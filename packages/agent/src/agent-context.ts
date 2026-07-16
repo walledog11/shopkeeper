@@ -48,13 +48,35 @@ export interface ShopifyOrderSummary {
   } | null;
 }
 
+export type AgentImageMediaType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+
+export type AgentMessageAttachment =
+  | {
+      type: "image";
+      reference: string;
+      status: "available";
+      mediaType: AgentImageMediaType;
+      data: string;
+    }
+  | {
+      type: "image";
+      reference: string;
+      status: "unavailable";
+    };
+
+export interface AgentRecentMessage {
+  senderType: string;
+  contentText: string | null;
+  attachments?: AgentMessageAttachment[];
+}
+
 // Module-agnostic agent context: the org identity and the conversation any
 // module's agent loop operates on. Future modules compose their own context on
 // top of this base.
 export interface BaseAgentContext {
   orgId: string;
   orgName: string;
-  recentMessages: { senderType: string; contentText: string | null }[];
+  recentMessages: AgentRecentMessage[];
   shopify: {
     shop: string;
     accessToken: string;

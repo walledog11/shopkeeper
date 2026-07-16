@@ -9,7 +9,7 @@ sends replies through the same connected account.
 ship a hybrid in which OAuth, tokens, account identifiers, webhooks, profiles, and sends come from
 different Meta integration models.
 
-Updated 2026-07-14 after a repository audit and review of Meta's current Instagram API materials.
+Updated 2026-07-16 after a live Standard Access DM/reply pass and attachment-path audit.
 
 ---
 
@@ -76,6 +76,15 @@ send node always had to be the Facebook Page ID.
 9. Disconnect deletes only the local row; it does not remove the account's webhook subscription.
 10. Token health resets `tokenExpiresAt` without receiving that expiry from Meta and does not
     replace the stored Page token when it refreshes the Facebook user token.
+
+### Live acceptance finding: stored images are not available to the agent
+
+The 2026-07-16 Standard Access test confirmed that a real customer DM can create a ticket and that
+an approved Shopkeeper reply reaches the same Instagram conversation. It also confirmed that an
+Instagram image is downloaded and stored as a private, workspace-scoped blob. However, the agent
+receives only the durable `[Instagram image attachment]` text placeholder: `AgentContext` and the
+message-history builder currently omit `Message.attachments`, so no image content block reaches the
+model. This is an agent-vision handoff gap, not a Meta webhook or media-download failure.
 
 ---
 
@@ -381,14 +390,15 @@ must fail loudly if duplicate rows somehow bypass the database constraints.
 
 ## 8. Phase 5 — Inbound Worker and Durable Message Data
 
-**Status: Complete (2026-07-15).** The worker consumes normalized jobs, revalidates the exact
-integration/account/workspace tuple, uses the Instagram Login profile client as optional
-enrichment, omits temporary profile URLs, persists provider timestamps and integration routing,
-preserves idempotency, and prevents delayed events from moving thread state backward. Supported
-binary media is downloaded only from allowlisted Meta HTTPS hosts with redirect revalidation,
-timeout, content-type, and size limits, then stored privately as a workspace-scoped managed blob.
-Shared Instagram links remain links and unsupported or failed media remains visible as a durable
-placeholder without persisting the temporary provider URL.
+**Status: In progress (2026-07-16).** Inbound transport and durable storage are complete. The worker
+consumes normalized jobs, revalidates the exact integration/account/workspace tuple, uses the
+Instagram Login profile client as optional enrichment, omits temporary profile URLs, persists
+provider timestamps and integration routing, preserves idempotency, and prevents delayed events
+from moving thread state backward. Supported binary media is downloaded only from allowlisted Meta
+HTTPS hosts with redirect revalidation, timeout, content-type, and size limits, then stored privately
+as a workspace-scoped managed blob. Shared Instagram links remain links and unsupported or failed
+media remains visible as a durable placeholder without persisting the temporary provider URL. Agent
+image understanding remains to be implemented.
 
 Rewrite `handleIgDmJob` to consume the normalized job instead of reparsing the full webhook.
 
@@ -418,6 +428,28 @@ Rewrite `handleIgDmJob` to consume the normalized job instead of reparsing the f
 
 The 24-hour reply-window calculation in the dashboard and server must use the last real customer
 message's provider timestamp.
+
+### Agent image understanding
+
+**Status: Not started (2026-07-16).** Live acceptance proved that the private image blob is stored,
+but the planning agent sees only `[Instagram image attachment]` because recent-message context keeps
+`senderType` and `contentText` while dropping attachments.
+
+1. Extend recent-message context with attachment references and the minimum metadata needed to
+   identify supported images.
+2. Resolve only private blob references that belong to the current workspace. Reject cross-workspace,
+   legacy/untrusted, malformed, or non-image references before any provider request.
+3. Load image bytes server-side and construct SDK-supported image content blocks for the model; do
+   not expose the private blob publicly or pass an authenticated Shopkeeper download URL to Meta or
+   the model provider.
+4. Revalidate MIME type and size while loading, and cap the number and total bytes of images included
+   in one model turn to control cost and context size.
+5. Preserve the text placeholder alongside the image block and continue treating both customer text
+   and image content as untrusted data, not instructions.
+6. Make images available to the capture-mode planner and the agent paths that reason about customer
+   messages. Text-only summaries may remain text-only, but must not claim to have inspected an image.
+7. If an image cannot be loaded, keep the ticket and attachment visible, tell the agent that visual
+   content is unavailable, and prefer a clarifying question or human escalation over guessing.
 
 ---
 
@@ -638,6 +670,18 @@ when the code merges.
 - A disconnected/replaced integration is rejected after enqueue.
 - `Message.integrationId` and `Thread.replyIntegrationId` are set correctly.
 
+### Agent image-understanding tests
+
+- A workspace-owned private JPEG/PNG attachment is loaded and sent to the planning model as an image
+  content block together with its untrusted customer-message context.
+- Cross-workspace, malformed, public/legacy, non-image, missing, and oversized attachment references
+  are never loaded into a model request.
+- Per-turn attachment count and byte limits are enforced deterministically.
+- Image hydration failure preserves the text placeholder and produces a safe clarification/escalation
+  path rather than a fabricated description.
+- An image-only Instagram message can produce a task-relevant plan without claiming that the agent
+  cannot view an image that was successfully supplied.
+
 ### Outbound tests
 
 - Exact `graph.instagram.com/v25.0/{IG_ID}/messages` URL, bearer token, and body.
@@ -663,11 +707,13 @@ when the code merges.
 2. Confirm `/subscribed_apps` contains `messages`.
 3. Send two DMs quickly from a separate Instagram account, including one attachment.
 4. Confirm both messages appear once, with the correct customer and timestamps.
-5. Approve a reply and confirm delivery in Instagram.
-6. Confirm the outbound provider message ID was recorded.
-7. Exercise reconnect with the same account.
-8. Disconnect and confirm new DMs no longer create tickets.
-9. Reconnect and exercise the token refresh client with a controlled test token when possible.
+5. Confirm the image is stored privately, appears in the ticket, and is available to the agent for
+   task-relevant visual reasoning.
+6. Approve a reply and confirm delivery in Instagram.
+7. Confirm the outbound provider message ID was recorded.
+8. Exercise reconnect with the same account.
+9. Disconnect and confirm new DMs no longer create tickets.
+10. Reconnect and exercise the token refresh client with a controlled test token when possible.
 
 No App Review submission should be made until this complete loop works through Shopkeeper—not only
 through Graph API Explorer or the App Dashboard's webhook test tool.
@@ -725,6 +771,8 @@ Instagram is launch-ready only when all of the following are true:
 - One provider account resolves to exactly one workspace and one active integration.
 - Every webhook entry/message is isolated, normalized, queued, and deduplicated correctly.
 - Inbound tickets retain their receiving integration and provider timestamp.
+- Supported Instagram images are stored privately and supplied to the agent through bounded,
+  workspace-scoped image content blocks; unavailable images degrade safely without hallucination.
 - Replies use the exact receiving integration and `graph.instagram.com/v25.0`.
 - Replaced, disconnected, legacy, and outside-window threads cannot send through another account.
 - Tokens refresh before expiry using Meta's returned token and expiry.

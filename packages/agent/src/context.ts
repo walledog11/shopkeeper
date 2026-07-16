@@ -3,6 +3,7 @@ import { parseClassifierSignals } from "./classifier-signals.js";
 import { shopifyRestJson, type ShopifyContext } from "./shopify/client.js";
 import { isOperatorChannel } from "./thread-constants.js";
 import { MEMORY_OVERRIDE_TAG, memoryOverrideTargetIds } from "./kb-memory.js";
+import { hydrateAgentMessageImages } from "./image-attachments.js";
 import type { ToolResult } from "./tools/result.js";
 import type {
   AddInternalNoteInput,
@@ -288,13 +289,19 @@ export async function buildContext(
       : {}),
   };
 
+  const rawRecentMessages = [...thread.messages].reverse().map((message) => ({
+    senderType: message.senderType,
+    contentText: message.contentText,
+    attachmentRefs: message.attachments,
+  }));
+  const recentMessages = thread.channelType === "ig_dm"
+    ? await hydrateAgentMessageImages(orgId, rawRecentMessages)
+    : rawRecentMessages.map(({ senderType, contentText }) => ({ senderType, contentText }));
+
   const base: BaseAgentContext = {
     orgId,
     orgName: org?.name ?? "Support",
-    recentMessages: [...thread.messages].reverse().map((m) => ({
-      senderType: m.senderType,
-      contentText: m.contentText,
-    })),
+    recentMessages,
     shopify:
       shopifyIntegration?.accessToken
         ? { shop: shopifyIntegration.externalAccountId, accessToken: shopifyIntegration.accessToken }

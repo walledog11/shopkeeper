@@ -47,7 +47,7 @@ export function classifierSignals(result: ClassificationResult) {
 export const CLASSIFIER_SYSTEM_PROMPT = `You are an AI assistant for a customer support team.
 Read the customer message and produce these fields in strict JSON:
 - "title": a short subject line (3 to 6 words) naming the topic, like an email subject line. Use Title Case, no trailing period, and never begin with "Customer" or "The customer". If the message is vague or unclear, say so plainly (e.g., "Unclear one-word message", "Vague inquiry about an offer"). Examples: "Damaged sweater return", "Where is order #1452", "Question about an exclusive offer".
-- "summary": one-sentence third-person summary of what the customer said. Always describe actual content; never refuse, never ask for more info. If the message is one word or fragmentary, quote/paraphrase it (e.g., 'Customer wrote a single word: "Palettegarments".').
+- "summary": one-sentence third-person summary of what the customer said. Always describe actual content; never refuse, never ask for more info. If the message is one word or fragmentary, quote/paraphrase it (e.g., 'Customer wrote a single word: "Palettegarments".'). Attachment placeholders such as "[Instagram image attachment]" prove only that an image was attached; say that plainly and never infer or describe visual details you were not given.
 - "tag": exactly one of Shipping, Returns, Order Status, Product Inquiry, General.
 - "classification": exactly one of "genuine", "questionable", "filtered".
   - "genuine": real human reaching out for support (question, complaint, request).

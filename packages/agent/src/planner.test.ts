@@ -187,6 +187,40 @@ describe("planAgent capture loop", () => {
     expect(mockCreate.mock.calls[0]![0].max_tokens).toBe(4096);
   });
 
+  it("passes hydrated Instagram images to the capture-mode planning model", async () => {
+    installAgentLogger(makeLogger());
+    mockCreate.mockResolvedValueOnce(singleToolUse("send_reply", { text: "Thanks for the photo." }));
+    const ctx = makeCtx({
+      thread: { ...makeCtx().thread, channelType: "ig_dm" },
+      recentMessages: [{
+        senderType: "customer",
+        contentText: "[Instagram image attachment]",
+        attachments: [{
+          type: "image",
+          reference: "blob:attachments/org_1/image-id/photo.png",
+          status: "available",
+          mediaType: "image/png",
+          data: "iVBORw0KGgo=",
+        }],
+      }],
+    });
+
+    await planAgent(ctx, "Handle this customer's latest request");
+
+    const firstCall = mockCreate.mock.calls[0]?.[0] as {
+      messages: Array<{ content: unknown }>;
+    };
+    expect(firstCall.messages[0]?.content).toEqual(expect.arrayContaining([{
+      type: "image",
+      source: {
+        type: "base64",
+        media_type: "image/png",
+        data: "iVBORw0KGgo=",
+      },
+    }]));
+    expect(JSON.stringify(firstCall.messages[0]?.content)).not.toContain("Visual content unavailable");
+  });
+
   it("captures a single send_reply as the plan and stops", async () => {
     const injectedLogger = makeLogger();
     installAgentLogger(injectedLogger);

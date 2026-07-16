@@ -246,6 +246,61 @@ describe('untrusted content handling', () => {
 
     expect(messages[0].content).toBe("Cancel Scooby's order");
   });
+
+  it('sends a safely hydrated customer image as a base64 content block', () => {
+    const messages = buildMessageHistory(
+      [{
+        senderType: 'customer',
+        contentText: '[Instagram image attachment]',
+        attachments: [{
+          type: 'image',
+          reference: 'blob:attachments/org_test/image-id/photo.png',
+          status: 'available',
+          mediaType: 'image/png',
+          data: 'iVBORw0KGgo=',
+        }],
+      }],
+      'Help the customer based on their message.',
+      { segregateUntrusted: true },
+    );
+
+    const content = messages[0].content;
+    expect(Array.isArray(content)).toBe(true);
+    expect(content).toEqual(expect.arrayContaining([{
+      type: 'image',
+      source: {
+        type: 'base64',
+        media_type: 'image/png',
+        data: 'iVBORw0KGgo=',
+      },
+    }]));
+    expect(JSON.stringify(content)).toContain('[Instagram image attachment]');
+    expect(JSON.stringify(content)).toContain('untrusted data');
+    expect(JSON.stringify(content)).not.toContain('blob:attachments');
+    expect((content as Array<{ type: string; text?: string }>).at(-1)?.text).toContain('</customer_message>');
+  });
+
+  it('tells the agent not to guess when customer visual content is unavailable', () => {
+    const messages = buildMessageHistory(
+      [{
+        senderType: 'customer',
+        contentText: '[Instagram image attachment]',
+        attachments: [{
+          type: 'image',
+          reference: 'blob:attachments/org_test/image-id/photo.png',
+          status: 'unavailable',
+        }],
+      }],
+      'Help the customer based on their message.',
+      { segregateUntrusted: true },
+    );
+
+    const serialized = JSON.stringify(messages[0].content);
+    expect(serialized).toContain('Visual content unavailable');
+    expect(serialized).toContain('Do not guess');
+    expect(serialized).not.toContain('"type":"image"');
+    expect(serialized).not.toContain('blob:attachments');
+  });
 });
 
 describe('AGENT_TOOLS', () => {

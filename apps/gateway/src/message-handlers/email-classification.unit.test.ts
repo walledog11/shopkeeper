@@ -3,6 +3,7 @@ import {
   parseClassifierJson,
   classifierSignals,
   emptyIntents,
+  CLASSIFIER_SYSTEM_PROMPT,
   CLASSIFIER_VERSION,
 } from './email-classification.js';
 
@@ -88,5 +89,12 @@ describe('classifierSignals', () => {
       language: 'fr',
       intents: result.intents,
     });
+  });
+});
+
+describe('CLASSIFIER_SYSTEM_PROMPT attachment safety', () => {
+  it('forbids text-only summaries from inventing image details', () => {
+    expect(CLASSIFIER_SYSTEM_PROMPT).toContain('[Instagram image attachment]');
+    expect(CLASSIFIER_SYSTEM_PROMPT).toMatch(/never infer or describe visual details/i);
   });
 });
