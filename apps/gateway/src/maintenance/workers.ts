@@ -2,6 +2,7 @@ import type { ConnectionOptions } from 'bullmq';
 import { registerDigestMaintenanceJob } from './digest.js';
 import { registerEmailTokenHealthMaintenanceJob } from './email-token-health.js';
 import { registerGmailWatchMaintenanceJob } from './gmail-watch.js';
+import { registerOperatorEventSweepMaintenanceJob } from './operator-event-sweep.js';
 import { registerOrderRiskMaintenanceJob } from './order-risk-monitor.js';
 import { registerOutboundSendSweepMaintenanceJob } from './outbound-send-sweep.js';
 import { registerQueueHealthMaintenanceJob } from './queue-health.js';
@@ -26,6 +27,7 @@ export const maintenanceJobRegistrations: MaintenanceJobRegistration[] = [
   registerVoiceSynthesisMaintenanceJob,
   registerOrderRiskMaintenanceJob,
   registerOutboundSendSweepMaintenanceJob,
+  registerOperatorEventSweepMaintenanceJob,
   registerQueueHealthMaintenanceJob,
 ];
 

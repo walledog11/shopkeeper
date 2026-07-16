@@ -23,6 +23,7 @@ const {
   mockLogger,
   queueAddBulkSpy,
   queueAddSpy,
+  queueGetJobSpy,
   getPlatformSpectrumAppSpy,
   spectrumWebhookSpy,
   uploadInboundAttachmentSpy,
@@ -38,6 +39,7 @@ const {
   },
   queueAddBulkSpy: vi.fn().mockResolvedValue([{ id: 'test-bulk-job-id' }]),
   queueAddSpy: vi.fn().mockResolvedValue({ id: 'test-job-id' }),
+  queueGetJobSpy: vi.fn().mockResolvedValue(null),
   getPlatformSpectrumAppSpy: vi.fn(),
   spectrumWebhookSpy: vi.fn(),
   uploadInboundAttachmentSpy: vi.fn(),
@@ -66,6 +68,7 @@ vi.mock('bullmq', () => ({
   Queue: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
     this.add = queueAddSpy;
     this.addBulk = queueAddBulkSpy;
+    this.getJob = queueGetJobSpy;
     this.close = vi.fn();
   }),
   Worker: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
@@ -117,6 +120,7 @@ export const webhookFixture = {
   mockLogger,
   queueAddBulkSpy,
   queueAddSpy,
+  queueGetJobSpy,
   spectrumWebhookSpy,
   uploadInboundAttachmentSpy,
   get org() {
@@ -131,6 +135,7 @@ beforeEach(async () => {
   org = await createTestOrg();
   queueAddBulkSpy.mockClear();
   queueAddSpy.mockClear();
+  queueGetJobSpy.mockClear().mockResolvedValue(null);
   getPlatformSpectrumAppSpy.mockReset();
   googleTokenVerifySpy.mockReset();
   spectrumWebhookSpy.mockReset();

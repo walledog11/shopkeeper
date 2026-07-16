@@ -19,12 +19,35 @@ export interface ImessageOperatorInbound {
   reply: OperatorReply;
 }
 
-// Operator-channel iMessage dispatch — the iMessage equivalent of
-// handleTelegramMessage. The merchant texts Shopkeeper's platform Spectrum line
-// and the operator agent replies; no customer ever reaches this path. The sender
-// binding resolves which org the handle belongs to. Reuses the same command
-// handlers as Telegram via the channel-neutral OperatorMessageContext.
-export async function handleImessageOperatorMessage(message: ImessageOperatorInbound): Promise<void> {
+export interface BoundImessageMember {
+  organizationId: string;
+  clerkUserId: string;
+}
+
+// Reply-free binding resolution by sender handle. The durable (P4-03) worker
+// re-runs this at claim time to re-validate ownership before running a turn; it
+// never mutates the binding or replies.
+export async function resolveBoundImessageMember(senderId: string): Promise<BoundImessageMember | null> {
+  const binding = await db.orgMemberImessageBinding.findUnique({
+    where: { senderId },
+    include: { orgMember: true },
+  });
+  if (!binding) return null;
+  return {
+    organizationId: binding.orgMember.organizationId,
+    clerkUserId: binding.orgMember.clerkUserId,
+  };
+}
+
+// Resolve the sender's binding and perform the synchronous binding maintenance
+// (connect-code binding/re-bind, unbound reply, and space/label refresh). Returns
+// the bound member when there is an operator turn left to run, or null when the
+// message was a binding interaction fully handled here. Both the synchronous
+// handler and the durable webhook ingestion path share this so binding behavior
+// stays identical; only where the turn runs differs.
+export async function resolveImessageOperatorBinding(
+  message: ImessageOperatorInbound,
+): Promise<BoundImessageMember | null> {
   const { senderId, spaceId, body, displayName, reply } = message;
 
   const binding = await db.orgMemberImessageBinding.findUnique({
@@ -37,7 +60,7 @@ export async function handleImessageOperatorMessage(message: ImessageOperatorInb
 
   if (!binding) {
     await handleImessageBinding({ senderId, spaceId, body, displayName, reply });
-    return;
+    return null;
   }
 
   // Re-bind only when the body matches a connect-code shape; skip DB for yes/no/HELP.
@@ -45,7 +68,7 @@ export async function handleImessageOperatorMessage(message: ImessageOperatorInb
     const resolvedPayload = await findOrgMemberBindToken(candidateToken);
     if (resolvedPayload) {
       await handleImessageBinding({ senderId, spaceId, body, displayName, reply, resolvedPayload });
-      return;
+      return null;
     }
   }
 
@@ -56,8 +79,28 @@ export async function handleImessageOperatorMessage(message: ImessageOperatorInb
       .catch((err) => logger.warn({ err, bindingId: binding.id }, '[iMessage] Failed to refresh binding'));
   }
 
-  const organizationId = binding.orgMember.organizationId;
-  const clerkUserId = binding.orgMember.clerkUserId;
+  return {
+    organizationId: binding.orgMember.organizationId,
+    clerkUserId: binding.orgMember.clerkUserId,
+  };
+}
+
+export interface ImessageOperatorTurnParams {
+  organizationId: string;
+  clerkUserId: string;
+  senderId: string;
+  body: string;
+  reply: OperatorReply;
+}
+
+// The operator turn for one bound iMessage message: keyword fast paths
+// (help/summary/digest/pending-plan) then the free-form agent turn. Extracted so
+// both the synchronous webhook path and the durable operator-event worker run
+// identical logic; they differ only in the injected reply (provider send) and
+// when the webhook is acknowledged. Mirrors runTelegramOperatorTurn.
+export async function runImessageOperatorTurn(params: ImessageOperatorTurnParams): Promise<void> {
+  const { organizationId, clerkUserId, senderId, body, reply } = params;
+
   const chatId = senderId;
   const operatorKey = `imessage:${senderId}`;
   const context = await getContext(organizationId, chatId);
@@ -108,4 +151,20 @@ export async function handleImessageOperatorMessage(message: ImessageOperatorInb
   // pending-state ledger and drives approve/reject/revise/answer via control tools,
   // or handles a fresh instruction normally.
   await executeFreeFormInstruction(organizationId, clerkUserId, baseMessage, context);
+}
+
+// Synchronous operator-channel iMessage dispatch — the iMessage equivalent of
+// handleTelegramMessage, and the fallback path when the durable operator queue is
+// off for iMessage. Resolves/maintains the binding, then runs the turn inline.
+export async function handleImessageOperatorMessage(message: ImessageOperatorInbound): Promise<void> {
+  const member = await resolveImessageOperatorBinding(message);
+  if (!member) return;
+
+  await runImessageOperatorTurn({
+    organizationId: member.organizationId,
+    clerkUserId: member.clerkUserId,
+    senderId: message.senderId,
+    body: message.body,
+    reply: message.reply,
+  });
 }

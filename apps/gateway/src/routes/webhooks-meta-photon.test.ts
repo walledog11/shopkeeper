@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
-import { ChannelType } from '@shopkeeper/db';
+import { ChannelType, db } from '@shopkeeper/db';
 import {
   cleanupTestData,
   createTestIntegration,
@@ -482,6 +482,108 @@ describe('POST /webhooks/photon', () => {
       expect.objectContaining({ messageId, senderId: '+15551234567' }),
       '[Webhook] iMessage duplicate delivery skipped',
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /webhooks/photon — durable iMessage ingestion (P4-03)
+// ---------------------------------------------------------------------------
+describe('POST /webhooks/photon — durable ingestion', () => {
+  const SENDER_ID = '+15551234567';
+  const SPACE_ID = 'any;-;+15551234567';
+  const CLERK_USER = 'usr_imsg_durable';
+
+  beforeEach(() => {
+    process.env.OPERATOR_DURABLE_QUEUE_IMESSAGE = 'true';
+  });
+
+  afterEach(async () => {
+    delete process.env.OPERATOR_DURABLE_QUEUE_IMESSAGE;
+    await db.operatorEvent.deleteMany({ where: { organizationId: org.id } }).catch(() => undefined);
+    await db.orgMember.deleteMany({ where: { organizationId: org.id } }).catch(() => undefined);
+  });
+
+  async function bindMember(): Promise<void> {
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: CLERK_USER },
+    });
+    await db.orgMemberImessageBinding.create({
+      data: { orgMemberId: member.id, senderId: SENDER_ID, spaceId: SPACE_ID },
+    });
+  }
+
+  function driveMessage(messageId: string, sendSpy: ReturnType<typeof vi.fn>) {
+    spectrumWebhookSpy.mockImplementationOnce(async (_requestInput, handler) => {
+      await handler(
+        { id: SPACE_ID, __platform: 'iMessage', send: sendSpy },
+        {
+          id: messageId,
+          direction: 'inbound',
+          platform: 'iMessage',
+          sender: { id: SENDER_ID, __platform: 'iMessage' },
+          space: { id: SPACE_ID, __platform: 'iMessage' },
+          timestamp: new Date('2026-07-15T12:00:00.000Z'),
+          content: { type: 'text', text: 'refund #1234' },
+        },
+      );
+      return { status: 200, headers: {}, body: Buffer.from('OK') };
+    });
+
+    return request(app)
+      .post('/webhooks/photon')
+      .set('Content-Type', 'application/json')
+      .set('x-spectrum-signature', 'v0=test')
+      .send(JSON.stringify({ event: 'message' }));
+  }
+
+  it('persists a pending operator event and enqueues it without running the turn', async () => {
+    await bindMember();
+    const sendSpy = vi.fn().mockResolvedValue(undefined);
+
+    const res = await driveMessage('imsg_durable_001', sendSpy);
+    expect(res.status).toBe(200);
+
+    const rows = await db.operatorEvent.findMany({ where: { organizationId: org.id } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe('pending');
+    expect(rows[0].channel).toBe('imessage');
+    expect(rows[0].providerMessageId).toBe('imessage:imsg_durable_001');
+    expect(rows[0].chatId).toBe(SENDER_ID);
+    expect(rows[0].spaceId).toBe(SPACE_ID);
+    expect(rows[0].body).toBe('refund #1234');
+    // Durable path only enqueues; the turn (and any reply) runs later in the worker.
+    expect(sendSpy).not.toHaveBeenCalled();
+    expect(queueAddSpy).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ operatorEventId: rows[0].id }),
+      expect.objectContaining({ jobId: rows[0].id }),
+    );
+  });
+
+  it('deduplicates a provider redelivery of the same message via the DB unique key', async () => {
+    await bindMember();
+    const sendSpy = vi.fn().mockResolvedValue(undefined);
+
+    await driveMessage('imsg_durable_dupe', sendSpy);
+    const second = await driveMessage('imsg_durable_dupe', sendSpy);
+    expect(second.status).toBe(200);
+
+    const count = await db.operatorEvent.count({ where: { organizationId: org.id } });
+    expect(count).toBe(1);
+  });
+
+  it('acknowledges an unbound sender without persisting an event', async () => {
+    const sendSpy = vi.fn().mockResolvedValue(undefined);
+
+    const res = await driveMessage('imsg_durable_unbound', sendSpy);
+    expect(res.status).toBe(200);
+    // Binding maintenance stays synchronous: the unbound sender is replied to inline.
+    expect(sendSpy).toHaveBeenCalledOnce();
+    expect(sendSpy.mock.calls[0][0]).toContain('Integrations → iMessage');
+
+    const count = await db.operatorEvent.count({ where: { organizationId: org.id } });
+    expect(count).toBe(0);
+    expect(queueAddSpy).not.toHaveBeenCalled();
   });
 });
 
