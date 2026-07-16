@@ -513,7 +513,7 @@ describe('updateThreadStatus', () => {
 });
 
 describe('escalateToHuman', () => {
-  it('flips the thread to pending, tags it needs_human, and writes an audit note', async () => {
+  it('keeps the thread open, sets escalatedAt, tags it needs_human, and writes an audit note', async () => {
     const customer = await createTestCustomer(org.id, 'escalation@example.com');
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);
 
@@ -526,7 +526,8 @@ describe('escalateToHuman', () => {
     expect(result.message).toContain('Customer is asking about wholesale pricing.');
 
     const updated = await db.thread.findUnique({ where: { id: thread.id } });
-    expect(updated?.status).toBe(THREAD_STATUS.PENDING);
+    expect(updated?.status).toBe(THREAD_STATUS.OPEN);
+    expect(updated?.escalatedAt).toBeInstanceOf(Date);
     expect(updated?.tag).toBe('needs_human');
 
     const note = await db.message.findFirst({

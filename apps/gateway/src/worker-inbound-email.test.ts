@@ -132,6 +132,36 @@ describe('Message worker — email branch', () => {
     expect(getMockAnthropicCreate()).not.toHaveBeenCalled();
   });
 
+  it('correlates a follow-up to an escalated (open) thread instead of splitting it (P5-04)', async () => {
+    const customer = await db.customer.create({
+      data: { organizationId: org.id, platformId: 'customer@example.com', name: 'Escalated Customer' },
+    });
+    // Escalation keeps the thread `open` and flags it — the pre-P5-04 bug parked
+    // it to `pending`, so the follow-up found no open thread and split off a
+    // second, context-less conversation.
+    const escalated = await db.thread.create({
+      data: {
+        organizationId: org.id,
+        customerId: customer.id,
+        channelType: ChannelType.email,
+        status: 'open',
+        tag: 'needs_human',
+        escalatedAt: new Date(),
+      },
+    });
+
+    const handler = getCapturedHandlers().get('inbound-messages');
+    await handler!(makeEmailJob(org.id));
+
+    const threads = await db.thread.findMany({
+      where: { organizationId: org.id, customerId: customer.id, channelType: ChannelType.email },
+    });
+    expect(threads).toHaveLength(1);
+    expect(threads[0].id).toBe(escalated.id);
+    expect(threads[0].status).toBe('open');
+    expect(threads[0].escalatedAt).not.toBeNull();
+  });
+
   it('skips classifier when customer has a prior genuine thread (existing-customer bypass)', async () => {
     const existing = await db.customer.create({
       data: { organizationId: org.id, platformId: 'customer@example.com', name: 'Existing' },

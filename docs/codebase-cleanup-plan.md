@@ -569,6 +569,40 @@ provider call or cross-tenant mutation.
 
 ### P5-04 — Define and correct the active thread/escalation state model
 
+**Status (2026-07-16): Product decision resolved; app layer implemented; historical
+backfill staged.** Decision: escalation is an **orthogonal flag, not a `pending`
+lifecycle status** — the ticket stays `open`. An additive `escalated_at` column
+(`Thread`, migration `20260716000000_add_thread_escalated_at`) records the handoff.
+Both `escalateToHuman` sinks (gateway `agent-thread-sink.ts`, dashboard
+`lib/agent/tools/thread.ts`) now keep the thread `open` and set `escalated_at`
+instead of flipping it to `pending`. Because escalated threads stay `open`,
+`inbound-persistence.ts` correlates a customer follow-up to the same ticket (no
+second, context-less thread) and it stays visible in the `open` inbox with no
+route change; `escalated_at` rides in the existing thread response for the inbox
+badge / A5 "Waiting on you" to consume. Gateway unit + dashboard integration
+escalation tests updated; a gateway integration test proves the follow-up
+correlates to the escalated thread rather than splitting. `escalated_at` is
+additive and deploy-safe.
+
+**Still required (staged):**
+
+- [ ] Backfill historical `pending` threads to `open` + `escalated_at`. It is a
+  separate, audited migration because a `pending` thread whose customer already
+  has an `open` thread would create two open threads and violate the
+  `threads_one_open_per_customer` (`WHERE status='open'`) unique index. Run
+  `npm run audit:escalation-backfill -- --strict` first; it lists collision
+  groups to resolve and exits non-zero while any remain.
+- [ ] Retire `pending` from the support-planner surface **with the eval gate**:
+  the `update_thread_status` tool still offers `pending`
+  (`registry/helpers.ts` `threadStatuses`) and the `escalate_to_human` tool
+  description still says "Marks the thread as pending". Both are prompt bytes, so
+  they were intentionally left unchanged here (A3 precedent) and need an eval run.
+- [ ] Autonomy-policy decision (separate): escalated threads now stay `open`, so a
+  customer follow-up can re-trigger auto-plan/auto-execute. This is not a
+  regression (pre-P5-04, the follow-up spawned a fresh open thread that
+  auto-planned anyway), but whether escalation should *suppress* further
+  autonomous action until a human clears the flag is its own call.
+
 - **Related findings:** AUD-023.
 - **Files likely to change:** gateway/dashboard `escalateToHuman` sinks; `inbound-persistence.ts`; `/api/threads/route.ts`; inbox query/presentation types; Prisma schema and the active-thread unique index migration.
 - **Proposed implementation:** Product owners define whether `pending` is active-awaiting-merchant or obsolete. If active, correlate inbound messages to open or pending threads, expose pending in the inbox, and enforce one active thread. If escalation is orthogonal, keep the thread open and store escalation state separately. Audit/resolve historical open+pending pairs before constraints.

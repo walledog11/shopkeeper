@@ -272,6 +272,10 @@ model Thread {
   cachedPlan                Json?                @map("cached_plan") @db.JsonB
   archivedAt                DateTime?            @map("archived_at") @db.Timestamptz
   deletedAt                 DateTime?            @map("deleted_at") @db.Timestamptz
+  // Escalation is orthogonal to lifecycle status (P5-04): an escalated ticket
+  // stays `open` so it remains in the inbox and inbound follow-ups correlate to
+  // it. Set when the agent hands off to the merchant; null otherwise.
+  escalatedAt               DateTime?            @map("escalated_at") @db.Timestamptz
   filterStatus              ThreadFilterStatus   @default(genuine) @map("filter_status")
   filterReason              String?              @map("filter_reason") @db.Text
   filterDecidedAt           DateTime?            @map("filter_decided_at") @db.Timestamptz

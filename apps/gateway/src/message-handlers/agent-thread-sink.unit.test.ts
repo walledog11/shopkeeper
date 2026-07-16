@@ -79,7 +79,7 @@ describe('gatewayThreadSink persistence', () => {
 
     expect(threadUpdate).toHaveBeenCalledWith({
       where: { id: 'thread-1' },
-      data: { status: 'pending', tag: 'needs_human' },
+      data: { status: 'open', tag: 'needs_human', escalatedAt: expect.any(Date) },
     });
     expect(createMessage).toHaveBeenCalledWith({
       threadId: 'thread-1',
