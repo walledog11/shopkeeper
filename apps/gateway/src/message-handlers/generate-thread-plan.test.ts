@@ -132,6 +132,24 @@ describe('generateThreadPlan auto-execute path', () => {
     });
   });
 
+  it('skips auto-execute on an escalated thread even when allowAutoExecute is true (P5-04)', async () => {
+    mockRequireOrgThread.mockResolvedValueOnce({
+      id: 'thread_1',
+      aiSummary: 'Customer needs help',
+      escalatedAt: new Date(),
+      messages: [{ id: 'msg_1' }],
+      cachedPlan: { plan: cachedPlan },
+    });
+
+    const result = await generateThreadPlan('org_1', 'thread_1', true);
+
+    // The plan is still surfaced for the merchant — the agent just never
+    // autonomously acts on a ticket flagged for a human.
+    expect(mockMaybeAutoExecute).not.toHaveBeenCalled();
+    expect(result.autoExecuted).toBeUndefined();
+    expect(result.plan).toEqual(cachedPlan);
+  });
+
   it('uses an instruction override instead of aiSummary when provided', async () => {
     mockIsAgentPlanCacheHit.mockReturnValue(false);
     mockRequireOrgThread.mockResolvedValueOnce({

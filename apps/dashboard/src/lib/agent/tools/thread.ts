@@ -383,9 +383,11 @@ export async function escalateToHuman(
   ctx: ThreadContext
 ): Promise<ToolResult> {
   const reason = input.reason.trim() || "No reason provided";
+  // P5-04: keep the ticket `open` so it stays in the inbox and inbound
+  // follow-ups correlate to it; escalation rides on the orthogonal flag.
   const updated = await db.thread.updateMany({
     where: { id: ctx.threadId, organizationId: ctx.orgId },
-    data: { status: THREAD_STATUS.PENDING, tag: "needs_human" },
+    data: { status: THREAD_STATUS.OPEN, tag: "needs_human", escalatedAt: new Date() },
   });
   if (updated.count !== 1) return toolError("Error: thread not found.");
   await createMessage({
