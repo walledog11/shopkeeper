@@ -1,6 +1,7 @@
 import logger from '../../logger.js';
 import { renderOperatorLedger } from '../../message-handlers/operator-ledger.js';
 import { buildOperatorSessionTools } from '../../message-handlers/operator-session-tools.js';
+import { buildOperatorInboxTools } from '../../message-handlers/operator-inbox-tools.js';
 import { executeOperatorAgentTurn } from '../../message-handlers/execute-operator-agent-turn.js';
 import type { OperatorContext } from '../../operator-context.js';
 import type { OperatorMessageContext } from '../operator-message.js';
@@ -20,13 +21,16 @@ export async function executeFreeFormInstruction(
   // resolves order references via tools from the text. It persists both sides of
   // the exchange, so this delivery reply must stay raw (unmirrored).
   const operatorLedger = await renderOperatorLedger(organizationId, context);
-  const moduleTools = buildOperatorSessionTools({
-    organizationId,
-    clerkUserId,
-    chatId,
-    senderRef,
-    context,
-  });
+  const moduleTools = {
+    ...buildOperatorSessionTools({
+      organizationId,
+      clerkUserId,
+      chatId,
+      senderRef,
+      context,
+    }),
+    ...buildOperatorInboxTools({ organizationId }),
+  };
 
   let summary: string;
   try {
