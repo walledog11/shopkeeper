@@ -14,16 +14,17 @@ let org!: Awaited<ReturnType<typeof createTestOrg>>;
 let otherOrg!: Awaited<ReturnType<typeof createTestOrg>>;
 let tools!: Record<string, AgentToolDefinition>;
 
-// The inbox tools read only org identity off their deps; nothing touches the
-// agent context, so the turn context is irrelevant to these paths.
-const NO_CTX = {} as never;
+// The inbox tools read only the org identity they close over — the context,
+// settings, and dependency seams the executor passes are unused, so the turn's
+// real values are irrelevant to these paths.
+const UNUSED = {} as never;
 
 function listTickets(input: { tag?: string; status?: string } = {}) {
-  return tools.list_active_tickets.execute(input, NO_CTX);
+  return tools.list_active_tickets.execute(input, UNUSED, UNUSED, UNUSED);
 }
 
 function getTicket(ticketId: string) {
-  return tools.get_ticket.execute({ ticket_id: ticketId }, NO_CTX);
+  return tools.get_ticket.execute({ ticket_id: ticketId }, UNUSED, UNUSED, UNUSED);
 }
 
 beforeEach(async () => {
