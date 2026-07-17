@@ -9,82 +9,46 @@ sends replies through the same connected account.
 ship a hybrid in which OAuth, tokens, account identifiers, webhooks, profiles, and sends come from
 different Meta integration models.
 
-Updated 2026-07-16 after a live Standard Access DM/reply pass and attachment-path audit.
+Updated 2026-07-16 after live Standard Access DM, image-understanding, and reply validation and
+removal of the legacy development Page-token backdoor.
 
 ---
 
 ## 1. Current Repository State
 
-The repository contains most of an end-to-end Instagram pipeline, but it is built around the
-older Messenger API for Instagram path:
+The repository now contains an end-to-end Instagram Login pipeline:
 
-- `apps/dashboard/src/app/api/integrations/instagram/auth/route.ts` starts Facebook Login for
-  Business with `META_CONFIG_ID`.
-- `apps/dashboard/src/app/api/integrations/instagram/callback/route.ts` exchanges a Facebook user
-  token, calls `/me/accounts`, chooses a Facebook Page linked to an Instagram account, stores the
-  Page token, and subscribes the Page to messaging webhooks.
-- `apps/gateway/src/routes/webhooks-meta.ts` verifies Meta webhook signatures and queues an
-  Instagram job.
-- `apps/gateway/src/message-handlers/channels.ts` creates customers, threads, and messages from
-  Instagram webhook payloads.
-- `apps/dashboard/src/lib/messaging/instagram-dispatch.ts` sends replies with the Page token.
-- `apps/gateway/src/maintenance/token-health.ts` checks the Page-token connection and attempts to
-  refresh the associated Facebook user token.
-- `apps/dashboard/src/app/api/integrations/instagram/connect/route.ts` is a development-only
-  backdoor that creates an integration from manually supplied Page-token environment variables.
+- Dashboard OAuth uses the Instagram-specific authorize, token, identity, and subscription APIs.
+- The gateway verifies Instagram webhook signatures, isolates every entry/message by integration
+  and workspace, and enqueues normalized jobs.
+- The inbound worker preserves provider timestamps and exact integration routing, downloads
+  supported media into private workspace-scoped storage, and avoids durable temporary Meta URLs.
+- Agent context safely hydrates supported private Instagram images with workspace, MIME, count,
+  per-image-size, and total-byte validation, then supplies bounded image content blocks to the
+  planning model.
+- Outbound dispatch requires the exact receiving integration and enforces the provider-token and
+  24-hour-window guards.
+- Token health refreshes Instagram long-lived tokens, and disconnect unsubscribes the account before
+  removing local access.
+- The legacy development Page-token connection route has been removed.
 
-### What likely prevented the old path from working
+The older Facebook Login/Page-token diagnosis and migration rationale remain in
+`docs/instagram-decision-memo.md` as historical context. The defects catalogued there—fail-open
+token/subscription behavior, partial batch handling, ambiguous tenant routing, ingestion-time reply
+windows, temporary media URLs, local-only disconnect, and fabricated token expiry—are addressed by
+the current implementation and focused automated coverage.
 
-The repository cannot prove the exact historical failure because the Meta App Dashboard
-configuration and provider logs are external. The most probable blockers are the old path's
-operational requirements:
+### Live Standard Access status
 
-- The Instagram account had to be linked to a Facebook Page.
-- The connecting user needed the correct Page role/tasks and the Page had to appear in
-  `/me/accounts`.
-- The Facebook Login for Business configuration had to include every required permission.
-- The app needed the appropriate access level, Business Verification, and App Review approval for
-  accounts outside the app's roles.
-- A failed per-Page webhook subscription was only logged; the callback still reported the
-  integration as connected.
+The 2026-07-16 live test confirmed that a real customer DM creates a ticket, an Instagram image is
+stored privately and is available to the agent for task-relevant visual reasoning, and an approved
+Shopkeeper reply reaches the same Instagram conversation.
 
-### Correction to the previous diagnosis
-
-`graph.facebook.com/{instagram-account-id}/messages` with a Page token is a valid shape for the
-legacy Messenger API for Instagram model. It is not, by itself, evidence that outbound replies
-were broken. The endpoint and token must change as part of the migration, but the reason to migrate
-is simpler merchant onboarding and one coherent, supportable API model—not a claim that the legacy
-send node always had to be the Facebook Page ID.
-
-### Confirmed code defects independent of the Meta product choice
-
-1. Long-lived token exchange fails open: the callback falls back to the short-lived token and then
-   records a made-up 60-day expiration.
-2. Webhook subscription fails open: a failed subscription still produces a successful connection.
-3. Only `entry[0]` and `messaging[0]` are processed, so batched messages are silently lost.
-4. Organization lookup uses `findFirst` by provider account ID while the database permits
-   ambiguous Instagram rows across or within workspaces.
-5. Outbound dispatch also uses `findFirst`, so more than one Instagram row in a workspace can send
-   a reply through the wrong account.
-6. The worker passes an entire webhook payload under the organization resolved from its first
-   entry. Merely adding loops in the worker could create a cross-tenant routing bug when a delivery
-   contains entries for different Instagram accounts.
-7. The provider's message timestamp is ignored. The 24-hour reply window is therefore calculated
-   from ingestion time rather than the customer's actual send time.
-8. Raw provider attachment and profile-picture URLs are stored even though Meta-hosted URLs can be
-   temporary.
-9. Disconnect deletes only the local row; it does not remove the account's webhook subscription.
-10. Token health resets `tokenExpiresAt` without receiving that expiry from Meta and does not
-    replace the stored Page token when it refreshes the Facebook user token.
-
-### Live acceptance finding: stored images are not available to the agent
-
-The 2026-07-16 Standard Access test confirmed that a real customer DM can create a ticket and that
-an approved Shopkeeper reply reaches the same Instagram conversation. It also confirmed that an
-Instagram image is downloaded and stored as a private, workspace-scoped blob. However, the agent
-receives only the durable `[Instagram image attachment]` text placeholder: `AgentContext` and the
-message-history builder currently omit `Message.attachments`, so no image content block reaches the
-model. This is an agent-vision handoff gap, not a Meta webhook or media-download failure.
+The remaining Standard Access work is lifecycle acceptance rather than a known implementation gap:
+exercise same-account reconnect, verify disconnect suppresses later DMs, reconnect, and exercise a
+controlled long-lived-token refresh when possible. Production read-only checks have already
+confirmed rapid distinct inbound messages with provider timestamps, exact integration routing, and
+the stored outbound provider message ID.
 
 ---
 
@@ -129,7 +93,7 @@ This is required because:
 - The current integrations UI represents Instagram as a single connection.
 - Supporting multiple accounts properly requires per-thread account selection and additional UI.
 
-Add database enforcement with raw partial unique indexes:
+Database enforcement uses raw partial unique indexes:
 
 1. One Instagram integration per organization: unique on `organization_id` where
    `platform = 'ig_dm'`.
@@ -141,15 +105,15 @@ not compatible with the new client and should be deleted during rollout after th
 are logged for operational reference. Existing tickets remain; legacy tickets must not fall back
 to a newly connected Instagram account for replies.
 
-For new inbound messages:
+New inbound messages:
 
 - Set `Message.integrationId` to the receiving Instagram integration.
 - Set `Thread.replyIntegrationId` to that integration.
 - Outbound Instagram dispatch must require the thread's `replyIntegrationId`; it must never pick
   an arbitrary Instagram row with `findFirst`.
 
-If the generic integration relations are not merged before this work starts, add equivalent
-Instagram-specific routing fields in the same migration.
+The routing fields and constraints are implemented in
+`packages/db/prisma/migrations/20260715010000_instagram_single_account/migration.sql`.
 
 ---
 
@@ -264,10 +228,11 @@ Suggested files:
 
 ## 6. Phase 3 — OAuth Connect and Reconnect
 
-**Status: In progress (2026-07-14).** Direct Instagram authorization, fail-closed callback,
+**Status: Complete (2026-07-16).** Direct Instagram authorization, fail-closed callback,
 subscription verification, tenant ownership enforcement, and same/different-account reconnect
-behavior are implemented with focused automated coverage. A real Standard Access acceptance pass
-and subsequent removal of the development manual-token backdoor remain.
+behavior are implemented with focused automated coverage. Live OAuth, inbound DM, image, and reply
+validation passed under Standard Access, and the development manual-token backdoor has been removed.
+Live reconnect/disconnect exercises remain rollout validation in the test plan below.
 
 ### Authorization route
 
@@ -390,7 +355,7 @@ must fail loudly if duplicate rows somehow bypass the database constraints.
 
 ## 8. Phase 5 — Inbound Worker and Durable Message Data
 
-**Status: In progress (2026-07-16).** Inbound transport and durable storage are complete. The worker
+**Status: Complete (2026-07-16).** Inbound transport and durable storage are complete. The worker
 consumes normalized jobs, revalidates the exact integration/account/workspace tuple, uses the
 Instagram Login profile client as optional enrichment, omits temporary profile URLs, persists
 provider timestamps and integration routing, preserves idempotency, and prevents delayed events
@@ -398,7 +363,7 @@ from moving thread state backward. Supported binary media is downloaded only fro
 HTTPS hosts with redirect revalidation, timeout, content-type, and size limits, then stored privately
 as a workspace-scoped managed blob. Shared Instagram links remain links and unsupported or failed
 media remains visible as a durable placeholder without persisting the temporary provider URL. Agent
-image understanding remains to be implemented.
+image understanding is implemented and has passed live validation.
 
 Rewrite `handleIgDmJob` to consume the normalized job instead of reparsing the full webhook.
 
@@ -431,9 +396,11 @@ message's provider timestamp.
 
 ### Agent image understanding
 
-**Status: Not started (2026-07-16).** Live acceptance proved that the private image blob is stored,
-but the planning agent sees only `[Instagram image attachment]` because recent-message context keeps
-`senderType` and `contentText` while dropping attachments.
+**Status: Complete (2026-07-16).** Recent-message context carries attachment references for
+Instagram threads, hydrates only workspace-owned private images, enforces MIME and deterministic
+count/byte limits, and supplies SDK image blocks while preserving the untrusted text placeholder.
+Unavailable images degrade to an explicit do-not-guess instruction. Live acceptance confirmed
+task-relevant visual reasoning from a real Instagram image.
 
 1. Extend recent-message context with attachment references and the minimum metadata needed to
    identify supported images.
@@ -463,7 +430,8 @@ customer `Message.sentAt` for manual, agent, and auto-ack sends. Sends use the c
 structured provider failures without logging tokens or message contents, and do not automatically
 retry ambiguous failures. Focused coverage includes exact routing, no fallback, legacy and expired
 connections, local and provider reply-window rejection, provider error categories, provider ID
-persistence, and the agent-mode guard. The real Standard Access acceptance pass remains pending.
+persistence, and the agent-mode guard. A live Standard Access reply reached the originating
+Instagram conversation, and a read-only production check confirmed its provider message ID.
 
 Update `apps/dashboard/src/lib/messaging/instagram-dispatch.ts` to:
 
@@ -586,8 +554,8 @@ best-effort additional cleanup after unsubscribe and cover it with a contract te
 accounts and direct Instagram Login, OAuth failures have specific user-facing messages, token and
 DM-subscription health are displayed separately, onboarding and repository documentation no longer
 present the Facebook Page-token model as current, and production validation covers a server-enforced
-global/workspace rollout gate. The runbook intentionally retains the "Deferred After V1" heading
-until the real Standard Access acceptance pass succeeds.
+global/workspace rollout gate. The runbook now describes a controlled rollout: the core live
+DM/image/reply path has passed, while lifecycle acceptance and Advanced Access remain launch gates.
 
 Update all user-facing copy to match the new model:
 
@@ -625,8 +593,7 @@ Update:
 - onboarding copy
 - the Instagram decision memo or replace it with a link to this plan
 
-Remove the "Deferred After V1" language when the real-account acceptance test passes, not merely
-when the code merges.
+Keep lifecycle verification and Advanced Access clearly marked as rollout gates until they pass.
 
 ---
 
@@ -703,17 +670,21 @@ when the code merges.
 
 ### Real Meta acceptance test under Standard Access
 
-1. Complete OAuth using the Shopkeeper UI.
-2. Confirm `/subscribed_apps` contains `messages`.
-3. Send two DMs quickly from a separate Instagram account, including one attachment.
-4. Confirm both messages appear once, with the correct customer and timestamps.
-5. Confirm the image is stored privately, appears in the ticket, and is available to the agent for
-   task-relevant visual reasoning.
-6. Approve a reply and confirm delivery in Instagram.
-7. Confirm the outbound provider message ID was recorded.
-8. Exercise reconnect with the same account.
-9. Disconnect and confirm new DMs no longer create tickets.
-10. Reconnect and exercise the token refresh client with a controlled test token when possible.
+**Partial pass (2026-07-16):** Items 1–7 are confirmed through the live flow and read-only
+production checks. Complete items 8–10 before App Review submission.
+
+1. **Passed:** Complete OAuth using the Shopkeeper UI.
+2. **Passed:** Confirm the `messages` subscription is recorded and active.
+3. **Passed:** Send two DMs quickly from a separate Instagram account, including one attachment.
+4. **Passed:** Confirm both messages appear once with distinct provider IDs and provider timestamps.
+5. **Passed:** Confirm the image is stored privately, appears in the ticket, and is available to the
+   agent for task-relevant visual reasoning.
+6. **Passed:** Approve a reply and confirm delivery in Instagram.
+7. **Passed:** Confirm the outbound provider message ID was recorded.
+8. **Pending:** Exercise reconnect with the same account.
+9. **Pending:** Disconnect and confirm new DMs no longer create tickets.
+10. **Pending:** Reconnect and exercise the token refresh client with a controlled test token when
+    possible.
 
 No App Review submission should be made until this complete loop works through Shopkeeper—not only
 through Graph API Explorer or the App Dashboard's webhook test tool.
@@ -744,6 +715,10 @@ Do not put a guaranteed review duration in the delivery schedule; Meta does not 
 approval SLA. Treat Advanced Access as an external launch gate.
 
 ### Rollout order
+
+**Production preflight (2026-07-16):** the strict Instagram rollout audit reports one Instagram
+Login integration with no legacy or duplicate rows, and Prisma reports all 55 migrations applied.
+The rollout remains gated on acceptance items 8–10 above and Advanced Access.
 
 1. Merge code behind an Instagram integration feature flag.
 2. Deploy new environment variables to dashboard and gateway.

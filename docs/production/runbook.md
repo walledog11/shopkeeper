@@ -333,9 +333,13 @@ Automated health checks are necessary but not sufficient. Before marking the dep
 4. Confirm a new thread appears in the dashboard with an AI summary and cached plan.
 5. Approve a response and confirm the outbound email sends successfully.
 
-### Instagram DM (Deferred After V1)
+### Instagram DM (Controlled Rollout)
 
-Keep this heading until the complete real-account acceptance pass succeeds.
+The live Standard Access DM/image/reply path has passed. Keep the integration workspace-gated until
+the remaining lifecycle checks below pass and Advanced Access is approved for external merchants.
+The 2026-07-16 production preflight also confirmed a clean strict ownership/auth-model audit, an
+up-to-date migration history, rapid distinct inbound messages with provider timestamps, and an
+outbound provider message ID. Reconnect, disconnect/reconnect, and controlled token refresh remain.
 
 Before deployment, run the read-only ownership/auth-model audit against production and require a
 clean result:

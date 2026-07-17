@@ -10,9 +10,9 @@ Use one coherent Instagram implementation path for V1: Instagram API with Instag
 
 Do not leave the app half Page-based and half Instagram-account-based. The auth flow, stored integration identifiers, webhook resolution, token model, and outbound reply endpoint must all match the same Meta product path.
 
-## Current Repository Path: Facebook Login and Page Tokens
+## Superseded Repository Path: Facebook Login and Page Tokens
 
-Current files:
+Before the migration, the relevant files included:
 
 - `apps/dashboard/src/app/api/integrations/instagram/auth/route.ts`
 - `apps/dashboard/src/app/api/integrations/instagram/callback/route.ts`
@@ -22,21 +22,21 @@ Current files:
 - `apps/dashboard/src/lib/messaging/instagram-dispatch.ts`
 - `apps/gateway/src/maintenance/token-health.ts`
 
-The current implementation uses Facebook Login for Business at `facebook.com/dialog/oauth`, exchanges a Facebook user token, lists Pages with linked Instagram Business accounts, subscribes the Page to messaging webhooks, stores the Page token as the integration access token, and stores the Instagram account id as `Integration.externalAccountId`.
+The old implementation used Facebook Login for Business at `facebook.com/dialog/oauth`, exchanged a Facebook user token, listed Pages with linked Instagram Business accounts, subscribed the Page to messaging webhooks, stored the Page token as the integration access token, and stored the Instagram account id as `Integration.externalAccountId`.
 
-This creates a mixed model:
+This created a mixed model:
 
-- Auth is Facebook/Page based.
-- Stored account identity is Instagram-account based.
-- Webhooks may arrive under Page-shaped or Instagram-shaped entries.
-- Current webhook org resolution checks `entry.id` against `Integration.externalAccountId`, which is risky if Meta sends a Page id while the database stores an Instagram id.
-- Outbound dispatch posts to a Graph URL using the Instagram account id with a Page token, which should not be trusted as the final model until verified end to end.
+- Auth was Facebook/Page based.
+- Stored account identity was Instagram-account based.
+- Webhooks could arrive under Page-shaped or Instagram-shaped entries.
+- Webhook org resolution checked `entry.id` against `Integration.externalAccountId`, which was risky if Meta sent a Page id while the database stored an Instagram id.
+- Outbound dispatch posted to a Graph URL using the Instagram account id with a Page token.
 
-This path also adds setup friction because the merchant must have a Facebook Page linked to the Instagram account and the right Page/admin permissions.
+That path also added setup friction because the merchant needed a Facebook Page linked to the Instagram account and the right Page/admin permissions.
 
-## Recommended Path: Instagram API with Instagram Login
+## Implemented Path: Instagram API with Instagram Login
 
-Target auth and token model:
+Current auth and token model:
 
 - Auth URL: `https://www.instagram.com/oauth/authorize`
 - Token exchange: `https://api.instagram.com/oauth/access_token`
@@ -73,21 +73,25 @@ App review requirements:
 - External beta merchants will likely require Advanced Access and Meta app review.
 - Expect Business Verification, screencast, privacy policy, data deletion instructions, and a clear demonstration of connect, receive DM, merchant approval, and reply.
 
-## Required Repository Changes
+## Completed Repository Changes
 
-Replace or update:
+The migration updated:
 
-- `apps/dashboard/src/app/api/integrations/instagram/auth/route.ts`: move from Facebook OAuth URL/config id to Instagram Login.
-- `apps/dashboard/src/app/api/integrations/instagram/callback/route.ts`: exchange Instagram auth code, store Instagram id/username/token, subscribe the Instagram account.
-- `apps/dashboard/src/app/api/integrations/_lib/meta-oauth-client.ts`: split Page/Facebook helpers from Instagram Login helpers or rename to a coherent Instagram client.
-- `apps/gateway/src/routes/webhooks-meta.ts`: resolve Instagram webhooks by Instagram account id, loop all entries/events, and remove Page-id assumptions.
-- `apps/gateway/src/clients/meta-graph.ts`: add Instagram token/profile/subscription helpers against the correct API host.
-- `apps/dashboard/src/lib/messaging/instagram-dispatch.ts`: send through the Instagram Graph endpoint that matches the selected auth path.
-- `apps/gateway/src/maintenance/token-health.ts`: refresh/check Instagram long-lived tokens, not Facebook/Page tokens.
-- `apps/dashboard/src/app/api/integrations/instagram/connect/route.ts`: remove or clearly isolate the dev-only Page-token backdoor.
-- `apps/dashboard/src/components/integrations/connect-bodies/InstagramConnectBody.tsx`: replace Facebook Page setup copy with the actual Instagram Login requirements.
-- Tests around Instagram auth, callback, webhooks, dispatch, and token health.
+- `apps/dashboard/src/app/api/integrations/instagram/auth/route.ts` to use direct Instagram Login.
+- `apps/dashboard/src/app/api/integrations/instagram/callback/route.ts` to exchange Instagram tokens,
+  validate identity, subscribe messages, and persist the Instagram account.
+- Dashboard and gateway clients to use the coherent Instagram API hosts and token model.
+- `apps/gateway/src/routes/webhooks-meta.ts` to isolate and normalize every Instagram event.
+- `apps/dashboard/src/lib/messaging/instagram-dispatch.ts` to send through the exact receiving
+  Instagram integration.
+- `apps/gateway/src/maintenance/token-health.ts` to refresh and check Instagram long-lived tokens.
+- Integration copy and tests for the direct Instagram Login model.
+
+The development-only Page-token connect route was removed after the live Standard Access
+DM/image/reply path passed.
 
 ## Recommendation
 
-For V1 beta, migrate fully to Instagram Login and Instagram Graph messaging. Keep the current Page-token implementation only as historical reference until the new path passes a real Meta test user flow. Do not ship a hybrid implementation to beta merchants because webhook resolution, token refresh, and outbound dispatch will be hard to reason about and hard to support.
+The repository now uses Instagram Login and Instagram Graph messaging coherently. Keep this memo as
+historical rationale; use the implementation plan for the remaining lifecycle acceptance, Advanced
+Access, and controlled-beta work.
