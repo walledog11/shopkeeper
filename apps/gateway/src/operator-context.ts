@@ -28,6 +28,10 @@ export interface PendingPlan {
   sourceMessageId?: string;
   planHash?: string;
   instructionHash?: string;
+  // Display-only, parked so the keyword fast path can name the concrete action
+  // without re-querying. Never used to decide what executes.
+  customerName?: string;
+  actionLabel?: string;
 }
 
 export interface PendingDigest {
@@ -90,6 +94,8 @@ function readPendingPlan(value: unknown): PendingPlan | null {
     ...(typeof value.sourceMessageId === 'string' ? { sourceMessageId: value.sourceMessageId } : {}),
     ...(typeof value.planHash === 'string' ? { planHash: value.planHash } : {}),
     ...(typeof value.instructionHash === 'string' ? { instructionHash: value.instructionHash } : {}),
+    ...(typeof value.customerName === 'string' ? { customerName: value.customerName } : {}),
+    ...(typeof value.actionLabel === 'string' ? { actionLabel: value.actionLabel } : {}),
     rawToolCalls: value.rawToolCalls
       .map(readToolCall)
       .filter((toolCall): toolCall is ToolCall => toolCall !== null),

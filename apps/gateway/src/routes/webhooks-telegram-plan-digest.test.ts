@@ -153,6 +153,7 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
     });
   });
 
+  // Older parked plans have no actionLabel — the fast path must still answer.
   it('"no" clears pendingPlan without calling the agent', async () => {
     const chatId = '5555003';
     await bindMember(chatId);
@@ -165,7 +166,31 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
       .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'no' } });
 
     await waitForReplies(1);
-    expect(lastReplyText()).toMatch(/dismissed/i);
+    expect(lastReplyText()).toBe('Plan dismissed.');
+    expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
+    const ctx = await getContext(org.id, chatId);
+    expect(ctx.pendingPlan).toBeNull();
+  });
+
+  it('"no" names the dropped action when the plan parked a label', async () => {
+    const chatId = '5555005';
+    await bindMember(chatId);
+    await updateContext(org.id, chatId, {
+      pendingPlan: {
+        threadId: 't',
+        instruction: 'refund #1',
+        rawToolCalls: [],
+        customerName: 'Sarah Chen',
+        actionLabel: 'reply to Sarah',
+      },
+    });
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'no' } });
+
+    await waitForReplies(1);
+    expect(lastReplyText()).toBe("Dismissed — I won't reply to Sarah.");
     expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
     const ctx = await getContext(org.id, chatId);
     expect(ctx.pendingPlan).toBeNull();
@@ -224,7 +249,7 @@ describe('POST /webhooks/telegram — digest commands', () => {
       .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'spam 1' } });
 
     await waitForReplies(1);
-    expect(lastReplyText()).toMatch(/spam/i);
+    expect(lastReplyText()).toBe("Marked Jane's message as spam.");
     const updated = await db.thread.findUnique({ where: { id: threadId } });
     expect(updated?.filterStatus).toBe('filtered');
     expect(updated?.filterFeedback).toBe('confirmed_spam');
@@ -245,7 +270,7 @@ describe('POST /webhooks/telegram — digest commands', () => {
       await waitForReplies(1);
       expect(setMessageReactionSpy).toHaveBeenCalledWith(chatId, 1, '👀');
       expect(sendChatActionSpy).toHaveBeenCalledWith(chatId, 'typing');
-      expect(lastReplyText()).toMatch(/Reply sent on ticket 1/);
+      expect(lastReplyText()).toBe('Replied to Jane — "Thanks for your patience!"');
       expect(fetchSpy).toHaveBeenCalledOnce();
       const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
       expect(url).toMatch(/\/api\/messages\/internal$/);

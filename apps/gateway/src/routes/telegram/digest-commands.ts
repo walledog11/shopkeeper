@@ -1,6 +1,7 @@
 import { db } from '@shopkeeper/db';
 import { postDashboardInternal } from '../../clients/dashboard-internal.js';
 import logger from '../../logger.js';
+import { customerFirstName } from '../../message-handlers/planning-notifications.js';
 import type { OperatorContext } from '../../operator-context.js';
 import type { DigestCommand } from './command-parser.js';
 import { relativeAge } from './format.js';
@@ -81,6 +82,14 @@ export async function handleDigestCommand(
   }
 
   if (command.type === 'digest-spam') {
+    const thread = await db.thread.findFirst({
+      where: { id: targetId, organizationId },
+      select: { customer: { select: { name: true } } },
+    });
+    if (!thread) {
+      await reply('Ticket not found.');
+      return true;
+    }
     await db.thread.update({
       where: { id: targetId },
       data: {
@@ -89,7 +98,19 @@ export async function handleDigestCommand(
         filterDecidedAt: new Date(),
       },
     });
-    await reply(`Marked ${command.index} as spam.`);
+    const firstName = customerFirstName(thread.customer.name);
+    await reply(
+      firstName ? `Marked ${firstName}'s message as spam.` : `Marked ${command.index} as spam.`,
+    );
+    return true;
+  }
+
+  const replyTarget = await db.thread.findFirst({
+    where: { id: targetId, organizationId },
+    select: { customer: { select: { name: true } } },
+  });
+  if (!replyTarget) {
+    await reply('Ticket not found.');
     return true;
   }
 
@@ -108,6 +129,12 @@ export async function handleDigestCommand(
     await reply('Reply failed to send. Please try again from the dashboard.');
     return true;
   }
-  await reply(`Reply sent on ticket ${command.index}.`);
+  const replyFirstName = customerFirstName(replyTarget.customer.name);
+  const echo = command.text.length > 120 ? `${command.text.slice(0, 120)}…` : command.text;
+  await reply(
+    replyFirstName
+      ? `Replied to ${replyFirstName} — "${echo}"`
+      : `Reply sent on ticket ${command.index}.`,
+  );
   return true;
 }

@@ -51,5 +51,5 @@ export async function executeFreeFormInstruction(
     await reply('Something went wrong running the agent. Please try again.');
     return;
   }
-  await reply(summary || 'Done.');
+  await reply(summary || 'All set.');
 }

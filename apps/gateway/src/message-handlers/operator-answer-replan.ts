@@ -15,6 +15,7 @@ import { gatewayThreadSink } from './agent-thread-sink.js';
 import { toGatewayAgentPlan } from './agent-plan-adapter.js';
 import {
   formatOperatorDraftSummary,
+  parkedActionLabel,
   sendOperatorPlanNotification,
   type OperatorNotificationExclude,
 } from './planning-notifications.js';
@@ -155,7 +156,11 @@ export async function applyOperatorAnswerReplan(
   }
 
   const exclude = answeringChannelFromSenderRef(senderRef);
-  const draftSummary = formatOperatorDraftSummary(meta?.customer?.name ?? null, notifyPlan);
+  const customerName = meta?.customer?.name ?? null;
+  const draftSummary = formatOperatorDraftSummary(customerName, notifyPlan);
+  // This device is excluded from the fan-out below, so it parks its own copy —
+  // including the display fields the fan-out would otherwise have supplied.
+  const actionLabel = parkedActionLabel(notifyPlan.steps, customerName);
   const pendingPlan = {
     threadId,
     instruction: baseInstruction,
@@ -166,6 +171,8 @@ export async function applyOperatorAnswerReplan(
       planHash: hashPlan(plan),
       instructionHash: hashInstruction(baseInstruction),
     } : {}),
+    ...(customerName ? { customerName } : {}),
+    ...(actionLabel ? { actionLabel } : {}),
   };
 
   await updateContext(organizationId, chatId, { pendingPlan });

@@ -1,4 +1,5 @@
 import { db, type DbChannelType } from '@shopkeeper/db';
+import { PLAN_STEP_LABELS } from '@shopkeeper/agent/tools';
 import { CHANNEL } from '../constants.js';
 import logger from '../logger.js';
 import { getGatewayDashboardUrl } from '../config/env.js';
@@ -144,7 +145,7 @@ function lowerFirst(text: string): string {
   return /^[A-Z][a-z]/.test(text) ? text.charAt(0).toLowerCase() + text.slice(1) : text;
 }
 
-function customerFirstName(customerName: string | null): string | null {
+export function customerFirstName(customerName: string | null): string | null {
   return customerName ? customerName.split(' ')[0] ?? null : null;
 }
 
@@ -171,6 +172,27 @@ function formatHeaderLine(
 
 function isSendStep(step: PlanStep): boolean {
   return step.tool === 'send_reply' || step.tool === 'send_email';
+}
+
+// A phrase that completes "I won't …", parked alongside the plan so a fast-path
+// dismissal can name what it dropped without re-reading the thread.
+export function parkedActionLabel(steps: PlanStep[], customerName: string | null): string | undefined {
+  const actionableSteps = steps.filter((step) => step.category !== 'read');
+  if (actionableSteps.length === 0) return undefined;
+
+  const firstName = customerFirstName(customerName);
+  const forCustomer = firstName ? ` for ${firstName}` : '';
+  if (actionableSteps.length > 1) {
+    return `run those ${actionableSteps.length} steps${forCustomer}`;
+  }
+
+  const step = actionableSteps[0]!;
+  if (step.tool === 'send_reply') return `reply to ${firstName ?? 'the customer'}`;
+  if (step.tool === 'send_email') return `email ${firstName ?? 'the customer'}`;
+
+  const label = (step.tool ? PLAN_STEP_LABELS[step.tool] : undefined) ?? step.label;
+  if (!label) return undefined;
+  return `${lowerFirst(label)}${forCustomer}`;
 }
 
 export function formatOperatorPlanMessage(
@@ -425,6 +447,7 @@ export async function sendOperatorPlanNotification(
     plan.rawToolCalls,
     instruction,
   );
+  const actionLabel = parkedActionLabel(plan.steps, customerName);
 
   await notifyCriticalToAllOperators(
     organizationId,
@@ -437,6 +460,8 @@ export async function sendOperatorPlanNotification(
           instruction,
           rawToolCalls: plan.rawToolCalls,
           ...(options?.identity ?? {}),
+          ...(customerName ? { customerName } : {}),
+          ...(actionLabel ? { actionLabel } : {}),
         },
       },
       idempotencyKey,
