@@ -49,6 +49,21 @@ describe('updateContext + getContext round-trip', () => {
     expect(ctx.pendingDigest).toBeNull();
   });
 
+  it('persists the optional display fields the fast path reads', async () => {
+    const threadId = '00000000-0000-4000-8000-000000000011';
+    const plan: PendingPlan = {
+      threadId,
+      instruction: 'refund the order',
+      rawToolCalls: [{ id: 'tc1', name: 'refundOrder' }],
+      customerName: 'Sarah Chen',
+      actionLabel: 'reply to Sarah',
+    };
+
+    await updateContext(org.id, '7000002', { pendingPlan: plan });
+
+    expect((await getContext(org.id, '7000002')).pendingPlan).toEqual(plan);
+  });
+
   it('persists pendingDigest', async () => {
     const digest: PendingDigest = {
       threadIds: ['t1', 't2'],
@@ -160,6 +175,25 @@ describe('updateContext + getContext round-trip', () => {
 
     expect((await getContext(org.id, 'legacy_a')).pendingPlan).toEqual(newer);
     expect((await getContext(org.id, 'legacy_b')).pendingPlan).toEqual(legacy);
+  });
+
+  // The identity-less path matches on whole-JSON equality, so the reader has to
+  // round-trip the display fields or a dismissal silently stops resolving.
+  it('resolves an identity-less plan that carries display fields', async () => {
+    const parked: PendingPlan = {
+      threadId: '00000000-0000-4000-8000-000000000025',
+      instruction: 'reply',
+      rawToolCalls: [],
+      customerName: 'Sarah Chen',
+      actionLabel: 'reply to Sarah',
+    };
+    await updateContext(org.id, 'display_a', { pendingPlan: parked });
+
+    const stored = (await getContext(org.id, 'display_a')).pendingPlan;
+    expect(stored).not.toBeNull();
+    await resolvePendingPlanContexts(org.id, 'display_a', stored!);
+
+    expect((await getContext(org.id, 'display_a')).pendingPlan).toBeNull();
   });
 });
 

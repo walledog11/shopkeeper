@@ -167,10 +167,14 @@ describe('applyOperatorAnswerReplan', () => {
     expect(message).not.toContain('Reply "yes" to send');
     expect(planAgentSpy).toHaveBeenCalledTimes(1);
 
+    // This device is excluded from the fan-out, so it must park the display
+    // fields itself or a later "no" here loses the named dismissal.
     const updatedCtx = await getContext(org.id, 'chat_2');
     expect(updatedCtx.pendingPlan).toMatchObject({
       threadId: thread.id,
       instruction: 'Shipping to Canada',
+      customerName: 'Jane Doe',
+      actionLabel: 'reply to Jane',
     });
 
     // The operator card still fans out to the merchant's other bound channels.

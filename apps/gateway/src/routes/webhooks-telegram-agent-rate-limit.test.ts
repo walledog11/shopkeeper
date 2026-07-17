@@ -42,7 +42,7 @@ describe('POST /webhooks/telegram — help & summary', () => {
     return member;
   }
 
-  it('"help" lists the available commands without touching the DB feed', async () => {
+  it('"help" leads with what to say and keeps commands as a trailing hint', async () => {
     const chatId = '7500001';
     await bindMember(chatId);
 
@@ -53,9 +53,13 @@ describe('POST /webhooks/telegram — help & summary', () => {
 
     await waitForReplies(1);
     const text = lastReplyText();
-    expect(text).toMatch(/Shopkeeper commands/);
+    expect(text).toMatch(/^Text me like you'd text an employee:/);
+    expect(text).toMatch(/refund #1234/);
+    expect(text).toMatch(/reply yes or no/);
+    // Commands still documented, but below the capabilities.
     expect(text).toMatch(/SUMMARY/);
     expect(text).toMatch(/OPEN <n>/);
+    expect(text.indexOf('SUMMARY')).toBeGreaterThan(text.indexOf('refund #1234'));
   });
 
   it('"summary" sends the live inbox digest and seeds pendingDigest', async () => {

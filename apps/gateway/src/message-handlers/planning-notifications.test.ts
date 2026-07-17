@@ -38,6 +38,7 @@ vi.mock('../config/env.js', () => ({
 import {
   formatOperatorPlanMessage,
   getConversationStage,
+  parkedActionLabel,
   sendOperatorAutoExecutionNotification,
   sendOperatorPlanNotification,
   sendOperatorQuestionNotification,
@@ -66,6 +67,44 @@ beforeEach(() => {
   notifyOperatorSpy.mockReset();
   mockLogger.info.mockClear();
   mockLogger.error.mockClear();
+});
+
+// Each label has to complete "I won't …" in the fast-path dismissal.
+describe('parkedActionLabel', () => {
+  const step = (tool: string, label: string, category = 'write') =>
+    ({ category, tool, description: label, label, enabled: true });
+
+  it('names the customer for a single reply step', () => {
+    expect(parkedActionLabel([step('send_reply', 'Reply')], 'Sarah Chen')).toBe('reply to Sarah');
+    expect(parkedActionLabel([step('send_email', 'Reply')], 'Sarah Chen')).toBe('email Sarah');
+  });
+
+  it('falls back to the registry plan-step label for non-send actions', () => {
+    expect(parkedActionLabel([step('create_refund', 'Refund')], 'Sarah Chen')).toBe(
+      'issue refund for Sarah',
+    );
+  });
+
+  it('counts the steps for a multi-action plan', () => {
+    expect(
+      parkedActionLabel([step('create_refund', 'Refund'), step('send_reply', 'Reply')], 'Sarah Chen'),
+    ).toBe('run those 2 steps for Sarah');
+  });
+
+  it('drops the customer clause when the customer has no name', () => {
+    expect(parkedActionLabel([step('send_reply', 'Reply')], null)).toBe('reply to the customer');
+    expect(parkedActionLabel([step('create_refund', 'Refund')], null)).toBe('issue refund');
+  });
+
+  it('ignores read steps and yields nothing for a read-only plan', () => {
+    expect(parkedActionLabel([step('get_order', 'Look up order', 'read')], 'Sarah Chen')).toBeUndefined();
+    expect(
+      parkedActionLabel(
+        [step('get_order', 'Look up order', 'read'), step('send_reply', 'Reply')],
+        'Sarah Chen',
+      ),
+    ).toBe('reply to Sarah');
+  });
 });
 
 describe('formatOperatorPlanMessage', () => {
@@ -269,6 +308,8 @@ describe('sendOperatorPlanNotification', () => {
         sourceMessageId: '00000000-0000-4000-8000-000000000002',
         planHash: 'a'.repeat(64),
         instructionHash: 'b'.repeat(64),
+        customerName: 'Jane Doe',
+        actionLabel: 'email Jane',
       },
     });
   });

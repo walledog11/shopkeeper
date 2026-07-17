@@ -27,7 +27,8 @@ export async function handlePendingPlanCommand(
   const { threadId, instruction, rawToolCalls } = pendingPlan;
   if (command.type === 'plan-dismiss') {
     await clearPendingPlan(organizationId, chatId, pendingPlan);
-    await reply('Plan dismissed.');
+    // Older parked plans carry no actionLabel.
+    await reply(pendingPlan.actionLabel ? `Dismissed — I won't ${pendingPlan.actionLabel}.` : 'Plan dismissed.');
     return true;
   }
 
