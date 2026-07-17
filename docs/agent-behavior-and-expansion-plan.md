@@ -74,13 +74,39 @@ their additive migration is applied; provider canaries and stale/unknown recover
 remain open. P4-01 outbound-email claims and P5-01 tenant ownership are deployed
 with their required migration and deterministic/cross-tenant coverage; provider
 canary and production mismatch observation remain open. P4-03 durable operator
-events, P5-04 active-thread semantics, and P6 dependencies remain outstanding.
+events are implemented for Telegram and iMessage behind their per-channel flags,
+with the recovery sweep; their production canary and the `unknown`-event runbook
+remain open. **P5-04 landed on 2026-07-16** (escalation is an orthogonal
+`escalated_at` flag; the additive migration ships with it), which unblocks A1's
+active-ticket semantics. P6 dependencies remain outstanding.
 
 ---
 
 ## Track A — conversational operator channel
 
 ### A1 — Inbox visibility tools (foundation)
+
+**Status (2026-07-16): Implementation complete; live-channel verification
+pending.** `apps/gateway/src/message-handlers/operator-inbox-tools.ts` ships
+`list_active_tickets` and `get_ticket` as read-only gateway module tools, merged
+into `moduleTools` in `agent-execution.ts` (so both Telegram and iMessage get
+them), with an inbox clause added to the gateway-only `isOperatorMode` branch of
+`prompt.ts` — zero support-planner prompt bytes changed, so no eval run was
+required. The P5-04 dependency below is now resolved: escalation is an
+orthogonal `escalated_at` flag, and the active-ticket predicate is the canonical
+inbox filter plus `status in (open, pending)`, listing both literal statuses so
+pending escalations from before P5-04 (and any the not-yet-retired
+`update_thread_status` enum still creates) cannot be silently hidden. Each tool
+result is wrapped once in `<customer_message>` tags with forged copies defanged,
+so the customer name is inside the boundary too. Database-backed coverage: org
+scoping on both tools, inbox exclusions, tag/status filters, escalation
+flagging, untrusted defanging, stale-plan reporting, and turn wiring. The
+required live Telegram/iMessage phone round-trip has not been performed, so
+release completion remains open.
+
+**Follow-up not in this phase:** the executor→parse→execute path (schema enum
+validation, `categoryPermission` gating) is exercised only by the live
+round-trip; the unit tests call `execute()` directly.
 
 **Problem:** the operator agent has no tool to list or read support tickets —
 thread tools operate only on the current thread, stats are aggregates. The
@@ -108,10 +134,11 @@ that customer say?" or "anything urgent right now?".
 **Why foundation:** A2's conversational digest triage and A5's briefing
 follow-ups get most of their power from these two tools.
 
-**Safety dependency:** finalize or explicitly stage the P5-04 definition of an
-active ticket before shipping inbox semantics. A read-only implementation may
-temporarily expose both `open` and `pending` with their literal statuses, but
-must not silently omit pending escalations.
+**Safety dependency:** ~~finalize or explicitly stage the P5-04 definition of an
+active ticket before shipping inbox semantics.~~ **Resolved 2026-07-16** — P5-04
+landed (escalation is orthogonal to status; the ticket stays `open`), and the
+tools expose both `open` and `pending` with their literal statuses, so pending
+escalations are not omitted.
 
 **Verify:** unit tests for org-scoping + untrusted wrapping; extend
 `execute-operator-agent-turn` smoke test; live phone round-trip ("what's in my
@@ -322,9 +349,11 @@ own plan.
 
 ### Suggested Track A order
 
-A3 should ship first because it stops operator-thread self-escalation. P8-01
-may also ship immediately as a standalone quick win. Subject to the safety
-gates above, the remaining behavior order is A1 → A2 → A4 → A6-step-1 → A5.
+A3 shipped first because it stops operator-thread self-escalation, and P8-01
+landed as a standalone quick win. **A1 is implementation-complete as of
+2026-07-16** (P5-04 unblocked it). Subject to the safety gates above, the
+remaining behavior order is A2 → A4 → A6-step-1 → A5. A2 can now assume
+`get_ticket` exists — its "open" case needs no tool.
 A5's deduplicated "Waiting on you" foundation now has P1 identity support; its
 authoritative "Handled" section still waits for P3. Each operator-only phase has its own live verification; none needs
 an eval run unless it changes the support-planner surface.
@@ -442,6 +471,8 @@ plan.
 4. A5 reporting boundary: persist one organization-level last-successful-
    digest cursor, or use a fixed rolling window? (Recommend the durable cursor
    so retries and delayed digests do not overlap or omit activity.)
-5. P5-04 active-ticket semantics: should `pending` remain an active inbox state,
-   or should escalation become orthogonal to thread status? A1 must expose the
-   literal state safely until that decision is implemented.
+5. ~~P5-04 active-ticket semantics: should `pending` remain an active inbox
+   state, or should escalation become orthogonal to thread status?~~
+   **Decided and shipped 2026-07-16:** escalation is orthogonal — an escalated
+   ticket stays `open` and carries `escalated_at`. `pending` remains listable
+   until the eval-gated retirement of the `update_thread_status` enum value.
