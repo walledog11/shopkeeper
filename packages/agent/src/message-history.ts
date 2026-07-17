@@ -18,7 +18,7 @@ function defangUntrusted(text: string): string {
     .split(UNTRUSTED_CLOSE_TAG).join("</customer_message >");
 }
 
-function wrapUntrusted(text: string): string {
+export function wrapUntrusted(text: string): string {
   return `${UNTRUSTED_OPEN_TAG}\n${defangUntrusted(text)}\n${UNTRUSTED_CLOSE_TAG}`;
 }
 

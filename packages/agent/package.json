@@ -26,6 +26,10 @@
       "types": "./dist/thread-constants.d.ts",
       "default": "./dist/thread-constants.js"
     },
+    "./inbox-filter": {
+      "types": "./dist/inbox-filter.d.ts",
+      "default": "./dist/inbox-filter.js"
+    },
     "./spend": {
       "types": "./dist/spend.d.ts",
       "default": "./dist/spend.js"

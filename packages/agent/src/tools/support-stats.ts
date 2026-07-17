@@ -8,8 +8,8 @@ export {
   type SupportStatsSummary,
 } from "./support-stats-types.js";
 
-// Must stay in sync with canonicalInboxThreadSql in
-// apps/dashboard/src/lib/messaging/inbox-filter.ts so stats match the inbox.
+// Must stay in sync with canonicalInboxThreadSql in ../inbox-filter.ts so stats
+// match the inbox.
 function inboxThreadSql(orgId: string) {
   return Prisma.sql`
     t.organization_id = ${orgId}::uuid
