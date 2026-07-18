@@ -92,6 +92,20 @@ describe('requestTokenRefresh', () => {
     })).resolves.toEqual({ ok: false, status: null, transient: true });
   });
 
+  it('bounds the refresh with a deadline and marks a timeout as transient', async () => {
+    // Honor the abort signal as real fetch does; the tiny timeout fires it.
+    mockFetch.mockImplementation((_url: string, init: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => reject(init.signal!.reason));
+      }),
+    );
+
+    await expect(requestTokenRefresh('gmail', 'refresh-token', {
+      clientId: 'client-id',
+      clientSecret: 'client-secret',
+    }, 10)).resolves.toEqual({ ok: false, status: null, transient: true });
+  });
+
   it('marks provider 4xx responses as non-transient refresh failures', async () => {
     mockFetch.mockResolvedValueOnce(new Response('invalid_grant', { status: 400 }));
 

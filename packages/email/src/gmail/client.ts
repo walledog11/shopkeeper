@@ -14,6 +14,9 @@ const GMAIL_API_BASE_URL = 'https://gmail.googleapis.com/gmail/v1';
 const REFRESH_LEEWAY_MS = 60_000;
 const MAX_GMAIL_PAGE_SIZE = 500;
 const MAX_HISTORY_PAGES = 1_000;
+// Bound every authenticated Gmail request so a stalled socket can't hold a sync
+// worker past the queue/agent lock window (AUD-015). Well under the 90s lock TTL.
+const GMAIL_REQUEST_TIMEOUT_MS = 15_000;
 
 export interface GmailApiIntegration {
   id: string;
@@ -32,6 +35,7 @@ export interface GmailApiClientOptions {
   ) => Promise<TokenRefreshResult>;
   now?: () => number;
   baseUrl?: string;
+  requestTimeoutMs?: number;
 }
 
 export type GmailLabelFilterBehavior = 'include' | 'exclude';
@@ -113,6 +117,13 @@ interface RequestOptions {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+// AbortSignal.timeout rejects fetch with a DOMException named 'TimeoutError';
+// a manual abort surfaces as 'AbortError'. The only signal here is the deadline.
+function isAbortError(cause: unknown): boolean {
+  const name = (cause as { name?: unknown } | null)?.name;
+  return name === 'TimeoutError' || name === 'AbortError';
 }
 
 function requireNonEmptyString(
@@ -268,6 +279,7 @@ export class GmailApiClient {
   private readonly refreshTokenRequest: NonNullable<GmailApiClientOptions['refreshToken']>;
   private readonly now: () => number;
   private readonly baseUrl: string;
+  private readonly requestTimeoutMs: number;
 
   constructor(
     private readonly integration: GmailApiIntegration,
@@ -276,9 +288,10 @@ export class GmailApiClient {
     this.accessToken = integration.accessToken;
     this.tokenExpiresAt = integration.tokenExpiresAt;
     this.fetch = options.fetch ?? globalThis.fetch;
+    this.requestTimeoutMs = options.requestTimeoutMs ?? GMAIL_REQUEST_TIMEOUT_MS;
     this.persistToken = options.persistToken ?? persistRefreshedToken;
     this.refreshTokenRequest = options.refreshToken
-      ?? ((refreshToken, client) => requestTokenRefresh('gmail', refreshToken, client));
+      ?? ((refreshToken, client) => requestTokenRefresh('gmail', refreshToken, client, this.requestTimeoutMs));
     this.now = options.now ?? Date.now;
     this.baseUrl = (options.baseUrl ?? GMAIL_API_BASE_URL).replace(/\/+$/, '');
   }
@@ -443,10 +456,11 @@ export class GmailApiClient {
           ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
         },
         ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
+        signal: AbortSignal.timeout(this.requestTimeoutMs),
       });
     } catch (cause) {
       throw new GmailApiError(`Gmail request failed for ${operation}`, {
-        kind: 'retryable',
+        kind: isAbortError(cause) ? 'timeout' : 'retryable',
         status: null,
         operation,
         cause,

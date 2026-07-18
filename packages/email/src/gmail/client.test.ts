@@ -261,6 +261,41 @@ describe('GmailApiClient response validation and errors', () => {
       status,
     });
   });
+
+  it('classifies a request deadline as a typed timeout error', async () => {
+    const client = new GmailApiClient(integration, {
+      fetch: mockFetch,
+      oauthClient: { clientId: 'client-id', clientSecret: 'client-secret' },
+      persistToken,
+      refreshToken,
+      now: () => Date.parse('2029-01-01T00:00:00.000Z'),
+      requestTimeoutMs: 10,
+    });
+    // Honor the abort signal exactly as real fetch does, rejecting with the
+    // signal's reason (AbortSignal.timeout's own TimeoutError DOMException).
+    mockFetch.mockImplementation((_url: string, init: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init.signal?.addEventListener('abort', () => reject(init.signal!.reason));
+      }),
+    );
+
+    await expect(client.getMessageRaw('message-1')).rejects.toMatchObject({
+      name: 'GmailApiError',
+      kind: 'timeout',
+      retryable: false,
+      operation: 'users.messages.get',
+    });
+  });
+
+  it('classifies a non-timeout fetch failure as retryable', async () => {
+    mockFetch.mockRejectedValueOnce(new Error('socket hang up'));
+
+    await expect(createClient().getMessageRaw('message-1')).rejects.toMatchObject({
+      name: 'GmailApiError',
+      kind: 'retryable',
+      retryable: true,
+    });
+  });
 });
 
 describe('decodeGmailBase64Url', () => {
