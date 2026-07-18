@@ -79,7 +79,7 @@ describe('notifyOperator (telegram)', () => {
     expect(updateContextSpy).toHaveBeenCalledWith('org_1', 'chat_1', { pendingPlan: null });
   });
 
-  it('returns null on best-effort HTTP send failure without updating context', async () => {
+  it('persists context before send, then returns null on best-effort HTTP send failure', async () => {
     sendMessageSpy.mockResolvedValue(false);
 
     const result = await notifyOperator(
@@ -90,14 +90,14 @@ describe('notifyOperator (telegram)', () => {
     );
 
     expect(result).toBeNull();
-    expect(updateContextSpy).not.toHaveBeenCalled();
+    expect(updateContextSpy).toHaveBeenCalledWith('org_1', 'chat_1', { pendingPlan: null });
     expect(mockLogger.warn).toHaveBeenCalledWith(
       { chatId: 'chat_1', channel: 'telegram', organizationId: 'org_1' },
-      '[OperatorNotify] Send failed — skipping context update',
+      '[OperatorNotify] Send failed',
     );
   });
 
-  it('throws on critical HTTP send failure', async () => {
+  it('persists context before send, then throws on critical HTTP send failure', async () => {
     sendMessageSpy.mockResolvedValue(false);
 
     await expect(
@@ -110,7 +110,45 @@ describe('notifyOperator (telegram)', () => {
       ),
     ).rejects.toThrow(OperatorNotifyError);
 
-    expect(updateContextSpy).not.toHaveBeenCalled();
+    expect(updateContextSpy).toHaveBeenCalledWith('org_1', 'chat_1', { pendingPlan: null });
+  });
+
+  it('persists the pending-plan slot before delivering the card', async () => {
+    const order: string[] = [];
+    updateContextSpy.mockImplementation(async () => {
+      order.push('persist');
+    });
+    sendMessageSpy.mockImplementation(async () => {
+      order.push('send');
+      return true;
+    });
+
+    await notifyOperator(
+      'org_1',
+      TELEGRAM_MEMBER,
+      'plan card',
+      { pendingPlan: { threadId: 't1', instruction: 'do it', rawToolCalls: [] } },
+      { policy: 'critical', threadId: 't1' },
+    );
+
+    expect(order).toEqual(['persist', 'send']);
+  });
+
+  it('does not deliver the card when the pending-plan slot cannot be persisted', async () => {
+    updateContextSpy.mockRejectedValue(new Error('db down'));
+    sendMessageSpy.mockResolvedValue(true);
+
+    await expect(
+      notifyOperator(
+        'org_1',
+        TELEGRAM_MEMBER,
+        'plan card',
+        { pendingPlan: null },
+        { policy: 'critical', threadId: 't1' },
+      ),
+    ).rejects.toThrow(OperatorNotifyError);
+
+    expect(sendMessageSpy).not.toHaveBeenCalled();
   });
 
   it('throws on critical network send failure', async () => {
