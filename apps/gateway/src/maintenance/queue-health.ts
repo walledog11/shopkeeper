@@ -17,8 +17,24 @@ import {
 
 const QUEUE_HEALTH_ACTIVE_SAMPLE_LIMIT = 20;
 
-type QueueHealthQueueLabel = 'inbound' | 'aiSummary';
+type QueueHealthQueueLabel =
+  | 'inbound'
+  | 'aiSummary'
+  | 'outboundEmail'
+  | 'gmailSync'
+  | 'orderReview'
+  | 'operatorEvent';
 type QueueHealthMetric = 'failed' | 'waiting' | 'active_stuck';
+
+// Per-queue SLO overrides. Any omitted metric falls back to the global
+// GatewayOpsAlertConfig threshold. `failed` counts the retained failed set over
+// the 7-day removeOnFail window, not "failures right now", so keep it coarse and
+// put tight customer-latency SLOs on waiting/active_stuck.
+export interface QueueHealthThresholds {
+  failed?: number;
+  waiting?: number;
+  activeStuckMs?: number;
+}
 
 type QueueHealthJobCounts = {
   waiting: number;
@@ -64,6 +80,7 @@ export interface QueueHealthMonitoredQueue {
   label: QueueHealthQueueLabel;
   queueName: string;
   queue: QueueHealthInspectableQueue;
+  thresholds?: QueueHealthThresholds;
 }
 
 export interface QueueHealthSnapshot {
@@ -107,20 +124,25 @@ export async function checkGatewayQueueHealth(
   const emitAlert = dependencies.emitAlert ?? emitOpsAlert;
   const incrementWindow = dependencies.incrementWindow ?? incrementOpsAlertWindow;
 
-  const snapshots = await Promise.all(
-    monitoredQueues.map((monitoredQueue) =>
-      readQueueHealthSnapshot(monitoredQueue, { nowMs, activeSampleLimit }),
-    ),
+  const monitored = await Promise.all(
+    monitoredQueues.map(async (monitoredQueue) => ({
+      monitoredQueue,
+      snapshot: await readQueueHealthSnapshot(monitoredQueue, { nowMs, activeSampleLimit }),
+    })),
   );
 
   const alerts: QueueHealthAlertDecision[] = [];
-  for (const snapshot of snapshots) {
-    if (snapshot.counts.failed > config.queueFailedThreshold) {
+  for (const { monitoredQueue, snapshot } of monitored) {
+    const failedThreshold = monitoredQueue.thresholds?.failed ?? config.queueFailedThreshold;
+    const waitingThreshold = monitoredQueue.thresholds?.waiting ?? config.queueWaitingThreshold;
+    const activeStuckMs = monitoredQueue.thresholds?.activeStuckMs ?? config.queueActiveStuckMs;
+
+    if (snapshot.counts.failed > failedThreshold) {
       alerts.push(await emitQueueHealthAlert({
         snapshot,
         metric: 'failed',
         value: snapshot.counts.failed,
-        threshold: config.queueFailedThreshold,
+        threshold: failedThreshold,
         config,
         nowMs,
         counterClient: dependencies.counterClient,
@@ -129,12 +151,12 @@ export async function checkGatewayQueueHealth(
       }));
     }
 
-    if (snapshot.counts.waiting > config.queueWaitingThreshold) {
+    if (snapshot.counts.waiting > waitingThreshold) {
       alerts.push(await emitQueueHealthAlert({
         snapshot,
         metric: 'waiting',
         value: snapshot.counts.waiting,
-        threshold: config.queueWaitingThreshold,
+        threshold: waitingThreshold,
         config,
         nowMs,
         counterClient: dependencies.counterClient,
@@ -145,13 +167,13 @@ export async function checkGatewayQueueHealth(
 
     if (
       snapshot.oldestActiveJob
-      && snapshot.oldestActiveJob.ageMs > config.queueActiveStuckMs
+      && snapshot.oldestActiveJob.ageMs > activeStuckMs
     ) {
       alerts.push(await emitQueueHealthAlert({
         snapshot,
         metric: 'active_stuck',
         value: snapshot.oldestActiveJob.ageMs,
-        threshold: config.queueActiveStuckMs,
+        threshold: activeStuckMs,
         config,
         nowMs,
         counterClient: dependencies.counterClient,
@@ -161,13 +183,27 @@ export async function checkGatewayQueueHealth(
     }
   }
 
-  return { snapshots, alerts };
+  return { snapshots: monitored.map((entry) => entry.snapshot), alerts };
 }
+
+// Customer- and merchant-facing queues carry a tight waiting SLO: a real backlog
+// here is a small number of undelivered replies or unprocessed merchant
+// instructions, well below the default 100. outbound-email also gets a tight
+// active_stuck bound since a send is a single deadline-bounded provider call.
+// gmail-sync (long history pagination) and operator-event active_stuck (already
+// backstopped by the P4-03 sweep at 10min) stay on the loose global default,
+// and `failed` stays global everywhere (it's cumulative over the 7-day window).
+const OUTBOUND_EMAIL_THRESHOLDS: QueueHealthThresholds = { waiting: 20, activeStuckMs: 300_000 };
+const OPERATOR_EVENT_THRESHOLDS: QueueHealthThresholds = { waiting: 20 };
 
 export const registerQueueHealthMaintenanceJob: MaintenanceJobRegistration = async (context) => {
   const queueHealthQueue = createMaintenanceQueue(context, QUEUE.QUEUE_HEALTH);
   const inboundQueue = createMaintenanceQueue(context, QUEUE.INBOUND);
   const summaryQueue = createMaintenanceQueue(context, QUEUE.AI_SUMMARY);
+  const outboundEmailQueue = createMaintenanceQueue(context, QUEUE.OUTBOUND_EMAIL);
+  const gmailSyncQueue = createMaintenanceQueue(context, QUEUE.GMAIL_SYNC);
+  const orderReviewQueue = createMaintenanceQueue(context, QUEUE.ORDER_REVIEW);
+  const operatorEventQueue = createMaintenanceQueue(context, QUEUE.OPERATOR_EVENT);
 
   await scheduleRepeatableJob(queueHealthQueue, JOB.QUEUE_HEALTH_CHECK, JOB.QUEUE_HEALTH_ID, FIVE_MINUTES_MS);
 
@@ -175,6 +211,20 @@ export const registerQueueHealthMaintenanceJob: MaintenanceJobRegistration = asy
     await checkGatewayQueueHealth([
       { label: 'inbound', queueName: QUEUE.INBOUND, queue: inboundQueue },
       { label: 'aiSummary', queueName: QUEUE.AI_SUMMARY, queue: summaryQueue },
+      {
+        label: 'outboundEmail',
+        queueName: QUEUE.OUTBOUND_EMAIL,
+        queue: outboundEmailQueue,
+        thresholds: OUTBOUND_EMAIL_THRESHOLDS,
+      },
+      { label: 'gmailSync', queueName: QUEUE.GMAIL_SYNC, queue: gmailSyncQueue },
+      { label: 'orderReview', queueName: QUEUE.ORDER_REVIEW, queue: orderReviewQueue },
+      {
+        label: 'operatorEvent',
+        queueName: QUEUE.OPERATOR_EVENT,
+        queue: operatorEventQueue,
+        thresholds: OPERATOR_EVENT_THRESHOLDS,
+      },
     ], {
       counterClient: context.producerConn,
     });
@@ -185,7 +235,15 @@ export const registerQueueHealthMaintenanceJob: MaintenanceJobRegistration = asy
 
   return {
     workers: [worker],
-    queues: [queueHealthQueue, inboundQueue, summaryQueue],
+    queues: [
+      queueHealthQueue,
+      inboundQueue,
+      summaryQueue,
+      outboundEmailQueue,
+      gmailSyncQueue,
+      orderReviewQueue,
+      operatorEventQueue,
+    ],
   };
 };
 

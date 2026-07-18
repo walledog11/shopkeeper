@@ -172,6 +172,86 @@ describe('checkGatewayQueueHealth', () => {
     ]);
     expect(emitAlert).toHaveBeenCalledTimes(1);
   });
+
+  it('applies a per-queue waiting override without lowering non-overridden queues', async () => {
+    const { client } = createCounterClient();
+    const emitAlert = createEmitAlert();
+    // 21 waiting is over the outbound-email override (20) but under the global default (100).
+    const inboundQueue = createQueue({ failed: 0, waiting: 21, active: 0 });
+    const outboundQueue = createQueue({ failed: 0, waiting: 21, active: 0 });
+
+    const result = await checkGatewayQueueHealth([
+      { label: 'inbound', queueName: 'inbound-messages', queue: inboundQueue },
+      {
+        label: 'outboundEmail',
+        queueName: 'outbound-email',
+        queue: outboundQueue,
+        thresholds: { waiting: 20, activeStuckMs: 300_000 },
+      },
+    ], {
+      counterClient: client,
+      config: CONFIG,
+      nowMs: 301_000,
+      emitAlert,
+    });
+
+    expect(result.alerts.map((alert) => `${alert.queue}:${alert.metric}:${alert.emitted}`)).toEqual([
+      'outboundEmail:waiting:true',
+    ]);
+  });
+
+  it('applies a per-queue active_stuck override', async () => {
+    const { client } = createCounterClient();
+    const emitAlert = createEmitAlert();
+    // Active 6 minutes: over the outbound-email override (5 min), under the global default (15 min).
+    const outboundQueue = createQueue(
+      { failed: 0, waiting: 0, active: 1 },
+      [{ id: 'job-send', name: 'send-email', processedOn: 640_000, attemptsMade: 0 }],
+    );
+
+    const result = await checkGatewayQueueHealth([
+      {
+        label: 'outboundEmail',
+        queueName: 'outbound-email',
+        queue: outboundQueue,
+        thresholds: { waiting: 20, activeStuckMs: 300_000 },
+      },
+    ], {
+      counterClient: client,
+      config: CONFIG,
+      nowMs: 1_000_000,
+      emitAlert,
+    });
+
+    expect(result.alerts).toMatchObject([
+      { queue: 'outboundEmail', metric: 'active_stuck', value: 360_000, threshold: 300_000, emitted: true },
+    ]);
+  });
+
+  it('keeps failed on the global threshold for a queue that only overrides waiting', async () => {
+    const { client } = createCounterClient();
+    const emitAlert = createEmitAlert();
+    // failed 11 is over the global default (10); operator-event overrides only waiting.
+    const operatorQueue = createQueue({ failed: 11, waiting: 5, active: 0 });
+
+    const result = await checkGatewayQueueHealth([
+      {
+        label: 'operatorEvent',
+        queueName: 'operator-event',
+        queue: operatorQueue,
+        thresholds: { waiting: 20 },
+      },
+    ], {
+      counterClient: client,
+      config: CONFIG,
+      nowMs: 301_000,
+      emitAlert,
+    });
+
+    expect(result.alerts.map((alert) => `${alert.queue}:${alert.metric}:${alert.emitted}`)).toEqual([
+      'operatorEvent:failed:true',
+    ]);
+  });
 });
 
 function createQueue(
