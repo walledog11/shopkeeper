@@ -45,7 +45,7 @@ incident, and below `QUEUE_ALERT_FAILED_THRESHOLD`. Clear it before controlled
 | Log alert rule `agent_failure` | ☐ | Rule id: ___ |
 | Uptime monitor: dashboard `/api/health` | ☐ | Monitor id: ___ First pass: ___ |
 | Uptime monitor: gateway `/health/deep` | ☐ | Monitor id: ___ First pass: ___ |
-| Uptime monitor: gateway `/health/queues` | ☐ | Monitor id: ___ First pass: ___ |
+| Uptime monitor: gateway `/health/queues` (send `x-internal-secret`) | ☐ | Monitor id: ___ First pass: ___ |
 | Better Stack test notification sent | ☐ | Recipient: ___ Time: ___ |
 
 ## Controlled ops-alert validation
