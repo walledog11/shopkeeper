@@ -143,6 +143,15 @@ export async function notifyOperator(
   }
 
   try {
+    // Commit the pending-state patch BEFORE delivering the card so the operator
+    // context already holds the plan the merchant is being shown. If the card
+    // went out first, a fast "yes" arriving before this write would approve
+    // whatever plan the slot still held — the previous one. The plan is also on
+    // the dashboard and critical sends throw so BullMQ retries the delivery, so
+    // parking it even when a later send fails is safe; a persist failure aborts
+    // before any card is sent.
+    await persistContextPatch();
+
     const sent = await sendToBinding(organizationId, member, body, options);
     if (!sent) {
       if (policy === 'critical') {
@@ -150,7 +159,7 @@ export async function notifyOperator(
       }
       logger.warn(
         { chatId: contextKey, channel: member.channel, organizationId },
-        '[OperatorNotify] Send failed — skipping context update',
+        '[OperatorNotify] Send failed',
       );
       return null;
     }
@@ -164,7 +173,6 @@ export async function notifyOperator(
     // duplicate-delivery branch above already mirrored on the original send.
     await mirrorOperatorMessage(organizationId, `${member.channel}:${contextKey}`, 'agent', body);
 
-    await persistContextPatch();
     return { channel: member.channel, chatId: contextKey };
   } catch (error) {
     if (policy === 'critical') {
