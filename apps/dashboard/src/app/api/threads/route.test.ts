@@ -222,6 +222,100 @@ describe('GET /api/threads', () => {
     expect(body.threads.map(t => t.id)).toEqual([returnsThread.id]);
   });
 
+  async function collectAllPages(queryString: string): Promise<string[]> {
+    const ids: string[] = [];
+    let cursor: string | null = null;
+    for (let guard = 0; guard < 20; guard++) {
+      const url = `http://localhost:3000/api/threads?${queryString}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`;
+      const res = await GET(new Request(url));
+      const body = await res.json() as { threads: { id: string }[]; nextCursor: string | null };
+      ids.push(...body.threads.map(t => t.id));
+      if (!body.nextCursor) break;
+      cursor = body.nextCursor;
+    }
+    return ids;
+  }
+
+  it('paginates in last_message_at order without skipping rows when UUID order disagrees', async () => {
+    const threadIds: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const customer = await createTestCustomer(org.id, `paginate_${i}@test.com`, { name: `Pag ${i}` });
+      const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+      threadIds.push(thread.id);
+    }
+    // Assign last_message_at in the reverse of id order: smallest id = newest, so
+    // the (last_message_at DESC, id DESC) order is exactly the ascending-id order
+    // — the case where the old `id < cursor` cursor skipped rows.
+    const byIdAsc = [...threadIds].sort();
+    const base = Date.parse('2026-01-01T00:00:00.000Z');
+    await Promise.all(byIdAsc.map((id, index) =>
+      db.thread.update({
+        where: { id },
+        data: { lastMessageAt: new Date(base + (byIdAsc.length - index) * 60_000) },
+      }),
+    ));
+
+    const paged = await collectAllPages('status=open&limit=1');
+
+    expect(paged).toEqual(byIdAsc);
+  });
+
+  it('paginates SQL-filtered lists in last_message_at order without skipping rows', async () => {
+    const threadIds: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const customer = await createTestCustomer(org.id, `sqlpage_${i}@test.com`, { name: `SqlPag ${i}` });
+      const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+      threadIds.push(thread.id);
+    }
+    const byIdAsc = [...threadIds].sort();
+    const base = Date.parse('2026-02-01T00:00:00.000Z');
+    await Promise.all(byIdAsc.map((id, index) =>
+      db.thread.update({
+        where: { id },
+        data: { tag: 'Returns', lastMessageAt: new Date(base + (byIdAsc.length - index) * 60_000) },
+      }),
+    ));
+
+    const paged = await collectAllPages('tag=Returns&status=open&limit=1');
+
+    expect(paged).toEqual(byIdAsc);
+  });
+
+  it('paginates SQL-filtered lists across a sub-millisecond boundary', async () => {
+    const a = await createTestCustomer(org.id, 'us_a@test.com', { name: 'UsA' });
+    const threadA = await createTestThread(org.id, a.id, ChannelType.email);
+    const b = await createTestCustomer(org.id, 'us_b@test.com', { name: 'UsB' });
+    const threadB = await createTestThread(org.id, b.id, ChannelType.email);
+    // Same millisecond, one microsecond apart: B is newer. A ms-precision cursor
+    // would round B down and skip A on the next page.
+    await db.$executeRaw`UPDATE threads SET tag = 'Returns', last_message_at = '2026-03-01T00:00:00.123456Z'::timestamptz WHERE id = ${threadA.id}::uuid`;
+    await db.$executeRaw`UPDATE threads SET tag = 'Returns', last_message_at = '2026-03-01T00:00:00.123457Z'::timestamptz WHERE id = ${threadB.id}::uuid`;
+
+    const paged = await collectAllPages('tag=Returns&status=open&limit=1');
+
+    expect(paged).toEqual([threadB.id, threadA.id]);
+  });
+
+  it('paginates the default inbox across a sub-millisecond boundary', async () => {
+    const a = await createTestCustomer(org.id, 'default_us_a@test.com', { name: 'DefUsA' });
+    const threadA = await createTestThread(org.id, a.id, ChannelType.email);
+    const b = await createTestCustomer(org.id, 'default_us_b@test.com', { name: 'DefUsB' });
+    const threadB = await createTestThread(org.id, b.id, ChannelType.email);
+    await db.$executeRaw`UPDATE threads SET last_message_at = '2026-04-01T00:00:00.123456Z'::timestamptz WHERE id = ${threadA.id}::uuid`;
+    await db.$executeRaw`UPDATE threads SET last_message_at = '2026-04-01T00:00:00.123457Z'::timestamptz WHERE id = ${threadB.id}::uuid`;
+
+    const paged = await collectAllPages('status=open&limit=1');
+
+    expect(paged).toEqual([threadB.id, threadA.id]);
+  });
+
+  it('returns 400 for a malformed cursor', async () => {
+    const req = new Request('http://localhost:3000/api/threads?cursor=not-a-valid-cursor');
+    const res = await GET(req);
+
+    expect(res.status).toBe(400);
+  });
+
   it('returns 403 when the user has no active organization', async () => {
     vi.mocked(auth).mockResolvedValueOnce(
       { userId: 'usr_test', orgId: null } as unknown as ReturnType<typeof auth> extends Promise<infer T>

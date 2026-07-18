@@ -2,6 +2,33 @@ import { Prisma, db as defaultDb } from "@shopkeeper/db"
 import { SUPPORTED_AGENT_PLAN_CACHE_VERSIONS } from "@shopkeeper/agent/plan-cache-shape"
 import { canonicalInboxThreadSql } from "@/lib/messaging/inbox-filter"
 
+// Thread lists sort by (last_message_at DESC, id DESC), so the page cursor must
+// carry both components — paging by id alone skips or repeats rows whenever UUID
+// order disagrees with last_message_at order. The cursor is opaque to clients,
+// which round-trip it unchanged. `lastMessageAt` is an ISO-8601 UTC string
+// (microsecond precision from the SQL path, millisecond from the Prisma path).
+export type ThreadCursor = { lastMessageAt: string; id: string }
+
+export function encodeThreadCursor(lastMessageAt: string, id: string): string {
+  return Buffer.from(`${lastMessageAt}|${id}`, "utf8").toString("base64url")
+}
+
+export function decodeThreadCursor(raw: string): ThreadCursor | null {
+  let decoded: string
+  try {
+    decoded = Buffer.from(raw, "base64url").toString("utf8")
+  } catch {
+    return null
+  }
+  const sep = decoded.indexOf("|")
+  if (sep <= 0) return null
+  const lastMessageAt = decoded.slice(0, sep)
+  const id = decoded.slice(sep + 1)
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null
+  if (Number.isNaN(Date.parse(lastMessageAt))) return null
+  return { lastMessageAt, id }
+}
+
 export function draftReadyPlanSql(organizationId: string) {
   return Prisma.sql`
     t.status = 'open'
@@ -152,28 +179,33 @@ export async function countThreadsBySqlFilters(
 export async function listThreadIdsBySqlFilters(
   organizationId: string,
   filters: ThreadListSqlFilters,
-  options?: { cursor?: string; limit?: number },
+  options?: { cursor?: ThreadCursor; limit?: number },
   db: Pick<typeof defaultDb, "$queryRaw"> = defaultDb,
 ) {
   const where = inboxScopeSql(organizationId, filters)
   const limit = options?.limit
   const cursor = options?.cursor
 
-  const rows = await db.$queryRaw<{ id: string }[]>`
-    SELECT t.id
+  const rows = await db.$queryRaw<{ id: string; lmat: string }[]>`
+    SELECT
+      t.id,
+      to_char(t.last_message_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS lmat
     FROM threads t
     WHERE ${where}
-    ${cursor ? Prisma.sql`AND t.id < ${cursor}::uuid` : Prisma.empty}
+    ${cursor
+      ? Prisma.sql`AND (t.last_message_at, t.id) < (${cursor.lastMessageAt}::timestamptz, ${cursor.id}::uuid)`
+      : Prisma.empty}
     ORDER BY t.last_message_at DESC, t.id DESC
     ${limit !== undefined ? Prisma.sql`LIMIT ${limit + 1}` : Prisma.empty}
   `
 
-  let ids = rows.map(row => row.id)
+  let page = rows
   let nextCursor: string | null = null
-  if (limit !== undefined && ids.length > limit) {
-    ids = ids.slice(0, limit)
-    nextCursor = ids[ids.length - 1] ?? null
+  if (limit !== undefined && rows.length > limit) {
+    page = rows.slice(0, limit)
+    const last = page[page.length - 1]
+    nextCursor = last ? encodeThreadCursor(last.lmat, last.id) : null
   }
 
-  return { ids, nextCursor }
+  return { ids: page.map(row => row.id), nextCursor }
 }
