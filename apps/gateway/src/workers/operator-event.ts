@@ -104,6 +104,7 @@ async function processTelegramOperatorEvent(event: OperatorEvent, claimToken: st
       body: event.body,
       messageId: readTelegramMessageId(event.metadata),
       reply,
+      turnId: event.id,
     }),
   );
 }
@@ -124,6 +125,7 @@ async function processImessageOperatorEvent(event: OperatorEvent, claimToken: st
       senderId: event.chatId,
       body: event.body,
       reply,
+      turnId: event.id,
     }),
   );
 }

@@ -101,6 +101,7 @@ describe('processOperatorEventById', () => {
     await processOperatorEventById(id);
 
     expect(runTurnSpy).toHaveBeenCalledTimes(1);
+    expect(runTurnSpy).toHaveBeenCalledWith(expect.objectContaining({ turnId: id }));
     expect(sendMessageSpy).toHaveBeenCalledWith(CHAT_ID, 'Refunded Sarah $12.', expect.anything());
     const row = await db.operatorEvent.findUnique({ where: { id } });
     expect(row?.status).toBe('committed');

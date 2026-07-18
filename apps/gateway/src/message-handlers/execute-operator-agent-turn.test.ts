@@ -48,6 +48,7 @@ describe('executeOperatorAgentTurn', () => {
     const result = await executeOperatorAgentTurn({
       orgId: org.id,
       instruction: 'check order #1001',
+      turnId: '00000000-0000-4000-8000-000000000321',
       operatorKey: 'telegram:123',
       senderPhone: 'telegram:123',
       clerkUserId: 'usr_1',
@@ -60,6 +61,7 @@ describe('executeOperatorAgentTurn', () => {
         orgId: org.id,
         threadId: 'op_thread_1',
         instruction: 'check order #1001',
+        turnId: '00000000-0000-4000-8000-000000000321',
         failureRoute: 'gateway:operator-turn',
         persistUserMessage: true,
         persistAgentMessage: true,

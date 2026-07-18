@@ -18,6 +18,7 @@ const FAILURE_ROUTE = 'gateway:operator-turn';
 export interface ExecuteOperatorAgentTurnParams {
   orgId: string;
   instruction: string;
+  turnId?: string;
   senderPhone?: string;
   clerkUserId?: string;
   // Free-form turns resolve the merchant's single durable operator thread from
@@ -81,6 +82,7 @@ export async function executeOperatorAgentTurn(
     orgId: params.orgId,
     threadId: resolvedThread.id,
     instruction: params.instruction,
+    ...(params.turnId ? { turnId: params.turnId } : {}),
     failureRoute: FAILURE_ROUTE,
     ...(params.operatorLedger ? { operatorLedger: params.operatorLedger } : {}),
     ...(params.moduleTools ? { moduleTools: params.moduleTools } : {}),

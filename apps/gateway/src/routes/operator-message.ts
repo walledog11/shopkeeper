@@ -18,6 +18,9 @@ export interface OperatorMessageContext {
   presence: OperatorPresence;
   // Stable operator reference for thread resolution / audit, e.g. `telegram:<id>`.
   senderRef: string;
+  // Durable operator-event UUID when this turn came through the queued P4-03
+  // path. It becomes the AgentAction turnId for direct recovery correlation.
+  turnId?: string;
 }
 
 const PROGRESS_THRESHOLD_MS = 10000;

@@ -45,6 +45,7 @@ export interface TelegramOperatorTurnParams {
   body: string;
   messageId: number;
   reply: TelegramReply;
+  turnId?: string;
 }
 
 // The operator turn for one bound Telegram message: keyword fast paths
@@ -53,7 +54,7 @@ export interface TelegramOperatorTurnParams {
 // identical logic; they differ only in the injected reply (provider send) and
 // when the webhook is acknowledged.
 export async function runTelegramOperatorTurn(params: TelegramOperatorTurnParams): Promise<void> {
-  const { organizationId, clerkUserId, chatId, body, messageId, reply } = params;
+  const { organizationId, clerkUserId, chatId, body, messageId, reply, turnId } = params;
   const operatorKey = `telegram:${chatId}`;
   const context = await getContext(organizationId, chatId);
 
@@ -65,6 +66,7 @@ export async function runTelegramOperatorTurn(params: TelegramOperatorTurnParams
     body,
     reply,
     senderRef: operatorKey,
+    ...(turnId ? { turnId } : {}),
     presence: (progress, work) =>
       withOperatorPresence({ chatId, messageId, reply, progress }, work),
   };

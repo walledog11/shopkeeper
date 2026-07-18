@@ -50,6 +50,10 @@ export interface ExecuteAgentTurnParams {
   orgId: string;
   threadId: string;
   instruction: string;
+  // Hosts with a durable inbound event may supply its UUID so AgentAction and
+  // audit-note rows can be correlated directly during recovery. Other callers
+  // keep the generated per-turn identity.
+  turnId?: string;
   failureRoute?: string;
   orgSettings?: Partial<OrgSettings> | null;
   approvedToolCalls?: RawToolCall[];
@@ -96,7 +100,7 @@ export async function executeAgentTurn(
       });
     }
 
-    const turnId = randomUUID();
+    const turnId = params.turnId ?? randomUUID();
     const ctx = await deps.buildContext(
       params.threadId,
       params.orgId,

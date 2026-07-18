@@ -49,6 +49,29 @@ describe('executeAgentTurn lock policy', () => {
     expect(deps.lock.acquire).toHaveBeenCalledWith('thread_1', { failClosed: false });
   });
 
+  it('forwards a caller-supplied durable turn identity', async () => {
+    deps.lock.acquire.mockResolvedValueOnce(NOOP_LOCK);
+    deps.buildContext.mockResolvedValueOnce({ orgId: 'org_1' });
+    deps.runAgent.mockResolvedValueOnce({ summary: 'done', actionsPerformed: [] });
+    const turnId = '00000000-0000-4000-8000-000000000321';
+
+    await executeAgentTurn({
+      orgId: 'org_1',
+      threadId: 'thread_1',
+      instruction: 'Summarize this ticket',
+      turnId,
+      persistAuditNote: false,
+    }, deps as never);
+
+    expect(deps.runAgent).toHaveBeenCalledWith(
+      expect.anything(),
+      'Summarize this ticket',
+      undefined,
+      expect.anything(),
+      expect.objectContaining({ turnId }),
+    );
+  });
+
   it('surfaces lock unavailability as a service error for mutating turns', async () => {
     deps.lock.acquire.mockRejectedValueOnce(new ServiceUnavailableError());
 

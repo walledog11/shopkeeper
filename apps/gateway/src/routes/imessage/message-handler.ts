@@ -91,6 +91,7 @@ export interface ImessageOperatorTurnParams {
   senderId: string;
   body: string;
   reply: OperatorReply;
+  turnId?: string;
 }
 
 // The operator turn for one bound iMessage message: keyword fast paths
@@ -99,7 +100,7 @@ export interface ImessageOperatorTurnParams {
 // identical logic; they differ only in the injected reply (provider send) and
 // when the webhook is acknowledged. Mirrors runTelegramOperatorTurn.
 export async function runImessageOperatorTurn(params: ImessageOperatorTurnParams): Promise<void> {
-  const { organizationId, clerkUserId, senderId, body, reply } = params;
+  const { organizationId, clerkUserId, senderId, body, reply, turnId } = params;
 
   const chatId = senderId;
   const operatorKey = `imessage:${senderId}`;
@@ -113,6 +114,7 @@ export async function runImessageOperatorTurn(params: ImessageOperatorTurnParams
     body,
     reply,
     senderRef: operatorKey,
+    ...(turnId ? { turnId } : {}),
     presence: progressOnlyPresence(reply),
   };
   const mirroredReply = buildMirroredReply(organizationId, operatorKey, body, reply);

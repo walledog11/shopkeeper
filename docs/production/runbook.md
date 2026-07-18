@@ -368,6 +368,75 @@ Then:
 4. Confirm a Telegram plan notification reaches bound org members for a new ticket.
 5. Reply `yes` / `no` / freeform and confirm the agent acts (or skips) accordingly.
 
+#### Durable operator-event canary (P4-03)
+
+The queued path persists a provider message before acknowledging it and claims the event once in
+the worker. Roll it out one channel at a time; keep iMessage on its synchronous path until the
+Telegram window is clean.
+
+Preflight:
+
+1. Confirm `npm run db:migrate:deploy` reports no pending migrations. The required table comes from
+   `20260715020000_add_operator_events`.
+2. Confirm both Railway gateway services run the same commit and `/health/deep` reports the web and
+   worker checks healthy.
+3. Run the read-only baseline. Zero events is expected before the flag is enabled, but every blocker
+   list must be empty:
+
+```bash
+railway run --service shopkeeper --environment production -- \
+  npm run audit:operator-events -- --hours=24 --strict
+```
+
+4. Set `OPERATOR_DURABLE_QUEUE_TELEGRAM=true` on the public `shopkeeper` service and the separate
+   `Gateway Worker` service, then wait for both deployments to become healthy. Leave
+   `OPERATOR_DURABLE_QUEUE_IMESSAGE` unset or `false`.
+
+Canary with one bound internal Telegram chat:
+
+1. Send a read-only free-form request such as “what's in my inbox?” and confirm the webhook responds
+   promptly, one reply arrives, and the dashboard/operator thread records one exchange.
+2. Exercise a deterministic command (`help` or `summary`) and a pending-plan dismissal (`no`). Do
+   not use an irreversible Shopify action for the durability canary.
+3. Confirm the audit reports one event with one claim attempt and one delivered committed reply per
+   Telegram provider message. Gateway logs must contain no permanent job failure, lost-binding
+   failure, or sweep alert.
+4. After at least one event finishes, require real Telegram traffic in the audit:
+
+```bash
+railway run --service shopkeeper --environment production -- \
+  npm run audit:operator-events -- --hours=1 --strict --require-channel=telegram
+```
+
+5. Keep Telegram enabled through an observation window that includes representative free-form and
+   pending-plan traffic. Repeat the 24-hour strict audit before enabling iMessage.
+
+Rollback ingress by setting `OPERATOR_DURABLE_QUEUE_TELEGRAM=false` on both services. Existing
+persisted events remain evidence and must not be deleted or blindly re-enqueued; the flag only sends
+new Telegram messages back through the synchronous path.
+
+#### Failed or unknown operator-event recovery
+
+The launch owner/on-call owns review. `failed` and `unknown` both mean a turn may have partially
+acted; neither state is safe to replay automatically.
+
+1. Run `npm run audit:operator-events -- --hours=24 --strict` and take the event ID, organization,
+   channel, claim/process times, error, and correlated action summaries from the report. The audit
+   intentionally omits merchant bodies, replies, chat IDs, and provider message IDs.
+2. For free-form queued turns deployed with durable turn correlation, inspect `agent_actions` where
+   `turn_id = <operator-event-id>`. For a keyword pending-plan decision, also inspect that
+   organization's plan-execution rows and actions in the claim-time window.
+3. Determine provider truth before taking another action: inspect Shopify transaction/order state,
+   the outbound message provider activity, and the dashboard action timeline as applicable. Never
+   infer “nothing happened” from a missing operator reply.
+4. If the provider proves no side effect, ask the merchant to issue a fresh instruction. If it
+   proves a commit, send only the missing confirmation or record a compensating follow-up. If truth
+   remains ambiguous, leave the event terminal, record the incident, and escalate to the production
+   owner; do not mutate it back to `pending`.
+5. A `committed` event with an undelivered reply is handled by `operator-event-sweep`; it may resend
+   the stored confirmation but never reruns the turn. If the strict audit still reports it after the
+   configured stale window, investigate provider delivery and the sweep before any manual send.
+
 ### iMessage Operator Channel (Phase 0 infra)
 
 One platform-wide Photon Spectrum line serves all orgs. Merchants bind their iPhone by texting a

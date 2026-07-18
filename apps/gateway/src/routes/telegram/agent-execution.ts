@@ -12,7 +12,7 @@ export async function executeFreeFormInstruction(
   message: OperatorMessageContext,
   context: OperatorContext,
 ): Promise<void> {
-  const { chatId, body, reply, presence, senderRef } = message;
+  const { chatId, body, reply, presence, senderRef, turnId } = message;
   logger.info({ chatId, organizationId }, '[Operator] Free-form agent instruction');
 
   // The model interprets the merchant's message against the pending-state ledger
@@ -39,6 +39,7 @@ export async function executeFreeFormInstruction(
       () => executeOperatorAgentTurn({
         orgId: organizationId,
         instruction: body,
+        ...(turnId ? { turnId } : {}),
         operatorKey: senderRef,
         senderPhone: senderRef,
         clerkUserId,
