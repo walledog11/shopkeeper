@@ -88,7 +88,7 @@ describe('createMaintenanceWorkers', () => {
 
     expect(maintenanceJobRegistrations).toHaveLength(10);
     expect(resources.workers).toHaveLength(11);
-    expect(resources.queues).toHaveLength(14);
+    expect(resources.queues).toHaveLength(18);
     expect(queueInstances.map((queue) => queue.name)).toEqual([
       QUEUE.TOKEN_HEALTH,
       QUEUE.EMAIL_TOKEN_HEALTH,
@@ -104,6 +104,10 @@ describe('createMaintenanceWorkers', () => {
       QUEUE.QUEUE_HEALTH,
       QUEUE.INBOUND,
       QUEUE.AI_SUMMARY,
+      QUEUE.OUTBOUND_EMAIL,
+      QUEUE.GMAIL_SYNC,
+      QUEUE.ORDER_REVIEW,
+      QUEUE.OPERATOR_EVENT,
     ]);
     expect(workerInstances.map((worker) => worker.name)).toEqual([
       QUEUE.TOKEN_HEALTH,
