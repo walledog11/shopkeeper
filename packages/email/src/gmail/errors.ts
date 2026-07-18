@@ -8,6 +8,7 @@ export type GmailWatchErrorCategory =
   | 'watch_request'
   | 'watch_retryable'
   | 'watch_stale_history'
+  | 'watch_timeout'
   | 'watch_unknown';
 
 export type GmailApiErrorKind =
@@ -15,6 +16,7 @@ export type GmailApiErrorKind =
   | 'quota'
   | 'stale_history'
   | 'retryable'
+  | 'timeout'
   | 'invalid_response'
   | 'request';
 

@@ -5,6 +5,10 @@ const TOKEN_ENDPOINT: Record<EmailOAuthProvider, string> = {
   gmail: 'https://oauth2.googleapis.com/token',
 };
 
+// The token refresh runs on the Gmail sync worker's hot path; bound it so a
+// stalled OAuth socket can't hold the worker past its lock window (AUD-015).
+const TOKEN_REFRESH_TIMEOUT_MS = 15_000;
+
 export interface EmailOAuthClient {
   clientId: string;
   clientSecret: string;
@@ -31,6 +35,7 @@ export async function requestTokenRefresh(
   provider: EmailOAuthProvider,
   refreshToken: string,
   client: EmailOAuthClient,
+  timeoutMs: number = TOKEN_REFRESH_TIMEOUT_MS,
 ): Promise<TokenRefreshResult> {
   let res: Response;
   try {
@@ -43,9 +48,10 @@ export async function requestTokenRefresh(
         refresh_token: refreshToken,
         grant_type: 'refresh_token',
       }).toString(),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch {
-    // Network/transient failure — caller should not treat as a dead grant.
+    // Network, transient, or timeout failure — caller should not treat as a dead grant.
     return { ok: false, status: null, transient: true };
   }
 
