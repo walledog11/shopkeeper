@@ -4,11 +4,11 @@ import webhookRoutes from './routes/webhooks.js';
 import internalOperatorRoutes from './routes/internal-operator.js';
 import internalQueueRoutes from './routes/internal-queue.js';
 import { getGatewayDashboardUrl, validateGatewayEnv } from './config/env.js';
-import { getQueueDiagnostics, readWorkerHeartbeat } from './health.js';
+import { registerHealthRoutes } from './health.js';
 import logger from './logger.js';
 import { closeGatewayBullMqQueues } from './clients/gateway-queues.js';
 import { closeGatewayRedisConnections, getGatewayRedis } from './clients/redis-client.js';
-import { isImessageConfigured, stopAllSpectrumApps } from './clients/spectrum.js';
+import { stopAllSpectrumApps } from './clients/spectrum.js';
 import { mountRealtime } from './realtime/sse.js';
 import { runGatewayEntry } from './bootstrap.js';
 import {
@@ -46,80 +46,8 @@ export async function startGatewayServer() {
   const PORT = process.env.PORT || 8080;
   const healthRedis = getGatewayRedis();
 
-  // Deep health check — verifies DB, Redis, worker heartbeat, and queue readiness
-  app.get('/health/deep', async (_req, res) => {
-    const checks: Record<string, unknown> = {};
-    let ok = true;
-
-    try {
-      await db.$queryRaw`SELECT 1`;
-      checks.db = { status: 'ok' };
-    } catch (err) {
-      checks.db = { status: 'error' };
-      ok = false;
-      logger.error({ err }, '[Health] DB check failed');
-    }
-
-    try {
-      const pong = await healthRedis.ping();
-      checks.redis = { status: pong === 'PONG' ? 'ok' : 'error' };
-      if (pong !== 'PONG') ok = false;
-    } catch (err) {
-      checks.redis = { status: 'error' };
-      ok = false;
-      logger.error({ err }, '[Health] Redis check failed');
-    }
-
-    try {
-      const heartbeat = await readWorkerHeartbeat(healthRedis);
-      checks.worker = {
-        status: heartbeat.healthy ? 'ok' : 'error',
-        ageMs: heartbeat.ageMs,
-        pid: heartbeat.payload?.pid ?? null,
-        timestamp: heartbeat.payload?.timestamp ?? null,
-      };
-      if (!heartbeat.healthy) ok = false;
-    } catch (err) {
-      checks.worker = { status: 'error' };
-      ok = false;
-      logger.error({ err }, '[Health] Worker heartbeat check failed');
-    }
-
-    try {
-      const queueCounts = await getQueueDiagnostics();
-      checks.queues = { status: 'ok', counts: queueCounts };
-    } catch (err) {
-      checks.queues = { status: 'error' };
-      ok = false;
-      logger.error({ err }, '[Health] Queue diagnostics failed');
-    }
-
-    checks.imessage = {
-      configured: isImessageConfigured(),
-    };
-
-    res.status(ok ? 200 : 503).json({ status: ok ? 'ok' : 'degraded', checks });
-  });
-
-  app.get('/health/queues', async (_req, res) => {
-    try {
-      const heartbeat = await readWorkerHeartbeat(healthRedis);
-      const queueCounts = await getQueueDiagnostics();
-
-      res.status(200).json({
-        worker: {
-          healthy: heartbeat.healthy,
-          ageMs: heartbeat.ageMs,
-          pid: heartbeat.payload?.pid ?? null,
-          timestamp: heartbeat.payload?.timestamp ?? null,
-        },
-        queues: queueCounts,
-      });
-    } catch (err) {
-      logger.error({ err }, '[Health] Queue diagnostics endpoint failed');
-      res.status(503).json({ error: 'Failed to read queue diagnostics' });
-    }
-  });
+  // Deep health check (public liveness) + auth-gated queue diagnostics.
+  registerHealthRoutes(app, { redis: healthRedis });
 
   app.use('/webhooks', webhookRoutes);
   app.use('/internal', internalOperatorRoutes);

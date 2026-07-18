@@ -244,7 +244,7 @@ Recommended log-drain alert rules:
 
 When queue alerts fire:
 
-- Check `/health/queues` for worker heartbeat and queue counts.
+- Check `/health/queues` (send the `x-internal-secret` header) for worker heartbeat and queue counts. Coarse liveness (db/redis/worker/queue `status`) is on the public `/health/deep`.
 - If active jobs are stuck, inspect the job payload and trace id in Railway logs.
 - Restart the gateway worker only after confirming Redis and DB are healthy.
 

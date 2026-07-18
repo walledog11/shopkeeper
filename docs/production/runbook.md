@@ -300,8 +300,8 @@ Prisma routes migrations through `DIRECT_DATABASE_URL` (`directUrl` in the schem
    - Confirm `GET /api/health` returns `status: ok`.
 
 5. Deploy the gateway to Railway.
-   - Confirm `GET /health/deep` returns `status: ok`.
-   - Confirm the worker heartbeat is healthy in `GET /health/queues`.
+   - Confirm `GET /health/deep` returns `status: ok` (`checks.worker.status: ok` confirms the worker heartbeat).
+   - For detailed queue counts and failed-job metadata, `GET /health/queues` with the `x-internal-secret` header.
 
 6. Run the smoke script against the live services.
 
@@ -568,7 +568,7 @@ Create a Better Stack monitor group named `Shopkeeper Production`, then create t
 | --- | --- | --- |
 | `Shopkeeper Dashboard Health` | `https://<dashboard-production-url>/api/health` | `"status":"ok"` |
 | `Shopkeeper Gateway Deep Health` | `https://<gateway-production-url>/health/deep` | `"status":"ok"` |
-| `Shopkeeper Gateway Queue Health` | `https://<gateway-production-url>/health/queues` | `"healthy":true` |
+| `Shopkeeper Gateway Queue Health` | `https://<gateway-production-url>/health/queues` (send `x-internal-secret`) | `"healthy":true` |
 
 Use the same settings for all three monitors:
 

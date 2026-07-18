@@ -1,7 +1,12 @@
+import type { Application } from 'express';
 import type { Redis as IORedis } from 'ioredis';
+import { db } from '@shopkeeper/db';
 import { QUEUE } from './constants.js';
 import { getGatewayBullMqQueue } from './clients/gateway-queues.js';
 import { getGatewayWorkerRedisConfig } from './config/runtime-config.js';
+import { isImessageConfigured } from './clients/spectrum.js';
+import { authorizeInternalRequest } from './routes/internal-auth.js';
+import logger from './logger.js';
 import { isRecord } from './lib/typing.js';
 
 export const WORKER_HEARTBEAT_KEY = 'health:gateway-worker:heartbeat';
@@ -130,6 +135,88 @@ export async function getQueueDiagnostics(): Promise<Record<string, unknown>> {
   } finally {
     queueDiagnosticsPromise = null;
   }
+}
+
+export interface HealthRouteDependencies {
+  redis: IORedis;
+}
+
+export function registerHealthRoutes(app: Application, { redis }: HealthRouteDependencies): void {
+  // Public liveness probe. Reports coarse per-check status only — no queue
+  // counts, worker PID/timestamp, or failed-job tenant identifiers (AUD-017).
+  // Detailed diagnostics are served behind auth on /health/queues.
+  app.get('/health/deep', async (_req, res) => {
+    const checks: Record<string, unknown> = {};
+    let ok = true;
+
+    try {
+      await db.$queryRaw`SELECT 1`;
+      checks.db = { status: 'ok' };
+    } catch (err) {
+      checks.db = { status: 'error' };
+      ok = false;
+      logger.error({ err }, '[Health] DB check failed');
+    }
+
+    try {
+      const pong = await redis.ping();
+      checks.redis = { status: pong === 'PONG' ? 'ok' : 'error' };
+      if (pong !== 'PONG') ok = false;
+    } catch (err) {
+      checks.redis = { status: 'error' };
+      ok = false;
+      logger.error({ err }, '[Health] Redis check failed');
+    }
+
+    try {
+      const heartbeat = await readWorkerHeartbeat(redis);
+      checks.worker = { status: heartbeat.healthy ? 'ok' : 'error' };
+      if (!heartbeat.healthy) ok = false;
+    } catch (err) {
+      checks.worker = { status: 'error' };
+      ok = false;
+      logger.error({ err }, '[Health] Worker heartbeat check failed');
+    }
+
+    try {
+      await getQueueDiagnostics();
+      checks.queues = { status: 'ok' };
+    } catch (err) {
+      checks.queues = { status: 'error' };
+      ok = false;
+      logger.error({ err }, '[Health] Queue diagnostics failed');
+    }
+
+    checks.imessage = {
+      configured: isImessageConfigured(),
+    };
+
+    res.status(ok ? 200 : 503).json({ status: ok ? 'ok' : 'degraded', checks });
+  });
+
+  // Detailed queue + worker diagnostics: exposes queue counts and failed-job
+  // metadata (thread/org identifiers), so require the internal secret.
+  app.get('/health/queues', async (req, res) => {
+    if (!authorizeInternalRequest(req, res, 'HealthQueues')) return;
+
+    try {
+      const heartbeat = await readWorkerHeartbeat(redis);
+      const queueCounts = await getQueueDiagnostics();
+
+      res.status(200).json({
+        worker: {
+          healthy: heartbeat.healthy,
+          ageMs: heartbeat.ageMs,
+          pid: heartbeat.payload?.pid ?? null,
+          timestamp: heartbeat.payload?.timestamp ?? null,
+        },
+        queues: queueCounts,
+      });
+    } catch (err) {
+      logger.error({ err }, '[Health] Queue diagnostics endpoint failed');
+      res.status(503).json({ error: 'Failed to read queue diagnostics' });
+    }
+  });
 }
 
 export async function readFailedQueueJobSnapshots(
