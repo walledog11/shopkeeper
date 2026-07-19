@@ -68,6 +68,28 @@ Do these before treating production as ready.
   report-only violations; reduce or justify `unsafe-inline`/`unsafe-eval`; keep
   Clerk and Cloudflare challenge requirements documented. (Lower urgency.)
 
+## Known Bugs
+
+Consolidated from the retired `operator-channel-bugs.md` (archived 2026-07-19).
+Bugs 1/2/8 were fixed and 3–6 were structurally eliminated by the model-owned
+operator-interpretation rework (the `lastThreadId` mechanism and keyword-skip
+grammar they described no longer exist); full history is in
+[archive/operator-channel-bugs.md](archive/operator-channel-bugs.md). Only one
+item was still open when the doc was retired:
+
+- [ ] **Dashboard `send_reply` internal hop returned HTTP 500 (bug 7 —
+  investigate).** Observed 2026-07-07 on a free-form operator turn: the gateway
+  worker `ThreadSink` POST to dashboard `/api/agent/io-send-internal` returned
+  500, the agent then burned its token budget and gave the operator the generic
+  "too many steps" message. Root cause not captured — the gateway log redacts
+  the body, so the dashboard-side failure is unknown. Never confirmed transient
+  vs systemic. Next steps: pull dashboard/Vercel logs for the request window;
+  add a cross-service correlation id so gateway↔dashboard hops are traceable;
+  make the operator path surface a send failure clearly instead of the
+  token-budget generic message.
+  Pointers: [`agent-thread-sink.ts`](../apps/gateway/src/message-handlers/agent-thread-sink.ts) (hop, no delivery verify),
+  [`io-send-internal/route.ts`](../apps/dashboard/src/app/api/agent/io-send-internal/route.ts) (dashboard receiver).
+
 ## Product Gaps
 
 Surfaced in the 2026-06-23 review — divergences between the stated vision and

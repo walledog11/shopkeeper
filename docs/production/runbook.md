@@ -398,11 +398,12 @@ Automated health checks are necessary but not sufficient. Before marking the dep
 
 ### Instagram DM (Controlled Rollout)
 
-The live Standard Access DM/image/reply path has passed. Keep the integration workspace-gated until
-the remaining lifecycle checks below pass and Advanced Access is approved for external merchants.
+The complete live Standard Access lifecycle has passed. Keep the integration workspace-gated until
+Advanced Access is approved for external merchants and a non-role merchant passes the same loop.
 The 2026-07-16 production preflight also confirmed a clean strict ownership/auth-model audit, an
 up-to-date migration history, rapid distinct inbound messages with provider timestamps, and an
-outbound provider message ID. Reconnect, disconnect/reconnect, and controlled token refresh remain.
+outbound provider message ID. Reconnect, disconnect suppression, reconnect, and controlled token
+refresh also passed.
 
 Before deployment, run the read-only ownership/auth-model audit against production and require a
 clean result:
@@ -553,7 +554,7 @@ Pass criteria:
 - Dashboard Integrations shows iMessage Connect enabled (not disabled) when `IMESSAGE_LINE_HANDLE` is set.
 
 Full merchant flows (bind, plan push, approve) are Phase 1 in
-[`imessage-production-readiness-plan.md`](../imessage-production-readiness-plan.md).
+[`imessage-production-readiness-plan.md`](../archive/imessage-production-readiness-plan.md).
 
 ### iMessage down triage
 

@@ -9,8 +9,8 @@ sends replies through the same connected account.
 ship a hybrid in which OAuth, tokens, account identifiers, webhooks, profiles, and sends come from
 different Meta integration models.
 
-Updated 2026-07-16 after live Standard Access DM, image-understanding, and reply validation and
-removal of the legacy development Page-token backdoor.
+Updated 2026-07-16 after the complete live Standard Access lifecycle pass and removal of the legacy
+development Page-token backdoor.
 
 ---
 
@@ -33,22 +33,20 @@ The repository now contains an end-to-end Instagram Login pipeline:
 - The legacy development Page-token connection route has been removed.
 
 The older Facebook Login/Page-token diagnosis and migration rationale remain in
-`docs/instagram-decision-memo.md` as historical context. The defects catalogued there—fail-open
+[`docs/archive/instagram-decision-memo.md`](archive/instagram-decision-memo.md) as historical context (archived 2026-07-19). The defects catalogued there—fail-open
 token/subscription behavior, partial batch handling, ambiguous tenant routing, ingestion-time reply
 windows, temporary media URLs, local-only disconnect, and fabricated token expiry—are addressed by
 the current implementation and focused automated coverage.
 
 ### Live Standard Access status
 
-The 2026-07-16 live test confirmed that a real customer DM creates a ticket, an Instagram image is
-stored privately and is available to the agent for task-relevant visual reasoning, and an approved
-Shopkeeper reply reaches the same Instagram conversation.
+The complete 2026-07-16 Standard Access pass confirmed direct OAuth and subscription, rapid distinct
+inbound DMs with provider timestamps, private image storage and agent visual reasoning, exact
+integration routing, an approved reply with a stored provider message ID, same-account reconnect,
+disconnect suppression, successful reconnect, and controlled long-lived-token refresh.
 
-The remaining Standard Access work is lifecycle acceptance rather than a known implementation gap:
-exercise same-account reconnect, verify disconnect suppresses later DMs, reconnect, and exercise a
-controlled long-lived-token refresh when possible. Production read-only checks have already
-confirmed rapid distinct inbound messages with provider timestamps, exact integration routing, and
-the stored outbound provider message ID.
+There are no remaining Standard Access implementation or lifecycle acceptance items. Advanced
+Access/App Review and a non-role merchant pass are the remaining external launch gates.
 
 ---
 
@@ -232,7 +230,7 @@ Suggested files:
 subscription verification, tenant ownership enforcement, and same/different-account reconnect
 behavior are implemented with focused automated coverage. Live OAuth, inbound DM, image, and reply
 validation passed under Standard Access, and the development manual-token backdoor has been removed.
-Live reconnect/disconnect exercises remain rollout validation in the test plan below.
+Live same-account reconnect, disconnect suppression, and reconnect validation also passed.
 
 ### Authorization route
 
@@ -481,8 +479,8 @@ The UI check is an early guard only; Meta's response remains authoritative.
 probes account identity and the `messages` subscription, refreshes eligible long-lived tokens with
 Meta's returned token and expiry, clears legacy refresh tokens, and records healthy, degraded, or
 reconnect-required metadata without expiring connections for transient failures. Dashboard health
-and outbound guards consume the definitive reconnect state. A controlled real-token refresh remains
-part of the Standard Access acceptance pass.
+and outbound guards consume the definitive reconnect state. A controlled real-token refresh passed
+as part of the completed Standard Access acceptance flow.
 
 Replace the Facebook/Page-token branch in `token-health.ts` with Instagram long-lived-token logic.
 
@@ -554,8 +552,8 @@ best-effort additional cleanup after unsubscribe and cover it with a contract te
 accounts and direct Instagram Login, OAuth failures have specific user-facing messages, token and
 DM-subscription health are displayed separately, onboarding and repository documentation no longer
 present the Facebook Page-token model as current, and production validation covers a server-enforced
-global/workspace rollout gate. The runbook now describes a controlled rollout: the core live
-DM/image/reply path has passed, while lifecycle acceptance and Advanced Access remain launch gates.
+global/workspace rollout gate. The runbook now describes a controlled rollout: the complete live
+Standard Access lifecycle has passed, while Advanced Access remains the external launch gate.
 
 Update all user-facing copy to match the new model:
 
@@ -591,9 +589,8 @@ Update:
 - environment examples and production validation scripts
 - integration help content
 - onboarding copy
-- the Instagram decision memo or replace it with a link to this plan
 
-Keep lifecycle verification and Advanced Access clearly marked as rollout gates until they pass.
+Keep Advanced Access and the non-role merchant pass clearly marked as rollout gates until they pass.
 
 ---
 
@@ -670,8 +667,8 @@ Keep lifecycle verification and Advanced Access clearly marked as rollout gates 
 
 ### Real Meta acceptance test under Standard Access
 
-**Partial pass (2026-07-16):** Items 1–7 are confirmed through the live flow and read-only
-production checks. Complete items 8–10 before App Review submission.
+**Status: Complete (2026-07-16).** All ten items passed through the live flow and read-only
+production verification. The integration is ready to proceed to App Review/Advanced Access.
 
 1. **Passed:** Complete OAuth using the Shopkeeper UI.
 2. **Passed:** Confirm the `messages` subscription is recorded and active.
@@ -681,13 +678,11 @@ production checks. Complete items 8–10 before App Review submission.
    agent for task-relevant visual reasoning.
 6. **Passed:** Approve a reply and confirm delivery in Instagram.
 7. **Passed:** Confirm the outbound provider message ID was recorded.
-8. **Pending:** Exercise reconnect with the same account.
-9. **Pending:** Disconnect and confirm new DMs no longer create tickets.
-10. **Pending:** Reconnect and exercise the token refresh client with a controlled test token when
-    possible.
+8. **Passed:** Exercise reconnect with the same account.
+9. **Passed:** Disconnect and confirm new DMs no longer create tickets.
+10. **Passed:** Reconnect and exercise the token refresh client with a controlled test token.
 
-No App Review submission should be made until this complete loop works through Shopkeeper—not only
-through Graph API Explorer or the App Dashboard's webhook test tool.
+The full loop now works through Shopkeeper, satisfying the prerequisite for App Review submission.
 
 ---
 
@@ -718,43 +713,47 @@ approval SLA. Treat Advanced Access as an external launch gate.
 
 **Production preflight (2026-07-16):** the strict Instagram rollout audit reports one Instagram
 Login integration with no legacy or duplicate rows, and Prisma reports all 55 migrations applied.
-The rollout remains gated on acceptance items 8–10 above and Advanced Access.
+Steps 1–6 below and the complete Standard Access lifecycle pass are complete. The next rollout step
+is App Review/Advanced Access.
 
-1. Merge code behind an Instagram integration feature flag.
-2. Deploy new environment variables to dashboard and gateway.
-3. Run `npm run audit:instagram-rollout -- --strict` against production, resolve any reported
+1. **Complete:** Merge code behind an Instagram integration feature flag.
+2. **Complete:** Deploy new environment variables to dashboard and gateway.
+3. **Complete:** Run `npm run audit:instagram-rollout -- --strict` against production, resolve any reported
    legacy/duplicate rows, then apply the uniqueness/migration changes.
-4. Deploy gateway webhook handling and clients.
-5. Deploy dashboard OAuth, UI, dispatch, token health, and disconnect changes.
-6. Run the Standard Access acceptance test in production-like infrastructure.
-7. Submit App Review/Advanced Access.
-8. Keep external connection disabled until approval is visible and a non-role merchant test passes.
-9. Enable for a small beta cohort and monitor connection failures, webhook signature failures,
+4. **Complete:** Deploy gateway webhook handling and clients.
+5. **Complete:** Deploy dashboard OAuth, UI, dispatch, token health, and disconnect changes.
+6. **Complete:** Run the Standard Access acceptance test in production-like infrastructure.
+7. **Next:** Submit App Review/Advanced Access.
+8. **Pending:** Keep external connection disabled until approval is visible and a non-role merchant
+   test passes.
+9. **Pending:** Enable for a small beta cohort and monitor connection failures, webhook signature failures,
    unknown account IDs, queue failures, send failures, and token refresh failures.
-10. Remove legacy Meta environment variables and dead Page-token code after the beta proves stable.
+10. **Pending:** Remove legacy Meta environment variables and dead Page-token code after the beta
+    proves stable.
 
 ---
 
 ## 15. Definition of Done
 
-Instagram is launch-ready only when all of the following are true:
+Instagram implementation and Standard Access acceptance are complete. External merchant launch
+remains gated by Advanced Access and a non-role merchant pass:
 
-- The repository contains no active Facebook Page-token Instagram path or manual-token backdoor.
-- OAuth uses Instagram-specific credentials and the two approved `instagram_business_*` scopes.
-- A connection is shown as successful only after long-token exchange, identity validation, and
+- [x] The repository contains no active Facebook Page-token Instagram path or manual-token backdoor.
+- [x] OAuth uses Instagram-specific credentials and the two approved `instagram_business_*` scopes.
+- [x] A connection is shown as successful only after long-token exchange, identity validation, and
   confirmed `messages` subscription.
-- One provider account resolves to exactly one workspace and one active integration.
-- Every webhook entry/message is isolated, normalized, queued, and deduplicated correctly.
-- Inbound tickets retain their receiving integration and provider timestamp.
-- Supported Instagram images are stored privately and supplied to the agent through bounded,
+- [x] One provider account resolves to exactly one workspace and one active integration.
+- [x] Every webhook entry/message is isolated, normalized, queued, and deduplicated correctly.
+- [x] Inbound tickets retain their receiving integration and provider timestamp.
+- [x] Supported Instagram images are stored privately and supplied to the agent through bounded,
   workspace-scoped image content blocks; unavailable images degrade safely without hallucination.
-- Replies use the exact receiving integration and `graph.instagram.com/v25.0`.
-- Replaced, disconnected, legacy, and outside-window threads cannot send through another account.
-- Tokens refresh before expiry using Meta's returned token and expiry.
-- Disconnect removes local access and attempts provider unsubscribe.
-- The full real-DM loop passes under Standard Access.
-- Advanced Access is approved and a non-role merchant account completes the same loop.
-- The production runbook, environment validation, dashboards, and alerts cover Instagram.
+- [x] Replies use the exact receiving integration and `graph.instagram.com/v25.0`.
+- [x] Replaced, disconnected, legacy, and outside-window threads cannot send through another account.
+- [x] Tokens refresh before expiry using Meta's returned token and expiry.
+- [x] Disconnect removes local access and attempts provider unsubscribe.
+- [x] The full real-DM loop passes under Standard Access.
+- [ ] Advanced Access is approved and a non-role merchant account completes the same loop.
+- [x] The production runbook, environment validation, dashboards, and alerts cover Instagram.
 
 ---
 

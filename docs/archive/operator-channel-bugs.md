@@ -8,7 +8,7 @@ send). Track and fix here before beta.
 Last updated: 2026-07-08.
 
 **Related docs:** [imessage-production-readiness-plan.md](imessage-production-readiness-plan.md)
-(iMessage-specific work only), [channel-roles.md](channel-roles.md).
+(iMessage-specific work only), [channel-roles.md](../channel-roles.md).
 
 ---
 
@@ -41,9 +41,9 @@ customer email opens a ticket.
 ### Root cause
 
 1. `sendOperatorPlanNotification` fans out to every bound operator channel with
-   `policy: 'critical'` ([`planning-notifications.ts`](../apps/gateway/src/message-handlers/planning-notifications.ts)).
+   `policy: 'critical'` ([`planning-notifications.ts`](../../apps/gateway/src/message-handlers/planning-notifications.ts)).
 2. Bindings are ordered **Telegram first**, then iMessage
-   ([`operator-notify.ts`](../apps/gateway/src/operator-notify.ts) `listOperatorBindings`).
+   ([`operator-notify.ts`](../../apps/gateway/src/operator-notify.ts) `listOperatorBindings`).
 3. Telegram send succeeds; iMessage proactive send fails (`ECONNRESET` on gRPC).
 4. `notifyOperator` throws → AISummary job fails → **BullMQ retries** (3 attempts).
 5. Each retry re-sends to Telegram before failing again on iMessage.
@@ -53,10 +53,10 @@ customer email opens a ticket.
 - **`notifyCriticalToAllOperators`** — job fails only when **no** channel delivers;
   per-channel failures are logged and the loop continues.
 - **Redis idempotency keys** per `(channel, contextKey, planHash)` in
-  [`operator-notify-idempotency.ts`](../apps/gateway/src/operator-notify-idempotency.ts) —
+  [`operator-notify-idempotency.ts`](../../apps/gateway/src/operator-notify-idempotency.ts) —
   BullMQ retries skip channels already marked delivered.
-- Covered by [`planning-notifications.test.ts`](../apps/gateway/src/message-handlers/planning-notifications.test.ts)
-  and [`operator-notify.test.ts`](../apps/gateway/src/operator-notify.test.ts).
+- Covered by [`planning-notifications.test.ts`](../../apps/gateway/src/message-handlers/planning-notifications.test.ts)
+  and [`operator-notify.test.ts`](../../apps/gateway/src/operator-notify.test.ts).
 
 ### Impact (before fix)
 
@@ -66,9 +66,9 @@ customer email opens a ticket.
 
 ### Code pointers
 
-- [`apps/gateway/src/operator-notify.ts`](../apps/gateway/src/operator-notify.ts) — `notifyOperator`, critical policy
-- [`apps/gateway/src/message-handlers/planning-notifications.ts`](../apps/gateway/src/message-handlers/planning-notifications.ts) — `sendOperatorPlanNotification`, `notifyCriticalToAllOperators`
-- [`apps/gateway/src/workers/ai-summary.ts`](../apps/gateway/src/workers/ai-summary.ts) — job retry on throw
+- [`apps/gateway/src/operator-notify.ts`](../../apps/gateway/src/operator-notify.ts) — `notifyOperator`, critical policy
+- [`apps/gateway/src/message-handlers/planning-notifications.ts`](../../apps/gateway/src/message-handlers/planning-notifications.ts) — `sendOperatorPlanNotification`, `notifyCriticalToAllOperators`
+- [`apps/gateway/src/workers/ai-summary.ts`](../../apps/gateway/src/workers/ai-summary.ts) — job retry on throw
 
 ---
 
@@ -90,15 +90,15 @@ redraft works (`[agent:plan] skip reply redrafted`).
 
 ### Fix
 
-Gateway [`skipped-plan-terminal-send.ts`](../apps/gateway/src/message-handlers/skipped-plan-terminal-send.ts)
-calls agent [`planner-skip-reply.ts`](../packages/agent/src/planner-skip-reply.ts)
+Gateway [`skipped-plan-terminal-send.ts`](../../apps/gateway/src/message-handlers/skipped-plan-terminal-send.ts)
+calls agent [`planner-skip-reply.ts`](../../packages/agent/src/planner-skip-reply.ts)
 `refreshTerminalSendAfterSkip`.
 
 ### Code pointers
 
-- [`apps/gateway/src/routes/telegram/pending-plan-commands.ts`](../apps/gateway/src/routes/telegram/pending-plan-commands.ts)
-- [`packages/agent/src/planner-skip-reply.ts`](../packages/agent/src/planner-skip-reply.ts)
-- [`apps/gateway/src/message-handlers/skipped-plan-terminal-send.ts`](../apps/gateway/src/message-handlers/skipped-plan-terminal-send.ts)
+- [`apps/gateway/src/routes/telegram/pending-plan-commands.ts`](../../apps/gateway/src/routes/telegram/pending-plan-commands.ts)
+- [`packages/agent/src/planner-skip-reply.ts`](../../packages/agent/src/planner-skip-reply.ts)
+- [`apps/gateway/src/message-handlers/skipped-plan-terminal-send.ts`](../../apps/gateway/src/message-handlers/skipped-plan-terminal-send.ts)
 
 ---
 
@@ -160,10 +160,10 @@ Concurrent (likely unrelated): `[Webhook] Shopify signature mismatch — rejecti
 
 ### Code pointers
 
-- [`apps/dashboard/src/lib/agent/tools/thread.ts`](../apps/dashboard/src/lib/agent/tools/thread.ts) — `sendReply`
-- [`apps/dashboard/src/lib/messaging/email-dispatch.ts`](../apps/dashboard/src/lib/messaging/email-dispatch.ts) — async queue
-- [`apps/gateway/src/message-handlers/agent-thread-sink.ts`](../apps/gateway/src/message-handlers/agent-thread-sink.ts) — hop, no delivery verify
-- [`packages/agent/src/order-status-fast-path.ts`](../packages/agent/src/order-status-fast-path.ts) — operator summary = last tool result
+- [`apps/dashboard/src/lib/agent/tools/thread.ts`](../../apps/dashboard/src/lib/agent/tools/thread.ts) — `sendReply`
+- [`apps/dashboard/src/lib/messaging/email-dispatch.ts`](../../apps/dashboard/src/lib/messaging/email-dispatch.ts) — async queue
+- [`apps/gateway/src/message-handlers/agent-thread-sink.ts`](../../apps/gateway/src/message-handlers/agent-thread-sink.ts) — hop, no delivery verify
+- [`packages/agent/src/order-status-fast-path.ts`](../../packages/agent/src/order-status-fast-path.ts) — operator summary = last tool result
 
 ---
 
@@ -184,12 +184,12 @@ token budget (“too many steps”).
 
 ### Root cause
 
-Message routing in [`telegram/message-handler.ts`](../apps/gateway/src/routes/telegram/message-handler.ts):
+Message routing in [`telegram/message-handler.ts`](../../apps/gateway/src/routes/telegram/message-handler.ts):
 
 1. Only exact `yes` / `no` / `skip N` match `handlePendingPlanCommand`.
 2. Everything else falls through to `executeFreeFormInstruction`.
 3. Free-form passes `context.lastThreadId`, **not** `context.pendingPlan.threadId`
-   ([`agent-execution.ts`](../apps/gateway/src/routes/telegram/agent-execution.ts)).
+   ([`agent-execution.ts`](../../apps/gateway/src/routes/telegram/agent-execution.ts)).
 
 `pendingPlan` can be set while `lastThreadId` still points at an older ticket.
 
@@ -210,9 +210,9 @@ Always set `lastThreadId` when parking `pendingPlan` (see #4).
 
 ### Code pointers
 
-- [`apps/gateway/src/routes/telegram/message-handler.ts`](../apps/gateway/src/routes/telegram/message-handler.ts)
-- [`apps/gateway/src/routes/telegram/agent-execution.ts`](../apps/gateway/src/routes/telegram/agent-execution.ts)
-- [`apps/gateway/src/routes/imessage/message-handler.ts`](../apps/gateway/src/routes/imessage/message-handler.ts) — same routing (shared handlers)
+- [`apps/gateway/src/routes/telegram/message-handler.ts`](../../apps/gateway/src/routes/telegram/message-handler.ts)
+- [`apps/gateway/src/routes/telegram/agent-execution.ts`](../../apps/gateway/src/routes/telegram/agent-execution.ts)
+- [`apps/gateway/src/routes/imessage/message-handler.ts`](../../apps/gateway/src/routes/imessage/message-handler.ts) — same routing (shared handlers)
 
 ---
 
@@ -229,9 +229,9 @@ reference a prior ticket.
 ### Root cause
 
 `sendOperatorPlanNotification` patches context with only `pendingPlan`, not
-`lastThreadId` ([`planning-notifications.ts`](../apps/gateway/src/message-handlers/planning-notifications.ts)).
+`lastThreadId` ([`planning-notifications.ts`](../../apps/gateway/src/message-handlers/planning-notifications.ts)).
 `lastThreadId` is updated only after plan **approval** completes
-([`pending-plan-commands.ts`](../apps/gateway/src/routes/telegram/pending-plan-commands.ts)).
+([`pending-plan-commands.ts`](../../apps/gateway/src/routes/telegram/pending-plan-commands.ts)).
 
 ### Suggested fix
 
@@ -252,7 +252,7 @@ Include `lastThreadId: threadId` in the `notifyOperator` context patch for plan
 
 ### Root cause
 
-[`command-parser.ts`](../apps/gateway/src/routes/telegram/command-parser.ts) only
+[`command-parser.ts`](../../apps/gateway/src/routes/telegram/command-parser.ts) only
 accepts `^skip\s+(\d+)$` (e.g. `skip 2`). No variants (`skip step 2`, etc.).
 
 ### Suggested fix
@@ -275,8 +275,8 @@ of `skip 1`, `skip 2`, etc., despite Phase 1 checklist requiring skip support.
 
 ### Root cause
 
-[`formatPlanMessage`](../apps/gateway/src/message-handlers/planning-notifications.ts)
-and [`HELP_TEXT`](../apps/gateway/src/routes/telegram/format.ts) do not document
+[`formatPlanMessage`](../../apps/gateway/src/message-handlers/planning-notifications.ts)
+and [`HELP_TEXT`](../../apps/gateway/src/routes/telegram/format.ts) do not document
 skip commands.
 
 ### Suggested fix
@@ -304,7 +304,7 @@ Agent continued, hit token budget, returned “too many steps” to operator.
 ### Root cause
 
 Gateway worker `ThreadSink` posts to dashboard `/api/agent/io-send-internal`
-([`agent-thread-sink.ts`](../apps/gateway/src/message-handlers/agent-thread-sink.ts)).
+([`agent-thread-sink.ts`](../../apps/gateway/src/message-handlers/agent-thread-sink.ts)).
 500 indicates dashboard-side failure; exact cause not captured in gateway logs
 (body redacted).
 
@@ -332,7 +332,7 @@ Exact strings only unless noted:
 
 **Skip index:** `skip 1` drops the first actionable (non-read) tool in
 `rawToolCalls` order. See
-[`webhooks-telegram-plan-digest.test.ts`](../apps/gateway/src/routes/webhooks-telegram-plan-digest.test.ts)
+[`webhooks-telegram-plan-digest.test.ts`](../../apps/gateway/src/routes/webhooks-telegram-plan-digest.test.ts)
 `"skip 1" drops the first actionable tool call`.
 
 ---

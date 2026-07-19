@@ -1,7 +1,7 @@
 # Instagram Decision Memo
 
 > Historical decision record. The migration described here has been implemented. Use
-> [`docs/instagram-integration-plan.md`](./instagram-integration-plan.md) for current status,
+> [`docs/instagram-integration-plan.md`](../instagram-integration-plan.md) for current status,
 > acceptance criteria, and rollout work.
 
 ## Decision
@@ -93,5 +93,5 @@ DM/image/reply path passed.
 ## Recommendation
 
 The repository now uses Instagram Login and Instagram Graph messaging coherently. Keep this memo as
-historical rationale; use the implementation plan for the remaining lifecycle acceptance, Advanced
-Access, and controlled-beta work.
+historical rationale; use the implementation plan for the remaining Advanced Access and
+controlled-beta work.

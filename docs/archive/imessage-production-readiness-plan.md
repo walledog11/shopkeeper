@@ -6,7 +6,7 @@ this line.
 Last reviewed: 2026-07-08 (Phases 1 + 7 sign-off complete).
 
 Archived implementation history:
-[`archive/imessage-operator-rewire-plan.md`](archive/imessage-operator-rewire-plan.md)
+[`archive/imessage-operator-rewire-plan.md`](imessage-operator-rewire-plan.md)
 (rewire marked complete 2026-06-24).
 
 ## Current state
@@ -235,7 +235,7 @@ deploy, `ddc3453`).
    org id, thread id, space id, error detail) — `spectrum.ts` +
    `operator-notify.ts`.
 2. ✅ Structured logs for bind success/failure and plan-notify sent vs failed per channel.
-3. ✅ Runbook section in [`production/runbook.md`](production/runbook.md):
+3. ✅ Runbook section in [`production/runbook.md`](../production/runbook.md):
    - Env matrix row for Spectrum vars
    - iMessage Phase 0/1 setup + webhook routing
    - iMessage down triage: `isImessageConfigured()`, webhook 503, cred rotation,
@@ -275,7 +275,7 @@ retry of a plan notification does not re-send to channels already marked deliver
 
 **Status:** ✅ Complete (2026-07-08).
 
-**Goal:** Close gaps in [`channel-roles.md`](channel-roles.md) (labels, deep links,
+**Goal:** Close gaps in [`channel-roles.md`](../channel-roles.md) (labels, deep links,
 edit/revise UX).
 
 1. ✅ **Dashboard deep links in plan notifications** — Plan pushes include
@@ -306,7 +306,7 @@ edit/revise UX).
    token/body at info/warn.
 
 **Exit:** ✅ Support playbook for wrong-org bind and lost access in
-[`production/runbook.md`](production/runbook.md).
+[`production/runbook.md`](../production/runbook.md).
 
 ---
 
@@ -408,6 +408,6 @@ pending-plan routing). Tracked in
 
 ## Source of truth
 
-- Channel role: [`channel-roles.md`](channel-roles.md)
-- Product framing: [`product-truth.md`](product-truth.md)
-- Near-term task pointers: [`to-do-list.md`](to-do-list.md)
+- Channel role: [`channel-roles.md`](../channel-roles.md)
+- Product framing: [`product-truth.md`](../product-truth.md)
+- Near-term task pointers: [`to-do-list.md`](../to-do-list.md)
