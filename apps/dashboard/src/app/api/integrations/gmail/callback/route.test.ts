@@ -71,6 +71,34 @@ afterEach(async () => {
 });
 
 describe('POST /api/integrations/gmail/callback', () => {
+  it('classifies a token-exchange deadline as provider unavailable', async () => {
+    mockSavedCookies({
+      gmail_oauth_state: 'state_123',
+      gmail_oauth_org: org!.clerkOrgId,
+      gmail_oauth_user: 'usr_oauth',
+    });
+    mockFetch.mockRejectedValueOnce(new DOMException('timed out', 'TimeoutError'));
+
+    const res = await POST(new Request(
+      'http://localhost/api/integrations/gmail/callback?code=oauth_code&state=state_123',
+    ));
+
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe(
+      'http://dashboard.test/dashboard/integrations/oauth/complete?error=provider_unavailable&integration=gmail',
+    );
+    expect(analyticsSink.events).toEqual([
+      expect.objectContaining({
+        event: 'integration_connection_failed',
+        distinctId: org!.id,
+        properties: expect.objectContaining({
+          failure_category: 'provider_unavailable',
+          platform: 'email',
+        }),
+      }),
+    ]);
+  });
+
   it('rejects state mismatch before token exchange', async () => {
     mockSavedCookies({
       gmail_oauth_state: 'state_123',

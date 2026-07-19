@@ -20,6 +20,10 @@ import {
   validateOAuthCallbackSession,
 } from './oauth-session';
 import { registerGmailWatch } from './gmail-watch';
+import {
+  fetchProviderWithDeadline,
+  isProviderRequestTimeoutError,
+} from '@/lib/server/provider-fetch';
 
 interface OAuthTokenResponse {
   access_token?: string;
@@ -174,7 +178,7 @@ export async function completeEmailOAuth(
   try {
     const gmailNativeInboundEnabled = config.provider === 'gmail'
       && isGmailNativeInboundEnabled();
-    const tokenResponse = await fetch(config.tokenUrl, {
+    const tokenResponse = await fetchProviderWithDeadline(config.tokenUrl, {
       cache: 'no-store',
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -185,6 +189,9 @@ export async function completeEmailOAuth(
         grant_type: 'authorization_code',
         redirect_uri: `${appUrl}${callbackPath(config)}`,
       }).toString(),
+    }, {
+      provider: config.provider,
+      operation: 'OAuth token exchange',
     });
     const tokenData = await tokenResponse.json() as OAuthTokenResponse;
 
@@ -203,9 +210,12 @@ export async function completeEmailOAuth(
       return emailOAuthCompleteResponse(appUrl, config, { error: 'token_exchange_failed', returnTo });
     }
 
-    const userinfoResponse = await fetch(config.userinfoUrl, {
+    const userinfoResponse = await fetchProviderWithDeadline(config.userinfoUrl, {
       cache: 'no-store',
       headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    }, {
+      provider: config.provider,
+      operation: 'OAuth userinfo lookup',
     });
     const userinfo = await userinfoResponse.json() as unknown;
     const userEmail = config.extractEmail(userinfo);
@@ -254,13 +264,17 @@ export async function completeEmailOAuth(
     logger.info({ userEmail, orgId: organizationId }, `[${prefix}] Integration saved`);
     return emailOAuthCompleteResponse(appUrl, config, { connected: config.provider, returnTo });
   } catch (error) {
+    const timedOut = isProviderRequestTimeoutError(error);
     logger.error({ err: error }, `[${prefix}] Unexpected error`);
     await captureIntegrationConnectionFailed({
       attemptId,
-      failureCategory: 'unknown',
+      failureCategory: timedOut ? 'provider_unavailable' : 'unknown',
       organizationId,
       platform: 'email',
     });
-    return emailOAuthCompleteResponse(appUrl, config, { error: 'server_error', returnTo });
+    return emailOAuthCompleteResponse(appUrl, config, {
+      error: timedOut ? 'provider_unavailable' : 'server_error',
+      returnTo,
+    });
   }
 }

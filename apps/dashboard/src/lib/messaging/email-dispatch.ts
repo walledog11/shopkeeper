@@ -12,6 +12,7 @@ import { enqueueOutboundEmail } from "@/lib/messaging/enqueue-outbound-email"
 import {
   createPendingAgentMessage,
   markAgentMessageSendFailed,
+  markPendingAgentMessageSendUnknown,
 } from "./dispatch-message-common"
 import type {
   DispatchFailure,
@@ -57,9 +58,13 @@ export async function dispatchEmailViaGatewayQueue(
     source,
   })
 
-  if (!enqueued) {
+  if (enqueued === "failed") {
     await markAgentMessageSendFailed(message.id, "Could not queue email send")
     return { ok: false, error: "Could not queue email send" }
+  }
+  if (enqueued === "unknown") {
+    await markPendingAgentMessageSendUnknown(message.id, "Email queue admission outcome unknown")
+    return { ok: false, error: "Email queue admission could not be confirmed" }
   }
 
   return { ok: true, message }

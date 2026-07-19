@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getGatewayBaseUrl } from '@/lib/server/gateway-url';
+import { fetchProviderWithDeadline } from '@/lib/server/provider-fetch';
 
 function verifyMetaWebhookSignature(signature: string | null, body: Buffer): boolean {
   const appSecret = (
@@ -17,12 +18,15 @@ function verifyMetaWebhookSignature(signature: string | null, body: Buffer): boo
 async function proxy(request: NextRequest, body?: Buffer) {
   const url = `${getGatewayBaseUrl({ required: true })}/webhooks/meta${request.nextUrl.search}`;
 
-  const res = await fetch(url, {
+  const res = await fetchProviderWithDeadline(url, {
     cache: 'no-store',
     redirect: 'manual',
     method: request.method,
     headers: request.headers,
     body: body ? new Uint8Array(body) : undefined,
+  }, {
+    provider: 'gateway',
+    operation: 'Meta webhook forwarding',
   });
 
   const text = await res.text();

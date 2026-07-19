@@ -3,6 +3,7 @@ import logger from '../logger.js';
 import {
   findCommittedUndeliveredOperatorEvents,
   markOperatorEventReplyDelivered,
+  markOperatorEventReplyDeliveryUnknown,
   reconcileStaleClaimedOperatorEvents,
 } from '../operator-event-store.js';
 import { sendOperatorEventReply } from '../operator-event-reply.js';
@@ -47,12 +48,17 @@ export async function runOperatorEventSweep(): Promise<void> {
   );
 
   let redelivered = 0;
+  let deliveryUnknown = 0;
   for (const event of undelivered) {
     if (!event.replyText) continue;
     try {
-      if (await sendOperatorEventReply(event, event.replyText)) {
+      const delivery = await sendOperatorEventReply(event, event.replyText);
+      if (delivery === true) {
         await markOperatorEventReplyDelivered(event.id);
         redelivered += 1;
+      } else if (delivery === 'unknown') {
+        await markOperatorEventReplyDeliveryUnknown(event.id);
+        deliveryUnknown += 1;
       }
     } catch (err) {
       logger.warn(
@@ -65,7 +71,13 @@ export async function runOperatorEventSweep(): Promise<void> {
   const unhealedUndelivered = undelivered.length - redelivered;
   if (reconciledUnknown > 0 || unhealedUndelivered > 0) {
     logger.error(
-      { opsAlert: true, reconciledUnknown, undeliveredFound: undelivered.length, redelivered },
+      {
+        opsAlert: true,
+        reconciledUnknown,
+        undeliveredFound: undelivered.length,
+        redelivered,
+        deliveryUnknown,
+      },
       '[OperatorEventSweep] Reconciled stuck operator events',
     );
   } else if (redelivered > 0) {

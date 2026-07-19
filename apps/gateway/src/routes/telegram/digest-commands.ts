@@ -126,7 +126,9 @@ export async function handleDigestCommand(
   );
   if (!response.ok) {
     logger.error({ status: response.status, err: response.responseBody, threadId: targetId }, '[Operator] Digest REPLY failed');
-    await reply('Reply failed to send. Please try again from the dashboard.');
+    await reply(response.outcome === 'unknown'
+      ? 'I could not confirm whether that reply sent. Check the ticket before trying again.'
+      : 'Reply failed to send. Please try again from the dashboard.');
     return true;
   }
   const replyFirstName = customerFirstName(replyTarget.customer.name);

@@ -166,4 +166,29 @@ describe('GmailSender.send', () => {
       text: 'Hi',
     })).rejects.toThrow('Gmail accepted the send but returned no message id');
   });
+
+  it('bounds sends and classifies a deadline as an ambiguous provider outcome', async () => {
+    mockFetch.mockRejectedValueOnce(new DOMException('timed out', 'TimeoutError'));
+    const sender = new GmailSender({
+      id: 'gmail-integration',
+      accessToken: 'token',
+      refreshToken: 'refresh_token',
+      tokenExpiresAt: new Date(Date.now() + 3600_000),
+    });
+
+    await expect(sender.send({
+      to: 'c@x.test',
+      fromAddress: 'merchant@gmail.test',
+      fromName: 'M',
+      subject: 'Hi',
+      text: 'Hi',
+    })).rejects.toMatchObject({
+      name: 'EmailProviderRequestTimeoutError',
+      operation: 'message send',
+      provider: 'gmail',
+    });
+    expect(mockFetch.mock.calls[0]?.[1]).toMatchObject({
+      signal: expect.any(AbortSignal),
+    });
+  });
 });

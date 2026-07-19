@@ -1,6 +1,10 @@
 import logger from '@/lib/server/logger';
 import type { ReplySource } from '@shopkeeper/analytics';
 import { getGatewayBaseUrl } from '@/lib/server/gateway-url';
+import {
+  fetchProviderWithDeadline,
+  isProviderRequestTimeoutError,
+} from '@/lib/server/provider-fetch';
 
 export type OutboundEmailSource =
   | 'dispatch_message'
@@ -17,26 +21,33 @@ export interface EnqueueOutboundEmailInput {
   source: OutboundEmailSource;
 }
 
+export type EnqueueOutboundEmailResult = 'enqueued' | 'failed' | 'unknown';
+
 // Phase 1.5 (option A): enqueue the actual provider send onto the gateway's
 // BullMQ queue over an internal HTTP hop. Returns false on any failure so the
-// caller can mark the pre-created message row failed and surface a retry.
-export async function enqueueOutboundEmail(input: EnqueueOutboundEmailInput): Promise<boolean> {
+// caller can distinguish a definite rejection from an ambiguous network outcome.
+export async function enqueueOutboundEmail(
+  input: EnqueueOutboundEmailInput,
+): Promise<EnqueueOutboundEmailResult> {
   const base = getGatewayBaseUrl();
   if (!base) {
     logger.error({ messageId: input.messageId }, '[enqueueOutboundEmail] No gateway base URL');
-    return false;
+    return 'failed';
   }
   const secret = process.env.INTERNAL_API_SECRET;
   if (!secret) {
     logger.error({ messageId: input.messageId }, '[enqueueOutboundEmail] INTERNAL_API_SECRET unset');
-    return false;
+    return 'failed';
   }
 
   try {
-    const res = await fetch(`${base}/internal/queue/outbound-email`, {
+    const res = await fetchProviderWithDeadline(`${base}/internal/queue/outbound-email`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-internal-secret': secret },
       body: JSON.stringify(input),
+    }, {
+      provider: 'gateway',
+      operation: 'outbound-email queue admission',
     });
     if (!res.ok) {
       const errBody = await res.text().catch(() => '');
@@ -44,15 +55,19 @@ export async function enqueueOutboundEmail(input: EnqueueOutboundEmailInput): Pr
         { status: res.status, messageId: input.messageId, body: errBody.slice(0, 300) },
         '[enqueueOutboundEmail] Gateway enqueue failed',
       );
-      return false;
+      return 'failed';
     }
-    return true;
+    return 'enqueued';
   } catch (err) {
     logger.error(
-      { err: (err as Error).message, messageId: input.messageId },
-      '[enqueueOutboundEmail] Gateway enqueue errored',
+      {
+        err: err instanceof Error ? err.message : String(err),
+        messageId: input.messageId,
+        timedOut: isProviderRequestTimeoutError(err),
+      },
+      '[enqueueOutboundEmail] Gateway enqueue outcome unknown',
     );
-    return false;
+    return 'unknown';
   }
 }
 

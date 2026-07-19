@@ -494,6 +494,28 @@ describe('sendEmail async outbound (OUTBOUND_EMAIL_ASYNC)', () => {
     expect(saved?.sendStatus).toBe('failed');
     expect(saved?.sendError).toBe('Could not queue email send');
   });
+
+  it('marks an ambiguous enqueue network outcome unknown', async () => {
+    mockFetch.mockRejectedValueOnce(new DOMException('connection lost', 'NetworkError'));
+    const emailAddress = `support_async_unknown_${org.id.slice(0, 8)}@example.com`;
+    await createTestIntegration(org.id, {
+      platform: ChannelType.email,
+      externalAccountId: emailAddress,
+      fromEmail: emailAddress,
+    });
+
+    const result = await sendEmail(
+      { to: 'prospect-unknown@example.com', subject: 'Q', body: 'Queue result is unclear.' },
+      { threadId: 'unused-for-send-email', orgId: org.id, orgName: org.name },
+    );
+
+    expect(result.status).toBe('error');
+    const saved = await db.message.findFirst({
+      where: { contentText: 'Queue result is unclear.', senderType: SenderType.agent },
+    });
+    expect(saved?.sendStatus).toBe('unknown');
+    expect(saved?.sendError).toBe('Email queue admission outcome unknown');
+  });
 });
 
 describe('updateThreadStatus', () => {

@@ -370,8 +370,14 @@ replace the per-tool canary observation window.
 
 ### P4-01 — Make outbound email claimable, tenant-validated and recoverable
 
-**Status (2026-07-13): Production migration and application deployment complete;
-provider canaries and reconciliation runbook pending.** Additive message claim
+**Status (2026-07-18): Production migration and application deployment complete;
+provider canaries pending.** The strict `audit:outbound-email` rollout check and
+provider-activity recovery runbook are now implemented. The first strict
+24-hour production baseline is clean but contains zero async sends, and
+`OUTBOUND_EMAIL_ASYNC` is not currently configured on the production dashboard;
+provider-specific evidence still requires a deliberate canary. **The 2026-07-19
+strict 24-hour audit is also clean with zero rows and no blockers, so this gate
+remains open.** Additive message claim
 fields support a conditional `pending -> processing` transition with a claim
 token and separate provider-attempt timestamp. The gateway uses the database
 claim as the cross-worker correctness boundary and `messageId` as the stable
@@ -380,6 +386,16 @@ retry; active jobs are deduplicated. Queue admission and execution both verify
 the organization/message/thread/email-integration relationship. Gmail and
 Postmark senders now return their provider message IDs, and async sends carry a
 stable per-message RFC `Message-ID` for provider-side correlation.
+
+**Deadline follow-up completed 2026-07-19:** the dashboard→gateway queue-admission
+hop now has a 15-second deadline and a three-way result (`enqueued`/`failed`/
+`unknown`). A timeout or connection loss is never collapsed into retryable
+`failed`: the dashboard conditionally marks a still-pending message `unknown`,
+while a worker that already won the `pending -> processing` claim keeps control
+of the row. Gmail sends use the same 15-second boundary with a typed timeout;
+Postmark's client is explicitly configured to 15 seconds. Both still inherit
+the existing worker rule that any failure after provider-attempt recording is
+an ambiguous outcome and cannot be automatically retried.
 
 Postmark's official provider contract does not offer idempotency keys. The
 worker therefore does not blindly retry after a provider attempt: transport,
@@ -401,8 +417,9 @@ audit gates pass.
 - [ ] Canary Postmark and Gmail independently with duplicate enqueue,
   crash-after-acceptance, stale processing, provider-ID persistence, and manual
   retry observation.
-- [ ] Document who checks provider activity and who may resolve an `unknown`
-  send; no automatic resend is allowed without positive no-send evidence.
+- [x] Document that the launch owner/on-call checks provider activity using the
+  stored provider ID and stable RFC `Message-ID`, and may resolve/retry an
+  `unknown` send only with positive no-send evidence.
 - [ ] Keep the synchronous email rollback rail until the async canary and stale-
   claim observation window are clean.
 
@@ -428,8 +445,20 @@ audit gates pass.
 
 ### P4-03 — Queue operator-channel messages before acknowledgement
 
-**Status (2026-07-15): Telegram + iMessage implementations complete (flag-gated)
-with the recovery sweep; production rollout pending.** A durable `OperatorEvent`
+**Status (2026-07-18): Telegram canary active; iMessage rollout pending.** The
+Telegram + iMessage implementations, recovery sweep, strict rollout audit, and
+`unknown`-event recovery runbook are complete. Migration status reports all 56
+migrations applied in production; the public gateway and separate worker are
+both deployed on canary commit `7774c88c`. Telegram durability is enabled on
+both services while iMessage remains off. The first strict 24-hour audit found
+two Telegram events, both committed on their first claim with delivered replies.
+The fresh one-hour required-traffic check then passed with another first-claim
+committed/delivered event; the follow-up 24-hour strict audit reports three clean
+Telegram events and no failed, unknown, stale, undelivered, or repeated-claim
+records. A later `help` command also passed its one-hour strict audit on the first
+claim with a delivered reply and no surrounding gateway/worker warnings or
+errors. Only pending-plan traffic remains in the representative observation
+window before iMessage rollout. A durable `OperatorEvent`
 table (migration `20260715020000_add_operator_events`) with a unique
 `(channel, providerMessageId)` key and a claim-state CHECK constraint backs the
 new path. Behind `OPERATOR_DURABLE_QUEUE_TELEGRAM` / `OPERATOR_DURABLE_QUEUE_IMESSAGE`,
@@ -449,6 +478,13 @@ the claim absorbs crash-after-ack (a claimed event is never auto-replayed —
 free-form operator turns carry no plan claim, so this is their only single-use
 guard).
 
+**Deadline follow-up completed 2026-07-19:** Telegram provider calls now have a
+15-second typed deadline. A connection loss or timeout during reply delivery is
+recorded on the committed event as an ambiguous delivery outcome; it remains a
+strict-audit blocker for manual provider review and is excluded from the
+automatic confirmation-resend query. This prevents the recovery sweep from
+blindly duplicating a reply that Telegram or Photon may already have accepted.
+
 The `operator-event-sweep` maintenance job (15-min, registered like
 `outbound-send-sweep`) is the recovery backstop: it reconciles `claimed` rows
 older than 10 min (above the worker stall interval and max turn duration, so it
@@ -462,22 +498,24 @@ reconciles or leaves anything unhealed (the P6-02 monitoring hook, mirroring
 single-winner claim, claim-token-guarded finalize, crash-after-claim non-replay,
 binding revocation, provider reply failure, failed-turn recording, persist-before-ack
 ingestion (both channels), iMessage missing-space handling, stale-claim
-reconciliation, delivery-window guard, and re-send success/failure. The full
+reconciliation, delivery-window guard, re-send success/failure, and ambiguous
+reply delivery suppression. The full
 gateway unit + integration suite passes.
 
 **Still required for P4-03 rollout completion:**
 
-- [ ] Document the recovery runbook: who reviews `unknown` operator events. The
-  sweep marks a claim `unknown` after 10 min, but until P4-06 external-fetch
-  deadlines land a still-hung turn can be reconciled while live — so `unknown`
-  means "may have partially acted," not "did nothing." On-call must check
-  `replyText`/`replyDeliveredAt` and the `AgentAction` audit trail before
-  assuming nothing happened; never blindly re-drive it.
-- [ ] Canary Telegram, then iMessage; verify ack timing, duplicate suppression,
-  and crash recovery in production before broadening.
-- [ ] (Follow-up, optional) Add the `OPERATOR_EVENT` processing queue to
-  queue-health monitoring if ingestion-backlog alerts are wanted; today only the
-  sweep alerts (matching `outbound-send-sweep`).
+- [x] Document the recovery runbook: the launch owner/on-call reviews `failed`
+  and `unknown` events, correlates `AgentAction` rows by durable turn ID, checks
+  provider truth, and never blindly re-drives an ambiguous turn. See
+  `docs/production/runbook.md`.
+- [ ] Complete the Telegram observation window with fresh representative
+  pending-plan traffic, then canary iMessage; verify ack timing,
+duplicate suppression, and crash recovery before broadening. **The 2026-07-19
+24-hour strict audit is clean with four Telegram events, all committed on their
+first claim with delivered replies; the latest required-traffic one-hour audit
+contained zero events, so it does not advance the pending-plan gate.**
+- [x] Add the `OPERATOR_EVENT` processing queue to queue-health monitoring with
+  a per-queue waiting threshold (P6-02, PR #26).
 
 - **Related findings:** AUD-001, AUD-007.
 - **Files likely to change:** gateway Telegram/Photon webhook routes and handlers; new operator-inbox queue/worker; Prisma schema/migration or durable BullMQ job IDs; presence/reply adapters.
@@ -489,6 +527,12 @@ gateway unit + integration suite passes.
 - **Acceptance criteria:** Acknowledged merchant instructions are durably recoverable and each provider message has at most one committed control action.
 
 ### P4-04 — Flatten Meta webhook batches
+
+**Status (2026-07-17): Completed by the Instagram Login integration work.** `webhooks-meta.ts`
+iterates every `entry` and normalizes every `messaging` event, enqueuing one `IG_DM` job per
+message keyed on `externalMessageId` (`mid`) so inbound dedupe persists each event exactly once.
+Only non-DM `changes` events remain unhandled, which is out of scope for the DM path. No further
+work required.
 
 - **Related findings:** AUD-008.
 - **Files likely to change:** `apps/gateway/src/routes/webhooks-meta.ts`, `message-handlers/channels.ts`, inbound job types/tests.
@@ -511,6 +555,42 @@ gateway unit + integration suite passes.
 - **Acceptance criteria:** Non-email routes cannot allocate a 50 MB parsed body and email payloads exceeding the documented contract fail clearly before upload fan-out.
 
 ### P4-06 — Add deadlines and typed timeout classification to external fetches
+
+**Status (2026-07-19): Local implementation complete; deployment observation
+pending.** The repository's first-party production HTTP calls have explicit
+deadlines and classified timeout behavior. The existing Gmail sync/OAuth,
+Shopify, and Instagram clients remain bounded. Shared 15-second wrappers now
+cover dashboard OAuth, dashboard→gateway webhook/internal hops, gateway→dashboard
+internal calls, Clerk, legacy Meta, Telegram, TikTok Shop token refresh, and
+email-token health. USPS tracking and Gmail sends carry explicit 15-second
+signals; Postmark's SDK client is explicitly configured to 15 seconds. The only
+remaining raw-fetch match without a fixed deadline is the non-production
+realtime smoke script, whose caller-owned abort lifecycle is its test control.
+
+Mutation timeouts are not treated like failed reads: TikTok Shop sends return an
+unknown delivery outcome; outbound-email queue admission returns `unknown` and
+conditionally preserves a worker claim; gateway→dashboard customer sends return
+an unknown tool result; ambiguous Telegram/iMessage confirmations are withheld
+from automatic resend and remain visible to the strict operator-event audit.
+No mutation gained an automatic retry.
+
+**Completed locally (verified 2026-07-19):**
+
+- [x] Inventory every first-party production raw HTTP call and bound each call
+  or retain its existing explicit deadline.
+- [x] Classify provider deadlines with typed errors/results and keep OAuth/read
+  timeouts distinct from invalid credentials and provider rejections.
+- [x] Preserve `unknown` for customer-send, queue-admission, and operator-reply
+  mutations whose provider or downstream commit cannot be disproved.
+- [x] Prevent the operator-event sweep from automatically resending an
+  ambiguously delivered confirmation.
+- [x] Pass repository lint and typecheck, 1,192 unit tests, 37 Node-script tests,
+  and 977 database-backed tests (2 existing skips).
+
+**Still required for rollout completion:**
+
+- [ ] Deploy the deadline changes and observe provider-timeout/error telemetry
+  through the normal canary windows; keep provider-specific rollback controls.
 
 - **Related findings:** AUD-015.
 - **Files likely to change:** `packages/email/src/gmail/client.ts`; gateway `clients/meta-graph.ts`; dashboard OAuth/internal fetch helpers; shared tests/config.
@@ -636,6 +716,13 @@ additive and deploy-safe.
 
 ### P6-01 — Correct compound pagination and bound thread-list responses
 
+**Status (2026-07-17): Completed (PR #24).** Opaque base64url cursor over
+`(last_message_at, id)` with a matching row-value SQL predicate (microsecond precision
+preserved via `to_char(...'US')` + `::timestamptz`); both list paths unified through the
+SQL-filter query, removing the second millisecond-precision Prisma cursor that skipped rows
+at sub-millisecond boundaries; default page size 50; malformed/legacy cursors return 400.
+19 route + 5 codec tests.
+
 - **Related findings:** AUD-013.
 - **Files likely to change:** `apps/dashboard/src/lib/messaging/thread-list-query.ts`, `/api/threads/route.ts`, `usePaginatedThreads.ts`, types/tests.
 - **Proposed implementation:** Introduce a versioned cursor encoding `lastMessageAt` and ID, use matching lexicographic SQL/Prisma predicates, add a default page size, and move full history to thread detail requests.
@@ -646,6 +733,17 @@ additive and deploy-safe.
 - **Acceptance criteria:** Paging returns every row once in stable sort order and no list request returns unbounded histories.
 
 ### P6-02 — Monitor every business-critical queue and formalize failed-job recovery
+
+**Status (2026-07-18): Monitoring and diagnostics protection complete (PR #26, #27);
+failed-job recovery runbook pending.** Queue-health now covers outbound-email, gmail-sync,
+order-review and operator-event with per-queue SLO thresholds falling back to the global
+config (PR #26). Detailed diagnostics are gated (PR #27): `/health/deep` stays public but
+coarse (per-check `status` only, matching the dashboard `/api/health` contract), and
+`/health/queues` — which exposes queue counts, worker PID and failed-job tenant identifiers —
+now requires the internal secret. Remaining (separate PR): the failed-job triage/replay
+runbook. It is blocked on the P1/P4 idempotent-replay dependency — `workers/failure.ts` is
+log-only, and a documented replay path is unsafe until mutating/sending jobs are idempotent on
+retry, so the "safe documented recovery path" half of the acceptance criterion is not yet met.
 
 - **Related findings:** AUD-017.
 - **Files likely to change:** `apps/gateway/src/maintenance/queue-health.ts`, `workers/failure.ts`, health routes, runbooks, alert verification scripts.
@@ -821,8 +919,8 @@ These can proceed while the durable-execution design is reviewed, provided they 
   2026-07-13.**
 - Durable Stripe event processing (P4-02).
 - Operator inbox/event persistence (P4-03). **Migration
-  `20260715020000_add_operator_events` created and locally verified (Telegram +
-  iMessage paths); not yet applied in production.**
+  `20260715020000_add_operator_events` is applied in production. Telegram is
+  enabled on both gateway services for its canary; iMessage remains off.**
 - Compound tenant constraints after audit/backfill (P5-03).
 - Active-thread constraint/state migration if `pending` remains active (P5-04).
 
@@ -852,8 +950,8 @@ passed but contained zero executions, so real-traffic observation, claim/recover
 review, provider and queue canary evidence, and live multi-device verification
 remain rollout prerequisites. P4-01 now provides one-winner email delivery
 claims, tenant validation, stable queue/provider identity, explicit unknown
-delivery, and stale-claim recovery; provider canaries and the provider-activity
-runbook remain open. P3-01's shared retry/unknown
+delivery, and stale-claim recovery; its provider-activity runbook and strict
+audit are implemented, while provider canaries remain open. P3-01's shared retry/unknown
 outcome contract plus refund, cancellation, order creation/editing, order
 address, gift-card, and store-credit handling are locally complete; provider
 canaries and durable recovery ownership remain. Run
@@ -861,6 +959,14 @@ canaries and durable recovery ownership remain. Run
 observations, unknown outcomes, and stale claims; `--strict` makes any such
 finding fail the command. The production shadow observation window remains open
 until the audit includes representative dashboard and gateway executions.
+
+**Progress (2026-07-19):** Unblocked pure-code cleanup has advanced independently of the
+rollout gates above. Previously merged work includes P4-04 (verified already complete), P6-01
+(PR #24), the Gmail slice of P4-06 (PR #25), and both P6-02 slices — queue-health monitoring
+(PR #26) and health-diagnostics auth (PR #27). See each item's Status line for detail.
+Remaining pure-code follow-ups: the P6-02 failed-job replay runbook (gated by P1/P4
+idempotency) and P7-01. **P4-06's repository-wide deadline audit and local
+implementation are complete as of 2026-07-19; deployment observation remains.**
 
 Next:
 
@@ -882,13 +988,18 @@ Next:
    stale or `unknown` reservations with
    `npm run audit:refund-spend-reservations -- --hours=24 --strict` until their
    recovery procedure is proven.
-7. The P4-01 outbound-send claim migration and state machine are deployed.
-   Canary Postmark/Gmail while keeping synchronous email as the rollback rail
-   until unknown reconciliation and stale-claim monitoring are proven.
-8. P4-03 durable operator-event ingestion is implemented for Telegram and
-   iMessage (each behind its `OPERATOR_DURABLE_QUEUE_*` flag), with the
-   `operator-event-sweep` recovery job reconciling stale claims and re-sending
-   undelivered replies. Next: deploy the additive `operator_events` migration,
-   canary the Telegram durable path, then the iMessage path, and write the
-   `unknown`-event recovery runbook. Do not broaden natural-language ticket sends
-   until that rollout and P4-01's are complete.
+7. The P4-01 outbound-send claim migration and state machine are deployed. The
+   strict audit and recovery runbook are implemented; their first production
+   baseline is clean but contains zero async sends, and the production dashboard
+   does not currently define `OUTBOUND_EMAIL_ASYNC`. Canary Postmark/Gmail while
+   keeping synchronous email as the rollback rail until unknown reconciliation
+   and stale-claim monitoring are proven.
+8. P4-03's migration, recovery sweep, strict audit, and `unknown`-event runbook
+   are deployed. Telegram is enabled on both gateway services; the fresh
+   required-traffic gate and follow-up strict audits pass; the latest 24-hour
+   audit on 2026-07-19 contains four first-claim committed events, delivered
+   replies, and no blockers. The latest one-hour required-traffic audit contains
+   zero events and therefore does not advance the pending-plan gate.
+   Next: complete pending-plan coverage in the Telegram observation window, then
+   canary iMessage. Do not broaden natural-language
+   ticket sends until that rollout and P4-01's are complete.

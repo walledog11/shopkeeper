@@ -42,6 +42,7 @@
     "audit:instagram-rollout": "node ./scripts/audit-instagram-rollout.mjs",
     "audit:plan-executions": "node ./scripts/audit-plan-execution-rollout.mjs",
     "audit:operator-events": "node ./scripts/audit-operator-events.mjs",
+    "audit:outbound-email": "node ./scripts/audit-outbound-email-rollout.mjs",
     "audit:refund-spend-reservations": "node ./scripts/audit-refund-spend-reservations.mjs",
     "audit:escalation-backfill": "node ./scripts/audit-escalation-backfill.mjs",
     "backfill:escalation": "node ./scripts/backfill-escalation.mjs",

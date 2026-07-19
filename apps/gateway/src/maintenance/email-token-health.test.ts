@@ -57,6 +57,10 @@ describe('runEmailTokenHealthCheck', () => {
     const after = await db.integration.findUnique({ where: { id: integration.id } });
     expect(after?.tokenExpiresAt?.getTime()).toBeGreaterThan(Date.now());
     expect(after?.accessToken).toBe('new-access');
+    const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      signal: expect.any(AbortSignal),
+    });
   });
 
   it('leaves the token alone on a transient provider error (500)', async () => {

@@ -134,6 +134,13 @@ function mapTikTokShopDispatchError(err: unknown): {
         providerStatus: err.providerStatus,
       }
     }
+    if (err.category === "outcome_unknown") {
+      return {
+        detail: "TikTok Shop delivery outcome unknown",
+        error: "TikTok Shop delivery could not be confirmed",
+        providerStatus: err.providerStatus,
+      }
+    }
     return {
       detail: err.message,
       error: err.category === "provider_unavailable"

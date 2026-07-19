@@ -55,7 +55,7 @@ export const POST = withOrgRoute(
       source: 'dispatch_message',
     });
 
-    if (!enqueued) {
+    if (enqueued === 'failed') {
       await db.message.update({
         where: { id: messageId },
         data: {
@@ -65,6 +65,17 @@ export const POST = withOrgRoute(
         },
       });
       throw new ApiError('Could not queue email send', 502);
+    }
+    if (enqueued === 'unknown') {
+      await db.message.updateMany({
+        where: { id: messageId, sendStatus: 'pending' },
+        data: {
+          sendStatus: 'unknown',
+          sendClaimToken: null,
+          sendError: 'Email queue admission outcome unknown',
+        },
+      });
+      throw new ApiError('Email queue admission could not be confirmed', 502);
     }
 
     return NextResponse.json({ ok: true });

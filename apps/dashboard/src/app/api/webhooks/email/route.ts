@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import logger from '@/lib/server/logger';
 import { getGatewayBaseUrl } from '@/lib/server/gateway-url';
+import { fetchProviderWithDeadline } from '@/lib/server/provider-fetch';
 
 // Postmark inbound email webhook — proxied to the gateway.
 // In dev, Postmark can't reach localhost:8080 directly, so this
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
     }
 
-    const response = await fetch(`${getGatewayBaseUrl({ required: true })}/webhooks/email/inbound`, {
+    const response = await fetchProviderWithDeadline(`${getGatewayBaseUrl({ required: true })}/webhooks/email/inbound`, {
       cache: 'no-store',
       redirect: 'manual',
       method: 'POST',
@@ -35,6 +36,9 @@ export async function POST(request: Request) {
         ...(authorization && { Authorization: authorization }),
       },
       body: JSON.stringify(body),
+    }, {
+      provider: 'gateway',
+      operation: 'email webhook forwarding',
     });
 
     const text = await response.text();

@@ -504,6 +504,48 @@ describe('dispatchMessage', () => {
     })).resolves.toBe(0);
   });
 
+  it('classifies a timed-out TikTok Shop mutation as an unknown delivery outcome', async () => {
+    vi.stubEnv('TIKTOK_SHOP_ENABLED', 'true');
+    vi.stubEnv('TIKTOK_SHOP_APP_KEY', 'tts-app-key');
+    vi.stubEnv('TIKTOK_SHOP_APP_SECRET', 'tts-app-secret');
+    vi.stubEnv('TIKTOK_SHOP_API_BASE_URL', 'https://open-api.tiktok.test');
+    vi.stubEnv('TIKTOK_SHOP_SEND_MESSAGE_PATH', '/customer-service/messages/send');
+    vi.stubEnv('TIKTOK_SHOP_TOKEN_URL', 'https://auth.tiktok.test/token');
+    const integration = await createTestIntegration(org.id, {
+      platform: ChannelType.tiktok,
+      externalAccountId: 'shop_timeout',
+      accessToken: 'tts-access-token',
+    });
+    const customer = await createTestCustomer(org.id, 'tiktok:shop_timeout:buyer_timeout');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.tiktok);
+    const threadWithSpace = await db.thread.update({
+      where: { id: thread.id },
+      data: { externalSpaceId: 'conversation_timeout' },
+      include: { customer: true },
+    });
+    mockFetch.mockRejectedValueOnce(new DOMException('timed out', 'TimeoutError'));
+
+    const result = await dispatchMessage(threadWithSpace, org, 'Did this arrive?');
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'TikTok Shop delivery could not be confirmed',
+    });
+    expect(mockRecordProviderSendFailure).toHaveBeenCalledWith(
+      'tiktok_shop',
+      'tiktok',
+      org.id,
+      expect.objectContaining({
+        threadId: thread.id,
+        integrationId: integration.id,
+        detail: 'TikTok Shop delivery outcome unknown',
+      }),
+    );
+    await expect(db.message.count({
+      where: { threadId: thread.id, senderType: SenderType.agent },
+    })).resolves.toBe(0);
+  });
+
   it('short-circuits provider calls when outbound recording succeeds', async () => {
     tempDir = await mkdtemp(path.join(os.tmpdir(), 'shopkeeper-dispatch-records-'));
     process.env.E2E_OUTBOUND_MODE = 'record';
@@ -646,5 +688,29 @@ describe('dispatchMessage — async outbound (OUTBOUND_EMAIL_ASYNC)', () => {
     });
     expect(saved?.sendStatus).toBe('failed');
     expect(saved?.sendError).toBe('Could not queue email send');
+  });
+
+  it('marks an ambiguous enqueue network outcome unknown instead of retryable failed', async () => {
+    mockFetch.mockRejectedValueOnce(new DOMException('timed out', 'TimeoutError'));
+    const emailAddress = `support_async_unknown_${org.id.slice(0, 8)}@example.com`;
+    await createTestIntegration(org.id, {
+      platform: ChannelType.email,
+      externalAccountId: emailAddress,
+      fromEmail: emailAddress,
+    });
+    const customer = await createTestCustomer(org.id, 'async-unknown@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+
+    const result = await dispatchMessage({ ...thread, customer }, org, 'Queue result is unclear.');
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'Email queue admission could not be confirmed',
+    });
+    const saved = await db.message.findFirst({
+      where: { threadId: thread.id, senderType: SenderType.agent },
+    });
+    expect(saved?.sendStatus).toBe('unknown');
+    expect(saved?.sendError).toBe('Email queue admission outcome unknown');
   });
 });

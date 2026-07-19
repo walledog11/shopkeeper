@@ -20,6 +20,10 @@ import {
   oauthCompleteResponse,
   resolveOAuthOrganization,
 } from '@/app/api/integrations/_lib/oauth-callback';
+import {
+  fetchProviderWithDeadline,
+  isProviderRequestTimeoutError,
+} from '@/lib/server/provider-fetch';
 
 const SHOPIFY_WEBHOOK_TOPICS = ['orders/created', 'orders/fulfilled', 'orders/updated', 'orders/cancelled', 'app/uninstalled'];
 
@@ -164,7 +168,7 @@ export async function POST(request: Request) {
     logger.error({ err }, '[Shopify OAuth] Unexpected error');
     await captureIntegrationConnectionFailed({
       attemptId,
-      failureCategory: 'unknown',
+      failureCategory: isProviderRequestTimeoutError(err) ? 'provider_unavailable' : 'unknown',
       organizationId: org.id,
       platform: 'shopify',
     });
@@ -200,12 +204,16 @@ async function exchangeShopifyAccessToken({
   code: string;
   shopDomain: string;
 }): Promise<string | null> {
-  const tokenRes = await fetch(`https://${shopDomain}/admin/oauth/access_token`, {
-    cache: 'no-store',
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code }),
-  });
+  const tokenRes = await fetchProviderWithDeadline(
+    `https://${shopDomain}/admin/oauth/access_token`,
+    {
+      cache: 'no-store',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code }),
+    },
+    { provider: 'shopify', operation: 'OAuth token exchange' },
+  );
   const tokenData = await tokenRes.json() as { access_token?: string; error?: unknown };
 
   if (!tokenData.access_token) {

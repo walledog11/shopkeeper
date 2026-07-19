@@ -65,7 +65,7 @@ describe('sendAutoAck', () => {
         '[Worker] Auto-ack skipped by dashboard — check businessHoursEnabled setting sync',
       );
       expect(mockLogger.warn).toHaveBeenCalledWith(
-        { status: 503, threadId: 'thread_failed', organizationId: 'org_1' },
+        { status: 503, outcome: 'failed', threadId: 'thread_failed', organizationId: 'org_1' },
         '[Worker] Auto-ack dispatch failed',
       );
     } finally {
@@ -73,14 +73,14 @@ describe('sendAutoAck', () => {
     }
   });
 
-  it('logs thrown dispatch errors without rethrowing', async () => {
+  it('logs ambiguous dispatch outcomes without claiming a definite failure', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network down'));
 
     try {
       await expect(sendAutoAck('org_1', 'thread_1')).resolves.toBeUndefined();
-      expect(mockLogger.error).toHaveBeenCalledWith(
-        { err: 'network down', threadId: 'thread_1' },
-        '[Worker] sendAutoAck error',
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        { status: null, outcome: 'unknown', threadId: 'thread_1', organizationId: 'org_1' },
+        '[Worker] Auto-ack dispatch outcome unknown',
       );
     } finally {
       fetchSpy.mockRestore();

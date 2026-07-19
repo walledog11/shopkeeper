@@ -71,7 +71,7 @@ afterEach(async () => {
 
 describe('POST /api/messages/retry', () => {
   it('re-enqueues a failed message and flips it back to pending', async () => {
-    mockEnqueue.mockResolvedValue(true);
+    mockEnqueue.mockResolvedValue('enqueued');
     const { message } = await seedFailedMessage();
 
     const res = await callRetry({ messageId: message.id });
@@ -84,7 +84,7 @@ describe('POST /api/messages/retry', () => {
   });
 
   it('reverts to failed when the enqueue hop fails', async () => {
-    mockEnqueue.mockResolvedValue(false);
+    mockEnqueue.mockResolvedValue('failed');
     const { message } = await seedFailedMessage();
 
     const res = await callRetry({ messageId: message.id });
@@ -93,6 +93,18 @@ describe('POST /api/messages/retry', () => {
     const after = await db.message.findUnique({ where: { id: message.id } });
     expect(after?.sendStatus).toBe('failed');
     expect(after?.sendError).toBe('Could not queue email send');
+  });
+
+  it('preserves an ambiguous enqueue hop as unknown', async () => {
+    mockEnqueue.mockResolvedValue('unknown');
+    const { message } = await seedFailedMessage();
+
+    const res = await callRetry({ messageId: message.id });
+    expect(res.status).toBe(502);
+
+    const after = await db.message.findUnique({ where: { id: message.id } });
+    expect(after?.sendStatus).toBe('unknown');
+    expect(after?.sendError).toBe('Email queue admission outcome unknown');
   });
 
   it('rejects a message that is not in a failed state', async () => {

@@ -186,4 +186,26 @@ describe('sendMessage', () => {
       fetchSpy.mockRestore();
     }
   });
+
+  it('classifies a provider deadline without claiming the message was not delivered', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(
+      new DOMException('timed out', 'TimeoutError'),
+    );
+
+    try {
+      await expect(sendMessage('chat_1', 'hello', { orgId: 'org_1' })).rejects.toMatchObject({
+        name: 'ExternalRequestTimeoutError',
+        operation: 'message send',
+        provider: 'telegram',
+      });
+      expect(recordProviderSendFailureInBackgroundSpy).toHaveBeenCalledWith(
+        'telegram',
+        'operator_notify',
+        'org_1',
+        expect.objectContaining({ detail: expect.stringContaining('timed out') }),
+      );
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
 });

@@ -4,6 +4,7 @@ import type {
   TikTokShopHttpMethod,
   TikTokShopWebhookConfig,
 } from '../config/runtime-config.js';
+import { fetchWithDeadline } from './request-deadline.js';
 
 export interface NormalizedTikTokShopMessage {
   accountId: string;
@@ -127,7 +128,10 @@ async function requestToken(
     init.body = JSON.stringify(params);
   }
 
-  const response = await fetch(url.toString(), init);
+  const response = await fetchWithDeadline(url.toString(), init, {
+    provider: 'tiktok_shop',
+    operation: 'token refresh',
+  });
   const body = await readJsonOrText(response);
   if (!response.ok || isProviderErrorBody(body)) {
     throw new Error(`TikTok Shop token refresh failed: ${response.status}`);

@@ -43,3 +43,10 @@ export function markAgentMessageSendFailed(messageId: string, sendError: string)
     data: { sendStatus: "failed", sendClaimToken: null, sendError },
   })
 }
+
+export function markPendingAgentMessageSendUnknown(messageId: string, sendError: string) {
+  return db.message.updateMany({
+    where: { id: messageId, sendStatus: "pending" },
+    data: { sendStatus: "unknown", sendClaimToken: null, sendError },
+  })
+}

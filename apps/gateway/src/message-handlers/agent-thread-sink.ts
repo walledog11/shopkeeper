@@ -1,7 +1,7 @@
 import { db, SenderType, createMessage } from '@shopkeeper/db';
 import { AGENT_NOTE_PREFIX, THREAD_STATUS } from '@shopkeeper/agent/thread-constants';
 import type { ThreadSink } from '@shopkeeper/agent/build-context';
-import { toolError, toolOk, toolEscalated, type ToolResult } from '@shopkeeper/agent/tools';
+import { toolError, toolOk, toolEscalated, toolUnknown, type ToolResult } from '@shopkeeper/agent/tools';
 import type {
   AddInternalNoteInput,
   AskOperatorInput,
@@ -71,8 +71,11 @@ async function dispatchAgentSend(
         ctx,
         'tool_result',
         response.responseBody.slice(0, 300) || `HTTP ${response.status}`,
-        response.status,
+        response.status ?? undefined,
       );
+      if (response.outcome === 'unknown') {
+        return toolUnknown('Unknown: message dispatch may have completed, but the dashboard response was not received. Do not send it again automatically.');
+      }
       return toolError(`Error: message dispatch failed (${response.status}).`);
     }
     return response.data;

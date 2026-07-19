@@ -63,6 +63,33 @@ afterEach(async () => {
 });
 
 describe('POST /api/integrations/tiktok-shop/callback', () => {
+  it('classifies a token-exchange deadline as provider unavailable', async () => {
+    mockSavedCookies({
+      tiktok_shop_oauth_state: 'state_123',
+      tiktok_shop_oauth_org: org!.clerkOrgId,
+      tiktok_shop_oauth_user: 'usr_oauth',
+    });
+    mockFetch.mockRejectedValueOnce(new DOMException('timed out', 'TimeoutError'));
+
+    const res = await POST(new Request(
+      'http://localhost/api/integrations/tiktok-shop/callback?code=oauth_code&state=state_123',
+    ));
+
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe(
+      'http://dashboard.test/dashboard/integrations?error=tiktok_shop_token_failed',
+    );
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      {
+        err: expect.objectContaining({
+          category: 'provider_unavailable',
+          name: 'TikTokShopProviderError',
+        }),
+      },
+      '[TikTok Shop OAuth] Unexpected error',
+    );
+  });
+
   it('exchanges the code and saves a TikTok Shop seller integration', async () => {
     mockSavedCookies({
       tiktok_shop_oauth_state: 'state_123',

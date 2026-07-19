@@ -167,6 +167,23 @@ describe('processOperatorEventById', () => {
     expect(row?.replyDeliveredAt).toBeNull();
   });
 
+  it('commits but suppresses automatic resend when reply delivery is ambiguous', async () => {
+    await seedBoundMember();
+    const id = await seedEvent();
+    sendMessageSpy.mockRejectedValue(new Error('connection lost after write'));
+    runTurnSpy.mockImplementation(async ({ reply }: { reply: TelegramReply }) => {
+      await reply('Refunded Sarah $12.');
+    });
+
+    await processOperatorEventById(id);
+
+    const row = await db.operatorEvent.findUnique({ where: { id } });
+    expect(row?.status).toBe('committed');
+    expect(row?.replyText).toBe('Refunded Sarah $12.');
+    expect(row?.replyDeliveredAt).toBeNull();
+    expect(row?.lastError).toMatch(/may have reached the provider/i);
+  });
+
   it('records a failed turn and does not mark it committed', async () => {
     await seedBoundMember();
     const id = await seedEvent();

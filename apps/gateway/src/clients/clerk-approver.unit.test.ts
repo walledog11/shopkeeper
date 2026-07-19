@@ -42,7 +42,10 @@ describe('resolveClerkUserApprover', () => {
     });
     expect(fetch).toHaveBeenCalledWith(
       'https://api.clerk.com/v1/users/user%2Fa',
-      { headers: { Authorization: 'Bearer secret' } },
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer secret' },
+        signal: expect.any(AbortSignal),
+      }),
     );
   });
 

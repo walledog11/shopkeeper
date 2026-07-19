@@ -48,9 +48,12 @@ async function runClaimedOperatorTurn(
 ): Promise<void> {
   const deliveredTexts: string[] = [];
   let deliveryFailed = false;
+  let deliveryUnknown = false;
   const reply: OperatorEventReply = async (text) => {
     deliveredTexts.push(text);
-    if (!(await sendOperatorEventReply(event, text))) deliveryFailed = true;
+    const delivery = await sendOperatorEventReply(event, text);
+    if (delivery === false) deliveryFailed = true;
+    if (delivery === 'unknown') deliveryUnknown = true;
   };
 
   try {
@@ -64,8 +67,10 @@ async function runClaimedOperatorTurn(
     return;
   }
 
-  await finalizeOperatorEventCommitted(event.id, claimToken, deliveredTexts.join('\n\n'));
-  if (deliveredTexts.length > 0 && !deliveryFailed) {
+  await finalizeOperatorEventCommitted(event.id, claimToken, deliveredTexts.join('\n\n'), {
+    replyDeliveryUnknown: deliveryUnknown,
+  });
+  if (deliveredTexts.length > 0 && !deliveryFailed && !deliveryUnknown) {
     await markOperatorEventReplyDelivered(event.id);
   }
 }

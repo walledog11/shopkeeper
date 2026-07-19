@@ -32,6 +32,9 @@ describe('meta-graph client', () => {
     expect(url.pathname).toBe(`/${META_GRAPH_VERSION}/page_123`);
     expect(url.searchParams.get('fields')).toBe('id');
     expect(url.searchParams.get('access_token')).toBe('token/with+special');
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      signal: expect.any(AbortSignal),
+    });
   });
 
   it('returns Graph API errors without throwing', async () => {

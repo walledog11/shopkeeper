@@ -1,5 +1,6 @@
 import type { ApproverIdentity } from '@shopkeeper/agent/plan-execution';
 import logger from '../logger.js';
+import { fetchWithDeadline } from './request-deadline.js';
 
 interface ClerkUserPayload {
   first_name?: string | null;
@@ -26,8 +27,11 @@ export async function resolveClerkUserApprover(
   }
 
   try {
-    const response = await fetch(`https://api.clerk.com/v1/users/${encodeURIComponent(userId)}`, {
+    const response = await fetchWithDeadline(`https://api.clerk.com/v1/users/${encodeURIComponent(userId)}`, {
       headers: { Authorization: `Bearer ${secret}` },
+    }, {
+      provider: 'clerk',
+      operation: 'approver lookup',
     });
     if (!response.ok) {
       logger.warn({ userId, status: response.status }, '[clerk] failed to resolve approver display name');

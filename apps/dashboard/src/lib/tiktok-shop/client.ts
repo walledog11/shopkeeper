@@ -4,10 +4,15 @@ import type {
   TikTokShopOAuthAuthorizeConfig,
   TikTokShopOAuthCallbackConfig,
 } from "./config";
+import {
+  fetchProviderWithDeadline,
+  isProviderRequestTimeoutError,
+} from "@/lib/server/provider-fetch";
 
 export type TikTokShopProviderErrorCategory =
   | "expired_token"
   | "missing_integration"
+  | "outcome_unknown"
   | "policy_window"
   | "rate_limited"
   | "provider_unavailable"
@@ -105,26 +110,51 @@ export async function sendTikTokShopTextMessage({
   const url = new URL(config.sendMessagePath, `${config.apiBaseUrl}/`);
   url.searchParams.set("app_key", config.appKey);
 
-  const res = await fetch(url.toString(), {
-    cache: "no-store",
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-      "x-tts-access-token": accessToken,
-    },
-    body: JSON.stringify({
-      conversation_id: conversationId,
-      ...(recipientId ? { recipient_id: recipientId, buyer_id: recipientId } : {}),
-      message_type: "TEXT",
-      content: { text },
-      text,
-    }),
-  });
+  let res: Response;
+  try {
+    res = await fetchProviderWithDeadline(url.toString(), {
+      cache: "no-store",
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        "x-tts-access-token": accessToken,
+      },
+      body: JSON.stringify({
+        conversation_id: conversationId,
+        ...(recipientId ? { recipient_id: recipientId, buyer_id: recipientId } : {}),
+        message_type: "TEXT",
+        content: { text },
+        text,
+      }),
+    }, {
+      provider: "tiktok_shop",
+      operation: "message send",
+    });
+  } catch (error) {
+    if (isProviderRequestTimeoutError(error)) {
+      throw new TikTokShopProviderError(
+        "TikTok Shop message outcome is unknown after the provider deadline",
+        { category: "outcome_unknown" },
+      );
+    }
+    throw error;
+  }
 
   const body = await readJsonOrText(res);
   if (!res.ok || isProviderErrorBody(body)) {
-    throw mapTikTokShopError(body, res.status);
+    const mapped = mapTikTokShopError(body, res.status);
+    if (mapped.category === "provider_unavailable") {
+      throw new TikTokShopProviderError(
+        "TikTok Shop message outcome is unknown after a provider failure",
+        {
+          category: "outcome_unknown",
+          providerStatus: res.status,
+          providerBody: body,
+        },
+      );
+    }
+    throw mapped;
   }
 
   const data = readObject(body, "data") ?? readObject(body, "result") ?? (isRecord(body) ? body : {});
@@ -154,7 +184,20 @@ async function requestToken(
     init.body = JSON.stringify(params);
   }
 
-  const res = await fetch(url.toString(), init);
+  let res: Response;
+  try {
+    res = await fetchProviderWithDeadline(url.toString(), init, {
+      provider: "tiktok_shop",
+      operation: "OAuth token exchange",
+    });
+  } catch (error) {
+    if (isProviderRequestTimeoutError(error)) {
+      throw new TikTokShopProviderError("TikTok Shop token exchange timed out", {
+        category: "provider_unavailable",
+      });
+    }
+    throw error;
+  }
   const body = await readJsonOrText(res);
   if (!res.ok || isProviderErrorBody(body)) {
     throw mapTikTokShopError(body, res.status);

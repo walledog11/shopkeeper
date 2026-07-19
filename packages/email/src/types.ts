@@ -69,3 +69,22 @@ export class EmailNotConfiguredError extends Error {
     this.name = 'EmailNotConfiguredError';
   }
 }
+
+export class EmailProviderRequestTimeoutError extends Error {
+  readonly operation: string;
+  readonly provider: EmailProvider;
+  readonly timeoutMs: number;
+
+  constructor(
+    provider: EmailProvider,
+    operation: string,
+    timeoutMs: number,
+    cause: unknown,
+  ) {
+    super(`${provider} ${operation} timed out after ${timeoutMs}ms`, { cause });
+    this.name = 'EmailProviderRequestTimeoutError';
+    this.provider = provider;
+    this.operation = operation;
+    this.timeoutMs = timeoutMs;
+  }
+}

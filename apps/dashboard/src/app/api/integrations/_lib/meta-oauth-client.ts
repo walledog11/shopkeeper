@@ -1,3 +1,5 @@
+import { fetchProviderWithDeadline } from '@/lib/server/provider-fetch';
+
 const META_GRAPH_BASE_URL = 'https://graph.facebook.com/v22.0';
 
 interface MetaErrorPayload {
@@ -61,8 +63,11 @@ export async function exchangeMetaOAuthCode(input: {
     redirect_uri: input.redirectUri,
     code: input.code,
   });
-  const response = await fetch(`${META_GRAPH_BASE_URL}/oauth/access_token?${query}`, {
+  const response = await fetchProviderWithDeadline(`${META_GRAPH_BASE_URL}/oauth/access_token?${query}`, {
     cache: 'no-store',
+  }, {
+    provider: 'meta',
+    operation: 'OAuth token exchange',
   });
   const payload = await readJson(response);
   return {
@@ -83,8 +88,11 @@ export async function exchangeLongLivedMetaToken(input: {
     client_secret: input.appSecret,
     fb_exchange_token: input.shortLivedToken,
   });
-  const response = await fetch(`${META_GRAPH_BASE_URL}/oauth/access_token?${query}`, {
+  const response = await fetchProviderWithDeadline(`${META_GRAPH_BASE_URL}/oauth/access_token?${query}`, {
     cache: 'no-store',
+  }, {
+    provider: 'meta',
+    operation: 'long-lived token exchange',
   });
   const payload = await readJson(response);
   return isRecord(payload) ? readString(payload.access_token) : null;
@@ -125,8 +133,11 @@ export async function listMetaInstagramPages(userToken: string): Promise<MetaIns
     fields: 'id,name,access_token,instagram_business_account{id,username}',
     access_token: userToken,
   });
-  const response = await fetch(`${META_GRAPH_BASE_URL}/me/accounts?${query}`, {
+  const response = await fetchProviderWithDeadline(`${META_GRAPH_BASE_URL}/me/accounts?${query}`, {
     cache: 'no-store',
+  }, {
+    provider: 'meta',
+    operation: 'Instagram account lookup',
   });
   const payload = await readJson(response);
   if (!isRecord(payload) || !Array.isArray(payload.data)) return [];
@@ -139,7 +150,7 @@ export async function subscribeMetaInstagramMessaging(input: {
   pageId: string;
   pageToken: string;
 }): Promise<{ status: number; success: boolean }> {
-  const response = await fetch(`${META_GRAPH_BASE_URL}/${input.pageId}/subscribed_apps`, {
+  const response = await fetchProviderWithDeadline(`${META_GRAPH_BASE_URL}/${input.pageId}/subscribed_apps`, {
     cache: 'no-store',
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -147,6 +158,9 @@ export async function subscribeMetaInstagramMessaging(input: {
       subscribed_fields: ['messages', 'messaging_postbacks'],
       access_token: input.pageToken,
     }),
+  }, {
+    provider: 'meta',
+    operation: 'Instagram webhook subscription',
   });
   const payload = await readJson(response);
   return {

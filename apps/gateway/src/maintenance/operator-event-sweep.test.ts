@@ -120,6 +120,21 @@ describe('runOperatorEventSweep', () => {
     expect(row?.replyDeliveredAt).toBeNull();
   });
 
+  it('records an ambiguous resend and does not try it again automatically', async () => {
+    sendOperatorEventReplySpy.mockResolvedValue('unknown');
+    const id = await seedEvent(committed(MINUTES_AGO(6), 'Refunded Sarah $12.', null));
+
+    await runOperatorEventSweep();
+
+    const row = await db.operatorEvent.findUnique({ where: { id } });
+    expect(row?.replyDeliveredAt).toBeNull();
+    expect(row?.lastError).toMatch(/may have reached the provider/i);
+
+    sendOperatorEventReplySpy.mockClear();
+    await runOperatorEventSweep();
+    expect(sendOperatorEventReplySpy).not.toHaveBeenCalled();
+  });
+
   it('does not re-send an already-delivered committed reply', async () => {
     await seedEvent(committed(MINUTES_AGO(30), 'Refunded Sarah $12.', MINUTES_AGO(30)));
 

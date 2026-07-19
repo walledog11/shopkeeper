@@ -11,6 +11,23 @@ afterEach(() => {
 });
 
 describe('Meta OAuth client', () => {
+  it('bounds token exchange with a typed timeout', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(
+      new DOMException('timed out', 'TimeoutError'),
+    ));
+
+    await expect(exchangeMetaOAuthCode({
+      appId: 'app',
+      appSecret: 'secret',
+      code: 'code',
+      redirectUri: 'https://dashboard.test/callback',
+    })).rejects.toMatchObject({
+      name: 'ProviderRequestTimeoutError',
+      operation: 'OAuth token exchange',
+      provider: 'meta',
+    });
+  });
+
   it('returns structured token errors without trusting the provider payload', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
       error: { type: 'OAuthException', code: 190 },
@@ -29,7 +46,7 @@ describe('Meta OAuth client', () => {
   });
 
   it('rejects malformed pages while retaining valid page records', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
       data: [
         { id: 'missing-token', name: 'Invalid' },
         {
@@ -39,7 +56,8 @@ describe('Meta OAuth client', () => {
           instagram_business_account: { id: 'ig_1', username: 'shop' },
         },
       ],
-    }))));
+    })));
+    vi.stubGlobal('fetch', fetchMock);
 
     await expect(listMetaInstagramPages('user_token')).resolves.toEqual([{
       id: 'page_1',
@@ -47,6 +65,10 @@ describe('Meta OAuth client', () => {
       accessToken: 'page_token',
       instagramBusinessAccount: { id: 'ig_1', username: 'shop' },
     }]);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/me/accounts?'),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
   });
 
   it('handles invalid upgrade and subscription responses', async () => {
@@ -64,5 +86,15 @@ describe('Meta OAuth client', () => {
       pageId: 'page_1',
       pageToken: 'page_token',
     })).resolves.toEqual({ status: 200, success: false });
+    expect(fetchMock.mock.calls).toEqual([
+      [
+        expect.stringContaining('/oauth/access_token?'),
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      ],
+      [
+        expect.stringContaining('/subscribed_apps'),
+        expect.objectContaining({ method: 'POST', signal: expect.any(AbortSignal) }),
+      ],
+    ]);
   });
 });

@@ -27,6 +27,14 @@ type TrackingShipment = {
 };
 
 let uspsAccessToken: USPSAccessToken | null = null;
+const USPS_REQUEST_TIMEOUT_MS = 15_000;
+
+export class USPSRequestTimeoutError extends Error {
+  constructor(cause: unknown) {
+    super(`USPS request timed out after ${USPS_REQUEST_TIMEOUT_MS}ms`, { cause });
+    this.name = "USPSRequestTimeoutError";
+  }
+}
 
 function isUSPSCarrier(carrier: string | null | undefined): boolean {
   const normalized = carrier?.toLowerCase() ?? "";
@@ -50,7 +58,22 @@ function fulfillmentTrackingUrls(fulfillment: ShopifyFulfillment): string[] {
 }
 
 async function fetchJson(url: string, init: RequestInit): Promise<unknown> {
-  const res = await fetch(url, init);
+  let res: Response;
+  try {
+    const deadline = AbortSignal.timeout(USPS_REQUEST_TIMEOUT_MS);
+    res = await fetch(url, {
+      ...init,
+      signal: init.signal ? AbortSignal.any([init.signal, deadline]) : deadline,
+    });
+  } catch (error) {
+    if (
+      error instanceof Error
+      && (error.name === "AbortError" || error.name === "TimeoutError")
+    ) {
+      throw new USPSRequestTimeoutError(error);
+    }
+    throw error;
+  }
   const text = await res.text();
   let payload: unknown = null;
   if (text) {

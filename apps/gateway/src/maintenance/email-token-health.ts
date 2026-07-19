@@ -1,6 +1,7 @@
 import { db } from '@shopkeeper/db';
 import { CHANNEL, JOB, QUEUE } from '../constants.js';
 import logger from '../logger.js';
+import { fetchWithDeadline } from '../clients/request-deadline.js';
 import {
   createMaintenanceQueue,
   createMaintenanceWorker,
@@ -63,7 +64,7 @@ async function probeIntegration(integration: EmailIntegrationRow, provider: Emai
 
   let res: Response;
   try {
-    res = await fetch(TOKEN_ENDPOINT[provider], {
+    res = await fetchWithDeadline(TOKEN_ENDPOINT[provider], {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -72,6 +73,9 @@ async function probeIntegration(integration: EmailIntegrationRow, provider: Emai
         refresh_token: integration.refreshToken,
         grant_type: 'refresh_token',
       }).toString(),
+    }, {
+      provider,
+      operation: 'token health refresh',
     });
   } catch (err) {
     // Network/transient failure — do not flag reconnect on a blip.

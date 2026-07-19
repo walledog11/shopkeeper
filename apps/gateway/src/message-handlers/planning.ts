@@ -70,7 +70,12 @@ export async function sendAutoAck(organizationId: string, threadId: string): Pro
   try {
     const response = await requestAutoAck(threadId);
     if (!response.ok) {
-      logger.warn({ status: response.status, threadId, organizationId }, '[Worker] Auto-ack dispatch failed');
+      logger.warn(
+        { status: response.status, outcome: response.outcome, threadId, organizationId },
+        response.outcome === 'unknown'
+          ? '[Worker] Auto-ack dispatch outcome unknown'
+          : '[Worker] Auto-ack dispatch failed',
+      );
     } else if (response.data.skipped) {
       logger.warn({ threadId, organizationId }, '[Worker] Auto-ack skipped by dashboard — check businessHoursEnabled setting sync');
     } else {

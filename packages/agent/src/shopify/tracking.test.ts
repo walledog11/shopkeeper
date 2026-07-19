@@ -162,6 +162,24 @@ describe("getOrderTracking", () => {
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/oauth2/v3/token"))).toHaveLength(1);
     expect(fetchMock.mock.calls.at(-1)?.[1]).toMatchObject({
       headers: { Authorization: "Bearer cached-token" },
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it("bounds USPS calls and degrades a deadline to a non-fatal tracking fallback", async () => {
+    vi.stubEnv("USPS_CLIENT_ID", "timeout-client");
+    vi.stubEnv("USPS_CLIENT_SECRET", "timeout-secret");
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ fulfillments: [fulfillment()] }))
+      .mockRejectedValueOnce(new DOMException("timed out", "TimeoutError"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await getOrderTracking({ order_id: "125" }, ctx);
+
+    expect(result.status).toBe("ok");
+    expect(JSON.parse(result.message).note).toMatch(/USPS (authentication failed|data unavailable)/);
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
+      signal: expect.any(AbortSignal),
     });
   });
 

@@ -1,6 +1,7 @@
 import { getTelegramConfig } from '../config/runtime-config.js';
 import logger from '../logger.js';
 import { recordProviderSendFailureInBackground } from '../provider-send-alerts.js';
+import { fetchWithDeadline } from './request-deadline.js';
 
 const TELEGRAM_API_BASE = 'https://api.telegram.org';
 
@@ -31,10 +32,13 @@ export async function sendChatAction(
   }
 
   try {
-    const res = await fetch(`${TELEGRAM_API_BASE}/bot${token}/sendChatAction`, {
+    const res = await fetchWithDeadline(`${TELEGRAM_API_BASE}/bot${token}/sendChatAction`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: chatId, action }),
+    }, {
+      provider: 'telegram',
+      operation: 'chat action',
     });
 
     if (!res.ok) {
@@ -69,7 +73,7 @@ export async function setMessageReaction(
   }
 
   try {
-    const res = await fetch(`${TELEGRAM_API_BASE}/bot${token}/setMessageReaction`, {
+    const res = await fetchWithDeadline(`${TELEGRAM_API_BASE}/bot${token}/setMessageReaction`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -77,6 +81,9 @@ export async function setMessageReaction(
         message_id: messageId,
         reaction: [{ type: 'emoji', emoji }],
       }),
+    }, {
+      provider: 'telegram',
+      operation: 'message reaction',
     });
 
     if (!res.ok) {
@@ -111,10 +118,13 @@ export async function sendMessage(
   }
 
   try {
-    const res = await fetch(`${TELEGRAM_API_BASE}/bot${token}/sendMessage`, {
+    const res = await fetchWithDeadline(`${TELEGRAM_API_BASE}/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: chatId, text }),
+    }, {
+      provider: 'telegram',
+      operation: 'message send',
     });
 
     if (!res.ok) {
@@ -150,10 +160,13 @@ export async function setWebhook(url: string, secretToken: string): Promise<void
   const token = getToken();
   if (!token) throw new Error('TELEGRAM_BOT_TOKEN is not set');
 
-  const res = await fetch(`${TELEGRAM_API_BASE}/bot${token}/setWebhook`, {
+  const res = await fetchWithDeadline(`${TELEGRAM_API_BASE}/bot${token}/setWebhook`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url, secret_token: secretToken, allowed_updates: ['message'] }),
+  }, {
+    provider: 'telegram',
+    operation: 'webhook setup',
   });
 
   if (!res.ok) {

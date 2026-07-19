@@ -3,6 +3,7 @@ import { AGENT_NOTE_PREFIX, CHANNEL_TYPE, THREAD_STATUS } from "@shopkeeper/agen
 import { recordOutboundCall } from "@/lib/server/outbound-recorder";
 import logger from "@/lib/server/logger";
 import { getGatewayBaseUrl } from "@/lib/server/gateway-url";
+import { fetchProviderWithDeadline } from "@/lib/server/provider-fetch";
 import { getEmailProvider } from "@shopkeeper/email/providers";
 import { buildThreadReplyHeaders, formatReplySubject } from "@shopkeeper/email/reply";
 import { getEmailSender } from "@shopkeeper/email/senders";
@@ -14,6 +15,10 @@ import {
   isOutboundEmailAsyncEnabled,
 } from "@/lib/messaging/enqueue-outbound-email";
 import { recordEmailSendFailure } from "@/lib/messaging/provider-send-failures";
+import {
+  markAgentMessageSendFailed,
+  markPendingAgentMessageSendUnknown,
+} from "@/lib/messaging/dispatch-message-common";
 import { captureDashboardOutboundReplySent } from "@/lib/server/product-analytics";
 import { toolError, toolEscalated, toolOk, type ToolResult } from "@shopkeeper/agent/tools";
 import type {
@@ -225,16 +230,16 @@ export async function sendEmail(
       replySource: agentReplySource(ctx.agentActionMode),
       source: 'agent_send_email',
     });
-    if (!enqueued) {
-      await db.message.update({
-        where: { id: message.id },
-        data: {
-          sendStatus: 'failed',
-          sendClaimToken: null,
-          sendError: 'Could not queue email send',
-        },
-      });
+    if (enqueued === 'failed') {
+      await markAgentMessageSendFailed(message.id, 'Could not queue email send');
       return toolError('Error: could not queue email send.');
+    }
+    if (enqueued === 'unknown') {
+      await markPendingAgentMessageSendUnknown(
+        message.id,
+        'Email queue admission outcome unknown',
+      );
+      return toolError('Error: email queue admission could not be confirmed.');
     }
     return toolOk(existingThread
       ? `Email queued to ${input.to} via their existing open ticket.`
@@ -355,13 +360,16 @@ async function notifyGatewayOfEscalation(args: {
     return;
   }
   try {
-    const res = await fetch(`${base}/internal/operator/escalate`, {
+    const res = await fetchProviderWithDeadline(`${base}/internal/operator/escalate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-internal-secret': secret,
       },
       body: JSON.stringify(args),
+    }, {
+      provider: 'gateway',
+      operation: 'operator escalation notification',
     });
     if (!res.ok) {
       const body = await res.text().catch(() => '');

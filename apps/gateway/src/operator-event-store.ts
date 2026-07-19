@@ -10,6 +10,9 @@ import type { OperatorEvent, Prisma as PrismaTypes } from '@prisma/client';
 
 export type OperatorEventChannel = 'telegram' | 'imessage';
 
+export const OPERATOR_REPLY_DELIVERY_UNKNOWN_ERROR =
+  'Operator reply may have reached the provider, but delivery could not be confirmed. Do not resend automatically.';
+
 export interface IngestOperatorEventParams {
   organizationId: string;
   channel: OperatorEventChannel;
@@ -90,10 +93,18 @@ export async function finalizeOperatorEventCommitted(
   id: string,
   claimToken: string,
   replyText: string,
+  options: { replyDeliveryUnknown?: boolean } = {},
 ): Promise<void> {
   await db.operatorEvent.updateMany({
     where: { id, status: 'claimed', claimToken },
-    data: { status: 'committed', processedAt: new Date(), replyText },
+    data: {
+      status: 'committed',
+      processedAt: new Date(),
+      replyText,
+      ...(options.replyDeliveryUnknown
+        ? { lastError: OPERATOR_REPLY_DELIVERY_UNKNOWN_ERROR }
+        : {}),
+    },
   });
 }
 
@@ -118,6 +129,13 @@ export async function markOperatorEventReplyDelivered(id: string): Promise<void>
   await db.operatorEvent.updateMany({
     where: { id, status: 'committed' },
     data: { replyDeliveredAt: new Date() },
+  });
+}
+
+export async function markOperatorEventReplyDeliveryUnknown(id: string): Promise<void> {
+  await db.operatorEvent.updateMany({
+    where: { id, status: 'committed', replyDeliveredAt: null },
+    data: { lastError: OPERATOR_REPLY_DELIVERY_UNKNOWN_ERROR },
   });
 }
 
@@ -150,6 +168,10 @@ export async function findCommittedUndeliveredOperatorEvents(
       replyDeliveredAt: null,
       replyText: { not: null },
       processedAt: { lt: cutoff },
+      OR: [
+        { lastError: null },
+        { lastError: { not: OPERATOR_REPLY_DELIVERY_UNKNOWN_ERROR } },
+      ],
     },
     orderBy: { processedAt: 'asc' },
     take: limit,

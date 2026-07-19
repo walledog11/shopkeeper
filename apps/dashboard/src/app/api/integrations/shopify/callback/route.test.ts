@@ -77,6 +77,37 @@ afterEach(async () => {
 });
 
 describe('POST /api/integrations/shopify/callback', () => {
+  it('bounds token exchange and preserves a typed timeout', async () => {
+    mockSavedCookies({
+      shopify_oauth_state: 'state_123',
+      shopify_oauth_org: org!.clerkOrgId,
+      shopify_oauth_user: 'usr_oauth',
+      shopify_oauth_shop: 'fixture-shop.myshopify.com',
+    });
+    mockFetch.mockRejectedValueOnce(new DOMException('timed out', 'TimeoutError'));
+
+    const res = await POST(new Request(signedCallbackUrl({
+      code: 'oauth_code',
+      shop: 'fixture-shop.myshopify.com',
+      state: 'state_123',
+    })));
+
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe(
+      'http://dashboard.test/dashboard/integrations/oauth/complete?error=shopify_server_error',
+    );
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      {
+        err: expect.objectContaining({
+          name: 'ProviderRequestTimeoutError',
+          operation: 'OAuth token exchange',
+          provider: 'shopify',
+        }),
+      },
+      '[Shopify OAuth] Unexpected error',
+    );
+  });
+
   it('rejects a callback for a different shop after verifying shop identity', async () => {
     mockSavedCookies({
       shopify_oauth_state: 'state_123',

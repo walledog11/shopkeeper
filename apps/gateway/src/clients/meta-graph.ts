@@ -1,3 +1,5 @@
+import { fetchWithDeadline } from './request-deadline.js';
+
 export const META_GRAPH_VERSION = 'v22.0';
 
 const META_GRAPH_BASE = `https://graph.facebook.com/${META_GRAPH_VERSION}`;
@@ -12,7 +14,10 @@ export interface MetaGraphResponse<T> {
 }
 
 async function fetchMetaGraph<T>(url: URL): Promise<MetaGraphResponse<T>> {
-  const res = await fetch(url.toString());
+  const res = await fetchWithDeadline(url.toString(), {}, {
+    provider: 'meta',
+    operation: 'Graph API request',
+  });
   const payload = await res.json() as T & { error?: MetaGraphError };
 
   if (payload && typeof payload === 'object' && payload.error) {

@@ -211,6 +211,69 @@ simultaneously. Connecting, reconnecting, or deleting one must not modify the ot
 
 Gmail native inbound is implemented but remains in controlled rollout.
 
+#### Async outbound-email canary (P4-01)
+
+The async path creates the outbound `Message` first, enqueues it with that message ID as the
+stable BullMQ job ID, and claims delivery once in the gateway worker. Roll out Postmark and Gmail
+separately while keeping the synchronous path available as the rollback rail.
+
+Preflight:
+
+1. Confirm `npm run db:migrate:deploy` reports no pending migrations. Outbound claim fields come
+   from `20260714000000_add_outbound_send_claims`.
+2. Confirm the public gateway and separate worker run the same commit and `/health/deep` reports
+   database, Redis, worker, and queue checks healthy.
+3. Run the read-only baseline; every blocker list must be empty:
+
+```bash
+railway run --service shopkeeper --environment production -- \
+  npm run audit:outbound-email -- --hours=24 --strict
+```
+
+Canary one provider at a time with an internal organization:
+
+1. Enable `OUTBOUND_EMAIL_ASYNC=true` for the dashboard deployment and keep the prior deployment
+   available for immediate rollback. Do not remove the synchronous implementation.
+2. Send one ordinary reply through the selected provider. Confirm the UI moves
+   `pending -> processing -> sent`, the recipient gets exactly one message, and the row records a
+   provider message ID.
+3. Re-submit the same message ID to the internal enqueue boundary and confirm it is deduplicated;
+   do not create a second message row for this check.
+4. Require fresh delivered traffic for that provider:
+
+```bash
+railway run --service shopkeeper --environment production -- \
+  npm run audit:outbound-email -- --hours=1 --strict --require-provider=postmark
+```
+
+   Repeat with `--require-provider=gmail` only after the Postmark observation window is clean.
+5. Review gateway logs for ownership mismatches, lost claims, provider ambiguity, sweep alerts, or
+   permanently failed jobs. Repeat the strict 24-hour audit before expanding rollout.
+
+Rollback by setting `OUTBOUND_EMAIL_ASYNC=false` and redeploying the dashboard. Existing pending,
+processing, failed, or unknown rows remain recovery evidence; do not delete or blindly enqueue
+them during rollback.
+
+#### Failed or unknown outbound-email recovery
+
+The launch owner/on-call owns review. A `failed` row is retryable only when the recorded failure is
+known to have occurred before provider submission. An `unknown` row may already have been accepted
+and must never be retried until provider activity proves no delivery.
+
+1. Run `npm run audit:outbound-email -- --hours=24 --strict` and take the message, organization,
+   thread, integration, provider, claim/attempt times, status, and error from the report. It omits
+   message bodies, customer addresses, and raw provider IDs.
+2. Search Gmail or Postmark activity using the stored provider ID when present and the stable RFC
+   `Message-ID` `<message-{messageId}@{INBOUND_EMAIL_DOMAIN}>`. Check the recipient mailbox when
+   provider activity alone is inconclusive.
+3. If the provider proves no submission, leave or move the row to the normal `failed` recovery path
+   and let an authorized merchant retry it once. If delivery is proven, record only the missing
+   delivery identity/state; do not send again. If truth remains ambiguous, keep the row `unknown`,
+   record the incident, and escalate to the production owner.
+4. A stale unattempted claim may be converted to `failed` by `outbound-send-sweep`; a stale claim
+   with `sendAttemptedAt` is converted to `unknown`. Investigate sweep/worker health before any
+   manual state change.
+
 ### Gmail native-inbound rollout
 
 Keep `EMAIL_INBOUND_MODE=hybrid` for every rollout stage so Postmark forwarding remains active.
@@ -433,9 +496,13 @@ acted; neither state is safe to replay automatically.
    proves a commit, send only the missing confirmation or record a compensating follow-up. If truth
    remains ambiguous, leave the event terminal, record the incident, and escalate to the production
    owner; do not mutate it back to `pending`.
-5. A `committed` event with an undelivered reply is handled by `operator-event-sweep`; it may resend
-   the stored confirmation but never reruns the turn. If the strict audit still reports it after the
-   configured stale window, investigate provider delivery and the sweep before any manual send.
+5. A `committed` event with an undelivered reply is normally handled by
+   `operator-event-sweep`; it may resend the stored confirmation but never
+   reruns the turn. If `last_error` says the reply may have reached the provider,
+   the send outcome is ambiguous and the sweep deliberately excludes it from
+   automatic resend. Check Telegram/Photon activity and the recipient device;
+   never resend without positive no-delivery evidence. Any committed-undelivered
+   row remains a strict-audit blocker until it is reconciled.
 
 ### iMessage Operator Channel (Phase 0 infra)
 

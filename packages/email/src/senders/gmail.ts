@@ -3,6 +3,7 @@ import { buildRawMime } from '../mime-build.js';
 import { getEmailOAuthClient, persistRefreshedToken, requestTokenRefresh } from '../token.js';
 import {
   EmailNotConfiguredError,
+  EmailProviderRequestTimeoutError,
   type EmailSender,
   type EmailSendResult,
   type OutboundEmail,
@@ -10,6 +11,7 @@ import {
 
 const SEND_URL = 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send';
 const REFRESH_LEEWAY_MS = 60_000;
+const SEND_TIMEOUT_MS = 15_000;
 
 export interface GmailIntegration {
   id: string;
@@ -59,14 +61,30 @@ export class GmailSender implements EmailSender {
   }
 
   private async postSend(raw: string): Promise<Response> {
-    return fetch(SEND_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ raw }),
-    });
+    try {
+      return await fetch(SEND_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ raw }),
+        signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+      });
+    } catch (error) {
+      if (
+        error instanceof Error
+        && (error.name === 'AbortError' || error.name === 'TimeoutError')
+      ) {
+        throw new EmailProviderRequestTimeoutError(
+          'gmail',
+          'message send',
+          SEND_TIMEOUT_MS,
+          error,
+        );
+      }
+      throw error;
+    }
   }
 
   private async refresh(): Promise<void> {

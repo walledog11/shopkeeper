@@ -94,6 +94,7 @@ describe('gatewayThreadSink persistence', () => {
   it('returns and records dashboard dispatch failures without partial persistence', async () => {
     postInternal.mockResolvedValue({
       ok: false,
+      outcome: 'failed',
       status: 503,
       responseBody: 'provider unavailable',
     });
@@ -110,5 +111,28 @@ describe('gatewayThreadSink persistence', () => {
     expect(createMessage).not.toHaveBeenCalled();
     expect(threadUpdate).not.toHaveBeenCalled();
     expect(publishThreadEvent).not.toHaveBeenCalled();
+  });
+
+  it('returns unknown when the dashboard send outcome cannot be confirmed', async () => {
+    postInternal.mockResolvedValue({
+      ok: false,
+      outcome: 'unknown',
+      status: null,
+      responseBody: 'dashboard request timed out',
+    });
+
+    const result = await gatewayThreadSink.sendReply({ text: 'Hello' }, ctx);
+
+    expect(result).toEqual({
+      status: 'unknown',
+      message: expect.stringMatching(/may have completed/i),
+    });
+    expect(recordFailure).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'tool_result',
+      orgId: 'org-1',
+      tool: 'send_reply',
+      statusCode: null,
+    }));
+    expect(publishThreadEvent).toHaveBeenCalledWith('org-1', 'thread-1');
   });
 });
