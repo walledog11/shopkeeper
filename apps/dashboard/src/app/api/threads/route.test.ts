@@ -316,6 +316,20 @@ describe('GET /api/threads', () => {
     expect(res.status).toBe(400);
   });
 
+  it.each([
+    ['status', 'not-a-status'],
+    ['channelType', 'not-a-channel'],
+    ['limit', '25rows'],
+    ['preview', 'yes'],
+  ])('returns 400 for invalid %s query input', async (field, value) => {
+    const req = new Request(`http://localhost:3000/api/threads?${field}=${value}`);
+    const res = await GET(req);
+    const body = await res.json() as { error: string };
+
+    expect(res.status).toBe(400);
+    expect(body.error).toMatch(/^Invalid |^limit must/);
+  });
+
   it('returns 403 when the user has no active organization', async () => {
     vi.mocked(auth).mockResolvedValueOnce(
       { userId: 'usr_test', orgId: null } as unknown as ReturnType<typeof auth> extends Promise<infer T>
