@@ -38,6 +38,7 @@ function createDashboardLaunchEnv(overrides = {}) {
     INSTAGRAM_INTEGRATION_ENABLED: 'false',
     PRODUCT_ANALYTICS_ENABLED: 'false',
     PLAN_EXECUTION_LEDGER_MODE: 'shadow',
+    AGENT_CONTEXT_BUDGET_MODE: 'shadow',
     ...overrides,
   };
 }
@@ -67,6 +68,7 @@ function createGatewayLaunchEnv(overrides = {}) {
     SPECTRUM_WEBHOOK_SECRET: 'webhook_secret_1',
     PRODUCT_ANALYTICS_ENABLED: 'false',
     PLAN_EXECUTION_LEDGER_MODE: 'shadow',
+    AGENT_CONTEXT_BUDGET_MODE: 'shadow',
     ...overrides,
   };
 }
@@ -380,6 +382,30 @@ test('production contracts require an explicit plan execution ledger rollout mod
   );
 });
 
+test('production contracts require a valid AI context budget rollout mode', () => {
+  const dashboard = validateProductionEnv('dashboard', {
+    scope: 'launch',
+    env: createDashboardLaunchEnv({ AGENT_CONTEXT_BUDGET_MODE: '' }),
+  });
+  const gateway = validateProductionEnv('gateway', {
+    scope: 'launch',
+    env: createGatewayLaunchEnv({ AGENT_CONTEXT_BUDGET_MODE: 'enabled' }),
+  });
+
+  assert.equal(
+    dashboard.errors.includes(
+      'Missing required environment variable: AGENT_CONTEXT_BUDGET_MODE',
+    ),
+    true,
+  );
+  assert.equal(
+    gateway.errors.includes(
+      'AGENT_CONTEXT_BUDGET_MODE must be one of: off, shadow, enforce',
+    ),
+    true,
+  );
+});
+
 test('enabled product analytics requires a token and HTTPS host', () => {
   const result = validateProductionEnv('gateway', {
     scope: 'launch',
@@ -432,6 +458,7 @@ test('env file parser trims comments and quoted values the same way prod env fil
       'SPECTRUM_WEBHOOK_SECRET=webhook_secret_1',
       'PRODUCT_ANALYTICS_ENABLED=false',
       'PLAN_EXECUTION_LEDGER_MODE=shadow',
+      'AGENT_CONTEXT_BUDGET_MODE=shadow',
       '',
     ].join('\n')
   );

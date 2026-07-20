@@ -72,12 +72,36 @@ describe('parseClassifierJson — intents + language', () => {
   it('normalizes language to lowercase and trims it', () => {
     expect(parseClassifierJson(fullResponse({ language: '  ES  ' })).language).toBe('es');
     expect(parseClassifierJson(fullResponse({ language: 42 })).language).toBe('');
+    expect(parseClassifierJson(fullResponse({ language: 'eng' })).language).toBe('');
+    expect(parseClassifierJson(fullResponse({ language: 'e1' })).language).toBe('');
   });
 
   it('still throws when a core field is missing', () => {
     expect(() =>
       parseClassifierJson(JSON.stringify({ summary: 'x', tag: 'General', classification: 'genuine' })),
     ).toThrow();
+  });
+
+  it.each(['Refund', 'shipping', '', 42, null])('rejects invalid classifier tag %j', (tag) => {
+    expect(() => parseClassifierJson(fullResponse({ tag }))).toThrow(/invalid tag/i);
+  });
+
+  it('rejects invalid core field types', () => {
+    expect(() => parseClassifierJson(fullResponse({ summary: ['not', 'text'] }))).toThrow(/summary/i);
+    expect(() => parseClassifierJson(fullResponse({ reason: { text: 'why' } }))).toThrow(/reason/i);
+    expect(() => parseClassifierJson(fullResponse({ classification: 'maybe' }))).toThrow(/classification/i);
+  });
+
+  it('bounds persisted classifier text fields', () => {
+    const result = parseClassifierJson(fullResponse({
+      title: `Title ${'x'.repeat(200)}`,
+      summary: `Summary ${'y'.repeat(1_200)}`,
+      reason: `Reason ${'z'.repeat(300)}`,
+    }));
+
+    expect(result.title).toHaveLength(120);
+    expect(result.summary).toHaveLength(1_000);
+    expect(result.filterReason).toHaveLength(240);
   });
 });
 

@@ -4,6 +4,15 @@ import { shopifyRestJson, type ShopifyContext } from "./shopify/client.js";
 import { isOperatorChannel } from "./thread-constants.js";
 import { MEMORY_OVERRIDE_TAG, memoryOverrideTargetIds } from "./kb-memory.js";
 import { hydrateAgentMessageImages } from "./image-attachments.js";
+import logger from "./logger.js";
+import {
+  CONTEXT_BUDGETS,
+  budgetKbArticles,
+  budgetRecentMessages,
+  resolveContextBudgetMode,
+  truncateContextText,
+  type ContextBudgetMode,
+} from "./context-budget.js";
 import type { ToolResult } from "./tools/result.js";
 import type {
   AddInternalNoteInput,
@@ -76,6 +85,9 @@ export interface BuildContextOptions {
   // Operator/read-only callers only use the last few messages, so they can cap
   // the fetch here instead of loading 50 rows and slicing after. Defaults to 50.
   messageWindow?: number;
+  // Rollout rail for bounded prompt context. Shadow mode computes and logs the
+  // bounded shape while preserving the legacy context; enforce uses it.
+  contextBudgetMode?: ContextBudgetMode;
   // Operator channel only: host-rendered pending-state ledger. Copied verbatim
   // onto the context and surfaced in the operator prompt; opaque to the core.
   operatorLedger?: string;
@@ -112,6 +124,11 @@ export async function buildContext(
   sink: ThreadSink,
   options?: BuildContextOptions,
 ): Promise<AgentContext> {
+  const contextBudgetMode = options?.contextBudgetMode ?? resolveContextBudgetMode();
+  const legacyMessageWindow = options?.messageWindow ?? 50;
+  const fetchedMessageWindow = contextBudgetMode === "enforce"
+    ? Math.min(legacyMessageWindow, CONTEXT_BUDGETS.recentMessageCount)
+    : legacyMessageWindow;
   const effectiveKbArticlesPromise = (async () => {
     const overrides = await db.kbArticle.findMany({
       where: { organizationId: orgId, tags: { has: MEMORY_OVERRIDE_TAG } },
@@ -140,7 +157,7 @@ export async function buildContext(
             platformId: true,
           },
         },
-        messages: { orderBy: { sentAt: "desc" }, take: options?.messageWindow ?? 50 },
+        messages: { orderBy: { sentAt: "desc" }, take: fetchedMessageWindow },
       },
     }),
     db.organization.findUnique({ where: { id: orgId } }),
@@ -269,16 +286,20 @@ export async function buildContext(
     }
   }
 
-  const [openThreadCount, pastTickets] = await Promise.all([openThreadCountPromise, pastTicketsPromise]);
+  const [openThreadCount, loadedPastTickets] = await Promise.all([openThreadCountPromise, pastTicketsPromise]);
 
   const threadTag = thread.tag?.toLowerCase();
   const matchingKbArticles = threadTag
     ? allKbArticles.filter(a => a.tags.some(t => t.toLowerCase() === threadTag))
     : allKbArticles;
   const loadedKbArticles = matchingKbArticles.length > 0 ? matchingKbArticles : allKbArticles;
-  const kbArticles = options?.pinKbArticles?.length
+  const mergedKbArticles = options?.pinKbArticles?.length
     ? mergePinnedKbArticles(options.pinKbArticles, loadedKbArticles)
     : loadedKbArticles;
+  const budgetedKb = budgetKbArticles(mergedKbArticles);
+  const kbArticles = contextBudgetMode === "enforce"
+    ? budgetedKb.articles
+    : mergedKbArticles;
 
   const threadIo = {
     threadId: thread.id,
@@ -294,9 +315,33 @@ export async function buildContext(
     contentText: message.contentText,
     attachmentRefs: message.attachments,
   }));
+  const budgetedMessages = budgetRecentMessages(rawRecentMessages, {
+    maxCount: Math.min(legacyMessageWindow, CONTEXT_BUDGETS.recentMessageCount),
+  });
+  const contextMessages = contextBudgetMode === "enforce"
+    ? budgetedMessages.messages
+    : rawRecentMessages;
   const recentMessages = thread.channelType === "ig_dm"
-    ? await hydrateAgentMessageImages(orgId, rawRecentMessages)
-    : rawRecentMessages.map(({ senderType, contentText }) => ({ senderType, contentText }));
+    ? await hydrateAgentMessageImages(orgId, contextMessages)
+    : contextMessages.map(({ senderType, contentText }) => ({ senderType, contentText }));
+  const pastTickets = contextBudgetMode === "enforce"
+    ? loadedPastTickets.map((ticket) => ({
+        ...ticket,
+        aiSummary: ticket.aiSummary
+          ? truncateContextText(ticket.aiSummary, CONTEXT_BUDGETS.pastTicketSummaryChars)
+          : null,
+      }))
+    : loadedPastTickets;
+
+  if (contextBudgetMode !== "off") {
+    logger.info({
+      orgId,
+      threadId,
+      mode: contextBudgetMode,
+      recentMessages: budgetedMessages.stats,
+      kbArticles: budgetedKb.stats,
+    }, "[agent:context] budget");
+  }
 
   const base: BaseAgentContext = {
     orgId,
@@ -331,7 +376,9 @@ export async function buildContext(
       status: thread.status,
       channelType: thread.channelType,
       tag: thread.tag,
-      aiSummary: thread.aiSummary,
+      aiSummary: contextBudgetMode === "enforce" && thread.aiSummary
+        ? truncateContextText(thread.aiSummary, CONTEXT_BUDGETS.priorSummaryChars)
+        : thread.aiSummary,
       shopifyCustomerId,
     },
     customer: {
@@ -345,6 +392,12 @@ export async function buildContext(
     linkedShopifyCustomerName: isOperator ? shopifyCustomerName : null,
     kbArticles: kbArticles.map(a => ({ title: a.title, body: a.body })),
     classifierSignals: parseClassifierSignals(thread.classifierSignals),
-    ...(options?.operatorLedger ? { operatorLedger: options.operatorLedger } : {}),
+    ...(options?.operatorLedger
+      ? {
+          operatorLedger: contextBudgetMode === "enforce"
+            ? truncateContextText(options.operatorLedger, CONTEXT_BUDGETS.operatorLedgerChars)
+            : options.operatorLedger,
+        }
+      : {}),
   };
 }
