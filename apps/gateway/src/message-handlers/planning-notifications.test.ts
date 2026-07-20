@@ -44,10 +44,12 @@ import {
   sendOperatorQuestionNotification,
 } from './planning-notifications.js';
 import { OperatorNotifyError } from '../operator-notify.js';
+import { updateContext } from '../operator-context.js';
 import type { AgentPlan } from '../types.js';
 
 // Send paths look up conversation stage by thread id, a uuid column in Postgres.
 const THREAD_ID = '00000000-0000-4000-8000-0000000000aa';
+const OTHER_THREAD_ID = '00000000-0000-4000-8000-0000000000bb';
 
 const plan: AgentPlan = {
   steps: [
@@ -225,6 +227,37 @@ describe('formatOperatorPlanMessage', () => {
     expect(message).toContain('Good to send?');
     expect(message).not.toContain('skip 1');
   });
+
+  it('discloses when the card overwrites a different thread\'s pending plan, above the footer', () => {
+    const message = formatOperatorPlanMessage(
+      'Jane Doe',
+      ChannelType.email,
+      'Needs a refund',
+      plan.steps,
+      { replacesPending: { customerName: 'Sarah Chen' } },
+    );
+
+    expect(message).toContain("(This replaces the earlier plan for Sarah — that one's still on your dashboard.)");
+    expect(message.indexOf('This replaces')).toBeLessThan(message.indexOf('Good to send?'));
+  });
+
+  it('uses a generic disclosure when the earlier plan has no customer name', () => {
+    const message = formatOperatorPlanMessage(
+      null,
+      ChannelType.email,
+      'Needs a refund',
+      plan.steps,
+      { replacesPending: { customerName: null } },
+    );
+
+    expect(message).toContain("(This replaces an earlier plan — it's still on your dashboard.)");
+  });
+
+  it('omits the disclosure when nothing is being overwritten', () => {
+    const message = formatOperatorPlanMessage('Jane Doe', ChannelType.email, 'Needs a refund', plan.steps, {});
+
+    expect(message).not.toContain('This replaces');
+  });
 });
 
 describe('getConversationStage', () => {
@@ -267,7 +300,16 @@ describe('getConversationStage', () => {
 });
 
 describe('sendOperatorPlanNotification', () => {
+  let orgId: string | null = null;
+
+  afterEach(async () => {
+    await cleanupTestData(orgId);
+    orgId = null;
+  });
+
   it('uses critical notification policy for each bound operator', async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
     listOperatorBindingsSpy.mockResolvedValue([
       { channel: 'telegram', chatId: 'chat_1' },
       { channel: 'imessage', senderId: 'sender_2', spaceId: 'space_2' },
@@ -275,7 +317,7 @@ describe('sendOperatorPlanNotification', () => {
     notifyOperatorSpy.mockResolvedValue({ channel: 'telegram', chatId: 'chat_1' });
 
     await sendOperatorPlanNotification(
-      'org_1',
+      org.id,
       THREAD_ID,
       'Jane Doe',
       ChannelType.email,
@@ -302,6 +344,8 @@ describe('sendOperatorPlanNotification', () => {
     const [, , body] = notifyOperatorSpy.mock.calls[0] ?? [];
     expect(body).toContain(`Full thread: https://dashboard.example.com/dashboard/tickets/${THREAD_ID}`);
     expect(body).toContain('Good to send?');
+    // Nothing is parked on this fresh context, so no overwrite disclosure.
+    expect(body).not.toContain('This replaces');
     expect(notifyOperatorSpy.mock.calls[0]?.[3]).toMatchObject({
       pendingPlan: {
         planId: '00000000-0000-4000-8000-000000000001',
@@ -315,12 +359,14 @@ describe('sendOperatorPlanNotification', () => {
   });
 
   it('propagates critical notification failures so the worker job can retry', async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
     listOperatorBindingsSpy.mockResolvedValue([{ channel: 'telegram', chatId: 'chat_1' }]);
     notifyOperatorSpy.mockRejectedValue(new OperatorNotifyError('Telegram send failed'));
 
     await expect(
       sendOperatorPlanNotification(
-        'org_1',
+        org.id,
         THREAD_ID,
         null,
         ChannelType.email,
@@ -332,6 +378,8 @@ describe('sendOperatorPlanNotification', () => {
   });
 
   it('does not fail the job when at least one channel delivers on partial fan-out failure', async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
     listOperatorBindingsSpy.mockResolvedValue([
       { channel: 'telegram', chatId: 'chat_1' },
       { channel: 'imessage', senderId: 'sender_2', spaceId: 'space_2' },
@@ -342,7 +390,7 @@ describe('sendOperatorPlanNotification', () => {
 
     await expect(
       sendOperatorPlanNotification(
-        'org_1',
+        org.id,
         THREAD_ID,
         null,
         ChannelType.email,
@@ -353,6 +401,62 @@ describe('sendOperatorPlanNotification', () => {
     ).resolves.toBeUndefined();
 
     expect(notifyOperatorSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('appends the overwrite disclosure when a different thread\'s plan is already parked', async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
+    await updateContext(org.id, 'chat_1', {
+      pendingPlan: {
+        threadId: OTHER_THREAD_ID,
+        instruction: 'Handle earlier request',
+        rawToolCalls: [{ id: 'tc_0', name: 'create_refund' }],
+        customerName: 'Bob Lee',
+      },
+    });
+    listOperatorBindingsSpy.mockResolvedValue([{ channel: 'telegram', chatId: 'chat_1' }]);
+    notifyOperatorSpy.mockResolvedValue({ channel: 'telegram', chatId: 'chat_1' });
+
+    await sendOperatorPlanNotification(
+      org.id,
+      THREAD_ID,
+      'Jane Doe',
+      ChannelType.email,
+      'Needs a refund',
+      plan,
+      'Handle refund request',
+    );
+
+    const [, , body] = notifyOperatorSpy.mock.calls[0] ?? [];
+    expect(body).toContain("(This replaces the earlier plan for Bob — that one's still on your dashboard.)");
+  });
+
+  it('omits the disclosure when the parked plan is for the same thread', async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
+    await updateContext(org.id, 'chat_1', {
+      pendingPlan: {
+        threadId: THREAD_ID,
+        instruction: 'Earlier draft on the same ticket',
+        rawToolCalls: [{ id: 'tc_0', name: 'send_reply' }],
+        customerName: 'Jane Doe',
+      },
+    });
+    listOperatorBindingsSpy.mockResolvedValue([{ channel: 'telegram', chatId: 'chat_1' }]);
+    notifyOperatorSpy.mockResolvedValue({ channel: 'telegram', chatId: 'chat_1' });
+
+    await sendOperatorPlanNotification(
+      org.id,
+      THREAD_ID,
+      'Jane Doe',
+      ChannelType.email,
+      'Needs a refund',
+      plan,
+      'Handle refund request',
+    );
+
+    const [, , body] = notifyOperatorSpy.mock.calls[0] ?? [];
+    expect(body).not.toContain('This replaces');
   });
 });
 

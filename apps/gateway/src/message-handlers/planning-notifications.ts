@@ -18,7 +18,7 @@ import {
 import type { AgentPlan, PlanStep } from '../types.js';
 import type { PlanIdentity, PrecomputedPlanResult } from './planning-types.js';
 import { firstDraftExcerpt } from './operator-ledger.js';
-import { resolvePendingPlanContexts } from '../operator-context.js';
+import { getContext, resolvePendingPlanContexts } from '../operator-context.js';
 
 export interface OperatorNotificationExclude {
   channel: OperatorBinding['channel'];
@@ -205,6 +205,9 @@ export function formatOperatorPlanMessage(
     dashboardUrl?: string;
     rawToolCalls?: readonly { name: string; input?: unknown }[];
     stage?: ConversationStage;
+    // Set when this card overwrites a different thread's still-pending plan on
+    // the operator context it is going to; renders the honesty disclosure line.
+    replacesPending?: { customerName: string | null };
   },
 ): string {
   const stage = options?.stage ?? FRESH_STAGE;
@@ -230,6 +233,13 @@ export function formatOperatorPlanMessage(
 
   if (options?.threadId && options.dashboardUrl) {
     lines.push('', `Full thread: ${options.dashboardUrl}/dashboard/tickets/${options.threadId}`);
+  }
+
+  if (options?.replacesPending) {
+    const earlierName = customerFirstName(options.replacesPending.customerName);
+    lines.push('', earlierName
+      ? `(This replaces the earlier plan for ${earlierName} — that one's still on your dashboard.)`
+      : "(This replaces an earlier plan — it's still on your dashboard.)");
   }
 
   const replyOnly = actionableSteps.length > 0 && actionableSteps.every(isSendStep);
@@ -435,12 +445,7 @@ export async function sendOperatorPlanNotification(
 
   const summary = aiSummary || instruction;
   const stage = await getConversationStage(threadId);
-  const message = formatOperatorPlanMessage(customerName, channelType, summary, plan.steps, {
-    threadId,
-    dashboardUrl: getGatewayDashboardUrl(),
-    rawToolCalls: plan.rawToolCalls,
-    stage,
-  });
+  const dashboardUrl = getGatewayDashboardUrl();
   const idempotencyKey = planNotificationIdempotencyKey(
     organizationId,
     threadId,
@@ -452,20 +457,46 @@ export async function sendOperatorPlanNotification(
   await notifyCriticalToAllOperators(
     organizationId,
     bindings,
-    async () => ({
-      body: message,
-      contextPatch: {
-        pendingPlan: {
+    async (member) => {
+      // Disclose when this card is about to overwrite a different thread's
+      // still-pending plan on this operator context. Read here, before
+      // notifyOperator persists the new plan, so it sees the older slot. This is
+      // best-effort honesty, not a concurrency fix: a read failure must not
+      // widen the critical push's failure surface, so drop the line silently.
+      let replacesPending: { customerName: string | null } | undefined;
+      try {
+        const existing = await getContext(organizationId, operatorContextKey(member));
+        if (existing.pendingPlan && existing.pendingPlan.threadId !== threadId) {
+          replacesPending = { customerName: existing.pendingPlan.customerName ?? null };
+        }
+      } catch (error) {
+        logger.warn(
+          { err: (error as Error).message, organizationId, threadId },
+          '[Worker] Overwrite-disclosure context read failed',
+        );
+      }
+
+      return {
+        body: formatOperatorPlanMessage(customerName, channelType, summary, plan.steps, {
           threadId,
-          instruction,
+          dashboardUrl,
           rawToolCalls: plan.rawToolCalls,
-          ...(options?.identity ?? {}),
-          ...(customerName ? { customerName } : {}),
-          ...(actionLabel ? { actionLabel } : {}),
+          stage,
+          replacesPending,
+        }),
+        contextPatch: {
+          pendingPlan: {
+            threadId,
+            instruction,
+            rawToolCalls: plan.rawToolCalls,
+            ...(options?.identity ?? {}),
+            ...(customerName ? { customerName } : {}),
+            ...(actionLabel ? { actionLabel } : {}),
+          },
         },
-      },
-      idempotencyKey,
-    }),
+        idempotencyKey,
+      };
+    },
     threadId,
     'Plan notification',
     options?.exclude,

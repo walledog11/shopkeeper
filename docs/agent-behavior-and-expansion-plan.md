@@ -250,6 +250,16 @@ P5-04 so support-ticket escalation semantics can still be decided separately.
 
 ### A4 — Fast-path and canned copy
 
+**Status (2026-07-20): Complete (commit `de0e9edd`); live phone confirmation is
+the only step outstanding.** All five build items shipped:
+`customerName`/`actionLabel` are parked in `pendingPlan`
+(`planning-notifications.ts`); the fast-path dismissal names the action
+(`pending-plan-commands.ts` — "Dismissed — I won't …"); digest spam/reply
+confirmations carry the customer name (`digest-commands.ts`); the bare `'Done.'`
+fallback is now `'All set.'` (`agent-execution.ts`); and `HELP_TEXT`
+(`telegram/format.ts`) leads capabilities-first with command hints trailing.
+Old/new pending-plan JSON shapes are unit-covered.
+
 **Problem:** literal `yes`/`no` — the most common replies — hit the keyword
 path and get `Plan dismissed.` / `Marked 2 as spam.` / `Reply sent on ticket
 2.` / bare `Done.`. The model path was told to quote the concrete action; the
@@ -324,6 +334,17 @@ the test DB.
 
 ### A6 — Pending-plan overwrite honesty + queue (last, safety-coupled)
 
+**Status (2026-07-20): Step 1 (overwrite disclosure) implemented on branch
+`behavior/a6-01-overwrite-disclosure`; live-channel verification pending. Step 2
+(real queue) still deferred.** `sendOperatorPlanNotification` now reads each
+operator context before `notifyOperator` parks the new plan and, when the card
+is about to overwrite a *different* thread's still-pending plan, appends the
+disclosure line naming the earlier customer. The read is best-effort — a failure
+drops the line, never the critical push — and the context write is unchanged, so
+P1-03's exact-plan resolution predicates are preserved. Unit + DB-backed tests
+cover the different-thread, same-thread, and no-earlier-name cases. The A5
+"Waiting on you" digest follow-up (step 1's second half) rides with A5.
+
 **Problem:** `OperatorContext.pendingPlan` is single-slot; each new plan
 notification overwrites the previous one silently, so the older plan stops
 being approvable by text and nobody says so. Nothing ever follows up on an
@@ -331,10 +352,12 @@ ignored plan.
 
 **Build in two steps:**
 
-1. **Cheap and honest (copy can ship now):** when a plan notification would overwrite a
+1. **Cheap and honest (copy can ship now) — card line done 2026-07-20:** when a
+   plan notification would overwrite a
    different thread's pending plan, append one line to the outgoing card:
    "(This replaces the earlier plan for <customer> — that one's still on your
-   dashboard.)" Plus the A5 "Waiting on you" digest section for follow-ups.
+   dashboard.)" The A5 "Waiting on you" digest section for follow-ups remains
+   with A5.
    This is disclosure, not a concurrency fix. P1-03 now supplies stable identity
    and conditional all-device resolution, so the accompanying context update
    must retain those exact-plan predicates and cannot regress to an unconditional
@@ -355,8 +378,9 @@ own plan.
 
 A3 shipped first because it stops operator-thread self-escalation, and P8-01
 landed as a standalone quick win. **A1 is implementation-complete as of
-2026-07-16** (P5-04 unblocked it). Subject to the safety gates above, the
-remaining behavior order is A2 → A4 → A6-step-1 → A5. A2 can now assume
+2026-07-16** (P5-04 unblocked it). **A4 and A6-step-1 are implementation-complete
+as of 2026-07-20** (both pending live phone verification). Subject to the safety
+gates above, the remaining behavior order is A2 → A5. A2 can now assume
 `get_ticket` exists — its "open" case needs no tool.
 A5's deduplicated "Waiting on you" foundation now has P1 identity support; its
 authoritative "Handled" section still waits for P3. Each operator-only phase has its own live verification; none needs
