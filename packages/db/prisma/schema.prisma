@@ -76,6 +76,13 @@ enum OperatorEventStatus {
   unknown
 }
 
+enum StripeWebhookEventStatus {
+  pending
+  processing
+  completed
+  failed
+}
+
 // --- MODELS ---
 
 // One Organization = one Shopify business using the app.
@@ -92,11 +99,13 @@ model Organization {
   createdAt                 DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt                 DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  stripeCustomerId     String?   @unique @map("stripe_customer_id") @db.VarChar(255)
-  stripeSubscriptionId String?   @unique @map("stripe_subscription_id") @db.VarChar(255)
-  stripePriceId        String?   @map("stripe_price_id") @db.VarChar(255)
-  stripeStatus         String?   @map("stripe_status") @db.VarChar(50)
-  trialEndsAt          DateTime? @map("trial_ends_at") @db.Timestamptz
+  stripeCustomerId          String?   @unique @map("stripe_customer_id") @db.VarChar(255)
+  stripeSubscriptionId      String?   @unique @map("stripe_subscription_id") @db.VarChar(255)
+  stripePriceId             String?   @map("stripe_price_id") @db.VarChar(255)
+  stripeStatus              String?   @map("stripe_status") @db.VarChar(50)
+  trialEndsAt               DateTime? @map("trial_ends_at") @db.Timestamptz
+  stripeStateEventCreatedAt DateTime? @map("stripe_state_event_created_at") @db.Timestamptz
+  stripeStateEventId        String?   @map("stripe_state_event_id") @db.VarChar(255)
 
   customers               Customer[]
   threads                 Thread[]
@@ -116,10 +125,38 @@ model Organization {
   refundSpendReservations RefundSpendReservation[]
   shadowDecisions         AutonomyShadowDecision[]
   planExecutions          PlanExecution[]
+  stripeWebhookEvents     StripeWebhookEvent[]
   messages                Message[]
 
   @@index([clerkOrgId])
   @@map("organizations")
+}
+
+// Durable processing record for Stripe webhooks. The signed event body is not
+// retained; Stripe redelivers it when a failed/active claim returns a retryable
+// response. Organization billing state and event completion commit together.
+model StripeWebhookEvent {
+  id              String                   @id @db.VarChar(255)
+  type            String                   @map("event_type") @db.VarChar(255)
+  stripeCreatedAt DateTime                 @map("stripe_created_at") @db.Timestamptz
+  customerId      String?                  @map("customer_id") @db.VarChar(255)
+  subscriptionId  String?                  @map("subscription_id") @db.VarChar(255)
+  organizationId  String?                  @map("organization_id") @db.Uuid
+  status          StripeWebhookEventStatus @default(pending)
+  claimToken      String?                  @map("claim_token") @db.Uuid
+  claimedAt       DateTime?                @map("claimed_at") @db.Timestamptz
+  processedAt     DateTime?                @map("processed_at") @db.Timestamptz
+  attempts        Int                      @default(0)
+  lastError       String?                  @map("last_error") @db.Text
+  createdAt       DateTime                 @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime                 @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([status, claimedAt])
+  @@index([organizationId, stripeCreatedAt])
+  @@index([customerId, stripeCreatedAt])
+  @@map("stripe_webhook_events")
 }
 
 // Per-org daily LLM spend backstop. One row per (org, UTC day) holding the

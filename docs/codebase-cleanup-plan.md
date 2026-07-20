@@ -434,6 +434,48 @@ audit gates pass.
 
 ### P4-02 — Replace Stripe claim-before-work with durable event processing
 
+**Status (2026-07-19): Production migration applied; application deployment and
+canary pending.** Signed events now enter a PostgreSQL ledger before work begins. A
+transactional claim admits one processor, active claims return a retryable
+response, failed claims can be reclaimed, and the event reaches `completed`
+only in the same transaction that commits organization billing state. Redis is
+no longer part of Stripe deduplication. Per-organization event time plus a
+deterministic same-second event-ID tie-break prevents older deliveries from
+overwriting newer state; customer and subscription identity guards prevent a
+different or one-off invoice from changing the current subscription. Existing
+billed organizations receive a migration-time ordering watermark so a
+historical Stripe retry cannot regress pre-migration state. Analytics runs
+post-commit and remains best-effort.
+
+**Completed locally:**
+
+- [x] Add the durable event table, claim-state constraint, recovery indexes,
+  organization ordering fields, and pre-existing-state rollout watermark.
+- [x] Replace Redis claim-before-work with durable claim/reclaim/completion and
+  retryable active/failed handling.
+- [x] Commit billing state and event completion atomically; keep analytics
+  outside the transaction and best-effort.
+- [x] Add the privacy-safe `audit:stripe-webhooks` strict rollout gate for
+  failed, stale-pending, stale-processing, retried, and required-completion
+  evidence.
+- [x] Pass 17 focused database-backed tests covering signature validation,
+  duplicate/concurrent delivery, active and stale claims, failed-attempt retry,
+  out-of-order events, subscription identity, one-off invoices, unknown event
+  types, and analytics failure.
+- [x] Rebuild the isolated test database successfully from all 57 migrations;
+  the empty strict local Stripe audit passes.
+
+**Still required for rollout completion:**
+
+- [x] Apply `20260720000000_add_stripe_webhook_events` before deploying the
+  dashboard build that reads the new columns/table. Production now reports all
+  57 migrations applied; the first strict 24-hour audit is clean with zero
+  pre-deployment rows.
+- [ ] Deliver a signed Stripe test event, replay it, and run
+  `npm run audit:stripe-webhooks -- --hours=1 --strict --require-completed`.
+- [ ] Observe the strict audit through the normal window with no failed or
+  stale claims before declaring the Redis rollback path removable.
+
 - **Related findings:** AUD-006.
 - **Files likely to change:** `apps/dashboard/src/app/api/billing/webhook/route.ts`; Prisma schema/migration; billing tests.
 - **Proposed implementation:** Persist Stripe event ID/type/time/status, process idempotently, mark completed only after subscription state commits, and make analytics best-effort/post-commit. Reject stale out-of-order state changes using event/customer/subscription ordering data.
@@ -556,8 +598,8 @@ work required.
 
 ### P4-06 — Add deadlines and typed timeout classification to external fetches
 
-**Status (2026-07-19): Local implementation complete; deployment observation
-pending.** The repository's first-party production HTTP calls have explicit
+**Status (2026-07-19): Deployed; production observation in progress.** The
+repository's first-party production HTTP calls have explicit
 deadlines and classified timeout behavior. The existing Gmail sync/OAuth,
 Shopify, and Instagram clients remain bounded. Shared 15-second wrappers now
 cover dashboard OAuth, dashboard→gateway webhook/internal hops, gateway→dashboard
@@ -589,8 +631,11 @@ No mutation gained an automatic retry.
 
 **Still required for rollout completion:**
 
-- [ ] Deploy the deadline changes and observe provider-timeout/error telemetry
-  through the normal canary windows; keep provider-specific rollback controls.
+- [x] Deploy the deadline changes to the Vercel dashboard and both Railway
+  gateway services; the full production health/deep/queue/webhook verifier
+  passes after deployment.
+- [ ] Observe provider-timeout/error telemetry through the normal canary
+  windows; keep provider-specific rollback controls.
 
 - **Related findings:** AUD-015.
 - **Files likely to change:** `packages/email/src/gmail/client.ts`; gateway `clients/meta-graph.ts`; dashboard OAuth/internal fetch helpers; shared tests/config.
@@ -744,6 +789,13 @@ now requires the internal secret. Remaining (separate PR): the failed-job triage
 runbook. It is blocked on the P1/P4 idempotent-replay dependency — `workers/failure.ts` is
 log-only, and a documented replay path is unsafe until mutating/sending jobs are idempotent on
 retry, so the "safe documented recovery path" half of the acceptance criterion is not yet met.
+The 2026-07-19 production verifier was corrected to authenticate its detailed
+queue request. It identified 11 historical inbound failures from the already-
+resolved `escalated_at` migration gap and 7 older AI-summary parse failures;
+all were idle for more than 24 hours with no active/waiting work. Their sanitized
+root-cause evidence was captured and the stale BullMQ records were removed. The
+authenticated queue check and full production verifier now pass with zero
+failed jobs.
 
 - **Related findings:** AUD-017.
 - **Files likely to change:** `apps/gateway/src/maintenance/queue-health.ts`, `workers/failure.ts`, health routes, runbooks, alert verification scripts.
@@ -758,8 +810,9 @@ retry, so the "safe documented recovery path" half of the acceptance criterion i
 
 ### P7-01 — Replace optimistic “Sent” with committed/failed/partial/unknown states
 
-**Status (2026-07-19): Local implementation complete; deployment spot-check
-pending.** The reviewed-plan API now returns the durable execution ID plus an
+**Status (2026-07-19): Deployed; authenticated outcome spot-checks pending.**
+Commit `54d82bbb` is live on the canonical Vercel dashboard and both Railway
+gateway services. The reviewed-plan API now returns the durable execution ID plus an
 explicit presentation outcome derived from the server's per-action truth.
 `partial` distinguishes mixed committed/failed actions in the UI while mapping
 to the ledger's existing terminal `failed` state; any ambiguous action or
@@ -793,8 +846,10 @@ for unknown provider outcomes.
 
 **Still required for rollout completion:**
 
-- [ ] Deploy the dashboard/API change and spot-check committed, known-failure,
-  and unknown recovery presentation in the normal canary environment.
+- [x] Deploy the dashboard/API change and pass production dashboard, database,
+  Redis, worker, queue, retired-route, and Photon webhook verification.
+- [ ] Spot-check committed, known-failure, and unknown recovery presentation in
+  an authenticated canary session.
 
 - **Related findings:** AUD-003, AUD-005, AUD-012.
 - **Files likely to change:** `useActionPlanReviewState.ts`, `useConversationAgentFlow.ts`, `conversation-agent-requests.ts`, plan card/body components, agent API response contracts.
@@ -955,7 +1010,10 @@ These can proceed while the durable-execution design is reviewed, provided they 
   `20260714000000_add_outbound_send_claims` was applied successfully to the
   isolated local test database and confirmed applied in production on
   2026-07-13.**
-- Durable Stripe event processing (P4-02).
+- Durable Stripe event processing (P4-02). **Migration
+  `20260720000000_add_stripe_webhook_events` was rebuilt successfully in the
+  isolated test database and applied to production before the application
+  deployment on 2026-07-19.**
 - Operator inbox/event persistence (P4-03). **Migration
   `20260715020000_add_operator_events` is applied in production. Telegram is
   enabled on both gateway services for its canary; iMessage remains off.**
@@ -1002,10 +1060,12 @@ until the audit includes representative dashboard and gateway executions.
 rollout gates above. Previously merged work includes P4-04 (verified already complete), P6-01
 (PR #24), the Gmail slice of P4-06 (PR #25), and both P6-02 slices — queue-health monitoring
 (PR #26) and health-diagnostics auth (PR #27). See each item's Status line for detail.
-P7-01's local implementation is complete. The only remaining pure-code follow-up
-is the P6-02 failed-job replay runbook, which remains gated by P1/P4 idempotency.
-**P4-06's repository-wide deadline audit and local implementation are complete
-as of 2026-07-19; deployment observation remains.**
+P7-01 and P4-06 are deployed; their remaining work is authenticated presentation
+checking and provider telemetry observation. P4-02's durable Stripe event
+implementation and rollout audit are complete locally, and its additive
+migration is applied in production; application deployment and signed-event
+canary are next. The P6-02 failed-job replay runbook remains gated by P1/P4
+idempotency.
 
 Next:
 
@@ -1039,6 +1099,9 @@ Next:
    audit on 2026-07-19 contains four first-claim committed events, delivered
    replies, and no blockers. The latest one-hour required-traffic audit contains
    zero events and therefore does not advance the pending-plan gate.
-   Next: complete pending-plan coverage in the Telegram observation window, then
-   canary iMessage. Do not broaden natural-language
+   A reversible pending-plan card was staged on 2026-07-19; complete its
+   Telegram `no` reply and required-channel audit, then canary iMessage. Do not broaden natural-language
    ticket sends until that rollout and P4-01's are complete.
+9. P4-02's additive migration is applied. Deploy the dashboard build, replay a
+   signed Stripe test event, and require a clean completed event
+   with `npm run audit:stripe-webhooks -- --hours=1 --strict --require-completed`.

@@ -1,17 +1,19 @@
 import { NextResponse } from 'next/server'
-import { db } from '@shopkeeper/db'
 import {
   SUBSCRIPTION_STATUSES,
   type SubscriptionPlan,
   type SubscriptionStatus,
 } from '@shopkeeper/analytics'
 import stripe from '@/lib/billing/stripe'
+import {
+  claimStripeWebhookEvent,
+  failStripeWebhookEvent,
+  processClaimedStripeWebhookEvent,
+} from '@/lib/billing/stripe-webhook-events'
 import { getBillingPriceIds } from '@/lib/env'
+import logger from '@/lib/server/logger'
 import { captureSubscriptionStatusChanged } from '@/lib/server/product-analytics'
-import { getRedis } from '@/lib/server/redis'
 import type Stripe from 'stripe'
-
-const STRIPE_EVENT_TTL_SECONDS = 60 * 60 * 24 * 7
 
 function analyticsSubscriptionStatus(status: string | null): SubscriptionStatus | null {
   if (status === null) return 'none'
@@ -64,99 +66,49 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
 
+  let claimed
   try {
-    const claimed = await getRedis().set(`stripe:event:${event.id}`, '1', {
-      nx: true,
-      ex: STRIPE_EVENT_TTL_SECONDS,
+    claimed = await claimStripeWebhookEvent(event)
+  } catch (error) {
+    logger.error({ err: error, stripeEventId: event.id }, '[StripeWebhook] Durable claim failed')
+    return NextResponse.json({ received: false, retry: true }, { status: 500 })
+  }
+
+  if (claimed.state === 'completed') {
+    return NextResponse.json({ received: true, duplicate: true })
+  }
+  if (claimed.state === 'processing') {
+    return NextResponse.json({ received: false, retry: true }, { status: 503 })
+  }
+
+  let processed
+  try {
+    processed = await processClaimedStripeWebhookEvent(event, claimed.claim)
+  } catch (error) {
+    await failStripeWebhookEvent(event.id, claimed.claim.claimToken, error).catch((failureError) => {
+      logger.error(
+        { err: failureError, stripeEventId: event.id },
+        '[StripeWebhook] Failed to record processing failure',
+      )
     })
-    if (claimed === null) {
-      return NextResponse.json({ received: true, duplicate: true })
-    }
-  } catch {
-    // Redis unavailable — fall through. All event handlers below are idempotent.
+    logger.error({ err: error, stripeEventId: event.id }, '[StripeWebhook] Processing failed')
+    return NextResponse.json({ received: false, retry: true }, { status: 500 })
   }
 
-  switch (event.type) {
-    case 'customer.subscription.created':
-    case 'customer.subscription.updated':
-    case 'customer.subscription.trial_will_end': {
-      const sub = event.data.object as Stripe.Subscription
-      const customerId = typeof sub.customer === 'string' ? sub.customer : sub.customer.id
-      const organization = await db.organization.findUnique({
-        where: { stripeCustomerId: customerId },
-        select: { id: true, stripeStatus: true },
-      })
-      if (!organization) break
-      const priceId = sub.items.data[0]?.price.id ?? null
-      await db.organization.update({
-        where: { id: organization.id },
-        data: {
-          stripeSubscriptionId: sub.id,
-          stripeStatus: sub.status,
-          stripePriceId: priceId,
-          trialEndsAt: sub.trial_end ? new Date(sub.trial_end * 1000) : null,
-        },
-      })
-      await captureCommittedSubscriptionTransition({
-        previousStatus: organization.stripeStatus,
-        newStatus: sub.status,
-        planPriceId: priceId,
-        organizationId: organization.id,
-        stripeEventId: event.id,
-      })
-      break
-    }
-    case 'customer.subscription.deleted': {
-      const sub = event.data.object as Stripe.Subscription
-      const customerId = typeof sub.customer === 'string' ? sub.customer : sub.customer.id
-      const organization = await db.organization.findUnique({
-        where: { stripeCustomerId: customerId },
-        select: { id: true, stripePriceId: true, stripeStatus: true },
-      })
-      if (!organization) break
-      await db.organization.update({
-        where: { id: organization.id },
-        data: {
-          stripeSubscriptionId: null,
-          stripeStatus: 'canceled',
-          stripePriceId: null,
-          trialEndsAt: null,
-        },
-      })
-      await captureCommittedSubscriptionTransition({
-        previousStatus: organization.stripeStatus,
-        newStatus: 'canceled',
-        planPriceId: organization.stripePriceId,
-        organizationId: organization.id,
-        stripeEventId: event.id,
-      })
-      break
-    }
-    case 'invoice.payment_failed': {
-      const invoice = event.data.object as Stripe.Invoice
-      const customerId = typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id
-      if (!customerId) break
-      const organization = await db.organization.findUnique({
-        where: { stripeCustomerId: customerId },
-        select: { id: true, stripePriceId: true, stripeStatus: true },
-      })
-      if (!organization || organization.stripeStatus === 'canceled') break
-      await db.organization.update({
-        where: { id: organization.id },
-        data: { stripeStatus: 'past_due' },
-      })
-      await captureCommittedSubscriptionTransition({
-        previousStatus: organization.stripeStatus,
-        newStatus: 'past_due',
-        planPriceId: organization.stripePriceId,
-        organizationId: organization.id,
-        stripeEventId: event.id,
-      })
-      break
-    }
-    default:
-      break
+  if (processed.transition) {
+    await captureCommittedSubscriptionTransition({
+      ...processed.transition,
+      stripeEventId: event.id,
+    }).catch((error) => {
+      logger.warn(
+        { err: error, stripeEventId: event.id },
+        '[StripeWebhook] Post-commit analytics capture failed',
+      )
+    })
   }
 
-  return NextResponse.json({ received: true })
+  return NextResponse.json({
+    received: true,
+    ...(processed.ignoredAsStale ? { stale: true } : {}),
+  })
 }
