@@ -1,8 +1,8 @@
 "use client"
 
-import { useReducer, useState } from "react"
+import { useEffect, useReducer, useRef, useState } from "react"
 import { planReplyText } from "@shopkeeper/agent/plan-preview"
-import type { AgentPlan, AgentTurn, RawToolCall, Ticket } from "@/types"
+import type { AgentPlan, AgentTurn, PlanExecutionOutcome, RawToolCall, Ticket } from "@/types"
 import {
   askAgentPrivately,
   executeApprovedAgentPlan,
@@ -27,8 +27,7 @@ interface UseConversationAgentFlowProps {
   onNoteModeReset: () => void
 }
 
-// How long the approved plan card lingers on its "Sent ✓" confirmation before it
-// slides away. The run fires immediately; this only delays dismissing the card.
+// How long a server-confirmed plan card lingers before it slides away.
 const SENT_CARD_LINGER_MS = 500
 
 function createAgentTurn(turn: Omit<AgentTurn, "id">): AgentTurn {
@@ -79,6 +78,17 @@ interface PendingPlanState {
   plan: AgentPlan | null
 }
 
+interface PlanExecutionState {
+  ticketId: string
+  planKey: string
+  outcome: PlanExecutionOutcome
+}
+
+function planStateKey(plan: AgentPlan): string {
+  return plan.planId
+    ?? `${plan.instruction}:${plan.rawToolCalls.map(toolCall => toolCall.id).join(",")}`
+}
+
 type PendingPlanAction = { type: "set"; ticketId: string; plan: AgentPlan | null }
 
 function pendingPlanReducer(_state: PendingPlanState, action: PendingPlanAction): PendingPlanState {
@@ -112,28 +122,54 @@ export function useConversationAgentFlow({
   const [isPlanLoading, setIsPlanLoading] = useState(false)
   const [isPlanExecuting, setIsPlanExecuting] = useState(false)
   const [isRegenerating, setIsRegenerating] = useState(false)
+  const [planExecutionState, setPlanExecutionState] = useState<PlanExecutionState | null>(null)
+  const successDismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const { agentInstruction, isAgentMode } = getAgentCommandState(replyText, agentName, viewTab)
   const pendingPlan = pendingPlanState.ticketId === ticket.id && pendingPlanState.hasOverride
     ? pendingPlanState.plan
     : initialPlan ?? null
+  const planExecutionOutcome = pendingPlan
+    && planExecutionState?.ticketId === ticket.id
+    && planExecutionState.planKey === planStateKey(pendingPlan)
+    ? planExecutionState.outcome
+    : null
   const setPendingPlan = (plan: AgentPlan | null) => {
+    if (successDismissTimer.current) {
+      clearTimeout(successDismissTimer.current)
+      successDismissTimer.current = null
+    }
     dispatchPendingPlan({ type: "set", ticketId: ticket.id, plan })
+    setPlanExecutionState(null)
   }
 
-  const executeApprovedPlan = async (instruction: string, approvedToolCalls: RawToolCall[]) => {
-    // Keep the card mounted briefly so it shows its "Sent ✓" confirmation before
-    // dismissing; the run itself starts immediately below.
-    setTimeout(() => setPendingPlan(null), SENT_CARD_LINGER_MS)
+  useEffect(() => () => {
+    if (successDismissTimer.current) clearTimeout(successDismissTimer.current)
+  }, [])
+
+  const executeApprovedPlan = async (plan: AgentPlan, approvedToolCalls: RawToolCall[]) => {
+    const instruction = plan.instruction
+    const executionIdentity = {
+      ticketId: ticket.id,
+      planKey: planStateKey(plan),
+    }
+    // Pin the reviewed plan locally while the server consumes its cache. This
+    // preserves failure/partial/unknown recovery context across SWR refreshes.
+    setPendingPlan(plan)
     setPendingInstruction(instruction)
     setIsPlanExecuting(true)
     onAgentRunningChange(true)
 
     try {
       const result = await executeApprovedAgentPlan(ticket.id, instruction, approvedToolCalls)
+      setPlanExecutionState({ ...executionIdentity, outcome: result.outcome })
       const turn = createAgentTurn(result.turn)
       if (result.ok) {
         onAgentComplete(turn)
+        successDismissTimer.current = setTimeout(() => {
+          successDismissTimer.current = null
+          setPendingPlan(null)
+        }, SENT_CARD_LINGER_MS)
       } else {
         onAgentTurnAdd(turn)
       }
@@ -207,11 +243,11 @@ export function useConversationAgentFlow({
 
   const handlePlanApprove = async (approvedToolCalls: RawToolCall[]) => {
     if (!pendingPlan) return
-    await executeApprovedPlan(pendingPlan.instruction, approvedToolCalls)
+    await executeApprovedPlan(pendingPlan, approvedToolCalls)
   }
 
   const handlePlanDismiss = () => {
-    if (pendingPlan?.planId) {
+    if (!planExecutionOutcome && pendingPlan?.planId) {
       void captureClientProductEvent({
         event: "agent_plan_decided",
         decision: "dismissed",
@@ -287,6 +323,7 @@ export function useConversationAgentFlow({
     isRegenerating,
     pendingInstruction,
     pendingPlan,
+    planExecutionOutcome,
     requestDraftReply,
     requestRefreshDraft,
   }

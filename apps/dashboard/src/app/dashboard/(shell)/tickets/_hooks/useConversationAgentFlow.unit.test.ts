@@ -1,11 +1,40 @@
-import { describe, expect, it } from "vitest"
+/**
+ * @vitest-environment jsdom
+ */
+
+import React, { act } from "react"
+import { createRoot, type Root } from "react-dom/client"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import type { AgentRequestResult } from "./conversation-agent-requests"
+
+const requestMocks = vi.hoisted(() => ({
+  executeApprovedAgentPlan: vi.fn(),
+}))
+
+vi.mock("./conversation-agent-requests", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./conversation-agent-requests")>(),
+  executeApprovedAgentPlan: requestMocks.executeApprovedAgentPlan,
+}))
+
 import {
   getAgentCommandState,
   planRequiresApproval,
   resolvePendingPlan,
   shouldUsePrivateComposerAsk,
+  useConversationAgentFlow,
 } from "./useConversationAgentFlow"
-import type { AgentPlan } from "@/types"
+import type { AgentPlan, Ticket } from "@/types"
+
+let root: Root | null = null
+let container: HTMLDivElement | null = null
+
+afterEach(() => {
+  act(() => root?.unmount())
+  root = null
+  container?.remove()
+  container = null
+  vi.clearAllMocks()
+})
 
 describe("getAgentCommandState", () => {
   it("detects agent mode in chat and notes", () => {
@@ -100,5 +129,128 @@ describe("planRequiresApproval", () => {
     }
 
     expect(planRequiresApproval(plan)).toBe(false)
+  })
+})
+
+describe("useConversationAgentFlow execution state", () => {
+  it("pins non-success recovery context and scopes it to the current ticket", async () => {
+    const plan: AgentPlan = {
+      planId: "plan-1",
+      instruction: "refund and reply",
+      rawToolCalls: [{ id: "refund-1", name: "create_refund", input: {} }],
+      steps: [{
+        id: "refund-1",
+        tool: "create_refund",
+        label: "Refund order",
+        description: "Refund the order",
+        category: "action",
+        enabled: true,
+      }],
+    }
+    const secondPlan: AgentPlan = {
+      ...plan,
+      planId: "plan-2",
+      instruction: "reply only",
+    }
+    const partialResult = {
+      ok: false,
+      executionId: "execution-1",
+      outcome: "partial",
+      turn: {
+        instruction: plan.instruction,
+        actions: [{ tool: "create_refund", result: "Refunded", status: "success" }],
+        summary: "Partially completed",
+        error: "Some plan steps failed.",
+      },
+    } satisfies AgentRequestResult
+    requestMocks.executeApprovedAgentPlan.mockResolvedValue(partialResult)
+
+    const callbacks = {
+      onReplyChange: vi.fn(),
+      onSend: vi.fn(),
+      onAgentTurnAdd: vi.fn(),
+      onAgentRunningChange: vi.fn(),
+      onAgentComplete: vi.fn(),
+      onNoteModeReset: vi.fn(),
+    }
+    const current: { value: ReturnType<typeof useConversationAgentFlow> | null } = { value: null }
+    const capture = (value: ReturnType<typeof useConversationAgentFlow>) => {
+      current.value = value
+    }
+    function Harness({
+      ticket,
+      initialPlan,
+      onValue,
+    }: {
+      ticket: Ticket
+      initialPlan: AgentPlan | null
+      onValue: (value: ReturnType<typeof useConversationAgentFlow>) => void
+    }) {
+      const value = useConversationAgentFlow({
+        ticket,
+        initialPlan,
+        viewTab: "chat",
+        replyText: "",
+        agentName: "Shopkeeper",
+        ...callbacks,
+      })
+      React.useEffect(() => onValue(value), [onValue, value])
+      return null
+    }
+    const firstTicket = { id: "ticket-1" } as Ticket
+    const secondTicket = { id: "ticket-2" } as Ticket
+    const renderHarness = (ticket: Ticket, initialPlan: AgentPlan | null) => {
+      act(() => {
+        root?.render(React.createElement(Harness, { ticket, initialPlan, onValue: capture }))
+      })
+    }
+
+    container = document.createElement("div")
+    document.body.appendChild(container)
+    root = createRoot(container)
+    renderHarness(firstTicket, plan)
+
+    await act(async () => {
+      await current.value?.handlePlanApprove(plan.rawToolCalls)
+    })
+
+    expect(current.value?.planExecutionOutcome).toBe("partial")
+    expect(current.value?.pendingPlan).toEqual(plan)
+    expect(callbacks.onAgentTurnAdd).toHaveBeenCalledTimes(1)
+
+    renderHarness(secondTicket, secondPlan)
+    expect(current.value?.planExecutionOutcome).toBeNull()
+    expect(current.value?.pendingPlan).toEqual(secondPlan)
+
+    renderHarness(firstTicket, null)
+    expect(current.value?.planExecutionOutcome).toBe("partial")
+    expect(current.value?.pendingPlan).toEqual(plan)
+
+    act(() => current.value?.handlePlanDismiss())
+    expect(current.value?.pendingPlan).toBeNull()
+
+    requestMocks.executeApprovedAgentPlan.mockResolvedValue({
+      ok: true,
+      executionId: "execution-2",
+      outcome: "committed",
+      turn: {
+        instruction: secondPlan.instruction,
+        actions: [{ tool: "create_refund", result: "Refunded", status: "success" }],
+        summary: "Completed",
+        error: null,
+      },
+    } satisfies AgentRequestResult)
+    renderHarness(secondTicket, secondPlan)
+
+    await act(async () => {
+      await current.value?.handlePlanApprove(secondPlan.rawToolCalls)
+    })
+    expect(current.value?.planExecutionOutcome).toBe("committed")
+    expect(current.value?.pendingPlan).toEqual(secondPlan)
+
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 550))
+    })
+    expect(current.value?.pendingPlan).toBeNull()
   })
 })

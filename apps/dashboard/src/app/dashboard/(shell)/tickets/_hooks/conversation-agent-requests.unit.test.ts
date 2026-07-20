@@ -17,6 +17,7 @@ describe("conversation agent requests", () => {
       new Response(JSON.stringify({
         summary: "Done",
         actionsPerformed: [{ tool: "send_reply", result: "Sent reply" }],
+        execution: { id: "execution-1", status: "committed" },
       }), { status: 200 }),
     ))
 
@@ -24,12 +25,60 @@ describe("conversation agent requests", () => {
 
     expect(result).toEqual({
       ok: true,
+      executionId: "execution-1",
+      outcome: "committed",
       turn: {
         instruction: "reply to customer",
         actions: [{ tool: "send_reply", result: "Sent reply" }],
         summary: "Done",
         error: null,
       },
+    })
+  })
+
+  it("preserves partial and unknown execution truth for recovery", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        summary: "Partially completed",
+        actionsPerformed: [
+          { tool: "create_refund", result: "Refunded", status: "success" },
+          { tool: "send_reply", result: "Send failed", status: "error" },
+        ],
+        execution: { id: "execution-partial", status: "partial" },
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: "Agent failed.",
+        execution: { id: "execution-unknown", status: "unknown" },
+      }), { status: 502 }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const partial = await executeApprovedAgentPlan("thread-1", "refund and reply", [])
+    const unknown = await executeApprovedAgentPlan("thread-1", "send reply", [])
+
+    expect(partial).toMatchObject({
+      ok: false,
+      executionId: "execution-partial",
+      outcome: "partial",
+      turn: { error: expect.stringContaining("Some plan steps completed") },
+    })
+    expect(unknown).toMatchObject({
+      ok: false,
+      executionId: "execution-unknown",
+      outcome: "unknown",
+      turn: { error: "Agent failed." },
+    })
+  })
+
+  it("treats an interrupted request as unknown instead of sent", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("connection lost")))
+
+    const result = await executeApprovedAgentPlan("thread-1", "reply to customer", [])
+
+    expect(result).toMatchObject({
+      ok: false,
+      executionId: null,
+      outcome: "unknown",
+      turn: { error: "Network error — please try again." },
     })
   })
 

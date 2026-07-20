@@ -130,6 +130,12 @@ describe('POST /api/agent', () => {
       instruction: 'Handle this',
       approvedToolCalls,
     }), expect.anything());
+    await expect(res.json()).resolves.toMatchObject({
+      execution: {
+        id: expect.any(String),
+        status: 'committed',
+      },
+    });
 
     const updatedThread = await db.thread.findUnique({ where: { id: thread.id } });
     expect(updatedThread?.cachedPlan).toBeNull();

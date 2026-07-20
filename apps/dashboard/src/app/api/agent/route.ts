@@ -106,6 +106,9 @@ export const POST = withOrgRoute(
       instructionHash,
     }, "[agent] result");
 
-    return NextResponse.json(result);
+    return NextResponse.json({
+      ...result,
+      execution: executed.execution,
+    });
   },
 );

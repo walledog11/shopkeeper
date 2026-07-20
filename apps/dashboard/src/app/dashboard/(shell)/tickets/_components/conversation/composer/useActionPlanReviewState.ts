@@ -1,9 +1,9 @@
 "use client"
 
-import { useReducer } from "react"
+import { useReducer, useRef } from "react"
 import { planReplyText, planWarningTiers } from "@shopkeeper/agent/plan-preview"
 import { TOOL_CATEGORIES } from "@shopkeeper/agent/tools"
-import type { AgentPlan, RawToolCall } from "@/types"
+import type { AgentPlan, PlanExecutionOutcome, RawToolCall } from "@/types"
 import { getPlanCollapsedPreview } from "./plan-step-display"
 import { planRecipientDisplay } from "./plan-recipient-display"
 
@@ -23,14 +23,14 @@ interface ActionPlanReviewState {
   compactHeader: boolean
   confirming: boolean
   warningsReviewed: boolean
-  sent: boolean
+  submitting: boolean
 }
 
 type ActionPlanReviewAction =
   | { type: "toggleStep"; id: string }
   | { type: "setConfirming"; value: boolean }
   | { type: "setWarningsReviewed"; value: boolean }
-  | { type: "sent" }
+  | { type: "submit" }
   | { type: "collapse" }
   | { type: "expand" }
   | { type: "bodyExpanded" }
@@ -55,8 +55,8 @@ function reducer(
       return { ...state, confirming: action.value }
     case "setWarningsReviewed":
       return { ...state, warningsReviewed: action.value }
-    case "sent":
-      return { ...state, sent: true }
+    case "submit":
+      return { ...state, submitting: true }
     case "collapse":
       return { ...state, collapsed: true, compactHeader: true }
     case "expand":
@@ -69,14 +69,16 @@ function reducer(
 export function useActionPlanReviewState({
   agentName,
   customerName,
+  executionOutcome,
   isExecuting,
   onApprove,
   plan,
 }: {
   agentName: string
   customerName?: string | null
+  executionOutcome: PlanExecutionOutcome | null
   isExecuting: boolean
-  onApprove: (approvedToolCalls: RawToolCall[]) => void
+  onApprove: (approvedToolCalls: RawToolCall[]) => Promise<void>
   plan: AgentPlan
 }) {
   const [state, dispatch] = useReducer(reducer, undefined, () => ({
@@ -85,8 +87,9 @@ export function useActionPlanReviewState({
     compactHeader: false,
     confirming: false,
     warningsReviewed: false,
-    sent: false,
+    submitting: false,
   }))
+  const submissionStarted = useRef(false)
 
   const steps = plan.steps.map(step => ({
     ...step,
@@ -105,11 +108,12 @@ export function useActionPlanReviewState({
   const consequential = steps.some(step => step.enabled && TOOL_CATEGORIES[step.tool] === "action")
   const enabledActions = shopifyActionSteps.some(step => step.enabled)
   const inReviewFlow = needsWarningReview || state.confirming
+  const isRunning = !executionOutcome && (isExecuting || state.submitting)
 
   const headerLabel = showReplyHero
     ? `${agentName} drafted a reply${recipient.headerTo ? ` to ${recipient.headerTo}` : ""}`
     : `${agentName} proposes`
-  const primaryLabel = isExecuting
+  const primaryLabel = isRunning || executionOutcome
     ? null
     : state.confirming
       ? (showReplyHero ? "Confirm & send" : "Confirm")
@@ -127,14 +131,16 @@ export function useActionPlanReviewState({
     dispatch({ type: "toggleStep", id })
   }
 
-  const runApprovedSteps = () => {
+  const runApprovedSteps = async () => {
+    if (submissionStarted.current) return
+    submissionStarted.current = true
     const enabledIds = new Set(steps.flatMap(step => step.enabled ? [step.id] : []))
     const stepIds = new Set(steps.map(step => step.id))
     const approved = plan.rawToolCalls.filter(toolCall => (
       !stepIds.has(toolCall.id) || enabledIds.has(toolCall.id)
     ))
-    dispatch({ type: "sent" })
-    onApprove(approved)
+    dispatch({ type: "submit" })
+    await onApprove(approved)
   }
 
   const onApproveClick = () => {
@@ -146,7 +152,7 @@ export function useActionPlanReviewState({
       dispatch({ type: "setConfirming", value: true })
       return
     }
-    runApprovedSteps()
+    void runApprovedSteps()
   }
 
   const onCancelReview = () => {
@@ -168,6 +174,7 @@ export function useActionPlanReviewState({
     headerLabel,
     informationalWarnings,
     inReviewFlow,
+    isRunning,
     onApproveClick,
     onCancelReview,
     primaryLabel,

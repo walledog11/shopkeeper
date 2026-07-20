@@ -10,8 +10,9 @@ import { classifyHomePlan, type HomePlanClassification, type HomePlanKind } from
 import { shouldBlockTrustedSendActions, shouldSkipAutoPlan } from "./sender-trust.js";
 import { resolveAutoExecuteMode } from "./settings.js";
 import { TOOL_CATEGORIES } from "./tools/registry/index.js";
+import { planExecutionOutcomeForResult } from "./execution-outcome.js";
 import type { AgentResult } from "./agent-context.js";
-import type { AgentPlan, OrgSettings, RawToolCall } from "./types.js";
+import type { AgentPlan, OrgSettings, PlanExecutionOutcome, RawToolCall } from "./types.js";
 import {
   claimCurrentPlanExecution,
   completePlanExecution,
@@ -53,6 +54,10 @@ interface CurrentCachedPlan {
 interface ExecutedCachedPlan extends CurrentCachedPlan {
   plan: AgentPlan;
   approvedToolCalls: RawToolCall[];
+  execution: {
+    id: string | null;
+    status: PlanExecutionOutcome;
+  };
   result: AgentResult;
 }
 
@@ -132,12 +137,8 @@ function validateExpectedIdentity(
 }
 
 function terminalStatusForResult(result: AgentResult): "committed" | "failed" | "unknown" {
-  if (result.actionsPerformed.some((action) => action.status === "unknown")) {
-    return "unknown";
-  }
-  return result.actionsPerformed.some((action) => (
-    action.status === "error" || action.status === "policy_block"
-  )) ? "failed" : "committed";
+  const outcome = planExecutionOutcomeForResult(result);
+  return outcome === "partial" ? "failed" : outcome;
 }
 
 function executionError(error: unknown): string {
@@ -354,6 +355,10 @@ export async function executeCurrentCachedHomePlan(params: {
     ...current,
     plan: current.plan,
     approvedToolCalls,
+    execution: {
+      id: executionId ?? null,
+      status: planExecutionOutcomeForResult(result),
+    },
     result,
   };
 }

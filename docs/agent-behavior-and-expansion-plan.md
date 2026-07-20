@@ -59,7 +59,7 @@ are shipping dependencies, not suggestions:
 Until a required gate lands, a phase may ship only the read-only or copy-only
 portion that does not widen the unsafe action surface.
 
-**Cleanup gate status (2026-07-13):** P1-01 through P1-03 and P2-01 are
+**Cleanup gate status (2026-07-19):** P1-01 through P1-03 and P2-01 are
 implementation-complete. Reviewed plans now have durable one-winner claims,
 stable cross-device identity/resolution, and stale-plan rejection. Their
 production migration and initial shadow deployment are complete; the first
@@ -75,10 +75,14 @@ remain open. P4-01 outbound-email claims and P5-01 tenant ownership are deployed
 with their required migration and deterministic/cross-tenant coverage; provider
 canary and production mismatch observation remain open. P4-03 durable operator
 events are implemented for Telegram and iMessage behind their per-channel flags,
-with the recovery sweep; their production canary and the `unknown`-event runbook
-remain open. **P5-04 landed on 2026-07-16** (escalation is an orthogonal
-`escalated_at` flag; the additive migration ships with it), which unblocks A1's
-active-ticket semantics. P6 dependencies remain outstanding.
+with the recovery sweep and `unknown`-event runbook complete. Telegram's strict
+canary is clean; representative pending-plan traffic and the iMessage canary
+remain open. P4-06's repository-wide deadline implementation is locally complete
+and awaits deployment observation. **P5-04 landed on 2026-07-16** (escalation is
+an orthogonal `escalated_at` flag; the additive migration ships with it), which
+unblocks A1's active-ticket semantics. P6-02 queue monitoring and protected
+diagnostics are complete; the safe failed-job replay runbook remains blocked on
+idempotent replay.
 
 ---
 

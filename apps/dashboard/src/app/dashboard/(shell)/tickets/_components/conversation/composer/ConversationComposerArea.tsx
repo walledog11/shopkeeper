@@ -7,7 +7,7 @@ import { useMediaQuery } from "@/hooks/useMediaQuery"
 import Composer from "./Composer"
 import MobileFloatingReplyComposer from "./MobileFloatingReplyComposer"
 import { PlanReviewSurface } from "./PlanReviewSurface"
-import type { AgentPlan, RawToolCall, Ticket } from "@/types"
+import type { AgentPlan, PlanExecutionOutcome, RawToolCall, Ticket } from "@/types"
 
 interface Props {
   agentName: string
@@ -20,7 +20,7 @@ interface Props {
   noteCount: number
   onChange: (text: string) => void
   onClearAgentMode: () => void
-  onPlanApprove: (approvedToolCalls: RawToolCall[]) => void
+  onPlanApprove: (approvedToolCalls: RawToolCall[]) => Promise<void>
   onPlanEdit?: () => void
   onPlanDismiss?: () => void
   onFocusShopifyLink?: () => void
@@ -29,6 +29,7 @@ interface Props {
   onViewTabChange: (tab: "chat" | "notes") => void
   onAnswered: (result?: { saveToKb: boolean }) => void
   pendingPlan: AgentPlan | null
+  planExecutionOutcome: PlanExecutionOutcome | null
   threadId: string
   composer: {
     customerName: string
@@ -69,6 +70,7 @@ export default function ConversationComposerArea({
   onViewTabChange,
   onAnswered,
   pendingPlan,
+  planExecutionOutcome,
   threadId,
   composer,
   viewTab,
@@ -160,10 +162,12 @@ export default function ConversationComposerArea({
                 layout="mobile-sticky"
                 onAnswered={onAnswered}
                 onApprove={onPlanApprove}
+                onDismiss={onPlanDismiss}
                 onEdit={handleMobilePlanEdit}
                 onFocusShopifyLink={onFocusShopifyLink}
                 onRegenerate={onPlanRegenerate}
                 pendingPlan={pendingPlan}
+                executionOutcome={planExecutionOutcome}
                 question={merchantQuestion}
                 threadId={threadId}
               />
@@ -188,10 +192,12 @@ export default function ConversationComposerArea({
               isRegenerating={isRegenerating}
               onAnswered={onAnswered}
               onApprove={onPlanApprove}
+              onDismiss={onPlanDismiss}
               onEdit={onPlanEdit}
               onFocusShopifyLink={onFocusShopifyLink}
               onRegenerate={onPlanRegenerate}
               pendingPlan={pendingPlan}
+              executionOutcome={planExecutionOutcome}
               question={merchantQuestion}
               threadId={threadId}
             />

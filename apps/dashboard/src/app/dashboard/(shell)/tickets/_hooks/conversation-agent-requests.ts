@@ -1,19 +1,91 @@
 import { ApiRequestError, requestJson } from "@/lib/api/fetcher"
+import { planExecutionOutcomeForActions } from "@shopkeeper/agent/execution-outcome"
 import type { ActionEntry } from "@/lib/agent/runner"
-import type { AgentPlan, AgentTurn, RawToolCall } from "@/types"
+import type { AgentPlan, AgentTurn, PlanExecutionOutcome, RawToolCall } from "@/types"
 
 const JSON_HEADERS = { "Content-Type": "application/json" } as const
 const NETWORK_ERROR = "Network error — please try again."
 
 interface AgentActionPayload {
   actionsPerformed?: ActionEntry[]
+  execution?: {
+    id?: unknown
+    status?: unknown
+  }
   summary?: string | null
   error?: string
 }
 
 export type AgentRequestResult =
+  | { ok: true; executionId: string | null; outcome: "committed"; turn: Omit<AgentTurn, "id"> }
+  | { ok: false; executionId: string | null; outcome: Exclude<PlanExecutionOutcome, "committed">; turn: Omit<AgentTurn, "id"> }
+
+type AgentTurnRequestResult =
   | { ok: true; turn: Omit<AgentTurn, "id"> }
   | { ok: false; turn: Omit<AgentTurn, "id"> }
+
+const PLAN_EXECUTION_OUTCOMES = new Set<PlanExecutionOutcome>([
+  "committed",
+  "failed",
+  "partial",
+  "unknown",
+])
+
+function executionId(payload: AgentActionPayload): string | null {
+  return typeof payload.execution?.id === "string" ? payload.execution.id : null
+}
+
+function payloadExecutionOutcome(
+  payload: AgentActionPayload,
+  fallback: PlanExecutionOutcome,
+): PlanExecutionOutcome {
+  const serverStatus = payload.execution?.status
+  if (
+    typeof serverStatus === "string"
+    && PLAN_EXECUTION_OUTCOMES.has(serverStatus as PlanExecutionOutcome)
+  ) {
+    return serverStatus as PlanExecutionOutcome
+  }
+  if (payload.actionsPerformed?.length) {
+    return planExecutionOutcomeForActions(payload.actionsPerformed)
+  }
+  return fallback
+}
+
+function outcomeError(outcome: Exclude<PlanExecutionOutcome, "committed">): string {
+  switch (outcome) {
+    case "failed":
+      return "The plan did not complete. Review the activity before trying again."
+    case "partial":
+      return "Some plan steps completed and others failed. Review the activity before trying again."
+    case "unknown":
+      return "The plan outcome could not be confirmed. Check the activity before trying again."
+  }
+}
+
+function executionResult(
+  instruction: string,
+  payload: AgentActionPayload,
+  fallbackOutcome: PlanExecutionOutcome,
+  error: string | null,
+): AgentRequestResult {
+  const outcome = payloadExecutionOutcome(payload, fallbackOutcome)
+  const id = executionId(payload)
+  if (outcome === "committed") {
+    return {
+      ok: true,
+      executionId: id,
+      outcome,
+      turn: agentTurnFields(instruction, payload, null),
+    }
+  }
+  return {
+    ok: false,
+    executionId: id,
+    outcome,
+    turn: agentTurnFields(instruction, payload, error ?? outcomeError(outcome)),
+  }
+}
 
 function agentTurnFields(
   instruction: string,
@@ -66,23 +138,26 @@ export async function executeApprovedAgentPlan(
       },
       "Agent failed.",
     )
-    return { ok: true, turn: agentTurnFields(instruction, payload, null) }
+    return executionResult(instruction, payload, "committed", null)
   } catch (error) {
     if (error instanceof ApiRequestError) {
       const payload = (error.payload ?? {}) as AgentActionPayload
-      return {
-        ok: false,
-        turn: agentTurnFields(instruction, payload, error.message),
-      }
+      const fallbackOutcome = error.status < 500 ? "failed" : "unknown"
+      return executionResult(instruction, payload, fallbackOutcome, error.message)
     }
-    return { ok: false, turn: networkErrorTurn(instruction) }
+    return {
+      ok: false,
+      executionId: null,
+      outcome: "unknown",
+      turn: networkErrorTurn(instruction),
+    }
   }
 }
 
 export async function askAgentPrivately(
   threadId: string,
   instruction: string,
-): Promise<AgentRequestResult> {
+): Promise<AgentTurnRequestResult> {
   try {
     const payload = await requestJson<AgentActionPayload>(
       "/api/agent/ask",

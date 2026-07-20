@@ -124,6 +124,11 @@ export interface AgentPlan {
   }
 }
 
+// Terminal result exposed to approval surfaces after a reviewed plan runs.
+// `partial` is a presentation-level distinction: the durable ledger records it
+// as failed, while the UI must still say that at least one action committed.
+export type PlanExecutionOutcome = 'committed' | 'failed' | 'partial' | 'unknown'
+
 // Agent turn in the notes tab
 export interface AgentTurn {
   id?: string

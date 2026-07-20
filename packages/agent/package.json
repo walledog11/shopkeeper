@@ -154,6 +154,10 @@
       "types": "./dist/plan-execution.d.ts",
       "default": "./dist/plan-execution.js"
     },
+    "./execution-outcome": {
+      "types": "./dist/execution-outcome.d.ts",
+      "default": "./dist/execution-outcome.js"
+    },
     "./execution-ledger": {
       "types": "./dist/execution-ledger.d.ts",
       "default": "./dist/execution-ledger.js"

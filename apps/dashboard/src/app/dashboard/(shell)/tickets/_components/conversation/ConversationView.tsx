@@ -18,7 +18,7 @@ import { partitionConversationMessages } from "./utils/conversationViewUtils"
 import { useConversationCocoAction } from "./useConversationCocoAction"
 import { useConversationViewportEffects } from "./useConversationViewportEffects"
 import { useVisualKeyboard } from "./useVisualKeyboard"
-import type { Ticket, AgentTurn, AgentPlan, FailedMessage, OrgSettings, Thread } from "@/types"
+import type { Ticket, AgentTurn, AgentPlan, FailedMessage, OrgSettings, PlanExecutionOutcome, Thread } from "@/types"
 
 interface Props {
   ticket: Ticket
@@ -139,6 +139,7 @@ export default function ConversationView({
     isRegenerating,
     pendingInstruction,
     pendingPlan,
+    planExecutionOutcome,
     requestDraftReply,
     requestRefreshDraft,
   } = useConversationAgentFlow({
@@ -301,6 +302,7 @@ export default function ConversationView({
           isPlanLoading,
           isRegenerating,
           pendingPlan,
+          planExecutionOutcome,
         }}
         composerRef={composerRef}
         customer={{
@@ -349,6 +351,7 @@ interface ConversationOpenComposerProps {
     isPlanLoading: boolean
     isRegenerating: boolean
     pendingPlan: AgentPlan | null
+    planExecutionOutcome: PlanExecutionOutcome | null
   }
   composerRef: RefObject<HTMLDivElement | null>
   customer: {
@@ -427,6 +430,7 @@ function ConversationOpenComposer({
       onSend={handlers.handleSend}
       onViewTabChange={handlers.setViewTab}
       pendingPlan={agent.pendingPlan}
+      planExecutionOutcome={agent.planExecutionOutcome}
       composer={{
         customerName: customer.customerName,
         channelType: customer.channelType,

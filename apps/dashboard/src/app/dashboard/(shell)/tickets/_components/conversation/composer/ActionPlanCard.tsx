@@ -1,7 +1,7 @@
 "use client"
 
-import { Check, ChevronUp, Loader2, RefreshCw } from "lucide-react"
-import type { AgentPlan, RawToolCall } from "@/types"
+import { AlertTriangle, Check, ChevronUp, CircleX, Loader2, RefreshCw } from "lucide-react"
+import type { AgentPlan, PlanExecutionOutcome, RawToolCall } from "@/types"
 import { ActionPlanBody } from "./ActionPlanBody"
 import { useActionPlanReviewState } from "./useActionPlanReviewState"
 
@@ -12,10 +12,12 @@ interface Props {
   plan: AgentPlan
   agentName?: string
   customerName?: string | null
+  executionOutcome: PlanExecutionOutcome | null
   isExecuting: boolean
   isRegenerating?: boolean
   layout?: "default" | "mobile-sticky"
-  onApprove: (approvedToolCalls: RawToolCall[]) => void
+  onApprove: (approvedToolCalls: RawToolCall[]) => Promise<void>
+  onDismiss?: () => void
   onEdit?: () => void
   onFocusShopifyLink?: () => void
   onRegenerate?: () => void
@@ -31,7 +33,7 @@ interface ActionPlanCardHeaderProps {
   onRegenerate?: () => void
   status: {
     compactHeader: boolean
-    isExecuting: boolean
+    isLocked: boolean
     isRegenerating: boolean
   }
 }
@@ -70,7 +72,7 @@ function ActionPlanCardHeader({
           {onRegenerate && (
             <button type="button"
               onClick={onRegenerate}
-              disabled={status.isExecuting || status.isRegenerating}
+              disabled={status.isLocked || status.isRegenerating}
               title="Rewrite"
               className="shrink-0 p-1.5 rounded-lg text-faint hover:text-strong hover:bg-foreground/[0.05] transition-colors disabled:opacity-40"
             >
@@ -95,16 +97,17 @@ function ActionPlanCardHeader({
 interface ActionPlanControlsProps {
   onApproveClick: () => void
   onCancelReview: () => void
+  onDismiss?: () => void
   onEdit?: () => void
   primaryLabel: string | null
-  sentLabel: string
+  successLabel: string
   status: {
     enabledCount: number
     hasBlockingWarnings: boolean
     inReviewFlow: boolean
-    isExecuting: boolean
+    executionOutcome: PlanExecutionOutcome | null
+    isRunning: boolean
     primaryNeedsCaution: boolean
-    sent: boolean
     showEditTakeover: boolean
     warningsReviewed: boolean
   }
@@ -113,20 +116,78 @@ interface ActionPlanControlsProps {
 function ActionPlanControls({
   onApproveClick,
   onCancelReview,
+  onDismiss,
   onEdit,
   primaryLabel,
-  sentLabel,
+  successLabel,
   status,
 }: ActionPlanControlsProps) {
+  const recovery = status.executionOutcome && status.executionOutcome !== "committed"
+    ? {
+        failed: {
+          label: "Plan failed",
+          detail: "Nothing was confirmed complete. Review the activity before creating another plan.",
+        },
+        partial: {
+          label: "Plan partially completed",
+          detail: "Some steps completed and others failed. Review the activity before taking another action.",
+        },
+        unknown: {
+          label: "Outcome unconfirmed",
+          detail: "The provider may have accepted an action. Check provider activity before trying again.",
+        },
+      }[status.executionOutcome]
+    : null
+
+  if (recovery) {
+    return (
+      <div
+        className="mt-4 rounded-2xl border border-amber-600/30 bg-amber-600/[0.07] px-4 py-3"
+        data-testid="action-plan-outcome"
+        role={status.executionOutcome === "unknown" ? "alert" : "status"}
+        aria-live={status.executionOutcome === "unknown" ? "assertive" : "polite"}
+      >
+        <div className="flex items-start gap-2.5">
+          {status.executionOutcome === "failed"
+            ? <CircleX className="mt-0.5 size-4 shrink-0 text-red-600" />
+            : <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-700" />
+          }
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-strong">{recovery.label}</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{recovery.detail}</p>
+          </div>
+        </div>
+        {onDismiss && (
+          <button
+            type="button"
+            data-testid="action-plan-dismiss-outcome"
+            onClick={onDismiss}
+            className="mt-3 w-full rounded-xl bg-foreground/[0.06] px-3 py-2 text-sm font-semibold text-strong transition-colors hover:bg-foreground/[0.1]"
+          >
+            Dismiss
+          </button>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="mt-4 flex flex-col gap-2">
+      <p className="sr-only" role="status" aria-live="polite">
+        {status.isRunning
+          ? "Plan execution in progress."
+          : status.executionOutcome === "committed"
+            ? "Plan execution completed successfully."
+            : ""
+        }
+      </p>
       <div className={`flex ${status.showEditTakeover ? "gap-2" : ""}`}>
         <button type="button"
           data-testid="action-plan-run"
           onClick={onApproveClick}
-          disabled={status.isExecuting || status.enabledCount === 0 || status.sent}
+          disabled={status.isRunning || status.enabledCount === 0 || Boolean(status.executionOutcome)}
           className={`${status.showEditTakeover ? "flex-1" : "w-full"} inline-flex items-center justify-center gap-2 py-3 rounded-2xl text-[15px] font-semibold transition active:scale-[0.98] disabled:opacity-40 ${
-            status.sent
+            status.executionOutcome === "committed"
               ? "bg-green-600 text-[#ffffff] disabled:opacity-100"
               : status.inReviewFlow || (status.hasBlockingWarnings && status.warningsReviewed)
                 ? "bg-amber-600 hover:bg-amber-700 text-[#ffffff]"
@@ -135,9 +196,9 @@ function ActionPlanControls({
                   : "bg-foreground text-background hover:bg-foreground/90"
           }`}
         >
-          {status.sent
-            ? <><Check className="size-4 animate-in zoom-in-75 fade-in duration-200" /> {sentLabel}</>
-            : status.isExecuting
+          {status.executionOutcome === "committed"
+            ? <><Check className="size-4 animate-in zoom-in-75 fade-in duration-200" /> {successLabel}</>
+            : status.isRunning
               ? <><Loader2 className="size-4 animate-spin" /> Sending…</>
               : primaryLabel
           }
@@ -147,7 +208,7 @@ function ActionPlanControls({
             type="button"
             data-testid="action-plan-edit"
             onClick={onEdit}
-            disabled={status.isExecuting}
+            disabled={status.isRunning || Boolean(status.executionOutcome)}
             className="flex-1 inline-flex items-center justify-center py-3 rounded-2xl text-[15px] font-semibold bg-foreground/[0.05] hover:bg-foreground/[0.08] text-strong transition-colors disabled:opacity-40"
           >
             Edit & send myself
@@ -160,7 +221,7 @@ function ActionPlanControls({
             type="button"
             data-testid="action-plan-cancel"
             onClick={onCancelReview}
-            disabled={status.isExecuting}
+            disabled={status.isRunning || Boolean(status.executionOutcome)}
             className="text-xs font-medium text-faint hover:text-muted-foreground transition-colors disabled:opacity-40"
           >
             Cancel
@@ -175,10 +236,12 @@ export default function ActionPlanCard({
   plan,
   agentName = "Shopkeeper",
   customerName,
+  executionOutcome,
   isExecuting,
   isRegenerating,
   layout = "default",
   onApprove,
+  onDismiss,
   onEdit,
   onFocusShopifyLink,
   onRegenerate,
@@ -187,6 +250,7 @@ export default function ActionPlanCard({
   const review = useActionPlanReviewState({
     agentName,
     customerName,
+    executionOutcome,
     isExecuting,
     onApprove,
     plan,
@@ -200,6 +264,7 @@ export default function ActionPlanCard({
     headerLabel,
     informationalWarnings,
     inReviewFlow,
+    isRunning,
     onApproveClick,
     onCancelReview,
     primaryLabel,
@@ -233,7 +298,7 @@ export default function ActionPlanCard({
         onRegenerate={onRegenerate}
         status={{
           compactHeader: state.compactHeader,
-          isExecuting,
+          isLocked: isRunning || Boolean(executionOutcome),
           isRegenerating: Boolean(isRegenerating),
         }}
       />
@@ -254,7 +319,7 @@ export default function ActionPlanCard({
               blockingWarnings={blockingWarnings}
               customerName={customerName}
               informationalWarnings={informationalWarnings}
-              isExecuting={isExecuting}
+              isExecuting={isRunning || Boolean(executionOutcome)}
               isMobileSticky={isMobileSticky}
               onFocusShopifyLink={onFocusShopifyLink}
               replyText={replyText}
@@ -266,16 +331,17 @@ export default function ActionPlanCard({
             <ActionPlanControls
               onApproveClick={onApproveClick}
               onCancelReview={onCancelReview}
+              onDismiss={onDismiss}
               onEdit={onEdit}
               primaryLabel={primaryLabel}
-              sentLabel={showReplyHero ? "Sent" : "Done"}
+              successLabel={showReplyHero ? "Sent" : "Done"}
               status={{
                 enabledCount,
+                executionOutcome,
                 hasBlockingWarnings,
                 inReviewFlow,
-                isExecuting,
+                isRunning,
                 primaryNeedsCaution,
-                sent: state.sent,
                 showEditTakeover,
                 warningsReviewed: state.warningsReviewed,
               }}

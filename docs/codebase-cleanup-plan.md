@@ -758,6 +758,44 @@ retry, so the "safe documented recovery path" half of the acceptance criterion i
 
 ### P7-01 — Replace optimistic “Sent” with committed/failed/partial/unknown states
 
+**Status (2026-07-19): Local implementation complete; deployment spot-check
+pending.** The reviewed-plan API now returns the durable execution ID plus an
+explicit presentation outcome derived from the server's per-action truth.
+`partial` distinguishes mixed committed/failed actions in the UI while mapping
+to the ledger's existing terminal `failed` state; any ambiguous action or
+interrupted 5xx/network hop remains `unknown`. The composer awaits approval,
+locks synchronously against double clicks, renders a running state, and only
+shows Sent/Done after the server reports committed success. Confirmed success
+lingers for 500 ms before dismissal. Failed, partial, and unknown cards remain
+mounted with the reviewed steps and safe recovery guidance; the plan is pinned
+locally even after the server consumes its cache, and outcome state is keyed to
+the ticket/plan so navigation cannot leak it to another conversation. Visible
+status notices use live-region semantics, with assertive announcement reserved
+for unknown provider outcomes.
+
+**Completed locally:**
+
+- [x] Return `{ id, status }` execution truth from `/api/agent` and share one
+  committed/failed/partial/unknown classifier between the ledger and browser.
+- [x] Make approval callbacks awaitable, render running state immediately, and
+  suppress duplicate approval clicks before React can re-render.
+- [x] Show Sent/Done only for server-confirmed committed success and preserve the
+  existing short successful linger.
+- [x] Retain failed/partial/unknown plan context with outcome-specific safe next
+  actions; never offer a blind retry for an unknown provider result.
+- [x] Scope recovery state to the current ticket and plan, pin it across cache
+  refresh/navigation, and clean up the success timer on unmount.
+- [x] Announce running and terminal states accessibly with polite/assertive live
+  regions as appropriate.
+- [x] Pass the 1,200-test repository unit suite, 37 Node-script tests, repository
+  typecheck, dashboard/agent lint, structure lint, and the 15 affected
+  database-backed approval/ledger tests.
+
+**Still required for rollout completion:**
+
+- [ ] Deploy the dashboard/API change and spot-check committed, known-failure,
+  and unknown recovery presentation in the normal canary environment.
+
 - **Related findings:** AUD-003, AUD-005, AUD-012.
 - **Files likely to change:** `useActionPlanReviewState.ts`, `useConversationAgentFlow.ts`, `conversation-agent-requests.ts`, plan card/body components, agent API response contracts.
 - **Proposed implementation:** Make approval callbacks awaitable; render running state; consume ledger/action outcomes; retain recovery context for failed/partial/unknown plans; announce status accessibly.
@@ -765,7 +803,7 @@ retry, so the "safe documented recovery path" half of the acceptance criterion i
 - **Risk / scope:** Medium-high / Medium.
 - **Tests required:** All outcome states, double click, reload/navigation, partial tools, screen-reader live region, successful linger behavior.
 - **Rollback considerations:** Keep the old card layout while switching its state source; avoid simultaneous visual redesign.
-- **Acceptance criteria:** The UI never says sent/done before the server reports committed success and gives a safe next action for every other state.
+- **Acceptance criteria:** The UI never says sent/done before the server reports committed success and gives a safe next action for every other state. **Met locally; deployment spot-check remains.**
 
 ### P7-02 — Extract frontend orchestration only when behavior work touches it
 
@@ -964,9 +1002,10 @@ until the audit includes representative dashboard and gateway executions.
 rollout gates above. Previously merged work includes P4-04 (verified already complete), P6-01
 (PR #24), the Gmail slice of P4-06 (PR #25), and both P6-02 slices — queue-health monitoring
 (PR #26) and health-diagnostics auth (PR #27). See each item's Status line for detail.
-Remaining pure-code follow-ups: the P6-02 failed-job replay runbook (gated by P1/P4
-idempotency) and P7-01. **P4-06's repository-wide deadline audit and local
-implementation are complete as of 2026-07-19; deployment observation remains.**
+P7-01's local implementation is complete. The only remaining pure-code follow-up
+is the P6-02 failed-job replay runbook, which remains gated by P1/P4 idempotency.
+**P4-06's repository-wide deadline audit and local implementation are complete
+as of 2026-07-19; deployment observation remains.**
 
 Next:
 

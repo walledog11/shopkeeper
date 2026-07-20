@@ -5,25 +5,42 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AgentPlan } from '@/types';
+import type { AgentPlan, PlanExecutionOutcome, RawToolCall } from '@/types';
 import ActionPlanCard from './ActionPlanCard';
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
 
-function render(plan: AgentPlan, onApprove = vi.fn()) {
+function render(plan: AgentPlan, options: {
+  executionOutcome?: PlanExecutionOutcome | null;
+  isExecuting?: boolean;
+  onApprove?: (approvedToolCalls: RawToolCall[]) => Promise<void>;
+  onDismiss?: () => void;
+} = {}) {
+  const onApprove = options.onApprove ?? vi.fn(async () => undefined);
+  const props = {
+    plan,
+    customerName: 'Alex',
+    executionOutcome: options.executionOutcome ?? null,
+    isExecuting: options.isExecuting ?? false,
+    onApprove,
+    onDismiss: options.onDismiss,
+  };
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
   act(() => {
-    root?.render(React.createElement(ActionPlanCard, {
-      plan,
-      customerName: 'Alex',
-      isExecuting: false,
-      onApprove,
-    }));
+    root?.render(React.createElement(ActionPlanCard, props));
   });
-  return { container, onApprove };
+  return {
+    container,
+    onApprove,
+    rerender(next: Partial<typeof props>) {
+      act(() => {
+        root?.render(React.createElement(ActionPlanCard, { ...props, ...next }));
+      });
+    },
+  };
 }
 
 function click(element: Element | null) {
@@ -71,6 +88,45 @@ describe('ActionPlanCard', () => {
     click(view.container.querySelector('[data-testid="action-plan-run"]'));
 
     expect(view.onApprove).toHaveBeenCalledWith(plan.rawToolCalls);
+  });
+
+  it('waits for the execution result and suppresses duplicate approval clicks', async () => {
+    let resolveApproval: (() => void) | undefined;
+    const onApprove = vi.fn(() => new Promise<void>((resolve) => {
+      resolveApproval = resolve;
+    }));
+    const plan: AgentPlan = {
+      instruction: 'Reply to the customer',
+      steps: [{
+        id: 'reply-1',
+        tool: 'send_reply',
+        label: 'Send reply',
+        description: '"Your order ships today."',
+        category: 'communication',
+        enabled: true,
+      }],
+      rawToolCalls: [{
+        id: 'reply-1',
+        name: 'send_reply',
+        input: { text: 'Your order ships today.' },
+      }],
+    };
+    const view = render(plan, { onApprove });
+    const runButton = () => view.container.querySelector('[data-testid="action-plan-run"]');
+
+    click(runButton());
+    click(runButton());
+
+    expect(onApprove).toHaveBeenCalledTimes(1);
+    expect(runButton()?.textContent).toContain('Sending…');
+    expect(runButton()?.textContent).not.toContain('Sent');
+    expect(view.container.querySelector('[role="status"]')?.textContent).toContain('in progress');
+
+    view.rerender({ executionOutcome: 'committed' });
+    expect(runButton()?.textContent).toContain('Sent');
+    expect(view.container.querySelector('[role="status"]')?.textContent).toContain('completed successfully');
+
+    await act(async () => resolveApproval?.());
   });
 
   it('requires confirmation before a consequential Shopify action', () => {
@@ -128,6 +184,36 @@ describe('ActionPlanCard', () => {
     expect(
       (view.container.querySelector('[data-testid="action-plan-run"]') as HTMLButtonElement).disabled,
     ).toBe(true);
+  });
+
+  it.each([
+    ['failed', 'Plan failed', 'Review the activity'],
+    ['partial', 'Plan partially completed', 'Some steps completed'],
+    ['unknown', 'Outcome unconfirmed', 'Check provider activity'],
+  ] as const)('retains %s outcomes with safe recovery guidance', (outcome, label, guidance) => {
+    const onDismiss = vi.fn();
+    const plan: AgentPlan = {
+      instruction: 'Reply to the customer',
+      steps: [{
+        id: 'reply-1',
+        tool: 'send_reply',
+        label: 'Send reply',
+        description: '"Your order ships today."',
+        category: 'communication',
+        enabled: true,
+      }],
+      rawToolCalls: [{ id: 'reply-1', name: 'send_reply', input: { text: 'Your order ships today.' } }],
+    };
+    const view = render(plan, { executionOutcome: outcome, onDismiss });
+
+    expect(view.container.textContent).toContain(label);
+    expect(view.container.textContent).toContain(guidance);
+    expect(view.container.querySelector('[data-testid="action-plan-run"]')).toBeNull();
+    expect(view.container.querySelector('[data-testid="action-plan-outcome"]')?.getAttribute('aria-live'))
+      .toBe(outcome === 'unknown' ? 'assertive' : 'polite');
+
+    click(view.container.querySelector('[data-testid="action-plan-dismiss-outcome"]'));
+    expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
 });

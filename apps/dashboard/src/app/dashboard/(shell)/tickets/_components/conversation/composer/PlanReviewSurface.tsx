@@ -1,7 +1,7 @@
 "use client"
 
 import MerchantAnswerForm from "@/components/agent/MerchantAnswerForm"
-import type { AgentPlan, RawToolCall } from "@/types"
+import type { AgentPlan, PlanExecutionOutcome, RawToolCall } from "@/types"
 import ActionPlanCard from "./ActionPlanCard"
 
 export function PlanReviewSurface({
@@ -10,8 +10,10 @@ export function PlanReviewSurface({
   isExecuting,
   isRegenerating,
   layout,
+  executionOutcome,
   onAnswered,
   onApprove,
+  onDismiss,
   onEdit,
   onFocusShopifyLink,
   onRegenerate,
@@ -24,8 +26,10 @@ export function PlanReviewSurface({
   isExecuting: boolean
   isRegenerating: boolean
   layout?: "default" | "mobile-sticky"
+  executionOutcome: PlanExecutionOutcome | null
   onAnswered: (result?: { saveToKb: boolean }) => void
-  onApprove: (approvedToolCalls: RawToolCall[]) => void
+  onApprove: (approvedToolCalls: RawToolCall[]) => Promise<void>
+  onDismiss?: () => void
   onEdit?: () => void
   onFocusShopifyLink?: () => void
   onRegenerate: () => void
@@ -53,9 +57,11 @@ export function PlanReviewSurface({
       agentName={agentName}
       customerName={customerName}
       isExecuting={isExecuting}
+      executionOutcome={executionOutcome}
       isRegenerating={isRegenerating}
       layout={layout}
       onApprove={onApprove}
+      onDismiss={onDismiss}
       onEdit={onEdit}
       onFocusShopifyLink={onFocusShopifyLink}
       onRegenerate={onRegenerate}
