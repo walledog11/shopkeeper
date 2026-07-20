@@ -58,6 +58,10 @@
       "types": "./dist/classifier-signals.d.ts",
       "default": "./dist/classifier-signals.js"
     },
+    "./context-budget": {
+      "types": "./dist/context-budget.d.ts",
+      "default": "./dist/context-budget.js"
+    },
     "./prompt": {
       "types": "./dist/prompt.d.ts",
       "default": "./dist/prompt.js"

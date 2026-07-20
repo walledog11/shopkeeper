@@ -12,6 +12,13 @@ export async function removeFailedQueueJob(
     return false;
   }
 
+  // This endpoint/script is housekeeping for retained failure evidence, not a
+  // generic queue deletion primitive. Re-check state at mutation time so a
+  // stale operator view cannot remove a waiting, active, or completed job.
+  if (await job.getState() !== 'failed') {
+    return false;
+  }
+
   await job.remove();
   return true;
 }

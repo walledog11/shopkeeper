@@ -21,6 +21,7 @@ const CONTRACTS = {
       'UPSTASH_REDIS_REST_TOKEN',
       'PRODUCT_ANALYTICS_ENABLED',
       'PLAN_EXECUTION_LEDGER_MODE',
+      'AGENT_CONTEXT_BUDGET_MODE',
     ],
     launchRequired: [
       'GATEWAY_INTERNAL_URL',
@@ -63,6 +64,7 @@ const CONTRACTS = {
       'TOKEN_ENCRYPTION_KEY',
       'PRODUCT_ANALYTICS_ENABLED',
       'PLAN_EXECUTION_LEDGER_MODE',
+      'AGENT_CONTEXT_BUDGET_MODE',
     ],
     launchRequired: [
       'SHOPIFY_APP_SECRET',
@@ -246,6 +248,14 @@ export function validateProductionEnv(target, options = {}) {
     && !['off', 'shadow', 'enforce'].includes(planExecutionLedgerMode)
   ) {
     errors.push('PLAN_EXECUTION_LEDGER_MODE must be one of: off, shadow, enforce');
+  }
+
+  const agentContextBudgetMode = readEnv(env, 'AGENT_CONTEXT_BUDGET_MODE');
+  if (
+    agentContextBudgetMode
+    && !['off', 'shadow', 'enforce'].includes(agentContextBudgetMode)
+  ) {
+    errors.push('AGENT_CONTEXT_BUDGET_MODE must be one of: off, shadow, enforce');
   }
 
   const gmailNativeInbound = readEnv(env, 'GMAIL_NATIVE_INBOUND');

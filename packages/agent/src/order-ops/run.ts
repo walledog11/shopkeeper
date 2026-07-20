@@ -190,6 +190,7 @@ export async function runOrderOps(
   logger.info({
     orgId: ctx.orgId,
     orderId: ctx.order.id,
+    purpose: "order_risk_review",
     outcome,
     flagged,
     durationMs: Date.now() - startedAt,

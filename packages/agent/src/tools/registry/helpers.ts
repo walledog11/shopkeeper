@@ -16,7 +16,9 @@ export const returnReasons = [
   "color",
   "other",
 ] as const;
-export const threadStatuses = ["open", "pending", "closed"] as const;
+// Escalation is orthogonal (`Thread.escalatedAt`); `pending` remains a legacy
+// database value but is no longer a state the model may create.
+export const threadStatuses = ["open", "closed"] as const;
 
 export function requireShopify(ctx: BaseAgentContext): ShopifyToolContext | null {
   return ctx.shopify;
