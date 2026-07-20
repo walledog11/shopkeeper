@@ -1,7 +1,7 @@
 # Shopkeeper — AI Support for Shopify Brands
 
 ## What This Is
-Shopkeeper is an AI operating layer for solo and small e-commerce businesses on Shopify — a general-purpose agent that handles operational work and is reachable from wherever the merchant is (Telegram today; WhatsApp next; the dashboard is one surface, not *the* surface).
+Shopkeeper is an AI operating layer for solo and small e-commerce businesses on Shopify — a general-purpose agent that handles operational work and is reachable from wherever the merchant is (Telegram and iMessage today; WhatsApp next; the dashboard is one surface, not *the* surface).
 
 **Customer support is the V1 wedge and the current focus.** Think Zendesk but AI-first and purpose-built for Shopify: a multi-channel support inbox plus an AI agent that reads and acts on Shopify data (orders, customers, refunds, etc.) directly inside the workflow. The architecture is built so the same agent core — memory, approval/autonomy workflows, multi-channel interaction, tool use — extends into adjacent workflow modules over time: order operations → inventory & supplier comms → marketing ops → financial ops. Only the support module is built today; the codebase assumes the others will share the core.
 
@@ -195,18 +195,18 @@ Configurable per org via Agent → Configure:
 - **Organization** — one per merchant. Stores Stripe subscription fields + `settings` JSON (agent config).
 - **Integration** — one per connected platform per org. Stores access token, external account ID, token expiry.
 - **Customer** — unique by `(organizationId, platformId)`. `platformId` is email for email channel, IG sender ID for DMs.
-- **Thread** — belongs to org + customer. Has `channelType`, `status` (open/pending/closed), `aiSummary`, `tag`, `shopifyCustomerId`, `cachedPlan` (agent plan cache), soft-delete + archive fields.
+- **Thread** — belongs to org + customer. Has `channelType`, active `status` values (`open`/`closed`; legacy `pending` remains database-readable), orthogonal `escalated_at`, `aiSummary`, `tag`, `shopifyCustomerId`, `cachedPlan` (agent plan cache), soft-delete + archive fields.
 - **Message** — belongs to thread. `senderType`: customer/agent/ai/note. Agent action logs are stored as `note` messages prefixed with `__shopkeeper_agent__` (legacy rows may use `__clerk_agent__`).
-- **OperatorContext** — persists Telegram operator conversation state per (org, chatId) (history, pendingPlan, pendingDigest, lastOrderNumber). DB-backed, not Redis.
-- **OrgMember** — extends Clerk org membership with a bound Telegram chat for operator notifications.
+- **OperatorContext** — persists Telegram/iMessage operator state per organization and channel context key (pending plan/digest/question). DB-backed, not Redis.
+- **OrgMember** — extends Clerk org membership with Telegram chat and iMessage sender bindings for operator notifications.
 - **KnowledgeBase** — named KB container. `source`: "user" | "shopify".
 - **KbArticle** — belongs to org + KB. Has tags for context filtering.
 - **Feedback** — in-app NPS/survey (rating + comment + categories).
 
 ## Key Files
-- `apps/gateway/src/routes/webhooks.ts` — webhook handlers (Meta/Instagram, Email, Telegram, Shopify)
+- `apps/gateway/src/routes/` — webhook handlers (Meta/Instagram, email, Telegram, iMessage/Photon, Shopify)
 - `apps/gateway/src/worker.ts` — BullMQ worker: inbound message processing + AI summary + maintenance workers
-- `apps/gateway/src/message-handlers/` — per-channel job handlers (`channels.ts`), AI summary generation (`intelligence.ts`), Telegram plan notification (`planning.ts`)
+- `apps/gateway/src/message-handlers/` — per-channel job handlers (`channels.ts`), AI summary generation (`intelligence.ts`), and operator-channel planning/notifications
 - `apps/gateway/src/maintenance/workers.ts` — daily IG token health check, 90-day archive + 90-day purge workers
 - `packages/agent/` (`@shopkeeper/agent`) — extracted agent core (`context.ts`, `planner.ts`, `run.ts`, `prompt.ts`, `tools/registry/`, `shopify/`, `settings.ts`); consumed by both apps via subpath exports
 - `packages/agent/src/tools/registry/` — tool registry, categories, and plan-step labels

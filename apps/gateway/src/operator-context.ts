@@ -1,8 +1,10 @@
 /**
  * Operator-channel conversation context.
  *
- * Persists per-(org, chatId) state in the operator_contexts table. The chatId
- * is the Telegram chat id (string-encoded int64).
+ * Persists per-(org, channel-context key) state in operator_contexts. The key is
+ * a Telegram chat id (string-encoded int64) or an iMessage sender id. Those
+ * identifier spaces are currently disjoint; a future shared-key migration must
+ * add an explicit channel column before changing that assumption.
  */
 
 import { db, Prisma } from '@shopkeeper/db';

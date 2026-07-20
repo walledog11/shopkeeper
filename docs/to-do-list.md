@@ -64,9 +64,11 @@ Do these before treating production as ready.
 
 - [ ] **Harden Content Security Policy.** Dashboard still sends
   `Content-Security-Policy-Report-Only` with `unsafe-inline` and `unsafe-eval`
-  in `apps/dashboard/next.config.js`. Move toward enforcement after reviewing
-  report-only violations; reduce or justify `unsafe-inline`/`unsafe-eval`; keep
-  Clerk and Cloudflare challenge requirements documented. (Lower urgency.)
+  in `apps/dashboard/next.config.js`. A bounded, privacy-sanitized report
+  collector and both browser reporting directives were added locally on
+  2026-07-20. Deploy and review report-only violations before reducing or
+  justifying `unsafe-inline`/`unsafe-eval`; keep Clerk and Cloudflare challenge
+  requirements documented. (Lower urgency.)
 
 ## Known Bugs
 
