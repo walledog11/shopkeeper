@@ -29,6 +29,8 @@ const CSP_DIRECTIVES = {
   'base-uri': ["'self'"],
   'form-action': ["'self'", 'https://*.clerk.com'],
   'frame-ancestors': ["'self'"],
+  'report-uri': ['/api/security/csp-report'],
+  'report-to': ['csp-endpoint'],
 };
 
 const CSP_HEADER_VALUE = Object.entries(CSP_DIRECTIVES)
@@ -41,6 +43,7 @@ const SECURITY_HEADERS = [
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+  { key: 'Reporting-Endpoints', value: 'csp-endpoint="/api/security/csp-report"' },
   { key: 'Content-Security-Policy-Report-Only', value: CSP_HEADER_VALUE },
 ];
 
