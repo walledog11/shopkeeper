@@ -1,10 +1,14 @@
 /**
- * Host-injected thread mutex seam. The agent core (executeAgentTurn) takes a
- * LockProvider so each host supplies its own Redis: the dashboard uses Upstash
- * (REST), the gateway worker uses ioredis (REDIS_URL) — separate instances.
+ * Host-injected thread latency-guard seam. The agent core (executeAgentTurn)
+ * takes a LockProvider so each host supplies its own Redis: the dashboard uses
+ * Upstash (REST), the gateway worker uses ioredis (REDIS_URL) — separate
+ * instances. Durable PostgreSQL claims, not this host-local mutex, own
+ * cross-process single-use correctness.
  */
 export interface ThreadLock {
   release(): Promise<void>;
+  /** True after token-checked renewal proves this caller no longer owns the lease. */
+  isLost?(): boolean;
 }
 
 export interface LockAcquireOptions {
