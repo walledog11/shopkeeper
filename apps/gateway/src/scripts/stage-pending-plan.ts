@@ -9,11 +9,12 @@ loadGatewayEnv();
 // operator-channel interpretation loop (approve / revise / answer / leave
 // untouched) WITHOUT routing a real customer message through a channel.
 //
-// It seeds a fake support ticket, generates a real plan (planAgent, no side
+// It seeds a fake support ticket, generates + caches a real plan (no side
 // effects), then parks + pushes it via the production notification path — the
-// same call the inbound flow uses, so OperatorContext.pendingPlan is set with
-// the exact shape a real ticket produces. A card lands on every bound operator
-// channel; reply from your phone and watch which control tool fires.
+// same calls the inbound flow uses, so OperatorContext.pendingPlan includes the
+// stable identity required to resolve that plan across every bound device. A
+// card lands on every bound operator channel; reply from your phone and watch
+// which control tool fires.
 //
 // Run from the repo root with the gateway service linked in Railway (so prod
 // env is injected — ANTHROPIC_API_KEY, DATABASE_URL, TELEGRAM_BOT_TOKEN, …):
@@ -27,11 +28,7 @@ loadGatewayEnv();
 
 async function main() {
   const { db } = await import('@shopkeeper/db');
-  const { buildContext } = await import('@shopkeeper/agent/build-context');
-  const { planAgent } = await import('@shopkeeper/agent/planner');
-  const { resolveAgentSettings } = await import('@shopkeeper/agent/settings');
-  const { gatewayThreadSink } = await import('../message-handlers/agent-thread-sink.js');
-  const { toGatewayAgentPlan } = await import('../message-handlers/agent-plan-adapter.js');
+  const { generateThreadPlan } = await import('../message-handlers/generate-thread-plan.js');
   const { sendOperatorPlanNotification } = await import('../message-handlers/planning-notifications.js');
   const { listOperatorBindings } = await import('../operator-notify.js');
 
@@ -70,7 +67,7 @@ async function main() {
     },
   });
 
-  await db.message.create({
+  const sourceMessage = await db.message.create({
     data: {
       threadId: thread.id,
       organizationId: orgId,
@@ -83,14 +80,14 @@ async function main() {
     data: { lastMessageAt: new Date(), lastMessageSenderType: 'customer' },
   });
 
-  const org = await db.organization.findUnique({ where: { id: orgId }, select: { settings: true } });
-  const settings = resolveAgentSettings(org?.settings as Parameters<typeof resolveAgentSettings>[0]);
   const instruction = "Handle this customer's latest request";
+  const generated = await generateThreadPlan(orgId, thread.id, false, {
+    instruction,
+    sourceMessageId: sourceMessage.id,
+  });
+  const plan = generated.plan;
 
-  const ctx = await buildContext(thread.id, orgId, gatewayThreadSink);
-  const plan = toGatewayAgentPlan(await planAgent(ctx, instruction, settings));
-
-  if (!plan || plan.rawToolCalls.length === 0) {
+  if (!plan || plan.rawToolCalls.length === 0 || !generated.identity) {
     console.error('Planner produced no actionable tool calls — try a different PROMPT');
     console.error('  (one that yields a reply/refund, not a "no action needed" plan).');
     console.error('  thread:', thread.id, ' customer:', customer.id, '(delete these before retrying)');
@@ -115,6 +112,7 @@ async function main() {
     aiSummary,
     plan,
     instruction,
+    { identity: generated.identity },
   );
 
   console.log(`✅ Staged a pending plan and pushed it to ${bindings.length} operator channel(s).`);
