@@ -7,9 +7,17 @@ import { anthropic } from '@shopkeeper/agent/ai';
 import { enforceSpendCap, recordSpend } from '@shopkeeper/agent/spend';
 import { readModelUsage } from '@shopkeeper/agent/usage';
 import {
+  buildBoundedEmailClassifierInput,
+  resolveContextBudgetMode,
+} from '@shopkeeper/agent/context-budget';
+import {
+  CLASSIFIER_TEXT_LIMITS,
+  isClassifierTag,
+  normalizeClassifierLanguage,
   emptyIntents,
   INTENT_KEYS,
   type ClassifierIntents,
+  type ClassifierTag,
 } from '@shopkeeper/agent/classifier-signals';
 import logger from '../logger.js';
 import { MODEL } from '../constants.js';
@@ -23,7 +31,7 @@ export { emptyIntents, type ClassifierIntents };
 export interface ClassificationResult {
   title: string;
   summary: string;
-  tag: string;
+  tag: ClassifierTag;
   filterStatus: DbThreadFilterStatus;
   filterReason: string;
   intents: ClassifierIntents;
@@ -46,14 +54,14 @@ export function classifierSignals(result: ClassificationResult) {
 
 export const CLASSIFIER_SYSTEM_PROMPT = `You are an AI assistant for a customer support team.
 Read the customer message and produce these fields in strict JSON:
-- "title": a short subject line (3 to 6 words) naming the topic, like an email subject line. Use Title Case, no trailing period, and never begin with "Customer" or "The customer". If the message is vague or unclear, say so plainly (e.g., "Unclear one-word message", "Vague inquiry about an offer"). Examples: "Damaged sweater return", "Where is order #1452", "Question about an exclusive offer".
-- "summary": one-sentence third-person summary of what the customer said. Always describe actual content; never refuse, never ask for more info. If the message is one word or fragmentary, quote/paraphrase it (e.g., 'Customer wrote a single word: "Palettegarments".'). Attachment placeholders such as "[Instagram image attachment]" prove only that an image was attached; say that plainly and never infer or describe visual details you were not given.
+- "title": a short subject line (3 to 6 words, at most 120 characters) naming the topic, like an email subject line. Use Title Case, no trailing period, and never begin with "Customer" or "The customer". If the message is vague or unclear, say so plainly (e.g., "Unclear one-word message", "Vague inquiry about an offer"). Examples: "Damaged sweater return", "Where is order #1452", "Question about an exclusive offer".
+- "summary": one-sentence third-person summary of what the customer said, at most 1,000 characters. Always describe actual content; never refuse, never ask for more info. If the message is one word or fragmentary, quote/paraphrase it (e.g., 'Customer wrote a single word: "Palettegarments".'). Attachment placeholders such as "[Instagram image attachment]" prove only that an image was attached; say that plainly and never infer or describe visual details you were not given.
 - "tag": exactly one of Shipping, Returns, Order Status, Product Inquiry, General.
 - "classification": exactly one of "genuine", "questionable", "filtered".
   - "genuine": real human reaching out for support (question, complaint, request).
   - "questionable": ambiguous — may be a real customer or may be unsolicited (cold pitch, vague outreach, possibly automated).
   - "filtered": clearly spam, newsletters, promotions, automated system alerts, or delivery status notifications.
-- "reason": one short sentence (under 20 words) justifying the classification.
+- "reason": one short sentence (under 20 words and at most 240 characters) justifying the classification.
 - "language": the ISO 639-1 code (two letters, lowercase) of the language the customer wrote in, e.g. "en", "es", "fr". Judge the customer's words, not the language you answer in.
 - "intents": an object of booleans describing what the customer is asking for. Set true only when clearly present:
   - "mutative_request": asks to cancel, refund, return, exchange, or edit an order.
@@ -103,32 +111,47 @@ function parseIntents(raw: unknown): ClassifierIntents {
 }
 
 function parseLanguage(raw: unknown): string {
-  return typeof raw === 'string' ? raw.trim().slice(0, 8).toLowerCase() : '';
+  return normalizeClassifierLanguage(raw);
+}
+
+function requireBoundedClassifierText(
+  value: unknown,
+  field: keyof typeof CLASSIFIER_TEXT_LIMITS,
+): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error(`Classifier response missing required field: ${field}`);
+  }
+  return value.trim().slice(0, CLASSIFIER_TEXT_LIMITS[field]);
 }
 
 export function parseClassifierJson(raw: string): ClassificationResult {
   const cleaned = raw.replace(JSON_FENCE_OPEN, '').replace(JSON_FENCE_CLOSE, '').trim();
   const parsed = JSON.parse(cleaned) as {
-    title?: string;
-    summary?: string;
-    tag?: string;
-    classification?: string;
-    reason?: string;
+    title?: unknown;
+    summary?: unknown;
+    tag?: unknown;
+    classification?: unknown;
+    reason?: unknown;
     language?: unknown;
     intents?: unknown;
   };
-  if (!parsed.summary || !parsed.tag || !parsed.classification || !parsed.reason) {
-    throw new Error('Classifier response missing required fields');
+  const summary = requireBoundedClassifierText(parsed.summary, 'summary');
+  const reason = requireBoundedClassifierText(parsed.reason, 'reason');
+  if (!isClassifierTag(parsed.tag)) {
+    throw new Error(`Classifier returned invalid tag: ${String(parsed.tag)}`);
   }
-  if (!isFilterStatus(parsed.classification)) {
+  if (typeof parsed.classification !== 'string' || !isFilterStatus(parsed.classification)) {
     throw new Error(`Classifier returned invalid classification: ${parsed.classification}`);
   }
+  const title = typeof parsed.title === 'string' && parsed.title.trim()
+    ? parsed.title.trim().slice(0, CLASSIFIER_TEXT_LIMITS.title)
+    : fallbackTitleFromSummary(summary).slice(0, CLASSIFIER_TEXT_LIMITS.title);
   return {
-    title: parsed.title?.trim() || fallbackTitleFromSummary(parsed.summary),
-    summary: parsed.summary,
+    title,
+    summary,
     tag: parsed.tag,
     filterStatus: parsed.classification,
-    filterReason: parsed.reason,
+    filterReason: reason,
     intents: parseIntents(parsed.intents),
     language: parseLanguage(parsed.language),
   };
@@ -169,14 +192,41 @@ export async function classifyAndSummarizeNewEmail(
   try {
     // Gateway uses default cap (per-org override applies on dashboard agent runs).
     await enforceSpendCap(organizationId, null);
+    const contextBudgetMode = resolveContextBudgetMode();
+    const boundedInput = buildBoundedEmailClassifierInput(subject, body);
+    const legacyInput = `Subject: ${subject}\n\nBody: ${body}`;
+    const classifierInput = contextBudgetMode === 'enforce'
+      ? boundedInput
+      : legacyInput;
+
+    if (contextBudgetMode !== 'off') {
+      logger.info({
+        organizationId,
+        purpose: 'email_classification',
+        mode: contextBudgetMode,
+        inputCharsBefore: legacyInput.length,
+        inputCharsAfter: boundedInput.length,
+        truncated: boundedInput !== legacyInput,
+      }, '[Worker] AI input budget');
+    }
 
     const response = await anthropic.messages.create({
       model: MODEL.CLAUDE,
       max_tokens: 400,
       system: CLASSIFIER_SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: `Subject: ${subject}\n\nBody: ${body}` }],
+      messages: [{ role: 'user', content: classifierInput }],
     });
-    await recordSpend(organizationId, readModelUsage(response), MODEL.CLAUDE);
+    const usage = readModelUsage(response);
+    await recordSpend(organizationId, usage, MODEL.CLAUDE);
+    logger.info({
+      organizationId,
+      purpose: 'email_classification',
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      cacheCreationInputTokens: usage.cacheCreationInputTokens,
+      cacheReadInputTokens: usage.cacheReadInputTokens,
+      inputChars: classifierInput.length,
+    }, '[Worker] AI model usage');
     const block = response.content[0];
     if (!block || block.type !== 'text') throw new Error('Unexpected AI response type');
     return parseClassifierJson(block.text);

@@ -22,6 +22,7 @@ vi.mock("./logger.js", () => ({
 }));
 
 import { buildContext, type ThreadSink } from "./context.js";
+import { CONTEXT_BUDGETS } from "./context-budget.js";
 
 const orgIds: string[] = [];
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01]);
@@ -100,5 +101,55 @@ describe("buildContext Instagram images", () => {
       contentText: "See attachment",
     }]);
     expect(getSpy).not.toHaveBeenCalled();
+  });
+
+  it("enforces bounded recent-message, summary, and KB context", async () => {
+    const org = await createTestOrg();
+    orgIds.push(org.id);
+    const customer = await createTestCustomer(org.id, `${randomUUID()}@example.com`);
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    await db.thread.update({
+      where: { id: thread.id },
+      data: { aiSummary: "summary ".repeat(500) },
+    });
+    await db.message.createMany({
+      data: Array.from({ length: 25 }, (_, index) => ({
+        organizationId: org.id,
+        threadId: thread.id,
+        senderType: index % 2 === 0 ? "customer" as const : "agent" as const,
+        contentText: `message-${index}-${"x".repeat(2_000)}`,
+        sentAt: new Date(Date.UTC(2026, 0, 1, 0, index)),
+      })),
+    });
+    const knowledgeBase = await db.knowledgeBase.create({
+      data: { organizationId: org.id, name: "Budget KB" },
+    });
+    await db.kbArticle.createMany({
+      data: Array.from({ length: 4 }, (_, index) => ({
+        organizationId: org.id,
+        knowledgeBaseId: knowledgeBase.id,
+        title: `Article ${index}`,
+        body: "policy ".repeat(2_000),
+        updatedAt: new Date(Date.UTC(2026, 0, 1, 0, index)),
+      })),
+    });
+
+    const context = await buildContext(thread.id, org.id, sink, {
+      contextBudgetMode: "enforce",
+    });
+
+    expect(context.recentMessages.length).toBeLessThanOrEqual(CONTEXT_BUDGETS.recentMessageCount);
+    expect(context.recentMessages.length).toBeGreaterThan(0);
+    expect(context.recentMessages.at(-1)?.contentText).toContain("message-24-");
+    expect(context.recentMessages.reduce(
+      (sum, message) => sum + (message.contentText?.length ?? 0),
+      0,
+    )).toBeLessThanOrEqual(CONTEXT_BUDGETS.recentMessageChars);
+    expect(context.thread.aiSummary?.length).toBeLessThanOrEqual(CONTEXT_BUDGETS.priorSummaryChars);
+    expect(context.kbArticles).toHaveLength(CONTEXT_BUDGETS.kbArticleCount);
+    expect(context.kbArticles.reduce(
+      (sum, article) => sum + article.title.length + article.body.length,
+      0,
+    )).toBeLessThanOrEqual(CONTEXT_BUDGETS.kbTotalChars);
   });
 });

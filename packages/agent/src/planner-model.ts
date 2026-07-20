@@ -57,6 +57,7 @@ export async function runPlannerModelCall(input: {
   logger.info({
     orgId: ctx.orgId,
     threadId: ctx.thread.id,
+    purpose: "agent_plan",
     phase,
     ...(attempt === undefined ? {} : { attempt }),
     model,

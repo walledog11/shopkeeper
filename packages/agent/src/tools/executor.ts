@@ -40,6 +40,12 @@ import type {
 } from "./registry/index.js";
 import { formatToolInputValidationError, getToolDefinition, unmetToolCapability } from "./registry/index.js";
 import { MEMORY_OVERRIDE_TAG, memoryOverrideTargetId, resolveEffectiveMemoryArticles } from "../kb-memory.js";
+import logger from "../logger.js";
+import {
+  CONTEXT_BUDGETS,
+  budgetKbArticles,
+  resolveContextBudgetMode,
+} from "../context-budget.js";
 export type { StaticPolicyResult } from "./static-policy.js";
 
 type PreparedToolCall =
@@ -124,7 +130,26 @@ const TOOL_EXECUTION_DEPS: ToolExecutionDeps = {
       const targetId = memoryOverrideTargetId(correction.tags);
       return Boolean(targetId && candidateIds.has(targetId));
     });
-    return resolveEffectiveMemoryArticles([...articles, ...relevantCorrections]).slice(0, 5);
+    const effectiveArticles = resolveEffectiveMemoryArticles([...articles, ...relevantCorrections]);
+    const budgetedArticles = budgetKbArticles(
+      effectiveArticles,
+      {
+        maxCount: CONTEXT_BUDGETS.searchedKbArticleCount,
+        maxTotalChars: CONTEXT_BUDGETS.searchedKbTotalChars,
+      },
+    );
+    const contextBudgetMode = resolveContextBudgetMode();
+    if (contextBudgetMode !== "off") {
+      logger.info({
+        orgId,
+        purpose: "search_kb",
+        mode: contextBudgetMode,
+        kbArticles: budgetedArticles.stats,
+      }, "[agent:context] budget");
+    }
+    return contextBudgetMode === "enforce"
+      ? budgetedArticles.articles
+      : effectiveArticles.slice(0, CONTEXT_BUDGETS.searchedKbArticleCount);
   },
   recordKnowledgeBaseCitations(orgId: string, threadId: string, articleIds: readonly string[]): Promise<unknown> {
     return db.kbCitation.createMany({

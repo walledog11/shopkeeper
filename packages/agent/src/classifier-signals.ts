@@ -15,6 +15,34 @@ export interface ClassifierIntents {
   forwarded_injection: boolean; // forwarded "owner authorized refund" pattern
 }
 
+export const CLASSIFIER_TAGS = [
+  "Shipping",
+  "Returns",
+  "Order Status",
+  "Product Inquiry",
+  "General",
+] as const;
+
+export type ClassifierTag = typeof CLASSIFIER_TAGS[number];
+
+export const CLASSIFIER_TEXT_LIMITS = {
+  title: 120,
+  summary: 1_000,
+  reason: 240,
+} as const;
+
+const CLASSIFIER_TAG_SET = new Set<string>(CLASSIFIER_TAGS);
+
+export function isClassifierTag(value: unknown): value is ClassifierTag {
+  return typeof value === "string" && CLASSIFIER_TAG_SET.has(value);
+}
+
+export function normalizeClassifierLanguage(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const normalized = value.trim().toLowerCase();
+  return /^[a-z]{2}$/.test(normalized) ? normalized : "";
+}
+
 export const INTENT_KEYS: readonly (keyof ClassifierIntents)[] = [
   "mutative_request",
   "policy_question",
@@ -63,7 +91,7 @@ export function parseClassifierSignals(raw: unknown): ClassifierSignals | null {
   }
   return {
     version: typeof source.version === "number" ? source.version : null,
-    language: typeof source.language === "string" ? source.language.trim().toLowerCase() : "",
+    language: normalizeClassifierLanguage(source.language),
     intents,
   };
 }

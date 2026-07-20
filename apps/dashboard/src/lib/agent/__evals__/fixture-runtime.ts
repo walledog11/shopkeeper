@@ -12,6 +12,13 @@ import {
 } from "@shopkeeper/db"
 import type { AgentContext, AgentActionMode } from "@shopkeeper/agent/context"
 import {
+  CONTEXT_BUDGETS,
+  budgetKbArticles,
+  budgetRecentMessages,
+  resolveContextBudgetMode,
+  truncateContextText,
+} from "@shopkeeper/agent/context-budget"
+import {
   hashInstruction,
   hashPlan,
   type AgentActionApproval,
@@ -43,6 +50,12 @@ function buildContext(
 ): AgentContext {
   const { setup } = fixture
   const toolContext = { threadId, orgId, orgName: "Test Store" }
+  const contextBudgetMode = resolveContextBudgetMode()
+  const recentMessages = setup.messages.map(message => ({
+    senderType: message.senderType,
+    contentText: message.contentText,
+  }))
+  const kbArticles = setup.kbArticles ?? []
   return {
     orgId,
     orgName: "Test Store",
@@ -51,7 +64,9 @@ function buildContext(
       status: "open",
       channelType: setup.channelType,
       tag: setup.tag ?? "Support",
-      aiSummary: setup.aiSummary ?? null,
+      aiSummary: contextBudgetMode === "enforce" && setup.aiSummary
+        ? truncateContextText(setup.aiSummary, CONTEXT_BUDGETS.priorSummaryChars)
+        : setup.aiSummary ?? null,
       shopifyCustomerId: setup.shopifyCustomerId ?? null,
     },
     customer: {
@@ -59,16 +74,24 @@ function buildContext(
       name: setup.customerName ?? null,
       platformId: setup.customerPlatformId ?? "customer@test.com",
     },
-    recentMessages: setup.messages.map(message => ({
-      senderType: message.senderType,
-      contentText: message.contentText,
-    })),
+    recentMessages: contextBudgetMode === "enforce"
+      ? budgetRecentMessages(recentMessages).messages
+      : recentMessages,
     openThreadCount: setup.openThreadCount ?? 1,
-    pastTickets: setup.pastTickets ?? [],
+    pastTickets: contextBudgetMode === "enforce"
+      ? (setup.pastTickets ?? []).map(ticket => ({
+          ...ticket,
+          aiSummary: ticket.aiSummary
+            ? truncateContextText(ticket.aiSummary, CONTEXT_BUDGETS.pastTicketSummaryChars)
+            : null,
+        }))
+      : setup.pastTickets ?? [],
     shopify: setup.shopify ?? null,
     recentOrders: setup.recentOrders ?? [],
     linkedShopifyCustomerName: setup.linkedShopifyCustomerName ?? null,
-    kbArticles: setup.kbArticles ?? [],
+    kbArticles: contextBudgetMode === "enforce"
+      ? budgetKbArticles(kbArticles).articles
+      : kbArticles,
     escalate: reason => escalateToHuman({ reason }, toolContext).then(() => {}),
     io: {
       addInternalNote: input => addInternalNote(input, toolContext),

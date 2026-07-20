@@ -6,6 +6,11 @@ import { enforceSpendCap, recordSpend } from '@shopkeeper/agent/spend';
 import { readModelUsage } from '@shopkeeper/agent/usage';
 import { anthropic } from '@shopkeeper/agent/ai';
 import {
+  CONTEXT_BUDGETS,
+  buildBoundedClassifierConversation,
+  resolveContextBudgetMode,
+} from '@shopkeeper/agent/context-budget';
+import {
   CLASSIFIER_SYSTEM_PROMPT,
   classifierSignals,
   parseClassifierJson,
@@ -24,16 +29,47 @@ export async function generateThreadIntelligence(
     }
 
     logger.info({ threadId }, '[Worker] Generating AI Summary');
+    const contextBudgetMode = resolveContextBudgetMode();
     const fullThread = await db.thread.findUnique({
       where: { id: threadId },
-      include: { messages: { where: { senderType: { not: SenderType.note } }, orderBy: { sentAt: 'asc' } } },
+      include: {
+        messages: contextBudgetMode === 'enforce'
+          ? {
+              where: { senderType: { not: SenderType.note } },
+              orderBy: { sentAt: 'desc' },
+              take: CONTEXT_BUDGETS.classifierMessageCount,
+            }
+          : {
+              where: { senderType: { not: SenderType.note } },
+              orderBy: { sentAt: 'asc' },
+            },
+      },
     });
 
     if (!fullThread) return null;
 
-    const conversationText = fullThread.messages
+    const chronologicalMessages = contextBudgetMode === 'enforce'
+      ? [...fullThread.messages].reverse()
+      : fullThread.messages;
+    const boundedConversation = buildBoundedClassifierConversation(
+      chronologicalMessages,
+      fullThread.aiSummary,
+    );
+    const conversationText = contextBudgetMode === 'enforce'
+      ? boundedConversation.text
+      : chronologicalMessages
       .map((m) => `${m.senderType.toUpperCase()}: ${m.contentText}`)
       .join('\n');
+
+    if (contextBudgetMode !== 'off') {
+      logger.info({
+        threadId,
+        organizationId: fullThread.organizationId,
+        purpose: 'thread_intelligence',
+        mode: contextBudgetMode,
+        context: boundedConversation.stats,
+      }, '[Worker] AI input budget');
+    }
 
     await enforceSpendCap(fullThread.organizationId, null);
 
@@ -43,7 +79,18 @@ export async function generateThreadIntelligence(
       system: CLASSIFIER_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: conversationText }],
     });
-    await recordSpend(fullThread.organizationId, readModelUsage(aiResponse), MODEL.CLAUDE);
+    const usage = readModelUsage(aiResponse);
+    await recordSpend(fullThread.organizationId, usage, MODEL.CLAUDE);
+    logger.info({
+      threadId,
+      organizationId: fullThread.organizationId,
+      purpose: 'thread_intelligence',
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      cacheCreationInputTokens: usage.cacheCreationInputTokens,
+      cacheReadInputTokens: usage.cacheReadInputTokens,
+      inputChars: conversationText.length,
+    }, '[Worker] AI model usage');
 
     const block = aiResponse.content[0];
     if (!block || block.type !== 'text') throw new Error('Unexpected AI response type');

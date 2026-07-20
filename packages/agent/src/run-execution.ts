@@ -160,6 +160,11 @@ export async function finishAgentRun(input: {
   logger.info({
     orgId: ctx.orgId,
     threadId: supportThread?.id ?? null,
+    purpose: readOnly
+      ? "composer_ask"
+      : supportThread?.channelType === "sms_agent"
+        ? "operator_turn"
+        : "agent_run",
     channelType: supportThread?.channelType ?? null,
     outcome,
     readOnly,

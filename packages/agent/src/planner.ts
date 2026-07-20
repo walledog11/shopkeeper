@@ -23,6 +23,11 @@ import { enforceSpendCap } from "./spend.js";
 import { selectAgentTools } from "./tools/registry/index.js";
 import type { AgentPlan, OrgSettings } from "./types.js";
 import { createModelUsageMetrics, hashInstructionForLog } from "./usage.js";
+import {
+  CONTEXT_BUDGETS,
+  resolveContextBudgetMode,
+  truncateContextText,
+} from "./context-budget.js";
 
 // Planning is a capture-mode run: one loop on the judgment tier, reads execute
 // for real, mutative + terminal tools are recorded instead of executed, and the
@@ -36,9 +41,13 @@ export async function planAgent(
   const startedAt = Date.now();
   const usageTotals = createModelUsageMetrics();
   const instructionHash = hashInstructionForLog(instruction);
+  const contextBudgetMode = resolveContextBudgetMode();
+  const modelInstruction = contextBudgetMode === "enforce"
+    ? truncateContextText(instruction, CONTEXT_BUDGETS.instructionChars)
+    : instruction;
   const operatorMode = isOperatorChannel(ctx.thread.channelType);
   const historyWindow = operatorMode ? ctx.recentMessages.slice(-4) : ctx.recentMessages;
-  const baseMessages = buildMessageHistory(historyWindow, instruction, {
+  const baseMessages = buildMessageHistory(historyWindow, modelInstruction, {
     segregateUntrusted: !operatorMode,
   });
   const { stable, volatile } = buildSystemPromptParts(ctx, settings);
@@ -58,11 +67,14 @@ export async function planAgent(
   logger.info({
     orgId: ctx.orgId,
     threadId: ctx.thread.id,
+    purpose: "agent_plan",
     channelType: ctx.thread.channelType,
     messageCount: baseMessages.length,
     toolCount: tools.length,
     tools: tools.map(tool => tool.name),
     instructionLength: instruction.length,
+    modelInstructionLength: modelInstruction.length,
+    contextBudgetMode,
     instructionHash,
   }, "[agent:plan] start");
 
@@ -125,6 +137,7 @@ export async function planAgent(
   logger.info({
     orgId: ctx.orgId,
     threadId: ctx.thread.id,
+    purpose: "agent_plan",
     durationMs: Date.now() - startedAt,
     iterations: loop.iterations,
     reprompted: loop.reprompted,
