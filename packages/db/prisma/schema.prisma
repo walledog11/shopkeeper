@@ -262,6 +262,10 @@ model Integration {
   messages                Message[]
 
   @@unique([organizationId, emailProvider])
+  // Supporting identity for database-level tenant-consistency foreign keys.
+  // The id remains the Prisma relation key; the compound index lets PostgreSQL
+  // prove that a referenced integration belongs to the child row's tenant.
+  @@unique([organizationId, id], map: "integrations_organization_id_id_key")
   // Non-email account uniqueness is enforced by the partial raw-SQL index
   // integrations_non_email_account_unique. Email rows are unique by provider
   // and may intentionally share the same external address.
@@ -283,6 +287,7 @@ model Customer {
 
   // platformId is unique per org, not globally — two orgs can share the same customer email
   @@unique([organizationId, platformId])
+  @@unique([organizationId, id], map: "customers_organization_id_id_key")
   @@index([organizationId])
   @@index([deletedAt])
   @@map("customers")
@@ -331,6 +336,7 @@ model Thread {
   planExecutions   PlanExecution[]
 
   @@unique([organizationId, operatorKey])
+  @@unique([organizationId, id], map: "threads_organization_id_id_key")
   @@index([organizationId, status])
   @@index([organizationId, updatedAt])
   @@index([organizationId, status, lastMessageAt(sort: Desc)])
@@ -371,6 +377,8 @@ model Message {
   integration          Integration?    @relation(fields: [integrationId], references: [id], onDelete: SetNull)
   sourcePlanExecutions PlanExecution[] @relation("PlanExecutionSourceMessage")
 
+  @@unique([organizationId, id], map: "messages_organization_id_id_key")
+  @@unique([organizationId, id, threadId], map: "messages_organization_id_id_thread_id_key")
   @@index([threadId])
   @@index([organizationId])
   @@index([integrationId])
@@ -380,8 +388,8 @@ model Message {
   @@map("messages")
 }
 
-// Per-(org, chatId) operator-channel state. `chatId` is the Telegram chat id
-// (string-encoded int64).
+// Per-organization/device operator-channel state. `chatId` is the channel
+// context key: a Telegram chat id or an iMessage sender id.
 model OperatorContext {
   id              String   @id @default(uuid()) @db.Uuid
   organizationId  String   @map("organization_id") @db.Uuid
@@ -437,8 +445,8 @@ model OperatorEvent {
   @@map("operator_events")
 }
 
-// Extends Clerk.com org membership with a bound Telegram chat so team members
-// can interact with the AI agent over Telegram.
+// Extends Clerk.com org membership with operator-channel bindings so team
+// members can interact with the AI agent over Telegram and iMessage.
 model OrgMember {
   id             String   @id @default(uuid()) @db.Uuid
   organizationId String   @map("organization_id") @db.Uuid
@@ -520,6 +528,7 @@ model KnowledgeBase {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   articles     KbArticle[]
 
+  @@unique([organizationId, id], map: "knowledge_bases_organization_id_id_key")
   @@index([organizationId])
   @@map("knowledge_bases")
 }
@@ -538,6 +547,7 @@ model KbArticle {
   knowledgeBase KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
   citations     KbCitation[]
 
+  @@unique([organizationId, id], map: "kb_articles_organization_id_id_key")
   @@index([organizationId])
   @@index([knowledgeBaseId])
   @@map("kb_articles")
@@ -632,6 +642,7 @@ model PlanExecution {
   actions       AgentAction[]
 
   @@unique([organizationId, planId])
+  @@unique([organizationId, id], map: "plan_executions_organization_id_id_key")
   @@index([organizationId, status, createdAt])
   @@index([organizationId, threadId, createdAt])
   @@index([sourceMessageId])
