@@ -4,13 +4,10 @@ import { withOrgRoute } from '@/lib/api/route';
 import {
   countThreadsBySqlFilters,
   listThreadIdsBySqlFilters,
-  decodeThreadCursor,
 } from '@/lib/messaging/thread-list-query';
+import { parseThreadListQuery } from './_lib/validation';
 
 export const dynamic = 'force-dynamic';
-
-const VALID_TAGS = new Set(['Shipping', 'Returns', 'Order Status', 'Product Inquiry']);
-const DEFAULT_THREAD_PAGE_SIZE = 50;
 
 export const GET = withOrgRoute(
   {
@@ -20,30 +17,21 @@ export const GET = withOrgRoute(
   },
   async ({ org, request }) => {
     const { searchParams } = new URL(request.url);
-    const status = (searchParams.get('status') || 'open') as 'open' | 'closed';
-    const filterStatusParam = searchParams.get('filterStatus');
-    const preview = searchParams.get('preview') === 'true';
-    const countOnly = searchParams.get('count') === 'true';
-    const includeCount = searchParams.get('includeCount') === 'true';
-    const rawCursor = searchParams.get('cursor');
-    const decodedCursor = rawCursor ? decodeThreadCursor(rawCursor) : null;
-    if (rawCursor && !decodedCursor) {
-      return NextResponse.json({ error: 'Invalid cursor' }, { status: 400 });
-    }
-    const cursor = decodedCursor ?? undefined;
-    const limitParam = searchParams.get('limit');
-    const parsedLimit = limitParam ? parseInt(limitParam, 10) : NaN;
-    const limit = !isNaN(parsedLimit) && parsedLimit > 0
-      ? Math.min(parsedLimit, 100)
-      : DEFAULT_THREAD_PAGE_SIZE;
-    const wantsFiltered = filterStatusParam === ThreadFilterStatus.filtered;
-    const needsReply = searchParams.get('needsReply') === 'true';
-    const forMe = searchParams.get('forMe') === 'true';
-    const hasDraft = searchParams.get('hasDraft') === 'true';
-    const tagParam = searchParams.get('tag');
-    const tag = tagParam && VALID_TAGS.has(tagParam) ? tagParam : undefined;
-    const channelTypeParam = searchParams.get('channelType');
-    const channelType = channelTypeParam && channelTypeParam.length > 0 ? channelTypeParam : undefined;
+    const {
+      status,
+      filterStatus,
+      preview,
+      countOnly,
+      includeCount,
+      cursor,
+      limit,
+      needsReply,
+      forMe,
+      hasDraft,
+      tag,
+      channelType,
+    } = parseThreadListQuery(searchParams);
+    const wantsFiltered = filterStatus === ThreadFilterStatus.filtered;
 
     const sqlFilters = {
       forMe,

@@ -1,4 +1,4 @@
-import { Prisma, db as defaultDb } from "@shopkeeper/db"
+import { Prisma, db as defaultDb, type DbChannelType } from "@shopkeeper/db"
 import { SUPPORTED_AGENT_PLAN_CACHE_VERSIONS } from "@shopkeeper/agent/plan-cache-shape"
 import { canonicalInboxThreadSql } from "@/lib/messaging/inbox-filter"
 
@@ -103,7 +103,7 @@ export type ThreadListSqlFilters = {
   hasDraft?: boolean
   needsReply?: boolean
   tag?: string
-  channelType?: string
+  channelType?: DbChannelType
   wantsFiltered?: boolean
   status?: "open" | "closed"
 }
