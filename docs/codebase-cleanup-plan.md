@@ -142,8 +142,8 @@ claim, delivered the dismissal reply, cleared both contexts, and created no
 
 ### P1-04 — Make locks a shared latency guard with renewal
 
-**Status (2026-07-20): Local implementation complete; deployment observation
-pending.** Both Upstash and ioredis lock adapters now renew a held lease with a
+**Status (2026-07-20): Merged to master; deployment observation pending.** Both
+Upstash and ioredis lock adapters now renew a held lease with a
 token-checked Redis script at one-third of its TTL. A failed/unknown renewal
 marks the lease lost and emits a warning; release is idempotent and can never
 delete a successor's lock. Deterministic tests cover a long-running renewal,
@@ -188,7 +188,7 @@ threads.
 
 ### P2-02 — Bound intelligence context and validate classifier output
 
-**Status (2026-07-20): Local implementation and dedicated eval gate complete;
+**Status (2026-07-20): Merged to master with the dedicated eval gate complete;
 shadow/enforce rollout remains.** The canonical classifier contract now owns the five
 allowed tags, exact two-letter language normalization, and explicit title,
 summary, and reason character limits. Gateway parsing rejects unknown tags,
@@ -803,7 +803,7 @@ the prioritized relationships. It has not been applied to production.
 ### P5-04 — Define and correct the active thread/escalation state model
 
 **Status (2026-07-20): App model deployed; production compatibility audit clean;
-planner-surface cleanup complete locally.**
+planner-surface cleanup merged to master.**
 Product decision resolved and the app layer is implemented; the historical
 backfill is staged but the production audit shows it is a no-op (see below).
 Decision: escalation is an **orthogonal flag, not a `pending`
@@ -889,8 +889,8 @@ at sub-millisecond boundaries; default page size 50; malformed/legacy cursors re
 
 ### P6-02 — Monitor every business-critical queue and formalize failed-job recovery
 
-**Status (2026-07-20): Local acceptance criteria complete; operational exercise
-pending.** Queue-health now covers outbound-email, gmail-sync,
+**Status (2026-07-20): Merged to master with local acceptance criteria complete;
+operational exercise pending.** Queue-health now covers outbound-email, gmail-sync,
 order-review and operator-event with per-queue SLO thresholds falling back to the global
 config (PR #26). Detailed diagnostics are gated (PR #27): `/health/deep` stays public but
 coarse (per-check `status` only, matching the dashboard `/api/health` contract), and
@@ -1036,7 +1036,7 @@ remain required before canary.
 
 ### P8-03 — Stage an enforced CSP
 
-**Status (2026-07-20): Local report-only telemetry slice complete; deployed
+**Status (2026-07-20): Report-only telemetry slice merged to master; deployed
 observation, nonce migration, and enforcement remain.** The global report-only
 policy now advertises both legacy `report-uri` and Reporting API `report-to`
 delivery to `/api/security/csp-report`. The unauthenticated collector accepts
@@ -1059,7 +1059,7 @@ slice intentionally does not claim enforcement.
 
 ### P8-04 — Normalize query/status validation without changing stored semantics
 
-**Status (2026-07-20): Local implementation complete.** `/api/threads` now uses
+**Status (2026-07-20): Merged to master.** `/api/threads` now uses
 one query parser for status, filter status, booleans, tag, channel type, limit,
 and compound cursor. Only documented enum values reach the SQL filter builder;
 malformed booleans, unknown enums/tags/channels, non-integer or out-of-range
@@ -1241,11 +1241,12 @@ implementation, additive migration, application deployment, signed-event
 replay, and first strict production canary are complete; its longer observation
 window remains open.
 
-**Progress (2026-07-20):** The next unblocked local slice now includes P1-04
-renewable latency-guard locks, all of P2-02's bounded-context implementation and
-dedicated quality/token eval, P5-03's audit plus `NOT VALID` enforcement
-migration, P5-04 planner-surface retirement, P6-02's per-queue recovery runbook,
-P8-04 query validation, and P9-01 documentation cleanup. Read-only production
+**Progress (2026-07-20):** P1-04 renewable latency-guard locks, P2-02 bounded
+context and its dedicated quality/token eval, P5-04 planner-surface retirement,
+P6-02's per-queue recovery guard, P8-03 report-only CSP collection, and P8-04
+query validation are merged to master. P5-03's audit plus `NOT VALID`
+enforcement migration remains a draft pending production-copy validation; this
+P9-01 documentation update is the final merge of the batch. Read-only production
 audits are clean: tenant consistency has zero mismatches across 13 checks;
 plan-execution and refund-reservation audits have zero traffic; the Stripe audit
 has one completed event; outbound email has one Gmail send with provider ID;
@@ -1259,18 +1260,18 @@ checks and the required 20% token-reduction gate.
 
 Next:
 
-1. Review and land the current local slice. Re-run the full real-model eval only
-   after Anthropic credit is restored; do not interpret credit errors as a
-   baseline regression. Then deploy `AGENT_CONTEXT_BUDGET_MODE=shadow` on the
-   dashboard, public gateway, and worker before one long-thread `enforce` canary.
+1. Deploy the merged bounded-context slice after re-running the full real-model
+   eval when Anthropic credit is restored; do not interpret credit errors as a
+   baseline regression. Set `AGENT_CONTEXT_BUDGET_MODE=shadow` on the dashboard,
+   public gateway, and worker before one long-thread `enforce` canary.
 2. Validate P5-03's ordinary unique-index lock timing and every `NOT VALID`
    foreign key against a current production copy. Re-run the strict production
    audit immediately before the migration, deploy it separately, and validate
    constraints in a later controlled step. Do not combine it with other schema
    work.
-3. Deploy the P1-04 lease renewal with the local Redis topology unchanged and
-   observe a long turn. PostgreSQL claims remain the correctness boundary even
-   while Redis renewal is healthy.
+3. Deploy the merged P1-04 lease renewal with the local Redis topology unchanged
+   and observe a long turn. PostgreSQL claims remain the correctness boundary
+   even while Redis renewal is healthy.
 4. Keep the plan-execution shadow window open until it contains representative
    dashboard and gateway executions; the latest 24-hour audit has zero
    executions. Then review repeated observations before enforcing dashboard.
