@@ -98,7 +98,7 @@ export interface SendEmailInput {
 }
 
 export interface UpdateThreadStatusInput {
-  status: "open" | "pending" | "closed";
+  status: "open" | "closed";
 }
 
 export interface UpdateThreadTagInput {

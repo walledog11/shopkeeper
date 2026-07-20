@@ -59,7 +59,7 @@ export const THREAD_TOOL_DEFINITIONS = [
   defineTool({
     name: "escalate_to_human",
     description:
-      "Hand off the ticket to the merchant when a tool failure, missing data, or out-of-scope question prevents you from helping. Marks the thread as pending with a 'needs_human' tag and logs the reason. Stop after calling this — do not attempt any other tools or send a reply.",
+      "Hand off the ticket to the merchant when a tool failure, missing data, or out-of-scope question prevents you from helping. Keeps the ticket open, records the escalation time, applies the 'needs_human' tag, and logs the reason. Stop after calling this — do not attempt any other tools or send a reply.",
     fields: {
       reason: stringArg("A short explanation of why a human needs to take over (e.g. 'Customer is asking about wholesale pricing — out of scope', 'Shopify returned 503 on refund attempt').", { required: true }),
     },
