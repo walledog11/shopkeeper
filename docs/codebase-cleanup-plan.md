@@ -119,14 +119,17 @@ deployment evidence, not enforcement evidence.
 
 ### P1-03 — Give pending operator plans a stable identity and resolve every device
 
-**Status (2026-07-12): Completed; live multi-device verification pending.** New
+**Status (2026-07-20): Completed; live multi-device dismissal verified.** New
 pending-plan JSON carries plan ID, source message ID, plan hash, and instruction
 hash while legacy readers remain compatible. Approval and dismissal resolve the
 same plan across every organization context with conditional JSON predicates;
 newer unrelated parked state is preserved. Stale, duplicate, failed, and unknown
 claims are made non-actionable on every device. Database-backed tests cover
 same-plan fan-out, newer-plan preservation, legacy conditional cleanup, and
-claim rejection.
+claim rejection. A production canary parked one stable plan identity across the
+bound Telegram and iMessage contexts; an iMessage `no` committed on its first
+claim, delivered the dismissal reply, cleared both contexts, and created no
+`PlanExecution`.
 
 - **Related findings:** AUD-001, AUD-007, AUD-020.
 - **Files likely to change:** `apps/gateway/src/operator-context.ts`; `message-handlers/planning-notifications.ts`, `pending-plan-actions.ts`, `operator-ledger.ts`; Telegram/iMessage plan tests; Prisma schema only if normalized references replace JSON.
@@ -509,20 +512,26 @@ post-commit and remains best-effort.
 
 ### P4-03 — Queue operator-channel messages before acknowledgement
 
-**Status (2026-07-18): Telegram canary active; iMessage rollout pending.** The
+**Status (2026-07-20): Telegram and iMessage durable canaries active; mixed-channel observation open.** The
 Telegram + iMessage implementations, recovery sweep, strict rollout audit, and
-`unknown`-event recovery runbook are complete. Migration status reports all 56
+`unknown`-event recovery runbook are complete. Migration status reports all 57
 migrations applied in production; the public gateway and separate worker are
-both deployed on canary commit `7774c88c`. Telegram durability is enabled on
-both services while iMessage remains off. The first strict 24-hour audit found
+both deployed on commit `1240d597`, with durable Telegram and iMessage ingestion
+enabled on both services. The first strict 24-hour audit found
 two Telegram events, both committed on their first claim with delivered replies.
 The fresh one-hour required-traffic check then passed with another first-claim
 committed/delivered event; the follow-up 24-hour strict audit reports three clean
 Telegram events and no failed, unknown, stale, undelivered, or repeated-claim
 records. A later `help` command also passed its one-hour strict audit on the first
 claim with a delivered reply and no surrounding gateway/worker warnings or
-errors. Only pending-plan traffic remains in the representative observation
-window before iMessage rollout. A durable `OperatorEvent`
+errors. A fresh Telegram pending-plan `no` then committed on its first claim,
+delivered its dismissal, and passed the required-channel strict audit without
+blockers. After enabling iMessage, a new stable-identity plan was parked across
+both bound channels; the iMessage `no` also committed on its first claim,
+delivered its dismissal, cleared the plan from both contexts, and created no
+execution. The resulting strict 24-hour audit contains one Telegram and one
+iMessage event, both first-claim committed with delivered replies and no failed,
+unknown, stale, undelivered, or repeated-claim records. A durable `OperatorEvent`
 table (migration `20260715020000_add_operator_events`) with a unique
 `(channel, providerMessageId)` key and a claim-state CHECK constraint backs the
 new path. Behind `OPERATOR_DURABLE_QUEUE_TELEGRAM` / `OPERATOR_DURABLE_QUEUE_IMESSAGE`,
@@ -572,12 +581,16 @@ gateway unit + integration suite passes.
   and `unknown` events, correlates `AgentAction` rows by durable turn ID, checks
   provider truth, and never blindly re-drives an ambiguous turn. See
   `docs/production/runbook.md`.
-- [ ] Complete the Telegram observation window with fresh representative
-  pending-plan traffic, then canary iMessage; verify ack timing,
-duplicate suppression, and crash recovery before broadening. **The 2026-07-19
-24-hour strict audit is clean with four Telegram events, all committed on their
-first claim with delivered replies; the latest required-traffic one-hour audit
-contained zero events, so it does not advance the pending-plan gate.**
+- [x] Complete the Telegram observation window with fresh representative
+  pending-plan traffic, then canary iMessage. **The 2026-07-20 Telegram and
+  iMessage pending-plan dismissals each committed on their first claim with a
+  delivered reply and no strict-audit blockers; the stable iMessage decision
+  cleared both bound contexts without creating an execution. Enqueue-before-ack,
+  duplicate suppression, and crash recovery remain covered by deterministic
+  integration tests rather than an unsafe production crash injection.**
+- [ ] Keep both durable-channel flags enabled through a mixed-channel observation
+  window, then retire the synchronous fallback only after a fresh 24-hour strict
+  audit remains clean.
 - [x] Add the `OPERATOR_EVENT` processing queue to queue-health monitoring with
   a per-queue waiting threshold (P6-02, PR #26).
 
@@ -1043,8 +1056,9 @@ These can proceed while the durable-execution design is reviewed, provided they 
   isolated test database and applied to production before the application
   deployment on 2026-07-19.**
 - Operator inbox/event persistence (P4-03). **Migration
-  `20260715020000_add_operator_events` is applied in production. Telegram is
-  enabled on both gateway services for its canary; iMessage remains off.**
+  `20260715020000_add_operator_events` is applied in production. Telegram and
+  iMessage are enabled on both gateway services; both live dismissal canaries
+  passed on their first claim with delivered replies.**
 - Compound tenant constraints after audit/backfill (P5-03).
 - Active-thread constraint/state migration if `pending` remains active (P5-04).
 
@@ -1071,8 +1085,9 @@ applied in production, and the cleanup implementation is deployed on commit
 `92d9333`. The Vercel dashboard and both Railway gateway services are explicitly
 in ledger `shadow` mode and healthy. The first strict 24-hour production audit
 passed but contained zero executions, so real-traffic observation, claim/recovery
-review, provider and queue canary evidence, and live multi-device verification
-remain rollout prerequisites. P4-01 now provides one-winner email delivery
+review, and provider and queue canary evidence remain rollout prerequisites;
+P1-03 live multi-device dismissal is now verified. P4-01 now provides one-winner
+email delivery
 claims, tenant validation, stable queue/provider identity, explicit unknown
 delivery, and stale-claim recovery; its provider-activity runbook and strict
 audit are implemented, while provider canaries remain open. P3-01's shared retry/unknown
@@ -1124,14 +1139,15 @@ Next:
    rail and `OUTBOUND_EMAIL_ASYNC` off until mailbox confirmation, unknown
    reconciliation, and stale-claim monitoring are proven.
 8. P4-03's migration, recovery sweep, strict audit, and `unknown`-event runbook
-   are deployed. Telegram is enabled on both gateway services; the fresh
-   required-traffic gate and follow-up strict audits pass; the latest 24-hour
-   audit on 2026-07-19 contains four first-claim committed events, delivered
-   replies, and no blockers. The latest one-hour required-traffic audit contains
-   zero events and therefore does not advance the pending-plan gate.
-   A reversible pending-plan card was staged on 2026-07-19; complete its
-   Telegram `no` reply and required-channel audit, then canary iMessage. Do not broaden natural-language
-   ticket sends until that rollout and P4-01's are complete.
+   are deployed. Telegram and iMessage durable ingestion are enabled on both
+   gateway services. Fresh pending-plan `no` canaries passed on both channels;
+   the iMessage decision cleared the same stable plan from both bound contexts
+   without execution. The latest strict 24-hour audit contains one Telegram and
+   one iMessage event, both first-claim committed with delivered replies and no
+   blockers. Keep the mixed-channel observation window open and retire the
+   synchronous fallback only after another clean 24-hour audit. Do not broaden
+   natural-language ticket sends until that observation and P4-01's outbound-email
+   rollout are complete.
 9. P4-02 is deployed and its signed-event replay canary passed. Keep
    `npm run audit:stripe-webhooks -- --hours=24 --strict` clean through the
    observation window before removing any transitional rollback path.
