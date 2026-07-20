@@ -4,8 +4,11 @@ import type { LockAcquireOptions, LockProvider, ThreadLock } from './index.js';
 
 export const RELEASE_SCRIPT =
   'if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end';
+export const RENEW_SCRIPT =
+  'if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("expire", KEYS[1], ARGV[2]) else return 0 end';
 export const ACQUIRE_TIMEOUT_MS = 1000;
-export const NOOP_LOCK: ThreadLock = { release: async () => {} };
+export const RENEW_TIMEOUT_MS = 1000;
+export const NOOP_LOCK: ThreadLock = { release: async () => {}, isLost: () => false };
 
 const TIMED_OUT = Symbol('timed-out');
 
@@ -16,6 +19,7 @@ export interface RedisLockLogger {
 export interface RedisLockClient {
   setNxEx(key: string, token: string, ttlSeconds: number): Promise<unknown>;
   evalRelease(key: string, token: string): Promise<unknown>;
+  evalRenew(key: string, token: string, ttlSeconds: number): Promise<unknown>;
 }
 
 export interface RedisLockClientSource {
@@ -24,6 +28,7 @@ export interface RedisLockClientSource {
 
 export interface RedisLockProviderOptions {
   log?: RedisLockLogger;
+  renewIntervalMs?: number;
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | typeof TIMED_OUT> {
@@ -102,8 +107,51 @@ export function createRedisLockProvider(
       }
 
       if (acquired !== 'OK') return null;
+      let released = false;
+      let lost = false;
+      let renewing = false;
+      const renewIntervalMs = options?.renewIntervalMs
+        ?? Math.max(250, Math.floor(ttlSeconds * 1000 / 3));
+      const renewalTimer = setInterval(async () => {
+        if (released || lost || renewing) return;
+        renewing = true;
+        try {
+          const renewed = await withTimeout(
+            client.evalRenew(key, token, ttlSeconds),
+            RENEW_TIMEOUT_MS,
+          );
+          if (renewed !== 1) {
+            lost = true;
+            clearInterval(renewalTimer);
+            options?.log?.warn(
+              {
+                threadId,
+                timeoutMs: renewed === TIMED_OUT ? RENEW_TIMEOUT_MS : undefined,
+              },
+              renewed === TIMED_OUT
+                ? '[agent-lock] lease renewal timed out; lock ownership is unknown'
+                : '[agent-lock] lease renewal lost; another caller may hold the latency guard',
+            );
+          }
+        } catch (err) {
+          lost = true;
+          clearInterval(renewalTimer);
+          options?.log?.warn(
+            { err: (err as Error).message, threadId },
+            '[agent-lock] lease renewal failed; lock ownership is unknown',
+          );
+        } finally {
+          renewing = false;
+        }
+      }, renewIntervalMs);
+      renewalTimer.unref?.();
+
       return {
+        isLost: () => lost,
         async release() {
+          if (released) return;
+          released = true;
+          clearInterval(renewalTimer);
           try {
             await client.evalRelease(key, token);
           } catch {
@@ -122,6 +170,7 @@ export function upstashRedisLockClient(redis: {
   return {
     setNxEx: (key, token, ttlSeconds) => redis.set(key, token, { nx: true, ex: ttlSeconds }),
     evalRelease: (key, token) => redis.eval(RELEASE_SCRIPT, [key], [token]),
+    evalRenew: (key, token, ttlSeconds) => redis.eval(RENEW_SCRIPT, [key], [token, String(ttlSeconds)]),
   };
 }
 
@@ -133,10 +182,11 @@ export function ioredisLockClient(redis: {
     ttlSeconds: number,
     setMode: 'NX',
   ): Promise<unknown>;
-  eval(script: string, numKeys: number, key: string, token: string): Promise<unknown>;
+  eval(script: string, numKeys: number, key: string, ...args: Array<string | number>): Promise<unknown>;
 }): RedisLockClient {
   return {
     setNxEx: (key, token, ttlSeconds) => redis.set(key, token, 'EX', ttlSeconds, 'NX'),
     evalRelease: (key, token) => redis.eval(RELEASE_SCRIPT, 1, key, token),
+    evalRenew: (key, token, ttlSeconds) => redis.eval(RENEW_SCRIPT, 1, key, token, ttlSeconds),
   };
 }

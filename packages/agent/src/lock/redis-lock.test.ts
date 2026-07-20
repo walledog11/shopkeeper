@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  RENEW_SCRIPT,
   createRedisLockProvider,
   ioredisLockClient,
   upstashRedisLockClient,
@@ -14,9 +15,10 @@ function makeFakeUpstashRedis() {
       store.set(key, value);
       return 'OK';
     }),
-    eval: vi.fn(async (_script: string, keys: string[], args: string[]) => {
+    eval: vi.fn(async (script: string, keys: string[], args: string[]) => {
       const [key] = keys;
       const [token] = args;
+      if (script === RENEW_SCRIPT) return store.get(key) === token ? 1 : 0;
       if (store.get(key) === token) {
         store.delete(key);
         return 1;
@@ -36,7 +38,8 @@ function makeFakeIoredis() {
       store.set(key, value);
       return 'OK';
     }),
-    eval: vi.fn(async (_script: string, _numKeys: number, key: string, token: string) => {
+    eval: vi.fn(async (script: string, _numKeys: number, key: string, token: string) => {
+      if (script === RENEW_SCRIPT) return store.get(key) === token ? 1 : 0;
       if (store.get(key) === token) {
         store.delete(key);
         return 1;
@@ -48,6 +51,7 @@ function makeFakeIoredis() {
 
 describe('createRedisLockProvider', () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.clearAllMocks();
   });
 
@@ -82,11 +86,17 @@ describe('createRedisLockProvider', () => {
 
     expect(first).not.toBeNull();
     expect(second).toBeNull();
+    await first!.release();
   });
 
-  it('reproduces overlapping ownership after the fixed lease expires', async () => {
+  it('detects ownership loss without deleting a successor lock', async () => {
+    vi.useFakeTimers();
     const fake = makeFakeUpstashRedis();
-    const provider = createRedisLockProvider(upstashRedisLockClient(fake));
+    const log = { warn: vi.fn() };
+    const provider = createRedisLockProvider(upstashRedisLockClient(fake), {
+      log,
+      renewIntervalMs: 100,
+    });
 
     const first = await provider.acquire('thread-expiry', { ttlSeconds: 1 });
     expect(first).not.toBeNull();
@@ -97,10 +107,36 @@ describe('createRedisLockProvider', () => {
     const second = await provider.acquire('thread-expiry', { ttlSeconds: 1 });
 
     expect(second).not.toBeNull();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(first!.isLost?.()).toBe(true);
+    expect(log.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ threadId: 'thread-expiry' }),
+      expect.stringMatching(/lease renewal lost/),
+    );
     await first!.release();
     expect(fake.store.has('agent:lock:thread-expiry')).toBe(true);
     await second!.release();
     expect(fake.store.has('agent:lock:thread-expiry')).toBe(false);
+    vi.useRealTimers();
+  });
+
+  it('renews a long-running lock with a token-checked lease extension', async () => {
+    vi.useFakeTimers();
+    const fake = makeFakeIoredis();
+    const provider = createRedisLockProvider(ioredisLockClient(fake), {
+      renewIntervalMs: 100,
+    });
+
+    const lock = await provider.acquire('thread-long', { ttlSeconds: 1 });
+    await vi.advanceTimersByTimeAsync(350);
+
+    const renewCalls = fake.eval.mock.calls.filter(([script]) => script === RENEW_SCRIPT);
+    expect(renewCalls).toHaveLength(3);
+    expect(lock!.isLost?.()).toBe(false);
+    expect(fake.store.has('agent:lock:thread-long')).toBe(true);
+
+    await lock!.release();
+    vi.useRealTimers();
   });
 
   it('fails open when the client source is unavailable', async () => {
