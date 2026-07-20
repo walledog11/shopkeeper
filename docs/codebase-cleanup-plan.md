@@ -22,11 +22,11 @@ database-backed combined coverage suite, production build, and the eight-test
 auth-bypass Playwright smoke suite. The full local equivalent passes; the first
 hosted run remains the release check.
 
-**Local verification checkpoint (2026-07-12):**
+**Local verification checkpoint (2026-07-20):**
 
 - [x] Structure/repository/package lint and repository type-check pass.
-- [x] 1,093 unit tests and 30 Node-script tests pass.
-- [x] 843 database-backed integration tests pass; 2 cases are skipped by the
+- [x] 1,253 unit tests and 38 Node-script tests pass.
+- [x] 993 database-backed integration tests pass; 3 cases are skipped by the
   existing suite configuration.
 - [x] All 8 auth-bypass Playwright smoke tests pass.
 - [x] The production build passes with Sentry uploads explicitly disabled;
@@ -44,7 +44,7 @@ hosted run remains the release check.
 - **Tests required:** The CI commands themselves; prove a deliberately failing fixture is detected before merging the CI change.
 - **Rollback considerations:** Revert workflow-only changes if runtime/cost is unacceptable; do not weaken required safety suites silently.
 - **Acceptance criteria:** CI reproduces the audit baseline: lint/type-check pass,
-  the current legitimate totals of 1,093 unit, 30 script, 843 integration and 8
+  the current legitimate totals of 1,253 unit, 38 script, 993 integration and 8
   smoke tests execute successfully.
 
 ### P0-02 — Add a deterministic concurrency and failure-injection harness
@@ -142,6 +142,18 @@ claim, delivered the dismissal reply, cleared both contexts, and created no
 
 ### P1-04 — Make locks a shared latency guard with renewal
 
+**Status (2026-07-20): Merged to master; deployment observation pending.** Both
+Upstash and ioredis lock adapters now renew a held lease with a
+token-checked Redis script at one-third of its TTL. A failed/unknown renewal
+marks the lease lost and emits a warning; release is idempotent and can never
+delete a successor's lock. Deterministic tests cover a long-running renewal,
+ownership loss, successor-safe release, Redis outage, and fail-open/fail-closed
+acquisition. The production runbook now documents the intentional topology:
+dashboard Upstash and gateway Railway Redis remain separate latency guards,
+while PostgreSQL execution/event/reservation claims own cross-host correctness.
+No shared Redis migration is required. A deployed long-turn observation is the
+remaining rollout evidence.
+
 - **Related findings:** AUD-001, AUD-015.
 - **Files likely to change:** `packages/agent/src/lock/redis-lock.ts`; dashboard/gateway lock adapters; environment/deployment documentation.
 - **Proposed implementation:** After ledger enforcement, either point both hosts at one lock authority or retain host-local locks only for duplicate-work suppression. Add token-checked renewal/lease loss handling for long turns. Correctness must remain with the database claim.
@@ -175,6 +187,26 @@ threads.
 - **Acceptance criteria:** Only the newest customer message can produce a cached/notified/executed plan, and bursts produce at most the defined bounded model calls.
 
 ### P2-02 — Bound intelligence context and validate classifier output
+
+**Status (2026-07-20): Merged to master with the dedicated eval gate complete;
+shadow/enforce rollout remains.** The canonical classifier contract now owns the five
+allowed tags, exact two-letter language normalization, and explicit title,
+summary, and reason character limits. Gateway parsing rejects unknown tags,
+invalid classifications, missing/non-string core fields, and prevents oversized
+model text from reaching persisted thread fields. Existing leniency remains for
+additive intent/language signals: malformed optional values safely normalize to
+empty/all-false rather than dropping an otherwise valid classification.
+
+`AGENT_CONTEXT_BUDGET_MODE=off|shadow|enforce` now gates shared hard budgets for
+recent messages, prior summaries, KB articles/search results, store/brand/sample
+context, order context, operator ledger, classifier input, and instructions.
+Shadow mode preserves legacy prompts while logging privacy-safe character/token
+estimates by purpose; enforce mode supplies only bounded context. Unit and
+database-backed long-thread/article tests pass. A real-model long-thread eval
+preserved the expected plan and reduced prompt tokens by at least the required
+20%. The production runbook defines aligned dashboard/gateway/worker shadow,
+long-thread canary, and rollback steps. The full committed eval-suite check and
+deployed shadow observation are rollout gates rather than missing implementation.
 
 - **Related findings:** AUD-014.
 - **Files likely to change:** `apps/gateway/src/message-handlers/intelligence.ts`, `email-classification.ts`; `packages/agent/src/context.ts`; classifier/prompt tests and eval fixtures.
@@ -724,6 +756,41 @@ provider call or cross-tenant mutation.
 
 ### P5-03 — Audit and then enforce relational tenant consistency
 
+**Status (2026-07-20): Production audit clean and local enforcement migration
+complete; staged production validation/deployment remain.** `npm run
+audit:tenant-consistency -- --strict` checks 13 high-risk relationships spanning
+thread/customer/reply integration/cached message, message/thread/integration,
+agent action/thread/customer/execution, plan execution/thread/source message,
+and KB article/citation parents. It reports total counts plus bounded UUID-only
+samples and never emits message, customer, article, or KB content. Strict mode
+fails on any mismatch; `--sample-limit` is bounded to 1–1,000. Database-backed
+coverage deliberately creates every supported cross-tenant relationship and
+proves each is detected, while unit coverage proves aggregation, clean-state,
+sample limiting, and strict-gate inputs. The strict production audit returned
+zero mismatches across every check, so no data repair is currently required.
+
+Migration `20260720010000_add_tenant_consistency_constraints` adds supporting
+compound unique indexes and 14 table-specific compound foreign keys as `NOT
+VALID`. The additional source-message/thread constraint proves a plan source
+belongs to its claimed thread as well as its tenant. PostgreSQL 17 column-targeted
+`SET NULL` preserves tenant IDs for nullable references. The migration rebuilds
+successfully in the isolated database, and database-backed tests prove same-
+tenant writes remain valid while new cross-tenant writes are rejected across
+the prioritized relationships. It has not been applied to production.
+
+**Still required:**
+
+- [x] Run the strict audit against production and preserve reviewed evidence.
+- [x] Review whether repair is required. The audit is clean; if a future
+  pre-deploy audit finds mismatches, determine ownership and repair them through an
+  approved, separately reviewed backfill; never delete inconsistent rows
+  automatically.
+- [x] Add table-specific compound foreign keys as `NOT VALID` and prove new
+  mismatch rejection in the isolated database.
+- [ ] Review index lock timing and validate every constraint against a current
+  production copy, then deploy and run `VALIDATE CONSTRAINT` separately. Keep
+  each constraint independently removable.
+
 - **Related findings:** AUD-016.
 - **Files likely to change:** read-only audit script; Prisma schema; one or more staged SQL migrations; central write helpers.
 - **Proposed implementation:** Query production for mismatched parent/tenant pairs, repair through an approved backfill, then add compound foreign keys/check triggers where feasible. Keep migrations table-specific and reversible.
@@ -735,7 +802,8 @@ provider call or cross-tenant mutation.
 
 ### P5-04 — Define and correct the active thread/escalation state model
 
-**Status (2026-07-16): Merged to master (PR #20); production deploy pending.**
+**Status (2026-07-20): App model deployed; production compatibility audit clean;
+planner-surface cleanup merged to master.**
 Product decision resolved and the app layer is implemented; the historical
 backfill is staged but the production audit shows it is a no-op (see below).
 Decision: escalation is an **orthogonal flag, not a `pending`
@@ -754,8 +822,8 @@ additive and deploy-safe.
 
 **Still required (staged):**
 
-- [ ] Backfill historical `pending` threads to `open` + `escalated_at`. **Backfill
-  code is written and staged; the production audit returned 0 pending threads and
+- [x] Audit/backfill historical `pending` threads to `open` + `escalated_at`.
+  **Backfill code is written and staged; the production audit returned 0 pending threads and
   0 collisions, so the run is currently a no-op — re-audit before running rather
   than assuming rows appeared.** `npm run backfill:escalation`
   is dry-run by default and requires `--execute` to write; it flips live pending
@@ -777,11 +845,12 @@ additive and deploy-safe.
   (`scripts/backfill-escalation.test.mjs`); the raw SQL aggregation is not
   DB-exercised (pre-launch, no rows) — validate against a data copy before the
   prod run.
-- [ ] Retire `pending` from the support-planner surface **with the eval gate**:
-  the `update_thread_status` tool still offers `pending`
-  (`registry/helpers.ts` `threadStatuses`) and the `escalate_to_human` tool
-  description still says "Marks the thread as pending". Both are prompt bytes, so
-  they were intentionally left unchanged here (A3 precedent) and need an eval run.
+- [x] Retire `pending` from the support-planner surface with the eval gate.
+  Production compatibility queries found zero pending cached
+  `update_thread_status` plans, zero historical pending tool actions, and zero
+  pending threads. `update_thread_status` now offers only `open` and `closed`;
+  `escalate_to_human` describes the orthogonal escalation flag while
+  keeping the ticket open. Legacy database values remain readable.
 - [x] Escalated threads suppress auto-execute. Because they now stay `open`, a
   customer follow-up would otherwise re-trigger autonomous execution on a ticket
   flagged for a human. `generateThreadPlan` gates auto-execute on
@@ -820,16 +889,17 @@ at sub-millisecond boundaries; default page size 50; malformed/legacy cursors re
 
 ### P6-02 — Monitor every business-critical queue and formalize failed-job recovery
 
-**Status (2026-07-18): Monitoring and diagnostics protection complete (PR #26, #27);
-failed-job recovery runbook pending.** Queue-health now covers outbound-email, gmail-sync,
+**Status (2026-07-20): Merged to master with local acceptance criteria complete;
+operational exercise pending.** Queue-health now covers outbound-email, gmail-sync,
 order-review and operator-event with per-queue SLO thresholds falling back to the global
 config (PR #26). Detailed diagnostics are gated (PR #27): `/health/deep` stays public but
 coarse (per-check `status` only, matching the dashboard `/api/health` contract), and
 `/health/queues` — which exposes queue counts, worker PID and failed-job tenant identifiers —
-now requires the internal secret. Remaining (separate PR): the failed-job triage/replay
-runbook. It is blocked on the P1/P4 idempotent-replay dependency — `workers/failure.ts` is
-log-only, and a documented replay path is unsafe until mutating/sending jobs are idempotent on
-retry, so the "safe documented recovery path" half of the acceptance criterion is not yet met.
+now requires the internal secret. The production runbook has a privacy-safe
+inspection command and a per-queue recovery matrix. It permits replay only when
+the queue's durable identity/state proves it safe, explicitly forbids generic
+replay for outbound email and claimed/terminal operator turns, and preserves
+PostgreSQL truth when stale BullMQ evidence is removed.
 The 2026-07-19 production verifier was corrected to authenticate its detailed
 queue request. It identified 11 historical inbound failures from the already-
 resolved `escalated_at` migration gap and 7 older AI-summary parse failures;
@@ -837,6 +907,10 @@ all were idle for more than 24 hours with no active/waiting work. Their sanitize
 root-cause evidence was captured and the stale BullMQ records were removed. The
 authenticated queue check and full production verifier now pass with zero
 failed jobs.
+
+The remaining rollout evidence is a controlled recovery exercise for a replayable
+queue and an operator walkthrough of the non-replay paths; it is no longer
+blocked on an undefined recovery policy.
 
 - **Related findings:** AUD-017.
 - **Files likely to change:** `apps/gateway/src/maintenance/queue-health.ts`, `workers/failure.ts`, health routes, runbooks, alert verification scripts.
@@ -932,6 +1006,25 @@ the formerly omitted product search, tracking, and support-stats reads.
 
 ### P8-02 — Upgrade Spectrum through a compatibility branch
 
+**Status (2026-07-20): Isolated compatibility spike complete; separate branch,
+provider sandbox, and canary remain.** The current registry release is
+`spectrum-ts@12.2.0`. An isolated exact-version probe confirmed that the gateway's
+current `Spectrum`, iMessage provider, webhook, space/send, shutdown, and content
+normalization APIs still typecheck and import at runtime with the repository's
+`skipLibCheck` setting. A detached copy of the real gateway then passed gateway
+typecheck, lint, build, 170 unit tests, and 481 integration tests without adapter
+changes.
+
+Installing 12.2 alone does not meet the security goal: its exporter subtree still
+pins OpenTelemetry 2.7.1/0.218 and produces the same baggage-allocation advisory.
+The isolated tree used aligned OpenTelemetry 2.9.0/0.220 overrides; that removed
+the complete OpenTelemetry audit chain, leaving one unrelated transitive Axios
+moderate advisory in the monorepo. Those overrides cross the provider's exact
+transitive pins, so they are evidence for the compatibility branch, not approval
+to edit the shared lockfile. Real Photon sandbox sends/receives, telemetry export,
+graceful shutdown under load, the oversized-baggage case, and a rollback artifact
+remain required before canary.
+
 - **Related findings:** AUD-019.
 - **Files likely to change:** `apps/gateway/package.json`, lockfile, Spectrum client/webhook adapters and tests.
 - **Proposed implementation:** Follow 4.x-to-9.x migration guidance, update adapters, run all iMessage suites and a real sandbox test, then stage deployment.
@@ -943,6 +1036,18 @@ the formerly omitted product search, tracking, and support-stats reads.
 
 ### P8-03 — Stage an enforced CSP
 
+**Status (2026-07-20): Report-only telemetry slice merged to master; deployed
+observation, nonce migration, and enforcement remain.** The global report-only
+policy now advertises both legacy `report-uri` and Reporting API `report-to`
+delivery to `/api/security/csp-report`. The unauthenticated collector accepts
+both browser formats, caps bodies at 16 KiB and batches at five violations,
+rate-limits a non-logged hashed client fingerprint, and logs only directives,
+status, and URL origins. Paths, queries, fragments, samples, and raw report bodies
+are never logged. Focused tests cover legacy and Reporting API payloads, privacy
+sanitization, malformed/oversized input, batch bounds, and rate limiting. The
+policy remains report-only and still permits `unsafe-inline`/`unsafe-eval`; this
+slice intentionally does not claim enforcement.
+
 - **Related findings:** AUD-018.
 - **Files likely to change:** `apps/dashboard/next.config.js`, instrumentation/layout/script integrations, CSP reporting tests/runbook.
 - **Proposed implementation:** Analyze report-only telemetry, remove production `unsafe-eval`, add nonces/hashes, canary enforcement, then switch the header.
@@ -953,6 +1058,16 @@ the formerly omitted product search, tracking, and support-stats reads.
 - **Acceptance criteria:** Enforced CSP blocks an injected script fixture while all supported flows function without unexpected violations.
 
 ### P8-04 — Normalize query/status validation without changing stored semantics
+
+**Status (2026-07-20): Merged to master.** `/api/threads` now uses
+one query parser for status, filter status, booleans, tag, channel type, limit,
+and compound cursor. Only documented enum values reach the SQL filter builder;
+malformed booleans, unknown enums/tags/channels, non-integer or out-of-range
+limits, and invalid cursors return typed 400 responses instead of silently
+falling back or reaching PostgreSQL. The SQL filter type now carries the Prisma
+channel enum rather than an unchecked string. Parser unit tests cover defaults,
+valid boundaries, and malformed values; database-backed route tests prove the
+HTTP 400 contract. Dashboard/agent/gateway typechecks and affected lint pass.
 
 - **Related findings:** AUD-014, AUD-021 and consistency observations.
 - **Files likely to change:** `/api/threads/route.ts`, shared API validation utilities, status/tag contracts and tests.
@@ -966,6 +1081,14 @@ the formerly omitted product search, tracking, and support-stats reads.
 ## Phase 9 — Documentation, observability and verified retirement
 
 ### P9-01 — Resolve compatibility naming and documentation drift
+
+**Status (2026-07-20): Local documentation cleanup complete.** The README now
+states that Telegram and iMessage operator channels are implemented, escalation
+tool text matches the active open-plus-flag model, and channel/operator comments
+no longer describe Telegram as the only active surface. Legacy storage/deployment
+identifiers remain intentionally unchanged and are labeled as compatibility
+names where they are discussed. Environment examples include the new bounded-
+context rollout rail, and the production environment checker covers it.
 
 - **Related findings:** AUD-021.
 - **Files likely to change:** `README.md`, environment examples, operator-context comments, production/channel runbooks.
@@ -996,8 +1119,11 @@ These can proceed while the durable-execution design is reviewed, provided they 
 3. P5-01's internal ownership assertions that do not overlap outbound-email state changes.
 4. P6-01: fix compound cursor correctness and default list limits.
 5. Validate classifier tags and query enum inputs from P2-02/P8-04.
-6. Expand queue-health monitoring from P6-02.
-7. P9-01: documentation/comment corrections.
+   **Completed locally 2026-07-20; bounded context and its dedicated real-model
+   eval are also complete, with staged rollout remaining.**
+6. Expand queue-health monitoring from P6-02. **Monitoring and the per-queue
+   recovery runbook are complete; a controlled recovery exercise remains.**
+7. P9-01: documentation/comment corrections. **Completed locally 2026-07-20.**
 
 “Quick win” does not mean deploy without tests; Meta and tenant-boundary changes still need focused integration coverage.
 
@@ -1035,7 +1161,6 @@ These can proceed while the durable-execution design is reviewed, provided they 
 - Member versus admin permission matrix (P5-02).
 - Supported attachment count, size and content types (P4-05).
 - Merchant UX and recovery authority for `unknown` external actions (P1/P3/P7).
-- Meaning of `pending` and whether escalation is a thread status or a separate active state (P5-04).
 - Whether failed known-no-op plans remain approvable or require regeneration.
 - Retention and visibility of execution/webhook inbox records.
 - Completion criteria/date for async-email-only operation.
@@ -1059,8 +1184,14 @@ These can proceed while the durable-execution design is reviewed, provided they 
   `20260715020000_add_operator_events` is applied in production. Telegram and
   iMessage are enabled on both gateway services; both live dismissal canaries
   passed on their first claim with delivered replies.**
-- Compound tenant constraints after audit/backfill (P5-03).
+- Compound tenant constraints after audit/backfill (P5-03). **The production
+  audit is clean and migration
+  `20260720010000_add_tenant_consistency_constraints` applies locally with 14
+  `NOT VALID` compound foreign keys. Production-copy validation and staged
+  deploy remain.**
 - Active-thread constraint/state migration if `pending` remains active (P5-04).
+  **No longer required: escalation is orthogonal, the additive `escalated_at`
+  migration is deployed, and production has zero legacy pending rows.**
 
 All should be additive first. Destructive cleanup belongs in later releases after application rollback windows close.
 
@@ -1071,6 +1202,7 @@ All should be additive first. Destructive cleanup belongs in later releases afte
 | Execution ledger | `off -> shadow claim/divergence logging -> enforce for dashboard -> enforce operator/auto` |
 | Shopify mutation policy | Per-tool canary; reads unchanged; `unknown` reconciliation observed before broad enablement |
 | AI coalescing | Stale-write rejection immediately; debounce/coalescing canary with token/latency/quality metrics |
+| Bounded AI context | Dedicated eval, aligned host `shadow`, one long-thread `enforce` canary, then normal observation |
 | Operator durable queue | Telegram canary, then iMessage; retain synchronous fallback briefly |
 | Outbound email claims | Test tenant/canary, monitor stale-processing recovery, then make async default |
 | RBAC | Audit/log denied-would-be actions, communicate, then enforce |
@@ -1107,38 +1239,65 @@ P7-01 and P4-06 are deployed; their remaining work is authenticated presentation
 checking and provider telemetry observation. P4-02's durable Stripe event
 implementation, additive migration, application deployment, signed-event
 replay, and first strict production canary are complete; its longer observation
-window remains open. The P6-02 failed-job replay runbook remains gated by P1/P4
-idempotency.
+window remains open.
+
+**Progress (2026-07-20):** P1-04 renewable latency-guard locks, P2-02 bounded
+context and its dedicated quality/token eval, P5-04 planner-surface retirement,
+P6-02's per-queue recovery guard, P8-03 report-only CSP collection, and P8-04
+query validation are merged to master. P5-03's audit plus `NOT VALID`
+enforcement migration remains a draft pending production-copy validation; this
+P9-01 documentation update is the final merge of the batch. Read-only production
+audits are clean: tenant consistency has zero mismatches across 13 checks;
+plan-execution and refund-reservation audits have zero traffic; the Stripe audit
+has one completed event; outbound email has one Gmail send with provider ID;
+operator events have one Telegram and one iMessage event, both first-claim
+committed/delivered; and escalation compatibility has zero pending rows/plans/
+actions. The full enforced-context eval reached 67/77 passing before Anthropic
+credit exhaustion caused nine explicit provider errors; one additional
+brand-voice fixture missed its expected no-read behavior. Treat that aggregate
+run as inconclusive. The independent long-thread comparison passed both quality
+checks and the required 20% token-reduction gate.
 
 Next:
 
-1. ~~Deploy the additive ledger migration before the enforcing application
-   build.~~ **Completed 2026-07-13.**
-2. Both hosts are explicitly in `shadow` and the initial strict audit is clean.
-   Keep the observation window open until it contains representative executions,
-   then review repeated observations before enforcing dashboard.
-3. Canary gateway enforcement on Telegram, then iMessage/auto-execution; verify one
-   multi-device decision and `unknown` recovery visibility.
-4. Canary the AI-summary debounce and confirm newest-message notification plus
+1. Deploy the merged bounded-context slice after re-running the full real-model
+   eval when Anthropic credit is restored; do not interpret credit errors as a
+   baseline regression. Set `AGENT_CONTEXT_BUDGET_MODE=shadow` on the dashboard,
+   public gateway, and worker before one long-thread `enforce` canary.
+2. Validate P5-03's ordinary unique-index lock timing and every `NOT VALID`
+   foreign key against a current production copy. Re-run the strict production
+   audit immediately before the migration, deploy it separately, and validate
+   constraints in a later controlled step. Do not combine it with other schema
+   work.
+3. Deploy the merged P1-04 lease renewal with the local Redis topology unchanged
+   and observe a long turn. PostgreSQL claims remain the correctness boundary
+   even while Redis renewal is healthy.
+4. Keep the plan-execution shadow window open until it contains representative
+   dashboard and gateway executions; the latest 24-hour audit has zero
+   executions. Then review repeated observations before enforcing dashboard.
+5. Canary the AI-summary debounce and confirm newest-message notification plus
    bounded model-call metrics.
-5. Sandbox/canary the completed P3-01 refund, cancellation, order-creation,
+6. Run the P6-02 controlled recovery exercise on one replayable test job and
+   walk the outbound-email/operator-event no-replay paths with on-call. Preserve
+   the per-queue database/provider evidence.
+7. Sandbox/canary the completed P3-01 refund, cancellation, order-creation,
    order-address, order-editing, gift-card, and store-credit paths, one tool
    family at a time, and define the durable reconciliation owner for outcomes
    that remain `unknown`. The only connected real store reports plan `basic`
    and has no test orders, so mutating canaries remain blocked until a confirmed
    Shopify test order/development store is available.
-6. The additive goodwill-reservation migration is deployed. Canary
+8. The additive goodwill-reservation migration is deployed. Canary
    refund/store-credit/gift-card cap enforcement and monitor
    stale or `unknown` reservations with
    `npm run audit:refund-spend-reservations -- --hours=24 --strict` until their
    recovery procedure is proven.
-7. The P4-01 outbound-send claim migration and state machine are deployed. A
+9. The P4-01 outbound-send claim migration and state machine are deployed. A
    Gmail queue canary committed once with provider identity, suppressed a
    duplicate enqueue, and passed its strict audit; mailbox confirmation is
    pending. Postmark is not configured. Keep synchronous email as the rollback
    rail and `OUTBOUND_EMAIL_ASYNC` off until mailbox confirmation, unknown
    reconciliation, and stale-claim monitoring are proven.
-8. P4-03's migration, recovery sweep, strict audit, and `unknown`-event runbook
+10. P4-03's migration, recovery sweep, strict audit, and `unknown`-event runbook
    are deployed. Telegram and iMessage durable ingestion are enabled on both
    gateway services. Fresh pending-plan `no` canaries passed on both channels;
    the iMessage decision cleared the same stable plan from both bound contexts
@@ -1148,6 +1307,14 @@ Next:
    synchronous fallback only after another clean 24-hour audit. Do not broaden
    natural-language ticket sends until that observation and P4-01's outbound-email
    rollout are complete.
-9. P4-02 is deployed and its signed-event replay canary passed. Keep
+11. P4-02 is deployed and its signed-event replay canary passed. Keep
    `npm run audit:stripe-webhooks -- --hours=24 --strict` clean through the
    observation window before removing any transitional rollback path.
+12. Complete P7-01's authenticated browser spot-checks. Deploy P8-03's CSP
+   collector while keeping the header report-only, observe authenticated Clerk,
+   dashboard, analytics, Sentry, and OAuth traffic, then plan the nonce/hash and
+   `unsafe-eval` removal canary from that evidence. Start P8-02 only in its own
+   compatibility branch using the proven 12.2 + aligned OpenTelemetry candidate;
+   validate Photon telemetry and real sandbox send/receive before a gateway
+   canary. P5-02 RBAC and P4-05 attachment limits remain blocked on explicit
+   product/security decisions.

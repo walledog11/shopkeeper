@@ -79,7 +79,7 @@ npm run build -w apps/gateway
 - `UPSTASH_REDIS_REST_URL`
 - `UPSTASH_REDIS_REST_TOKEN`
 
-> Dashboard `UPSTASH_REDIS_REST_URL` (Upstash REST — rate limiting, locks, presence) and gateway `REDIS_URL` (a dedicated per-instance Redis for BullMQ) are **separate** instances and must not point at the same database. BullMQ holds a blocking connection per worker and polls continuously, so running it against Upstash's per-command billing is very expensive. The daily LLM spend cap is shared across both apps via Postgres (the `llm_daily_spend` table), so it stays per-org regardless of the Redis split.
+> Dashboard `UPSTASH_REDIS_REST_URL` (Upstash REST — rate limiting, locks, presence) and gateway `REDIS_URL` (a dedicated per-instance Redis for BullMQ) are **separate** instances and must not point at the same database. BullMQ holds a blocking connection per worker and polls continuously, so running it against Upstash's per-command billing is very expensive. Agent locks are therefore host-local latency guards, not the cross-host correctness boundary: reviewed actions are single-use through PostgreSQL plan claims, operator events through their durable event claim, and capped goodwill through reservations. Both lock adapters renew their token-checked lease during long turns and log a lost/unknown lease; release can never delete a successor's token. The daily LLM spend cap is also shared across both apps via Postgres (the `llm_daily_spend` table), so it stays per-org regardless of the Redis split.
 
 Rules:
 
@@ -837,37 +837,111 @@ For dashboard email sends, repeat with the dashboard helper:
 
 After each category, record the log entry timestamp, alert recipient, tags/extras checked, and any side-effect notes in [`alerting-evidence.md`](alerting-evidence.md).
 
+### Bounded AI context rollout (P2-02)
+
+`AGENT_CONTEXT_BUDGET_MODE=off|shadow|enforce` controls bounded recent-message,
+prior-summary, KB, store-profile, sample-reply, order, operator-ledger, and
+instruction context. Keep the dashboard, public gateway, and worker aligned.
+
+1. Run the long-thread quality/cost comparison with a real Anthropic test key:
+
+   ```bash
+   RUN_JUDGE_EVALS=0 npm run test:integration -w apps/dashboard -- --run src/lib/agent/__evals__/context-budget.eval.test.ts
+   ```
+
+   Both legacy and bounded runs must pass, and bounded prompt tokens must be at
+   least 20% lower for the long-thread fixture. Then run the full eval suite with
+   `AGENT_CONTEXT_BUDGET_MODE=enforce`; its committed baseline gate must remain
+   green.
+2. Deploy all three hosts with `AGENT_CONTEXT_BUDGET_MODE=shadow`. Review
+   `[agent:context] budget` and `[Worker] AI input budget` telemetry by purpose;
+   logs contain counts/character totals only, never prompt text.
+3. Canary one long thread in `enforce`. Confirm thread intelligence includes the
+   prior summary plus newest messages, the newest customer request produces the
+   same plan, and `[Worker] AI model usage` shows the expected input-token drop.
+4. Keep `enforce` through the normal observation window before removing the
+   legacy `off` behavior. Roll back by setting all hosts to `off`; no stored data
+   or cached-plan schema changes are involved.
+
+### CSP report-only observation and enforcement (P8-03)
+
+The dashboard policy is intentionally report-only while browser compatibility is
+measured. Both `report-uri` and the Reporting API endpoint target
+`POST /api/security/csp-report`. The collector accepts no authenticated business
+action, caps requests at 16 KiB, and logs only normalized directives, status, and
+URL origins under `[CSP] Browser policy violation`; it discards paths, queries,
+fragments, code samples, and raw payloads.
+
+1. Deploy the collector without changing the
+   `Content-Security-Policy-Report-Only` header to enforcement. Confirm a
+   production dashboard response includes `report-uri
+   /api/security/csp-report`, `report-to csp-endpoint`, and the matching
+   `Reporting-Endpoints` header.
+2. Submit one synthetic `application/csp-report` violation with test origins and
+   confirm the log drain contains only the sanitized origin/directive fields.
+   Confirm malformed and oversized requests do not create log entries.
+3. Observe normal authenticated login/signup, dashboard, analytics, Sentry,
+   OAuth, Clerk challenge, and supported browser traffic. Group violations by
+   effective directive and blocked origin. Add only a narrowly justified source;
+   never use captured customer URLs or script samples for diagnosis because the
+   collector deliberately does not retain them.
+4. After a representative clean window, remove production `unsafe-eval` and
+   replace required inline execution with per-request nonces or static hashes in
+   a production-like build. Exercise the full authenticated Playwright matrix
+   before enabling an enforcement canary.
+5. Canary `Content-Security-Policy` on limited production traffic and verify an
+   injected script fixture is blocked while supported flows remain clean. Roll
+   back by restoring the report-only header; keep the collector enabled so the
+   violation evidence remains available.
+
 ### BullMQ Failed Jobs
 
-Retry-exhausted BullMQ jobs land in the queue's `failed` set after all configured attempts are used. The launch queues most likely to need inspection are:
+Retry-exhausted BullMQ jobs land in the queue's `failed` set after all configured attempts are used. A failed BullMQ row is evidence to triage, not proof that the underlying business operation failed. Always compare the job with PostgreSQL and provider truth before replaying or removing it.
+
+The launch queues most likely to need inspection are:
 
 - `inbound-messages` for inbound email, Shopify order events, and deferred Instagram DM jobs.
 - `ai-summary` for summary, plan precompute, auto-ack, and notification work.
+- `outbound-email` for a message whose durable send row owns delivery truth.
 - `gmail-sync` for Gmail history synchronization and stale-history recovery.
 - `gmail-watch-maintenance` for 12-hour watch renewal and inbound health monitoring.
+- `order-review` for the flag-only order risk reviewer.
+- `operator-event` for durable Telegram and iMessage operator turns.
 
-Inspect failed jobs from a shell with production `REDIS_URL` loaded:
-
-```bash
-cd apps/gateway
-npx tsx -e "import { Queue } from 'bullmq'; import { createGatewayRedisClient } from './src/clients/redis-client.ts'; import { QUEUE } from './src/constants.ts'; const conn = createGatewayRedisClient(); const q = new Queue(QUEUE.INBOUND, { connection: conn }); const jobs = await q.getJobs(['failed'], 0, 20, false); for (const job of jobs) console.log(JSON.stringify({ id: job.id, name: job.name, failedReason: job.failedReason, attemptsMade: job.attemptsMade, data: job.data }, null, 2)); await q.close(); await conn.quit();"
-```
-
-For the summary queue, change `QUEUE.INBOUND` to `QUEUE.AI_SUMMARY`.
-
-Replay a failed job only after the root cause is understood and fixed:
+Inspect failed jobs from a shell with production `REDIS_URL` loaded. This command intentionally prints only identifiers and failure metadata; do not dump arbitrary `job.data`, which can contain message content.
 
 ```bash
 cd apps/gateway
-JOB_ID='the-failed-job-id' npx tsx -e "import { Queue } from 'bullmq'; import { createGatewayRedisClient } from './src/clients/redis-client.ts'; import { QUEUE } from './src/constants.ts'; const conn = createGatewayRedisClient(); const q = new Queue(QUEUE.INBOUND, { connection: conn }); const job = await q.getJob(process.env.JOB_ID); if (!job) throw new Error('Job not found'); await job.retry('failed'); console.log('Retried job', job.id); await q.close(); await conn.quit();"
+QUEUE_NAME='inbound-messages' npx tsx -e "import { Queue } from 'bullmq'; import { createGatewayRedisClient } from './src/clients/redis-client.ts'; const allowed = new Set(['inbound-messages','ai-summary','outbound-email','gmail-sync','gmail-watch-maintenance','order-review','operator-event']); const name = process.env.QUEUE_NAME ?? ''; if (!allowed.has(name)) throw new Error('Unsupported QUEUE_NAME'); const conn = createGatewayRedisClient(); const q = new Queue(name, { connection: conn }); const jobs = await q.getJobs(['failed'], 0, 20, false); const keys = ['organizationId','threadId','messageId','integrationId','orderId','operatorEventId','sourceMessageId','platform','traceId']; for (const job of jobs) { const data = Object.fromEntries(keys.flatMap((key) => job.data?.[key] === undefined ? [] : [[key, job.data[key]]])); console.log(JSON.stringify({ id: job.id, name: job.name, failedReason: job.failedReason, attemptsMade: job.attemptsMade, timestamp: job.timestamp, processedOn: job.processedOn, finishedOn: job.finishedOn, data }, null, 2)); } await q.close(); await conn.quit();"
 ```
 
-Before replaying:
+Use the following recovery decision matrix. If the evidence does not fit the stated safe condition, escalate to the owning engineer instead of replaying.
 
-- Check `failedReason`, `attemptsMade`, `traceId`, `organizationId`, and provider response details in Railway logs.
-- Confirm Redis, Postgres, and provider credentials are healthy.
-- Check whether the job may have already created customer-visible side effects.
-- Prefer replaying one job first, then watch `/health/queues` before replaying a batch.
+| Queue | Durable/provider truth to inspect | Replay rule |
+| --- | --- | --- |
+| `inbound-messages` | Provider message/webhook identity, persisted `Message`/order event, and downstream summary job | Replay the original job only after confirming its stable provider identity is present and the ingestion path deduplicates that exact identity. Do not reconstruct a new job with a new ID. |
+| `ai-summary` | `sourceMessageId`, latest customer message, cached-plan identity, and any `PlanExecution` | Replay only when `sourceMessageId` is still the latest customer request. A stale job should be left superseded. Auto-execution must be behind the durable execution ledger; legacy jobs without stable source identity are not replayable. |
+| `gmail-sync` | Integration history cursor, Gmail message ID, and stable `gmail-inbound-<integration>-<message>` jobs | Replay the original sync after credentials/provider health recover. The checkpoint is monotonic and individual inbound jobs use stable IDs. |
+| `gmail-watch-maintenance` | Integration watch expiration/status and current Pub/Sub configuration | Prefer letting the 12-hour repeat job run after the root cause is fixed. Run one manual maintenance invocation only for an expired/near-expiry watch; do not create a second repeat schedule. |
+| `order-review` | Organization/order identity and existing `AgentAction` audit rows | Safe to replay one original job after the model/provider issue is fixed. The current reviewer is flag/log-only, but duplicate audit observations and model cost are possible. |
+| `outbound-email` | `Message.sendStatus`, `sendAttemptedAt`, `providerMessageId`, stable RFC `Message-ID`, and provider activity | **Never use generic BullMQ replay.** Follow the outbound-email recovery procedure above. Retry only a known pre-provider `failed` row through the authorized application path; `processing`/`unknown` after provider attempt requires provider reconciliation and positive no-send evidence. |
+| `operator-event` | `OperatorEvent.status`, claim timestamps, `replyText`, `replyDeliveredAt`, and channel-provider activity | **Never replay a claimed or terminal turn.** A `pending` event can be re-enqueued with its same event ID after infrastructure recovery. Let the sweep reconcile stale claims to `unknown`; it may re-send a committed reply but never re-run the turn. |
+
+Before any permitted replay:
+
+- Check `failedReason`, `attemptsMade`, `traceId`, tenant identifiers, and provider response category in Railway logs.
+- Confirm Redis, PostgreSQL, and the relevant provider are healthy and the code/config root cause is fixed.
+- Record the database/provider evidence that proves the operation is safe to run again.
+- Replay one job first and watch authenticated `/health/queues`, the durable row, and provider activity before a batch.
+
+For a queue whose matrix entry permits BullMQ replay, retry the existing failed job without changing its identity:
+
+```bash
+cd apps/gateway
+QUEUE_NAME='gmail-sync' JOB_ID='the-failed-job-id' npx tsx -e "import { Queue } from 'bullmq'; import { createGatewayRedisClient } from './src/clients/redis-client.ts'; const replayable = new Set(['inbound-messages','ai-summary','gmail-sync','gmail-watch-maintenance','order-review']); const name = process.env.QUEUE_NAME ?? ''; const id = process.env.JOB_ID ?? ''; if (!replayable.has(name) || !id) throw new Error('QUEUE_NAME is not generically replayable or JOB_ID is missing'); const conn = createGatewayRedisClient(); const q = new Queue(name, { connection: conn }); const job = await q.getJob(id); if (!job) throw new Error('Job not found'); if (await job.getState() !== 'failed') throw new Error('Job is not failed'); await job.retry('failed'); console.log('Retried job', job.id, 'on', name); await q.close(); await conn.quit();"
+```
+
+Removing a stale failed BullMQ record is housekeeping, not recovery. Capture its sanitized evidence first, verify the durable operation is terminal or superseded, then remove only that exact job through the authenticated internal queue endpoint. The endpoint re-checks that the job is still `failed` and refuses to remove waiting, active, delayed, or completed work. Never delete the related PostgreSQL ledger/message/event row.
 
 ## Sign-Off Evidence
 

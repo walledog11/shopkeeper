@@ -9,7 +9,7 @@ export const CHANNEL_TYPE = {
   DASHBOARD_AGENT: 'dashboard_agent',
 } as const;
 
-// Operator-facing channels (Concierge + Telegram). Single source of truth for
+// Operator-facing channels (Concierge + Telegram/iMessage). Single source of truth for
 // the operator-class predicate — do not re-spell `channelType === ...` for this.
 export const OPERATOR_CHANNEL_TYPES = new Set<string>([
   CHANNEL_TYPE.DASHBOARD_AGENT,
