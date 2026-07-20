@@ -230,7 +230,12 @@ async function verifyPhotonWebhookInfrastructure(baseUrl) {
 
 async function verifyGatewayQueues(baseUrl) {
   const url = buildUrl(baseUrl, '/health/queues');
-  const { data } = await fetchJson(url, [200]);
+  const headers = buildInternalRequestHeaders();
+  if (!headers) {
+    throw new Error('[verify-production] INTERNAL_API_SECRET is required for gateway queue verification');
+  }
+
+  const { data } = await fetchJson(url, [200], headers);
 
   if (data?.worker?.healthy !== true) {
     throw new Error(`[verify-production] Expected worker.healthy=true, received ${JSON.stringify(data?.worker)}`);
