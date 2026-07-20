@@ -15,8 +15,8 @@ This plan implements the findings in `docs/codebase-audit.md` without turning th
 
 ### P0-01 — Lock the audit baseline into CI
 
-**Status (2026-07-12): Implementation complete; hosted CI confirmation
-pending.** Pull-request CI now runs the structure and repository/package lint
+**Status (2026-07-19): Completed, including hosted CI confirmation.**
+Pull-request CI now runs the structure and repository/package lint
 gates, an explicit repository type-check, unit and Node-script tests, the
 database-backed combined coverage suite, production build, and the eight-test
 auth-bypass Playwright smoke suite. The full local equivalent passes; the first
@@ -32,7 +32,9 @@ hosted run remains the release check.
 - [x] The production build passes with Sentry uploads explicitly disabled;
   builds without upload credentials no longer install Sentry's post-compile
   release/upload hook.
-- [ ] Confirm the same gates on the first hosted pull-request CI run.
+- [x] Confirm the hosted workflow gates. Master run `29711158806` completed
+  successfully with secret scan, unit/Node tests, lint/audit/typecheck, build,
+  integration/coverage, and E2E jobs all green.
 
 - **Related findings:** All; especially AUD-001 through AUD-012.
 - **Files likely to change:** root `package.json`; CI workflow files; `scripts/check-critical-coverage.mjs`; possibly test documentation.
@@ -268,6 +270,11 @@ open.
 - [ ] Verify refund idempotency plus cancellation, order creation/editing,
   address, gift-card, and store-credit outcome handling against a Shopify
   development store, then canary each tool family independently.
+- [x] Revalidate production Shopify connectivity read-only. The connected store
+  identifies itself as `palette-dev` but reports Shopify plan `basic`; its four
+  recent orders contain no `test: true` order. Treat it as potentially live and
+  require a confirmed test order or separate development store before mutating
+  canaries.
 - [ ] Define recovery ownership and durable follow-up reconciliation for
   outcomes that remain `unknown` after the immediate retry/read.
 - [x] Run the remaining tool families' deterministic commit-before-response,
@@ -370,8 +377,8 @@ replace the per-tool canary observation window.
 
 ### P4-01 — Make outbound email claimable, tenant-validated and recoverable
 
-**Status (2026-07-18): Production migration and application deployment complete;
-provider canaries pending.** The strict `audit:outbound-email` rollout check and
+**Status (2026-07-19): First Gmail queue canary clean; mailbox confirmation and
+broad flag rollout pending.** The strict `audit:outbound-email` rollout check and
 provider-activity recovery runbook are now implemented. The first strict
 24-hour production baseline is clean but contains zero async sends, and
 `OUTBOUND_EMAIL_ASYNC` is not currently configured on the production dashboard;
@@ -410,13 +417,25 @@ recovery, and manual retry compatibility. The full local unit, Node-script,
 database integration, lint, typecheck, migration, and strict isolated-database
 audit gates pass.
 
+**2026-07-19 Gmail canary evidence:** one harmless message to the connected
+account's own Gmail plus-address was admitted to the production queue, claimed,
+accepted by Gmail, and committed with a provider message ID. Re-enqueuing the
+same stable message ID returned `deduplicated: true`; the strict one-hour
+required-Gmail audit reports one sent row and no failed, unknown, stale,
+missing-provider-ID, or duplicate-provider-ID blockers. Manual mailbox receipt
+confirmation remains open. No Postmark integration is configured for a
+provider-specific Postmark canary.
+
 **Still required for P4-01 rollout completion:**
 
 - [x] Deploy `20260714000000_add_outbound_send_claims` before the application
   build.
-- [ ] Canary Postmark and Gmail independently with duplicate enqueue,
-  crash-after-acceptance, stale processing, provider-ID persistence, and manual
-  retry observation.
+- [x] Canary Gmail queue admission, provider-ID persistence, and duplicate
+  enqueue suppression.
+- [ ] Confirm the Gmail canary in the recipient mailbox, and exercise
+  crash-after-acceptance/stale-processing/manual-retry recovery under the
+  documented no-resend rules.
+- [ ] Canary Postmark when a Postmark integration is configured.
 - [x] Document that the launch owner/on-call checks provider activity using the
   stored provider ID and stable RFC `Message-ID`, and may resolve/retry an
   `unknown` send only with positive no-send evidence.
@@ -434,8 +453,9 @@ audit gates pass.
 
 ### P4-02 — Replace Stripe claim-before-work with durable event processing
 
-**Status (2026-07-19): Production migration applied; application deployment and
-canary pending.** Signed events now enter a PostgreSQL ledger before work begins. A
+**Status (2026-07-19): Deployed; production observation window in progress.**
+The migration-first rollout is complete on commit `c8aa4c73`. Signed events now
+enter a PostgreSQL ledger before work begins. A
 transactional claim admits one processor, active claims return a retryable
 response, failed claims can be reclaimed, and the event reaches `completed`
 only in the same transaction that commits organization billing state. Redis is
@@ -471,8 +491,10 @@ post-commit and remains best-effort.
   dashboard build that reads the new columns/table. Production now reports all
   57 migrations applied; the first strict 24-hour audit is clean with zero
   pre-deployment rows.
-- [ ] Deliver a signed Stripe test event, replay it, and run
-  `npm run audit:stripe-webhooks -- --hours=1 --strict --require-completed`.
+- [x] Deliver a signed non-mutating Stripe test event and replay the exact event.
+  The first request committed and the replay returned `duplicate: true`; the
+  one-hour strict required-completion audit reports one completed event and no
+  failed, pending, stale, or recovery blockers.
 - [ ] Observe the strict audit through the normal window with no failed or
   stale claims before declaring the Redis rollback path removable.
 
@@ -615,6 +637,12 @@ conditionally preserves a worker claim; gateway→dashboard customer sends retur
 an unknown tool result; ambiguous Telegram/iMessage confirmations are withheld
 from automatic resend and remain visible to the strict operator-event audit.
 No mutation gained an automatic retry.
+
+The initial post-deploy telemetry snapshot is clean: neither Railway gateway
+service logged a timeout/abort match in the preceding four hours, and neither
+logged a warning or error in the first 30 minutes after the final deployment.
+This is deployment evidence, not a substitute for provider traffic across the
+full observation window.
 
 **Completed locally (verified 2026-07-19):**
 
@@ -1062,9 +1090,9 @@ rollout gates above. Previously merged work includes P4-04 (verified already com
 (PR #26) and health-diagnostics auth (PR #27). See each item's Status line for detail.
 P7-01 and P4-06 are deployed; their remaining work is authenticated presentation
 checking and provider telemetry observation. P4-02's durable Stripe event
-implementation and rollout audit are complete locally, and its additive
-migration is applied in production; application deployment and signed-event
-canary are next. The P6-02 failed-job replay runbook remains gated by P1/P4
+implementation, additive migration, application deployment, signed-event
+replay, and first strict production canary are complete; its longer observation
+window remains open. The P6-02 failed-job replay runbook remains gated by P1/P4
 idempotency.
 
 Next:
@@ -1081,18 +1109,20 @@ Next:
 5. Sandbox/canary the completed P3-01 refund, cancellation, order-creation,
    order-address, order-editing, gift-card, and store-credit paths, one tool
    family at a time, and define the durable reconciliation owner for outcomes
-   that remain `unknown`.
+   that remain `unknown`. The only connected real store reports plan `basic`
+   and has no test orders, so mutating canaries remain blocked until a confirmed
+   Shopify test order/development store is available.
 6. The additive goodwill-reservation migration is deployed. Canary
    refund/store-credit/gift-card cap enforcement and monitor
    stale or `unknown` reservations with
    `npm run audit:refund-spend-reservations -- --hours=24 --strict` until their
    recovery procedure is proven.
-7. The P4-01 outbound-send claim migration and state machine are deployed. The
-   strict audit and recovery runbook are implemented; their first production
-   baseline is clean but contains zero async sends, and the production dashboard
-   does not currently define `OUTBOUND_EMAIL_ASYNC`. Canary Postmark/Gmail while
-   keeping synchronous email as the rollback rail until unknown reconciliation
-   and stale-claim monitoring are proven.
+7. The P4-01 outbound-send claim migration and state machine are deployed. A
+   Gmail queue canary committed once with provider identity, suppressed a
+   duplicate enqueue, and passed its strict audit; mailbox confirmation is
+   pending. Postmark is not configured. Keep synchronous email as the rollback
+   rail and `OUTBOUND_EMAIL_ASYNC` off until mailbox confirmation, unknown
+   reconciliation, and stale-claim monitoring are proven.
 8. P4-03's migration, recovery sweep, strict audit, and `unknown`-event runbook
    are deployed. Telegram is enabled on both gateway services; the fresh
    required-traffic gate and follow-up strict audits pass; the latest 24-hour
@@ -1102,6 +1132,6 @@ Next:
    A reversible pending-plan card was staged on 2026-07-19; complete its
    Telegram `no` reply and required-channel audit, then canary iMessage. Do not broaden natural-language
    ticket sends until that rollout and P4-01's are complete.
-9. P4-02's additive migration is applied. Deploy the dashboard build, replay a
-   signed Stripe test event, and require a clean completed event
-   with `npm run audit:stripe-webhooks -- --hours=1 --strict --require-completed`.
+9. P4-02 is deployed and its signed-event replay canary passed. Keep
+   `npm run audit:stripe-webhooks -- --hours=24 --strict` clean through the
+   observation window before removing any transitional rollback path.
