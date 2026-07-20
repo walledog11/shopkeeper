@@ -213,6 +213,12 @@ export type ThreadFilterFeedback = DbThreadFilterFeedback;
 export type EmailProvider = DbEmailProvider;
 export { encryptToken, decryptToken, isEncrypted } from './crypto.js';
 export {
+  computeTenantConsistencyReport,
+  type TenantConsistencyCheckResult,
+  type TenantConsistencyMismatch,
+  type TenantConsistencyReport,
+} from './tenant-consistency.js';
+export {
   DEFAULT_DAILY_LLM_SPEND_CAP_USD,
   LLM_PRICING,
   NANO_DOLLARS_PER_USD,
