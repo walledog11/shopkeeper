@@ -76,6 +76,23 @@ enum OperatorEventStatus {
   unknown
 }
 
+enum ReturnWatchStatus {
+  open
+  plan_pushed
+  skipped
+}
+
+enum ShipmentWatchIssueType {
+  exception
+  stalled
+}
+
+enum ShipmentWatchStatus {
+  open
+  plan_pushed
+  skipped
+}
+
 enum StripeWebhookEventStatus {
   pending
   processing
@@ -125,6 +142,8 @@ model Organization {
   refundSpendReservations RefundSpendReservation[]
   shadowDecisions         AutonomyShadowDecision[]
   planExecutions          PlanExecution[]
+  returnWatches           ReturnWatch[]
+  shipmentWatches         ShipmentWatch[]
   stripeWebhookEvents     StripeWebhookEvent[]
   messages                Message[]
 
@@ -334,6 +353,8 @@ model Thread {
   agentActions     AgentAction[]
   shadowDecisions  AutonomyShadowDecision[]
   planExecutions   PlanExecution[]
+  returnWatches    ReturnWatch[]
+  shipmentWatches  ShipmentWatch[]
 
   @@unique([organizationId, operatorKey])
   @@unique([organizationId, id], map: "threads_organization_id_id_key")
@@ -601,6 +622,7 @@ model AgentAction {
   organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   thread       Thread?        @relation(fields: [threadId], references: [id], onDelete: SetNull)
   execution    PlanExecution? @relation(fields: [executionId], references: [id], onDelete: SetNull)
+  returnWatches ReturnWatch[]
 
   @@index([organizationId, executedAt(sort: Desc)])
   @@index([organizationId, threadId])
@@ -609,6 +631,59 @@ model AgentAction {
   @@index([turnId])
   @@index([executionId])
   @@map("agent_actions")
+}
+
+// Durable return↔ticket association for the return-lifecycle monitor (B3).
+// Created when create_return/create_exchange succeeds; updated when the reverse
+// shipment arrives and a plan-approval card is pushed.
+model ReturnWatch {
+  id                  String            @id @default(uuid()) @db.Uuid
+  organizationId      String            @map("organization_id") @db.Uuid
+  threadId            String?           @map("thread_id") @db.Uuid
+  sourceAgentActionId String?           @map("source_agent_action_id") @db.Uuid
+  orderId             String            @map("order_id") @db.VarChar(32)
+  shopifyReturnId     String            @map("shopify_return_id") @db.VarChar(128)
+  returnName          String?           @map("return_name") @db.VarChar(64)
+  tool                String            @db.VarChar(32)
+  status              ReturnWatchStatus @default(open)
+  arrivedAt           DateTime?         @map("arrived_at") @db.Timestamptz
+  planPushedAt        DateTime?         @map("plan_pushed_at") @db.Timestamptz
+  createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  thread            Thread?      @relation(fields: [threadId], references: [id], onDelete: SetNull)
+  sourceAgentAction AgentAction? @relation(fields: [sourceAgentActionId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, shopifyReturnId])
+  @@index([organizationId, status])
+  @@index([organizationId, orderId])
+  @@map("return_watches")
+}
+
+// Durable shipment↔ticket association for the delivery-exception monitor (B4).
+model ShipmentWatch {
+  id               String                 @id @default(uuid()) @db.Uuid
+  organizationId   String                 @map("organization_id") @db.Uuid
+  threadId         String?                @map("thread_id") @db.Uuid
+  orderId          String                 @map("order_id") @db.VarChar(32)
+  trackingNumber   String                 @map("tracking_number") @db.VarChar(64)
+  trackingCompany  String?                @map("tracking_company") @db.VarChar(64)
+  issueType        ShipmentWatchIssueType @map("issue_type")
+  issueSummary     String?                @map("issue_summary") @db.VarChar(255)
+  status           ShipmentWatchStatus    @default(open)
+  detectedAt       DateTime?              @map("detected_at") @db.Timestamptz
+  planPushedAt     DateTime?              @map("plan_pushed_at") @db.Timestamptz
+  createdAt        DateTime               @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  thread       Thread?      @relation(fields: [threadId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, trackingNumber])
+  @@index([organizationId, status])
+  @@index([organizationId, orderId])
+  @@map("shipment_watches")
 }
 
 // Durable, cross-runtime identity and claim state for one reviewed agent plan.

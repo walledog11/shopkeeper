@@ -2,7 +2,7 @@ import type { CreateExchangeInput } from "../tools/index.js";
 import { formatShopifyToolError, shopifyGraphql, type ShopifyContext } from "./client.js";
 import { toolError, toolOk, type ToolResult } from "../tools/result.js";
 import { moneyToCents, optionalPositiveInteger, requireNumericId } from "./validation.js";
-import { fetchReturnableLineItems, mapReturnReason, runReturnCreate } from "./returns.js";
+import { fetchReturnableLineItems, mapReturnReason, runReturnCreate, type ReturnWatchToolData } from "./returns.js";
 
 interface VariantPricesData {
   nodes: ({
@@ -111,7 +111,15 @@ export async function createExchange(
     const returnedName = selected[0].name;
     const replacementName = variantDisplayName(replacementVariant);
     return toolOk(
-      `Opened exchange ${label} (status ${created.createdReturn.status ?? "REQUESTED"}) on order ${orderId}: returning ${quantity}x ${returnedName} in exchange for ${quantity}x ${replacementName}. No refund was issued and the customer was not charged. The replacement ships once the return is processed in Shopify. Tell the customer the exchange is set up and how to send the item back.`
+      `Opened exchange ${label} (status ${created.createdReturn.status ?? "REQUESTED"}) on order ${orderId}: returning ${quantity}x ${returnedName} in exchange for ${quantity}x ${replacementName}. No refund was issued and the customer was not charged. The replacement ships once the return is processed in Shopify. Tell the customer the exchange is set up and how to send the item back.`,
+      {
+        returnWatch: {
+          shopifyReturnId: created.createdReturn.id,
+          returnName: created.createdReturn.name ?? null,
+          orderId,
+          tool: "create_exchange",
+        },
+      } satisfies ReturnWatchToolData,
     );
   } catch (err) {
     return toolError(formatShopifyToolError("failed to set up exchange", err));

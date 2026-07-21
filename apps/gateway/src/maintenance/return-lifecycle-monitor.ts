@@ -1,13 +1,18 @@
 import { db } from '@shopkeeper/db';
 import {
-  formatReturnArrivedNotification,
+  listOpenReturnWatches,
+  markReturnWatchPlanPushed,
+  markReturnWatchSkipped,
+  ensureReturnWatchFromDelivery,
+  type ReturnWatchTool,
+} from '@shopkeeper/db';
+import {
   safeFetchOrderReturnStatuses,
   type ShopifyContext,
 } from '@shopkeeper/agent/shopify';
 import { isReturnLifecycleMonitorEnabled } from '../config/runtime-config.js';
 import logger from '../logger.js';
 import { JOB, QUEUE } from '../constants.js';
-import { listOperatorBindings, notifyOperator } from '../operator-notify.js';
 import {
   createMaintenanceQueue,
   createMaintenanceWorker,
@@ -15,6 +20,9 @@ import {
   scheduleRepeatableJob,
   type MaintenanceJobRegistration,
 } from './registration.js';
+import { pushReturnArrivalApprovalPlan } from './return-arrival-plan.js';
+
+export { returnArrivedIdempotencyKey } from './return-arrival-plan.js';
 
 const LOOKBACK_DAYS = 90;
 const ACTIONS_PER_ORG = 25;
@@ -25,6 +33,7 @@ export interface OpenReturnCandidate {
   orderId: string;
   customerName: string | null;
   executedAt: Date;
+  tool: ReturnWatchTool;
 }
 
 function readOrderId(input: unknown): string | null {
@@ -36,7 +45,14 @@ function readOrderId(input: unknown): string | null {
   return null;
 }
 
-export async function loadOpenReturnCandidates(organizationId: string): Promise<OpenReturnCandidate[]> {
+function toolFromAction(tool: string): ReturnWatchTool | null {
+  if (tool === 'create_return' || tool === 'create_exchange') return tool;
+  return null;
+}
+
+// Legacy bridge: infer open returns from recent successful audit rows when a
+// durable ReturnWatch row does not exist yet (pre-migration actions).
+export async function loadLegacyOpenReturnCandidates(organizationId: string): Promise<OpenReturnCandidate[]> {
   const since = new Date(Date.now() - LOOKBACK_DAYS * 24 * 3_600_000);
   const actions = await db.agentAction.findMany({
     where: {
@@ -51,6 +67,7 @@ export async function loadOpenReturnCandidates(organizationId: string): Promise<
       threadId: true,
       input: true,
       executedAt: true,
+      tool: true,
       thread: { select: { customer: { select: { name: true } } } },
     },
   });
@@ -59,7 +76,8 @@ export async function loadOpenReturnCandidates(organizationId: string): Promise<
   const candidates: OpenReturnCandidate[] = [];
   for (const action of actions) {
     const orderId = readOrderId(action.input);
-    if (!orderId || seen.has(orderId)) continue;
+    const tool = toolFromAction(action.tool);
+    if (!orderId || !tool || seen.has(orderId)) continue;
     seen.add(orderId);
     candidates.push({
       organizationId,
@@ -67,38 +85,45 @@ export async function loadOpenReturnCandidates(organizationId: string): Promise<
       orderId,
       customerName: action.thread?.customer?.name ?? null,
       executedAt: action.executedAt,
+      tool,
     });
   }
   return candidates;
 }
 
-export function returnArrivedIdempotencyKey(
-  organizationId: string,
-  orderId: string,
-  returnId: string,
-): string {
-  return `return-arrived:${organizationId}:${orderId}:${returnId}`;
-}
-
-export async function notifyReturnArrived(
-  organizationId: string,
-  candidate: OpenReturnCandidate,
-  returnName: string | null,
-  returnId: string,
-): Promise<number> {
-  const message = formatReturnArrivedNotification({
-    customerName: candidate.customerName,
-    orderId: candidate.orderId,
-    returnName,
+async function handleDeliveredReturn(params: {
+  organizationId: string;
+  watchId: string;
+  threadId: string | null;
+  orderId: string;
+  shopifyReturnId: string;
+  returnName: string | null;
+  tool: ReturnWatchTool;
+  customerName: string | null;
+}): Promise<boolean> {
+  const outcome = await pushReturnArrivalApprovalPlan(params.organizationId, {
+    id: params.watchId,
+    threadId: params.threadId,
+    orderId: params.orderId,
+    shopifyReturnId: params.shopifyReturnId,
+    returnName: params.returnName,
+    tool: params.tool,
+    customerName: params.customerName,
   });
-  const bindings = await listOperatorBindings(organizationId);
-  const idempotencyKey = returnArrivedIdempotencyKey(organizationId, candidate.orderId, returnId);
-  let notified = 0;
-  for (const member of bindings) {
-    const result = await notifyOperator(organizationId, member, message, {}, { idempotencyKey });
-    if (result) notified += 1;
+
+  if (outcome === 'plan_pushed' || outcome === 'notify_only') {
+    const marked = await markReturnWatchPlanPushed(params.watchId, params.organizationId);
+    if (!marked) {
+      logger.info(
+        { organizationId: params.organizationId, watchId: params.watchId },
+        '[ReturnLifecycleMonitor] arrival already handled on another worker',
+      );
+    }
+    return true;
   }
-  return notified;
+
+  await markReturnWatchSkipped(params.watchId, params.organizationId);
+  return false;
 }
 
 export async function runReturnLifecycleMonitor(): Promise<{
@@ -124,37 +149,91 @@ export async function runReturnLifecycleMonitor(): Promise<{
       shop: integration.externalAccountId,
       accessToken: integration.accessToken,
     };
-    const candidates = await loadOpenReturnCandidates(integration.organizationId);
 
-    for (const candidate of candidates) {
-      const statuses = await safeFetchOrderReturnStatuses(ctx, candidate.orderId);
+    const watches = await listOpenReturnWatches(integration.organizationId);
+    const watchedReturnIds = new Set(watches.map((watch) => watch.shopifyReturnId));
+
+    for (const watch of watches) {
+      const statuses = await safeFetchOrderReturnStatuses(ctx, watch.orderId);
       if (!statuses) {
         logger.warn(
-          { organizationId: integration.organizationId, orderId: candidate.orderId },
+          { organizationId: integration.organizationId, orderId: watch.orderId, watchId: watch.id },
           '[ReturnLifecycleMonitor] return status fetch failed',
         );
         continue;
       }
 
-      returnsChecked += statuses.length;
-      for (const status of statuses) {
-        if (status.deliveryState !== 'delivered') continue;
-        const notified = await notifyReturnArrived(
-          integration.organizationId,
-          candidate,
-          status.returnName,
-          status.returnId,
+      const status = statuses.find((row) => row.returnId === watch.shopifyReturnId);
+      if (!status) continue;
+      returnsChecked += 1;
+      if (status.deliveryState !== 'delivered') continue;
+
+      const notified = await handleDeliveredReturn({
+        organizationId: integration.organizationId,
+        watchId: watch.id,
+        threadId: watch.threadId,
+        orderId: watch.orderId,
+        shopifyReturnId: watch.shopifyReturnId,
+        returnName: status.returnName ?? watch.returnName,
+        tool: watch.tool as ReturnWatchTool,
+        customerName: watch.thread?.customer?.name ?? null,
+      });
+      if (notified) {
+        arrivalsNotified += 1;
+        logger.info(
+          {
+            organizationId: integration.organizationId,
+            orderId: watch.orderId,
+            returnId: watch.shopifyReturnId,
+            threadId: watch.threadId,
+            watchId: watch.id,
+          },
+          '[ReturnLifecycleMonitor] pushed return-arrival approval plan',
         );
-        arrivalsNotified += notified;
-        if (notified > 0) {
+      }
+    }
+
+    const legacyCandidates = await loadLegacyOpenReturnCandidates(integration.organizationId);
+    for (const candidate of legacyCandidates) {
+      const statuses = await safeFetchOrderReturnStatuses(ctx, candidate.orderId);
+      if (!statuses) continue;
+
+      for (const status of statuses) {
+        if (status.deliveryState !== 'delivered' || watchedReturnIds.has(status.returnId)) continue;
+        returnsChecked += 1;
+
+        const watchId = await ensureReturnWatchFromDelivery({
+          organizationId: integration.organizationId,
+          threadId: candidate.threadId,
+          orderId: candidate.orderId,
+          shopifyReturnId: status.returnId,
+          returnName: status.returnName,
+          tool: candidate.tool,
+        });
+        watchedReturnIds.add(status.returnId);
+
+        const notified = await handleDeliveredReturn({
+          organizationId: integration.organizationId,
+          watchId,
+          threadId: candidate.threadId,
+          orderId: candidate.orderId,
+          shopifyReturnId: status.returnId,
+          returnName: status.returnName,
+          tool: candidate.tool,
+          customerName: candidate.customerName,
+        });
+        if (notified) {
+          arrivalsNotified += 1;
           logger.info(
             {
               organizationId: integration.organizationId,
               orderId: candidate.orderId,
               returnId: status.returnId,
               threadId: candidate.threadId,
+              watchId,
+              legacy: true,
             },
-            '[ReturnLifecycleMonitor] notified operator of delivered return',
+            '[ReturnLifecycleMonitor] backfilled legacy return watch and pushed approval plan',
           );
         }
       }

@@ -17,6 +17,9 @@ export {
   getOrderByName,
   getShopifyOrders,
   listRecentUnfulfilledOrderIds,
+  listRecentShippedOrderShipments,
+  extractUspsShipmentsFromOrders,
+  type ShippedOrderShipment,
 } from "./orders.js";
 export {
   formatSalesPulseLine,
@@ -49,4 +52,15 @@ export { issueStoreCredit } from "./store-credit.js";
 export { createGiftCard } from "./gift-cards.js";
 export { attachReturnLabel } from "./return-labels.js";
 export { issueDiscount } from "./discounts.js";
-export { getOrderTracking } from "./tracking.js";
+export {
+  classifyShipmentAlert,
+  formatDeliveryExceptionNotification,
+  type ShipmentAlertKind,
+  type ShipmentTrackingSnapshot,
+} from "./shipment-alerts.js";
+export {
+  fetchUspsTrackingSnapshot,
+  getOrderTracking,
+  isUspsCarrier,
+  readFulfillmentTrackingNumbers,
+} from "./tracking.js";

@@ -438,37 +438,56 @@ briefing extras** on Agent settings when Shopify is connected.
 
 ### B3 — Return-lifecycle completion
 
-**Status (2026-07-20): Scaffold shipped behind `RETURN_LIFECYCLE_MONITOR_ENABLED`.**
-Hourly sweep reads recent `create_return` / `create_exchange` audit rows, checks
-Shopify reverse-delivery status, and notifies bound operators when a return
-arrives (idempotent push). Plan-approval loop wiring and durable
-return↔ticket association remain next.
+**Status (2026-07-20): Complete.** Shipped behind `RETURN_LIFECYCLE_MONITOR_ENABLED`.
+Hourly sweep reads durable `ReturnWatch` rows (recorded when `create_return` /
+`create_exchange` succeed) plus a legacy backfill from recent audit rows, checks
+Shopify reverse-delivery status, and on delivery pushes a `needs_review` plan
+through the existing approval loop (`generateThreadPlan` +
+`sendOperatorPlanNotification`). Notify-only fallback remains when there is no
+open thread or the planner produces no actionable steps.
 
-The agent opens returns/exchanges today, then goes blind. Sweep open returns;
-when the reverse shipment shows delivered, push through the plan-approval
-loop: "Sarah's return arrived back — approve the $42 refund?" Attach it through
-a durable return/action-to-ticket association rather than inferring from
-best-effort audit text. The eventual refund uses `create_refund`. P1-01/P1-02
-single-use execution is implementation-complete. P3-01 refund reconciliation is
-locally complete but still waits for Shopify sandbox/canary verification; this
-phase also waits for P1 rollout verification and P3-02's migration/canary
-rollout of the locally complete atomic cap reservation.
-The sweep also needs stable delivery-event
-deduplication and P6-02 monitoring. This closes the loop merchants forget, and
-it's the highest-trust-building candidate of the six.
+- Durable return↔ticket association: `return_watches` table + migration
+  `20260720100000_add_return_watches`; watches are upserted at tool success
+  time with `shopifyReturnId`, `threadId`, and `orderId`.
+- Arrival handling: `return-arrival-plan.ts` builds a return-arrival instruction,
+  caches a fresh plan on the source thread, and fans out the operator approval
+  card with P1-03 stable plan identity.
+- Idempotent delivery detection: per-org/order/return idempotency keys; watch
+  status moves `open` → `plan_pushed` (or `skipped` when no operators are bound).
+
+Broad rollout still follows the same cleanup gates as other mutative sweeps:
+P1 execution-claim rollout verification, applicable P3 refund reconciliation
+canaries, and P6-02 queue monitoring. Enabling the flag does not bypass those
+gates — it only exposes the completed monitor + approval path.
 
 ### B4 — Delivery-exception watch
 
-Sweep fulfilled orders' tracking (existing USPS client, rate-limited); on a
-stalled shipment or delivery exception, notify the operator and offer a
-drafted proactive customer heads-up (via the create-thread-from-Shopify path,
-`needs_review` — never auto-send). Prevents the biggest ticket class (WISMO)
-instead of answering it. Flag-gated like the order-risk monitor. Require
-P4-06 deadlines/rate-limit classification for tracking, P5-04 active-thread
-correlation so the proactive draft cannot split an escalated conversation.
-P1/P2 single-use and stale-plan protection is implementation-complete but still
-needs rollout verification before approval; P4 delivery
-durability before customer send, and P6-02 monitoring/replay ownership.
+**Status (2026-07-20): Complete.** Shipped behind `DELIVERY_EXCEPTION_MONITOR_ENABLED`
+with per-org opt-out via `deliveryExceptionWatchEnabled` on Agent settings
+(Shopify-connected orgs). Hourly sweep reads recent fulfilled USPS shipments,
+classifies stalled in-transit and carrier-exception tracking via the existing
+USPS client (P4-06 deadlines), correlates to the customer's open ticket by
+`thread.shopifyCustomerId` (P5-04 — no split thread), or creates an email
+thread through the same shape as `POST /api/threads/shopify` when an address is
+available. Detected issues push a `needs_review` plan through the existing
+approval loop (`generateThreadPlan` + `sendOperatorPlanNotification`); notify-only
+fallback remains when there is no customer message to plan against or no operators
+are bound.
+
+- Durable idempotency: `shipment_watches` table + migration
+  `20260720110000_add_shipment_watches`; one row per org/tracking number moves
+  `open` → `plan_pushed` or `skipped`.
+- Exception handling: `delivery-exception-plan.ts` builds the proactive heads-up
+  instruction and fans out the operator approval card with P1-03 stable plan identity.
+- Rate limiting: bounded org scan (`25` shipments) plus `150ms` delay between USPS
+  lookups.
+- Settings: per-org opt-out via `deliveryExceptionWatchEnabled` on **Proactive
+  shipping alerts** (`/dashboard/agent/configure`); gateway env flag remains the
+  rollout gate.
+
+Broad rollout still follows the same cleanup gates as other mutative sweeps.
+Enabling the flag does not bypass P1 execution-claim rollout verification,
+P4 delivery durability before customer send, or P6-02 queue monitoring.
 
 ### B5 — Post-resolution follow-up
 
@@ -496,8 +515,8 @@ staged rollout; enabling the existing monitor does not authorize actions.
 
 ### Suggested Track B order
 
-B1 → B2 → B3 → B4 → B5 → B6. B1/B2 are digest garnish shippable alongside A5.
-B3–B5 each want one new maintenance worker + settings flag and do not start
+B1 → B2 → B3 → B4 → B5 → B6. **B1, B2, B3, and B4 are complete as of 2026-07-20.**
+B5 wants one new maintenance worker + settings flag and does not start
 broad rollout until their cleanup dependencies above are satisfied. B6 is
 gated on eval fixtures, the safety program, and its own actionable-autonomy
 plan.
@@ -524,3 +543,8 @@ plan.
    **Decided and shipped 2026-07-16:** escalation is orthogonal — an escalated
    ticket stays `open` and carries `escalated_at`. `pending` remains listable
    until the eval-gated retirement of the `update_thread_status` enum value.
+6. ~~B4 settings surface: org opt-out for delivery-exception watch?~~
+   **Decided and shipped 2026-07-20:** `deliveryExceptionWatchEnabled` on Agent
+   settings (`/dashboard/agent/configure` → **Proactive shipping alerts**) for
+   Shopify-connected orgs; gateway `DELIVERY_EXCEPTION_MONITOR_ENABLED` remains
+   the rollout gate.

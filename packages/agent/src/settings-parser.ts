@@ -65,6 +65,7 @@ const SETTINGS_KEYS = [
   "lastSuccessfulDigestAt",
   "salesPulseEnabled",
   "lowStockThreshold",
+  "deliveryExceptionWatchEnabled",
 ] as const satisfies readonly (keyof OrgSettings)[];
 
 const BOOLEAN_FIELDS = [
@@ -76,6 +77,7 @@ const BOOLEAN_FIELDS = [
   "spamFilterEnabled",
   "firstBriefingPending",
   "salesPulseEnabled",
+  "deliveryExceptionWatchEnabled",
 ] as const satisfies readonly (keyof OrgSettings)[];
 
 const STRING_FIELDS = [

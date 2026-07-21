@@ -9,8 +9,8 @@ export interface ToolResult {
   data?: unknown;
 }
 
-export function toolOk(message: string): ToolResult {
-  return { status: "ok", message };
+export function toolOk(message: string, data?: unknown): ToolResult {
+  return data === undefined ? { status: "ok", message } : { status: "ok", message, data };
 }
 
 export function toolEscalated(reason: string): ToolResult {

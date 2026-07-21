@@ -1,5 +1,6 @@
 import type { GetOrderTrackingInput } from "../tools/index.js";
 import { formatShopifyToolError, shopifyRestJson, type ShopifyContext } from "./client.js";
+import type { ShipmentTrackingSnapshot } from "./shipment-alerts.js";
 import { toolError, toolNotFound, toolOk, type ToolResult } from "../tools/result.js";
 import type { ShopifyFulfillment } from "./types.js";
 import { requireNumericId } from "./validation.js";
@@ -43,6 +44,14 @@ function isUSPSCarrier(carrier: string | null | undefined): boolean {
     normalized.includes("united states postal service") ||
     normalized.includes("u.s. postal service")
   );
+}
+
+export function isUspsCarrier(carrier: string | null | undefined): boolean {
+  return isUSPSCarrier(carrier);
+}
+
+export function readFulfillmentTrackingNumbers(fulfillment: ShopifyFulfillment): string[] {
+  return fulfillmentTrackingNumbers(fulfillment);
 }
 
 function fulfillmentTrackingNumbers(fulfillment: ShopifyFulfillment): string[] {
@@ -119,6 +128,45 @@ async function getUspsAccessToken(): Promise<string | null> {
   };
 
   return uspsAccessToken.token;
+}
+
+function mapUspsTrackingSnapshot(trackData: {
+  statusCategory?: string;
+  status?: string;
+  statusSummary?: string;
+  trackingEvents?: USPSEvent[];
+}): ShipmentTrackingSnapshot {
+  return {
+    status: trackData.statusCategory ?? trackData.status ?? null,
+    statusSummary: trackData.statusSummary ?? null,
+    events: (trackData.trackingEvents ?? []).slice(0, 10).map((event) => ({
+      message: event.eventType ?? null,
+      datetime: event.eventTimestamp ?? null,
+    })),
+  };
+}
+
+export async function fetchUspsTrackingSnapshot(
+  trackingNumber: string,
+): Promise<ShipmentTrackingSnapshot | null> {
+  try {
+    const accessToken = await getUspsAccessToken();
+    if (!accessToken) return null;
+
+    const trackData = await fetchJson(
+      `https://apis.usps.com/tracking/v3/tracking/${encodeURIComponent(trackingNumber)}?expand=DETAIL`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    ) as {
+      statusCategory?: string;
+      status?: string;
+      statusSummary?: string;
+      trackingEvents?: USPSEvent[];
+    };
+
+    return mapUspsTrackingSnapshot(trackData);
+  } catch {
+    return null;
+  }
 }
 
 export async function getOrderTracking(
@@ -200,12 +248,14 @@ export async function getOrderTracking(
         trackingEvents?: USPSEvent[];
       };
 
+      const liveTracking = mapUspsTrackingSnapshot(trackData);
+
       return toolOk(JSON.stringify({
         shipments,
         live_usps_tracking: {
           tracking_number: uspsShipment.tracking_number,
-          status: trackData.statusCategory ?? trackData.status ?? uspsShipment.shipment_status ?? uspsShipment.fulfillment_status,
-          status_summary: trackData.statusSummary ?? null,
+          status: liveTracking.status ?? uspsShipment.shipment_status ?? uspsShipment.fulfillment_status,
+          status_summary: liveTracking.statusSummary,
           events: (trackData.trackingEvents ?? []).slice(0, 10).map((event) => ({
             message: event.eventType ?? null,
             datetime: event.eventTimestamp ?? null,

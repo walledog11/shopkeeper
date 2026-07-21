@@ -10,6 +10,8 @@ import {
   getTelegramConfig,
   isGmailNativeInboundEnabled,
   isOrderRiskMonitorEnabled,
+  isDeliveryExceptionMonitorEnabled,
+  isReturnLifecycleMonitorEnabled,
   shouldRunGatewayServer,
   shouldRunGatewayWorker,
 } from './runtime-config.js';
@@ -153,6 +155,49 @@ describe('isOrderRiskMonitorEnabled', () => {
   it('rejects invalid boolean strings', () => {
     vi.stubEnv('ORDER_RISK_MONITOR_ENABLED', 'maybe');
     expect(() => isOrderRiskMonitorEnabled()).toThrow(/ORDER_RISK_MONITOR_ENABLED/);
+  });
+});
+
+describe('isReturnLifecycleMonitorEnabled', () => {
+  it('defaults to disabled when unset', () => {
+    expect(isReturnLifecycleMonitorEnabled()).toBe(false);
+  });
+
+  it('enables only for explicit truthy values', () => {
+    vi.stubEnv('RETURN_LIFECYCLE_MONITOR_ENABLED', '1');
+    expect(isReturnLifecycleMonitorEnabled()).toBe(true);
+
+    vi.stubEnv('RETURN_LIFECYCLE_MONITOR_ENABLED', 'true');
+    expect(isReturnLifecycleMonitorEnabled()).toBe(true);
+  });
+
+  it('treats falsey string values as disabled', () => {
+    vi.stubEnv('RETURN_LIFECYCLE_MONITOR_ENABLED', 'false');
+    expect(isReturnLifecycleMonitorEnabled()).toBe(false);
+
+    vi.stubEnv('RETURN_LIFECYCLE_MONITOR_ENABLED', '0');
+    expect(isReturnLifecycleMonitorEnabled()).toBe(false);
+  });
+
+  it('rejects invalid boolean strings', () => {
+    vi.stubEnv('RETURN_LIFECYCLE_MONITOR_ENABLED', 'maybe');
+    expect(() => isReturnLifecycleMonitorEnabled()).toThrow(/RETURN_LIFECYCLE_MONITOR_ENABLED/);
+  });
+});
+
+describe('isDeliveryExceptionMonitorEnabled', () => {
+  it('defaults to disabled when unset', () => {
+    expect(isDeliveryExceptionMonitorEnabled()).toBe(false);
+  });
+
+  it('enables only for explicit truthy values', () => {
+    vi.stubEnv('DELIVERY_EXCEPTION_MONITOR_ENABLED', '1');
+    expect(isDeliveryExceptionMonitorEnabled()).toBe(true);
+  });
+
+  it('rejects invalid boolean strings', () => {
+    vi.stubEnv('DELIVERY_EXCEPTION_MONITOR_ENABLED', 'maybe');
+    expect(() => isDeliveryExceptionMonitorEnabled()).toThrow(/DELIVERY_EXCEPTION_MONITOR_ENABLED/);
   });
 });
 

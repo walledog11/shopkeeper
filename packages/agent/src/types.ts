@@ -89,6 +89,10 @@ export interface OrgSettings {
   // Digest garnish — alert when variant inventory is at or below this count.
   // Omit or null to disable low-stock lines.
   lowStockThreshold?: number | null;
+
+  // Proactive shipping monitor — watch USPS tracking for stalled shipments and
+  // delivery exceptions. Requires DELIVERY_EXCEPTION_MONITOR_ENABLED on the gateway.
+  deliveryExceptionWatchEnabled?: boolean;
 }
 
 export type OrgSettingsPatch = Omit<Partial<OrgSettings>, 'toolsEnabled'> & {

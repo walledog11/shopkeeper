@@ -8,6 +8,8 @@ in the 2026-06-23 review.
 Last reviewed: 2026-07-20.
 
 Recent completions (not yet removed from history below):
+- B4 delivery-exception watch (USPS monitor + approval loop) — 2026-07-20
+- B3 return-lifecycle monitor (`ReturnWatch` + arrival approval loop) — 2026-07-20
 - Operator-channel nudge parity (Telegram + iMessage) — 2026-07-20
 - Live operator phone verification (Telegram + iMessage) — 2026-07-20
 - P4-03 durable operator queue rollout — 2026-07-20

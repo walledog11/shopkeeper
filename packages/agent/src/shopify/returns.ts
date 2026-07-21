@@ -74,6 +74,15 @@ export interface CreatedReturn {
   status?: string | null;
 }
 
+export interface ReturnWatchToolData {
+  returnWatch: {
+    shopifyReturnId: string;
+    returnName: string | null;
+    orderId: string;
+    tool: "create_return" | "create_exchange";
+  };
+}
+
 // Returns null when the order does not exist.
 export async function fetchReturnableLineItems(
   ctx: ShopifyContext,
@@ -189,7 +198,15 @@ export async function createReturn(
     const itemList = selected.map((item) => `${item.quantity}x ${item.name}`).join(", ");
     const label = created.createdReturn.name ?? created.createdReturn.id;
     return toolOk(
-      `Opened return ${label} (status ${created.createdReturn.status ?? "REQUESTED"}) on order ${orderId} for: ${itemList}. No refund was issued - this only authorizes the customer to send the items back. Tell the customer the return is set up and how to ship the items.`
+      `Opened return ${label} (status ${created.createdReturn.status ?? "REQUESTED"}) on order ${orderId} for: ${itemList}. No refund was issued - this only authorizes the customer to send the items back. Tell the customer the return is set up and how to ship the items.`,
+      {
+        returnWatch: {
+          shopifyReturnId: created.createdReturn.id,
+          returnName: created.createdReturn.name ?? null,
+          orderId,
+          tool: "create_return",
+        },
+      } satisfies ReturnWatchToolData,
     );
   } catch (err) {
     return toolError(formatShopifyToolError("failed to create return", err));

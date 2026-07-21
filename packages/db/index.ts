@@ -261,3 +261,23 @@ export {
   parseVoiceProposal,
 } from './voice.js';
 export type { VoiceProposal } from './voice.js';
+export {
+  ensureReturnWatchFromDelivery,
+  listOpenReturnWatches,
+  markReturnWatchPlanPushed,
+  markReturnWatchSkipped,
+  recordReturnWatch,
+  type RecordReturnWatchParams,
+  type ReturnWatchTool,
+} from './return-watch.js';
+export {
+  getShipmentWatch,
+  isTerminalShipmentWatchStatus,
+  markShipmentWatchPlanPushed,
+  markShipmentWatchSkipped,
+  recordShipmentWatch,
+  type RecordShipmentWatchParams,
+  type ShipmentWatchHandle,
+  type ShipmentWatchIssueType,
+  type ShipmentWatchStatus,
+} from './shipment-watch.js';

@@ -1,4 +1,4 @@
-import { noShopify, cancelReasons, requireShopify, returnReasons } from "./helpers.js";
+import { noShopify, cancelReasons, requireShopify, returnReasons, maybeRecordReturnWatch } from "./helpers.js";
 import { arrayArg, booleanArg, defineTool, numberArg, stringArg } from "./schema.js";
 import type {
   AttachReturnLabelInput,
@@ -241,7 +241,10 @@ export const ORDER_TOOL_DEFINITIONS = [
     planStepLabel: "Open return",
     execute: async (input: CreateReturnInput, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
-      return shopify ? deps.createReturn(input, shopify) : noShopify;
+      if (!shopify) return noShopify;
+      const result = await deps.createReturn(input, shopify);
+      await maybeRecordReturnWatch(ctx, result);
+      return result;
     },
   }),
   defineTool({
@@ -262,7 +265,10 @@ export const ORDER_TOOL_DEFINITIONS = [
     planStepLabel: "Set up exchange",
     execute: async (input: CreateExchangeInput, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
-      return shopify ? deps.createExchange(input, shopify) : noShopify;
+      if (!shopify) return noShopify;
+      const result = await deps.createExchange(input, shopify);
+      await maybeRecordReturnWatch(ctx, result);
+      return result;
     },
   }),
   defineTool({

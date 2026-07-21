@@ -9,6 +9,7 @@ import {
   AgentDefaultBehaviorSection,
   AgentIdentitySection,
   MorningBriefingSection,
+  ProactiveMonitoringSection,
   StickySaveBar,
   WhenOnDutySection,
 } from "./agent-tab-sections"
@@ -49,6 +50,7 @@ export default function AgentTab(props: Props) {
         <AgentDefaultBehaviorSection controller={controller} />
         <WhenOnDutySection controller={controller} emailConnected={emailConnected} />
         {shopifyConnected && <MorningBriefingSection controller={controller} />}
+        {shopifyConnected && <ProactiveMonitoringSection controller={controller} />}
         <AgentAdvancedSection controller={controller} />
       </div>
 

@@ -132,6 +132,10 @@ export function isReturnLifecycleMonitorEnabled(): boolean {
   return parseBooleanEnv('RETURN_LIFECYCLE_MONITOR_ENABLED', false);
 }
 
+export function isDeliveryExceptionMonitorEnabled(): boolean {
+  return parseBooleanEnv('DELIVERY_EXCEPTION_MONITOR_ENABLED', false);
+}
+
 export function isGmailNativeInboundEnabled(): boolean {
   return parseBooleanEnv('GMAIL_NATIVE_INBOUND', false);
 }

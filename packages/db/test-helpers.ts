@@ -68,7 +68,7 @@ export async function createTestThread(
   orgId: string,
   customerId: string,
   channel: DbChannelType,
-  options: { tag?: string } = {},
+  options: { tag?: string; shopifyCustomerId?: string } = {},
 ) {
   return db.thread.create({
     data: {
@@ -77,6 +77,7 @@ export async function createTestThread(
       channelType: channel,
       status: 'open',
       tag: options.tag ?? 'Support',
+      shopifyCustomerId: options.shopifyCustomerId,
     },
   });
 }
