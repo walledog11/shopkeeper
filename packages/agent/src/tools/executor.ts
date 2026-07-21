@@ -3,6 +3,7 @@ import {
   commitDailyRefundSpendReservation,
   db,
   markDailyRefundSpendReservationUnknown,
+  recordReturnWatch,
   releaseDailyRefundSpendReservation,
   reserveDailyRefundSpend,
 } from "@shopkeeper/db";
@@ -161,6 +162,7 @@ const TOOL_EXECUTION_DEPS: ToolExecutionDeps = {
     });
   },
   getSupportStats,
+  recordReturnWatch,
 };
 
 type ReservationInput = Parameters<typeof reserveDailyRefundSpend>[0]["input"];

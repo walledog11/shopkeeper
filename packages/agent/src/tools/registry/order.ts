@@ -243,7 +243,7 @@ export const ORDER_TOOL_DEFINITIONS = [
       const shopify = requireShopify(ctx);
       if (!shopify) return noShopify;
       const result = await deps.createReturn(input, shopify);
-      await maybeRecordReturnWatch(ctx, result);
+      await maybeRecordReturnWatch(ctx, result, deps);
       return result;
     },
   }),
@@ -267,7 +267,7 @@ export const ORDER_TOOL_DEFINITIONS = [
       const shopify = requireShopify(ctx);
       if (!shopify) return noShopify;
       const result = await deps.createExchange(input, shopify);
-      await maybeRecordReturnWatch(ctx, result);
+      await maybeRecordReturnWatch(ctx, result, deps);
       return result;
     },
   }),

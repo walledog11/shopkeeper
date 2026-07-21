@@ -177,6 +177,7 @@ function makeDeps(): ToolExecutionDeps {
       messages: { customer: 20, agent: 5, ai: 11 },
       resolution: { closedCount: 9, avgMinutes: 42 },
     }),
+    recordReturnWatch: vi.fn().mockResolvedValue(undefined),
   };
 }
 

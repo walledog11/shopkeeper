@@ -1,9 +1,8 @@
-import { recordReturnWatch } from "@shopkeeper/db";
 import type { BaseAgentContext, SupportContext } from "../../agent-context.js";
 import type { ReturnWatchToolData } from "../../shopify/returns.js";
 import logger from "../../logger.js";
 import { toolError, type ToolResult } from "../result.js";
-import type { AgentToolDefinition, ShopifyToolContext, ToolCapability } from "./types.js";
+import type { AgentToolDefinition, ShopifyToolContext, ToolCapability, ToolExecutionDeps } from "./types.js";
 
 export const noShopify = toolError("Error: no Shopify integration connected.");
 export const noThread = toolError("Error: this tool requires a conversation thread.");
@@ -75,13 +74,14 @@ function readReturnWatchData(result: ToolResult): ReturnWatchToolData["returnWat
 export async function maybeRecordReturnWatch(
   ctx: BaseAgentContext,
   result: ToolResult,
+  deps: Pick<ToolExecutionDeps, "recordReturnWatch">,
 ): Promise<void> {
   const watch = readReturnWatchData(result);
   if (!watch) return;
 
   const threadCtx = threadContextOf(ctx);
   try {
-    await recordReturnWatch({
+    await deps.recordReturnWatch({
       organizationId: threadCtx?.orgId ?? ctx.orgId,
       threadId: threadCtx?.threadId ?? null,
       orderId: watch.orderId,
