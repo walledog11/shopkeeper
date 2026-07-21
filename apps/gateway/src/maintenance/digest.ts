@@ -1,7 +1,6 @@
 import { getSupportStats, type SupportStatsSummary } from '@shopkeeper/agent/support-stats';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { db, ThreadFilterStatus, type DbThreadFilterStatus } from '@shopkeeper/db';
-import type { Prisma } from '@prisma/client';
 import { JOB, QUEUE } from '../constants.js';
 import logger from '../logger.js';
 import { listOperatorBindings, notifyOperator } from '../operator-notify.js';

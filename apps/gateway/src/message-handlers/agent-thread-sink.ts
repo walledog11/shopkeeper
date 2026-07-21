@@ -2,7 +2,6 @@ import { db, SenderType, createMessage } from '@shopkeeper/db';
 import { AGENT_NOTE_PREFIX, THREAD_STATUS } from '@shopkeeper/agent/thread-constants';
 import type { ThreadSink } from '@shopkeeper/agent/build-context';
 import { randomUUID } from 'node:crypto';
-import { INTERNAL_REQUEST_ID_HEADER } from '@shopkeeper/agent/message-dispatch';
 import { toolError, toolOk, toolEscalated, toolUnknown, type ToolResult } from '@shopkeeper/agent/tools';
 import type {
   AddInternalNoteInput,
