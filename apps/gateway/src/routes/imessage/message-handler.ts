@@ -128,9 +128,14 @@ export async function runImessageOperatorTurn(params: ImessageOperatorTurnParams
   }
 
   if (command.type === 'summary') {
-    const digest = await buildOrgDigest(organizationId, new Date());
+    const org = await db.organization.findUnique({
+      where: { id: organizationId },
+      select: { settings: true },
+    });
+    const settings = (org?.settings as Record<string, unknown> | null) ?? {};
+    const digest = await buildOrgDigest(organizationId, new Date(), settings);
     if (!digest) {
-      await mirroredReply('Your support inbox is empty — no open tickets.');
+      await mirroredReply('Nothing new in your support inbox right now.');
       return;
     }
     await updateContext(organizationId, chatId, { pendingDigest: digest.pendingDigest });

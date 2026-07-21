@@ -106,7 +106,6 @@ describe('formatDigestMessage', () => {
     expect(msg).toContain('Flagged (review needed): 2');
     expect(msg).toContain('1. Alice — Asking about wholesale pricing');
     expect(msg).toContain('2. Bob — Refund request without order #');
-    // Help footer shows command list
     expect(msg).toContain('OPEN <n>');
     expect(msg).toContain('SPAM <n>');
     expect(msg).toContain('REPLY <n> <text>');
@@ -142,17 +141,51 @@ describe('formatDigestMessage', () => {
     expect(formatDigestMessage(without)).not.toContain('Filtered:');
   });
 
-  it('omits the command help line when there are no questionable threads', () => {
+  it('omits the shortcut line when there are no questionable threads', () => {
     const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW);
     const msg = formatDigestMessage(buckets);
-    expect(msg).not.toContain('OPEN <n>');
-    expect(msg).toContain('order number');
+    expect(msg).not.toContain('Shortcuts:');
+    expect(msg).toContain('Text me anytime');
+  });
+
+  it('includes handled and waiting sections when provided', () => {
+    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW);
+    const msg = formatDigestMessage(buckets, null, {
+      handledSection: 'Since your last briefing:\n1 refund approved\n- Refunded Sarah $12',
+      waitingSection: 'Waiting on you:\n- Sarah\'s $12 refund — still waiting on your OK',
+    });
+    expect(msg).toContain('Since your last briefing');
+    expect(msg).toContain('Refunded Sarah $12');
+    expect(msg).toContain('Waiting on you');
+    expect(msg).toContain('still waiting on your OK');
+    expect(msg).toContain("Here's your support inbox");
   });
 
   it('includes the weekly summary line when provided and omits it otherwise', () => {
     const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW);
     expect(formatDigestMessage(buckets, 'Last 7 days: 5 new tickets')).toContain('Last 7 days: 5 new tickets');
     expect(formatDigestMessage(buckets)).not.toContain('Last 7 days');
+  });
+
+  it('inserts Shopify garnish lines before the weekly summary', () => {
+    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine', tag: 'Shipping' })], NOW);
+    const msg = formatDigestMessage(
+      buckets,
+      'Last 7 days: 5 new tickets',
+      {
+        garnishLines: [
+          'Sales since your last briefing: 3 orders · $120',
+          'Low stock (≤5): Hat (Blue) · 1 left',
+        ],
+      },
+    );
+
+    const salesIndex = msg.indexOf('Sales since your last briefing');
+    const lowStockIndex = msg.indexOf('Low stock (≤5)');
+    const weeklyIndex = msg.indexOf('Last 7 days');
+    expect(salesIndex).toBeGreaterThan(-1);
+    expect(lowStockIndex).toBeGreaterThan(salesIndex);
+    expect(weeklyIndex).toBeGreaterThan(lowStockIndex);
   });
 });
 

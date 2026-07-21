@@ -244,7 +244,11 @@ const OPERATOR_CONTROL_TOOL_INSTRUCTIONS = `- When a plan is awaiting the mercha
   - If their assent is ambiguous ("ok", "hmm fine", "sure I guess"), do NOT call a tool - ask one short confirming question instead.
 - When a question is awaiting the merchant's answer (see "## Pending state") and their message plausibly answers it, call answer_operator_question with the answer.
 - Call at most ONE of approve_pending_plan / reject_pending_plan / revise_pending_plan / answer_operator_question per turn. After you revise a plan, the merchant must see the new draft before approving it - do NOT revise and then approve in the same turn; stop after revising and let them approve on their next message.
-- A message about something else entirely (an order lookup, a brand-new instruction) is handled normally with your other tools and MUST NOT touch the pending plan or question.
+- When a digest is awaiting triage (see "## Pending state") and the merchant wants to act on flagged tickets:
+  - If they clearly want to dismiss one as spam, call mark_ticket_spam with that ticket's id from the digest list. If their intent is ambiguous ("that first one seems off"), ask one short confirming question before marking spam.
+  - If they want to send a reply on a flagged ticket, call send_ticket_reply with the ticket id and their exact reply text. Multiple digest actions in one message are allowed.
+  - To open or read a flagged ticket, call get_ticket with its id — do not invent index numbers.
+- A message about something else entirely (an order lookup, a brand-new instruction) is handled normally with your other tools and MUST NOT touch the pending plan, question, or digest unless the merchant is clearly referring to it.
 - After a control tool runs, state plainly what happened, quoting the concrete action (e.g. "Sent - Sarah gets the $12 refund." or "Re-drafted it warmer with 10% off - reply yes when you're happy.").`;
 
 // Appended alongside the control tools: the gateway operator turn also carries

@@ -7,12 +7,22 @@ import logger from '../logger.js';
 import { listOperatorBindings, notifyOperator } from '../operator-notify.js';
 import { digestNotificationIdempotencyKey } from '../operator-notify-idempotency.js';
 import {
+  formatHandledSection,
+  formatWaitingSection,
+  loadHandledRollup,
+  loadWaitingOnYouItems,
+  finalizeDigestSend,
+  resolveHandledWindowStart,
+} from './digest-briefing.js';
+import { loadDigestShopifyGarnish } from './digest-shopify-garnish.js';
+import {
   createMaintenanceQueue,
   createMaintenanceWorker,
   ONE_HOUR_MS,
   scheduleRepeatableJob,
   type MaintenanceJobRegistration,
 } from './registration.js';
+
 const FOUR_HOURS_MS = 4 * ONE_HOUR_MS;
 const TWENTY_FOUR_HOURS_MS = 24 * ONE_HOUR_MS;
 
@@ -101,9 +111,28 @@ export function formatWeeklySummaryLine(stats: SupportStatsSummary): string {
   return `Last 7 days: ${parts.join(' · ')}`;
 }
 
-export function formatDigestMessage(buckets: DigestBuckets, weeklyLine?: string | null): string {
+export interface DigestMessageExtras {
+  handledSection?: string | null;
+  waitingSection?: string | null;
+  garnishLines?: string[];
+}
+
+export function formatDigestMessage(
+  buckets: DigestBuckets,
+  weeklyLine?: string | null,
+  extras?: DigestMessageExtras,
+): string {
   const { genuine, questionable, filteredCount, urgent, stale, fresh, topTags } = buckets;
-  const lines: string[] = [`Here's your support inbox:`, ``, `Open tickets: ${genuine.length}`];
+  const lines: string[] = [];
+
+  if (extras?.handledSection) {
+    lines.push(extras.handledSection, '');
+  }
+  if (extras?.waitingSection) {
+    lines.push(extras.waitingSection, '');
+  }
+
+  lines.push(`Here's your support inbox:`, ``, `Open tickets: ${genuine.length}`);
 
   if (urgent > 0) lines.push(`  No reply >24h: ${urgent}`);
   if (stale > 0) lines.push(`  Needs attention (4-24h): ${stale}`);
@@ -129,13 +158,17 @@ export function formatDigestMessage(buckets: DigestBuckets, weeklyLine?: string 
 
   if (topTags) lines.push(``, `Topics: ${topTags}`);
 
+  for (const line of extras?.garnishLines ?? []) {
+    lines.push(``, line);
+  }
+
   if (weeklyLine) lines.push(``, weeklyLine);
 
   lines.push(``);
+  lines.push(`Text me anytime for your inbox — or send an order number (e.g. #1234) for ticket details.`);
   if (questionable.length > 0) {
-    lines.push(`Reply OPEN <n> · SPAM <n> · REPLY <n> <text> · REVIEW to relist`);
+    lines.push(`Shortcuts: OPEN <n> · SPAM <n> · REPLY <n> <text> · REVIEW to relist flagged tickets.`);
   }
-  lines.push(`Or send an order number (e.g. #1234) for ticket details.`);
 
   return lines.join('\n');
 }
@@ -152,8 +185,13 @@ export interface OrgDigest {
  * Returns null when the org has no open tickets. Shared by the scheduled digest
  * worker and the on-demand `SUMMARY` operator command.
  */
-export async function buildOrgDigest(organizationId: string, now: Date): Promise<OrgDigest | null> {
-  const [openThreads, weeklyStats] = await Promise.all([
+export async function buildOrgDigest(
+  organizationId: string,
+  now: Date,
+  settings: Record<string, unknown> = {},
+): Promise<OrgDigest | null> {
+  const since = resolveHandledWindowStart(settings, now);
+  const [openThreads, weeklyStats, handledRollup, waitingItems, garnishLines] = await Promise.all([
     db.thread.findMany({
       where: { organizationId, status: 'open', deletedAt: null },
       select: {
@@ -167,15 +205,25 @@ export async function buildOrgDigest(organizationId: string, now: Date): Promise
       },
       orderBy: { updatedAt: 'desc' },
     }),
-    // The weekly line is garnish — never let it sink the digest itself.
     getSupportStats(organizationId, 7).catch(() => null),
+    loadHandledRollup(organizationId, since),
+    loadWaitingOnYouItems(organizationId, now),
+    loadDigestShopifyGarnish(organizationId, settings, now),
   ]);
 
-  if (openThreads.length === 0) return null;
+  const handledSection = formatHandledSection(handledRollup);
+  const waitingSection = formatWaitingSection(waitingItems);
+  const hasBriefingContent = Boolean(handledSection || waitingSection);
+
+  if (openThreads.length === 0 && !hasBriefingContent) return null;
 
   const buckets = bucketDigestThreads(openThreads, now);
   return {
-    message: formatDigestMessage(buckets, weeklyStats ? formatWeeklySummaryLine(weeklyStats) : null),
+    message: formatDigestMessage(
+      buckets,
+      weeklyStats ? formatWeeklySummaryLine(weeklyStats) : null,
+      { handledSection, waitingSection, garnishLines },
+    ),
     pendingDigest: {
       threadIds: buckets.questionable.slice(0, DIGEST_QUESTIONABLE_LIMIT).map((t) => t.id),
       sentAt: now.toISOString(),
@@ -214,14 +262,6 @@ export async function buildFirstNightMessage(
   return lines.join('\n');
 }
 
-async function clearFirstBriefingPending(organizationId: string, currentSettings: unknown): Promise<void> {
-  const raw = (currentSettings as Record<string, unknown> | null) ?? {};
-  await db.organization.update({
-    where: { id: organizationId },
-    data: { settings: { ...raw, firstBriefingPending: false } as Prisma.InputJsonObject },
-  });
-}
-
 export async function sendScheduledDigests(): Promise<void> {
   const now = new Date();
   const nowMs = now.getTime();
@@ -244,8 +284,9 @@ export async function sendScheduledDigests(): Promise<void> {
   if (eligibleOrgs.length === 0) return;
 
   for (const org of eligibleOrgs) {
-    const firstBriefingPending = ((org.settings as Record<string, unknown> | null) ?? {}).firstBriefingPending === true;
-    const digest = await buildOrgDigest(org.id, now);
+    const orgSettings = (org.settings as Record<string, unknown> | null) ?? {};
+    const firstBriefingPending = orgSettings.firstBriefingPending === true;
+    const digest = await buildOrgDigest(org.id, now, orgSettings);
 
     // A brand-new merchant with an empty inbox would otherwise never get a
     // first digest. Send a welcome briefing once so they see the morning ritual.
@@ -276,9 +317,7 @@ export async function sendScheduledDigests(): Promise<void> {
       }
     }
 
-    if (firstBriefingPending) {
-      await clearFirstBriefingPending(org.id, org.settings);
-    }
+    await finalizeDigestSend(org.id, now, firstBriefingPending);
   }
 }
 

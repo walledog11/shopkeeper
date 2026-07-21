@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { db } from '@shopkeeper/db';
 import {
   createTestOrg,
   createTestCustomer,
@@ -74,16 +75,28 @@ describe('renderOperatorLedger', () => {
     expect(ledger).toContain('Do we ship to Canada?');
   });
 
-  it('renders a pending digest with age and ticket count', async () => {
+  it('renders a pending digest with indexed flagged tickets and untrusted summaries', async () => {
+    const customer = await createTestCustomer(org.id, 'sarah@example.com', { name: 'Sarah Jones' });
+    const thread = await createTestThread(org.id, customer.id, 'email');
+    await db.thread.update({
+      where: { id: thread.id },
+      data: { aiSummary: 'Wants a refund for a late order' },
+    });
+
     const ledger = await renderOperatorLedger(org.id, {
       ...EMPTY,
       pendingDigest: {
-        threadIds: ['t1', 't2', 't3'],
+        threadIds: [thread.id],
         sentAt: new Date(Date.now() - 2 * 3_600_000).toISOString(),
       },
     });
+
     expect(ledger).toContain('support digest');
-    expect(ledger).toContain('covering 3 tickets');
     expect(ledger).toContain('2h ago');
+    expect(ledger).toContain('1. Sarah Jones — Wants a refund for a late order');
+    expect(ledger).toContain(`ticket: ${thread.id}`);
+    expect(ledger).toContain('<customer_message>');
+    expect(ledger).toContain('mark_ticket_spam');
+    expect(ledger).toContain('send_ticket_reply');
   });
 });

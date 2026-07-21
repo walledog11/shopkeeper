@@ -104,6 +104,10 @@ function readPendingPlan(value: unknown): PendingPlan | null {
   };
 }
 
+export function parseStoredPendingPlan(value: unknown): PendingPlan | null {
+  return readPendingPlan(value);
+}
+
 function readPendingDigest(value: unknown): PendingDigest | null {
   if (
     !isRecord(value) ||

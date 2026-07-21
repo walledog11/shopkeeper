@@ -1,6 +1,6 @@
 import { db } from '@shopkeeper/db';
 import { isReadToolName, PLAN_STEP_LABELS } from '@shopkeeper/agent/tools';
-import { relativeAge } from '../routes/telegram/format.js';
+import { buildDigestLedgerSection } from './digest-triage.js';
 import type { OperatorContext, ToolCall } from '../operator-context.js';
 
 const NOTHING_PENDING = "Nothing is awaiting the merchant's decision.";
@@ -77,9 +77,7 @@ export async function renderOperatorLedger(
   }
 
   if (pendingDigest) {
-    const age = relativeAge(Date.now() - new Date(pendingDigest.sentAt).getTime());
-    const count = pendingDigest.threadIds.length;
-    return `A support digest was sent${age ? ` ${age}` : ''} covering ${count} ticket${count === 1 ? '' : 's'}, awaiting the merchant's triage.`;
+    return buildDigestLedgerSection(organizationId, pendingDigest);
   }
 
   return NOTHING_PENDING;

@@ -2,6 +2,7 @@ import logger from '../../logger.js';
 import { renderOperatorLedger } from '../../message-handlers/operator-ledger.js';
 import { buildOperatorSessionTools } from '../../message-handlers/operator-session-tools.js';
 import { buildOperatorInboxTools } from '../../message-handlers/operator-inbox-tools.js';
+import { buildOperatorDigestTools } from '../../message-handlers/operator-digest-tools.js';
 import { executeOperatorAgentTurn } from '../../message-handlers/execute-operator-agent-turn.js';
 import type { OperatorContext } from '../../operator-context.js';
 import type { OperatorMessageContext } from '../operator-message.js';
@@ -30,6 +31,7 @@ export async function executeFreeFormInstruction(
       context,
     }),
     ...buildOperatorInboxTools({ organizationId }),
+    ...buildOperatorDigestTools({ organizationId, context }),
   };
 
   let summary: string;

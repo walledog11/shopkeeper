@@ -101,7 +101,7 @@ describe('POST /webhooks/telegram — help & summary', () => {
 
     await processPendingOperatorEvents(org.id);
     await waitForReplies(1);
-    expect(lastReplyText()).toMatch(/inbox is empty/i);
+    expect(lastReplyText()).toMatch(/nothing new in your support inbox/i);
   });
 });
 

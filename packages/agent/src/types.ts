@@ -78,6 +78,17 @@ export interface OrgSettings {
   // scheduled digest send a welcome briefing even when the inbox is empty,
   // then cleared by the digest worker.
   firstBriefingPending?: boolean;
+
+  // ISO timestamp of the last successfully sent scheduled digest. Drives the
+  // handled rollup window for morning briefing v2.
+  lastSuccessfulDigestAt?: string;
+
+  // Digest garnish — daily sales pulse (default on when Shopify is connected).
+  salesPulseEnabled?: boolean;
+
+  // Digest garnish — alert when variant inventory is at or below this count.
+  // Omit or null to disable low-stock lines.
+  lowStockThreshold?: number | null;
 }
 
 export type OrgSettingsPatch = Omit<Partial<OrgSettings>, 'toolsEnabled'> & {

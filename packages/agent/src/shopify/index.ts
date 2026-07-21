@@ -18,6 +18,19 @@ export {
   getShopifyOrders,
   listRecentUnfulfilledOrderIds,
 } from "./orders.js";
+export {
+  formatSalesPulseLine,
+  shiftWindowByDays,
+  summarizeOrders,
+  summarizeOrdersInWindow,
+  type OrderWindowBounds,
+  type OrderWindowSummary,
+} from "./sales-pulse.js";
+export {
+  formatLowStockLine,
+  listLowStockVariants,
+  type LowStockVariant,
+} from "./low-stock.js";
 export { updateShopifyOrderAddress } from "./order-address.js";
 export { cancelOrder } from "./order-cancellation.js";
 export { createShopifyOrder, type CreateShopifyOrderOptions } from "./order-creation.js";

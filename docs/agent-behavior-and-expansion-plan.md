@@ -149,9 +149,14 @@ mirror these as dashboard host tools.
 
 ### A2 — Conversational digest triage
 
-**Status (2026-07-12): In progress.** The independent AUD-020/P8-01 drive-by is
-complete; conversational digest ledger rendering and control tools have not
-started and remain gated by the send/tenant durability work below.
+**Status (2026-07-20): Complete.** `renderOperatorLedger` now lists flagged digest
+tickets with index, customer, summary, and ticket id in the same order the
+merchant saw, wrapped as untrusted customer data. Gateway operator turns expose
+`mark_ticket_spam` and `send_ticket_reply` digest control tools with org-scoped
+and digest-membership checks; keyword fast paths (`SPAM n`, `REPLY n`) are
+unchanged. Shared digest-triage helpers back both paths. Unit and database-backed
+tests cover ledger rendering, spam marking, reply send failures, and tool wiring.
+Live phone verification remains optional follow-up.
 
 **Problem:** digest follow-ups are index commands (`OPEN 2 · SPAM 3 ·
 REPLY 1 <text>`) parsed before the model
@@ -280,11 +285,14 @@ shapes; screenshots/phone once.
 
 ### A5 — Morning briefing v2
 
-**Problem:** the first-night message promises "what came in, what I handled,
-and what needs you"; the recurring digest
-(`apps/gateway/src/maintenance/digest.ts`) delivers counts + flagged list +
-command footer. No "what I handled", no pending approvals, no per-ticket
-plans. This is the flagship surface (magic moment = next-morning briefing).
+**Status (2026-07-20): Complete.** Recurring digests now include a deterministic
+"Since your last briefing" handled rollup from committed `PlanExecution` rows
+since an org-level `lastSuccessfulDigestAt` cursor, plus a deduplicated
+"Waiting on you" section from operator pending plans and stale
+`needs_review`/`needs_merchant_input` thread plans. Footer copy leads with a
+natural-language invite and demotes command shortcuts. Weekly stats and the
+first-night flow are unchanged. Unit and database-backed tests cover handled
+rollups, waiting dedupe, digest formatting, and cursor behavior.
 
 **Build (stay deterministic — assembled from DB, no LLM cost per digest):**
 
@@ -372,8 +380,8 @@ A3 shipped first because it stops operator-thread self-escalation, and P8-01
 landed as a standalone quick win. **A1 is implementation-complete as of
 2026-07-16** (P5-04 unblocked it). **A4 and A6-step-1 are implementation-complete
 as of 2026-07-20** (live phone verification complete). Subject to the safety
-gates above, the remaining behavior order is A2 → A5. A2 can now assume
-`get_ticket` exists — its "open" case needs no tool.
+gates above, the remaining behavior order is complete for Track A operator
+expansion (A5 shipped 2026-07-20).
 A5's deduplicated "Waiting on you" foundation now has P1 identity support; its
 authoritative "Handled" section still waits for P3. Each operator-only phase has its own live verification; none needs
 an eval run unless it changes the support-planner surface.
@@ -397,6 +405,11 @@ while customer delivery waits for P4 durability.
 
 ### B1 — Daily sales pulse line in the briefing (small)
 
+**Status (2026-07-20): Complete.** Recurring digests include a failure-tolerant
+sales line built from an org-wide Shopify orders read since the org-level
+`lastSuccessfulDigestAt` window, with a prior-week comparison when the follow-up
+fetch succeeds. Opt out via `salesPulseEnabled: false` in org settings.
+
 One line in the digest: orders + revenue since yesterday (vs. same day last
 week if cheap). Mirror the weekly-stats pattern — computed at digest build,
 failure-tolerant garnish that can never sink the digest. Needs one small
@@ -406,6 +419,11 @@ cut once by design. Use the P4-06 deadline/timeout conventions for the new
 org-wide read and the same org-level digest reporting window chosen in A5.
 
 ### B2 — Inventory awareness (read-only)
+
+**Status (2026-07-20): Complete (serializer + digest line).** Variant
+`inventory_quantity` is already exposed in the product serializer and returned by
+`search_shopify_products`. Low-stock digest lines are behind
+`lowStockThreshold` in org settings (default off).
 
 - Expose variant inventory quantities in the product serializer
   (`packages/agent/src/shopify/serializers.ts` / `products.ts`) if not already

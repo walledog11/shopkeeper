@@ -58,8 +58,10 @@ describe('executeFreeFormInstruction', () => {
       'approve_pending_plan',
       'get_ticket',
       'list_active_tickets',
+      'mark_ticket_spam',
       'reject_pending_plan',
       'revise_pending_plan',
+      'send_ticket_reply',
     ]);
   });
 

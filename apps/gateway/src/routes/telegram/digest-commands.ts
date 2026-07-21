@@ -1,7 +1,13 @@
 import { db } from '@shopkeeper/db';
-import { postDashboardInternal } from '../../clients/dashboard-internal.js';
 import logger from '../../logger.js';
-import { customerFirstName } from '../../message-handlers/planning-notifications.js';
+import {
+  formatDigestReplyConfirmation,
+  formatDigestSpamConfirmation,
+  formatDigestThreadBlurb,
+  loadDigestThreads,
+  markDigestThreadSpam,
+  sendDigestThreadReply,
+} from '../../message-handlers/digest-triage.js';
 import type { OperatorContext } from '../../operator-context.js';
 import type { DigestCommand } from './command-parser.js';
 import { relativeAge } from './format.js';
@@ -22,19 +28,13 @@ export async function handleDigestCommand(
       await reply('No flagged tickets in your last digest.');
       return true;
     }
-    const rows = await db.thread.findMany({
-      where: { id: { in: threadIds }, organizationId },
-      select: { id: true, aiSummary: true, filterReason: true, customer: { select: { name: true } } },
-    });
-    const byId = new Map(rows.map((row) => [row.id, row]));
+    const entries = await loadDigestThreads(organizationId, threadIds);
     const lines = ['Flagged tickets:'];
-    threadIds.forEach((id, index) => {
-      const thread = byId.get(id);
-      if (!thread) return;
-      const blurb = (thread.aiSummary ?? thread.filterReason ?? '').trim();
-      const truncated = blurb.length > 90 ? `${blurb.slice(0, 90)}…` : blurb;
-      lines.push(`${index + 1}. ${thread.customer.name ?? 'Unknown'}${truncated ? ` — ${truncated}` : ''}`);
-    });
+    for (const entry of entries) {
+      if (!entry.thread) continue;
+      const blurb = formatDigestThreadBlurb(entry.thread);
+      lines.push(`${entry.index}. ${entry.thread.customer.name ?? 'Unknown'}${blurb ? ` — ${blurb}` : ''}`);
+    }
     lines.push('', 'OPEN <n> · SPAM <n> · REPLY <n> <text>');
     await reply(lines.join('\n'));
     return true;
@@ -82,26 +82,12 @@ export async function handleDigestCommand(
   }
 
   if (command.type === 'digest-spam') {
-    const thread = await db.thread.findFirst({
-      where: { id: targetId, organizationId },
-      select: { customer: { select: { name: true } } },
-    });
-    if (!thread) {
+    const result = await markDigestThreadSpam(organizationId, context.pendingDigest, targetId);
+    if (!result.ok) {
       await reply('Ticket not found.');
       return true;
     }
-    await db.thread.update({
-      where: { id: targetId },
-      data: {
-        filterStatus: 'filtered',
-        filterFeedback: 'confirmed_spam',
-        filterDecidedAt: new Date(),
-      },
-    });
-    const firstName = customerFirstName(thread.customer.name);
-    await reply(
-      firstName ? `Marked ${firstName}'s message as spam.` : `Marked ${command.index} as spam.`,
-    );
+    await reply(formatDigestSpamConfirmation(result.customerName, result.index));
     return true;
   }
 
@@ -119,10 +105,7 @@ export async function handleDigestCommand(
       kind: 'digest-reply',
       ticketIndex: command.index,
     },
-    () => postDashboardInternal('/api/messages/internal', {
-      threadId: targetId,
-      text: command.text,
-    }),
+    () => sendDigestThreadReply(targetId, command.text),
   );
   if (!response.ok) {
     logger.error({ status: response.status, err: response.responseBody, threadId: targetId }, '[Operator] Digest REPLY failed');
@@ -131,12 +114,6 @@ export async function handleDigestCommand(
       : 'Reply failed to send. Please try again from the dashboard.');
     return true;
   }
-  const replyFirstName = customerFirstName(replyTarget.customer.name);
-  const echo = command.text.length > 120 ? `${command.text.slice(0, 120)}…` : command.text;
-  await reply(
-    replyFirstName
-      ? `Replied to ${replyFirstName} — "${echo}"`
-      : `Reply sent on ticket ${command.index}.`,
-  );
+  await reply(formatDigestReplyConfirmation(replyTarget.customer.name, command.index, command.text));
   return true;
 }
