@@ -408,7 +408,8 @@ while customer delivery waits for P4 durability.
 **Status (2026-07-20): Complete.** Recurring digests include a failure-tolerant
 sales line built from an org-wide Shopify orders read since the org-level
 `lastSuccessfulDigestAt` window, with a prior-week comparison when the follow-up
-fetch succeeds. Opt out via `salesPulseEnabled: false` in org settings.
+fetch succeeds. Opt out via `salesPulseEnabled: false` in org settings or the
+**Morning briefing extras** panel on Agent settings (Shopify-connected orgs).
 
 One line in the digest: orders + revenue since yesterday (vs. same day last
 week if cheap). Mirror the weekly-stats pattern — computed at digest build,
@@ -420,10 +421,11 @@ org-wide read and the same org-level digest reporting window chosen in A5.
 
 ### B2 — Inventory awareness (read-only)
 
-**Status (2026-07-20): Complete (serializer + digest line).** Variant
+**Status (2026-07-20): Complete (serializer + digest line + settings UI).** Variant
 `inventory_quantity` is already exposed in the product serializer and returned by
 `search_shopify_products`. Low-stock digest lines are behind
-`lowStockThreshold` in org settings (default off).
+`lowStockThreshold` in org settings (default off), configurable from **Morning
+briefing extras** on Agent settings when Shopify is connected.
 
 - Expose variant inventory quantities in the product serializer
   (`packages/agent/src/shopify/serializers.ts` / `products.ts`) if not already
@@ -435,6 +437,12 @@ org-wide read and the same org-level digest reporting window chosen in A5.
   and account for the added fields in P2-02's hard context/token budget.
 
 ### B3 — Return-lifecycle completion
+
+**Status (2026-07-20): Scaffold shipped behind `RETURN_LIFECYCLE_MONITOR_ENABLED`.**
+Hourly sweep reads recent `create_return` / `create_exchange` audit rows, checks
+Shopify reverse-delivery status, and notifies bound operators when a return
+arrives (idempotent push). Plan-approval loop wiring and durable
+return↔ticket association remain next.
 
 The agent opens returns/exchanges today, then goes blind. Sweep open returns;
 when the reverse shipment shows delivered, push through the plan-approval
@@ -503,12 +511,14 @@ plan.
    lower-stakes and reversible — recommend trusting it.)
 2. Concierge parity for A1's inbox tools — worth mirroring as dashboard host
    tools, or is the dashboard inbox UI enough there?
-3. B2/B1 settings surface: new `Organization.settings` keys
+3. ~~B2/B1 settings surface: new `Organization.settings` keys
    (`lowStockThreshold`, `salesPulseEnabled`?) — dashboard settings UI or
-   settings-JSON-only at first?
-4. A5 reporting boundary: persist one organization-level last-successful-
-   digest cursor, or use a fixed rolling window? (Recommend the durable cursor
-   so retries and delayed digests do not overlap or omit activity.)
+   settings-JSON-only at first?~~ **Decided and shipped 2026-07-20:**
+   **Morning briefing extras** on Agent settings (`/dashboard/agent/configure`)
+   for Shopify-connected orgs; JSON keys remain the API surface.
+4. ~~A5 reporting boundary: persist one organization-level last-successful-
+   digest cursor, or use a fixed rolling window?~~ **Decided and shipped
+   2026-07-20:** durable org-level `lastSuccessfulDigestAt` cursor (see A5).
 5. ~~P5-04 active-ticket semantics: should `pending` remain an active inbox
    state, or should escalation become orthogonal to thread status?~~
    **Decided and shipped 2026-07-16:** escalation is orthogonal — an escalated

@@ -90,10 +90,11 @@ item was still open when the doc was retired:
   500, the agent then burned its token budget and gave the operator the generic
   "too many steps" message. Root cause not captured — the gateway log redacts
   the body, so the dashboard-side failure is unknown. Never confirmed transient
-  vs systemic. Next steps: pull dashboard/Vercel logs for the request window;
-  add a cross-service correlation id so gateway↔dashboard hops are traceable;
-  make the operator path surface a send failure clearly instead of the
-  token-budget generic message.
+  vs systemic. **Partial fix shipped 2026-07-20:** cross-service
+  `x-shopkeeper-request-id` correlation, clearer operator-facing dispatch-failure
+  copy, failed approvals no longer clear the parked plan, and operator turns
+  stop summarizing as "too many steps" when a send hop failed. Still open:
+  pull dashboard/Vercel logs for the original incident window if it recurs.
   Pointers: [`agent-thread-sink.ts`](../apps/gateway/src/message-handlers/agent-thread-sink.ts) (hop, no delivery verify),
   [`io-send-internal/route.ts`](../apps/dashboard/src/app/api/agent/io-send-internal/route.ts) (dashboard receiver).
 

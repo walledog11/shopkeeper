@@ -128,6 +128,10 @@ export function isOrderRiskMonitorEnabled(): boolean {
   return parseBooleanEnv('ORDER_RISK_MONITOR_ENABLED', false);
 }
 
+export function isReturnLifecycleMonitorEnabled(): boolean {
+  return parseBooleanEnv('RETURN_LIFECYCLE_MONITOR_ENABLED', false);
+}
+
 export function isGmailNativeInboundEnabled(): boolean {
   return parseBooleanEnv('GMAIL_NATIVE_INBOUND', false);
 }

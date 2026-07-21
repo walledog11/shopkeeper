@@ -59,6 +59,7 @@ describe("agent tab helpers", () => {
         maxIter: "0",
         digestHour: "99",
         digestSecondHour: "",
+        lowStockThreshold: "7",
         bhStart: "bad",
         bhEnd: "-3",
       }
@@ -72,6 +73,7 @@ describe("agent tab helpers", () => {
     expect(payload.maxIterations).toBe(10);
     expect(payload.digestHour).toBe(23);
     expect(payload.digestSecondHour).toBe(17);
+    expect(payload.lowStockThreshold).toBe(7);
     expect(payload.businessHoursStart).toBe(9);
     expect(payload.businessHoursEnd).toBe(0);
   });
@@ -84,6 +86,7 @@ describe("agent tab helpers", () => {
       maxIterations: 7,
       digestHour: 10,
       digestSecondHour: 18,
+      lowStockThreshold: 5,
       businessHoursStart: 6,
       businessHoursEnd: 14,
     }));
@@ -96,6 +99,7 @@ describe("agent tab helpers", () => {
       maxIter: "7",
       digestHour: "10",
       digestSecondHour: "18",
+      lowStockThreshold: "5",
       bhStart: "6",
       bhEnd: "14",
     });

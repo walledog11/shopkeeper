@@ -31,6 +31,13 @@ export {
   listLowStockVariants,
   type LowStockVariant,
 } from "./low-stock.js";
+export {
+  fetchOrderReturnStatuses,
+  formatReturnArrivedNotification,
+  safeFetchOrderReturnStatuses,
+  type MonitoredReturnStatus,
+  type ReturnDeliveryState,
+} from "./return-status.js";
 export { updateShopifyOrderAddress } from "./order-address.js";
 export { cancelOrder } from "./order-cancellation.js";
 export { createShopifyOrder, type CreateShopifyOrderOptions } from "./order-creation.js";

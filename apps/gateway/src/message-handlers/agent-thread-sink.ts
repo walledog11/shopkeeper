@@ -1,6 +1,8 @@
 import { db, SenderType, createMessage } from '@shopkeeper/db';
 import { AGENT_NOTE_PREFIX, THREAD_STATUS } from '@shopkeeper/agent/thread-constants';
 import type { ThreadSink } from '@shopkeeper/agent/build-context';
+import { randomUUID } from 'node:crypto';
+import { INTERNAL_REQUEST_ID_HEADER } from '@shopkeeper/agent/message-dispatch';
 import { toolError, toolOk, toolEscalated, toolUnknown, type ToolResult } from '@shopkeeper/agent/tools';
 import type {
   AddInternalNoteInput,
@@ -47,11 +49,17 @@ function recordDispatchFailure(
   });
 }
 
+function formatDispatchFailureMessage(status: number | null | undefined, requestId: string): string {
+  const statusLabel = status ?? 'unknown';
+  return `Error: message dispatch failed (${statusLabel}). Reference: ${requestId}.`;
+}
+
 async function dispatchAgentSend(
   op: 'send_reply' | 'send_email',
   ctx: ThreadSinkContext,
   input: SendReplyInput | SendEmailInput,
 ): Promise<ToolResult> {
+  const requestId = randomUUID();
   try {
     const response = await postDashboardInternal<ToolResult>('/api/agent/io-send-internal', {
       orgId: ctx.orgId,
@@ -60,10 +68,16 @@ async function dispatchAgentSend(
       op,
       input,
       agentActionMode: ctx.agentActionMode,
-    });
+    }, { requestId });
     if (!response.ok) {
       logger.warn(
-        { op, status: response.status, threadId: ctx.threadId, body: response.responseBody.slice(0, 300) },
+        {
+          op,
+          status: response.status,
+          threadId: ctx.threadId,
+          requestId,
+          body: response.responseBody.slice(0, 300),
+        },
         '[agent-sink] dashboard send hop failed',
       );
       recordDispatchFailure(
@@ -74,19 +88,19 @@ async function dispatchAgentSend(
         response.status ?? undefined,
       );
       if (response.outcome === 'unknown') {
-        return toolUnknown('Unknown: message dispatch may have completed, but the dashboard response was not received. Do not send it again automatically.');
+        return toolUnknown(`Unknown: message dispatch may have completed, but the dashboard response was not received. Reference: ${requestId}. Do not send it again automatically.`);
       }
-      return toolError(`Error: message dispatch failed (${response.status}).`);
+      return toolError(formatDispatchFailureMessage(response.status, requestId));
     }
     return response.data;
   } catch (err) {
     const message = (err as Error).message;
     logger.error(
-      { op, err: message, threadId: ctx.threadId },
+      { op, err: message, threadId: ctx.threadId, requestId },
       '[agent-sink] dashboard send hop errored',
     );
     recordDispatchFailure(op, ctx, 'tool_exception', message);
-    return toolError('Error: message dispatch failed.');
+    return toolError(formatDispatchFailureMessage(null, requestId));
   }
 }
 

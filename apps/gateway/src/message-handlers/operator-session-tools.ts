@@ -1,4 +1,5 @@
 import { defineTool, stringArg, toolError, toolOk, type AgentToolDefinition } from '@shopkeeper/agent/tools';
+import { formatOperatorDispatchFailure, isPlanExecutionFailureMessage } from '@shopkeeper/agent/message-dispatch';
 import type { SupportContext } from '@shopkeeper/agent/context';
 import logger from '../logger.js';
 import {
@@ -83,6 +84,10 @@ export function buildOperatorSessionTools(
       } catch (err) {
         logger.error({ err, organizationId, threadId: pendingPlan.threadId }, '[Operator] approve_pending_plan failed');
         return toolError('Error: something went wrong running the plan. Please try again.');
+      }
+
+      if (isPlanExecutionFailureMessage(summary)) {
+        return toolError(formatOperatorDispatchFailure(summary));
       }
 
       return toolOk(summary);

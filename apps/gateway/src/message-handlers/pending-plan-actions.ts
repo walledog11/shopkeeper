@@ -1,4 +1,5 @@
 import type { RawToolCall } from '@shopkeeper/agent/types';
+import { isPlanExecutionFailureMessage } from '@shopkeeper/agent/message-dispatch';
 import { resolvePendingPlanContexts, type PendingPlan } from '../operator-context.js';
 import type { ExpectedPlanIdentity } from '@shopkeeper/agent/plan-execution';
 import { BadRequestError, ConflictError } from '@shopkeeper/agent/errors';
@@ -48,7 +49,9 @@ export async function runApprovedPendingPlan(params: {
     }
     throw error;
   }
-  await resolvePendingPlanContexts(params.organizationId, params.chatId, params.pendingPlan);
+  if (!isPlanExecutionFailureMessage(summary)) {
+    await resolvePendingPlanContexts(params.organizationId, params.chatId, params.pendingPlan);
+  }
   return summary || 'Done.';
 }
 

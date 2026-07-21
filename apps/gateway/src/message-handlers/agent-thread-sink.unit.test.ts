@@ -101,7 +101,14 @@ describe('gatewayThreadSink persistence', () => {
 
     const result = await gatewayThreadSink.sendReply({ text: 'Hello' }, ctx);
 
-    expect(result).toEqual({ status: 'error', message: 'Error: message dispatch failed (503).' });
+    expect(result.status).toBe('error');
+    expect(result.message).toMatch(/message dispatch failed \(503\)/);
+    expect(result.message).toMatch(/Reference:/);
+    expect(postInternal).toHaveBeenCalledWith(
+      '/api/agent/io-send-internal',
+      expect.objectContaining({ op: 'send_reply', threadId: 'thread-1' }),
+      expect.objectContaining({ requestId: expect.any(String) }),
+    );
     expect(recordFailure).toHaveBeenCalledWith(expect.objectContaining({
       kind: 'tool_result',
       orgId: 'org-1',

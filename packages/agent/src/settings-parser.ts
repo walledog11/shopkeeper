@@ -62,6 +62,9 @@ const SETTINGS_KEYS = [
   "autonomyTier",
   "onboardingCompletedAt",
   "firstBriefingPending",
+  "lastSuccessfulDigestAt",
+  "salesPulseEnabled",
+  "lowStockThreshold",
 ] as const satisfies readonly (keyof OrgSettings)[];
 
 const BOOLEAN_FIELDS = [
@@ -72,6 +75,7 @@ const BOOLEAN_FIELDS = [
   "businessHoursEnabled",
   "spamFilterEnabled",
   "firstBriefingPending",
+  "salesPulseEnabled",
 ] as const satisfies readonly (keyof OrgSettings)[];
 
 const STRING_FIELDS = [
@@ -82,6 +86,7 @@ const STRING_FIELDS = [
   ["replyLanguage", 100],
   ["autoAckMessage", 500],
   ["onboardingCompletedAt", 64],
+  ["lastSuccessfulDigestAt", 64],
 ] as const satisfies readonly [keyof OrgSettings, number][];
 
 const NULLABLE_NON_NEGATIVE_FIELDS = [
@@ -428,6 +433,7 @@ function parseSettingsObject(value: unknown, mode: ParseMode): OrgSettingsPatch 
   for (const key of TIMEZONE_FIELDS) readTimezone(value, key, output, context);
 
   readNullablePercent(value, "maxDiscountPercent", output, context);
+  readNullableNonNegativeNumber(value, "lowStockThreshold", output, context);
   readInteger(value, "maxIterations", 1, 100, output, context);
   readEnum(value, "autoExecuteMode", AUTO_EXECUTE_MODES, output, context);
   readEnum(value, "autonomyTier", AUTONOMY_TIERS, output, context);

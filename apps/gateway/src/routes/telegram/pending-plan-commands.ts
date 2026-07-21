@@ -8,6 +8,7 @@ import {
   type ToolCall,
 } from '../../operator-context.js';
 import { runApprovedPendingPlan, clearPendingPlan } from '../../message-handlers/pending-plan-actions.js';
+import { formatOperatorDispatchFailure, isPlanExecutionFailureMessage } from '@shopkeeper/agent/message-dispatch';
 import { refreshSkippedPlanTerminalSend } from '../../message-handlers/skipped-plan-terminal-send.js';
 import { findTerminalSendTool } from '@shopkeeper/agent/planner-skip-reply';
 import type { PendingPlanCommand } from './command-parser.js';
@@ -79,6 +80,8 @@ export async function handlePendingPlanCommand(
     return true;
   }
 
-  await reply(summary);
+  await reply(isPlanExecutionFailureMessage(summary)
+    ? formatOperatorDispatchFailure(summary)
+    : summary);
   return true;
 }

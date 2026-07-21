@@ -38,6 +38,7 @@ export function useAgentTabState({ settings, rawSettings, version, orgName, voic
   const [maxIterationsInput, setMaxIterationsInput] = useState<string>(initialRaw.maxIter)
   const [digestHourInput, setDigestHourInput] = useState<string>(initialRaw.digestHour)
   const [digestSecondHourInput, setDigestSecondHourInput] = useState<string>(initialRaw.digestSecondHour)
+  const [lowStockThresholdInput, setLowStockThresholdInput] = useState<string>(initialRaw.lowStockThreshold)
   const [businessHoursStartInput, setBusinessHoursStartInput] = useState<string>(initialRaw.bhStart)
   const [businessHoursEndInput, setBusinessHoursEndInput] = useState<string>(initialRaw.bhEnd)
   const currentVersionRef = useRef(version)
@@ -60,6 +61,7 @@ export function useAgentTabState({ settings, rawSettings, version, orgName, voic
       maxIter: maxIterationsInput,
       digestHour: digestHourInput,
       digestSecondHour: digestSecondHourInput,
+      lowStockThreshold: lowStockThresholdInput,
       bhStart: businessHoursStartInput,
       bhEnd: businessHoursEndInput,
     }),
@@ -72,6 +74,7 @@ export function useAgentTabState({ settings, rawSettings, version, orgName, voic
       maxIterationsInput,
       digestHourInput,
       digestSecondHourInput,
+      lowStockThresholdInput,
       businessHoursStartInput,
       businessHoursEndInput,
     ],
@@ -115,6 +118,7 @@ export function useAgentTabState({ settings, rawSettings, version, orgName, voic
     setMaxIterationsInput(raw.maxIter)
     setDigestHourInput(raw.digestHour)
     setDigestSecondHourInput(raw.digestSecondHour)
+    setLowStockThresholdInput(raw.lowStockThreshold)
     setBusinessHoursStartInput(raw.bhStart)
     setBusinessHoursEndInput(raw.bhEnd)
     setBusinessName(initialNameRef.current)
@@ -280,6 +284,8 @@ export function useAgentTabState({ settings, rawSettings, version, orgName, voic
     setDigestHourInput,
     digestSecondHourInput,
     setDigestSecondHourInput,
+    lowStockThresholdInput,
+    setLowStockThresholdInput,
     businessHoursStartInput,
     setBusinessHoursStartInput,
     businessHoursEndInput,

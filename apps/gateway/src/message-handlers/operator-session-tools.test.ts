@@ -151,6 +151,25 @@ describe('approve_pending_plan', () => {
     expect(mockExecuteOperatorAgentTurn).not.toHaveBeenCalled();
   });
 
+  it('returns a tool error when plan execution reports a dispatch failure', async () => {
+    const chatId = 'chat_dispatch_fail';
+    mockExecuteOperatorAgentTurn.mockResolvedValueOnce({
+      summary: 'Error: message dispatch failed (500). Reference: req-1.',
+      threadId: 'ticket_thread_1',
+      actionsPerformed: [],
+    });
+    await updateContext(org.id, chatId, {
+      pendingPlan: { threadId: 'ticket_thread_1', instruction: 'x', rawToolCalls: [] },
+    });
+    const tools = await buildTools(chatId);
+
+    const result = await tools.approve_pending_plan.execute({}, baseCtx, settings, emptyDeps);
+
+    expect(result.status).toBe('error');
+    expect(result.message).toContain("couldn't send the customer message");
+    expect((await getContext(org.id, chatId)).pendingPlan).not.toBeNull();
+  });
+
   it('keeps the pending plan parked when execution throws', async () => {
     const chatId = 'chat_throw';
     mockExecuteOperatorAgentTurn.mockRejectedValueOnce(new Error('boom'));

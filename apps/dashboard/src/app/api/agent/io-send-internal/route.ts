@@ -10,6 +10,7 @@
  * Response: ToolResult ({ status, message })
  */
 import { NextResponse } from "next/server";
+import { INTERNAL_REQUEST_ID_HEADER } from "@shopkeeper/agent/message-dispatch";
 import { db } from "@shopkeeper/db";
 import { sendReply, sendEmail } from "@/lib/agent/tools/thread";
 import type { SendReplyInput, SendEmailInput } from "@shopkeeper/agent/tools";
@@ -17,8 +18,14 @@ import type { AgentActionMode } from "@shopkeeper/agent/context";
 import { readRequiredJsonObject } from "@/lib/api/body";
 import { BadRequestError } from "@/lib/api/errors";
 import { withInternalRoute } from "@/lib/api/internal-route";
+import logger from "@/lib/server/logger";
 
 export const maxDuration = 60;
+
+function readRequestId(request: Request): string | undefined {
+  const value = request.headers.get(INTERNAL_REQUEST_ID_HEADER)?.trim();
+  return value || undefined;
+}
 
 interface IoSendBody {
   agentActionMode?: AgentActionMode;
@@ -62,6 +69,7 @@ export const POST = withInternalRoute(
     errorMessage: "Failed to dispatch agent message",
   },
   async ({ request }) => {
+    const requestId = readRequestId(request);
     const { agentActionMode, orgId, threadId, op, input } = parseBody(
       await readRequiredJsonObject(request, {
         malformed: { message: "Validation failed", details: [{ code: "invalid_body", message: "Request body must be a JSON object" }] },
@@ -75,19 +83,28 @@ export const POST = withInternalRoute(
       select: { organization: { select: { name: true } } },
     });
     if (!ownedThread) {
-      return NextResponse.json({ error: "Thread not found" }, { status: 404 });
+      logger.warn({ requestId, orgId, threadId }, "[Agent io-send-internal] thread not found");
+      return NextResponse.json(
+        { error: "Thread not found", ...(requestId ? { requestId } : {}) },
+        { status: 404 },
+      );
     }
 
-    const ctx = {
-      threadId,
-      orgId,
-      orgName: ownedThread.organization.name,
-      ...(agentActionMode ? { agentActionMode } : {}),
-    };
-    const result = op === "send_reply"
-      ? await sendReply(input as SendReplyInput, ctx)
-      : await sendEmail(input as SendEmailInput, ctx);
+    try {
+      const ctx = {
+        threadId,
+        orgId,
+        orgName: ownedThread.organization.name,
+        ...(agentActionMode ? { agentActionMode } : {}),
+      };
+      const result = op === "send_reply"
+        ? await sendReply(input as SendReplyInput, ctx)
+        : await sendEmail(input as SendEmailInput, ctx);
 
-    return NextResponse.json(result);
+      return NextResponse.json(result);
+    } catch (error) {
+      logger.error({ err: error, requestId, orgId, threadId, op }, "[Agent io-send-internal] dispatch failed");
+      throw error;
+    }
   },
 );

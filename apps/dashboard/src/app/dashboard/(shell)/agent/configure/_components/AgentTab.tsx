@@ -8,6 +8,7 @@ import {
   AgentAutonomySection,
   AgentDefaultBehaviorSection,
   AgentIdentitySection,
+  MorningBriefingSection,
   StickySaveBar,
   WhenOnDutySection,
 } from "./agent-tab-sections"
@@ -31,6 +32,7 @@ export default function AgentTab(props: Props) {
   const agentName = settingsState.agentName
   const { data: integrations } = useSWR<IntegrationRow[]>("/api/integrations", fetcher)
   const emailConnected = integrations?.some(row => row.platform === "email") ?? false
+  const shopifyConnected = integrations?.some(row => row.platform === "shopify") ?? false
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6 pb-20">
@@ -46,6 +48,7 @@ export default function AgentTab(props: Props) {
         <AgentAutonomySection controller={controller} />
         <AgentDefaultBehaviorSection controller={controller} />
         <WhenOnDutySection controller={controller} emailConnected={emailConnected} />
+        {shopifyConnected && <MorningBriefingSection controller={controller} />}
         <AgentAdvancedSection controller={controller} />
       </div>
 

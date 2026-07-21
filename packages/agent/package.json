@@ -130,6 +130,10 @@
       "types": "./dist/errors.d.ts",
       "default": "./dist/errors.js"
     },
+    "./message-dispatch": {
+      "types": "./dist/message-dispatch.d.ts",
+      "default": "./dist/message-dispatch.js"
+    },
     "./plan-cache-shape": {
       "types": "./dist/plan-cache-shape.d.ts",
       "default": "./dist/plan-cache-shape.js"

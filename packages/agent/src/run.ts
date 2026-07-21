@@ -21,6 +21,7 @@ import {
   selectExecutableApprovedToolCalls,
   summarizeApprovedDashboardActions,
 } from "./run-approved-actions.js";
+import { summarizeOperatorTurnDispatchFailure } from "./message-dispatch.js";
 import {
   createAgentFailureRecorder,
   executeAgentToolCalls,
@@ -236,9 +237,14 @@ export async function runAgent(
       }, "escalated");
     case "max_iterations":
       return finish({
-        summary: readOnly
-          ? "I could not finish answering that. Try asking a narrower question."
-          : "Reached maximum steps without completing the task.",
+        summary: gatewayOperatorMode
+          ? (summarizeOperatorTurnDispatchFailure(actionsPerformed)
+            ?? (readOnly
+              ? "I could not finish answering that. Try asking a narrower question."
+              : "Reached maximum steps without completing the task."))
+          : readOnly
+            ? "I could not finish answering that. Try asking a narrower question."
+            : "Reached maximum steps without completing the task.",
         actionsPerformed,
       }, "max_iterations");
     case "max_tokens":
@@ -248,12 +254,17 @@ export async function runAgent(
           : "Agent response was cut off - the request may be too complex. Try breaking it into smaller steps.",
         actionsPerformed,
       }, "max_tokens");
-    case "token_budget":
+    case "token_budget": {
+      const dispatchFailure = gatewayOperatorMode
+        ? summarizeOperatorTurnDispatchFailure(actionsPerformed)
+        : null;
       return finish({
-        summary: loop.finalText?.trim()
-          || "Agent stopped - this request required too many steps. Please try a more specific instruction.",
+        summary: dispatchFailure
+          ?? loop.finalText?.trim()
+          ?? "Agent stopped - this request required too many steps. Please try a more specific instruction.",
         actionsPerformed,
       }, "token_budget");
+    }
     default:
       return finish({
         summary: readOnly

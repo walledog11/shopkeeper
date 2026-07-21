@@ -21,6 +21,7 @@ export interface RawInputs {
   maxIter: string
   digestHour: string
   digestSecondHour: string
+  lowStockThreshold: string
   bhStart: string
   bhEnd: string
 }
@@ -279,6 +280,14 @@ function clampHour(value: string, fallback: number): number {
   return Math.min(23, Math.max(0, isNaN(parsed) ? fallback : parsed))
 }
 
+function parseLowStockThreshold(value: string): number | null {
+  const trimmed = value.trim()
+  if (trimmed === "") return null
+  const parsed = Number(trimmed)
+  if (!Number.isFinite(parsed) || parsed < 0) return null
+  return Math.floor(parsed)
+}
+
 export function buildSettingsPayload(state: OrgSettings, raw: RawInputs): OrgSettings {
   const parsedMax = raw.maxRefund.trim() === "" ? null : Number(raw.maxRefund)
   const parsedDiscount = raw.maxDiscount.trim() === "" ? null : Number(raw.maxDiscount)
@@ -298,6 +307,7 @@ export function buildSettingsPayload(state: OrgSettings, raw: RawInputs): OrgSet
       : parsedIter,
     digestHour: clampHour(raw.digestHour, AGENT_SETTINGS_DEFAULTS.digestHour),
     digestSecondHour: clampHour(raw.digestSecondHour, AGENT_SETTINGS_DEFAULTS.digestSecondHour),
+    lowStockThreshold: parseLowStockThreshold(raw.lowStockThreshold),
     businessHoursStart: clampHour(raw.bhStart, AGENT_SETTINGS_DEFAULTS.businessHoursStart),
     businessHoursEnd: clampHour(raw.bhEnd, AGENT_SETTINGS_DEFAULTS.businessHoursEnd),
   }
@@ -312,6 +322,7 @@ export function rawInputsFor(settings: OrgSettings): RawInputs {
     maxIter: String(settings.maxIterations ?? AGENT_SETTINGS_DEFAULTS.maxIterations),
     digestHour: String(settings.digestHour ?? AGENT_SETTINGS_DEFAULTS.digestHour),
     digestSecondHour: String(settings.digestSecondHour ?? AGENT_SETTINGS_DEFAULTS.digestSecondHour),
+    lowStockThreshold: settings.lowStockThreshold != null ? String(settings.lowStockThreshold) : "",
     bhStart: String(settings.businessHoursStart),
     bhEnd: String(settings.businessHoursEnd),
   }
