@@ -67,8 +67,9 @@ traffic observation and staged ledger enforcement remain release checks.
 P3-01's shared retry/`unknown` contract plus refund,
 cancellation, order creation/editing, multi-step order-address handling, gift
 cards, and store credit have complete local implementations and deterministic
-coverage. Their Shopify sandbox/canary checks and durable follow-up recovery
-remain open. P3-02 atomic goodwill reservations are also locally complete and
+coverage. **Durable follow-up recovery landed 2026-07-21** (the
+`unknown-outcome-sweep` reconciliation owner); only their Shopify
+sandbox/canary checks remain open. P3-02 atomic goodwill reservations are also locally complete and
 their additive migration is applied; provider canaries and stale/unknown recovery
 remain open. P4-01 outbound-email claims and P5-01 tenant ownership are deployed
 with their required migration and deterministic/cross-tenant coverage; provider
@@ -320,8 +321,9 @@ rollups, waiting dedupe, digest formatting, and cursor behavior.
 **Safety dependencies:** P1-01 through P1-03 committed outcomes and stable plan
 identity are implementation-complete. P3-01 refund, cancellation, order creation
 and editing, order-address reconciliation, gift cards, and store credit are
-locally complete but still require their Shopify sandbox/canary checks and a
-durable recovery owner before the briefing can claim ambiguous actions were
+locally complete; the durable recovery owner landed 2026-07-21
+(`unknown-outcome-sweep`), so only their Shopify sandbox/canary checks remain
+before the briefing can claim ambiguous actions were
 handled. Store a single
 org-level digest cursor or use a fixed,
 documented reporting window — do not choose an arbitrary device context's

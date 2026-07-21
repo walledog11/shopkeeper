@@ -246,9 +246,12 @@ are reconciled against current order quantities. Store-credit ambiguity is
 `unknown` and explicitly suppresses gift-card fallback. Gift cards use a stable,
 provider-unique code derived from the reviewed tool operation, validate the
 created card, and treat a taken stable code as a possible prior commit instead
-of minting another card. Local unit, lint, and repository type checks pass;
-provider sandbox/canary verification and durable follow-up recovery are still
-open.
+of minting another card. Local unit, lint, and repository type checks pass.
+**Durable follow-up recovery is now implemented (2026-07-21):** the
+`unknown-outcome-sweep` maintenance job read-probes ambiguous mutations left in
+`unknown`, moves proven committed/no-effect outcomes to terminal states, and
+reconciles stale `claimed` executions — never replaying an approved plan. Only
+provider sandbox/canary verification remains open.
 
 **Completed locally (verified 2026-07-13):**
 
@@ -310,8 +313,11 @@ open.
   recent orders contain no `test: true` order. Treat it as potentially live and
   require a confirmed test order or separate development store before mutating
   canaries.
-- [ ] Define recovery ownership and durable follow-up reconciliation for
-  outcomes that remain `unknown` after the immediate retry/read.
+- [x] Define recovery ownership and durable follow-up reconciliation for
+  outcomes that remain `unknown` after the immediate retry/read. **Done
+  2026-07-21** — `unknown-outcome-sweep` (gateway maintenance) +
+  `unknown-outcome-reconciliation` / `shopify/reconciliation-probes` (agent
+  core); read-only probes and terminal ledger updates only, no plan replay.
 - [x] Run the remaining tool families' deterministic commit-before-response,
   connection-loss, 429/5xx, provider-error, replay, and partial-operation tests.
 
@@ -394,8 +400,12 @@ replace the per-tool canary observation window.
 - [ ] Canary refund, store-credit, and gift-card reservations independently and
   observe cap totals plus duplicate suppression against Shopify development
   stores.
-- [ ] Assign recovery ownership and prove the runbook/worker that reconciles
-  stale or `unknown` reservations to `committed` or `released`.
+- [~] Assign recovery ownership and prove the runbook/worker that reconciles
+  stale or `unknown` reservations to `committed` or `released`. **Worker
+  implemented 2026-07-21** — `unknown-outcome-sweep` reconciles `unknown`
+  reservations via read probes (commit verified amount / release no-effect) and
+  releases stale `reserved` rows past the reservation window. Proving it against
+  production traffic remains a rollout gate.
 - [ ] Run the strict reservation audit through the production observation
   window with no unexplained stale or `unknown` rows.
 
@@ -1225,8 +1235,9 @@ claims, tenant validation, stable queue/provider identity, explicit unknown
 delivery, and stale-claim recovery; its provider-activity runbook and strict
 audit are implemented, while provider canaries remain open. P3-01's shared retry/unknown
 outcome contract plus refund, cancellation, order creation/editing, order
-address, gift-card, and store-credit handling are locally complete; provider
-canaries and durable recovery ownership remain. Run
+address, gift-card, and store-credit handling are locally complete; durable
+recovery ownership landed 2026-07-21 (`unknown-outcome-sweep`), and provider
+canaries remain. Run
 `npm run audit:plan-executions -- --hours=24` to report repeated shadow
 observations, unknown outcomes, and stale claims; `--strict` makes any such
 finding fail the command. The production shadow observation window remains open
@@ -1264,6 +1275,20 @@ only path for Telegram and iMessage; the synchronous webhook fallback and
 per-channel rollout flags are removed. Operator nudge parity (Telegram/iMessage)
 and live phone verification of the operator turn are complete.
 
+**Progress (2026-07-21):** The P3-01/P3-02 durable reconciliation owner is
+implemented and merged to master — a 15-min `unknown-outcome-sweep` maintenance
+job plus the agent-core `unknown-outcome-reconciliation` /
+`shopify/reconciliation-probes` modules read-probe ambiguous Shopify mutations,
+drive `unknown` executions/reservations/actions terminal, and reconcile stale
+`claimed`/`reserved` rows — all read-only probes and terminal ledger updates,
+never a plan replay. Ships with the read-only `audit:unknown-outcomes` rollout
+gate and inspect-only `canary:shopify-mutations` harness; reuses existing
+models (no migration). Its provider sandbox/canary observation remains the only
+open P3 rollout gate. Separately, vision-audit §2.2 is fixed: `updateContext`
+is now an atomic per-slot write (no read-modify-write), so concurrent
+plan-card/operator-turn writes to different pending slots can no longer clobber
+one another.
+
 Next:
 
 1. Deploy the merged bounded-context slice after re-running the full real-model
@@ -1288,8 +1313,13 @@ Next:
    the per-queue database/provider evidence.
 7. Sandbox/canary the completed P3-01 refund, cancellation, order-creation,
    order-address, order-editing, gift-card, and store-credit paths, one tool
-   family at a time, and define the durable reconciliation owner for outcomes
-   that remain `unknown`. The only connected real store reports plan `basic`
+   family at a time. ~~Define the durable reconciliation owner for outcomes
+   that remain `unknown`.~~ **Reconciliation owner landed 2026-07-21** — the
+   `unknown-outcome-sweep` maintenance job read-probes `unknown` executions,
+   reservations, and agent actions and drives them terminal without replay;
+   `npm run audit:unknown-outcomes -- --hours=24 --strict` gates it and
+   `npm run canary:shopify-mutations` (inspect-only by default) exercises the
+   probes. The only connected real store reports plan `basic`
    and has no test orders, so mutating canaries remain blocked until a confirmed
    Shopify test order/development store is available.
 8. The additive goodwill-reservation migration is deployed. Canary

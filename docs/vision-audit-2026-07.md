@@ -89,13 +89,15 @@ Ranked findings elsewhere:
    `useOperatorChannels` and updated home/agent-panel nudges now treat Telegram
    or iMessage binding as equivalent; iMessage-only merchants no longer see
    Telegram-only connect prompts.
-2. **`updateContext` is a non-transactional read-modify-write**
-   (`operator-context.ts:151-170`). A plan-card fan-out writing `pendingPlan`
-   concurrent with an operator turn clearing `pendingQuestion` can clobber one
-   slot with the other's stale snapshot. Consequences are bounded — the
-   identity checks mean a wrong plan can never *execute* — worst case a parked
-   plan silently vanishes or a cleared question resurrects. Theoretical-to-rare,
-   but it is in the approval path's backing store.
+2. **`updateContext` was a non-transactional read-modify-write** — **Fixed
+   2026-07-21.** `updateContext` (`operator-context.ts`) now writes only the
+   pending slots named in its `updates` argument instead of reading and
+   rewriting all three. Concurrent callers touching different slots (a
+   plan-card fan-out setting `pendingPlan` vs. an operator turn clearing
+   `pendingQuestion`) now emit UPDATEs on different columns that Postgres
+   serializes on the row lock, so neither can clobber the other with a stale
+   snapshot. Slot-isolation coverage added; the read-side JSON filtering in
+   `getContext` is unchanged.
 3. **Gateway thread sink drops the org-scoping invariant.**
    `agent-thread-sink.ts` mutates threads by bare `id`
    (`updateThreadStatus`/`updateThreadTag`/`escalateToHuman`, lines 113-137)
