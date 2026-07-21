@@ -197,6 +197,60 @@ describe('updateContext + getContext round-trip', () => {
   });
 });
 
+describe('updateContext slot isolation', () => {
+  it('writes only the named slot and leaves the others as stored', async () => {
+    const question: PendingQuestion = {
+      threadId: '00000000-0000-4000-8000-000000000040',
+      question: 'Do we ship to Canada?',
+    };
+    await db.operatorContext.create({
+      data: { organizationId: org.id, chatId: 'isolation', pendingQuestion: question },
+    });
+
+    const plan: PendingPlan = {
+      threadId: '00000000-0000-4000-8000-000000000041',
+      instruction: 'refund',
+      rawToolCalls: [],
+    };
+    await updateContext(org.id, 'isolation', { pendingPlan: plan });
+
+    const ctx = await getContext(org.id, 'isolation');
+    expect(ctx.pendingPlan).toEqual(plan);
+    expect(ctx.pendingQuestion).toEqual(question);
+    expect(ctx.pendingDigest).toBeNull();
+  });
+
+  // Demonstrates post-fix behavior: a plan-card fan-out and an operator turn that
+  // touch different slots on the same row both land. The guarantee is structural
+  // (each call SETs only its own column), so this passes regardless of interleave
+  // rather than depending on a specific one.
+  it('does not clobber when two different slots are updated concurrently', async () => {
+    const digest: PendingDigest = { threadIds: ['t1'], sentAt: '2026-07-20T00:00:00.000Z' };
+    await db.operatorContext.create({
+      data: { organizationId: org.id, chatId: 'concurrent', pendingDigest: digest },
+    });
+
+    const plan: PendingPlan = {
+      threadId: '00000000-0000-4000-8000-000000000042',
+      instruction: 'reply',
+      rawToolCalls: [],
+    };
+    const question: PendingQuestion = {
+      threadId: '00000000-0000-4000-8000-000000000043',
+      question: 'Which warehouse?',
+    };
+    await Promise.all([
+      updateContext(org.id, 'concurrent', { pendingPlan: plan }),
+      updateContext(org.id, 'concurrent', { pendingQuestion: question }),
+    ]);
+
+    const ctx = await getContext(org.id, 'concurrent');
+    expect(ctx.pendingPlan).toEqual(plan);
+    expect(ctx.pendingQuestion).toEqual(question);
+    expect(ctx.pendingDigest).toEqual(digest);
+  });
+});
+
 describe('extractOrderNumber', () => {
   it.each([
     ['#1234', '#1234'],

@@ -154,19 +154,31 @@ export async function getContext(organizationId: string, chatId: string): Promis
   };
 }
 
+// Write only the slots present in `updates`, never a read-modify-write of all
+// three. A plan-card fan-out setting `pendingPlan` and an operator turn clearing
+// `pendingQuestion` therefore touch different columns and cannot clobber each
+// other: each concurrent call emits an UPDATE that SETs only its own column, so
+// Postgres serializes them on the row lock and both land. Slots not named in
+// `updates` are left exactly as stored.
 export async function updateContext(
   organizationId: string,
   chatId: string,
   updates: Partial<OperatorContext>,
 ): Promise<void> {
-  const current = await getContext(organizationId, chatId);
-  const next = { ...current, ...updates };
-
-  const data = {
-    pendingPlan: next.pendingPlan ? toJsonObject(next.pendingPlan) : Prisma.DbNull,
-    pendingDigest: next.pendingDigest ? toJsonObject(next.pendingDigest) : Prisma.DbNull,
-    pendingQuestion: next.pendingQuestion ? toJsonObject(next.pendingQuestion) : Prisma.DbNull,
-  };
+  const data: {
+    pendingPlan?: PrismaTypes.InputJsonValue | typeof Prisma.DbNull;
+    pendingDigest?: PrismaTypes.InputJsonValue | typeof Prisma.DbNull;
+    pendingQuestion?: PrismaTypes.InputJsonValue | typeof Prisma.DbNull;
+  } = {};
+  if ('pendingPlan' in updates) {
+    data.pendingPlan = updates.pendingPlan ? toJsonObject(updates.pendingPlan) : Prisma.DbNull;
+  }
+  if ('pendingDigest' in updates) {
+    data.pendingDigest = updates.pendingDigest ? toJsonObject(updates.pendingDigest) : Prisma.DbNull;
+  }
+  if ('pendingQuestion' in updates) {
+    data.pendingQuestion = updates.pendingQuestion ? toJsonObject(updates.pendingQuestion) : Prisma.DbNull;
+  }
 
   await db.operatorContext.upsert({
     where: { organizationId_chatId: { organizationId, chatId } },
