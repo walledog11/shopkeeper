@@ -156,7 +156,7 @@ export async function runImessageOperatorTurn(params: ImessageOperatorTurnParams
 }
 
 // Synchronous operator-channel iMessage dispatch — the iMessage equivalent of
-// handleTelegramMessage, and the fallback path when the durable operator queue is
+// handleTelegramMessage, and the edge-case path when a provider message has no
 // off for iMessage. Resolves/maintains the binding, then runs the turn inline.
 export async function handleImessageOperatorMessage(message: ImessageOperatorInbound): Promise<void> {
   const member = await resolveImessageOperatorBinding(message);

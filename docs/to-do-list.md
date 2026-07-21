@@ -5,7 +5,12 @@ consolidated to the items that are still pending — completed work was removed
 (it lives in git history). It now also carries the product/vision gaps surfaced
 in the 2026-06-23 review.
 
-Last reviewed: 2026-06-26.
+Last reviewed: 2026-07-20.
+
+Recent completions (not yet removed from history below):
+- Operator-channel nudge parity (Telegram + iMessage) — 2026-07-20
+- Live operator phone verification (Telegram + iMessage) — 2026-07-20
+- P4-03 durable operator queue rollout — 2026-07-20
 
 Roadmap for agent-core extraction and module expansion lives separately in
 [core-extraction-and-module-expansion-plan.md](core-extraction-and-module-expansion-plan.md);

@@ -12,6 +12,7 @@ import {
   SECRET,
   lastReplyText,
   seedBindToken,
+  processPendingOperatorEvents,
   telegramFixture,
   waitForReplies,
 } from '../test-fixtures/telegram-webhook-test-fixture.js';
@@ -51,6 +52,7 @@ describe('POST /webhooks/telegram — help & summary', () => {
       .set('x-telegram-bot-api-secret-token', SECRET)
       .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'help' } });
 
+    await processPendingOperatorEvents(org.id);
     await waitForReplies(1);
     const text = lastReplyText();
     expect(text).toMatch(/^Text me like you'd text an employee:/);
@@ -77,6 +79,7 @@ describe('POST /webhooks/telegram — help & summary', () => {
       .set('x-telegram-bot-api-secret-token', SECRET)
       .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'summary' } });
 
+    await processPendingOperatorEvents(org.id);
     await waitForReplies(1);
     const text = lastReplyText();
     expect(text).toMatch(/support inbox/i);
@@ -96,6 +99,7 @@ describe('POST /webhooks/telegram — help & summary', () => {
       .set('x-telegram-bot-api-secret-token', SECRET)
       .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'summary' } });
 
+    await processPendingOperatorEvents(org.id);
     await waitForReplies(1);
     expect(lastReplyText()).toMatch(/inbox is empty/i);
   });
@@ -122,6 +126,7 @@ describe('POST /webhooks/telegram — order reference', () => {
       .set('x-telegram-bot-api-secret-token', SECRET)
       .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: '#4242' } });
 
+    await processPendingOperatorEvents(org.id);
     await waitForReplies(1);
     // The keyword order-lookup command is gone — the agent resolves the order.
     expect(executeOperatorAgentTurnSpy).toHaveBeenCalledWith(
@@ -133,7 +138,7 @@ describe('POST /webhooks/telegram — order reference', () => {
 
 // ── Free-form instruction ────────────────────────────────────────────────────
 describe('POST /webhooks/telegram — free-form instruction', () => {
-  it('runs arbitrary text in-process on the durable operator thread', async () => {
+  it('runs arbitrary text through the durable operator-event worker', async () => {
     const chatId = '8000001';
     const member = await db.orgMember.create({
       data: { organizationId: org.id, clerkUserId: `usr_${chatId}` },
@@ -153,6 +158,7 @@ describe('POST /webhooks/telegram — free-form instruction', () => {
       .set('x-telegram-bot-api-secret-token', SECRET)
       .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'how many orders today?' } });
 
+    await processPendingOperatorEvents(org.id);
     await waitForReplies(1);
     expect(setMessageReactionSpy).toHaveBeenCalledWith(chatId, 1, '👀');
     expect(sendChatActionSpy).toHaveBeenCalledWith(chatId, 'typing');
@@ -166,6 +172,7 @@ describe('POST /webhooks/telegram — free-form instruction', () => {
       operatorKey: `telegram:${chatId}`,
       senderPhone: `telegram:${chatId}`,
       clerkUserId: `usr_${chatId}`,
+      turnId: expect.any(String),
       operatorLedger: expect.any(String),
       moduleTools: expect.any(Object),
     });

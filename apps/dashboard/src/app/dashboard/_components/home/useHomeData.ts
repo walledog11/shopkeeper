@@ -12,6 +12,7 @@ import { selectWalkthroughItems } from "@/lib/home/walkthrough"
 import { CHANNEL_TYPE } from "@shopkeeper/agent/thread-constants"
 import { useOrg } from "@/hooks/useOrg"
 import { useIntegrations } from "@/hooks/useIntegrations"
+import { useOperatorChannels } from "@/hooks/useOperatorChannels"
 import { isEmailIntegrationConfigured } from "@/lib/integrations/onboarding-setup"
 import { isShopifyIntegrationActive } from "@/lib/integrations/shopify-connection"
 
@@ -42,14 +43,13 @@ export function useHomeData({ initialSummary }: Options) {
   )
   const { data: integrations = [] } = useIntegrations()
   const { data: orgData } = useOrg()
-  const { data: telegramData } = useSWR<{ connected: boolean; botUsername: string | null }>("/api/integrations/telegram", fetcher, { revalidateOnFocus: false })
+  const { anyBound: hasPhoneBound } = useOperatorChannels()
 
   const hasShopify = integrations.some(integration =>
     integration.platform === CHANNEL_TYPE.SHOPIFY && isShopifyIntegrationActive(integration),
   )
   const emailIntegration = integrations.find(integration => integration.platform === CHANNEL_TYPE.EMAIL)
   const hasEmailForwarding = isEmailIntegrationConfigured(emailIntegration)
-  const hasTelegramBound = telegramData?.connected ?? false
 
   const summary = summaryData ?? createEmptyHomeSummary()
   const isInitialSummaryLoading = isSummaryLoading || (summaryData === initialSummary && isSummaryValidating)
@@ -81,13 +81,13 @@ export function useHomeData({ initialSummary }: Options) {
   const workflowSteps = useMemo(() => [
     { label: "Connect Shopify", href: "/dashboard/integrations", status: (hasShopify ? "done" : "pending") as "done" | "pending" },
     { label: "Set up email forwarding", href: "/dashboard/integrations", status: (hasEmailForwarding ? "done" : "pending") as "done" | "pending" },
-    { label: "Connect Telegram (optional)", href: "/dashboard/integrations", status: (hasTelegramBound ? "done" : "pending") as "done" | "pending", optional: true },
+    { label: "Connect your phone (optional)", href: "/dashboard/integrations", status: (hasPhoneBound ? "done" : "pending") as "done" | "pending", optional: true },
     { label: "Receive first ticket", href: "/dashboard/tickets", status: (hasReceivedTicket ? "done" : "pending") as "done" | "pending" },
     { label: "Send first reply", href: "/dashboard/tickets", status: (home.hasSentReply ? "done" : "pending") as "done" | "pending" },
   ], [
     hasShopify,
     hasEmailForwarding,
-    hasTelegramBound,
+    hasPhoneBound,
     hasReceivedTicket,
     home.hasSentReply,
   ])
@@ -103,7 +103,7 @@ export function useHomeData({ initialSummary }: Options) {
     walkthroughCount,
     ordersToShip,
     hasShopify,
-    hasTelegramBound,
+    hasPhoneBound,
     workflowSteps,
     agentName,
     isNeedsYouLoading: home.needsYouItems.length === 0 && isInitialSummaryLoading,

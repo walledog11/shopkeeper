@@ -58,8 +58,8 @@ passing suites and the production rollout notes in
   devices (`operator-context.ts:176`). The stale-plan race is fixed —
   `notifyOperator` persists the slot before sending the card
   (`operator-notify.ts:145-153`).
-- **Durable operator events (P4-03).** Telegram canary live in prod and clean
-  per the runbook; iMessage code-complete but flag-off.
+- **Durable operator events (P4-03).** Completed 2026-07-20 — durable ingestion
+  is the only path for Telegram and iMessage; synchronous webhook fallback removed.
 - **Digest/briefing.** Timezone-aware scheduler, first-night welcome briefing,
   fan-out to all bindings on both channels (`maintenance/digest.ts`).
 - **Safety rails.** Postgres-backed LLM spend cap, refund-spend reservation
@@ -70,7 +70,7 @@ passing suites and the production rollout notes in
 **Built but dark (flag-off, real code behind it):** order-risk monitor
 (`ORDER_RISK_MONITOR_ENABLED`), Gmail native inbound (`GMAIL_NATIVE_INBOUND`),
 async outbound email (`OUTBOUND_EMAIL_ASYNC` — never enabled in prod, zero
-async sends in the strict audit baseline), iMessage durable queue.
+async sends in the strict audit baseline).
 
 **Scaffolded only:** TikTok Shop (webhook route, signature verify, client,
 OAuth callback exist but the webhook 404s unless configured; no prod config),
@@ -85,15 +85,10 @@ surfaces.
 
 Ranked findings elsewhere:
 
-1. **Telegram-only nudges misfire for iMessage merchants** (would annoy a real
-   merchant today). `HomeTelegramNudge` and `AgentPanelTelegramNudge` key
-   solely on `/api/integrations/telegram` connected state
-   (`useHomeData.ts:45-52`). A merchant bound only via iMessage sees "Get plan
-   approvals on your phone — Connect Telegram" forever, plus a
-   permanently-pending "Connect Telegram (optional)" walkthrough item, plus
-   "Also on Telegram when you're away from the desk" copy naming the wrong
-   channel. Small, but on the home screen daily, and it directly contradicts
-   principle 2.
+1. **Telegram-only nudges misfire for iMessage merchants** — **Fixed 2026-07-20.**
+   `useOperatorChannels` and updated home/agent-panel nudges now treat Telegram
+   or iMessage binding as equivalent; iMessage-only merchants no longer see
+   Telegram-only connect prompts.
 2. **`updateContext` is a non-transactional read-modify-write**
    (`operator-context.ts:151-170`). A plan-card fan-out writing `pendingPlan`
    concurrent with an operator turn clearing `pendingQuestion` can clobber one
@@ -117,10 +112,10 @@ Ranked findings elsewhere:
    channel." Vestige of the pre-rewire customer iMessage channel the purge job
    exists for. Dead path, not a live bug.
 
-**Unverified rather than broken:** the operator-turn model interpretation (the
-eval was waived 2026-07-10 for live-phone verification that hasn't happened),
-the iMessage durable queue (never canaried), and the async email path (never
-enabled). These are the real risk surface — see §7.
+**Unverified rather than broken:** ~~the operator-turn model interpretation~~
+**Verified 2026-07-20** via live Telegram/iMessage phone round-trips (approve,
+reject, revise, ambiguous replies, multi-device plan dismissal). Async email
+path (never enabled) remains unverified in production.
 
 ## 3. Core coupling check
 
@@ -250,28 +245,19 @@ candidate; if the former, carry on and update both docs.
 
 ## 7. What's next
 
-The smallest path to a real merchant is verification and a person, not code:
+The smallest path to a real merchant is a design partner and closing the
+remaining rollout windows — not more operator-channel construction:
 
-1. **Live-phone verification of the operator turn.** The model-owned
-   interpretation layer — the flagship surface — shipped with its eval waived
-   (see
-   [archive/operator-model-owned-interpretation-plan.md](archive/operator-model-owned-interpretation-plan.md)).
-   Before a stranger texts this thing real refund approvals, spend a session
-   on a real store: approve, reject, revise, answer, ambiguous-assent,
-   mid-turn new-plan arrival, on both channels. The single highest-risk
-   unverified thing in the product.
-2. **Finish the P4-03 window.** Push the deterministic-command and
-   pending-plan traffic the observation window still needs, then flip
-   `OPERATOR_DURABLE_QUEUE_IMESSAGE` — or make the explicit call that iMessage
-   ships on the sync path for the first merchant.
+1. ~~**Live-phone verification of the operator turn.**~~ **Completed 2026-07-20.**
+2. ~~**Finish the P4-03 window.**~~ **Completed 2026-07-20** — durable ingestion
+   is the only path; synchronous fallback removed.
 3. **Get the design partner.** Every remaining rollout item in
-   [codebase-cleanup-plan.md](codebase-cleanup-plan.md) (email async canary,
-   provider-specific evidence, representative traffic) is blocked on real
-   traffic. A design partner *is* the canary. Constraint to plan around: with
-   Instagram behind the Meta-review allowlist, the first merchant is
-   realistically email-forwarding + Shopify + phone.
-4. **Fix the Telegram-only nudges** (§2.1) before onboarding them — half a
-   day, and it is the first thing an iMessage merchant sees.
+   [codebase-cleanup-plan.md](codebase-cleanup-plan.md) (ledger enforce mode,
+   email async canary, Shopify mutation canaries, representative traffic) is
+   blocked on real traffic. A design partner *is* the canary. Constraint to
+   plan around: with Instagram behind the Meta-review allowlist, the first
+   merchant is realistically email-forwarding + Shopify + phone.
+4. ~~**Fix the Telegram-only nudges** (§2.1).~~ **Completed 2026-07-20.**
 
 Explicitly *not* needed first: the coupling renames, the turn-runner
 extraction, TikTok, `sms` removal, or any new capability.
@@ -281,12 +267,10 @@ extraction, TikTok, `sms` removal, or any new capability.
 Honest read: **late-beta, and closer than the roadmap docs' tone suggests.**
 The hard, trust-critical engineering — durable approval claims,
 identity-checked execution, escalation-over-confidence, channel-agnostic
-operator UX, spend/refund caps, audit trails — is done and tested to a
-standard most launched products don't meet. Prod is on current master with all
-56 migrations applied and a clean Telegram durability canary. The remaining
-risk is concentrated in exactly two places: the unverified operator-turn
-interpretation, and the absence of any real merchant traffic. Those are also
-the only real blockers — everything else in this report is polish or hygiene.
-The failure mode to guard against now isn't a bad refund; it's spending
-another month hardening rails nobody has ridden. Verify the turn, pick the
-channel posture for merchant #1, and go get them.
+operator UX, spend/refund caps, audit trails, durable operator ingestion — is
+done and tested to a standard most launched products don't meet. Prod is on
+current master with all migrations applied; P4-03 is complete. The remaining
+risk is concentrated in rollout evidence without a real merchant (ledger
+enforce mode, Shopify/email canaries) and product expansion (A2 digest triage,
+design partner). The failure mode to guard against now isn't a bad refund;
+it's spending another month hardening rails nobody has ridden. Get merchant #1.

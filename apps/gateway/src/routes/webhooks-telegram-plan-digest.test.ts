@@ -12,6 +12,7 @@ import {
   SECRET,
   lastReplyText,
   seedBindToken,
+  processPendingOperatorEvents,
   telegramFixture,
   waitForReplies,
 } from '../test-fixtures/telegram-webhook-test-fixture.js';
@@ -66,6 +67,7 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
       .set('x-telegram-bot-api-secret-token', SECRET)
       .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'yes' } });
 
+    await processPendingOperatorEvents(org.id);
     await waitForReplies(1);
     expect(setMessageReactionSpy).toHaveBeenCalledWith(chatId, 1, '👀');
     expect(sendChatActionSpy).toHaveBeenCalledWith(chatId, 'typing');
@@ -105,6 +107,7 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
       .set('x-telegram-bot-api-secret-token', SECRET)
       .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'skip 1' } });
 
+    await processPendingOperatorEvents(org.id);
     await waitForReplies(1);
     expect(setMessageReactionSpy).toHaveBeenCalledWith(chatId, 1, '👀');
     expect(sendChatActionSpy).toHaveBeenCalledWith(chatId, 'typing');
@@ -142,6 +145,7 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
       .set('x-telegram-bot-api-secret-token', SECRET)
       .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'skip 1' } });
 
+    await processPendingOperatorEvents(org.id);
     await waitForReplies(1);
     expect(refreshSkippedPlanTerminalSendSpy).toHaveBeenCalledOnce();
     expect(executeOperatorAgentTurnSpy).toHaveBeenCalledOnce();
@@ -165,6 +169,7 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
       .set('x-telegram-bot-api-secret-token', SECRET)
       .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'no' } });
 
+    await processPendingOperatorEvents(org.id);
     await waitForReplies(1);
     expect(lastReplyText()).toBe('Plan dismissed.');
     expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
@@ -189,6 +194,7 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
       .set('x-telegram-bot-api-secret-token', SECRET)
       .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'no' } });
 
+    await processPendingOperatorEvents(org.id);
     await waitForReplies(1);
     expect(lastReplyText()).toBe("Dismissed — I won't reply to Sarah.");
     expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
@@ -233,6 +239,7 @@ describe('POST /webhooks/telegram — digest commands', () => {
       .set('x-telegram-bot-api-secret-token', SECRET)
       .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'review' } });
 
+    await processPendingOperatorEvents(org.id);
     await waitForReplies(1);
     const text = lastReplyText();
     expect(text).toMatch(/Flagged tickets/);
@@ -248,6 +255,7 @@ describe('POST /webhooks/telegram — digest commands', () => {
       .set('x-telegram-bot-api-secret-token', SECRET)
       .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'spam 1' } });
 
+    await processPendingOperatorEvents(org.id);
     await waitForReplies(1);
     expect(lastReplyText()).toBe("Marked Jane's message as spam.");
     const updated = await db.thread.findUnique({ where: { id: threadId } });
@@ -267,6 +275,7 @@ describe('POST /webhooks/telegram — digest commands', () => {
         .set('x-telegram-bot-api-secret-token', SECRET)
         .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'reply 1 Thanks for your patience!' } });
 
+      await processPendingOperatorEvents(org.id);
       await waitForReplies(1);
       expect(setMessageReactionSpy).toHaveBeenCalledWith(chatId, 1, '👀');
       expect(sendChatActionSpy).toHaveBeenCalledWith(chatId, 'typing');
@@ -289,6 +298,7 @@ describe('POST /webhooks/telegram — digest commands', () => {
       .set('x-telegram-bot-api-secret-token', SECRET)
       .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'open 5' } });
 
+    await processPendingOperatorEvents(org.id);
     await waitForReplies(1);
     expect(lastReplyText()).toMatch(/No flagged ticket 5/);
   });

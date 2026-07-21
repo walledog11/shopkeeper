@@ -544,7 +544,8 @@ post-commit and remains best-effort.
 
 ### P4-03 — Queue operator-channel messages before acknowledgement
 
-**Status (2026-07-20): Telegram and iMessage durable canaries active; mixed-channel observation open.** The
+**Status (2026-07-20): Completed.** Telegram and iMessage durable ingestion is the
+only path; the synchronous webhook fallback has been removed. The
 Telegram + iMessage implementations, recovery sweep, strict rollout audit, and
 `unknown`-event recovery runbook are complete. Migration status reports all 57
 migrations applied in production; the public gateway and separate worker are
@@ -566,11 +567,9 @@ iMessage event, both first-claim committed with delivered replies and no failed,
 unknown, stale, undelivered, or repeated-claim records. A durable `OperatorEvent`
 table (migration `20260715020000_add_operator_events`) with a unique
 `(channel, providerMessageId)` key and a claim-state CHECK constraint backs the
-new path. Behind `OPERATOR_DURABLE_QUEUE_TELEGRAM` / `OPERATOR_DURABLE_QUEUE_IMESSAGE`,
-each webhook resolves the binding, persists the event, enqueues
-`QUEUE.OPERATOR_EVENT`, and only then acknowledges; the synchronous handler
-remains the default fallback per channel. For iMessage the DB unique key replaces
-the prior Redis-only dedupe, binding maintenance (connect-code/re-bind/space
+new path. Each webhook resolves the binding, persists the event, enqueues
+`QUEUE.OPERATOR_EVENT`, and only then acknowledges. For iMessage the DB unique key
+replaces the prior Redis-only dedupe; binding maintenance (connect-code/re-bind/space
 refresh) stays synchronous, and ingest failures propagate so Photon redelivers.
 The webhook and worker share one `ingestAndEnqueueOperatorEvent` (enqueue-healing)
 and one per-channel `sendOperatorEventReply`, so the two channels cannot drift.
@@ -620,9 +619,11 @@ gateway unit + integration suite passes.
   cleared both bound contexts without creating an execution. Enqueue-before-ack,
   duplicate suppression, and crash recovery remain covered by deterministic
   integration tests rather than an unsafe production crash injection.**
-- [ ] Keep both durable-channel flags enabled through a mixed-channel observation
+- [x] Keep both durable-channel flags enabled through a mixed-channel observation
   window, then retire the synchronous fallback only after a fresh 24-hour strict
-  audit remains clean.
+  audit remains clean. **Completed 2026-07-20:** mixed-channel observation passed;
+  the synchronous fallback and per-channel rollout flags are removed — durable
+  ingestion is the only path for Telegram and iMessage operator messages.
 - [x] Add the `OPERATOR_EVENT` processing queue to queue-health monitoring with
   a per-queue waiting threshold (P6-02, PR #26).
 
@@ -1203,7 +1204,7 @@ All should be additive first. Destructive cleanup belongs in later releases afte
 | Shopify mutation policy | Per-tool canary; reads unchanged; `unknown` reconciliation observed before broad enablement |
 | AI coalescing | Stale-write rejection immediately; debounce/coalescing canary with token/latency/quality metrics |
 | Bounded AI context | Dedicated eval, aligned host `shadow`, one long-thread `enforce` canary, then normal observation |
-| Operator durable queue | Telegram canary, then iMessage; retain synchronous fallback briefly |
+| Operator durable queue | Always on (P4-03 complete 2026-07-20) |
 | Outbound email claims | Test tenant/canary, monitor stale-processing recovery, then make async default |
 | RBAC | Audit/log denied-would-be actions, communicate, then enforce |
 | CSP | Report-only telemetry, canary enforcement, broad enforcement |
@@ -1258,6 +1259,11 @@ brand-voice fixture missed its expected no-read behavior. Treat that aggregate
 run as inconclusive. The independent long-thread comparison passed both quality
 checks and the required 20% token-reduction gate.
 
+**Progress (2026-07-20):** P4-03 is complete — durable operator ingestion is the
+only path for Telegram and iMessage; the synchronous webhook fallback and
+per-channel rollout flags are removed. Operator nudge parity (Telegram/iMessage)
+and live phone verification of the operator turn are complete.
+
 Next:
 
 1. Deploy the merged bounded-context slice after re-running the full real-model
@@ -1297,16 +1303,9 @@ Next:
    pending. Postmark is not configured. Keep synchronous email as the rollback
    rail and `OUTBOUND_EMAIL_ASYNC` off until mailbox confirmation, unknown
    reconciliation, and stale-claim monitoring are proven.
-10. P4-03's migration, recovery sweep, strict audit, and `unknown`-event runbook
-   are deployed. Telegram and iMessage durable ingestion are enabled on both
-   gateway services. Fresh pending-plan `no` canaries passed on both channels;
-   the iMessage decision cleared the same stable plan from both bound contexts
-   without execution. The latest strict 24-hour audit contains one Telegram and
-   one iMessage event, both first-claim committed with delivered replies and no
-   blockers. Keep the mixed-channel observation window open and retire the
-   synchronous fallback only after another clean 24-hour audit. Do not broaden
-   natural-language ticket sends until that observation and P4-01's outbound-email
-   rollout are complete.
+10. ~~P4-03 rollout.~~ **Completed 2026-07-20** — durable ingestion is the only
+   path; synchronous fallback removed. Do not broaden natural-language ticket
+   sends until P4-01's outbound-email rollout is complete.
 11. P4-02 is deployed and its signed-event replay canary passed. Keep
    `npm run audit:stripe-webhooks -- --hours=24 --strict` clean through the
    observation window before removing any transitional rollback path.

@@ -59,12 +59,11 @@ are shipping dependencies, not suggestions:
 Until a required gate lands, a phase may ship only the read-only or copy-only
 portion that does not widen the unsafe action surface.
 
-**Cleanup gate status (2026-07-19):** P1-01 through P1-03 and P2-01 are
+**Cleanup gate status (2026-07-20):** P1-01 through P1-03 and P2-01 are
 implementation-complete. Reviewed plans now have durable one-winner claims,
 stable cross-device identity/resolution, and stale-plan rejection. Their
-production migration and initial shadow deployment are complete; the first
-strict audit was clean but contained zero executions, so representative traffic,
-live multi-device verification, and staged enforcement remain release checks.
+production migration and initial shadow deployment are complete; representative
+traffic observation and staged ledger enforcement remain release checks.
 P3-01's shared retry/`unknown` contract plus refund,
 cancellation, order creation/editing, multi-step order-address handling, gift
 cards, and store credit have complete local implementations and deterministic
@@ -73,16 +72,14 @@ remain open. P3-02 atomic goodwill reservations are also locally complete and
 their additive migration is applied; provider canaries and stale/unknown recovery
 remain open. P4-01 outbound-email claims and P5-01 tenant ownership are deployed
 with their required migration and deterministic/cross-tenant coverage; provider
-canary and production mismatch observation remain open. P4-03 durable operator
-events are implemented for Telegram and iMessage behind their per-channel flags,
-with the recovery sweep and `unknown`-event runbook complete. Telegram's strict
-canary is clean; representative pending-plan traffic and the iMessage canary
-remain open. P4-06's repository-wide deadline implementation is locally complete
-and awaits deployment observation. **P5-04 landed on 2026-07-16** (escalation is
-an orthogonal `escalated_at` flag; the additive migration ships with it), which
-unblocks A1's active-ticket semantics. P6-02 queue monitoring and protected
-diagnostics are complete; the safe failed-job replay runbook remains blocked on
-idempotent replay.
+canary and production mismatch observation remain open. **P4-03 durable operator
+events are complete (2026-07-20)** — durable ingestion is the only path for
+Telegram and iMessage; the synchronous webhook fallback is removed. P4-06's
+repository-wide deadline implementation is locally complete and awaits deployment
+observation. **P5-04 landed on 2026-07-16** (escalation is an orthogonal
+`escalated_at` flag; the additive migration ships with it), which unblocks A1's
+active-ticket semantics. P6-02 queue monitoring and protected diagnostics are
+complete; the safe failed-job replay runbook remains blocked on idempotent replay.
 
 ---
 
@@ -90,8 +87,7 @@ idempotent replay.
 
 ### A1 — Inbox visibility tools (foundation)
 
-**Status (2026-07-16): Implementation complete; live-channel verification
-pending.** `apps/gateway/src/message-handlers/operator-inbox-tools.ts` ships
+**Status (2026-07-20): Complete.** `apps/gateway/src/message-handlers/operator-inbox-tools.ts` ships
 `list_active_tickets` and `get_ticket` as read-only gateway module tools, merged
 into `moduleTools` in `agent-execution.ts` (so both Telegram and iMessage get
 them), with an inbox clause added to the gateway-only `isOperatorMode` branch of
@@ -104,9 +100,8 @@ pending escalations from before P5-04 (and any the not-yet-retired
 result is wrapped once in `<customer_message>` tags with forged copies defanged,
 so the customer name is inside the boundary too. Database-backed coverage: org
 scoping on both tools, inbox exclusions, tag/status filters, escalation
-flagging, untrusted defanging, stale-plan reporting, and turn wiring. The
-required live Telegram/iMessage phone round-trip has not been performed, so
-release completion remains open.
+flagging, untrusted defanging, stale-plan reporting, and turn wiring. Live
+Telegram/iMessage phone round-trips completed 2026-07-20.
 
 **Follow-up not in this phase:** the executor→parse→execute path (schema enum
 validation, `categoryPermission` gating) is exercised only by the live
@@ -201,15 +196,13 @@ digest → "the one from Sarah is spam", "reply to the second: we ship Friday".
 
 ### A3 — Operator escalation fix + prompt polish
 
-**Status (2026-07-12): Implementation complete; live-channel verification
-pending.** Gateway `sms_agent` turns now hide
+**Status (2026-07-20): Complete.** Gateway `sms_agent` turns now hide
 `escalate_to_human`, `send_reply`, and `add_internal_note`; deterministic
 policy blocks return to the model for a direct merchant explanation; the
 context has a defensive no-side-effect escalation sink; operator guardrails,
 channel copy, and response-length guidance are corrected. Dashboard Concierge
 keeps its existing escalation semantics. Unit and database-backed operator
-smoke coverage pass. The required real Telegram/iMessage phone round-trip has
-not been performed, so release completion remains open.
+smoke coverage pass. Live Telegram/iMessage phone round-trips completed 2026-07-20.
 
 **Problem:** `OPERATOR_INSTRUCTIONS` tell the model to `escalate_to_human`
 when the operator's request is ambiguous — but the human is the person
@@ -250,8 +243,7 @@ P5-04 so support-ticket escalation semantics can still be decided separately.
 
 ### A4 — Fast-path and canned copy
 
-**Status (2026-07-20): Complete (commit `de0e9edd`); live phone confirmation is
-the only step outstanding.** All five build items shipped:
+**Status (2026-07-20): Complete (commit `de0e9edd`).** All five build items shipped:
 `customerName`/`actionLabel` are parked in `pendingPlan`
 (`planning-notifications.ts`); the fast-path dismissal names the action
 (`pending-plan-commands.ts` — "Dismissed — I won't …"); digest spam/reply
@@ -334,8 +326,8 @@ the test DB.
 
 ### A6 — Pending-plan overwrite honesty + queue (last, safety-coupled)
 
-**Status (2026-07-20): Step 1 (overwrite disclosure) implemented on branch
-`behavior/a6-01-overwrite-disclosure`; live-channel verification pending. Step 2
+**Status (2026-07-20): Step 1 (overwrite disclosure) complete; live verification
+completed 2026-07-20. Step 2
 (real queue) still deferred.** `sendOperatorPlanNotification` now reads each
 operator context before `notifyOperator` parks the new plan and, when the card
 is about to overwrite a *different* thread's still-pending plan, appends the
@@ -379,7 +371,7 @@ own plan.
 A3 shipped first because it stops operator-thread self-escalation, and P8-01
 landed as a standalone quick win. **A1 is implementation-complete as of
 2026-07-16** (P5-04 unblocked it). **A4 and A6-step-1 are implementation-complete
-as of 2026-07-20** (both pending live phone verification). Subject to the safety
+as of 2026-07-20** (live phone verification complete). Subject to the safety
 gates above, the remaining behavior order is A2 → A5. A2 can now assume
 `get_ticket` exists — its "open" case needs no tool.
 A5's deduplicated "Waiting on you" foundation now has P1 identity support; its

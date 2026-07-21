@@ -33,7 +33,7 @@ export default function DashboardHomeClient({ userName, initialSummary }: Props)
             steps={data.workflowSteps}
           />
 
-          <HomeTelegramNudge connected={data.hasTelegramBound} />
+          <HomeTelegramNudge connected={data.hasPhoneBound} />
 
           <div className="flex flex-col gap-3 min-w-0">
             <ConciergeBriefing

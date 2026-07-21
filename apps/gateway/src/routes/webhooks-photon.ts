@@ -3,7 +3,6 @@ import { randomUUID } from 'crypto';
 import type { Content, Message, Space, WebhookRawResult } from 'spectrum-ts';
 import { getPlatformSpectrumApp, sendImessageOnSpace, SpectrumIntegrationConfigError } from '../clients/spectrum.js';
 import logger from '../logger.js';
-import { isOperatorDurableQueueEnabled } from '../config/runtime-config.js';
 import { rateLimit, sendTooManyRequests } from '../rate-limit.js';
 import { stripMarkdown } from '../message-handlers/strip-markdown.js';
 import { ingestAndEnqueueOperatorEvent } from '../operator-event-ingest.js';
@@ -95,100 +94,13 @@ function normalizeContent(content: Content): string | null {
   }
 }
 
-const IMESSAGE_DEDUPE_TTL_SECONDS = 300;
-
-// Spectrum webhooks deliver at-least-once, so claim each provider message id
-// before dispatching: an operator turn has real side effects (refunds, replies)
-// and must never run twice on a redelivery or a Photon timeout-retry. Returns
-// true on first delivery, false on a duplicate. Fails open on a Redis error —
-// dropping a merchant instruction is worse than a rare duplicate.
-async function claimImessageMessage(messageId: string): Promise<boolean> {
-  try {
-    const claimed = await getRateLimitRedis().set(
-      `imsg:op:${messageId}`,
-      '1',
-      'EX',
-      IMESSAGE_DEDUPE_TTL_SECONDS,
-      'NX',
-    );
-    return claimed === 'OK';
-  } catch (err) {
-    logger.warn({ err, messageId }, '[Webhook] iMessage dedupe check failed — processing anyway');
-    return true;
-  }
-}
-
-// iMessage is an operator channel: the merchant texts Shopkeeper's platform line
-// and the operator agent replies synchronously. No customer ever reaches this
-// path, so there is no ticket/customer persistence — dispatch straight to the
-// operator handler (which resolves the org from the sender binding), mirroring
-// the Telegram webhook.
-async function dispatchInboundImessageMessage(
-  space: Space,
-  message: Message,
-  traceId: string,
-): Promise<void> {
-  if (message.direction !== 'inbound') {
-    logger.info(
-      { messageId: message.id, direction: message.direction, traceId },
-      '[Webhook] Photon non-inbound message skipped',
-    );
-    return;
-  }
-
-  const senderId = safeTrim(message.sender?.id);
-  if (!senderId) {
-    logger.warn({ messageId: message.id, traceId }, '[Webhook] Photon message missing sender id');
-    return;
-  }
-
-  const externalSpaceId = safeTrim(space.id);
-  if (!externalSpaceId) {
-    logger.warn({ messageId: message.id, senderId, traceId }, '[Webhook] Photon message missing space id');
-    return;
-  }
-
-  const messageId = safeTrim(message.id);
-  if (messageId && !(await claimImessageMessage(messageId))) {
-    logger.info({ senderId, messageId, traceId }, '[Webhook] iMessage duplicate delivery skipped');
-    return;
-  }
-
-  const body = safeTrim(normalizeContent(message.content));
-  if (!body) {
-    logger.info(
-      { messageId: message.id, senderId, contentType: message.content.type, traceId },
-      '[Webhook] Photon message has no persistable content',
-    );
-    return;
-  }
-
-  const reply: OperatorReply = async (replyText) => {
-    await sendImessageOnSpace(space, stripMarkdown(replyText));
-  };
-
-  // Sender carries no display name inbound (User = { id }); binding label stays null.
-  await handleImessageOperatorMessage({
-    senderId,
-    spaceId: externalSpaceId,
-    body,
-    displayName: null,
-    reply,
-  });
-
-  logger.info(
-    { senderId, messageId: message.id, externalSpaceId, traceId },
-    '[Webhook] iMessage operator handled',
-  );
-}
-
 // Durable ingestion (P4-03): persist + enqueue the operator event before the
 // turn runs, so an acknowledged instruction is recoverable and executed at most
-// once. The DB unique key on (channel, providerMessageId) replaces the Redis
-// dedupe used by the synchronous path. Errors propagate to the route so it
-// returns a non-2xx and Photon redelivers; the unique key absorbs that
-// redelivery. A message without a stable provider id can't be deduped durably,
-// so it falls back to synchronous handling.
+// once. The DB unique key on (channel, providerMessageId) absorbs provider
+// redeliveries. Errors propagate to the route so it returns a non-2xx and
+// Photon redelivers; the unique key absorbs that redelivery. A message without a
+// stable provider id can't be deduped durably, so it falls back to synchronous
+// handling.
 async function ingestInboundImessageMessage(
   space: Space,
   message: Message,
@@ -306,22 +218,11 @@ export function registerPhotonWebhookRoutes(router: Router): void {
         throw error;
       }
 
-      const durable = isOperatorDurableQueueEnabled('imessage');
       const result = await app.webhook(
         { body: req.rawBody, headers: normalizeHeaders(req.headers) },
         async (space, message) => {
           const traceId = randomUUID();
-          if (durable) {
-            // Let ingest failures propagate so the route returns non-2xx and
-            // Photon redelivers; the DB unique key dedupes the redelivery.
-            await ingestInboundImessageMessage(space, message, traceId);
-            return;
-          }
-          try {
-            await dispatchInboundImessageMessage(space, message, traceId);
-          } catch (error) {
-            logger.error({ err: error, traceId }, '[Webhook] iMessage operator dispatch failed');
-          }
+          await ingestInboundImessageMessage(space, message, traceId);
         },
       );
 

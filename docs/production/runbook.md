@@ -432,52 +432,31 @@ Then:
 4. Confirm a Telegram plan notification reaches bound org members for a new ticket.
 5. Reply `yes` / `no` / freeform and confirm the agent acts (or skips) accordingly.
 
-#### Durable operator-event canary (P4-03)
+#### Durable operator events (P4-03) — complete
 
-The queued path persists a provider message before acknowledging it and claims the event once in
-the worker. Roll it out one channel at a time; keep iMessage on its synchronous path until the
-Telegram window is clean.
+Durable ingestion is the only path for Telegram and iMessage operator messages
+(completed 2026-07-20). Each inbound message is persisted and enqueued before
+the webhook acknowledges it; the operator-event worker claims the event once and
+runs the turn.
 
-Preflight:
-
-1. Confirm `npm run db:migrate:deploy` reports no pending migrations. The required table comes from
-   `20260715020000_add_operator_events`.
-2. Confirm both Railway gateway services run the same commit and `/health/deep` reports the web and
-   worker checks healthy.
-3. Run the read-only baseline. Zero events is expected before the flag is enabled, but every blocker
-   list must be empty:
+**Routine monitoring:**
 
 ```bash
 railway run --service shopkeeper --environment production -- \
   npm run audit:operator-events -- --hours=24 --strict
 ```
 
-4. Set `OPERATOR_DURABLE_QUEUE_TELEGRAM=true` on the public `shopkeeper` service and the separate
-   `Gateway Worker` service, then wait for both deployments to become healthy. Leave
-   `OPERATOR_DURABLE_QUEUE_IMESSAGE` unset or `false`.
-
-Canary with one bound internal Telegram chat:
-
-1. Send a read-only free-form request such as “what's in my inbox?” and confirm the webhook responds
-   promptly, one reply arrives, and the dashboard/operator thread records one exchange.
-2. Exercise a deterministic command (`help` or `summary`) and a pending-plan dismissal (`no`). Do
-   not use an irreversible Shopify action for the durability canary.
-3. Confirm the audit reports one event with one claim attempt and one delivered committed reply per
-   Telegram provider message. Gateway logs must contain no permanent job failure, lost-binding
-   failure, or sweep alert.
-4. After at least one event finishes, require real Telegram traffic in the audit:
+Expect committed events with delivered replies and no failed, unknown, stale,
+undelivered, or repeated-claim records. Per-channel checks:
 
 ```bash
-railway run --service shopkeeper --environment production -- \
-  npm run audit:operator-events -- --hours=1 --strict --require-channel=telegram
+npm run audit:operator-events -- --hours=24 --strict --require-channel=telegram
+npm run audit:operator-events -- --hours=24 --strict --require-channel=imessage
 ```
 
-5. Keep Telegram enabled through an observation window that includes representative free-form and
-   pending-plan traffic. Repeat the 24-hour strict audit before enabling iMessage.
-
-Rollback ingress by setting `OPERATOR_DURABLE_QUEUE_TELEGRAM=false` on both services. Existing
-persisted events remain evidence and must not be deleted or blindly re-enqueued; the flag only sends
-new Telegram messages back through the synchronous path.
+There is no synchronous webhook fallback to roll back to. If durable ingestion
+must be disabled, redeploy a prior gateway build that still carried the
+fallback — do not delete or blindly re-enqueue existing `OperatorEvent` rows.
 
 #### Failed or unknown operator-event recovery
 

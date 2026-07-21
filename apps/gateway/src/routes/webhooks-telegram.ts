@@ -1,10 +1,8 @@
 import type { Request, Response, Router } from 'express';
 import logger from '../logger.js';
-import { isOperatorDurableQueueEnabled } from '../config/runtime-config.js';
 import { ingestAndEnqueueOperatorEvent } from '../operator-event-ingest.js';
 import { parseTelegramCommand } from './telegram/command-parser.js';
 import {
-  handleTelegramMessage,
   resolveBoundTelegramMember,
   TELEGRAM_UNBOUND_REPLY,
 } from './telegram/message-handler.js';
@@ -68,25 +66,6 @@ export function registerTelegramWebhookRoutes(router: Router): void {
     const webhook = await validateTelegramWebhook(req, res);
     if (!webhook) return;
 
-    if (isOperatorDurableQueueEnabled('telegram')) {
-      await ingestTelegramOperatorEvent(webhook, res);
-      return;
-    }
-
-    // Synchronous path: acknowledge immediately so Telegram does not time out
-    // during the LLM turn, then process in-process (non-durable, the fallback).
-    res.status(200).send('OK');
-    try {
-      await handleTelegramMessage({
-        chatId: webhook.chatId,
-        metadata: webhook.metadata,
-        messageId: webhook.messageId,
-        body: webhook.body,
-        reply: webhook.reply,
-      });
-    } catch (error) {
-      logger.error({ err: error }, '[Telegram] Webhook error');
-      await webhook.reply('An unexpected error occurred. Please try again.');
-    }
+    await ingestTelegramOperatorEvent(webhook, res);
   });
 }

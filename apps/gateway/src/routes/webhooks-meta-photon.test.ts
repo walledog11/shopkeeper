@@ -442,13 +442,21 @@ describe('POST /webhooks/photon', () => {
     expect(queueAddSpy).not.toHaveBeenCalled();
   });
 
-  it('skips duplicate webhook deliveries for the same provider message id', async () => {
+  it('deduplicates a provider redelivery of the same message via the DB unique key', async () => {
     const sendSpy = vi.fn().mockResolvedValue(undefined);
     const messageId = 'imsg_dedupe_001';
-    let dispatchCount = 0;
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: 'usr_imsg_dedupe' },
+    });
+    await db.orgMemberImessageBinding.create({
+      data: {
+        orgMemberId: member.id,
+        senderId: '+15551234567',
+        spaceId: 'any;-;+15551234567',
+      },
+    });
 
     spectrumWebhookSpy.mockImplementation(async (_requestInput, handler) => {
-      dispatchCount += 1;
       await handler(
         { id: 'any;-;+15551234567', __platform: 'iMessage', send: sendSpy },
         {
@@ -476,12 +484,8 @@ describe('POST /webhooks/photon', () => {
 
     expect(first.status).toBe(200);
     expect(second.status).toBe(200);
-    expect(dispatchCount).toBe(2);
-    expect(sendSpy).toHaveBeenCalledTimes(1);
-    expect(mockLogger.info).toHaveBeenCalledWith(
-      expect.objectContaining({ messageId, senderId: '+15551234567' }),
-      '[Webhook] iMessage duplicate delivery skipped',
-    );
+    expect(sendSpy).not.toHaveBeenCalled();
+    expect(await db.operatorEvent.count({ where: { organizationId: org.id } })).toBe(1);
   });
 });
 
@@ -493,12 +497,7 @@ describe('POST /webhooks/photon — durable ingestion', () => {
   const SPACE_ID = 'any;-;+15551234567';
   const CLERK_USER = 'usr_imsg_durable';
 
-  beforeEach(() => {
-    process.env.OPERATOR_DURABLE_QUEUE_IMESSAGE = 'true';
-  });
-
   afterEach(async () => {
-    delete process.env.OPERATOR_DURABLE_QUEUE_IMESSAGE;
     await db.operatorEvent.deleteMany({ where: { organizationId: org.id } }).catch(() => undefined);
     await db.orgMember.deleteMany({ where: { organizationId: org.id } }).catch(() => undefined);
   });

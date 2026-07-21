@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { db } from '@shopkeeper/db';
 import {
@@ -39,17 +39,10 @@ function post(messageId: number, text: string) {
     });
 }
 
-// The durable (P4-03) ingestion path: enabled via the per-channel flag. Persists
-// the operator event and enqueues before acknowledging, instead of running the
-// turn synchronously inside the webhook.
+// P4-03 durable ingestion: persist the operator event and enqueue before
+// acknowledging, instead of running the turn synchronously inside the webhook.
 beforeEach(() => {
   org = telegramFixture.org;
-  process.env.OPERATOR_DURABLE_QUEUE_TELEGRAM = 'true';
-});
-
-afterEach(async () => {
-  delete process.env.OPERATOR_DURABLE_QUEUE_TELEGRAM;
-  await db.operatorEvent.deleteMany({ where: { organizationId: org.id } }).catch(() => undefined);
 });
 
 describe('POST /webhooks/telegram — durable ingestion', () => {

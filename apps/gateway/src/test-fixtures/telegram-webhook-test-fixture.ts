@@ -116,6 +116,7 @@ vi.mock('../message-handlers/skipped-plan-terminal-send.js', () => ({
 }));
 
 import { registerTelegramWebhookRoutes } from '../routes/webhooks-telegram.js';
+import { processOperatorEventById } from '../workers/operator-event.js';
 
 export const SECRET = process.env.TELEGRAM_WEBHOOK_SECRET!;
 export let org!: Awaited<ReturnType<typeof createTestOrg>>;
@@ -136,7 +137,17 @@ export const telegramFixture = {
   },
 };
 
-// Wait until the fire-and-forget reply lands. The route does res.send before
+export async function processPendingOperatorEvents(organizationId: string): Promise<void> {
+  const pending = await db.operatorEvent.findMany({
+    where: { organizationId, status: 'pending' },
+    orderBy: { createdAt: 'asc' },
+  });
+  for (const event of pending) {
+    await processOperatorEventById(event.id);
+  }
+}
+
+// Wait until the fire-and-forget reply lands. The durable webhook acks before
 // doing async work, so supertest resolves before sendMessage is called.
 export async function waitForReplies(count: number, timeoutMs = 3000): Promise<void> {
   const start = Date.now();
@@ -195,6 +206,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  await db.operatorEvent.deleteMany({ where: { organizationId: org.id } }).catch(() => undefined);
   await db.operatorContext.deleteMany({ where: { organizationId: org.id } }).catch(() => undefined);
   await db.orgMember.deleteMany({ where: { organizationId: org.id } }).catch(() => undefined);
   await cleanupTestData(org?.id);
