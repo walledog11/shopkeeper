@@ -1,4 +1,4 @@
-import { formatShopifyToolError, shopifyGraphql, type ShopifyContext } from "./client.js";
+import { shopifyGraphql, type ShopifyContext } from "./client.js";
 
 export type ReturnDeliveryState = "pending" | "in_transit" | "delivered" | "unknown";
 
@@ -118,7 +118,7 @@ export async function safeFetchOrderReturnStatuses(
 ): Promise<MonitoredReturnStatus[] | null> {
   try {
     return await fetchOrderReturnStatuses(ctx, orderId, { timeoutMs: 10_000 });
-  } catch (error) {
+  } catch {
     return null;
   }
 }
