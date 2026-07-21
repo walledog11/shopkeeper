@@ -45,6 +45,8 @@
     "audit:outbound-email": "node ./scripts/audit-outbound-email-rollout.mjs",
     "audit:stripe-webhooks": "node ./scripts/audit-stripe-webhook-events.mjs",
     "audit:refund-spend-reservations": "node ./scripts/audit-refund-spend-reservations.mjs",
+    "audit:unknown-outcomes": "node ./scripts/audit-unknown-outcomes.mjs",
+    "canary:shopify-mutations": "node ./scripts/canary-shopify-mutations.mjs",
     "audit:tenant-consistency": "node ./scripts/audit-tenant-consistency.mjs",
     "audit:escalation-backfill": "node ./scripts/audit-escalation-backfill.mjs",
     "backfill:escalation": "node ./scripts/backfill-escalation.mjs",

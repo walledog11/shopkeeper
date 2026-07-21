@@ -364,3 +364,46 @@ export async function getPlanExecution(
     where: { organizationId_planId: { organizationId, planId } },
   });
 }
+
+// A worker that dies after claiming but before completePlanExecution leaves a
+// stuck `claimed` row. Reconcile it to `unknown` so operators can review it
+// without ever replaying the approved plan.
+export async function reconcileStaleClaimedPlanExecutions(
+  staleBefore: Date,
+  reason: string,
+): Promise<number> {
+  const updated = await db.planExecution.updateMany({
+    where: {
+      status: "claimed",
+      claimedAt: { lt: staleBefore },
+    },
+    data: {
+      status: "unknown",
+      completedAt: new Date(),
+      lastError: reason,
+    },
+  });
+  return updated.count;
+}
+
+export async function finalizeReconciledPlanExecution(executionId: string): Promise<"committed" | "failed" | "unknown" | null> {
+  const actions = await db.agentAction.findMany({
+    where: { executionId },
+    select: { status: true },
+  });
+  if (actions.length === 0) return null;
+  if (actions.some((action) => action.status === "unknown")) {
+    return "unknown";
+  }
+  const status = actions.some((action) => (
+    action.status === "error" || action.status === "policy_block"
+  )) ? "failed" : "committed";
+  await db.planExecution.updateMany({
+    where: { id: executionId, status: "unknown" },
+    data: {
+      status,
+      lastError: status === "committed" ? null : "reconciled_with_failures",
+    },
+  });
+  return status;
+}

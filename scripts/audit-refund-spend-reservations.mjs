@@ -1,4 +1,7 @@
 import { db } from '@shopkeeper/db';
+import { loadLocalEnv } from './load-local-env.mjs';
+
+loadLocalEnv();
 
 function parsePositiveNumberArg(name, fallback) {
   const prefix = `--${name}=`;

@@ -53,6 +53,11 @@ export { createGiftCard } from "./gift-cards.js";
 export { attachReturnLabel } from "./return-labels.js";
 export { issueDiscount } from "./discounts.js";
 export {
+  probeUnknownShopifyMutation,
+  RECONCILABLE_SHOPIFY_MUTATION_TOOLS,
+  type ShopifyReconciliationProbeResult,
+} from "./reconciliation-probes.js";
+export {
   classifyShipmentAlert,
   formatDeliveryExceptionNotification,
   type ShipmentAlertKind,

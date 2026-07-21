@@ -39,6 +39,7 @@ export const QUEUE = {
   // worker died mid-turn to `unknown` and re-sends committed-but-undelivered
   // confirmations. Backstop, not the primary path.
   OPERATOR_EVENT_SWEEP: 'operator-event-sweep',
+  UNKNOWN_OUTCOME_SWEEP: 'unknown-outcome-sweep',
 } as const;
 export const JOB = {
   IG_DM: 'process-ig-dm',
@@ -76,6 +77,8 @@ export const JOB = {
   OPERATOR_EVENT: 'process-operator-event',
   OPERATOR_EVENT_SWEEP: 'sweep-operator-events',
   OPERATOR_EVENT_SWEEP_ID: 'operator-event-sweep-15min',
+  UNKNOWN_OUTCOME_SWEEP: 'sweep-unknown-outcomes',
+  UNKNOWN_OUTCOME_SWEEP_ID: 'unknown-outcome-sweep-15min',
 } as const;
 // 7-day failed retention keeps post-mortems possible; 1-day completed retention bounds Redis.
 export const PROCESSING_QUEUE_DEFAULTS = {

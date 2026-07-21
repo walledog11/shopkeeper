@@ -3,6 +3,7 @@ import { registerDigestMaintenanceJob } from './digest.js';
 import { registerEmailTokenHealthMaintenanceJob } from './email-token-health.js';
 import { registerGmailWatchMaintenanceJob } from './gmail-watch.js';
 import { registerOperatorEventSweepMaintenanceJob } from './operator-event-sweep.js';
+import { registerUnknownOutcomeSweepMaintenanceJob } from './unknown-outcome-sweep.js';
 import { registerOrderRiskMaintenanceJob } from './order-risk-monitor.js';
 import { registerReturnLifecycleMaintenanceJob } from './return-lifecycle-monitor.js';
 import { registerDeliveryExceptionMaintenanceJob } from './delivery-exception-monitor.js';
@@ -32,6 +33,7 @@ export const maintenanceJobRegistrations: MaintenanceJobRegistration[] = [
   registerDeliveryExceptionMaintenanceJob,
   registerOutboundSendSweepMaintenanceJob,
   registerOperatorEventSweepMaintenanceJob,
+  registerUnknownOutcomeSweepMaintenanceJob,
   registerQueueHealthMaintenanceJob,
 ];
 

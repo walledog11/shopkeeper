@@ -170,6 +170,10 @@
       "types": "./dist/execution-ledger.d.ts",
       "default": "./dist/execution-ledger.js"
     },
+    "./unknown-outcome-reconciliation": {
+      "types": "./dist/unknown-outcome-reconciliation.d.ts",
+      "default": "./dist/unknown-outcome-reconciliation.js"
+    },
     "./testing": {
       "types": "./dist/testing/failure-harness.d.ts",
       "default": "./dist/testing/failure-harness.js"
