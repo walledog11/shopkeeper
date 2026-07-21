@@ -5,7 +5,6 @@ import { registerGmailWatchMaintenanceJob } from './gmail-watch.js';
 import { registerOperatorEventSweepMaintenanceJob } from './operator-event-sweep.js';
 import { registerOrderRiskMaintenanceJob } from './order-risk-monitor.js';
 import { registerReturnLifecycleMaintenanceJob } from './return-lifecycle-monitor.js';
-import { registerReturnLifecycleMaintenanceJob } from './return-lifecycle-monitor.js';
 import { registerOutboundSendSweepMaintenanceJob } from './outbound-send-sweep.js';
 import { registerQueueHealthMaintenanceJob } from './queue-health.js';
 import { registerRetentionMaintenanceJobs } from './retention.js';
