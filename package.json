@@ -36,6 +36,7 @@
     "test:e2e:smoke": "E2E_AUTH_BYPASS=true node ./scripts/with-test-env.mjs npx playwright test --config=playwright.config.ts",
     "test:e2e:browser": "E2E_AUTH_BYPASS=false node ./scripts/with-test-env.mjs npx playwright test --config=playwright.browser.config.ts",
     "configure:gmail-pubsub": "bash scripts/configure-gmail-pubsub.sh",
+    "provision:posthog-reports": "node ./scripts/provision-posthog-reports.mjs",
     "verify:production:env": "node ./scripts/check-production-env.mjs all",
     "verify:production": "node ./scripts/verify-production.mjs",
     "verify:production:alerts": "node ./scripts/verify-production-alerts.mjs",

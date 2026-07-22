@@ -72,8 +72,8 @@ Before enabling production capture:
 2. confirm raw payloads contain no names, addresses, message content, prompts, provider identifiers,
    credentials, or provider payloads;
 3. confirm deterministic retries retain one unique event;
-4. save and verify the reports listed in
-   [`product-instrumentation-plan.md`](../product-instrumentation-plan.md); and
+4. save and verify the four reports specified in
+   [`posthog-reports.md`](posthog-reports.md); and
 5. assign an owner to monitor analytics-delivery warnings for the first production week.
 
 ## Post-Deploy Verification

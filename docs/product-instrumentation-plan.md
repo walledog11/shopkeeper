@@ -1,8 +1,10 @@
 # Product instrumentation plan — PostHog
 
-**Status:** In progress — Phases 1–3 complete; Phase 4 is next
+**Status:** In progress — Phases 1–3 complete; Phase 4 specified and tooled
+(reports defined + provisioning script), pending a run against the production
+PostHog project; Phase 5 verification/rollout remains.
 
-**Last updated:** 2026-06-29
+**Last updated:** 2026-07-22
 
 **Owner:** Product engineering
 
@@ -441,6 +443,31 @@ The exhaustive raw-payload review remains part of Phase 5 staging validation.
 - [x] Complete a controlled agent-assisted activation journey in staging and review every raw Phase 3 payload.
 
 ## Phase 4 — PostHog reports
+
+**Status (2026-07-22): specified and tooled; a run against the production project remains.**
+
+Done:
+- Reports fully specified against the real event wire schema — exact event names,
+  snake_case property filters, windows, breakdowns, and the retention Action — in
+  [`production/posthog-reports.md`](production/posthog-reports.md), which also holds
+  the fill-in record table the deployment docs require.
+- Idempotent provisioning script `npm run provision:posthog-reports`
+  (`scripts/provision-posthog-reports.mjs`) creates the dashboard, eight insight
+  tiles, and the retention Action via the PostHog management API. Verified only that
+  it emits well-formed queries — the live API schema is unverified without project
+  credentials, so the first run may need one field tweak (its error path prints the
+  response body).
+
+Remaining:
+- Run `npm run provision:posthog-reports` against the production project (and the
+  staging mirror), reconciling any schema error the API returns.
+- Verify each report with a controlled activation journey (Phase 5).
+- Record the saved URLs/owners/last-verified dates in the record table; assign the
+  first-week monitoring owner.
+
+Empty reports are expected until `PRODUCT_ANALYTICS_ENABLED=true` and real traffic
+exist — saving them is a prerequisite for enabling production capture, not a
+consumer of live data.
 
 Create and save these reports in the production PostHog project. Mirror them in staging while validating events.
 
