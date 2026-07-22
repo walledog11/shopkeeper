@@ -73,6 +73,7 @@ vi.mock('@shopkeeper/db', () => ({
   commitDailyRefundSpendReservation: vi.fn().mockResolvedValue(undefined),
   releaseDailyRefundSpendReservation: vi.fn().mockResolvedValue(undefined),
   markDailyRefundSpendReservationUnknown: vi.fn().mockResolvedValue(undefined),
+  recordReturnWatch: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@shopkeeper/agent/settings', () => ({
