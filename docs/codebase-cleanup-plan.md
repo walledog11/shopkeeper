@@ -767,8 +767,14 @@ provider call or cross-tenant mutation.
 
 ### P5-03 — Audit and then enforce relational tenant consistency
 
-**Status (2026-07-20): Production audit clean and local enforcement migration
-complete; staged production validation/deployment remain.** `npm run
+**Status (2026-07-21): COMPLETE in production.** Migration
+`20260720010000_add_tenant_consistency_constraints` was applied to production on
+2026-07-21T00:34 UTC and all 14 tenant foreign keys are validated
+(`convalidated = true`); the strict consistency audit is clean over real
+production data. Verified 2026-07-21 against a copy-on-write Neon branch of the
+`production` branch (see Production verification below). Controlled
+validation/verification tooling (`npm run validate:tenant-constraints`) landed
+alongside. `npm run
 audit:tenant-consistency -- --strict` checks 13 high-risk relationships spanning
 thread/customer/reply integration/cached message, message/thread/integration,
 agent action/thread/customer/execution, plan execution/thread/source message,
@@ -787,9 +793,82 @@ belongs to its claimed thread as well as its tenant. PostgreSQL 17 column-target
 `SET NULL` preserves tenant IDs for nullable references. The migration rebuilds
 successfully in the isolated database, and database-backed tests prove same-
 tenant writes remain valid while new cross-tenant writes are rejected across
-the prioritized relationships. It has not been applied to production.
+the prioritized relationships. It was applied to production on 2026-07-21T00:34
+UTC (`_prisma_migrations.finished_at`, no rollback).
 
-**Still required:**
+**Validation tooling (2026-07-21):** `npm run validate:tenant-constraints`
+(`scripts/validate-tenant-consistency-constraints.mjs`) runs the deferred
+`VALIDATE CONSTRAINT` step as a controlled, inspect-only-by-default script — not
+the "later migration" the migration comment anticipated. Prisma wraps a
+migration file in one transaction, so a migration would validate all 14
+constraints all-or-nothing under a single `SHARE UPDATE EXCLUSIVE` hold, on every
+`migrate deploy`; running each `VALIDATE` as its own autocommitted statement is
+what actually delivers "validate separately / keep each constraint independently
+removable / a later controlled step." Inspect mode reports each constraint's
+installed/validated state; `--execute` refuses unless `computeTenantConsistencyReport`
+is clean (a dirty audit means a `VALIDATE` would error mid-run) and every
+constraint is installed, validates each pending constraint independently,
+skips already-validated ones, and names the exact constraint on failure.
+Exercised end to end against the local test database with all 60 migrations
+applied: inspect detects the 14 installed-but-unvalidated constraints, `--execute`
+validates all 14 (exit 0), and re-running `--execute` is an idempotent no-op.
+
+**Lock-timing review (two distinct DDL profiles):**
+
+- *NOT VALID migration `20260720010000` (applied to production 2026-07-21).* Its
+  non-concurrent `CREATE UNIQUE INDEX`/`CREATE INDEX` builds take a `SHARE` lock
+  that blocks writes (not reads) for the build — Prisma's per-file transaction
+  rules out `CONCURRENTLY`. Confirmed empirically harmless: the production copy
+  carries only hundreds of rows per table (13 orgs, 105 threads, 459 messages,
+  178 agent actions), so the builds were sub-millisecond. The write-blocking
+  window would grow with table size, which is why the migration comment flags
+  reviewing it against a production copy before any future large-table deploy. The
+  `ADD CONSTRAINT … NOT VALID` statements take only a brief metadata lock with no
+  table scan. This review attaches to deploying *that* migration.
+- *This VALIDATE step.* `ALTER TABLE … VALIDATE CONSTRAINT` takes a `SHARE UPDATE
+  EXCLUSIVE` lock — it does not block reads or writes, only concurrent DDL/VACUUM
+  on the same table — and performs a full-table scan whose cost scales with size
+  but is concurrency-safe against live traffic. Each of the 14 runs as its own
+  autocommitted statement, so the lock is held one constraint at a time.
+
+**Production rollout procedure (this is the pattern; the production run already
+happened on 2026-07-21).** For reference and for any future large-table redeploy:
+
+1. On a current production copy (restored Neon branch/snapshot), apply migration
+   `20260720010000`, time the index builds, and confirm the write-blocking
+   window is acceptable at real table sizes. Then run `npm run
+   validate:tenant-constraints` (inspect) and `--execute` against the copy;
+   confirm all 14 validate cleanly and the re-run is a no-op.
+2. Immediately before deploying, re-run `npm run audit:tenant-consistency --
+   --strict` against production; it must be clean.
+3. Deploy migration `20260720010000` to production separately (`npm run
+   db:migrate:deploy`), not bundled with other schema work. New writes are then
+   protected.
+4. Soak.
+5. In a later controlled step, run `npm run validate:tenant-constraints --
+   --execute` against production; each constraint validates independently and a
+   failure names the exact constraint while leaving the others validated. Confirm
+   inspect mode then reports all 14 `already_validated`.
+
+**Production verification (2026-07-21):** created a copy-on-write Neon branch off
+the `production` branch (Neon project `shopkeeper`, single `production` branch)
+and confirmed via two independent catalog signals — `_prisma_migrations` shows the
+migration applied 2026-07-21T00:34 UTC with no rollback, and all 14 tenant foreign
+keys report `convalidated = true` in `pg_constraint` — plus `npm run
+validate:tenant-constraints` (inspect) as a third read of the same state (all 14
+`already_validated`, audit clean, 0 mismatches over the real production data). The
+branch was deleted after verification. The 2026-07-21 deploy and validation were
+never recorded here, so this section read "not applied" until the copy proved
+otherwise.
+
+**Still required: none.** Note: validation is a per-environment post-deploy step,
+not something the migration carries — the committed migration installs the
+constraints `NOT VALID`, which already enforce new writes, but any environment
+rebuilt by replaying migrations onto an empty database starts unvalidated until
+`npm run validate:tenant-constraints -- --execute` runs (only historical-row
+checking and planner trust are deferred until then). That recurring step is why
+the tooling and procedure above are kept rather than deleted as now-redundant.
+History:
 
 - [x] Run the strict audit against production and preserve reviewed evidence.
 - [x] Review whether repair is required. The audit is clean; if a future
@@ -798,9 +877,13 @@ the prioritized relationships. It has not been applied to production.
   automatically.
 - [x] Add table-specific compound foreign keys as `NOT VALID` and prove new
   mismatch rejection in the isolated database.
-- [ ] Review index lock timing and validate every constraint against a current
-  production copy, then deploy and run `VALIDATE CONSTRAINT` separately. Keep
-  each constraint independently removable.
+- [x] Review index lock timing (documented above) and build the controlled,
+  independently-removable `VALIDATE CONSTRAINT` tooling
+  (`npm run validate:tenant-constraints`), verified against a real database.
+- [x] Migration `20260720010000` applied to production and all 14 constraints
+  validated; verified 2026-07-21 against a Neon production-copy branch (migration
+  record, `pg_constraint.convalidated`, and `validate:tenant-constraints` inspect
+  all agree; audit clean).
 
 - **Related findings:** AUD-016.
 - **Files likely to change:** read-only audit script; Prisma schema; one or more staged SQL migrations; central write helpers.
@@ -1289,17 +1372,26 @@ is now an atomic per-slot write (no read-modify-write), so concurrent
 plan-card/operator-turn writes to different pending slots can no longer clobber
 one another.
 
+**Progress (2026-07-21):** P5-03 is complete in production. A production-copy
+Neon branch confirmed migration `20260720010000` was applied 2026-07-21T00:34 UTC
+and all 14 tenant foreign keys are validated, with a clean consistency audit over
+real production data — the section previously read "not applied" because the
+2026-07-21 deploy/validation was never recorded here. Controlled
+validation/verification tooling (`npm run validate:tenant-constraints`,
+inspect-only by default) landed alongside and is exercised against a real DB.
+
 Next:
 
 1. Deploy the merged bounded-context slice after re-running the full real-model
    eval when Anthropic credit is restored; do not interpret credit errors as a
    baseline regression. Set `AGENT_CONTEXT_BUDGET_MODE=shadow` on the dashboard,
    public gateway, and worker before one long-thread `enforce` canary.
-2. Validate P5-03's ordinary unique-index lock timing and every `NOT VALID`
-   foreign key against a current production copy. Re-run the strict production
-   audit immediately before the migration, deploy it separately, and validate
-   constraints in a later controlled step. Do not combine it with other schema
-   work.
+2. ~~P5-03 production validation.~~ **Complete.** Migration `20260720010000` is
+   applied to production (2026-07-21T00:34 UTC) and all 14 tenant foreign keys
+   are validated with a clean audit — verified 2026-07-21 against a Neon
+   production-copy branch. Lock-timing review documented and the controlled
+   `VALIDATE CONSTRAINT` tooling (`npm run validate:tenant-constraints`) landed.
+   See the P5-03 section for evidence.
 3. Deploy the merged P1-04 lease renewal with the local Redis topology unchanged
    and observe a long turn. PostgreSQL claims remain the correctness boundary
    even while Redis renewal is healthy.
