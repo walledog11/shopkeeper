@@ -6,18 +6,18 @@ const {
   publishThreadEvent,
   pushEscalation,
   recordFailure,
-  threadUpdate,
+  threadUpdateMany,
 } = vi.hoisted(() => ({
   createMessage: vi.fn(),
   postInternal: vi.fn(),
   publishThreadEvent: vi.fn(),
   pushEscalation: vi.fn(),
   recordFailure: vi.fn(),
-  threadUpdate: vi.fn(),
+  threadUpdateMany: vi.fn(),
 }));
 
 vi.mock('@shopkeeper/db', () => ({
-  db: { thread: { update: threadUpdate } },
+  db: { thread: { updateMany: threadUpdateMany } },
   SenderType: { note: 'note' },
   createMessage,
 }));
@@ -46,7 +46,7 @@ describe('gatewayThreadSink persistence', () => {
     vi.clearAllMocks();
     createMessage.mockResolvedValue({});
     publishThreadEvent.mockResolvedValue(undefined);
-    threadUpdate.mockResolvedValue({});
+    threadUpdateMany.mockResolvedValue({ count: 1 });
     pushEscalation.mockResolvedValue(undefined);
   });
 
@@ -61,9 +61,9 @@ describe('gatewayThreadSink persistence', () => {
       senderType: 'note',
       contentText: '__shopkeeper_agent_note__Investigating',
     });
-    expect(threadUpdate.mock.calls).toEqual([
-      [{ where: { id: 'thread-1' }, data: { status: 'closed' } }],
-      [{ where: { id: 'thread-1' }, data: { tag: 'shipping' } }],
+    expect(threadUpdateMany.mock.calls).toEqual([
+      [{ where: { id: 'thread-1', organizationId: 'org-1' }, data: { status: 'closed' } }],
+      [{ where: { id: 'thread-1', organizationId: 'org-1' }, data: { tag: 'shipping' } }],
     ]);
     expect(createMessage).toHaveBeenNthCalledWith(2, {
       threadId: 'thread-1',
@@ -77,8 +77,8 @@ describe('gatewayThreadSink persistence', () => {
   it('persists escalation state before notifying the operator', async () => {
     const result = await gatewayThreadSink.escalateToHuman({ reason: '  Refund approval needed  ' }, ctx);
 
-    expect(threadUpdate).toHaveBeenCalledWith({
-      where: { id: 'thread-1' },
+    expect(threadUpdateMany).toHaveBeenCalledWith({
+      where: { id: 'thread-1', organizationId: 'org-1' },
       data: { status: 'open', tag: 'needs_human', escalatedAt: expect.any(Date) },
     });
     expect(createMessage).toHaveBeenCalledWith({
@@ -116,7 +116,7 @@ describe('gatewayThreadSink persistence', () => {
       statusCode: 503,
     }));
     expect(createMessage).not.toHaveBeenCalled();
-    expect(threadUpdate).not.toHaveBeenCalled();
+    expect(threadUpdateMany).not.toHaveBeenCalled();
     expect(publishThreadEvent).not.toHaveBeenCalled();
   });
 
@@ -141,5 +141,20 @@ describe('gatewayThreadSink persistence', () => {
       statusCode: null,
     }));
     expect(publishThreadEvent).toHaveBeenCalledWith('org-1', 'thread-1');
+  });
+
+  it('does not persist or notify when the thread belongs to another org', async () => {
+    threadUpdateMany.mockResolvedValue({ count: 0 });
+
+    const status = await gatewayThreadSink.updateThreadStatus({ status: 'closed' }, ctx);
+    const tag = await gatewayThreadSink.updateThreadTag({ tag: 'shipping' }, ctx);
+    const escalation = await gatewayThreadSink.escalateToHuman({ reason: 'Refund approval needed' }, ctx);
+
+    expect(status).toEqual({ status: 'error', message: 'Error: thread not found.' });
+    expect(tag).toEqual({ status: 'error', message: 'Error: thread not found.' });
+    expect(escalation).toEqual({ status: 'error', message: 'Error: thread not found.' });
+    expect(createMessage).not.toHaveBeenCalled();
+    expect(pushEscalation).not.toHaveBeenCalled();
+    expect(publishThreadEvent).not.toHaveBeenCalled();
   });
 });

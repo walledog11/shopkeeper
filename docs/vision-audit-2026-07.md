@@ -98,21 +98,25 @@ Ranked findings elsewhere:
    serializes on the row lock, so neither can clobber the other with a stale
    snapshot. Slot-isolation coverage added; the read-side JSON filtering in
    `getContext` is unchanged.
-3. **Gateway thread sink drops the org-scoping invariant.**
-   `agent-thread-sink.ts` mutates threads by bare `id`
-   (`updateThreadStatus`/`updateThreadTag`/`escalateToHuman`, lines 113-137)
-   where the dashboard sink scopes every write by `organizationId`
-   (`lib/agent/tools/thread.ts:318,388`). Not exploitable today — thread ids
-   are org-validated upstream — but "every DB query is scoped by
-   organizationId" is the stated invariant, and this is exactly the drift a
-   future refactor turns into a cross-tenant bug.
-4. **Dead customer-iMessage branch in the dashboard sink.** `sendReply`
-   allowlists `CHANNEL_TYPE.IMESSAGE` and has "Reply queued via iMessage"
-   success copy (`thread.ts:107,132-134`) plus a "No inbound iMessage
-   conversation to reply into" error mapping (line 62), but `dispatchMessage`
-   has no iMessage dispatcher anymore — the call falls through to "Unsupported
-   channel." Vestige of the pre-rewire customer iMessage channel the purge job
-   exists for. Dead path, not a live bug.
+3. **Gateway thread sink dropped the org-scoping invariant** — **Fixed
+   2026-07-21.** `agent-thread-sink.ts` now scopes every thread mutation
+   (`updateThreadStatus`/`updateThreadTag`/`escalateToHuman`) by
+   `organizationId` via `updateMany({ where: { id, organizationId } })` and
+   returns `Error: thread not found.` on a zero-row match — the same
+   compare-count idiom the dashboard sink uses
+   (`lib/agent/tools/thread.ts:323,337,396`). A cross-org write now no-ops
+   before any note, escalation push, or realtime publish, restoring the "every
+   DB query is scoped by organizationId" invariant on the gateway side.
+   Slot-isolation coverage added to `agent-thread-sink.unit.test.ts`.
+4. **Dead customer-iMessage branch in the dashboard sink** — **Removed
+   2026-07-21.** `sendReply` no longer allowlists `CHANNEL_TYPE.IMESSAGE`, the
+   unreachable "Reply queued via iMessage" success branch is gone, and the two
+   dead iMessage keys were dropped from the dispatch error map. Since
+   `dispatchMessage` has no iMessage dispatcher, an iMessage thread now returns
+   "channel dispatch not implemented" up front instead of falling through to
+   "Unsupported channel." The `purge-legacy-imessage` job and its script stay
+   until a prod dry-run counts zero (see §5); only the dead reply path was
+   removed here.
 
 **Unverified rather than broken:** ~~the operator-turn model interpretation~~
 **Verified 2026-07-20** via live Telegram/iMessage phone round-trips (approve,
@@ -193,18 +197,19 @@ filed under one channel's directory.
 
 ## 5. What should be removed
 
-- **The dead customer-iMessage branch** in `lib/agent/tools/thread.ts` (§2.4),
-  and — once a prod dry-run of `purge-legacy-imessage` counts zero — the purge
-  job and its script.
+- ~~**The dead customer-iMessage branch** in `lib/agent/tools/thread.ts`~~ —
+  removed 2026-07-21 (§2.4). Still pending: once a prod dry-run of
+  `purge-legacy-imessage` counts zero, remove the purge job and its script.
 - **The `sms` ChannelType enum value** — nothing ever creates a thread with
   it; it survives only in enum lists (`thread-constants.ts:7`,
   `channels.ts:84`, analytics event lists). Dropping it needs a migration, so
   it is cheap to leave — but it is noise in every channel switch.
-- **`channel-roles.md` TikTok rows are factually stale** — they say "no real
-  adapter, OAuth flow, webhook handler" and "no implementation found" while
-  `webhooks-tiktok-shop.ts`, `clients/tiktok-shop.ts`, the dispatch path, and
-  OAuth callback routes all exist (with active test work on them). Fix the doc
-  or it will mislead the next planning pass.
+- ~~**`channel-roles.md` TikTok rows are factually stale**~~ — **Corrected
+  2026-07-21.** Both TikTok rows now describe the gated, unconfigured TikTok
+  Shop integration (`webhooks-tiktok-shop.ts`, `clients/tiktok-shop.ts`,
+  `tiktok-shop-dispatch.ts`, OAuth `auth`/`callback` routes) accurately. The
+  disposition — spike-in-progress vs. predates-the-decision — is left open in
+  the doc as an owner call; see the §5/§6 open question below, still unresolved.
 - **Housekeeping:** 4 stale stashes (including a "Security Fixes" WIP from an
   old commit) and ~20 merged local branches. Risk is losing something real in
   the noise.

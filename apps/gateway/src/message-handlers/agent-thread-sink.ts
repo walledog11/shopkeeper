@@ -127,19 +127,21 @@ export const gatewayThreadSink: ThreadSink = {
   },
 
   async updateThreadStatus(input: UpdateThreadStatusInput, ctx: ThreadSinkContext): Promise<ToolResult> {
-    await db.thread.update({
-      where: { id: ctx.threadId },
+    const updated = await db.thread.updateMany({
+      where: { id: ctx.threadId, organizationId: ctx.orgId },
       data: { status: input.status },
     });
+    if (updated.count !== 1) return toolError('Error: thread not found.');
     await publishThreadEvent(ctx.orgId, ctx.threadId);
     return toolOk(`Thread status updated to "${input.status}".`);
   },
 
   async updateThreadTag(input: UpdateThreadTagInput, ctx: ThreadSinkContext): Promise<ToolResult> {
-    await db.thread.update({
-      where: { id: ctx.threadId },
+    const updated = await db.thread.updateMany({
+      where: { id: ctx.threadId, organizationId: ctx.orgId },
       data: { tag: input.tag },
     });
+    if (updated.count !== 1) return toolError('Error: thread not found.');
     await publishThreadEvent(ctx.orgId, ctx.threadId);
     return toolOk(`Thread tag updated to "${input.tag}".`);
   },
@@ -148,10 +150,11 @@ export const gatewayThreadSink: ThreadSink = {
     const reason = input.reason.trim() || 'No reason provided';
     // P5-04: keep the ticket `open` so it stays in the inbox and inbound
     // follow-ups correlate to it; escalation rides on the orthogonal flag.
-    await db.thread.update({
-      where: { id: ctx.threadId },
+    const updated = await db.thread.updateMany({
+      where: { id: ctx.threadId, organizationId: ctx.orgId },
       data: { status: THREAD_STATUS.OPEN, tag: 'needs_human', escalatedAt: new Date() },
     });
+    if (updated.count !== 1) return toolError('Error: thread not found.');
     await createMessage({
       threadId: ctx.threadId,
       senderType: SenderType.note,

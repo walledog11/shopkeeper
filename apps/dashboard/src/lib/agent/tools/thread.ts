@@ -63,9 +63,6 @@ function agentReplyDispatchError(
     "No TikTok Shop integration configured": "no TikTok Shop integration configured",
     "TikTok Shop messaging is not configured": "TikTok Shop messaging is not configured",
     "TikTok Shop token expired": "TikTok Shop token expired",
-    "No iMessage integration configured": "no iMessage integration configured",
-    "No inbound iMessage conversation to reply into":
-      "can't reply on iMessage — the customer must message first (no open iMessage conversation to reply into)",
     "No email integration configured": "no email integration configured",
     "Email not configured": "email not configured",
     "Email dispatch failed": "email dispatch failed",
@@ -108,8 +105,7 @@ export async function sendReply(
   if (
     thread.channelType !== CHANNEL_TYPE.IG_DM &&
     thread.channelType !== CHANNEL_TYPE.TIKTOK &&
-    thread.channelType !== CHANNEL_TYPE.EMAIL &&
-    thread.channelType !== CHANNEL_TYPE.IMESSAGE
+    thread.channelType !== CHANNEL_TYPE.EMAIL
   ) {
     return toolError(`Error: channel dispatch not implemented for ${thread.channelType}.`);
   }
@@ -131,11 +127,6 @@ export async function sendReply(
   }
   if (thread.channelType === CHANNEL_TYPE.TIKTOK) {
     return toolOk(`Reply sent to customer via TikTok Shop.`);
-  }
-  // iMessage has no delivery confirmation — the send is queued, not confirmed
-  // delivered. Say "queued" so the agent never implies delivery certainty.
-  if (thread.channelType === CHANNEL_TYPE.IMESSAGE) {
-    return toolOk(`Reply queued to customer via iMessage.`);
   }
   return toolOk(`Reply sent to customer via email.`);
 }
