@@ -73,7 +73,7 @@
   },
   "dependencies": {
     "@shopkeeper/db": "*",
-    "mailparser": "^3.7.4",
+    "mailparser": "^3.9.14",
     "postmark": "4.0.7"
   }
 }
