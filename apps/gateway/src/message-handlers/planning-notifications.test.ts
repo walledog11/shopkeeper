@@ -44,7 +44,7 @@ import {
   sendOperatorQuestionNotification,
 } from './planning-notifications.js';
 import { OperatorNotifyError } from '../operator-notify.js';
-import { updateContext } from '../operator-context.js';
+import { appendPendingPlan, getContext, updateContext } from '../operator-context.js';
 import type { AgentPlan } from '../types.js';
 
 // Send paths look up conversation stage by thread id, a uuid column in Postgres.
@@ -234,7 +234,7 @@ describe('formatOperatorPlanMessage', () => {
       ChannelType.email,
       'Needs a refund',
       plan.steps,
-      { replacesPending: { customerName: 'Sarah Chen' } },
+      { queueNotice: { kind: 'replaces', customerName: 'Sarah Chen' } },
     );
 
     expect(message).toContain("(This replaces the earlier plan for Sarah — that one's still on your dashboard.)");
@@ -247,7 +247,7 @@ describe('formatOperatorPlanMessage', () => {
       ChannelType.email,
       'Needs a refund',
       plan.steps,
-      { replacesPending: { customerName: null } },
+      { queueNotice: { kind: 'replaces', customerName: null } },
     );
 
     expect(message).toContain("(This replaces an earlier plan — it's still on your dashboard.)");
@@ -335,10 +335,11 @@ describe('sendOperatorPlanNotification', () => {
     );
 
     expect(notifyOperatorSpy).toHaveBeenCalledTimes(2);
-    expect(notifyOperatorSpy.mock.calls[0]?.[4]).toEqual({
+    expect(notifyOperatorSpy.mock.calls[0]?.[4]).toMatchObject({
       policy: 'critical',
       threadId: THREAD_ID,
       idempotencyKey: expect.any(String),
+      appendPlan: { maxDepth: 1 },
     });
 
     const [, , body] = notifyOperatorSpy.mock.calls[0] ?? [];
@@ -346,15 +347,15 @@ describe('sendOperatorPlanNotification', () => {
     expect(body).toContain('Good to send?');
     // Nothing is parked on this fresh context, so no overwrite disclosure.
     expect(body).not.toContain('This replaces');
-    expect(notifyOperatorSpy.mock.calls[0]?.[3]).toMatchObject({
-      pendingPlan: {
-        planId: '00000000-0000-4000-8000-000000000001',
-        sourceMessageId: '00000000-0000-4000-8000-000000000002',
-        planHash: 'a'.repeat(64),
-        instructionHash: 'b'.repeat(64),
-        customerName: 'Jane Doe',
-        actionLabel: 'email Jane',
-      },
+    // The plan card parks by queue-append, not a whole-slot overwrite.
+    expect(notifyOperatorSpy.mock.calls[0]?.[3]).toEqual({});
+    expect(notifyOperatorSpy.mock.calls[0]?.[4]?.appendPlan?.plan).toMatchObject({
+      planId: '00000000-0000-4000-8000-000000000001',
+      sourceMessageId: '00000000-0000-4000-8000-000000000002',
+      planHash: 'a'.repeat(64),
+      instructionHash: 'b'.repeat(64),
+      customerName: 'Jane Doe',
+      actionLabel: 'email Jane',
     });
   });
 
@@ -469,7 +470,7 @@ describe('sendOperatorQuestionNotification', () => {
     notifyOperatorSpy.mockResolvedValue({ channel: 'telegram', chatId: 'chat_1' });
 
     await sendOperatorQuestionNotification(
-      'org_1',
+      '00000000-0000-4000-8000-00000000c001',
       THREAD_ID,
       'Jane Doe',
       ChannelType.email,
@@ -482,7 +483,6 @@ describe('sendOperatorQuestionNotification', () => {
     const [, , body, contextPatch, options] = notifyOperatorSpy.mock.calls[0] ?? [];
     expect(body).toContain('Do we ship to Canada?');
     expect(contextPatch).toEqual({
-      pendingPlan: null,
       pendingQuestion: { threadId: THREAD_ID, question: 'Do we ship to Canada?' },
     });
     expect(options).toEqual({
@@ -514,7 +514,7 @@ describe('sendOperatorQuestionNotification', () => {
 
     await expect(
       sendOperatorQuestionNotification(
-        'org_1',
+        '00000000-0000-4000-8000-00000000c001',
         THREAD_ID,
         null,
         ChannelType.email,
@@ -523,6 +523,35 @@ describe('sendOperatorQuestionNotification', () => {
         'Handle shipping question',
       ),
     ).rejects.toThrow(OperatorNotifyError);
+  });
+
+  it('clears only its own thread\'s queued plan, leaving other threads\' plans', async () => {
+    const org = await createTestOrg();
+    try {
+      await appendPendingPlan(org.id, 'chat_1', {
+        threadId: THREAD_ID, instruction: 'draft on this thread', rawToolCalls: [], planId: 'plan-here',
+      }, 3);
+      await appendPendingPlan(org.id, 'chat_1', {
+        threadId: OTHER_THREAD_ID, instruction: 'other thread plan', rawToolCalls: [], planId: 'plan-other',
+      }, 3);
+      listOperatorBindingsSpy.mockResolvedValue([{ channel: 'telegram', chatId: 'chat_1' }]);
+      notifyOperatorSpy.mockResolvedValue({ channel: 'telegram', chatId: 'chat_1' });
+
+      await sendOperatorQuestionNotification(
+        org.id,
+        THREAD_ID,
+        null,
+        ChannelType.email,
+        null,
+        'Do we ship to Canada?',
+        'Handle shipping question',
+      );
+
+      // The question's own thread plan is dropped; the unrelated thread survives.
+      expect((await getContext(org.id, 'chat_1')).pendingPlans.map((plan) => plan.planId)).toEqual(['plan-other']);
+    } finally {
+      await cleanupTestData(org.id);
+    }
   });
 });
 

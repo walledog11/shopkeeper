@@ -12,6 +12,7 @@ import type { OperatorContext } from '../operator-context.js';
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 
 const EMPTY: OperatorContext = {
+  pendingPlans: [],
   pendingPlan: null,
   pendingDigest: null,
   pendingQuestion: null,
@@ -37,7 +38,7 @@ describe('renderOperatorLedger', () => {
 
     const ledger = await renderOperatorLedger(org.id, {
       ...EMPTY,
-      pendingPlan: {
+      pendingPlans: [{
         threadId: thread.id,
         instruction: 'Refund request for a late order',
         rawToolCalls: [
@@ -49,7 +50,7 @@ describe('renderOperatorLedger', () => {
           { id: 'tc2', name: 'create_refund', input: { order_id: '1', amount: 12 } },
           { id: 'tc3', name: 'send_reply', input: { text: 'Refunded $12 for the delay — sorry about that!' } },
         ],
-      },
+      }],
     });
 
     expect(ledger).toContain("A drafted plan is awaiting the merchant's decision:");

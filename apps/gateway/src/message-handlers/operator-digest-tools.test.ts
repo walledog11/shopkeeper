@@ -33,6 +33,7 @@ let tools!: Record<string, AgentToolDefinition>;
 const UNUSED = {} as never;
 
 const digestContext: OperatorContext = {
+  pendingPlans: [],
   pendingPlan: null,
   pendingQuestion: null,
   pendingDigest: null,

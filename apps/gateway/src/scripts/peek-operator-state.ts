@@ -39,11 +39,17 @@ async function main() {
     console.log('  (none — no operator has interacted yet)');
   }
   for (const c of contexts) {
-    const plan = c.pendingPlan as { threadId?: string; instruction?: string } | null;
+    const queued = Array.isArray(c.pendingPlans)
+      ? (c.pendingPlans as Array<{ threadId?: string; instruction?: string }>)
+      : [];
+    const legacy = c.pendingPlan as { threadId?: string; instruction?: string } | null;
+    const plans = queued.length > 0 ? queued : legacy ? [legacy] : [];
     const question = c.pendingQuestion as { question?: string } | null;
     const digest = c.pendingDigest as unknown;
     console.log(`  chatId ${c.chatId}  (updated ${c.updatedAt.toISOString()})`);
-    console.log(`    pendingPlan:     ${plan ? `thread ${plan.threadId} — "${plan.instruction ?? ''}"` : '—'}`);
+    console.log(`    pendingPlans:    ${plans.length > 0
+      ? plans.map((plan) => `thread ${plan.threadId} — "${plan.instruction ?? ''}"`).join('; ')
+      : '—'}`);
     console.log(`    pendingQuestion: ${question ? `"${question.question ?? JSON.stringify(question)}"` : '—'}`);
     console.log(`    pendingDigest:   ${digest ? 'set' : '—'}`);
   }

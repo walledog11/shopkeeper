@@ -1,7 +1,7 @@
 import { db, findOrgMemberBindToken, looksLikeOrgMemberBindToken } from '@shopkeeper/db';
 import logger from '../../logger.js';
 import { buildOrgDigest } from '../../maintenance/digest.js';
-import { getContext, updateContext } from '../../operator-context.js';
+import { getContext, loadLivePendingPlans, updateContext } from '../../operator-context.js';
 import { executeFreeFormInstruction } from '../telegram/agent-execution.js';
 import { isDigestCommand, isPendingPlanCommand, parseTelegramCommand } from '../telegram/command-parser.js';
 import { handleDigestCommand } from '../telegram/digest-commands.js';
@@ -104,7 +104,11 @@ export async function runImessageOperatorTurn(params: ImessageOperatorTurnParams
 
   const chatId = senderId;
   const operatorKey = `imessage:${senderId}`;
-  const context = await getContext(organizationId, chatId);
+  const context = await loadLivePendingPlans(
+    organizationId,
+    chatId,
+    await getContext(organizationId, chatId),
+  );
 
   // Freeform turns persist their own thread messages, so they keep the raw reply.
   // Command paths reply through a wrapper that mirrors the exchange (inbound once,

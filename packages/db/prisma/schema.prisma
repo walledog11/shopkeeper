@@ -428,7 +428,13 @@ model OperatorContext {
   id              String   @id @default(uuid()) @db.Uuid
   organizationId  String   @map("organization_id") @db.Uuid
   chatId          String   @map("chat_id") @db.VarChar(64)
+  // Legacy single-plan slot (pre-A6-step-2). Retained one release for rollback and
+  // read as a fallback while `pending_plans` is empty; new writes go to the array.
   pendingPlan     Json?    @map("pending_plan") @db.JsonB
+  // Pending-plan queue (A6-step-2): newest-last JSONB array, at most one entry per
+  // threadId, trimmed to OPERATOR_PLAN_QUEUE_MAX. Nullable so an absent row reads
+  // as an empty queue.
+  pendingPlans    Json?    @map("pending_plans") @db.JsonB
   pendingDigest   Json?    @map("pending_digest") @db.JsonB
   pendingQuestion Json?    @map("pending_question") @db.JsonB
   updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz

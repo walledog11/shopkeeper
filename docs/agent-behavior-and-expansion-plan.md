@@ -336,16 +336,40 @@ the test DB.
 
 ### A6 — Pending-plan overwrite honesty + queue (last, safety-coupled)
 
-**Status (2026-07-20): Step 1 (overwrite disclosure) complete; live verification
-completed 2026-07-20. Step 2
-(real queue) still deferred.** `sendOperatorPlanNotification` now reads each
-operator context before `notifyOperator` parks the new plan and, when the card
-is about to overwrite a *different* thread's still-pending plan, appends the
-disclosure line naming the earlier customer. The read is best-effort — a failure
-drops the line, never the critical push — and the context write is unchanged, so
-P1-03's exact-plan resolution predicates are preserved. Unit + DB-backed tests
-cover the different-thread, same-thread, and no-earlier-name cases. The A5
-"Waiting on you" digest follow-up (step 1's second half) rides with A5.
+**Status (2026-07-23): Step 1 complete (2026-07-20); Step 2 (real queue)
+implemented on branch `a6-step2-operator-plan-queue`, flag-gated OFF by default —
+live phone verification pending.** Step 1: `sendOperatorPlanNotification` reads
+each operator context before parking and, at cap 1, appends the disclosure line
+naming the earlier customer.
+
+Step 2 replaces the single `OperatorContext.pendingPlan` slot with a
+`pending_plans` JSONB queue (additive migration `20260723000000` + backfill;
+legacy column kept one release for rollback and dual-read):
+- **Storage** (`operator-context.ts`): `appendPendingPlan` parks via a row-lock
+  transaction that upserts by `threadId` (one pending plan per thread), trims to
+  the cap, and is idempotent under BullMQ retry; `resolvePendingPlanContexts`
+  removes one element atomically (cross-device by `planId`, acting-device by full
+  match for legacy), preserving P1-03 predicates. `selectPendingPlan`
+  (ordinal/`planId`/customer-name) and `mostRecentPendingPlan` back selection.
+- **Selection**: approve/reject/revise gained an optional `plan_ref`; several
+  pending + no/ambiguous ref → the model is told to ask which one, never guesses.
+  The ledger renders a numbered list in the same order the selector uses.
+- **Fast path**: literal yes/no/skip act on the most-recent plan; the reply names
+  what's still waiting. Revise re-parks by `threadId` upsert (no sibling wipe).
+- **Question path**: a question notification clears only its own thread's queued
+  plan (`removePendingPlanForThread`), not the whole queue — a whole-queue clear
+  would silently drop unrelated threads' plans (the exact A6 harm) once the cap
+  is raised. At cap 1 this is behaviourally identical to the old single-slot clear.
+- **Recovery**: `loadLivePendingPlans` prunes entries whose execution is terminal
+  (approved elsewhere) once per turn before the ledger/tools read the context.
+- **Rollout**: `OPERATOR_PLAN_QUEUE_MAX` (default **1** = today's single-slot
+  overwrite exactly). Raise to >1 only after P1 execution-ledger rollout
+  verification. No support-planner bytes changed, so no eval run required.
+- **Coverage**: gateway suite green (198 unit + 558 integration); new tests cover
+  append/cap-trim, concurrent-append serialization, retry idempotency, per-plan
+  resolve leaving siblings, selection, and terminal-execution pruning.
+
+The A5 "Waiting on you" digest follow-up now iterates the whole queue.
 
 **Problem:** `OperatorContext.pendingPlan` is single-slot; each new plan
 notification overwrites the previous one silently, so the older plan stops
@@ -364,12 +388,14 @@ ignored plan.
    and conditional all-device resolution, so the accompanying context update
    must retain those exact-plan predicates and cannot regress to an unconditional
    clear that erases a newer notification.
-2. **Real queue (later, deliberately):** `pendingPlans[]` with model-side
-   selection ("approve the refund one"). P1-01/P1-02 execution claims, P1-03
-   all-device resolution, and P2-01 stale-plan rejection are now
-   implementation-complete. Start the queue only after their rollout checks;
-   it remains a separate data-model phase with its own selection, claim,
-   resolution, and recovery design.
+2. **Real queue — implemented 2026-07-23 (branch `a6-step2-operator-plan-queue`),
+   flag-gated OFF:** `pendingPlans[]` with model-side selection ("approve the
+   refund one"). Built on P1-01/P1-02 execution claims, P1-03 all-device
+   resolution, and P2-01 stale-plan rejection (all implementation-complete). It is
+   a separate data-model phase with its own selection, claim, resolution, and
+   recovery design — see the A6 status block above for the full breakdown. The cap
+   defaults to 1 (single-slot parity); raise `OPERATOR_PLAN_QUEUE_MAX` above 1 only
+   after the P1 execution-ledger rollout checks.
 
 **Verify:** unit test the overwrite line. With P1-03, also test the race where
 plan B arrives while a model turn still holds a snapshot of plan A; approving,
@@ -381,9 +407,11 @@ own plan.
 A3 shipped first because it stops operator-thread self-escalation, and P8-01
 landed as a standalone quick win. **A1 is implementation-complete as of
 2026-07-16** (P5-04 unblocked it). **A4 and A6-step-1 are implementation-complete
-as of 2026-07-20** (live phone verification complete). Subject to the safety
-gates above, the remaining behavior order is complete for Track A operator
-expansion (A5 shipped 2026-07-20).
+as of 2026-07-20** (live phone verification complete). **A6-step-2 (the real
+pending-plan queue) is implemented as of 2026-07-23** on branch
+`a6-step2-operator-plan-queue`, flag-gated OFF (`OPERATOR_PLAN_QUEUE_MAX=1`) —
+live phone verification pending. Subject to the safety gates above, the behavior
+order is complete for Track A operator expansion (A5 shipped 2026-07-20).
 A5's deduplicated "Waiting on you" foundation now has P1 identity support; its
 authoritative "Handled" section still waits for P3. Each operator-only phase has its own live verification; none needs
 an eval run unless it changes the support-planner surface.

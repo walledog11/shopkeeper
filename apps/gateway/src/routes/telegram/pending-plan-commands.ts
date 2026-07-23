@@ -3,8 +3,10 @@ import logger from '../../logger.js';
 import {
   extractOrderNumber,
   expectedPlanIdentity,
+  mostRecentPendingPlan,
   normalizeApprovedToolCalls,
   type OperatorContext,
+  type PendingPlan,
   type ToolCall,
 } from '../../operator-context.js';
 import { runApprovedPendingPlan, clearPendingPlan } from '../../message-handlers/pending-plan-actions.js';
@@ -14,6 +16,20 @@ import { findTerminalSendTool } from '@shopkeeper/agent/planner-skip-reply';
 import type { PendingPlanCommand } from './command-parser.js';
 import type { OperatorMessageContext } from '../operator-message.js';
 
+// A literal yes/no/skip acts on the most-recent plan; any older queued plans stay
+// pending. Names one so the merchant knows something's still waiting for them.
+function stillWaitingSuffix(remaining: PendingPlan[]): string {
+  if (remaining.length === 0) return '';
+  if (remaining.length === 1) {
+    const plan = remaining[0]!;
+    const who = plan.customerName ? plan.customerName.split(' ')[0] : 'another customer';
+    return plan.actionLabel
+      ? `\n(${who}'s plan is still waiting — I'd ${plan.actionLabel}.)`
+      : `\n(${who}'s plan is still waiting.)`;
+  }
+  return `\n(${remaining.length} more plans are still waiting for you.)`;
+}
+
 export async function handlePendingPlanCommand(
   organizationId: string,
   clerkUserId: string,
@@ -22,14 +38,17 @@ export async function handlePendingPlanCommand(
   context: OperatorContext,
 ): Promise<boolean> {
   const { chatId, reply, presence } = message;
-  const pendingPlan = context.pendingPlan;
+  const pendingPlan = mostRecentPendingPlan(context.pendingPlans);
   if (!pendingPlan) return false;
+  // Everything but the most-recent plan stays parked; name it in the reply.
+  const remaining = context.pendingPlans.slice(0, -1);
 
   const { threadId, instruction, rawToolCalls } = pendingPlan;
   if (command.type === 'plan-dismiss') {
     await clearPendingPlan(organizationId, chatId, pendingPlan);
     // Older parked plans carry no actionLabel.
-    await reply(pendingPlan.actionLabel ? `Dismissed — I won't ${pendingPlan.actionLabel}.` : 'Plan dismissed.');
+    const dismissed = pendingPlan.actionLabel ? `Dismissed — I won't ${pendingPlan.actionLabel}.` : 'Plan dismissed.';
+    await reply(`${dismissed}${stillWaitingSuffix(remaining)}`);
     return true;
   }
 
@@ -80,8 +99,10 @@ export async function handlePendingPlanCommand(
     return true;
   }
 
-  await reply(isPlanExecutionFailureMessage(summary)
-    ? formatOperatorDispatchFailure(summary)
-    : summary);
+  if (isPlanExecutionFailureMessage(summary)) {
+    await reply(formatOperatorDispatchFailure(summary));
+    return true;
+  }
+  await reply(`${summary}${stillWaitingSuffix(remaining)}`);
   return true;
 }

@@ -50,23 +50,46 @@ export async function renderOperatorLedger(
   organizationId: string,
   context: OperatorContext,
 ): Promise<string> {
-  const { pendingPlan, pendingQuestion, pendingDigest } = context;
+  const { pendingPlans, pendingQuestion, pendingDigest } = context;
 
-  if (pendingPlan) {
-    const thread = await db.thread.findFirst({
-      where: { id: pendingPlan.threadId, organizationId },
-      select: { customer: { select: { name: true } } },
+  if (pendingPlans.length > 0) {
+    const threads = await db.thread.findMany({
+      where: { id: { in: pendingPlans.map((plan) => plan.threadId) }, organizationId },
+      select: { id: true, customer: { select: { name: true } } },
     });
-    const customerName = thread?.customer?.name ?? 'the customer';
-    const steps = planStepLines(pendingPlan.rawToolCalls);
-    const draft = firstDraftExcerpt(pendingPlan.rawToolCalls);
-    return [
-      "A drafted plan is awaiting the merchant's decision:",
-      `- Ticket: ${pendingPlan.threadId} (customer: ${customerName})`,
-      `- What it's about: ${pendingPlan.instruction}`,
-      ...(steps.length > 0 ? ['- Actions it will take:', ...steps] : []),
-      ...(draft ? ['- Draft message the merchant is approving:', `  "${draft}"`] : []),
-    ].join('\n');
+    const nameByThread = new Map(threads.map((thread) => [thread.id, thread.customer?.name ?? 'the customer']));
+
+    // One plan: keep the original single-plan wording. Several: a numbered list in
+    // the same order the control-tool `plan_ref` selector uses, so "the second one"
+    // / "Sarah's" resolves identically on both sides.
+    if (pendingPlans.length === 1) {
+      const plan = pendingPlans[0]!;
+      const steps = planStepLines(plan.rawToolCalls);
+      const draft = firstDraftExcerpt(plan.rawToolCalls);
+      return [
+        "A drafted plan is awaiting the merchant's decision:",
+        `- Ticket: ${plan.threadId} (customer: ${nameByThread.get(plan.threadId) ?? 'the customer'})`,
+        `- What it's about: ${plan.instruction}`,
+        ...(steps.length > 0 ? ['- Actions it will take:', ...steps] : []),
+        ...(draft ? ['- Draft message the merchant is approving:', `  "${draft}"`] : []),
+      ].join('\n');
+    }
+
+    const lines: string[] = [
+      `${pendingPlans.length} drafted plans are awaiting the merchant's decision. When they approve, decline, or revise, use plan_ref (the number below or the customer name) to say which one:`,
+    ];
+    pendingPlans.forEach((plan, index) => {
+      const steps = planStepLines(plan.rawToolCalls);
+      const draft = firstDraftExcerpt(plan.rawToolCalls);
+      lines.push(
+        '',
+        `${index + 1}. Ticket ${plan.threadId} (customer: ${nameByThread.get(plan.threadId) ?? 'the customer'})`,
+        `   What it's about: ${plan.instruction}`,
+        ...(steps.length > 0 ? ['   Actions it will take:', ...steps.map((step) => `  ${step}`)] : []),
+        ...(draft ? ['   Draft message the merchant is approving:', `     "${draft}"`] : []),
+      );
+    });
+    return lines.join('\n');
   }
 
   if (pendingQuestion) {

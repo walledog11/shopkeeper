@@ -14,16 +14,24 @@ import {
   notifyOperator,
   OperatorNotifyError,
   type OperatorBinding,
+  type OperatorNotifyOptions,
 } from '../operator-notify.js';
 import type { AgentPlan, PlanStep } from '../types.js';
 import type { PlanIdentity, PrecomputedPlanResult } from './planning-types.js';
 import { firstDraftExcerpt } from './operator-ledger.js';
-import { getContext, resolvePendingPlanContexts } from '../operator-context.js';
+import { getContext, resolvePendingPlanContexts, removePendingPlanForThread, type PendingPlan } from '../operator-context.js';
+import { getOperatorPlanQueueMax } from '../config/runtime-config.js';
 
 export interface OperatorNotificationExclude {
   channel: OperatorBinding['channel'];
   contextKey: string;
 }
+
+// Honesty disclosure about what parking a plan card does to the operator's queue.
+export type QueueNotice =
+  | { kind: 'replaces'; customerName: string | null }
+  | { kind: 'evicts'; customerName: string | null }
+  | { kind: 'stacked'; waiting: number };
 
 function operatorContextKey(member: OperatorBinding): string {
   return member.channel === 'telegram' ? member.chatId : member.senderId;
@@ -46,6 +54,7 @@ async function notifyCriticalToAllOperators(
     body: string;
     contextPatch: Parameters<typeof notifyOperator>[3];
     idempotencyKey: string;
+    appendPlan?: OperatorNotifyOptions['appendPlan'];
   }>,
   threadId: string,
   logLabel: string,
@@ -57,12 +66,13 @@ async function notifyCriticalToAllOperators(
   for (const member of bindings) {
     if (shouldExcludeMember(member, exclude)) continue;
 
-    const { body, contextPatch, idempotencyKey } = await notify(member);
+    const { body, contextPatch, idempotencyKey, appendPlan } = await notify(member);
     try {
       const result = await notifyOperator(organizationId, member, body, contextPatch, {
         policy: 'critical',
         threadId,
         idempotencyKey,
+        ...(appendPlan ? { appendPlan } : {}),
       });
       if (result) {
         delivered += 1;
@@ -205,9 +215,11 @@ export function formatOperatorPlanMessage(
     dashboardUrl?: string;
     rawToolCalls?: readonly { name: string; input?: unknown }[];
     stage?: ConversationStage;
-    // Set when this card overwrites a different thread's still-pending plan on
-    // the operator context it is going to; renders the honesty disclosure line.
-    replacesPending?: { customerName: string | null };
+    // Honesty disclosure about what parking this card does to the operator's
+    // queue: `replaces` (cap-1: it evicts a different thread's pending plan),
+    // `evicts` (cap>1: the queue is full so the oldest waiting plan is trimmed),
+    // or `stacked` (cap>1: it joins the queue, nothing dropped).
+    queueNotice?: QueueNotice;
   },
 ): string {
   const stage = options?.stage ?? FRESH_STAGE;
@@ -235,11 +247,22 @@ export function formatOperatorPlanMessage(
     lines.push('', `Full thread: ${options.dashboardUrl}/dashboard/tickets/${options.threadId}`);
   }
 
-  if (options?.replacesPending) {
-    const earlierName = customerFirstName(options.replacesPending.customerName);
-    lines.push('', earlierName
-      ? `(This replaces the earlier plan for ${earlierName} — that one's still on your dashboard.)`
-      : "(This replaces an earlier plan — it's still on your dashboard.)");
+  if (options?.queueNotice) {
+    const notice = options.queueNotice;
+    if (notice.kind === 'stacked') {
+      lines.push('', `(Added — you now have ${notice.waiting} plans waiting for you.)`);
+    } else {
+      const earlierName = customerFirstName(notice.customerName);
+      if (notice.kind === 'replaces') {
+        lines.push('', earlierName
+          ? `(This replaces the earlier plan for ${earlierName} — that one's still on your dashboard.)`
+          : "(This replaces an earlier plan — it's still on your dashboard.)");
+      } else {
+        lines.push('', earlierName
+          ? `(This pushes out the oldest waiting plan — ${earlierName}'s — to stay under your limit; it's still on your dashboard.)`
+          : "(This pushes out the oldest waiting plan to stay under your limit; it's still on your dashboard.)");
+      }
+    }
   }
 
   const replyOnly = actionableSteps.length > 0 && actionableSteps.every(isSendStep);
@@ -410,13 +433,16 @@ export async function sendOperatorQuestionNotification(
   const message = formatQuestionMessage(customerName, channelType, summary, question, stage);
   const idempotencyKey = questionNotificationIdempotencyKey(organizationId, threadId, question);
 
+  // This thread's plan (if any) is superseded by the question. Remove only its
+  // entry across devices — a whole-queue clear would drop other threads' plans.
+  await removePendingPlanForThread(organizationId, threadId);
+
   await notifyCriticalToAllOperators(
     organizationId,
     bindings,
     async () => ({
       body: message,
       contextPatch: {
-        pendingPlan: null,
         pendingQuestion: { threadId, question },
       },
       idempotencyKey,
@@ -453,26 +479,43 @@ export async function sendOperatorPlanNotification(
     instruction,
   );
   const actionLabel = parkedActionLabel(plan.steps, customerName);
+  const maxDepth = getOperatorPlanQueueMax();
+  const parkPlan: PendingPlan = {
+    threadId,
+    instruction,
+    rawToolCalls: plan.rawToolCalls,
+    ...(options?.identity ?? {}),
+    ...(customerName ? { customerName } : {}),
+    ...(actionLabel ? { actionLabel } : {}),
+  };
 
   await notifyCriticalToAllOperators(
     organizationId,
     bindings,
     async (member) => {
-      // Disclose when this card is about to overwrite a different thread's
-      // still-pending plan on this operator context. Read here, before
-      // notifyOperator persists the new plan, so it sees the older slot. This is
-      // best-effort honesty, not a concurrency fix: a read failure must not
-      // widen the critical push's failure surface, so drop the line silently.
-      let replacesPending: { customerName: string | null } | undefined;
+      // Disclose what parking this card does to the operator's queue. Read here,
+      // before notifyOperator appends the new plan, so it sees the prior queue.
+      // Best-effort honesty, not a concurrency fix: a read failure must not widen
+      // the critical push's failure surface, so drop the line silently.
+      let queueNotice: QueueNotice | undefined;
       try {
         const existing = await getContext(organizationId, operatorContextKey(member));
-        if (existing.pendingPlan && existing.pendingPlan.threadId !== threadId) {
-          replacesPending = { customerName: existing.pendingPlan.customerName ?? null };
+        // A thread holds one pending plan, so a same-thread park is a replace, not
+        // a stack — only other-thread plans matter for the disclosure.
+        const others = existing.pendingPlans.filter((parked) => parked.threadId !== threadId);
+        if (others.length > 0) {
+          if (maxDepth === 1) {
+            queueNotice = { kind: 'replaces', customerName: others[others.length - 1]!.customerName ?? null };
+          } else if (others.length + 1 > maxDepth) {
+            queueNotice = { kind: 'evicts', customerName: others[0]!.customerName ?? null };
+          } else {
+            queueNotice = { kind: 'stacked', waiting: others.length + 1 };
+          }
         }
       } catch (error) {
         logger.warn(
           { err: (error as Error).message, organizationId, threadId },
-          '[Worker] Overwrite-disclosure context read failed',
+          '[Worker] Queue-disclosure context read failed',
         );
       }
 
@@ -482,18 +525,10 @@ export async function sendOperatorPlanNotification(
           dashboardUrl,
           rawToolCalls: plan.rawToolCalls,
           stage,
-          replacesPending,
+          ...(queueNotice ? { queueNotice } : {}),
         }),
-        contextPatch: {
-          pendingPlan: {
-            threadId,
-            instruction,
-            rawToolCalls: plan.rawToolCalls,
-            ...(options?.identity ?? {}),
-            ...(customerName ? { customerName } : {}),
-            ...(actionLabel ? { actionLabel } : {}),
-          },
-        },
+        contextPatch: {},
+        appendPlan: { plan: parkPlan, maxDepth },
         idempotencyKey,
       };
     },

@@ -6,6 +6,7 @@ import {
   expectedPlanIdentity,
   updateContext,
   normalizeApprovedToolCalls,
+  selectPendingPlan,
   type OperatorContext,
 } from '../operator-context.js';
 import { runApprovedPendingPlan, clearPendingPlan } from './pending-plan-actions.js';
@@ -22,7 +23,11 @@ export interface OperatorSessionToolDeps {
   context: OperatorContext;
 }
 
-interface ReviseGuidanceInput {
+interface PlanRefInput {
+  plan_ref?: string;
+}
+
+interface ReviseGuidanceInput extends PlanRefInput {
   guidance: string;
 }
 
@@ -30,7 +35,13 @@ interface AnswerQuestionInput {
   answer: string;
 }
 
-const NO_PENDING_PLAN = 'Error: no plan is awaiting the merchant\'s approval.';
+// Picks which queued plan a control tool acts on when several are pending. With
+// one plan the ref is ignored; with several and no/ambiguous ref the model is
+// told to ask which one. Shared by approve/reject/revise.
+const planRefField = stringArg(
+  'Which pending plan to act on when several are waiting — its number from the pending-plans list, or the customer name. Omit if only one is pending.',
+  { required: false },
+);
 
 // Deterministic state-transition tools for the operator agent turn. The model
 // interprets the merchant's reply and calls one of these; the tool effects the
@@ -49,17 +60,18 @@ export function buildOperatorSessionTools(
   const approvePendingPlan = defineTool({
     name: 'approve_pending_plan',
     description:
-      'Approve and execute the plan the merchant is being shown. Call this when the merchant clearly agrees to send it as drafted (yes / send it / go ahead / looks good). It runs exactly the drafted actions — you cannot change them.',
-    fields: {},
+      'Approve and execute a plan the merchant is being shown. Call this when the merchant clearly agrees to send it as drafted (yes / send it / go ahead / looks good). It runs exactly the drafted actions — you cannot change them. When more than one plan is pending, set plan_ref to the one they mean.',
+    fields: { plan_ref: planRefField },
     category: 'action',
     group: 'thread',
     capabilities: [],
     label: 'Approved pending plan',
     planStepLabel: 'Approve pending plan',
     policy: { categoryPermission: false },
-    execute: async (_input, ctx) => {
-      const pendingPlan = context.pendingPlan;
-      if (!pendingPlan) return toolError(NO_PENDING_PLAN);
+    execute: async (input: PlanRefInput, ctx) => {
+      const selected = selectPendingPlan(context.pendingPlans, input.plan_ref);
+      if ('error' in selected) return toolError(selected.error);
+      const pendingPlan = selected.plan;
 
       // The operator turn holds the operator thread's lock; approval runs on the
       // ticket thread's lock — different thread ids, no deadlock. Guard the
@@ -97,17 +109,18 @@ export function buildOperatorSessionTools(
   const rejectPendingPlan = defineTool({
     name: 'reject_pending_plan',
     description:
-      'Dismiss the plan the merchant is being shown. Call this when the merchant clearly declines it (no / don\'t / cancel / skip it).',
-    fields: {},
+      'Dismiss a plan the merchant is being shown. Call this when the merchant clearly declines it (no / don\'t / cancel / skip it). When more than one plan is pending, set plan_ref to the one they mean.',
+    fields: { plan_ref: planRefField },
     category: 'action',
     group: 'thread',
     capabilities: [],
     label: 'Dismissed pending plan',
     planStepLabel: 'Dismiss pending plan',
     policy: { categoryPermission: false },
-    execute: async () => {
-      if (!context.pendingPlan) return toolError(NO_PENDING_PLAN);
-      await clearPendingPlan(organizationId, chatId, context.pendingPlan);
+    execute: async (input: PlanRefInput) => {
+      const selected = selectPendingPlan(context.pendingPlans, input.plan_ref);
+      if ('error' in selected) return toolError(selected.error);
+      await clearPendingPlan(organizationId, chatId, selected.plan);
       return toolOk('Plan dismissed.');
     },
   });
@@ -115,12 +128,13 @@ export function buildOperatorSessionTools(
   const revisePendingPlan = defineTool({
     name: 'revise_pending_plan',
     description:
-      'Re-draft the plan the merchant is being shown, folding in their guidance. Call this when the merchant supplies a fact, correction, or change for the drafted plan instead of approving or declining it.',
+      'Re-draft a plan the merchant is being shown, folding in their guidance. Call this when the merchant supplies a fact, correction, or change for the drafted plan instead of approving or declining it. When more than one plan is pending, set plan_ref to the one they mean.',
     fields: {
       guidance: stringArg(
         'The merchant\'s guidance to fold into the new draft — their fact, correction, or requested change, in their words.',
         { required: true },
       ),
+      plan_ref: planRefField,
     },
     category: 'action',
     group: 'thread',
@@ -129,8 +143,9 @@ export function buildOperatorSessionTools(
     planStepLabel: 'Revise pending plan',
     policy: { categoryPermission: false },
     execute: async (input: ReviseGuidanceInput) => {
-      const pendingPlan = context.pendingPlan;
-      if (!pendingPlan) return toolError(NO_PENDING_PLAN);
+      const selected = selectPendingPlan(context.pendingPlans, input.plan_ref);
+      if ('error' in selected) return toolError(selected.error);
+      const pendingPlan = selected.plan;
       const message = await applyOperatorAnswerReplan({
         organizationId,
         chatId,

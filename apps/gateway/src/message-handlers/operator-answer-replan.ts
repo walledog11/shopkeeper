@@ -19,7 +19,8 @@ import {
   sendOperatorPlanNotification,
   type OperatorNotificationExclude,
 } from './planning-notifications.js';
-import { updateContext, type ToolCall } from '../operator-context.js';
+import { appendPendingPlan, type PendingPlan, type ToolCall } from '../operator-context.js';
+import { getOperatorPlanQueueMax } from '../config/runtime-config.js';
 
 function answeringChannelFromSenderRef(senderRef: string): OperatorNotificationExclude | null {
   if (senderRef.startsWith('imessage:')) {
@@ -161,7 +162,7 @@ export async function applyOperatorAnswerReplan(
   // This device is excluded from the fan-out below, so it parks its own copy —
   // including the display fields the fan-out would otherwise have supplied.
   const actionLabel = parkedActionLabel(notifyPlan.steps, customerName);
-  const pendingPlan = {
+  const pendingPlan: PendingPlan = {
     threadId,
     instruction: baseInstruction,
     rawToolCalls: toPendingPlanToolCalls(notifyPlan.rawToolCalls),
@@ -175,7 +176,9 @@ export async function applyOperatorAnswerReplan(
     ...(actionLabel ? { actionLabel } : {}),
   };
 
-  await updateContext(organizationId, chatId, { pendingPlan });
+  // Upsert by threadId: the revised draft replaces this thread's own queued entry
+  // and leaves other threads' pending plans intact.
+  await appendPendingPlan(organizationId, chatId, pendingPlan, getOperatorPlanQueueMax());
 
   // The answering operator gets the draft summary as this call's return value (the
   // control tool relays it through the model); here we only fan the operator card

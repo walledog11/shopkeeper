@@ -247,32 +247,44 @@ export function formatHandledSection(rollup: HandledRollup): string | null {
 
 async function loadOperatorWaitingItems(organizationId: string): Promise<WaitingItem[]> {
   const contexts = await db.operatorContext.findMany({
-    where: { organizationId, pendingPlan: { not: Prisma.DbNull } },
-    select: { chatId: true, pendingPlan: true },
+    where: {
+      organizationId,
+      OR: [{ pendingPlans: { not: Prisma.DbNull } }, { pendingPlan: { not: Prisma.DbNull } }],
+    },
+    select: { chatId: true, pendingPlans: true, pendingPlan: true },
   });
 
   const items: WaitingItem[] = [];
   for (const context of contexts) {
-    const pendingPlan = parseStoredPendingPlan(context.pendingPlan);
-    if (!pendingPlan) continue;
-    if (await isPlanExecutionResolved(organizationId, pendingPlan.planId)) continue;
+    // Prefer the queue; fall back to the legacy single slot for un-backfilled rows.
+    const queued = Array.isArray(context.pendingPlans)
+      ? context.pendingPlans
+          .map(parseStoredPendingPlan)
+          .filter((plan): plan is NonNullable<typeof plan> => plan !== null)
+      : [];
+    const legacy = queued.length === 0 ? parseStoredPendingPlan(context.pendingPlan) : null;
+    const plans = queued.length > 0 ? queued : legacy ? [legacy] : [];
 
-    const thread = await db.thread.findFirst({
-      where: { id: pendingPlan.threadId, organizationId },
-      select: { customer: { select: { name: true } } },
-    });
-    const dedupeKey = pendingPlan.planId
-      ?? `${pendingPlan.threadId}:${pendingPlan.planHash ?? ''}:${pendingPlan.instructionHash ?? ''}`;
-    items.push({
-      dedupeKey,
-      threadId: pendingPlan.threadId,
-      line: waitingPhrase(
-        thread?.customer?.name ?? pendingPlan.customerName ?? null,
-        pendingPlan.rawToolCalls,
-        pendingPlan.instruction,
-        pendingPlan.actionLabel,
-      ),
-    });
+    for (const pendingPlan of plans) {
+      if (await isPlanExecutionResolved(organizationId, pendingPlan.planId)) continue;
+
+      const thread = await db.thread.findFirst({
+        where: { id: pendingPlan.threadId, organizationId },
+        select: { customer: { select: { name: true } } },
+      });
+      const dedupeKey = pendingPlan.planId
+        ?? `${pendingPlan.threadId}:${pendingPlan.planHash ?? ''}:${pendingPlan.instructionHash ?? ''}`;
+      items.push({
+        dedupeKey,
+        threadId: pendingPlan.threadId,
+        line: waitingPhrase(
+          thread?.customer?.name ?? pendingPlan.customerName ?? null,
+          pendingPlan.rawToolCalls,
+          pendingPlan.instruction,
+          pendingPlan.actionLabel,
+        ),
+      });
+    }
   }
   return items;
 }

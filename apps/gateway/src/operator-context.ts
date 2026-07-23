@@ -11,6 +11,7 @@ import { db, Prisma } from '@shopkeeper/db';
 import type { Prisma as PrismaTypes } from '@prisma/client';
 import type { RawToolCall } from '@shopkeeper/agent/types';
 import type { ExpectedPlanIdentity } from '@shopkeeper/agent/plan-execution';
+import { getPlanExecution } from '@shopkeeper/agent/execution-ledger';
 import { isRecord } from './lib/typing.js';
 
 export interface ToolCall {
@@ -47,6 +48,12 @@ export interface PendingQuestion {
 }
 
 export interface OperatorContext {
+  // The pending-plan queue (A6-step-2), newest last, at most one entry per thread.
+  // Bounded by OPERATOR_PLAN_QUEUE_MAX at park time.
+  pendingPlans: PendingPlan[];
+  // Convenience alias for the most-recent queued plan (the last element), or null.
+  // The keyword fast path and single-plan callers read this; queue-aware callers
+  // (ledger, control-tool selection, digest "waiting on you") read `pendingPlans`.
   pendingPlan: PendingPlan | null;
   pendingDigest: PendingDigest | null;
   pendingQuestion: PendingQuestion | null;
@@ -67,6 +74,7 @@ export function expectedPlanIdentity(
 }
 
 const EMPTY: OperatorContext = {
+  pendingPlans: [],
   pendingPlan: null,
   pendingDigest: null,
   pendingQuestion: null,
@@ -108,6 +116,19 @@ export function parseStoredPendingPlan(value: unknown): PendingPlan | null {
   return readPendingPlan(value);
 }
 
+function readPendingPlanArray(value: unknown): PendingPlan[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map(readPendingPlan)
+    .filter((plan): plan is PendingPlan => plan !== null);
+}
+
+// The most-recent queued plan is the last element (newest-last ordering). The
+// keyword fast path and any single-plan caller act on this one.
+export function mostRecentPendingPlan(plans: PendingPlan[]): PendingPlan | null {
+  return plans.length > 0 ? plans[plans.length - 1]! : null;
+}
+
 function readPendingDigest(value: unknown): PendingDigest | null {
   if (
     !isRecord(value) ||
@@ -147,8 +168,19 @@ export async function getContext(organizationId: string, chatId: string): Promis
     where: { organizationId_chatId: { organizationId, chatId } },
   });
   if (!row) return { ...EMPTY };
+
+  let pendingPlans = readPendingPlanArray(row.pendingPlans);
+  // Dual-read: a plan parked in the legacy single slot before this release (the
+  // migration backfills existing rows; an old instance could still park there
+  // during a rolling deploy) surfaces as a one-item queue.
+  if (pendingPlans.length === 0) {
+    const legacy = readPendingPlan(row.pendingPlan);
+    if (legacy) pendingPlans = [legacy];
+  }
+
   return {
-    pendingPlan: readPendingPlan(row.pendingPlan),
+    pendingPlans,
+    pendingPlan: mostRecentPendingPlan(pendingPlans),
     pendingDigest: readPendingDigest(row.pendingDigest),
     pendingQuestion: readPendingQuestion(row.pendingQuestion),
   };
@@ -160,18 +192,25 @@ export async function getContext(organizationId: string, chatId: string): Promis
 // other: each concurrent call emits an UPDATE that SETs only its own column, so
 // Postgres serializes them on the row lock and both land. Slots not named in
 // `updates` are left exactly as stored.
+//
+// The `pendingPlan` key is the legacy single-plan API: it *replaces* the whole
+// queue with `[plan]` (or clears it) and nulls the dead singular column. Parking
+// that must preserve other threads' queued plans goes through `appendPendingPlan`,
+// not here.
 export async function updateContext(
   organizationId: string,
   chatId: string,
-  updates: Partial<OperatorContext>,
+  updates: Partial<Omit<OperatorContext, 'pendingPlans'>>,
 ): Promise<void> {
   const data: {
-    pendingPlan?: PrismaTypes.InputJsonValue | typeof Prisma.DbNull;
+    pendingPlan?: typeof Prisma.DbNull;
+    pendingPlans?: PrismaTypes.InputJsonValue | typeof Prisma.DbNull;
     pendingDigest?: PrismaTypes.InputJsonValue | typeof Prisma.DbNull;
     pendingQuestion?: PrismaTypes.InputJsonValue | typeof Prisma.DbNull;
   } = {};
   if ('pendingPlan' in updates) {
-    data.pendingPlan = updates.pendingPlan ? toJsonObject(updates.pendingPlan) : Prisma.DbNull;
+    data.pendingPlans = updates.pendingPlan ? [toJsonObject(updates.pendingPlan)] : Prisma.DbNull;
+    data.pendingPlan = Prisma.DbNull;
   }
   if ('pendingDigest' in updates) {
     data.pendingDigest = updates.pendingDigest ? toJsonObject(updates.pendingDigest) : Prisma.DbNull;
@@ -187,34 +226,196 @@ export async function updateContext(
   });
 }
 
-// Resolve only the exact parked plan that was acted on. New plans are cleared
-// across every bound device by stable planId. Legacy JSON is cleared only on
-// the acting device and only if the full parked value still matches, preserving
-// a newer notification that may have arrived during execution.
+// Resolve only the exact parked plan that was acted on by removing that one
+// element from the queue (and clearing a matching legacy single slot), leaving
+// every sibling plan intact. New plans resolve across every bound device by
+// stable planId. Legacy identity-less plans resolve only on the acting device and
+// only if the full parked value still matches, preserving a newer notification
+// that may have arrived during execution. Each raw UPDATE is a single atomic
+// statement, so the removal races cleanly against a concurrent `appendPendingPlan`
+// on the same row (they serialize on the row lock).
 export async function resolvePendingPlanContexts(
   organizationId: string,
   chatId: string,
   expected: PendingPlan,
 ): Promise<void> {
   if (expected.planId) {
-    await db.operatorContext.updateMany({
-      where: {
-        organizationId,
-        pendingPlan: { path: ['planId'], equals: expected.planId },
-      },
-      data: { pendingPlan: Prisma.DbNull },
-    });
+    const planId = expected.planId;
+    const planIdMatch = JSON.stringify([{ planId }]);
+    await db.$executeRaw`
+      UPDATE operator_contexts
+      SET pending_plans = COALESCE((
+            SELECT jsonb_agg(element)
+            FROM jsonb_array_elements(COALESCE(pending_plans, '[]'::jsonb)) AS element
+            WHERE element->>'planId' IS DISTINCT FROM ${planId}
+          ), '[]'::jsonb),
+          pending_plan = CASE WHEN pending_plan->>'planId' = ${planId} THEN NULL ELSE pending_plan END
+      WHERE organization_id = ${organizationId}::uuid
+        AND (
+          pending_plans @> ${planIdMatch}::jsonb
+          OR pending_plan->>'planId' = ${planId}
+        )`;
     return;
   }
 
-  await db.operatorContext.updateMany({
-    where: {
-      organizationId,
-      chatId,
-      pendingPlan: { equals: toJsonObject(expected) },
-    },
-    data: { pendingPlan: Prisma.DbNull },
+  const expectedJson = JSON.stringify(toJsonObject(expected));
+  const expectedContains = JSON.stringify([toJsonObject(expected)]);
+  await db.$executeRaw`
+    UPDATE operator_contexts
+    SET pending_plans = COALESCE((
+          SELECT jsonb_agg(element)
+          FROM jsonb_array_elements(COALESCE(pending_plans, '[]'::jsonb)) AS element
+          WHERE element <> ${expectedJson}::jsonb
+        ), '[]'::jsonb),
+        pending_plan = CASE WHEN pending_plan = ${expectedJson}::jsonb THEN NULL ELSE pending_plan END
+    WHERE organization_id = ${organizationId}::uuid AND chat_id = ${chatId}
+      AND (
+        pending_plans @> ${expectedContains}::jsonb
+        OR pending_plan = ${expectedJson}::jsonb
+      )`;
+}
+
+// Remove any queued plan for one thread across every bound device (and clear a
+// matching legacy single slot), leaving other threads' plans intact. Used when a
+// thread transitions from "plan drafted" to "question pending" — its old plan is
+// superseded, but a whole-queue clear would silently drop unrelated threads'
+// plans (the A6 harm). Atomic single statement.
+export async function removePendingPlanForThread(
+  organizationId: string,
+  threadId: string,
+): Promise<void> {
+  const threadMatch = JSON.stringify([{ threadId }]);
+  await db.$executeRaw`
+    UPDATE operator_contexts
+    SET pending_plans = COALESCE((
+          SELECT jsonb_agg(element)
+          FROM jsonb_array_elements(COALESCE(pending_plans, '[]'::jsonb)) AS element
+          WHERE element->>'threadId' IS DISTINCT FROM ${threadId}
+        ), '[]'::jsonb),
+        pending_plan = CASE WHEN pending_plan->>'threadId' = ${threadId} THEN NULL ELSE pending_plan END
+    WHERE organization_id = ${organizationId}::uuid
+      AND (
+        pending_plans @> ${threadMatch}::jsonb
+        OR pending_plan->>'threadId' = ${threadId}
+      )`;
+}
+
+// Park a plan on the queue, upserting by threadId (a thread holds at most one
+// pending plan) and trimming to the newest `maxDepth`. The row-lock transaction
+// serializes concurrent parks so none is lost, and the threadId upsert makes the
+// append idempotent under BullMQ retry — re-appending the same plan yields one
+// entry. Nulls the dead legacy single slot on every write.
+export async function appendPendingPlan(
+  organizationId: string,
+  chatId: string,
+  plan: PendingPlan,
+  maxDepth: number,
+): Promise<void> {
+  const depth = Math.max(1, Math.floor(maxDepth));
+  await db.$transaction(async (tx) => {
+    // Ensure the row exists race-safely: a plain upsert SELECT-then-INSERTs, so two
+    // concurrent first parks both INSERT and one hits the unique constraint. ON
+    // CONFLICT DO NOTHING is atomic and blocks on the index until the other commits.
+    await tx.$executeRaw`
+      INSERT INTO operator_contexts (id, organization_id, chat_id, updated_at)
+      VALUES (gen_random_uuid(), ${organizationId}::uuid, ${chatId}, now())
+      ON CONFLICT (organization_id, chat_id) DO NOTHING`;
+    // Lock the row so concurrent parks serialize here; a plain findUnique under
+    // Read Committed would let two parks read the same array and drop one.
+    await tx.$queryRaw`
+      SELECT 1 FROM operator_contexts
+      WHERE organization_id = ${organizationId}::uuid AND chat_id = ${chatId}
+      FOR UPDATE`;
+    const row = await tx.operatorContext.findUnique({
+      where: { organizationId_chatId: { organizationId, chatId } },
+      select: { pendingPlans: true },
+    });
+    const current = readPendingPlanArray(row?.pendingPlans);
+    const next = [
+      ...current.filter((existing) => existing.threadId !== plan.threadId),
+      plan,
+    ].slice(-depth);
+    await tx.operatorContext.update({
+      where: { organizationId_chatId: { organizationId, chatId } },
+      data: { pendingPlans: next.map(toJsonObject), pendingPlan: Prisma.DbNull },
+    });
   });
+}
+
+export type SelectPendingPlanResult =
+  | { plan: PendingPlan }
+  | { error: string };
+
+function summarizePendingPlan(plan: PendingPlan): string {
+  const who = plan.customerName ? plan.customerName.split(' ')[0] : 'the customer';
+  const what = plan.actionLabel ?? plan.instruction;
+  return `${who} — ${what}`;
+}
+
+function pendingPlanOptions(plans: PendingPlan[]): string {
+  return plans.map((plan, index) => `${index + 1}. ${summarizePendingPlan(plan)}`).join('; ');
+}
+
+// Resolve which queued plan a control tool should act on from the model's
+// optional `plan_ref` (an ordinal from the ledger list, a planId, or a customer
+// name). With one plan pending the ref is ignored; with several and no/ambiguous
+// ref the model is told to ask which one rather than guess.
+export function selectPendingPlan(plans: PendingPlan[], ref?: string): SelectPendingPlanResult {
+  if (plans.length === 0) {
+    return { error: 'Error: no plan is awaiting the merchant\'s approval.' };
+  }
+  if (plans.length === 1) {
+    return { plan: plans[0]! };
+  }
+
+  const trimmed = ref?.trim();
+  const ambiguous = `Multiple plans are pending — ask which one before acting: ${pendingPlanOptions(plans)}.`;
+  if (!trimmed) {
+    return { error: ambiguous };
+  }
+
+  if (/^\d+$/.test(trimmed)) {
+    const index = Number.parseInt(trimmed, 10) - 1;
+    if (index >= 0 && index < plans.length) return { plan: plans[index]! };
+    return { error: ambiguous };
+  }
+
+  const byPlanId = plans.filter((plan) => plan.planId === trimmed);
+  if (byPlanId.length === 1) return { plan: byPlanId[0]! };
+
+  const needle = trimmed.toLowerCase();
+  const byName = plans.filter((plan) => plan.customerName?.toLowerCase().includes(needle));
+  if (byName.length === 1) return { plan: byName[0]! };
+
+  return { error: ambiguous };
+}
+
+// Drop queue entries whose plan already reached a terminal execution outcome
+// (committed/failed/unknown) elsewhere — e.g. approved on the dashboard — so the
+// operator turn never shows or acts on a dead plan. Each stale entry is removed
+// atomically; `pending`/`claimed` executions stay (still actionable / in flight).
+// Called once per turn before the ledger and control tools read the context.
+export async function loadLivePendingPlans(
+  organizationId: string,
+  chatId: string,
+  context: OperatorContext,
+): Promise<OperatorContext> {
+  if (context.pendingPlans.length === 0) return context;
+
+  const live: PendingPlan[] = [];
+  for (const plan of context.pendingPlans) {
+    if (plan.planId) {
+      const execution = await getPlanExecution(organizationId, plan.planId).catch(() => null);
+      if (execution && execution.status !== 'pending' && execution.status !== 'claimed') {
+        await resolvePendingPlanContexts(organizationId, chatId, plan).catch(() => undefined);
+        continue;
+      }
+    }
+    live.push(plan);
+  }
+
+  if (live.length === context.pendingPlans.length) return context;
+  return { ...context, pendingPlans: live, pendingPlan: mostRecentPendingPlan(live) };
 }
 
 // Normalize a stored pending-plan's tool calls into the RawToolCall shape the

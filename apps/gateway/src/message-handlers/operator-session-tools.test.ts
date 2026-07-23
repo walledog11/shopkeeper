@@ -36,7 +36,7 @@ vi.mock('./planning-notifications.js', async (importOriginal) => {
 });
 
 import { buildOperatorSessionTools } from './operator-session-tools.js';
-import { getContext, updateContext } from '../operator-context.js';
+import { appendPendingPlan, getContext, updateContext } from '../operator-context.js';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 const settings = resolveAgentSettings(null);
@@ -182,6 +182,51 @@ describe('approve_pending_plan', () => {
 
     expect(result.status).toBe('error');
     expect((await getContext(org.id, chatId)).pendingPlan).not.toBeNull();
+  });
+
+  it('executes the plan named by plan_ref and leaves the sibling queued', async () => {
+    const chatId = 'chat_select';
+    await appendPendingPlan(org.id, chatId, {
+      threadId: 'thread_sarah', instruction: 'refund Sarah', rawToolCalls: [],
+      planId: 'plan-sarah', customerName: 'Sarah Chen',
+    }, 3);
+    await appendPendingPlan(org.id, chatId, {
+      threadId: 'thread_jake', instruction: 'exchange Jake', rawToolCalls: [],
+      planId: 'plan-jake', customerName: 'Jake Long',
+    }, 3);
+    mockExecuteOperatorAgentTurn.mockResolvedValueOnce({
+      summary: 'Refunded Sarah.', threadId: 'thread_sarah', actionsPerformed: [],
+    });
+    const tools = await buildTools(chatId);
+
+    const result = await tools.approve_pending_plan.execute({ plan_ref: 'Sarah' }, baseCtx, settings, emptyDeps);
+
+    expect(result.status).toBe('ok');
+    // The selected plan — not the most-recent — is the one that executed.
+    expect(mockExecuteOperatorAgentTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ threadId: 'thread_sarah' }),
+    );
+    // Jake's plan is untouched.
+    expect((await getContext(org.id, chatId)).pendingPlans.map((plan) => plan.planId)).toEqual(['plan-jake']);
+  });
+
+  it('asks which plan when several are pending and no ref is given', async () => {
+    const chatId = 'chat_ambiguous';
+    await appendPendingPlan(org.id, chatId, {
+      threadId: 't1', instruction: 'a', rawToolCalls: [], planId: 'p1', customerName: 'Sarah',
+    }, 3);
+    await appendPendingPlan(org.id, chatId, {
+      threadId: 't2', instruction: 'b', rawToolCalls: [], planId: 'p2', customerName: 'Jake',
+    }, 3);
+    const tools = await buildTools(chatId);
+
+    const result = await tools.approve_pending_plan.execute({}, baseCtx, settings, emptyDeps);
+
+    expect(result.status).toBe('error');
+    expect(result.message).toContain('ask which one');
+    expect(mockExecuteOperatorAgentTurn).not.toHaveBeenCalled();
+    // Nothing resolved — both plans still pending.
+    expect((await getContext(org.id, chatId)).pendingPlans).toHaveLength(2);
   });
 });
 

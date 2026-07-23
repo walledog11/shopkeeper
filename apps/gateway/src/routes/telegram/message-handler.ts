@@ -1,7 +1,7 @@
 import { db } from '@shopkeeper/db';
 import logger from '../../logger.js';
 import { buildOrgDigest } from '../../maintenance/digest.js';
-import { getContext, updateContext } from '../../operator-context.js';
+import { getContext, loadLivePendingPlans, updateContext } from '../../operator-context.js';
 import { executeFreeFormInstruction } from './agent-execution.js';
 import {
   isDigestCommand,
@@ -56,7 +56,11 @@ export interface TelegramOperatorTurnParams {
 export async function runTelegramOperatorTurn(params: TelegramOperatorTurnParams): Promise<void> {
   const { organizationId, clerkUserId, chatId, body, messageId, reply, turnId } = params;
   const operatorKey = `telegram:${chatId}`;
-  const context = await getContext(organizationId, chatId);
+  const context = await loadLivePendingPlans(
+    organizationId,
+    chatId,
+    await getContext(organizationId, chatId),
+  );
 
   // Freeform turns persist their own thread messages, so they keep the raw reply.
   // Command paths reply through a wrapper that mirrors the exchange (inbound once,

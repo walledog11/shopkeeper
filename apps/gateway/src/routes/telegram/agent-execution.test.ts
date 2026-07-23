@@ -23,6 +23,7 @@ import { executeFreeFormInstruction } from './agent-execution.js';
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 
 const EMPTY_CONTEXT: OperatorContext = {
+  pendingPlans: [],
   pendingPlan: null,
   pendingDigest: null,
   pendingQuestion: null,

@@ -140,6 +140,15 @@ export function isPostResolutionFollowUpMonitorEnabled(): boolean {
   return parseBooleanEnv('POST_RESOLUTION_FOLLOWUP_MONITOR_ENABLED', false);
 }
 
+// Max pending plans held per operator context (A6-step-2 queue). Default 1
+// reproduces the pre-queue single-slot overwrite exactly; raise it (bounded 1–5)
+// to let plans stack and be individually approved. Enablement is gated on P1
+// execution-ledger rollout — see docs/agent-behavior-and-expansion-plan.md.
+export function getOperatorPlanQueueMax(): number {
+  const parsed = parsePositiveIntEnv('OPERATOR_PLAN_QUEUE_MAX', 1);
+  return Math.min(parsed, 5);
+}
+
 export function isGmailNativeInboundEnabled(): boolean {
   return parseBooleanEnv('GMAIL_NATIVE_INBOUND', false);
 }

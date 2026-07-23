@@ -20,7 +20,7 @@ import logger from './logger.js';
 import { isTelegramConfigured, sendMessage as telegramSend } from './clients/telegram-client.js';
 import { isImessageConfigured, sendImessageToSpace } from './clients/spectrum.js';
 import { stripMarkdown } from './message-handlers/strip-markdown.js';
-import { updateContext, type OperatorContext } from './operator-context.js';
+import { appendPendingPlan, updateContext, type OperatorContext, type PendingPlan } from './operator-context.js';
 import { mirrorOperatorMessage } from './operator-thread-mirror.js';
 import {
   markOperatorNotifyDelivered,
@@ -38,6 +38,12 @@ export interface OperatorNotifyOptions {
   threadId?: string | null;
   /** Stable per notification; skips re-send on BullMQ retry when already delivered to this channel. */
   idempotencyKey?: string | null;
+  /**
+   * Park this plan on the operator's queue (upsert by threadId, trimmed to
+   * `maxDepth`) in the same persist-before-send slot as `contextPatch`. Used for
+   * plan-card fan-out so a second plan stacks instead of overwriting the first.
+   */
+  appendPlan?: { plan: PendingPlan; maxDepth: number } | null;
 }
 
 export interface OperatorNotifyResult {
@@ -114,6 +120,14 @@ export async function notifyOperator(
   const label = member.channel === 'telegram' ? 'Telegram' : 'iMessage';
   const contextKey = member.channel === 'telegram' ? member.chatId : member.senderId;
   const persistContextPatch = async () => {
+    if (options.appendPlan) {
+      await appendPendingPlan(
+        organizationId,
+        contextKey,
+        options.appendPlan.plan,
+        options.appendPlan.maxDepth,
+      );
+    }
     if (Object.keys(contextPatch).length > 0) {
       await updateContext(organizationId, contextKey, contextPatch);
     }
