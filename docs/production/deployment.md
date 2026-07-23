@@ -97,6 +97,20 @@ After deploy, run the production smoke check:
 npm run verify:production
 ```
 
+Also confirm no migration lagged the code. Railway's build does **not** run
+migrations, and merging/deploying a feature does not imply its migration is
+applied — verify explicitly (prod env injected, credential-safe):
+
+```bash
+railway run npx prisma migrate status --schema=packages/db/prisma/schema.prisma
+```
+
+This gap is real: on 2026-07-22 the B3/B4 watch-table migrations
+(`add_return_watches`, `add_shipment_watches`) were found unapplied in
+production two days after their code shipped, so their tool-success recording
+had been failing-and-warning the whole time. They were applied together with
+B5's `add_follow_up_watches`.
+
 For the product analytics rollout, complete one controlled workspace journey after enabling capture
 and verify both the raw events and saved reports. Do not backfill events from before deployment.
 

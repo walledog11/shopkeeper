@@ -440,6 +440,12 @@ briefing extras** on Agent settings when Shopify is connected.
 
 ### B3 — Return-lifecycle completion
 
+**Prod migration note (2026-07-22):** `20260720100000_add_return_watches` had
+never been applied to production despite the code shipping 2026-07-20, so
+`recordReturnWatch` was failing-and-warning (caught) on every return/exchange in
+prod for two days. Applied 2026-07-22 alongside B4/B5's watch tables; the
+`RETURN_LIFECYCLE_MONITOR_ENABLED` flag remains **off**.
+
 **Status (2026-07-20): Complete.** Shipped behind `RETURN_LIFECYCLE_MONITOR_ENABLED`.
 Hourly sweep reads durable `ReturnWatch` rows (recorded when `create_return` /
 `create_exchange` succeed) plus a legacy backfill from recent audit rows, checks
@@ -463,6 +469,10 @@ canaries, and P6-02 queue monitoring. Enabling the flag does not bypass those
 gates — it only exposes the completed monitor + approval path.
 
 ### B4 — Delivery-exception watch
+
+**Prod migration note (2026-07-22):** `20260720110000_add_shipment_watches` had
+likewise never reached production (same two-day gap as B3). Applied 2026-07-22;
+the `DELIVERY_EXCEPTION_MONITOR_ENABLED` flag remains **off**.
 
 **Status (2026-07-20): Complete.** Shipped behind `DELIVERY_EXCEPTION_MONITOR_ENABLED`
 with per-org opt-out via `deliveryExceptionWatchEnabled` on Agent settings
@@ -492,6 +502,20 @@ Enabling the flag does not bypass P1 execution-claim rollout verification,
 P4 delivery durability before customer send, or P6-02 queue monitoring.
 
 ### B5 — Post-resolution follow-up
+
+**Deployed + enabled in prod (2026-07-22).** Commit `9a686639` on master; gateway
+auto-deployed on push (Railway `proud-dream`/production/`shopkeeper`, deploy
+`aa714b89`), then redeployed `733e7023` (SUCCESS) after setting
+`POST_RESOLUTION_FOLLOWUP_MONITOR_ENABLED=1` — so the hourly sweep is **live**.
+Three additive watch-table migrations (`add_return_watches`,
+`add_shipment_watches`, `add_follow_up_watches`) were applied together via
+`railway run npm run db:migrate:deploy`; `prisma migrate status` = up to date.
+Dashboard shipped via Vercel's GitHub integration on the same push. Blast radius
+is near-zero at enablement: `follow_up_watches` started empty, so the first
+possible nudge is ~5 days out (default window) and only for genuinely new
+refund/exchange resolutions. Roll back with
+`railway variable set POST_RESOLUTION_FOLLOWUP_MONITOR_ENABLED=0` (recording
+continues regardless).
 
 **Status (2026-07-22): Complete (nudge variant) behind `POST_RESOLUTION_FOLLOWUP_MONITOR_ENABLED`.**
 Shipped as an operator *nudge*, not a pre-drafted plan, after a design finding:
