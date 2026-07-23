@@ -493,6 +493,37 @@ P4 delivery durability before customer send, or P6-02 queue monitoring.
 
 ### B5 — Post-resolution follow-up
 
+**Status (2026-07-22): Complete (nudge variant) behind `POST_RESOLUTION_FOLLOWUP_MONITOR_ENABLED`.**
+Shipped as an operator *nudge*, not a pre-drafted plan, after a design finding:
+the B3/B4 template (`generateThreadPlan` → `sendOperatorPlanNotification`)
+hard-requires a *pending customer message* (`getPendingCustomerMessageId`), and a
+closed/resolved ticket's last message is the agent's reply — so a proactive draft
+would be rejected at approval by the P1-02/P1-03 claim path
+(`loadCurrentCachedHomePlan` re-derives `pendingCustomerMessageId` and keys the
+durable claim on a real `Message` id). Rather than modify trust-critical
+approval/claim machinery for the lowest-priority Track B item, B5 nudges the
+operator ("worth a quick check-in? Sarah's exchange wrapped up 5 days ago") and
+leans on the conversational operator loop (A1/A2) to draft the actual reply.
+Implemented:
+- `FollowUpWatch` table + migration `20260722120000_add_follow_up_watches`; one row
+  per (org, order), recorded at tool success via `maybeRecordFollowUpWatch` on
+  `create_refund`/`create_exchange` (injected `recordFollowUpWatch` dep — never a
+  static `@shopkeeper/db` import in `registry/*`).
+- Hourly `post-resolution-followup-monitor.ts`: open watches whose source ticket is
+  closed on a customer channel and older than the org window get a notify-only
+  operator push; org opt-out / no-operators retire the watch (`skipped`).
+- Settings: `postResolutionFollowUpEnabled` (default on when the flag is on) +
+  `postResolutionFollowUpDays` (default 5), with a **Post-resolution check-ins**
+  toggle on `/dashboard/agent/configure`.
+- **Deliberately excluded:** `create_shopify_order`-as-replacement (can't be
+  distinguished from an ordinary new order and carries no structured order id) — an
+  exchange already covers the "replacement" case.
+- Unit + DB-backed coverage: config, nudge copy/idempotency, and the sweep
+  (window/closed/channel gating, org opt-out, terminal idempotency, no-operators).
+
+The full "draft through the approval loop" version remains possible but needs a
+proactive-planner seam that changes P1-02/P1-03 identity semantics; deferred.
+
 N days after a closed ticket that involved a refund/exchange/replacement,
 draft a short check-in ("did the replacement fit?") through the approval loop.
 Cheap sweep + plan generation; pure brand-voice/trust play. Ship after B3/B4
@@ -505,10 +536,13 @@ delivery durability, P5-04 thread correlation, and P6-02 queue monitoring remain
 ### B6 — Order-ops autonomy (module #2, largest, last)
 
 The fraud-risk monitor is code-complete behind `ORDER_RISK_MONITOR_ENABLED`,
-flag-and-notify only. Per the to-do list: write order-ops eval fixtures first,
-then decide how flagged orders enter the approval loop ("hold fulfillment?")
-and whether/how the module earns autonomy tiers. This is the roadmap's module
-#2 and the template for every future module — don't rush it in as a sweep.
+flag-and-notify only. **Eval fixtures landed 2026-07-22**
+(`apps/gateway/src/order-ops.eval.test.ts`: real-key-gated flag/no-flag judgment
+fixtures + an always-on deterministic no-signal skip; `npm run test:evals` in the
+gateway). Remaining: decide how flagged orders enter the approval loop ("hold
+fulfillment?") and whether/how the module earns autonomy tiers. This is the
+roadmap's module #2 and the template for every future module — don't rush it in
+as a sweep.
 Keep it flag-and-notify-only until the completed P1 claim implementation is
 rollout-verified, the applicable P3 mutation outcome model/cap enforcement,
 P4-03 durable operator instructions, and P6-02 monitored
@@ -517,11 +551,11 @@ staged rollout; enabling the existing monitor does not authorize actions.
 
 ### Suggested Track B order
 
-B1 → B2 → B3 → B4 → B5 → B6. **B1, B2, B3, and B4 are complete as of 2026-07-20.**
-B5 wants one new maintenance worker + settings flag and does not start
-broad rollout until their cleanup dependencies above are satisfied. B6 is
-gated on eval fixtures, the safety program, and its own actionable-autonomy
-plan.
+B1 → B2 → B3 → B4 → B5 → B6. **B1–B4 complete as of 2026-07-20; B5 (nudge
+variant) complete 2026-07-22** behind `POST_RESOLUTION_FOLLOWUP_MONITOR_ENABLED`
+(off by default) — broad rollout still follows the shared cleanup gates. B6's eval
+fixtures landed 2026-07-22; it remains gated on the safety program and its own
+actionable-autonomy plan.
 
 ---
 

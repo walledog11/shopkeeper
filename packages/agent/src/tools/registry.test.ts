@@ -178,6 +178,7 @@ function makeDeps(): ToolExecutionDeps {
       resolution: { closedCount: 9, avgMinutes: 42 },
     }),
     recordReturnWatch: vi.fn().mockResolvedValue(undefined),
+    recordFollowUpWatch: vi.fn().mockResolvedValue(undefined),
   };
 }
 

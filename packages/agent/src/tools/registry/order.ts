@@ -1,4 +1,4 @@
-import { noShopify, cancelReasons, requireShopify, returnReasons, maybeRecordReturnWatch } from "./helpers.js";
+import { noShopify, cancelReasons, requireShopify, returnReasons, maybeRecordReturnWatch, maybeRecordFollowUpWatch } from "./helpers.js";
 import { arrayArg, booleanArg, defineTool, numberArg, stringArg } from "./schema.js";
 import type {
   AttachReturnLabelInput,
@@ -115,7 +115,9 @@ export const ORDER_TOOL_DEFINITIONS = [
       const shopify = requireShopify(ctx);
       if (!shopify) return noShopify;
 
-      return deps.createRefund(input, shopify);
+      const result = await deps.createRefund(input, shopify);
+      await maybeRecordFollowUpWatch(ctx, result, "refund", input.order_id, deps);
+      return result;
     },
   }),
   defineTool({
@@ -268,6 +270,7 @@ export const ORDER_TOOL_DEFINITIONS = [
       if (!shopify) return noShopify;
       const result = await deps.createExchange(input, shopify);
       await maybeRecordReturnWatch(ctx, result, deps);
+      await maybeRecordFollowUpWatch(ctx, result, "exchange", input.order_id, deps);
       return result;
     },
   }),

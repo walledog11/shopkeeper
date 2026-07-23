@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import type { RecordReturnWatchParams } from "@shopkeeper/db";
+import type { RecordFollowUpWatchParams, RecordReturnWatchParams } from "@shopkeeper/db";
 import type { BaseAgentContext } from "../../agent-context.js";
 import type { OrgSettings, ToolCategory } from "../../types.js";
 import type { ToolResult } from "../result.js";
@@ -248,6 +248,7 @@ export interface ToolExecutionDeps {
   // graph (which feeds client-imported TOOL_LABELS) never statically pulls
   // `@shopkeeper/db`.
   recordReturnWatch(params: RecordReturnWatchParams): Promise<void>;
+  recordFollowUpWatch(params: RecordFollowUpWatchParams): Promise<void>;
 }
 
 export interface ToolPolicyMetadata {

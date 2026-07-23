@@ -1,3 +1,4 @@
+import type { FollowUpWatchKind } from "@shopkeeper/db";
 import type { BaseAgentContext, SupportContext } from "../../agent-context.js";
 import type { ReturnWatchToolData } from "../../shopify/returns.js";
 import logger from "../../logger.js";
@@ -98,6 +99,43 @@ export async function maybeRecordReturnWatch(
         shopifyReturnId: watch.shopifyReturnId,
       },
       "[return-watch] failed to record return watch",
+    );
+  }
+}
+
+// B5: record a durable post-resolution follow-up watch when a refund/exchange
+// lands on a support thread. Only threaded tool calls count (an operator's
+// ad-hoc refund with no ticket has no customer to check back with); the sweep
+// re-gates on the thread being closed on a customer channel.
+export async function maybeRecordFollowUpWatch(
+  ctx: BaseAgentContext,
+  result: ToolResult,
+  kind: FollowUpWatchKind,
+  orderId: string,
+  deps: Pick<ToolExecutionDeps, "recordFollowUpWatch">,
+): Promise<void> {
+  if (result.status !== "ok") return;
+  const threadCtx = threadContextOf(ctx);
+  if (!threadCtx) return;
+  const normalizedOrderId = orderId.trim();
+  if (!normalizedOrderId) return;
+
+  try {
+    await deps.recordFollowUpWatch({
+      organizationId: threadCtx.orgId,
+      threadId: threadCtx.threadId,
+      orderId: normalizedOrderId,
+      kind,
+    });
+  } catch (error) {
+    logger.warn(
+      {
+        err: error instanceof Error ? error.message : String(error),
+        organizationId: threadCtx.orgId,
+        orderId: normalizedOrderId,
+        kind,
+      },
+      "[follow-up-watch] failed to record follow-up watch",
     );
   }
 }

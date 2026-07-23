@@ -93,6 +93,15 @@ export interface OrgSettings {
   // Proactive shipping monitor — watch USPS tracking for stalled shipments and
   // delivery exceptions. Requires DELIVERY_EXCEPTION_MONITOR_ENABLED on the gateway.
   deliveryExceptionWatchEnabled?: boolean;
+
+  // Post-resolution follow-up (B5) — nudge the operator to check in a few days
+  // after a refund/exchange ticket closes. Requires
+  // POST_RESOLUTION_FOLLOWUP_MONITOR_ENABLED on the gateway.
+  postResolutionFollowUpEnabled?: boolean;
+
+  // Days a resolved ticket must have been closed before the follow-up nudge
+  // fires. Omit for the default (5).
+  postResolutionFollowUpDays?: number | null;
 }
 
 export type OrgSettingsPatch = Omit<Partial<OrgSettings>, 'toolsEnabled'> & {

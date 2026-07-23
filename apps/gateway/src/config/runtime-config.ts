@@ -136,6 +136,10 @@ export function isDeliveryExceptionMonitorEnabled(): boolean {
   return parseBooleanEnv('DELIVERY_EXCEPTION_MONITOR_ENABLED', false);
 }
 
+export function isPostResolutionFollowUpMonitorEnabled(): boolean {
+  return parseBooleanEnv('POST_RESOLUTION_FOLLOWUP_MONITOR_ENABLED', false);
+}
+
 export function isGmailNativeInboundEnabled(): boolean {
   return parseBooleanEnv('GMAIL_NATIVE_INBOUND', false);
 }

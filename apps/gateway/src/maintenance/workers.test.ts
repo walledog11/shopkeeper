@@ -86,9 +86,9 @@ describe('createMaintenanceWorkers', () => {
 
     const resources = await createMaintenanceWorkers(workerConn, producerConn, workerOptions);
 
-    expect(maintenanceJobRegistrations).toHaveLength(13);
-    expect(resources.workers).toHaveLength(14);
-    expect(resources.queues).toHaveLength(21);
+    expect(maintenanceJobRegistrations).toHaveLength(14);
+    expect(resources.workers).toHaveLength(15);
+    expect(resources.queues).toHaveLength(22);
     expect(queueInstances.map((queue) => queue.name)).toEqual([
       QUEUE.TOKEN_HEALTH,
       QUEUE.EMAIL_TOKEN_HEALTH,
@@ -101,6 +101,7 @@ describe('createMaintenanceWorkers', () => {
       QUEUE.ORDER_REVIEW,
       QUEUE.RETURN_LIFECYCLE,
       QUEUE.DELIVERY_EXCEPTION,
+      QUEUE.POST_RESOLUTION_FOLLOWUP,
       QUEUE.OUTBOUND_SEND_SWEEP,
       QUEUE.OPERATOR_EVENT_SWEEP,
       QUEUE.UNKNOWN_OUTCOME_SWEEP,
@@ -123,6 +124,7 @@ describe('createMaintenanceWorkers', () => {
       QUEUE.ORDER_RISK,
       QUEUE.RETURN_LIFECYCLE,
       QUEUE.DELIVERY_EXCEPTION,
+      QUEUE.POST_RESOLUTION_FOLLOWUP,
       QUEUE.OUTBOUND_SEND_SWEEP,
       QUEUE.OPERATOR_EVENT_SWEEP,
       QUEUE.UNKNOWN_OUTCOME_SWEEP,
@@ -194,6 +196,11 @@ describe('createMaintenanceWorkers', () => {
       jobId: JOB.DELIVERY_EXCEPTION_ID,
       every: ONE_HOUR_MS,
     });
+    expect(readRepeatJob(QUEUE.POST_RESOLUTION_FOLLOWUP)).toEqual({
+      name: JOB.POST_RESOLUTION_FOLLOWUP_SCAN,
+      jobId: JOB.POST_RESOLUTION_FOLLOWUP_ID,
+      every: ONE_HOUR_MS,
+    });
     expect(readRepeatJob(QUEUE.OUTBOUND_SEND_SWEEP)).toEqual({
       name: JOB.OUTBOUND_SEND_SWEEP,
       jobId: JOB.OUTBOUND_SEND_SWEEP_ID,
@@ -226,7 +233,7 @@ describe('createMaintenanceWorkers', () => {
     );
 
     const repeatableAdds = queueInstances.flatMap((queue) => queue.add.mock.calls);
-    expect(repeatableAdds).toHaveLength(14);
+    expect(repeatableAdds).toHaveLength(15);
 
     for (const addCall of repeatableAdds) {
       expect(addCall[2]).toEqual(expect.objectContaining(PROCESSING_QUEUE_DEFAULTS));

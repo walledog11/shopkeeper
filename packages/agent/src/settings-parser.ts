@@ -66,6 +66,8 @@ const SETTINGS_KEYS = [
   "salesPulseEnabled",
   "lowStockThreshold",
   "deliveryExceptionWatchEnabled",
+  "postResolutionFollowUpEnabled",
+  "postResolutionFollowUpDays",
 ] as const satisfies readonly (keyof OrgSettings)[];
 
 const BOOLEAN_FIELDS = [
@@ -78,6 +80,7 @@ const BOOLEAN_FIELDS = [
   "firstBriefingPending",
   "salesPulseEnabled",
   "deliveryExceptionWatchEnabled",
+  "postResolutionFollowUpEnabled",
 ] as const satisfies readonly (keyof OrgSettings)[];
 
 const STRING_FIELDS = [
@@ -437,6 +440,7 @@ function parseSettingsObject(value: unknown, mode: ParseMode): OrgSettingsPatch 
   readNullablePercent(value, "maxDiscountPercent", output, context);
   readNullableNonNegativeNumber(value, "lowStockThreshold", output, context);
   readInteger(value, "maxIterations", 1, 100, output, context);
+  readInteger(value, "postResolutionFollowUpDays", 1, 90, output, context);
   readEnum(value, "autoExecuteMode", AUTO_EXECUTE_MODES, output, context);
   readEnum(value, "autonomyTier", AUTONOMY_TIERS, output, context);
   readEnum(value, "digestFrequency", DIGEST_FREQUENCIES, output, context);
