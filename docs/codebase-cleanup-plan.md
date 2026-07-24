@@ -665,6 +665,33 @@ work required.
 
 ### P4-05 — Apply route-specific body and attachment budgets
 
+**Status (2026-07-24): Implementation complete; one product decision left open.**
+Shipped in two parts. Body budgets: the application-wide 50 MB JSON/urlencoded
+parsers are gone, and each route mounts its own budget through
+`routes/body-parsers.ts` — 2 MB for signed provider webhooks, 1 MB for internal
+routes, 50 MB for Postmark inbound email only. Raw-body capture stays on the
+signed webhooks that verify over it and is dropped from the email parser, which
+authenticates with basic auth and no longer holds a second copy of an
+attachment-sized payload. Rejections answer 413 JSON and log path, content type,
+rejected length and limit. Attachment contract: count (10), combined decoded
+bytes (25 MB) and upload concurrency (3) are enforced at ingestion in
+`storage/attachment-budget.ts`, before anything is queued or uploaded, so
+over-budget base64 no longer reaches Redis; the existing per-attachment 10 MB
+cap now reads from the same config. All seven limits are env-overridable
+(`GATEWAY_BODY_LIMIT_*`, `GATEWAY_ATTACHMENT_*`) for an emergency increase.
+Coverage: per-route boundary sizes including a large invalid signature, the
+413 handler's log and pass-through branches, budget trimming at the email route,
+and the concurrency runner's ordering/ceiling.
+
+**Decisions taken, and the one still open.** An over-budget *attachment* is
+dropped while the customer's message is still delivered — a support ticket that
+arrives without its photo is recoverable, one that never arrives is not; only a
+request over the *body* limit fails outright, which is the DoS boundary. The
+supported content-type contract is unchanged: `storage/blob.ts` still uses an
+executable denylist rather than an allowlist. Converting it is the remaining
+product decision, and it is deliberately not guessed — a wrong allowlist
+silently drops legitimate customer attachments (`.heic`, `.docx`, `.zip`).
+
 - **Related findings:** AUD-009.
 - **Files likely to change:** `apps/gateway/src/index.ts`, `routes/webhooks.ts`, provider webhook routes, `routes/webhooks-email.ts`, blob upload helper, runtime config/env examples.
 - **Proposed implementation:** Mount small/default JSON parsers per router, provider-sized raw body limits for signed routes, and a separate Postmark parser. Add attachment count, decoded-byte, type and concurrency limits.

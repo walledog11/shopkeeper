@@ -1,10 +1,10 @@
 import { put } from '@vercel/blob';
 import { randomUUID } from 'crypto';
+import { getInboundAttachmentLimits } from '../config/runtime-config.js';
 import logger from '../logger.js';
+import { decodedByteLength } from './attachment-budget.js';
 
 export const BLOB_ATTACHMENT_PREFIX = 'blob:';
-
-const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
 const BLOCKED_EXTENSIONS = new Set([
   'exe', 'bat', 'cmd', 'scr', 'msi', 'com', 'vbs', 'js', 'jar',
@@ -29,14 +29,15 @@ export async function uploadInboundAttachment(
   base64Content: string,
 ): Promise<string | null> {
   const safeName = filename.replace(/[^\w.\-]+/g, '_').slice(0, 120) || 'attachment';
+  const maxAttachmentBytes = getInboundAttachmentLimits().maxBytesEach;
 
   if (isBlocked(safeName, contentType)) {
     logger.warn({ organizationId, filename: safeName, contentType }, '[Blob] Skipping blocked attachment');
     return null;
   }
 
-  const approxBytes = Math.floor(base64Content.length * 3 / 4);
-  if (approxBytes > MAX_ATTACHMENT_BYTES) {
+  const approxBytes = decodedByteLength(base64Content);
+  if (approxBytes > maxAttachmentBytes) {
     logger.warn(
       { organizationId, filename: safeName, approxBytes },
       '[Blob] Skipping oversized attachment',
@@ -49,7 +50,7 @@ export async function uploadInboundAttachment(
     logger.warn({ organizationId, filename: safeName }, '[Blob] Skipping empty attachment');
     return null;
   }
-  if (buffer.byteLength > MAX_ATTACHMENT_BYTES) {
+  if (buffer.byteLength > maxAttachmentBytes) {
     logger.warn(
       { organizationId, filename: safeName, byteLength: buffer.byteLength },
       '[Blob] Skipping oversized attachment',

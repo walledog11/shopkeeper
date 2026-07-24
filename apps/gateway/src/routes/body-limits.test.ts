@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { ChannelType } from '@shopkeeper/db';
 import { createTestIntegration } from '@shopkeeper/db/test-helpers';
@@ -27,6 +27,11 @@ const SIGNED_WEBHOOK_ROUTES = [
 describe('request body budgets', () => {
   beforeEach(() => {
     queueAddSpy.mockClear();
+  });
+
+  afterEach(() => {
+    delete process.env.GATEWAY_ATTACHMENT_MAX_COUNT;
+    delete process.env.GATEWAY_ATTACHMENT_MAX_BYTES;
   });
 
   it.each(SIGNED_WEBHOOK_ROUTES)('rejects an oversized body on %s', async (route) => {
@@ -82,6 +87,45 @@ describe('request body budgets', () => {
 
     expect(res.status).toBe(200);
     expect(queueAddSpy).toHaveBeenCalledOnce();
+  });
+
+  it('trims over-budget attachments before enqueue and still delivers the message', async () => {
+    process.env.GATEWAY_ATTACHMENT_MAX_COUNT = '2';
+    process.env.GATEWAY_ATTACHMENT_MAX_BYTES = '1000';
+
+    const org = webhookFixture.org;
+    await createTestIntegration(org.id, {
+      platform: ChannelType.email,
+      externalAccountId: `support-${org.id.slice(0, 8)}@example.com`,
+    });
+
+    const postmarkAttachment = (name: string, bytes: number) => ({
+      Name: name,
+      Content: Buffer.alloc(bytes, 1).toString('base64'),
+      ContentType: 'image/png',
+    });
+
+    const res = await request(app)
+      .post('/webhooks/email/inbound')
+      .send({
+        From: 'Alice <alice@example.com>',
+        OriginalRecipient: `${org.id}@inbound.shopkeeper.delivery`,
+        Subject: 'Lots of photos',
+        TextBody: 'See attached.',
+        Attachments: [
+          postmarkAttachment('keep-1.png', 100),
+          postmarkAttachment('too-big.png', 5000),
+          postmarkAttachment('keep-2.png', 100),
+          postmarkAttachment('over-count.png', 100),
+        ],
+      });
+
+    expect(res.status).toBe(200);
+    const [, jobData] = queueAddSpy.mock.calls[0];
+    expect(jobData.attachments.map((a: { name: string }) => a.name)).toEqual([
+      'keep-1.png',
+      'keep-2.png',
+    ]);
   });
 
   it('keeps a signature-verifying webhook working under its budget', async () => {

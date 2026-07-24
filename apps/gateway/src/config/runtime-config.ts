@@ -143,6 +143,25 @@ export function getGatewayBodyLimits(): GatewayBodyLimits {
   };
 }
 
+export interface InboundAttachmentLimits {
+  maxCount: number;
+  maxBytesEach: number;
+  maxTotalBytes: number;
+  uploadConcurrency: number;
+}
+
+// P4-05: the per-attachment size cap and executable denylist already lived in
+// the blob helper, but nothing bounded how many attachments one message could
+// carry, their combined size, or how many uploads fanned out at once.
+export function getInboundAttachmentLimits(): InboundAttachmentLimits {
+  return {
+    maxCount: parsePositiveIntEnv('GATEWAY_ATTACHMENT_MAX_COUNT', 10),
+    maxBytesEach: parsePositiveIntEnv('GATEWAY_ATTACHMENT_MAX_BYTES', 10_485_760),
+    maxTotalBytes: parsePositiveIntEnv('GATEWAY_ATTACHMENT_MAX_TOTAL_BYTES', 26_214_400),
+    uploadConcurrency: parsePositiveIntEnv('GATEWAY_ATTACHMENT_UPLOAD_CONCURRENCY', 3),
+  };
+}
+
 export function isOrderRiskMonitorEnabled(): boolean {
   return parseBooleanEnv('ORDER_RISK_MONITOR_ENABLED', false);
 }

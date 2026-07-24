@@ -17,6 +17,8 @@ import type {
   ShopifyOrderPayload,
 } from '../types.js';
 import { uploadInboundAttachment } from '../storage/blob.js';
+import { applyInboundAttachmentBudget, mapWithConcurrency } from '../storage/attachment-budget.js';
+import { getInboundAttachmentLimits } from '../config/runtime-config.js';
 import {
   classifyAndSummarizeNewEmail,
   emptyIntents,
@@ -317,10 +319,11 @@ export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Q
       resolvedName = emailLocal;
     }
 
-    const attachmentUrls = (await Promise.all(
-      (job.data.attachments ?? []).map((att) =>
-        uploadInboundAttachment(organizationId, att.name, att.contentType, att.contentBase64),
-      ),
+    const { accepted: budgetedAttachments } = applyInboundAttachmentBudget(job.data.attachments ?? []);
+    const attachmentUrls = (await mapWithConcurrency(
+      budgetedAttachments,
+      getInboundAttachmentLimits().uploadConcurrency,
+      (att) => uploadInboundAttachment(organizationId, att.name, att.contentType, att.contentBase64),
     )).filter((url): url is string => url !== null);
 
     await processInboundMessage(organizationId, senderEmail!, CHANNEL.EMAIL, stripQuotedReply(body!), aiSummaryQueue, {

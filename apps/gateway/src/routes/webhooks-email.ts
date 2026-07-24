@@ -6,6 +6,7 @@ import logger from '../logger.js';
 import { CHANNEL, JOB } from '../constants.js';
 import { safeEqual } from '../lib/crypto.js';
 import { rateLimit, sendTooManyRequests } from '../rate-limit.js';
+import { applyInboundAttachmentBudget } from '../storage/attachment-budget.js';
 import { emailInboundJsonParser, emailInboundUrlencodedParser } from './body-parsers.js';
 import { getMessageQueue, getRateLimitRedis } from './webhooks-shared.js';
 
@@ -79,13 +80,21 @@ export function registerEmailWebhookRoutes(router: Router): void {
 
       const rawAttachments: Array<{ Name?: string; Content?: string; ContentType?: string }> =
         Array.isArray(req.body.Attachments) ? req.body.Attachments : [];
-      const attachments = rawAttachments
-        .filter((a) => typeof a.Content === 'string' && a.Content.length > 0)
-        .map((a) => ({
-          name: typeof a.Name === 'string' && a.Name.length > 0 ? a.Name : 'attachment',
-          contentType: typeof a.ContentType === 'string' ? a.ContentType : 'application/octet-stream',
-          contentBase64: a.Content as string,
-        }));
+      const { accepted: attachments, rejected } = applyInboundAttachmentBudget(
+        rawAttachments
+          .filter((a) => typeof a.Content === 'string' && a.Content.length > 0)
+          .map((a) => ({
+            name: typeof a.Name === 'string' && a.Name.length > 0 ? a.Name : 'attachment',
+            contentType: typeof a.ContentType === 'string' ? a.ContentType : 'application/octet-stream',
+            contentBase64: a.Content as string,
+          })),
+      );
+      if (rejected.length > 0) {
+        logger.warn(
+          { rejected: rejected.map(({ name, reason, bytes }) => ({ name, reason, bytes })) },
+          '[Webhook] Dropped inbound attachments over budget — message still delivered',
+        );
+      }
 
       if (!rawFrom || !text) {
         return res.sendStatus(400);
