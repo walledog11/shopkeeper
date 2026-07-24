@@ -1,8 +1,23 @@
-# Agent Behavior & Expansion Plan
+# Agent Behavior & Expansion Plan (archived 2026-07-24)
+
+**Archived — historical record only.** Every phase in this plan (A1–A6, B1–B5)
+is implementation-complete and live-verified; B6 was moved out to the roadmap.
+Open work that outlived the plan lives in
+[agent-behavior-open-work.md](../agent-behavior-open-work.md); the standing
+invariants from this doc's "Ground rules" were promoted into `.claude/CLAUDE.md`
+("Agent-change invariants"); B6 order-ops autonomy moved to
+[core-extraction-and-module-expansion-plan.md](../core-extraction-and-module-expansion-plan.md).
+
+Two corrections applied at archive time, so this record isn't misleading:
+
+- A6-step-2 is **merged to master** (`f2778ec1`), not sitting on branch
+  `a6-step2-operator-plan-queue` as the body below says in two places.
+- A6-step-1 and A6-step-2 are both **live phone verified** (confirmed by the
+  operator 2026-07-24); the body says step 2's verification was pending.
 
 Source: 2026-07-11 agent-behavior audit (operator-channel conversational gaps +
 support-adjacent expansion candidates). This is the *product-behavior* companion
-to the systems-safety audit in [codebase-audit.md](codebase-audit.md) — the
+to the systems-safety audit in [codebase-audit.md](../codebase-audit.md) — the
 AUD-xxx concurrency/idempotency findings are tracked there, not here, except
 where a phase below explicitly interacts with one.
 
@@ -45,7 +60,7 @@ Two tracks:
 ## Systems-safety gates
 
 The tracks below describe product behavior, but they must not bypass the
-correctness work in [codebase-cleanup-plan.md](codebase-cleanup-plan.md). These
+correctness work in [codebase-cleanup-plan.md](../codebase-cleanup-plan.md). These
 are shipping dependencies, not suggestions:
 
 | Behavior work | Required cleanup work before broad rollout |

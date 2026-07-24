@@ -74,6 +74,14 @@ Read tool list and exact behavior from `packages/agent/src/tools/registry/` — 
 
 `Organization.settings` keys: `agentName`, `aiContext`, `brandVoice`, `autoPlanOnOpen`, `defaultInstruction`, `requireApprovalForActions`, `autonomyTier` (watch/guarded/trusted/broad/full), `autoExecuteMode` (off/shadow/live; legacy boolean `autoExecuteEnabled` is migrated), `toolsEnabled` (action/communication/internal/read), `maxRefundAmount`, `blockCancellations`, `blockCustomLineItems`, `maxIterations` (default 10), `replyLanguage`.
 
+### Agent-change invariants
+Standing rules for any change to agent behavior (promoted from the 2026-07 behavior plan):
+- **Don't touch the support-planner surface without the eval gate.** Operator-only changes ship as gateway `moduleTools` (`apps/gateway/src/message-handlers/operator-*-tools.ts`), **not** the shared registry, and prompt edits stay inside the `isOperatorMode` branch of `packages/agent/src/prompt.ts`. Operator prompt changes are verified by live phone round-trip, not evals.
+- **Justify every eval run** before making it; single-fixture probes for diagnosis, no tune-then-rerun loops.
+- **Ticket text is untrusted.** Any customer-derived prose reaching an operator turn is wrapped in `<customer_message>` tags (`wrapUntrusted` in `packages/agent/src/message-history.ts`) — tool results, `aiSummary`, digest/briefing blurbs, and pending-state ledger text, not just raw message bodies.
+- **Deterministic keyword fast paths stay** (`yes`/`no`/`OPEN n`/…). They're a latency win and muscle memory; make the model path capable and the fast-path copy warmer rather than removing them.
+- Proactive/mutative monitors are flag-gated and notify-only until their rollout gate lands; enabling a flag never bypasses a gate.
+
 ## Key API routes (`apps/dashboard/src/app/api/`)
 - `agent/route.ts` — execute run on a ticket
 - `agent/plan/route.ts` — generate plan, no side effects

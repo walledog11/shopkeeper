@@ -8,6 +8,10 @@ import {
   cleanupTestData,
 } from '@shopkeeper/db/test-helpers';
 import type { AgentToolDefinition } from '@shopkeeper/agent/tools';
+import type { BaseAgentContext } from '@shopkeeper/agent/context';
+import type { OrgSettings } from '@shopkeeper/agent/types';
+import { executeToolWithStatus } from '@shopkeeper/agent/executor';
+import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { buildOperatorInboxTools } from './operator-inbox-tools.js';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
@@ -222,5 +226,114 @@ describe('get_ticket', () => {
     await createTestMessage(thread.id, 'Actually, never mind!', 'customer');
     const stale = await getTicket(thread.id);
     expect(stale.message).not.toContain('A drafted plan is waiting');
+  });
+});
+
+// The suites above call execute() directly, which skips the two gates a real
+// turn goes through first: definition.parse (schema types, required fields,
+// unknown keys, enum values) and the static policy check (categoryPermission).
+// Both are load-bearing here — list_active_tickets casts its `status` arg
+// straight into the Prisma filter on the strength of the schema enum — so they
+// are exercised through the executor, the way run-execution.ts calls them.
+describe('executor path', () => {
+  function operatorCtx(): BaseAgentContext {
+    return {
+      orgId: org.id,
+      orgName: 'Test Org',
+      recentMessages: [],
+      shopify: null,
+      escalate: async () => {},
+    };
+  }
+
+  function runTool(name: string, args: unknown, settings?: OrgSettings) {
+    return executeToolWithStatus(name, args, operatorCtx(), settings, tools);
+  }
+
+  async function closedThread(name: string) {
+    const customer = await createTestCustomer(org.id, `${name}@example.com`, { name });
+    const thread = await createTestThread(org.id, customer.id, 'email');
+    await db.thread.update({ where: { id: thread.id }, data: { status: 'closed' } });
+    return thread;
+  }
+
+  it('runs a valid call end to end and returns the wrapped ticket data', async () => {
+    const customer = await createTestCustomer(org.id, 'exec@example.com', { name: 'Executor Eve' });
+    await createTestThread(org.id, customer.id, 'email', { tag: 'Refund' });
+
+    const listed = await runTool('list_active_tickets', { tag: 'Refund' });
+    expect(listed.status).toBe('success');
+    expect(listed.result).toContain('Executor Eve');
+    expect(listed.result).toContain('<customer_message>');
+  });
+
+  // canonicalInboxThreadWhere deliberately says nothing about status, so the
+  // schema enum is the only thing standing between a model-supplied `status`
+  // and a query that would list closed tickets.
+  it('rejects a status outside the active enum before it reaches the query', async () => {
+    await closedThread('Closed Cleo');
+
+    const result = await runTool('list_active_tickets', { status: 'closed' });
+    expect(result.status).toBe('error');
+    expect(result.result).toContain('must be one of');
+    expect(result.result).not.toContain('Closed Cleo');
+  });
+
+  it('accepts every status the enum does allow', async () => {
+    const customer = await createTestCustomer(org.id, 'pend@example.com', { name: 'Pending Pia' });
+    const thread = await createTestThread(org.id, customer.id, 'email');
+    await db.thread.update({ where: { id: thread.id }, data: { status: 'pending' } });
+
+    const result = await runTool('list_active_tickets', { status: 'pending' });
+    expect(result.status).toBe('success');
+    expect(result.result).toContain('Pending Pia');
+  });
+
+  it('rejects arguments the tool does not declare', async () => {
+    const theirs = await createTestCustomer(otherOrg.id, 'theirs@example.com', { name: 'Other Org Olive' });
+    await createTestThread(otherOrg.id, theirs.id, 'email');
+
+    // The org is closed over at build time; a model cannot reach another tenant
+    // by inventing an argument for it.
+    const result = await runTool('list_active_tickets', { organizationId: otherOrg.id });
+    expect(result.status).toBe('error');
+    expect(result.result).toContain('is not allowed');
+    expect(result.result).not.toContain('Other Org Olive');
+  });
+
+  it('rejects get_ticket without a ticket id, and with a non-string one', async () => {
+    const missing = await runTool('get_ticket', {});
+    expect(missing.status).toBe('error');
+    expect(missing.result).toContain('is required');
+
+    const wrongType = await runTool('get_ticket', { ticket_id: 42 });
+    expect(wrongType.status).toBe('error');
+    expect(wrongType.result).toContain('must be a string');
+  });
+
+  it('blocks both tools when the workspace disables read tools', async () => {
+    const customer = await createTestCustomer(org.id, 'gated@example.com', { name: 'Gated Gil' });
+    const thread = await createTestThread(org.id, customer.id, 'email');
+    const readDisabled = resolveAgentSettings({ toolsEnabled: { read: false } });
+
+    const listed = await runTool('list_active_tickets', {}, readDisabled);
+    expect(listed.status).toBe('policy_block');
+    expect(listed.result).not.toContain('Gated Gil');
+
+    const read = await runTool('get_ticket', { ticket_id: thread.id }, readDisabled);
+    expect(read.status).toBe('policy_block');
+    expect(read.result).not.toContain('Gated Gil');
+  });
+
+  // These are gateway module tools on purpose: keeping them out of the shared
+  // registry is what keeps the support-planner surface unchanged.
+  it('is not resolvable without the gateway module tools', async () => {
+    const ctx = operatorCtx();
+
+    for (const name of ['list_active_tickets', 'get_ticket']) {
+      const result = await executeToolWithStatus(name, {}, ctx, undefined, undefined);
+      expect(result.status).toBe('error');
+      expect(result.result).toContain(`unknown tool "${name}"`);
+    }
   });
 });

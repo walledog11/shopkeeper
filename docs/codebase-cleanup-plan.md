@@ -310,9 +310,11 @@ provider sandbox/canary verification remains open.
   development store, then canary each tool family independently.
 - [x] Revalidate production Shopify connectivity read-only. The connected store
   identifies itself as `palette-dev` but reports Shopify plan `basic`; its four
-  recent orders contain no `test: true` order. Treat it as potentially live and
-  require a confirmed test order or separate development store before mutating
-  canaries.
+  recent orders contain no `test: true` order. **Resolved 2026-07-20:** the
+  operator confirmed `palette-dev` is the development store with test orders used
+  to exercise the app, so store availability no longer blocks the mutating
+  canaries — running them (the first unchecked item above) is the remaining
+  rollout step.
 - [x] Define recovery ownership and durable follow-up reconciliation for
   outcomes that remain `unknown` after the immediate retry/read. **Done
   2026-07-21** — `unknown-outcome-sweep` (gateway maintenance) +
@@ -1438,9 +1440,9 @@ Next:
    reservations, and agent actions and drives them terminal without replay;
    `npm run audit:unknown-outcomes -- --hours=24 --strict` gates it and
    `npm run canary:shopify-mutations` (inspect-only by default) exercises the
-   probes. The only connected real store reports plan `basic`
-   and has no test orders, so mutating canaries remain blocked until a confirmed
-   Shopify test order/development store is available.
+   probes. The `palette-dev` development store with test orders (the app's test
+   environment, confirmed 2026-07-20) is available for these canaries; running
+   them one tool family at a time is the remaining rollout step.
 8. The additive goodwill-reservation migration is deployed. Canary
    refund/store-credit/gift-card cap enforcement and monitor
    stale or `unknown` reservations with

@@ -5,7 +5,7 @@ consolidated to the items that are still pending — completed work was removed
 (it lives in git history). It now also carries the product/vision gaps surfaced
 in the 2026-06-23 review.
 
-Last reviewed: 2026-07-20.
+Last reviewed: 2026-07-24.
 
 Recent completions (not yet removed from history below):
 - B4 delivery-exception watch (USPS monitor + approval loop) — 2026-07-20
@@ -137,9 +137,13 @@ near-term pointers only here.
   flag/notify behind `ORDER_RISK_MONITOR_ENABLED`, no autonomy. **Eval fixtures
   landed 2026-07-22** (`apps/gateway/src/order-ops.eval.test.ts`: real-key-gated
   flag/no-flag judgment fixtures + an always-on deterministic no-signal skip).
-  Remaining: production finding-persistence/webhook-idempotency validation and a
-  shadow-to-live policy before the module earns any actionable autonomy (its own
-  plan + staged rollout).
+  The single remaining-work list lives in
+  [core-extraction-and-module-expansion-plan.md](core-extraction-and-module-expansion-plan.md)
+  — consolidated there 2026-07-24; don't re-copy it here.
+
+- [ ] **Agent behavior (2026-07 audit): residual.** Tracks A and B are complete
+  and archived; the flag/rollout state table and the few remaining items are in
+  [agent-behavior-open-work.md](agent-behavior-open-work.md).
 
 ## Documentation
 
