@@ -21,6 +21,7 @@
     "test:unit": "node ../../scripts/with-test-env.mjs vitest run --config vitest.unit.config.ts",
     "test:integration": "node ../../scripts/with-test-env.mjs vitest run --config vitest.integration.config.ts",
     "test:watch": "node ../../scripts/with-test-env.mjs vitest --config vitest.integration.config.ts",
+    "test:evals": "node ../../scripts/with-test-env.mjs vitest run --config vitest.integration.config.ts src/order-ops.eval.test.ts",
     "test:coverage": "node ../../scripts/with-test-env.mjs vitest run --coverage --config vitest.config.ts",
     "rebuild-summaries": "tsx src/scripts/rebuild-bad-summaries.ts",
     "backfill-titles": "tsx src/scripts/backfill-thread-titles.ts",

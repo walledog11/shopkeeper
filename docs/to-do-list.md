@@ -133,10 +133,13 @@ what ships.
 Full detail in [core-extraction-and-module-expansion-plan.md](core-extraction-and-module-expansion-plan.md);
 near-term pointers only here.
 
-- [ ] **Order-ops (module #2): evals + autonomy.** Code-complete but
-  monitoring-only — flag/notify behind `ORDER_RISK_MONITOR_ENABLED`, no autonomy,
-  evals deferred (Track 3, Step 5). Write the order-ops eval fixtures when the
-  behavior is worth gating, then plan how/whether it earns autonomy.
+- [ ] **Order-ops (module #2): autonomy.** Code-complete but monitoring-only —
+  flag/notify behind `ORDER_RISK_MONITOR_ENABLED`, no autonomy. **Eval fixtures
+  landed 2026-07-22** (`apps/gateway/src/order-ops.eval.test.ts`: real-key-gated
+  flag/no-flag judgment fixtures + an always-on deterministic no-signal skip).
+  Remaining: production finding-persistence/webhook-idempotency validation and a
+  shadow-to-live policy before the module earns any actionable autonomy (its own
+  plan + staged rollout).
 
 ## Documentation
 

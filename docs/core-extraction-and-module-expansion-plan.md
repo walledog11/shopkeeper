@@ -21,7 +21,9 @@ Last reviewed: 2026-06-26.
 The order-operations module is code-complete and monitoring-only behind
 `ORDER_RISK_MONITOR_ENABLED`. Before increasing autonomy:
 
-1. Add dedicated order-risk eval fixtures.
+1. ~~Add dedicated order-risk eval fixtures.~~ **Done** —
+   `apps/gateway/src/order-ops.eval.test.ts` gates the flag/no-flag judgment
+   (real-key-gated; deterministic no-signal skip always on).
 2. Validate finding persistence and webhook idempotency in production.
 3. Confirm the hourly backstop and alerting behavior.
 4. Define a shadow-to-live policy before permitting system-of-record mutations.
