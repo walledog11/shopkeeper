@@ -9,6 +9,7 @@ import type {
   InstagramInboundJobData,
 } from '../types.js';
 import { resolveActiveInstagramIntegration } from '../lib/instagram-integration.js';
+import { webhookJsonParser } from './body-parsers.js';
 import { getMessageQueue, getRateLimitRedis } from './webhooks-shared.js';
 import {
   buildWebhookSignatureRequestMetadata,
@@ -129,7 +130,7 @@ export function registerMetaWebhookRoutes(router: Router): void {
     return res.sendStatus(400);
   });
 
-  router.post('/meta', async (req: Request, res: Response) => {
+  router.post('/meta', webhookJsonParser(), async (req: Request, res: Response) => {
     const { appSecret } = getInstagramWebhookConfig();
     const signature = req.headers['x-hub-signature-256'] as string | undefined;
 

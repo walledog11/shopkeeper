@@ -12,6 +12,7 @@ import { JOB } from '../constants.js';
 import logger from '../logger.js';
 import type { GmailSyncJobData } from '../types.js';
 import { isRecord } from '../lib/typing.js';
+import { webhookJsonParser } from './body-parsers.js';
 import { getGmailSyncQueue } from './webhooks-shared.js';
 
 const GOOGLE_TOKEN_ISSUERS = new Set(['accounts.google.com', 'https://accounts.google.com']);
@@ -119,7 +120,7 @@ function gmailSyncJobId(integrationId: string, historyId: string): string {
 }
 
 export function registerGmailWebhookRoutes(router: Router): void {
-  router.post('/gmail/push', async (req: Request, res: Response) => {
+  router.post('/gmail/push', webhookJsonParser(), async (req: Request, res: Response) => {
     if (!isGmailNativeInboundEnabled()) {
       logger.info('[Gmail Push] Native inbound is disabled; notification acknowledged');
       return res.sendStatus(204);

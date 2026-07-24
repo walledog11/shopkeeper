@@ -9,6 +9,7 @@ import type {
   OutboundEmailJobData,
   OutboundEmailSource,
 } from '../types.js';
+import { internalJsonParser } from './body-parsers.js';
 import { authorizeInternalRequest } from './internal-auth.js';
 
 const OUTBOUND_EMAIL_SOURCES: ReadonlySet<OutboundEmailSource> = new Set([
@@ -23,7 +24,7 @@ export function registerInternalQueueRoutes(router: Router): void {
   // message row, then enqueues the actual provider send here so it inherits the
   // gateway's BullMQ retries. Preserves the Redis split — no dashboard access to
   // the gateway's ioredis.
-  router.post('/queue/outbound-email', async (req: Request, res: Response) => {
+  router.post('/queue/outbound-email', internalJsonParser(), async (req: Request, res: Response) => {
     if (!authorizeInternalRequest(req, res, 'InternalQueue')) return;
 
     const body = req.body as Record<string, unknown>;
@@ -110,7 +111,7 @@ export function registerInternalQueueRoutes(router: Router): void {
     }
   });
 
-  router.post('/queue/remove-failed', async (req: Request, res: Response) => {
+  router.post('/queue/remove-failed', internalJsonParser(), async (req: Request, res: Response) => {
     if (!authorizeInternalRequest(req, res, 'InternalQueue')) return;
 
     const body = req.body as { queue?: unknown; jobId?: unknown };

@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 import { registerInternalQueueRoutes } from './internal-queue.js';
+import { bodyLimitErrorHandler } from './body-parsers.js';
 
 const removeFailedQueueJob = vi.fn();
 const clearQueueDiagnosticsCache = vi.fn();
@@ -40,12 +41,14 @@ vi.mock('../config/env.js', async (importOriginal) => {
   };
 });
 
+// No application-wide parser, matching production: the routes mount their own
+// P4-05 budget.
 function createApp() {
   const app = express();
-  app.use(express.json());
   const router = express.Router();
   registerInternalQueueRoutes(router);
   app.use('/internal', router);
+  app.use(bodyLimitErrorHandler);
   return app;
 }
 
@@ -259,5 +262,23 @@ describe('POST /internal/queue/outbound-email', () => {
       expect.any(Object),
       { jobId: 'msg_1' },
     );
+  });
+});
+
+describe('internal route body budget', () => {
+  beforeEach(() => {
+    queueAdd.mockReset();
+  });
+
+  it('rejects a payload over the internal limit before authorization', async () => {
+    const response = await request(createApp())
+      .post('/internal/queue/outbound-email')
+      .set('x-internal-secret', 'test-internal-secret')
+      .set('Content-Type', 'application/json')
+      .send(JSON.stringify({ padding: 'x'.repeat(1_200_000) }));
+
+    expect(response.status).toBe(413);
+    expect(response.body).toEqual({ error: 'Payload too large' });
+    expect(queueAdd).not.toHaveBeenCalled();
   });
 });

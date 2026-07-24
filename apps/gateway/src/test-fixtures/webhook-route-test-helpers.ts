@@ -1,6 +1,7 @@
 import { createHmac } from 'crypto';
 import express, { type Router } from 'express';
 import type { Mock } from 'vitest';
+import { bodyLimitErrorHandler } from '../routes/body-parsers.js';
 
 export interface MockLogger {
   debug: Mock;
@@ -9,33 +10,19 @@ export interface MockLogger {
   warn: Mock;
 }
 
-function installJsonParserWithRawBody(app: express.Express) {
-  app.use(
-    express.json({
-      verify: (req, _res, buf) => {
-        (req as express.Request & { rawBody?: Buffer }).rawBody = buf;
-      },
-    }),
-  );
-}
-
-export function createWebhookRouterApp(router: Router, options: { urlencoded?: boolean } = {}) {
+// Mirrors the production shape: no application-wide parser, so each route runs
+// under the P4-05 budget it mounts for itself.
+export function createWebhookRouterApp(router: Router) {
   const app = express();
-  installJsonParserWithRawBody(app);
-  if (options.urlencoded) {
-    app.use(express.urlencoded({ extended: false }));
-  }
   app.use('/webhooks', router);
+  app.use(bodyLimitErrorHandler);
   return app;
 }
 
-export function createRegisteredWebhookRouterApp(
-  registerRoutes: (router: Router) => void,
-  options: { urlencoded?: boolean } = {},
-) {
+export function createRegisteredWebhookRouterApp(registerRoutes: (router: Router) => void) {
   const router = express.Router();
   registerRoutes(router);
-  return createWebhookRouterApp(router, options);
+  return createWebhookRouterApp(router);
 }
 
 export function hmacSha256(secret: string, body: string) {

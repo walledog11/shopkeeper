@@ -1,6 +1,7 @@
 import express from 'express';
 import { db } from '@shopkeeper/db';
 import webhookRoutes from './routes/webhooks.js';
+import { bodyLimitErrorHandler } from './routes/body-parsers.js';
 import internalOperatorRoutes from './routes/internal-operator.js';
 import internalQueueRoutes from './routes/internal-queue.js';
 import { getGatewayDashboardUrl, validateGatewayEnv } from './config/env.js';
@@ -19,16 +20,9 @@ import {
 export function createGatewayApp() {
   const app = express();
 
-  // Middleware to parse incoming JSON payloads and capture raw body for signature verification.
-  // Postmark inbound emails can be up to 35MB with attachments — keep headroom above that.
-  app.use(express.json({
-    limit: '50mb',
-    verify: (req, _res, buf) => {
-      req.rawBody = buf;
-    },
-  }));
-
-  app.use(express.urlencoded({ extended: false, limit: '50mb' }));
+  // P4-05: no application-wide body parser. Each route mounts its own budget
+  // (see routes/body-parsers.ts) so only Postmark inbound email can allocate an
+  // attachment-sized payload.
 
   // A simple health-check route to prove the server is alive
   app.get('/', (_req, res) => {
@@ -70,6 +64,8 @@ export async function startGatewayServer() {
       res.redirect(dashboardInternalUrl + req.url);
     });
   }
+
+  app.use(bodyLimitErrorHandler);
 
   const dashboardUrl = getGatewayDashboardUrl();
   logger.info({ dashboardUrl }, '[Gateway] Dashboard base URL configured');

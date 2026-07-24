@@ -1,10 +1,11 @@
 import express, { type Request, type Response, type Router } from 'express';
 import logger from '../logger.js';
 import { pushOperatorEscalation } from '../operator-escalation.js';
+import { internalJsonParser } from './body-parsers.js';
 import { authorizeInternalRequest } from './internal-auth.js';
 
 export function registerInternalOperatorRoutes(router: Router): void {
-  router.post('/operator/escalate', async (req: Request, res: Response) => {
+  router.post('/operator/escalate', internalJsonParser(), async (req: Request, res: Response) => {
     if (!authorizeInternalRequest(req, res, 'InternalOperator')) return;
 
     const body = req.body as { organizationId?: unknown; threadId?: unknown; reason?: unknown };

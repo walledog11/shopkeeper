@@ -8,6 +8,7 @@ import {
 import logger from '../logger.js';
 import { CHANNEL, JOB } from '../constants.js';
 import { rateLimit, sendTooManyRequests } from '../rate-limit.js';
+import { webhookJsonParser } from './body-parsers.js';
 import { getMessageQueue, getRateLimitRedis, resolveOrganizationId } from './webhooks-shared.js';
 import {
   buildWebhookSignatureRequestMetadata,
@@ -15,7 +16,7 @@ import {
 } from './webhooks-signature-alerts.js';
 
 export function registerTikTokShopWebhookRoutes(router: Router): void {
-  router.post('/tiktok-shop', async (req: Request, res: Response) => {
+  router.post('/tiktok-shop', webhookJsonParser(), async (req: Request, res: Response) => {
     const config = getTikTokShopWebhookConfig();
     if (!config.enabled) {
       return res.sendStatus(404);

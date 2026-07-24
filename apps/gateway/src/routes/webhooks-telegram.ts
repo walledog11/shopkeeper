@@ -1,5 +1,6 @@
 import type { Request, Response, Router } from 'express';
 import logger from '../logger.js';
+import { webhookJsonParser } from './body-parsers.js';
 import { ingestAndEnqueueOperatorEvent } from '../operator-event-ingest.js';
 import { parseTelegramCommand } from './telegram/command-parser.js';
 import {
@@ -62,7 +63,7 @@ async function ingestTelegramOperatorEvent(
 }
 
 export function registerTelegramWebhookRoutes(router: Router): void {
-  router.post('/telegram', async (req: Request, res: Response) => {
+  router.post('/telegram', webhookJsonParser(), async (req: Request, res: Response) => {
     const webhook = await validateTelegramWebhook(req, res);
     if (!webhook) return;
 

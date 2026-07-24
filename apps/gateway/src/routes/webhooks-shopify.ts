@@ -5,6 +5,7 @@ import { isOrderRiskMonitorEnabled } from '../config/runtime-config.js';
 import logger from '../logger.js';
 import { CHANNEL, JOB } from '../constants.js';
 import { rateLimit, sendTooManyRequests } from '../rate-limit.js';
+import { webhookJsonParser } from './body-parsers.js';
 import { getMessageQueue, getOrderReviewQueue, getRateLimitRedis, resolveOrganizationId } from './webhooks-shared.js';
 import {
   buildWebhookSignatureRequestMetadata,
@@ -14,7 +15,7 @@ import {
 const SHOPIFY_SUPPORTED_TOPICS = new Set(['orders/created', 'orders/fulfilled', 'orders/updated', 'orders/cancelled']);
 
 export function registerShopifyWebhookRoutes(router: Router): void {
-  router.post('/shopify', async (req: Request, res: Response) => {
+  router.post('/shopify', webhookJsonParser(), async (req: Request, res: Response) => {
     const APP_SECRET = process.env.SHOPIFY_APP_SECRET;
     const signature = req.headers['x-shopify-hmac-sha256'] as string | undefined;
 

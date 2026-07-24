@@ -110,7 +110,7 @@ export const GMAIL_PUSH_SERVICE_ACCOUNT =
   'shopkeeper-gmail-push@test-project.iam.gserviceaccount.com';
 
 export let org!: Awaited<ReturnType<typeof createTestOrg>>;
-export const app = createWebhookRouterApp(webhookRoutes, { urlencoded: true });
+export const app = createWebhookRouterApp(webhookRoutes);
 export const webhookFixture = {
   SpectrumConfigError,
   app,

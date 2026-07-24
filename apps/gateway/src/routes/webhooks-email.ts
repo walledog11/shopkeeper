@@ -6,6 +6,7 @@ import logger from '../logger.js';
 import { CHANNEL, JOB } from '../constants.js';
 import { safeEqual } from '../lib/crypto.js';
 import { rateLimit, sendTooManyRequests } from '../rate-limit.js';
+import { emailInboundJsonParser, emailInboundUrlencodedParser } from './body-parsers.js';
 import { getMessageQueue, getRateLimitRedis } from './webhooks-shared.js';
 
 function isProductionEnv(): boolean {
@@ -60,7 +61,7 @@ async function recordUnclaimedRecipient(recipient: string): Promise<void> {
 }
 
 export function registerEmailWebhookRoutes(router: Router): void {
-  router.post('/email/inbound', async (req: Request, res: Response) => {
+  router.post('/email/inbound', emailInboundJsonParser(), emailInboundUrlencodedParser(), async (req: Request, res: Response) => {
     if (!hasValidPostmarkAuth(req)) {
       logger.warn('[Webhook] Inbound email rejected — invalid or missing basic auth');
       res.set('WWW-Authenticate', 'Basic realm="postmark-inbound"');

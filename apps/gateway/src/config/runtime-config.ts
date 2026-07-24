@@ -124,6 +124,25 @@ export function getGatewayOpsAlertConfig(): GatewayOpsAlertConfig {
   };
 }
 
+export interface GatewayBodyLimits {
+  webhookBytes: number;
+  emailInboundBytes: number;
+  internalBytes: number;
+}
+
+// P4-05: signed provider webhooks carry kilobyte payloads but were parsed under
+// the same 50 MB ceiling as Postmark inbound email, so an unauthenticated
+// request could allocate and parse 50 MB before any HMAC/auth check ran. Only
+// the email route keeps the attachment-sized budget. Overridable so an
+// unexpected provider payload can be unblocked without a deploy.
+export function getGatewayBodyLimits(): GatewayBodyLimits {
+  return {
+    webhookBytes: parsePositiveIntEnv('GATEWAY_BODY_LIMIT_WEBHOOK_BYTES', 2_097_152),
+    emailInboundBytes: parsePositiveIntEnv('GATEWAY_BODY_LIMIT_EMAIL_BYTES', 52_428_800),
+    internalBytes: parsePositiveIntEnv('GATEWAY_BODY_LIMIT_INTERNAL_BYTES', 1_048_576),
+  };
+}
+
 export function isOrderRiskMonitorEnabled(): boolean {
   return parseBooleanEnv('ORDER_RISK_MONITOR_ENABLED', false);
 }

@@ -6,6 +6,7 @@ import logger from '../logger.js';
 import { rateLimit, sendTooManyRequests } from '../rate-limit.js';
 import { stripMarkdown } from '../message-handlers/strip-markdown.js';
 import { ingestAndEnqueueOperatorEvent } from '../operator-event-ingest.js';
+import { webhookJsonParser } from './body-parsers.js';
 import { getRateLimitRedis } from './webhooks-shared.js';
 import {
   handleImessageOperatorMessage,
@@ -185,7 +186,7 @@ async function ingestInboundImessageMessage(
 }
 
 export function registerPhotonWebhookRoutes(router: Router): void {
-  router.post('/photon', async (req: Request, res: Response) => {
+  router.post('/photon', webhookJsonParser(), async (req: Request, res: Response) => {
     if (!req.rawBody) {
       logger.warn('[Webhook] Photon missing raw body — rejecting.');
       recordWebhookSignatureFailure(
