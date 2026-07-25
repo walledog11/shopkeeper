@@ -356,11 +356,53 @@ provider sandbox/canary verification remains open.
   over what a store receives, which is precisely why the pre-check reads the live
   grant instead of trusting our own constant. Changing what a store holds means
   changing the app's configured scopes and releasing that to the install.
-  Remaining order: land the store-credit scopes, re-run the inspect pass, create
-  the test order, then `--execute --allow-live-store`. `read_content` is also
-  missing and is being left alone — nothing in the codebase consumes it, so the
-  open question is whether to stop requesting it, not whether to grant it. The
-  canary run itself is still outstanding.
+  `read_content` is also missing and is being left alone — nothing in the
+  codebase consumes it, so the open question is whether to stop requesting it,
+  not whether to grant it.
+  **Scope gap fully closed 2026-07-25:** the live grant now reports
+  `missing: []`, including both store-credit scopes and `read_content`. No
+  re-auth was performed; the scopes appeared once the app-side configuration
+  changed, confirming the correction above.
+  **First mutating canary run, 2026-07-25 — two of three families pass.**
+  Against `palette-dev` with a $600 Bogus-gateway test order (`#1005`,
+  `financial_status: paid`, `authorization` + `capture` both `success`):
+  `gift_card` returned `ok` / probe `committed`; `refund` returned `ok` / probe
+  `committed` on a $0.01 partial. `order_creation` was deliberately not run —
+  it commits a genuine order on a live `basic`-plan store.
+  **The refund pass required fixing a defect that made `create_refund` fail
+  100% of the time on every store since it shipped.** `refunds.ts` selected
+  `userErrors { field message code }`, but `refundCreate` returns plain
+  `UserError`, which has no `code` — a static document-validation error, so
+  Shopify rejected the mutation before executing it. Because a validation error
+  arrives as HTTP 200 with an `errors` array, `shopifyGraphql` threw a
+  statusless `ShopifyRequestError` (`client.ts:316`) and
+  `isAmbiguousShopifyMutationError` (`client.ts:224`) read the missing status as
+  transport ambiguity, so a mutation that provably never ran reported *"may have
+  committed… do not retry or confirm it to the customer"*. The reconciliation
+  probe was correct throughout (`no_effect`); only the classification above it
+  was wrong. Fixed by dropping `code` from the selection — the sibling
+  `giftCardCreate` selection is **correct** and must keep `code`, since
+  `gift-cards.ts:109` needs `code === "TAKEN"` for prior-commit detection.
+  Three process findings, all reusable:
+  (1) unit tests cannot catch this class — all 30 refund tests passed before and
+  after, because they mock `shopifyGraphql`, so no mutation document in
+  `packages/agent/src/shopify/` is schema-validated anywhere in CI;
+  (2) the canary resolves `@shopkeeper/agent/shopify` through the export map to
+  `dist/`, so a source fix needs `npm run build -w @shopkeeper/agent` first — one
+  verification round was wasted re-testing a stale artifact;
+  (3) recording only `status` made the run undiagnosable, since four branches of
+  `createRefund` return `unknown` and `unknown`/`no_effect` fits both "totally
+  broken" and "correctly survived a 5xx"; the harness now records `message` and
+  `probeMessage`, which is what found the bug.
+  Remaining before P3-01 can claim a canary pass: run `order_creation`; exercise
+  the **full-refund** branch (the canary only ever sends `amount`, so
+  `shipping: { fullRefund: true }` and `graphqlRefundLineItems` at
+  `refunds.ts:133` have never been coerced against the live schema); and
+  schema-validate the seven never-checked mutation documents — `cancel_order`,
+  `edit_shopify_order`, `update_shopify_order_address`, `issue_store_credit`,
+  returns, return labels, discounts — which can be done with zero side effects by
+  sending each with `@skip(if: true)` on the mutation field, since GraphQL
+  validates and coerces variables before deciding to skip.
 - [ ] Persist the granted scope set at install. `callback/route.ts:147` discards
   the `scope` field Shopify returns with the token, so no install's capability is
   knowable without probing that store — which is why the gap above needed a

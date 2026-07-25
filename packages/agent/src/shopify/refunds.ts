@@ -221,7 +221,7 @@ export async function createRefund(
               }
             }
           }
-          userErrors { field message code }
+          userErrors { field message }
         }
       }
     `, {

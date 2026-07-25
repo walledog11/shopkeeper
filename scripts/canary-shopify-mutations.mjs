@@ -253,7 +253,14 @@ async function runCanaries(ctx, inspection) {
       const input = { amount: '1.00', reason: 'Shopkeeper mutation canary' };
       const result = await createGiftCard(input, { ...ctx, operationId });
       const probe = await probeUnknownShopifyMutation('create_gift_card', input, { ...ctx, operationId });
-      return { status: result.status, probeOutcome: probe.outcome };
+      // `status` alone cannot tell a rejected mutation from an ambiguous one:
+      // several branches return `unknown`, and only the message names which.
+      return {
+        status: result.status,
+        message: result.message,
+        probeOutcome: probe.outcome,
+        probeMessage: probe.message,
+      };
     }));
   }
 
@@ -264,7 +271,14 @@ async function runCanaries(ctx, inspection) {
       const input = { order_id: testOrderId, amount: '0.01', reason: 'Shopkeeper mutation canary' };
       const result = await createRefund(input, { ...ctx, operationId });
       const probe = await probeUnknownShopifyMutation('create_refund', input, { ...ctx, operationId });
-      return { status: result.status, probeOutcome: probe.outcome };
+      // `status` alone cannot tell a rejected mutation from an ambiguous one:
+      // several branches return `unknown`, and only the message names which.
+      return {
+        status: result.status,
+        message: result.message,
+        probeOutcome: probe.outcome,
+        probeMessage: probe.message,
+      };
     }));
   }
 
@@ -285,7 +299,14 @@ async function runCanaries(ctx, inspection) {
       };
       const result = await createShopifyOrder(input, { ...ctx, operationId }, { allowCustomLineItems: true });
       const probe = await probeUnknownShopifyMutation('create_shopify_order', { email }, { ...ctx, operationId });
-      return { status: result.status, probeOutcome: probe.outcome };
+      // `status` alone cannot tell a rejected mutation from an ambiguous one:
+      // several branches return `unknown`, and only the message names which.
+      return {
+        status: result.status,
+        message: result.message,
+        probeOutcome: probe.outcome,
+        probeMessage: probe.message,
+      };
     }));
   }
 

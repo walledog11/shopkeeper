@@ -23,27 +23,64 @@ place that says both.
 | Delivery-exception monitor (B4) | `DELIVERY_EXCEPTION_MONITOR_ENABLED` | merged 2026-07-20 | **off** (migration applied 2026-07-22) |
 | Post-resolution follow-up (B5) | `POST_RESOLUTION_FOLLOWUP_MONITOR_ENABLED` | merged `9a686639` | **on** since 2026-07-22 |
 | Order-risk fraud monitor (B6) | `ORDER_RISK_MONITOR_ENABLED` | code-complete | **off** — flag-and-notify only, no autonomy |
-| Gift cards (2026-07-06 expansion) | none | shipped tool `create_gift_card` | **live on `palette-dev`** since 2026-07-25 |
-| Store credit (2026-07-06 expansion) | none | shipped tool `issue_store_credit` | **403 on `palette-dev`** — scopes not granted; see below |
+| Gift cards (2026-07-06 expansion) | none | shipped tool `create_gift_card` | **verified on `palette-dev`** 2026-07-25 — canary `ok`/`committed` |
+| Store credit (2026-07-06 expansion) | none | shipped tool `issue_store_credit` | **scopes granted 2026-07-25**, never executed — no canary family |
+| Refunds (`create_refund`) | none | **broken since it shipped**; fixed 2026-07-25 | **verified on `palette-dev`** — partial-amount path only |
 
-The last two rows were one capability that read as live everywhere in the code
-and was not. `create_gift_card` and `issue_store_credit` sit in the registry
+The gift-card and store-credit rows were one capability that read as live
+everywhere in the code and was not. Both sit in the registry
 (`tools/registry/order.ts`), the prompt and `plan-preview.ts`, so the agent
 plans them and the merchant can approve them, but the only real store's OAuth
 grant predated the expansion and held none of their scopes — an approved plan
 using either failed at execution. Found 2026-07-25 by the P3-01 canary scope
-pre-check. The gift-card scopes were granted the same day; the two store-credit
-scopes were reported added but have not appeared in the live grant across two
-inspect runs, so that half is still failing.
+pre-check. Both sets have since landed: the live grant now reports
+`missing: []`, so neither tool 403s. `create_gift_card` is verified end to end;
+`issue_store_credit` is merely unblocked, because no canary family exercises it
+and nothing has ever called it against a real store.
 
-Nothing here is a code gap, and re-authorizing is not the fix — the grant is
-driven by the app's configured scopes, not by our authorize URL, so
+The scope half was not a code gap, and re-authorizing was not the fix — the
+grant is driven by the app's configured scopes, not by our authorize URL, so
 `SHOPIFY_OAUTH_SCOPES` describes what we intend rather than what a store holds
 (detail and evidence in P3-01 of the cleanup plan). Two consequences worth
 keeping: a shipped tool can be inert on a given store with nothing in our data
 saying so, and the durable fix is persisting granted scopes at install so it is
 knowable without probing that store. Until then, `node
 scripts/canary-shopify-mutations.mjs` is the only way to ask.
+
+### `create_refund` never worked (found and fixed 2026-07-25)
+
+The refund row above is a genuine code defect, not a grant problem, and it is
+the most serious thing this doc has recorded. `refunds.ts` selected
+`userErrors { field message code }`, but `refundCreate` returns plain
+`UserError`, which has no `code`. That is a **static document-validation
+error**: Shopify rejected every refund before executing it, on every store,
+100% of the time, since the capability shipped.
+
+The failure mode is what makes it expensive. A validation error comes back as
+HTTP 200 with an `errors` array; `shopifyGraphql` throws a `ShopifyRequestError`
+with **no status** (`client.ts:316`); and `isAmbiguousShopifyMutationError`
+(`client.ts:224`) treats a missing status as transport ambiguity. So a mutation
+that provably never ran was reported as *"may have committed at Shopify… do not
+retry or confirm it to the customer"* — the P3-01 machinery faithfully parking a
+deterministic outage in `unknown` and suppressing customer confirmation. The
+reconciliation probe was right every time (`no_effect`); only the classification
+above it was wrong.
+
+Three durable lessons:
+
+- **Unit tests cannot catch this class.** All 30 refund tests passed before and
+  after the fix, because they mock `shopifyGraphql` — no document in
+  `packages/agent/src/shopify/` is validated against a real schema anywhere in
+  CI. The canary is the only guard, which is the argument for widening it.
+- **The canary runs the built package.** `railway run` resolves
+  `@shopkeeper/agent/shopify` through the export map to `dist/`, so a source fix
+  needs `npm run build -w @shopkeeper/agent` before a canary run means anything.
+  One verification round was wasted re-testing a stale artifact.
+- **`status` alone is not a diagnosis.** Four branches of `createRefund` return
+  `unknown` and the harness recorded only the enum, making the run unreadable —
+  `unknown`/`no_effect` is equally consistent with "totally broken" and with
+  "correctly survived a transient 5xx". The canary now records `message` and
+  `probeMessage`, which is what identified the bug.
 
 Per-org opt-outs, all in `Organization.settings` and surfaced on
 `/dashboard/agent/configure`: `salesPulseEnabled`, `lowStockThreshold`,
@@ -137,6 +174,34 @@ Nothing here waits on production traffic, credits, or another plan.
    **Left open:** deleting the two production rows. It is a production data
    decision, the fixtures come back the next time someone seeds, and nothing now
    depends on it.
+7. **The full-refund path is still unvalidated.** The canary always passes
+   `amount: '0.01'`, which takes the partial branch of `createRefund`. A refund
+   with no `amount` sends two variable shapes that have never been coerced
+   against the live schema — `shipping: { fullRefund: true }` and the
+   `refundLineItems` built by `graphqlRefundLineItems` (`refunds.ts:133`:
+   `lineItemId`, `quantity`, `restockType`, `locationId`). The document is now
+   proven valid, but a wrong field name inside those inputs fails at variable
+   coercion and produces the *identical* statusless error and the identical
+   bogus `unknown`. Needs a second test order and an `--only=refund` variant
+   that omits `amount`.
+8. **Validate every Shopify mutation document against the live schema.** Seven
+   GraphQL mutations have never been schema-checked — `cancel_order`,
+   `edit_shopify_order`, `update_shopify_order_address`, `issue_store_credit`,
+   returns, return labels, discounts — and any of them could carry the exact
+   `userErrors { … code }` defect while looking like an ambiguous provider
+   hiccup. This does **not** require executing them: GraphQL validates and
+   coerces variables before it decides to skip a field, so sending each document
+   with `@skip(if: true)` on the mutation field validates it with zero side
+   effects. Cheap, and it closes the class rather than the instance.
+9. **Decide whether a statusless GraphQL error stays "ambiguous."**
+   `isAmbiguousShopifyMutationError` (`client.ts:224`) cannot currently tell a
+   dead socket from a 200 that rejected the document, and the refund bug showed
+   what that costs. The narrow, safe fix is to reclassify **only** the
+   validation case, which is identifiable because Shopify returns no `data` key
+   at all: execution errors can genuinely follow side effects, and `THROTTLED`
+   also arrives as a 200 `errors` array, so both must stay ambiguous. Left as a
+   decision rather than a change because it widens what the system will claim
+   definitely did not happen.
 
 ## Decisions
 
@@ -197,11 +262,13 @@ ticket and hits the cliff.
 
 ## Blocked, and on what
 
-Each row names the event that unblocks it. None of these are code.
+Each row names the event that unblocks it. All but the first wait on traffic or
+time rather than on work; A5 is now the exception, since items 7 and 8 above
+feed it.
 
 | Item | Blocked on | Unblock event |
 | --- | --- | --- |
-| A5's "Handled" section claiming actions definitely completed | P3-01 mutating canary pass — and, before it, **one test order in `palette-dev`** | Inspect pass ran clean 2026-07-25 (`railway run --service shopkeeper -- node scripts/canary-shopify-mutations.mjs`): selected `palette-dev-3peukw16.myshopify.com`, skipped both simulated rows as `simulated fixture`, `connectivityError: null` — so credentials, token decryption and Shopify auth are all confirmed, and neither store availability nor the harness (`632be88e`) is a blocker. What *is*: the store reports `testCount: 0` / `liveCount: 4`, and the refund family needs a `test: true` order (`canary-shopify-mutations.mjs:235`). Without one it silently skips with a note and exit code 0, so a mutating run would cover gift_card + order_creation **for real** on a paid `basic`-plan store while never testing refunds — the one irreversible family. Create a Bogus Gateway / Shopify-Payments-test-mode order first, then run `--execute --allow-live-store`. The scope gap this row used to flag as an ambiguous-403 risk turned out to be real, and the pre-flight check found it (2026-07-25; detail in P3-01 of the cleanup plan): `palette-dev` lacked every gift-card and store-credit scope, so `gift_card` would have 403'd while `order_creation` committed a real order. The gift-card scopes have since been granted and that family will now run for real; store credit is still ungranted but the canary does not exercise it, so it no longer gates this row. The test order is the remaining gate. |
+| A5's "Handled" section claiming actions definitely completed | the last canary family — `order_creation` — plus items 7 and 8 above | **Two of three families now pass** (2026-07-25, order `#1005`, a $600 Bogus-gateway test order). `gift_card`: `ok` / `committed`. `refund`: `ok` / `committed` on a $0.01 partial, but only after fixing a defect that made it fail 100% of the time — see the `create_refund` section above, and note it took three runs, one of which wasted a round on a stale `dist`. `order_creation` is unrun because it commits a genuine order on a live `basic`-plan store; that is a deliberate choice, not a blocker. Before this row closes on the strength of a canary pass, the pass has to mean something: item 7 (the full-refund branch is still unexercised) and item 8 (seven mutation documents never schema-validated) are both live instances of the same class the refund bug came from. |
 | Raising `OPERATOR_PLAN_QUEUE_MAX` above 1 | P1 execution-ledger rollout verification | `npm run audit:plan-executions -- --hours=24` returning representative dashboard *and* gateway executions. It currently returns zero — there is no traffic yet. |
 | Enabling B3/B4 monitors | same P1 rollout, plus the P6-02 controlled recovery exercise (the simulated-fixture leg is closed — see item 6) | as above |
 | B3/B4/B5 live push verification | a real return arrival, delivery exception, or 5-day-old resolution | first real merchant traffic, or a deliberately staged fixture on the test DB |
