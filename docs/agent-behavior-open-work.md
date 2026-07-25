@@ -33,9 +33,28 @@ Per-org opt-outs, all in `Organization.settings` and surfaced on
 
 Nothing here waits on production traffic, credits, or another plan.
 
-1. **A2 live phone verification.** The only Track A phase never phone-verified.
-   Digest arrives → "the one from Sarah is spam" → "reply to the second: we ship
-   Friday". Both must hit the model path, not the `SPAM n` / `REPLY n` fast path.
+1. ~~**A2 live phone verification.**~~ **Done 2026-07-24.** Verified on a real
+   phone against the local test DB, with `@ClerkDevBot`'s webhook temporarily
+   pointed at a cloudflared tunnel (prod webhook captured first and restored
+   after). Both merchant messages parsed as `free-form` — checked against
+   `parseTelegramCommand`, with `SPAM 1` / `REPLY 2 …` still hitting their fast
+   paths as controls — and both reached the model over the durable path: two
+   `OperatorEvent` rows, channel `telegram`, status `committed`. "the one from
+   sarah is spam" fired `mark_ticket_spam` on the right ticket id, resolved from
+   the customer name alone and with no confirming question, and the thread went
+   `filtered` / `confirmed_spam`. The reply instruction fired `send_ticket_reply`
+   on the flagged ticket; the dashboard hop returned ok and the thread
+   self-healed to `confirmed_genuine`, exercising the recoverability legs the
+   spam decision below rests on.
+   **Narrower gap, left open on purpose:** the reply was actually sent as "we
+   ship Friday", not the scripted "reply to the second: …", so the model chose
+   the ticket by content rather than by ordinal. Ordinal reference ("the second")
+   is still unverified on a phone — one message closes it.
+   Fixture: `apps/gateway/src/scripts/stage-digest.ts`, which seeds two flagged
+   tickets plus one genuine ticket deliberately left out of `pendingDigest` and
+   pushes through the production `buildOrgDigest` + `notifyOperator` path. It
+   needs the gateway **worker** as well as the server — durable ingestion is the
+   only inbound path — and `E2E_AI_MODE` set to anything but `deterministic`.
 2. ~~**A1 executor coverage gap.**~~ **Done 2026-07-24.** An `executor path`
    suite in `operator-inbox-tools.test.ts` now drives both tools through
    `executeToolWithStatus` — the same entry point `run-execution.ts` uses — so
@@ -43,12 +62,84 @@ Nothing here waits on production traffic, credits, or another plan.
    `categoryPermission` are covered, plus a guard that neither tool resolves
    without the gateway `moduleTools`. Verified by mutation: deleting the
    `status` enum fails the suite.
-3. **Decision — digest spam via the model.** Trust clear intent, or always
-   confirm before marking spam? Plan approval trusts clear intent; spam is
-   lower-stakes and reversible, so trusting it is the consistent choice.
-4. **Decision — Concierge parity for the inbox tools.** Concierge runs in the
-   dashboard and can't use gateway `moduleTools`. Mirror `list_active_tickets` /
-   `get_ticket` as dashboard host tools, or is the inbox UI enough there?
+3. ~~**Decision — digest spam via the model.**~~ **Decided 2026-07-24** — see
+   Decisions below. No code change: the shipped behavior is the decision.
+4. ~~**Decision — Concierge parity for the inbox tools.**~~ **Decided
+   2026-07-24** — see Decisions below. No code change.
+5. ~~**The digest counts internal threads as open tickets.**~~ **Done
+   2026-07-24.** Found while verifying A2: the staged digest read "Open tickets:
+   1" before any operator thread existed and "Open tickets: 2" afterwards, with
+   the same single genuine support ticket both times — the extra one was the
+   merchant's own operator thread, and that count is the first line the merchant
+   reads. `buildOrgDigest` (`apps/gateway/src/maintenance/digest.ts:194`) now
+   takes `canonicalInboxThreadWhere`, which adds the `sms_agent` /
+   `dashboard_agent` and `archivedAt` exclusions it was missing, with one
+   documented exception: `filterStatus: undefined`, because the digest reports
+   filtered threads as a count ("Filtered: n") rather than hiding them.
+   The same gap sat in `loadStaleThreadWaitingItems`
+   (`apps/gateway/src/maintenance/digest-briefing.ts:298`), where a filtered or
+   archived thread with a stale `cachedPlan` could reach "Waiting on you"; that
+   query takes the predicate whole. Real-DB tests cover both and were
+   mutation-verified against the old queries — an org with one email ticket plus
+   an operator thread, a Concierge thread and an archived thread reported "Open
+   tickets: 3" before and 1 after.
+
+## Decisions
+
+### Digest spam: trust clear intent (2026-07-24)
+
+`mark_ticket_spam` fires on clear intent and asks one short confirming question
+only when intent is ambiguous — the behavior already shipped in
+`operator-digest-tools.ts:37`. No always-confirm prompt.
+
+What makes that safe is recoverability, not caution, and all four legs are real:
+
+- **Bounded target.** `markDigestThreadSpam` rejects any id outside
+  `pendingDigest.threadIds`, so the model can only act on tickets the filter
+  already flagged and the merchant just read in the digest. It cannot reach a
+  healthy inbox ticket.
+- **One-click reversible.** The tickets page has a **View spam (n)** filter with
+  a per-row Recover action (`useTicketActions.ts:248` → `filterStatus: genuine`).
+- **Self-healing.** Any reply sent on the thread sets `confirmed_genuine`
+  (`messages/route.ts:48`, `messages/internal/route.ts:50`), so acting on the
+  ticket un-files it.
+- **Non-compounding.** `filterFeedback` trains nothing — its only consumers are
+  the tickets UI, route validation, and `purge.ts`. A wrong mark does not bias
+  future filtering.
+
+The argument against always-confirming is stronger than the argument for it: a
+prompt on every dismissal is approval theater that teaches reflexive "yes", which
+erodes the confirmations that do matter — plan approvals that move money. It also
+wouldn't catch the actual failure mode, which is the model picking the *wrong*
+ticket, not misreading intent.
+
+**Known limitation, accepted:** from the phone this is one-way. The inbox tools
+exclude filtered threads (`canonicalInboxThreadWhere`), so a merchant cannot see
+or undo a spam mark from Telegram/iMessage — only from the dashboard. If that
+ever bites someone, the fix is an `undo_ticket_spam` digest tool, not a confirm
+prompt.
+
+### Concierge inbox parity: no (2026-07-24)
+
+Do not mirror `list_active_tickets` / `get_ticket` as dashboard host tools.
+
+- Concierge runs two clicks from `/dashboard/tickets`, which is strictly richer
+  than a 20-row text list. The tools earn their value on the phone, where there
+  is no UI.
+- Mirroring means a second implementation of the same tool — the drift class this
+  doc set just spent a cleanup on.
+- Product principle 2 ("reach the merchant wherever they are") governs proactive
+  *pushes*. These are pull-only read tools, so it doesn't bind here.
+- Every tool added to a turn costs prompt tokens and a chance the model reaches
+  for a tool instead of answering, cutting against P2-02's bounded-context work.
+
+**If reopened, promote rather than mirror.** `operator-inbox-tools.ts` depends
+only on `db` plus host-agnostic helpers (`canonicalInboxThreadWhere`,
+`wrapUntrusted`, `getCurrentPlanForThread`), so it can move into
+`packages/agent` behind a server-only subpath the way `./executor` is exported —
+never into `registry/*`, which ships in the dashboard client bundle. **Trigger:**
+Concierge gains a mobile surface, or a merchant actually asks Concierge about a
+ticket and hits the cliff.
 
 ## Blocked, and on what
 
