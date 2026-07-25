@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { SHOPIFY_OAUTH_SCOPES } from '@shopkeeper/agent/shopify/integration-health';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
 import { getShopifyOAuthAuthorizeConfig } from '@/lib/env';
 import { normalizeShopifyShopDomain } from '@/lib/shopify/oauth';
@@ -44,11 +45,9 @@ export async function POST(request: Request) {
     { shop: shopDomain },
   );
 
-  const scopes = 'read_customers,write_customers,read_orders,write_orders,write_order_edits,read_returns,write_returns,read_products,read_content,write_gift_cards,read_store_credit_accounts,write_store_credit_account_transactions';
-
   const authUrl = new URL(`https://${shopDomain}/admin/oauth/authorize`);
   authUrl.searchParams.set('client_id', oauthConfig.clientId);
-  authUrl.searchParams.set('scope', scopes);
+  authUrl.searchParams.set('scope', SHOPIFY_OAUTH_SCOPES.join(','));
   authUrl.searchParams.set('redirect_uri', oauthConfig.redirectUri);
   authUrl.searchParams.set('state', state);
   return NextResponse.redirect(authUrl.toString());

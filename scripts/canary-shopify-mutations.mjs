@@ -19,12 +19,14 @@ loadLocalEnv();
 
 const { db } = await import('@shopkeeper/db');
 const {
+  shopifyGraphql,
   shopifyRestJson,
   createGiftCard,
   createRefund,
   createShopifyOrder,
   probeUnknownShopifyMutation,
 } = await import('@shopkeeper/agent/shopify');
+const { missingShopifyScopes } = await import('@shopkeeper/agent/shopify/integration-health');
 
 const args = new Set(process.argv.slice(2));
 const EXECUTE = args.has('--execute');
@@ -197,6 +199,30 @@ async function inspectStore(ctx) {
   }
 }
 
+// A token carries whatever grant it was issued with, so an install older than a
+// capability expansion is short some scopes. Without this the gap only shows up
+// mid-canary as a 403 that is indistinguishable from a Shopify-side rejection.
+async function inspectAccessScopes(ctx) {
+  try {
+    const data = await shopifyGraphql(ctx, `
+      query ShopkeeperGrantedScopes {
+        currentAppInstallation { accessScopes { handle } }
+      }
+    `, {});
+    const granted = (data?.currentAppInstallation?.accessScopes ?? [])
+      .map((scope) => scope?.handle)
+      .filter(Boolean)
+      .sort();
+    return { granted, missing: missingShopifyScopes(granted), error: null };
+  } catch (error) {
+    return {
+      granted: null,
+      missing: null,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 async function runFamily(family, runner) {
   const startedAt = Date.now();
   try {
@@ -267,7 +293,11 @@ async function runCanaries(ctx, inspection) {
 }
 
 const { organizationId, integrationId, skipped, ctx } = await loadShopifyIntegration();
-const inspection = await inspectStore(ctx);
+const [storeInspection, accessScopes] = await Promise.all([
+  inspectStore(ctx),
+  inspectAccessScopes(ctx),
+]);
+const inspection = { ...storeInspection, accessScopes };
 
 const report = {
   mode: EXECUTE ? 'execute' : 'inspect',
@@ -282,6 +312,14 @@ const report = {
 
 if (inspection.connectivityError) {
   report.notes.push(`Shopify connectivity failed: ${inspection.connectivityError}`);
+}
+if (accessScopes.error) {
+  report.notes.push(`Granted-scope probe failed: ${accessScopes.error}`);
+} else if (accessScopes.missing.length > 0) {
+  report.notes.push(
+    `Install is missing ${accessScopes.missing.length} requested scope(s): ${accessScopes.missing.join(', ')}.`
+    + ' Re-authorize the store before reading any 403 from this run as a Shopify-side rejection.',
+  );
 }
 if (!inspection.shop.mutationsAllowed) {
   report.notes.push(

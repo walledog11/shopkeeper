@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  SHOPIFY_OAUTH_SCOPES,
   getShopifyConnectionState,
   isShopifyIntegrationOperational,
   isShopifyIntegrationSweepable,
   isSimulatedShopifyIntegration,
+  missingShopifyScopes,
 } from "./integration-health.js";
 
 const HOUR_MS = 3_600_000;
@@ -91,5 +93,45 @@ describe("isShopifyIntegrationSweepable", () => {
 
   it("treats an absent metadata field as not simulated", () => {
     expect(isShopifyIntegrationSweepable({ accessToken: "tok", tokenExpiresAt: null })).toBe(true);
+  });
+});
+
+describe("missingShopifyScopes", () => {
+  it("reports nothing for a grant that matches the requested set", () => {
+    expect(missingShopifyScopes([...SHOPIFY_OAUTH_SCOPES])).toEqual([]);
+  });
+
+  it("reports every requested scope for an empty grant", () => {
+    expect(missingShopifyScopes([])).toEqual([...SHOPIFY_OAUTH_SCOPES]);
+  });
+
+  // The case this probe exists for: an install predating the 2026-07-06
+  // capability expansion, where gift cards and store credit fail as 403s.
+  it("reports the scopes an older install never received", () => {
+    const older = SHOPIFY_OAUTH_SCOPES.filter((scope) => (
+      scope !== "write_gift_cards"
+      && scope !== "read_store_credit_accounts"
+      && scope !== "write_store_credit_account_transactions"
+    ));
+
+    expect(missingShopifyScopes(older)).toEqual([
+      "write_gift_cards",
+      "read_store_credit_accounts",
+      "write_store_credit_account_transactions",
+    ]);
+  });
+
+  it("accepts a write grant in place of the implied read", () => {
+    const impliedReads = SHOPIFY_OAUTH_SCOPES.filter((scope) => !scope.startsWith("read_"));
+
+    expect(missingShopifyScopes(impliedReads)).toEqual([
+      "read_products",
+      "read_content",
+      "read_store_credit_accounts",
+    ]);
+  });
+
+  it("ignores case and surrounding whitespace in the granted list", () => {
+    expect(missingShopifyScopes(SHOPIFY_OAUTH_SCOPES.map((scope) => ` ${scope.toUpperCase()} `))).toEqual([]);
   });
 });

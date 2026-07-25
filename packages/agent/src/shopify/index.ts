@@ -2,6 +2,7 @@ export {
   SHOPIFY_API_VERSION,
   ShopifyRequestError,
   parseNextPageInfo,
+  shopifyGraphql,
   shopifyRest,
   shopifyRestJson,
   type ShopifyContext,

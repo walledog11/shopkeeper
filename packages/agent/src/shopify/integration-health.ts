@@ -40,3 +40,32 @@ export function isShopifyIntegrationSweepable(
   if (isSimulatedShopifyIntegration(integration.metadata)) return false;
   return isShopifyIntegrationOperational(integration);
 }
+
+// The scopes the install flow requests. A token keeps whatever grant it was
+// issued with, so an install that predates a capability expansion stays short
+// of this list until the merchant re-authorizes.
+export const SHOPIFY_OAUTH_SCOPES = [
+  "read_customers",
+  "write_customers",
+  "read_orders",
+  "write_orders",
+  "write_order_edits",
+  "read_returns",
+  "write_returns",
+  "read_products",
+  "read_content",
+  "write_gift_cards",
+  "read_store_credit_accounts",
+  "write_store_credit_account_transactions",
+] as const;
+
+// Shopify's `write_x` grant includes `read_x`, and the granted list does not
+// always spell the implied read out, so satisfy a requested read either way.
+export function missingShopifyScopes(granted: readonly string[]): string[] {
+  const held = new Set(granted.map((scope) => scope.trim().toLowerCase()).filter(Boolean));
+  return SHOPIFY_OAUTH_SCOPES.filter((scope) => {
+    if (held.has(scope)) return false;
+    const readMatch = scope.match(/^read_(.+)$/);
+    return !(readMatch && held.has(`write_${readMatch[1]}`));
+  });
+}

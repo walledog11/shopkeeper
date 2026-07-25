@@ -316,8 +316,19 @@ provider sandbox/canary verification remains open.
   fixture and died there, never reaching `palette-dev`. Selection is now
   explicit: simulated and undecryptable rows are skipped with a per-row reason,
   `--shop=<domain>` chooses among the rest, and anything other than one
-  candidate refuses instead of guessing. The canary run itself is still
-  outstanding.
+  candidate refuses instead of guessing. **Scope pre-check added 2026-07-25:**
+  granted scopes are not persisted at install (`callback/route.ts:147` stores
+  only token/fromEmail/tokenExpiresAt), so the inspect pass now reads them live
+  from `currentAppInstallation.accessScopes` and reports
+  `inspection.accessScopes.missing` against the requested set. That set is one
+  shared constant (`SHOPIFY_OAUTH_SCOPES` in
+  `packages/agent/src/shopify/integration-health.ts`) used by both the install
+  flow and the canary; the emitted OAuth scope string is byte-identical to the
+  literal it replaced, so no store is re-prompted. `missingShopifyScopes` counts
+  a `write_x` grant as covering a requested `read_x`, since Shopify's write
+  grant includes read. A grant predating the 2026-07-06 capability expansion now
+  surfaces as a named missing scope before the run instead of an ambiguous 403
+  during it. The canary run itself is still outstanding.
 - [x] Revalidate production Shopify connectivity read-only. The connected store
   identifies itself as `palette-dev` but reports Shopify plan `basic`; its four
   recent orders contain no `test: true` order. **Resolved 2026-07-20:** the
