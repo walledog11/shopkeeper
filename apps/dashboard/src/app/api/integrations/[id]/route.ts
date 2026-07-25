@@ -12,6 +12,7 @@ export const PATCH = withOrgRoute<{ id: string }>(
   {
     context: 'Integrations PATCH',
     errorMessage: 'Failed to update integration',
+    requireAdmin: true,
     requireBillingWriteAllowed: true,
     rateLimit: { key: 'integrations:update', limit: 30, windowSecs: 60 },
   },
@@ -61,7 +62,11 @@ export const PATCH = withOrgRoute<{ id: string }>(
 );
 
 export const DELETE = withOrgRoute<{ id: string }>(
-  { context: 'Integrations DELETE', errorMessage: 'Failed to delete integration' },
+  {
+    context: 'Integrations DELETE',
+    errorMessage: 'Failed to delete integration',
+    requireAdmin: true,
+  },
   async ({ org, params }) => {
     const { id } = params;
 

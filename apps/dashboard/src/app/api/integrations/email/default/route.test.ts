@@ -20,6 +20,7 @@ beforeEach(async () => {
   vi.mocked(auth).mockResolvedValue({
     userId: 'usr_test',
     orgId: org.clerkOrgId,
+    orgRole: 'org:admin',
   } as ReturnType<typeof auth> extends Promise<infer T> ? T : never);
 });
 

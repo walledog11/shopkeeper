@@ -99,6 +99,28 @@ describe('/api/org PATCH settings', () => {
     });
   }
 
+  it('refuses to let a member widen the agent\'s spend authority', async () => {
+    setAuth({ orgRole: 'org:member' });
+
+    const res = await PATCH(patchReq({
+      settings: { maxRefundAmount: 5000, autonomyTier: 'full', autoExecuteMode: 'live' },
+    }));
+
+    expect(res.status).toBe(403);
+    const after = await db.organization.findUniqueOrThrow({ where: { id: org.id } });
+    expect(after.settings).toEqual(org.settings);
+  });
+
+  it('lets an admin change the same settings', async () => {
+    const res = await PATCH(patchReq({
+      settings: { maxRefundAmount: 5000, autonomyTier: 'full' },
+    }));
+
+    expect(res.status).toBe(200);
+    const after = await db.organization.findUniqueOrThrow({ where: { id: org.id } });
+    expect(after.settings).toMatchObject({ maxRefundAmount: 5000, autonomyTier: 'full' });
+  });
+
   it('captures onboarding completion once after its timestamp persists', async () => {
     const completedAt = new Date().toISOString();
 

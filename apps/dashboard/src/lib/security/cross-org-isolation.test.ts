@@ -49,8 +49,9 @@ const jsonReq = (url: string, body: unknown, method = 'POST') =>
 beforeEach(async () => {
   callerOrg = await createTestOrg();
   otherOrg = await createTestOrg();
+  // An admin caller, so a cross-org 404 can never be masked by a role 403.
   vi.mocked(auth).mockResolvedValue(
-    { userId: 'usr_test', orgId: callerOrg.clerkOrgId } as ReturnType<typeof auth> extends Promise<infer T> ? T : never,
+    { userId: 'usr_test', orgId: callerOrg.clerkOrgId, orgRole: 'org:admin' } as ReturnType<typeof auth> extends Promise<infer T> ? T : never,
   );
 });
 

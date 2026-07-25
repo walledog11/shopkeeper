@@ -4,7 +4,13 @@ import { Check, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import type { AgentTabController } from "./useAgentTabState"
 
-export function StickySaveBar({ controller }: { controller: AgentTabController }) {
+export function StickySaveBar({
+  controller,
+  canSave = true,
+}: {
+  controller: AgentTabController
+  canSave?: boolean
+}) {
   const { isDirty, saved, error, staleVersion, saving, businessHoursInvalid, businessNameInvalid, reset, save } = controller
 
   if (!isDirty && !saved && !error && !staleVersion) return null
@@ -13,7 +19,9 @@ export function StickySaveBar({ controller }: { controller: AgentTabController }
     <div className="sticky bottom-0 z-10 pt-3 pb-4">
       <div className="flex items-center justify-between gap-3 rounded-[22px] border border-foreground/[0.10] bg-card/85 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.34),0_-18px_50px_rgba(0,0,0,0.35)] backdrop-blur-2xl backdrop-saturate-150 supports-[backdrop-filter]:bg-card/72">
         <div className="flex items-center gap-2 min-w-0">
-          {staleVersion ? (
+          {!canSave ? (
+            <p className="text-xs text-amber-300 truncate">Only workspace admins can change agent settings.</p>
+          ) : staleVersion ? (
             <p className="text-xs text-amber-300 truncate">Settings were updated in another tab. Reset to load the latest, then reapply your changes.</p>
           ) : error ? (
             <p className="text-xs text-red-400 truncate">{error}</p>
@@ -40,7 +48,7 @@ export function StickySaveBar({ controller }: { controller: AgentTabController }
           <Button
             size="sm"
             onClick={save}
-            disabled={saving || !isDirty || businessHoursInvalid || businessNameInvalid}
+            disabled={!canSave || saving || !isDirty || businessHoursInvalid || businessNameInvalid}
             className="h-8 px-4 bg-amber-400 text-black hover:bg-amber-300 text-xs font-semibold disabled:opacity-40 min-w-[90px]"
           >
             {saving ? <Loader2 className="size-3.5 animate-spin" /> : "Save changes"}

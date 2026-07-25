@@ -59,9 +59,12 @@ let otherOrg: Awaited<ReturnType<typeof createTestOrg>>;
 beforeEach(async () => {
   callerOrg = await createTestOrg();
   otherOrg = await createTestOrg();
+  // An admin caller, so a tenant-scoping assertion can never be masked by a
+  // role 403 on the admin-only surfaces this suite also exercises.
   vi.mocked(auth).mockResolvedValue({
     userId: 'usr_caller',
     orgId: callerOrg.clerkOrgId,
+    orgRole: 'org:admin',
   } as ReturnType<typeof auth> extends Promise<infer T> ? T : never);
   vi.mocked(clerkClient).mockResolvedValue({
     organizations: {

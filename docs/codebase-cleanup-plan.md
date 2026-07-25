@@ -785,6 +785,48 @@ provider call or cross-tenant mutation.
 
 ### P5-02 — Decide and implement the member/admin permission matrix
 
+**Status (2026-07-24): Decided and implemented; enforced from the first deploy.**
+The matrix is admin = the operations that change what the agent may do on its own,
+move money, hold provider credentials, or destroy data; member = everything a
+teammate does day to day. Before this, `withOrgRoute` — the wrapper on nearly
+every API route — had no role concept at all, and `requireAdmin` existed only on
+`withClerkOrgRoute` (3 handlers). Any member could raise `maxRefundAmount`, flip
+`autonomyTier`/`autoExecuteMode` to live, disconnect Shopify, or clear all ticket
+history.
+
+Admin-only now: `PATCH /api/org` (the agent settings blob), `DELETE /api/org`,
+`DELETE /api/org/data`, `POST /api/billing/checkout`, `POST /api/billing/portal`,
+`POST /api/integrations`, `PATCH`/`DELETE /api/integrations/[id]`,
+`PATCH /api/integrations/email/default`, team invite/remove, and OAuth connect
+initiation for all four providers. Members keep tickets, agent runs and
+approvals, messages, KB, Shopify customer writes, and binding their own
+Telegram/iMessage device.
+
+- `lib/api/permissions.ts` holds `isOrgAdmin`/`assertOrgAdmin` and the denial
+  copy; the E2E bypass identity is treated as its workspace's admin so the
+  auth-bypass smoke suite is unaffected.
+- `withOrgRoute` gained `requireAdmin`, checked after org resolution but before
+  the billing gate and rate limit, so a denied caller neither learns the org's
+  billing state nor spends its budget.
+- `requireAuthenticatedOAuthSession` is the single chokepoint for Shopify,
+  Gmail, Instagram and TikTok connect; it now returns a result union so a member
+  gets a 403 with the admin message rather than a misleading 401.
+- UI follows the server, not the reverse: the danger zone is hidden from
+  members, billing portal buttons are admin-only, the agent-settings save bar
+  explains why it is disabled, and the integrations page states the rule while
+  leaving own-device binding available.
+- Coverage: `lib/api/permissions.unit.test.ts` (roles, unset role, custom role,
+  bypass), `app/api/admin-permissions.unit.test.ts` (8 admin-only routes × member
+  and unset-role callers denied 403 with the role message, and admins let
+  through), plus a DB-backed `PATCH /api/org` pair proving a member cannot widen
+  the refund cap or autonomy tier and an admin can. Suites that exercise admin
+  operations now authenticate as admins so a role 403 can never mask a 402/404
+  assertion.
+
+Rollout: enforcement is immediate, not audit-first. The plan's audit-then-enforce
+sequence exists to avoid breaking established teams; there are no onboarded
+merchants yet, so a log-only mode would be code written to be deleted.
+
 - **Related findings:** AUD-011.
 - **Files likely to change:** `apps/dashboard/src/lib/api/route.ts`/`clerk-route.ts`; org, integration, billing, OAuth and data routes; UI visibility; authorization tests.
 - **Proposed implementation:** Product/security owners classify permissions. Add a shared `requirePermission`/role-aware route option and enforce it server-side; UI hiding is secondary.
@@ -1281,7 +1323,9 @@ These can proceed while the durable-execution design is reviewed, provided they 
 
 ## Product decisions required
 
-- Member versus admin permission matrix (P5-02).
+- ~~Member versus admin permission matrix (P5-02).~~ **Decided 2026-07-24:**
+  admin owns agent settings, billing, integration connect/disconnect and data
+  destruction; members own the daily ticket work. See P5-02.
 - Supported attachment count, size and content types (P4-05).
 - Merchant UX and recovery authority for `unknown` external actions (P1/P3/P7).
 - Whether failed known-no-op plans remain approvable or require regeneration.
@@ -1328,7 +1372,7 @@ All should be additive first. Destructive cleanup belongs in later releases afte
 | Bounded AI context | Dedicated eval, aligned host `shadow`, one long-thread `enforce` canary, then normal observation |
 | Operator durable queue | Always on (P4-03 complete 2026-07-20) |
 | Outbound email claims | Test tenant/canary, monitor stale-processing recovery, then make async default |
-| RBAC | Audit/log denied-would-be actions, communicate, then enforce |
+| RBAC | Enforced from first deploy (P5-02, 2026-07-24) — no onboarded merchants to break, so the audit-first stage was skipped |
 | CSP | Report-only telemetry, canary enforcement, broad enforcement |
 | Spectrum upgrade | Sandbox, one gateway canary, broad rollout |
 
@@ -1466,5 +1510,6 @@ Next:
    `unsafe-eval` removal canary from that evidence. Start P8-02 only in its own
    compatibility branch using the proven 12.2 + aligned OpenTelemetry candidate;
    validate Photon telemetry and real sandbox send/receive before a gateway
-   canary. P5-02 RBAC and P4-05 attachment limits remain blocked on explicit
-   product/security decisions.
+   canary. ~~P5-02 RBAC~~ **decided and implemented 2026-07-24** (see P5-02);
+   P4-05's attachment content-type contract remains the one open
+   product/security decision.

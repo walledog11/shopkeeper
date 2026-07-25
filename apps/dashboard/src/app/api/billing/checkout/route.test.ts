@@ -55,6 +55,7 @@ beforeEach(async () => {
   vi.mocked(auth).mockResolvedValue({
     userId: 'usr_billing',
     orgId: org.clerkOrgId,
+    orgRole: 'org:admin',
   } as ReturnType<typeof auth> extends Promise<infer T> ? T : never);
   mockRateLimit.mockResolvedValue({ success: true, remaining: 4, reset: 1234 });
   mockGetOrCreateStripeCustomer.mockResolvedValue('cus_checkout');

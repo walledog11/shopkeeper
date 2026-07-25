@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import {
   oauthPageRedirect,
 } from './oauth-callback';
+import { ADMIN_REQUIRED_MESSAGE, isOrgAdmin } from '@/lib/api/permissions';
 import logger from '@/lib/server/logger';
 import { safeReturnTo } from '@/lib/security/safe-return-to';
 import { timingSafeIncludes } from '@/lib/security/timing-safe';
@@ -28,10 +29,25 @@ export interface AuthenticatedOAuthSession {
   orgId: string;
 }
 
-export async function requireAuthenticatedOAuthSession(): Promise<AuthenticatedOAuthSession | null> {
+export type OAuthSessionResult =
+  | { ok: true; session: AuthenticatedOAuthSession }
+  | { ok: false; response: NextResponse };
+
+// The single chokepoint for starting any provider connect flow (Shopify, Gmail,
+// Instagram, TikTok Shop). Connecting binds provider credentials to the
+// workspace, so it is admin-only.
+export async function requireAuthenticatedOAuthSession(): Promise<OAuthSessionResult> {
   const { userId, orgId } = await auth();
-  if (!userId || !orgId) return null;
-  return { userId, orgId };
+  if (!userId || !orgId) {
+    return { ok: false, response: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+  }
+  if (!(await isOrgAdmin())) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: ADMIN_REQUIRED_MESSAGE }, { status: 403 }),
+    };
+  }
+  return { ok: true, session: { userId, orgId } };
 }
 
 export async function createOAuthSessionCookies(

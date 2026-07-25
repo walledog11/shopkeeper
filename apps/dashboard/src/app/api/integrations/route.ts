@@ -155,6 +155,7 @@ export const POST = withOrgRoute(
   {
     context: 'Integrations POST',
     errorMessage: 'Failed to create integration',
+    requireAdmin: true,
     requireBillingWriteAllowed: true,
     rateLimit: { key: 'integrations:create', limit: 20, windowSecs: 60 },
   },

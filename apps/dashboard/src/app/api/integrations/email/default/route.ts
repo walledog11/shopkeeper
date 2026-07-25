@@ -8,6 +8,7 @@ export const PATCH = withOrgRoute(
   {
     context: 'Default email integration PATCH',
     errorMessage: 'Failed to set default email integration',
+    requireAdmin: true,
     requireBillingWriteAllowed: true,
     rateLimit: { key: 'integrations:email-default', limit: 30, windowSecs: 60 },
   },

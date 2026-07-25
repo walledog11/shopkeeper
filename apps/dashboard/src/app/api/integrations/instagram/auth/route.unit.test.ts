@@ -17,7 +17,10 @@ describe('POST /api/integrations/instagram/auth', () => {
     vi.stubEnv('APP_URL', 'https://dashboard.example.com');
     vi.stubEnv('INSTAGRAM_APP_ID', 'instagram-app-id');
     vi.stubEnv('INSTAGRAM_INTEGRATION_ENABLED', 'true');
-    requireSession.mockResolvedValue({ orgId: 'org_123', userId: 'user_123' });
+    requireSession.mockResolvedValue({
+      ok: true,
+      session: { orgId: 'org_123', userId: 'user_123' },
+    });
     createSessionCookies.mockResolvedValue({ state: 'state_123', returnTo: null });
   });
 
@@ -55,11 +58,26 @@ describe('POST /api/integrations/instagram/auth', () => {
   });
 
   it('requires an authenticated workspace session', async () => {
-    requireSession.mockResolvedValue(null);
+    requireSession.mockResolvedValue({
+      ok: false,
+      response: Response.json({ error: 'Unauthorized' }, { status: 401 }),
+    });
 
     const response = await POST(new Request('http://localhost', { method: 'POST' }));
 
     expect(response.status).toBe(401);
+    expect(createSessionCookies).not.toHaveBeenCalled();
+  });
+
+  it('passes the admin denial through when a member starts the connect flow', async () => {
+    requireSession.mockResolvedValue({
+      ok: false,
+      response: Response.json({ error: 'Only workspace admins can do this.' }, { status: 403 }),
+    });
+
+    const response = await POST(new Request('http://localhost', { method: 'POST' }));
+
+    expect(response.status).toBe(403);
     expect(createSessionCookies).not.toHaveBeenCalled();
   });
 

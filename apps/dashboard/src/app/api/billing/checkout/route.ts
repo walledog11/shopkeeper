@@ -10,6 +10,7 @@ export const POST = withOrgRoute(
   {
     context: 'Billing Checkout POST',
     errorMessage: 'Failed to create checkout session',
+    requireAdmin: true,
     rateLimit: { key: 'billing:checkout', limit: 5, windowSecs: 3600 },
   },
   async ({ org, request }) => {

@@ -23,6 +23,7 @@ beforeEach(() => {
   vi.mocked(auth).mockResolvedValue({
     userId: 'usr_oauth',
     orgId: 'org_oauth',
+    orgRole: 'org:admin',
   } as ReturnType<typeof auth> extends Promise<infer T> ? T : never);
   mockCookieSet.mockClear();
 });

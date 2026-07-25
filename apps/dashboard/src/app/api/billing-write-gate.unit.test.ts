@@ -12,6 +12,17 @@ vi.mock('@/lib/server/org', () => ({
   getOrCreateOrg: mockGetOrCreateOrg,
 }));
 
+// Admin-gated routes in the sweep (POST /api/integrations) check the role before
+// the billing gate, so the caller is an admin here: the 402 under test must be
+// the billing gate, not a role denial.
+vi.mock('@clerk/nextjs/server', () => ({
+  auth: vi.fn().mockResolvedValue({
+    userId: 'usr_1',
+    orgId: 'org_clerk_1',
+    orgRole: 'org:admin',
+  }),
+}));
+
 vi.mock('@/lib/server/logger', () => ({
   default: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));

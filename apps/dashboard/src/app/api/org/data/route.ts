@@ -77,6 +77,7 @@ export const DELETE = withOrgRoute(
   {
     context: 'Org Data DELETE',
     errorMessage: 'Failed to perform action',
+    requireAdmin: true,
     rateLimit: { key: 'org:data:delete', limit: 2, windowSecs: 3600 },
   },
   async ({ org, request }) => {

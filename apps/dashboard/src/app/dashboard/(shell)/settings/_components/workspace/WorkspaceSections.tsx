@@ -20,7 +20,9 @@ export function WorkspaceTabView({ orgName, state }: WorkspaceTabViewProps) {
   return (
     <div className="space-y-6">
       <DataPrivacySection state={state} />
-      <DangerZone orgName={orgName} state={state} />
+      {/* Both danger-zone actions are admin-only server-side, so members are not
+          shown a section where every button would come back 403. */}
+      {state.isAdmin && <DangerZone orgName={orgName} state={state} />}
       <DeleteWorkspaceDialog orgName={orgName} state={state} />
     </div>
   )

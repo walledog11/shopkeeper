@@ -12,10 +12,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await requireAuthenticatedOAuthSession();
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const sessionResult = await requireAuthenticatedOAuthSession();
+  if (!sessionResult.ok) return sessionResult.response;
+  const session = sessionResult.session;
 
   const oauthConfig = getShopifyOAuthAuthorizeConfig();
 

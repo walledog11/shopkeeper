@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { getOrCreateOrg } from '@/lib/server/org';
 import { handleApiError, NotFoundError } from '@/lib/api/errors';
+import { assertOrgAdmin } from '@/lib/api/permissions';
 import { assertBillingWriteAllowed } from '@/lib/billing/write-gate';
 import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit';
 
@@ -9,6 +10,9 @@ type Org = Awaited<ReturnType<typeof getOrCreateOrg>>;
 export interface OrgRouteOptions {
   context: string;
   errorMessage: string;
+  // Restrict this handler to Clerk org admins. See lib/api/permissions.ts for
+  // which operations are admin-only and why.
+  requireAdmin?: boolean;
   requireBillingWriteAllowed?: boolean;
   rateLimit?: { key: string; limit: number; windowSecs: number };
   // Called from the catch before handleApiError so routes can record failure
@@ -38,6 +42,9 @@ export function withOrgRoute<P = Record<string, never>>(
     try {
       const org = await getOrCreateOrg();
       orgId = org.id;
+      // Before the billing gate and rate limit so a forbidden caller neither
+      // learns the org's billing state nor spends its budget.
+      if (options.requireAdmin) await assertOrgAdmin();
       if (options.requireBillingWriteAllowed) assertBillingWriteAllowed(org);
       if (options.rateLimit) {
         const { key, limit, windowSecs } = options.rateLimit;

@@ -42,6 +42,7 @@ export const PATCH = withOrgRoute(
   {
     context: 'Org PATCH',
     errorMessage: 'Failed to update org',
+    requireAdmin: true,
     requireBillingWriteAllowed: true,
   },
   async ({ org, request }) => {

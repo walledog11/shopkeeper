@@ -1,6 +1,7 @@
 "use client"
 
 import useSWR from "swr"
+import { useOrganization } from "@clerk/nextjs"
 import { fetcher } from "@/lib/api/fetcher"
 import { Button } from "@/components/ui/button"
 import { SettingsDisclosure } from "@/components/settings-form/shared"
@@ -48,6 +49,10 @@ async function openBillingPortal() {
 
 export default function BillingTab() {
   const { data, isLoading, error } = useSWR<BillingInfo>('/api/billing', fetcher)
+  // Billing state stays readable for everyone; only admins can open the Stripe
+  // portal, which is what the server enforces.
+  const { membership } = useOrganization()
+  const isAdmin = membership?.role === 'org:admin'
 
   if (isLoading) {
     return (
@@ -109,13 +114,15 @@ export default function BillingTab() {
                   </p>
                 )}
               </div>
-              <Button
-                size="sm"
-                onClick={openBillingPortal}
-                className="h-8 px-4 bg-foreground/[0.12] text-white hover:bg-foreground/[0.18] text-xs font-semibold shrink-0"
-              >
-                {isActive ? 'Manage plan' : 'Upgrade'}
-              </Button>
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  onClick={openBillingPortal}
+                  className="h-8 px-4 bg-foreground/[0.12] text-white hover:bg-foreground/[0.18] text-xs font-semibold shrink-0"
+                >
+                  {isActive ? 'Manage plan' : 'Upgrade'}
+                </Button>
+              )}
             </div>
 
             <div className="flex items-center justify-between gap-4 border-t border-foreground/[0.06] pt-4">
@@ -128,14 +135,16 @@ export default function BillingTab() {
               ) : (
                 <p className="text-sm text-faint italic">No payment method on file</p>
               )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={openBillingPortal}
-                className="h-8 px-3 text-xs font-semibold border-foreground/[0.10] text-muted-foreground hover:bg-foreground/[0.08] shrink-0"
-              >
-                {data.paymentMethod ? 'Update card' : 'Add card'}
-              </Button>
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={openBillingPortal}
+                  className="h-8 px-3 text-xs font-semibold border-foreground/[0.10] text-muted-foreground hover:bg-foreground/[0.08] shrink-0"
+                >
+                  {data.paymentMethod ? 'Update card' : 'Add card'}
+                </Button>
+              )}
             </div>
           </div>
         </div>

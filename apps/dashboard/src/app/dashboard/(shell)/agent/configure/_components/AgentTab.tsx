@@ -1,6 +1,7 @@
 "use client"
 
 import useSWR from "swr"
+import { useOrganization } from "@clerk/nextjs"
 import type { OrgSettings, OrgSettingsPatch, VoiceProposal } from "@/types"
 import { fetcher } from "@/lib/api/fetcher"
 import {
@@ -31,6 +32,11 @@ export default function AgentTab(props: Props) {
   const controller = useAgentTabState(props)
   const { settingsState } = controller
   const agentName = settingsState.agentName
+  // These settings decide how much the agent may do on its own and how much it
+  // may refund, so saving them is admin-only server-side. Members can read the
+  // page; the save bar tells them why they can't apply a change.
+  const { membership } = useOrganization()
+  const isAdmin = membership?.role === "org:admin"
   const { data: integrations } = useSWR<IntegrationRow[]>("/api/integrations", fetcher)
   const emailConnected = integrations?.some(row => row.platform === "email") ?? false
   const shopifyConnected = integrations?.some(row => row.platform === "shopify") ?? false
@@ -54,7 +60,7 @@ export default function AgentTab(props: Props) {
         <AgentAdvancedSection controller={controller} />
       </div>
 
-      <StickySaveBar controller={controller} />
+      <StickySaveBar controller={controller} canSave={isAdmin} />
     </div>
   )
 }

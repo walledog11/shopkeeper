@@ -3,7 +3,8 @@
 import { Suspense, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import useSWR from "swr"
-import { CheckCircle2, AlertCircle, AlertTriangle } from "lucide-react"
+import { useOrganization } from "@clerk/nextjs"
+import { CheckCircle2, AlertCircle, AlertTriangle, Info } from "lucide-react"
 import { fetcher } from "@/lib/api/fetcher"
 import { cn } from "@/lib/ui/cn"
 import { useIntegrations } from "@/hooks/useIntegrations"
@@ -108,6 +109,8 @@ function IntegrationsPageContent({
   tiktokShopConfigured: boolean
 }) {
   const searchParams = useSearchParams()
+  const { membership } = useOrganization()
+  const isAdmin = membership?.role === 'org:admin'
   const { data, mutate } = useIntegrations()
   const { data: telegramStatus } = useSWR<{ connected: boolean; botUsername: string | null }>('/api/integrations/telegram', fetcher)
   const integrations = useMemo(() => data ?? [], [data])
@@ -355,6 +358,18 @@ function IntegrationsPageContent({
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex-1 overflow-y-auto">
         <div className="w-full px-6 py-6 space-y-6">
+
+        {/* Connecting or disconnecting a store binds provider credentials to the
+            whole workspace, so it is admin-only server-side. Binding your own
+            Telegram/iMessage device stays open to every member. */}
+        {!isAdmin && (
+          <div className="flex items-center gap-3 rounded-lg px-4 py-3 text-sm border border-foreground/[0.10] bg-foreground/[0.03] text-muted-foreground">
+            <Info className="size-4 shrink-0" />
+            <span>
+              Only workspace admins can connect or disconnect integrations. You can still link your own Telegram or iMessage.
+            </span>
+          </div>
+        )}
 
         {/* Attention banner — only when something needs fixing */}
         {alertCount > 0 && (

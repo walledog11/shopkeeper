@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getOrCreateOrg } from '@/lib/server/org'
 import { handleApiError } from '@/lib/api/errors'
+import { assertOrgAdmin } from '@/lib/api/permissions'
 import { readEmptyJsonBody } from '@/lib/api/body'
 import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit'
 import stripe from '@/lib/billing/stripe'
@@ -12,6 +13,7 @@ export async function POST(request?: Request) {
     if (request) await readEmptyJsonBody(request)
 
     const org = await getOrCreateOrg()
+    await assertOrgAdmin()
 
     // 5 portal sessions per hour per org — each call creates a Stripe session
     const rl = await rateLimit(`billing:portal:${org.id}`, 5, 3600)
