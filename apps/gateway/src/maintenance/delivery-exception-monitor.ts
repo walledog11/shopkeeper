@@ -13,6 +13,7 @@ import {
   ShopifyRequestError,
   type ShopifyContext,
 } from '@shopkeeper/agent/shopify';
+import { isShopifyIntegrationSweepable } from '@shopkeeper/agent/shopify/integration-health';
 import logger from '../logger.js';
 import { JOB, QUEUE } from '../constants.js';
 import {
@@ -90,6 +91,8 @@ export async function runDeliveryExceptionMonitor(): Promise<{
       organizationId: true,
       externalAccountId: true,
       accessToken: true,
+      tokenExpiresAt: true,
+      metadata: true,
       organization: { select: { settings: true } },
     },
   });
@@ -100,6 +103,7 @@ export async function runDeliveryExceptionMonitor(): Promise<{
 
   for (const integration of integrations) {
     if (!integration.accessToken || !integration.externalAccountId) continue;
+    if (!isShopifyIntegrationSweepable(integration)) continue;
     if (!isOrgDeliveryExceptionWatchEnabled(integration.organization.settings)) continue;
     orgsScanned += 1;
 

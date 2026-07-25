@@ -10,6 +10,7 @@ import {
   safeFetchOrderReturnStatuses,
   type ShopifyContext,
 } from '@shopkeeper/agent/shopify';
+import { isShopifyIntegrationSweepable } from '@shopkeeper/agent/shopify/integration-health';
 import { isReturnLifecycleMonitorEnabled } from '../config/runtime-config.js';
 import logger from '../logger.js';
 import { JOB, QUEUE } from '../constants.js';
@@ -137,7 +138,13 @@ export async function runReturnLifecycleMonitor(): Promise<{
 
   const integrations = await db.integration.findMany({
     where: { platform: 'shopify', accessToken: { not: null } },
-    select: { organizationId: true, externalAccountId: true, accessToken: true },
+    select: {
+      organizationId: true,
+      externalAccountId: true,
+      accessToken: true,
+      tokenExpiresAt: true,
+      metadata: true,
+    },
   });
 
   let returnsChecked = 0;
@@ -145,6 +152,7 @@ export async function runReturnLifecycleMonitor(): Promise<{
 
   for (const integration of integrations) {
     if (!integration.accessToken || !integration.externalAccountId) continue;
+    if (!isShopifyIntegrationSweepable(integration)) continue;
     const ctx: ShopifyContext = {
       shop: integration.externalAccountId,
       accessToken: integration.accessToken,

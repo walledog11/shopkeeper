@@ -3,35 +3,21 @@ import { db } from '@shopkeeper/db';
 import { shopifyRestJson, ShopifyRequestError } from '@shopkeeper/agent/shopify';
 import { getRedis } from '@/lib/server/redis';
 import logger from '@/lib/server/logger';
-import { isSimulatedShopifyIntegration } from '@/lib/integrations/shopify-simulator';
+import {
+  isShopifyIntegrationOperational,
+  isSimulatedShopifyIntegration,
+} from '@shopkeeper/agent/shopify/integration-health';
 
-export type ShopifyConnectionState = 'active' | 'invalid' | 'incomplete';
+export {
+  getShopifyConnectionState,
+  isShopifyIntegrationOperational,
+  type ShopifyConnectionState,
+} from '@shopkeeper/agent/shopify/integration-health';
 
 const PROBE_COOLDOWN_SECS = 60;
 
 export function isShopifyAuthFailure(status: number | undefined): boolean {
   return status === 401 || status === 403;
-}
-
-export function getShopifyConnectionState(integration: {
-  accessToken: string | null;
-  tokenExpiresAt: Date | null;
-}): ShopifyConnectionState {
-  if (!integration.accessToken) return 'incomplete';
-  if (
-    integration.tokenExpiresAt !== null &&
-    integration.tokenExpiresAt.getTime() <= Date.now()
-  ) {
-    return 'invalid';
-  }
-  return 'active';
-}
-
-export function isShopifyIntegrationOperational(integration: {
-  accessToken: string | null;
-  tokenExpiresAt: Date | null;
-}): boolean {
-  return getShopifyConnectionState(integration) === 'active';
 }
 
 export async function markShopifyIntegrationInvalidIfAuthFailure(

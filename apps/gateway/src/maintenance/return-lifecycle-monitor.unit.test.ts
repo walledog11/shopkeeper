@@ -108,6 +108,34 @@ describe('runReturnLifecycleMonitor', () => {
     expect(markReturnWatchPlanPushed).toHaveBeenCalledWith('watch-1', 'org-a');
   });
 
+  it('skips simulated and expired integrations without loading their watches', async () => {
+    isEnabled.mockReturnValue(true);
+    findMany.mockResolvedValue([
+      {
+        organizationId: 'org-simulated',
+        externalAccountId: 'demo-store.shopkeeper.test',
+        accessToken: 'shopkeeper-development-simulator',
+        tokenExpiresAt: null,
+        metadata: { simulated: true },
+      },
+      {
+        organizationId: 'org-expired',
+        externalAccountId: 'expired.myshopify.com',
+        accessToken: 'token-expired',
+        tokenExpiresAt: new Date(0),
+        metadata: null,
+      },
+    ]);
+
+    await expect(runReturnLifecycleMonitor()).resolves.toEqual({
+      orgsScanned: 2,
+      returnsChecked: 0,
+      arrivalsNotified: 0,
+    });
+    expect(listOpenReturnWatches).not.toHaveBeenCalled();
+    expect(safeFetchOrderReturnStatuses).not.toHaveBeenCalled();
+  });
+
   it('isolates Shopify failures to the affected order', async () => {
     isEnabled.mockReturnValue(true);
     findMany.mockResolvedValue([

@@ -112,6 +112,36 @@ describe('runDeliveryExceptionMonitor', () => {
     expect(findMany).not.toHaveBeenCalled();
   });
 
+  it('skips simulated and expired integrations without listing shipments', async () => {
+    findMany.mockResolvedValue([
+      {
+        organizationId: 'org-simulated',
+        externalAccountId: 'demo-store.shopkeeper.test',
+        accessToken: 'shopkeeper-development-simulator',
+        tokenExpiresAt: null,
+        metadata: { simulated: true },
+        organization: { settings: {} },
+      },
+      {
+        organizationId: 'org-expired',
+        externalAccountId: 'expired.myshopify.com',
+        accessToken: 'token-expired',
+        tokenExpiresAt: new Date(0),
+        metadata: null,
+        organization: { settings: {} },
+      },
+    ]);
+
+    const runPromise = runDeliveryExceptionMonitor();
+    await vi.runAllTimersAsync();
+    await expect(runPromise).resolves.toEqual({
+      orgsScanned: 0,
+      shipmentsChecked: 0,
+      issuesNotified: 0,
+    });
+    expect(listRecentShippedOrderShipments).not.toHaveBeenCalled();
+  });
+
   it('skips shipments that already have a terminal watch row', async () => {
     getShipmentWatch.mockResolvedValue({ id: 'watch-old', status: 'plan_pushed' });
     listRecentShippedOrderShipments.mockResolvedValue([{

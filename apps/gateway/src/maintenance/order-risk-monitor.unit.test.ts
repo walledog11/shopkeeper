@@ -81,6 +81,46 @@ describe('runOrderRiskMonitor', () => {
     ]);
   });
 
+  it('skips simulated and expired integrations without touching Shopify', async () => {
+    isEnabled.mockReturnValue(true);
+    findMany.mockResolvedValue([
+      {
+        organizationId: 'org-simulated',
+        externalAccountId: 'demo-store.shopkeeper.test',
+        accessToken: 'shopkeeper-development-simulator',
+        tokenExpiresAt: null,
+        metadata: { simulated: true },
+      },
+      {
+        organizationId: 'org-expired',
+        externalAccountId: 'expired.myshopify.com',
+        accessToken: 'token-expired',
+        tokenExpiresAt: new Date(0),
+        metadata: null,
+      },
+      {
+        organizationId: 'org-real',
+        externalAccountId: 'real.myshopify.com',
+        accessToken: 'token-real',
+        tokenExpiresAt: null,
+        metadata: null,
+      },
+    ]);
+    listOrderIds.mockResolvedValue(['100']);
+    const queue = { add: vi.fn().mockResolvedValue({ id: 'job' }) };
+
+    await expect(runOrderRiskMonitor(queue as never)).resolves.toEqual({
+      orgsScanned: 3,
+      ordersReviewed: 1,
+    });
+    expect(listOrderIds).toHaveBeenCalledTimes(1);
+    expect(listOrderIds).toHaveBeenCalledWith(
+      expect.objectContaining({ shop: 'real.myshopify.com' }),
+      expect.anything(),
+    );
+    expect(queue.add).toHaveBeenCalledTimes(1);
+  });
+
   it('isolates provider failures to the affected organization', async () => {
     isEnabled.mockReturnValue(true);
     findMany.mockResolvedValue([

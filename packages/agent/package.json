@@ -106,6 +106,10 @@
       "types": "./dist/shopify/index.d.ts",
       "default": "./dist/shopify/index.js"
     },
+    "./shopify/integration-health": {
+      "types": "./dist/shopify/integration-health.d.ts",
+      "default": "./dist/shopify/integration-health.js"
+    },
     "./order-ops": {
       "types": "./dist/order-ops/index.d.ts",
       "default": "./dist/order-ops/index.js"

@@ -5,6 +5,7 @@ import {
   ShopifyRequestError,
   type ShopifyContext,
 } from '@shopkeeper/agent/shopify';
+import { isShopifyIntegrationSweepable } from '@shopkeeper/agent/shopify/integration-health';
 import { isOrderRiskMonitorEnabled } from '../config/runtime-config.js';
 import logger from '../logger.js';
 import { JOB, QUEUE } from '../constants.js';
@@ -51,12 +52,19 @@ export async function runOrderRiskMonitor(
 
   const integrations = await db.integration.findMany({
     where: { platform: 'shopify', accessToken: { not: null } },
-    select: { organizationId: true, externalAccountId: true, accessToken: true },
+    select: {
+      organizationId: true,
+      externalAccountId: true,
+      accessToken: true,
+      tokenExpiresAt: true,
+      metadata: true,
+    },
   });
 
   let ordersReviewed = 0;
   for (const integration of integrations) {
     if (!integration.accessToken || !integration.externalAccountId) continue;
+    if (!isShopifyIntegrationSweepable(integration)) continue;
     const shop = integration.externalAccountId;
     const orderIds = await fetchRecentUnfulfilledOrderIds(shop, integration.accessToken);
     for (const orderId of orderIds) {
