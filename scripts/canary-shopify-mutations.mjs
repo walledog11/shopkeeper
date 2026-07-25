@@ -5,7 +5,12 @@
 // mutations unless the store is a known development plan or --allow-live-store
 // is explicitly passed.
 //
+// The store is never chosen implicitly: simulated fixtures and rows whose token
+// cannot be decrypted in this environment are skipped, and anything short of a
+// single remaining candidate requires --shop.
+//
 //   node scripts/canary-shopify-mutations.mjs
+//   node scripts/canary-shopify-mutations.mjs --shop=example.myshopify.com
 //   node scripts/canary-shopify-mutations.mjs --execute --only=gift_card,refund
 import { createHash, randomUUID } from 'node:crypto';
 import { loadLocalEnv } from './load-local-env.mjs';
@@ -25,6 +30,7 @@ const args = new Set(process.argv.slice(2));
 const EXECUTE = args.has('--execute');
 const ALLOW_LIVE_STORE = args.has('--allow-live-store');
 const ONLY = readCsvArg('--only=');
+const SHOP = readValueArg('--shop=');
 
 const DEVELOPMENT_PLANS = new Set([
   'partner_test',
@@ -36,8 +42,13 @@ const DEVELOPMENT_PLANS = new Set([
   'shopify_alumni',
 ]);
 
+function readValueArg(prefix) {
+  const raw = process.argv.slice(2).find((arg) => arg.startsWith(prefix))?.slice(prefix.length).trim();
+  return raw || null;
+}
+
 function readCsvArg(prefix) {
-  const raw = process.argv.slice(2).find((arg) => arg.startsWith(prefix))?.slice(prefix.length);
+  const raw = readValueArg(prefix);
   if (!raw) return null;
   return raw.split(',').map((value) => value.trim()).filter(Boolean);
 }
@@ -50,9 +61,22 @@ function shouldRun(family) {
   return !ONLY || ONLY.includes(family);
 }
 
+function isSimulated(metadata) {
+  return Boolean(
+    metadata
+    && typeof metadata === 'object'
+    && !Array.isArray(metadata)
+    && metadata.simulated === true,
+  );
+}
+
+function normalizeShop(value) {
+  return value.trim().toLowerCase().replace(/\.myshopify\.com$/, '');
+}
+
 async function loadShopifyIntegration() {
-  const integration = await db.integration.findFirst({
-    where: { platform: 'shopify', accessToken: { not: null } },
+  const rows = await db.integration.findMany({
+    where: { platform: 'shopify' },
     select: {
       id: true,
       organizationId: true,
@@ -62,18 +86,49 @@ async function loadShopifyIntegration() {
     },
     orderBy: { createdAt: 'desc' },
   });
-  if (!integration?.accessToken || !integration.externalAccountId) {
-    throw new Error('No connected Shopify integration with credentials was found.');
+
+  const skipped = [];
+  const candidates = [];
+  for (const row of rows) {
+    const shop = row.externalAccountId;
+    if (!shop) {
+      skipped.push({ shop: null, reason: 'no shop domain recorded' });
+    } else if (isSimulated(row.metadata)) {
+      skipped.push({ shop, reason: 'simulated fixture' });
+    } else if (!row.accessToken) {
+      // accessToken is decrypted on read, so a null here means either no stored
+      // token or one this environment's TOKEN_ENCRYPTION_KEY cannot decrypt.
+      skipped.push({ shop, reason: 'token absent or not decryptable with this TOKEN_ENCRYPTION_KEY' });
+    } else {
+      candidates.push(row);
+    }
   }
+
+  const matches = SHOP
+    ? candidates.filter((row) => normalizeShop(row.externalAccountId) === normalizeShop(SHOP))
+    : candidates;
+
+  if (matches.length !== 1) {
+    const available = candidates.map((row) => row.externalAccountId).join(', ') || 'none';
+    const detail = skipped.length > 0
+      ? ` Skipped: ${skipped.map((entry) => `${entry.shop ?? 'unknown'} (${entry.reason})`).join('; ')}.`
+      : '';
+    if (matches.length === 0) {
+      throw new Error(
+        `${SHOP ? `No usable Shopify integration matched --shop=${SHOP}.` : 'No usable Shopify integration was found.'}`
+        + ` Usable: ${available}.${detail}`,
+      );
+    }
+    throw new Error(
+      `${matches.length} usable Shopify integrations found; pass --shop=<domain> to choose one. Usable: ${available}.${detail}`,
+    );
+  }
+
+  const integration = matches[0];
   return {
     organizationId: integration.organizationId,
     integrationId: integration.id,
-    simulated: Boolean(
-      integration.metadata
-      && typeof integration.metadata === 'object'
-      && !Array.isArray(integration.metadata)
-      && integration.metadata.simulated === true,
-    ),
+    skipped,
     ctx: {
       shop: integration.externalAccountId,
       accessToken: integration.accessToken,
@@ -211,22 +266,19 @@ async function runCanaries(ctx, inspection) {
   return results;
 }
 
-const { organizationId, integrationId, simulated, ctx } = await loadShopifyIntegration();
+const { organizationId, integrationId, skipped, ctx } = await loadShopifyIntegration();
 const inspection = await inspectStore(ctx);
 
 const report = {
   mode: EXECUTE ? 'execute' : 'inspect',
   organizationFingerprint: fingerprint(organizationId),
   integrationFingerprint: fingerprint(integrationId),
-  simulatedIntegration: simulated,
+  selectedShop: ctx.shop,
+  skippedIntegrations: skipped,
   inspection,
-  canaries: EXECUTE && !simulated ? await runCanaries(ctx, inspection) : [],
+  canaries: EXECUTE ? await runCanaries(ctx, inspection) : [],
   notes: [],
 };
-
-if (simulated) {
-  report.notes.push('Connected Shopify integration is marked simulated; mutation canaries are disabled.');
-}
 
 if (inspection.connectivityError) {
   report.notes.push(`Shopify connectivity failed: ${inspection.connectivityError}`);
