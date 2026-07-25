@@ -9,7 +9,7 @@ B6 (order-ops autonomy) was never a behavior phase — it's module #2 and now li
 only in
 [core-extraction-and-module-expansion-plan.md](core-extraction-and-module-expansion-plan.md).
 
-Last reviewed: 2026-07-24.
+Last reviewed: 2026-07-25.
 
 ## Rollout state
 
@@ -83,24 +83,39 @@ Nothing here waits on production traffic, credits, or another plan.
    mutation-verified against the old queries — an org with one email ticket plus
    an operator thread, a Concierge thread and an archived thread reported "Open
    tickets: 3" before and 1 after.
-6. **Two simulated Shopify integrations are sitting in the production
-   database.** Both are `demo-store.shopkeeper.test`, created 2026-07-02, with
+6. ~~**Two simulated Shopify integrations are sitting in the production
+   database.**~~ **Guard done 2026-07-25; the rows are still there and that is
+   now a cleanup choice, not an exposure.** Both are
+   `demo-store.shopkeeper.test`, created 2026-07-02, with
    `metadata.simulated = true` and tokens encrypted under a local dev fallback
    key (they are unreadable in production; `palette-dev` is healthy and reads
    fine there). Found 2026-07-24 while running the P3-01 canary, which selected
-   one of them instead of the real store.
-   They are inert today — every app-code Shopify lookup is org-scoped, so no
-   merchant is served from them. The exposure is the monitor rollout: the
-   cross-org sweeps in `order-risk-monitor.ts:53`,
-   `return-lifecycle-monitor.ts:139` and `delivery-exception-monitor.ts:88`
-   select *every* integration with a non-null token and have no
-   `isShopifyIntegrationOperational` guard — that guard exists only in the
-   dashboard (`lib/server/shopify-integration.ts:30`). When B3/B4/B6 flags flip,
-   those sweeps would try to work a fake store.
-   Two fixes, and they are not equivalent: delete the two rows (a production
-   data decision, and the fixtures come back the next time someone seeds), or
-   give the sweeps the operational guard (durable, and the right fix
-   regardless). Prefer the guard; treat deletion as cleanup, not the remedy.
+   one of them instead of the real store. They were always inert to app code —
+   every app-code Shopify lookup is org-scoped — so the exposure was only the
+   cross-org monitor sweeps.
+   **Correction to what this item originally prescribed:** the operational guard
+   alone would *not* have excluded these rows. `api/integrations/shopify/simulate/route.ts:30`
+   creates them with a live-looking `accessToken` and no `tokenExpiresAt`, so
+   `getShopifyConnectionState` returns `active` and
+   `isShopifyIntegrationOperational` returns **true**. The dashboard never leaned
+   on that guard for them either — it checks `isSimulatedShopifyIntegration`
+   separately and earlier (`shopify-integration.ts:92`).
+   The fix is `isShopifyIntegrationSweepable` in the new host-agnostic
+   `packages/agent/src/shopify/integration-health.ts` (own subpath export, so the
+   pure predicates don't drag the `./shopify` barrel into the dashboard client
+   bundle — and so the sweeps' `vi.mock('@shopkeeper/agent/shopify')` doesn't
+   stub them out). It is not-simulated **and** operational, applied in all three
+   sweeps (`order-risk-monitor.ts`, `return-lifecycle-monitor.ts`,
+   `delivery-exception-monitor.ts`), each of which now also selects
+   `tokenExpiresAt` and `metadata`. The dashboard's copies of
+   `getShopifyConnectionState` / `isShopifyIntegrationOperational` /
+   `isSimulatedShopifyIntegration` are re-exports of the shared module, so there
+   is one definition rather than two. Covered by a per-sweep unit test plus the
+   predicate suite, mutation-verified: stubbing the guard to `return true` fails
+   exactly three tests, one per monitor.
+   **Left open:** deleting the two production rows. It is a production data
+   decision, the fixtures come back the next time someone seeds, and nothing now
+   depends on it.
 
 ## Decisions
 
@@ -165,9 +180,9 @@ Each row names the event that unblocks it. None of these are code.
 
 | Item | Blocked on | Unblock event |
 | --- | --- | --- |
-| A5's "Handled" section claiming actions definitely completed | P3-01 provider canaries | Run them one tool family at a time: `npm run canary:shopify-mutations` (inspect-only by default), under production credentials — `railway run --service shopkeeper --`. **Not** blocked on store availability (`palette-dev` confirmed 2026-07-20) or on the harness (store selection fixed 2026-07-24, `632be88e`); the mutating pass needs `--allow-live-store` because `palette-dev` reports plan `basic`. |
+| A5's "Handled" section claiming actions definitely completed | P3-01 mutating canary pass — and, before it, **one test order in `palette-dev`** | Inspect pass ran clean 2026-07-25 (`railway run --service shopkeeper -- node scripts/canary-shopify-mutations.mjs`): selected `palette-dev-3peukw16.myshopify.com`, skipped both simulated rows as `simulated fixture`, `connectivityError: null` — so credentials, token decryption and Shopify auth are all confirmed, and neither store availability nor the harness (`632be88e`) is a blocker. What *is*: the store reports `testCount: 0` / `liveCount: 4`, and the refund family needs a `test: true` order (`canary-shopify-mutations.mjs:235`). Without one it silently skips with a note and exit code 0, so a mutating run would cover gift_card + order_creation **for real** on a paid `basic`-plan store while never testing refunds — the one irreversible family. Create a Bogus Gateway / Shopify-Payments-test-mode order first, then run `--execute --allow-live-store`. Unrelated pre-check: granted scopes aren't persisted (`callback/route.ts:147` stores only token/fromEmail/tokenExpiresAt), so a `write_gift_cards` gap from before the 2026-07-06 capability expansion would surface as an ambiguous 403. |
 | Raising `OPERATOR_PLAN_QUEUE_MAX` above 1 | P1 execution-ledger rollout verification | `npm run audit:plan-executions -- --hours=24` returning representative dashboard *and* gateway executions. It currently returns zero — there is no traffic yet. |
-| Enabling B3/B4 monitors | same P1 rollout, plus the P6-02 controlled recovery exercise, plus item 6 above (their cross-org sweeps would pick up the simulated production fixtures) | as above |
+| Enabling B3/B4 monitors | same P1 rollout, plus the P6-02 controlled recovery exercise (the simulated-fixture leg is closed — see item 6) | as above |
 | B3/B4/B5 live push verification | a real return arrival, delivery exception, or 5-day-old resolution | first real merchant traffic, or a deliberately staged fixture on the test DB |
 
 Until its gate lands, a capability may ship only the read-only or copy-only
