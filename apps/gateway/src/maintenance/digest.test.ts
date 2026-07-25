@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { ThreadFilterStatus } from '@shopkeeper/db';
+import { afterEach, describe, it, expect } from 'vitest';
+import { db, ThreadFilterStatus } from '@shopkeeper/db';
+import { cleanupTestData, createTestCustomer, createTestOrg, createTestThread } from '@shopkeeper/db/test-helpers';
 import type { SupportStatsSummary } from '@shopkeeper/agent/support-stats';
-import { bucketDigestThreads, formatDigestMessage, formatWeeklySummaryLine } from './digest.js';
+import { bucketDigestThreads, buildOrgDigest, formatDigestMessage, formatWeeklySummaryLine } from './digest.js';
 
 const NOW = new Date('2026-04-29T12:00:00Z');
 const HOUR = 3_600_000;
@@ -186,6 +187,48 @@ describe('formatDigestMessage', () => {
     expect(salesIndex).toBeGreaterThan(-1);
     expect(lowStockIndex).toBeGreaterThan(salesIndex);
     expect(weeklyIndex).toBeGreaterThan(lowStockIndex);
+  });
+});
+
+describe('buildOrgDigest — inbox scope', () => {
+  let org: Awaited<ReturnType<typeof createTestOrg>> | null = null;
+
+  afterEach(async () => {
+    await cleanupTestData(org?.id);
+    org = null;
+  });
+
+  it('counts only canonical inbox threads as open tickets', async () => {
+    org = await createTestOrg();
+    // One open thread per (customer, channel) — the threads table has a partial
+    // unique index on open rows, so each thread here needs its own customer.
+    const jane = await createTestCustomer(org.id, 'jane@example.com', { name: 'Jane' });
+    const operator = await createTestCustomer(org.id, 'op@example.com', { name: 'Operator' });
+    const archivedCustomer = await createTestCustomer(org.id, 'old@example.com', { name: 'Old' });
+    await createTestThread(org.id, jane.id, 'email');
+    await createTestThread(org.id, operator.id, 'sms_agent');
+    await createTestThread(org.id, operator.id, 'dashboard_agent');
+    const archived = await createTestThread(org.id, archivedCustomer.id, 'email');
+    await db.thread.update({ where: { id: archived.id }, data: { archivedAt: new Date() } });
+
+    const digest = await buildOrgDigest(org.id, NOW);
+    expect(digest?.message).toContain('Open tickets: 1');
+  });
+
+  it('still counts filtered threads for the filtered line', async () => {
+    org = await createTestOrg();
+    const genuine = await createTestCustomer(org.id, 'real@example.com', { name: 'Real' });
+    const spammer = await createTestCustomer(org.id, 'spam@example.com', { name: 'Spammer' });
+    await createTestThread(org.id, genuine.id, 'email');
+    const filtered = await createTestThread(org.id, spammer.id, 'email');
+    await db.thread.update({
+      where: { id: filtered.id },
+      data: { filterStatus: ThreadFilterStatus.filtered },
+    });
+
+    const digest = await buildOrgDigest(org.id, NOW);
+    expect(digest?.message).toContain('Open tickets: 1');
+    expect(digest?.message).toContain('Filtered: 1');
   });
 });
 

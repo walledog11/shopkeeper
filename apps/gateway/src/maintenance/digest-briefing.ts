@@ -1,6 +1,7 @@
 import { classifyHomePlan } from '@shopkeeper/agent/plan-preview';
 import { getPlanExecution } from '@shopkeeper/agent/execution-ledger';
 import { getCurrentPlanForThread, readAgentPlanCacheRecordShape } from '@shopkeeper/agent/plan-cache-shape';
+import { canonicalInboxThreadWhere } from '@shopkeeper/agent/inbox-filter';
 import { PLAN_STEP_LABELS } from '@shopkeeper/agent/tools';
 import { SENDER_TYPE } from '@shopkeeper/agent/thread-constants';
 import { db } from '@shopkeeper/db';
@@ -297,9 +298,8 @@ async function loadStaleThreadWaitingItems(
   const cutoff = new Date(now.getTime() - WAITING_PLAN_MIN_AGE_MS);
   const threads = await db.thread.findMany({
     where: {
-      organizationId,
+      ...canonicalInboxThreadWhere(organizationId),
       status: 'open',
-      deletedAt: null,
       cachedPlan: { not: Prisma.DbNull },
       updatedAt: { lte: cutoff },
     },

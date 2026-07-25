@@ -22,6 +22,28 @@ import { updateContext } from '../operator-context.js';
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 const NOW = new Date('2026-04-29T12:00:00Z');
 
+// A cached plan that classifies as needing merchant input, so the thread
+// qualifies for "Waiting on you" once it goes stale.
+function staleReviewPlanCache(lastCustomerMessageId: string) {
+  return buildAgentPlanCacheRecord({
+    instruction: 'Refund policy question',
+    plan: {
+      instruction: 'Refund policy question',
+      steps: [{
+        id: 'step-1',
+        tool: 'ask_operator',
+        label: 'Ask operator',
+        description: 'Ask operator',
+        category: 'internal',
+        enabled: true,
+      }],
+      rawToolCalls: [{ id: 'step-1', name: 'ask_operator', input: { question: 'Can we refund?' } }],
+    },
+    lastCustomerMessageId,
+    settings: resolveAgentSettings(null),
+  });
+}
+
 beforeEach(async () => {
   org = await createTestOrg();
 });
@@ -139,29 +161,11 @@ describe('loadWaitingOnYouItems', () => {
     const customer = await createTestCustomer(org.id, 'bob@example.com', { name: 'Bob Lee' });
     const thread = await createTestThread(org.id, customer.id, 'email');
     const message = await createTestMessage(thread.id, 'Can I get a refund?');
-    const settings = resolveAgentSettings(null);
-    const cached = buildAgentPlanCacheRecord({
-      instruction: 'Refund policy question',
-      plan: {
-        instruction: 'Refund policy question',
-        steps: [{
-          id: 'step-1',
-          tool: 'ask_operator',
-          label: 'Ask operator',
-          description: 'Ask operator',
-          category: 'internal',
-          enabled: true,
-        }],
-        rawToolCalls: [{ id: 'step-1', name: 'ask_operator', input: { question: 'Can we refund?' } }],
-      },
-      lastCustomerMessageId: message.id,
-      settings,
-    });
 
     await db.thread.update({
       where: { id: thread.id },
       data: {
-        cachedPlan: cached,
+        cachedPlan: staleReviewPlanCache(message.id),
         cachedPlanMessageId: message.id,
         updatedAt: new Date(NOW.getTime() - 4 * 3_600_000),
       },
@@ -171,5 +175,23 @@ describe('loadWaitingOnYouItems', () => {
     expect(items).toHaveLength(1);
     expect(items[0]?.line).toContain('Bob');
     expect(formatWaitingSection(items)).toContain('Waiting on you');
+  });
+
+  it('ignores stale plans on threads outside the support inbox', async () => {
+    const customer = await createTestCustomer(org.id, 'op@example.com', { name: 'Operator' });
+    for (const channel of ['sms_agent', 'dashboard_agent'] as const) {
+      const thread = await createTestThread(org.id, customer.id, channel);
+      const message = await createTestMessage(thread.id, 'What needs my attention?');
+      await db.thread.update({
+        where: { id: thread.id },
+        data: {
+          cachedPlan: staleReviewPlanCache(message.id),
+          cachedPlanMessageId: message.id,
+          updatedAt: new Date(NOW.getTime() - 4 * 3_600_000),
+        },
+      });
+    }
+
+    expect(await loadWaitingOnYouItems(org.id, NOW)).toEqual([]);
   });
 });

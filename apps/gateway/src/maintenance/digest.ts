@@ -1,4 +1,5 @@
 import { getSupportStats, type SupportStatsSummary } from '@shopkeeper/agent/support-stats';
+import { canonicalInboxThreadWhere } from '@shopkeeper/agent/inbox-filter';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { db, ThreadFilterStatus, type DbThreadFilterStatus } from '@shopkeeper/db';
 import { JOB, QUEUE } from '../constants.js';
@@ -192,7 +193,13 @@ export async function buildOrgDigest(
   const since = resolveHandledWindowStart(settings, now);
   const [openThreads, weeklyStats, handledRollup, waitingItems, garnishLines] = await Promise.all([
     db.thread.findMany({
-      where: { organizationId, status: 'open', deletedAt: null },
+      where: {
+        ...canonicalInboxThreadWhere(organizationId),
+        // The digest reports filtered threads as a count ("Filtered: n") rather
+        // than hiding them, so drop that one clause of the inbox scope.
+        filterStatus: undefined,
+        status: 'open',
+      },
       select: {
         id: true,
         updatedAt: true,
