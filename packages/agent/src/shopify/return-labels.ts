@@ -49,6 +49,19 @@ interface ReverseDeliveryCreateData {
   } | null;
 }
 
+export const REVERSE_DELIVERY_CREATE_WITH_SHIPPING_MUTATION = `mutation reverseDeliveryCreateWithShipping($reverseFulfillmentOrderId: ID!, $trackingInput: ReverseDeliveryTrackingInput, $labelInput: ReverseDeliveryLabelInput) {
+        reverseDeliveryCreateWithShipping(
+          reverseFulfillmentOrderId: $reverseFulfillmentOrderId,
+          reverseDeliveryLineItems: [],
+          trackingInput: $trackingInput,
+          labelInput: $labelInput,
+          notifyCustomer: false
+        ) {
+          reverseDelivery { id }
+          userErrors { field message }
+        }
+      }`;
+
 export async function attachReturnLabel(
   input: AttachReturnLabelInput,
   ctx: ShopifyContext
@@ -95,18 +108,7 @@ export async function attachReturnLabel(
 
     const created = await shopifyGraphql<ReverseDeliveryCreateData>(
       ctx,
-      `mutation reverseDeliveryCreateWithShipping($reverseFulfillmentOrderId: ID!, $trackingInput: ReverseDeliveryTrackingInput, $labelInput: ReverseDeliveryLabelInput, $notifyCustomer: Boolean) {
-        reverseDeliveryCreateWithShipping(
-          reverseFulfillmentOrderId: $reverseFulfillmentOrderId,
-          reverseDeliveryLineItems: [],
-          trackingInput: $trackingInput,
-          labelInput: $labelInput,
-          notifyCustomer: false
-        ) {
-          reverseDelivery { id }
-          userErrors { field message }
-        }
-      }`,
+      REVERSE_DELIVERY_CREATE_WITH_SHIPPING_MUTATION,
       {
         reverseFulfillmentOrderId,
         labelInput: { fileUrl: labelUrl },

@@ -65,6 +65,46 @@ interface OrderEditMutationData {
   } | null;
 }
 
+export const ORDER_EDIT_BEGIN_MUTATION = `mutation orderEditBegin($id: ID!) {
+        orderEditBegin(id: $id) {
+          calculatedOrder {
+            id
+            lineItems(first: 250) {
+              edges { node { id quantity variant { id title } title } }
+              pageInfo { hasNextPage }
+            }
+          }
+          userErrors { field message }
+        }
+      }`;
+
+export const ORDER_EDIT_ADD_VARIANT_MUTATION = `mutation orderEditAddVariant($id: ID!, $variantId: ID!, $quantity: Int!) {
+          orderEditAddVariant(id: $id, variantId: $variantId, quantity: $quantity) {
+            calculatedOrder { id }
+            userErrors { field message }
+          }
+        }`;
+
+export const ORDER_EDIT_SET_QUANTITY_MUTATION = `mutation orderEditSetQuantity($id: ID!, $lineItemId: ID!, $quantity: Int!) {
+          orderEditSetQuantity(id: $id, lineItemId: $lineItemId, quantity: $quantity) {
+            calculatedOrder { id }
+            userErrors { field message }
+          }
+        }`;
+
+export const ORDER_EDIT_COMMIT_MUTATION = `mutation orderEditCommit($id: ID!) {
+        orderEditCommit(id: $id, notifyCustomer: false) {
+          order {
+            name
+            lineItems(first: 250) {
+              edges { node { title currentQuantity variant { id title } } }
+              pageInfo { hasNextPage }
+            }
+          }
+          userErrors { field message }
+        }
+      }`;
+
 type EditAction = "swapped item on" | "removed item from" | "added item to";
 type EditPhase = "not_started" | "begin" | "add" | "remove" | "commit";
 
@@ -227,18 +267,7 @@ export async function editShopifyOrder(
     phase = "begin";
     const beginData = await shopifyGraphql<OrderEditBeginData>(
       ctx,
-      `mutation orderEditBegin($id: ID!) {
-        orderEditBegin(id: $id) {
-          calculatedOrder {
-            id
-            lineItems(first: 250) {
-              edges { node { id quantity variant { id title } title } }
-              pageInfo { hasNextPage }
-            }
-          }
-          userErrors { field message }
-        }
-      }`,
+      ORDER_EDIT_BEGIN_MUTATION,
       { id: orderGid },
     );
 
@@ -284,12 +313,7 @@ export async function editShopifyOrder(
       phase = "add";
       const addData = await shopifyGraphql<OrderEditMutationData>(
         ctx,
-        `mutation orderEditAddVariant($id: ID!, $variantId: ID!, $quantity: Int!) {
-          orderEditAddVariant(id: $id, variantId: $variantId, quantity: $quantity) {
-            calculatedOrder { id }
-            userErrors { field message }
-          }
-        }`,
+        ORDER_EDIT_ADD_VARIANT_MUTATION,
         { id: calculatedOrderId, variantId: addVariantGid, quantity },
       );
       const addPayload = addData.orderEditAddVariant;
@@ -303,12 +327,7 @@ export async function editShopifyOrder(
       phase = "remove";
       const setQtyData = await shopifyGraphql<OrderEditMutationData>(
         ctx,
-        `mutation orderEditSetQuantity($id: ID!, $lineItemId: ID!, $quantity: Int!) {
-          orderEditSetQuantity(id: $id, lineItemId: $lineItemId, quantity: $quantity) {
-            calculatedOrder { id }
-            userErrors { field message }
-          }
-        }`,
+        ORDER_EDIT_SET_QUANTITY_MUTATION,
         { id: calculatedOrderId, lineItemId: itemToRemove.node.id, quantity: 0 },
       );
       const setQtyPayload = setQtyData.orderEditSetQuantity;
@@ -327,18 +346,7 @@ export async function editShopifyOrder(
     phase = "commit";
     const commitData = await shopifyGraphql<OrderEditMutationData>(
       ctx,
-      `mutation orderEditCommit($id: ID!) {
-        orderEditCommit(id: $id, notifyCustomer: false) {
-          order {
-            name
-            lineItems(first: 250) {
-              edges { node { title currentQuantity variant { id title } } }
-              pageInfo { hasNextPage }
-            }
-          }
-          userErrors { field message }
-        }
-      }`,
+      ORDER_EDIT_COMMIT_MUTATION,
       { id: calculatedOrderId },
     );
 

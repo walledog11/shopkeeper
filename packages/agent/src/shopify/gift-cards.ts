@@ -33,6 +33,20 @@ interface GiftCardCreateData {
   } | null;
 }
 
+export const GIFT_CARD_CREATE_MUTATION = `mutation giftCardCreate($input: GiftCardCreateInput!) {
+        giftCardCreate(input: $input) {
+          giftCardCode
+          giftCard {
+            id
+            expiresOn
+            note
+            initialValue { amount }
+            customer { id }
+          }
+          userErrors { field message code }
+        }
+      }`;
+
 function spendError(message: string): SpendToolResult {
   return { ...toolError(message), spentCents: null };
 }
@@ -87,19 +101,7 @@ export async function createGiftCard(
     mutationStarted = true;
     const data = await shopifyGraphql<GiftCardCreateData>(
       ctx,
-      `mutation giftCardCreate($input: GiftCardCreateInput!) {
-        giftCardCreate(input: $input) {
-          giftCardCode
-          giftCard {
-            id
-            expiresOn
-            note
-            initialValue { amount }
-            customer { id }
-          }
-          userErrors { field message code }
-        }
-      }`,
+      GIFT_CARD_CREATE_MUTATION,
       { input: giftCardInput }
     );
 

@@ -37,6 +37,17 @@ interface StoreCreditCreditData {
   } | null;
 }
 
+export const STORE_CREDIT_ACCOUNT_CREDIT_MUTATION = `mutation storeCreditAccountCredit($id: ID!, $creditInput: StoreCreditAccountCreditInput!) {
+        storeCreditAccountCredit(id: $id, creditInput: $creditInput) {
+          storeCreditAccountTransaction {
+            id
+            amount { amount currencyCode }
+            account { id balance { amount currencyCode } }
+          }
+          userErrors { field message }
+        }
+      }`;
+
 function spendError(message: string): SpendToolResult {
   return { ...toolError(message), spentCents: null };
 }
@@ -78,16 +89,7 @@ export async function issueStoreCredit(
     mutationStarted = true;
     const data = await shopifyGraphql<StoreCreditCreditData>(
       ctx,
-      `mutation storeCreditAccountCredit($id: ID!, $creditInput: StoreCreditAccountCreditInput!) {
-        storeCreditAccountCredit(id: $id, creditInput: $creditInput) {
-          storeCreditAccountTransaction {
-            id
-            amount { amount currencyCode }
-            account { id balance { amount currencyCode } }
-          }
-          userErrors { field message }
-        }
-      }`,
+      STORE_CREDIT_ACCOUNT_CREDIT_MUTATION,
       { id: `gid://shopify/Customer/${customerId}`, creditInput }
     );
 

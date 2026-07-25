@@ -59,6 +59,11 @@ export {
   type ShopifyReconciliationProbeResult,
 } from "./reconciliation-probes.js";
 export {
+  SHOPIFY_MUTATION_DOCUMENTS,
+  skippedMutationDocument,
+  type ShopifyMutationDocument,
+} from "./mutation-documents.js";
+export {
   classifyShipmentAlert,
   formatDeliveryExceptionNotification,
   type ShipmentAlertKind,

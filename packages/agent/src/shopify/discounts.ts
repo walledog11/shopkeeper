@@ -21,6 +21,20 @@ interface DiscountCodeBasicCreateData {
   } | null;
 }
 
+export const DISCOUNT_CODE_BASIC_CREATE_MUTATION = `mutation discountCodeBasicCreate($basicCodeDiscount: DiscountCodeBasicInput!) {
+        discountCodeBasicCreate(basicCodeDiscount: $basicCodeDiscount) {
+          codeDiscountNode {
+            codeDiscount {
+              ... on DiscountCodeBasic {
+                codes(first: 1) { nodes { code } }
+                endsAt
+              }
+            }
+          }
+          userErrors { field message }
+        }
+      }`;
+
 // Excludes visually ambiguous characters (0/O, 1/I) so the code is easy to read aloud and retype.
 const DISCOUNT_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
@@ -62,19 +76,7 @@ export async function issueDiscount(
 
     const data = await shopifyGraphql<DiscountCodeBasicCreateData>(
       ctx,
-      `mutation discountCodeBasicCreate($basicCodeDiscount: DiscountCodeBasicInput!) {
-        discountCodeBasicCreate(basicCodeDiscount: $basicCodeDiscount) {
-          codeDiscountNode {
-            codeDiscount {
-              ... on DiscountCodeBasic {
-                codes(first: 1) { nodes { code } }
-                endsAt
-              }
-            }
-          }
-          userErrors { field message }
-        }
-      }`,
+      DISCOUNT_CODE_BASIC_CREATE_MUTATION,
       {
         basicCodeDiscount: {
           title: reason ? `Goodwill ${percentage}% off — ${reason}` : `Goodwill ${percentage}% off`,

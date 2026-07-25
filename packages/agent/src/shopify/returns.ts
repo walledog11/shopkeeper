@@ -61,6 +61,13 @@ interface ReturnCreateData {
   } | null;
 }
 
+export const RETURN_CREATE_MUTATION = `mutation returnCreate($returnInput: ReturnInput!) {
+      returnCreate(returnInput: $returnInput) {
+        return { id name status }
+        userErrors { field message }
+      }
+    }`;
+
 export interface ReturnableLineItem {
   fulfillmentLineItemId: string;
   quantity: number;
@@ -133,12 +140,7 @@ export async function runReturnCreate(
 ): Promise<{ createdReturn: CreatedReturn } | { errorMessage: string }> {
   const createData = await shopifyGraphql<ReturnCreateData>(
     ctx,
-    `mutation returnCreate($returnInput: ReturnInput!) {
-      returnCreate(returnInput: $returnInput) {
-        return { id name status }
-        userErrors { field message }
-      }
-    }`,
+    RETURN_CREATE_MUTATION,
     { returnInput }
   );
 

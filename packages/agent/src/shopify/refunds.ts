@@ -50,6 +50,26 @@ export interface RefundResult extends ToolResult {
   refundedCents: number | null;
 }
 
+export const REFUND_CREATE_MUTATION = `
+      mutation CreateRefund($input: RefundInput!, $idempotencyKey: String!) {
+        refundCreate(input: $input) @idempotent(key: $idempotencyKey) {
+          refund {
+            id
+            totalRefundedSet {
+              presentmentMoney { amount }
+            }
+            transactions(first: 20) {
+              nodes {
+                status
+                amountSet { presentmentMoney { amount } }
+              }
+            }
+          }
+          userErrors { field message }
+        }
+      }
+    `;
+
 function refundableQuantity(lineItem: ShopifyOrderLineItem): number {
   const quantity = lineItem.current_quantity ?? lineItem.quantity;
   return Number.isFinite(quantity) ? Math.max(quantity, 0) : 0;
@@ -206,25 +226,7 @@ export async function createRefund(
       transactions: graphqlRefundTransactions(orderId, transactions),
     };
     mutationStarted = true;
-    const data = await shopifyGraphql<RefundCreateData>(ctx, `
-      mutation CreateRefund($input: RefundInput!, $idempotencyKey: String!) {
-        refundCreate(input: $input) @idempotent(key: $idempotencyKey) {
-          refund {
-            id
-            totalRefundedSet {
-              presentmentMoney { amount }
-            }
-            transactions(first: 20) {
-              nodes {
-                status
-                amountSet { presentmentMoney { amount } }
-              }
-            }
-          }
-          userErrors { field message }
-        }
-      }
-    `, {
+    const data = await shopifyGraphql<RefundCreateData>(ctx, REFUND_CREATE_MUTATION, {
       input: refundInput,
       idempotencyKey,
     }, {
