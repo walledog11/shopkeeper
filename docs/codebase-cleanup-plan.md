@@ -328,7 +328,28 @@ provider sandbox/canary verification remains open.
   a `write_x` grant as covering a requested `read_x`, since Shopify's write
   grant includes read. A grant predating the 2026-07-06 capability expansion now
   surfaces as a named missing scope before the run instead of an ambiguous 403
-  during it. The canary run itself is still outstanding.
+  during it.
+  **The first pre-check run found that gap on `palette-dev` (2026-07-25).**
+  Missing: `read_content`, `write_gift_cards`, `read_store_credit_accounts`,
+  `write_store_credit_account_transactions`. The granted set is not a subset of
+  the requested one — it also holds `read_all_orders`, `read_analytics`,
+  `write_products`, `write_discounts`, `write_inventory` and others we no longer
+  ask for — so this install was authorized against an older, differently shaped
+  scope list and has never been re-consented. Without the pre-check a mutating
+  run would have gone: `gift_card` 403, `refund` silently skipped for want of a
+  test order, `order_creation` committing a real order on a live `basic`-plan
+  store — the only family that executes being the one that creates real data,
+  and the 403 unreadable against a Shopify-side rejection. **Re-authorize
+  `palette-dev` first, then re-run the inspect pass and require `missing: []`**
+  (which also proves the re-auth wrote a new token), then create the test order,
+  then `--execute --allow-live-store`. The canary run itself is still
+  outstanding.
+- [ ] Persist the granted scope set at install. `callback/route.ts:147` discards
+  the `scope` field Shopify returns with the token, so no install's capability is
+  knowable without probing that store — which is why the gap above needed a
+  script to find. Storing it would surface the same gap on a real merchant from
+  our own data. Not required for P3-01 rollout; recorded here because P3-01 is
+  what exposed it.
 - [x] Revalidate production Shopify connectivity read-only. The connected store
   identifies itself as `palette-dev` but reports Shopify plan `basic`; its four
   recent orders contain no `test: true` order. **Resolved 2026-07-20:** the

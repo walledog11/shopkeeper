@@ -23,6 +23,17 @@ place that says both.
 | Delivery-exception monitor (B4) | `DELIVERY_EXCEPTION_MONITOR_ENABLED` | merged 2026-07-20 | **off** (migration applied 2026-07-22) |
 | Post-resolution follow-up (B5) | `POST_RESOLUTION_FOLLOWUP_MONITOR_ENABLED` | merged `9a686639` | **on** since 2026-07-22 |
 | Order-risk fraud monitor (B6) | `ORDER_RISK_MONITOR_ENABLED` | code-complete | **off** — flag-and-notify only, no autonomy |
+| Gift cards / store credit (2026-07-06 expansion) | none | shipped tools (`create_gift_card`, `issue_store_credit`) | **403 on `palette-dev` until re-auth** — see below |
+
+The last row is a capability that reads as live everywhere in the code and is
+not. `create_gift_card` and `issue_store_credit` sit in the registry
+(`tools/registry/order.ts`), the prompt and `plan-preview.ts`, so the agent will
+plan them and the merchant can approve them, but the only real store's OAuth
+grant predates the expansion and lacks `write_gift_cards` and both store-credit
+scopes. An approved plan using either fails at execution. Found 2026-07-25 by
+the P3-01 canary scope pre-check; re-auth in progress. Nothing here is a code
+gap — the durable fix is persisting granted scopes at install so this is
+knowable without probing (recorded under P3-01).
 
 Per-org opt-outs, all in `Organization.settings` and surfaced on
 `/dashboard/agent/configure`: `salesPulseEnabled`, `lowStockThreshold`,
@@ -180,7 +191,7 @@ Each row names the event that unblocks it. None of these are code.
 
 | Item | Blocked on | Unblock event |
 | --- | --- | --- |
-| A5's "Handled" section claiming actions definitely completed | P3-01 mutating canary pass — and, before it, **one test order in `palette-dev`** | Inspect pass ran clean 2026-07-25 (`railway run --service shopkeeper -- node scripts/canary-shopify-mutations.mjs`): selected `palette-dev-3peukw16.myshopify.com`, skipped both simulated rows as `simulated fixture`, `connectivityError: null` — so credentials, token decryption and Shopify auth are all confirmed, and neither store availability nor the harness (`632be88e`) is a blocker. What *is*: the store reports `testCount: 0` / `liveCount: 4`, and the refund family needs a `test: true` order (`canary-shopify-mutations.mjs:235`). Without one it silently skips with a note and exit code 0, so a mutating run would cover gift_card + order_creation **for real** on a paid `basic`-plan store while never testing refunds — the one irreversible family. Create a Bogus Gateway / Shopify-Payments-test-mode order first, then run `--execute --allow-live-store`. The scope gap this row used to flag as an ambiguous-403 risk is now a pre-flight answer: the inspect pass reports `inspection.accessScopes.missing` (added 2026-07-25, read-only; detail in P3-01 of the cleanup plan), so run it once before creating the test order — a missing scope would change what a mutating run can prove. |
+| A5's "Handled" section claiming actions definitely completed | P3-01 mutating canary pass — and, before it, **a re-auth of `palette-dev` and one test order** | Inspect pass ran clean 2026-07-25 (`railway run --service shopkeeper -- node scripts/canary-shopify-mutations.mjs`): selected `palette-dev-3peukw16.myshopify.com`, skipped both simulated rows as `simulated fixture`, `connectivityError: null` — so credentials, token decryption and Shopify auth are all confirmed, and neither store availability nor the harness (`632be88e`) is a blocker. What *is*: the store reports `testCount: 0` / `liveCount: 4`, and the refund family needs a `test: true` order (`canary-shopify-mutations.mjs:235`). Without one it silently skips with a note and exit code 0, so a mutating run would cover gift_card + order_creation **for real** on a paid `basic`-plan store while never testing refunds — the one irreversible family. Create a Bogus Gateway / Shopify-Payments-test-mode order first, then run `--execute --allow-live-store`. The scope gap this row used to flag as an ambiguous-403 risk turned out to be real, and the pre-flight check found it (2026-07-25; detail and the run order in P3-01 of the cleanup plan): `palette-dev` is missing `write_gift_cards` and both store-credit scopes, so re-auth comes before the test order. |
 | Raising `OPERATOR_PLAN_QUEUE_MAX` above 1 | P1 execution-ledger rollout verification | `npm run audit:plan-executions -- --hours=24` returning representative dashboard *and* gateway executions. It currently returns zero — there is no traffic yet. |
 | Enabling B3/B4 monitors | same P1 rollout, plus the P6-02 controlled recovery exercise (the simulated-fixture leg is closed — see item 6) | as above |
 | B3/B4/B5 live push verification | a real return arrival, delivery exception, or 5-day-old resolution | first real merchant traffic, or a deliberately staged fixture on the test DB |
