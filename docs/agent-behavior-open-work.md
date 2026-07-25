@@ -23,17 +23,27 @@ place that says both.
 | Delivery-exception monitor (B4) | `DELIVERY_EXCEPTION_MONITOR_ENABLED` | merged 2026-07-20 | **off** (migration applied 2026-07-22) |
 | Post-resolution follow-up (B5) | `POST_RESOLUTION_FOLLOWUP_MONITOR_ENABLED` | merged `9a686639` | **on** since 2026-07-22 |
 | Order-risk fraud monitor (B6) | `ORDER_RISK_MONITOR_ENABLED` | code-complete | **off** — flag-and-notify only, no autonomy |
-| Gift cards / store credit (2026-07-06 expansion) | none | shipped tools (`create_gift_card`, `issue_store_credit`) | **403 on `palette-dev` until re-auth** — see below |
+| Gift cards (2026-07-06 expansion) | none | shipped tool `create_gift_card` | **live on `palette-dev`** since 2026-07-25 |
+| Store credit (2026-07-06 expansion) | none | shipped tool `issue_store_credit` | **403 on `palette-dev`** — scopes not granted; see below |
 
-The last row is a capability that reads as live everywhere in the code and is
-not. `create_gift_card` and `issue_store_credit` sit in the registry
-(`tools/registry/order.ts`), the prompt and `plan-preview.ts`, so the agent will
-plan them and the merchant can approve them, but the only real store's OAuth
-grant predates the expansion and lacks `write_gift_cards` and both store-credit
-scopes. An approved plan using either fails at execution. Found 2026-07-25 by
-the P3-01 canary scope pre-check; re-auth in progress. Nothing here is a code
-gap — the durable fix is persisting granted scopes at install so this is
-knowable without probing (recorded under P3-01).
+The last two rows were one capability that read as live everywhere in the code
+and was not. `create_gift_card` and `issue_store_credit` sit in the registry
+(`tools/registry/order.ts`), the prompt and `plan-preview.ts`, so the agent
+plans them and the merchant can approve them, but the only real store's OAuth
+grant predated the expansion and held none of their scopes — an approved plan
+using either failed at execution. Found 2026-07-25 by the P3-01 canary scope
+pre-check. The gift-card scopes were granted the same day; the two store-credit
+scopes were reported added but have not appeared in the live grant across two
+inspect runs, so that half is still failing.
+
+Nothing here is a code gap, and re-authorizing is not the fix — the grant is
+driven by the app's configured scopes, not by our authorize URL, so
+`SHOPIFY_OAUTH_SCOPES` describes what we intend rather than what a store holds
+(detail and evidence in P3-01 of the cleanup plan). Two consequences worth
+keeping: a shipped tool can be inert on a given store with nothing in our data
+saying so, and the durable fix is persisting granted scopes at install so it is
+knowable without probing that store. Until then, `node
+scripts/canary-shopify-mutations.mjs` is the only way to ask.
 
 Per-org opt-outs, all in `Organization.settings` and surfaced on
 `/dashboard/agent/configure`: `salesPulseEnabled`, `lowStockThreshold`,
@@ -191,7 +201,7 @@ Each row names the event that unblocks it. None of these are code.
 
 | Item | Blocked on | Unblock event |
 | --- | --- | --- |
-| A5's "Handled" section claiming actions definitely completed | P3-01 mutating canary pass — and, before it, **a re-auth of `palette-dev` and one test order** | Inspect pass ran clean 2026-07-25 (`railway run --service shopkeeper -- node scripts/canary-shopify-mutations.mjs`): selected `palette-dev-3peukw16.myshopify.com`, skipped both simulated rows as `simulated fixture`, `connectivityError: null` — so credentials, token decryption and Shopify auth are all confirmed, and neither store availability nor the harness (`632be88e`) is a blocker. What *is*: the store reports `testCount: 0` / `liveCount: 4`, and the refund family needs a `test: true` order (`canary-shopify-mutations.mjs:235`). Without one it silently skips with a note and exit code 0, so a mutating run would cover gift_card + order_creation **for real** on a paid `basic`-plan store while never testing refunds — the one irreversible family. Create a Bogus Gateway / Shopify-Payments-test-mode order first, then run `--execute --allow-live-store`. The scope gap this row used to flag as an ambiguous-403 risk turned out to be real, and the pre-flight check found it (2026-07-25; detail and the run order in P3-01 of the cleanup plan): `palette-dev` is missing `write_gift_cards` and both store-credit scopes, so re-auth comes before the test order. |
+| A5's "Handled" section claiming actions definitely completed | P3-01 mutating canary pass — and, before it, **one test order in `palette-dev`** | Inspect pass ran clean 2026-07-25 (`railway run --service shopkeeper -- node scripts/canary-shopify-mutations.mjs`): selected `palette-dev-3peukw16.myshopify.com`, skipped both simulated rows as `simulated fixture`, `connectivityError: null` — so credentials, token decryption and Shopify auth are all confirmed, and neither store availability nor the harness (`632be88e`) is a blocker. What *is*: the store reports `testCount: 0` / `liveCount: 4`, and the refund family needs a `test: true` order (`canary-shopify-mutations.mjs:235`). Without one it silently skips with a note and exit code 0, so a mutating run would cover gift_card + order_creation **for real** on a paid `basic`-plan store while never testing refunds — the one irreversible family. Create a Bogus Gateway / Shopify-Payments-test-mode order first, then run `--execute --allow-live-store`. The scope gap this row used to flag as an ambiguous-403 risk turned out to be real, and the pre-flight check found it (2026-07-25; detail in P3-01 of the cleanup plan): `palette-dev` lacked every gift-card and store-credit scope, so `gift_card` would have 403'd while `order_creation` committed a real order. The gift-card scopes have since been granted and that family will now run for real; store credit is still ungranted but the canary does not exercise it, so it no longer gates this row. The test order is the remaining gate. |
 | Raising `OPERATOR_PLAN_QUEUE_MAX` above 1 | P1 execution-ledger rollout verification | `npm run audit:plan-executions -- --hours=24` returning representative dashboard *and* gateway executions. It currently returns zero — there is no traffic yet. |
 | Enabling B3/B4 monitors | same P1 rollout, plus the P6-02 controlled recovery exercise (the simulated-fixture leg is closed — see item 6) | as above |
 | B3/B4/B5 live push verification | a real return arrival, delivery exception, or 5-day-old resolution | first real merchant traffic, or a deliberately staged fixture on the test DB |

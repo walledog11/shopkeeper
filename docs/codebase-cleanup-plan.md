@@ -339,11 +339,28 @@ provider sandbox/canary verification remains open.
   run would have gone: `gift_card` 403, `refund` silently skipped for want of a
   test order, `order_creation` committing a real order on a live `basic`-plan
   store — the only family that executes being the one that creates real data,
-  and the 403 unreadable against a Shopify-side rejection. **Re-authorize
-  `palette-dev` first, then re-run the inspect pass and require `missing: []`**
-  (which also proves the re-auth wrote a new token), then create the test order,
-  then `--execute --allow-live-store`. The canary run itself is still
-  outstanding.
+  and the 403 unreadable against a Shopify-side rejection.
+  **Partly closed the same day.** The gift-card family landed —
+  `write_gift_cards` plus `read_gift_cards` and both `*_gift_card_transactions`
+  — so `create_gift_card` now executes on `palette-dev` instead of 403ing.
+  `read_store_credit_accounts` and `write_store_credit_account_transactions`
+  were reported as added but have **not** appeared in the live grant across two
+  inspect runs, so `issue_store_credit` still fails at execution.
+  **Correction to the prescription above:** re-authorizing is not the lever, and
+  a `missing: []` re-run does not prove a re-auth wrote a new token. The grant is
+  driven app-side, not by our authorize URL's `scope` parameter — the four
+  gift-card scopes arrived together when we request only `write_gift_cards`, and
+  two of them are implied by nothing we ask for, while the grant has always held
+  `read_all_orders`, `write_products` and others we never request.
+  `SHOPIFY_OAUTH_SCOPES` is therefore descriptive of intent, not authoritative
+  over what a store receives, which is precisely why the pre-check reads the live
+  grant instead of trusting our own constant. Changing what a store holds means
+  changing the app's configured scopes and releasing that to the install.
+  Remaining order: land the store-credit scopes, re-run the inspect pass, create
+  the test order, then `--execute --allow-live-store`. `read_content` is also
+  missing and is being left alone — nothing in the codebase consumes it, so the
+  open question is whether to stop requesting it, not whether to grant it. The
+  canary run itself is still outstanding.
 - [ ] Persist the granted scope set at install. `callback/route.ts:147` discards
   the `scope` field Shopify returns with the token, so no install's capability is
   knowable without probing that store — which is why the gap above needed a
