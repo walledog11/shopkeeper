@@ -307,7 +307,17 @@ provider sandbox/canary verification remains open.
 
 - [ ] Verify refund idempotency plus cancellation, order creation/editing,
   address, gift-card, and store-credit outcome handling against a Shopify
-  development store, then canary each tool family independently.
+  development store, then canary each tool family independently. **Harness
+  blocker cleared 2026-07-24** (`632be88e`): the canary selected the newest
+  integration row with a non-null `access_token`, but that filter runs in SQL
+  against the *encrypted* column, so it matched rows this environment cannot
+  decrypt and then failed as "No connected Shopify integration with credentials
+  was found". Under production credentials it picked a simulated `demo-store`
+  fixture and died there, never reaching `palette-dev`. Selection is now
+  explicit: simulated and undecryptable rows are skipped with a per-row reason,
+  `--shop=<domain>` chooses among the rest, and anything other than one
+  candidate refuses instead of guessing. The canary run itself is still
+  outstanding.
 - [x] Revalidate production Shopify connectivity read-only. The connected store
   identifies itself as `palette-dev` but reports Shopify plan `basic`; its four
   recent orders contain no `test: true` order. **Resolved 2026-07-20:** the
