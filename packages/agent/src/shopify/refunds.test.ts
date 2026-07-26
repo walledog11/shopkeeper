@@ -54,9 +54,117 @@ function refundResponse(status = "SUCCESS") {
   });
 }
 
+// A full refund fans out across every transaction that paid for the order, and
+// Shopify's calculation is the source of truth for both the transactions and
+// the line items - including a $0 one, which it returns and which must not be
+// sent.
+function multiTransactionCalculationResponse() {
+  return jsonResponse({
+    refund: {
+      currency: "USD",
+      refund_line_items: [
+        { line_item_id: 11, quantity: 1, restock_type: "return", location_id: 77 },
+        { line_item_id: 12, quantity: 2, restock_type: "no_restock", location_id: 77 },
+      ],
+      transactions: [
+        {
+          kind: "suggested_refund",
+          gateway: "shopify_payments",
+          parent_id: 222,
+          amount: "20.00",
+          maximum_refundable: "20.00",
+        },
+        { kind: "suggested_refund", gateway: "gift_card", parent_id: 223, amount: "0.00", maximum_refundable: "0.00" },
+        { kind: "suggested_refund", gateway: "paypal", parent_id: 224, amount: "5.50", maximum_refundable: "5.50" },
+      ],
+    },
+  });
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+});
+
+// The branch that had never executed against a real store: omitting `amount`
+// takes buildFullRefundTransactions and graphqlRefundLineItems instead of the
+// partial path. These assert the document variables, which is the half a live
+// canary run cannot isolate.
+describe("createRefund full-refund input", () => {
+  async function fullRefundVariables() {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(orderResponse())
+      .mockResolvedValueOnce(multiTransactionCalculationResponse())
+      .mockResolvedValueOnce(jsonResponse({
+        data: {
+          refundCreate: {
+            refund: {
+              id: "gid://shopify/Refund/9001",
+              totalRefundedSet: { presentmentMoney: { amount: "25.50" } },
+              transactions: { nodes: [{ status: "SUCCESS" }] },
+            },
+            userErrors: [],
+          },
+        },
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await createRefund({ order_id: "456" }, ctx);
+    return { result, variables: JSON.parse(fetchMock.mock.calls[2][1].body as string).variables };
+  }
+
+  it("refunds every paying transaction at its full amount and drops the zero one", async () => {
+    const { result, variables } = await fullRefundVariables();
+
+    expect(variables.input.transactions).toEqual([
+      {
+        orderId: "gid://shopify/Order/456",
+        kind: "REFUND",
+        gateway: "shopify_payments",
+        amount: "20.00",
+        parentId: "gid://shopify/OrderTransaction/222",
+      },
+      {
+        orderId: "gid://shopify/Order/456",
+        kind: "REFUND",
+        gateway: "paypal",
+        amount: "5.50",
+        parentId: "gid://shopify/OrderTransaction/224",
+      },
+    ]);
+    expect(result).toMatchObject({ status: "ok", refundedCents: 2550 });
+  });
+
+  it("asks for the shipping and line items the partial path leaves out", async () => {
+    const { variables } = await fullRefundVariables();
+
+    expect(variables.input.shipping).toEqual({ fullRefund: true });
+    // Shopify's calculated line items win over the ones derived from the order.
+    expect(variables.input.refundLineItems).toEqual([
+      {
+        lineItemId: "gid://shopify/LineItem/11",
+        quantity: 1,
+        restockType: "RETURN",
+        locationId: "gid://shopify/Location/77",
+      },
+      { lineItemId: "gid://shopify/LineItem/12", quantity: 2, restockType: "NO_RESTOCK" },
+    ]);
+  });
+
+  it("sends neither of them when an amount is given", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(orderResponse())
+      .mockResolvedValueOnce(multiTransactionCalculationResponse())
+      .mockResolvedValueOnce(refundResponse());
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createRefund({ order_id: "456", amount: "20.00" }, ctx);
+    const { input } = JSON.parse(fetchMock.mock.calls[2][1].body as string).variables;
+
+    expect(input.shipping).toBeUndefined();
+    expect(input.refundLineItems).toBeUndefined();
+    expect(input.transactions).toHaveLength(1);
+  });
 });
 
 describe("createRefund provider outcomes", () => {

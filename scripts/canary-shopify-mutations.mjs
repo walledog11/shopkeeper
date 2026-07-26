@@ -91,6 +91,38 @@ function normalizeShop(value) {
   return value.trim().toLowerCase().replace(/\.myshopify\.com$/, '');
 }
 
+// Deliberately the same string parse as the agent's moneyToCents rather than
+// float math: this comparison decides the run's exit code, so the two must not
+// be able to disagree by a rounding cent.
+function moneyToCents(value) {
+  if (value === null || value === undefined) return null;
+  const [dollars, cents = ''] = String(value).split('.');
+  const total = Number(dollars) * 100 + Number(cents.padEnd(2, '0').slice(0, 2));
+  return Number.isFinite(total) ? total : null;
+}
+
+// The full-refund branch needs an order nothing has refunded yet. `paid`
+// excludes the partially refunded ones - including whatever the partial canary
+// already touched - and that also keeps the reconciliation probe readable: with
+// no requested amount it matches every successful refund on the order, so a
+// second one would report `unknown` for a run that actually worked.
+function isFullRefundCandidate(order) {
+  return !order.cancelled_at
+    && String(order.financial_status ?? '').toLowerCase() === 'paid';
+}
+
+function selectFullRefundOrder(inspection) {
+  // Avoid the partial family's order only when that family is running in this
+  // same invocation and will therefore dirty it first. Excluding it
+  // unconditionally strands the common case: the newest test order is both the
+  // partial family's default pick and the only clean full-refund candidate.
+  const conflictOrderId = shouldRun('refund')
+    ? inspection.recentOrders.candidateTestOrderId
+    : null;
+  return inspection.recentOrders.fullRefundCandidates
+    .find((order) => order.id !== conflictOrderId) ?? null;
+}
+
 async function loadShopifyIntegration() {
   const rows = await db.integration.findMany({
     where: { platform: 'shopify' },
@@ -161,7 +193,7 @@ async function inspectStore(ctx) {
         query: {
           status: 'any',
           limit: 10,
-          fields: 'id,name,test,financial_status,cancelled_at,total_price',
+          fields: 'id,name,test,financial_status,cancelled_at,total_price,current_total_price',
         },
       }),
     ]);
@@ -189,6 +221,11 @@ async function inspectStore(ctx) {
         testCount: testOrders.length,
         liveCount: liveOrders.length,
         candidateTestOrderId: testOrders[0]?.id ? String(testOrders[0].id) : null,
+        fullRefundCandidates: testOrders.filter(isFullRefundCandidate).map((order) => ({
+          id: String(order.id),
+          name: order.name ?? null,
+          total: order.current_total_price ?? order.total_price ?? null,
+        })),
       },
       connectivityError: null,
     };
@@ -208,6 +245,7 @@ async function inspectStore(ctx) {
         testCount: 0,
         liveCount: 0,
         candidateTestOrderId: null,
+        fullRefundCandidates: [],
       },
       connectivityError: error instanceof Error ? error.message : String(error),
     };
@@ -543,6 +581,36 @@ async function runCanaries(ctx, inspection) {
     }));
   }
 
+  // The partial branch above is the only one that has ever executed. Omitting
+  // `amount` takes buildFullRefundTransactions and graphqlRefundLineItems
+  // instead, which --validate can type-check but cannot exercise.
+  const fullRefundOrder = selectFullRefundOrder(inspection);
+  if (shouldRun('refund_full') && inspection.shop.mutationsAllowed && fullRefundOrder) {
+    results.push(await runFamily('refund_full', async () => {
+      const operationId = `${operationBase}:refund_full`;
+      const input = { order_id: fullRefundOrder.id, reason: 'Shopkeeper mutation canary' };
+      const result = await createRefund(input, { ...ctx, operationId });
+      const probe = await probeUnknownShopifyMutation('create_refund', input, { ...ctx, operationId });
+      const orderTotalCents = moneyToCents(fullRefundOrder.total);
+      return {
+        status: result.status,
+        message: result.message,
+        orderId: fullRefundOrder.id,
+        orderName: fullRefundOrder.name,
+        // `ok` only proves the document ran. Whether the right transactions
+        // were picked and the whole order came back is what this family is for,
+        // and only the totals say that.
+        orderTotalCents,
+        refundedCents: result.refundedCents,
+        matchesOrderTotal: orderTotalCents === null || result.refundedCents === null
+          ? null
+          : result.refundedCents === orderTotalCents,
+        probeOutcome: probe.outcome,
+        probeMessage: probe.message,
+      };
+    }));
+  }
+
   if (shouldRun('order_creation') && inspection.shop.mutationsAllowed) {
     results.push(await runFamily('order_creation', async () => {
       const operationId = `${operationBase}:create_order`;
@@ -622,6 +690,12 @@ if (EXECUTE && !inspection.shop.mutationsAllowed) {
 if (EXECUTE && inspection.shop.mutationsAllowed && shouldRun('refund') && !inspection.recentOrders.candidateTestOrderId) {
   report.notes.push('Refund canary skipped: no recent test order was found.');
 }
+if (EXECUTE && inspection.shop.mutationsAllowed && shouldRun('refund_full') && !selectFullRefundOrder(inspection)) {
+  report.notes.push(
+    'Full-refund canary skipped: no unrefunded test order was available. It needs a paid,'
+    + ' uncancelled test order that no other refund canary has touched.',
+  );
+}
 
 if (VALIDATE && report.skipPreflight.honored) {
   report.validation = await runValidation(ctx);
@@ -657,7 +731,11 @@ if (VALIDATE && report.skipPreflight.honored) {
 
 console.log(JSON.stringify(report, null, 2));
 
-const failed = report.canaries.filter((entry) => !entry.ok || entry.status === 'error');
+// A full refund that ran but returned the wrong total is the failure this
+// harness exists to surface, so it must not read as a green run.
+const failed = report.canaries.filter((entry) => (
+  !entry.ok || entry.status === 'error' || entry.matchesOrderTotal === false
+));
 if (EXECUTE && failed.length > 0) {
   process.exitCode = 1;
 }
