@@ -11,14 +11,21 @@ only in
 
 Last reviewed: 2026-07-25.
 
-Three shipped Shopify money paths were found this week to have never once worked.
-`create_refund` and `attach_return_label` were rejected by Shopify at document
-validation and reported to the merchant as "may have committed"; store credit's
-*reconciliation probe* read every committed credit as a no-op, which is the same
-100% failure rate pointed the other way. All three are fixed. The systematic
-guard against shipping a fourth invalid document is item 8; the guard against
-misreporting a rejection as ambiguous is item 9; the probe defect is the one
-neither of those would have caught, and item 10 says why.
+**Four shipped Shopify write paths were found this week to have never once
+worked.** `create_refund` and `attach_return_label` were rejected by Shopify at
+document validation and reported to the merchant as "may have committed"; store
+credit's *reconciliation probe* read every committed credit as a no-op, which is
+the same 100% failure rate pointed the other way; and `create_shopify_order`
+sent an operation tag over Shopify's 40-character cap, so every order creation
+came back `422`. All four are fixed. The systematic guard against shipping
+another invalid document is item 8; the guard against misreporting a rejection as
+ambiguous is item 9; the probe defect is the one neither of those would have
+caught, and item 10 says why. The fourth was REST, so item 8 could never have
+reached it — only running the canary family did.
+
+The through-line: **every one of these was found by executing the capability
+against a real store, and none by a test.** Three of the four surfaced the first
+time their canary family ran.
 
 Acting on item 10's closing lesson then found two *more* probes reading Shopify
 wrongly (item 11) — a country code and an order-edit delta — and one tool pair
