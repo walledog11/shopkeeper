@@ -28,12 +28,22 @@ export interface ShopifyGraphqlUserError {
 export class ShopifyRequestError extends Error {
   status?: number;
   payload?: unknown;
+  rejectedBeforeExecution?: boolean;
 
-  constructor(message: string, options: { status?: number; payload?: unknown; cause?: unknown } = {}) {
+  constructor(
+    message: string,
+    options: {
+      status?: number;
+      payload?: unknown;
+      cause?: unknown;
+      rejectedBeforeExecution?: boolean;
+    } = {}
+  ) {
     super(message);
     this.name = "ShopifyRequestError";
     this.status = options.status;
     this.payload = options.payload;
+    this.rejectedBeforeExecution = options.rejectedBeforeExecution;
     if (options.cause !== undefined) {
       this.cause = options.cause;
     }
@@ -220,8 +230,10 @@ export function formatShopifyToolError(action: string, err: unknown): string {
 }
 
 export function isAmbiguousShopifyMutationError(err: unknown): boolean {
-  return err instanceof ShopifyRequestError
-    && (err.status === undefined || err.status === 429 || err.status >= 500);
+  if (!(err instanceof ShopifyRequestError)) return false;
+  // A document Shopify refused to execute is not ambiguous: nothing ran.
+  if (err.rejectedBeforeExecution) return false;
+  return err.status === undefined || err.status === 429 || err.status >= 500;
 }
 
 export interface ShopifyResponse<T> {
@@ -297,6 +309,23 @@ export function parseNextPageInfo(headers: Headers): string | null {
   return nextMatch ? nextMatch[1] : null;
 }
 
+interface ShopifyGraphqlError {
+  message: string;
+  extensions?: { code?: unknown } | null;
+}
+
+// A GraphQL response omits the `data` key only when the request failed before
+// execution began — a parse, validation or variable-coercion error, which
+// provably committed nothing. An execution error can follow a side effect, and
+// Shopify reports its capacity failures the same statusless way, so those keep
+// the benefit of the doubt.
+const CODES_THAT_ARE_NOT_DOCUMENT_REJECTIONS = new Set(["THROTTLED", "INTERNAL_SERVER_ERROR"]);
+
+function graphqlErrorCode(err: ShopifyGraphqlError): string | undefined {
+  const code = err.extensions?.code;
+  return typeof code === "string" ? code.toUpperCase() : undefined;
+}
+
 export async function shopifyGraphql<TData>(
   ctx: ShopifyContext,
   query: string,
@@ -305,7 +334,7 @@ export async function shopifyGraphql<TData>(
 ): Promise<TData> {
   const payload = await shopifyRestJson<{
     data?: TData;
-    errors?: { message: string }[];
+    errors?: ShopifyGraphqlError[];
   }>(ctx, "graphql.json", {
     method: "POST",
     body: { query, variables },
@@ -313,8 +342,13 @@ export async function shopifyGraphql<TData>(
   });
 
   if (payload.errors?.length) {
+    const codes = payload.errors.map(graphqlErrorCode);
     throw new ShopifyRequestError("Shopify GraphQL request failed.", {
-      payload: payload.errors.map((e) => e.message).join(", "),
+      payload: payload.errors
+        .map((e, i) => (codes[i] ? `${e.message} (${codes[i]})` : e.message))
+        .join(", "),
+      rejectedBeforeExecution: !("data" in payload)
+        && !codes.some((code) => code !== undefined && CODES_THAT_ARE_NOT_DOCUMENT_REJECTIONS.has(code)),
     });
   }
 

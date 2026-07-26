@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ShopifyRequestError, shopifyRestJson } from "./client.js";
+import {
+  isAmbiguousShopifyMutationError,
+  ShopifyRequestError,
+  shopifyGraphql,
+  shopifyRestJson,
+} from "./client.js";
 
 const ctx = { shop: "example.myshopify.com", accessToken: "test-token" };
 
@@ -54,5 +59,59 @@ describe("Shopify request retry policy", () => {
       maxRetries: 1,
     })).resolves.toEqual({ order: { id: 1 } });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+async function graphqlError(body: unknown, status = 200): Promise<ShopifyRequestError> {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(body, status)));
+  const err = await shopifyGraphql(ctx, "mutation { x }", {}).catch((e) => e);
+  expect(err).toBeInstanceOf(ShopifyRequestError);
+  return err as ShopifyRequestError;
+}
+
+describe("GraphQL mutation ambiguity", () => {
+  // The shape of the create_refund defect: Shopify rejects the document at
+  // validation, so no `data` key comes back and nothing executed.
+  it("treats a rejected document as definitely not executed", async () => {
+    const err = await graphqlError({
+      errors: [{ message: "Field 'code' doesn't exist on type 'UserError'" }],
+    });
+
+    expect(err.rejectedBeforeExecution).toBe(true);
+    expect(isAmbiguousShopifyMutationError(err)).toBe(false);
+  });
+
+  it("keeps a throttled request ambiguous even though it also omits data", async () => {
+    const err = await graphqlError({
+      errors: [{ message: "Throttled", extensions: { code: "THROTTLED" } }],
+    });
+
+    expect(err.rejectedBeforeExecution).toBe(false);
+    expect(isAmbiguousShopifyMutationError(err)).toBe(true);
+  });
+
+  it("keeps an execution error ambiguous, because a side effect can precede it", async () => {
+    const err = await graphqlError({
+      data: null,
+      errors: [{ message: "Internal error. Looks like something went wrong on our end." }],
+    });
+
+    expect(err.rejectedBeforeExecution).toBe(false);
+    expect(isAmbiguousShopifyMutationError(err)).toBe(true);
+  });
+
+  it("keeps a 5xx ambiguous", async () => {
+    const err = await graphqlError({ errors: "service unavailable" }, 503);
+
+    expect(err.rejectedBeforeExecution).toBeUndefined();
+    expect(isAmbiguousShopifyMutationError(err)).toBe(true);
+  });
+
+  it("reports the error code, not just the message", async () => {
+    const err = await graphqlError({
+      errors: [{ message: "Throttled", extensions: { code: "THROTTLED" } }],
+    });
+
+    expect(err.payload).toBe("Throttled (THROTTLED)");
   });
 });
