@@ -11,11 +11,14 @@ only in
 
 Last reviewed: 2026-07-25.
 
-Two shipped Shopify capabilities — `create_refund` and `attach_return_label` —
-were found this week to have never once executed, each rejected by Shopify at
-document validation and each reported to the merchant as "may have committed."
-Both are fixed. The systematic guard against shipping a third one is item 8; the
-guard against misreporting one as ambiguous is item 9.
+Three shipped Shopify money paths were found this week to have never once worked.
+`create_refund` and `attach_return_label` were rejected by Shopify at document
+validation and reported to the merchant as "may have committed"; store credit's
+*reconciliation probe* read every committed credit as a no-op, which is the same
+100% failure rate pointed the other way. All three are fixed. The systematic
+guard against shipping a fourth invalid document is item 8; the guard against
+misreporting a rejection as ambiguous is item 9; the probe defect is the one
+neither of those would have caught, and item 10 says why.
 
 ## Rollout state
 
@@ -30,7 +33,7 @@ place that says both.
 | Post-resolution follow-up (B5) | `POST_RESOLUTION_FOLLOWUP_MONITOR_ENABLED` | merged `9a686639` | **on** since 2026-07-22 |
 | Order-risk fraud monitor (B6) | `ORDER_RISK_MONITOR_ENABLED` | code-complete | **off** — flag-and-notify only, no autonomy |
 | Gift cards (2026-07-06 expansion) | none | shipped tool `create_gift_card` | **verified on `palette-dev`** 2026-07-25 — canary `ok`/`committed` |
-| Store credit (2026-07-06 expansion) | none | shipped tool `issue_store_credit` | **scopes granted 2026-07-25**, never executed — no canary family |
+| Store credit (2026-07-06 expansion) | none | shipped tool `issue_store_credit`; **its reconciliation probe was broken since it shipped**, fixed 2026-07-25 | **verified on `palette-dev`** 2026-07-25 — `ok`, `spentCents: 1`, balance $0.01; probe `committed` only after the fix |
 | Refunds (`create_refund`) | none | **broken since it shipped**; fixed 2026-07-25 | **verified on `palette-dev`** — both paths: partial (`#1005`, $0.01) and full (`#1006`, $629.95, total matched) |
 | Return labels (`attach_return_label`) | none | **broken since it shipped**; fixed 2026-07-25 | **document schema-valid** on `palette-dev`; never executed |
 
@@ -41,9 +44,9 @@ plans them and the merchant can approve them, but the only real store's OAuth
 grant predated the expansion and held none of their scopes — an approved plan
 using either failed at execution. Found 2026-07-25 by the P3-01 canary scope
 pre-check. Both sets have since landed: the live grant now reports
-`missing: []`, so neither tool 403s. `create_gift_card` is verified end to end;
-`issue_store_credit` is merely unblocked, because no canary family exercises it
-and nothing has ever called it against a real store.
+`missing: []`, so neither tool 403s. Both are now verified end to end —
+`issue_store_credit` by the `store_credit` family added the same day, whose first
+run is what exposed the probe defect in item 10.
 
 The scope half was not a code gap, and re-authorizing was not the fix — the
 grant is driven by the app's configured scopes, not by our authorize URL, so
@@ -327,14 +330,81 @@ Two lessons on top of the refund ones, both already applied:
    guard exists to prevent. The unit tests replay the recorded response shapes
    instead — including the exact `Field 'code' doesn't exist on type 'UserError'`
    body from the refund defect.
-10. **`issue_store_credit` has never executed against any store.** Split out of
-    the rollout table 2026-07-25 so it stops living only in prose. It is in the
-    same state item 7 describes for the full-refund branch, one step earlier:
-    scopes granted, document schema-valid under item 8, and no canary family
-    exercising it. Adding a `store_credit` family is the same shape of work as
-    the refund one, with one asymmetry to decide first — `store-credit.ts` has a
-    credit mutation and no debit, so a canary credit cannot be undone by our own
-    code even on `palette-dev`.
+10. ~~**`issue_store_credit` has never executed against any store.**~~ **Done
+    2026-07-25 — it executed, and the run found a third 100%-failure defect,**
+    this time in reconciliation rather than in a mutation document. See the
+    section below.
+    The tool itself was sound on the first try: `status: ok`, `spentCents: 1`,
+    "balance is now $0.01 USD" on a customer the harness had just created.
+    Two things the `store_credit` family had to decide, both settled in its
+    implementation and both still right after the fix:
+    - **Each run credits a customer it creates itself.** `probeStoreCredit`
+      reconciles on the amount alone, because `StoreCreditAccountCreditInput`
+      carries no note or reference field we control — unlike the gift-card probe,
+      which matches an operation code encoded in the card. Two $0.01 credits on
+      one account would therefore both match and report `unknown` for a run that
+      worked: the same shape as the `#1006` trap in item 7, and preventable up
+      front rather than after the fact. `createCanaryCustomer` posts a fresh
+      tagged `shopkeeper-canary` customer per run, which needs `write_customers`
+      — already granted.
+    - **The credit is permanent, and that is accepted.** `store-credit.ts` has a
+      credit mutation and no debit, so nothing in our code can take one back. The
+      answer is not to add a debit mutation to unwind canaries — that widens the
+      money surface for no product reason — but to land the $0.01 on a throwaway
+      customer who will never check out, which the point above already does.
+    The family reports `spentCents` alongside `status`, but unlike `refund_full`
+    it adds no harness-side total check: `issueStoreCredit` already downgrades to
+    `unknown` unless the committed amount and currency equal what was requested,
+    so `ok` is the assertion.
+    **Left open:** the run credits `palette-dev` customer `9071668134122` and
+    leaves it there by design. Re-running the family is safe at any time — it
+    creates a new customer rather than reusing that one.
+
+### `probeStoreCredit` called every committed credit a no-op (found and fixed 2026-07-25)
+
+The store-credit mutation worked on its first live run. Its **reconciliation
+probe** did not, and the canary caught the disagreement in the same output:
+`status: ok` with a $0.01 balance, alongside `probeOutcome: no_effect` — "No
+store-credit transaction matching $0.01 was found."
+
+`probeStoreCredit` filtered on `transaction.event === "CREDIT"`. Querying the
+account directly showed what Shopify actually returns for a credit made by
+`storeCreditAccountCredit`: `__typename:
+"StoreCreditAccountCreditTransaction"`, `event: "ADJUSTMENT"`. `event` says
+*why* the balance moved; `__typename` says *which way*. So the filter matched
+nothing, on every store, 100% of the time, since the capability shipped — the
+same three words the other two defects in this doc earned.
+
+**This one fails in the expensive direction.** A wrong `no_effect` is not a
+stalled action, it is a confident false negative: the probe runs precisely when a
+credit came back ambiguous, and `store-credit.ts:135` tells the agent not to
+issue a gift-card fallback *until the account is reconciled*. Reconciling to "it
+didn't happen" releases that hold, and the next move is a second credit or a
+gift card on top of money that already moved. The refund defect reported a
+non-event as ambiguous; this one reported a real event as a non-event, which is
+the direction product principle 3 cares about.
+
+Fix: filter on `__typename`, and drop `event` from the selection since nothing
+reads it. Covered by two tests that replay the recorded `palette-dev` response —
+one asserting an `ADJUSTMENT`-event credit reconciles as `committed`, one
+asserting a debit of the same amount does not — mutation-verified per leg.
+Verified live against the credit the canary had already made: the probe now
+returns `committed` / `spentCents: 1` for customer `9071668134122`, with no
+second charge.
+
+Two lessons, both new:
+
+- **Item 8 does not cover this class.** Schema validation proves a document is
+  *acceptable*, not that our reading of the response is *correct*. Both are
+  static-shape mistakes, but a probe that queries valid fields and compares them
+  wrongly passes every validator we have. The only thing that caught it was
+  running the mutation and the probe against the same real store in one command
+  and comparing them — which is now the argument for every future canary family
+  reporting both, not just `status`.
+- **Reconciliation code is less tested than the code it reconciles.**
+  `probeStoreCredit` had *zero* unit coverage before this, while
+  `issueStoreCredit` had a suite. That is backwards: the probe is the thing that
+  runs when we already know something went wrong.
 
 ## Decisions
 
@@ -400,7 +470,7 @@ or a deliberate choice rather than on work.
 
 | Item | Blocked on | Unblock event |
 | --- | --- | --- |
-| A5's "Handled" section claiming actions definitely completed | the last canary family — `order_creation` | **Three of four families pass, and all 10 mutation documents are schema-valid** (2026-07-25). `gift_card`: `ok` / `committed`. `refund`: `ok` / `committed` on a $0.01 partial against `#1005`, but only after fixing a defect that made it fail 100% of the time — see the `create_refund` section above, and note it took three runs, one of which wasted a round on a stale `dist`. `refund_full`: `ok` / `committed` against `#1006`, refunded total equal to the order total, closing item 7. `order_creation` is unrun because it commits a genuine order on `palette-dev`, which is on a live `basic` plan; that is a deliberate choice, not a blocker. Item 8 is closed and took a second 100%-failure defect (`attach_return_label`) with it, so a canary pass means considerably more than it did: the documents behind it are proven, and a new one cannot ship unvalidated. Item 9 also narrows what reaches this section at all: a rejected document now lands in `error`, not `unknown`, so the outcomes A5 has to describe are one class cleaner. |
+| A5's "Handled" section claiming actions definitely completed | the last canary family — `order_creation` | **Four of five families pass, and all 10 mutation documents are schema-valid** (2026-07-25). `gift_card`: `ok` / `committed`. `refund`: `ok` / `committed` on a $0.01 partial against `#1005`, but only after fixing a defect that made it fail 100% of the time — see the `create_refund` section above, and note it took three runs, one of which wasted a round on a stale `dist`. `refund_full`: `ok` / `committed` against `#1006`, refunded total equal to the order total, closing item 7. `store_credit`: `ok` / `committed` — but `committed` only after fixing a probe that read every real credit as a no-op, which is the one defect this doc has recorded that would have caused a *double* spend rather than a stalled one (item 10). `order_creation` is unrun because it commits a genuine order on `palette-dev`, which is on a live `basic` plan; that is a deliberate choice, not a blocker. Item 8 is closed and took a second 100%-failure defect (`attach_return_label`) with it, so a canary pass means considerably more than it did: the documents behind it are proven, and a new one cannot ship unvalidated. Item 9 also narrows what reaches this section at all: a rejected document now lands in `error`, not `unknown`, so the outcomes A5 has to describe are one class cleaner. |
 | Raising `OPERATOR_PLAN_QUEUE_MAX` above 1 | P1 execution-ledger rollout verification | `npm run audit:plan-executions -- --hours=24` returning representative dashboard *and* gateway executions. It currently returns zero — there is no traffic yet. |
 | Enabling B3/B4 monitors | same P1 rollout, plus the P6-02 controlled recovery exercise (the simulated-fixture leg is closed — see item 6) | as above |
 | B3/B4/B5 live push verification | a real return arrival, delivery exception, or 5-day-old resolution | first real merchant traffic, or a deliberately staged fixture on the test DB |
