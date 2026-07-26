@@ -49,7 +49,7 @@ place that says both.
 | Store credit (2026-07-06 expansion) | none | shipped tool `issue_store_credit`; **its reconciliation probe was broken since it shipped**, fixed 2026-07-25 | **verified on `palette-dev`** 2026-07-25 — `ok`, `spentCents: 1`, balance $0.01; probe `committed` only after the fix |
 | Refunds (`create_refund`) | none | **broken since it shipped**; fixed 2026-07-25 | **verified on `palette-dev`** — both paths: partial (`#1005`, $0.01) and full (`#1006`, $629.95, total matched) |
 | Return labels (`attach_return_label`) | none | **broken since it shipped**; fixed 2026-07-25 | **document schema-valid** on `palette-dev`; never executed |
-| Order creation (`create_shopify_order`) | none | **broken since it shipped**; fixed 2026-07-25, and its probe raced Shopify's search index, fixed 2026-07-26 | **executed on `palette-dev`** — order `#1007`, $1.00; probe `no_effect` on that run was the index lag, not the order |
+| Order creation (`create_shopify_order`) | none | **broken since it shipped**; fixed 2026-07-25, and its probe reconciled through a lagging index, fixed 2026-07-26 | **verified on `palette-dev`** 2026-07-26 — order `#1009`, `ok` / `committed`. Took three orders: `#1007` exposed the probe race, `#1008` disproved the retry fix |
 
 The gift-card and store-credit rows were one capability that read as live
 everywhere in the code and was not. Both sit in the registry
@@ -590,7 +590,18 @@ new clothes: **two rounds of tuning a number means the approach is wrong, not th
 constant.**
 
 Either way the probe returns `still_unknown` rather than `no_effect` when the
-lookup comes up empty. An exhausted search cannot tell
+lookup comes up empty.
+
+**Green on the third order.** `#1009` came back `ok` / `committed` —
+"Reconciled created order #1009." One honest detail: the run still took 5.7s,
+consistent with the probe spending its retry budget, so the direct lookup is not
+instant either. It converges in seconds where search was still missing at four
+and unconfirmed until somewhere under 169. The retry loop is load-bearing for
+both paths; only the *conclusion* from an exhausted one changed.
+
+The cost of this family was three $1 orders on `palette-dev` and three fixes, of
+which the first two were reasoned from plausible mechanisms and the third from a
+measurement. That ratio is the argument for measuring first. An exhausted search cannot tell
 "never created" from "created and not yet indexed", and the two call for opposite
 moves. `no_effect` is now deliberately unreachable for this probe: an order
 creation that truly failed will sit for human review rather than be auto-cleared,
@@ -680,7 +691,7 @@ or a deliberate choice rather than on work.
 
 | Item | Blocked on | Unblock event |
 | --- | --- | --- |
-| A5's "Handled" section claiming actions definitely completed | the last canary family — `order_creation` | **Four of five families pass, and all 10 mutation documents are schema-valid** (2026-07-25). `gift_card`: `ok` / `committed`. `refund`: `ok` / `committed` on a $0.01 partial against `#1005`, but only after fixing a defect that made it fail 100% of the time — see the `create_refund` section above, and note it took three runs, one of which wasted a round on a stale `dist`. `refund_full`: `ok` / `committed` against `#1006`, refunded total equal to the order total, closing item 7. `store_credit`: `ok` / `committed` — but `committed` only after fixing a probe that read every real credit as a no-op, which is the one defect this doc has recorded that would have caused a *double* spend rather than a stalled one (item 10). `order_creation` **ran 2026-07-25 and failed**, which is how the fourth 100%-failure defect was found: the operation tag exceeded Shopify's 40-character cap and every order creation came back `422 "Order tags is invalid"` (section above). The tool reported `error` with a `no_effect` probe agreeing — the correct classification, not a false ambiguity. The fix is in and built; **the family still needs one green re-run** before this row can close. Item 8 is closed and took a second 100%-failure defect (`attach_return_label`) with it, so a canary pass means considerably more than it did: the documents behind it are proven, and a new one cannot ship unvalidated. Item 9 also narrows what reaches this section at all: a rejected document now lands in `error`, not `unknown`, so the outcomes A5 has to describe are one class cleaner. |
+| ~~A5's "Handled" section~~ **unblocked 2026-07-26** | — | **All five canary families pass** and all 10 mutation documents are schema-valid. `gift_card`, `refund` (`#1005`), `refund_full` (`#1006`, total matched), `store_credit`, and now `order_creation` (`#1009`) each return `ok` with a `committed` probe. Getting here cost four 100%-failure defects and three probe defects — see the sections above; every one was found by executing against a real store, none by a test. The harness now fails any family whose probe disagrees with its status, so a future pass means what it says. |
 | Raising `OPERATOR_PLAN_QUEUE_MAX` above 1 | P1 execution-ledger rollout verification | `npm run audit:plan-executions -- --hours=24` returning representative dashboard *and* gateway executions. It currently returns zero — there is no traffic yet. |
 | Enabling B3/B4 monitors | same P1 rollout, plus the P6-02 controlled recovery exercise (the simulated-fixture leg is closed — see item 6) | as above |
 | B3/B4/B5 live push verification | a real return arrival, delivery exception, or 5-day-old resolution | first real merchant traffic, or a deliberately staged fixture on the test DB |
