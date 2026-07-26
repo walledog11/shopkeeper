@@ -111,15 +111,15 @@ describe("probeUnknownShopifyMutation", () => {
     expect(result).toMatchObject({ outcome: "no_effect" });
   });
 
-  it("commits when a tagged order exists for the operation", async () => {
+  // Measured on palette-dev: order #1008 was unfindable by `tag:` after three
+  // attempts across four seconds, while REST filtered by email returned it
+  // carrying that tag. The direct query is the reconciliation path.
+  it("reconciles a created order through the direct email lookup, not search", async () => {
     const tag = shopifyOperationTag("execution-1:create_order");
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
-      data: {
-        orders: {
-          nodes: [{ legacyResourceId: "9001", name: "#1002", tags: [tag] }],
-        },
-      },
-    })));
+    const fetchMock = vi.fn(async () => jsonResponse({
+      orders: [{ id: 6123346100458, name: "#1008", tags: `some-other-tag, ${tag}` }],
+    }));
+    vi.stubGlobal("fetch", fetchMock);
 
     const result = await probeUnknownShopifyMutation(
       "create_shopify_order",
@@ -128,12 +128,38 @@ describe("probeUnknownShopifyMutation", () => {
     );
 
     expect(result).toMatchObject({ outcome: "committed" });
+    const url = String(fetchMock.mock.calls[0]![0]);
+    expect(url).toContain("orders.json");
+    expect(url).toContain("email=buyer%40example.com");
+    expect(url).not.toContain("graphql");
   });
 
-  // Shopify's order search lags the write: the canary created #1007 and this
-  // query missed it seconds later, then matched it afterwards. Retrying across
-  // the lag is what turns that into a committed reconciliation.
-  it("finds a created order once the search index catches up", async () => {
+  // REST hands back tags as one comma-separated string, so a tag that is merely
+  // a prefix of another must not count as a match.
+  it("does not match a tag that is only a prefix of the order's tag", async () => {
+    vi.useFakeTimers();
+    try {
+      const tag = shopifyOperationTag("execution-1:create_order");
+      vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({
+        orders: [{ id: 1, name: "#1008", tags: `${tag}-extra` }],
+      })));
+
+      const pending = probeUnknownShopifyMutation(
+        "create_shopify_order",
+        { email: "buyer@example.com", line_items: [{ variant_id: "1", quantity: 1 }] },
+        { ...ctx, operationId: "execution-1:create_order" },
+      );
+      const [result] = await Promise.all([pending, vi.runAllTimersAsync()]);
+
+      expect(result.outcome).toBe("still_unknown");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // Without an email there is nothing to filter on, so search is all that is
+  // left — and it is allowed to need a retry.
+  it("falls back to the tag search when the input carries no email", async () => {
     vi.useFakeTimers();
     try {
       const tag = shopifyOperationTag("execution-1:create_order");
@@ -146,13 +172,13 @@ describe("probeUnknownShopifyMutation", () => {
 
       const pending = probeUnknownShopifyMutation(
         "create_shopify_order",
-        { email: "buyer@example.com", line_items: [{ variant_id: "1", quantity: 1 }] },
+        { line_items: [{ variant_id: "1", quantity: 1 }] },
         { ...ctx, operationId: "execution-1:create_order" },
       );
       const [result] = await Promise.all([pending, vi.runAllTimersAsync()]);
 
       expect(result).toMatchObject({ outcome: "committed" });
-      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(String(fetchMock.mock.calls[0]![0])).toContain("graphql");
     } finally {
       vi.useRealTimers();
     }
@@ -165,7 +191,7 @@ describe("probeUnknownShopifyMutation", () => {
     try {
       // A Response body reads once, so each attempt needs its own instance -
       // mockResolvedValue would hand attempt 2 an already-consumed body.
-      const fetchMock = vi.fn(async () => jsonResponse({ data: { orders: { nodes: [] } } }));
+      const fetchMock = vi.fn(async () => jsonResponse({ orders: [] }));
       vi.stubGlobal("fetch", fetchMock);
 
       const pending = probeUnknownShopifyMutation(

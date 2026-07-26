@@ -578,8 +578,19 @@ customer**. `order-creation.ts:111` already refused to conclude from the very
 same miss and returned `toolUnknown` — so this was, for the third time in two
 days, one question with two implementations that disagreed.
 
-Fix: retry the search across the lag (3 attempts, 2s apart), and when it is still
-empty return `still_unknown`, not `no_effect`. An exhausted search cannot tell
+**First fix was the wrong shape.** Retrying the search across the lag (3
+attempts, 2s apart) sounded right and failed on its next run: order `#1008` was
+still unfindable by `tag:` after four seconds. Measuring instead of widening the
+budget settled the design — a REST lookup filtered by `email` returned `#1008`
+carrying that same tag, because REST list filtering queries the orders
+themselves rather than the search index. `probeCreatedOrder` now reconciles
+through that direct query and falls back to `tag:` search only when the input
+has no email to filter on. The lesson is the doc's own debugging rule arriving in
+new clothes: **two rounds of tuning a number means the approach is wrong, not the
+constant.**
+
+Either way the probe returns `still_unknown` rather than `no_effect` when the
+lookup comes up empty. An exhausted search cannot tell
 "never created" from "created and not yet indexed", and the two call for opposite
 moves. `no_effect` is now deliberately unreachable for this probe: an order
 creation that truly failed will sit for human review rather than be auto-cleared,

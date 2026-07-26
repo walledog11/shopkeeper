@@ -122,15 +122,59 @@ async function probeCancellation(
   return committed(`Reconciled cancellation for order ${data.order.name ?? orderId}.`);
 }
 
-// Shopify's order search is index-backed and lags the write. The canary created
-// order #1007 and this exact query returned nothing for it moments later, then
-// matched it on a later run — so an empty result is not evidence the order is
-// absent. Retry across the lag before concluding anything.
-const ORDER_SEARCH_ATTEMPTS = 3;
-const ORDER_SEARCH_BACKOFF_MS = 2000;
+// Shopify's order *search* is index-backed and lags the write by far more than
+// a probe can wait: order #1008 was still unfindable by `tag:` after three
+// attempts across four seconds, while a REST lookup filtered by email returned
+// it carrying that same tag. So the direct query is the reconciliation path and
+// search is only the fallback for an input with no email to filter on.
+const ORDER_LOOKUP_ATTEMPTS = 3;
+const ORDER_LOOKUP_BACKOFF_MS = 2000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// REST returns an order's tags as one comma-separated string, unlike GraphQL,
+// which returns a list. Comparing the raw string would match a tag that is
+// merely a prefix of another.
+function restOrderTags(order: { tags?: unknown }): string[] {
+  return String(order.tags ?? "")
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
+
+async function findCreatedOrdersByEmail(
+  ctx: ShopifyContext,
+  email: string,
+  tag: string,
+): Promise<Array<{ id: string; name?: string }>> {
+  const data = await shopifyRestJson<{ orders?: Array<ShopifyOrder & { tags?: string }> }>(
+    ctx,
+    "orders.json",
+    { query: { email, status: "any", fields: "id,name,tags" }, maxRetries: 1 },
+  );
+  return (data.orders ?? [])
+    .filter((order) => restOrderTags(order).includes(tag))
+    .map((order) => ({ id: String(order.id), name: order.name }));
+}
+
+async function findCreatedOrdersByTagSearch(
+  ctx: ShopifyContext,
+  tag: string,
+): Promise<Array<{ id: string; name?: string }>> {
+  const data = await shopifyGraphql<{
+    orders?: { nodes?: Array<{ legacyResourceId?: string | null; name?: string | null; tags?: string[] | null }> } | null;
+  }>(ctx, `
+    query FindShopkeeperCreatedOrder($query: String!) {
+      orders(first: 2, query: $query, sortKey: CREATED_AT, reverse: true) {
+        nodes { legacyResourceId name tags }
+      }
+    }
+  `, { query: `tag:${tag}` }, { maxRetries: 1 });
+  return (data.orders?.nodes ?? [])
+    .filter((order) => order.tags?.includes(tag))
+    .map((order) => ({ id: order.legacyResourceId ?? "unknown", name: order.name ?? undefined }));
 }
 
 async function probeCreatedOrder(
@@ -141,37 +185,30 @@ async function probeCreatedOrder(
   if (!tag) {
     return stillUnknown("Order creation reconciliation requires a stable operation identity.");
   }
+  const email = optionalString(input.email);
 
-  for (let attempt = 0; attempt < ORDER_SEARCH_ATTEMPTS; attempt += 1) {
-    if (attempt > 0) await sleep(ORDER_SEARCH_BACKOFF_MS);
-    const data = await shopifyGraphql<{
-      orders?: { nodes?: Array<{ legacyResourceId?: string | null; name?: string | null; tags?: string[] | null }> } | null;
-    }>(ctx, `
-      query FindShopkeeperCreatedOrder($query: String!) {
-        orders(first: 2, query: $query, sortKey: CREATED_AT, reverse: true) {
-          nodes { legacyResourceId name tags }
-        }
-      }
-    `, { query: `tag:${tag}` }, { maxRetries: 1 });
-    const matches = (data.orders?.nodes ?? []).filter((order) => order.tags?.includes(tag));
+  for (let attempt = 0; attempt < ORDER_LOOKUP_ATTEMPTS; attempt += 1) {
+    if (attempt > 0) await sleep(ORDER_LOOKUP_BACKOFF_MS);
+    const matches = email
+      ? await findCreatedOrdersByEmail(ctx, email, tag)
+      : await findCreatedOrdersByTagSearch(ctx, tag);
     if (matches.length === 1) {
-      return committed(`Reconciled created order ${matches[0]!.name ?? matches[0]!.legacyResourceId ?? "unknown"}.`);
+      return committed(`Reconciled created order ${matches[0]!.name ?? matches[0]!.id}.`);
     }
     if (matches.length > 1) {
       return stillUnknown(`Multiple Shopify orders match operation tag ${tag}.`);
     }
   }
 
-  // Deliberately not `no_effect`. An exhausted search cannot distinguish "never
-  // created" from "created and still not indexed", and the two call for opposite
+  // Deliberately not `no_effect`. An exhausted lookup cannot distinguish "never
+  // created" from "created and not yet visible", and the two call for opposite
   // moves: no_effect releases the hold and invites a second create, which for
   // this tool means a duplicate real order against a customer.
   // `order-creation.ts`'s own post-failure reconciliation already refuses to
-  // conclude from the same miss; this now matches it.
-  const email = optionalString(input.email);
+  // conclude from the same miss; this matches it.
   const forEmail = email ? ` for ${email}` : "";
   return stillUnknown(
-    `No Shopify order with operation tag ${tag} was found${forEmail} after ${ORDER_SEARCH_ATTEMPTS} attempts. Shopify's order search lags recent writes, so this does not prove the order was not created — review it before creating another.`,
+    `No Shopify order with operation tag ${tag} was found${forEmail} after ${ORDER_LOOKUP_ATTEMPTS} attempts. This does not prove the order was not created — review it before creating another.`,
   );
 }
 
