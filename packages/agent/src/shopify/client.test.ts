@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   isAmbiguousShopifyMutationError,
+  SHOPIFY_TAG_MAX_LENGTH,
   ShopifyRequestError,
   shopifyGraphql,
+  shopifyOperationTag,
   shopifyRestJson,
 } from "./client.js";
 
@@ -113,5 +115,31 @@ describe("GraphQL mutation ambiguity", () => {
     });
 
     expect(err.payload).toBe("Throttled (THROTTLED)");
+  });
+});
+
+describe("shopifyOperationTag", () => {
+  // The defect this pins: the tag was the prefix plus the raw 36-character
+  // idempotency key, 50 characters against Shopify's 40-character cap, so every
+  // create_shopify_order came back 422 "Order tags is invalid".
+  it("stays inside Shopify's tag length cap", () => {
+    for (const operationId of ["execution-1:create_order", "a", "x".repeat(500)]) {
+      expect(shopifyOperationTag(operationId).length).toBeLessThanOrEqual(SHOPIFY_TAG_MAX_LENGTH);
+    }
+    expect(shopifyOperationTag().length).toBeLessThanOrEqual(SHOPIFY_TAG_MAX_LENGTH);
+  });
+
+  // The writer stamps it and the probe searches for it; a tag Shopify's `tag:`
+  // search cannot round-trip would reconcile every created order as no_effect.
+  it("is stable per operation and free of separator characters", () => {
+    const tag = shopifyOperationTag("execution-1:create_order");
+
+    expect(tag).toBe(shopifyOperationTag("execution-1:create_order"));
+    expect(tag).not.toBe(shopifyOperationTag("execution-2:create_order"));
+    expect(tag).toMatch(/^shopkeeper-op-[0-9a-f]+$/);
+  });
+
+  it("gives an unidentified operation its own tag rather than a shared one", () => {
+    expect(shopifyOperationTag()).not.toBe(shopifyOperationTag());
   });
 });

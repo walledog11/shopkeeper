@@ -8,7 +8,7 @@ import {
   issueDiscount,
   updateShopifyOrderAddress,
 } from "./shopify.js";
-import { shopifyIdempotencyKey } from "../shopify/client.js";
+import { shopifyOperationTag } from "../shopify/client.js";
 
 const ctx = {
   shop: "test-store.myshopify.com",
@@ -460,7 +460,7 @@ describe("shopify tools", () => {
 
   it("creates an order with a stable operation tag after confirming it does not already exist", async () => {
     const operationId = "0ecfcf1c-2a07-4caf-956f-77cbaa2fb83a:create_order";
-    const operationTag = `shopkeeper-op-${shopifyIdempotencyKey(operationId)}`;
+    const operationTag = shopifyOperationTag(operationId);
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ data: { orders: { nodes: [] } } }))
@@ -495,7 +495,7 @@ describe("shopify tools", () => {
 
   it.each([429, 503])("reconciles an order that committed before Shopify returned %i", async (status) => {
     const operationId = "0ecfcf1c-2a07-4caf-956f-77cbaa2fb83a:create_order";
-    const operationTag = `shopkeeper-op-${shopifyIdempotencyKey(operationId)}`;
+    const operationTag = shopifyOperationTag(operationId);
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse({ data: { orders: { nodes: [] } } }))
@@ -580,7 +580,7 @@ describe("shopify tools", () => {
 
   it("returns a previously created order without issuing another create request", async () => {
     const operationId = "0ecfcf1c-2a07-4caf-956f-77cbaa2fb83a:create_order";
-    const operationTag = `shopkeeper-op-${shopifyIdempotencyKey(operationId)}`;
+    const operationTag = shopifyOperationTag(operationId);
     const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
       data: {
         orders: {

@@ -42,6 +42,7 @@ place that says both.
 | Store credit (2026-07-06 expansion) | none | shipped tool `issue_store_credit`; **its reconciliation probe was broken since it shipped**, fixed 2026-07-25 | **verified on `palette-dev`** 2026-07-25 — `ok`, `spentCents: 1`, balance $0.01; probe `committed` only after the fix |
 | Refunds (`create_refund`) | none | **broken since it shipped**; fixed 2026-07-25 | **verified on `palette-dev`** — both paths: partial (`#1005`, $0.01) and full (`#1006`, $629.95, total matched) |
 | Return labels (`attach_return_label`) | none | **broken since it shipped**; fixed 2026-07-25 | **document schema-valid** on `palette-dev`; never executed |
+| Order creation (`create_shopify_order`) | none | **broken since it shipped**; fixed 2026-07-25 | rejected `422 "Order tags is invalid"` on `palette-dev`; **fix not yet re-run** |
 
 The gift-card and store-credit rows were one capability that read as live
 everywhere in the code and was not. Both sit in the registry
@@ -500,6 +501,53 @@ now shares the tool's; `probeOrderEdit` cannot share `order-edit.ts`'s, because
 that one needs state the probe does not have — so it says so rather than
 approximating it.
 
+### `create_shopify_order` never worked either (found and fixed 2026-07-25)
+
+The `order_creation` family — the last unrun canary, and the only reason A5 was
+still blocked — failed on its first execution with
+`422 - {"order":["Order tags is invalid"]}`. It is the **fourth** shipped
+capability this doc has caught failing 100% of the time since it shipped, and
+the third found by running a canary family for the first time.
+
+Shopify caps a tag at 40 characters. The operation tag was
+`shopkeeper-op-` (14) plus the raw 36-character idempotency key — **50**. Every
+`create_shopify_order` sent one, because `shopifyIdempotencyKey` falls back to a
+random UUID when there is no operation id, so there was no path that omitted the
+tag and no store on which this worked.
+
+Why nothing caught it earlier:
+
+- **Item 8 could not reach it.** Order creation's write half is REST, not
+  GraphQL, so it fails with an HTTP status and was never in the
+  document-validation class. The doc already said this; here is what it costs.
+- **The unit test asserted the bug.** `shopify.test.ts` checked
+  `createBody.order.tags === operationTag` where the expectation was built by
+  the same wrong expression as the code — the tag format was hand-reproduced in
+  **five** places across two implementations and three tests. Both sides agreed
+  on a string Shopify always rejected. This is the sharpest instance yet of "unit
+  tests cannot catch this class."
+- **Only the canary could, and this family had never run.** Same as
+  `issue_store_credit` in item 10.
+
+Two things went **right**, and both are recent work paying off. The 422 carries
+an HTTP status, so `isAmbiguousShopifyMutationError` correctly returned false and
+the tool reported `error` rather than parking in `unknown` — item 9's
+classification behaving exactly as designed on a defect it had never seen. And
+`probeOutcome: no_effect` agreed with it, so the mutation and its probe told the
+same story, which is the check item 10 argued every family should report.
+
+Fix: one shared `shopifyOperationTag` in `client.ts` — the prefix plus 24 hex
+digits of the same digest, 38 characters — replacing all five copies, with the
+writer, the probe and every test now reading the single definition. Covered by
+tests that pin the length against `SHOPIFY_TAG_MAX_LENGTH`, the per-operation
+stability the probe's `tag:` search depends on, and the random-per-call
+behavior for an unidentified operation.
+
+The lesson is the one from item 11, arriving again within a day and from the
+other direction: **a format shared between a writer and a reader must have one
+definition.** There it was a comparison predicate; here it was a string. The
+tests hand-reproducing it are what made the duplication invisible.
+
 ## Decisions
 
 ### Digest spam: trust clear intent (2026-07-24)
@@ -564,7 +612,7 @@ or a deliberate choice rather than on work.
 
 | Item | Blocked on | Unblock event |
 | --- | --- | --- |
-| A5's "Handled" section claiming actions definitely completed | the last canary family — `order_creation` | **Four of five families pass, and all 10 mutation documents are schema-valid** (2026-07-25). `gift_card`: `ok` / `committed`. `refund`: `ok` / `committed` on a $0.01 partial against `#1005`, but only after fixing a defect that made it fail 100% of the time — see the `create_refund` section above, and note it took three runs, one of which wasted a round on a stale `dist`. `refund_full`: `ok` / `committed` against `#1006`, refunded total equal to the order total, closing item 7. `store_credit`: `ok` / `committed` — but `committed` only after fixing a probe that read every real credit as a no-op, which is the one defect this doc has recorded that would have caused a *double* spend rather than a stalled one (item 10). `order_creation` is unrun because it commits a genuine order on `palette-dev`, which is on a live `basic` plan; that is a deliberate choice, not a blocker. Item 8 is closed and took a second 100%-failure defect (`attach_return_label`) with it, so a canary pass means considerably more than it did: the documents behind it are proven, and a new one cannot ship unvalidated. Item 9 also narrows what reaches this section at all: a rejected document now lands in `error`, not `unknown`, so the outcomes A5 has to describe are one class cleaner. |
+| A5's "Handled" section claiming actions definitely completed | the last canary family — `order_creation` | **Four of five families pass, and all 10 mutation documents are schema-valid** (2026-07-25). `gift_card`: `ok` / `committed`. `refund`: `ok` / `committed` on a $0.01 partial against `#1005`, but only after fixing a defect that made it fail 100% of the time — see the `create_refund` section above, and note it took three runs, one of which wasted a round on a stale `dist`. `refund_full`: `ok` / `committed` against `#1006`, refunded total equal to the order total, closing item 7. `store_credit`: `ok` / `committed` — but `committed` only after fixing a probe that read every real credit as a no-op, which is the one defect this doc has recorded that would have caused a *double* spend rather than a stalled one (item 10). `order_creation` **ran 2026-07-25 and failed**, which is how the fourth 100%-failure defect was found: the operation tag exceeded Shopify's 40-character cap and every order creation came back `422 "Order tags is invalid"` (section above). The tool reported `error` with a `no_effect` probe agreeing — the correct classification, not a false ambiguity. The fix is in and built; **the family still needs one green re-run** before this row can close. Item 8 is closed and took a second 100%-failure defect (`attach_return_label`) with it, so a canary pass means considerably more than it did: the documents behind it are proven, and a new one cannot ship unvalidated. Item 9 also narrows what reaches this section at all: a rejected document now lands in `error`, not `unknown`, so the outcomes A5 has to describe are one class cleaner. |
 | Raising `OPERATOR_PLAN_QUEUE_MAX` above 1 | P1 execution-ledger rollout verification | `npm run audit:plan-executions -- --hours=24` returning representative dashboard *and* gateway executions. It currently returns zero — there is no traffic yet. |
 | Enabling B3/B4 monitors | same P1 rollout, plus the P6-02 controlled recovery exercise (the simulated-fixture leg is closed — see item 6) | as above |
 | B3/B4/B5 live push verification | a real return arrival, delivery exception, or 5-day-old resolution | first real merchant traffic, or a deliberately staged fixture on the test DB |

@@ -369,6 +369,21 @@ export function shopifyIdempotencyKey(operationId?: string): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }
 
+// Shopify caps a tag at 40 characters and rejects the whole write with a 422
+// ("Order tags is invalid") when one is longer — which the raw 36-character
+// idempotency key plus this prefix is, at 50. Strip the key's hyphens and take
+// 24 of its hex digits instead: 14 + 24 = 38, comfortably under the cap and
+// still 96 bits of the same digest.
+export const SHOPIFY_OPERATION_TAG_PREFIX = "shopkeeper-op-";
+export const SHOPIFY_TAG_MAX_LENGTH = 40;
+
+// The one definition of an operation tag. The writer that stamps it and the
+// probe that searches for it must agree exactly, so neither builds its own.
+export function shopifyOperationTag(operationId?: string): string {
+  const key = shopifyIdempotencyKey(operationId).replaceAll("-", "").slice(0, 24);
+  return `${SHOPIFY_OPERATION_TAG_PREFIX}${key}`;
+}
+
 export function formatUserErrors(errors: ShopifyGraphqlUserError[] | undefined | null): string | null {
   if (!errors?.length) return null;
   return errors.map((e) => e.message).join(", ");

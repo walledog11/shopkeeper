@@ -4,7 +4,7 @@ import {
   formatShopifyToolError,
   isAmbiguousShopifyMutationError,
   shopifyGraphql,
-  shopifyIdempotencyKey,
+  shopifyOperationTag,
   shopifyRestJson,
   type ShopifyContext,
 } from "./client.js";
@@ -37,12 +37,6 @@ interface CreatedOrderLookupData {
       } | null;
     }>;
   } | null;
-}
-
-const OPERATION_TAG_PREFIX = "shopkeeper-op-";
-
-function orderOperationTag(operationId?: string): string {
-  return `${OPERATION_TAG_PREFIX}${shopifyIdempotencyKey(operationId)}`;
 }
 
 function createdOrderResult(
@@ -176,7 +170,7 @@ export async function createShopifyOrder(
     });
     const lineItems = buildLineItems(input.line_items, options);
     const note = optionalString(input.note);
-    const currentOperationTag = orderOperationTag(ctx.operationId);
+    const currentOperationTag = shopifyOperationTag(ctx.operationId);
     operationTag = currentOperationTag;
 
     const existing = await findCreatedOrder(ctx, currentOperationTag);

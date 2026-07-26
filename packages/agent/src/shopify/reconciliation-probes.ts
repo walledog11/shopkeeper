@@ -4,6 +4,7 @@ import {
   formatShopifyToolError,
   shopifyGraphql,
   shopifyIdempotencyKey,
+  shopifyOperationTag,
   shopifyRestJson,
   type ShopifyContext,
 } from "./client.js";
@@ -15,8 +16,6 @@ export type ShopifyReconciliationProbeResult =
   | { outcome: "no_effect"; message: string }
   | { outcome: "still_unknown"; message: string };
 
-const OPERATION_TAG_PREFIX = "shopkeeper-op-";
-
 export const RECONCILABLE_SHOPIFY_MUTATION_TOOLS = new Set([
   "create_refund",
   "cancel_order",
@@ -27,9 +26,12 @@ export const RECONCILABLE_SHOPIFY_MUTATION_TOOLS = new Set([
   "update_shopify_order_address",
 ]);
 
+// Null, not a generated tag: without a stable operation identity there is
+// nothing to search for, and a fresh random tag would match nothing and read as
+// a confident no_effect.
 function operationTag(operationId?: string): string | null {
   if (!operationId) return null;
-  return `${OPERATION_TAG_PREFIX}${shopifyIdempotencyKey(operationId)}`;
+  return shopifyOperationTag(operationId);
 }
 
 function giftCardCode(operationId?: string): string | null {

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { shopifyIdempotencyKey } from "./client.js";
+import { shopifyIdempotencyKey, shopifyOperationTag } from "./client.js";
 import { probeUnknownShopifyMutation } from "./reconciliation-probes.js";
 
 const ctx = {
@@ -112,7 +112,7 @@ describe("probeUnknownShopifyMutation", () => {
   });
 
   it("commits when a tagged order exists for the operation", async () => {
-    const tag = `shopkeeper-op-${shopifyIdempotencyKey("execution-1:create_order")}`;
+    const tag = shopifyOperationTag("execution-1:create_order");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
       data: {
         orders: {
