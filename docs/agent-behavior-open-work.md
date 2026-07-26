@@ -9,7 +9,7 @@ B6 (order-ops autonomy) was never a behavior phase — it's module #2 and now li
 only in
 [core-extraction-and-module-expansion-plan.md](core-extraction-and-module-expansion-plan.md).
 
-Last reviewed: 2026-07-25.
+Last reviewed: 2026-07-26.
 
 **Four shipped Shopify write paths were found this week to have never once
 worked.** `create_refund` and `attach_return_label` were rejected by Shopify at
