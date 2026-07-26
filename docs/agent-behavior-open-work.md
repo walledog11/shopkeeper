@@ -191,10 +191,20 @@ Nothing here waits on production traffic, credits, or another plan.
    is one definition rather than two. Covered by a per-sweep unit test plus the
    predicate suite, mutation-verified: stubbing the guard to `return true` fails
    exactly three tests, one per monitor.
-   **Left open:** deleting the two production rows. It is a production data
-   decision, the fixtures come back the next time someone seeds, and nothing now
-   depends on it. Both were still present on a 2026-07-25 inspect pass, each
-   skipped as `simulated fixture` before store selection.
+   **The rows are deleted too, 2026-07-25.** Both were confirmed inert before
+   removal — `metadata.simulated: true`, shop `demo-store.shopkeeper.test`, and
+   each in its own throwaway org ("test" and "tes", 0 threads and 0
+   `AgentAction` rows apiece) rather than in the real store's org, which holds 99
+   threads and 178 actions. Every inbound reference was checked and was zero:
+   `Thread.replyIntegrationId`, `Message.integrationId`, and
+   `Organization.defaultEmailIntegrationId`. The deletion was guarded on all
+   three conditions plus the exact ids, dry-run first, and one Shopify
+   integration remains: `palette-dev-3peukw16.myshopify.com`.
+   The fixtures still come back the next time someone runs
+   `api/integrations/shopify/simulate`, which is why the sweep guard above — not
+   this deletion — is what closes the item. **Deliberately left:** the two empty
+   orgs and their 2 KB articles each, seeded by the simulated connect. They own
+   nothing else and no sweep reads them.
 7. ~~**The full-refund path is schema-valid but still unexecuted.**~~ **Done
    2026-07-25 — it executed, on order `#1006`.** Full refund of $629.95 on a
    fresh Bogus-gateway test order: `status: ok`, `refundedCents: 62995` against
