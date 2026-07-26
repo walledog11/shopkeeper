@@ -94,4 +94,44 @@ describe("attachReturnLabel", () => {
     expect(result.message).toContain("#2001-R1");
     expect(result.message).toContain("https://labels.example.com/rma-2001.pdf");
   });
+
+  // A dropped connection after the reverse-delivery mutation went out can leave
+  // a label attached at Shopify. Reporting that as a flat failure invites the
+  // retry that attaches a second one.
+  it("reports an interrupted reverse-delivery mutation as unknown, not failed", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(orderReturnsResponse())
+      .mockRejectedValueOnce(new TypeError("fetch failed"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await attachReturnLabel(input, ctx);
+
+    expect(result.status).toBe("unknown");
+    expect(result.message).toContain("Do not attach another label");
+  });
+
+  // The lookup runs before any mutation, so its failure committed nothing and
+  // must not be laundered into an ambiguous outcome.
+  it("keeps a failed return lookup an error", async () => {
+    const fetchMock = vi.fn().mockRejectedValueOnce(new TypeError("fetch failed"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await attachReturnLabel(input, ctx);
+
+    expect(result.status).toBe("error");
+  });
+
+  // Item 9's classification: Shopify refused the document, so nothing ran.
+  it("keeps a rejected document an error", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(orderReturnsResponse())
+      .mockResolvedValueOnce(jsonResponse({
+        errors: [{ message: "Variable $notifyCustomer is declared by reverseDeliveryCreateWithShipping but not used" }],
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await attachReturnLabel(input, ctx);
+
+    expect(result.status).toBe("error");
+  });
 });

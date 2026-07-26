@@ -2,11 +2,12 @@ import type { AttachReturnLabelInput } from "../tools/index.js";
 import {
   formatShopifyToolError,
   formatUserErrors,
+  isAmbiguousShopifyMutationError,
   shopifyGraphql,
   type ShopifyContext,
   type ShopifyGraphqlUserError,
 } from "./client.js";
-import { toolError, toolOk, type ToolResult } from "../tools/result.js";
+import { toolError, toolOk, toolUnknown, type ToolResult } from "../tools/result.js";
 import { optionalString, requireNonEmptyString, requireNumericId, ShopifyInputError } from "./validation.js";
 
 const OPEN_RETURN_STATUSES = new Set(["OPEN", "REQUESTED"]);
@@ -66,6 +67,10 @@ export async function attachReturnLabel(
   input: AttachReturnLabelInput,
   ctx: ShopifyContext
 ): Promise<ToolResult> {
+  // Only the reverse-delivery mutation can leave a label attached at Shopify. A
+  // failure in the return lookup above it committed nothing, so it keeps the
+  // ordinary error path.
+  let mutationStarted = false;
   try {
     const orderId = requireNumericId(input.order_id, "order_id");
     const labelUrl = requireLabelUrl(input.label_url);
@@ -106,6 +111,7 @@ export async function attachReturnLabel(
 
     const reverseFulfillmentOrderId = openReturn.reverseFulfillmentOrders!.edges[0].node.id;
 
+    mutationStarted = true;
     const created = await shopifyGraphql<ReverseDeliveryCreateData>(
       ctx,
       REVERSE_DELIVERY_CREATE_WITH_SHIPPING_MUTATION,
@@ -130,6 +136,11 @@ export async function attachReturnLabel(
       `Attached the return label to return ${returnName} on order ${orderId}${trackingNote}. Send the customer the label link in your reply so they can ship the items back: ${labelUrl}`
     );
   } catch (err) {
+    if (mutationStarted && isAmbiguousShopifyMutationError(err)) {
+      return toolUnknown(
+        `Unknown: the return label may have been attached at Shopify, but it could not be confirmed. Do not attach another label, retry, or send the customer a label link until the return on order ${input.order_id} is reviewed. ${formatShopifyToolError("return label reconciliation failed", err)}`,
+      );
+    }
     return toolError(formatShopifyToolError("failed to attach return label", err));
   }
 }

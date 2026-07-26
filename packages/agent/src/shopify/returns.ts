@@ -2,11 +2,12 @@ import type { CreateReturnInput } from "../tools/index.js";
 import {
   formatShopifyToolError,
   formatUserErrors,
+  isAmbiguousShopifyMutationError,
   shopifyGraphql,
   type ShopifyContext,
   type ShopifyGraphqlUserError,
 } from "./client.js";
-import { toolError, toolOk, type ToolResult } from "../tools/result.js";
+import { toolError, toolOk, toolUnknown, type ToolResult } from "../tools/result.js";
 import { optionalString, requireNumericId } from "./validation.js";
 
 const RETURN_REASON_MAP: Record<string, string> = {
@@ -159,6 +160,9 @@ export async function createReturn(
   input: CreateReturnInput,
   ctx: ShopifyContext
 ): Promise<ToolResult> {
+  // Only returnCreate can open a return; the returnable-items lookup above it
+  // commits nothing and keeps the ordinary error path.
+  let mutationStarted = false;
   try {
     const orderId = requireNumericId(input.order_id, "order_id");
     const filterVariantId = optionalString(input.variant_id);
@@ -183,6 +187,7 @@ export async function createReturn(
       }
     }
 
+    mutationStarted = true;
     const created = await runReturnCreate(ctx, {
       orderId: orderGid,
       notifyCustomer: false,
@@ -211,6 +216,11 @@ export async function createReturn(
       } satisfies ReturnWatchToolData,
     );
   } catch (err) {
+    if (mutationStarted && isAmbiguousShopifyMutationError(err)) {
+      return toolUnknown(
+        `Unknown: the return may have been opened at Shopify, but it could not be confirmed. Do not open another return, retry, or tell the customer the return is set up until order ${input.order_id} is reviewed. ${formatShopifyToolError("return reconciliation failed", err)}`,
+      );
+    }
     return toolError(formatShopifyToolError("failed to create return", err));
   }
 }
