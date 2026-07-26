@@ -25,6 +25,7 @@ const {
   createGiftCard,
   createRefund,
   createShopifyOrder,
+  issueStoreCredit,
   probeUnknownShopifyMutation,
   SHOPIFY_MUTATION_DOCUMENTS,
   skippedMutationDocument,
@@ -274,6 +275,35 @@ async function inspectAccessScopes(ctx) {
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+// Store credit carries no field we control - StoreCreditAccountCreditInput is
+// creditAmount plus expiresAt - so probeStoreCredit reconciles on the amount
+// alone (reconciliation-probes.ts:228). A second $0.01 credit on the same
+// account therefore matches twice and reports `unknown` for a run that worked,
+// the same trap the full-refund family avoids by requiring a clean order. Each
+// run gets its own customer instead, which also parks the credit on someone who
+// will never check out: store-credit.ts has a credit mutation and no debit, so
+// nothing in our code can take it back.
+async function createCanaryCustomer(ctx, operationId) {
+  const email = `shopkeeper-canary+${Date.now()}@example.com`;
+  const data = await shopifyRestJson(ctx, 'customers.json', {
+    method: 'POST',
+    body: {
+      customer: {
+        email,
+        first_name: 'Canary',
+        last_name: 'Shopkeeper',
+        tags: 'shopkeeper-canary',
+        note: `Shopkeeper store-credit canary ${operationId}`,
+      },
+    },
+  });
+  const id = data.customer?.id;
+  if (!id) {
+    throw new Error('Shopify accepted the canary customer but returned no id.');
+  }
+  return { id: String(id), email };
 }
 
 async function runFamily(family, runner) {
@@ -605,6 +635,29 @@ async function runCanaries(ctx, inspection) {
         matchesOrderTotal: orderTotalCents === null || result.refundedCents === null
           ? null
           : result.refundedCents === orderTotalCents,
+        probeOutcome: probe.outcome,
+        probeMessage: probe.message,
+      };
+    }));
+  }
+
+  if (shouldRun('store_credit') && inspection.shop.mutationsAllowed) {
+    results.push(await runFamily('store_credit', async () => {
+      const operationId = `${operationBase}:store_credit`;
+      const customer = await createCanaryCustomer(ctx, operationId);
+      const input = { customer_id: customer.id, amount: '0.01' };
+      const result = await issueStoreCredit(input, { ...ctx, operationId });
+      const probe = await probeUnknownShopifyMutation('issue_store_credit', input, { ...ctx, operationId });
+      // `status` alone cannot tell a rejected mutation from an ambiguous one:
+      // several branches return `unknown`, and only the message names which.
+      return {
+        status: result.status,
+        message: result.message,
+        customerId: customer.id,
+        customerEmail: customer.email,
+        // The tool downgrades to `unknown` unless the committed amount equals
+        // the requested one, so this is what `ok` is asserting about the money.
+        spentCents: result.spentCents,
         probeOutcome: probe.outcome,
         probeMessage: probe.message,
       };
