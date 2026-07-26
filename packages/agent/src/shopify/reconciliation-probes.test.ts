@@ -129,4 +129,245 @@ describe("probeUnknownShopifyMutation", () => {
 
     expect(result).toMatchObject({ outcome: "committed" });
   });
+
+  const giftCardOperationId = "execution-1:gift_card";
+  const giftCardCode = shopifyIdempotencyKey(giftCardOperationId).replaceAll("-", "").slice(0, 20);
+
+  it("commits a gift card carrying the operation code and amount", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+      data: {
+        giftCards: {
+          nodes: [{
+            id: "gid://shopify/GiftCard/1",
+            initialValue: { amount: "25.00" },
+            note: `Shopkeeper operation: ${giftCardCode}`,
+          }],
+        },
+      },
+    })));
+
+    const result = await probeUnknownShopifyMutation(
+      "create_gift_card",
+      { amount: "25.00" },
+      { ...ctx, operationId: giftCardOperationId },
+    );
+
+    expect(result).toMatchObject({ outcome: "committed", spentCents: 2500 });
+  });
+
+  // The code is per-operation, so an unrelated card of the same value is not
+  // this operation's card.
+  it("does not read another gift card of the same value as this operation's", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+      data: {
+        giftCards: {
+          nodes: [{
+            id: "gid://shopify/GiftCard/2",
+            initialValue: { amount: "25.00" },
+            note: "Goodwill for a late delivery",
+          }],
+        },
+      },
+    })));
+
+    const result = await probeUnknownShopifyMutation(
+      "create_gift_card",
+      { amount: "25.00" },
+      { ...ctx, operationId: giftCardOperationId },
+    );
+
+    expect(result).toMatchObject({ outcome: "no_effect" });
+  });
+
+  it("cannot reconcile a gift card without a stable operation identity", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await probeUnknownShopifyMutation(
+      "create_gift_card",
+      { amount: "25.00" },
+      { ...ctx, operationId: undefined },
+    );
+
+    expect(result).toMatchObject({ outcome: "still_unknown" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  function orderLineItemsResponse(lineItems: Array<{ variant_id: number; quantity: number }>): Response {
+    return jsonResponse({
+      order: {
+        id: 456,
+        name: "#1001",
+        line_items: lineItems.map((item, index) => ({ id: index + 1, ...item })),
+      },
+    });
+  }
+
+  it("rules out an order-edit add when the variant is absent", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(orderLineItemsResponse([
+      { variant_id: 111, quantity: 1 },
+    ])));
+
+    const result = await probeUnknownShopifyMutation(
+      "edit_shopify_order",
+      { order_id: "456", variant_id: "222", quantity: 2 },
+      ctx,
+    );
+
+    expect(result).toMatchObject({ outcome: "no_effect" });
+  });
+
+  // The defect this replaces: the probe compared the line against the requested
+  // delta with `>=`, so an order already carrying enough of the variant read as
+  // a committed edit that had never run.
+  it("does not read a pre-existing line as evidence the add committed", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(orderLineItemsResponse([
+      { variant_id: 222, quantity: 3 },
+    ])));
+
+    const result = await probeUnknownShopifyMutation(
+      "edit_shopify_order",
+      { order_id: "456", variant_id: "222", quantity: 2 },
+      ctx,
+    );
+
+    expect(result).toMatchObject({ outcome: "still_unknown" });
+  });
+
+  it("commits an order-edit removal once the variant is gone", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(orderLineItemsResponse([
+      { variant_id: 111, quantity: 1 },
+    ])));
+
+    const result = await probeUnknownShopifyMutation(
+      "edit_shopify_order",
+      { order_id: "456", remove_variant_id: "222" },
+      ctx,
+    );
+
+    expect(result).toMatchObject({ outcome: "committed" });
+  });
+
+  // A swap is one edit. The removal landing tells us nothing about the add, and
+  // half an edit must not report as a committed one.
+  it("does not report a swap as committed on the removal alone", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(orderLineItemsResponse([
+      { variant_id: 333, quantity: 1 },
+    ])));
+
+    const result = await probeUnknownShopifyMutation(
+      "edit_shopify_order",
+      { order_id: "456", variant_id: "333", quantity: 1, remove_variant_id: "222" },
+      ctx,
+    );
+
+    expect(result).toMatchObject({ outcome: "still_unknown" });
+  });
+
+  it("rules out a swap when neither half is reflected", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(orderLineItemsResponse([
+      { variant_id: 222, quantity: 1 },
+    ])));
+
+    const result = await probeUnknownShopifyMutation(
+      "edit_shopify_order",
+      { order_id: "456", variant_id: "333", quantity: 1, remove_variant_id: "222" },
+      ctx,
+    );
+
+    expect(result).toMatchObject({ outcome: "no_effect" });
+  });
+
+  const addressInput = {
+    order_id: "456",
+    customer_id: "789",
+    address1: "12  Bridge  St",
+    city: "Brooklyn",
+    province: "NY",
+    zip: "11201",
+    country: "US",
+  };
+
+  // Shopify echoes a country as its full name with the code alongside. Comparing
+  // the input's "US" against `country` alone read every committed update on a
+  // country-code input as a no-op.
+  it("commits an address update Shopify echoes with a country name", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+      order: {
+        id: 456,
+        name: "#1001",
+        shipping_address: {
+          address1: "12 Bridge St",
+          city: "Brooklyn",
+          province: "New York",
+          province_code: "NY",
+          zip: "11201",
+          country: "United States",
+          country_code: "US",
+        },
+      },
+    })));
+
+    const result = await probeUnknownShopifyMutation(
+      "update_shopify_order_address",
+      addressInput,
+      ctx,
+    );
+
+    expect(result).toMatchObject({ outcome: "committed" });
+  });
+
+  it("rules out an address update the order does not carry", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+      order: {
+        id: 456,
+        name: "#1001",
+        shipping_address: {
+          address1: "88 Old Road",
+          city: "Queens",
+          province: "New York",
+          province_code: "NY",
+          zip: "11375",
+          country: "United States",
+          country_code: "US",
+        },
+      },
+    })));
+
+    const result = await probeUnknownShopifyMutation(
+      "update_shopify_order_address",
+      addressInput,
+      ctx,
+    );
+
+    expect(result).toMatchObject({ outcome: "no_effect" });
+  });
+
+  // The street matched; the province did not. The old comparison never looked at
+  // province at all.
+  it("rules out an address update that landed in the wrong province", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+      order: {
+        id: 456,
+        name: "#1001",
+        shipping_address: {
+          address1: "12 Bridge St",
+          city: "Brooklyn",
+          province: "New Jersey",
+          province_code: "NJ",
+          zip: "11201",
+          country: "United States",
+          country_code: "US",
+        },
+      },
+    })));
+
+    const result = await probeUnknownShopifyMutation(
+      "update_shopify_order_address",
+      addressInput,
+      ctx,
+    );
+
+    expect(result).toMatchObject({ outcome: "no_effect" });
+  });
 });

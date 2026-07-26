@@ -1,5 +1,5 @@
 import type { CancelOrderInput, CreateGiftCardInput, CreateRefundInput, CreateShopifyOrderInput, EditShopifyOrderInput, IssueStoreCreditInput, UpdateShopifyOrderAddressInput } from "../tools/index.js";
-import { buildOrderAddress } from "./order-address.js";
+import { addressMatches, buildOrderAddress } from "./order-address.js";
 import {
   formatShopifyToolError,
   shopifyGraphql,
@@ -8,7 +8,7 @@ import {
   type ShopifyContext,
 } from "./client.js";
 import type { ShopifyOrder, ShopifyOrderLineItem } from "./types.js";
-import { moneyToCents, optionalPositiveInteger, optionalString, requireAmount, requireNumericId } from "./validation.js";
+import { moneyToCents, optionalString, requireAmount, requireNumericId } from "./validation.js";
 
 export type ShopifyReconciliationProbeResult =
   | { outcome: "committed"; message: string; spentCents?: number | null }
@@ -277,25 +277,38 @@ async function probeOrderEdit(
     return stillUnknown("Order-edit reconciliation requires variant_id or remove_variant_id.");
   }
 
-  let committedEvidence = false;
+  // `edit_shopify_order` adds a *delta*, so the order as it stands cannot say on
+  // its own whether that delta was applied: order-edit.ts:290 compares against
+  // pre-edit quantity plus the delta, and the probe has no pre-edit reading. A
+  // quantity that merely satisfies the request is therefore not evidence the
+  // request ran — an order that already held enough of the variant read as
+  // committed for an edit that never happened. `null` is "cannot tell".
+  const legs: Array<boolean | null> = [];
   if (removeVariantId) {
+    // The tool refuses to remove a variant the order does not carry, so the line
+    // existed when the mutation went out: absent now means the removal ran.
     const key = requireNumericId(removeVariantId, "remove_variant_id");
-    if ((current.get(key) ?? 0) === 0) {
-      committedEvidence = true;
-    }
+    legs.push((current.get(key) ?? 0) === 0);
   }
   if (addVariantId) {
+    // Only the negative is conclusive. A committed add leaves at least the
+    // requested quantity behind, so nothing at all rules it out; any other count
+    // is indistinguishable from a line that was already there.
     const key = requireNumericId(addVariantId, "variant_id");
-    const quantity = optionalPositiveInteger(input.quantity, "quantity", 1);
-    if ((current.get(key) ?? 0) >= quantity) {
-      committedEvidence = true;
-    }
+    legs.push((current.get(key) ?? 0) === 0 ? false : null);
   }
 
-  if (committedEvidence) {
+  if (legs.every((leg) => leg === false)) {
+    return noEffect(`Order ${orderId} does not reflect the requested edit at Shopify.`);
+  }
+  if (legs.every((leg) => leg === true)) {
     return committed(`Reconciled order edit for order ${data.order.name ?? orderId}.`);
   }
-  return noEffect(`Order ${orderId} does not reflect the requested edit at Shopify.`);
+  // A swap whose halves disagree lands here too, which is the point: half an
+  // edit is not a committed edit and must not read as one.
+  return stillUnknown(
+    `Order ${orderId} cannot be reconciled against the requested edit from its current line items alone.`,
+  );
 }
 
 async function probeOrderAddress(
@@ -312,11 +325,11 @@ async function probeOrderAddress(
   if (!actual) {
     return noEffect(`Order ${orderId} has no shipping address at Shopify.`);
   }
-  const matches = ["address1", "city", "zip", "country"].every((field) => (
-    String((actual as Record<string, unknown>)[field] ?? "").trim().toLowerCase()
-      === String(expected[field] ?? "").trim().toLowerCase()
-  ));
-  if (matches) {
+  // Compare with the same predicate the tool itself commits on, not a second
+  // copy of it: Shopify returns a country as "United States" while the input
+  // carries "US", so a field-by-field string compare read every committed
+  // update on a country-code input as a no-op.
+  if (addressMatches(actual, expected)) {
     return committed(`Reconciled shipping-address update for order ${data.order?.name ?? orderId}.`);
   }
   return noEffect(`Order ${orderId} shipping address does not match the requested update.`);

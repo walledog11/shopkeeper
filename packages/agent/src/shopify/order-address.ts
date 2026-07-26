@@ -45,7 +45,7 @@ function locationPartMatches(expected: string, ...actualValues: unknown[]): bool
   return actualValues.some((value) => normalizeAddressPart(value) === normalizedExpected);
 }
 
-function addressMatches(
+export function addressMatches(
   actual: ShopifyCustomerAddress | null | undefined,
   expected: Record<string, string>,
 ): boolean {
