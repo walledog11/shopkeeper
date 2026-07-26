@@ -20,6 +20,12 @@ guard against shipping a fourth invalid document is item 8; the guard against
 misreporting a rejection as ambiguous is item 9; the probe defect is the one
 neither of those would have caught, and item 10 says why.
 
+Acting on item 10's closing lesson then found two *more* probes reading Shopify
+wrongly (item 11) — a country code and an order-edit delta — and one tool pair
+that reported a committed return as a flat failure (item 12). Neither set is a
+100%-failure, but both are the same shape as the first three: the code that runs
+when we already know something went wrong was the code nobody had tested.
+
 ## Rollout state
 
 Code state and production state are different things; this table is the only
@@ -359,6 +365,35 @@ Two lessons on top of the refund ones, both already applied:
     **Left open:** the run credits `palette-dev` customer `9071668134122` and
     leaves it there by design. Re-running the family is safe at any time — it
     creates a new customer rather than reusing that one.
+11. ~~**Cover the probes item 10's lesson left dark.**~~ **Done 2026-07-25, and
+    it found two more probes reading Shopify wrongly** — see below. Item 10 ended
+    on "reconciliation code is less tested than the code it reconciles" and did
+    not act on it. Three of seven probes had zero unit coverage: `probeGiftCard`,
+    `probeOrderEdit`, `probeOrderAddress`. `probeGiftCard` was sound and the
+    `gift_card` canary had already proven it live; the other two were neither
+    unit-tested nor reachable by any canary family, which is the same
+    double-dark condition that hid the store-credit defect. All three are now
+    covered, and both defects are fixed.
+12. ~~**A return that committed could be reported as a flat failure.**~~ **Done
+    2026-07-25.** Every other mutating Shopify tool classifies an interrupted
+    mutation as `unknown` and says "do not retry"; `create_return` and
+    `attach_return_label` had no such branch at all, so a `returnCreate` or
+    `reverseDeliveryCreateWithShipping` that committed and then lost the
+    connection came back as `error`. That is the retry-inviting direction: a
+    second return opened on the order, or a second label sent to the customer.
+    Both now set `mutationStarted` immediately before their mutation and return
+    `toolUnknown` for an ambiguous failure, so a failure in the read *above* the
+    mutation — which committed nothing — keeps the ordinary error path.
+    Mutation-verified: never setting the flag fails exactly the two
+    interrupted-mutation tests. `createReturn` had no test file at all before
+    this; it has one now.
+    **Left open, deliberately:** neither tool gets a reconciliation probe, so
+    both stay out of `RECONCILABLE_SHOPIFY_MUTATION_TOOLS` and their `unknown`
+    outcomes park for human review via `unknown-outcome-sweep`. A probe needs a
+    new GraphQL query document, and item 10 is the argument for not shipping one
+    that has never run against a real store: `probeStoreCredit` queried valid
+    fields and still read every credit wrongly. Writing it belongs with a
+    `return_label` canary family and a live `--validate` run, not before one.
 
 ### `probeStoreCredit` called every committed credit a no-op (found and fixed 2026-07-25)
 
@@ -405,6 +440,55 @@ Two lessons, both new:
   `probeStoreCredit` had *zero* unit coverage before this, while
   `issueStoreCredit` had a suite. That is backwards: the probe is the thing that
   runs when we already know something went wrong.
+
+### Two more probes read Shopify wrongly (found and fixed 2026-07-25)
+
+Covering the three uncovered probes found a defect in two of them. Neither is a
+100%-failure like the first three defects, and both are the same underlying
+mistake: **a probe reimplemented a comparison the tool it reconciles already
+owned, and got it wrong.** Item 8 closed that class for mutation *documents* by
+making each one an exported const with a single definition; the probes had no
+such rule.
+
+- **`probeOrderAddress` fails a country code.** It compared `address1`, `city`,
+  `zip` and `country` with a plain lowercased string equality. Shopify echoes an
+  address back with `country: "United States"` and `country_code: "US"`, so an
+  input carrying `"US"` — the form the tool's own schema asks for — never
+  matched, and every committed address update on such an input reconciled as
+  `no_effect`. It also never compared `province` at all, so an update that landed
+  in the wrong state read as committed. Both are fixed by calling
+  `addressMatches` from `order-address.ts`, which the tool already commits on and
+  which handles `province_code` / `country_code` / `country_name` and whitespace.
+  It is now exported rather than duplicated. This is a **false negative in the
+  same direction as the store-credit probe**: reporting a real change as a
+  non-event.
+- **`probeOrderEdit` claims an edit it cannot see.** It tested
+  `currentQuantity >= requestedQuantity`, but `edit_shopify_order` adds a
+  *delta*: `order-edit.ts:290` reconciles against pre-edit quantity **plus** the
+  delta with strict equality. The probe has no pre-edit reading, so an order
+  already carrying enough of that variant reported a committed edit that had
+  never run — a **false positive**, the direction that tells a merchant an item
+  was added when it was not. A swap was worse: either half alone satisfied the
+  whole check, so a half-applied edit read as fully committed.
+  The probe cannot reconstruct pre-edit state, so it no longer pretends to. Each
+  leg is now three-valued: a removal is conclusive (the tool refuses to remove a
+  variant the order does not carry, so absent-now means it ran), an add is
+  conclusive only in the negative (a committed add leaves at least the requested
+  quantity, so nothing at all rules it out), and anything else is
+  `still_unknown`. A swap needs both legs to agree. The cost is that the common
+  add case no longer returns `committed`; that is the point — it never could
+  know, and `still_unknown` routes to a human instead of lying.
+
+Mutation-verified per defect: restoring the string-equality comparison fails the
+country-name test, restoring `>=` fails the pre-existing-line and swap tests, and
+dropping the `province` leg from `addressMatches` fails the wrong-province test —
+which is the only test in the package that guards it.
+
+The lesson generalizes past probes: **where a tool and its probe both decide
+"did this land?", there must be one predicate, not two.** `probeOrderAddress`
+now shares the tool's; `probeOrderEdit` cannot share `order-edit.ts`'s, because
+that one needs state the probe does not have — so it says so rather than
+approximating it.
 
 ## Decisions
 
