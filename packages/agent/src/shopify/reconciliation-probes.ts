@@ -201,8 +201,8 @@ async function probeStoreCredit(
         nodes?: Array<{
           transactions?: {
             nodes?: Array<{
+              __typename?: string | null;
               amount?: { amount?: string | null } | null;
-              event?: string | null;
             }>;
           } | null;
         }>;
@@ -215,8 +215,8 @@ async function probeStoreCredit(
           nodes {
             transactions(first: 10, reverse: true) {
               nodes {
+                __typename
                 amount { amount }
-                event
               }
             }
           }
@@ -225,8 +225,13 @@ async function probeStoreCredit(
     }
   `, { id: `gid://shopify/Customer/${customerId}` }, { maxRetries: 1 });
   const transactions = data.customer?.storeCreditAccounts?.nodes?.[0]?.transactions?.nodes ?? [];
+  // Direction is the transaction's type, not its `event`: a credit issued by
+  // storeCreditAccountCredit comes back as ADJUSTMENT, so the earlier
+  // `event === "CREDIT"` test matched nothing and reported every committed
+  // credit as no_effect. `event` says why the balance moved; `__typename` says
+  // which way.
   const matches = transactions.filter((transaction) => (
-    transaction.event === "CREDIT"
+    transaction.__typename === "StoreCreditAccountCreditTransaction"
     && moneyToCents(transaction.amount?.amount ?? "0") === moneyToCents(amount)
   ));
   if (matches.length === 1) {

@@ -52,6 +52,65 @@ describe("probeUnknownShopifyMutation", () => {
     expect(result).toMatchObject({ outcome: "no_effect" });
   });
 
+  // Recorded from palette-dev after a real storeCreditAccountCredit: the credit
+  // it produces carries event ADJUSTMENT, so a probe keyed on event "CREDIT"
+  // called a committed credit no_effect.
+  it("commits a store credit whose event is ADJUSTMENT", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+      data: {
+        customer: {
+          storeCreditAccounts: {
+            nodes: [{
+              transactions: {
+                nodes: [{
+                  __typename: "StoreCreditAccountCreditTransaction",
+                  amount: { amount: "0.01" },
+                  event: "ADJUSTMENT",
+                }],
+              },
+            }],
+          },
+        },
+      },
+    })));
+
+    const result = await probeUnknownShopifyMutation(
+      "issue_store_credit",
+      { customer_id: "9071668134122", amount: "0.01" },
+      ctx,
+    );
+
+    expect(result).toMatchObject({ outcome: "committed", spentCents: 1 });
+  });
+
+  it("does not read a store-credit debit as the credit it was asked to reconcile", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+      data: {
+        customer: {
+          storeCreditAccounts: {
+            nodes: [{
+              transactions: {
+                nodes: [{
+                  __typename: "StoreCreditAccountDebitTransaction",
+                  amount: { amount: "0.01" },
+                  event: "ORDER_PAYMENT",
+                }],
+              },
+            }],
+          },
+        },
+      },
+    })));
+
+    const result = await probeUnknownShopifyMutation(
+      "issue_store_credit",
+      { customer_id: "9071668134122", amount: "0.01" },
+      ctx,
+    );
+
+    expect(result).toMatchObject({ outcome: "no_effect" });
+  });
+
   it("commits when a tagged order exists for the operation", async () => {
     const tag = `shopkeeper-op-${shopifyIdempotencyKey("execution-1:create_order")}`;
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
