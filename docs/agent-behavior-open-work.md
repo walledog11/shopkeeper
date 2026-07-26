@@ -28,10 +28,15 @@ against a real store, and none by a test.** Three of the four surfaced the first
 time their canary family ran.
 
 Acting on item 10's closing lesson then found two *more* probes reading Shopify
-wrongly (item 11) — a country code and an order-edit delta — and one tool pair
-that reported a committed return as a flat failure (item 12). Neither set is a
-100%-failure, but both are the same shape as the first three: the code that runs
+wrongly (item 11) — a country code and an order-edit delta — one tool pair that
+reported a committed return as a flat failure (item 12), and a third probe that
+reconciled created orders through an index that lags the write (item 14). None is
+a 100%-failure, but all are the same shape as the first four: the code that runs
 when we already know something went wrong was the code nobody had tested.
+
+**Everything in "Finishable now" is now closed** (items 1–14) and every capability
+the canary can reach is verified against a real store. What remains waits on
+traffic, time, or a deliberate choice — see "Blocked, and on what".
 
 ## Rollout state
 
@@ -117,7 +122,9 @@ Per-org opt-outs, all in `Organization.settings` and surfaced on
 
 ## Finishable now
 
-Nothing here waits on production traffic, credits, or another plan.
+Nothing here waits on production traffic, credits, or another plan. **All 14
+items are closed as of 2026-07-26**; the list is kept because the reasoning and
+the landmines are the durable part.
 
 1. ~~**A2 live phone verification.**~~ **Done 2026-07-24.** Verified on a real
    phone against the local test DB, with `@ClerkDevBot`'s webhook temporarily
@@ -412,6 +419,34 @@ Two lessons on top of the refund ones, both already applied:
     that has never run against a real store: `probeStoreCredit` queried valid
     fields and still read every credit wrongly. Writing it belongs with a
     `return_label` canary family and a live `--validate` run, not before one.
+13. ~~**`create_shopify_order` has never executed against any store.**~~ **Done
+    2026-07-26 — it executed, on order `#1009`,** and getting there found the
+    fourth 100%-failure defect in the set (section below). The `order_creation`
+    family was the last one unrun, deliberately, because it commits a genuine
+    order on a live `basic`-plan store; running it was the only way to learn that
+    the tool had never worked. The operation tag was 50 characters against
+    Shopify's 40-character cap, so every creation came back `422 "Order tags is
+    invalid"`. Fixed by a single `shopifyOperationTag` in `client.ts` replacing
+    the five hand-written copies of that format.
+    **Cost:** three $1 orders on `palette-dev` — `#1007` (exposed the probe
+    defect), `#1008` (disproved the first fix for it), `#1009` (green). All three
+    are still open there; cancelling them is a housekeeping choice, not a
+    dependency.
+14. ~~**The order-creation probe reconciled through a lagging index.**~~ **Done
+    2026-07-26.** Found the moment `#1007` was created: `status: ok` beside
+    `probeOutcome: no_effect`. `probeCreatedOrder` searched `tag:` — which is
+    index-backed and lags the write — and read the empty result as proof the
+    order was absent. For this tool that is the most expensive false negative in
+    the doc: `no_effect` releases the hold and the next move is a **second real
+    order against a customer**. It now reconciles through a REST lookup filtered
+    by email, and an exhausted lookup returns `still_unknown`, never `no_effect`.
+    Took three attempts; only the third was based on a measurement rather than a
+    plausible mechanism.
+    **Harness fixed alongside it:** the canary's failure filter compared `status`
+    but never checked it against `probeOutcome`, so the first contradiction
+    exited green. A family returning `ok` with any probe outcome other than
+    `committed` now fails the run — which is what item 10 argued for and stopped
+    short of implementing. It caught `#1008` on its first outing.
 
 ### `probeStoreCredit` called every committed credit a no-op (found and fixed 2026-07-25)
 
@@ -695,6 +730,7 @@ or a deliberate choice rather than on work.
 | Raising `OPERATOR_PLAN_QUEUE_MAX` above 1 | P1 execution-ledger rollout verification | `npm run audit:plan-executions -- --hours=24` returning representative dashboard *and* gateway executions. It currently returns zero — there is no traffic yet. |
 | Enabling B3/B4 monitors | same P1 rollout, plus the P6-02 controlled recovery exercise (the simulated-fixture leg is closed — see item 6) | as above |
 | B3/B4/B5 live push verification | a real return arrival, delivery exception, or 5-day-old resolution | first real merchant traffic, or a deliberately staged fixture on the test DB |
+| `attach_return_label` executed end to end, and a probe for it | a deliberate choice, not traffic | A `return_label` canary family. The document is schema-valid and the tool is fixed, but it has **never run**, and every capability in that state so far has turned out to be broken — three of four were found the first time their family ran. It is also the one mutating tool with no reconciliation probe (item 12), and writing that probe should happen with a live `--validate` run rather than before one. **This is the highest-value remaining Shopify work.** |
 
 Until its gate lands, a capability may ship only the read-only or copy-only
 portion that doesn't widen the unsafe action surface. Enabling a flag does not
