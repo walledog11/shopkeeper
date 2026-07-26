@@ -786,8 +786,18 @@ console.log(JSON.stringify(report, null, 2));
 
 // A full refund that ran but returned the wrong total is the failure this
 // harness exists to surface, so it must not read as a green run.
+//
+// Nor may a mutation that reports `ok` while its own reconciliation probe says
+// the effect is not there. That disagreement is what exposed the store-credit
+// probe defect, and reporting both without failing on the contradiction leaves
+// the next one to be noticed by eye. `still_unknown` counts too: a probe that
+// cannot confirm a mutation the tool called committed is not evidence of
+// success, and every passing family returns `committed`.
 const failed = report.canaries.filter((entry) => (
-  !entry.ok || entry.status === 'error' || entry.matchesOrderTotal === false
+  !entry.ok
+  || entry.status === 'error'
+  || entry.matchesOrderTotal === false
+  || (entry.status === 'ok' && entry.probeOutcome !== undefined && entry.probeOutcome !== 'committed')
 ));
 if (EXECUTE && failed.length > 0) {
   process.exitCode = 1;

@@ -130,6 +130,59 @@ describe("probeUnknownShopifyMutation", () => {
     expect(result).toMatchObject({ outcome: "committed" });
   });
 
+  // Shopify's order search lags the write: the canary created #1007 and this
+  // query missed it seconds later, then matched it afterwards. Retrying across
+  // the lag is what turns that into a committed reconciliation.
+  it("finds a created order once the search index catches up", async () => {
+    vi.useFakeTimers();
+    try {
+      const tag = shopifyOperationTag("execution-1:create_order");
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce(jsonResponse({ data: { orders: { nodes: [] } } }))
+        .mockResolvedValueOnce(jsonResponse({
+          data: { orders: { nodes: [{ legacyResourceId: "9001", name: "#1007", tags: [tag] }] } },
+        }));
+      vi.stubGlobal("fetch", fetchMock);
+
+      const pending = probeUnknownShopifyMutation(
+        "create_shopify_order",
+        { email: "buyer@example.com", line_items: [{ variant_id: "1", quantity: 1 }] },
+        { ...ctx, operationId: "execution-1:create_order" },
+      );
+      const [result] = await Promise.all([pending, vi.runAllTimersAsync()]);
+
+      expect(result).toMatchObject({ outcome: "committed" });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // The defect this guards: reporting a confident no_effect for an order that
+  // may exist releases the hold, and the next move is a duplicate real order.
+  it("never rules a created order out from an exhausted search", async () => {
+    vi.useFakeTimers();
+    try {
+      // A Response body reads once, so each attempt needs its own instance -
+      // mockResolvedValue would hand attempt 2 an already-consumed body.
+      const fetchMock = vi.fn(async () => jsonResponse({ data: { orders: { nodes: [] } } }));
+      vi.stubGlobal("fetch", fetchMock);
+
+      const pending = probeUnknownShopifyMutation(
+        "create_shopify_order",
+        { email: "buyer@example.com", line_items: [{ variant_id: "1", quantity: 1 }] },
+        { ...ctx, operationId: "execution-1:create_order" },
+      );
+      const [result] = await Promise.all([pending, vi.runAllTimersAsync()]);
+
+      expect(result.outcome).toBe("still_unknown");
+      expect(result.outcome).not.toBe("no_effect");
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   const giftCardOperationId = "execution-1:gift_card";
   const giftCardCode = shopifyIdempotencyKey(giftCardOperationId).replaceAll("-", "").slice(0, 20);
 

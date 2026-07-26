@@ -49,7 +49,7 @@ place that says both.
 | Store credit (2026-07-06 expansion) | none | shipped tool `issue_store_credit`; **its reconciliation probe was broken since it shipped**, fixed 2026-07-25 | **verified on `palette-dev`** 2026-07-25 — `ok`, `spentCents: 1`, balance $0.01; probe `committed` only after the fix |
 | Refunds (`create_refund`) | none | **broken since it shipped**; fixed 2026-07-25 | **verified on `palette-dev`** — both paths: partial (`#1005`, $0.01) and full (`#1006`, $629.95, total matched) |
 | Return labels (`attach_return_label`) | none | **broken since it shipped**; fixed 2026-07-25 | **document schema-valid** on `palette-dev`; never executed |
-| Order creation (`create_shopify_order`) | none | **broken since it shipped**; fixed 2026-07-25 | rejected `422 "Order tags is invalid"` on `palette-dev`; **fix not yet re-run** |
+| Order creation (`create_shopify_order`) | none | **broken since it shipped**; fixed 2026-07-25, and its probe raced Shopify's search index, fixed 2026-07-26 | **executed on `palette-dev`** — order `#1007`, $1.00; probe `no_effect` on that run was the index lag, not the order |
 
 The gift-card and store-credit rows were one capability that read as live
 everywhere in the code and was not. Both sit in the registry
@@ -554,6 +554,56 @@ The lesson is the one from item 11, arriving again within a day and from the
 other direction: **a format shared between a writer and a reader must have one
 definition.** There it was a comparison predicate; here it was a string. The
 tests hand-reproducing it are what made the duplication invisible.
+
+### The order-creation probe raced Shopify's search index (found and fixed 2026-07-26)
+
+Re-running `order_creation` after the tag fix created order `#1007` for $1.00 —
+and reported `status: ok` beside `probeOutcome: no_effect`. The tool and its
+probe contradicted each other in one line of output, which is the shape item 10
+was written about.
+
+**Diagnosed rather than guessed.** Three candidates — the tag never landed, the
+`tag:` query needs quoting for a hyphenated value, or the search index lags the
+write — and one read-only run against `#1007` settled it. A REST read showed
+`tags: "shopkeeper-op-34c58ba093d15c568d36af36"`, so the tag was stored; both the
+unquoted and quoted searches found the order afterwards, so the query was fine.
+The only survivor is index lag: **the same unquoted query that returned nothing
+moments after the write returns the order now.**
+
+`probeCreatedOrder` treated that empty result as conclusive and returned
+`no_effect`. That is the store-credit direction again, and for this tool it is
+the worst one in the doc: `no_effect` resolves the action as never-happened,
+releases the hold, and the next move is a **second real order against a
+customer**. `order-creation.ts:111` already refused to conclude from the very
+same miss and returned `toolUnknown` — so this was, for the third time in two
+days, one question with two implementations that disagreed.
+
+Fix: retry the search across the lag (3 attempts, 2s apart), and when it is still
+empty return `still_unknown`, not `no_effect`. An exhausted search cannot tell
+"never created" from "created and not yet indexed", and the two call for opposite
+moves. `no_effect` is now deliberately unreachable for this probe: an order
+creation that truly failed will sit for human review rather than be auto-cleared,
+which is the trade product principle 3 asks for. Mutation-verified — collapsing
+to a single attempt, or restoring the conclusive `no_effect`, each fails both
+tests.
+
+**The harness let this exit green.** The failure filter checked `status` but
+never compared it against `probeOutcome`, so a mutation reporting `ok` beside a
+probe reporting `no_effect` passed with exit 0 — exactly what item 10 argued
+against, since reporting both values and not acting on the contradiction leaves
+the next one to be caught by eye. `canary-shopify-mutations.mjs:788` now fails
+any family that returns `ok` with a probe outcome other than `committed`, which
+every passing family already does.
+
+Two lessons on top of the earlier ones:
+
+- **A probe's negative result needs the same scrutiny as its positive one.**
+  Every probe defect so far has been about what "not found" means. Absence of
+  evidence arrives through an eventually-consistent index, and no schema
+  validation or unit test can see that.
+- **Two failed hypotheses, then measure.** The quoting theory was plausible and
+  wrong; one read-only script against the real order ended the argument in a
+  single run.
 
 ## Decisions
 
