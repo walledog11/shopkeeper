@@ -14,7 +14,8 @@ Last reviewed: 2026-07-25.
 Two shipped Shopify capabilities — `create_refund` and `attach_return_label` —
 were found this week to have never once executed, each rejected by Shopify at
 document validation and each reported to the merchant as "may have committed."
-Both are fixed. The systematic guard is item 8 below.
+Both are fixed. The systematic guard against shipping a third one is item 8; the
+guard against misreporting one as ambiguous is item 9.
 
 ## Rollout state
 
@@ -30,7 +31,7 @@ place that says both.
 | Order-risk fraud monitor (B6) | `ORDER_RISK_MONITOR_ENABLED` | code-complete | **off** — flag-and-notify only, no autonomy |
 | Gift cards (2026-07-06 expansion) | none | shipped tool `create_gift_card` | **verified on `palette-dev`** 2026-07-25 — canary `ok`/`committed` |
 | Store credit (2026-07-06 expansion) | none | shipped tool `issue_store_credit` | **scopes granted 2026-07-25**, never executed — no canary family |
-| Refunds (`create_refund`) | none | **broken since it shipped**; fixed 2026-07-25 | **verified on `palette-dev`** — partial-amount path only |
+| Refunds (`create_refund`) | none | **broken since it shipped**; fixed 2026-07-25 | **verified on `palette-dev`** — both paths: partial (`#1005`, $0.01) and full (`#1006`, $629.95, total matched) |
 | Return labels (`attach_return_label`) | none | **broken since it shipped**; fixed 2026-07-25 | **document schema-valid** on `palette-dev`; never executed |
 
 The gift-card and store-credit rows were one capability that read as live
@@ -63,14 +64,14 @@ error**: Shopify rejected every refund before executing it, on every store,
 100% of the time, since the capability shipped.
 
 The failure mode is what makes it expensive. A validation error comes back as
-HTTP 200 with an `errors` array; `shopifyGraphql` throws a `ShopifyRequestError`
-with **no status** (`client.ts:316`); and `isAmbiguousShopifyMutationError`
-(`client.ts:224`) treats a missing status as transport ambiguity. So a mutation
-that provably never ran was reported as *"may have committed at Shopify… do not
-retry or confirm it to the customer"* — the P3-01 machinery faithfully parking a
+HTTP 200 with an `errors` array; `shopifyGraphql` threw a `ShopifyRequestError`
+with **no status**; and `isAmbiguousShopifyMutationError` (`client.ts:232`)
+treated a missing status as transport ambiguity. So a mutation that provably
+never ran was reported as *"may have committed at Shopify… do not retry or
+confirm it to the customer"* — the P3-01 machinery faithfully parking a
 deterministic outage in `unknown` and suppressing customer confirmation. The
 reconciliation probe was right every time (`no_effect`); only the classification
-above it was wrong.
+above it was wrong. That classification is fixed as of item 9.
 
 Three durable lessons:
 
@@ -183,19 +184,63 @@ Nothing here waits on production traffic, credits, or another plan.
    exactly three tests, one per monitor.
    **Left open:** deleting the two production rows. It is a production data
    decision, the fixtures come back the next time someone seeds, and nothing now
-   depends on it.
-7. **The full-refund path is schema-valid but still unexecuted.** Narrowed by
-   item 8, not closed. The shape half is done: `refundCreate.full` in
+   depends on it. Both were still present on a 2026-07-25 inspect pass, each
+   skipped as `simulated fixture` before store selection.
+7. ~~**The full-refund path is schema-valid but still unexecuted.**~~ **Done
+   2026-07-25 — it executed, on order `#1006`.** Full refund of $629.95 on a
+   fresh Bogus-gateway test order: `status: ok`, `refundedCents: 62995` against
+   `orderTotalCents: 62995`, `matchesOrderTotal: true`, and the reconciliation
+   probe `committed` — "Reconciled refund on order 6122805395690 for $629.95."
+   Both branches of `create_refund` have now run against a real store, which was
+   the last thing this doc could say about refunds without hedging.
+   The shape half was closed by item 8: `refundCreate.full` in
    `VALIDATION_CASES` coerces `shipping: { fullRefund: true }` and the
-   `refundLineItems` built by `graphqlRefundLineItems` (`refunds.ts:133`:
+   `refundLineItems` built by `graphqlRefundLineItems` (`refunds.ts:153`:
    `lineItemId`, `quantity`, `restockType`, `locationId`) against the live
-   schema, so a wrong field name in those inputs can no longer hide. What
-   remains is behavioral, and validation cannot reach it: whether
-   `buildFullRefundTransactions` picks the right transactions, and whether the
-   refunded total matches the order. The canary always passes `amount: '0.01'`
-   and takes the partial branch. Still needs a second test order and an
-   `--only=refund` variant that omits `amount` — but it is no longer the same
-   class of risk as the two defects above.
+   schema, so a wrong field name in those inputs can no longer hide.
+   **Selection logic covered 2026-07-25.** The branch had *zero* unit coverage —
+   nothing in the repo referenced `buildFullRefundTransactions` or `fullRefund`,
+   so "picks the right transactions" was untested as well as unexecuted. A
+   `createRefund full-refund input` suite in `refunds.test.ts` now drives the
+   no-`amount` path against a three-transaction calculation and asserts the
+   document variables: every paying transaction at its full amount, the $0
+   gift-card one dropped, `shipping: { fullRefund: true }` present, Shopify's
+   calculated `refund_line_items` winning over the order-derived ones, and none
+   of it sent on the partial path. Mutation-verified — un-dropping the zero
+   transaction, removing the shipping flag, or preferring the order-derived line
+   items each fails a test.
+   What a mock could never prove, and the live run did: Shopify *accepts* those
+   transactions, and the refunded total comes back equal to the order total.
+   **The `refund_full` family.** `--only=refund_full` omits `amount`. It selects
+   only `test: true` orders that are `paid` and uncancelled, so it cannot reach
+   a real customer's order or a dirty one — `palette-dev` had four live orders
+   sitting alongside the fixture the whole time. It records `orderTotalCents`,
+   `refundedCents` and `matchesOrderTotal` rather than just `status`, because
+   `ok` proves the document ran and says nothing about whether the right money
+   moved, and `matchesOrderTotal === false` fails the run's exit code so that
+   defect cannot read as green.
+   The `paid` requirement is not fussiness: `probeRefund` with no requested
+   amount matches *every* successful refund on the order, so a second refund on
+   the same order reports `unknown` for a run that worked. **`#1006` is now
+   fully refunded, so re-running this family needs another fresh test order.**
+   Two operational facts worth keeping. `--allow-live-store` is **required, not
+   conditional** — `palette-dev` reports `plan_name: basic`, so
+   `isDevelopmentPlan` is false and every family refuses by default; that is the
+   same fact behind `order_creation` staying unrun in the A5 row, where the
+   "live `basic`-plan store" is `palette-dev` itself, not the production store.
+   And the run has to go through `railway run`: the repo's `.env` files carry no
+   `TOKEN_ENCRYPTION_KEY`, so a local run skips the `palette-dev` row as
+   undecryptable and then refuses to pick a store at all — the guard working,
+   not a misconfiguration.
+   **One harness bug, caught by the harness.** The first execute attempt skipped
+   the family, and the note said why: the selection excluded the partial
+   family's order unconditionally, but the newest test order is *both* that
+   default pick and the only clean full-refund candidate, so the guard stranded
+   exactly the case it was meant to protect. Now conditional on whether the
+   partial family is running in the same invocation. The generalizable part is
+   that a skip which explains itself cost one round-trip; a silent one would
+   have read as "no candidates" and sent someone to create a second unnecessary
+   order.
 8. ~~**Validate every Shopify mutation document against the live schema.**~~
    **Done 2026-07-25, and it found a second 100%-failure defect** — see below.
    `node scripts/canary-shopify-mutations.mjs --validate` now sends all 10
@@ -252,18 +297,44 @@ Two lessons on top of the refund ones, both already applied:
   GraphQL error text on `payload`, and the harness was reading `message`. This
   is the same failure the `create_refund` write-up recorded one section up, in a
   new place. The harness now reports both.
-9. **Decide whether a statusless GraphQL error stays "ambiguous."** Now the only
-   open decision, and item 8 strengthened the case for it: **two** shipped tools,
-   not one, spent their entire lives reporting a deterministic rejection as
-   "may have committed."
-   `isAmbiguousShopifyMutationError` (`client.ts:224`) cannot currently tell a
-   dead socket from a 200 that rejected the document, and the refund bug showed
-   what that costs. The narrow, safe fix is to reclassify **only** the
-   validation case, which is identifiable because Shopify returns no `data` key
-   at all: execution errors can genuinely follow side effects, and `THROTTLED`
-   also arrives as a 200 `errors` array, so both must stay ambiguous. Left as a
-   decision rather than a change because it widens what the system will claim
-   definitely did not happen.
+9. ~~**Decide whether a statusless GraphQL error stays "ambiguous."**~~
+   **Decided and done 2026-07-25.** A document Shopify refused to execute is no
+   longer reported as "may have committed" — the case both defects above landed
+   in. `ShopifyRequestError` carries `rejectedBeforeExecution`, set in
+   `shopifyGraphql`, and `isAmbiguousShopifyMutationError` returns false for it;
+   the tool then takes its ordinary error path instead of parking in `unknown`.
+   Everything else is untouched, so a dead socket, a 429, a 5xx and an execution
+   error all stay ambiguous.
+   **Two corrections to the discriminator this item proposed.** The "no `data`
+   key" signal was not reachable where the doc assumed: `shopifyGraphql` threw on
+   `payload.errors` *before* it ever looked at `data`, so the throw had to start
+   carrying the answer rather than the classifier deriving it. And that throw
+   flattened errors to `e.message`, discarding `extensions` — which is where
+   `THROTTLED` lives. Since a throttle is also pre-execution and also arrives
+   with no `data` key, the data-key test **alone** would have reclassified
+   throttles as definitely-didn't-happen, the one direction that must not
+   happen. The implemented rule is therefore: no `data` key **and** no error
+   carrying a capacity code (`THROTTLED`, `INTERNAL_SERVER_ERROR`).
+   Codes now also survive into the error text (`Throttled (THROTTLED)`), which
+   is the third instance of this doc's "a bare message is not a diagnosis"
+   lesson.
+   Mutation-verified per leg: dropping the classifier's early return, the
+   capacity-code exclusion, or the data-key test each fails exactly one test —
+   the rejected-document, throttle, and execution-error cases respectively.
+   Package suite 538/538, root typecheck green.
+   **Not proven live.** Every mutation document is valid now, so no canary run
+   can reach this path without deliberately breaking one, which the item-8 drift
+   guard exists to prevent. The unit tests replay the recorded response shapes
+   instead — including the exact `Field 'code' doesn't exist on type 'UserError'`
+   body from the refund defect.
+10. **`issue_store_credit` has never executed against any store.** Split out of
+    the rollout table 2026-07-25 so it stops living only in prose. It is in the
+    same state item 7 describes for the full-refund branch, one step earlier:
+    scopes granted, document schema-valid under item 8, and no canary family
+    exercising it. Adding a `store_credit` family is the same shape of work as
+    the refund one, with one asymmetry to decide first — `store-credit.ts` has a
+    credit mutation and no debit, so a canary credit cannot be undone by our own
+    code even on `palette-dev`.
 
 ## Decisions
 
@@ -324,13 +395,12 @@ ticket and hits the cliff.
 
 ## Blocked, and on what
 
-Each row names the event that unblocks it. All but the first wait on traffic or
-time rather than on work; A5 is now the exception, since items 7 and 8 above
-feed it.
+Each row names the event that unblocks it. All of them now wait on traffic, time
+or a deliberate choice rather than on work.
 
 | Item | Blocked on | Unblock event |
 | --- | --- | --- |
-| A5's "Handled" section claiming actions definitely completed | the last canary family — `order_creation` — plus item 7 above | **Two of three families pass, and all 10 mutation documents are schema-valid** (2026-07-25, order `#1005`, a $600 Bogus-gateway test order). `gift_card`: `ok` / `committed`. `refund`: `ok` / `committed` on a $0.01 partial, but only after fixing a defect that made it fail 100% of the time — see the `create_refund` section above, and note it took three runs, one of which wasted a round on a stale `dist`. `order_creation` is unrun because it commits a genuine order on a live `basic`-plan store; that is a deliberate choice, not a blocker. Item 8 is now closed and took a second 100%-failure defect (`attach_return_label`) with it, so a canary pass means considerably more than it did: the documents behind it are proven, and a new one cannot ship unvalidated. Item 7 remains — the full-refund branch is schema-valid but has never executed. |
+| A5's "Handled" section claiming actions definitely completed | the last canary family — `order_creation` | **Three of four families pass, and all 10 mutation documents are schema-valid** (2026-07-25). `gift_card`: `ok` / `committed`. `refund`: `ok` / `committed` on a $0.01 partial against `#1005`, but only after fixing a defect that made it fail 100% of the time — see the `create_refund` section above, and note it took three runs, one of which wasted a round on a stale `dist`. `refund_full`: `ok` / `committed` against `#1006`, refunded total equal to the order total, closing item 7. `order_creation` is unrun because it commits a genuine order on `palette-dev`, which is on a live `basic` plan; that is a deliberate choice, not a blocker. Item 8 is closed and took a second 100%-failure defect (`attach_return_label`) with it, so a canary pass means considerably more than it did: the documents behind it are proven, and a new one cannot ship unvalidated. Item 9 also narrows what reaches this section at all: a rejected document now lands in `error`, not `unknown`, so the outcomes A5 has to describe are one class cleaner. |
 | Raising `OPERATOR_PLAN_QUEUE_MAX` above 1 | P1 execution-ledger rollout verification | `npm run audit:plan-executions -- --hours=24` returning representative dashboard *and* gateway executions. It currently returns zero — there is no traffic yet. |
 | Enabling B3/B4 monitors | same P1 rollout, plus the P6-02 controlled recovery exercise (the simulated-fixture leg is closed — see item 6) | as above |
 | B3/B4/B5 live push verification | a real return arrival, delivery exception, or 5-day-old resolution | first real merchant traffic, or a deliberately staged fixture on the test DB |
