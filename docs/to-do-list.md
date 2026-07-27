@@ -141,9 +141,10 @@ near-term pointers only here.
   [core-extraction-and-module-expansion-plan.md](core-extraction-and-module-expansion-plan.md)
   — consolidated there 2026-07-24; don't re-copy it here.
 
-- [ ] **Agent behavior (2026-07 audit): residual.** Tracks A and B are complete
-  and archived; the flag/rollout state table and the few remaining items are in
-  [agent-behavior-open-work.md](agent-behavior-open-work.md).
+- [x] **Agent behavior (2026-07 audit).** Tracks A1–A6 and B1–B5 are complete;
+  the residual closeout list was completed and deleted 2026-07-26. History and
+  durable findings live in
+  [archive/agent-behavior-and-expansion-plan-2026-07.md](archive/agent-behavior-and-expansion-plan-2026-07.md).
 
 ## Documentation
 

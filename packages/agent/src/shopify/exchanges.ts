@@ -1,6 +1,11 @@
 import type { CreateExchangeInput } from "../tools/index.js";
-import { formatShopifyToolError, shopifyGraphql, type ShopifyContext } from "./client.js";
-import { toolError, toolOk, type ToolResult } from "../tools/result.js";
+import {
+  formatShopifyToolError,
+  isAmbiguousShopifyMutationError,
+  shopifyGraphql,
+  type ShopifyContext,
+} from "./client.js";
+import { toolError, toolOk, toolUnknown, type ToolResult } from "../tools/result.js";
 import { moneyToCents, optionalPositiveInteger, requireNumericId } from "./validation.js";
 import { fetchReturnableLineItems, mapReturnReason, runReturnCreate, type ReturnWatchToolData } from "./returns.js";
 
@@ -13,6 +18,17 @@ interface VariantPricesData {
   } | null)[];
 }
 
+export const VARIANT_PRICES_QUERY = `query variantPrices($ids: [ID!]!) {
+  nodes(ids: $ids) {
+    ... on ProductVariant {
+      id
+      title
+      price
+      product { title }
+    }
+  }
+}`;
+
 function variantDisplayName(variant: { title?: string | null; product?: { title?: string | null } | null }): string {
   const product = variant.product?.title ?? null;
   const title = variant.title && variant.title !== "Default Title" ? variant.title : null;
@@ -23,6 +39,7 @@ export async function createExchange(
   input: CreateExchangeInput,
   ctx: ShopifyContext
 ): Promise<ToolResult> {
+  let mutationStarted = false;
   try {
     const orderId = requireNumericId(input.order_id, "order_id");
     const returnVariantId = requireNumericId(input.variant_id, "variant_id");
@@ -55,16 +72,7 @@ export async function createExchange(
 
     const priceData = await shopifyGraphql<VariantPricesData>(
       ctx,
-      `query variantPrices($ids: [ID!]!) {
-        nodes(ids: $ids) {
-          ... on ProductVariant {
-            id
-            title
-            price
-            product { title }
-          }
-        }
-      }`,
+      VARIANT_PRICES_QUERY,
       { ids: [returnVariantGid, exchangeVariantGid] }
     );
 
@@ -97,6 +105,7 @@ export async function createExchange(
       remaining -= take;
     }
 
+    mutationStarted = true;
     const created = await runReturnCreate(ctx, {
       orderId: orderGid,
       returnLineItems,
@@ -122,6 +131,11 @@ export async function createExchange(
       } satisfies ReturnWatchToolData,
     );
   } catch (err) {
+    if (mutationStarted && isAmbiguousShopifyMutationError(err)) {
+      return toolUnknown(
+        `Unknown: the exchange return may have been opened at Shopify, but it could not be confirmed. Do not create another exchange, retry, or tell the customer the exchange is set up until order ${input.order_id} is reviewed. ${formatShopifyToolError("exchange reconciliation failed", err)}`,
+      );
+    }
     return toolError(formatShopifyToolError("failed to set up exchange", err));
   }
 }

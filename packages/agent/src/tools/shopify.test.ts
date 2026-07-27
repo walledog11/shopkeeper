@@ -364,35 +364,34 @@ describe("shopify tools", () => {
       .fn()
       .mockResolvedValueOnce(jsonResponse({
         data: {
-          order: {
-            returnableFulfillments: {
-              edges: [{
-                node: {
-                  returnableFulfillmentLineItems: {
-                    edges: [
-                      {
-                        node: {
-                          quantity: 1,
-                          fulfillmentLineItem: {
-                            id: "gid://shopify/FulfillmentLineItem/11",
-                            lineItem: { name: "Blue shirt", variant: { id: "gid://shopify/ProductVariant/789" } },
-                          },
+          order: { id: "gid://shopify/Order/456" },
+          returnableFulfillments: {
+            edges: [{
+              node: {
+                returnableFulfillmentLineItems: {
+                  edges: [
+                    {
+                      node: {
+                        quantity: 1,
+                        fulfillmentLineItem: {
+                          id: "gid://shopify/FulfillmentLineItem/11",
+                          lineItem: { name: "Blue shirt", variant: { id: "gid://shopify/ProductVariant/789" } },
                         },
                       },
-                      {
-                        node: {
-                          quantity: 2,
-                          fulfillmentLineItem: {
-                            id: "gid://shopify/FulfillmentLineItem/22",
-                            lineItem: { name: "Red hat", variant: { id: "gid://shopify/ProductVariant/123" } },
-                          },
+                    },
+                    {
+                      node: {
+                        quantity: 2,
+                        fulfillmentLineItem: {
+                          id: "gid://shopify/FulfillmentLineItem/22",
+                          lineItem: { name: "Red hat", variant: { id: "gid://shopify/ProductVariant/123" } },
                         },
                       },
-                    ],
-                  },
+                    },
+                  ],
                 },
-              }],
-            },
+              },
+            }],
           },
         },
       }))
@@ -410,7 +409,11 @@ describe("shopify tools", () => {
 
     const queryBody = JSON.parse(fetchMock.mock.calls[0][1].body as string);
     const createBody = JSON.parse(fetchMock.mock.calls[1][1].body as string);
-    expect(queryBody.query).toContain("returnableFulfillments");
+    // Pin the root-query form, not just the word: `returnableFulfillments` was
+    // nested under `order` for the whole life of this capability, which Shopify
+    // rejects as an undefined field, and a substring check passed either way.
+    expect(queryBody.query).toContain("returnableFulfillments(orderId: $orderId");
+    expect(queryBody.variables).toEqual({ orderId: "gid://shopify/Order/456" });
     expect(createBody.query).toContain("mutation returnCreate");
     expect(createBody.variables.returnInput).toEqual({
       orderId: "gid://shopify/Order/456",
@@ -426,7 +429,7 @@ describe("shopify tools", () => {
 
   it("returns an error when the order has no returnable items", async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
-      data: { order: { returnableFulfillments: { edges: [] } } },
+      data: { order: { id: "gid://shopify/Order/456" }, returnableFulfillments: { edges: [] } },
     }));
     vi.stubGlobal("fetch", fetchMock);
 

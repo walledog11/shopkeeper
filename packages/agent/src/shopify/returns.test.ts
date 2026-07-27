@@ -16,27 +16,26 @@ function jsonResponse(body: unknown, status = 200): Response {
 function returnableFulfillmentsResponse(): Response {
   return jsonResponse({
     data: {
-      order: {
-        returnableFulfillments: {
-          edges: [{
-            node: {
-              returnableFulfillmentLineItems: {
-                edges: [{
-                  node: {
-                    quantity: 1,
-                    fulfillmentLineItem: {
-                      id: "gid://shopify/FulfillmentLineItem/321",
-                      lineItem: {
-                        name: "Wool Scarf",
-                        variant: { id: "gid://shopify/ProductVariant/111" },
-                      },
+      order: { id: "gid://shopify/Order/2001" },
+      returnableFulfillments: {
+        edges: [{
+          node: {
+            returnableFulfillmentLineItems: {
+              edges: [{
+                node: {
+                  quantity: 1,
+                  fulfillmentLineItem: {
+                    id: "gid://shopify/FulfillmentLineItem/321",
+                    lineItem: {
+                      name: "Wool Scarf",
+                      variant: { id: "gid://shopify/ProductVariant/111" },
                     },
                   },
-                }],
-              },
+                },
+              }],
             },
-          }],
-        },
+          },
+        }],
       },
     },
   });

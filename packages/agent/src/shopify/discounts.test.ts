@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { issueDiscount } from "./discounts.js";
+import { discountCodeForOperation, issueDiscount } from "./discounts.js";
 
 const ctx = {
   shop: "test-store.myshopify.com",
@@ -36,7 +36,6 @@ describe("issueDiscount edge cases", () => {
   it("sets an expiry and falls back to the generated code when Shopify omits it", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-27T12:00:00.000Z"));
-    vi.spyOn(Math, "random").mockReturnValue(0);
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
       data: {
         discountCodeBasicCreate: {
@@ -54,10 +53,10 @@ describe("issueDiscount edge cases", () => {
 
     expect(request.variables.basicCodeDiscount).toMatchObject({
       title: "Goodwill 15% off",
-      code: "THANKS15-AAAAAA",
       endsAt: "2026-06-30T12:00:00.000Z",
     });
-    expect(result.message).toContain("THANKS15-AAAAAA");
+    expect(request.variables.basicCodeDiscount.code).toMatch(/^THANKS15-[A-F0-9]{8}$/);
+    expect(result.message).toContain(request.variables.basicCodeDiscount.code);
     expect(result.message).toContain("expires in 3 day(s)");
   });
 
@@ -75,5 +74,42 @@ describe("issueDiscount edge cases", () => {
       status: "error",
       message: "Error: could not create discount code - Shopify did not return a discount.",
     });
+  });
+
+  it("reuses a deterministic operation code and confirms an earlier attempt", async () => {
+    const operationId = "execution-1:discount";
+    const code = discountCodeForOperation(10, operationId);
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      data: {
+        codeDiscountNodeByCode: {
+          id: "gid://shopify/DiscountCodeNode/1",
+          codeDiscount: { codes: { nodes: [{ code }] } },
+        },
+      },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await issueDiscount({ percentage: 10 }, { ...ctx, operationId });
+
+    expect(result).toMatchObject({ status: "ok" });
+    expect(result.message).toContain(code);
+    expect(result.message).toContain("earlier attempt");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports an ambiguous create failure as unknown", async () => {
+    const operationId = "execution-2:discount";
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({
+        data: { codeDiscountNodeByCode: null },
+      }))
+      .mockRejectedValueOnce(new TypeError("connection reset"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await issueDiscount({ percentage: 10 }, { ...ctx, operationId });
+
+    expect(result.status).toBe("unknown");
+    expect(result.message).toContain(discountCodeForOperation(10, operationId));
+    expect(result.message).toContain("Do not issue another discount");
   });
 });

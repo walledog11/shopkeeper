@@ -27,27 +27,26 @@ export function mapReturnReason(reason: string | undefined): string {
 }
 
 interface ReturnableFulfillmentsData {
-  order?: {
-    returnableFulfillments?: {
-      edges: {
-        node: {
-          returnableFulfillmentLineItems?: {
-            edges: {
-              node: {
-                quantity: number;
-                fulfillmentLineItem: {
-                  id: string;
-                  lineItem?: {
-                    name?: string | null;
-                    variant?: { id: string } | null;
-                  } | null;
-                };
+  order?: { id: string } | null;
+  returnableFulfillments?: {
+    edges: {
+      node: {
+        returnableFulfillmentLineItems?: {
+          edges: {
+            node: {
+              quantity: number;
+              fulfillmentLineItem: {
+                id: string;
+                lineItem?: {
+                  name?: string | null;
+                  variant?: { id: string } | null;
+                } | null;
               };
-            }[];
-          } | null;
-        };
-      }[];
-    } | null;
+            };
+          }[];
+        } | null;
+      };
+    }[];
   } | null;
 }
 
@@ -68,6 +67,33 @@ export const RETURN_CREATE_MUTATION = `mutation returnCreate($returnInput: Retur
         userErrors { field message }
       }
     }`;
+
+// `returnableFulfillments` is a root query taking orderId, not a field on Order:
+// it was removed from Order with no deprecation pointing anywhere, so the old
+// `order { returnableFulfillments }` was a static validation error and every
+// create_return and create_exchange died on it. `order { id }` rides along only
+// to keep "order not found" distinguishable from "nothing to return", which the
+// Order-nested form got for free.
+export const RETURNABLE_FULFILLMENTS_QUERY = `query returnableFulfillments($orderId: ID!) {
+  order(id: $orderId) { id }
+  returnableFulfillments(orderId: $orderId, first: 50) {
+    edges {
+      node {
+        returnableFulfillmentLineItems(first: 50) {
+          edges {
+            node {
+              quantity
+              fulfillmentLineItem {
+                id
+                lineItem { name variant { id } }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}`;
 
 export interface ReturnableLineItem {
   fulfillmentLineItemId: string;
@@ -98,33 +124,13 @@ export async function fetchReturnableLineItems(
 ): Promise<ReturnableLineItem[] | null> {
   const data = await shopifyGraphql<ReturnableFulfillmentsData>(
     ctx,
-    `query returnableFulfillments($id: ID!) {
-      order(id: $id) {
-        returnableFulfillments(first: 50) {
-          edges {
-            node {
-              returnableFulfillmentLineItems(first: 50) {
-                edges {
-                  node {
-                    quantity
-                    fulfillmentLineItem {
-                      id
-                      lineItem { name variant { id } }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }`,
-    { id: orderGid }
+    RETURNABLE_FULFILLMENTS_QUERY,
+    { orderId: orderGid }
   );
 
   if (!data.order) return null;
 
-  return (data.order.returnableFulfillments?.edges ?? [])
+  return (data.returnableFulfillments?.edges ?? [])
     .flatMap((fulfillment) => fulfillment.node.returnableFulfillmentLineItems?.edges ?? [])
     .map((edge) => ({
       fulfillmentLineItemId: edge.node.fulfillmentLineItem.id,

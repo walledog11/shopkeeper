@@ -2,7 +2,7 @@ import { db } from '@shopkeeper/db';
 import { getLatestConversationMessage } from '@shopkeeper/agent/thread-auth';
 import { getPendingCustomerMessageId } from '@shopkeeper/agent/plan-cache-shape';
 import type { ReturnWatchTool } from '@shopkeeper/db';
-import { formatReturnArrivedNotification } from '@shopkeeper/agent/shopify';
+import { formatReturnClosedNotification } from '@shopkeeper/agent/shopify';
 import logger from '../logger.js';
 import { generateThreadPlan } from '../message-handlers/generate-thread-plan.js';
 import { sendOperatorPlanNotification } from '../message-handlers/planning-notifications.js';
@@ -29,9 +29,9 @@ export interface ReturnArrivalWatch {
 export function buildReturnArrivalInstruction(watch: Pick<ReturnArrivalWatch, 'orderId' | 'returnName' | 'tool'>): string {
   const returnLabel = watch.returnName?.trim() || `order ${watch.orderId}`;
   if (watch.tool === 'create_exchange') {
-    return `The exchange return ${returnLabel} on order ${watch.orderId} has arrived back at the warehouse. Process the exchange (ship the replacement) and confirm with the customer.`;
+    return `The exchange return ${returnLabel} on order ${watch.orderId} is marked closed in Shopify. Review its current Shopify state and verify the returned goods were received. If the replacement has not already been processed and is still due, ship it and confirm with the customer.`;
   }
-  return `Return ${returnLabel} on order ${watch.orderId} has arrived back at the warehouse. Issue the refund the customer is owed and confirm with a reply.`;
+  return `Return ${returnLabel} on order ${watch.orderId} is marked closed in Shopify. Review its current Shopify state and verify the returned goods were received. If a refund has not already been processed and is still due, issue it and confirm with the customer.`;
 }
 
 export async function pushReturnArrivalApprovalPlan(
@@ -115,7 +115,7 @@ async function notifyReturnArrivalOnly(
   organizationId: string,
   watch: ReturnArrivalWatch,
 ): Promise<number> {
-  const message = formatReturnArrivedNotification({
+  const message = formatReturnClosedNotification({
     customerName: watch.customerName,
     orderId: watch.orderId,
     returnName: watch.returnName,

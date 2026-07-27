@@ -37,21 +37,20 @@ export {
 } from "./low-stock.js";
 export {
   fetchOrderReturnStatuses,
-  formatReturnArrivedNotification,
+  formatReturnClosedNotification,
   safeFetchOrderReturnStatuses,
   type MonitoredReturnStatus,
-  type ReturnDeliveryState,
 } from "./return-status.js";
 export { updateShopifyOrderAddress } from "./order-address.js";
 export { cancelOrder } from "./order-cancellation.js";
 export { createShopifyOrder, type CreateShopifyOrderOptions } from "./order-creation.js";
 export { editShopifyOrder } from "./order-edit.js";
 export { createRefund } from "./refunds.js";
-export { createReturn } from "./returns.js";
+export { createReturn, fetchReturnableLineItems } from "./returns.js";
 export { createExchange } from "./exchanges.js";
 export { issueStoreCredit } from "./store-credit.js";
 export { createGiftCard } from "./gift-cards.js";
-export { attachReturnLabel } from "./return-labels.js";
+export { attachReturnLabel, OPEN_RETURN_STATUSES } from "./return-labels.js";
 export { issueDiscount } from "./discounts.js";
 export {
   probeUnknownShopifyMutation,
@@ -63,6 +62,10 @@ export {
   skippedMutationDocument,
   type ShopifyMutationDocument,
 } from "./mutation-documents.js";
+export {
+  SHOPIFY_QUERY_DOCUMENTS,
+  type ShopifyQueryDocument,
+} from "./query-documents.js";
 export {
   classifyShipmentAlert,
   formatDeliveryExceptionNotification,

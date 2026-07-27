@@ -653,8 +653,10 @@ model AgentAction {
 }
 
 // Durable return↔ticket association for the return-lifecycle monitor (B3).
-// Created when create_return/create_exchange succeeds; updated when the reverse
-// shipment arrives and a plan-approval card is pushed.
+// Created when create_return/create_exchange succeeds; updated when Shopify
+// closes the return and a plan-approval card is pushed. `arrived_at` is a legacy
+// column name retained to avoid a destructive rename; it records observation of
+// the terminal return state, not a carrier-confirmed warehouse arrival.
 model ReturnWatch {
   id                  String            @id @default(uuid()) @db.Uuid
   organizationId      String            @map("organization_id") @db.Uuid

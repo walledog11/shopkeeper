@@ -1,10 +1,10 @@
 # Agent Behavior & Expansion Plan (archived 2026-07-24)
 
 **Archived — historical record only.** Every phase in this plan (A1–A6, B1–B5)
-is implementation-complete and live-verified; B6 was moved out to the roadmap.
-Open work that outlived the plan lives in
-[agent-behavior-open-work.md](../agent-behavior-open-work.md); the standing
-invariants from this doc's "Ground rules" were promoted into `.claude/CLAUDE.md`
+is implementation-complete and verified; B6 was moved out to the roadmap. The
+residual closeout list was completed and deleted on 2026-07-26; its durable
+findings are summarized below. The standing invariants from this doc's "Ground
+rules" were promoted into `.claude/CLAUDE.md`
 ("Agent-change invariants"); B6 order-ops autonomy moved to
 [core-extraction-and-module-expansion-plan.md](../core-extraction-and-module-expansion-plan.md).
 
@@ -14,6 +14,52 @@ Two corrections applied at archive time, so this record isn't misleading:
   `a6-step2-operator-plan-queue` as the body below says in two places.
 - A6-step-1 and A6-step-2 are both **live phone verified** (confirmed by the
   operator 2026-07-24); the body says step 2's verification was pending.
+
+## Closeout addendum (2026-07-26)
+
+The follow-up audit is complete. Its lasting results:
+
+- A2's model path trusts clear spam intent because the action is bounded,
+  reversible, self-healing on reply, and non-training. Concierge does not mirror
+  the phone-only inbox tools; promote the shared implementation if Concierge
+  later gains a mobile surface. The previously unverified ordinal instruction
+  passed a live-model, non-sending probe: “reply to the second: we ship Friday”
+  selected digest ticket 2 and called `send_ticket_reply` with the requested
+  text.
+- Shopify document validation now covers the exact strings used by all package
+  GraphQL operations: 12/12 mutation cases and 11/11 query documents passed
+  against the live 2026-04 schema. The source registry prevents an unregistered
+  query from silently escaping the guard.
+- The audit found seven shipped Shopify capabilities that had been incapable of
+  working: refunds, return labels, store-credit reconciliation, order creation,
+  returns, exchanges, and the original return-lifecycle query. It also found
+  three less-than-total reconciliation defects. All were corrected.
+- Every formerly unexecuted Shopify tool in this audit now has a canary family
+  and live evidence. `create_exchange` ran on fulfilled test order `#1012` and
+  reconciled return `#1012-R1`; `issue_discount` created and directly reconciled
+  a one-day 1% code. The discount family's first run exposed a lagging search
+  index, so both preflight and reconciliation now use Shopify's direct
+  `codeDiscountNodeByCode` lookup.
+- `create_return`, `attach_return_label`, `create_exchange`, and
+  `issue_discount` now classify a transport/5xx interruption after mutation
+  start as `unknown` and participate in durable reconciliation. Absence-shaped
+  reads that could invite duplicate customer-visible writes remain
+  `still_unknown`, never a confident `no_effect`.
+- B3 no longer invents reverse-shipment transit state. Shopify's reverse
+  delivery graph exposes no delivered/in-transit status, so the monitor reacts
+  to the real terminal signal, `Return.status === CLOSED`, and all plan and
+  notification copy explicitly tells the merchant to verify receipt before
+  refunding or shipping an exchange. The legacy `return-arrived` idempotency key
+  and `arrived_at` column name remain for compatibility; neither is presented as
+  carrier evidence.
+- Canary fixture discovery walks paginated orders instead of filtering only the
+  newest ten. The exchange family can create a fulfilled `test: true` order via
+  GraphQL `orderCreate`, with receipts disabled and a skipped-document preflight,
+  avoiding new fulfillment scopes and live-looking fixture orders.
+
+Rollout observation and shared safety gates remain owned by
+[codebase-cleanup-plan.md](../codebase-cleanup-plan.md); they are not residual
+work in this behavior plan.
 
 Source: 2026-07-11 agent-behavior audit (operator-channel conversational gaps +
 support-adjacent expansion candidates). This is the *product-behavior* companion
@@ -489,13 +535,16 @@ never been applied to production despite the code shipping 2026-07-20, so
 prod for two days. Applied 2026-07-22 alongside B4/B5's watch tables; the
 `RETURN_LIFECYCLE_MONITOR_ENABLED` flag remains **off**.
 
-**Status (2026-07-20): Complete.** Shipped behind `RETURN_LIFECYCLE_MONITOR_ENABLED`.
-Hourly sweep reads durable `ReturnWatch` rows (recorded when `create_return` /
-`create_exchange` succeed) plus a legacy backfill from recent audit rows, checks
-Shopify reverse-delivery status, and on delivery pushes a `needs_review` plan
-through the existing approval loop (`generateThreadPlan` +
-`sendOperatorPlanNotification`). Notify-only fallback remains when there is no
-open thread or the planner produces no actionable steps.
+**Status (corrected 2026-07-26): Complete.** Shipped behind
+`RETURN_LIFECYCLE_MONITOR_ENABLED`. Hourly sweep reads durable `ReturnWatch` rows
+(recorded when `create_return` / `create_exchange` succeed) plus a legacy
+backfill from recent audit rows, checks Shopify's real terminal return state
+(`Return.status === CLOSED`), and pushes a `needs_review` plan through the
+existing approval loop (`generateThreadPlan` +
+`sendOperatorPlanNotification`). Copy says the return is closed in Shopify and
+requires the merchant to verify receipt; it never claims the reverse shipment
+arrived. Notify-only fallback remains when there is no open thread or the
+planner produces no actionable steps.
 
 - Durable return↔ticket association: `return_watches` table + migration
   `20260720100000_add_return_watches`; watches are upserted at tool success
@@ -503,7 +552,7 @@ open thread or the planner produces no actionable steps.
 - Arrival handling: `return-arrival-plan.ts` builds a return-arrival instruction,
   caches a fresh plan on the source thread, and fans out the operator approval
   card with P1-03 stable plan identity.
-- Idempotent delivery detection: per-org/order/return idempotency keys; watch
+- Idempotent terminal-state detection: per-org/order/return idempotency keys; watch
   status moves `open` → `plan_pushed` (or `skipped` when no operators are bound).
 
 Broad rollout still follows the same cleanup gates as other mutative sweeps:
@@ -628,11 +677,13 @@ actionable-autonomy plan.
 
 ## Open questions
 
-1. Digest spam via the model (A2): trust clear intent, or always confirm
-   before marking spam? (Plan approval trusts clear intent; spam is
-   lower-stakes and reversible — recommend trusting it.)
-2. Concierge parity for A1's inbox tools — worth mirroring as dashboard host
-   tools, or is the dashboard inbox UI enough there?
+1. ~~Digest spam via the model (A2): trust clear intent, or always confirm
+   before marking spam?~~ **Decided 2026-07-24:** trust clear intent; ask only
+   when intent is ambiguous.
+2. ~~Concierge parity for A1's inbox tools — worth mirroring as dashboard host
+   tools, or is the dashboard inbox UI enough there?~~ **Decided 2026-07-24:**
+   no mirrored dashboard tools; promote the implementation if a mobile
+   Concierge surface later needs it.
 3. ~~B2/B1 settings surface: new `Organization.settings` keys
    (`lowStockThreshold`, `salesPulseEnabled`?) — dashboard settings UI or
    settings-JSON-only at first?~~ **Decided and shipped 2026-07-20:**

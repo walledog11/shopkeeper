@@ -10,7 +10,26 @@ import {
 import { toolError, toolOk, toolUnknown, type ToolResult } from "../tools/result.js";
 import { optionalString, requireNonEmptyString, requireNumericId, ShopifyInputError } from "./validation.js";
 
-const OPEN_RETURN_STATUSES = new Set(["OPEN", "REQUESTED"]);
+// Exported so the reconciliation probe decides "is this return open?" with the
+// same predicate the tool commits on rather than a second copy of it.
+export const OPEN_RETURN_STATUSES = new Set(["OPEN", "REQUESTED"]);
+
+export const ORDER_RETURNS_QUERY = `query orderReturns($id: ID!) {
+  order(id: $id) {
+    returns(first: 10) {
+      edges {
+        node {
+          id
+          name
+          status
+          reverseFulfillmentOrders(first: 5) {
+            edges { node { id } }
+          }
+        }
+      }
+    }
+  }
+}`;
 
 function requireLabelUrl(value: unknown): string {
   const url = requireNonEmptyString(value, "label_url");
@@ -78,22 +97,7 @@ export async function attachReturnLabel(
 
     const data = await shopifyGraphql<OrderReturnsData>(
       ctx,
-      `query orderReturns($id: ID!) {
-        order(id: $id) {
-          returns(first: 10) {
-            edges {
-              node {
-                id
-                name
-                status
-                reverseFulfillmentOrders(first: 5) {
-                  edges { node { id } }
-                }
-              }
-            }
-          }
-        }
-      }`,
+      ORDER_RETURNS_QUERY,
       { id: `gid://shopify/Order/${orderId}` }
     );
 

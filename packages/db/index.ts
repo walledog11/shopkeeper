@@ -262,7 +262,7 @@ export {
 } from './voice.js';
 export type { VoiceProposal } from './voice.js';
 export {
-  ensureReturnWatchFromDelivery,
+  ensureReturnWatchFromClosure,
   listOpenReturnWatches,
   markReturnWatchPlanPushed,
   markReturnWatchSkipped,

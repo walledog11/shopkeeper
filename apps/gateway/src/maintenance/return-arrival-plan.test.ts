@@ -44,20 +44,20 @@ afterEach(async () => {
 });
 
 describe('buildReturnArrivalInstruction', () => {
-  it('asks for a refund after a return arrives', () => {
+  it('asks for a refund after a return is closed and requires receipt verification', () => {
     expect(buildReturnArrivalInstruction({
       orderId: '1001',
       returnName: '#R12',
       tool: 'create_return',
-    })).toContain('Issue the refund');
+    })).toContain('If a refund has not already been processed');
   });
 
-  it('asks to process an exchange after the return arrives', () => {
+  it('asks to process an exchange after a return is closed', () => {
     expect(buildReturnArrivalInstruction({
       orderId: '1001',
       returnName: '#R12',
       tool: 'create_exchange',
-    })).toContain('Process the exchange');
+    })).toContain('If the replacement has not already been processed');
   });
 });
 
@@ -73,7 +73,7 @@ describe('pushReturnArrivalApprovalPlan', () => {
         steps: [{ id: '1', tool: 'create_refund', label: 'Refund', description: 'Refund', category: 'action', enabled: true }],
         rawToolCalls: [{ id: '1', name: 'create_refund', input: { order_id: '1001', amount: '42.00' } }],
       },
-      instruction: 'Return arrived',
+      instruction: 'Return closed',
       identity: {
         planId: '11111111-1111-4111-8111-111111111111',
         sourceMessageId: '22222222-2222-4222-8222-222222222222',
@@ -94,7 +94,7 @@ describe('pushReturnArrivalApprovalPlan', () => {
 
     expect(outcome).toBe('plan_pushed');
     expect(generateThreadPlanSpy).toHaveBeenCalledWith(org.id, thread.id, false, expect.objectContaining({
-      instruction: expect.stringContaining('arrived back at the warehouse'),
+      instruction: expect.stringContaining('marked closed in Shopify'),
     }));
     expect(sendOperatorPlanNotificationSpy).toHaveBeenCalled();
   });

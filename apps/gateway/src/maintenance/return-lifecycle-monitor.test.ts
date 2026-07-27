@@ -8,11 +8,11 @@ describe('return lifecycle monitor helpers', () => {
       .toBe('return-arrived:org-1:1001:gid://shopify/Return/9');
   });
 
-  it('builds refund-oriented arrival instructions', () => {
+  it('builds truthful closed-return instructions', () => {
     expect(buildReturnArrivalInstruction({
       orderId: '1001',
       returnName: '#R12',
       tool: 'create_return',
-    })).toContain('Issue the refund');
+    })).toContain('marked closed in Shopify');
   });
 });

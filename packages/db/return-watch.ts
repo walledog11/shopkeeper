@@ -85,7 +85,7 @@ export async function markReturnWatchSkipped(
   return updated.count === 1;
 }
 
-export async function ensureReturnWatchFromDelivery(params: {
+export async function ensureReturnWatchFromClosure(params: {
   organizationId: string;
   threadId: string | null;
   orderId: string;

@@ -37,6 +37,10 @@ interface StoreCreditCreditData {
   } | null;
 }
 
+// Named rather than anonymous so the query registry can key it, and so a
+// validation failure names the document instead of reporting "query".
+export const SHOP_CURRENCY_QUERY = `query ShopCurrency { shop { currencyCode } }`;
+
 export const STORE_CREDIT_ACCOUNT_CREDIT_MUTATION = `mutation storeCreditAccountCredit($id: ID!, $creditInput: StoreCreditAccountCreditInput!) {
         storeCreditAccountCredit(id: $id, creditInput: $creditInput) {
           storeCreditAccountTransaction {
@@ -68,7 +72,7 @@ export async function issueStoreCredit(
 
     const shopData = await shopifyGraphql<ShopCurrencyData>(
       ctx,
-      `query { shop { currencyCode } }`,
+      SHOP_CURRENCY_QUERY,
       {},
       { maxRetries: 1 },
     );

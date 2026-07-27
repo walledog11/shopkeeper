@@ -61,24 +61,33 @@ function createdOrderResult(
   );
 }
 
+// Distinct from the probe's CREATED_ORDER_TAG_SEARCH_QUERY in
+// reconciliation-probes.ts: both are named FindShopkeeperCreatedOrder, because an
+// operation name is only scoped to its own document, but they select different
+// fields for different callers. Both are registered and validated separately.
+export const CREATED_ORDER_LOOKUP_QUERY = `query FindShopkeeperCreatedOrder($query: String!) {
+  orders(first: 2, query: $query, sortKey: CREATED_AT, reverse: true) {
+    nodes {
+      id
+      legacyResourceId
+      name
+      email
+      tags
+      totalPriceSet { shopMoney { amount } }
+    }
+  }
+}`;
+
 async function findCreatedOrder(
   ctx: ShopifyContext,
   operationTag: string,
 ): Promise<CreatedOrderLookupData["orders"]> {
-  const data = await shopifyGraphql<CreatedOrderLookupData>(ctx, `
-    query FindShopkeeperCreatedOrder($query: String!) {
-      orders(first: 2, query: $query, sortKey: CREATED_AT, reverse: true) {
-        nodes {
-          id
-          legacyResourceId
-          name
-          email
-          tags
-          totalPriceSet { shopMoney { amount } }
-        }
-      }
-    }
-  `, { query: `tag:${operationTag}` }, { maxRetries: 1 });
+  const data = await shopifyGraphql<CreatedOrderLookupData>(
+    ctx,
+    CREATED_ORDER_LOOKUP_QUERY,
+    { query: `tag:${operationTag}` },
+    { maxRetries: 1 },
+  );
   return data.orders ?? null;
 }
 

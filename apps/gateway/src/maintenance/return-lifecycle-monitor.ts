@@ -3,7 +3,7 @@ import {
   listOpenReturnWatches,
   markReturnWatchPlanPushed,
   markReturnWatchSkipped,
-  ensureReturnWatchFromDelivery,
+  ensureReturnWatchFromClosure,
   type ReturnWatchTool,
 } from '@shopkeeper/db';
 import {
@@ -117,7 +117,7 @@ async function handleDeliveredReturn(params: {
     if (!marked) {
       logger.info(
         { organizationId: params.organizationId, watchId: params.watchId },
-        '[ReturnLifecycleMonitor] arrival already handled on another worker',
+        '[ReturnLifecycleMonitor] closed return already handled on another worker',
       );
     }
     return true;
@@ -130,10 +130,10 @@ async function handleDeliveredReturn(params: {
 export async function runReturnLifecycleMonitor(): Promise<{
   orgsScanned: number;
   returnsChecked: number;
-  arrivalsNotified: number;
+  closuresNotified: number;
 }> {
   if (!isReturnLifecycleMonitorEnabled()) {
-    return { orgsScanned: 0, returnsChecked: 0, arrivalsNotified: 0 };
+    return { orgsScanned: 0, returnsChecked: 0, closuresNotified: 0 };
   }
 
   const integrations = await db.integration.findMany({
@@ -148,7 +148,7 @@ export async function runReturnLifecycleMonitor(): Promise<{
   });
 
   let returnsChecked = 0;
-  let arrivalsNotified = 0;
+  let closuresNotified = 0;
 
   for (const integration of integrations) {
     if (!integration.accessToken || !integration.externalAccountId) continue;
@@ -174,7 +174,7 @@ export async function runReturnLifecycleMonitor(): Promise<{
       const status = statuses.find((row) => row.returnId === watch.shopifyReturnId);
       if (!status) continue;
       returnsChecked += 1;
-      if (status.deliveryState !== 'delivered') continue;
+      if (status.returnStatus?.toUpperCase() !== 'CLOSED') continue;
 
       const notified = await handleDeliveredReturn({
         organizationId: integration.organizationId,
@@ -187,7 +187,7 @@ export async function runReturnLifecycleMonitor(): Promise<{
         customerName: watch.thread?.customer?.name ?? null,
       });
       if (notified) {
-        arrivalsNotified += 1;
+        closuresNotified += 1;
         logger.info(
           {
             organizationId: integration.organizationId,
@@ -196,7 +196,7 @@ export async function runReturnLifecycleMonitor(): Promise<{
             threadId: watch.threadId,
             watchId: watch.id,
           },
-          '[ReturnLifecycleMonitor] pushed return-arrival approval plan',
+          '[ReturnLifecycleMonitor] pushed closed-return approval plan',
         );
       }
     }
@@ -207,10 +207,10 @@ export async function runReturnLifecycleMonitor(): Promise<{
       if (!statuses) continue;
 
       for (const status of statuses) {
-        if (status.deliveryState !== 'delivered' || watchedReturnIds.has(status.returnId)) continue;
+        if (status.returnStatus?.toUpperCase() !== 'CLOSED' || watchedReturnIds.has(status.returnId)) continue;
         returnsChecked += 1;
 
-        const watchId = await ensureReturnWatchFromDelivery({
+        const watchId = await ensureReturnWatchFromClosure({
           organizationId: integration.organizationId,
           threadId: candidate.threadId,
           orderId: candidate.orderId,
@@ -231,7 +231,7 @@ export async function runReturnLifecycleMonitor(): Promise<{
           customerName: candidate.customerName,
         });
         if (notified) {
-          arrivalsNotified += 1;
+          closuresNotified += 1;
           logger.info(
             {
               organizationId: integration.organizationId,
@@ -241,7 +241,7 @@ export async function runReturnLifecycleMonitor(): Promise<{
               watchId,
               legacy: true,
             },
-            '[ReturnLifecycleMonitor] backfilled legacy return watch and pushed approval plan',
+            '[ReturnLifecycleMonitor] backfilled legacy closed return and pushed approval plan',
           );
         }
       }
@@ -251,7 +251,7 @@ export async function runReturnLifecycleMonitor(): Promise<{
   return {
     orgsScanned: integrations.length,
     returnsChecked,
-    arrivalsNotified,
+    closuresNotified,
   };
 }
 

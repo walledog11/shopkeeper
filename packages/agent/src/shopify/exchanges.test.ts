@@ -15,31 +15,30 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 const returnableResponse = () => jsonResponse({
   data: {
-    order: {
-      returnableFulfillments: {
-        edges: [
-          {
-            node: {
-              returnableFulfillmentLineItems: {
-                edges: [
-                  {
-                    node: {
-                      quantity: 1,
-                      fulfillmentLineItem: {
-                        id: "gid://shopify/FulfillmentLineItem/111",
-                        lineItem: {
-                          name: "Trail Boots - Size 10",
-                          variant: { id: "gid://shopify/ProductVariant/710000004040" },
-                        },
+    order: { id: "gid://shopify/Order/2001" },
+    returnableFulfillments: {
+      edges: [
+        {
+          node: {
+            returnableFulfillmentLineItems: {
+              edges: [
+                {
+                  node: {
+                    quantity: 1,
+                    fulfillmentLineItem: {
+                      id: "gid://shopify/FulfillmentLineItem/111",
+                      lineItem: {
+                        name: "Trail Boots - Size 10",
+                        variant: { id: "gid://shopify/ProductVariant/710000004040" },
                       },
                     },
                   },
-                ],
-              },
+                },
+              ],
             },
           },
-        ],
-      },
+        },
+      ],
     },
   },
 });
@@ -147,5 +146,28 @@ describe("createExchange", () => {
     expect(result.message).toContain("#4040-R1");
     expect(result.message).toContain("Trail Boots - Size 11");
     expect(result.message).toContain("No refund was issued");
+  });
+
+  it("reports an ambiguous returnCreate failure as unknown after the mutation starts", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(returnableResponse())
+      .mockResolvedValueOnce(pricesResponse("120.00", "120.00"))
+      .mockRejectedValueOnce(new TypeError("connection reset"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await createExchange(input, ctx);
+
+    expect(result.status).toBe("unknown");
+    expect(result.message).toContain("may have been opened");
+    expect(result.message).toContain("Do not create another exchange");
+  });
+
+  it("keeps pre-mutation lookup failures on the ordinary error path", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValueOnce(new TypeError("connection reset")));
+
+    const result = await createExchange(input, ctx);
+
+    expect(result.status).toBe("error");
+    expect(result.message).not.toContain("may have been opened");
   });
 });

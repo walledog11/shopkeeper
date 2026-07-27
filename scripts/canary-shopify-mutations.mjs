@@ -13,6 +13,10 @@
 //   node scripts/canary-shopify-mutations.mjs --shop=example.myshopify.com
 //   node scripts/canary-shopify-mutations.mjs --execute --only=gift_card,refund
 //   node scripts/canary-shopify-mutations.mjs --validate
+//
+// --validate checks two document classes against the live schema: mutations, via
+// @skip(if: true) so nothing executes, and queries, sent as-is because a read
+// against a nonexistent id commits nothing.
 import { createHash, randomUUID } from 'node:crypto';
 import { loadLocalEnv } from './load-local-env.mjs';
 
@@ -20,14 +24,23 @@ loadLocalEnv();
 
 const { db } = await import('@shopkeeper/db');
 const {
+  parseNextPageInfo,
   shopifyGraphql,
+  shopifyRest,
   shopifyRestJson,
+  attachReturnLabel,
+  createExchange,
   createGiftCard,
   createRefund,
+  createReturn,
   createShopifyOrder,
+  fetchReturnableLineItems,
+  issueDiscount,
   issueStoreCredit,
+  OPEN_RETURN_STATUSES,
   probeUnknownShopifyMutation,
   SHOPIFY_MUTATION_DOCUMENTS,
+  SHOPIFY_QUERY_DOCUMENTS,
   skippedMutationDocument,
 } = await import('@shopkeeper/agent/shopify');
 const { missingShopifyScopes } = await import('@shopkeeper/agent/shopify/integration-health');
@@ -188,19 +201,12 @@ async function loadShopifyIntegration() {
 
 async function inspectStore(ctx) {
   try {
-    const [shopData, ordersData] = await Promise.all([
+    const [shopData, orders] = await Promise.all([
       shopifyRestJson(ctx, 'shop.json', { query: { fields: 'name,plan_name,domain,email,currency' } }),
-      shopifyRestJson(ctx, 'orders.json', {
-        query: {
-          status: 'any',
-          limit: 10,
-          fields: 'id,name,test,financial_status,cancelled_at,total_price,current_total_price',
-        },
-      }),
+      listCanaryOrders(ctx),
     ]);
 
     const shop = shopData.shop;
-    const orders = ordersData.orders ?? [];
     const testOrders = orders.filter((order) => order.test === true);
     const liveOrders = orders.filter((order) => order.test !== true);
     const planName = String(shop?.plan_name ?? 'unknown');
@@ -222,6 +228,7 @@ async function inspectStore(ctx) {
         testCount: testOrders.length,
         liveCount: liveOrders.length,
         candidateTestOrderId: testOrders[0]?.id ? String(testOrders[0].id) : null,
+        testOrderIds: testOrders.map((order) => String(order.id)),
         fullRefundCandidates: testOrders.filter(isFullRefundCandidate).map((order) => ({
           id: String(order.id),
           name: order.name ?? null,
@@ -246,11 +253,40 @@ async function inspectStore(ctx) {
         testCount: 0,
         liveCount: 0,
         candidateTestOrderId: null,
+        testOrderIds: [],
         fullRefundCandidates: [],
       },
       connectivityError: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+// Fixture discovery must not depend on the ten newest orders. The canary itself
+// creates live-looking orders, so a client-side test filter over one small page
+// eventually hides perfectly usable test fixtures. Walk the whole REST cursor
+// instead (bounded defensively for a misconfigured non-development store).
+async function listCanaryOrders(ctx) {
+  const orders = [];
+  let pageInfo = null;
+  for (let page = 0; page < 20; page += 1) {
+    const response = await shopifyRest(ctx, 'orders.json', {
+      query: pageInfo
+        ? {
+          limit: 250,
+          page_info: pageInfo,
+          fields: 'id,name,test,financial_status,cancelled_at,total_price,current_total_price',
+        }
+        : {
+          status: 'any',
+          limit: 250,
+          fields: 'id,name,test,financial_status,cancelled_at,total_price,current_total_price',
+        },
+    });
+    orders.push(...(response.data.orders ?? []));
+    pageInfo = parseNextPageInfo(response.headers);
+    if (!pageInfo) return orders;
+  }
+  throw new Error('Order fixture scan exceeded 5,000 orders; choose a dedicated development store.');
 }
 
 // A token carries whatever grant it was issued with, so an install older than a
@@ -306,6 +342,218 @@ async function createCanaryCustomer(ctx, operationId) {
   return { id: String(id), email };
 }
 
+// The return family needs something no other family does: a *fulfilled* order.
+// returnCreate builds its line items from returnableFulfillments, so an
+// unfulfilled order - which is every order order_creation leaves behind - has
+// nothing returnable on it. The fixture must also carry no open return, or
+// probeReturn cannot tell this run's return from the one already there.
+// `rejected` is the point of the return value, not a nicety: this scan is the
+// only thing standing between "no fixture" and an operator guessing which order
+// to go fulfil, and a skip that names no order costs a round-trip to answer.
+async function findReturnFixtureOrder(ctx, orderIds, excludedOrderIds = new Set()) {
+  const rejected = [];
+  for (const orderId of orderIds) {
+    if (excludedOrderIds.has(String(orderId))) continue;
+    const orderGid = `gid://shopify/Order/${orderId}`;
+    const data = await shopifyGraphql(ctx, `
+      query CanaryOrderReturns($id: ID!) {
+        order(id: $id) { name returns(first: 10) { edges { node { status } } } }
+      }
+    `, { id: orderGid });
+    const name = data.order?.name ?? null;
+
+    const returnable = await fetchReturnableLineItems(ctx, orderGid);
+    if (!returnable) {
+      rejected.push({ orderId, name, reason: 'order not found' });
+      continue;
+    }
+    if (returnable.length === 0) {
+      rejected.push({ orderId, name, reason: 'no returnable items - not fulfilled, or already returned' });
+      continue;
+    }
+
+    const open = (data.order?.returns?.edges ?? [])
+      .filter((edge) => OPEN_RETURN_STATUSES.has(edge.node?.status ?? ''));
+    if (open.length > 0) {
+      rejected.push({ orderId, name, reason: `already carries ${open.length} open return(s)` });
+      continue;
+    }
+
+    return {
+      id: String(orderId),
+      name,
+      source: 'selected',
+      returnableItems: returnable,
+      rejected,
+    };
+  }
+  return { id: null, rejected };
+}
+
+const CANARY_FULFILLED_ORDER_CREATE_MUTATION = `mutation CanaryFulfilledOrderCreate(
+  $order: OrderCreateOrderInput!
+  $options: OrderCreateOptionsInput
+) {
+  orderCreate(order: $order, options: $options) {
+    order { id name test }
+    userErrors { field message }
+  }
+}`;
+
+async function loadActiveVariants(ctx) {
+  const products = await shopifyRestJson(ctx, 'products.json', {
+    query: { status: 'active', limit: 250, fields: 'id,title,variants' },
+  });
+  return (products.products ?? []).flatMap((product) =>
+    (product.variants ?? []).map((variant) => ({
+      id: String(variant.id),
+      title: `${product.title ?? 'Product'} - ${variant.title ?? 'Variant'}`,
+      priceCents: moneyToCents(variant.price),
+    })),
+  );
+}
+
+function exchangePairForFixture(returnFixture, variants) {
+  for (const item of returnFixture.returnableItems ?? []) {
+    const returnedId = String(item.variantId ?? '').replace(/^gid:\/\/shopify\/ProductVariant\//, '');
+    if (!returnedId) continue;
+    const returned = variants.find((variant) => variant.id === returnedId);
+    if (!returned || returned.priceCents === null) continue;
+    const replacement = variants.find((variant) => (
+      variant.id !== returned.id
+      && variant.priceCents !== null
+      && variant.priceCents <= returned.priceCents
+    ));
+    if (!replacement) continue;
+    return {
+      returned,
+      replacement,
+    };
+  }
+  return null;
+}
+
+function exchangePairForNewOrder(variants) {
+  for (const returned of variants) {
+    if (returned.priceCents === null) continue;
+    const replacement = variants.find((variant) => (
+      variant.id !== returned.id
+      && variant.priceCents !== null
+      && variant.priceCents <= returned.priceCents
+    ));
+    if (replacement) return { returned, replacement };
+  }
+  return null;
+}
+
+async function createFulfilledExchangeFixture(ctx, pair) {
+  const variables = {
+    order: {
+      email: `shopkeeper-exchange-canary+${Date.now()}@example.com`,
+      test: true,
+      financialStatus: 'PAID',
+      fulfillmentStatus: 'FULFILLED',
+      lineItems: [{
+        variantId: `gid://shopify/ProductVariant/${pair.returned.id}`,
+        quantity: 1,
+      }],
+      tags: ['shopkeeper-canary', 'shopkeeper-exchange-canary'],
+    },
+    options: {
+      sendReceipt: false,
+      sendFulfillmentReceipt: false,
+    },
+  };
+
+  // Coerce the exact fixture variables against the live schema before allowing
+  // the side effect. A bad document or stale input shape stops at validation.
+  const skipped = await shopifyGraphql(
+    ctx,
+    skippedMutationDocument({
+      document: CANARY_FULFILLED_ORDER_CREATE_MUTATION,
+      rootField: 'orderCreate',
+    }),
+    variables,
+    { maxRetries: 0 },
+  );
+  if (skipped && typeof skipped === 'object' && 'orderCreate' in skipped) {
+    throw new Error('Shopify did not honor @skip for the exchange fixture preflight.');
+  }
+
+  const data = await shopifyGraphql(
+    ctx,
+    CANARY_FULFILLED_ORDER_CREATE_MUTATION,
+    variables,
+    { maxRetries: 0 },
+  );
+  const userErrors = data.orderCreate?.userErrors ?? [];
+  if (userErrors.length > 0) {
+    throw new Error(`Could not create fulfilled test order: ${userErrors.map((error) => error.message).join(', ')}`);
+  }
+  const order = data.orderCreate?.order;
+  if (!order?.id || order.test !== true) {
+    throw new Error('Shopify did not return a test order for the fulfilled exchange fixture.');
+  }
+  const id = String(order.id).replace(/^gid:\/\/shopify\/Order\//, '');
+  const returnableItems = await fetchReturnableLineItems(ctx, order.id);
+  if (!returnableItems?.length) {
+    throw new Error(`Created test order ${order.name ?? id}, but it has no returnable fulfilled items.`);
+  }
+  return {
+    id,
+    name: order.name ?? null,
+    source: 'created-fulfilled-test-order',
+    returnableItems,
+  };
+}
+
+async function findExchangeFixture(ctx, returnFixture) {
+  const variants = await loadActiveVariants(ctx);
+  let fixture = returnFixture;
+  let pair = fixture?.id ? exchangePairForFixture(fixture, variants) : null;
+
+  if (!fixture?.id) {
+    pair = exchangePairForNewOrder(variants);
+    if (!pair) {
+      return { id: null, reason: 'the store has no two active variants where the replacement does not cost more' };
+    }
+    fixture = await createFulfilledExchangeFixture(ctx, pair);
+    pair = exchangePairForFixture(fixture, variants);
+  }
+
+  if (pair) {
+    return {
+      ...fixture,
+      returnVariantId: pair.returned.id,
+      returnVariantTitle: pair.returned.title,
+      exchangeVariantId: pair.replacement.id,
+      exchangeVariantTitle: pair.replacement.title,
+    };
+  }
+  return {
+    id: null,
+    reason: `order ${fixture.name ?? fixture.id} has no different active replacement variant at or below the returned item's price`,
+  };
+}
+
+// Return-label verification still uses a hand-fulfilled order so the harness
+// exercises the merchant workflow. Exchange verification may create a dedicated
+// fulfilled *test* order with orderCreate: unlike fulfilling an existing order,
+// that needs no fulfillment-order scope, sends no receipt, and cannot be
+// mistaken for a customer's live order.
+// `ok` for the family means every step committed. Rolling the steps up rather
+// than reporting only the last one is what keeps the run's exit code honest: a
+// return that failed and a label that never ran must not read as green.
+function worstStatus(statuses) {
+  if (statuses.includes('error')) return 'error';
+  if (statuses.includes('unknown')) return 'unknown';
+  return 'ok';
+}
+
+function worstProbeOutcome(outcomes) {
+  return outcomes.find((outcome) => outcome !== 'committed') ?? 'committed';
+}
+
 async function runFamily(family, runner) {
   const startedAt = Date.now();
   try {
@@ -321,7 +569,11 @@ async function runFamily(family, runner) {
       family,
       ok: false,
       durationMs: Date.now() - startedAt,
-      error: error instanceof Error ? error.message : String(error),
+      // describeError, not error.message: ShopifyRequestError's message is a
+      // fixed string and the GraphQL error text lives on `payload`. Reporting
+      // only the message is what made an earlier run unreadable - twice, in the
+      // validator and then here.
+      error: describeError(error),
     };
   }
 }
@@ -572,7 +824,44 @@ function uncoveredMutationDocuments() {
   return Object.keys(SHOPIFY_MUTATION_DOCUMENTS).filter((name) => !covered.has(name));
 }
 
-async function runCanaries(ctx, inspection) {
+// Queries need none of the @skip machinery above: a read against a nonexistent
+// id commits nothing, so the document is sent as-is and either validates or does
+// not. That also means this leg does not depend on the skip preflight, and still
+// runs when the preflight is inconclusive.
+//
+// There is no uncovered-document list to compute here, because the registry
+// carries its own fixture variables - a document cannot be registered without
+// one. The drift that remains, a query in the package that was never registered
+// at all, is guarded in query-documents.test.ts, which compares the registry
+// against the source files.
+async function runQueryValidation(ctx) {
+  const results = [];
+
+  for (const [name, entry] of Object.entries(SHOPIFY_QUERY_DOCUMENTS)) {
+    if (!shouldRun(name)) continue;
+
+    const startedAt = Date.now();
+    try {
+      await shopifyGraphql(ctx, entry.document, entry.variables, { maxRetries: 0 });
+      results.push({
+        document: name,
+        outcome: 'valid',
+        durationMs: Date.now() - startedAt,
+      });
+    } catch (error) {
+      results.push({
+        document: name,
+        outcome: 'invalid',
+        durationMs: Date.now() - startedAt,
+        detail: describeError(error),
+      });
+    }
+  }
+
+  return results;
+}
+
+async function runCanaries(ctx, inspection, returnFixture, exchangeFixture) {
   const results = [];
   const operationBase = `canary:${randomUUID()}`;
 
@@ -692,6 +981,126 @@ async function runCanaries(ctx, inspection) {
     }));
   }
 
+  if (shouldRun('discount') && inspection.shop.mutationsAllowed) {
+    results.push(await runFamily('discount', async () => {
+      const operationId = `${operationBase}:issue_discount`;
+      const input = {
+        percentage: 1,
+        reason: 'Shopkeeper mutation canary',
+        expires_in_days: 1,
+      };
+      const result = await issueDiscount(input, { ...ctx, operationId });
+      const probe = await probeUnknownShopifyMutation(
+        'issue_discount',
+        input,
+        { ...ctx, operationId },
+      );
+      return {
+        status: result.status,
+        message: result.message,
+        probeOutcome: probe.outcome,
+        probeMessage: probe.message,
+      };
+    }));
+  }
+
+  if (shouldRun('exchange') && inspection.shop.mutationsAllowed && exchangeFixture?.id) {
+    results.push(await runFamily('exchange', async () => {
+      const operationId = `${operationBase}:create_exchange`;
+      const input = {
+        order_id: exchangeFixture.id,
+        variant_id: exchangeFixture.returnVariantId,
+        exchange_variant_id: exchangeFixture.exchangeVariantId,
+        quantity: 1,
+        reason: 'unwanted',
+      };
+      const result = await createExchange(input, { ...ctx, operationId });
+      const probe = await probeUnknownShopifyMutation(
+        'create_exchange',
+        input,
+        { ...ctx, operationId },
+      );
+      return {
+        status: result.status,
+        message: result.message,
+        orderId: exchangeFixture.id,
+        orderName: exchangeFixture.name,
+        returnedVariant: exchangeFixture.returnVariantTitle,
+        exchangeVariant: exchangeFixture.exchangeVariantTitle,
+        probeOutcome: probe.outcome,
+        probeMessage: probe.message,
+      };
+    }));
+  }
+
+  // create_return and attach_return_label are one family because they are one
+  // workflow: a label can only be attached to a return that is already open, so
+  // running the second without the first tests nothing.
+  if (shouldRun('return_label') && inspection.shop.mutationsAllowed && returnFixture?.id) {
+    results.push(await runFamily('return_label', async () => {
+      const fixture = returnFixture;
+      const returnOperationId = `${operationBase}:create_return`;
+      const returnInput = { order_id: fixture.id, reason: 'unwanted' };
+      const returnResult = await createReturn(returnInput, { ...ctx, operationId: returnOperationId });
+      const returnProbe = await probeUnknownShopifyMutation(
+        'create_return',
+        returnInput,
+        { ...ctx, operationId: returnOperationId },
+      );
+
+      const steps = [{
+        tool: 'create_return',
+        status: returnResult.status,
+        message: returnResult.message,
+        probeOutcome: returnProbe.outcome,
+        probeMessage: returnProbe.message,
+      }];
+
+      // Attaching a label to a return that did not open tests the error path,
+      // not the capability, and its failure message would bury the real one.
+      if (returnResult.status === 'ok') {
+        const labelOperationId = `${operationBase}:attach_return_label`;
+        const labelInput = {
+          order_id: fixture.id,
+          label_url: 'https://example.com/shopkeeper-canary-return-label.pdf',
+          // The probe's only handle on this call: Shopify re-hosts the label and
+          // never echoes label_url back, so without a tracking number a reverse
+          // delivery cannot be attributed to this run.
+          tracking_number: `SKCANARY${Date.now()}`,
+        };
+        const labelResult = await attachReturnLabel(labelInput, { ...ctx, operationId: labelOperationId });
+        const labelProbe = await probeUnknownShopifyMutation(
+          'attach_return_label',
+          labelInput,
+          { ...ctx, operationId: labelOperationId },
+        );
+        steps.push({
+          tool: 'attach_return_label',
+          status: labelResult.status,
+          message: labelResult.message,
+          trackingNumber: labelInput.tracking_number,
+          probeOutcome: labelProbe.outcome,
+          probeMessage: labelProbe.message,
+        });
+      }
+
+      return {
+        status: worstStatus(steps.map((step) => step.status)),
+        message: steps.map((step) => `${step.tool}: ${step.message}`).join(' | '),
+        orderId: fixture.id,
+        orderName: fixture.name,
+        fixture: fixture.source,
+        // A family that stopped after one step is not a pass, whatever that step
+        // returned.
+        stepsRun: steps.length,
+        probeOutcome: steps.length === 2
+          ? worstProbeOutcome(steps.map((step) => step.probeOutcome))
+          : 'still_unknown',
+        steps,
+      };
+    }));
+  }
+
   return results;
 }
 
@@ -701,6 +1110,23 @@ const [storeInspection, accessScopes] = await Promise.all([
   inspectAccessScopes(ctx),
 ]);
 const inspection = { ...storeInspection, accessScopes };
+
+// Resolved before the report rather than inside the family so its absence can be
+// a note that says what to do, the way the full-refund skip does, instead of a
+// family that fails for a reason no operator can act on.
+const returnFixture = EXECUTE && shouldRun('return_label') && inspection.shop.mutationsAllowed
+  ? await findReturnFixtureOrder(ctx, inspection.recentOrders.testOrderIds)
+  : null;
+const exchangeReturnFixture = EXECUTE && shouldRun('exchange') && inspection.shop.mutationsAllowed
+  ? await findReturnFixtureOrder(
+    ctx,
+    inspection.recentOrders.testOrderIds,
+    new Set(returnFixture?.id ? [returnFixture.id] : []),
+  )
+  : null;
+const exchangeFixture = exchangeReturnFixture
+  ? await findExchangeFixture(ctx, exchangeReturnFixture)
+  : null;
 
 const report = {
   mode: EXECUTE ? 'execute' : VALIDATE ? 'validate' : 'inspect',
@@ -715,8 +1141,11 @@ const report = {
   // effects - and needs no development-plan store.
   skipPreflight: VALIDATE ? await preflightSkipHonored(ctx) : null,
   validation: [],
+  queryValidation: [],
   uncoveredMutationDocuments: VALIDATE ? uncoveredMutationDocuments() : [],
-  canaries: EXECUTE ? await runCanaries(ctx, inspection) : [],
+  canaries: EXECUTE ? await runCanaries(ctx, inspection, returnFixture, exchangeFixture) : [],
+  returnFixture,
+  exchangeFixture,
   notes: [],
 };
 
@@ -743,6 +1172,19 @@ if (EXECUTE && !inspection.shop.mutationsAllowed) {
 if (EXECUTE && inspection.shop.mutationsAllowed && shouldRun('refund') && !inspection.recentOrders.candidateTestOrderId) {
   report.notes.push('Refund canary skipped: no recent test order was found.');
 }
+if (EXECUTE && inspection.shop.mutationsAllowed && shouldRun('return_label') && !returnFixture?.id) {
+  report.notes.push(
+    'Return-label canary skipped: no test order has returnable items and no open return.'
+    + ' returnCreate builds its line items from fulfillments, so the fixture must be a *fulfilled*'
+    + ' test order - mark one fulfilled in the Shopify admin, since this app has no fulfillment scope'
+    + ' and should not gain one just to serve the canary.',
+  );
+}
+if (EXECUTE && inspection.shop.mutationsAllowed && shouldRun('exchange') && !exchangeFixture?.id) {
+  report.notes.push(
+    `Exchange canary skipped: ${exchangeFixture?.reason ?? 'a fulfilled test fixture could not be created'}.`,
+  );
+}
 if (EXECUTE && inspection.shop.mutationsAllowed && shouldRun('refund_full') && !selectFullRefundOrder(inspection)) {
   report.notes.push(
     'Full-refund canary skipped: no unrefunded test order was available. It needs a paid,'
@@ -752,6 +1194,20 @@ if (EXECUTE && inspection.shop.mutationsAllowed && shouldRun('refund_full') && !
 
 if (VALIDATE && report.skipPreflight.honored) {
   report.validation = await runValidation(ctx);
+}
+
+// Deliberately outside the preflight guard: no query is skipped, so nothing about
+// the mutation premise applies. A broken read kills a capability as dead as a
+// broken write, and this leg is the guard for that class.
+if (VALIDATE) {
+  report.queryValidation = await runQueryValidation(ctx);
+  const invalidQueries = report.queryValidation.filter((entry) => entry.outcome !== 'valid');
+  if (invalidQueries.length > 0) {
+    report.notes.push(
+      `${invalidQueries.length} of ${report.queryValidation.length} query document(s) failed schema validation: `
+      + `${invalidQueries.map((entry) => entry.document).join(', ')}.`,
+    );
+  }
 }
 
 if (VALIDATE && !report.skipPreflight.honored) {
@@ -805,6 +1261,7 @@ if (EXECUTE && failed.length > 0) {
 if (VALIDATE && (
   !report.skipPreflight.honored
   || report.validation.some((entry) => entry.outcome !== 'valid')
+  || report.queryValidation.some((entry) => entry.outcome !== 'valid')
   || report.uncoveredMutationDocuments.length > 0
 )) {
   process.exitCode = 1;
