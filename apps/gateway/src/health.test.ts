@@ -6,6 +6,7 @@ import request from 'supertest';
 const queryRaw = vi.fn();
 const getJobCounts = vi.fn();
 const getJobs = vi.fn();
+const requestedQueueNames: string[] = [];
 const imessageConfigured = vi.fn();
 
 vi.mock('@shopkeeper/db', () => ({
@@ -15,10 +16,13 @@ vi.mock('@shopkeeper/db', () => ({
 }));
 
 vi.mock('./clients/gateway-queues.js', () => ({
-  getGatewayBullMqQueue: () => ({
-    getJobCounts: (...args: unknown[]) => getJobCounts(...args),
-    getJobs: (...args: unknown[]) => getJobs(...args),
-  }),
+  getGatewayBullMqQueue: (queueName: string) => {
+    requestedQueueNames.push(queueName);
+    return {
+      getJobCounts: (...args: unknown[]) => getJobCounts(queueName, ...args),
+      getJobs: (...args: unknown[]) => getJobs(queueName, ...args),
+    };
+  },
 }));
 
 vi.mock('./config/runtime-config.js', () => ({
@@ -94,6 +98,12 @@ describe('readFailedQueueJobSnapshots', () => {
             threadId: 'thread-1',
             organizationId: 'org-1',
             traceId: 'trace-1',
+            messageId: 'message-1',
+            integrationId: 'integration-1',
+            orderId: 'order-1',
+            operatorEventId: 'operator-event-1',
+            sourceMessageId: 'source-message-1',
+            platform: 'email',
           },
         },
       ]),
@@ -109,6 +119,12 @@ describe('readFailedQueueJobSnapshots', () => {
         threadId: 'thread-1',
         organizationId: 'org-1',
         traceId: 'trace-1',
+        messageId: 'message-1',
+        integrationId: 'integration-1',
+        orderId: 'order-1',
+        operatorEventId: 'operator-event-1',
+        sourceMessageId: 'source-message-1',
+        platform: 'email',
       },
     ]);
 
@@ -119,17 +135,18 @@ describe('readFailedQueueJobSnapshots', () => {
 describe('health routes', () => {
   beforeEach(() => {
     clearQueueDiagnosticsCache();
+    requestedQueueNames.length = 0;
     queryRaw.mockReset().mockResolvedValue([{ '?column?': 1 }]);
     imessageConfigured.mockReset().mockReturnValue(true);
-    getJobCounts.mockReset().mockResolvedValue({
+    getJobCounts.mockReset().mockImplementation(async () => ({
       waiting: 0,
       active: 0,
       completed: 0,
       failed: 1,
       delayed: 0,
       paused: 0,
-    });
-    getJobs.mockReset().mockResolvedValue([
+    }));
+    getJobs.mockReset().mockImplementation(async () => [
       {
         id: 'job-1',
         name: 'process-email',
@@ -140,6 +157,7 @@ describe('health routes', () => {
           threadId: 'thread_secret',
           organizationId: 'org_secret',
           traceId: 'trace_secret',
+          sourceMessageId: 'source_message_secret',
         },
       },
     ]);
@@ -206,6 +224,27 @@ describe('health routes', () => {
         threadId: 'thread_secret',
         organizationId: 'org_secret',
       });
+      expect(Object.keys(response.body.queues)).toEqual([
+        'inbound',
+        'aiSummary',
+        'outboundEmail',
+        'gmailSync',
+        'gmailWatchMaintenance',
+        'orderReview',
+        'operatorEvent',
+      ]);
+      expect(response.body.queues.aiSummary.failedJobs[0]).toMatchObject({
+        sourceMessageId: 'source_message_secret',
+      });
+      expect(requestedQueueNames).toEqual(expect.arrayContaining([
+        'inbound-messages',
+        'ai-summary',
+        'outbound-email',
+        'gmail-sync',
+        'gmail-watch-maintenance',
+        'order-review',
+        'operator-event',
+      ]));
     });
   });
 });

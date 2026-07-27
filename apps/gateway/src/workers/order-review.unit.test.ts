@@ -22,6 +22,8 @@ const {
 
 let processor: ((job: {
   id?: string;
+  name?: string;
+  attemptsMade?: number;
   data: { organizationId?: string; orderId?: string; traceId?: string };
 }) => Promise<void>) | undefined;
 
@@ -59,6 +61,10 @@ vi.mock('./failure.js', () => ({
 }));
 
 import { createOrderReviewWorker } from './order-review.js';
+import {
+  CONTROLLED_QUEUE_RECOVERY_FAILURE,
+  JOB,
+} from '../constants.js';
 
 function createWorker() {
   createOrderReviewWorker({
@@ -99,6 +105,44 @@ describe('order-review worker', () => {
 
     await handle({ id: 'job-1', data: { organizationId: 'org-1', orderId: '100' } });
 
+    expect(findUnique).not.toHaveBeenCalled();
+    expect(runOrderOps).not.toHaveBeenCalled();
+  });
+
+  it('fails the controlled recovery canary exactly on its first attempt', async () => {
+    isEnabled.mockReturnValue(false);
+    const handle = createWorker();
+
+    await expect(handle({
+      id: 'queue-recovery-canary-test',
+      name: JOB.CONTROLLED_QUEUE_RECOVERY,
+      attemptsMade: 0,
+      data: { traceId: 'trace-recovery' },
+    })).rejects.toThrow(CONTROLLED_QUEUE_RECOVERY_FAILURE);
+
+    expect(findUnique).not.toHaveBeenCalled();
+    expect(runOrderOps).not.toHaveBeenCalled();
+  });
+
+  it('completes a retried recovery canary without business work', async () => {
+    isEnabled.mockReturnValue(true);
+    const handle = createWorker();
+
+    await handle({
+      id: 'queue-recovery-canary-test',
+      name: JOB.CONTROLLED_QUEUE_RECOVERY,
+      attemptsMade: 1,
+      data: { traceId: 'trace-recovery' },
+    });
+
+    expect(logger.info).toHaveBeenCalledWith(
+      {
+        jobId: 'queue-recovery-canary-test',
+        traceId: 'trace-recovery',
+        attemptsMade: 1,
+      },
+      '[OrderReview] Controlled queue recovery canary completed',
+    );
     expect(findUnique).not.toHaveBeenCalled();
     expect(runOrderOps).not.toHaveBeenCalled();
   });

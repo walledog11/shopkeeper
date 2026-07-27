@@ -21,6 +21,12 @@ export interface FailedQueueJobSnapshot {
   threadId: string | null;
   organizationId: string | null;
   traceId: string | null;
+  messageId: string | null;
+  integrationId: string | null;
+  orderId: string | null;
+  operatorEventId: string | null;
+  sourceMessageId: string | null;
+  platform: string | null;
 }
 
 interface FailedQueueJobRecord {
@@ -36,6 +42,16 @@ let cachedQueueDiagnostics:
   | { expiresAt: number; value: Record<string, unknown> }
   | null = null;
 let queueDiagnosticsPromise: Promise<Record<string, unknown>> | null = null;
+
+const DIAGNOSTIC_QUEUES = [
+  { label: 'inbound', queueName: QUEUE.INBOUND },
+  { label: 'aiSummary', queueName: QUEUE.AI_SUMMARY },
+  { label: 'outboundEmail', queueName: QUEUE.OUTBOUND_EMAIL },
+  { label: 'gmailSync', queueName: QUEUE.GMAIL_SYNC },
+  { label: 'gmailWatchMaintenance', queueName: QUEUE.GMAIL_WATCH },
+  { label: 'orderReview', queueName: QUEUE.ORDER_REVIEW },
+  { label: 'operatorEvent', queueName: QUEUE.OPERATOR_EVENT },
+] as const;
 
 export function clearQueueDiagnosticsCache(): void {
   cachedQueueDiagnostics = null;
@@ -98,29 +114,27 @@ export async function getQueueDiagnostics(): Promise<Record<string, unknown>> {
 
   queueDiagnosticsPromise = (async () => {
     const { queueDiagnosticsCacheMs } = getGatewayWorkerRedisConfig();
-    const inboundQueue = getGatewayBullMqQueue(QUEUE.INBOUND);
-    const summaryQueue = getGatewayBullMqQueue(QUEUE.AI_SUMMARY);
+    const entries = await Promise.all(DIAGNOSTIC_QUEUES.map(async ({ label, queueName }) => {
+      const queue = getGatewayBullMqQueue(queueName);
+      const counts = await queue.getJobCounts(
+        'waiting',
+        'active',
+        'completed',
+        'failed',
+        'delayed',
+        'paused',
+      );
+      const failedJobs = await readFailedQueueJobSnapshots(queue, counts.failed ?? 0);
 
-    const [inboundCounts, summaryCounts] = await Promise.all([
-      inboundQueue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed', 'paused'),
-      summaryQueue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed', 'paused'),
-    ]);
-
-    const [inboundFailedJobs, aiSummaryFailedJobs] = await Promise.all([
-      readFailedQueueJobSnapshots(inboundQueue, inboundCounts.failed ?? 0),
-      readFailedQueueJobSnapshots(summaryQueue, summaryCounts.failed ?? 0),
-    ]);
-
-    const diagnostics = {
-      inbound: {
-        ...inboundCounts,
-        ...(inboundFailedJobs.length > 0 ? { failedJobs: inboundFailedJobs } : {}),
-      },
-      aiSummary: {
-        ...summaryCounts,
-        ...(aiSummaryFailedJobs.length > 0 ? { failedJobs: aiSummaryFailedJobs } : {}),
-      },
-    };
+      return [
+        label,
+        {
+          ...counts,
+          ...(failedJobs.length > 0 ? { failedJobs } : {}),
+        },
+      ] as const;
+    }));
+    const diagnostics = Object.fromEntries(entries);
 
     cachedQueueDiagnostics = {
       value: diagnostics,
@@ -242,6 +256,12 @@ export async function readFailedQueueJobSnapshots(
       threadId: readOptionalString(data.threadId),
       organizationId: readOptionalString(data.organizationId),
       traceId: readOptionalString(data.traceId),
+      messageId: readOptionalString(data.messageId),
+      integrationId: readOptionalString(data.integrationId),
+      orderId: readOptionalString(data.orderId),
+      operatorEventId: readOptionalString(data.operatorEventId),
+      sourceMessageId: readOptionalString(data.sourceMessageId),
+      platform: readOptionalString(data.platform),
     };
   });
 }
@@ -256,4 +276,3 @@ function formatTimestamp(value: unknown): string | null {
   }
   return new Date(value).toISOString();
 }
-

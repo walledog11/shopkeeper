@@ -25,6 +25,7 @@
     "test:coverage": "node ../../scripts/with-test-env.mjs vitest run --coverage --config vitest.config.ts",
     "rebuild-summaries": "tsx src/scripts/rebuild-bad-summaries.ts",
     "backfill-titles": "tsx src/scripts/backfill-thread-titles.ts",
+    "recovery:queue": "tsx src/scripts/exercise-queue-recovery.ts",
     "realtime:smoke": "tsx src/scripts/realtime-smoke.ts"
   },
   "dependencies": {

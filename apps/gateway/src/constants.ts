@@ -71,6 +71,7 @@ export const JOB = {
   POST_RESOLUTION_FOLLOWUP_SCAN: 'scan-post-resolution-followup',
   POST_RESOLUTION_FOLLOWUP_ID: 'post-resolution-followup-monitor-hourly',
   ORDER_REVIEW: 'process-order-review',
+  CONTROLLED_QUEUE_RECOVERY: 'controlled-queue-recovery',
   SEND_EMAIL: 'send-email',
   GMAIL_SYNC: 'sync-gmail-mailbox',
   GMAIL_WATCH_MAINTENANCE: 'maintain-gmail-watches',
@@ -83,6 +84,8 @@ export const JOB = {
   UNKNOWN_OUTCOME_SWEEP: 'sweep-unknown-outcomes',
   UNKNOWN_OUTCOME_SWEEP_ID: 'unknown-outcome-sweep-15min',
 } as const;
+export const CONTROLLED_QUEUE_RECOVERY_FAILURE =
+  'Controlled queue recovery canary: first attempt must fail';
 // 7-day failed retention keeps post-mortems possible; 1-day completed retention bounds Redis.
 export const PROCESSING_QUEUE_DEFAULTS = {
   attempts: 3,

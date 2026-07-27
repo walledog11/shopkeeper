@@ -229,6 +229,15 @@ async function verifyPhotonWebhookInfrastructure(baseUrl) {
 }
 
 async function verifyGatewayQueues(baseUrl) {
+  const expectedQueues = [
+    'inbound',
+    'aiSummary',
+    'outboundEmail',
+    'gmailSync',
+    'gmailWatchMaintenance',
+    'orderReview',
+    'operatorEvent',
+  ];
   const url = buildUrl(baseUrl, '/health/queues');
   const headers = buildInternalRequestHeaders();
   if (!headers) {
@@ -243,6 +252,11 @@ async function verifyGatewayQueues(baseUrl) {
 
   if (!data?.queues || typeof data.queues !== 'object') {
     throw new Error('[verify-production] Queue diagnostics payload is missing or invalid');
+  }
+
+  const missingQueues = expectedQueues.filter((queue) => !Object.hasOwn(data.queues, queue));
+  if (missingQueues.length > 0) {
+    throw new Error(`[verify-production] Queue diagnostics missing: ${missingQueues.join(', ')}`);
   }
 
   const failedQueues = Object.entries(data.queues)

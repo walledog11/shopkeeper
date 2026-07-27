@@ -3,7 +3,11 @@ import { db } from '@shopkeeper/db';
 import { buildOrderOpsContext, runOrderOps } from '@shopkeeper/agent/order-ops';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import type { OrgSettings } from '@shopkeeper/agent/types';
-import { QUEUE } from '../constants.js';
+import {
+  CONTROLLED_QUEUE_RECOVERY_FAILURE,
+  JOB,
+  QUEUE,
+} from '../constants.js';
 import { isOrderRiskMonitorEnabled } from '../config/runtime-config.js';
 import logger from '../logger.js';
 import type { OrderReviewJobData } from '../types.js';
@@ -23,6 +27,21 @@ export function createOrderReviewWorker(
 ): Worker<OrderReviewJobData> {
   const worker = new Worker<OrderReviewJobData>(QUEUE.ORDER_REVIEW, async (job) => {
     const { organizationId, orderId, traceId } = job.data;
+
+    // P6-02 production recovery exercise. This named job has no business
+    // operation: its first processing attempt fails deterministically, and a
+    // manual retry of the same BullMQ identity succeeds without touching the
+    // database, a provider, or the model.
+    if (job.name === JOB.CONTROLLED_QUEUE_RECOVERY) {
+      if (job.attemptsMade === 0) {
+        throw new Error(CONTROLLED_QUEUE_RECOVERY_FAILURE);
+      }
+      logger.info(
+        { jobId: job.id, traceId, attemptsMade: job.attemptsMade },
+        '[OrderReview] Controlled queue recovery canary completed',
+      );
+      return;
+    }
 
     if (!isOrderRiskMonitorEnabled()) return;
     if (!organizationId || !orderId) {
