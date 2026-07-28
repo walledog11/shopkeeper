@@ -188,8 +188,8 @@ threads.
 
 ### P2-02 — Bound intelligence context and validate classifier output
 
-**Status (2026-07-20): Merged to master with the dedicated eval gate complete;
-shadow/enforce rollout remains.** The canonical classifier contract now owns the five
+**Status (2026-07-26): Deployed on all three hosts in shadow; the production
+enforce canary remains.** The canonical classifier contract now owns the five
 allowed tags, exact two-letter language normalization, and explicit title,
 summary, and reason character limits. Gateway parsing rejects unknown tags,
 invalid classifications, missing/non-string core fields, and prevents oversized
@@ -208,6 +208,21 @@ preserved the expected plan and reduced prompt tokens by at least the required
 long-thread canary, and rollback steps. The full committed eval-suite check and
 deployed shadow observation are rollout gates rather than missing implementation.
 
+**Eval/production checkpoint (2026-07-26):** the real-model long-thread
+legacy-versus-enforce comparison passed again. A complete one-repeat enforced
+suite reached 72/74 fixture passes (97.3%), exactly the committed aggregate
+baseline, with 76/77 tests green; the only hard red was the known stochastic
+`brand-voice-cheers-signoff` fixture making an unnecessary tracking read. Its
+targeted three-repeat diagnostic passed 2/3, better than its committed 1/3
+baseline. A subsequent full three-repeat run completed 186 non-tier attempts at
+182/186 (97.8%) before exhausting Anthropic credit at the tier fixtures; the
+resulting 82% aggregate is provider-truncated and invalid as a quality signal.
+Do not update the baseline from either diagnostic run. Vercel dashboard,
+Railway public gateway, and Railway worker are all on current master with
+`AGENT_CONTEXT_BUDGET_MODE=shadow`. The preceding 24-hour Railway log query
+contained no context-budget telemetry, so representative shadow traffic and one
+reversible production long-thread `enforce` canary remain open.
+
 - **Related findings:** AUD-014.
 - **Files likely to change:** `apps/gateway/src/message-handlers/intelligence.ts`, `email-classification.ts`; `packages/agent/src/context.ts`; classifier/prompt tests and eval fixtures.
 - **Proposed implementation:** Use a bounded recent-message window plus prior summary, cap KB/article/message characters by a measured token budget, and share a schema for allowed tag/status/language/text lengths. Record prompt/input token metrics by purpose.
@@ -221,8 +236,9 @@ deployed shadow observation are rollout gates rather than missing implementation
 
 ### P3-01 — Classify Shopify retries and reconcile ambiguous mutations
 
-**Status (2026-07-13): Local implementation complete; rollout incomplete.** The
-shared Shopify client now retries
+**Status (2026-07-28): Local implementation complete; five provider canaries
+and live-schema validation complete; remaining mutation-family rollout evidence
+pending.** The shared Shopify client now retries
 safe GET reads once by default and never implicitly retries POST/PUT/DELETE;
 mutation retries require an explicit call-site override backed by an operation-
 specific idempotency/reconciliation decision. Refunds now use Shopify 2026-04's
@@ -305,110 +321,36 @@ provider sandbox/canary verification remains open.
 
 **Still required for P3-01 rollout completion:**
 
-- [ ] Verify refund idempotency plus cancellation, order creation/editing,
-  address, gift-card, and store-credit outcome handling against a Shopify
-  development store, then canary each tool family independently. **Harness
-  blocker cleared 2026-07-24** (`632be88e`): the canary selected the newest
-  integration row with a non-null `access_token`, but that filter runs in SQL
-  against the *encrypted* column, so it matched rows this environment cannot
-  decrypt and then failed as "No connected Shopify integration with credentials
-  was found". Under production credentials it picked a simulated `demo-store`
-  fixture and died there, never reaching `palette-dev`. Selection is now
-  explicit: simulated and undecryptable rows are skipped with a per-row reason,
-  `--shop=<domain>` chooses among the rest, and anything other than one
-  candidate refuses instead of guessing. **Scope pre-check added 2026-07-25:**
-  granted scopes are not persisted at install (`callback/route.ts:147` stores
-  only token/fromEmail/tokenExpiresAt), so the inspect pass now reads them live
-  from `currentAppInstallation.accessScopes` and reports
-  `inspection.accessScopes.missing` against the requested set. That set is one
-  shared constant (`SHOPIFY_OAUTH_SCOPES` in
-  `packages/agent/src/shopify/integration-health.ts`) used by both the install
-  flow and the canary; the emitted OAuth scope string is byte-identical to the
-  literal it replaced, so no store is re-prompted. `missingShopifyScopes` counts
-  a `write_x` grant as covering a requested `read_x`, since Shopify's write
-  grant includes read. A grant predating the 2026-07-06 capability expansion now
-  surfaces as a named missing scope before the run instead of an ambiguous 403
-  during it.
-  **The first pre-check run found that gap on `palette-dev` (2026-07-25).**
-  Missing: `read_content`, `write_gift_cards`, `read_store_credit_accounts`,
-  `write_store_credit_account_transactions`. The granted set is not a subset of
-  the requested one — it also holds `read_all_orders`, `read_analytics`,
-  `write_products`, `write_discounts`, `write_inventory` and others we no longer
-  ask for — so this install was authorized against an older, differently shaped
-  scope list and has never been re-consented. Without the pre-check a mutating
-  run would have gone: `gift_card` 403, `refund` silently skipped for want of a
-  test order, `order_creation` committing a real order on a live `basic`-plan
-  store — the only family that executes being the one that creates real data,
-  and the 403 unreadable against a Shopify-side rejection.
-  **Partly closed the same day.** The gift-card family landed —
-  `write_gift_cards` plus `read_gift_cards` and both `*_gift_card_transactions`
-  — so `create_gift_card` now executes on `palette-dev` instead of 403ing.
-  `read_store_credit_accounts` and `write_store_credit_account_transactions`
-  were reported as added but have **not** appeared in the live grant across two
-  inspect runs, so `issue_store_credit` still fails at execution.
-  **Correction to the prescription above:** re-authorizing is not the lever, and
-  a `missing: []` re-run does not prove a re-auth wrote a new token. The grant is
-  driven app-side, not by our authorize URL's `scope` parameter — the four
-  gift-card scopes arrived together when we request only `write_gift_cards`, and
-  two of them are implied by nothing we ask for, while the grant has always held
-  `read_all_orders`, `write_products` and others we never request.
-  `SHOPIFY_OAUTH_SCOPES` is therefore descriptive of intent, not authoritative
-  over what a store receives, which is precisely why the pre-check reads the live
-  grant instead of trusting our own constant. Changing what a store holds means
-  changing the app's configured scopes and releasing that to the install.
-  `read_content` is also missing and is being left alone — nothing in the
-  codebase consumes it, so the open question is whether to stop requesting it,
-  not whether to grant it.
-  **Scope gap fully closed 2026-07-25:** the live grant now reports
-  `missing: []`, including both store-credit scopes and `read_content`. No
-  re-auth was performed; the scopes appeared once the app-side configuration
-  changed, confirming the correction above.
-  **First mutating canary run, 2026-07-25 — two of three families pass.**
-  Against `palette-dev` with a $600 Bogus-gateway test order (`#1005`,
-  `financial_status: paid`, `authorization` + `capture` both `success`):
-  `gift_card` returned `ok` / probe `committed`; `refund` returned `ok` / probe
-  `committed` on a $0.01 partial. `order_creation` was deliberately not run —
-  it commits a genuine order on a live `basic`-plan store.
-  **The refund pass required fixing a defect that made `create_refund` fail
-  100% of the time on every store since it shipped.** `refunds.ts` selected
-  `userErrors { field message code }`, but `refundCreate` returns plain
-  `UserError`, which has no `code` — a static document-validation error, so
-  Shopify rejected the mutation before executing it. Because a validation error
-  arrives as HTTP 200 with an `errors` array, `shopifyGraphql` threw a
-  statusless `ShopifyRequestError` (`client.ts:316`) and
-  `isAmbiguousShopifyMutationError` (`client.ts:224`) read the missing status as
-  transport ambiguity, so a mutation that provably never ran reported *"may have
-  committed… do not retry or confirm it to the customer"*. The reconciliation
-  probe was correct throughout (`no_effect`); only the classification above it
-  was wrong. Fixed by dropping `code` from the selection — the sibling
-  `giftCardCreate` selection is **correct** and must keep `code`, since
-  `gift-cards.ts:109` needs `code === "TAKEN"` for prior-commit detection.
-  Three process findings, all reusable:
-  (1) unit tests cannot catch this class — all 30 refund tests passed before and
-  after, because they mock `shopifyGraphql`, so no mutation document in
-  `packages/agent/src/shopify/` is schema-validated anywhere in CI;
-  (2) the canary resolves `@shopkeeper/agent/shopify` through the export map to
-  `dist/`, so a source fix needs `npm run build -w @shopkeeper/agent` first — one
-  verification round was wasted re-testing a stale artifact;
-  (3) recording only `status` made the run undiagnosable, since four branches of
-  `createRefund` return `unknown` and `unknown`/`no_effect` fits both "totally
-  broken" and "correctly survived a 5xx"; the harness now records `message` and
-  `probeMessage`, which is what found the bug.
-  Remaining before P3-01 can claim a canary pass: run `order_creation`; exercise
-  the **full-refund** branch (the canary only ever sends `amount`, so
-  `shipping: { fullRefund: true }` and `graphqlRefundLineItems` at
-  `refunds.ts:133` have never been coerced against the live schema); and
-  schema-validate the seven never-checked mutation documents — `cancel_order`,
-  `edit_shopify_order`, `update_shopify_order_address`, `issue_store_credit`,
-  returns, return labels, discounts — which can be done with zero side effects by
-  sending each with `@skip(if: true)` on the mutation field, since GraphQL
-  validates and coerces variables before deciding to skip.
-- [ ] Persist the granted scope set at install. `callback/route.ts:147` discards
-  the `scope` field Shopify returns with the token, so no install's capability is
-  knowable without probing that store — which is why the gap above needed a
-  script to find. Storing it would surface the same gap on a real merchant from
-  our own data. Not required for P3-01 rollout; recorded here because P3-01 is
-  what exposed it.
+- [x] Verify every currently executable canary family and validate the Shopify
+  document registry against the live schema. **Completed 2026-07-26:** all five
+  staged families pass on `palette-dev` with agreeing reconciliation probes:
+  `gift_card`, partial `refund` (`#1005`), `refund_full` (`#1006`, committed
+  total matched the order), `store_credit`, and `order_creation` (`#1009`).
+  All ten mutation documents are schema-valid through the no-side-effect
+  `@skip(if: true)` validation path, and the query registry/source completeness
+  guard is committed in `query-documents.test.ts`. The canaries exposed and
+  drove fixes for four always-failing provider paths and three incorrect
+  reconciliation probes; the detailed incident history remains in
+  `docs/archive/agent-behavior-and-expansion-plan-2026-07.md`.
+- [ ] Complete provider rollout evidence for the remaining mutation paths that
+  have deterministic coverage but have not been deliberately executed
+  end-to-end: `cancel_order`, `edit_shopify_order`, and
+  `update_shopify_order_address`. The broader Shopify harness also still needs a
+  fulfilled test-order fixture for the `create_return` +
+  `attach_return_label` family; its document is schema-valid but the workflow
+  has never executed, making it the highest-value remaining Shopify canary.
+  Run each family separately against a controlled fixture and require the
+  provider result and reconciliation probe to agree.
+- [x] Persist the granted scope set at install. **Implemented locally
+  2026-07-27:** the
+  Shopify token exchange normalizes the returned `scope` set into
+  `Integration.metadata.oauthScopes`. Reconnects replace that scope snapshot
+  while preserving unrelated metadata, and an omitted scope field does not
+  erase a prior snapshot. Existing installs remain unknown until refreshed or
+  probed. Focused callback integration tests pass 5/5, with dashboard typecheck
+  and lint clean. Deployment is still required before new installations persist
+  the snapshot. Not required for P3-01 rollout; recorded here because P3-01
+  exposed it.
 - [x] Revalidate production Shopify connectivity read-only. The connected store
   identifies itself as `palette-dev` but reports Shopify plan `basic`; its four
   recent orders contain no `test: true` order. **Resolved 2026-07-20:** the
@@ -425,7 +367,8 @@ provider sandbox/canary verification remains open.
   connection-loss, 429/5xx, provider-error, replay, and partial-operation tests.
 
 P3-01 is complete for local code and deterministic-test purposes. Do not mark
-its rollout complete until both unchecked items above are complete.
+its rollout complete until the remaining unchecked provider-evidence item above
+is complete.
 
 - **Related findings:** AUD-003, AUD-015.
 - **Files likely to change:** `packages/agent/src/shopify/client.ts`; mutation modules under `packages/agent/src/shopify`; execution ledger/reconciliation worker; tool tests.
@@ -768,7 +711,7 @@ work required.
 
 ### P4-05 — Apply route-specific body and attachment budgets
 
-**Status (2026-07-24): Implementation complete; one product decision left open.**
+**Status (2026-07-28): Local implementation complete; deployment pending.**
 Shipped in two parts. Body budgets: the application-wide 50 MB JSON/urlencoded
 parsers are gone, and each route mounts its own budget through
 `routes/body-parsers.ts` — 2 MB for signed provider webhooks, 1 MB for internal
@@ -786,23 +729,39 @@ Coverage: per-route boundary sizes including a large invalid signature, the
 413 handler's log and pass-through branches, budget trimming at the email route,
 and the concurrency runner's ordering/ceiling.
 
-**Decisions taken, and the one still open.** An over-budget *attachment* is
+**Decisions taken.** An over-budget *attachment* is
 dropped while the customer's message is still delivered — a support ticket that
 arrives without its photo is recoverable, one that never arrives is not; only a
 request over the *body* limit fails outright, which is the DoS boundary. The
-supported content-type contract is unchanged: `storage/blob.ts` still uses an
-executable denylist rather than an allowlist. Converting it is the remaining
-product decision, and it is deliberately not guessed — a wrong allowlist
-silently drops legitimate customer attachments (`.heic`, `.docx`, `.zip`).
+supported content-type contract deliberately retains a direct-executable
+denylist rather than a restrictive allowlist, so legitimate support attachments
+such as `.heic`, `.docx`, and `.zip` remain accepted. Declared MIME types are
+normalized before policy and storage; common executable/script extensions and
+MIME types are rejected even when filename and MIME disagree. At delivery, only
+passive raster images whose MIME and extension agree render inline. HTML, SVG,
+PDF, mismatched, unknown, and every other retained type use
+`Content-Disposition: attachment`, so broad compatibility does not turn
+customer-controlled content into active same-origin browser content.
+
+**Local completion checkpoint (2026-07-27):** the gateway attachment suite
+passes all 24 cases, including MIME parameters, filename/MIME disagreement,
+script and executable types, malformed MIME fallback, size limits and upload
+failure. The authenticated dashboard attachment route passes all 10 cases,
+including inline passive images plus forced download for HTML, SVG, PDF,
+mismatches and unknown types. Dashboard and gateway typechecks and lints pass;
+`git diff --check` is clean. These changes have not yet been deployed.
 
 - **Related findings:** AUD-009.
 - **Files likely to change:** `apps/gateway/src/index.ts`, `routes/webhooks.ts`, provider webhook routes, `routes/webhooks-email.ts`, blob upload helper, runtime config/env examples.
 - **Proposed implementation:** Mount small/default JSON parsers per router, provider-sized raw body limits for signed routes, and a separate Postmark parser. Add attachment count, decoded-byte, type and concurrency limits.
-- **Dependencies:** Product decision on supported attachment contract.
+- **Dependencies:** None; the supported attachment contract is decided.
 - **Risk / scope:** Medium / Medium.
 - **Tests required:** Boundary sizes for every route, large invalid signature, attachment budget/type, partial upload cleanup.
 - **Rollback considerations:** Limits should be configurable for emergency increases; retain metrics on rejected size/type.
-- **Acceptance criteria:** Non-email routes cannot allocate a 50 MB parsed body and email payloads exceeding the documented contract fail clearly before upload fan-out.
+- **Acceptance criteria:** Non-email routes cannot allocate a 50 MB parsed body
+  and email payloads exceeding the documented contract fail clearly before
+  upload fan-out. Retained customer-controlled content cannot execute inline
+  from the dashboard origin. **Met locally; deployment remains.**
 
 ### P4-06 — Add deadlines and typed timeout classification to external fetches
 
@@ -1155,8 +1114,8 @@ at sub-millisecond boundaries; default page size 50; malformed/legacy cursors re
 
 ### P6-02 — Monitor every business-critical queue and formalize failed-job recovery
 
-**Status (2026-07-20): Merged to master with local acceptance criteria complete;
-operational exercise pending.** Queue-health now covers outbound-email, gmail-sync,
+**Status (2026-07-27): Completed, including the controlled production recovery
+exercise.** Queue-health now covers outbound-email, gmail-sync,
 order-review and operator-event with per-queue SLO thresholds falling back to the global
 config (PR #26). Detailed diagnostics are gated (PR #27): `/health/deep` stays public but
 coarse (per-check `status` only, matching the dashboard `/api/health` contract), and
@@ -1174,9 +1133,44 @@ root-cause evidence was captured and the stale BullMQ records were removed. The
 authenticated queue check and full production verifier now pass with zero
 failed jobs.
 
-The remaining rollout evidence is a controlled recovery exercise for a replayable
-queue and an operator walkthrough of the non-replay paths; it is no longer
-blocked on an undefined recovery policy.
+The controlled recovery exercise and operator walkthrough of the non-replay
+paths are now complete.
+
+**Operational checkpoint (2026-07-26):** the production worker heartbeat was
+healthy and a direct, read-only Redis inspection found every monitored launch
+queue idle/clean except `ai-summary` job `79`. That job exhausted its retries on
+the unavailable Anthropic credit balance. Its stable source thread has since
+been deleted, so the runbook correctly classified it as non-replayable; its
+sanitized identity/failure evidence was captured, then only that failed BullMQ
+record was removed through the state-checking internal endpoint. PostgreSQL was
+not changed, and authenticated queue health returned zero failures afterward.
+At this checkpoint, the result proved the triage/refusal/housekeeping path and
+identified a safely staged successful replay as the remaining exercise.
+
+The same walkthrough found that authenticated `/health/queues` exposed only
+`inbound` and `aiSummary`, even though the maintenance monitor owns seven launch
+queues. Commit `693ced7c` now exposes all seven queue counts plus only the stable
+message/integration/order/event/source identifiers needed by the recovery
+matrix; it never exposes message content. Focused route tests, the full gateway
+unit suite, gateway typecheck, lint, build, script syntax, and diff validation
+pass. The seven-day operator-event audits are clean with nine first-claim
+committed/delivered events (five Telegram, four iMessage). The outbound-email
+audit is clean but contains zero sends, so it does not close that provider path.
+
+**Operational completion (2026-07-27):** commit `693ced7c` deployed successfully
+to the Railway public gateway (`8538cdbf-d9c6-4785-a52f-817e0ba1b38c`) and
+worker (`d08a49ff-a512-4b27-93e5-c6b7e147c41a`). Authenticated production
+diagnostics reported a healthy worker and all seven queues — inbound, AI
+summary, outbound email, Gmail sync, Gmail watch maintenance, order review, and
+operator event — with zero failures before the exercise. The side-effect-free
+order-review canary
+`queue-recovery-canary-798b8ee4-a4e7-42dc-9f63-be82785b99fc` then failed its
+first attempt with the exact controlled reason and appeared in diagnostics with
+sanitized stable identity metadata. Retrying that same BullMQ job identity
+completed on attempt two. Worker logs captured both transitions; the canary
+branch made no database, provider, model, or customer-facing call. The exact
+completed canary record was removed afterward, and the worker plus all seven
+queues returned healthy with zero failures.
 
 - **Related findings:** AUD-017.
 - **Files likely to change:** `apps/gateway/src/maintenance/queue-health.ts`, `workers/failure.ts`, health routes, runbooks, alert verification scripts.
@@ -1387,8 +1381,9 @@ These can proceed while the durable-execution design is reviewed, provided they 
 5. Validate classifier tags and query enum inputs from P2-02/P8-04.
    **Completed locally 2026-07-20; bounded context and its dedicated real-model
    eval are also complete, with staged rollout remaining.**
-6. Expand queue-health monitoring from P6-02. **Monitoring and the per-queue
-   recovery runbook are complete; a controlled recovery exercise remains.**
+6. Expand queue-health monitoring from P6-02. **Completed 2026-07-27:** all
+   seven queues are visible in authenticated production diagnostics, and a
+   side-effect-free failed job was recovered by exact identity.
 7. P9-01: documentation/comment corrections. **Completed locally 2026-07-20.**
 
 “Quick win” does not mean deploy without tests; Meta and tenant-boundary changes still need focused integration coverage.
@@ -1427,7 +1422,9 @@ These can proceed while the durable-execution design is reviewed, provided they 
 - ~~Member versus admin permission matrix (P5-02).~~ **Decided 2026-07-24:**
   admin owns agent settings, billing, integration connect/disconnect and data
   destruction; members own the daily ticket work. See P5-02.
-- Supported attachment count, size and content types (P4-05).
+- ~~Supported attachment count, size and content types (P4-05).~~ **Decided
+  2026-07-27:** broad compatibility with a direct-executable denylist; only
+  MIME/extension-matched passive raster images render inline.
 - Merchant UX and recovery authority for `unknown` external actions (P1/P3/P7).
 - Whether failed known-no-op plans remain approvable or require regeneration.
 - Retention and visibility of execution/webhook inbox records.
@@ -1554,12 +1551,28 @@ real production data — the section previously read "not applied" because the
 validation/verification tooling (`npm run validate:tenant-constraints`,
 inspect-only by default) landed alongside and is exercised against a real DB.
 
+**Progress (2026-07-28):** Two remaining no-credit/no-traffic code gaps are
+complete locally. Shopify OAuth now persists a normalized granted-scope snapshot
+without erasing unrelated reconnect metadata; its five callback integration
+tests, dashboard typecheck and dashboard lint pass. P4-05's attachment contract
+is decided and implemented: broad support remains, direct executables/scripts
+are rejected after MIME normalization, and only MIME/extension-matched passive
+raster images render inline while every other retained type downloads. The 24
+gateway attachment tests and 10 authenticated dashboard attachment-route tests
+pass, as do gateway/dashboard typechecks, lints and diff validation. Neither
+2026-07-27 code change is deployed yet.
+
 Next:
 
-1. Deploy the merged bounded-context slice after re-running the full real-model
-   eval when Anthropic credit is restored; do not interpret credit errors as a
-   baseline regression. Set `AGENT_CONTEXT_BUDGET_MODE=shadow` on the dashboard,
-   public gateway, and worker before one long-thread `enforce` canary.
+1. The bounded-context slice is deployed on current master and
+   `AGENT_CONTEXT_BUDGET_MODE=shadow` is aligned on the dashboard, public
+   gateway, and worker. The long-thread comparison and complete one-repeat suite
+   are clean at the committed aggregate baseline; the three-repeat confirmation
+   exhausted Anthropic credit only when it reached the tier fixtures. When
+   sufficient eval credit is available, finish the committed-cadence confirmation
+   without updating the baseline. Then stage one reversible production long-thread
+   `enforce` canary; the current 24-hour shadow telemetry window contains zero
+   representative traffic.
 2. ~~P5-03 production validation.~~ **Complete.** Migration `20260720010000` is
    applied to production (2026-07-21T00:34 UTC) and all 14 tenant foreign keys
    are validated with a clean audit — verified 2026-07-21 against a Neon
@@ -1574,20 +1587,22 @@ Next:
    executions. Then review repeated observations before enforcing dashboard.
 5. Canary the AI-summary debounce and confirm newest-message notification plus
    bounded model-call metrics.
-6. Run the P6-02 controlled recovery exercise on one replayable test job and
-   walk the outbound-email/operator-event no-replay paths with on-call. Preserve
-   the per-queue database/provider evidence.
-7. Sandbox/canary the completed P3-01 refund, cancellation, order-creation,
-   order-address, order-editing, gift-card, and store-credit paths, one tool
-   family at a time. ~~Define the durable reconciliation owner for outcomes
-   that remain `unknown`.~~ **Reconciliation owner landed 2026-07-21** — the
-   `unknown-outcome-sweep` maintenance job read-probes `unknown` executions,
-   reservations, and agent actions and drives them terminal without replay;
+6. ~~Deploy P6-02's complete authenticated queue diagnostics and run the
+   controlled recovery exercise on one safely replayable test job.~~ **Complete
+   2026-07-27.** The seven-queue health view is live, the non-replay walkthrough
+   correctly refused stale `ai-summary` job `79`, and an isolated order-review
+   canary failed once and completed when the exact same job was retried. The
+   completed canary record was removed after its sanitized diagnostic and worker
+   log evidence was captured.
+7. P3-01's `gift_card`, partial/full refund, store-credit and order-creation
+   canaries are complete, and all ten mutation documents are live-schema-valid.
+   Run the still-unexecuted cancellation, order-address and order-editing paths
+   one controlled fixture at a time. Then stage a fulfilled test order for the
+   broader return-label family; its document is valid, but the
+   `create_return` → `attach_return_label` workflow has never run end to end.
+   The reconciliation owner is already live:
    `npm run audit:unknown-outcomes -- --hours=24 --strict` gates it and
-   `npm run canary:shopify-mutations` (inspect-only by default) exercises the
-   probes. The `palette-dev` development store with test orders (the app's test
-   environment, confirmed 2026-07-20) is available for these canaries; running
-   them one tool family at a time is the remaining rollout step.
+   `npm run canary:shopify-mutations` exercises supported probes.
 8. The additive goodwill-reservation migration is deployed. Canary
    refund/store-credit/gift-card cap enforcement and monitor
    stale or `unknown` reservations with
@@ -1612,5 +1627,9 @@ Next:
    compatibility branch using the proven 12.2 + aligned OpenTelemetry candidate;
    validate Photon telemetry and real sandbox send/receive before a gateway
    canary. ~~P5-02 RBAC~~ **decided and implemented 2026-07-24** (see P5-02);
-   P4-05's attachment content-type contract remains the one open
-   product/security decision.
+   P4-05's attachment content-type contract is decided and implemented locally.
+13. Deploy the local Shopify OAuth scope persistence and P4-05 attachment
+    hardening in the next dashboard/gateway release, run normal production
+    health verification, and retain the prior build as the rollback artifact.
+    No model credit or organic traffic is required for this deployment; existing
+    Shopify installs remain scope-unknown until refreshed or probed.
