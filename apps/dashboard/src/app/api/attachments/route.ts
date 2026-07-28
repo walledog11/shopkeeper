@@ -7,6 +7,13 @@ import {
   parseManagedAttachmentRef,
 } from '@/lib/attachments/blob-ref';
 
+const INLINE_IMAGE_TYPES = new Map([
+  ['image/gif', new Set(['gif'])],
+  ['image/jpeg', new Set(['jpg', 'jpeg'])],
+  ['image/png', new Set(['png'])],
+  ['image/webp', new Set(['webp'])],
+]);
+
 async function fetchManagedAttachment(pathname: string) {
   const privateResult = await get(pathname, { access: 'private' });
   if (privateResult?.statusCode === 200 && privateResult.stream) {
@@ -19,6 +26,18 @@ async function fetchManagedAttachment(pathname: string) {
   }
 
   return null;
+}
+
+function normalizeAttachmentContentType(value: string | null | undefined): string {
+  const mediaType = value?.split(';', 1)[0]?.trim().toLowerCase() ?? '';
+  return /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/.test(mediaType)
+    ? mediaType
+    : 'application/octet-stream';
+}
+
+function attachmentDisposition(filename: string, contentType: string): 'inline' | 'attachment' {
+  const extension = filename.toLowerCase().split('.').at(-1) ?? '';
+  return INLINE_IMAGE_TYPES.get(contentType)?.has(extension) ? 'inline' : 'attachment';
 }
 
 export const GET = withOrgRoute(
@@ -47,11 +66,16 @@ export const GET = withOrgRoute(
     }
 
     const filename = attachmentFilename(pathname);
+    const contentType = normalizeAttachmentContentType(result.blob.contentType);
+    const disposition = attachmentDisposition(filename, contentType);
     const headers = new Headers({
-      'Content-Type': result.blob.contentType ?? 'application/octet-stream',
+      'Content-Type': contentType,
       'X-Content-Type-Options': 'nosniff',
       'Cache-Control': 'private, no-store',
-      'Content-Disposition': `inline; filename="${filename.replace(/"/g, '')}"`,
+      // Only passive raster formats whose MIME and extension agree render
+      // inline. Every other supported attachment remains available as a
+      // download without becoming active same-origin browser content.
+      'Content-Disposition': `${disposition}; filename="${filename.replace(/"/g, '')}"`,
     });
 
     return new Response(result.stream, { headers });

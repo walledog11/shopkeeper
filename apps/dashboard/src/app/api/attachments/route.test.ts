@@ -55,9 +55,46 @@ describe('GET /api/attachments', () => {
     const res = await GET(new Request(`http://localhost:3000/api/attachments?ref=${encodeURIComponent(ref)}`));
     expect(res.status).toBe(200);
     expect(res.headers.get('Content-Type')).toBe('image/png');
+    expect(res.headers.get('Content-Disposition')).toBe('inline; filename="photo.png"');
+    expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff');
     expect(await res.text()).toBe('hello');
     expect(getSpy).toHaveBeenCalledWith(pathname, { access: 'private' });
   });
+
+  it.each([
+    ['page.html', 'text/html', 'text/html'],
+    ['vector.svg', 'image/svg+xml', 'image/svg+xml'],
+    ['photo.png', 'text/html', 'text/html'],
+    ['page.html', 'image/png', 'image/png'],
+    ['report.pdf', 'application/pdf; charset=binary', 'application/pdf'],
+    ['unknown.bin', 'not a media type', 'application/octet-stream'],
+  ])(
+    'forces %s with declared type %s to download as %s',
+    async (filename, declaredContentType, expectedContentType) => {
+      const pathname = `attachments/${org.id}/file-id/${filename}`;
+      const ref = formatBlobAttachmentRef(pathname);
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('attachment'));
+          controller.close();
+        },
+      });
+      getSpy.mockResolvedValueOnce({
+        statusCode: 200,
+        stream,
+        blob: { contentType: declaredContentType },
+      });
+
+      const res = await GET(new Request(
+        `http://localhost:3000/api/attachments?ref=${encodeURIComponent(ref)}`,
+      ));
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get('Content-Type')).toBe(expectedContentType);
+      expect(res.headers.get('Content-Disposition')).toBe(`attachment; filename="${filename}"`);
+      expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff');
+    },
+  );
 
   it('returns 404 for another org attachment ref', async () => {
     const otherOrgId = '00000000-0000-0000-0000-000000000099';

@@ -22,7 +22,7 @@ describe('uploadInboundAttachment', () => {
     const ref = await uploadInboundAttachment(
       ORG_ID,
       'photo.png',
-      'image/png',
+      ' Image/PNG; charset=binary ',
       Buffer.from('hello').toString('base64'),
     );
     expect(ref).toMatch(new RegExp(`^blob:attachments/${ORG_ID}/[0-9a-f-]+/photo.png$`));
@@ -51,6 +51,12 @@ describe('uploadInboundAttachment', () => {
     ['exploit.js', 'application/javascript'],
     ['runme.jar', 'application/java-archive'],
     ['something', 'application/x-msdownload'],
+    ['invoice.pdf', 'Application/X-MsDownload; name="invoice.pdf"'],
+    ['invoice.pdf', 'application/vnd.microsoft.portable-executable'],
+    ['invoice.pdf', 'text/javascript; charset=utf-8'],
+    ['invoice.pdf', 'text/x-shellscript'],
+    ['setup.ps1', 'text/plain'],
+    ['launch.command', 'text/plain'],
     ['evil.exe.txt', 'text/plain'],
     ['photo.jpg.scr', 'image/jpeg'],
   ])('skips blocked attachment %s (%s)', async (name, contentType) => {
@@ -62,6 +68,19 @@ describe('uploadInboundAttachment', () => {
     );
     expect(url).toBeNull();
     expect(putSpy).not.toHaveBeenCalled();
+  });
+
+  it('stores malformed declared content types as generic binary data', async () => {
+    await uploadInboundAttachment(
+      ORG_ID,
+      'report.pdf',
+      'not a media type',
+      Buffer.from('hello').toString('base64'),
+    );
+
+    expect(putSpy.mock.calls[0][2]).toMatchObject({
+      contentType: 'application/octet-stream',
+    });
   });
 
   it('skips empty attachments', async () => {
