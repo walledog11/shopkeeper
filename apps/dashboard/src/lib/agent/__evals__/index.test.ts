@@ -89,7 +89,11 @@ describe.sequential("agent evals", () => {
       // now run it `repeats` times back-to-back. A timed-out fixture keeps running and its
       // restore would clobber the next one's instrumentation on the shared client, so we avoid
       // abandoning runs mid-flight.
-      180_000 * repeats,
+      // Provider backoff can dominate a healthy repeated run. The 2026-07-28
+      // committed cadence produced a passing 3/3 fixture in 943s, beyond the
+      // previous 540s allowance, so keep enough headroom to avoid reporting a
+      // model-quality regression when every repeat actually completed.
+      360_000 * repeats,
     );
   }
 

@@ -92,6 +92,7 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toMatch(/not fulfilled/i);
     expect(prompt).toContain('get_order_tracking');
     expect(prompt).toMatch(/fulfilled or partially fulfilled/i);
+    expect(prompt).toMatch(/Fulfillment by itself is not a reason to fetch tracking/i);
   });
 
   it('keeps operator ambiguity and policy blocks in the operator conversation', () => {
@@ -135,6 +136,7 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toMatch(/not shipped/i);
     expect(prompt).toContain('get_order_tracking');
     expect(prompt).toMatch(/fulfilled or partially fulfilled/i);
+    expect(prompt).toMatch(/Fulfillment by itself is not a reason to fetch tracking/i);
   });
 
   it('defaults to ask_operator when KB cannot answer a store-policy question', () => {
@@ -375,6 +377,7 @@ describe('AGENT_TOOLS', () => {
     expect(getOrders?.description).toContain('get_order_tracking');
 
     expect(getTracking?.description).toMatch(/fulfilled or partially fulfilled/i);
+    expect(getTracking?.description).toMatch(/Fulfillment by itself is not a reason/i);
     expect(getTracking?.description).toMatch(/unfulfilled orders/i);
   });
 });

@@ -11,6 +11,65 @@ This plan implements the findings in `docs/codebase-audit.md` without turning th
 5. Use staged rollout for execution, retry, queue and CSP behavior.
 6. Do not remove compatibility code until deployed state/data proves it is unused.
 
+## Closeout status
+
+**Current checkpoint (2026-07-28): implementation is complete for the original
+correctness findings, but rollout evidence and three standalone hardening tracks
+remain.** The Shopify OAuth scope snapshot and P4-05 attachment hardening are
+deployed on dashboard/gateway release `ca72dcbe`; Vercel and both Railway
+services are healthy. Production has all 62 migrations applied, including the
+previously missed additive
+`20260723000000_add_operator_pending_plans` migration.
+
+The 240-hour production audits run on 2026-07-28 are clean for Stripe (one
+completed event), Gmail outbound delivery (one sent message with provider
+identity), operator events (14 first-claim committed/delivered events: 10
+Telegram and 4 iMessage), plan-execution duplication/unknown/stale claims, and
+unknown-outcome recovery. The reservation audit is also clean but contains zero
+reservations, so it is baseline evidence rather than a canary. Plan-execution
+shadow has two human-approved observations with no repeated observation,
+unknown outcome, or stale claim; it still does not prove representative
+dashboard and gateway execution on both hosts. The two AI-summary jobs that
+failed solely because Anthropic credit was exhausted were revalidated against
+their still-current source messages and retried in place on 2026-07-28. Both
+completed: one classified its thread as filtered without generating a plan, and
+one persisted a current cached plan and delivered its merchant notification.
+The queue is now 0 waiting, 0 active, and 0 failed, and the authenticated
+production verifier is green.
+
+To close this plan:
+
+1. **Agent rollout:** canary P2-01 debounce/newest-message behavior on controlled
+   inbound traffic; run one reversible production long-thread P2-02 `enforce`
+   canary; observe one renewed long turn for P1-04; and obtain representative
+   dashboard plus gateway ledger evidence before moving P1-02 from `shadow` to
+   staged enforcement. Credit-dependent queue recovery and evaluation are
+   complete; these remaining checks require controlled or representative
+   traffic, not more standalone model-credit work.
+2. **Shopify safety:** execute controlled `cancel_order`,
+   `edit_shopify_order`, `update_shopify_order_address`, and fulfilled-order
+   `create_return` → `attach_return_label` canaries; separately exercise
+   refund/store-credit/gift-card reservation admission and finish a strict
+   observation window containing real reservation rows.
+3. **Outbound email:** confirm the Gmail canary in the mailbox, exercise the
+   documented crash-after-acceptance/stale-processing/manual-retry paths
+   without blind resend, decide the async-only date, and canary Postmark when a
+   Postmark integration exists. Until then, keep the synchronous rollback rail.
+4. **Presentation and timeout evidence:** complete P7-01 authenticated
+   committed/known-failure/unknown browser checks and close P4-06 after the
+   normal provider-timeout telemetry window.
+5. **Standalone security tracks:** complete or move P8-02 Spectrum/OpenTelemetry
+   and P8-03 enforced CSP into separately owned plans with their existing
+   acceptance criteria. They must not disappear when this document is removed.
+6. **Retirement and decisions:** give every P9-02 compatibility candidate and
+   each unresolved product decision an owner in the durable backlog. Remove
+   compatibility code one surface at a time only after positive non-use
+   evidence.
+
+This document can be deleted once items 1–4 are complete and items 5–6 are
+either complete or copied into owned, durable plans/issues. P7-02 is explicitly
+opportunistic guidance and does not block deletion.
+
 ## Phase 0 — Safety checks and baseline tests
 
 ### P0-01 — Lock the audit baseline into CI
@@ -108,6 +167,12 @@ stale claims, but contained zero executions. Keep the shadow window open until
 real reviewed-plan traffic exercises both hosts; an empty audit is schema and
 deployment evidence, not enforcement evidence.
 
+**Current checkpoint (2026-07-28):** the strict 240-hour audit contains two
+human-approved shadow observations and no repeated observations, unknown
+outcomes, or stale claims. Both rows remain `pending`, as expected for shadow
+observation, and the audit does not identify representative execution on both
+hosts. The enforcement gate therefore remains open.
+
 - **Related findings:** AUD-001, AUD-002, AUD-012.
 - **Files likely to change:** `packages/agent/src/plan-execution.ts`, `turn.ts`; `apps/dashboard/src/app/api/agent/route.ts`, `quick-approve/route.ts`; `apps/gateway/src/message-handlers/execute-operator-agent-turn.ts`, `pending-plan-actions.ts`.
 - **Proposed implementation:** Move current-message/plan/hash validation into the execution-claim service. Claim before running any approved tool; reject consumed/stale claims consistently from dashboard, auto-execution, Telegram and iMessage. Stop relying on cache consumption in `finally` as the single-use mechanism.
@@ -142,7 +207,8 @@ claim, delivered the dismissal reply, cleared both contexts, and created no
 
 ### P1-04 — Make locks a shared latency guard with renewal
 
-**Status (2026-07-20): Merged to master; deployment observation pending.** Both
+**Status (2026-07-28): Deployed on all three hosts; long-turn observation
+pending.** Both
 Upstash and ioredis lock adapters now renew a held lease with a
 token-checked Redis script at one-third of its TTL. A failed/unknown renewal
 marks the lease lost and emits a warning; release is idempotent and can never
@@ -151,8 +217,9 @@ ownership loss, successor-safe release, Redis outage, and fail-open/fail-closed
 acquisition. The production runbook now documents the intentional topology:
 dashboard Upstash and gateway Railway Redis remain separate latency guards,
 while PostgreSQL execution/event/reservation claims own cross-host correctness.
-No shared Redis migration is required. A deployed long-turn observation is the
-remaining rollout evidence.
+No shared Redis migration is required. Release `ca72dcbe` is live on the Vercel
+dashboard, Railway public gateway, and Railway worker with healthy service
+checks. A renewed long-turn observation is the remaining rollout evidence.
 
 - **Related findings:** AUD-001, AUD-015.
 - **Files likely to change:** `packages/agent/src/lock/redis-lock.ts`; dashboard/gateway lock adapters; environment/deployment documentation.
@@ -208,20 +275,28 @@ preserved the expected plan and reduced prompt tokens by at least the required
 long-thread canary, and rollback steps. The full committed eval-suite check and
 deployed shadow observation are rollout gates rather than missing implementation.
 
-**Eval/production checkpoint (2026-07-26):** the real-model long-thread
-legacy-versus-enforce comparison passed again. A complete one-repeat enforced
-suite reached 72/74 fixture passes (97.3%), exactly the committed aggregate
-baseline, with 76/77 tests green; the only hard red was the known stochastic
-`brand-voice-cheers-signoff` fixture making an unnecessary tracking read. Its
-targeted three-repeat diagnostic passed 2/3, better than its committed 1/3
-baseline. A subsequent full three-repeat run completed 186 non-tier attempts at
-182/186 (97.8%) before exhausting Anthropic credit at the tier fixtures; the
-resulting 82% aggregate is provider-truncated and invalid as a quality signal.
-Do not update the baseline from either diagnostic run. Vercel dashboard,
-Railway public gateway, and Railway worker are all on current master with
-`AGENT_CONTEXT_BUDGET_MODE=shadow`. The preceding 24-hour Railway log query
-contained no context-budget telemetry, so representative shadow traffic and one
-reversible production long-thread `enforce` canary remain open.
+**Eval/production checkpoint (2026-07-28):** credit-dependent evaluation is
+complete without updating the committed baseline. Two fresh real-model
+legacy-versus-enforce comparisons preserved the expected plan and reduced
+prompt tokens by 70.8% (76,629 → 22,353) and 41.5% (76,721 → 44,897),
+comfortably above the required 20%. The first completed three-repeat cadence
+scored 217/222 (97.7%), above the committed 216/222 (97.3%) baseline, but exposed
+contradictory tracking guidance when `brand-voice-cheers-signoff` made an
+unnecessary read in all three attempts. The support/operator prompts and
+tracking-tool contract now require both a fulfilled order and an explicit need
+for tracking detail; focused unit tests pass 116/116 and the fixture passes 3/3.
+
+The post-fix complete cadence again scored 217/222 (97.7%), with hard-gated
+fixtures at 175/177 (98.9%), advisory fixtures at 42/45 (93.3%), brand voice at
+6/6, and no provider-credit failures. Vitest originally reported a false timeout
+after an otherwise-passing 3/3 failure-injection fixture spent 943 seconds in
+provider backoff; its per-repeat allowance is now 360 seconds, and a focused
+three-repeat confirmation passes. The only full-cadence misses were stochastic:
+one conservative exchange escalation, one watch-tier classification, and three
+non-blocking full-tier cancellation advisory attempts that added an unwanted
+refund. Vercel dashboard, Railway public gateway, and Railway worker remain in
+aligned `shadow`. Representative shadow traffic and one reversible production
+long-thread `enforce` canary remain open.
 
 - **Related findings:** AUD-014.
 - **Files likely to change:** `apps/gateway/src/message-handlers/intelligence.ts`, `email-classification.ts`; `packages/agent/src/context.ts`; classifier/prompt tests and eval fixtures.
@@ -236,8 +311,8 @@ reversible production long-thread `enforce` canary remain open.
 
 ### P3-01 — Classify Shopify retries and reconcile ambiguous mutations
 
-**Status (2026-07-28): Local implementation complete; five provider canaries
-and live-schema validation complete; remaining mutation-family rollout evidence
+**Status (2026-07-28): Implementation deployed; five provider canaries and
+live-schema validation complete; remaining mutation-family rollout evidence
 pending.** The shared Shopify client now retries
 safe GET reads once by default and never implicitly retries POST/PUT/DELETE;
 mutation retries require an explicit call-site override backed by an operation-
@@ -341,16 +416,15 @@ provider sandbox/canary verification remains open.
   has never executed, making it the highest-value remaining Shopify canary.
   Run each family separately against a controlled fixture and require the
   provider result and reconciliation probe to agree.
-- [x] Persist the granted scope set at install. **Implemented locally
-  2026-07-27:** the
+- [x] Persist the granted scope set at install. **Deployed 2026-07-28:** the
   Shopify token exchange normalizes the returned `scope` set into
   `Integration.metadata.oauthScopes`. Reconnects replace that scope snapshot
   while preserving unrelated metadata, and an omitted scope field does not
   erase a prior snapshot. Existing installs remain unknown until refreshed or
   probed. Focused callback integration tests pass 5/5, with dashboard typecheck
-  and lint clean. Deployment is still required before new installations persist
-  the snapshot. Not required for P3-01 rollout; recorded here because P3-01
-  exposed it.
+  and lint clean. Dashboard release `ca72dcbe` now persists the snapshot for new
+  installs and reconnects. Not required for P3-01 rollout; recorded here because
+  P3-01 exposed it.
 - [x] Revalidate production Shopify connectivity read-only. The connected store
   identifies itself as `palette-dev` but reports Shopify plan `basic`; its four
   recent orders contain no `test: true` order. **Resolved 2026-07-20:** the
@@ -382,9 +456,9 @@ is complete.
   order-edit stage/commit interruption and reconciliation, store-credit fallback
   suppression, stable-code gift-card replay protection, and suppression of later
   actions after `unknown`.
-- **Verification remaining:** Provider sandbox/canary for every completed
-  family; recovery-worker tests and operational ownership for durable `unknown`
-  reconciliation.
+- **Verification remaining:** Controlled provider canaries for cancellation,
+  order editing, order-address updates, and the fulfilled-order return/label
+  workflow. Recovery-worker tests and operational ownership are complete.
 - **Rollback considerations:** Roll out tool by tool behind a mutation-policy flag; preserve old client for reads during migration.
 - **Acceptance criteria:** No high-risk mutation is blindly retried after an ambiguous response; every outcome is committed, failed-before-side-effect, or explicitly unknown/reconcilable.
 
@@ -407,6 +481,10 @@ stale/unknown reservations remain rollout gates. Run
 passes against the isolated local test database. The first strict 24-hour
 production baseline also passed, but contained zero reservations; it does not
 replace the per-tool canary observation window.
+
+**Current checkpoint (2026-07-28):** the strict 240-hour production audit still
+contains zero reservations and no unknown or stale rows. This is clean baseline
+evidence only; refund/store-credit/gift-card reservation canaries remain open.
 
 **Completed locally (verified 2026-07-13):**
 
@@ -517,6 +595,13 @@ missing-provider-ID, or duplicate-provider-ID blockers. Manual mailbox receipt
 confirmation remains open. No Postmark integration is configured for a
 provider-specific Postmark canary.
 
+**Current checkpoint (2026-07-28):** the strict 240-hour required-Gmail audit
+contains one `sent` Gmail row with provider identity and no failed, unknown,
+stale, missing-provider-ID, or duplicate-provider-ID blockers. This closes the
+observation-window portion of the Gmail gate, but not mailbox confirmation or
+the documented recovery exercises. Postmark remains conditional on configuring
+a Postmark integration.
+
 **Still required for P4-01 rollout completion:**
 
 - [x] Deploy `20260714000000_add_outbound_send_claims` before the application
@@ -544,7 +629,7 @@ provider-specific Postmark canary.
 
 ### P4-02 — Replace Stripe claim-before-work with durable event processing
 
-**Status (2026-07-19): Deployed; production observation window in progress.**
+**Status (2026-07-28): Completed in production.**
 The migration-first rollout is complete on commit `c8aa4c73`. Signed events now
 enter a PostgreSQL ledger before work begins. A
 transactional claim admits one processor, active claims return a retryable
@@ -586,8 +671,11 @@ post-commit and remains best-effort.
   The first request committed and the replay returned `duplicate: true`; the
   one-hour strict required-completion audit reports one completed event and no
   failed, pending, stale, or recovery blockers.
-- [ ] Observe the strict audit through the normal window with no failed or
+- [x] Observe the strict audit through the normal window with no failed or
   stale claims before declaring the Redis rollback path removable.
+  **Completed 2026-07-28:** the strict 240-hour audit contains one completed
+  `invoice.payment_succeeded` event and no failed, stale-pending, or
+  stale-processing records.
 
 - **Related findings:** AUD-006.
 - **Files likely to change:** `apps/dashboard/src/app/api/billing/webhook/route.ts`; Prisma schema/migration; billing tests.
@@ -711,7 +799,7 @@ work required.
 
 ### P4-05 — Apply route-specific body and attachment budgets
 
-**Status (2026-07-28): Local implementation complete; deployment pending.**
+**Status (2026-07-28): Completed and deployed.**
 Shipped in two parts. Body budgets: the application-wide 50 MB JSON/urlencoded
 parsers are gone, and each route mounts its own budget through
 `routes/body-parsers.ts` — 2 MB for signed provider webhooks, 1 MB for internal
@@ -743,13 +831,15 @@ PDF, mismatched, unknown, and every other retained type use
 `Content-Disposition: attachment`, so broad compatibility does not turn
 customer-controlled content into active same-origin browser content.
 
-**Local completion checkpoint (2026-07-27):** the gateway attachment suite
+**Deployment checkpoint (2026-07-28):** the gateway attachment suite
 passes all 24 cases, including MIME parameters, filename/MIME disagreement,
 script and executable types, malformed MIME fallback, size limits and upload
 failure. The authenticated dashboard attachment route passes all 10 cases,
 including inline passive images plus forced download for HTML, SVG, PDF,
 mismatches and unknown types. Dashboard and gateway typechecks and lints pass;
-`git diff --check` is clean. These changes have not yet been deployed.
+`git diff --check` is clean. Commits `0381cce1`, `52270fd1`, and `ca72dcbe`
+were deployed to Vercel and both Railway services; dashboard and gateway health
+return 200, the worker heartbeat is healthy, and the Photon route is configured.
 
 - **Related findings:** AUD-009.
 - **Files likely to change:** `apps/gateway/src/index.ts`, `routes/webhooks.ts`, provider webhook routes, `routes/webhooks-email.ts`, blob upload helper, runtime config/env examples.
@@ -761,7 +851,7 @@ mismatches and unknown types. Dashboard and gateway typechecks and lints pass;
 - **Acceptance criteria:** Non-email routes cannot allocate a 50 MB parsed body
   and email payloads exceeding the documented contract fail clearly before
   upload fan-out. Retained customer-controlled content cannot execute inline
-  from the dashboard origin. **Met locally; deployment remains.**
+  from the dashboard origin. **Met in production.**
 
 ### P4-06 — Add deadlines and typed timeout classification to external fetches
 
@@ -823,8 +913,8 @@ full observation window.
 
 ### P5-01 — Enforce ownership at internal and message-write boundaries
 
-**Status (2026-07-13): Local implementation complete; production mismatch
-observation pending.** `createMessage()` always loads the parent thread, derives
+**Status (2026-07-28): Completed in production.** `createMessage()` always loads
+the parent thread, derives
 its organization, and rejects a conflicting caller-supplied organization.
 Dashboard thread tools scope reads and writes by thread plus organization; the
 internal provider-send hop derives the organization name from that owned
@@ -832,7 +922,9 @@ thread. Gateway outbound-email admission and execution validate the complete
 organization/message/thread/integration product before enqueue or provider
 access. Database-backed cross-tenant tests prove mismatched replies, status
 updates, escalations, message writes, queued sends, and worker jobs produce no
-provider call or cross-tenant mutation.
+provider call or cross-tenant mutation. The later P5-03 strict production audit
+found zero mismatches across the prioritized relationships, and all 14 compound
+tenant constraints are validated, closing the production-observation gate.
 
 - **Related findings:** AUD-005, AUD-010, AUD-016.
 - **Files likely to change:** dashboard internal send route/thread tools; gateway internal queue/outbound worker; `packages/db/index.ts`; related tenant tests.
@@ -1237,6 +1329,9 @@ for unknown provider outcomes.
 
 ### P7-02 — Extract frontend orchestration only when behavior work touches it
 
+**Status:** Ongoing engineering guidance; not a standalone cleanup deliverable
+and not a plan-deletion blocker.
+
 - **Related findings:** AUD-022.
 - **Files likely to change:** onboarding flow hook, `ConversationView`, `OrdersBoard`, cache coordinator as naturally encountered.
 - **Proposed implementation:** Extract pure reducers/state machines and request adapters with focused tests. Do not launch a standalone size-based refactor.
@@ -1296,8 +1391,8 @@ remain required before canary.
 
 ### P8-03 — Stage an enforced CSP
 
-**Status (2026-07-20): Report-only telemetry slice merged to master; deployed
-observation, nonce migration, and enforcement remain.** The global report-only
+**Status (2026-07-28): Report-only collector deployed; observation, nonce
+migration, and enforcement remain.** The global report-only
 policy now advertises both legacy `report-uri` and Reporting API `report-to`
 delivery to `/api/security/csp-report`. The unauthenticated collector accepts
 both browser formats, caps bodies at 16 KiB and batches at five violations,
@@ -1360,6 +1455,10 @@ context rollout rail, and the production environment checker covers it.
 - **Acceptance criteria:** A new engineer can identify current customer/operator channels and understands why legacy identifiers remain.
 
 ### P9-02 — Verify and remove only proven dead compatibility code
+
+**Status (2026-07-28):** Evidence-gated retirement backlog. Each candidate must
+be completed separately or moved into an owned durable issue before this plan is
+deleted.
 
 - **Related findings:** AUD-021 and dead-code candidates.
 - **Files likely to change:** Sentry example routes/flag, deprecated URL alias, legacy purge/normalization code, sync email path—only the candidates proven unused.
@@ -1450,10 +1549,13 @@ These can proceed while the durable-execution design is reviewed, provided they 
   iMessage are enabled on both gateway services; both live dismissal canaries
   passed on their first claim with delivered replies.**
 - Compound tenant constraints after audit/backfill (P5-03). **The production
-  audit is clean and migration
-  `20260720010000_add_tenant_consistency_constraints` applies locally with 14
-  `NOT VALID` compound foreign keys. Production-copy validation and staged
-  deploy remain.**
+  audit is clean; migration
+  `20260720010000_add_tenant_consistency_constraints` is applied in production,
+  and all 14 compound foreign keys are validated.**
+- Operator pending-plan queue (A6/P1 compatibility). **The additive
+  `20260723000000_add_operator_pending_plans` migration and its legacy
+  single-slot backfill were applied on 2026-07-28 after release verification
+  exposed the migration lag. Production now reports all 62 migrations applied.**
 - Active-thread constraint/state migration if `pending` remains active (P5-04).
   **No longer required: escalation is orthogonal, the additive `escalated_at`
   migration is deployed, and production has zero legacy pending rows.**
@@ -1474,7 +1576,7 @@ All should be additive first. Destructive cleanup belongs in later releases afte
 | CSP | Report-only telemetry, canary enforcement, broad enforcement |
 | Spectrum upgrade | Sandbox, one gateway canary, broad rollout |
 
-## Recommended next implementation phase
+## Historical implementation progress
 
 **Progress (2026-07-13):** P0-02, P1-01 through P1-03, P2-01, P3-01/P3-02,
 P4-01, and P5-01 have complete local implementations. All 52 migrations are
@@ -1507,12 +1609,13 @@ implementation, additive migration, application deployment, signed-event
 replay, and first strict production canary are complete; its longer observation
 window remains open.
 
-**Progress (2026-07-20):** P1-04 renewable latency-guard locks, P2-02 bounded
+**Progress (2026-07-20, historical checkpoint):** P1-04 renewable latency-guard locks, P2-02 bounded
 context and its dedicated quality/token eval, P5-04 planner-surface retirement,
 P6-02's per-queue recovery guard, P8-03 report-only CSP collection, and P8-04
-query validation are merged to master. P5-03's audit plus `NOT VALID`
-enforcement migration remains a draft pending production-copy validation; this
-P9-01 documentation update is the final merge of the batch. Read-only production
+query validation were merged to master. At that checkpoint P5-03's audit plus
+`NOT VALID` enforcement migration was awaiting production-copy validation; it
+was subsequently applied and fully validated on 2026-07-21. This P9-01
+documentation update was the final merge of the batch. Read-only production
 audits are clean: tenant consistency has zero mismatches across 13 checks;
 plan-execution and refund-reservation audits have zero traffic; the Stripe audit
 has one completed event; outbound email has one Gmail send with provider ID;
@@ -1523,6 +1626,18 @@ credit exhaustion caused nine explicit provider errors; one additional
 brand-voice fixture missed its expected no-read behavior. Treat that aggregate
 run as inconclusive. The independent long-thread comparison passed both quality
 checks and the required 20% token-reduction gate.
+
+**Audit refresh (2026-07-28):** the strict 240-hour operator-event audit reports
+14/14 first-claim committed events with delivered replies (10 Telegram, 4
+iMessage) and no failed, unknown, stale, undelivered, or repeated-claim rows.
+The strict Stripe audit reports one completed event and no blockers, closing
+P4-02's observation window. The strict Gmail audit reports one sent message and
+no blockers. Plan execution has two clean human-approved shadow observations;
+refund reservations remain at zero. Queue diagnostics contain two preserved
+AI-summary failures for open threads, both explicitly caused by exhausted
+Anthropic credit. **Resolved later on 2026-07-28:** both source identities were
+revalidated and retried in place, both jobs completed, the queue has zero failed
+jobs, and authenticated production verification passes.
 
 **Progress (2026-07-20):** P4-03 is complete — durable operator ingestion is the
 only path for Telegram and iMessage; the synchronous webhook fallback and
@@ -1551,85 +1666,29 @@ real production data — the section previously read "not applied" because the
 validation/verification tooling (`npm run validate:tenant-constraints`,
 inspect-only by default) landed alongside and is exercised against a real DB.
 
-**Progress (2026-07-28):** Two remaining no-credit/no-traffic code gaps are
-complete locally. Shopify OAuth now persists a normalized granted-scope snapshot
-without erasing unrelated reconnect metadata; its five callback integration
-tests, dashboard typecheck and dashboard lint pass. P4-05's attachment contract
-is decided and implemented: broad support remains, direct executables/scripts
-are rejected after MIME normalization, and only MIME/extension-matched passive
-raster images render inline while every other retained type downloads. The 24
-gateway attachment tests and 10 authenticated dashboard attachment-route tests
-pass, as do gateway/dashboard typechecks, lints and diff validation. Neither
-2026-07-27 code change is deployed yet.
+**Progress (2026-07-28):** The two remaining no-credit/no-traffic code gaps are
+complete and deployed. Shopify OAuth now persists a normalized granted-scope
+snapshot without erasing unrelated reconnect metadata; its five callback
+integration tests, dashboard typecheck and dashboard lint pass. P4-05's
+attachment contract is decided and implemented: broad support remains, direct
+executables/scripts are rejected after MIME normalization, and only
+MIME/extension-matched passive raster images render inline while every other
+retained type downloads. The 24 gateway attachment tests and 10 authenticated
+dashboard attachment-route tests pass, as do gateway/dashboard typechecks,
+lints and diff validation. Commits `0381cce1`, `52270fd1`, and `ca72dcbe` are
+live on Vercel and both Railway services; public health checks pass. Release
+verification also found and applied the previously missed additive pending-plan
+migration, bringing production current across all 62 migrations.
 
-Next:
+The canonical remaining-work list is now the **Closeout status** section at the
+top of this document. Historical progress entries remain here only as rollout
+evidence; do not derive current priorities from an older checkpoint.
 
-1. The bounded-context slice is deployed on current master and
-   `AGENT_CONTEXT_BUDGET_MODE=shadow` is aligned on the dashboard, public
-   gateway, and worker. The long-thread comparison and complete one-repeat suite
-   are clean at the committed aggregate baseline; the three-repeat confirmation
-   exhausted Anthropic credit only when it reached the tier fixtures. When
-   sufficient eval credit is available, finish the committed-cadence confirmation
-   without updating the baseline. Then stage one reversible production long-thread
-   `enforce` canary; the current 24-hour shadow telemetry window contains zero
-   representative traffic.
-2. ~~P5-03 production validation.~~ **Complete.** Migration `20260720010000` is
-   applied to production (2026-07-21T00:34 UTC) and all 14 tenant foreign keys
-   are validated with a clean audit — verified 2026-07-21 against a Neon
-   production-copy branch. Lock-timing review documented and the controlled
-   `VALIDATE CONSTRAINT` tooling (`npm run validate:tenant-constraints`) landed.
-   See the P5-03 section for evidence.
-3. Deploy the merged P1-04 lease renewal with the local Redis topology unchanged
-   and observe a long turn. PostgreSQL claims remain the correctness boundary
-   even while Redis renewal is healthy.
-4. Keep the plan-execution shadow window open until it contains representative
-   dashboard and gateway executions; the latest 24-hour audit has zero
-   executions. Then review repeated observations before enforcing dashboard.
-5. Canary the AI-summary debounce and confirm newest-message notification plus
-   bounded model-call metrics.
-6. ~~Deploy P6-02's complete authenticated queue diagnostics and run the
-   controlled recovery exercise on one safely replayable test job.~~ **Complete
-   2026-07-27.** The seven-queue health view is live, the non-replay walkthrough
-   correctly refused stale `ai-summary` job `79`, and an isolated order-review
-   canary failed once and completed when the exact same job was retried. The
-   completed canary record was removed after its sanitized diagnostic and worker
-   log evidence was captured.
-7. P3-01's `gift_card`, partial/full refund, store-credit and order-creation
-   canaries are complete, and all ten mutation documents are live-schema-valid.
-   Run the still-unexecuted cancellation, order-address and order-editing paths
-   one controlled fixture at a time. Then stage a fulfilled test order for the
-   broader return-label family; its document is valid, but the
-   `create_return` → `attach_return_label` workflow has never run end to end.
-   The reconciliation owner is already live:
-   `npm run audit:unknown-outcomes -- --hours=24 --strict` gates it and
-   `npm run canary:shopify-mutations` exercises supported probes.
-8. The additive goodwill-reservation migration is deployed. Canary
-   refund/store-credit/gift-card cap enforcement and monitor
-   stale or `unknown` reservations with
-   `npm run audit:refund-spend-reservations -- --hours=24 --strict` until their
-   recovery procedure is proven.
-9. The P4-01 outbound-send claim migration and state machine are deployed. A
-   Gmail queue canary committed once with provider identity, suppressed a
-   duplicate enqueue, and passed its strict audit; mailbox confirmation is
-   pending. Postmark is not configured. Keep synchronous email as the rollback
-   rail and `OUTBOUND_EMAIL_ASYNC` off until mailbox confirmation, unknown
-   reconciliation, and stale-claim monitoring are proven.
-10. ~~P4-03 rollout.~~ **Completed 2026-07-20** — durable ingestion is the only
-   path; synchronous fallback removed. Do not broaden natural-language ticket
-   sends until P4-01's outbound-email rollout is complete.
-11. P4-02 is deployed and its signed-event replay canary passed. Keep
-   `npm run audit:stripe-webhooks -- --hours=24 --strict` clean through the
-   observation window before removing any transitional rollback path.
-12. Complete P7-01's authenticated browser spot-checks. Deploy P8-03's CSP
-   collector while keeping the header report-only, observe authenticated Clerk,
-   dashboard, analytics, Sentry, and OAuth traffic, then plan the nonce/hash and
-   `unsafe-eval` removal canary from that evidence. Start P8-02 only in its own
-   compatibility branch using the proven 12.2 + aligned OpenTelemetry candidate;
-   validate Photon telemetry and real sandbox send/receive before a gateway
-   canary. ~~P5-02 RBAC~~ **decided and implemented 2026-07-24** (see P5-02);
-   P4-05's attachment content-type contract is decided and implemented locally.
-13. Deploy the local Shopify OAuth scope persistence and P4-05 attachment
-    hardening in the next dashboard/gateway release, run normal production
-    health verification, and retain the prior build as the rollback artifact.
-    No model credit or organic traffic is required for this deployment; existing
-    Shopify installs remain scope-unknown until refreshed or probed.
+**Credit-restoration closeout (2026-07-28):** the two credit-exhausted
+AI-summary jobs were safely recovered, the production queue and authenticated
+health verifier are green, the long-thread quality/token gate passed twice, and
+the full committed three-repeat cadence completed above baseline. The cadence
+also drove a deterministic tracking-guidance correction and an evidence-based
+eval timeout increase; focused model checks now pass. No standalone
+credit-blocked item remains. The remaining agent gates require controlled or
+representative production traffic and are listed in **Closeout status**.
