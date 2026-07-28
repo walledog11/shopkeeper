@@ -14,6 +14,8 @@ import { timingSafeIncludes } from '@/lib/security/timing-safe';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
 import { normalizeShopifyShopDomain, parseShopifyShopIdentity, isSameShopifyStore } from '@/lib/shopify/oauth';
 import { shopifyRestJson, ShopifyRequestError } from '@shopkeeper/agent/shopify';
+import { db } from '@shopkeeper/db';
+import type { Prisma } from '@prisma/client';
 import { validateOAuthCallbackSession } from '@/app/api/integrations/_lib/oauth-session';
 import { upsertRaceSafeIntegration } from '@/app/api/integrations/_lib/integration-upsert';
 import {
@@ -104,13 +106,13 @@ export async function POST(request: Request) {
   }
 
   try {
-    const accessToken = await exchangeShopifyAccessToken({
+    const tokenResult = await exchangeShopifyAccessToken({
       clientId,
       clientSecret,
       code,
       shopDomain,
     });
-    if (!accessToken) {
+    if (!tokenResult) {
       await captureIntegrationConnectionFailed({
         attemptId,
         failureCategory: 'invalid_credentials',
@@ -119,6 +121,7 @@ export async function POST(request: Request) {
       });
       return oauthCompleteResponse(appUrl, { error: 'shopify_token_failed', returnTo });
     }
+    const { accessToken, oauthScopes } = tokenResult;
 
     const shopIdentityResult = await resolveShopifyAuthorizedShop({
       accessToken,
@@ -139,12 +142,26 @@ export async function POST(request: Request) {
 
     const canonicalShopDomain = shopIdentityResult.shop.myshopifyDomain;
     const shopName = shopIdentityResult.shop.name;
+    const existingIntegration = await db.integration.findFirst({
+      where: {
+        organizationId: org.id,
+        platform: 'shopify',
+        externalAccountId: canonicalShopDomain,
+      },
+      select: { metadata: true },
+    });
+    const metadata = mergeShopifyOAuthScopes(existingIntegration?.metadata, oauthScopes);
 
     const shopifyIntegration = await upsertRaceSafeIntegration({
       organizationId: org.id,
       platform: 'shopify',
       externalAccountId: canonicalShopDomain,
-      data: { accessToken, fromEmail: shopName, tokenExpiresAt: null },
+      data: {
+        accessToken,
+        fromEmail: shopName,
+        tokenExpiresAt: null,
+        ...(metadata && { metadata }),
+      },
     });
     const shopifyIntegrationId = shopifyIntegration.id;
     await captureIntegrationConnectionCompleted({
@@ -203,7 +220,7 @@ async function exchangeShopifyAccessToken({
   clientSecret: string;
   code: string;
   shopDomain: string;
-}): Promise<string | null> {
+}): Promise<{ accessToken: string; oauthScopes?: string[] } | null> {
   const tokenRes = await fetchProviderWithDeadline(
     `https://${shopDomain}/admin/oauth/access_token`,
     {
@@ -214,7 +231,11 @@ async function exchangeShopifyAccessToken({
     },
     { provider: 'shopify', operation: 'OAuth token exchange' },
   );
-  const tokenData = await tokenRes.json() as { access_token?: string; error?: unknown };
+  const tokenData = await tokenRes.json() as {
+    access_token?: string;
+    error?: unknown;
+    scope?: unknown;
+  };
 
   if (!tokenData.access_token) {
     logger.error(
@@ -224,7 +245,40 @@ async function exchangeShopifyAccessToken({
     return null;
   }
 
-  return tokenData.access_token;
+  return {
+    accessToken: tokenData.access_token,
+    oauthScopes: normalizeShopifyOAuthScopes(tokenData.scope),
+  };
+}
+
+function normalizeShopifyOAuthScopes(value: unknown): string[] | undefined {
+  if (typeof value !== 'string') return undefined;
+  return [...new Set(
+    value
+      .split(',')
+      .map((scope) => scope.trim().toLowerCase())
+      .filter(Boolean),
+  )].sort();
+}
+
+function mergeShopifyOAuthScopes(
+  existingMetadata: unknown,
+  oauthScopes: readonly string[] | undefined,
+): Prisma.InputJsonObject | undefined {
+  if (oauthScopes === undefined) {
+    return isJsonObject(existingMetadata)
+      ? existingMetadata as Prisma.InputJsonObject
+      : undefined;
+  }
+  const existing = isJsonObject(existingMetadata) ? existingMetadata : {};
+  return {
+    ...existing,
+    oauthScopes: [...oauthScopes],
+  } as Prisma.InputJsonObject;
+}
+
+function isJsonObject(value: unknown): value is Record<string, Prisma.InputJsonValue> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
 async function resolveShopifyAuthorizedShop({

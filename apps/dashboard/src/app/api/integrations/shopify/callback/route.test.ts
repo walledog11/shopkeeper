@@ -189,7 +189,10 @@ describe('POST /api/integrations/shopify/callback', () => {
       shopify_oauth_return: '/dashboard/settings',
     });
     mockFetch
-      .mockResolvedValueOnce(jsonResponse({ access_token: 'shpat_fixture' }))
+      .mockResolvedValueOnce(jsonResponse({
+        access_token: 'shpat_fixture',
+        scope: 'write_orders, read_orders,write_orders,READ_PRODUCTS',
+      }))
       .mockResolvedValueOnce(jsonResponse({ shop: { id: 7, name: 'Fixture Shop', myshopify_domain: 'fixture-shop.myshopify.com' } }))
       .mockResolvedValueOnce(jsonResponse({ webhook: { id: 1 } }))
       .mockResolvedValueOnce(jsonResponse({ errors: 'topic disabled' }, { status: 422 }))
@@ -212,6 +215,9 @@ describe('POST /api/integrations/shopify/callback', () => {
     expect(integration.externalAccountId).toBe('fixture-shop.myshopify.com');
     expect(integration.accessToken).toBe('shpat_fixture');
     expect(integration.fromEmail).toBe('Fixture Shop');
+    expect(integration.metadata).toEqual({
+      oauthScopes: ['read_orders', 'read_products', 'write_orders'],
+    });
 
     expect(mockFetch).toHaveBeenCalledTimes(7);
     expect(mockLogger.warn).toHaveBeenCalledWith(
@@ -228,6 +234,62 @@ describe('POST /api/integrations/shopify/callback', () => {
         extra: { topic: 'orders/fulfilled', shop: 'fixture-shop.myshopify.com' },
       }),
     );
+  });
+
+  it('preserves unrelated Shopify metadata when refreshed scopes are persisted', async () => {
+    await db.integration.create({
+      data: {
+        organizationId: org!.id,
+        platform: ChannelType.shopify,
+        externalAccountId: 'fixture-shop.myshopify.com',
+        accessToken: 'shpat_old',
+        metadata: {
+          oauthScopes: ['read_orders'],
+          providerNote: 'preserve me',
+          simulated: false,
+        },
+      },
+    });
+    mockSavedCookies({
+      shopify_oauth_state: 'state_123',
+      shopify_oauth_org: org!.clerkOrgId,
+      shopify_oauth_user: 'usr_oauth',
+      shopify_oauth_shop: 'fixture-shop.myshopify.com',
+    });
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse({
+        access_token: 'shpat_refreshed',
+        scope: ' write_customers,read_orders,write_customers ',
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        shop: {
+          id: 7,
+          name: 'Fixture Shop',
+          myshopify_domain: 'fixture-shop.myshopify.com',
+        },
+      }))
+      .mockResolvedValueOnce(jsonResponse({ webhook: { id: 1 } }))
+      .mockResolvedValueOnce(jsonResponse({ webhook: { id: 2 } }))
+      .mockResolvedValueOnce(jsonResponse({ webhook: { id: 3 } }))
+      .mockResolvedValueOnce(jsonResponse({ webhook: { id: 4 } }))
+      .mockResolvedValueOnce(jsonResponse({ webhook: { id: 5 } }));
+
+    const res = await POST(new Request(signedCallbackUrl({
+      code: 'oauth_code',
+      shop: 'fixture-shop.myshopify.com',
+      state: 'state_123',
+    })));
+
+    expect(res.status).toBe(303);
+    const integration = await db.integration.findFirstOrThrow({
+      where: { organizationId: org!.id, platform: ChannelType.shopify },
+    });
+    expect(integration.accessToken).toBe('shpat_refreshed');
+    expect(integration.metadata).toEqual({
+      oauthScopes: ['read_orders', 'write_customers'],
+      providerNote: 'preserve me',
+      simulated: false,
+    });
   });
 });
 
