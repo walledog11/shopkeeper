@@ -13,23 +13,29 @@ This plan implements the findings in `docs/codebase-audit.md` without turning th
 
 ## Closeout status
 
-**Current checkpoint (2026-07-28): implementation is complete for the original
-correctness findings, but rollout evidence and three standalone hardening tracks
-remain.** The Shopify OAuth scope snapshot and P4-05 attachment hardening are
-deployed on dashboard/gateway release `ca72dcbe`; Vercel and both Railway
-services are healthy. Production has all 62 migrations applied, including the
-previously missed additive
+**Current checkpoint (2026-07-29): implementation is complete for the original
+correctness findings. The agent-rollout evidence gates are complete; the
+remaining work is staged ledger enforcement plus the standalone closeout tracks
+below.** The Shopify OAuth scope snapshot and P4-05 attachment hardening are
+deployed, and the P2-01 reconciliation fix plus rollout harnesses are deployed
+from local release `d7d88edc`; Vercel and both Railway services are healthy.
+Production has all 62 migrations applied, including the previously missed additive
 `20260723000000_add_operator_pending_plans` migration.
 
-The 240-hour production audits run on 2026-07-28 are clean for Stripe (one
+The 240-hour production audits are clean for Stripe (one
 completed event), Gmail outbound delivery (one sent message with provider
 identity), operator events (14 first-claim committed/delivered events: 10
 Telegram and 4 iMessage), plan-execution duplication/unknown/stale claims, and
 unknown-outcome recovery. The reservation audit is also clean but contains zero
 reservations, so it is baseline evidence rather than a canary. Plan-execution
-shadow has two human-approved observations with no repeated observation,
-unknown outcome, or stale claim; it still does not prove representative
-dashboard and gateway execution on both hosts. The two AI-summary jobs that
+shadow now has six human-approved observations with no repeated observation,
+unknown outcome, or stale claim. Two historical `search_kb` → `send_reply`
+observations are supplemented by host-identified, internal-only dashboard and
+gateway canaries. The canonical gateway and dashboard observations each linked
+one successful `add_internal_note` AgentAction to one observation-count-1
+execution; two earlier gateway harness attempts also executed successfully but
+failed only their note-count assertions while the harness distinguished the
+tool note from the normal turn-audit note. The two AI-summary jobs that
 failed solely because Anthropic credit was exhausted were revalidated against
 their still-current source messages and retried in place on 2026-07-28. Both
 completed: one classified its thread as filtered without generating a plan, and
@@ -39,13 +45,12 @@ production verifier is green.
 
 To close this plan:
 
-1. **Agent rollout:** canary P2-01 debounce/newest-message behavior on controlled
-   inbound traffic; run one reversible production long-thread P2-02 `enforce`
-   canary; observe one renewed long turn for P1-04; and obtain representative
-   dashboard plus gateway ledger evidence before moving P1-02 from `shadow` to
-   staged enforcement. Credit-dependent queue recovery and evaluation are
-   complete; these remaining checks require controlled or representative
-   traffic, not more standalone model-credit work.
+1. **Agent rollout:** the P2-01 newest-message canary, reversible P2-02
+   `enforce` canary, P1-04 renewed long turn, and host-specific dashboard plus
+   gateway shadow-ledger canaries are complete. The next step is P1-02 staged
+   enforcement: dashboard first, followed by operator/auto paths after a clean
+   observation window. Keep the documented rollback rail and strict audit
+   running through each stage.
 2. **Shopify safety:** execute controlled `cancel_order`,
    `edit_shopify_order`, `update_shopify_order_address`, and fulfilled-order
    `create_return` → `attach_return_label` canaries; separately exercise
@@ -167,11 +172,18 @@ stale claims, but contained zero executions. Keep the shadow window open until
 real reviewed-plan traffic exercises both hosts; an empty audit is schema and
 deployment evidence, not enforcement evidence.
 
-**Current checkpoint (2026-07-28):** the strict 240-hour audit contains two
+**Current checkpoint (2026-07-29):** the strict 240-hour audit contains six
 human-approved shadow observations and no repeated observations, unknown
-outcomes, or stale claims. Both rows remain `pending`, as expected for shadow
-observation, and the audit does not identify representative execution on both
-hosts. The enforcement gate therefore remains open.
+outcomes, or stale claims. All rows remain `pending`, as expected in shadow.
+Controlled production-environment canaries now identify both host paths:
+gateway execution `7c2eefca-e62d-423a-b07f-0a04e3fea185` and dashboard
+execution `f066c88d-9d91-47bf-8a6f-bd0d50cb2d5a` each persisted one successful
+internal-only `add_internal_note` action linked to one observation-count-1
+execution, with no model or customer/operator provider call. During this work,
+Vercel's ledger variable was found empty (which resolves to `enforce`), replaced
+with an explicit non-sensitive `shadow` value, redeployed, and verified alongside
+the two Railway hosts. The evidence gate is complete; proceed with dashboard-
+first staged enforcement rather than enabling all entry points at once.
 
 - **Related findings:** AUD-001, AUD-002, AUD-012.
 - **Files likely to change:** `packages/agent/src/plan-execution.ts`, `turn.ts`; `apps/dashboard/src/app/api/agent/route.ts`, `quick-approve/route.ts`; `apps/gateway/src/message-handlers/execute-operator-agent-turn.ts`, `pending-plan-actions.ts`.
@@ -207,8 +219,8 @@ claim, delivered the dismissal reply, cleared both contexts, and created no
 
 ### P1-04 — Make locks a shared latency guard with renewal
 
-**Status (2026-07-28): Deployed on all three hosts; long-turn observation
-pending.** Both
+**Status (2026-07-29): Complete, including the production long-turn
+observation.** Both
 Upstash and ioredis lock adapters now renew a held lease with a
 token-checked Redis script at one-third of its TTL. A failed/unknown renewal
 marks the lease lost and emits a warning; release is idempotent and can never
@@ -219,7 +231,9 @@ dashboard Upstash and gateway Railway Redis remain separate latency guards,
 while PostgreSQL execution/event/reservation claims own cross-host correctness.
 No shared Redis migration is required. Release `ca72dcbe` is live on the Vercel
 dashboard, Railway public gateway, and Railway worker with healthy service
-checks. A renewed long-turn observation is the remaining rollout evidence.
+checks. A controlled 36-second turn through the production ioredis adapter
+observed TTL 90 at acquisition and TTL 88 after the 30-second renewal point,
+blocked a contender, removed the key on release, and allowed a successor.
 
 - **Related findings:** AUD-001, AUD-015.
 - **Files likely to change:** `packages/agent/src/lock/redis-lock.ts`; dashboard/gateway lock adapters; environment/deployment documentation.
@@ -234,7 +248,7 @@ checks. A renewed long-turn observation is the remaining rollout evidence.
 
 ### P2-01 — Coalesce per-thread summary jobs and conditionally commit plans
 
-**Status (2026-07-12): Implementation complete; queue canary pending.** Inbound
+**Status (2026-07-29): Complete, including the production queue canary.** Inbound
 summary jobs carry the source customer-message ID and use BullMQ debounce mode
 per thread, replacing a delayed job with the newest payload while retaining a
 trailing run behind an active worker. Plan writes use one SQL conditional update
@@ -242,7 +256,13 @@ that accepts only the latest non-note customer message; operator notification
 rechecks the stable cached-plan identity, and stale planners are discarded before
 publish, auto-execution, or notification. Deterministic and database-backed tests
 cover out-of-order planners, superseded jobs, newest-source commits, and handled
-threads.
+threads. The production canary deliberately enqueued an older source-message
+payload after the newer message. It exposed a worker-replica ordering gap: the
+stale-write guard prevented a wrong plan but could leave the newest request
+without a plan. The worker now reconciles a queued source ID to the latest
+persisted customer message before planning. In the repeat canary, job `109`
+carried the older ID, the deployed worker logged the reconciliation, and the
+only cached plan referenced the newer ID.
 
 - **Related findings:** AUD-002, AUD-014.
 - **Files likely to change:** `apps/gateway/src/message-handlers/inbound-persistence.ts`, `generate-thread-plan.ts`, `ai-summary-flow.ts`; `workers/ai-summary.ts`; queue constants/types/tests.
@@ -255,8 +275,9 @@ threads.
 
 ### P2-02 — Bound intelligence context and validate classifier output
 
-**Status (2026-07-26): Deployed on all three hosts in shadow; the production
-enforce canary remains.** The canonical classifier contract now owns the five
+**Status (2026-07-29): Complete through the reversible production `enforce`
+canary; all three hosts are restored to `shadow`.** The canonical classifier
+contract now owns the five
 allowed tags, exact two-letter language normalization, and explicit title,
 summary, and reason character limits. Gateway parsing rejects unknown tags,
 invalid classifications, missing/non-string core fields, and prevents oversized
@@ -294,9 +315,16 @@ provider backoff; its per-repeat allowance is now 360 seconds, and a focused
 three-repeat confirmation passes. The only full-cadence misses were stochastic:
 one conservative exchange escalation, one watch-tier classification, and three
 non-blocking full-tier cancellation advisory attempts that added an unwanted
-refund. Vercel dashboard, Railway public gateway, and Railway worker remain in
-aligned `shadow`. Representative shadow traffic and one reversible production
-long-thread `enforce` canary remain open.
+refund.
+
+**Production canary (2026-07-29):** equivalent 61-message synthetic threads in
+the isolated E2E organization produced the same one-step `send_reply` plan with
+the same instruction hash in `shadow` and `enforce`. Bounded classifier input
+retained the prior summary and newest customer request. Thread-intelligence
+input fell 65.3% (11,395 → 3,958 tokens), and planning input fell 61.8%
+(14,385 → 5,496 tokens). The Vercel dashboard, Railway public gateway, and
+Railway worker were aligned during the canary, passed the production verifier,
+then were restored to aligned `shadow` and passed it again.
 
 - **Related findings:** AUD-014.
 - **Files likely to change:** `apps/gateway/src/message-handlers/intelligence.ts`, `email-classification.ts`; `packages/agent/src/context.ts`; classifier/prompt tests and eval fixtures.
