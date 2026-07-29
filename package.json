@@ -47,6 +47,7 @@
     "audit:stripe-webhooks": "node ./scripts/audit-stripe-webhook-events.mjs",
     "audit:refund-spend-reservations": "node ./scripts/audit-refund-spend-reservations.mjs",
     "audit:unknown-outcomes": "node ./scripts/audit-unknown-outcomes.mjs",
+    "canary:agent-rollout": "tsx ./apps/gateway/src/scripts/canary-agent-rollout.ts",
     "canary:shopify-mutations": "node ./scripts/canary-shopify-mutations.mjs",
     "audit:tenant-consistency": "node ./scripts/audit-tenant-consistency.mjs",
     "validate:tenant-constraints": "node ./scripts/validate-tenant-consistency-constraints.mjs",

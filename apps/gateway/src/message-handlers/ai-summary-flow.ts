@@ -35,6 +35,15 @@ export function resolveParallelPlanInstruction(latestCustomerMessageText: string
   return latestCustomerMessageText?.trim() || DEFAULT_PLAN_INSTRUCTION;
 }
 
+export function resolveAiSummarySourceMessageId(
+  queuedSourceMessageId: string,
+  latestConversation: { id: string; senderType: string } | null,
+): string {
+  return latestConversation?.senderType === 'customer'
+    ? latestConversation.id
+    : queuedSourceMessageId;
+}
+
 async function isPlanStillCurrent(
   organizationId: string,
   threadId: string,
@@ -53,16 +62,42 @@ async function isPlanStillCurrent(
 }
 
 export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void> {
-  const { threadId, organizationId, sourceMessageId, customerName, channelType, traceId, skipSummary } = data;
+  const {
+    threadId,
+    organizationId,
+    sourceMessageId: queuedSourceMessageId,
+    customerName,
+    channelType,
+    traceId,
+    skipSummary,
+  } = data;
   logger.info({ threadId, organizationId, traceId }, '[AISummary] Processing job');
 
-  const threadSnapshot = await db.thread.findUnique({
-    where: { id: threadId },
-    select: { channelType: true, filterDecidedAt: true, filterStatus: true },
-  });
+  const [threadSnapshot, latestConversation] = await Promise.all([
+    db.thread.findUnique({
+      where: { id: threadId },
+      select: { channelType: true, filterDecidedAt: true, filterStatus: true },
+    }),
+    getLatestConversationMessage(threadId),
+  ]);
   if (!threadSnapshot) {
     logger.warn({ threadId, organizationId }, '[AISummary] Thread not found — skipping');
     return;
+  }
+  const sourceMessageId = resolveAiSummarySourceMessageId(
+    queuedSourceMessageId,
+    latestConversation,
+  );
+  if (sourceMessageId !== queuedSourceMessageId) {
+    logger.info(
+      {
+        threadId,
+        organizationId,
+        queuedSourceMessageId,
+        sourceMessageId,
+      },
+      '[AISummary] Reconciled out-of-order debounce payload to newest customer message',
+    );
   }
 
   const parallelPlan = canParallelizeThreadPlanning(threadSnapshot);
