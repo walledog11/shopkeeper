@@ -106,21 +106,11 @@ async function main(): Promise<void> {
     });
 
     const queue = getGatewayBullMqQueue(QUEUE.AI_SUMMARY);
-    const firstInbound = processInboundMessage(
-      organization.id,
-      platformId,
-      'email',
-      'Controlled rollout canary, first message. I need candle care guidance; wait for my follow-up.',
-      queue,
-      {
-        customerName: 'Agent rollout canary',
-        externalMessageId: firstExternalId,
-        receivedAt: firstReceivedAt,
-        lockAsGenuine: true,
-        isRealCustomerMessage: false,
-      },
-    );
-    const secondInbound = delay(40).then(() => processInboundMessage(
+    // Deliberately process the provider-newer message first, then let the older
+    // timestamped message enqueue last. This forces BullMQ's replace-on-debounce
+    // payload to be stale and proves the worker reconciles it against database
+    // message order before planning.
+    const secondInbound = processInboundMessage(
       organization.id,
       platformId,
       'email',
@@ -130,6 +120,20 @@ async function main(): Promise<void> {
         customerName: 'Agent rollout canary',
         externalMessageId: secondExternalId,
         receivedAt: secondReceivedAt,
+        lockAsGenuine: true,
+        isRealCustomerMessage: false,
+      },
+    );
+    const firstInbound = delay(40).then(() => processInboundMessage(
+      organization.id,
+      platformId,
+      'email',
+      'Controlled rollout canary, first message. I need candle care guidance; wait for my follow-up.',
+      queue,
+      {
+        customerName: 'Agent rollout canary',
+        externalMessageId: firstExternalId,
+        receivedAt: firstReceivedAt,
         lockAsGenuine: true,
         isRealCustomerMessage: false,
       },
@@ -192,13 +196,20 @@ async function main(): Promise<void> {
         lastMessageAt: finalThread.lastMessageAt,
         lastMessageSenderType: finalThread.lastMessageSenderType,
       },
-      queuePayloadWasNewest: finalJobs[0]?.sourceMessageId === secondMessage.id,
+      queuedNewestMessage: finalJobs.some((job) => job.sourceMessageId === secondMessage.id),
+      queuedStaleMessage: finalJobs.some((job) => job.sourceMessageId === firstMessage.id),
       jobs: finalJobs,
     };
     console.log(JSON.stringify({ phase: 'evidence', ...evidence }, null, 2));
 
-    const passed = finalJobs.length === 1
-      && finalJobs[0]?.state === 'completed'
+    // One job is expected when debounce replacement wins before processing.
+    // Two are bounded and valid when the first job is already active and the
+    // trailing debounce job runs afterward. In either case, force at least one
+    // stale payload and prove the worker leaves the newest message in cache.
+    const passed = finalJobs.length >= 1
+      && finalJobs.length <= 2
+      && finalJobs.every((job) => job.state === 'completed')
+      && finalJobs.some((job) => job.sourceMessageId === firstMessage.id)
       && finalThread.cachedPlanMessageId === secondMessage.id
       && finalThread.cachedPlan !== null
       && finalThread.filterStatus === 'genuine';
@@ -206,7 +217,7 @@ async function main(): Promise<void> {
       throw new Error('P2-01 canary failed: newest-message queue/cache evidence did not agree.');
     }
 
-    console.log('P2-01 canary passed: one completed AI-summary job produced a cached plan for the newest message.');
+    console.log('P2-01 canary passed: bounded AI-summary jobs included a stale payload and left the newest message in cache.');
   } finally {
     await closeGatewayBullMqQueues().catch(() => {});
     await closeGatewayRedisConnections().catch(() => {});
