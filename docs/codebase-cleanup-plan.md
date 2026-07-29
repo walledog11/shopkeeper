@@ -14,9 +14,10 @@ This plan implements the findings in `docs/codebase-audit.md` without turning th
 ## Closeout status
 
 **Current checkpoint (2026-07-29): implementation is complete for the original
-correctness findings. The agent-rollout evidence gates are complete; the
-remaining work is staged ledger enforcement plus the standalone closeout tracks
-below.** The Shopify OAuth scope snapshot and P4-05 attachment hardening are
+correctness findings. The agent-rollout evidence gates are complete and
+dashboard-first ledger enforcement is active; the remaining work is its
+observation window, operator/auto enforcement, and the standalone closeout
+tracks below.** The Shopify OAuth scope snapshot and P4-05 attachment hardening are
 deployed, and the P2-01 reconciliation fix plus rollout harnesses are deployed
 from local release `d7d88edc`; Vercel and both Railway services are healthy.
 Production has all 62 migrations applied, including the previously missed additive
@@ -27,9 +28,11 @@ completed event), Gmail outbound delivery (one sent message with provider
 identity), operator events (14 first-claim committed/delivered events: 10
 Telegram and 4 iMessage), plan-execution duplication/unknown/stale claims, and
 unknown-outcome recovery. The reservation audit is also clean but contains zero
-reservations, so it is baseline evidence rather than a canary. Plan-execution
-shadow now has six human-approved observations with no repeated observation,
-unknown outcome, or stale claim. Two historical `search_kb` → `send_reply`
+reservations, so it is baseline evidence rather than a canary. The plan-execution
+ledger now has seven human-approved rows: six shadow observations remain
+`pending`, and the first dashboard-enforced canary is `committed`. There is no
+repeated observation, unknown outcome, or stale claim. Two historical
+`search_kb` → `send_reply`
 observations are supplemented by host-identified, internal-only dashboard and
 gateway canaries. The canonical gateway and dashboard observations each linked
 one successful `add_internal_note` AgentAction to one observation-count-1
@@ -47,9 +50,11 @@ To close this plan:
 
 1. **Agent rollout:** the P2-01 newest-message canary, reversible P2-02
    `enforce` canary, P1-04 renewed long turn, and host-specific dashboard plus
-   gateway shadow-ledger canaries are complete. The next step is P1-02 staged
-   enforcement: dashboard first, followed by operator/auto paths after a clean
-   observation window. Keep the documented rollback rail and strict audit
+   gateway shadow-ledger canaries are complete. P1-02 dashboard enforcement is
+   active and its internal-only claim canary passed. Keep it dashboard-only
+   through a clean 24-hour window containing representative reviewed dashboard
+   traffic; then enforce the public gateway and worker together and repeat the
+   canary/audit sequence. Keep the documented rollback rail and strict audit
    running through each stage.
 2. **Shopify safety:** execute controlled `cancel_order`,
    `edit_shopify_order`, `update_shopify_order_address`, and fulfilled-order
@@ -184,6 +189,18 @@ Vercel's ledger variable was found empty (which resolves to `enforce`), replaced
 with an explicit non-sensitive `shadow` value, redeployed, and verified alongside
 the two Railway hosts. The evidence gate is complete; proceed with dashboard-
 first staged enforcement rather than enabling all entry points at once.
+
+**Dashboard enforcement stage (2026-07-29):** Vercel is now explicitly
+`PLAN_EXECUTION_LEDGER_MODE=enforce`; the Railway public gateway and worker
+remain explicitly `shadow`. Internal-only dashboard execution
+`6fdec37f-e92a-4115-b909-c8a226464fe4` atomically claimed and completed as
+`committed`, kept `observationCount=0`, populated `claimedAt` and `completedAt`,
+recorded no error, and linked one successful `add_internal_note` action. The
+post-canary strict audit contains seven human-approved rows (six shadow
+`pending`, one enforced `committed`) with no repeated observations, unknown
+outcomes, or stale claims; the unknown-outcome audit and production verifier
+also pass. Hold this host split for a representative 24-hour dashboard
+observation window before changing either Railway service.
 
 - **Related findings:** AUD-001, AUD-002, AUD-012.
 - **Files likely to change:** `packages/agent/src/plan-execution.ts`, `turn.ts`; `apps/dashboard/src/app/api/agent/route.ts`, `quick-approve/route.ts`; `apps/gateway/src/message-handlers/execute-operator-agent-turn.ts`, `pending-plan-actions.ts`.

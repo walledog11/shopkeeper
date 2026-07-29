@@ -666,6 +666,53 @@ Relevant signed dashboard webhook route:
 
 The guardrail code is implemented, but the production checklist item is not complete until ops-alert log routing is validated against live or staging traffic. Treat [`operational-guardrails.md`](operational-guardrails.md) as the implementation record and this section as the production operating procedure.
 
+### Plan-execution ledger staged enforcement (P1-02)
+
+`PLAN_EXECUTION_LEDGER_MODE=off|shadow|enforce` controls whether reviewed plans
+only record observations or atomically claim and complete their durable
+execution row. Roll out by host: dashboard first, then the public gateway and
+worker together after the dashboard observation window. PostgreSQL is the
+single-use boundary; Redis remains only a latency guard.
+
+**Current stage (2026-07-29):** the Vercel dashboard is in `enforce`; Railway
+public gateway and worker remain in `shadow`. Dashboard canary execution
+`6fdec37f-e92a-4115-b909-c8a226464fe4` committed with one linked successful
+internal action, zero shadow observations, and populated claim/completion
+timestamps.
+
+Before and after every flag change:
+
+1. Verify the target host's non-secret flag directly. Do not infer it from
+   health alone, and do not let a local `.env.local` override the downloaded
+   Vercel production value.
+2. Run `npm run verify:production`.
+3. Run:
+
+   ```bash
+   railway run --service shopkeeper --environment production -- \
+     npm run audit:plan-executions -- --hours=240 --strict
+   railway run --service shopkeeper --environment production -- \
+     npm run audit:unknown-outcomes -- --hours=240 --strict
+   ```
+
+4. Require no repeated shadow observations, unknown outcomes, or stale claims.
+   In `enforce`, a successful canary must be terminal `committed`, have
+   `observationCount=0`, populated `claimedAt`/`completedAt`, no `lastError`,
+   and linked successful actions.
+
+Keep dashboard-only enforcement for at least one normal 24-hour observation
+window containing representative reviewed dashboard traffic. Do not advance
+operator/auto paths from an empty window or from the internal-only canary alone.
+After the window is clean, set both Railway services to `enforce` together,
+deploy them, and repeat the canary/audit sequence before broad observation.
+
+Dashboard rollback is configuration-only: restore the Vercel Production
+variable to explicit non-sensitive `shadow`, redeploy the same known-good
+artifact, verify the cloud value, and rerun both audits. Do not change the
+Railway flags during a dashboard-stage rollback. If an enforced execution is
+`unknown`, determine provider truth before any fresh instruction; never reset
+the row to `pending` or replay it.
+
 ### External Monitors
 
 Configure Better Stack HTTP keyword checks before sign-off. Do this manually in the Better Stack console; do not add Better Stack API tokens or credentials to the repo. Route these monitors to the same launch owner or escalation policy used for ops-alert notifications.
