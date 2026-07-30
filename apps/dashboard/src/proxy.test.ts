@@ -9,10 +9,19 @@ type MiddlewareHandler = (
 ) => Promise<Response | undefined>;
 
 let capturedHandler: MiddlewareHandler;
+let capturedOptions: {
+  contentSecurityPolicy?: {
+    strict?: boolean;
+    reportOnly?: boolean;
+    reportTo?: string;
+    directives?: Record<string, string[]>;
+  };
+};
 
 vi.mock('@clerk/nextjs/server', () => ({
-  clerkMiddleware: (handler: MiddlewareHandler) => {
+  clerkMiddleware: (handler: MiddlewareHandler, options: typeof capturedOptions) => {
     capturedHandler = handler;
+    capturedOptions = options;
     return handler;
   },
 }));
@@ -87,5 +96,34 @@ describe('proxy middleware auth handling', () => {
     const res = await capturedHandler(fn as never, makeReq('/signup'));
     expect(res?.status).toBe(307);
     expect(res?.headers.get('location')).toContain('/dashboard');
+  });
+});
+
+describe('proxy content security policy', () => {
+  it('requests a nonce-based strict policy that stays report-only', () => {
+    expect(capturedOptions.contentSecurityPolicy).toMatchObject({
+      strict: true,
+      reportOnly: true,
+      reportTo: '/api/security/csp-report',
+    });
+  });
+
+  it('no longer asks for unsafe-inline or unsafe-eval in script-src', () => {
+    const scriptSrc = capturedOptions.contentSecurityPolicy?.directives?.['script-src'] ?? [];
+    expect(scriptSrc).not.toContain("'unsafe-inline'");
+    expect(scriptSrc).not.toContain("'unsafe-eval'");
+  });
+
+  it('keeps the non-Clerk directives the app depends on', () => {
+    const directives = capturedOptions.contentSecurityPolicy?.directives ?? {};
+    expect(directives['connect-src']).toEqual(
+      expect.arrayContaining(['https://*.ingest.us.sentry.io']),
+    );
+    expect(directives['media-src']).toEqual(
+      expect.arrayContaining(['https://*.public.blob.vercel-storage.com']),
+    );
+    expect(directives['frame-ancestors']).toEqual(["'self'"]);
+    expect(directives['object-src']).toEqual(["'none'"]);
+    expect(directives['report-uri']).toEqual(['/api/security/csp-report']);
   });
 });

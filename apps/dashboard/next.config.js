@@ -1,50 +1,15 @@
 const path = require('path');
 const { withSentryConfig } = require('@sentry/nextjs');
 
-const CSP_DIRECTIVES = {
-  'default-src': ["'self'"],
-  'script-src': [
-    "'self'",
-    "'unsafe-inline'",
-    "'unsafe-eval'",
-    'https://*.clerk.com',
-    'https://*.clerk.accounts.dev',
-    'https://challenges.cloudflare.com',
-  ],
-  'style-src': ["'self'", "'unsafe-inline'", 'https://*.clerk.com'],
-  'img-src': ["'self'", 'data:', 'blob:', 'https:'],
-  'media-src': ["'self'", 'https://*.public.blob.vercel-storage.com'],
-  'font-src': ["'self'", 'data:'],
-  'connect-src': [
-    "'self'",
-    'https://*.clerk.com',
-    'https://*.clerk.accounts.dev',
-    'https://*.sentry.io',
-    'https://*.ingest.sentry.io',
-    'https://*.ingest.us.sentry.io',
-  ],
-  'frame-src': ['https://*.clerk.com', 'https://challenges.cloudflare.com'],
-  'worker-src': ["'self'", 'blob:'],
-  'object-src': ["'none'"],
-  'base-uri': ["'self'"],
-  'form-action': ["'self'", 'https://*.clerk.com'],
-  'frame-ancestors': ["'self'"],
-  'report-uri': ['/api/security/csp-report'],
-  'report-to': ['csp-endpoint'],
-};
-
-const CSP_HEADER_VALUE = Object.entries(CSP_DIRECTIVES)
-  .map(([directive, sources]) => `${directive} ${sources.join(' ')}`)
-  .join('; ');
-
+// The Content-Security-Policy and Reporting-Endpoints headers are per-request
+// (the policy carries a fresh nonce) and are emitted by Clerk's middleware CSP
+// option in src/proxy.ts, not here.
 const SECURITY_HEADERS = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
-  { key: 'Reporting-Endpoints', value: 'csp-endpoint="/api/security/csp-report"' },
-  { key: 'Content-Security-Policy-Report-Only', value: CSP_HEADER_VALUE },
 ];
 
 const NOINDEX_HEADERS = [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }];
