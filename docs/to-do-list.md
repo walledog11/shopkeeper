@@ -140,8 +140,13 @@ what ships.
   `maxRefundAmount` and the `dailyRefundCap` goodwill pool — added 2026-07-06;
   note the new OAuth scopes mean already-connected stores must re-auth Shopify),
   and discount codes. Remaining gap:
-  - [ ] Fulfillment — no "mark fulfilled" / create shipment / reship-replacement
-    helper distinct from `create_shopify_order`. Deferred.
+  - [x] Fulfillment — **closed 2026-07-30.** `fulfill_order` marks every item
+    still awaiting fulfillment as shipped and optionally attaches carrier
+    tracking (`packages/agent/src/shopify/fulfillment.ts`), with an ambiguous-
+    failure `unknown` outcome and a `probeFulfillment` reconciliation probe.
+    Restricted by description to merchant-confirmed shipments; partial
+    shipments escalate. **Eval gate still owed** — this added a tool to the
+    shared planner surface.
 
 ## Modules / Roadmap
 
