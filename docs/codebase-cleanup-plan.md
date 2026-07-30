@@ -73,6 +73,8 @@ To close this plan:
 5. **Standalone security tracks:** complete or move P8-02 Spectrum/OpenTelemetry
    and P8-03 enforced CSP into separately owned plans with their existing
    acceptance criteria. They must not disappear when this document is removed.
+   P8-03's nonce migration landed 2026-07-30; enforcement is blocked on Clerk's
+   un-nonced script tag, so that blocker travels with the track wherever it goes.
 6. **Retirement and decisions:** give every P9-02 compatibility candidate and
    each unresolved product decision an owner in the durable backlog. Remove
    compatibility code one surface at a time only after positive non-use
@@ -1473,21 +1475,49 @@ the prior release as the rollback artifact.
 
 ### P8-03 — Stage an enforced CSP
 
-**Status (2026-07-28): Report-only collector deployed; observation, nonce
-migration, and enforcement remain.** The global report-only
+**Status (2026-07-30): Report-only collector deployed and the nonce migration is
+done; observation and enforcement remain, and enforcement has a known blocker.**
+The global report-only
 policy now advertises both legacy `report-uri` and Reporting API `report-to`
 delivery to `/api/security/csp-report`. The unauthenticated collector accepts
 both browser formats, caps bodies at 16 KiB and batches at five violations,
 rate-limits a non-logged hashed client fingerprint, and logs only directives,
 status, and URL origins. Paths, queries, fragments, samples, and raw report bodies
 are never logged. Focused tests cover legacy and Reporting API payloads, privacy
-sanitization, malformed/oversized input, batch bounds, and rate limiting. The
-policy remains report-only and still permits `unsafe-inline`/`unsafe-eval`; this
-slice intentionally does not claim enforcement.
+sanitization, malformed/oversized input, batch bounds, and rate limiting.
+
+**Nonce migration (2026-07-30).** The policy moved out of
+`apps/dashboard/next.config.js` — a static `headers()` entry cannot carry a
+per-request nonce — into Clerk's native `contentSecurityPolicy` middleware option
+in `apps/dashboard/src/proxy.ts`, with the directive set in
+`src/proxy/content-security-policy.ts`. Clerk `strict: true` deletes
+`http:`/`https:` from `script-src` and adds the nonce plus `'strict-dynamic'`;
+`unsafe-eval` is now dev-only. Two properties of Clerk's implementation are
+load-bearing and must not be "corrected": its directive merge is a **union** with
+its own defaults, so a Clerk default cannot be removed by omitting it; and the
+surviving `'unsafe-inline'` is the deliberate CSP2 fallback that
+`'strict-dynamic'` makes CSP3 browsers ignore. `Reporting-Endpoints` is now
+emitted by Clerk's `reportTo` and was removed from `next.config.js` to avoid a
+duplicate header. Next 16.2 reads the nonce from
+`content-security-policy-report-only` as well as the enforced header
+(`app-render.js:167`), so propagation is verifiable before enforcement — and was
+verified live at 51 of 52 script tags nonced, plus preload links. The policy
+remains report-only; this slice still does not claim enforcement.
+
+**Blocker before the header can be flipped.** Clerk's own `clerk.browser.js`
+`<script>` tag is server-rendered **without** a nonce, so `'strict-dynamic'` will
+block it on enforcement and break authentication. Ruled out: the nonce is minted
+and forwarded (`x-nonce` present on both request and response);
+`buildClerkJSScriptAttributes` does apply a nonce when given one (`@clerk/shared`
+`loadClerkJsScript.mjs:160`); and making `providers.tsx` a server component with
+`dynamic` on `ClerkProvider` did not fix it — that change was reverted because it
+costs dynamic rendering and bought nothing. The nonce is lost between the header
+and `ClerkScriptTags`. This is exactly what the report-only window exists to
+surface, so nothing is broken today.
 
 - **Related findings:** AUD-018.
-- **Files likely to change:** `apps/dashboard/next.config.js`, instrumentation/layout/script integrations, CSP reporting tests/runbook.
-- **Proposed implementation:** Analyze report-only telemetry, remove production `unsafe-eval`, add nonces/hashes, canary enforcement, then switch the header.
+- **Files likely to change:** `apps/dashboard/src/proxy.ts` and `src/proxy/content-security-policy.ts` (the policy now lives here), `apps/dashboard/next.config.js`, instrumentation/layout/script integrations, CSP reporting tests/runbook.
+- **Proposed implementation:** ~~Remove production `unsafe-eval`, add nonces/hashes~~ **done 2026-07-30.** Remaining: resolve the un-nonced Clerk script tag, analyze report-only telemetry, canary enforcement, then switch the header.
 - **Dependencies:** Sentry/Clerk/PostHog compatibility testing and violation endpoint/telemetry.
 - **Risk / scope:** Medium-high / Medium.
 - **Tests required:** Production build Playwright across auth, dashboard, analytics, Sentry and OAuth.

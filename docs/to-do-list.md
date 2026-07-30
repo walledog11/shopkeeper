@@ -5,9 +5,15 @@ consolidated to the items that are still pending — completed work was removed
 (it lives in git history). It now also carries the product/vision gaps surfaced
 in the 2026-06-23 review.
 
-Last reviewed: 2026-07-24.
+Last reviewed: 2026-07-30.
 
-Recent completions (not yet removed from history below):
+Recently completed — detail is in git history, not here:
+- Production migration workflow documented (`production/deployment.md`) — 2026-07-30
+- Alerting doc debt corrected (Better Stack Telemetry, Railway forwarder, threshold alert rules) — 2026-07-30
+- Agent behavior tracks A1–A6 and B1–B5 — 2026-07-26
+- `fulfill_order` capability, eval gate (78/79) and canary execute family — 2026-07-30
+- CSP nonce migration (report-only; enforcement blocked) — 2026-07-30
+- Dashboard `send_reply` internal-hop 500 (operator bug 7) — 2026-07-29
 - B4 delivery-exception watch (USPS monitor + approval loop) — 2026-07-20
 - B3 return-lifecycle monitor (`ReturnWatch` + arrival approval loop) — 2026-07-20
 - Operator-channel nudge parity (Telegram + iMessage) — 2026-07-20
@@ -60,51 +66,51 @@ Do these before treating production as ready.
     (2026-06-24): verification tooling (`scripts/verify-production-alerts.mjs` +
     `emit-controlled-ops-alert.ts` helpers) confirmed working, live health baseline
     recorded, per-category trigger cheatsheet written.
-  - **Doc debt:** [runbook.md](production/runbook.md) and
-    [error-tracking-plan.md](production/error-tracking-plan.md) still describe a
-    stale Better Stack ("Logs", not the current "Telemetry"), a nonexistent Railway
-    log-drain setting, and "keyword alert rules" (alerts are actually
-    query/threshold-based on a saved chart). Correct these when the work is picked
-    up.
+  - ~~**Doc debt:** stale Better Stack product name, nonexistent Railway
+    log-drain setting, "keyword alert rules".~~ **Corrected 2026-07-30** in
+    [runbook.md](production/runbook.md) and
+    [error-tracking-plan.md](production/error-tracking-plan.md): "Logs" is now
+    "Telemetry", the Railway step calls for a forwarder service (no native drain
+    exists), log alerting is described as query/threshold rules on a saved chart,
+    and the free-tier/paywall boundaries are recorded inline so the deferred work
+    resumes with accurate instructions.
 
 ## Security And Data Hardening
 
-- [ ] **Harden Content Security Policy.** Dashboard still sends
-  `Content-Security-Policy-Report-Only` with `unsafe-inline` and `unsafe-eval`
-  in `apps/dashboard/next.config.js`. A bounded, privacy-sanitized report
-  collector and both browser reporting directives were added locally on
-  2026-07-20. Deploy and review report-only violations before reducing or
-  justifying `unsafe-inline`/`unsafe-eval`; keep Clerk and Cloudflare challenge
-  requirements documented. (Lower urgency.)
+- [ ] **Harden Content Security Policy — nonce migration done 2026-07-30,
+  enforcement blocked.** The policy moved out of `apps/dashboard/next.config.js`
+  (a static `headers()` entry cannot carry a per-request nonce) into Clerk's
+  native `contentSecurityPolicy` middleware option in
+  `apps/dashboard/src/proxy.ts`, with the directives in
+  `src/proxy/content-security-policy.ts`. `strict: true` drops `http:`/`https:`
+  from `script-src` and adds the nonce plus `'strict-dynamic'`; `unsafe-eval` is
+  now dev-only. The remaining `'unsafe-inline'` is Clerk's deliberate CSP2
+  fallback, which `'strict-dynamic'` makes CSP3 browsers ignore — do not "fix"
+  it. `Reporting-Endpoints` is now emitted by Clerk's `reportTo`, so it was
+  removed from `next.config.js`. Verified live: 51 of 52 script tags nonced,
+  plus preload links. Next 16.2 reads the nonce from the report-only header too
+  (`app-render.js:167`), so propagation works before enforcement.
+  - **Blocker before enforcing:** Clerk's own `clerk.browser.js` `<script>` is
+    server-rendered **without** a nonce, so `'strict-dynamic'` will block it the
+    moment the header is enforced — breaking auth. Ruled out: the nonce is
+    minted and forwarded (`x-nonce` on both request and response);
+    `buildClerkJSScriptAttributes` does apply a nonce when given one
+    (`@clerk/shared` `loadClerkJsScript.mjs:160`); and making `providers.tsx` a
+    server component with `dynamic` on `ClerkProvider` did not fix it (reverted
+    — it costs dynamic rendering and bought nothing). The nonce is lost between
+    the header and `ClerkScriptTags`.
+  - Still owed after that: review report-only violations from deployed traffic,
+    then flip the header. Keep Clerk and Cloudflare challenge requirements
+    documented. (Lower urgency.)
 
 ## Known Bugs
 
-Consolidated from the retired `operator-channel-bugs.md` (archived 2026-07-19).
-Bugs 1/2/8 were fixed and 3–6 were structurally eliminated by the model-owned
-operator-interpretation rework (the `lastThreadId` mechanism and keyword-skip
-grammar they described no longer exist); full history is in
-[archive/operator-channel-bugs.md](archive/operator-channel-bugs.md). Only one
-item was still open when the doc was retired:
-
-- [x] **Dashboard `send_reply` internal hop returned HTTP 500 (bug 7 —
-  regression closed 2026-07-29).** Observed 2026-07-07 on a free-form operator turn: the gateway
-  worker `ThreadSink` POST to dashboard `/api/agent/io-send-internal` returned
-  500, the agent then burned its token budget and gave the operator the generic
-  "too many steps" message. Root cause not captured — the gateway log redacts
-  the body, so the dashboard-side failure is unknown. Never confirmed transient
-  vs systemic. **Partial fix shipped 2026-07-20:** cross-service
-  `x-shopkeeper-request-id` correlation, clearer operator-facing dispatch-failure
-  copy, failed approvals no longer clear the parked plan, and operator turns
-  stop summarizing as "too many steps" when a send hop failed. A focused
-  cross-service Playwright canary now starts both apps, invokes the real gateway
-  `ThreadSink` in a separate process, crosses the authenticated internal HTTP
-  hop, records provider delivery without network access, and proves exactly one
-  agent message committed. The canary passes via
-  `npm run test:e2e:send-reply-hop`. The original dashboard exception is no
-  longer recoverable; use the correlated request ID to pull Vercel logs if a
-  future recurrence appears.
-  Pointers: [`agent-thread-sink.ts`](../apps/gateway/src/message-handlers/agent-thread-sink.ts) (hop, no delivery verify),
-  [`io-send-internal/route.ts`](../apps/dashboard/src/app/api/agent/io-send-internal/route.ts) (dashboard receiver).
+**None open.** All eight operator-channel bugs consolidated from the retired
+`operator-channel-bugs.md` are closed — 1/2/8 fixed, 3–6 structurally eliminated
+by the model-owned operator-interpretation rework, and 7 (the dashboard
+`send_reply` internal-hop 500) closed 2026-07-29 with request-ID correlation and
+the `npm run test:e2e:send-reply-hop` cross-service canary. Full history:
+[archive/operator-channel-bugs.md](archive/operator-channel-bugs.md).
 
 ## Product Gaps
 
@@ -127,48 +133,36 @@ what ships.
   — not more adapter code — determines whether the next step is "configure and
   enable" or "cut." Needs an owner call, not a guess.
 
-- [ ] **Build the WhatsApp adapter.** Not built. Track 5 in the roadmap — a small
-  adapter on the existing Meta app (same vendor as IG DM). Slots into the same
-  inbound channel interface.
+- [ ] **Decide the `tier-watch-refund-draft-only` fixture assertion and whether to
+  re-capture the eval baseline.** Two owner calls left over from the 2026-07-30
+  `fulfill_order` gate (78/79):
+  - The single failure produced `needs_merchant_input` where the fixture asserts
+    `mustClassifyAs: "needs_review"`. Not a safety bug — both route to the
+    merchant and neither auto-fires, so the behavior satisfies the fixture's own
+    description and the assertion is narrower than the intent. Its baseline was
+    already 66.7% (2/3) and a targeted 3-repeat probe scored 1/3, one sample
+    apart; `tier-full-cancel-auto` warned for the same reason. Structurally a new
+    tool cannot move it: `watch` is not in `TIERS_THAT_AUTO_EXECUTE`, so both
+    branches of `classifyPlanPreview` return `NEEDS_REVIEW` regardless of the
+    tool set. Decide whether to widen the assertion to accept
+    `needs_merchant_input`.
+  - `baseline.json` is still 2026-07-10 (74 fixtures / 222 runs); the suite is
+    now 76. Decide whether to re-capture. Note `npm run test:evals` defaults to
+    `EVAL_REPEATS=1` while the baseline was captured at 3 repeats, so comparing
+    the two raises false "regression" warnings on already-flaky fixtures.
+  - Neither was done deliberately: tuning a fixture to make a gate green, and
+    capturing a baseline without sign-off, are both off-limits.
 
-- [ ] **Close the agent-capability gaps in support workflows.** The tool registry
-  (`packages/agent/src/tools/registry/`) covers refunds, cancellations, order
-  edits, address changes, tracking, notes, KB, stats, return-only RMAs,
-  exchanges (`create_exchange`, even-or-cheaper only), return labels
-  (`attach_return_label`, merchant-supplied URL via the ask_operator loop),
-  store credit + gift cards (`issue_store_credit` / `create_gift_card`, sharing
-  `maxRefundAmount` and the `dailyRefundCap` goodwill pool — added 2026-07-06;
-  note the new OAuth scopes mean already-connected stores must re-auth Shopify),
-  and discount codes. Remaining gap:
-  - [x] Fulfillment — **closed 2026-07-30.** `fulfill_order` marks every item
-    still awaiting fulfillment as shipped and optionally attaches carrier
-    tracking (`packages/agent/src/shopify/fulfillment.ts`), with an ambiguous-
-    failure `unknown` outcome and a `probeFulfillment` reconciliation probe.
-    Restricted by description to merchant-confirmed shipments; partial
-    shipments escalate.
-    - Schema-validated against the live 2026-04 store on 2026-07-30:
-      `fulfillmentCreate`, `orderFulfillmentOrders`, and
-      `orderFulfillmentsTracking` all valid, no uncovered documents.
-    - Eval coverage landed the same day: `fulfill-stalled-order-under-pressure`
-      (must not fabricate a fulfillment on a chased unfulfilled order),
-      `fulfill-merchant-confirmed-shipment` (must fulfil when the merchant
-      confirms the shipment and supplies tracking), plus `fulfill_order` added
-      to `order-status-not-shipped-yet`'s `mustNotCallTools`. Targeted run was
-      hard-gated 7/7.
-    - **Still owed:** the full 74-fixture gate. Adding a 21st tool changes the
-      action-tool set `plan-preview.ts` classifies against, and the targeted
-      probe does not cover that broad surface.
-
-- [ ] **Add a `fulfill_order` execute family to the Shopify canary harness.**
-  Every other mutation tool has one in `scripts/canary-shopify-mutations.mjs`
-  (`refund`, `cancel_order`, `edit_shopify_order`, `exchange`, `return_label`,
-  `order_creation`, `gift_card`, `store_credit`, `discount`,
-  `update_shopify_order_address`); `fulfill_order` has only the `--validate`
-  document coverage. It matters more here than for most tools because
+- [ ] **Run the `fulfill_order` canary family against the live store.** The
+  family landed in `scripts/canary-shopify-mutations.mjs` on 2026-07-30 and is
+  verified locally (syntax, lint, both directions of the `--test-orders-only`
+  guard), but has never executed against `palette-dev`. It fires a real Shopify
+  mutation and needs `TOKEN_ENCRYPTION_KEY`, so it belongs with the other
+  controlled canary runs. Safety already holds it shut three ways: a fixture
+  order the run creates itself (`sendFulfillmentReceipt: false`),
+  `notify_customer: false`, and membership in `TEST_ORDER_ONLY_FAMILIES` —
   fulfillment is the one mutation whose side effect reaches the customer
-  directly, through Shopify's own shipping-confirmation email — so the canary
-  must pass `notify_customer: false`, use a test order, and belong in
-  `TEST_ORDER_ONLY_FAMILIES`.
+  directly, via Shopify's own shipping-confirmation email.
 
 ## Modules / Roadmap
 
@@ -183,15 +177,14 @@ near-term pointers only here.
   [core-extraction-and-module-expansion-plan.md](core-extraction-and-module-expansion-plan.md)
   — consolidated there 2026-07-24; don't re-copy it here.
 
-- [x] **Agent behavior (2026-07 audit).** Tracks A1–A6 and B1–B5 are complete;
-  the residual closeout list was completed and deleted 2026-07-26. History and
-  durable findings live in
-  [archive/agent-behavior-and-expansion-plan-2026-07.md](archive/agent-behavior-and-expansion-plan-2026-07.md).
+Durable findings from the completed agent-behavior audit (tracks A1–A6, B1–B5)
+live in
+[archive/agent-behavior-and-expansion-plan-2026-07.md](archive/agent-behavior-and-expansion-plan-2026-07.md).
 
 ## Documentation
 
-- [ ] **Document the final production migration workflow.** Partially covered in
-  [deployment.md](production/deployment.md) (pooled `DATABASE_URL` vs direct
-  `DIRECT_DATABASE_URL` for `npm run db:migrate:deploy`). Still needed: one
-  consolidated section with exact env vars for Vercel, Railway, local migration
-  runs, and CI.
+No open items. The production migration workflow is documented in
+[deployment.md](production/deployment.md) → **Database Migrations**: env vars per
+context (production run, Vercel, Railway, local, CI), the commands, the
+`migrate status` verification step, and the two incidents where a migration
+lagged its code.

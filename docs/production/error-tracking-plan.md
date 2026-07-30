@@ -1,19 +1,41 @@
 # Production Observability Plan — Better Stack
 
-**Vendor:** [Better Stack](https://betterstack.com/) (Logs, Uptime, Incidents, Errors).
+**Vendor:** [Better Stack](https://betterstack.com/) (Telemetry, Uptime, Incidents, Errors).
 
-**Launch (Level 1):** Better Stack Logs + keyword alerts + uptime monitors — **required before production sign-off**.
+**Launch (Level 1):** Better Stack Telemetry + log alert rules + uptime monitors — **required before production sign-off**.
 
 **Post-launch (Level 2):** Better Stack Errors via Sentry-compatible SDK — **optional**, typically 2–4 weeks after launch.
 
-Sentry was removed on 2026-06-07 in favor of structured Pino logs only. Ops alerts emit `opsAlert: true` log lines. This plan standardizes on Better Stack for production observability instead of re-adding sentry.io. Level 2 reuses `@sentry/nextjs` and `@sentry/node` packages with Better Stack ingestion endpoints — no sentry.io account required.
+Ops alerts emit `opsAlert: true` structured Pino log lines. This plan standardizes on Better Stack for production observability.
+
+> **Vendor naming (corrected 2026-07-30).** Better Stack renamed the **Logs**
+> product to **Telemetry**. Where this document said "Logs" it means the
+> Telemetry product; log sources, drains and alert rules all live there now.
+
+> **Sentry status (corrected 2026-07-30).** The claim that "Sentry was removed on
+> 2026-06-07 in favor of structured Pino logs only" is stale. Sentry was removed
+> in commit `d5f9b7a`, then **sentry.io was later re-added for the dashboard
+> only**: `@sentry/nextjs` in `apps/dashboard/package.json`,
+> `src/sentry.server.config.ts`, `src/sentry.edge.config.ts`,
+> `src/instrumentation-client.ts`, `onRequestError` in `src/instrumentation.ts`,
+> and `withSentryConfig` in `next.config.js` — pointed at a hardcoded default
+> `ingest.us.sentry.io` DSN, not a Better Stack ingestion endpoint. The gateway
+> still has no error SDK.
+>
+> This partly supersedes Level 2 below, which was written assuming a clean slate
+> and no sentry.io account. **Needs an owner call before Level 2 is implemented:**
+> keep dashboard errors on sentry.io and scope Level 2 to the gateway, or
+> re-point the dashboard DSN at Better Stack for one vendor. Until that call,
+> read Level 2 as the gateway plan plus a dashboard migration, and note that the
+> hardcoded fallback DSN means the dashboard ships errors to sentry.io whether or
+> not `SENTRY_DSN` is configured.
 
 ## Summary
 
 | Layer | Level | Required for launch? | Better Stack product |
 |-------|-------|---------------------|----------------------|
-| Structured Pino logs + `opsAlert: true` | — | Yes (code done) | Logs (via drains) |
-| Log-drain keyword alerts (4 categories) | 1 | **Yes — launch gate** | Logs → alert rules |
+| Structured Pino logs + `opsAlert: true` | — | Yes (code done) | Telemetry (via drains) |
+| Log alert rules (4 categories) | 1 | **Yes — launch gate** | Telemetry → alert rules |
 | HTTP health uptime monitors | 1 | **Yes — launch gate** | Uptime |
 | Error grouping + source-mapped stacks | 2 | No — post-launch | Errors |
 | Client/browser error capture | 2 | No — post-launch | Errors (Sentry-compatible SDK) |
@@ -31,13 +53,29 @@ Use **two Better Stack Error applications** (`shopkeeper-dashboard`, `shopkeeper
 
 Do **not** block launch on Level 2. Block launch only if Better Stack Level 1 is incomplete:
 
-- [ ] Better Stack team and escalation policy configured for launch owner
-- [ ] Vercel log drain → Better Stack Logs HTTP source (Production + Preview)
-- [ ] Railway log drain → Better Stack Logs HTTP source
+- [ ] Better Stack team and escalation policy configured for launch owner (**paid tier** — see cost gates below)
+- [ ] Vercel log drain → Better Stack Telemetry HTTP source (Production + Preview) (**requires Vercel Pro/Enterprise**)
+- [ ] Railway logs → Better Stack Telemetry HTTP source via a forwarder service (**Railway has no native log drain**)
 - [ ] Log alert rules for all four categories: `opsAlert` + `category=queue_health|webhook_signature|provider_send|agent_failure`
 - [ ] Three uptime keyword monitors (dashboard health, gateway deep health, gateway queue health) — see [runbook.md](runbook.md)
 - [ ] One controlled alert validated per ops-alert category
 - [ ] `OPS_ALERTS_ENABLED=false` kill switch verified
+
+**Cost gates (recorded 2026-06-26).** Three of the items above are behind
+paywalls, which is why this whole gate is deferred until the first real merchant
+or paid beta:
+
+- Custom Vercel log drains require a **Vercel Pro or Enterprise** plan.
+- Railway has **no native log drain** — forwarding gateway logs needs a forwarder
+  service (e.g. the Locomotive template), not a settings toggle.
+- Better Stack's **free tier excludes escalation policies, sub-3-minute check
+  frequency, and phone/SMS paging** (escalation and on-call start at the paid
+  tier). Free gives email and Slack alerts with 3-day / 3 GB retention.
+
+**Free interim option (~15 min, no paywall):** create only the three uptime
+monitors as HTTP keyword checks at 3-minute frequency with email alerts. That
+answers "is production up?" without a Vercel upgrade or a Better Stack paid plan.
+Log drains, alert rules, controlled validation and kill-switch sign-off all wait.
 
 See Phase 5 in [operational-guardrails.md](operational-guardrails.md) and the External Monitors / Ops Alert Log Routing sections in [runbook.md](runbook.md).
 
@@ -56,15 +94,15 @@ Implement **after** Level 1 is validated — typically 2–4 weeks post-launch.
 
 **Can defer longer if:**
 
-- Log keyword alerts catch every production incident
+- Log alert rules catch every production incident
 - Runbook steps resolve issues from structured logs alone
 - Traffic is low and log search in Better Stack is sufficient
 
-## Level 1 — Launch observability (Better Stack Logs + Uptime)
+## Level 1 — Launch observability (Better Stack Telemetry + Uptime)
 
 No application code changes. Configure in the Better Stack console and platform log drains.
 
-### 1. Better Stack Logs — HTTP sources
+### 1. Better Stack Telemetry — HTTP sources
 
 Create two HTTP log sources (or one shared source with distinct tags if you prefer):
 
@@ -85,24 +123,41 @@ Per [Better Stack Vercel docs](https://betterstack.com/docs/logs/vercel/log-drai
 
 **Note:** Custom Vercel log drains require Vercel Pro or Enterprise. Alternatively, use Better Stack's Vercel marketplace integration for simpler setup if available on your plan.
 
-### 3. Railway log drain
+### 3. Railway logs → Better Stack
 
-Configure Railway to forward service logs to the gateway Better Stack HTTP source (Railway → service → Settings → log drain or observability integration, depending on Railway UI). Use the same `Authorization: Bearer $SOURCE_TOKEN` header pattern.
+**Railway has no native log-drain setting.** There is no Railway → service →
+Settings toggle that forwards logs to an HTTP source; earlier revisions of this
+document described one that does not exist. Forwarding gateway logs requires
+deploying a **forwarder service** into the Railway project — e.g. the Locomotive
+template — which subscribes to the project's logs and POSTs them to the Better
+Stack HTTP source using the same `Authorization: Bearer $SOURCE_TOKEN` header
+pattern.
+
+Budget for this as a deployed service with its own cost and failure mode, not a
+settings change. Until it exists, gateway logs are readable only in the Railway
+log view.
 
 ### 4. Log alert rules (ops-alert paging)
 
-Create Better Stack log alert rules (one per category, or one rule with OR conditions):
+Better Stack log alerting is **query/threshold-based on a saved Telemetry chart**,
+not keyword matching on raw lines. For each category: build a chart that filters
+the structured fields, save it, then attach an alert rule that fires when the
+result count crosses a threshold over a window (e.g. `> 0` in 5 minutes).
 
-| Rule | Match |
-|------|-------|
+| Rule | Chart filter |
+|------|--------------|
 | Queue health | `opsAlert` AND `category=queue_health` |
 | Webhook signature | `opsAlert` AND `category=webhook_signature` |
 | Provider send | `opsAlert` AND `category=provider_send` |
 | Agent failure | `opsAlert` AND `category=agent_failure` |
 
+This is why the ops-alert logs carry stable `category` / `service` / `fingerprint`
+fields — the alert rule filters on parsed structure, so a phrasing change in a log
+message must not change those field values.
+
 Route all four to the same launch escalation policy. Do **not** route by `orgId` — it fragments platform-wide incidents.
 
-**Log-drain keyword alerts remain the sole paging channel** at launch and after Level 2 is added, unless explicitly changed later.
+**Log alert rules remain the sole paging channel** at launch and after Level 2 is added, unless explicitly changed later.
 
 ### 5. Uptime monitors
 
@@ -133,7 +188,7 @@ Docs:
 
 ### Prior setup to restore
 
-The repo previously had a working Sentry integration (removed in commit `d5f9b7a`). Restore these patterns with Better Stack endpoints:
+The repo previously had a working Sentry integration (removed in commit `d5f9b7a`). Note the correction at the top of this document: the **dashboard** has since been re-wired to sentry.io directly, so the list below is now accurate for the **gateway** and describes a re-pointing job for the dashboard. Restore these patterns with Better Stack endpoints:
 
 - Opt-in init when `SENTRY_DSN` is set — local dev, CI, and e2e work without error tracking
 - Shared `resolveRelease()` using `RAILWAY_GIT_COMMIT_SHA` / `VERCEL_GIT_COMMIT_SHA`
@@ -324,8 +379,8 @@ Update `apps/dashboard/.env.example` and `apps/gateway/.env.example` with commen
 
 Handled primarily by [operational-guardrails.md](operational-guardrails.md) and [runbook.md](runbook.md):
 
-- Better Stack Logs HTTP sources + Vercel/Railway drains
-- Log keyword alerts on four ops-alert categories
+- Better Stack Telemetry HTTP sources + Vercel drain and Railway forwarder
+- Log alert rules on four ops-alert categories
 - Uptime monitors on three health endpoints
 - Controlled alert validation + escalation policy
 
@@ -350,7 +405,7 @@ Handled primarily by [operational-guardrails.md](operational-guardrails.md) and 
 
 1. **Treating Level 2 as a launch blocker** — Level 1 log-drain ops alerts are the v1 paging channel.
 2. **Launching with neither log drains nor error tracking** — no production paging at all.
-3. **Adding sentry.io** — use Better Stack ingestion endpoints; avoids vendor access issues and keeps one observability stack.
+3. **Adding a second error vendor by accident** — this originally read "adding sentry.io," but the dashboard already reports to sentry.io (see the correction at the top). Resolve that split deliberately rather than letting a Better Stack gateway SDK land beside it unnoticed.
 4. **One error application for everything** — BullMQ worker noise will bury dashboard regressions.
 5. **Wizard at monorepo root** — paths and build commands will not match this layout.
 6. **Init inside route handlers** — too late for auto-instrumentation; use `instrumentation.ts` / `--import`.
@@ -363,11 +418,11 @@ Handled primarily by [operational-guardrails.md](operational-guardrails.md) and 
 
 ### Level 1 — launch (do first)
 
-- [ ] Create Better Stack team + escalation policy for launch owner
-- [ ] Create Logs HTTP sources for dashboard and gateway
-- [ ] Configure Vercel log drain → Better Stack
-- [ ] Configure Railway log drain → Better Stack
-- [ ] Create log alert rules for four ops-alert categories
+- [ ] Create Better Stack team + escalation policy for launch owner (paid tier)
+- [ ] Create Telemetry HTTP sources for dashboard and gateway
+- [ ] Configure Vercel log drain → Better Stack (needs Vercel Pro/Enterprise)
+- [ ] Deploy a Railway log forwarder service → Better Stack (no native drain exists)
+- [ ] Create saved charts + threshold alert rules for four ops-alert categories
 - [ ] Create three uptime keyword monitors (see runbook)
 - [ ] Validate one controlled alert per category
 - [ ] Complete operational-guardrails Phase 5 gate
@@ -409,7 +464,7 @@ Handled primarily by [operational-guardrails.md](operational-guardrails.md) and 
 
 ### Alert routing overlap
 
-Ops alerts emit `opsAlert: true` Pino logs in Better Stack Logs. **Keep log keyword alerts as the sole paging channel.** Level 2 dual-write to Better Stack Errors is for triage grouping only — do not enable Errors alert rules on ops-alert captures unless log paging is retired.
+Ops alerts emit `opsAlert: true` Pino logs into Better Stack Telemetry. **Keep log alert rules as the sole paging channel.** Level 2 dual-write to Better Stack Errors is for triage grouping only — do not enable Errors alert rules on ops-alert captures unless log paging is retired.
 
 ### Event scrubbing must stay in sync with log redaction
 
@@ -417,7 +472,7 @@ OAuth and provider token leakage was fixed in Pino via `PINO_REDACT_PATHS`. `scr
 
 ### CSP and client SDK
 
-Dashboard CSP is still report-only with `unsafe-inline` and `unsafe-eval`. If `tunnelRoute` or direct Better Stack ingest hosts are enabled for the client SDK, coordinate `connect-src` changes with the broader CSP enforcement pass.
+Dashboard CSP is still report-only, but it is no longer the loose policy this section assumed: since the 2026-07-30 nonce migration `unsafe-eval` is dev-only, `script-src` carries a per-request nonce with `'strict-dynamic'`, and the policy is built in `apps/dashboard/src/proxy.ts` rather than `next.config.js`. If `tunnelRoute` or direct ingest hosts are enabled for a client SDK, add the `connect-src` entries in `src/proxy/content-security-policy.ts` and coordinate with the broader CSP enforcement pass.
 
 ## Alternatives (if Better Stack Errors is insufficient)
 
@@ -425,7 +480,7 @@ Dashboard CSP is still report-only with `unsafe-inline` and `unsafe-eval`. If `t
 |------|-------------|
 | Sentry-class error UX, session replay | sentry.io (if access restored) or Highlight.io |
 | Sentry SDK compatible, self-host | GlitchTip, Bugsink |
-| Logs-only at scale | Axiom (replace or supplement Better Stack Logs) |
+| Logs-only at scale | Axiom (replace or supplement Better Stack Telemetry) |
 
 Do not add a second error-tracking vendor alongside Better Stack Errors without a clear split (e.g. logs in Axiom, errors in Better Stack).
 

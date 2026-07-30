@@ -19,7 +19,54 @@ This runbook covers the repo-side production deployment path for the dashboard o
 ## Deploy Order
 
 1. Set or update production env vars in Vercel and Railway.
-2. Run the production DB migration (uses `DIRECT_DATABASE_URL` via Prisma `directUrl`; keep the pooled `DATABASE_URL` set as well):
+2. Run the production DB migration — see [Database Migrations](#database-migrations) for the exact command and env vars.
+3. Deploy the dashboard to Vercel.
+4. Deploy the gateway to Railway.
+5. Confirm no migration lagged the code (see [Verify what is actually applied](#verify-what-is-actually-applied)).
+
+## Database Migrations
+
+Every migration runs through `prisma migrate deploy` against
+`packages/db/prisma/schema.prisma`. **Nothing applies them automatically.** The
+Vercel build is `next build`, the Railway build is `tsc`, and CI only ever
+migrates a throwaway local database. A production migration is applied because a
+human ran it — which is why the failures at the end of this section keep
+recurring.
+
+Apply an additive migration **before** deploying the build that reads the new
+columns, and treat destructive cleanup as a separate later release.
+
+### Env vars by context
+
+The datasource declares both URLs, so Prisma resolves **both** variables
+everywhere — even in contexts that never migrate:
+
+```prisma
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")         // pooled (PgBouncer)
+  directUrl = env("DIRECT_DATABASE_URL")  // direct host; migrations travel over this
+}
+```
+
+| Context | `DATABASE_URL` | `DIRECT_DATABASE_URL` | Runs migrations? |
+|---------|----------------|-----------------------|------------------|
+| Production migration run (your machine) | pooled Neon host + `?pgbouncer=true&connection_limit=1` | direct Neon host + `?sslmode=require` | **Yes — this is the only path that migrates production** |
+| Vercel (dashboard) | pooled Neon host | direct Neon host | No — `next build` only |
+| Railway (gateway server + worker) | pooled Neon host | direct Neon host | No — `npm run build` is compile-only |
+| Local tests | injected by `scripts/with-test-env.mjs` | same value | Yes — via `scripts/test-bootstrap.mjs` |
+| CI | same as local tests | same value | Yes — same bootstrap, against the CI service container |
+
+Set both variables in Vercel and Railway even though neither platform migrates:
+the schema declares `directUrl`, so both must resolve at client initialization.
+
+The local/CI test database defaults to
+`postgresql://postgres:postgres@127.0.0.1:55432/clerk_test?schema=public` and is
+overridden with `TEST_DATABASE_URL`. It is never a deployed database.
+
+### Commands
+
+Production — run before deploying the build that depends on the migration:
 
 ```bash
 DATABASE_URL='postgresql://...@ep-....-pooler.us-east-2.aws.neon.tech/neondb?pgbouncer=true&connection_limit=1' \
@@ -27,8 +74,46 @@ DIRECT_DATABASE_URL='postgresql://...@ep-....us-east-2.aws.neon.tech/neondb?sslm
 npm run db:migrate:deploy
 ```
 
-3. Deploy the dashboard to Vercel.
-4. Deploy the gateway to Railway.
+Local and CI — `test:integration` bootstraps the schema itself, so a new
+migration needs no separate step:
+
+```bash
+npm run test:services:up
+npm run test:integration     # runs scripts/test-bootstrap.mjs -> prisma migrate deploy
+```
+
+To apply new migrations to the local test database without running the suite:
+
+```bash
+npm run test:services:up
+node scripts/test-bootstrap.mjs
+```
+
+### Verify what is actually applied
+
+Merging and deploying a feature does **not** imply its migration ran. Check
+explicitly, with production env injected and no credentials on your clipboard:
+
+```bash
+railway run npx prisma migrate status --schema=packages/db/prisma/schema.prisma
+```
+
+Run this after every deploy that included a migration, and whenever a tool
+starts failing-and-warning for no apparent reason.
+
+### Known failures this prevents
+
+- **2026-07-22** — the B3/B4 watch-table migrations (`add_return_watches`,
+  `add_shipment_watches`) were found unapplied in production two days after
+  their code shipped, so their tool-success recording had been failing and
+  warning the entire time. They were applied together with B5's
+  `add_follow_up_watches`.
+- **2026-07-28** — release verification found the additive
+  `20260723000000_add_operator_pending_plans` migration had never been applied,
+  well after the feature merged. Applying it brought production current at all
+  62 migrations.
+
+Both were caught by `migrate status`, not by an error at deploy time.
 
 ## Config Notes
 
@@ -97,19 +182,8 @@ After deploy, run the production smoke check:
 npm run verify:production
 ```
 
-Also confirm no migration lagged the code. Railway's build does **not** run
-migrations, and merging/deploying a feature does not imply its migration is
-applied — verify explicitly (prod env injected, credential-safe):
-
-```bash
-railway run npx prisma migrate status --schema=packages/db/prisma/schema.prisma
-```
-
-This gap is real: on 2026-07-22 the B3/B4 watch-table migrations
-(`add_return_watches`, `add_shipment_watches`) were found unapplied in
-production two days after their code shipped, so their tool-success recording
-had been failing-and-warning the whole time. They were applied together with
-B5's `add_follow_up_watches`.
+Also confirm no migration lagged the code — see
+[Verify what is actually applied](#verify-what-is-actually-applied).
 
 For the product analytics rollout, complete one controlled workspace journey after enabling capture
 and verify both the raw events and saved reports. Do not backfill events from before deployment.

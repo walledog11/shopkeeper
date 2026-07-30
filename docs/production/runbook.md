@@ -785,6 +785,13 @@ the row to `pending` or replay it.
 
 Configure Better Stack HTTP keyword checks before sign-off. Do this manually in the Better Stack console; do not add Better Stack API tokens or credentials to the repo. Route these monitors to the same launch owner or escalation policy used for ops-alert notifications.
 
+**Plan note (2026-07-30).** Uptime keyword monitors themselves are available on
+the free tier, but two settings below are not: **escalation policies** and
+**sub-3-minute check frequency** are paid features, as is phone/SMS paging. On
+the free tier, create the same three monitors at 3-minute frequency with email
+(or Slack) alerts routed directly to the launch owner. That is the deliberate
+zero-cost interim posture; upgrade when the first merchant onboards.
+
 Before creating monitors, verify the live production health endpoints from a trusted shell:
 
 ```bash
@@ -847,7 +854,14 @@ Do not check off the PITR item until the retention window is recorded here or in
 
 ### Ops Alert Log Routing
 
-Ops alerts emit structured Pino logs with `opsAlert: true` and stable `category`, `service`, `tags`, `extra`, and `fingerprint` fields. Route Vercel and Railway log drains to Better Stack and create keyword alert rules on `opsAlert` and `category` (see [error-tracking-plan.md](error-tracking-plan.md)).
+Ops alerts emit structured Pino logs with `opsAlert: true` and stable `category`, `service`, `tags`, `extra`, and `fingerprint` fields. Forward both services' logs into Better Stack **Telemetry** — a Vercel log drain for the dashboard (needs Vercel Pro/Enterprise) and a **forwarder service** for the gateway, since **Railway has no native log drain** — then alert on `opsAlert` and `category`.
+
+Better Stack log alerting is **query/threshold-based on a saved Telemetry chart**,
+not raw-text keyword matching: filter the structured fields into a chart, save it,
+and attach a threshold rule. This is why the `category` / `service` / `fingerprint`
+field values are a stable contract — rewording an alert message is safe, renaming
+a field silently breaks paging. Full setup lives in
+[error-tracking-plan.md](error-tracking-plan.md).
 
 Alert categories:
 
@@ -974,7 +988,11 @@ fragments, code samples, and raw payloads.
    `Content-Security-Policy-Report-Only` header to enforcement. Confirm a
    production dashboard response includes `report-uri
    /api/security/csp-report`, `report-to csp-endpoint`, and the matching
-   `Reporting-Endpoints` header.
+   `Reporting-Endpoints` header. Since 2026-07-30 the policy is built
+   **per request** by Clerk's middleware CSP option in
+   `apps/dashboard/src/proxy.ts` (it carries a fresh nonce), not by a static
+   `next.config.js` header — so check a real response, and expect the nonce and
+   `Reporting-Endpoints` to differ between requests.
 2. Submit one synthetic `application/csp-report` violation with test origins and
    confirm the log drain contains only the sanitized origin/directive fields.
    Confirm malformed and oversized requests do not create log entries.
@@ -983,11 +1001,25 @@ fragments, code samples, and raw payloads.
    effective directive and blocked origin. Add only a narrowly justified source;
    never use captured customer URLs or script samples for diagnosis because the
    collector deliberately does not retain them.
-4. After a representative clean window, remove production `unsafe-eval` and
-   replace required inline execution with per-request nonces or static hashes in
-   a production-like build. Exercise the full authenticated Playwright matrix
+4. ~~Remove production `unsafe-eval` and replace required inline execution with
+   per-request nonces.~~ **Done 2026-07-30**, ahead of the observation window.
+   `unsafe-eval` is dev-only, `http:`/`https:` are gone from `script-src`, and
+   every script carries a per-request nonce under `'strict-dynamic'`. The
+   surviving `'unsafe-inline'` is Clerk's intentional CSP2 fallback, which
+   `'strict-dynamic'` makes CSP3 browsers ignore — do not remove it. Still
+   exercise the full authenticated Playwright matrix in a production-like build
    before enabling an enforcement canary.
-5. Canary `Content-Security-Policy` on limited production traffic and verify an
+5. **Gate — resolve before any enforcement canary.** Clerk's own
+   `clerk.browser.js` `<script>` tag is server-rendered **without** a nonce, so
+   `'strict-dynamic'` blocks it the moment the header is enforced, breaking
+   authentication for every user. Already ruled out: the nonce is minted and
+   forwarded (`x-nonce` on request and response);
+   `buildClerkJSScriptAttributes` applies a nonce when given one (`@clerk/shared`
+   `loadClerkJsScript.mjs:160`); and a server-component `providers.tsx` with
+   `dynamic` on `ClerkProvider` does not fix it. Expect this to appear in the
+   report-only telemetry as a `script-src` violation against the Clerk frontend
+   API origin — that is the policy working, not a collector fault.
+6. Canary `Content-Security-Policy` on limited production traffic and verify an
    injected script fixture is blocked while supported flows remain clean. Roll
    back by restoring the report-only header; keep the collector enabled so the
    violation evidence remains available.
