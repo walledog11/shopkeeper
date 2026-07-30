@@ -4,8 +4,8 @@ import logger from './logger.js';
 import type { OperatorBinding } from './operator-notify.js';
 
 // BullMQ processing queues retry up to 3× with exponential backoff (~35s window).
-// spectrum-ts@4.2.0 does not expose clientGuid on space.send(), so per-channel Redis
-// keys substitute for transport-level dedupe on proactive operator sends.
+// Spectrum does not expose a stable provider idempotency key on space.send(), so
+// per-channel Redis keys substitute for transport-level dedupe on proactive sends.
 const OPERATOR_NOTIFY_DEDUPE_TTL_SECONDS = 60 * 60;
 
 function redisKey(

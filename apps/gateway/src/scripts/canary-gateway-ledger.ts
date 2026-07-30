@@ -6,6 +6,7 @@ loadGatewayEnv();
 
 const EXECUTE = process.argv.includes('--execute');
 const ORGANIZATION_ID = readArg('--org-id=');
+const EXPECTED_MODE = readArg('--expected-mode=') ?? 'shadow';
 
 function readArg(prefix: string): string | null {
   const raw = process.argv.find((arg) => arg.startsWith(prefix))?.slice(prefix.length).trim();
@@ -17,9 +18,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 async function main(): Promise<void> {
-  if (!ORGANIZATION_ID) {
+  if (!ORGANIZATION_ID || (EXPECTED_MODE !== 'shadow' && EXPECTED_MODE !== 'enforce')) {
     throw new Error(
-      'Usage: npx tsx apps/gateway/src/scripts/canary-gateway-ledger.ts --org-id=<uuid> [--execute]',
+      'Usage: npx tsx apps/gateway/src/scripts/canary-gateway-ledger.ts '
+      + '--org-id=<uuid> [--expected-mode=shadow|enforce] [--execute]',
     );
   }
 
@@ -57,12 +59,13 @@ async function main(): Promise<void> {
       modes: {
         autoExecute: rawSettings.autoExecuteMode ?? 'off(default)',
         planExecutionLedger: process.env.PLAN_EXECUTION_LEDGER_MODE ?? null,
+        expectedPlanExecutionLedger: EXPECTED_MODE,
       },
       action: 'add_internal_note',
     }, null, 2));
 
     if (!EXECUTE) {
-      console.log('Inspect-only. Re-run with --execute to create one controlled gateway-host shadow-ledger observation.');
+      console.log(`Inspect-only. Re-run with --execute to create one controlled gateway-host ${EXPECTED_MODE} ledger observation.`);
       return;
     }
     if (
@@ -75,8 +78,11 @@ async function main(): Promise<void> {
     if (rawSettings.autoExecuteMode !== undefined && rawSettings.autoExecuteMode !== 'off') {
       throw new Error(`Execute mode requires autoExecuteMode=off; received ${String(rawSettings.autoExecuteMode)}`);
     }
-    if (process.env.PLAN_EXECUTION_LEDGER_MODE !== 'shadow') {
-      throw new Error('Execute mode requires PLAN_EXECUTION_LEDGER_MODE=shadow.');
+    if (process.env.PLAN_EXECUTION_LEDGER_MODE !== EXPECTED_MODE) {
+      throw new Error(
+        `Execute mode requires PLAN_EXECUTION_LEDGER_MODE=${EXPECTED_MODE}; `
+        + `received ${String(process.env.PLAN_EXECUTION_LEDGER_MODE)}`,
+      );
     }
 
     const runId = randomUUID();
@@ -165,7 +171,7 @@ async function main(): Promise<void> {
     }, buildGatewayPlanExecutionDeps());
 
     if (!result.execution.id) {
-      throw new Error('P1-02 gateway canary failed: shadow ledger did not return an execution ID.');
+      throw new Error('P1-02 gateway canary failed: ledger did not return an execution ID.');
     }
     const [execution, internalNoteCount, auditNoteCount] = await Promise.all([
       db.planExecution.findUniqueOrThrow({
@@ -177,6 +183,9 @@ async function main(): Promise<void> {
           observationCount: true,
           threadId: true,
           sourceMessageId: true,
+          claimedAt: true,
+          completedAt: true,
+          lastError: true,
           actions: {
             select: {
               tool: true,
@@ -229,9 +238,18 @@ async function main(): Promise<void> {
     console.log(JSON.stringify(evidence, null, 2));
 
     const action = execution.actions[0];
-    const passed = execution.status === 'pending'
+    const ledgerStatePassed = EXPECTED_MODE === 'shadow'
+      ? execution.status === 'pending'
+        && execution.observationCount === 1
+        && execution.claimedAt === null
+        && execution.completedAt === null
+      : execution.status === 'committed'
+        && execution.observationCount === 0
+        && execution.claimedAt !== null
+        && execution.completedAt !== null;
+    const passed = ledgerStatePassed
       && execution.mode === 'human_approved'
-      && execution.observationCount === 1
+      && execution.lastError === null
       && execution.threadId === thread.id
       && execution.sourceMessageId === message.id
       && execution.actions.length === 1
@@ -246,7 +264,9 @@ async function main(): Promise<void> {
       throw new Error('P1-02 gateway canary failed: ledger, action, or internal-note evidence did not agree.');
     }
 
-    console.log('P1-02 gateway canary passed: one internal-only approved action produced one linked shadow-ledger observation.');
+    console.log(
+      `P1-02 gateway canary passed: one internal-only approved action produced one linked ${EXPECTED_MODE} ledger execution.`,
+    );
   } finally {
     await closeGatewayRedisConnections().catch(() => {});
     await db.$disconnect().catch(() => {});

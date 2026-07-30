@@ -19,6 +19,7 @@ npm run test:unit
 npm run test:node
 npm run test:integration
 npm run test:e2e:smoke
+npm run test:e2e:send-reply-hop
 npm run test:coverage
 ```
 
@@ -44,6 +45,14 @@ seeded plan → approval → persistence workflow. Clerk browser-session E2E is
 intentionally separate via `npm run test:e2e:browser`, requires real
 development Clerk credentials, and is a nightly, release, or manual
 identity-provider contract.
+
+`npm run test:e2e:send-reply-hop` is the focused cross-service delivery canary.
+It starts both apps, seeds an isolated email thread, invokes the gateway
+`ThreadSink` in a separate gateway process, crosses the authenticated
+`/api/agent/io-send-internal` HTTP boundary, and requires both a recorded
+provider call and one committed agent message. Test env forces synchronous
+record mode, a loopback dashboard URL, and an `example.com` recipient, so this
+canary cannot reach a real provider.
 
 Node script tests cover `scripts/*.test.mjs` and are part of PR verification through `npm run test:node`.
 

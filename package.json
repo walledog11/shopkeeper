@@ -34,6 +34,7 @@
     "test:integration:local": "node ./scripts/test-integration-local.mjs",
     "test:e2e": "npm run test:e2e:smoke && npm run test:e2e:browser",
     "test:e2e:smoke": "E2E_AUTH_BYPASS=true node ./scripts/with-test-env.mjs npx playwright test --config=playwright.config.ts",
+    "test:e2e:send-reply-hop": "E2E_AUTH_BYPASS=true node ./scripts/with-test-env.mjs npx playwright test e2e/internal-send-hop.spec.ts --config=playwright.config.ts",
     "test:e2e:browser": "E2E_AUTH_BYPASS=false node ./scripts/with-test-env.mjs npx playwright test --config=playwright.browser.config.ts",
     "configure:gmail-pubsub": "bash scripts/configure-gmail-pubsub.sh",
     "provision:posthog-reports": "node ./scripts/provision-posthog-reports.mjs",
@@ -80,6 +81,7 @@
   },
   "packageManager": "npm@10.9.3",
   "overrides": {
+    "@opentelemetry/core": "2.8.0",
     "prisma": "6.19.3",
     "@prisma/client": "6.19.3",
     "js-cookie": "^3.0.6",
@@ -90,7 +92,7 @@
       "shell-quote": "1.10.0"
     },
     "next": {
-      "postcss": "8.5.15"
+      "postcss": "8.5.25"
     }
   }
 }

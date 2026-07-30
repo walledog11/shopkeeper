@@ -5,9 +5,12 @@ Independent Gmail and forwarded-email integrations with deterministic reply rout
 **Status:** implementation for Phases 1–7 and the reliability hardening follow-up
 is deployed from `5a7771ab`. Production Pub/Sub/OIDC, deep health, authenticated
 queue health, the production verifier, startup logs, and the inspect-only
-recovery guardrail were verified on 2026-07-29. The scheduled 12/24-hour
-observation, live mailbox canary, custom-domain verification prerequisites, and
-Google's restricted-scope verification remain.
+recovery guardrail were verified on 2026-07-29. A fresh self-addressed Gmail
+outbound queue canary was accepted with a provider ID and deduplicated on
+re-enqueue; strict one-hour and 240-hour audits are clean. The scheduled
+12/24-hour observation, independent inbound/threading mailbox canary,
+custom-domain verification prerequisites, and Google's restricted-scope
+verification remain.
 
 **Last reviewed:** 2026-07-29
 
@@ -76,12 +79,17 @@ Out of scope:
   health, queues, logs, Vercel build, and recovery preflight passed with no
   rollback. See
   [`production/gmail-rollout-evidence-2026-07-29.md`](production/gmail-rollout-evidence-2026-07-29.md).
+- The guarded `canary:outbound-gmail` command targets only the connected
+  account's own plus-address. Its 2026-07-29 production run reached `sent`,
+  persisted a provider message ID, and reported duplicate queue admission as
+  deduplicated. Both strict audits contain one Gmail sent row and no blockers.
 
 ### Remaining
 
 - Observe at least one scheduled maintenance catch-up and daily renewal, then
   close the 24-hour health window.
-- Complete the compact live Gmail canary: plain-text/threaded reply, HTML-only
+- Confirm the self-addressed canary in Gmail and complete the independent live
+  inbound canary: plain-text/threaded reply, HTML-only
   plus attachment, Workspace alias routing, and isolated stale-history
   recovery.
 - Complete Google OAuth restricted-scope verification/security assessment
@@ -90,7 +98,10 @@ Out of scope:
   configured; production currently has no Postmark row.
 - Native Gmail inbound must remain in controlled rollout until production soak is complete.
 - `EMAIL_INBOUND_MODE=gmail-only` must not be used outside development until native inbound is complete.
-- The async outbound feature is implemented behind `OUTBOUND_EMAIL_ASYNC`; its deployed rollout state must be checked separately.
+- The async worker path has fresh production provider and deduplication
+  evidence. `OUTBOUND_EMAIL_ASYNC` remains unset on the dashboard, so broad
+  dashboard routing stays on the synchronous rollback rail until mailbox and
+  recovery checks are complete.
 
 ## Target architecture
 
@@ -526,18 +537,17 @@ These items are separate from Gmail native inbound and should not delay it.
 
 ### Async outbound rollout
 
-- Verify the deployed value of `OUTBOUND_EMAIL_ASYNC`.
+- Verify and record the deployed value of `OUTBOUND_EMAIL_ASYNC`.
 - Enable for internal organizations first.
 - Confirm pending, retry, and orphan-sweeper behavior.
-- Populate `providerMessageId` when provider APIs expose it.
+- `providerMessageId` persistence is implemented for Gmail and Postmark.
 
 ### Outbound parity
 
 - Outbound attachments
-- Provider message IDs
-- Gmail-native threading regression tests
+- Gmail-native threading live mailbox confirmation
 - Optional HTML replies with a plain-text fallback
-- Bounce handling after provider message IDs are available
+- Bounce handling
 
 ## Risks and controls
 

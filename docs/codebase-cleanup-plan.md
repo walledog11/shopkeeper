@@ -29,8 +29,9 @@ identity), operator events (14 first-claim committed/delivered events: 10
 Telegram and 4 iMessage), plan-execution duplication/unknown/stale claims, and
 unknown-outcome recovery. The reservation audit is also clean but contains zero
 reservations, so it is baseline evidence rather than a canary. The plan-execution
-ledger now has seven human-approved rows: six shadow observations remain
-`pending`, and the first dashboard-enforced canary is `committed`. There is no
+ledger now has eight human-approved rows: six shadow observations remain
+`pending`, while the dashboard-enforced internal canary and first representative
+reviewed `send_reply` are `committed`. There is no
 repeated observation, unknown outcome, or stale claim. Two historical
 `search_kb` → `send_reply`
 observations are supplemented by host-identified, internal-only dashboard and
@@ -56,11 +57,11 @@ To close this plan:
    traffic; then enforce the public gateway and worker together and repeat the
    canary/audit sequence. Keep the documented rollback rail and strict audit
    running through each stage.
-2. **Shopify safety:** execute controlled `cancel_order`,
+2. **Shopify safety:** the controlled `cancel_order`,
    `edit_shopify_order`, `update_shopify_order_address`, and fulfilled-order
-   `create_return` → `attach_return_label` canaries; separately exercise
-   refund/store-credit/gift-card reservation admission and finish a strict
-   observation window containing real reservation rows.
+   `create_return` → `attach_return_label` canaries are complete. Separately
+   exercise refund/store-credit/gift-card reservation admission and finish a
+   strict observation window containing real reservation rows.
 3. **Outbound email:** confirm the Gmail canary in the mailbox, exercise the
    documented crash-after-acceptance/stale-processing/manual-retry paths
    without blind resend, decide the async-only date, and canary Postmark when a
@@ -97,7 +98,8 @@ hosted run remains the release check.
 - [x] 1,253 unit tests and 38 Node-script tests pass.
 - [x] 993 database-backed integration tests pass; 3 cases are skipped by the
   existing suite configuration.
-- [x] All 8 auth-bypass Playwright smoke tests pass.
+- [x] All 9 auth-bypass Playwright smoke tests pass, including the focused
+  gateway-to-dashboard `send_reply` hop canary.
 - [x] The production build passes with Sentry uploads explicitly disabled;
   builds without upload credentials no longer install Sentry's post-compile
   release/upload hook.
@@ -199,8 +201,17 @@ recorded no error, and linked one successful `add_internal_note` action. The
 post-canary strict audit contains seven human-approved rows (six shadow
 `pending`, one enforced `committed`) with no repeated observations, unknown
 outcomes, or stale claims; the unknown-outcome audit and production verifier
-also pass. Hold this host split for a representative 24-hour dashboard
-observation window before changing either Railway service.
+also pass. The first representative reviewed dashboard execution
+`9bbe5f42-4da9-4f89-ad13-e10a7b167d49` then committed one successful
+`send_reply` with `observationCount=0`, populated claim/completion timestamps,
+and no error. The strict audits now contain eight human-approved rows (six
+shadow `pending`, two enforced `committed`) with no blockers. Hold this host
+split until the representative 24-hour dashboard observation window completes.
+The representative execution committed at 2026-07-29 14:46 PDT
+(2026-07-29T21:46:25Z), so the conservative earliest Railway promotion check is
+2026-07-30 after 14:47 PDT. Before changing either Railway service, rerun the
+production verifier plus the strict plan-execution and unknown-outcome audits
+and require them all to pass.
 
 - **Related findings:** AUD-001, AUD-002, AUD-012.
 - **Files likely to change:** `packages/agent/src/plan-execution.ts`, `turn.ts`; `apps/dashboard/src/app/api/agent/route.ts`, `quick-approve/route.ts`; `apps/gateway/src/message-handlers/execute-operator-agent-turn.ts`, `pending-plan-actions.ts`.
@@ -356,9 +367,8 @@ then were restored to aligned `shadow` and passed it again.
 
 ### P3-01 — Classify Shopify retries and reconcile ambiguous mutations
 
-**Status (2026-07-28): Implementation deployed; five provider canaries and
-live-schema validation complete; remaining mutation-family rollout evidence
-pending.** The shared Shopify client now retries
+**Status (2026-07-29): Implementation deployed; live-schema validation and all
+planned provider mutation-family canaries complete.** The shared Shopify client now retries
 safe GET reads once by default and never implicitly retries POST/PUT/DELETE;
 mutation retries require an explicit call-site override backed by an operation-
 specific idempotency/reconciliation decision. Refunds now use Shopify 2026-04's
@@ -386,8 +396,8 @@ of minting another card. Local unit, lint, and repository type checks pass.
 **Durable follow-up recovery is now implemented (2026-07-21):** the
 `unknown-outcome-sweep` maintenance job read-probes ambiguous mutations left in
 `unknown`, moves proven committed/no-effect outcomes to terminal states, and
-reconciles stale `claimed` executions — never replaying an approved plan. Only
-provider sandbox/canary verification remains open.
+reconciles stale `claimed` executions — never replaying an approved plan. The
+P3-01 provider rollout gate is complete.
 
 **Completed locally (verified 2026-07-13):**
 
@@ -452,15 +462,18 @@ provider sandbox/canary verification remains open.
   drove fixes for four always-failing provider paths and three incorrect
   reconciliation probes; the detailed incident history remains in
   `docs/archive/agent-behavior-and-expansion-plan-2026-07.md`.
-- [ ] Complete provider rollout evidence for the remaining mutation paths that
-  have deterministic coverage but have not been deliberately executed
-  end-to-end: `cancel_order`, `edit_shopify_order`, and
-  `update_shopify_order_address`. The broader Shopify harness also still needs a
-  fulfilled test-order fixture for the `create_return` +
-  `attach_return_label` family; its document is schema-valid but the workflow
-  has never executed, making it the highest-value remaining Shopify canary.
-  Run each family separately against a controlled fixture and require the
-  provider result and reconciliation probe to agree.
+- [x] Complete provider rollout evidence for `cancel_order`,
+  `edit_shopify_order`, `update_shopify_order_address`, and fulfilled-order
+  `create_return` + `attach_return_label`. **Completed 2026-07-29:** the harness
+  gained a `--test-orders-only` safety mode that requires an explicit supported
+  `--only` family, creates a fresh `test: true` order, and never selects a live
+  or pre-existing order. Separate runs passed on `palette-dev`: cancellation
+  (`#1013`), remove-only edit with one retained line (`#1014`), order plus
+  customer-default-address synchronization (`#1015`), and fulfilled return plus
+  attached label/tracking (`#1016`). Every tool returned `ok`, every independent
+  probe returned `committed`, the customer address matched, and the two-step
+  return family ran both steps. The no-side-effect live-schema pass also
+  validated all 12 mutation cases and 11 registered query documents.
 - [x] Persist the granted scope set at install. **Deployed 2026-07-28:** the
   Shopify token exchange normalizes the returned `scope` set into
   `Integration.metadata.oauthScopes`. Reconnects replace that scope snapshot
@@ -471,8 +484,9 @@ provider sandbox/canary verification remains open.
   installs and reconnects. Not required for P3-01 rollout; recorded here because
   P3-01 exposed it.
 - [x] Revalidate production Shopify connectivity read-only. The connected store
-  identifies itself as `palette-dev` but reports Shopify plan `basic`; its four
-  recent orders contain no `test: true` order. **Resolved 2026-07-20:** the
+  identifies itself as `palette-dev` but reports Shopify plan `basic`; at the
+  time, its four recent orders contained no `test: true` order.
+  **Resolved 2026-07-20:** the
   operator confirmed `palette-dev` is the development store with test orders used
   to exercise the app, so store availability no longer blocks the mutating
   canaries — running them (the first unchecked item above) is the remaining
@@ -1406,28 +1420,39 @@ the formerly omitted product search, tracking, and support-stats reads.
 
 ### P8-02 — Upgrade Spectrum through a compatibility branch
 
-**Status (2026-07-20): Isolated compatibility spike complete; separate branch,
-provider sandbox, and canary remain.** The current registry release is
-`spectrum-ts@12.2.0`. An isolated exact-version probe confirmed that the gateway's
-current `Spectrum`, iMessage provider, webhook, space/send, shutdown, and content
-normalization APIs still typecheck and import at runtime with the repository's
-`skipLibCheck` setting. A detached copy of the real gateway then passed gateway
-typecheck, lint, build, 170 unit tests, and 481 integration tests without adapter
-changes.
+**Status (2026-07-29): Local upgrade complete; production deployment and
+provider canary remain.** The gateway now pins `spectrum-ts@12.6.0`, the
+dashboard pins Next `16.2.12`, and the vulnerable exporter path resolves
+`@opentelemetry/core@2.8.0`; Photon's own telemetry package retains its
+compatible `2.10.0` core. `npm audit --omit=dev` reports zero production
+vulnerabilities. The existing `Spectrum`, iMessage provider, webhook,
+space/send, reconnect, shutdown, and content-normalization adapters required no
+API rewrite.
 
-Installing 12.2 alone does not meet the security goal: its exporter subtree still
-pins OpenTelemetry 2.7.1/0.218 and produces the same baggage-allocation advisory.
-The isolated tree used aligned OpenTelemetry 2.9.0/0.220 overrides; that removed
-the complete OpenTelemetry audit chain, leaving one unrelated transitive Axios
-moderate advisory in the monorepo. Those overrides cross the provider's exact
-transitive pins, so they are evidence for the compatibility branch, not approval
-to edit the shared lockfile. Real Photon sandbox sends/receives, telemetry export,
-graceful shutdown under load, the oversized-baggage case, and a rollback artifact
-remain required before canary.
+The full audit still reports 11 development-only advisories in the ESLint
+`minimatch`/`brace-expansion` chain and the shadcn MCP
+`@modelcontextprotocol/sdk`/Hono chain. Neither remaining chain is reachable
+from the shipped gateway or dashboard, and the prior Spectrum/OpenTelemetry
+production advisory chain is gone.
+
+The upgrade PR gate passes with 1,472 unit tests, 38 Node-script tests, 9
+Playwright smoke tests, all coverage thresholds, lint, and all production
+builds. The final gateway coverage suite, including the guarded Gmail canary
+added during rollout verification, passes 870 tests with 1 skipped;
+96 focused Spectrum/iMessage integration tests and a runtime import probe also
+pass. The deployed production verifier confirms the current iMessage
+configuration, deep health, queue health, and reachable Photon webhook.
+
+The dependency upgrade is not deployed yet, so production health is not a
+12.6 provider canary. The stored Photon CLI session expired during verification
+and device authorization was not approved; after deploying the exact tested
+lockfile, re-authenticate the CLI, run one controlled bound-device send/receive,
+inspect telemetry, and verify graceful shutdown before broad rollout. Preserve
+the prior release as the rollback artifact.
 
 - **Related findings:** AUD-019.
 - **Files likely to change:** `apps/gateway/package.json`, lockfile, Spectrum client/webhook adapters and tests.
-- **Proposed implementation:** Follow 4.x-to-9.x migration guidance, update adapters, run all iMessage suites and a real sandbox test, then stage deployment.
+- **Proposed implementation:** Deploy the tested 12.6 lockfile, run the controlled Photon canary, then stage broad rollout.
 - **Dependencies:** Provider sandbox and rollback artifact.
 - **Risk / scope:** Medium-high / Medium.
 - **Tests required:** Signature/webhook, all content variants, binding, operator/customer sends, graceful shutdown, oversized baggage memory case.
@@ -1696,9 +1721,10 @@ job plus the agent-core `unknown-outcome-reconciliation` /
 drive `unknown` executions/reservations/actions terminal, and reconcile stale
 `claimed`/`reserved` rows — all read-only probes and terminal ledger updates,
 never a plan replay. Ships with the read-only `audit:unknown-outcomes` rollout
-gate and inspect-only `canary:shopify-mutations` harness; reuses existing
-models (no migration). Its provider sandbox/canary observation remains the only
-open P3 rollout gate. Separately, vision-audit §2.2 is fixed: `updateContext`
+gate and guarded `canary:shopify-mutations` harness; reuses existing
+models (no migration). The provider canary gate completed on 2026-07-29 with
+fresh test-order-only fixtures and agreeing reconciliation probes. Separately,
+vision-audit §2.2 is fixed: `updateContext`
 is now an atomic per-slot write (no read-modify-write), so concurrent
 plan-card/operator-turn writes to different pending slots can no longer clobber
 one another.

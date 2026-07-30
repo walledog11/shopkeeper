@@ -12,6 +12,7 @@
 //   node scripts/canary-shopify-mutations.mjs
 //   node scripts/canary-shopify-mutations.mjs --shop=example.myshopify.com
 //   node scripts/canary-shopify-mutations.mjs --execute --only=gift_card,refund
+//   node scripts/canary-shopify-mutations.mjs --execute --test-orders-only --only=cancel_order
 //   node scripts/canary-shopify-mutations.mjs --validate
 //
 // --validate checks two document classes against the live schema: mutations, via
@@ -29,11 +30,13 @@ const {
   shopifyRest,
   shopifyRestJson,
   attachReturnLabel,
+  cancelOrder,
   createExchange,
   createGiftCard,
   createRefund,
   createReturn,
   createShopifyOrder,
+  editShopifyOrder,
   fetchReturnableLineItems,
   issueDiscount,
   issueStoreCredit,
@@ -42,6 +45,7 @@ const {
   SHOPIFY_MUTATION_DOCUMENTS,
   SHOPIFY_QUERY_DOCUMENTS,
   skippedMutationDocument,
+  updateShopifyOrderAddress,
 } = await import('@shopkeeper/agent/shopify');
 const { missingShopifyScopes } = await import('@shopkeeper/agent/shopify/integration-health');
 
@@ -49,8 +53,30 @@ const args = new Set(process.argv.slice(2));
 const EXECUTE = args.has('--execute');
 const VALIDATE = args.has('--validate');
 const ALLOW_LIVE_STORE = args.has('--allow-live-store');
+const TEST_ORDERS_ONLY = args.has('--test-orders-only');
 const ONLY = readCsvArg('--only=');
 const SHOP = readValueArg('--shop=');
+
+const TEST_ORDER_ONLY_FAMILIES = new Set([
+  'cancel_order',
+  'edit_shopify_order',
+  'update_shopify_order_address',
+  'return_label',
+]);
+
+if (
+  TEST_ORDERS_ONLY
+  && (
+    !EXECUTE
+    || !ONLY
+    || ONLY.some((family) => !TEST_ORDER_ONLY_FAMILIES.has(family))
+  )
+) {
+  throw new Error(
+    '--test-orders-only requires --execute and an explicit --only list containing only '
+    + [...TEST_ORDER_ONLY_FAMILIES].join(', '),
+  );
+}
 
 const DEVELOPMENT_PLANS = new Set([
   'partner_test',
@@ -211,7 +237,7 @@ async function inspectStore(ctx) {
     const liveOrders = orders.filter((order) => order.test !== true);
     const planName = String(shop?.plan_name ?? 'unknown');
     const isDevelopmentPlan = DEVELOPMENT_PLANS.has(planName.toLowerCase());
-    const mutationsAllowed = isDevelopmentPlan || ALLOW_LIVE_STORE;
+    const mutationsAllowed = isDevelopmentPlan || ALLOW_LIVE_STORE || TEST_ORDERS_ONLY;
 
     return {
       shop: {
@@ -222,6 +248,13 @@ async function inspectStore(ctx) {
         currency: shop?.currency ?? null,
         isDevelopmentPlan,
         mutationsAllowed,
+        writeMode: TEST_ORDERS_ONLY
+          ? 'new-test-orders-only'
+          : isDevelopmentPlan
+            ? 'development-plan'
+            : ALLOW_LIVE_STORE
+              ? 'explicit-live-store'
+              : 'inspect-only',
       },
       recentOrders: {
         totalSampled: orders.length,
@@ -247,6 +280,7 @@ async function inspectStore(ctx) {
         currency: null,
         isDevelopmentPlan: false,
         mutationsAllowed: false,
+        writeMode: 'inspect-only',
       },
       recentOrders: {
         totalSampled: 0,
@@ -342,6 +376,140 @@ async function createCanaryCustomer(ctx, operationId) {
   return { id: String(id), email };
 }
 
+const CANARY_INITIAL_ADDRESS = Object.freeze({
+  first_name: 'Canary',
+  last_name: 'Shopkeeper',
+  address1: '1 Canary Test St',
+  city: 'Portland',
+  province: 'OR',
+  zip: '97201',
+  country: 'US',
+});
+
+const CANARY_UPDATED_ADDRESS = Object.freeze({
+  address1: '2 Canary Verified Ave',
+  city: 'Portland',
+  province: 'OR',
+  zip: '97202',
+  country: 'US',
+});
+
+function normalizedAddressPart(value) {
+  return typeof value === 'string' ? value.trim().toLowerCase().replace(/\s+/g, ' ') : '';
+}
+
+function canaryAddressMatches(actual, expected) {
+  if (!actual) return false;
+  if (normalizedAddressPart(actual.address1) !== normalizedAddressPart(expected.address1)) return false;
+  if (normalizedAddressPart(actual.city) !== normalizedAddressPart(expected.city)) return false;
+  if (normalizedAddressPart(actual.zip) !== normalizedAddressPart(expected.zip)) return false;
+  const expectedProvince = normalizedAddressPart(expected.province);
+  const actualProvinces = [actual.province, actual.province_code].map(normalizedAddressPart);
+  if (!actualProvinces.includes(expectedProvince)) return false;
+  const expectedCountry = normalizedAddressPart(expected.country);
+  const actualCountries = [actual.country, actual.country_code].map(normalizedAddressPart);
+  return actualCountries.includes(expectedCountry)
+    || (expectedCountry === 'us' && actualCountries.includes('united states'));
+}
+
+async function createCanaryOrderFixture(
+  ctx,
+  {
+    family,
+    variants,
+  },
+) {
+  if (!Array.isArray(variants) || variants.length === 0) {
+    throw new Error(`Cannot create ${family} fixture: the store has no active product variant.`);
+  }
+
+  const email = `shopkeeper-${family}-canary+${Date.now()}@example.com`;
+  const mailingAddress = {
+    firstName: CANARY_INITIAL_ADDRESS.first_name,
+    lastName: CANARY_INITIAL_ADDRESS.last_name,
+    address1: CANARY_INITIAL_ADDRESS.address1,
+    city: CANARY_INITIAL_ADDRESS.city,
+    provinceCode: CANARY_INITIAL_ADDRESS.province,
+    zip: CANARY_INITIAL_ADDRESS.zip,
+    countryCode: CANARY_INITIAL_ADDRESS.country,
+  };
+  const variables = {
+    order: {
+      email,
+      test: true,
+      financialStatus: 'PENDING',
+      lineItems: variants.map((variant) => ({
+        variantId: `gid://shopify/ProductVariant/${variant.id}`,
+        quantity: 1,
+      })),
+      customer: {
+        toUpsert: {
+          email,
+          firstName: CANARY_INITIAL_ADDRESS.first_name,
+          lastName: CANARY_INITIAL_ADDRESS.last_name,
+        },
+      },
+      shippingAddress: mailingAddress,
+      billingAddress: mailingAddress,
+      tags: ['shopkeeper-canary', `shopkeeper-${family}-canary`],
+    },
+    options: {
+      sendReceipt: false,
+      sendFulfillmentReceipt: false,
+    },
+  };
+
+  const skipped = await shopifyGraphql(
+    ctx,
+    skippedMutationDocument({
+      document: CANARY_FULFILLED_ORDER_CREATE_MUTATION,
+      rootField: 'orderCreate',
+    }),
+    variables,
+    { maxRetries: 0 },
+  );
+  if (skipped && typeof skipped === 'object' && 'orderCreate' in skipped) {
+    throw new Error(`Shopify did not honor @skip for the ${family} fixture preflight.`);
+  }
+
+  const data = await shopifyGraphql(
+    ctx,
+    CANARY_FULFILLED_ORDER_CREATE_MUTATION,
+    variables,
+    { maxRetries: 0 },
+  );
+  const userErrors = data.orderCreate?.userErrors ?? [];
+  if (userErrors.length > 0) {
+    throw new Error(
+      `Could not create ${family} test order: ${userErrors.map((error) => error.message).join(', ')}`,
+    );
+  }
+  const order = data.orderCreate?.order;
+  if (!order?.id) {
+    throw new Error(`Shopify accepted the ${family} fixture request but returned no order id.`);
+  }
+  if (order.test !== true) {
+    throw new Error(`Shopify created ${family} fixture ${order.name ?? order.id} as a non-test order.`);
+  }
+  if (!order.customer?.id) {
+    throw new Error(`Shopify created ${family} fixture without the expected customer ownership.`);
+  }
+
+  return {
+    id: String(order.id).replace(/^gid:\/\/shopify\/Order\//, ''),
+    name: order.name ?? null,
+    customerId: String(order.customer.id).replace(/^gid:\/\/shopify\/Customer\//, ''),
+    variants,
+  };
+}
+
+async function readCanaryCustomerAddress(ctx, customerId) {
+  const data = await shopifyRestJson(ctx, `customers/${customerId}.json`, {
+    query: { fields: 'id,default_address' },
+  });
+  return data.customer?.default_address ?? null;
+}
+
 // The return family needs something no other family does: a *fulfilled* order.
 // returnCreate builds its line items from returnableFulfillments, so an
 // unfulfilled order - which is every order order_creation leaves behind - has
@@ -395,7 +563,7 @@ const CANARY_FULFILLED_ORDER_CREATE_MUTATION = `mutation CanaryFulfilledOrderCre
   $options: OrderCreateOptionsInput
 ) {
   orderCreate(order: $order, options: $options) {
-    order { id name test }
+    order { id name test customer { id } }
     userErrors { field message }
   }
 }`;
@@ -446,18 +614,18 @@ function exchangePairForNewOrder(variants) {
   return null;
 }
 
-async function createFulfilledExchangeFixture(ctx, pair) {
+async function createFulfilledTestOrder(ctx, variant, family) {
   const variables = {
     order: {
-      email: `shopkeeper-exchange-canary+${Date.now()}@example.com`,
+      email: `shopkeeper-${family}-canary+${Date.now()}@example.com`,
       test: true,
       financialStatus: 'PAID',
       fulfillmentStatus: 'FULFILLED',
       lineItems: [{
-        variantId: `gid://shopify/ProductVariant/${pair.returned.id}`,
+        variantId: `gid://shopify/ProductVariant/${variant.id}`,
         quantity: 1,
       }],
-      tags: ['shopkeeper-canary', 'shopkeeper-exchange-canary'],
+      tags: ['shopkeeper-canary', `shopkeeper-${family}-canary`],
     },
     options: {
       sendReceipt: false,
@@ -497,7 +665,7 @@ async function createFulfilledExchangeFixture(ctx, pair) {
   const id = String(order.id).replace(/^gid:\/\/shopify\/Order\//, '');
   const returnableItems = await fetchReturnableLineItems(ctx, order.id);
   if (!returnableItems?.length) {
-    throw new Error(`Created test order ${order.name ?? id}, but it has no returnable fulfilled items.`);
+    throw new Error(`Created ${family} test order ${order.name ?? id}, but it has no returnable fulfilled items.`);
   }
   return {
     id,
@@ -517,7 +685,7 @@ async function findExchangeFixture(ctx, returnFixture) {
     if (!pair) {
       return { id: null, reason: 'the store has no two active variants where the replacement does not cost more' };
     }
-    fixture = await createFulfilledExchangeFixture(ctx, pair);
+    fixture = await createFulfilledTestOrder(ctx, pair.returned, 'exchange');
     pair = exchangePairForFixture(fixture, variants);
   }
 
@@ -536,11 +704,33 @@ async function findExchangeFixture(ctx, returnFixture) {
   };
 }
 
-// Return-label verification still uses a hand-fulfilled order so the harness
-// exercises the merchant workflow. Exchange verification may create a dedicated
-// fulfilled *test* order with orderCreate: unlike fulfilling an existing order,
-// that needs no fulfillment-order scope, sends no receipt, and cannot be
-// mistaken for a customer's live order.
+async function resolveReturnFixture(ctx, orderIds) {
+  const existing = await findReturnFixtureOrder(ctx, orderIds);
+  if (existing.id) return existing;
+
+  const variants = await loadActiveVariants(ctx);
+  const variant = variants.find((candidate) => candidate.id);
+  if (!variant) {
+    return {
+      id: null,
+      source: null,
+      returnableItems: [],
+      rejected: existing.rejected,
+      reason: 'the store has no active product variant for a fulfilled test order',
+    };
+  }
+
+  const created = await createFulfilledTestOrder(ctx, variant, 'return-label');
+  return {
+    ...created,
+    rejected: existing.rejected,
+  };
+}
+
+// Return-label and exchange verification may create dedicated fulfilled *test*
+// orders with orderCreate. Unlike fulfilling an existing order, that needs no
+// fulfillment-order scope, sends no receipt, and cannot be mistaken for a
+// customer's live order.
 // `ok` for the family means every step committed. Rolling the steps up rather
 // than reporting only the last one is what keeps the run's exit code honest: a
 // return that failed and a label that never ran must not read as green.
@@ -981,6 +1171,116 @@ async function runCanaries(ctx, inspection, returnFixture, exchangeFixture) {
     }));
   }
 
+  if (shouldRun('cancel_order') && inspection.shop.mutationsAllowed) {
+    results.push(await runFamily('cancel_order', async () => {
+      const operationId = `${operationBase}:cancel_order`;
+      const variants = await loadActiveVariants(ctx);
+      const fixture = await createCanaryOrderFixture(ctx, {
+        family: 'cancel-order',
+        variants: variants.slice(0, 1),
+      });
+      const input = {
+        order_id: fixture.id,
+        reason: 'other',
+        restock: true,
+      };
+      const result = await cancelOrder(input, { ...ctx, operationId });
+      const probe = await probeUnknownShopifyMutation(
+        'cancel_order',
+        input,
+        { ...ctx, operationId },
+      );
+      return {
+        status: result.status,
+        message: result.message,
+        orderId: fixture.id,
+        orderName: fixture.name,
+        probeOutcome: probe.outcome,
+        probeMessage: probe.message,
+      };
+    }));
+  }
+
+  if (shouldRun('edit_shopify_order') && inspection.shop.mutationsAllowed) {
+    results.push(await runFamily('edit_shopify_order', async () => {
+      const operationId = `${operationBase}:edit_shopify_order`;
+      const variants = await loadActiveVariants(ctx);
+      if (variants.length < 2) {
+        throw new Error('Cannot create edit fixture: the store needs at least two active product variants.');
+      }
+      const fixture = await createCanaryOrderFixture(ctx, {
+        family: 'edit-order',
+        variants: variants.slice(0, 2),
+      });
+      // A remove-only edit has a conclusive independent probe: the fixture
+      // proves the variant existed before execution, and zero afterward proves
+      // this exact leg committed. Add-only deltas cannot be attributed from a
+      // post-mutation read without storing the prior quantity.
+      const input = {
+        order_id: fixture.id,
+        remove_variant_id: fixture.variants[0].id,
+      };
+      const result = await editShopifyOrder(input, { ...ctx, operationId });
+      const probe = await probeUnknownShopifyMutation(
+        'edit_shopify_order',
+        input,
+        { ...ctx, operationId },
+      );
+      return {
+        status: result.status,
+        message: result.message,
+        orderId: fixture.id,
+        orderName: fixture.name,
+        removedVariantId: fixture.variants[0].id,
+        retainedVariantId: fixture.variants[1].id,
+        probeOutcome: probe.outcome,
+        probeMessage: probe.message,
+      };
+    }));
+  }
+
+  if (shouldRun('update_shopify_order_address') && inspection.shop.mutationsAllowed) {
+    results.push(await runFamily('update_shopify_order_address', async () => {
+      const operationId = `${operationBase}:update_shopify_order_address`;
+      const variants = await loadActiveVariants(ctx);
+      const fixture = await createCanaryOrderFixture(ctx, {
+        family: 'address-update',
+        variants: variants.slice(0, 1),
+      });
+      if (!fixture.customerId) {
+        throw new Error('Cannot create address fixture: Shopify returned no customer id.');
+      }
+      const beforeAddress = await readCanaryCustomerAddress(ctx, fixture.customerId);
+      if (!canaryAddressMatches(beforeAddress, CANARY_INITIAL_ADDRESS)) {
+        throw new Error('Cannot create address fixture: customer default address does not match the test order.');
+      }
+      const input = {
+        order_id: fixture.id,
+        customer_id: fixture.customerId,
+        ...CANARY_UPDATED_ADDRESS,
+      };
+      const result = await updateShopifyOrderAddress(input, { ...ctx, operationId });
+      const [probe, customerAddress] = await Promise.all([
+        probeUnknownShopifyMutation(
+          'update_shopify_order_address',
+          input,
+          { ...ctx, operationId },
+        ),
+        readCanaryCustomerAddress(ctx, fixture.customerId),
+      ]);
+      return {
+        status: result.status,
+        message: result.message,
+        orderId: fixture.id,
+        orderName: fixture.name,
+        customerId: fixture.customerId,
+        customerAddressMatches: canaryAddressMatches(customerAddress, CANARY_UPDATED_ADDRESS),
+        probeOutcome: probe.outcome,
+        probeMessage: probe.message,
+      };
+    }));
+  }
+
   if (shouldRun('discount') && inspection.shop.mutationsAllowed) {
     results.push(await runFamily('discount', async () => {
       const operationId = `${operationBase}:issue_discount`;
@@ -1115,7 +1415,10 @@ const inspection = { ...storeInspection, accessScopes };
 // a note that says what to do, the way the full-refund skip does, instead of a
 // family that fails for a reason no operator can act on.
 const returnFixture = EXECUTE && shouldRun('return_label') && inspection.shop.mutationsAllowed
-  ? await findReturnFixtureOrder(ctx, inspection.recentOrders.testOrderIds)
+  ? await resolveReturnFixture(
+    ctx,
+    TEST_ORDERS_ONLY ? [] : inspection.recentOrders.testOrderIds,
+  )
   : null;
 const exchangeReturnFixture = EXECUTE && shouldRun('exchange') && inspection.shop.mutationsAllowed
   ? await findReturnFixtureOrder(
@@ -1169,15 +1472,17 @@ if (!inspection.shop.mutationsAllowed && !VALIDATE) {
 if (EXECUTE && !inspection.shop.mutationsAllowed) {
   report.notes.push('No canaries were executed.');
 }
+if (EXECUTE && TEST_ORDERS_ONLY) {
+  report.notes.push(
+    'Safety mode active: every selected family creates a new Shopify test order and never selects a live order.',
+  );
+}
 if (EXECUTE && inspection.shop.mutationsAllowed && shouldRun('refund') && !inspection.recentOrders.candidateTestOrderId) {
   report.notes.push('Refund canary skipped: no recent test order was found.');
 }
 if (EXECUTE && inspection.shop.mutationsAllowed && shouldRun('return_label') && !returnFixture?.id) {
   report.notes.push(
-    'Return-label canary skipped: no test order has returnable items and no open return.'
-    + ' returnCreate builds its line items from fulfillments, so the fixture must be a *fulfilled*'
-    + ' test order - mark one fulfilled in the Shopify admin, since this app has no fulfillment scope'
-    + ' and should not gain one just to serve the canary.',
+    `Return-label canary skipped: ${returnFixture?.reason ?? 'a fulfilled test fixture could not be created'}.`,
   );
 }
 if (EXECUTE && inspection.shop.mutationsAllowed && shouldRun('exchange') && !exchangeFixture?.id) {
@@ -1251,8 +1556,9 @@ console.log(JSON.stringify(report, null, 2));
 // success, and every passing family returns `committed`.
 const failed = report.canaries.filter((entry) => (
   !entry.ok
-  || entry.status === 'error'
+  || entry.status !== 'ok'
   || entry.matchesOrderTotal === false
+  || entry.customerAddressMatches === false
   || (entry.status === 'ok' && entry.probeOutcome !== undefined && entry.probeOutcome !== 'committed')
 ));
 if (EXECUTE && failed.length > 0) {

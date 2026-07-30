@@ -58,6 +58,10 @@ export function getTestEnv(baseEnv = process.env) {
     E2E_CLERK_ORG_ID: env.E2E_CLERK_ORG_ID || 'org_e2e_test',
     E2E_CLERK_USER_ID: env.E2E_CLERK_USER_ID || 'user_e2e_test',
     E2E_OUTBOUND_MODE: baseEnv.E2E_OUTBOUND_MODE || 'record',
+    // Browser and cross-service canaries must never reach a real email
+    // provider. Keep delivery in the dashboard process, where record mode
+    // replaces the provider call with a JSONL audit record.
+    OUTBOUND_EMAIL_ASYNC: 'false',
     PRODUCT_ANALYTICS_ENABLED: 'false',
     E2E_OUTBOUND_RECORD_PATH: baseEnv.E2E_OUTBOUND_RECORD_PATH || path.join(REPO_ROOT, 'test-results', 'e2e-outbound.jsonl'),
     E2E_TEST_EMAIL_ADDRESS: baseEnv.E2E_TEST_EMAIL_ADDRESS || 'support-e2e@inbound.test',

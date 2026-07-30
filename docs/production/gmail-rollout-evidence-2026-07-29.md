@@ -120,6 +120,11 @@ Completed after both Railway deployments reached `SUCCESS`:
 - Startup logs for both services contained no warning or error entries.
 - No rollback was required.
 
+Post-canary verification at 2026-07-30T04:45Z again passed dashboard health,
+internal hop-back authentication, gateway deep health, authenticated queue
+health, and the Photon webhook check. Recent worker logs contained no canary
+error and recorded the expected Gmail history synchronization.
+
 Post-deploy authenticated queue snapshot at 2026-07-30T02:10:39Z:
 
 | Queue | Waiting | Active | Completed | Failed | Delayed |
@@ -163,16 +168,51 @@ maintenance run is due at 2026-07-30T12:00Z (05:00 PDT).
 - [ ] Re-run those checks after 24 hours and confirm both services still run the
   same release SHA.
 
+## Async outbound Gmail canary
+
+At 2026-07-30T04:45Z, the guarded production canary sent one clearly labeled
+message to the connected Gmail account's own plus-address. The output was
+sanitized and reported:
+
+| Check | Result |
+|---|---|
+| Queue admission | accepted |
+| Final state | `sent` |
+| Provider message ID persisted | yes |
+| Same message ID re-enqueued | `deduplicated=true` |
+| Staged Shopkeeper thread | closed after verification |
+
+The canary message ID is `32588b09-0a00-4e10-93b0-a5813b1d39ad`; its raw
+provider ID, recipient address, body, and credentials are intentionally absent
+from this record.
+
+Strict audits immediately afterward:
+
+| Window | Gmail sent | Failed | Unknown | Stale pending/processing | Missing/duplicate provider ID |
+|---|---:|---:|---:|---:|---:|
+| 1 hour | 1 | 0 | 0 | 0 | 0 |
+| 240 hours | 1 | 0 | 0 | 0 | 0 |
+
+`OUTBOUND_EMAIL_ASYNC` remains unset on the production dashboard. This canary
+proves the deployed gateway worker, Gmail provider send, provider-ID commit, and
+stable queue deduplication path without widening dashboard traffic. Keep the
+synchronous dashboard path as the rollback rail until mailbox confirmation and
+the documented unknown/stale/manual-retry recovery exercises are complete.
+
 ## Live mailbox canary
 
-This needs authenticated Gmail administrator access and an independent external
-mailbox. Neither is available in the release workspace, so no message was sent
-and Palette's support address was not changed.
+The automated self-addressed outbound canary above is complete. The remaining
+inbound, alias, attachment, and threading checks need authenticated Gmail
+administrator access plus an independent external mailbox. Neither is
+available in the release workspace, so Palette's support address was not
+changed.
 
 - [ ] Configure delivery for `support@palettegarments.com`.
 - [ ] Verify it as an authorized Gmail **Send mail as** address.
 - [ ] Prove inbound delivery and alias sending in Gmail first.
 - [ ] Save the alias in Shopkeeper.
+- [ ] Confirm message `32588b09-0a00-4e10-93b0-a5813b1d39ad` arrived once in
+  the connected Gmail mailbox.
 - [ ] Send unique plain-text and HTML-plus-safe-attachment canaries externally.
 - [ ] Reply from the dashboard alias and send one customer follow-up.
 - [ ] Confirm one ticket/message, attachment persistence, alias sender,

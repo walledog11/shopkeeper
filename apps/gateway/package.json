@@ -25,11 +25,13 @@
     "test:coverage": "node ../../scripts/with-test-env.mjs vitest run --coverage --config vitest.config.ts",
     "rebuild-summaries": "tsx src/scripts/rebuild-bad-summaries.ts",
     "backfill-titles": "tsx src/scripts/backfill-thread-titles.ts",
+    "canary:outbound-gmail": "tsx src/scripts/canary-outbound-gmail.ts",
     "recovery:queue": "tsx src/scripts/exercise-queue-recovery.ts",
     "realtime:smoke": "tsx src/scripts/realtime-smoke.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.104.1",
+    "@opentelemetry/core": "2.8.0",
     "@shopkeeper/agent": "*",
     "@shopkeeper/analytics": "*",
     "@shopkeeper/db": "*",
@@ -42,7 +44,7 @@
     "ioredis": "5.10.0",
     "pino": "^10.3.1",
     "pino-pretty": "^13.1.3",
-    "spectrum-ts": "^4.2.0"
+    "spectrum-ts": "12.6.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",

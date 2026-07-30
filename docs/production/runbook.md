@@ -253,6 +253,25 @@ railway run --service shopkeeper --environment production -- \
 5. Review gateway logs for ownership mismatches, lost claims, provider ambiguity, sweep alerts, or
    permanently failed jobs. Repeat the strict 24-hour audit before expanding rollout.
 
+For a Gmail integration, the guarded self-addressed provider canary can establish
+queue/provider evidence before changing the broad dashboard flag. It sends one
+clearly labeled message only to the connected account's own plus-address, closes
+the staged ticket, and prints no address, token, body, or raw provider ID:
+
+```bash
+railway run --service shopkeeper --environment production -- \
+  env GATEWAY_URL='https://<gateway>' \
+  npm run canary:outbound-gmail -w apps/gateway -- \
+    --integration-id='<gmail-integration-uuid>' \
+    --acknowledge-self-email \
+    --execute
+```
+
+Require `sendStatus=sent`, `hasProviderMessageId=true`, and
+`deduplicated=true`, then run the strict required-Gmail audit. This does not
+replace recipient mailbox confirmation, the independent inbound/threading
+canary, or recovery-path exercises.
+
 Rollback by setting `OUTBOUND_EMAIL_ASYNC=false` and redeploying the dashboard. Existing pending,
 processing, failed, or unknown rows remain recovery evidence; do not delete or blindly enqueue
 them during rollback.
@@ -723,7 +742,11 @@ single-use boundary; Redis remains only a latency guard.
 public gateway and worker remain in `shadow`. Dashboard canary execution
 `6fdec37f-e92a-4115-b909-c8a226464fe4` committed with one linked successful
 internal action, zero shadow observations, and populated claim/completion
-timestamps.
+timestamps. Representative reviewed execution
+`9bbe5f42-4da9-4f89-ad13-e10a7b167d49` subsequently committed one successful
+`send_reply` with the same enforce-state invariants and no error. The
+representative 24-hour observation window is now in progress; its conservative
+earliest promotion check is 2026-07-30 after 14:47 PDT.
 
 Before and after every flag change:
 

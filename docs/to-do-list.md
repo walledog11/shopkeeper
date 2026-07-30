@@ -86,8 +86,8 @@ grammar they described no longer exist); full history is in
 [archive/operator-channel-bugs.md](archive/operator-channel-bugs.md). Only one
 item was still open when the doc was retired:
 
-- [ ] **Dashboard `send_reply` internal hop returned HTTP 500 (bug 7 —
-  investigate).** Observed 2026-07-07 on a free-form operator turn: the gateway
+- [x] **Dashboard `send_reply` internal hop returned HTTP 500 (bug 7 —
+  regression closed 2026-07-29).** Observed 2026-07-07 on a free-form operator turn: the gateway
   worker `ThreadSink` POST to dashboard `/api/agent/io-send-internal` returned
   500, the agent then burned its token budget and gave the operator the generic
   "too many steps" message. Root cause not captured — the gateway log redacts
@@ -95,8 +95,14 @@ item was still open when the doc was retired:
   vs systemic. **Partial fix shipped 2026-07-20:** cross-service
   `x-shopkeeper-request-id` correlation, clearer operator-facing dispatch-failure
   copy, failed approvals no longer clear the parked plan, and operator turns
-  stop summarizing as "too many steps" when a send hop failed. Still open:
-  pull dashboard/Vercel logs for the original incident window if it recurs.
+  stop summarizing as "too many steps" when a send hop failed. A focused
+  cross-service Playwright canary now starts both apps, invokes the real gateway
+  `ThreadSink` in a separate process, crosses the authenticated internal HTTP
+  hop, records provider delivery without network access, and proves exactly one
+  agent message committed. The canary passes via
+  `npm run test:e2e:send-reply-hop`. The original dashboard exception is no
+  longer recoverable; use the correlated request ID to pull Vercel logs if a
+  future recurrence appears.
   Pointers: [`agent-thread-sink.ts`](../apps/gateway/src/message-handlers/agent-thread-sink.ts) (hop, no delivery verify),
   [`io-send-internal/route.ts`](../apps/dashboard/src/app/api/agent/io-send-internal/route.ts) (dashboard receiver).
 
