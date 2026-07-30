@@ -16,6 +16,7 @@ const CATEGORY_PREFIXES = [
   "cancel",
   "escalate",
   "exchange",
+  "fulfill",
   "gift-card",
   "kb",
   "memory",
