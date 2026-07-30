@@ -125,6 +125,13 @@ internal hop-back authentication, gateway deep health, authenticated queue
 health, and the Photon webhook check. Recent worker logs contained no canary
 error and recorded the expected Gmail history synchronization.
 
+Verification at 2026-07-30T08:20Z against the current production deployments
+again passed dashboard health, all authenticated dashboard hop-back checks,
+retired-route rejection, gateway deep health, authenticated seven-queue health,
+and the Photon webhook check. The strict 240-hour required-Gmail outbound audit
+still reported exactly one `sent` Gmail row and no failed, unknown, stale,
+missing-provider-ID, or duplicate-provider-ID blockers.
+
 Post-deploy authenticated queue snapshot at 2026-07-30T02:10:39Z:
 
 | Queue | Waiting | Active | Completed | Failed | Delayed |
@@ -196,8 +203,9 @@ Strict audits immediately afterward:
 `OUTBOUND_EMAIL_ASYNC` remains unset on the production dashboard. This canary
 proves the deployed gateway worker, Gmail provider send, provider-ID commit, and
 stable queue deduplication path without widening dashboard traffic. Keep the
-synchronous dashboard path as the rollback rail until mailbox confirmation and
-the documented unknown/stale/manual-retry recovery exercises are complete.
+synchronous dashboard path as the rollback rail until the documented
+unknown/stale/manual-retry recovery exercises are complete; mailbox receipt and
+exact-once reconciliation are now confirmed below.
 
 ## Live mailbox canary
 
@@ -207,11 +215,21 @@ administrator access plus an independent external mailbox. Neither is
 available in the release workspace, so Palette's support address was not
 changed.
 
+At 2026-07-30T08:36Z, a read-only Gmail API reconciliation loaded the integration
+through the same top-level credential path used by production, fetched the
+stored provider message, parsed its RFC `Message-ID`, and queried Gmail by that
+identity. Gmail returned exactly one match, whose provider ID and unique canary
+subject both matched the staged Shopkeeper row. This closes mailbox receipt and
+duplicate-delivery confirmation without recording the mailbox address, message
+body, raw MIME, provider ID, or token. A separate read-only `sendAs` check found
+one configured sender and confirmed `support@palettegarments.com` is not present
+or verified, so changing Shopkeeper's `fromEmail` would be premature.
+
 - [ ] Configure delivery for `support@palettegarments.com`.
 - [ ] Verify it as an authorized Gmail **Send mail as** address.
 - [ ] Prove inbound delivery and alias sending in Gmail first.
 - [ ] Save the alias in Shopkeeper.
-- [ ] Confirm message `32588b09-0a00-4e10-93b0-a5813b1d39ad` arrived once in
+- [x] Confirm message `32588b09-0a00-4e10-93b0-a5813b1d39ad` arrived once in
   the connected Gmail mailbox.
 - [ ] Send unique plain-text and HTML-plus-safe-attachment canaries externally.
 - [ ] Reply from the dashboard alias and send one customer follow-up.

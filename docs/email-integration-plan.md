@@ -7,12 +7,15 @@ is deployed from `5a7771ab`. Production Pub/Sub/OIDC, deep health, authenticated
 queue health, the production verifier, startup logs, and the inspect-only
 recovery guardrail were verified on 2026-07-29. A fresh self-addressed Gmail
 outbound queue canary was accepted with a provider ID and deduplicated on
-re-enqueue; strict one-hour and 240-hour audits are clean. The scheduled
-12/24-hour observation, independent inbound/threading mailbox canary,
-custom-domain verification prerequisites, and Google's restricted-scope
-verification remain.
+re-enqueue; strict one-hour and 240-hour audits are clean. Gmail API
+reconciliation confirmed that canary arrived exactly once with matching
+provider identity and subject. The scheduled 12/24-hour observation,
+independent inbound/alias/attachment/threading canary, custom-domain
+verification prerequisites, and Google's restricted-scope verification remain.
+`support@palettegarments.com` is not yet present or verified in Gmail
+`sendAs`, so Shopkeeper's `fromEmail` remains unchanged.
 
-**Last reviewed:** 2026-07-29
+**Last reviewed:** 2026-07-30
 
 ## Independent integration model
 
@@ -545,7 +548,8 @@ These items are separate from Gmail native inbound and should not delay it.
 ### Outbound parity
 
 - Outbound attachments
-- Gmail-native threading live mailbox confirmation
+- Gmail-native threading through an independent external-mailbox round trip
+  (self-addressed mailbox receipt and exact-once delivery are confirmed)
 - Optional HTML replies with a plain-text fallback
 - Bounce handling
 
@@ -581,6 +585,8 @@ These items are separate from Gmail native inbound and should not delay it.
 - [x] Restricted-scope verification and production setup are documented in the runbook.
 - [x] Gateway and email-package unit/integration/coverage, typecheck, and lint gates pass locally on 2026-07-29.
 - [x] Deploy the hardening change and record immediate production evidence.
+- [x] Confirm the self-addressed outbound Gmail canary arrived exactly once in
+  the connected mailbox.
 - [ ] Record scheduled catch-up/renewal evidence and close the 24-hour health window.
 - [ ] Complete Google restricted-scope verification and the compact live canary.
 

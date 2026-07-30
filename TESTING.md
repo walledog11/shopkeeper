@@ -44,7 +44,11 @@ including the seeded ticket → manual reply → recorded outbound delivery and
 seeded plan → approval → persistence workflow. Clerk browser-session E2E is
 intentionally separate via `npm run test:e2e:browser`, requires real
 development Clerk credentials, and is a nightly, release, or manual
-identity-provider contract.
+identity-provider contract. Its agent approval coverage includes a real
+recorded-delivery approval plus controlled server-authoritative committed,
+known-failure, and unknown presentation canaries. The failure canaries exercise
+recovery copy and live-region behavior without issuing a provider/customer
+side effect.
 
 `npm run test:e2e:send-reply-hop` is the focused cross-service delivery canary.
 It starts both apps, seeds an isolated email thread, invokes the gateway

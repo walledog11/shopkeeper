@@ -62,13 +62,14 @@ To close this plan:
    `create_return` → `attach_return_label` canaries are complete. Separately
    exercise refund/store-credit/gift-card reservation admission and finish a
    strict observation window containing real reservation rows.
-3. **Outbound email:** confirm the Gmail canary in the mailbox, exercise the
-   documented crash-after-acceptance/stale-processing/manual-retry paths
-   without blind resend, decide the async-only date, and canary Postmark when a
-   Postmark integration exists. Until then, keep the synchronous rollback rail.
-4. **Presentation and timeout evidence:** complete P7-01 authenticated
-   committed/known-failure/unknown browser checks and close P4-06 after the
-   normal provider-timeout telemetry window.
+3. **Outbound email:** mailbox receipt and exact-once reconciliation are
+   complete. Exercise the documented
+   crash-after-acceptance/stale-processing/manual-retry paths without blind
+   resend, decide the async-only date, and canary Postmark when a Postmark
+   integration exists. Until then, keep the synchronous rollback rail.
+4. **Presentation and timeout evidence:** P7-01 authenticated
+   committed/known-failure/unknown browser checks are complete. Close P4-06
+   after the normal provider-timeout telemetry window.
 5. **Standalone security tracks:** complete or move P8-02 Spectrum/OpenTelemetry
    and P8-03 enforced CSP into separately owned plans with their existing
    acceptance criteria. They must not disappear when this document is removed.
@@ -605,8 +606,9 @@ evidence only; refund/store-credit/gift-card reservation canaries remain open.
 
 ### P4-01 — Make outbound email claimable, tenant-validated and recoverable
 
-**Status (2026-07-19): First Gmail queue canary clean; mailbox confirmation and
-broad flag rollout pending.** The strict `audit:outbound-email` rollout check and
+**Status (2026-07-30): Gmail queue, provider, deduplication, and mailbox
+confirmation clean; recovery exercises and broad flag rollout pending.** The
+strict `audit:outbound-email` rollout check and
 provider-activity recovery runbook are now implemented. The first strict
 24-hour production baseline is clean but contains zero async sends, and
 `OUTBOUND_EMAIL_ASYNC` is not currently configured on the production dashboard;
@@ -651,15 +653,17 @@ accepted by Gmail, and committed with a provider message ID. Re-enqueuing the
 same stable message ID returned `deduplicated: true`; the strict one-hour
 required-Gmail audit reports one sent row and no failed, unknown, stale,
 missing-provider-ID, or duplicate-provider-ID blockers. Manual mailbox receipt
-confirmation remains open. No Postmark integration is configured for a
-provider-specific Postmark canary.
+confirmation was completed by sanitized Gmail API reconciliation on 2026-07-30.
+No Postmark integration is configured for a provider-specific Postmark canary.
 
-**Current checkpoint (2026-07-28):** the strict 240-hour required-Gmail audit
+**Current checkpoint (2026-07-30):** the strict 240-hour required-Gmail audit
 contains one `sent` Gmail row with provider identity and no failed, unknown,
-stale, missing-provider-ID, or duplicate-provider-ID blockers. This closes the
-observation-window portion of the Gmail gate, but not mailbox confirmation or
-the documented recovery exercises. Postmark remains conditional on configuring
-a Postmark integration.
+stale, missing-provider-ID, or duplicate-provider-ID blockers. Gmail returned
+exactly one mailbox match for the canary's parsed RFC `Message-ID`, with the
+expected provider identity and unique subject. This closes the observation
+window and mailbox-confirmation portions of the Gmail gate, but not the
+documented recovery exercises. Postmark remains conditional on configuring a
+Postmark integration.
 
 **Still required for P4-01 rollout completion:**
 
@@ -667,9 +671,9 @@ a Postmark integration.
   build.
 - [x] Canary Gmail queue admission, provider-ID persistence, and duplicate
   enqueue suppression.
-- [ ] Confirm the Gmail canary in the recipient mailbox, and exercise
-  crash-after-acceptance/stale-processing/manual-retry recovery under the
-  documented no-resend rules.
+- [x] Confirm the Gmail canary arrived exactly once in the recipient mailbox.
+- [ ] Exercise crash-after-acceptance/stale-processing/manual-retry recovery
+  under the documented no-resend rules.
 - [ ] Canary Postmark when a Postmark integration is configured.
 - [x] Document that the launch owner/on-call checks provider activity using the
   stored provider ID and stable RFC `Message-ID`, and may resolve/retry an
@@ -1336,7 +1340,7 @@ queues returned healthy with zero failures.
 
 ### P7-01 — Replace optimistic “Sent” with committed/failed/partial/unknown states
 
-**Status (2026-07-19): Deployed; authenticated outcome spot-checks pending.**
+**Status (2026-07-30): Completed.**
 Commit `54d82bbb` is live on the canonical Vercel dashboard and both Railway
 gateway services. The reviewed-plan API now returns the durable execution ID plus an
 explicit presentation outcome derived from the server's per-action truth.
@@ -1369,12 +1373,20 @@ for unknown provider outcomes.
 - [x] Pass the 1,200-test repository unit suite, 37 Node-script tests, repository
   typecheck, dashboard/agent lint, structure lint, and the 15 affected
   database-backed approval/ledger tests.
+- [x] Add authenticated browser canaries for committed, known-failure, and
+  unknown server-authoritative outcomes. The 2026-07-30 focused Clerk run passed
+  all five selected tests: the existing real recorded-delivery approval plus
+  the three controlled presentation outcomes and Clerk setup. The committed
+  card showed `Sent` only after the response; failed and unknown cards stayed
+  mounted with safe guidance; unknown used an assertive live region. Controlled
+  terminal responses prevented the failure canaries from manufacturing a
+  customer/provider side effect.
 
 **Still required for rollout completion:**
 
 - [x] Deploy the dashboard/API change and pass production dashboard, database,
   Redis, worker, queue, retired-route, and Photon webhook verification.
-- [ ] Spot-check committed, known-failure, and unknown recovery presentation in
+- [x] Spot-check committed, known-failure, and unknown recovery presentation in
   an authenticated canary session.
 
 - **Related findings:** AUD-003, AUD-005, AUD-012.
@@ -1673,8 +1685,9 @@ until the audit includes representative dashboard and gateway executions.
 rollout gates above. Previously merged work includes P4-04 (verified already complete), P6-01
 (PR #24), the Gmail slice of P4-06 (PR #25), and both P6-02 slices — queue-health monitoring
 (PR #26) and health-diagnostics auth (PR #27). See each item's Status line for detail.
-P7-01 and P4-06 are deployed; their remaining work is authenticated presentation
-checking and provider telemetry observation. P4-02's durable Stripe event
+P7-01 is complete after authenticated committed/failed/unknown presentation
+canaries. P4-06 remains deployed with only provider telemetry observation open.
+P4-02's durable Stripe event
 implementation, additive migration, application deployment, signed-event
 replay, and first strict production canary are complete; its longer observation
 window remains open.

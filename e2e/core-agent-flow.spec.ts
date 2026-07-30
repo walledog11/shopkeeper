@@ -239,6 +239,112 @@ test('approve a seeded AI plan and record the outbound email reply', async ({ pa
   await expect(page.getByTestId('chat-message').filter({ hasText: replyText })).toBeVisible();
 });
 
+for (const scenario of [
+  {
+    name: 'committed',
+    httpStatus: 200,
+    outcome: 'committed',
+    actionStatus: 'success',
+    label: 'Sent',
+    detail: 'Plan execution completed successfully.',
+    role: 'status',
+    ariaLive: 'polite',
+  },
+  {
+    name: 'known failure',
+    httpStatus: 409,
+    outcome: 'failed',
+    actionStatus: 'error',
+    label: 'Plan failed',
+    detail: 'Nothing was confirmed complete.',
+    role: 'status',
+    ariaLive: 'polite',
+  },
+  {
+    name: 'unknown outcome',
+    httpStatus: 502,
+    outcome: 'unknown',
+    actionStatus: 'unknown',
+    label: 'Outcome unconfirmed',
+    detail: 'Check provider activity before trying again.',
+    role: 'alert',
+    ariaLive: 'assertive',
+  },
+] as const) {
+  test(`renders the ${scenario.name} approval outcome in an authenticated session`, async ({ page }) => {
+    const clerkEnv = requireClerkE2EEnv();
+    const org = await getE2EOrg();
+    const runId = randomUUID();
+    const { thread } = await seedEmailThreadWithCachedPlan({
+      orgId: org.id,
+      customerEmail: `plan-outcome-${scenario.outcome}-${runId}@example.com`,
+      inboundText: `approval outcome customer question ${runId}`,
+      replyText: `approval outcome reply ${runId}`,
+      instruction: `Exercise the ${scenario.outcome} presentation for ${runId}.`,
+    });
+
+    await page.goto('/');
+    await clerk.signIn({ page, emailAddress: clerkEnv.email });
+    await clerk.loaded({ page });
+    await activateClerkOrganization(page, clerkEnv.orgId);
+    await expectDashboardOrg(page, org.id);
+
+    await page.goto(`/dashboard/tickets?thread=${thread.id}`);
+    await expect(page.getByTestId('action-plan-card')).toBeVisible();
+
+    // This is a presentation canary: keep the authenticated dashboard and
+    // reviewed-plan flow real, but provide a controlled server-authoritative
+    // terminal outcome so no customer/provider side effect is manufactured.
+    await page.route('**/api/agent', async (route) => {
+      if (route.request().method() !== 'POST') {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: scenario.httpStatus,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ...(scenario.httpStatus >= 400 ? { error: `Controlled ${scenario.name} canary` } : {}),
+          summary: `Controlled ${scenario.name} canary`,
+          actionsPerformed: [{
+            tool: 'send_reply',
+            result: `Controlled ${scenario.name} canary`,
+            status: scenario.actionStatus,
+          }],
+          execution: {
+            id: `canary-${scenario.outcome}-${runId}`,
+            status: scenario.outcome,
+          },
+        }),
+      });
+    });
+
+    if (scenario.outcome === 'committed') {
+      // Freeze the 500 ms success-dismiss timer so the authenticated browser
+      // can assert the server-confirmed Sent presentation deterministically.
+      await page.clock.install();
+    }
+
+    await page.getByTestId('action-plan-run').click();
+
+    if (scenario.outcome === 'committed') {
+      await expect(page.getByTestId('action-plan-run')).toContainText(scenario.label);
+      const liveStatus = page.getByRole(scenario.role);
+      await expect(liveStatus).toContainText(scenario.detail);
+      await expect(liveStatus).toHaveAttribute('aria-live', scenario.ariaLive);
+      return;
+    }
+
+    const outcome = page.getByTestId('action-plan-outcome');
+    await expect(outcome).toContainText(scenario.label);
+    await expect(outcome).toContainText(scenario.detail);
+    await expect(outcome).toHaveAttribute('role', scenario.role);
+    await expect(outcome).toHaveAttribute('aria-live', scenario.ariaLive);
+    await expect(page.getByTestId('action-plan-run')).toHaveCount(0);
+    await expect(page.getByTestId('action-plan-dismiss-outcome')).toBeVisible();
+  });
+}
+
 test('blocks cross-org thread API and UI access in an authenticated session', async ({ page }) => {
   const clerkEnv = requireClerkE2EEnv();
   const org = await getE2EOrg();
