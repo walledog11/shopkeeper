@@ -111,12 +111,21 @@ item was still open when the doc was retired:
 Surfaced in the 2026-06-23 review — divergences between the stated vision and
 what ships.
 
-- [ ] **Build the TikTok inbound adapter.** TikTok is stubs only but is already
-  promised on the marketing site and in-app help
-  (`apps/dashboard/src/app/(marketing)/_components/Channels.tsx`,
-  `Integrations.tsx`, `apps/dashboard/src/app/dashboard/_components/help/content/`).
-  Wire an inbound adapter so the channel matches what's advertised — a pending
-  integration to finish, not a promise to remove.
+- [ ] **Decide the TikTok Shop disposition — it is built, not stubbed.**
+  Corrected 2026-07-30: the "stubs only" framing was stale. TikTok Shop is
+  wired end to end and gated off by `TIKTOK_SHOP_ENABLED=false` —
+  `apps/gateway/src/routes/webhooks-tiktok-shop.ts` (HMAC verify,
+  signature-failure alerting, org resolution, rate limit, enqueue),
+  `apps/gateway/src/clients/tiktok-shop.ts` (payload normalization +
+  signature), the inbound worker, `tiktok-shop-dispatch.ts` for outbound, and
+  the OAuth `auth`/`callback` routes, all with tests.
+  The open item is the unresolved question from
+  [vision-audit-2026-07.md](vision-audit-2026-07.md) §5: is this code the
+  feasibility spike from
+  [tiktok-shop-customer-service-api-spike.md](tiktok-shop-customer-service-api-spike.md)
+  in progress, or did it get built ahead of that spike's answer? That decision
+  — not more adapter code — determines whether the next step is "configure and
+  enable" or "cut." Needs an owner call, not a guess.
 
 - [ ] **Build the WhatsApp adapter.** Not built. Track 5 in the roadmap — a small
   adapter on the existing Meta app (same vendor as IG DM). Slots into the same

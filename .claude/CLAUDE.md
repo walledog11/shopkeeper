@@ -39,7 +39,7 @@ External webhook → `apps/gateway/src/routes/webhooks.ts` (HMAC verify, enqueue
 - `VoiceEdit` — merchant edits to AI drafts, consumed by gateway voice synthesis to refine the brand-voice brief
 
 ## Channels
-Email (Postmark), Instagram DM (Meta OAuth), Telegram (operator-only, single Shopkeeper bot), iMessage (operator-only, single platform-wide Photon Spectrum line for all orgs — no per-org credentials; merchants link a handle by texting a single-use code, routed by the sender→member binding), Shopify (OAuth + webhooks). TikTok: stubs only.
+Email (Postmark inbound/outbound + Gmail native OAuth inbound via Pub/Sub push), Instagram DM (Meta OAuth), Telegram (operator-only, single Shopkeeper bot), iMessage (operator-only, single platform-wide Photon Spectrum line for all orgs — no per-org credentials; merchants link a handle by texting a single-use code, routed by the sender→member binding), Shopify (OAuth + webhooks). TikTok Shop is fully wired but gated off (`TIKTOK_SHOP_ENABLED=false`): signed webhook → normalize → queue → worker, plus outbound dispatch and OAuth. WhatsApp is not built.
 
 Internal-only `channelType` values (not user-facing): `dashboard_agent` (Concierge sessions), `sms_agent` (operator threads via Telegram — legacy name).
 
