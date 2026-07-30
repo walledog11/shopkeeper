@@ -8,6 +8,8 @@ in the 2026-06-23 review.
 Last reviewed: 2026-07-30.
 
 Recently completed — detail is in git history, not here:
+- Eval assertion decision and three-repeat baseline re-capture (226/228, 99.1%,
+  up from 216/222 / 97.3%) — 2026-07-30
 - Production migration workflow documented (`production/deployment.md`) — 2026-07-30
 - Alerting doc debt corrected (Better Stack Telemetry, Railway forwarder, threshold alert rules) — 2026-07-30
 - Agent behavior tracks A1–A6 and B1–B5 — 2026-07-26
@@ -133,36 +135,34 @@ what ships.
   — not more adapter code — determines whether the next step is "configure and
   enable" or "cut." Needs an owner call, not a guess.
 
-- [ ] **Decide the `tier-watch-refund-draft-only` fixture assertion and whether to
-  re-capture the eval baseline.** Two owner calls left over from the 2026-07-30
-  `fulfill_order` gate (78/79):
-  - The single failure produced `needs_merchant_input` where the fixture asserts
-    `mustClassifyAs: "needs_review"`. Not a safety bug — both route to the
-    merchant and neither auto-fires, so the behavior satisfies the fixture's own
-    description and the assertion is narrower than the intent. Its baseline was
-    already 66.7% (2/3) and a targeted 3-repeat probe scored 1/3, one sample
-    apart; `tier-full-cancel-auto` warned for the same reason. Structurally a new
-    tool cannot move it: `watch` is not in `TIERS_THAT_AUTO_EXECUTE`, so both
-    branches of `classifyPlanPreview` return `NEEDS_REVIEW` regardless of the
-    tool set. Decide whether to widen the assertion to accept
-    `needs_merchant_input`.
-  - `baseline.json` is still 2026-07-10 (74 fixtures / 222 runs); the suite is
-    now 76. Decide whether to re-capture. Note `npm run test:evals` defaults to
-    `EVAL_REPEATS=1` while the baseline was captured at 3 repeats, so comparing
-    the two raises false "regression" warnings on already-flaky fixtures.
-  - Neither was done deliberately: tuning a fixture to make a gate green, and
-    capturing a baseline without sign-off, are both off-limits.
+- [ ] **Full-tier auto-execute is drifting — `tier-full-cancel-auto` scored 1/3
+  in the 2026-07-30 baseline, down from 2/3 on 2026-07-10.** The fixture is a
+  full-autonomy org with `blockCancellations: false` asking to cancel an
+  unfulfilled order: it expects `cancel_order` + `send_reply`, an `auto_execute`
+  classification, and both actions recorded as `auto_executed`. It is
+  `advisory: true`, so it does not gate the suite — which is exactly why the
+  drift needs an owner rather than a green checkmark. It is the only fixture
+  that asserts full tier actually acts on its own; if it keeps sliding, "full"
+  autonomy is a setting that does nothing. Which of the four assertions missed
+  is not recorded — diagnose with a single-fixture probe before assuming it is
+  the classifier. (When comparing runs, note `npm run test:evals` defaults to
+  `EVAL_REPEATS=1` while the baseline is captured at 3, so a single miss reads
+  as a 100% → 0% "regression".)
 
-- [ ] **Run the `fulfill_order` canary family against the live store.** The
+- [ ] **Complete the `fulfill_order` canary family against the live store.** The
   family landed in `scripts/canary-shopify-mutations.mjs` on 2026-07-30 and is
   verified locally (syntax, lint, both directions of the `--test-orders-only`
-  guard), but has never executed against `palette-dev`. It fires a real Shopify
-  mutation and needs `TOKEN_ENCRYPTION_KEY`, so it belongs with the other
-  controlled canary runs. Safety already holds it shut three ways: a fixture
-  order the run creates itself (`sendFulfillmentReceipt: false`),
-  `notify_customer: false`, and membership in `TEST_ORDER_ONLY_FAMILIES` —
-  fulfillment is the one mutation whose side effect reaches the customer
-  directly, via Shopify's own shipping-confirmation email.
+  guard). The first guarded run against `palette-dev` on 2026-07-30 created a
+  fresh test order (ID `6126844477674`) with fulfillment receipts disabled, then
+  stopped before the mutation: Shopify denied the preflight
+  `Order.fulfillmentOrders` read. That exposed a real install-scope gap.
+  `SHOPIFY_OAUTH_SCOPES` and its health check now include
+  `read_merchant_managed_fulfillment_orders` and
+  `write_merchant_managed_fulfillment_orders`, with focused tests passing.
+  Remaining: ship that scope change, re-authorize `palette-dev`, and rerun
+  `--execute --test-orders-only --only=fulfill_order`. The mutation call also
+  carries `notify_customer: false`; no fulfillment mutation or customer email
+  occurred in the failed run.
 
 ## Modules / Roadmap
 
