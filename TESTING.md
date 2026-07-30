@@ -128,6 +128,19 @@ npm run test:evals:baseline -w apps/dashboard
 
 `test:evals:baseline` sets `EVAL_REPEATS=3` and `UPDATE_EVAL_BASELINE=1`. Do not regenerate the baseline at `EVAL_REPEATS=1`; that produces a noisy repeats=1 snapshot that hides flaky fixtures.
 
+Two prerequisites, both of which fail quietly rather than loudly:
+
+- **`ANTHROPIC_API_KEY` must be in the shell**, not just an `.env` file. `with-test-env.mjs` does not forward it, so the whole suite reports `skipped` — not failed — when it is missing.
+- **The test database must be up** (`npm run test:services:up`). Fixtures seed a real org, so with Postgres down every fixture fails instantly with `runner threw: … Can't reach database server`. The tell is `calls=0` in the `[eval]` line: no model call was made, so nothing was spent.
+
+To run a subset, filter by test name — the name is `<fixture id> — <description>`, so the filter matches description text too:
+
+```sh
+npx vitest run --config vitest.integration.config.ts src/lib/agent/__evals__/index.test.ts -t "fulfill"
+```
+
+On a subset run the suite still compares against the full baseline and will fail with an aggregate regression that only reflects the fixtures you ran. Read `[eval:gates]` and the per-category lines instead. Before treating a single-repeat failure as a regression, check the fixture's recorded rate in `baseline.json` and re-run it at `EVAL_REPEATS=3`: several fixtures sit at 66.7% by design, and advisory fixtures never hard-fail their own test but do move the aggregate.
+
 The live-AI eval workflow is separate from comprehensive coverage. The
 non-judge eval runs on relevant pull requests and manual dispatches; the
 judge-scored contract runs nightly or manually and remains non-blocking.

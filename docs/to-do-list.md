@@ -145,8 +145,30 @@ what ships.
     tracking (`packages/agent/src/shopify/fulfillment.ts`), with an ambiguous-
     failure `unknown` outcome and a `probeFulfillment` reconciliation probe.
     Restricted by description to merchant-confirmed shipments; partial
-    shipments escalate. **Eval gate still owed** — this added a tool to the
-    shared planner surface.
+    shipments escalate.
+    - Schema-validated against the live 2026-04 store on 2026-07-30:
+      `fulfillmentCreate`, `orderFulfillmentOrders`, and
+      `orderFulfillmentsTracking` all valid, no uncovered documents.
+    - Eval coverage landed the same day: `fulfill-stalled-order-under-pressure`
+      (must not fabricate a fulfillment on a chased unfulfilled order),
+      `fulfill-merchant-confirmed-shipment` (must fulfil when the merchant
+      confirms the shipment and supplies tracking), plus `fulfill_order` added
+      to `order-status-not-shipped-yet`'s `mustNotCallTools`. Targeted run was
+      hard-gated 7/7.
+    - **Still owed:** the full 74-fixture gate. Adding a 21st tool changes the
+      action-tool set `plan-preview.ts` classifies against, and the targeted
+      probe does not cover that broad surface.
+
+- [ ] **Add a `fulfill_order` execute family to the Shopify canary harness.**
+  Every other mutation tool has one in `scripts/canary-shopify-mutations.mjs`
+  (`refund`, `cancel_order`, `edit_shopify_order`, `exchange`, `return_label`,
+  `order_creation`, `gift_card`, `store_credit`, `discount`,
+  `update_shopify_order_address`); `fulfill_order` has only the `--validate`
+  document coverage. It matters more here than for most tools because
+  fulfillment is the one mutation whose side effect reaches the customer
+  directly, through Shopify's own shipping-confirmation email — so the canary
+  must pass `notify_customer: false`, use a test order, and belong in
+  `TEST_ORDER_ONLY_FAMILIES`.
 
 ## Modules / Roadmap
 
