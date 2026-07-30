@@ -790,6 +790,32 @@ const VALIDATION_CASES = [
     },
   },
   {
+    // Mirrors fulfillOrder's shape: one fulfillment order, explicit line-item
+    // quantities, and tracking, so the trackingInfo branch is type-checked too.
+    // notifyCustomer is false here even though the tool defaults to true — a
+    // validation probe must not be one @skip regression away from emailing
+    // someone that their order shipped.
+    name: 'fulfillmentCreate',
+    document: 'fulfillmentCreate',
+    variables: {
+      fulfillment: {
+        lineItemsByFulfillmentOrder: [{
+          fulfillmentOrderId: 'gid://shopify/FulfillmentOrder/1',
+          fulfillmentOrderLineItems: [{
+            id: 'gid://shopify/FulfillmentOrderLineItem/1',
+            quantity: 1,
+          }],
+        }],
+        notifyCustomer: false,
+        trackingInfo: {
+          number: 'SHOPKEEPER-VALIDATION-PROBE',
+          company: 'UPS',
+          url: 'https://example.invalid/track/SHOPKEEPER-VALIDATION-PROBE',
+        },
+      },
+    },
+  },
+  {
     name: 'giftCardCreate',
     document: 'giftCardCreate',
     variables: {
