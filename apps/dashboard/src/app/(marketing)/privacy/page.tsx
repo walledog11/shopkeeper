@@ -18,7 +18,7 @@ export default function PrivacyPage() {
   return (
     <LegalPage
       title="Privacy Policy"
-      effectiveDate="June 28, 2026"
+      effectiveDate="July 29, 2026"
       intro={privacyIntro}
       sections={[
         {
@@ -61,6 +61,28 @@ export default function PrivacyPage() {
               <p>
                 We do not sell personal information. We do not use merchant customer message content to train general
                 purpose AI models.
+              </p>
+            </>
+          ),
+        },
+        {
+          title: 'Google Workspace API Data',
+          body: (
+            <>
+              <p>
+                When a merchant connects Gmail, Shopkeeper uses Google Workspace APIs to identify the connected account,
+                read inbox messages and attachments addressed to the merchant&apos;s configured support address, create
+                and continue visible support tickets, and send merchant-approved replies from the connected account.
+                Shopkeeper stores the normalized message content, attachments, delivery metadata, and Gmail identifiers
+                needed to provide those support features, prevent duplicate tickets, preserve conversation threading,
+                and recover delayed synchronization.
+              </p>
+              <p>
+                Google Workspace API data is shared only with infrastructure and AI service providers as necessary to
+                provide and secure these user-facing support features, and with authorized members of the merchant&apos;s
+                workspace. It is not sold, used for advertising, or used to create, train, or improve a general-purpose
+                AI model. Shopkeeper&apos;s use and transfer of information received from Google APIs adheres to the
+                Google API Services User Data Policy, including the Limited Use requirements.
               </p>
             </>
           ),

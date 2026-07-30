@@ -3,9 +3,11 @@
 Independent Gmail and forwarded-email integrations with deterministic reply routing.
 
 **Status:** implementation for Phases 1–7 and the reliability hardening follow-up
-is complete locally. Production Pub/Sub/OIDC resources were verified on
-2026-07-29. Deployment, live mailbox canaries, optional Gmail/Postmark
-dual-delivery evidence, and Google's restricted-scope verification remain.
+is deployed from `5a7771ab`. Production Pub/Sub/OIDC, deep health, authenticated
+queue health, the production verifier, startup logs, and the inspect-only
+recovery guardrail were verified on 2026-07-29. The scheduled 12/24-hour
+observation, live mailbox canary, custom-domain verification prerequisites, and
+Google's restricted-scope verification remain.
 
 **Last reviewed:** 2026-07-29
 
@@ -70,11 +72,15 @@ Out of scope:
   seven-day window. A larger result becomes `sync_recovery_truncated`,
   remains degraded, and alerts instead of silently establishing a new
   checkpoint.
+- Release `5a7771ab` runs on both Railway gateway services. Immediate production
+  health, queues, logs, Vercel build, and recovery preflight passed with no
+  rollback. See
+  [`production/gmail-rollout-evidence-2026-07-29.md`](production/gmail-rollout-evidence-2026-07-29.md).
 
 ### Remaining
 
-- Deploy the 2026-07-29 reliability hardening to the gateway worker and observe
-  at least one scheduled maintenance catch-up and daily renewal.
+- Observe at least one scheduled maintenance catch-up and daily renewal, then
+  close the 24-hour health window.
 - Complete the compact live Gmail canary: plain-text/threaded reply, HTML-only
   plus attachment, Workspace alias routing, and isolated stale-history
   recovery.
@@ -564,7 +570,8 @@ These items are separate from Gmail native inbound and should not delay it.
 - [x] Automated Postmark behavior remains unchanged; dual-provider live evidence is conditional on connecting Postmark.
 - [x] Restricted-scope verification and production setup are documented in the runbook.
 - [x] Gateway and email-package unit/integration/coverage, typecheck, and lint gates pass locally on 2026-07-29.
-- [ ] Deploy the hardening change and record scheduled catch-up/renewal evidence.
+- [x] Deploy the hardening change and record immediate production evidence.
+- [ ] Record scheduled catch-up/renewal evidence and close the 24-hour health window.
 - [ ] Complete Google restricted-scope verification and the compact live canary.
 
 ## References
@@ -572,5 +579,7 @@ These items are separate from Gmail native inbound and should not delay it.
 - [Gmail push notifications](https://developers.google.com/workspace/gmail/api/guides/push)
 - [Gmail history synchronization](https://developers.google.com/workspace/gmail/api/guides/sync)
 - [Gmail API scopes](https://developers.google.com/workspace/gmail/api/auth/scopes)
+- [`production/gmail-rollout-evidence-2026-07-29.md`](production/gmail-rollout-evidence-2026-07-29.md)
+- [`production/google-gmail-verification-packet.md`](production/google-gmail-verification-packet.md)
 - `docs/production/runbook.md`
 - `docs/phase-6-external-services.md`

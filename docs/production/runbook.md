@@ -338,6 +338,11 @@ maintenance interval and verify:
    specifically for `sync_recovery_truncated`; it caps the override at 50,000
    messages and keeps the same checkpoint/idempotency rules.
 
+The 2026-07-29 production release and observation checklist are recorded in
+[`gmail-rollout-evidence-2026-07-29.md`](gmail-rollout-evidence-2026-07-29.md).
+The owner-ready restricted-scope package is
+[`google-gmail-verification-packet.md`](google-gmail-verification-packet.md).
+
 ### Independent-email canary (Palette)
 
 1. Confirm Palette's existing Gmail row and watch remain active.

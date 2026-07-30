@@ -10,6 +10,8 @@ import {
 describe("proxy path access policy", () => {
   it("marks marketing and auth entrypoints as public", () => {
     expect(isPublicPath("/")).toBe(true);
+    expect(isPublicPath("/privacy")).toBe(true);
+    expect(isPublicPath("/terms")).toBe(true);
     expect(isPublicPath("/login")).toBe(true);
     expect(isPublicPath("/signup")).toBe(true);
     expect(isPublicPath("/sentry-example-page")).toBe(true);

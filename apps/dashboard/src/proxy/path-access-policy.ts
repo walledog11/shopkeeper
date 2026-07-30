@@ -8,6 +8,8 @@ export interface PathAccessPolicy {
 
 export const publicRoutePatterns = [
   "/",
+  "/privacy",
+  "/terms",
   "/login(.*)",
   "/signup(.*)",
   "/demo-film",

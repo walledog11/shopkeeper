@@ -1,0 +1,302 @@
+# Google Gmail restricted-scope verification packet
+
+Prepared from the production deployment and repository behavior on
+2026-07-29. This is an owner-ready working packet, not proof that Google has
+approved the app. Do not submit credentials, tokens, customer addresses,
+message content, or raw Gmail payloads.
+
+## Submission status
+
+| Requirement | Current evidence | Owner action |
+|---|---|---|
+| Production app | Dashboard and two Railway gateway services are healthy | Keep production stable through review |
+| Homepage | `https://dashboard-shopkeeper.vercel.app/` returns 200 and identifies Shopkeeper | Move to an owned, Search Console-verified custom domain |
+| Privacy policy | `/privacy` exists; public-route and Google Limited Use disclosure fix is prepared | Deploy, legal-review, and recheck anonymously on the owned domain |
+| Terms | `/terms` exists; public-route fix is prepared | Deploy and recheck anonymously on the owned domain |
+| OAuth redirect | Current code derives `/api/integrations/gmail/callback` from `APP_URL` | Set the final custom-domain URI in Vercel and Google Console |
+| Authorized domains | Vercel account currently has no custom domains | Add and verify the owned domain in Search Console and OAuth Branding |
+| User support email | Live policy publishes `hello@useclerk.co` | Confirm mailbox ownership and brand consistency or replace it |
+| Developer contacts | Not discoverable from the repository | Add at least two monitored owner/editor contacts |
+| Demo video | Script below is ready | Record after the alias canary and final domain are ready |
+| Restricted-scope assessment | `gmail.readonly` is restricted and server-side data is stored/transmitted | Complete the assessor/CASA path when Google initiates it |
+
+The current `*.vercel.app` homepage is not a domain the app owner can verify in
+Search Console. This is the principal pre-submission blocker. Google requires
+the homepage to be on a verified domain owned by the developer, the privacy
+policy to be on that domain and linked from the homepage, and authorized-domain
+ownership to be verified.
+
+## App identity and URLs
+
+Use these values only after replacing the host with the final owned domain:
+
+- App name: **Shopkeeper**
+- Homepage: `https://<owned-domain>/`
+- Privacy policy: `https://<owned-domain>/privacy`
+- Terms: `https://<owned-domain>/terms`
+- OAuth redirect URI:
+  `https://<owned-domain>/api/integrations/gmail/callback`
+- User support email: `<monitored support mailbox>`
+- Authorized domain: `<owned-domain>`
+- Google Cloud project ID observed in production Gmail configuration:
+  `shopkeeper-501301`
+
+The Pub/Sub push URL remains operationally separate from the browser OAuth
+redirect:
+
+`https://clerk-production-e37f.up.railway.app/webhooks/gmail/push`
+
+## Exact requested scopes
+
+The application requests exactly:
+
+```text
+openid
+email
+https://www.googleapis.com/auth/gmail.send
+https://www.googleapis.com/auth/gmail.readonly
+```
+
+### Scope justifications
+
+`openid`
+
+: Establishes the OAuth/OpenID Connect session needed to associate the Google
+  authorization result with the merchant who initiated the visible Gmail
+  connection.
+
+`email`
+
+: Reads the connected Google account's email identity from the OpenID Connect
+  userinfo response. Shopkeeper displays and stores that identity so the
+  merchant can verify which mailbox is connected and so inbound filtering and
+  reply routing use the intended account. A stable account identity cannot be
+  derived from `gmail.send`.
+
+`https://www.googleapis.com/auth/gmail.send`
+
+: Sends merchant-approved support replies through the connected Gmail account,
+  including the already-authorized Gmail send-as alias selected in Shopkeeper.
+  Shopkeeper does not request compose, modify, or full-mail access for this
+  feature. `gmail.send` is the narrow scope for sending without granting mailbox
+  read or mutation rights.
+
+`https://www.googleapis.com/auth/gmail.readonly`
+
+: Reads Gmail history and the raw contents of newly added inbox messages so
+  Shopkeeper can create visible support tickets, preserve MIME headers and Gmail
+  threading, retain safe attachments, deduplicate delivery, recover dropped
+  Pub/Sub notifications, and resume from a checkpoint. Metadata-only access
+  cannot provide message bodies or attachments, while `gmail.modify` and
+  `mail.google.com` grant mutation/deletion privileges Shopkeeper does not use.
+
+Google currently classifies `gmail.send` as sensitive and `gmail.readonly` as
+restricted. Because Shopkeeper transmits and stores restricted-scope data on its
+servers, restricted-scope verification and a recurring security assessment are
+expected.
+
+## User-facing functionality
+
+The requested access powers two prominent product features:
+
+1. **Gmail inbox to Shopkeeper ticket.** A merchant connects Gmail, configures a
+   support address, and messages delivered to that address appear as tickets
+   with body, sender, subject, threading, and accepted attachments.
+2. **Shopkeeper reply through Gmail.** An authorized merchant reviews or writes
+   a reply in the ticket UI. Shopkeeper sends it from the connected Gmail
+   account or verified send-as alias and preserves the Gmail conversation
+   thread.
+
+Shopkeeper does not mark mail read, edit labels, delete mail, manage Gmail
+settings, scrape mailboxes, build a general email database, or use Gmail data
+for advertising or credit decisions.
+
+## Data flow
+
+```mermaid
+flowchart LR
+  Merchant[Merchant connects Gmail] --> OAuth[Google OAuth]
+  OAuth --> Tokens[Encrypted access and refresh tokens in Neon]
+  Gmail[Gmail inbox] -->|users.watch| PubSub[Google Pub/Sub]
+  PubSub -->|OIDC-authenticated notification| Gateway[Railway gateway]
+  Gateway --> SyncQ[Railway Redis gmail-sync]
+  SyncQ --> Worker[Railway worker]
+  Worker -->|history.list / messages.get| Gmail
+  Worker --> InboundQ[Railway Redis inbound job]
+  InboundQ --> DB[Normalized ticket and metadata in Neon]
+  InboundQ --> Blob[Private accepted attachments in Vercel Blob]
+  DB --> UI[Shopkeeper ticket UI]
+  DB --> AI[Anthropic API classification, summary, and draft support]
+  UI -->|merchant-approved reply| Send[Gmail API users.messages.send]
+  Send --> Gmail
+```
+
+Raw Gmail MIME is fetched into worker memory and parsed. It is not stored as a
+raw provider payload. The normalized message and accepted attachment data enter
+the inbound queue; the database stores message text and metadata, and Vercel
+Blob stores accepted attachments privately.
+
+## Google data use and Limited Use statement
+
+Publish this factual disclosure in the privacy policy before submission:
+
+> Shopkeeper's use and transfer of information received from Google APIs
+> adheres to the Google API Services User Data Policy, including the Limited Use
+> requirements.
+
+The production implementation uses Gmail data only to provide and secure the
+visible ticket-ingestion, classification, summary, draft, and reply features.
+It does not sell the data, use it for advertising, or use it to create, train,
+or improve a general-purpose AI model. Human access is limited to authorized
+merchant workspace users and narrowly controlled security/support situations
+covered by the privacy policy and Google policy.
+
+Shopkeeper sends bounded customer-support content to the Anthropic commercial
+API for classification, summaries, and agent drafts. This transfer supports the
+visible user-facing features and must be disclosed. Anthropic's current
+commercial-product statement says API content is not used for model training
+unless the customer explicitly opts in. Before submission, the owner must save
+evidence that the production Anthropic organization is not enrolled in a
+training/development-partner opt-in and that feedback paths do not submit
+customer content.
+
+## Storage, retention, and deletion
+
+| Data | Storage and protection | Actual retention/deletion behavior |
+|---|---|---|
+| Gmail access/refresh tokens | Application-layer encrypted token fields in Neon; production requires `TOKEN_ENCRYPTION_KEY` | Retained while integration is connected; removed with integration/workspace deletion |
+| Account identity and Gmail watch metadata | Neon | Retained with the integration; disconnect removes the integration and stops the last mailbox watch when applicable |
+| Normalized messages and ticket metadata | Neon, tenant-scoped | Retained while the workspace/ticket remains active; user-soft-deleted records are hard-purged after 90 days |
+| Accepted attachments | Private Vercel Blob objects; DB stores references | Removed through the documented workspace/customer deletion procedure; current deletion runbook requires an explicit Blob cleanup check |
+| Inbound queue payload | Railway Redis/BullMQ | Completed jobs are retained up to 24 hours and failed jobs up to 7 days under the shared processing defaults |
+| Gmail sync job | Railway Redis/BullMQ; contains integration/checkpoint identifiers, not message bodies | Completed jobs up to 24 hours; failed jobs up to 7 days |
+| Raw Gmail MIME | Worker memory | Parsed during processing and not intentionally persisted as a raw payload |
+| Operational logs | Railway/Vercel and configured observability drains | Identifiers, counts, and safe categories only by design; no tokens or message bodies |
+
+Workspace deletion removes the local organization and cascades through
+integrations, customers, threads, and messages. Customer deletion uses verified
+request intake, soft deletion, attachment cleanup, and later hard purge.
+Deleting Shopkeeper data does not delete the source message in the merchant's
+Gmail mailbox. The owner must communicate that boundary.
+
+Before security assessment, close or formally accept these operational gaps:
+
+- attachment deletion is an explicit operator step rather than an automatic
+  cascade;
+- active messages do not have a fixed maximum lifetime while the merchant keeps
+  the workspace;
+- verify backup/PITR deletion behavior and the exact production retention
+  window with Neon;
+- confirm log-drain retention and access controls with the configured provider.
+
+## Subprocessor/data-recipient inventory
+
+Owner/legal must verify current contracts, regions, and subprocessors before
+submission. The implementation currently depends on:
+
+| Provider | Gmail-related role |
+|---|---|
+| Google | OAuth identity, Gmail source mailbox, Pub/Sub notifications, Gmail send |
+| Vercel | Dashboard hosting and private attachment storage |
+| Railway | Gateway/worker compute and BullMQ Redis |
+| Neon | Primary relational database |
+| Anthropic | Support-message classification, summaries, and draft/agent generation |
+| Clerk | Merchant authentication and workspace membership |
+| PostHog | Server-side product events only; policy and code prohibit message content, emails, tokens, and provider payloads |
+| Observability providers | Sanitized application/error logs; confirm the actual production vendors and retention |
+
+Stripe, Shopify, Photon, and other connected-channel providers are product
+subprocessors but are not required for the Gmail data path. Include them in the
+company-wide public subprocessor list if they are active for submitted users.
+
+## Demo video script
+
+Use a test merchant, test Gmail/Workspace mailbox, test send-as alias, and
+independent test sender. Keep the consent-screen language set to English.
+
+1. Start on the final owned-domain homepage. Show Shopkeeper branding,
+   Gmail-ticket/reply functionality, and visible Privacy/Terms links.
+2. Open the privacy policy and briefly show the Google Workspace API data,
+   Limited Use, retention/deletion, sharing, and no-general-model-training
+   disclosures.
+3. Sign in as the test merchant and open **Integrations → Gmail**.
+4. Click **Connect Gmail** and show the complete Google consent screen,
+   including the same app name and exact requested scopes submitted for review.
+5. Grant access and return to Shopkeeper. Show the connected mailbox identity,
+   native inbound status, and configured support alias.
+6. From the independent mailbox, send a uniquely identified HTML email with a
+   safe attachment to the alias.
+7. Show the message arriving as one Shopkeeper ticket with the attachment.
+   Explain that `gmail.readonly` powers history/message reads and that no Gmail
+   mutation scope is requested.
+8. Write and approve a reply in Shopkeeper. Show the reply was sent from the
+   verified alias, then show the same conversation in Gmail. Explain that
+   `gmail.send` powers this action.
+9. Send a customer follow-up from the independent mailbox. Show one continuing
+   Gmail thread and one continuing Shopkeeper ticket without duplicates.
+10. Return to Integrations and show the disconnect control and the privacy/data
+    deletion contact path.
+
+Upload the video as an unlisted link accessible to Google's reviewers without a
+login. Do not expose real customer data, console secrets, tokens, or production
+logs in the recording.
+
+## CASA/security assessment readiness
+
+- [ ] Confirm assessment scope includes dashboard, both Railway services,
+  production database, Redis, Blob storage, OAuth/token handling, CI/CD, and
+  observability.
+- [ ] Provide current architecture and data-flow diagrams.
+- [ ] Provide asset inventory, owners, environments, and data classifications.
+- [ ] Provide access-control/RBAC evidence and joiner/mover/leaver procedures.
+- [ ] Provide encryption-in-transit and encryption-at-rest evidence, including
+  application-layer OAuth token encryption and key rotation.
+- [ ] Provide SDLC, code-review, dependency/vulnerability-management, and
+  release evidence.
+- [ ] Provide incident response, breach notification, backup/PITR, restoration,
+  and disaster-recovery evidence.
+- [ ] Provide penetration-test and vulnerability-remediation evidence.
+- [ ] Provide logging/monitoring configuration showing restricted data is not
+  written to logs.
+- [ ] Exercise verified deletion across Neon, Vercel Blob, Redis retention,
+  backups, and connected-provider handoff.
+- [ ] Select a Google-empanelled assessor and budget for at least annual
+  reassessment/recertification.
+
+Google states that server-side apps accessing restricted data generally require
+an assessment using the App Defense Alliance/CASA framework and reassessment at
+least every 12 months after the Letter of Assessment approval date.
+
+## Final owner submission checklist
+
+- [ ] Attach an owned custom domain to Vercel.
+- [ ] Verify that domain in Google Search Console using a project owner/editor.
+- [ ] Set `APP_URL` and `NEXT_PUBLIC_APP_URL` to the final domain and redeploy.
+- [ ] Update the Google OAuth client redirect URI to the exact final callback.
+- [ ] Add only the final owned domain to OAuth Branding authorized domains.
+- [ ] Confirm homepage, privacy, and terms return 200 in an anonymous browser.
+- [ ] Confirm homepage visibly links the same privacy URL used in OAuth
+  Branding.
+- [ ] Confirm the support mailbox is monitored and matches the public brand.
+- [ ] Add at least two current developer/project contacts.
+- [ ] Declare exactly the four scopes above in Google Cloud Data Access.
+- [ ] Paste the scope justifications above, adjusted only for final UI wording.
+- [ ] Complete the Palette/test-mailbox alias canary.
+- [ ] Record and review the demo video.
+- [ ] Legal/owner approves the privacy, retention, deletion, subprocessor, and
+  no-training statements against current contracts.
+- [ ] Publish the OAuth app to production and click **Prepare for Verification**.
+- [ ] Submit the verification request from an authorized project owner/editor.
+- [ ] Respond to reviewer questions and begin the security assessment when
+  Google requests it.
+- [ ] Record annual recertification and assessment owners.
+
+## Primary references
+
+- [Google verification requirements](https://support.google.com/cloud/answer/13464321?hl=en)
+- [Google submission process](https://support.google.com/cloud/answer/13461325?hl=en)
+- [Google restricted-scope verification](https://developers.google.com/identity/protocols/oauth2/production-readiness/restricted-scope-verification)
+- [Gmail scope classifications](https://developers.google.com/workspace/gmail/api/auth/scopes)
+- [Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy)
+- [Google Workspace API user data and developer policy](https://developers.google.com/workspace/workspace-api-user-data-developer-policy)
+- [Anthropic commercial API model-training statement](https://privacy.claude.com/en/articles/7996885-how-do-you-use-personal-data-in-model-training)
