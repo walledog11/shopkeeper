@@ -75,10 +75,10 @@ To close this plan:
    acceptance criteria. They must not disappear when this document is removed.
    P8-03's nonce migration landed 2026-07-30; enforcement is blocked on Clerk's
    un-nonced script tag, so that blocker travels with the track wherever it goes.
-6. **Retirement and decisions:** give every P9-02 compatibility candidate and
-   each unresolved product decision an owner in the durable backlog. Remove
-   compatibility code one surface at a time only after positive non-use
-   evidence.
+6. **Retirement and decisions:** P9-02 backlog is owned in
+   [compatibility-retirement-backlog.md](compatibility-retirement-backlog.md);
+   first retirement (Sentry example routes) landed 2026-07-30. Continue one
+   surface per PR with positive non-use evidence.
 
 This document can be deleted once items 1–4 are complete and items 5–6 are
 either complete or copied into owned, durable plans/issues. P7-02 is explicitly
@@ -195,9 +195,19 @@ with an explicit non-sensitive `shadow` value, redeployed, and verified alongsid
 the two Railway hosts. The evidence gate is complete; proceed with dashboard-
 first staged enforcement rather than enabling all entry points at once.
 
-**Dashboard enforcement stage (2026-07-29):** Vercel is now explicitly
-`PLAN_EXECUTION_LEDGER_MODE=enforce`; the Railway public gateway and worker
-remain explicitly `shadow`. Internal-only dashboard execution
+**Gateway enforcement stage (2026-07-30):** After pre-promotion verifier and
+strict audits passed, both Railway services (`shopkeeper` public gateway and
+`Gateway Worker`) were set to `PLAN_EXECUTION_LEDGER_MODE=enforce`. Gateway
+canary execution `345be6f6-555e-4cde-9e1e-961fca91cb22` committed with
+`observationCount=0`, populated claim/completion timestamps, one linked
+successful `add_internal_note` action, and no error. Post-promotion strict
+24-hour audits report one `committed` row and no repeated observations,
+unknown outcomes, or stale claims. Hold a normal 24-hour observation window with
+representative gateway/operator traffic before treating rollout complete;
+rollback is configuration-only on each Railway service.
+
+**Dashboard enforcement stage (2026-07-29):** Vercel is explicitly
+`PLAN_EXECUTION_LEDGER_MODE=enforce`. Internal-only dashboard execution
 `6fdec37f-e92a-4115-b909-c8a226464fe4` atomically claimed and completed as
 `committed`, kept `observationCount=0`, populated `claimedAt` and `completedAt`,
 recorded no error, and linked one successful `add_internal_note` action. The
@@ -208,13 +218,10 @@ also pass. The first representative reviewed dashboard execution
 `9bbe5f42-4da9-4f89-ad13-e10a7b167d49` then committed one successful
 `send_reply` with `observationCount=0`, populated claim/completion timestamps,
 and no error. The strict audits now contain eight human-approved rows (six
-shadow `pending`, two enforced `committed`) with no blockers. Hold this host
-split until the representative 24-hour dashboard observation window completes.
-The representative execution committed at 2026-07-29 14:46 PDT
-(2026-07-29T21:46:25Z), so the conservative earliest Railway promotion check is
-2026-07-30 after 14:47 PDT. Before changing either Railway service, rerun the
-production verifier plus the strict plan-execution and unknown-outcome audits
-and require them all to pass.
+shadow `pending`, two enforced `committed`) with no blockers before gateway
+promotion. The representative execution committed at 2026-07-29 14:46 PDT
+(2026-07-29T21:46:25Z); gateway promotion followed on 2026-07-30 after the
+documented pre-check audits passed.
 
 - **Related findings:** AUD-001, AUD-002, AUD-012.
 - **Files likely to change:** `packages/agent/src/plan-execution.ts`, `turn.ts`; `apps/dashboard/src/app/api/agent/route.ts`, `quick-approve/route.ts`; `apps/gateway/src/message-handlers/execute-operator-agent-turn.ts`, `pending-plan-actions.ts`.
@@ -1568,9 +1575,11 @@ context rollout rail, and the production environment checker covers it.
 
 ### P9-02 — Verify and remove only proven dead compatibility code
 
-**Status (2026-07-28):** Evidence-gated retirement backlog. Each candidate must
-be completed separately or moved into an owned durable issue before this plan is
-deleted.
+**Status (2026-07-30):** Owned backlog in
+[compatibility-retirement-backlog.md](compatibility-retirement-backlog.md).
+First retirement complete: Sentry example page/API and `SENTRY_EXAMPLE_PAGE_ENABLED`
+(not in operational runbooks). Remaining candidates have assigned owners and
+evidence gates in that file.
 
 - **Related findings:** AUD-021 and dead-code candidates.
 - **Files likely to change:** Sentry example routes/flag, deprecated URL alias, legacy purge/normalization code, sync email path—only the candidates proven unused.

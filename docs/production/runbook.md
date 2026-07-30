@@ -738,15 +738,19 @@ execution row. Roll out by host: dashboard first, then the public gateway and
 worker together after the dashboard observation window. PostgreSQL is the
 single-use boundary; Redis remains only a latency guard.
 
-**Current stage (2026-07-29):** the Vercel dashboard is in `enforce`; Railway
-public gateway and worker remain in `shadow`. Dashboard canary execution
+**Current stage (2026-07-30):** dashboard, Railway public gateway, and Railway
+worker are all in `enforce`. Gateway canary execution
+`345be6f6-555e-4cde-9e1e-961fca91cb22` committed on 2026-07-30 with enforce-state
+invariants. Hold a normal 24-hour observation window with representative
+gateway/operator traffic; strict audits must stay clean.
+
+**Previous stage (2026-07-29):** the Vercel dashboard was in `enforce`; Railway
+public gateway and worker remained in `shadow`. Dashboard canary execution
 `6fdec37f-e92a-4115-b909-c8a226464fe4` committed with one linked successful
 internal action, zero shadow observations, and populated claim/completion
 timestamps. Representative reviewed execution
 `9bbe5f42-4da9-4f89-ad13-e10a7b167d49` subsequently committed one successful
-`send_reply` with the same enforce-state invariants and no error. The
-representative 24-hour observation window is now in progress; its conservative
-earliest promotion check is 2026-07-30 after 14:47 PDT.
+`send_reply` with the same enforce-state invariants and no error.
 
 Before and after every flag change:
 
@@ -769,10 +773,10 @@ Before and after every flag change:
    and linked successful actions.
 
 Keep dashboard-only enforcement for at least one normal 24-hour observation
-window containing representative reviewed dashboard traffic. Do not advance
-operator/auto paths from an empty window or from the internal-only canary alone.
-After the window is clean, set both Railway services to `enforce` together,
-deploy them, and repeat the canary/audit sequence before broad observation.
+window containing representative reviewed dashboard traffic before promoting
+gateway/worker. Gateway and worker were promoted to `enforce` on 2026-07-30;
+repeat the canary/audit sequence and hold a broad observation window after any
+future flag change.
 
 Dashboard rollback is configuration-only: restore the Vercel Production
 variable to explicit non-sensitive `shadow`, redeploy the same known-good
