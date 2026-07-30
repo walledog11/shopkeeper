@@ -9,6 +9,7 @@ import type {
   CreateReturnInput,
   CreateShopifyOrderInput,
   EditShopifyOrderInput,
+  FulfillOrderInput,
   GetOrderByNameInput,
   GetOrderTrackingInput,
   GetShopifyOrdersInput,
@@ -342,6 +343,27 @@ export const ORDER_TOOL_DEFINITIONS = [
     execute: async (input: AttachReturnLabelInput, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
       return shopify ? deps.attachReturnLabel(input, shopify) : noShopify;
+    },
+  }),
+  defineTool({
+    name: "fulfill_order",
+    description:
+      "Mark a Shopify order as fulfilled (shipped) and optionally attach tracking. Fulfills every item still awaiting fulfillment on the order. Only use this when the merchant has confirmed the parcel is actually shipped or handed to the carrier - never to reassure a customer who is asking where their order is, and never on your own initiative from a customer message alone. By default Shopify emails the customer a shipping confirmation. This cannot be undone from here: a wrong fulfillment sends a false shipping notice, so escalate instead if you are unsure. It also cannot ship part of an order - if only some items went out, escalate to the merchant.",
+    fields: {
+      order_id: stringArg("Shopify order ID (numeric). Use the id field from the orders context.", { required: true }),
+      tracking_number: stringArg("Carrier tracking number for the shipment, if the merchant provided one."),
+      tracking_company: stringArg("Carrier name (e.g. 'USPS', 'UPS', 'FedEx'). Provide it whenever a tracking number is given so the customer's tracking link resolves."),
+      tracking_url: stringArg("Direct tracking URL, if the merchant provided one instead of or alongside a number."),
+      notify_customer: booleanArg("Whether Shopify emails the customer a shipping confirmation. Defaults to true."),
+    },
+    category: "action",
+    group: "order",
+    capabilities: ["shopify"],
+    label: "Fulfilled order",
+    planStepLabel: "Mark order fulfilled",
+    execute: async (input: FulfillOrderInput, ctx, _settings, deps) => {
+      const shopify = requireShopify(ctx);
+      return shopify ? deps.fulfillOrder(input, shopify) : noShopify;
     },
   }),
 ] as const;

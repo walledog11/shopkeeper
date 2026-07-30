@@ -10,6 +10,7 @@
 // fail with an HTTP status rather than as a statusless document-validation
 // error, so they are not part of this class.
 import { DISCOUNT_CODE_BASIC_CREATE_MUTATION } from "./discounts.js";
+import { FULFILLMENT_CREATE_MUTATION } from "./fulfillment.js";
 import { GIFT_CARD_CREATE_MUTATION } from "./gift-cards.js";
 import {
   ORDER_EDIT_ADD_VARIANT_MUTATION,
@@ -33,6 +34,10 @@ export const SHOPIFY_MUTATION_DOCUMENTS: Record<string, ShopifyMutationDocument>
   discountCodeBasicCreate: {
     document: DISCOUNT_CODE_BASIC_CREATE_MUTATION,
     rootField: "discountCodeBasicCreate",
+  },
+  fulfillmentCreate: {
+    document: FULFILLMENT_CREATE_MUTATION,
+    rootField: "fulfillmentCreate",
   },
   giftCardCreate: {
     document: GIFT_CARD_CREATE_MUTATION,

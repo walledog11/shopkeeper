@@ -62,6 +62,8 @@ function describeTool(name: string, input: unknown): string {
       return `Create $${a.amount} gift card${a.reason ? ` (${a.reason})` : ""}`;
     case "attach_return_label":
       return `Attach return label${a.tracking_number ? ` (tracking ${a.tracking_number})` : ""}`;
+    case "fulfill_order":
+      return `Mark order fulfilled${a.tracking_number ? ` (tracking ${a.tracking_number})` : ""}${a.notify_customer === false ? ", no customer email" : ""}`;
     default:
       return name.replace(/_/g, " ");
   }

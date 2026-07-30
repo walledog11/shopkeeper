@@ -19,6 +19,10 @@
 // string that actually runs.
 import { VARIANT_PRICES_QUERY } from "./exchanges.js";
 import { DISCOUNT_CODES_BY_CODE_QUERY } from "./discounts.js";
+import {
+  ORDER_FULFILLMENTS_TRACKING_QUERY,
+  ORDER_FULFILLMENT_ORDERS_QUERY,
+} from "./fulfillment.js";
 import { CREATED_ORDER_LOOKUP_QUERY } from "./order-creation.js";
 import {
   CREATED_ORDER_TAG_SEARCH_QUERY,
@@ -79,6 +83,14 @@ export const SHOPIFY_QUERY_DOCUMENTS: Record<string, ShopifyQueryDocument> = {
   returnableFulfillments: {
     document: RETURNABLE_FULFILLMENTS_QUERY,
     variables: { orderId: "gid://shopify/Order/1" },
+  },
+  orderFulfillmentOrders: {
+    document: ORDER_FULFILLMENT_ORDERS_QUERY,
+    variables: { id: "gid://shopify/Order/1" },
+  },
+  orderFulfillmentsTracking: {
+    document: ORDER_FULFILLMENTS_TRACKING_QUERY,
+    variables: { id: "gid://shopify/Order/1" },
   },
   shopCurrency: {
     document: SHOP_CURRENCY_QUERY,

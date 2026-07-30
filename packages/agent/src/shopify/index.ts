@@ -51,6 +51,11 @@ export { createExchange } from "./exchanges.js";
 export { issueStoreCredit } from "./store-credit.js";
 export { createGiftCard } from "./gift-cards.js";
 export { attachReturnLabel, OPEN_RETURN_STATUSES } from "./return-labels.js";
+export {
+  fulfillOrder,
+  fetchFulfillableFulfillmentOrders,
+  FULFILLABLE_FULFILLMENT_ORDER_STATUSES,
+} from "./fulfillment.js";
 export { issueDiscount } from "./discounts.js";
 export {
   probeUnknownShopifyMutation,

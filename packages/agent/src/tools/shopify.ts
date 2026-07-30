@@ -9,6 +9,7 @@ export {
   issueStoreCredit,
   createShopifyOrder,
   editShopifyOrder,
+  fulfillOrder,
   getOrderByName,
   getOrderTracking,
   getShopifyCustomer,

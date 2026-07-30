@@ -30,6 +30,7 @@ import {
   issueStoreCredit,
   createGiftCard,
   attachReturnLabel,
+  fulfillOrder,
 } from "./shopify.js";
 import { checkParsedStaticToolPolicy } from "./static-policy.js";
 import { getSupportStats } from "./support-stats.js";
@@ -107,6 +108,7 @@ const TOOL_EXECUTION_DEPS: ToolExecutionDeps = {
   issueStoreCredit,
   createGiftCard,
   attachReturnLabel,
+  fulfillOrder,
   async searchKnowledgeBaseArticles(orgId: string, words: readonly string[]): Promise<KnowledgeBaseToolArticle[]> {
     const wordConditions = words.flatMap((word) => [
       { title: { contains: word, mode: "insensitive" as const } },

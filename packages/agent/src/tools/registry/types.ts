@@ -169,6 +169,14 @@ export interface AttachReturnLabelInput {
   tracking_number?: string;
 }
 
+export interface FulfillOrderInput {
+  order_id: string;
+  tracking_number?: string;
+  tracking_company?: string;
+  tracking_url?: string;
+  notify_customer?: boolean;
+}
+
 export interface GetOrderTrackingInput {
   order_id: string;
 }
@@ -241,6 +249,7 @@ export interface ToolExecutionDeps {
   issueStoreCredit(input: IssueStoreCreditInput, ctx: ShopifyToolContext): Promise<SpendToolResult>;
   createGiftCard(input: CreateGiftCardInput, ctx: ShopifyToolContext): Promise<SpendToolResult>;
   attachReturnLabel(input: AttachReturnLabelInput, ctx: ShopifyToolContext): Promise<ToolResult>;
+  fulfillOrder(input: FulfillOrderInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   searchKnowledgeBaseArticles(orgId: string, words: readonly string[]): Promise<KnowledgeBaseToolArticle[]>;
   recordKnowledgeBaseCitations(orgId: string, threadId: string, articleIds: readonly string[]): Promise<unknown>;
   getSupportStats(orgId: string, days: number): Promise<SupportStatsSummary>;

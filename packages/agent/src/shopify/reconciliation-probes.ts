@@ -1,5 +1,6 @@
-import type { AttachReturnLabelInput, CancelOrderInput, CreateExchangeInput, CreateGiftCardInput, CreateRefundInput, CreateReturnInput, CreateShopifyOrderInput, EditShopifyOrderInput, IssueDiscountInput, IssueStoreCreditInput, UpdateShopifyOrderAddressInput } from "../tools/index.js";
+import type { AttachReturnLabelInput, CancelOrderInput, CreateExchangeInput, CreateGiftCardInput, CreateRefundInput, CreateReturnInput, CreateShopifyOrderInput, EditShopifyOrderInput, FulfillOrderInput, IssueDiscountInput, IssueStoreCreditInput, UpdateShopifyOrderAddressInput } from "../tools/index.js";
 import { discountCodeForOperation, findDiscountsByCode } from "./discounts.js";
+import { fetchFulfillableFulfillmentOrders, fetchOrderFulfillmentTrackingNumbers } from "./fulfillment.js";
 import { addressMatches, buildOrderAddress } from "./order-address.js";
 import { OPEN_RETURN_STATUSES } from "./return-labels.js";
 import { fetchReturnableLineItems } from "./returns.js";
@@ -31,6 +32,7 @@ export const RECONCILABLE_SHOPIFY_MUTATION_TOOLS = new Set([
   "create_exchange",
   "attach_return_label",
   "issue_discount",
+  "fulfill_order",
 ]);
 
 // Shares the operation name FindShopkeeperCreatedOrder with
@@ -564,6 +566,54 @@ async function probeReturnLabel(
   );
 }
 
+async function probeFulfillment(
+  input: FulfillOrderInput,
+  ctx: ShopifyContext,
+): Promise<ShopifyReconciliationProbeResult> {
+  const orderId = requireNumericId(input.order_id, "order_id");
+  const orderGid = `gid://shopify/Order/${orderId}`;
+  const trackingNumber = optionalString(input.tracking_number);
+
+  // fulfillOrder does not reach fulfillmentCreate unless something was
+  // fulfillable a moment earlier, so what is fulfillable now is what says
+  // whether the mutation landed - read with the tool's own query, not a copy.
+  const fulfillable = await fetchFulfillableFulfillmentOrders(ctx, orderGid);
+  if (fulfillable === null) {
+    return stillUnknown(`Order ${orderId} was not returned by Shopify during reconciliation.`);
+  }
+
+  if (trackingNumber) {
+    const matches = (await fetchOrderFulfillmentTrackingNumbers(ctx, orderGid))
+      .filter((number) => number === trackingNumber);
+    if (matches.length === 1) {
+      return committed(`Reconciled fulfillment with tracking ${trackingNumber} on order ${orderId}.`);
+    }
+    if (matches.length > 1) {
+      return stillUnknown(`Multiple fulfillments on order ${orderId} carry tracking number ${trackingNumber}.`);
+    }
+    if (fulfillable.length > 0) {
+      // Positive on both halves: no fulfillment carries this call's tracking
+      // number, and the items it would have shipped are still awaiting
+      // fulfillment. Neither alone would justify clearing the action.
+      return noEffect(
+        `Order ${orderId} has no fulfillment carrying tracking number ${trackingNumber} and its items are still awaiting fulfillment.`,
+      );
+    }
+    // Something fulfilled this order, but not identifiably this call. Fulfilling
+    // again would send the customer a second shipping notice.
+    return stillUnknown(
+      `Order ${orderId} has nothing left to fulfill, but no fulfillment carries tracking number ${trackingNumber}. Review the order before fulfilling again.`,
+    );
+  }
+
+  if (fulfillable.length === 0) {
+    // The tool stops at "nothing left to fulfill" before mutating, so this
+    // reading cannot have pre-dated the call.
+    return committed(`Reconciled fulfillment on order ${orderId}: nothing remains to fulfill.`);
+  }
+  return noEffect(`Order ${orderId} still has items awaiting fulfillment.`);
+}
+
 async function probeDiscount(
   input: IssueDiscountInput,
   ctx: ShopifyContext,
@@ -624,6 +674,8 @@ export async function probeUnknownShopifyMutation(
         return await probeReturnLabel(record as unknown as AttachReturnLabelInput, ctx);
       case "issue_discount":
         return await probeDiscount(record as unknown as IssueDiscountInput, ctx);
+      case "fulfill_order":
+        return await probeFulfillment(record as unknown as FulfillOrderInput, ctx);
       default:
         return stillUnknown(`Tool ${tool} does not have a Shopify reconciliation probe.`);
     }

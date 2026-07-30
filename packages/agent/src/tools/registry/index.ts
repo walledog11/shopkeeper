@@ -28,6 +28,7 @@ export type {
   CreateShopifyOrderLineItem,
   EditShopifyOrderInput,
   EscalateToHumanInput,
+  FulfillOrderInput,
   GetOrderByNameInput,
   GetOrderTrackingInput,
   GetShopifyCustomerInput,

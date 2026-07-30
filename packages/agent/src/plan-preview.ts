@@ -39,6 +39,7 @@ const ACTION_TOOL_PRIORITY = [
   "attach_return_label",
   "edit_shopify_order",
   "create_shopify_order",
+  "fulfill_order",
   "update_shopify_order_address",
   "update_shopify_customer_info",
   "add_shopify_customer_note",
