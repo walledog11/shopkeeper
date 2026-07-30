@@ -120,9 +120,12 @@ export function collectPlanExpectationFailures(
   }))
   if (expected.mustClassifyAs) {
     const classification = classifyHomePlan(plan, fixture.setup.orgSettings ?? null)
-    if (classification.kind !== expected.mustClassifyAs) {
+    const allowedClassifications = Array.isArray(expected.mustClassifyAs)
+      ? expected.mustClassifyAs
+      : [expected.mustClassifyAs]
+    if (!allowedClassifications.includes(classification.kind)) {
       failures.push(
-        `expected classifyHomePlan -> "${expected.mustClassifyAs}", got "${classification.kind}"`,
+        `expected classifyHomePlan -> one of [${allowedClassifications.map(kind => `"${kind}"`).join(", ")}], got "${classification.kind}"`,
       )
     }
   }

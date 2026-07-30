@@ -37,6 +37,6 @@
   },
   "instruction": "Reply to the customer and process their refund request.",
   "expectedPlan": {
-    "mustClassifyAs": "needs_review"
+    "mustClassifyAs": ["needs_review", "needs_merchant_input"]
   }
 }

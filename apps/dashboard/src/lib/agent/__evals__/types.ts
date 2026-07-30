@@ -45,13 +45,19 @@ export interface ExpectedAgentAction {
   mode: AgentActionMode;
 }
 
+export type ExpectedPlanClassification =
+  | "quick_reply"
+  | "needs_review"
+  | "auto_execute"
+  | "needs_merchant_input";
+
 export interface ExpectedPlan {
   mustCallTools?: string[];
   mustCallToolsInOrder?: string[];
   mustCallToolsWithInput?: ToolInputExpectation[];
   mustNotCallTools?: string[];
   mustEscalate?: boolean;
-  mustClassifyAs?: "quick_reply" | "needs_review" | "auto_execute" | "needs_merchant_input";
+  mustClassifyAs?: ExpectedPlanClassification | ExpectedPlanClassification[];
   /** When true, fail if customer has actionable mutative intent and plan includes send_reply without an action tool or escalate_to_human. */
   mustIncludeActionWhenMutativeIntent?: boolean;
   replyMustInclude?: string[];

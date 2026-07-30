@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import type { AgentPlan } from "@/types";
+import { collectPlanExpectationFailures } from "./assertions";
 import { formatGateSummary, mutativeIntentActionFailures, summarizeGates } from "./runner";
-import type { FixtureRunSummary } from "./types";
+import type { Fixture, FixtureRunSummary } from "./types";
 
 describe("summarizeGates", () => {
   const summaries: FixtureRunSummary[] = [
@@ -75,5 +77,50 @@ describe("mutativeIntentActionFailures", () => {
       customerTexts: ["Please refund order #4003."],
       rawToolCalls: [{ name: "get_shopify_orders" }],
     })).toEqual([]);
+  });
+});
+
+describe("classification expectations", () => {
+  const merchantInputPlan: AgentPlan = {
+    instruction: "Handle the request",
+    steps: [],
+    rawToolCalls: [{
+      id: "ask-1",
+      name: "ask_operator",
+      input: { question: "Should I refund this order?" },
+    }],
+  };
+
+  function fixture(mustClassifyAs: Fixture["expectedPlan"]["mustClassifyAs"]): Fixture {
+    return {
+      id: "classification-test",
+      description: "classification expectation test",
+      setup: {
+        channelType: "email",
+        messages: [],
+      },
+      instruction: "Handle the request",
+      expectedPlan: { mustClassifyAs },
+    };
+  }
+
+  it("accepts any classification in an allowed list", () => {
+    expect(
+      collectPlanExpectationFailures(
+        fixture(["needs_review", "needs_merchant_input"]),
+        merchantInputPlan,
+      ).failures,
+    ).toEqual([]);
+  });
+
+  it("reports a classification outside the allowed list", () => {
+    expect(
+      collectPlanExpectationFailures(
+        fixture(["quick_reply", "needs_review"]),
+        merchantInputPlan,
+      ).failures,
+    ).toEqual([
+      'expected classifyHomePlan -> one of ["quick_reply", "needs_review"], got "needs_merchant_input"',
+    ]);
   });
 });
