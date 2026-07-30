@@ -107,7 +107,10 @@ export interface OutboundEmailJobData {
 
 export interface GmailSyncJobData {
   integrationId: string;
-  notifiedHistoryId: string;
+  notifiedHistoryId?: string;
+  source?: 'push' | 'maintenance' | 'operator_recovery';
+  recoveryMaxMessages?: number;
+  recoveryQuery?: string;
   traceId: string;
 }
 

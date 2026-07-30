@@ -47,6 +47,7 @@
     "audit:stripe-webhooks": "node ./scripts/audit-stripe-webhook-events.mjs",
     "audit:refund-spend-reservations": "node ./scripts/audit-refund-spend-reservations.mjs",
     "audit:unknown-outcomes": "node ./scripts/audit-unknown-outcomes.mjs",
+    "recover:gmail-history": "tsx ./scripts/recover-gmail-history.ts",
     "canary:agent-rollout": "tsx ./apps/gateway/src/scripts/canary-agent-rollout.ts",
     "canary:context-budget": "tsx ./apps/gateway/src/scripts/canary-context-budget.ts",
     "canary:dashboard-ledger": "tsx --tsconfig apps/dashboard/tsconfig.json ./apps/dashboard/src/scripts/canary-dashboard-ledger.ts",

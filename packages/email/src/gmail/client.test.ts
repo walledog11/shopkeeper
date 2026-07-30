@@ -173,6 +173,26 @@ describe('GmailApiClient resources', () => {
     );
   });
 
+  it('rejects an unexpectedly oversized raw response before decoding it', async () => {
+    mockFetch.mockResolvedValueOnce(jsonResponse({
+      id: 'message-1',
+      raw: Buffer.from('five!').toString('base64url'),
+    }));
+    const client = new GmailApiClient(integration, {
+      fetch: mockFetch,
+      oauthClient: { clientId: 'client-id', clientSecret: 'client-secret' },
+      persistToken,
+      refreshToken,
+      now: () => Date.parse('2029-01-01T00:00:00.000Z'),
+      maxRawMessageBytes: 4,
+    });
+
+    await expect(client.getMessageRaw('message-1')).rejects.toMatchObject({
+      kind: 'invalid_response',
+      operation: 'users.messages.get',
+    });
+  });
+
   it('lists only an explicitly bounded recovery page', async () => {
     mockFetch.mockResolvedValueOnce(jsonResponse({
       messages: [{ id: 'message-1', threadId: 'thread-1' }],
@@ -282,7 +302,7 @@ describe('GmailApiClient response validation and errors', () => {
     await expect(client.getMessageRaw('message-1')).rejects.toMatchObject({
       name: 'GmailApiError',
       kind: 'timeout',
-      retryable: false,
+      retryable: true,
       operation: 'users.messages.get',
     });
   });

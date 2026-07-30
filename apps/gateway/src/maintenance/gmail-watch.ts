@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import type { Queue } from 'bullmq';
 import type { Prisma } from '@prisma/client';
 import { db } from '@shopkeeper/db';
 import {
@@ -14,15 +16,17 @@ import {
 } from '@shopkeeper/email';
 import { getEmailInboundMode } from '../config/env.js';
 import { isGmailNativeInboundEnabled } from '../config/runtime-config.js';
-import { JOB, QUEUE } from '../constants.js';
+import { GMAIL_SYNC_QUEUE_DEFAULTS, JOB, QUEUE } from '../constants.js';
 import logger from '../logger.js';
 import { emitOpsAlert } from '../ops-alerts.js';
 import {
   acquireGmailIntegrationLock,
+  GmailSyncLockLostError,
   GmailSyncLockUnavailableError,
   type GmailSyncRedis,
 } from '../lib/gmail-sync-lock.js';
 import { isRecord, readString } from '../lib/typing.js';
+import type { GmailSyncJobData } from '../types.js';
 import {
   createMaintenanceQueue,
   createMaintenanceWorker,
@@ -32,8 +36,8 @@ import {
 } from './registration.js';
 
 const GMAIL_WATCH_MAINTENANCE_INTERVAL_MS = 12 * ONE_HOUR_MS;
+const GMAIL_WATCH_RENEWAL_INTERVAL_MS = 24 * ONE_HOUR_MS;
 const GMAIL_WATCH_RENEWAL_WINDOW_MS = 24 * ONE_HOUR_MS;
-const GMAIL_STALE_SYNC_THRESHOLD_MS = 2 * ONE_HOUR_MS;
 const GMAIL_REPEATED_WATCH_FAILURE_THRESHOLD = 3;
 const EPOCH_SENTINEL = new Date(0);
 
@@ -50,6 +54,7 @@ interface GmailWatchIntegration {
 
 export interface GmailWatchMaintenanceDependencies {
   redis: GmailSyncRedis;
+  syncQueue: Pick<Queue<GmailSyncJobData>, 'add'>;
   createClient?: (integration: GmailWatchIntegration) => GmailApiClient;
   emitAlert?: typeof emitOpsAlert;
   now?: () => Date;
@@ -61,7 +66,7 @@ export interface GmailWatchMaintenanceResult {
   renewed: number;
   failed: number;
   skippedForLock: number;
-  staleSyncWarnings: number;
+  catchupsEnqueued: number;
   alerts: number;
 }
 
@@ -95,9 +100,19 @@ function isNativeGmailIntegration(integration: GmailWatchIntegration): boolean {
 function needsWatchRenewal(integration: GmailWatchIntegration, nowMs: number): boolean {
   const gmail = getGmailMetadata(integration.metadata);
   if (!gmail) return true;
-  if (gmail.inboundStatus === 'degraded' || gmail.inboundStatus === 'pending') return true;
+  const lastError = readString(gmail.lastError);
+  if (
+    gmail.inboundStatus === 'pending'
+    || (gmail.inboundStatus === 'degraded' && !lastError?.startsWith('sync_'))
+  ) {
+    return true;
+  }
   const expiration = readTimestamp(gmail.watchExpiration);
-  return expiration === null || expiration <= nowMs + GMAIL_WATCH_RENEWAL_WINDOW_MS;
+  const lastRenewedAt = readTimestamp(gmail.watchLastRenewedAt);
+  return expiration === null
+    || expiration <= nowMs + GMAIL_WATCH_RENEWAL_WINDOW_MS
+    || lastRenewedAt === null
+    || nowMs - lastRenewedAt >= GMAIL_WATCH_RENEWAL_INTERVAL_MS;
 }
 
 async function loadIntegration(integrationId: string): Promise<GmailWatchIntegration | null> {
@@ -126,16 +141,19 @@ async function markWatchSuccess(
   const historyId = existingHistoryId && isValidGmailHistoryId(existingHistoryId)
     ? existingHistoryId
     : response.historyId;
+  const lastError = readString(gmail?.lastError);
+  const preserveSyncDegradation = gmail?.inboundStatus === 'degraded'
+    && lastError?.startsWith('sync_') === true;
   const metadata = metadataWithGmailState(
     integration.metadata,
     {
       historyId,
-      inboundStatus: 'active',
+      inboundStatus: preserveSyncDegradation ? 'degraded' : 'active',
       watchExpiration: response.expiration,
       watchFailureCount: 0,
       watchLastRenewedAt: now.toISOString(),
     },
-    { clearLastError: true },
+    { clearLastError: !preserveSyncDegradation },
   ) as Prisma.InputJsonObject;
 
   await db.integration.update({
@@ -171,12 +189,11 @@ function monitorIntegration(
   integration: GmailWatchIntegration,
   nowMs: number,
   emitAlert: typeof emitOpsAlert,
-): { alerts: number; staleSyncWarnings: number } {
+): { alerts: number } {
   const gmail = getGmailMetadata(integration.metadata);
-  if (!gmail) return { alerts: 0, staleSyncWarnings: 0 };
+  if (!gmail) return { alerts: 0 };
 
   let alerts = 0;
-  let staleSyncWarnings = 0;
   const expiration = readTimestamp(gmail.watchExpiration);
   if (expiration !== null && expiration <= nowMs) {
     emitAlert({
@@ -210,27 +227,7 @@ function monitorIntegration(
     alerts += 1;
   }
 
-  if (gmail.inboundStatus === 'active') {
-    const lastSync = readTimestamp(gmail.lastSyncedAt);
-    const activeSince = readTimestamp(gmail.watchLastRenewedAt)
-      ?? integration.createdAt.getTime();
-    if (
-      (lastSync === null && nowMs - activeSince >= GMAIL_STALE_SYNC_THRESHOLD_MS)
-      || (lastSync !== null && nowMs - lastSync >= GMAIL_STALE_SYNC_THRESHOLD_MS)
-    ) {
-      logger.warn(
-        {
-          integrationId: integration.id,
-          lastSyncedAt: lastSync === null ? null : new Date(lastSync).toISOString(),
-          organizationId: integration.organizationId,
-        },
-        '[Gmail Watch] Active integration has no recent successful sync',
-      );
-      staleSyncWarnings += 1;
-    }
-  }
-
-  return { alerts, staleSyncWarnings };
+  return { alerts };
 }
 
 export async function runGmailWatchMaintenance(
@@ -267,7 +264,7 @@ export async function runGmailWatchMaintenance(
     renewed: 0,
     failed: 0,
     skippedForLock: 0,
-    staleSyncWarnings: 0,
+    catchupsEnqueued: 0,
     alerts: 0,
   };
 
@@ -301,6 +298,8 @@ export async function runGmailWatchMaintenance(
         if (!topicName) throw new EmailNotConfiguredError('Gmail Pub/Sub topic missing');
         const client = dependencies.createClient?.(integration) ?? new GmailApiClient(integration);
         const response = await client.watch(buildInboxWatchRequest(topicName));
+        await lock.renew();
+        lock.assertOwned();
         const updated = await markWatchSuccess(integration, response, now);
         monitored.set(updated.id, updated);
         result.renewed += 1;
@@ -309,6 +308,9 @@ export async function runGmailWatchMaintenance(
           '[Gmail Watch] Watch renewed',
         );
       } catch (error) {
+        if (error instanceof GmailSyncLockLostError) throw error;
+        await lock.renew();
+        lock.assertOwned();
         const category = classifyWatchError(error);
         const updated = await markWatchFailure(integration, category, now);
         monitored.set(updated.id, updated);
@@ -323,10 +325,30 @@ export async function runGmailWatchMaintenance(
     }
   }
 
+  const maintenanceBucket = Math.floor(nowMs / GMAIL_WATCH_MAINTENANCE_INTERVAL_MS);
+  for (const integration of monitored.values()) {
+    const gmail = getGmailMetadata(integration.metadata);
+    if (
+      gmail?.inboundStatus !== 'active'
+      || !readString(gmail.historyId)
+    ) {
+      continue;
+    }
+    await dependencies.syncQueue.add(
+      JOB.GMAIL_SYNC,
+      {
+        integrationId: integration.id,
+        source: 'maintenance',
+        traceId: randomUUID(),
+      },
+      { jobId: `gmail-sync-maintenance-${integration.id}-${maintenanceBucket}` },
+    );
+    result.catchupsEnqueued += 1;
+  }
+
   for (const integration of monitored.values()) {
     const monitoring = monitorIntegration(integration, nowMs, emitAlert);
     result.alerts += monitoring.alerts;
-    result.staleSyncWarnings += monitoring.staleSyncWarnings;
   }
 
   logger.info(result, '[Gmail Watch] Maintenance complete');
@@ -335,6 +357,11 @@ export async function runGmailWatchMaintenance(
 
 export const registerGmailWatchMaintenanceJob: MaintenanceJobRegistration = async (context) => {
   const queue = createMaintenanceQueue(context, QUEUE.GMAIL_WATCH);
+  const syncQueue = createMaintenanceQueue<GmailSyncJobData>(
+    context,
+    QUEUE.GMAIL_SYNC,
+    { defaultJobOptions: GMAIL_SYNC_QUEUE_DEFAULTS },
+  );
   await scheduleRepeatableJob(
     queue,
     JOB.GMAIL_WATCH_MAINTENANCE,
@@ -347,6 +374,7 @@ export const registerGmailWatchMaintenanceJob: MaintenanceJobRegistration = asyn
     QUEUE.GMAIL_WATCH,
     () => runGmailWatchMaintenance({
       redis: context.producerConn as GmailSyncRedis,
+      syncQueue,
     }),
     {
       label: 'GmailWatch',
@@ -354,5 +382,5 @@ export const registerGmailWatchMaintenanceJob: MaintenanceJobRegistration = asyn
     },
   );
 
-  return { workers: [worker], queues: [queue] };
+  return { workers: [worker], queues: [queue, syncQueue] };
 };

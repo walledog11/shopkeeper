@@ -93,3 +93,12 @@ export const PROCESSING_QUEUE_DEFAULTS = {
   removeOnComplete: { age: 60 * 60 * 24, count: 1000 },
   removeOnFail: { age: 60 * 60 * 24 * 7, count: 5000 },
 } as const;
+
+// Gmail history reads are idempotent and checkpointed only after durable
+// downstream enqueueing. Give quota/provider outages time to clear, and let the
+// Gmail worker choose a Retry-After-aware delay through its custom strategy.
+export const GMAIL_SYNC_QUEUE_DEFAULTS = {
+  ...PROCESSING_QUEUE_DEFAULTS,
+  attempts: 6,
+  backoff: { type: 'gmail', delay: 5000 },
+} as const;

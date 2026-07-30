@@ -41,7 +41,9 @@ export class GmailApiError extends Error {
     this.kind = options.kind;
     this.status = options.status;
     this.operation = options.operation;
-    this.retryable = options.kind === 'retryable' || options.kind === 'quota';
+    this.retryable = options.kind === 'retryable'
+      || options.kind === 'quota'
+      || options.kind === 'timeout';
     this.retryAfterMs = options.retryAfterMs;
   }
 }

@@ -25,12 +25,19 @@ import {
 } from '../lib/gmail-sync-lock.js';
 import { isRecord } from '../lib/typing.js';
 import logger from '../logger.js';
+import { emitOpsAlert } from '../ops-alerts.js';
+import { applyInboundAttachmentBudget } from '../storage/attachment-budget.js';
 import type { GmailSyncJobData, InboundJobData } from '../types.js';
 import { registerJobFailureLogging } from './failure.js';
 import type { SharedGatewayWorkerOptions } from './resources.js';
 
 const GMAIL_RECOVERY_MAX_RESULTS = 500;
+const GMAIL_RECOVERY_MAX_MESSAGES = 2_000;
 const GMAIL_RECOVERY_QUERY = 'newer_than:7d in:inbox';
+const GMAIL_OPERATOR_RECOVERY_MAX_MESSAGES = 50_000;
+const GMAIL_MESSAGE_FETCH_CONCURRENCY = 3;
+const GMAIL_RETRY_BASE_MS = 5_000;
+const GMAIL_RETRY_MAX_MS = 6 * 60 * 60 * 1_000;
 
 interface GmailSyncIntegration {
   id: string;
@@ -48,14 +55,19 @@ export interface GmailSyncProcessorDependencies {
   inboundQueue: Queue<InboundJobData>;
   redis: GmailSyncRedis;
   createClient?: (integration: GmailSyncIntegration) => GmailApiClient;
+  emitAlert?: typeof emitOpsAlert;
   now?: () => Date;
+  recoveryMaxMessages?: number;
 }
 
 export interface GmailSyncWorkerRegistrationOptions extends GmailSyncProcessorDependencies {
   workerOptions: SharedGatewayWorkerOptions;
 }
 
-function isNativeGmailInboundEnabled(integration: GmailSyncIntegration): boolean {
+function isNativeGmailInboundEnabled(
+  integration: GmailSyncIntegration,
+  allowIncompleteRecovery: boolean,
+): boolean {
   if (!isGmailNativeInboundEnabled()) return false;
   if (getEmailInboundMode() === 'postmark') return false;
   if (getEmailProvider(integration) !== 'gmail' || !isRecord(integration.metadata)) return false;
@@ -63,7 +75,15 @@ function isNativeGmailInboundEnabled(integration: GmailSyncIntegration): boolean
   const inboundStatus = isRecord(integration.metadata.gmail)
     ? integration.metadata.gmail.inboundStatus
     : null;
-  return inboundStatus === 'active';
+  const lastError = isRecord(integration.metadata.gmail)
+    ? integration.metadata.gmail.lastError
+    : null;
+  return inboundStatus === 'active'
+    || (
+      allowIncompleteRecovery
+      && inboundStatus === 'degraded'
+      && lastError === 'sync_recovery_truncated'
+    );
 }
 
 function normalizeAddress(value: string | null | undefined): string | null {
@@ -73,6 +93,30 @@ function normalizeAddress(value: string | null | undefined): string | null {
 
 function providerMessageKey(messageId: string): string {
   return `gmail:${messageId}`;
+}
+
+async function mapGmailMessagesWithConcurrency<T>(
+  items: string[],
+  run: (messageId: string) => Promise<T>,
+): Promise<T[]> {
+  const results = new Array<T>(items.length);
+  let next = 0;
+  const workers = Array.from(
+    { length: Math.min(GMAIL_MESSAGE_FETCH_CONCURRENCY, items.length) },
+    async () => {
+      while (next < items.length) {
+        const index = next;
+        next += 1;
+        results[index] = await run(items[index]);
+      }
+    },
+  );
+  const settled = await Promise.allSettled(workers);
+  const failure = settled.find(
+    (result): result is PromiseRejectedResult => result.status === 'rejected',
+  );
+  if (failure) throw failure.reason;
+  return results;
 }
 
 async function markReauthorizationRequired(integrationId: string): Promise<void> {
@@ -120,6 +164,28 @@ async function advanceCheckpoint(
           lastSyncedAt: now.toISOString(),
         },
       ) as Prisma.InputJsonObject,
+    },
+  });
+}
+
+async function markRecoveryIncomplete(
+  integrationId: string,
+  now: Date,
+): Promise<void> {
+  const current = await db.integration.findUnique({
+    where: { id: integrationId },
+    select: { metadata: true },
+  });
+  if (!current) return;
+
+  await db.integration.update({
+    where: { id: integrationId },
+    data: {
+      metadata: metadataWithGmailState(current.metadata, {
+        inboundStatus: 'degraded',
+        lastError: 'sync_recovery_truncated',
+        lastRecoveryAttemptAt: now.toISOString(),
+      }) as Prisma.InputJsonObject,
     },
   });
 }
@@ -184,65 +250,130 @@ async function enqueueGmailMessages(
       .filter((address): address is string => address !== null),
   );
   const supportAddress = integration.fromEmail || integration.externalAccountId;
-  let queuedCount = 0;
+  const results = await mapGmailMessagesWithConcurrency(
+    [...messageIds],
+    async (messageId): Promise<number> => {
+      const message = await client.getMessageRaw(messageId);
+      const labels = new Set(message.labelIds ?? []);
+      if (!labels.has('INBOX') || labels.has('SENT')) return 0;
 
-  for (const messageId of messageIds) {
-    const message = await client.getMessageRaw(messageId);
-    const labels = new Set(message.labelIds ?? []);
-    if (!labels.has('INBOX') || labels.has('SENT')) continue;
+      // MIME parse failures are retryable by default. Only a successfully
+      // parsed message that is explicitly unusable/filterable is skipped.
+      let parsed;
+      try {
+        parsed = await parseMime(message.raw);
+      } catch (error) {
+        logger.warn(
+          { gmailMessageId: message.id, integrationId: integration.id },
+          '[Gmail Sync] MIME parse failed; retrying sync',
+        );
+        throw error;
+      }
+      if (parsed.from && merchantAddresses.has(parsed.from.toLowerCase())) return 0;
+      if (!isForSupportAddress(parsed, supportAddress)) return 0;
 
-    // MIME parse failures are retryable by default. Only a successfully
-    // parsed message that is explicitly unusable/filterable is skipped.
-    let parsed;
-    try {
-      parsed = await parseMime(message.raw);
-    } catch (error) {
-      logger.warn(
-        { gmailMessageId: message.id, integrationId: integration.id },
-        '[Gmail Sync] MIME parse failed; retrying sync',
+      const normalized = normalizeInboundEmail(parsed);
+      if (!normalized) {
+        logger.warn(
+          { gmailMessageId: message.id, integrationId: integration.id },
+          '[Gmail Sync] Skipping non-actionable parsed message',
+        );
+        return 0;
+      }
+      const { accepted: attachments, rejected } = applyInboundAttachmentBudget(
+        normalized.attachments,
       );
-      throw error;
-    }
-    if (parsed.from && merchantAddresses.has(parsed.from.toLowerCase())) continue;
-    if (!isForSupportAddress(parsed, supportAddress)) continue;
+      if (rejected.length > 0) {
+        logger.warn(
+          {
+            gmailMessageId: message.id,
+            integrationId: integration.id,
+            rejected: rejected.map(({ name, reason, bytes }) => ({ name, reason, bytes })),
+          },
+          '[Gmail Sync] Dropped inbound attachments over budget before queueing',
+        );
+      }
 
-    const normalized = normalizeInboundEmail(parsed);
-    if (!normalized) {
-      logger.warn(
-        { gmailMessageId: message.id, integrationId: integration.id },
-        '[Gmail Sync] Skipping non-actionable parsed message',
+      const inboundMessageId = normalized.inboundMessageId || providerMessageKey(message.id);
+      const internalDateMs = message.internalDate ? Number(message.internalDate) : Number.NaN;
+      const receivedAt = Number.isFinite(internalDateMs) && internalDateMs >= 0
+        ? new Date(internalDateMs).toISOString()
+        : new Date().toISOString();
+      await inboundQueue.add(
+        JOB.EMAIL,
+        {
+          platform: CHANNEL.EMAIL,
+          organizationId: integration.organizationId,
+          integrationId: integration.id,
+          receivedAt,
+          senderEmail: normalized.senderEmail,
+          senderName: normalized.senderName,
+          subject: normalized.subject,
+          body: normalized.body,
+          inboundMessageId,
+          traceId,
+          ...(attachments.length > 0
+            ? { attachments }
+            : {}),
+        },
+        { jobId: `gmail-inbound-${integration.id}-${message.id}` },
       );
-      continue;
+      return 1;
+    },
+  );
+
+  return results.reduce((total, count) => total + count, 0);
+}
+
+async function listRecoveryMessageIds(
+  client: GmailApiClient,
+  maxMessages: number,
+  query: string,
+): Promise<{ messageIds: Set<string>; truncated: boolean }> {
+  const messageIds = new Set<string>();
+  let pageToken: string | undefined;
+
+  do {
+    const remaining = maxMessages - messageIds.size;
+    if (remaining <= 0) {
+      return { messageIds, truncated: true };
     }
+    const response = await client.listMessages({
+      maxResults: Math.min(GMAIL_RECOVERY_MAX_RESULTS, remaining),
+      ...(pageToken ? { pageToken } : {}),
+      query,
+      labelIds: ['INBOX'],
+      includeSpamTrash: false,
+    });
+    for (const message of response.messages) messageIds.add(message.id);
+    pageToken = response.nextPageToken;
+  } while (pageToken);
 
-    const inboundMessageId = normalized.inboundMessageId || providerMessageKey(message.id);
-    const internalDateMs = message.internalDate ? Number(message.internalDate) : Number.NaN;
-    const receivedAt = Number.isFinite(internalDateMs) && internalDateMs >= 0
-      ? new Date(internalDateMs).toISOString()
-      : new Date().toISOString();
-    await inboundQueue.add(
-      JOB.EMAIL,
-      {
-        platform: CHANNEL.EMAIL,
-        organizationId: integration.organizationId,
-        integrationId: integration.id,
-        receivedAt,
-        senderEmail: normalized.senderEmail,
-        senderName: normalized.senderName,
-        subject: normalized.subject,
-        body: normalized.body,
-        inboundMessageId,
-        traceId,
-        ...(normalized.attachments.length > 0
-          ? { attachments: normalized.attachments }
-          : {}),
-      },
-      { jobId: `gmail-inbound-${integration.id}-${message.id}` },
-    );
-    queuedCount += 1;
-  }
+  return { messageIds, truncated: false };
+}
 
-  return queuedCount;
+async function recordIncompleteRecovery(
+  integration: GmailSyncIntegration,
+  dependencies: GmailSyncProcessorDependencies,
+  traceId: string,
+  recoveredMessageCount: number,
+  maxMessages: number,
+): Promise<void> {
+  const now = dependencies.now?.() ?? new Date();
+  await markRecoveryIncomplete(integration.id, now);
+  (dependencies.emitAlert ?? emitOpsAlert)({
+    category: 'gmail_inbound',
+    message: 'Gmail stale-history recovery exceeded its safe message bound',
+    level: 'error',
+    tags: { orgId: integration.organizationId },
+    fingerprint: ['ops-alert', 'gmail_inbound', 'recovery_truncated', integration.id],
+    extra: {
+      integrationId: integration.id,
+      maxMessages,
+      recoveredMessageCount,
+      traceId,
+    },
+  });
 }
 
 async function recoverStaleHistory(
@@ -250,14 +381,12 @@ async function recoverStaleHistory(
   client: GmailApiClient,
   dependencies: GmailSyncProcessorDependencies,
   traceId: string,
+  ensureLockOwned: () => Promise<void>,
+  options: { maxMessages: number; query: string },
 ): Promise<void> {
-  const recovery = await client.listMessages({
-    maxResults: GMAIL_RECOVERY_MAX_RESULTS,
-    query: GMAIL_RECOVERY_QUERY,
-    labelIds: ['INBOX'],
-    includeSpamTrash: false,
-  });
-  const messageIds = new Set(recovery.messages.map((message) => message.id));
+  const { maxMessages, query } = options;
+  const recovery = await listRecoveryMessageIds(client, maxMessages, query);
+  const messageIds = recovery.messageIds;
   const queuedCount = await enqueueGmailMessages(
     integration,
     messageIds,
@@ -265,6 +394,17 @@ async function recoverStaleHistory(
     dependencies.inboundQueue,
     traceId,
   );
+  if (recovery.truncated) {
+    await ensureLockOwned();
+    await recordIncompleteRecovery(
+      integration,
+      dependencies,
+      traceId,
+      messageIds.size,
+      maxMessages,
+    );
+    return;
+  }
 
   const topicName = process.env.GMAIL_PUBSUB_TOPIC?.trim();
   if (!topicName) {
@@ -274,15 +414,9 @@ async function recoverStaleHistory(
 
   // Close the list-to-watch race: anything delivered after the first bounded
   // list but before the new watch baseline is visible in this second list.
-  const catchUp = await client.listMessages({
-    maxResults: GMAIL_RECOVERY_MAX_RESULTS,
-    query: GMAIL_RECOVERY_QUERY,
-    labelIds: ['INBOX'],
-    includeSpamTrash: false,
-  });
+  const catchUp = await listRecoveryMessageIds(client, maxMessages, query);
   const catchUpMessageIds = new Set(
-    catchUp.messages
-      .map((message) => message.id)
+    [...catchUp.messageIds]
       .filter((messageId) => !messageIds.has(messageId)),
   );
   const catchUpQueuedCount = await enqueueGmailMessages(
@@ -292,9 +426,21 @@ async function recoverStaleHistory(
     dependencies.inboundQueue,
     traceId,
   );
+  if (catchUp.truncated) {
+    await ensureLockOwned();
+    await recordIncompleteRecovery(
+      integration,
+      dependencies,
+      traceId,
+      messageIds.size + catchUpMessageIds.size,
+      maxMessages,
+    );
+    return;
+  }
 
   // Recovery intentionally establishes a new baseline. This is the only path,
   // other than initial connection, that may replace an existing checkpoint.
+  await ensureLockOwned();
   await establishRecoveredCheckpoint(
     integration.id,
     watch,
@@ -316,6 +462,10 @@ export async function processGmailSyncJob(
   dependencies: GmailSyncProcessorDependencies,
 ): Promise<void> {
   const lock = await acquireGmailIntegrationLock(dependencies.redis, jobData.integrationId);
+  const ensureLockOwned = async (): Promise<void> => {
+    await lock.renew();
+    lock.assertOwned();
+  };
   try {
     const integration = await loadIntegration(jobData.integrationId);
     if (!integration) {
@@ -324,8 +474,9 @@ export async function processGmailSyncJob(
     }
 
     const storedHistoryId = readStoredGmailHistoryId(integration.metadata);
+    const operatorRecovery = jobData.source === 'operator_recovery';
     if (
-      !isNativeGmailInboundEnabled(integration)
+      !isNativeGmailInboundEnabled(integration, operatorRecovery)
       || !integration.refreshToken
       || !storedHistoryId
     ) {
@@ -337,7 +488,8 @@ export async function processGmailSyncJob(
     }
 
     if (
-      isValidGmailHistoryId(jobData.notifiedHistoryId)
+      typeof jobData.notifiedHistoryId === 'string'
+      && isValidGmailHistoryId(jobData.notifiedHistoryId)
       && historyIdAtOrAfter(storedHistoryId, jobData.notifiedHistoryId)
     ) {
       logger.info(
@@ -348,6 +500,27 @@ export async function processGmailSyncJob(
     }
 
     const client = dependencies.createClient?.(integration) ?? new GmailApiClient(integration);
+    const requestedRecoveryMax = operatorRecovery
+      ? jobData.recoveryMaxMessages
+      : dependencies.recoveryMaxMessages;
+    const recoveryMaxMessages = requestedRecoveryMax === undefined
+      ? GMAIL_RECOVERY_MAX_MESSAGES
+      : requestedRecoveryMax;
+    if (
+      !Number.isInteger(recoveryMaxMessages)
+      || recoveryMaxMessages < 1
+      || recoveryMaxMessages > GMAIL_OPERATOR_RECOVERY_MAX_MESSAGES
+    ) {
+      throw new RangeError(
+        `Gmail recoveryMaxMessages must be between 1 and ${GMAIL_OPERATOR_RECOVERY_MAX_MESSAGES}`,
+      );
+    }
+    const recoveryQuery = operatorRecovery
+      ? jobData.recoveryQuery?.trim() || GMAIL_RECOVERY_QUERY
+      : GMAIL_RECOVERY_QUERY;
+    if (recoveryQuery.length > 256) {
+      throw new RangeError('Gmail recoveryQuery must be 256 characters or fewer');
+    }
     let history;
     try {
       history = await client.listHistory({
@@ -356,7 +529,14 @@ export async function processGmailSyncJob(
       });
     } catch (error) {
       if (isGmailApiError(error) && error.kind === 'stale_history') {
-        await recoverStaleHistory(integration, client, dependencies, jobData.traceId);
+        await recoverStaleHistory(
+          integration,
+          client,
+          dependencies,
+          jobData.traceId,
+          ensureLockOwned,
+          { maxMessages: recoveryMaxMessages, query: recoveryQuery },
+        );
         return;
       }
       throw error;
@@ -379,6 +559,7 @@ export async function processGmailSyncJob(
 
     // This write is deliberately last: any fetch, parse, or enqueue failure
     // leaves the old checkpoint intact so BullMQ can retry the whole range.
+    await ensureLockOwned();
     await advanceCheckpoint(
       integration.id,
       history.historyId,
@@ -402,13 +583,48 @@ export async function processGmailSyncJob(
   }
 }
 
+export function calculateGmailSyncBackoff(
+  attemptsMade: number,
+  error: Error | undefined,
+  random: () => number = Math.random,
+): number {
+  if (error instanceof RangeError) {
+    return -1;
+  }
+
+  if (
+    isGmailApiError(error)
+    && !error.retryable
+    && error.kind !== 'stale_history'
+  ) {
+    return -1;
+  }
+
+  const exponential = Math.min(
+    GMAIL_RETRY_BASE_MS * (2 ** Math.max(0, attemptsMade - 1)),
+    15 * 60 * 1_000,
+  );
+  const requested = isGmailApiError(error) && error.retryAfterMs !== undefined
+    ? Math.max(exponential, error.retryAfterMs)
+    : exponential;
+  const jittered = requested + Math.floor(requested * 0.2 * random());
+  return Math.min(jittered, GMAIL_RETRY_MAX_MS);
+}
+
 export function createGmailSyncWorker(
   options: GmailSyncWorkerRegistrationOptions,
 ): Worker<GmailSyncJobData> {
   const worker = new Worker<GmailSyncJobData>(
     QUEUE.GMAIL_SYNC,
     (job: Job<GmailSyncJobData>) => processGmailSyncJob(job.data, options),
-    options.workerOptions,
+    {
+      ...options.workerOptions,
+      settings: {
+        backoffStrategy: (attemptsMade, _type, error) => (
+          calculateGmailSyncBackoff(attemptsMade, error)
+        ),
+      },
+    },
   );
 
   registerJobFailureLogging(worker, {

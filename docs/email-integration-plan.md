@@ -2,9 +2,12 @@
 
 Independent Gmail and forwarded-email integrations with deterministic reply routing.
 
-**Status:** shared email infrastructure, async outbound, and implementation for Phases 1–7 of native Gmail inbound are complete. Controlled production rollout remains. Google Cloud resources still need to be provisioned per environment with `npm run configure:gmail-pubsub`.
+**Status:** implementation for Phases 1–7 and the reliability hardening follow-up
+is complete locally. Production Pub/Sub/OIDC resources were verified on
+2026-07-29. Deployment, live mailbox canaries, optional Gmail/Postmark
+dual-delivery evidence, and Google's restricted-scope verification remain.
 
-**Last reviewed:** 2026-07-13
+**Last reviewed:** 2026-07-29
 
 ## Independent integration model
 
@@ -56,9 +59,29 @@ Out of scope:
 - Gmail OAuth requests `gmail.readonly`, stores granted scopes, preserves provider metadata on reconnect, and identifies accounts that need reauthorization.
 - Postmark inbound normalizes messages into the `process-email` queue.
 - Customer messages persist `externalMessageId`; an organization-scoped partial unique index prevents duplicate provider messages.
+- Watch maintenance runs every 12 hours, admits one stable checkpoint catch-up
+  per active integration, and renews healthy Gmail watches daily.
+- Gmail sync uses a renewable token-owned lease, a small fetch-concurrency
+  bound, Retry-After-aware queue backoff, and a 64 MiB decoded-raw safety
+  ceiling.
+- Native Gmail attachment count/size budgets are applied before the inbound job
+  reaches Redis. The email worker retains the same budget as defense in depth.
+- Stale-history recovery paginates up to 2,000 messages from the bounded
+  seven-day window. A larger result becomes `sync_recovery_truncated`,
+  remains degraded, and alerts instead of silently establishing a new
+  checkpoint.
 
 ### Remaining
 
+- Deploy the 2026-07-29 reliability hardening to the gateway worker and observe
+  at least one scheduled maintenance catch-up and daily renewal.
+- Complete the compact live Gmail canary: plain-text/threaded reply, HTML-only
+  plus attachment, Workspace alias routing, and isolated stale-history
+  recovery.
+- Complete Google OAuth restricted-scope verification/security assessment
+  before general external-merchant rollout.
+- Run Gmail/Postmark dual-delivery evidence only when a Postmark integration is
+  configured; production currently has no Postmark row.
 - Native Gmail inbound must remain in controlled rollout until production soak is complete.
 - `EMAIL_INBOUND_MODE=gmail-only` must not be used outside development until native inbound is complete.
 - The async outbound feature is implemented behind `OUTBOUND_EMAIL_ASYNC`; its deployed rollout state must be checked separately.
@@ -256,7 +279,10 @@ Minimal payload:
 ```typescript
 type GmailSyncJobData = {
   integrationId: string;
-  notifiedHistoryId: string;
+  notifiedHistoryId?: string;
+  source?: 'push' | 'maintenance' | 'operator_recovery';
+  recoveryMaxMessages?: number;
+  recoveryQuery?: string;
   traceId: string;
 };
 ```
@@ -274,7 +300,9 @@ Acceptance:
 
 Processing:
 
-1. Acquire a per-integration Redis lock with a token, expiry, and safe token-checked release.
+1. Acquire a per-integration Redis lock with a token, expiry, periodic
+   token-checked renewal, and safe token-checked release. Revalidate ownership
+   before committing a checkpoint.
 2. Load the integration and verify:
    - Provider is Gmail
    - Native inbound is enabled
@@ -282,7 +310,8 @@ Processing:
    - Stored history ID exists
 3. Call `users.history.list` from the stored checkpoint with `historyTypes=messageAdded`.
 4. Follow every page and deduplicate Gmail message IDs within the sync.
-5. Fetch each message with `format=raw`.
+5. Fetch each message with `format=raw` using concurrency three. Reject a
+   malformed response above the 64 MiB decoded-raw safety ceiling.
 6. Skip messages that:
    - Do not have the `INBOX` label
    - Have the `SENT` label
@@ -292,7 +321,9 @@ Processing:
    - `parseMime`
    - `isForSupportAddress`
    - `normalizeInboundEmail`
-8. Enqueue the existing `process-email` job, including attachments and the MIME `Message-ID`.
+8. Apply the shared attachment count/per-file/combined-size budget, then
+   enqueue the existing `process-email` job with only accepted attachments and
+   the MIME `Message-ID`. Over-budget attachment base64 never enters Redis.
 9. When a MIME `Message-ID` is absent, use a stable Gmail provider key for deduplication and ensure reply-header construction does not emit that provider key as an RFC `In-Reply-To` value.
 10. Advance the checkpoint to Gmail's returned history ID only after every resulting inbound job has been durably enqueued.
 11. Release the integration lock.
@@ -303,7 +334,8 @@ Failure behavior:
 
 - `401` after refresh: mark reauthorization required.
 - `404` from `history.list`: run bounded recovery.
-- `429` or `5xx`: retry with exponential backoff.
+- `429`, timeout, or `5xx`: retry up to six attempts with jittered exponential
+  backoff, honoring a longer provider `Retry-After` up to six hours.
 - Parse failure for one message: record the Gmail message ID and continue only if the failure is explicitly classified as non-retryable; otherwise retry the sync.
 - Never advance the checkpoint past work that was not durably enqueued.
 
@@ -314,35 +346,50 @@ Acceptance:
 - Concurrent and out-of-order notifications cannot move the checkpoint backward.
 - Postmark and Gmail delivering the same MIME message create one customer message.
 
-### Phase 6 — watch renewal and recovery — complete (2026-07-03)
+### Phase 6 — watch renewal and recovery — complete; hardened (2026-07-29)
 
 **Purpose:** keep inbound active without manual intervention.
 
 Add `apps/gateway/src/maintenance/gmail-watch.ts`, following the existing maintenance registration pattern.
 
-Run every 12 hours:
+Run maintenance every 12 hours:
 
 1. Find Gmail integrations that:
    - Have no watch
    - Are degraded
    - Expire within 24 hours
-2. Refresh the access token if needed.
-3. Call `users.watch` and update `historyId`, `watchExpiration`, and status.
-4. On renewal, update the expiration but never replace an existing checkpoint with the watch response's history ID. Only the sync worker advances an established checkpoint.
-5. Record repeated failures and expose them in the dashboard.
-6. Mark revoked grants for reconnection.
+   - Have not renewed their healthy watch in 24 hours
+2. Enqueue one stable, time-bucketed maintenance sync for every active
+   integration. This is the fallback for delayed or dropped Pub/Sub
+   notifications and uses the existing `gmail-sync` queue and lock.
+3. Refresh the access token if needed.
+4. Call `users.watch` daily and update `watchExpiration` and status.
+5. On renewal, update the expiration but never replace an existing checkpoint
+   with the watch response's history ID. Preserve a sync-specific degraded
+   state; only the sync worker advances an established checkpoint.
+6. Record repeated failures and expose them in the dashboard.
+7. Mark revoked grants for reconnection.
 
 Stale-history recovery:
 
-1. On `history.list` returning `404`, list a bounded window such as `newer_than:7d in:inbox`.
+1. On `history.list` returning `404`, paginate `newer_than:7d in:inbox`
+   through at most 2,000 messages.
 2. Fetch and normalize those messages through the same pipeline.
 3. Rely on `externalMessageId` idempotency for overlap.
 4. Establish a fresh watch and checkpoint after recovery jobs are durably enqueued.
+5. If another page remains after the bound, keep the old checkpoint, mark
+   inbound degraded with `sync_recovery_truncated`, emit `gmail_inbound`, and
+   require an operator-controlled broader/full recovery through
+   `npm run recover:gmail-history`. The command is inspect-only unless
+   `--execute` and a stable incident recovery ID are supplied; execution is
+   allowed only for the exact truncated-recovery state.
 
-Add stale-sync monitoring:
+Monitoring:
 
-- Warn when an active Gmail integration has no successful sync for two hours.
+- Scheduled catch-up makes `lastSyncedAt` meaningful even for an idle mailbox;
+  do not warn merely because no push has arrived recently.
 - Alert when a watch is expired or renewal repeatedly fails.
+- Alert when bounded stale-history recovery is incomplete.
 
 Acceptance:
 
@@ -413,6 +460,12 @@ The app can be built and tested with OAuth test users before Google verification
 - Token refresh, rate-limit retry, and stale-history recovery.
 - Postmark/Gmail dual delivery creates one message.
 - Watch renewal updates metadata without losing the sync checkpoint.
+- Maintenance catch-up uses stable 12-hour job identities.
+- Daily renewal preserves sync-specific degraded state.
+- Attachment budgets run before Redis queue admission.
+- Recovery pagination refuses to advance when its 2,000-message bound is
+  incomplete.
+- Lease renewal/loss and Retry-After-aware backoff.
 
 ### Dashboard
 
@@ -485,17 +538,18 @@ These items are separate from Gmail native inbound and should not delay it.
 | Risk | Control |
 |------|---------|
 | Restricted-scope verification delays external rollout | Build and test with Google OAuth test users; keep Postmark forwarding |
-| Watch expiration creates an inbound gap | Renew every 12 hours; alert before expiration |
+| Watch expiration creates an inbound gap | Run maintenance every 12 hours, renew watches daily, and alert before expiration |
+| Pub/Sub delays or drops a notification | Enqueue a stable maintenance history catch-up every 12 hours |
 | Pub/Sub delivers more than once | Job identity, serialized sync, and database idempotency |
 | Notifications arrive out of order | Always sync from the stored checkpoint; never replace it with the notification ID |
-| History checkpoint expires | Bounded recovery followed by a fresh watch |
+| History checkpoint expires | Paginated bounded recovery followed by a fresh watch; refuse to advance and alert if more than 2,000 messages qualify |
 | OAuth token is revoked | Shared refresh behavior, daily token health, and reconnect status |
 | Gmail and Postmark both ingest the message | Organization-scoped `externalMessageId` uniqueness; the first persisted copy retains attribution |
 | Delayed inbound work changes a reply route backwards | Compare captured receipt time before updating `replyIntegrationId` |
 | Both providers exist with no default | Return a configuration error; never use an unordered `findFirst` |
 | Alias receives unrelated mailbox mail | Filter `To`, `Delivered-To`, and `X-Original-To` against `fromEmail` |
 | Restricted data leaks into logs | Log identifiers and error categories only; redact tokens and message content |
-| Gmail API quotas or outages | Retry `429` and `5xx` with backoff; monitor stale sync |
+| Gmail API quotas or outages | Six safe read attempts with jittered exponential/Retry-After backoff plus the scheduled catch-up backstop |
 
 ## Success criteria
 
@@ -503,13 +557,15 @@ These items are separate from Gmail native inbound and should not delay it.
 - [x] Gmail OAuth stores both send and read grants.
 - [ ] Workspace aliases work for inbound filtering and outbound sending.
 - [x] Pub/Sub requests are authenticated.
-- [ ] Duplicate and out-of-order notifications do not duplicate tickets or regress checkpoints.
-- [ ] Attachments and HTML-only mail work through the existing pipeline.
+- [x] Automated duplicate and out-of-order notifications do not duplicate tickets or regress checkpoints.
+- [x] Automated attachments and HTML-only mail use the existing pipeline; live mailbox evidence remains.
 - [x] Watch renewal and stale-history recovery run automatically.
-- [ ] Token, watch, and sync failures are visible in the integrations UI.
-- [ ] Postmark forwarding remains unchanged.
-- [ ] Restricted-scope verification and production setup are documented in the runbook.
-- [ ] Gateway, dashboard, and email-package tests, type checks, and lint pass.
+- [x] Token, watch, and sync failures are visible in the integrations UI.
+- [x] Automated Postmark behavior remains unchanged; dual-provider live evidence is conditional on connecting Postmark.
+- [x] Restricted-scope verification and production setup are documented in the runbook.
+- [x] Gateway and email-package unit/integration/coverage, typecheck, and lint gates pass locally on 2026-07-29.
+- [ ] Deploy the hardening change and record scheduled catch-up/renewal evidence.
+- [ ] Complete Google restricted-scope verification and the compact live canary.
 
 ## References
 

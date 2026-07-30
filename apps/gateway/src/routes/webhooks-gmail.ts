@@ -183,6 +183,7 @@ export function registerGmailWebhookRoutes(router: Router): void {
         const jobData: GmailSyncJobData = {
           integrationId: integration.id,
           notifiedHistoryId: notification.historyId,
+          source: 'push',
           traceId,
         };
         await queue.add(JOB.GMAIL_SYNC, jobData, {

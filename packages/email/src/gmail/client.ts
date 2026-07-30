@@ -14,8 +14,12 @@ const GMAIL_API_BASE_URL = 'https://gmail.googleapis.com/gmail/v1';
 const REFRESH_LEEWAY_MS = 60_000;
 const MAX_GMAIL_PAGE_SIZE = 500;
 const MAX_HISTORY_PAGES = 1_000;
-// Bound every authenticated Gmail request so a stalled socket can't hold a sync
-// worker past the queue/agent lock window (AUD-015). Well under the 90s lock TTL.
+// Gmail's documented inbound message ceiling is below this value. The guard
+// protects the worker from a malformed or unexpectedly oversized raw response
+// before allocating the decoded MIME buffer.
+const MAX_GMAIL_RAW_MESSAGE_BYTES = 64 * 1024 * 1024;
+// Bound every authenticated Gmail request so a stalled socket cannot monopolize
+// a sync worker; the higher-level integration lease renews independently.
 const GMAIL_REQUEST_TIMEOUT_MS = 15_000;
 
 export interface GmailApiIntegration {
@@ -36,6 +40,7 @@ export interface GmailApiClientOptions {
   now?: () => number;
   baseUrl?: string;
   requestTimeoutMs?: number;
+  maxRawMessageBytes?: number;
 }
 
 export type GmailLabelFilterBehavior = 'include' | 'exclude';
@@ -280,6 +285,7 @@ export class GmailApiClient {
   private readonly now: () => number;
   private readonly baseUrl: string;
   private readonly requestTimeoutMs: number;
+  private readonly maxRawMessageBytes: number;
 
   constructor(
     private readonly integration: GmailApiIntegration,
@@ -289,6 +295,7 @@ export class GmailApiClient {
     this.tokenExpiresAt = integration.tokenExpiresAt;
     this.fetch = options.fetch ?? globalThis.fetch;
     this.requestTimeoutMs = options.requestTimeoutMs ?? GMAIL_REQUEST_TIMEOUT_MS;
+    this.maxRawMessageBytes = options.maxRawMessageBytes ?? MAX_GMAIL_RAW_MESSAGE_BYTES;
     this.persistToken = options.persistToken ?? persistRefreshedToken;
     this.refreshTokenRequest = options.refreshToken
       ?? ((refreshToken, client) => requestTokenRefresh('gmail', refreshToken, client, this.requestTimeoutMs));
@@ -364,6 +371,17 @@ export class GmailApiClient {
     );
     if (!isRecord(value)) throw invalidResponse(operation);
 
+    const raw = requireNonEmptyString(value, 'raw', operation);
+    const padding = raw.endsWith('==') ? 2 : raw.endsWith('=') ? 1 : 0;
+    const decodedBytes = Math.max(Math.floor((raw.length * 3) / 4) - padding, 0);
+    if (decodedBytes > this.maxRawMessageBytes) {
+      throw new GmailApiError(`Gmail raw message exceeds the configured size limit`, {
+        kind: 'invalid_response',
+        status: null,
+        operation,
+      });
+    }
+
     return {
       id: requireNonEmptyString(value, 'id', operation),
       ...optionalProperty('threadId', optionalString(value, 'threadId', operation)),
@@ -374,7 +392,7 @@ export class GmailApiClient {
         'sizeEstimate',
         optionalNonNegativeInteger(value, 'sizeEstimate', operation),
       ),
-      raw: decodeGmailBase64Url(requireNonEmptyString(value, 'raw', operation)),
+      raw: decodeGmailBase64Url(raw),
     };
   }
 

@@ -1,13 +1,19 @@
 import { Queue } from 'bullmq';
-import { PROCESSING_QUEUE_DEFAULTS, QUEUE } from '../constants.js';
+import {
+  GMAIL_SYNC_QUEUE_DEFAULTS,
+  PROCESSING_QUEUE_DEFAULTS,
+  QUEUE,
+} from '../constants.js';
 import { getGatewayBullMqProducerConnection } from './redis-client.js';
 
-const DEFAULT_QUEUE_OPTIONS: Partial<Record<string, { defaultJobOptions: typeof PROCESSING_QUEUE_DEFAULTS }>> = {
+type GatewayQueueDefaults = typeof PROCESSING_QUEUE_DEFAULTS | typeof GMAIL_SYNC_QUEUE_DEFAULTS;
+
+const DEFAULT_QUEUE_OPTIONS: Partial<Record<string, { defaultJobOptions: GatewayQueueDefaults }>> = {
   [QUEUE.INBOUND]: { defaultJobOptions: PROCESSING_QUEUE_DEFAULTS },
   [QUEUE.AI_SUMMARY]: { defaultJobOptions: PROCESSING_QUEUE_DEFAULTS },
   [QUEUE.ORDER_REVIEW]: { defaultJobOptions: PROCESSING_QUEUE_DEFAULTS },
   [QUEUE.OUTBOUND_EMAIL]: { defaultJobOptions: PROCESSING_QUEUE_DEFAULTS },
-  [QUEUE.GMAIL_SYNC]: { defaultJobOptions: PROCESSING_QUEUE_DEFAULTS },
+  [QUEUE.GMAIL_SYNC]: { defaultJobOptions: GMAIL_SYNC_QUEUE_DEFAULTS },
   [QUEUE.OPERATOR_EVENT]: { defaultJobOptions: PROCESSING_QUEUE_DEFAULTS },
 };
 

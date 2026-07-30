@@ -194,8 +194,11 @@ simultaneously. Connecting, reconnecting, or deleting one must not modify the ot
 
 - **Inbound intake:** Gmail can receive native Pub/Sub push
   notifications, synchronize mailbox history through `gmail-sync`, and enqueue the same
-  `process-email` jobs used by Postmark forwarding. Watch renewal runs every 12 hours, and an
-  expired history checkpoint triggers a bounded seven-day inbox recovery. Postmark accepts only
+  `process-email` jobs used by Postmark forwarding. Maintenance runs every 12
+  hours, enqueues one stable history catch-up per active integration, and
+  renews healthy watches daily. An expired history checkpoint triggers a
+  paginated seven-day inbox recovery capped at 2,000 messages; a larger result
+  stays degraded and alerts instead of silently advancing. Postmark accepts only
   the generated organization recipient from `OriginalRecipient` and requires an active Postmark
   integration row; the visible `To` header is not a tenancy key.
 - **Outbound routing:** `Integration.emailProvider` is authoritative. Replies and auto-acks use
@@ -297,6 +300,43 @@ filtering, outbound send-as behavior, and reconnect/degraded states in Integrati
 setting `GMAIL_NATIVE_INBOUND=false` in both services; leave `EMAIL_INBOUND_MODE=hybrid`.
 Do not use `gmail-only` until the production soak is complete and no forwarding integrations
 remain.
+
+After deploying Gmail reliability changes, allow one complete 12-hour
+maintenance interval and verify:
+
+1. `gmail-watch-maintenance` completed successfully.
+2. One `source=maintenance` job per active Gmail integration completed on
+   `gmail-sync`; its job ID uses
+   `gmail-sync-maintenance-<integration>-<12-hour-bucket>`.
+3. `lastSyncedAt` advanced even if the mailbox was idle.
+4. A watch whose `watchLastRenewedAt` is at least 24 hours old renewed without
+   replacing its stored history checkpoint.
+5. No integration has `lastError=sync_recovery_truncated`. If one does, do not
+   force it active or replace its checkpoint; investigate the mailbox window
+   and inspect an operator-controlled broader/full recovery:
+
+   ```bash
+   npm run recover:gmail-history -- \
+     --integration-id='<integration-uuid>' \
+     --max-messages=10000 \
+     --query='newer_than:30d in:inbox'
+   ```
+
+   After reviewing the sanitized preflight, reuse the incident identifier so
+   repeat invocations deduplicate:
+
+   ```bash
+   npm run recover:gmail-history -- \
+     --integration-id='<integration-uuid>' \
+     --max-messages=10000 \
+     --query='newer_than:30d in:inbox' \
+     --recovery-id='<incident-id>' \
+     --execute
+   ```
+
+   The worker accepts operator recovery only while the integration is degraded
+   specifically for `sync_recovery_truncated`; it caps the override at 50,000
+   messages and keeps the same checkpoint/idempotency rules.
 
 ### Independent-email canary (Palette)
 
@@ -860,6 +900,10 @@ For dashboard email sends, repeat with the dashboard helper:
    immediately.
 4. Confirm the alert includes only integration identifiers, the safe error category, and the
    failure count—not OAuth tokens or message content.
+5. In an isolated test integration, constrain the stale-recovery bound and
+   confirm incomplete pagination emits the same category with fingerprint
+   `recovery_truncated`, leaves `inboundStatus=degraded`, and does not establish
+   a new checkpoint.
 
 After each category, record the log entry timestamp, alert recipient, tags/extras checked, and any side-effect notes in [`alerting-evidence.md`](alerting-evidence.md).
 
@@ -930,7 +974,8 @@ The launch queues most likely to need inspection are:
 - `ai-summary` for summary, plan precompute, auto-ack, and notification work.
 - `outbound-email` for a message whose durable send row owns delivery truth.
 - `gmail-sync` for Gmail history synchronization and stale-history recovery.
-- `gmail-watch-maintenance` for 12-hour watch renewal and inbound health monitoring.
+- `gmail-watch-maintenance` for 12-hour catch-up admission, daily watch renewal,
+  and inbound health monitoring.
 - `order-review` for the flag-only order risk reviewer.
 - `operator-event` for durable Telegram and iMessage operator turns.
 
@@ -948,7 +993,7 @@ Use the following recovery decision matrix. If the evidence does not fit the sta
 | `inbound-messages` | Provider message/webhook identity, persisted `Message`/order event, and downstream summary job | Replay the original job only after confirming its stable provider identity is present and the ingestion path deduplicates that exact identity. Do not reconstruct a new job with a new ID. |
 | `ai-summary` | `sourceMessageId`, latest customer message, cached-plan identity, and any `PlanExecution` | Replay only when `sourceMessageId` is still the latest customer request. A stale job should be left superseded. Auto-execution must be behind the durable execution ledger; legacy jobs without stable source identity are not replayable. |
 | `gmail-sync` | Integration history cursor, Gmail message ID, and stable `gmail-inbound-<integration>-<message>` jobs | Replay the original sync after credentials/provider health recover. The checkpoint is monotonic and individual inbound jobs use stable IDs. |
-| `gmail-watch-maintenance` | Integration watch expiration/status and current Pub/Sub configuration | Prefer letting the 12-hour repeat job run after the root cause is fixed. Run one manual maintenance invocation only for an expired/near-expiry watch; do not create a second repeat schedule. |
+| `gmail-watch-maintenance` | Integration watch expiration/status, scheduled catch-up admission, and current Pub/Sub configuration | Prefer letting the 12-hour repeat job run after the root cause is fixed. Run one manual maintenance invocation only for an expired/near-expiry watch or an overdue catch-up; do not create a second repeat schedule. |
 | `order-review` | Organization/order identity and existing `AgentAction` audit rows | Safe to replay one original job after the model/provider issue is fixed. The current reviewer is flag/log-only, but duplicate audit observations and model cost are possible. |
 | `outbound-email` | `Message.sendStatus`, `sendAttemptedAt`, `providerMessageId`, stable RFC `Message-ID`, and provider activity | **Never use generic BullMQ replay.** Follow the outbound-email recovery procedure above. Retry only a known pre-provider `failed` row through the authorized application path; `processing`/`unknown` after provider attempt requires provider reconciliation and positive no-send evidence. |
 | `operator-event` | `OperatorEvent.status`, claim timestamps, `replyText`, `replyDeliveredAt`, and channel-provider activity | **Never replay a claimed or terminal turn.** A `pending` event can be re-enqueued with its same event ID after infrastructure recovery. Let the sweep reconcile stale claims to `unknown`; it may re-send a committed reply but never re-run the turn. |

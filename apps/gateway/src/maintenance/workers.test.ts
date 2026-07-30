@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { JOB, PROCESSING_QUEUE_DEFAULTS, QUEUE } from '../constants.js';
+import {
+  GMAIL_SYNC_QUEUE_DEFAULTS,
+  JOB,
+  PROCESSING_QUEUE_DEFAULTS,
+  QUEUE,
+} from '../constants.js';
 
 interface MockQueueInstance {
   name: string;
@@ -88,11 +93,12 @@ describe('createMaintenanceWorkers', () => {
 
     expect(maintenanceJobRegistrations).toHaveLength(14);
     expect(resources.workers).toHaveLength(15);
-    expect(resources.queues).toHaveLength(22);
+    expect(resources.queues).toHaveLength(23);
     expect(queueInstances.map((queue) => queue.name)).toEqual([
       QUEUE.TOKEN_HEALTH,
       QUEUE.EMAIL_TOKEN_HEALTH,
       QUEUE.GMAIL_WATCH,
+      QUEUE.GMAIL_SYNC,
       QUEUE.ARCHIVAL,
       QUEUE.PURGE,
       QUEUE.DIGEST,
@@ -161,6 +167,13 @@ describe('createMaintenanceWorkers', () => {
       jobId: JOB.GMAIL_WATCH_MAINTENANCE_ID,
       every: 12 * ONE_HOUR_MS,
     });
+    const gmailSyncQueue = queueInstances.find(
+      (queue) => queue.name === QUEUE.GMAIL_SYNC
+        && readOptions(queue).defaultJobOptions !== undefined,
+    );
+    expect(readOptions(gmailSyncQueue!).defaultJobOptions).toEqual(
+      GMAIL_SYNC_QUEUE_DEFAULTS,
+    );
     expect(readRepeatJob(QUEUE.ARCHIVAL)).toEqual({
       name: JOB.ARCHIVE_THREADS,
       jobId: JOB.ARCHIVE_THREADS_ID,

@@ -50,6 +50,18 @@ describe('getGatewayBullMqQueue', () => {
     });
   });
 
+  it('uses the longer Retry-After-aware policy for Gmail synchronization', () => {
+    getGatewayBullMqQueue(QUEUE.GMAIL_SYNC);
+
+    expect(Queue).toHaveBeenCalledWith(QUEUE.GMAIL_SYNC, {
+      connection: producerConnection,
+      defaultJobOptions: expect.objectContaining({
+        attempts: 6,
+        backoff: { type: 'gmail', delay: 5000 },
+      }),
+    });
+  });
+
   it('closes and clears cached queues on shutdown', async () => {
     const inbound = getGatewayBullMqQueue(QUEUE.INBOUND);
     await closeGatewayBullMqQueues();
