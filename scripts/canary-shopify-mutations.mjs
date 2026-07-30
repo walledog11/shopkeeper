@@ -37,7 +37,9 @@ const {
   createReturn,
   createShopifyOrder,
   editShopifyOrder,
+  fetchFulfillableFulfillmentOrders,
   fetchReturnableLineItems,
+  fulfillOrder,
   issueDiscount,
   issueStoreCredit,
   OPEN_RETURN_STATUSES,
@@ -62,6 +64,7 @@ const TEST_ORDER_ONLY_FAMILIES = new Set([
   'edit_shopify_order',
   'update_shopify_order_address',
   'return_label',
+  'fulfill_order',
 ]);
 
 if (
@@ -1301,6 +1304,59 @@ async function runCanaries(ctx, inspection, returnFixture, exchangeFixture) {
         orderName: fixture.name,
         customerId: fixture.customerId,
         customerAddressMatches: canaryAddressMatches(customerAddress, CANARY_UPDATED_ADDRESS),
+        probeOutcome: probe.outcome,
+        probeMessage: probe.message,
+      };
+    }));
+  }
+
+  // Fulfillment is the one mutation whose side effect reaches the customer
+  // directly, through Shopify's own shipping-confirmation email. Three things
+  // hold that shut: a fixture order this run created, `sendFulfillmentReceipt`
+  // off on that fixture, and `notify_customer: false` on the call itself.
+  if (shouldRun('fulfill_order') && inspection.shop.mutationsAllowed) {
+    results.push(await runFamily('fulfill_order', async () => {
+      const operationId = `${operationBase}:fulfill_order`;
+      const variants = await loadActiveVariants(ctx);
+      const fixture = await createCanaryOrderFixture(ctx, {
+        family: 'fulfill-order',
+        variants: variants.slice(0, 1),
+      });
+      const orderGid = `gid://shopify/Order/${fixture.id}`;
+
+      // Reading what is awaiting fulfillment *before* the call is what makes
+      // the after-reading mean something: probeFulfillment treats "nothing left
+      // to fulfill" as committed, which is only true if something was left a
+      // moment earlier.
+      const awaitingBefore = await fetchFulfillableFulfillmentOrders(ctx, orderGid);
+      if (!awaitingBefore?.length) {
+        throw new Error(
+          `Cannot fulfil ${fixture.name ?? fixture.id}: the fixture has nothing awaiting fulfillment.`,
+        );
+      }
+
+      // A unique tracking number is the probe's attribution key - it is what
+      // lets reconciliation say "this call landed" rather than "some
+      // fulfillment exists".
+      const input = {
+        order_id: fixture.id,
+        tracking_number: `SHOPKEEPER-CANARY-${randomUUID().slice(0, 8).toUpperCase()}`,
+        tracking_company: 'USPS',
+        notify_customer: false,
+      };
+      const result = await fulfillOrder(input, { ...ctx, operationId });
+      const [probe, awaitingAfter] = await Promise.all([
+        probeUnknownShopifyMutation('fulfill_order', input, { ...ctx, operationId }),
+        fetchFulfillableFulfillmentOrders(ctx, orderGid),
+      ]);
+      return {
+        status: result.status,
+        message: result.message,
+        orderId: fixture.id,
+        orderName: fixture.name,
+        trackingNumber: input.tracking_number,
+        awaitingBefore: awaitingBefore.length,
+        awaitingAfter: awaitingAfter?.length ?? null,
         probeOutcome: probe.outcome,
         probeMessage: probe.message,
       };
