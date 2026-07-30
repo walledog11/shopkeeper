@@ -121,6 +121,17 @@ describe("missingShopifyScopes", () => {
     ]);
   });
 
+  it("reports the fulfillment-order scopes required by fulfill_order", () => {
+    const withoutFulfillment = SHOPIFY_OAUTH_SCOPES.filter(
+      (scope) => !scope.endsWith("_merchant_managed_fulfillment_orders"),
+    );
+
+    expect(missingShopifyScopes(withoutFulfillment)).toEqual([
+      "read_merchant_managed_fulfillment_orders",
+      "write_merchant_managed_fulfillment_orders",
+    ]);
+  });
+
   it("accepts a write grant in place of the implied read", () => {
     const impliedReads = SHOPIFY_OAUTH_SCOPES.filter((scope) => !scope.startsWith("read_"));
 

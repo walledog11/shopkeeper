@@ -50,6 +50,8 @@ export const SHOPIFY_OAUTH_SCOPES = [
   "read_orders",
   "write_orders",
   "write_order_edits",
+  "read_merchant_managed_fulfillment_orders",
+  "write_merchant_managed_fulfillment_orders",
   "read_returns",
   "write_returns",
   "read_products",
