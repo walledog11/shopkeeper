@@ -547,11 +547,38 @@ These items are separate from Gmail native inbound and should not delay it.
 
 ### Outbound parity
 
-- Outbound attachments
+Implemented 2026-07-30:
+
+- **Outbound attachments.** `OutboundEmail.attachments` carries
+  `{ name, contentType, contentBase64 }` — the same shape as the inbound
+  `ParsedAttachment`. The MIME builder wraps the body in `multipart/mixed`,
+  Postmark maps to its `Attachments` array. Filenames are sanitized so a quote
+  or CRLF cannot break out of the header parameter.
+- **Optional HTML replies with a plain-text fallback.** `OutboundEmail.html` is
+  optional while `text` stays required, so the fallback is a type guarantee
+  rather than a convention. HTML sends build `multipart/alternative` with
+  text first; Postmark gets `HtmlBody` alongside `TextBody`. A text-only reply
+  is still a flat single-part `text/plain` message, byte-for-byte what it was.
+- **Bounce handling.** Postmark posts to a new authenticated
+  `POST /webhooks/email/bounce` (same basic auth as inbound) and is matched by
+  `providerMessageId`. Gmail has no bounce webhook, so `detectEmailBounce`
+  recognizes the DSN in the sync worker by daemon sender **and** a recoverable
+  outbound RFC Message-ID, and matches on the `Message.id` that
+  `createOutboundMessageId` encoded. Both paths converge on `recordEmailBounce`,
+  which moves the message to `sendStatus: "bounced"` and writes a merchant-visible
+  note on the thread; the ticket timeline renders it in red with no retry
+  affordance. Unmatched and repeat bounces are acknowledged, never retried.
+
+**Operational step not yet done:** the Postmark bounce webhook URL must be
+pointed at `/webhooks/email/bounce` in the Postmark server settings. Until then
+the Gmail path is live and the Postmark path is dormant code.
+
+Still open:
+
 - Gmail-native threading through an independent external-mailbox round trip
   (self-addressed mailbox receipt and exact-once delivery are confirmed)
-- Optional HTML replies with a plain-text fallback
-- Bounce handling
+- No caller passes `attachments` or `html` yet — the send layer is capable, but
+  composing an HTML reply or attaching a file is a separate product surface.
 
 ## Risks and controls
 

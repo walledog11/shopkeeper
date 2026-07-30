@@ -20,6 +20,15 @@ export class PostmarkSender implements EmailSender {
       To: email.to,
       Subject: email.subject,
       TextBody: email.text,
+      ...(email.html && { HtmlBody: email.html }),
+      ...(email.attachments?.length && {
+        Attachments: email.attachments.map((a) => ({
+          Name: a.name,
+          Content: a.contentBase64,
+          ContentType: a.contentType,
+          ContentID: null,
+        })),
+      }),
       ...(email.headers && {
         Headers: email.headers.map((h) => ({ Name: h.name, Value: h.value })),
       }),

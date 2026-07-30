@@ -25,6 +25,17 @@ export function createOutboundMessageId(
   return `<message-${messageId}@${inboundDomain}>`;
 }
 
+const OUTBOUND_MESSAGE_ID_PATTERN =
+  /^<message-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})@[^<>\s]+>$/i;
+
+// Recovers the Message.id that createOutboundMessageId encoded. A bounce
+// notification quotes the RFC Message-ID of the mail that failed, so this is how
+// a DSN is attributed to the row we sent without depending on a provider id.
+export function parseOutboundMessageId(value: string | null | undefined): string | null {
+  const match = OUTBOUND_MESSAGE_ID_PATTERN.exec(value?.trim() ?? '');
+  return match ? match[1].toLowerCase() : null;
+}
+
 function buildReplyHeaders(
   messageId: string,
   threadId: string,

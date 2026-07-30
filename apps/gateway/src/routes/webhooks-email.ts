@@ -9,6 +9,7 @@ import { rateLimit, sendTooManyRequests } from '../rate-limit.js';
 import { applyInboundAttachmentBudget } from '../storage/attachment-budget.js';
 import { emailInboundJsonParser, emailInboundUrlencodedParser } from './body-parsers.js';
 import { getMessageQueue, getRateLimitRedis } from './webhooks-shared.js';
+import { recordEmailBounce } from '../message-handlers/email-bounce.js';
 
 function isProductionEnv(): boolean {
   return process.env.NODE_ENV === 'production';
@@ -157,6 +158,50 @@ export function registerEmailWebhookRoutes(router: Router): void {
       return res.status(200).send('OK');
     } catch (error) {
       logger.error({ err: error }, '[Webhook] Failed to queue email');
+      return res.sendStatus(500);
+    }
+  });
+
+  // Postmark delivers bounces on a separate webhook from inbound mail, behind
+  // the same basic auth. Anything this route cannot attribute is acknowledged
+  // rather than retried: Postmark re-sends on non-2xx, and an unmatched bounce
+  // will never start matching.
+  router.post('/email/bounce', emailInboundJsonParser(), async (req: Request, res: Response) => {
+    if (!hasValidPostmarkAuth(req)) {
+      logger.warn('[Webhook] Postmark bounce rejected — invalid or missing basic auth');
+      res.set('WWW-Authenticate', 'Basic realm="postmark-bounce"');
+      return res.sendStatus(401);
+    }
+
+    try {
+      const body = req.body as Record<string, unknown>;
+      const recordType = typeof body.RecordType === 'string' ? body.RecordType : null;
+      if (recordType && recordType !== 'Bounce' && recordType !== 'SpamComplaint') {
+        return res.status(200).send('OK');
+      }
+
+      const providerMessageId = typeof body.MessageID === 'string' ? body.MessageID : null;
+      if (!providerMessageId) {
+        logger.warn('[Webhook] Postmark bounce carried no MessageID — acknowledging');
+        return res.status(200).send('OK');
+      }
+
+      const bounceType = typeof body.Type === 'string' ? body.Type : recordType;
+      const outcome = await recordEmailBounce({
+        provider: 'postmark',
+        locator: { kind: 'provider_message_id', value: providerMessageId },
+        recipient: typeof body.Email === 'string' ? normalizeEmailAddress(body.Email) : null,
+        bounceType,
+        detail: typeof body.Description === 'string' ? body.Description : null,
+        // Postmark's Inactive flag means it has deactivated the address, which
+        // is its own judgement that the failure is terminal.
+        permanent: body.Inactive === true || bounceType === 'HardBounce' || recordType === 'SpamComplaint',
+      });
+
+      logger.info({ outcome, bounceType }, '[Webhook] Postmark bounce processed');
+      return res.status(200).send('OK');
+    } catch (error) {
+      logger.error({ err: error }, '[Webhook] Failed to process Postmark bounce');
       return res.sendStatus(500);
     }
   });

@@ -56,6 +56,9 @@ export default function ChatTimeline({
         const isPending = isOutbound && (msg.sendStatus === "pending" || msg.sendStatus === "processing")
         const isFailed = isOutbound && msg.sendStatus === "failed"
         const isUnknown = isOutbound && msg.sendStatus === "unknown"
+        // Distinct from "failed": this one left the building and was rejected by
+        // the receiving system, so re-sending to the same address repeats it.
+        const isBounced = isOutbound && msg.sendStatus === "bounced"
 
         return (
           <div
@@ -71,7 +74,7 @@ export default function ChatTimeline({
               data-message-id={msg.id}
               data-sender={msg.sender}
               className={`px-4 py-3 text-[14px] max-w-[80%] leading-relaxed shadow-sm ${
-                isFailed
+                isFailed || isBounced
                   ? "bg-red-500/10 border border-red-500/30 text-strong rounded-2xl rounded-tr-md"
                   : isUnknown
                     ? "bg-amber-500/10 border border-amber-500/30 text-strong rounded-2xl rounded-tr-md"
@@ -99,6 +102,15 @@ export default function ChatTimeline({
                 >
                   Retry
                 </button>
+              </div>
+            ) : isBounced ? (
+              // No retry affordance: the same address bounced once already, so
+              // the merchant needs to fix the address or reach them elsewhere.
+              <div className="flex items-center gap-1.5 mx-1 max-w-[80%]">
+                <AlertTriangle className="size-3 shrink-0 text-red-400" />
+                <span className="text-xs text-red-400">
+                  Bounced — the customer never received this. See the note for the reason.
+                </span>
               </div>
             ) : isUnknown ? (
               <div className="flex items-center gap-1.5 mx-1 max-w-[80%]">

@@ -7,6 +7,7 @@ import {
   GmailApiClient,
   getEmailProvider,
   historyIdAtOrAfter,
+  detectEmailBounce,
   isForSupportAddress,
   isGmailApiError,
   isValidGmailHistoryId,
@@ -25,6 +26,7 @@ import {
 } from '../lib/gmail-sync-lock.js';
 import { isRecord } from '../lib/typing.js';
 import logger from '../logger.js';
+import { recordEmailBounce } from '../message-handlers/email-bounce.js';
 import { emitOpsAlert } from '../ops-alerts.js';
 import { applyInboundAttachmentBudget } from '../storage/attachment-budget.js';
 import type { GmailSyncJobData, InboundJobData } from '../types.js';
@@ -269,6 +271,26 @@ async function enqueueGmailMessages(
         );
         throw error;
       }
+      // Gmail has no bounce webhook — a failed delivery comes back as mail from
+      // the receiving system. Checked before the support-address filter, which a
+      // daemon report addressed to the sending mailbox would otherwise drop.
+      const bounce = detectEmailBounce(parsed);
+      if (bounce) {
+        const outcome = await recordEmailBounce({
+          provider: 'gmail',
+          locator: { kind: 'outbound_message_id', value: bounce.outboundMessageId },
+          recipient: null,
+          bounceType: bounce.permanent ? 'permanent' : 'transient',
+          detail: bounce.detail,
+          permanent: bounce.permanent,
+        });
+        logger.info(
+          { gmailMessageId: message.id, integrationId: integration.id, outcome },
+          '[Gmail Sync] Delivery status notification processed',
+        );
+        return 0;
+      }
+
       if (parsed.from && merchantAddresses.has(parsed.from.toLowerCase())) return 0;
       if (!isForSupportAddress(parsed, supportAddress)) return 0;
 

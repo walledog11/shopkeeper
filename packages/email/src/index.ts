@@ -2,6 +2,7 @@ export type {
   EmailProvider,
   EmailOAuthProvider,
   EmailHeader,
+  OutboundAttachment,
   OutboundEmail,
   EmailSendResult,
   EmailSender,
@@ -49,10 +50,12 @@ export { buildRawMime, buildMimeBase64 } from './mime-build.js';
 export { parseMime } from './mime-parse.js';
 export { normalizeInboundEmail } from './inbound-normalize.js';
 export { isForSupportAddress } from './address-filter.js';
+export { detectEmailBounce, type DetectedBounce } from './bounce-detect.js';
 export {
   formatReplySubject,
   createThreadMessageId,
   createOutboundMessageId,
+  parseOutboundMessageId,
   buildThreadReplyHeaders,
   buildOutboundMessageReplyHeaders,
 } from './reply.js';

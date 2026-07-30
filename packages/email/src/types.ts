@@ -7,13 +7,23 @@ export interface EmailHeader {
   value: string;
 }
 
+export interface OutboundAttachment {
+  name: string;
+  contentType: string;
+  contentBase64: string;
+}
+
 export interface OutboundEmail {
   to: string;
   fromAddress: string;
   fromName: string;
   replyTo?: string;
   subject: string;
+  // `text` stays required while `html` is optional, so the plain-text fallback
+  // is a type guarantee rather than a convention a caller can forget.
   text: string;
+  html?: string;
+  attachments?: OutboundAttachment[];
   headers?: EmailHeader[];
 }
 
