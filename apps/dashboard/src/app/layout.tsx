@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Caveat, Just_Another_Hand } from "next/font/google";
+import { headers } from "next/headers";
 import { getDashboardAppUrl } from "@/lib/env";
 import { Providers } from "./providers";
 import "./globals.css";
@@ -51,7 +52,7 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
@@ -61,10 +62,15 @@ export default function RootLayout({
     throw new Error("Missing NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY");
   }
 
+  // Clerk's middleware mints the CSP nonce and forwards it as `x-nonce`. The
+  // client ClerkProvider cannot read request headers, so thread it through as a
+  // prop or `clerk.browser.js` renders un-nonced and 'strict-dynamic' blocks it.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
   return (
     <html lang="en" className={`${caveat.variable} ${justAnotherHand.variable}`}>
       <body className="font-sans antialiased">
-        <Providers publishableKey={publishableKey}>
+        <Providers publishableKey={publishableKey} nonce={nonce}>
           {children}
         </Providers>
       </body>

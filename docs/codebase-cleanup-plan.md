@@ -73,8 +73,10 @@ To close this plan:
 5. **Standalone security tracks:** complete or move P8-02 Spectrum/OpenTelemetry
    and P8-03 enforced CSP into separately owned plans with their existing
    acceptance criteria. They must not disappear when this document is removed.
-   P8-03's nonce migration landed 2026-07-30; enforcement is blocked on Clerk's
-   un-nonced script tag, so that blocker travels with the track wherever it goes.
+   P8-03's nonce migration landed 2026-07-30 and its enforcement blocker was
+   resolved and verified the same day (0 violations under an enforced policy);
+   what travels with the track is the remaining flip: observe deployed
+   report-only telemetry, then set `reportOnly: false`.
 6. **Retirement and decisions:** P9-02 backlog is owned in
    [compatibility-retirement-backlog.md](compatibility-retirement-backlog.md);
    first retirement (Sentry example routes) landed 2026-07-30. Continue one
@@ -1482,8 +1484,9 @@ the prior release as the rollback artifact.
 
 ### P8-03 — Stage an enforced CSP
 
-**Status (2026-07-30): Report-only collector deployed and the nonce migration is
-done; observation and enforcement remain, and enforcement has a known blocker.**
+**Status (2026-07-30): Report-only collector deployed, nonce migration done, and
+the enforcement blocker resolved and verified under an enforced policy. Only
+deployed-traffic observation and the header flip remain.**
 The global report-only
 policy now advertises both legacy `report-uri` and Reporting API `report-to`
 delivery to `/api/security/csp-report`. The unauthenticated collector accepts
@@ -1507,24 +1510,46 @@ surviving `'unsafe-inline'` is the deliberate CSP2 fallback that
 emitted by Clerk's `reportTo` and was removed from `next.config.js` to avoid a
 duplicate header. Next 16.2 reads the nonce from
 `content-security-policy-report-only` as well as the enforced header
-(`app-render.js:167`), so propagation is verifiable before enforcement — and was
-verified live at 51 of 52 script tags nonced, plus preload links. The policy
-remains report-only; this slice still does not claim enforcement.
+(`app-render.js:167`), so propagation is verifiable before enforcement. The
+policy remains report-only; this slice still does not claim enforcement.
 
-**Blocker before the header can be flipped.** Clerk's own `clerk.browser.js`
-`<script>` tag is server-rendered **without** a nonce, so `'strict-dynamic'` will
-block it on enforcement and break authentication. Ruled out: the nonce is minted
-and forwarded (`x-nonce` present on both request and response);
-`buildClerkJSScriptAttributes` does apply a nonce when given one (`@clerk/shared`
-`loadClerkJsScript.mjs:160`); and making `providers.tsx` a server component with
-`dynamic` on `ClerkProvider` did not fix it — that change was reverted because it
-costs dynamic rendering and bought nothing. The nonce is lost between the header
-and `ClerkScriptTags`. This is exactly what the report-only window exists to
-surface, so nothing is broken today.
+**Blocker resolved 2026-07-30 — and the original diagnosis was too narrow.** The
+recorded symptom ("Clerk's `clerk.browser.js` is the one un-nonced tag; 51 of 52
+nonced") came from a dynamic route and hid the real failure. Measured against a
+production build with `reportOnly: false`, `/` produced **44 CSP violations and
+zero nonced script tags** — every Next chunk blocked, not just Clerk's — and
+`window.Clerk` never loaded. Cause: `/` and `/sign-in` were **statically
+prerendered** (`○` in the route table), and prerendered HTML cannot carry a
+per-request nonce, so `'strict-dynamic'` rejected the entire bundle.
+
+**Fix.** `app/layout.tsx` reads `x-nonce` from `headers()` and threads it to
+`ClerkProvider` through a `nonce` prop on `app/providers.tsx`. The prop is
+required because `providers.tsx` is `"use client"`: that resolves to the
+**client** `ClerkProvider`, which renders `ClerkScripts` and takes the nonce from
+provider options, and which cannot read request headers. The `dynamic` prop is
+read only by the **server** provider
+(`@clerk/nextjs` `app-router/server/ClerkProvider.js`, which renders
+`DynamicClerkScripts` in a Suspense boundary) — a `"use client"` `providers.tsx`
+never reaches it. That is precisely why the earlier `dynamic` attempt failed;
+Clerk's own docs saying the nonce "requires the `dynamic` prop" is what misled
+it. `style-src`/`font-src` additionally gained
+`fonts.googleapis.com`/`fonts.gstatic.com`, a second real blocker from the
+`globals.css` `@import`s that only surfaced once scripts stopped failing.
+
+**Verified.** Enforced-CSP production build, headless Chromium: `/` and
+`/sign-in` both at **0 violations with `window.Clerk: true`** (from 44 and 31
+violations with Clerk dead). Proxy unit tests 17/17.
+
+**Accepted cost.** `headers()` in the root layout flips every route from static
+to dynamic (`○ /` → `ƒ /`). This is inherent — a per-request nonce and static
+prerendering are mutually exclusive — not a regression to chase. The alternative
+that preserves static rendering is Clerk's Suspense-isolated
+`DynamicClerkScripts`, which requires converting `providers.tsx` to a server
+component.
 
 - **Related findings:** AUD-018.
 - **Files likely to change:** `apps/dashboard/src/proxy.ts` and `src/proxy/content-security-policy.ts` (the policy now lives here), `apps/dashboard/next.config.js`, instrumentation/layout/script integrations, CSP reporting tests/runbook.
-- **Proposed implementation:** ~~Remove production `unsafe-eval`, add nonces/hashes~~ **done 2026-07-30.** Remaining: resolve the un-nonced Clerk script tag, analyze report-only telemetry, canary enforcement, then switch the header.
+- **Proposed implementation:** ~~Remove production `unsafe-eval`, add nonces/hashes~~ **done 2026-07-30.** ~~Resolve the un-nonced Clerk script tag~~ **done 2026-07-30.** Remaining: analyze report-only telemetry from deployed traffic, canary enforcement, then flip `reportOnly` to `false` in `apps/dashboard/src/proxy.ts`.
 - **Dependencies:** Sentry/Clerk/PostHog compatibility testing and violation endpoint/telemetry.
 - **Risk / scope:** Medium-high / Medium.
 - **Tests required:** Production build Playwright across auth, dashboard, analytics, Sentry and OAuth.

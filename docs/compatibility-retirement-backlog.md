@@ -32,7 +32,6 @@ repeatable schedulers and can break operator digests and async outbound recovery
 
 | Decision | Owner | Blocks |
 | --- | --- | --- |
-| Whether Sentry diagnostic routes remain operational tooling | Launch owner | ~~Sentry example routes~~ (resolved — removed) |
 | Completion criteria/date for async-email-only operation | Launch owner / email | Sync outbound email path |
 | Merchant UX for `unknown` external actions | Product | None of the deferred candidates directly, but affects recovery runbook ownership |
 

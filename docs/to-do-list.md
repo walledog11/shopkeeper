@@ -10,17 +10,13 @@ Last reviewed: 2026-07-30.
 Recently completed — detail is in git history, not here:
 - Eval assertion decision and three-repeat baseline re-capture (228/228, 100%,
   up from 226/228 / 99.1%) — 2026-07-30
+- Full-tier `tier-full-cancel-auto` drift fixed (cancel-only prompt rule; 3/3) — 2026-07-30
 - Production migration workflow documented (`production/deployment.md`) — 2026-07-30
 - Alerting doc debt corrected (Better Stack Telemetry, Railway forwarder, threshold alert rules) — 2026-07-30
-- Agent behavior tracks A1–A6 and B1–B5 — 2026-07-26
 - `fulfill_order` capability, eval gate (78/79) and canary execute family — 2026-07-30
 - CSP nonce migration (report-only; enforcement blocked) — 2026-07-30
 - Dashboard `send_reply` internal-hop 500 (operator bug 7) — 2026-07-29
-- B4 delivery-exception watch (USPS monitor + approval loop) — 2026-07-20
-- B3 return-lifecycle monitor (`ReturnWatch` + arrival approval loop) — 2026-07-20
-- Operator-channel nudge parity (Telegram + iMessage) — 2026-07-20
-- Live operator phone verification (Telegram + iMessage) — 2026-07-20
-- P4-03 durable operator queue rollout — 2026-07-20
+- Agent behavior tracks A1–A6 and B1–B5 — 2026-07-26
 
 Roadmap for agent-core extraction and module expansion lives separately in
 [core-extraction-and-module-expansion-plan.md](core-extraction-and-module-expansion-plan.md);
@@ -68,19 +64,12 @@ Do these before treating production as ready.
     (2026-06-24): verification tooling (`scripts/verify-production-alerts.mjs` +
     `emit-controlled-ops-alert.ts` helpers) confirmed working, live health baseline
     recorded, per-category trigger cheatsheet written.
-  - ~~**Doc debt:** stale Better Stack product name, nonexistent Railway
-    log-drain setting, "keyword alert rules".~~ **Corrected 2026-07-30** in
-    [runbook.md](production/runbook.md) and
-    [error-tracking-plan.md](production/error-tracking-plan.md): "Logs" is now
-    "Telemetry", the Railway step calls for a forwarder service (no native drain
-    exists), log alerting is described as query/threshold rules on a saved chart,
-    and the free-tier/paywall boundaries are recorded inline so the deferred work
-    resumes with accurate instructions.
 
 ## Security And Data Hardening
 
-- [ ] **Harden Content Security Policy — nonce migration done 2026-07-30,
-  enforcement blocked.** The policy moved out of `apps/dashboard/next.config.js`
+- [ ] **Harden Content Security Policy — nonce migration and enforcement blocker
+  both done 2026-07-30; only the header flip remains.** The policy moved out of
+  `apps/dashboard/next.config.js`
   (a static `headers()` entry cannot carry a per-request nonce) into Clerk's
   native `contentSecurityPolicy` middleware option in
   `apps/dashboard/src/proxy.ts`, with the directives in
@@ -89,30 +78,49 @@ Do these before treating production as ready.
   now dev-only. The remaining `'unsafe-inline'` is Clerk's deliberate CSP2
   fallback, which `'strict-dynamic'` makes CSP3 browsers ignore — do not "fix"
   it. `Reporting-Endpoints` is now emitted by Clerk's `reportTo`, so it was
-  removed from `next.config.js`. Verified live: 51 of 52 script tags nonced,
-  plus preload links. Next 16.2 reads the nonce from the report-only header too
-  (`app-render.js:167`), so propagation works before enforcement.
-  - **Blocker before enforcing:** Clerk's own `clerk.browser.js` `<script>` is
-    server-rendered **without** a nonce, so `'strict-dynamic'` will block it the
-    moment the header is enforced — breaking auth. Ruled out: the nonce is
-    minted and forwarded (`x-nonce` on both request and response);
-    `buildClerkJSScriptAttributes` does apply a nonce when given one
-    (`@clerk/shared` `loadClerkJsScript.mjs:160`); and making `providers.tsx` a
-    server component with `dynamic` on `ClerkProvider` did not fix it (reverted
-    — it costs dynamic rendering and bought nothing). The nonce is lost between
-    the header and `ClerkScriptTags`.
-  - Still owed after that: review report-only violations from deployed traffic,
-    then flip the header. Keep Clerk and Cloudflare challenge requirements
-    documented. (Lower urgency.)
+  removed from `next.config.js`. Next 16.2 reads the nonce from the report-only
+  header too (`app-render.js:167`), so propagation works before enforcement.
+  - **Blocker resolved 2026-07-30 — the diagnosis was bigger than "Clerk's
+    script tag."** Measured against a real production build with
+    `reportOnly: false`, `/` produced **44 CSP violations and zero nonced
+    script tags** — every Next chunk blocked, not just `clerk.browser.js`, and
+    `window.Clerk` never loaded. Cause: `/` and `/sign-in` were **statically
+    prerendered** (`○` in the route table), and prerendered HTML cannot carry a
+    per-request nonce, so `'strict-dynamic'` rejected the whole bundle. The
+    earlier "51 of 52 nonced" reading came from a dynamic route and hid this.
+  - **Fix:** the root layout now reads `x-nonce` from `headers()` and threads it
+    to `ClerkProvider` via a `nonce` prop (`app/layout.tsx`, `app/providers.tsx`).
+    The client `ClerkProvider` cannot read request headers — it renders
+    `ClerkScripts`, which takes the nonce from provider options — so the prop is
+    required; the `dynamic` prop only helps the *server* provider, which a
+    `"use client"` `providers.tsx` never reaches. That is why the earlier
+    `dynamic` attempt failed. `style-src`/`font-src` also gained
+    `fonts.googleapis.com`/`fonts.gstatic.com` for the `globals.css` imports.
+  - **Verified:** enforced-CSP production build, headless Chromium, `/` and
+    `/sign-in` → **0 violations, `window.Clerk: true`** on both (was 44 and 31
+    violations, Clerk dead). Proxy unit tests 17/17.
+  - **Accepted cost:** `headers()` in the root layout flips every route from
+    static to dynamic (`○ /` → `ƒ /`). This is inherent — a per-request nonce and
+    static prerendering are mutually exclusive — not a regression to fix.
+  - Still owed: review report-only violations from deployed traffic, then flip
+    `reportOnly` to `false` in `apps/dashboard/src/proxy.ts` (left `true`; the
+    flip is a one-line, deploy-gated decision). Keep Clerk and Cloudflare
+    challenge requirements documented.
 
 ## Known Bugs
 
-**None open.** All eight operator-channel bugs consolidated from the retired
-`operator-channel-bugs.md` are closed — 1/2/8 fixed, 3–6 structurally eliminated
-by the model-owned operator-interpretation rework, and 7 (the dashboard
-`send_reply` internal-hop 500) closed 2026-07-29 with request-ID correlation and
-the `npm run test:e2e:send-reply-hop` cross-service canary. Full history:
+History for the eight closed operator-channel bugs:
 [archive/operator-channel-bugs.md](archive/operator-channel-bugs.md).
+
+- [ ] **Local `next build` / `npm run typecheck` fail on stale generated route
+  validators.** `apps/dashboard/tsconfig.json` includes `.next/types/**`,
+  `.next-dev/types/**` and `.next-e2e/types/**`, so a deleted route leaves every
+  existing dist dir's generated `validator.ts` importing source that no longer
+  exists. Currently failing on the Sentry example routes removed 2026-07-30:
+  `Cannot find module '../../src/app/sentry-example-page/page.js'`. CI builds
+  fresh so it never sees this; it only bites locally, and it recurs on every
+  route deletion. Rebuilding each dist dir clears it — the durable fix is to stop
+  type-checking stale dist dirs.
 
 ## Product Gaps
 
@@ -134,13 +142,6 @@ what ships.
   in progress, or did it get built ahead of that spike's answer? That decision
   — not more adapter code — determines whether the next step is "configure and
   enable" or "cut." Needs an owner call, not a guess.
-
-- [ ] **Full-tier auto-execute is drifting — `tier-full-cancel-auto` scored 1/3
-  in the 2026-07-30 baseline, down from 2/3 on 2026-07-10.** **Diagnosed and
-  fixed 2026-07-30:** the miss was `create_refund` being called alongside
-  `cancel_order` on a cancel-only request. A support-prompt rule now forbids the
-  double refund; a fresh 3/3 capture updated the baseline to 228/228. Re-run
-  periodically — the fixture remains advisory.
 
 - [ ] **Complete the `fulfill_order` canary family against the live store.** The
   family landed in `scripts/canary-shopify-mutations.mjs` on 2026-07-30 and is
@@ -174,11 +175,3 @@ near-term pointers only here.
 Durable findings from the completed agent-behavior audit (tracks A1–A6, B1–B5)
 live in
 [archive/agent-behavior-and-expansion-plan-2026-07.md](archive/agent-behavior-and-expansion-plan-2026-07.md).
-
-## Documentation
-
-No open items. The production migration workflow is documented in
-[deployment.md](production/deployment.md) → **Database Migrations**: env vars per
-context (production run, Vercel, Railway, local, CI), the commands, the
-`migrate status` verification step, and the two incidents where a migration
-lagged its code.

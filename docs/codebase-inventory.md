@@ -165,7 +165,7 @@ Important raw-SQL invariants not expressible in the Prisma schema are present in
 - `/api/billing`, `/api/billing/checkout`, `/api/billing/portal`, `/api/billing/webhook`
 - `/api/realtime/token`, `/api/product-events`, `/api/health`
 - Dashboard-side webhook compatibility routes for Clerk, email, Meta and TikTok Shop
-- Feature-gated Sentry diagnostics: `/sentry-example-page` and `/api/sentry-example-api`
+- ~~Feature-gated Sentry diagnostics: `/sentry-example-page` and `/api/sentry-example-api`~~ removed 2026-07-30
 
 ### Gateway HTTP routes
 
@@ -242,7 +242,7 @@ Canonical examples are `apps/dashboard/.env.example` and `apps/gateway/.env.exam
 
 | Group | Variables |
 | --- | --- |
-| Core/database | `NODE_ENV`, `DATABASE_URL`, `DIRECT_DATABASE_URL`, `NEON_SERVERLESS_HTTP`, `APP_URL`, `NEXT_PUBLIC_APP_URL`, `DASHBOARD_URL`, `DASHBOARD_INTERNAL_URL`, `GATEWAY_INTERNAL_URL`, deprecated `GATEWAY_PUBLIC_URL`, `PORT` |
+| Core/database | `NODE_ENV`, `DATABASE_URL`, `DIRECT_DATABASE_URL`, `NEON_SERVERLESS_HTTP`, `APP_URL`, `NEXT_PUBLIC_APP_URL`, `DASHBOARD_URL`, `DASHBOARD_INTERNAL_URL`, `GATEWAY_INTERNAL_URL`, `PORT` (deprecated `GATEWAY_PUBLIC_URL` alias removed 2026-07-30) |
 | Authentication/secrets | `CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_WEBHOOK_SECRET`, `INTERNAL_API_SECRET`, `INTERNAL_API_SECRET_PREV`, `TOKEN_ENCRYPTION_KEY` |
 | Redis/workers | `REDIS_URL`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `GATEWAY_RUNTIME_ROLE`, `GATEWAY_ENABLE_MAINTENANCE_WORKERS`, BullMQ drain/stalled/heartbeat tuning variables |
 | AI/analytics/observability | `ANTHROPIC_API_KEY`, `PRODUCT_ANALYTICS_ENABLED`, `POSTHOG_PROJECT_TOKEN`, `POSTHOG_HOST`, Sentry DSN/environment/auth/upload variables, `LOG_LEVEL`, `LOG_PRETTY` |
@@ -291,8 +291,8 @@ Audit baseline results were 1,032 unit and 806 integration tests. Current 2026-0
 
 These are candidates for verification, not deletion recommendations:
 
-- `apps/dashboard/src/app/sentry-example-page` and `api/sentry-example-api`: diagnostic scaffolding, correctly gated outside development; remove only if the operational Sentry test is no longer used.
-- `GATEWAY_PUBLIC_URL`: explicitly deprecated alias still accepted and tested by production checks; inspect deployed environments before removal.
+- `apps/dashboard/src/app/sentry-example-page` and `api/sentry-example-api`: ~~diagnostic scaffolding, correctly gated outside development~~ retired 2026-07-30 with the `SENTRY_EXAMPLE_PAGE_ENABLED` flag.
+- `GATEWAY_PUBLIC_URL`: ~~explicitly deprecated alias still accepted and tested by production checks~~ retired 2026-07-30; the dashboard reads only `GATEWAY_INTERNAL_URL`.
 - WhatsApp-named digest queue/job constants and the email-named outbound sweep constant: intentionally retained to avoid orphaning live BullMQ repeatable jobs.
 - `apps/gateway/src/maintenance/purge-legacy-imessage.ts`: ~~legacy-data cleanup~~ retired 2026-07-30; use `npm run audit:legacy-imessage-threads`.
 - Operator-context legacy tool-call normalization in `apps/gateway/src/operator-context.ts`: supports stored rows written in the prior shape; retire only after a data migration proves no old rows remain.

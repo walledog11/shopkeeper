@@ -504,9 +504,11 @@ therefore remains Critical until P1-02/P1-03 complete.
 | Category | Browser security hardening |
 | Disposition | Fix later after telemetry |
 
-**Locations and symbols:** `apps/dashboard/next.config.js:4-45`; `app/sentry-example-page/page.tsx`; `app/api/sentry-example-api/route.ts`.
+**Locations and symbols:** ~~`apps/dashboard/next.config.js:4-45`~~ — the policy moved 2026-07-30 to `apps/dashboard/src/proxy.ts` with directives in `src/proxy/content-security-policy.ts`; nonce plumbing in `app/layout.tsx` and `app/providers.tsx`. ~~`app/sentry-example-page/page.tsx`; `app/api/sentry-example-api/route.ts`~~ (both removed 2026-07-30).
 
-**Description and evidence:** CSP is emitted as `Content-Security-Policy-Report-Only` and includes `'unsafe-inline'` and `'unsafe-eval'`. Other security headers are present. Sentry example routes are gated outside development unless explicitly enabled, so they are not an always-public production defect, but remain operational scaffolding.
+**Description and evidence:** CSP is emitted as `Content-Security-Policy-Report-Only` and includes `'unsafe-inline'` and `'unsafe-eval'`. Other security headers are present. ~~Sentry example routes are gated outside development unless explicitly enabled, so they are not an always-public production defect, but remain operational scaffolding.~~ (Sentry example routes retired 2026-07-30.)
+
+**Update 2026-07-30 — nonce migration done, enforcement blocker resolved, header still report-only.** `unsafe-eval` is now dev-only and the policy carries a per-request nonce plus `'strict-dynamic'`; the surviving `'unsafe-inline'` is Clerk's deliberate CSP2 fallback that CSP3 browsers ignore, not a defect. Enforcement was blocked because `/` and `/sign-in` were statically prerendered and prerendered HTML cannot carry a per-request nonce — an enforced-policy production build showed 44 violations on `/` with every Next chunk blocked and Clerk dead. The root layout now reads `x-nonce` from `headers()` and passes it to `ClerkProvider`, at the cost of making all routes dynamic. Re-measured under an enforced policy: 0 violations and Clerk loading on both routes. Full detail in [codebase-cleanup-plan.md](codebase-cleanup-plan.md) P8-03.
 
 **Why it matters:** Report-only CSP does not block an XSS payload. This is defense in depth; no exploitable XSS was confirmed.
 
@@ -576,7 +578,7 @@ omitted read tools.
 
 **Locations and symbols:** `apps/gateway/src/constants.ts:9-31`; dashboard/gateway environment examples; `scripts/check-production-env.mjs`; root `README.md`; `apps/gateway/src/operator-context.ts:1-6`.
 
-**Description and evidence:** WhatsApp-named queues now serve Telegram/operator behavior, `OUTBOUND_SEND_SWEEP` retains an email legacy string despite being channel-agnostic, `OperatorContext` comments still describe only Telegram, and `GATEWAY_PUBLIC_URL` remains a deprecated alias. README product-status statements lag implemented TikTok/iMessage/Gmail paths.
+**Description and evidence:** WhatsApp-named queues now serve Telegram/operator behavior, `OUTBOUND_SEND_SWEEP` retains an email legacy string despite being channel-agnostic, `OperatorContext` comments still describe only Telegram, and ~~`GATEWAY_PUBLIC_URL` remains a deprecated alias~~ (the `GATEWAY_PUBLIC_URL` alias was removed 2026-07-30). README product-status statements lag implemented TikTok/iMessage/Gmail paths.
 
 **Why it matters:** New engineers can misunderstand ownership and deployments; renaming live queue IDs without migration would be worse than the current naming.
 
@@ -613,10 +615,10 @@ No file was proven dead enough to delete during the audit. Verified candidates r
 
 | Candidate | Evidence | Recommendation |
 | --- | --- | --- |
-| Sentry example page/API | Only self-referenced; gated outside development by `SENTRY_EXAMPLE_PAGE_ENABLED` | Keep if part of monitoring runbook; otherwise remove page, API and flag together |
-| Deprecated `GATEWAY_PUBLIC_URL` alias | Production checker emits a deprecation warning and has explicit tests | Query deployed env first; remove only in a later release |
-| Legacy iMessage purge module | Clearly migration-oriented but still tested and referenced operationally | Verify production cleanup completion and runbook ownership |
-| Legacy operator tool-call shape normalization | Reads old JSON representation from persisted `OperatorContext` | Count/migrate old rows before removal |
+| ~~Sentry example page/API~~ | Only self-referenced; gated outside development by `SENTRY_EXAMPLE_PAGE_ENABLED` | Removed 2026-07-30 (page, API and flag together) |
+| ~~Deprecated `GATEWAY_PUBLIC_URL` alias~~ | Production checker emits a deprecation warning and has explicit tests | Removed 2026-07-30 |
+| ~~Legacy iMessage purge module~~ | Clearly migration-oriented but still tested and referenced operationally | Removed 2026-07-30 |
+| ~~Legacy operator tool-call shape normalization~~ | Reads old JSON representation from persisted `OperatorContext` | Removed 2026-07-30 (audit reported zero legacy rows) |
 | Synchronous outbound email | Async path is feature-flagged and sync remains rollback compatibility | Remove only after async rollout and provider recovery behavior is proven |
 
 Commented-out application code was not a material pattern. Direct production dependencies all had observable import/use sites; no direct dependency is recommended for deletion based only on static scanning.
@@ -655,7 +657,7 @@ The material consistency issues are the tool-category drift (AUD-020), relationa
 - High, product-dependent: ordinary member versus admin permissions (AUD-011).
 - High availability/file risk: global 50 MB parsing and unbounded attachment fan-out (AUD-009).
 - Medium: database permits cross-tenant parent/tenant mismatches (AUD-016).
-- Medium defense-in-depth: report-only CSP (AUD-018).
+- Medium defense-in-depth: report-only CSP (AUD-018) — nonce migration and the enforcement blocker resolved 2026-07-30; the header is still report-only pending deployed-traffic review.
 - No committed credentials were found. Integration access and refresh tokens are transparently encrypted in `packages/db/index.ts`; token fields are redacted from structured logs.
 - Ordinary dashboard entity routes generally scope through the authenticated organization and use `assertEntityInOrg`. Dedicated cross-organization test suites are present.
 - Webhook signature verification is present across supported providers. The major webhook defects are post-verification processing semantics, not missing signatures.

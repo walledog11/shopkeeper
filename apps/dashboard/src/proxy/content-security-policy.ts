@@ -16,10 +16,10 @@ export const CSP_REPORT_ENDPOINT = "/api/security/csp-report";
 export const cspDirectives: CspDirectives = {
   "default-src": ["'self'"],
   "script-src": ["https://*.clerk.com", "https://*.clerk.accounts.dev"],
-  "style-src": ["'self'", "'unsafe-inline'", "https://*.clerk.com"],
+  "style-src": ["'self'", "'unsafe-inline'", "https://*.clerk.com", "https://fonts.googleapis.com"],
   "img-src": ["'self'", "data:", "blob:", "https:"],
   "media-src": ["'self'", "https://*.public.blob.vercel-storage.com"],
-  "font-src": ["'self'", "data:"],
+  "font-src": ["'self'", "data:", "https://fonts.gstatic.com"],
   "connect-src": [
     "https://*.clerk.com",
     "https://*.clerk.accounts.dev",
