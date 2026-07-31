@@ -849,18 +849,72 @@ routing below is for.
 
 ### Neon PITR
 
-Confirm point-in-time recovery on the production Neon branch before sign-off. Record the exact retention window from Neon, not an assumed plan default.
+Confirmed 2026-07-31. Record the exact retention window Neon reports, never an
+assumed plan default.
 
-Evidence to record:
+| Field | Value |
+| --- | --- |
+| Project | `misty-bird-75162134` (`shopkeeper`), `aws-us-west-2`, PG 17 |
+| Production branch | `production` (`br-aged-union-akjqrbbs`) — the only branch |
+| Endpoint | `ep-red-waterfall-akf6xfkq` (`c-3.us-west-2`), the only endpoint |
+| PITR status | Enabled |
+| Retention window | **7 days** (`history_retention_seconds: 604800`) |
+| Confirmed at | 2026-07-31 |
 
-- Neon project:
-- Production branch:
-- PITR status:
-- Retention window:
-- Confirmed by:
-- Confirmed at:
+Raised from **6 hours** to 7 days on 2026-07-31. Six hours does not survive a
+Friday-evening fault noticed on Saturday, which is the realistic failure mode for
+a solo operator. The increase is effectively free — see the cost note below.
 
-Do not check off the PITR item until the retention window is recorded here or in the launch evidence tracker.
+**Still owed: one restore test.** Branch from a timestamp an hour old, connect,
+confirm the data is there, delete the branch. Ten minutes, no cost. An untested
+restore is an assumption, and the moment you need it is the worst time to learn
+the console.
+
+#### What PITR does not cover
+
+Branch restore is a **whole-branch** operation — you cannot restore one table or
+one organization. To repair a single merchant's data, restore to a *separate*
+branch and copy rows out; do not roll production back and lose everyone else's
+day.
+
+It restores Postgres only. It does not restore Vercel Blob (attachments), Redis
+(in-flight BullMQ jobs are simply lost), or the external systems of record.
+Rolling the database back does not un-charge a Stripe invoice, un-issue a Shopify
+refund, or un-send an email — after a restore the database disagrees with Clerk,
+Stripe and Shopify about what happened. PITR is a last resort; `AgentAction` is
+the audit trail you would actually reconstruct from.
+
+#### Cost shape (measured 2026-07-31)
+
+The Neon bill is **entirely compute**, which is why retention is cheap to extend:
+
+| Metric | Value |
+| --- | --- |
+| `active_time` | 742.0 h — **99.7% of a 744-hour month** |
+| `cpu_used_sec` | 330.1 CU-hours, averaging 0.445 CU while active |
+| Storage | 36 MB |
+
+The compute never suspends. Autosuspend requires zero client connections, and the
+gateway is an always-on Railway process holding a Prisma pool through pgbouncer —
+`pg_stat_activity` shows persistent idle pooler connections. `suspend_timeout_seconds: 0`
+is Neon's 5-minute default and never gets the chance to fire. This is
+architectural, not a misconfiguration: Neon's scale-to-zero pricing assumes bursty
+serverless access, and a 24/7 worker is the opposite. Even perfect idle-timeout
+tuning would be undone by the 15-minute maintenance sweeps, and each cold start
+would add latency to a merchant-facing agent.
+
+Consequences for anyone touching this:
+
+- **Raising history retention does not raise the bill** at this data volume. Do
+  not trade recoverability for a saving that is not there.
+- **`autoscaling_limit_max_cu` is capped at 2** (endpoint and project default),
+  lowered from 8 on 2026-07-31. This is a blast-radius cap, not a saving — it
+  bounds the damage when a query that was fine against 36 MB stops being fine
+  once a merchant's data lands. Sustained throttling at 2 CU is a signal to fix
+  the query, not to raise the ceiling.
+- If the bill ever grows materially, the lever is the always-on access pattern —
+  a fixed small Postgres instance suits it better than serverless pricing. That
+  is a migration with real risk; do not attempt it ahead of a merchant.
 
 ### Ops Alert Log Routing
 
@@ -1140,4 +1194,4 @@ Reliability evidence to record before updating [`checklist.md`](checklist.md):
 - Ops alert `gmail_inbound`: log timestamp, routed owner, validation time
 - Better Stack dashboard monitor: monitor id, monitor URL, escalation policy or owner, required keyword, first passing check time
 - Better Stack gateway deep monitor: monitor id, monitor URL, escalation policy or owner, required keyword, first passing check time
-- Neon PITR: branch, status, retention window, confirmation time
+- Neon PITR: recorded 2026-07-31 — branch `production`, enabled, 7 days (see "Neon PITR"); restore test still owed

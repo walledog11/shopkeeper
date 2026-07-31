@@ -44,10 +44,11 @@ dropping or de-advertising a channel.
     to dynamic. Per-request nonces and static prerendering are mutually
     exclusive; this is inherent, not a regression.
 
-- [ ] **Check the Neon PITR retention window.** The only remaining monitoring
-  item, and the one where being wrong is unrecoverable once a real merchant's
-  customer data is in the database. Record the exact window Neon reports, not an
-  assumed plan default — see [runbook.md](production/runbook.md) "Neon PITR".
+- [ ] **Run one Neon restore test.** PITR is confirmed and raised to 7 days
+  (2026-07-31, evidence in [runbook.md](production/runbook.md) "Neon PITR"), but
+  it has never been exercised. Branch from a timestamp an hour old, connect,
+  confirm the data is there, delete the branch. Ten minutes, no cost. An
+  untested restore is an assumption.
 
 - [ ] **Better Stack Level 1 (log drains + escalation) — still DEFERRED until a
   paid beta (decided 2026-06-26).** Everything free is now done: two external

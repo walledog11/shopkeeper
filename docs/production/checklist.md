@@ -48,7 +48,8 @@ Before marking production ready, record the evidence listed in
 - ops-alert log routing and one controlled alert for each guardrail category
 - Better Stack monitors for dashboard health and gateway deep health (two, not three —
   `/health/queues` is auth-gated and redundant; see runbook "External Monitors")
-- Neon PITR status and retention window
+- Neon PITR status and retention window (confirmed 2026-07-31: enabled, 7 days;
+  one restore test still owed — see runbook "Neon PITR")
 - at least one real inbound message through webhook, queue, dashboard, plan generation, and outbound
   reply
 - product analytics staging payload review, deterministic retry verification, saved report URLs,
