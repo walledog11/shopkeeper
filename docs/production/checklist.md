@@ -46,7 +46,8 @@ Before marking production ready, record the evidence listed in
 [runbook.md](runbook.md#sign-off-evidence):
 
 - ops-alert log routing and one controlled alert for each guardrail category
-- Better Stack monitors for dashboard health, gateway deep health, and gateway queue health
+- Better Stack monitors for dashboard health and gateway deep health (two, not three —
+  `/health/queues` is auth-gated and redundant; see runbook "External Monitors")
 - Neon PITR status and retention window
 - at least one real inbound message through webhook, queue, dashboard, plan generation, and outbound
   reply

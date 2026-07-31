@@ -43,9 +43,9 @@ incident, and below `QUEUE_ALERT_FAILED_THRESHOLD`. Clear it before controlled
 | Log alert rule `webhook_signature` | ☐ | Rule id: ___ |
 | Log alert rule `provider_send` | ☐ | Rule id: ___ |
 | Log alert rule `agent_failure` | ☐ | Rule id: ___ |
-| Uptime monitor: dashboard `/api/health` | ☐ | Monitor id: ___ First pass: ___ |
-| Uptime monitor: gateway `/health/deep` | ☐ | Monitor id: ___ First pass: ___ |
-| Uptime monitor: gateway `/health/queues` (send `x-internal-secret`) | ☐ | Monitor id: ___ First pass: ___ |
+| Uptime monitor: dashboard `/api/health` (keyword `{"status":"ok"`) | ☑ | Configured 2026-07-31, Better Stack free tier |
+| Uptime monitor: gateway `/health/deep` (keyword `{"status":"ok"`) | ☑ | Configured 2026-07-31, Better Stack free tier |
+| Gateway ops-alert → Telegram push | ☑ | Verified in production 2026-07-31 via `emit-controlled-ops-alert.ts queue_health`; both test alerts delivered |
 | Better Stack test notification sent | ☐ | Recipient: ___ Time: ___ |
 
 ## Controlled ops-alert validation

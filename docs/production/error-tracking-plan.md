@@ -161,13 +161,23 @@ Route all four to the same launch escalation policy. Do **not** route by `orgId`
 
 ### 5. Uptime monitors
 
-Configure the three HTTP keyword monitors documented in [runbook.md](runbook.md) under External Monitors:
+**Done 2026-07-31.** Two HTTP keyword monitors, configured as documented in
+[runbook.md](runbook.md) under External Monitors:
 
-- `Shopkeeper Dashboard Health` → `/api/health` → `"status":"ok"`
-- `Shopkeeper Gateway Deep Health` → `/health/deep` → `"status":"ok"`
-- `Shopkeeper Gateway Queue Health` → `/health/queues` → `"healthy":true`
+- `Shopkeeper Dashboard Health` → `/api/health` → `{"status":"ok"`
+- `Shopkeeper Gateway Deep Health` → `/health/deep` → `{"status":"ok"`
 
-Use 60s check frequency, 60s confirmation period, US region, same escalation policy as log alerts.
+Two corrections applied there, both of which this section previously got wrong:
+the keyword needs the **leading brace** (a bare `"status":"ok"` also matches a
+degraded response, whose nested checks still contain it, so the monitor sits
+green while the database is down); and there is **no third monitor** against
+`/health/queues` — that route needs the internal secret and exposes tenant
+identifiers (AUD-017), and `/health/deep` already rolls up worker and queue
+health.
+
+Free tier: 3-minute check frequency, US region, email to the launch owner on
+failure and recovery. Escalation policies and sub-3-minute checks are paid and
+deliberately unused pre-merchant.
 
 ### What Level 1 does not cover
 

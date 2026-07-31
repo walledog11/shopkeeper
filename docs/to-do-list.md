@@ -27,9 +27,9 @@ dropping or de-advertising a channel.
   bad refund; it is spending another month hardening rails nobody has ridden.
   - Constraint to plan around: Instagram is behind Meta App Review, so merchant
     #1 is realistically **email forwarding + Shopify + phone**.
-  - On the day a real merchant onboards, do the free 15-minute alerting version
-    (see "Production alerting" below) — that deferral's own resume trigger is
-    this event.
+  - Monitoring is ready: two external uptime monitors and gateway ops-alert
+    push to Telegram are live and verified (2026-07-31). Only the Neon retention
+    check remains below.
 
 ## Pre-Release Blockers
 
@@ -44,30 +44,20 @@ dropping or de-advertising a channel.
     to dynamic. Per-request nonces and static prerendering are mutually
     exclusive; this is inherent, not a regression.
 
-- [ ] **Production alerting — DEFERRED until first real merchant / paid beta
-  (decided 2026-06-26).** Ops-alert instrumentation is complete and free:
-  `opsAlert` logs are emitted today and readable in the Vercel and Railway log
-  views. The missing piece is an external listener (Better Stack Level 1), which
-  hits several paywalls not worth buying pre-users: Vercel custom log drains
-  need Pro/Enterprise, Railway has no native drain, and Better Stack's free tier
-  excludes escalation policies and paging.
-  - **Free interim option (~15 min, no paywall):** **two** external uptime
-    monitors (HTTP keyword checks, 3-min frequency, email alerts) against
-    dashboard `/api/health` and gateway `/health/deep`. Corrected 2026-07-31 —
-    this previously said three including `/health/queues`, which is wrong on two
-    counts: that route requires the internal secret (`health.ts:214`) and
-    deliberately exposes failed-job tenant identifiers (AUD-017), so it must not
-    be polled by a third party; and `/health/deep` already rolls up the worker
-    heartbeat and queue diagnostics, returning 503 if either is bad.
-    `/health/queues` is the manual drill-down after an alert
-    (`curl -H "x-internal-secret: $INTERNAL_API_SECRET" .../health/queues`).
-  - **Keyword must be `{"status":"ok"`, not `"status":"ok"`.** A degraded
-    response still contains the latter in its nested checks
-    (`{"status":"degraded","checks":{"db":{"status":"error"},"redis":{"status":"ok"}...`),
-    so the naive keyword sits green while the database is down. The leading
-    brace anchors the match to the document root; both endpoints return compact
-    JSON, verified live 2026-07-31.
-  - **When resumed**, the full Level 1 checklist lives in
+- [ ] **Check the Neon PITR retention window.** The only remaining monitoring
+  item, and the one where being wrong is unrecoverable once a real merchant's
+  customer data is in the database. Record the exact window Neon reports, not an
+  assumed plan default — see [runbook.md](production/runbook.md) "Neon PITR".
+
+- [ ] **Better Stack Level 1 (log drains + escalation) — still DEFERRED until a
+  paid beta (decided 2026-06-26).** Everything free is now done: two external
+  uptime monitors and gateway ops-alert push to Telegram are live and verified
+  (2026-07-31; both documented in [runbook.md](production/runbook.md)). What
+  remains is genuinely paywalled — Vercel custom log drains need
+  Pro/Enterprise, Railway has no native drain, and escalation policies and
+  phone/SMS paging are Better Stack's paid tier. At one hand-held merchant,
+  email plus a Telegram push is sufficient paging.
+  - **When resumed**, the checklist lives in
     [runbook.md](production/runbook.md),
     [error-tracking-plan.md](production/error-tracking-plan.md) and
     [alerting-evidence.md](production/alerting-evidence.md). Prep is already
@@ -111,7 +101,8 @@ or a configured provider — none is a code task.
 
 - [ ] **Dashboard ops alerts still go nowhere.** The gateway pushes `opsAlert`
   to Telegram as of 2026-07-31 (`apps/gateway/src/ops-alert-notify.ts`), covering
-  13 of 17 call sites. The dashboard's three — `agent_failure`
+  13 of 17 call sites and verified end to end in production the same day. The
+  dashboard's three — `agent_failure`
   (`lib/server/agent-failure-alerts.ts`), `provider_send`
   (`lib/server/provider-send-alerts.ts`), `provider_cleanup`
   (`api/integrations/_lib/instagram-disconnect.ts`) — remain log-only, because

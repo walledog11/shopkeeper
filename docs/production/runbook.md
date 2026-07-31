@@ -784,59 +784,68 @@ the row to `pending` or replay it.
 
 ### External Monitors
 
-Configure Better Stack HTTP keyword checks before sign-off. Do this manually in the Better Stack console; do not add Better Stack API tokens or credentials to the repo. Route these monitors to the same launch owner or escalation policy used for ops-alert notifications.
+**Configured 2026-07-31** on the Better Stack free tier. Keep this manual in the
+Better Stack console; do not add Better Stack API tokens or credentials to the
+repo.
 
-**Plan note (2026-07-30).** Uptime keyword monitors themselves are available on
-the free tier, but two settings below are not: **escalation policies** and
-**sub-3-minute check frequency** are paid features, as is phone/SMS paging. On
-the free tier, create the same three monitors at 3-minute frequency with email
-(or Slack) alerts routed directly to the launch owner. That is the deliberate
-zero-cost interim posture; upgrade when the first merchant onboards.
+**Two monitors, not three.** Corrected 2026-07-31 — this previously specified a
+third monitor against `/health/queues`, which is wrong on two counts:
 
-Before creating monitors, verify the live production health endpoints from a trusted shell:
+- That route requires the internal secret (`health.ts:214`, `authorizeInternalRequest`)
+  and deliberately exposes queue counts and failed-job **tenant identifiers**
+  (AUD-017). It must not be polled by a third-party vendor.
+- It is redundant. `/health/deep` already rolls up the worker heartbeat *and*
+  queue diagnostics and returns `503` if either is unhealthy, so a stale worker
+  already fails the gateway monitor.
+
+`/health/queues` is the manual drill-down *after* an alert fires:
 
 ```bash
-DASHBOARD_URL='https://<dashboard-production-url>' \
-GATEWAY_URL='https://<gateway-production-url>' \
-npm run verify:production
+curl -H "x-internal-secret: $INTERNAL_API_SECRET" \
+  https://<gateway-production-url>/health/queues
 ```
-
-Create a Better Stack monitor group named `Shopkeeper Production`, then create these monitors:
 
 | Monitor | URL | Required keyword |
 | --- | --- | --- |
-| `Shopkeeper Dashboard Health` | `https://<dashboard-production-url>/api/health` | `"status":"ok"` |
-| `Shopkeeper Gateway Deep Health` | `https://<gateway-production-url>/health/deep` | `"status":"ok"` |
-| `Shopkeeper Gateway Queue Health` | `https://<gateway-production-url>/health/queues` (send `x-internal-secret`) | `"healthy":true` |
+| `Shopkeeper Dashboard Health` | `https://<dashboard-production-url>/api/health` | `{"status":"ok"` |
+| `Shopkeeper Gateway Deep Health` | `https://<gateway-production-url>/health/deep` | `{"status":"ok"` |
 
-Use the same settings for all three monitors:
+**The keyword must include the leading brace.** A bare `"status":"ok"` matches a
+*degraded* response too, because the nested checks still contain it:
+
+```json
+{"status":"degraded","checks":{"db":{"status":"error"},"redis":{"status":"ok"}, ...}}
+```
+
+That monitor would sit green while the database is down. `{"status":"ok"` only
+matches at the document root. Both endpoints return compact JSON with no
+whitespace — verified live 2026-07-31.
+
+Settings for both monitors:
 
 - Monitor type: `keyword`
 - HTTP method: `GET`
-- Check frequency: `60` seconds
-- Confirmation period: `60` seconds
-- Request timeout: `10` seconds
+- Check frequency: `3` minutes (free-tier floor; sub-3-minute is paid)
+- Request timeout: `15` seconds
 - Verify SSL: enabled
 - Follow redirects: enabled
 - Region: `us`
-- Escalation policy: same launch owner or policy used for ops alerts
+- Notify: email to the launch owner, on failure **and** recovery
 
-After creation, wait for all three monitors to show `up`, confirm each has a first passing check timestamp, and use Better Stack's built-in test notification for the selected escalation policy. Do not validate alert routing by intentionally taking production down.
+Escalation policies and phone/SMS paging are paid features and are deliberately
+not used pre-merchant. Do not validate alert routing by intentionally taking
+production down; use Better Stack's built-in test notification.
 
 Expected failure behavior:
 
-- Dashboard DB, Redis, or env failure should make `/api/health` return degraded/non-`200` behavior and lose the dashboard monitor's passing condition.
-- Gateway DB, Redis, worker heartbeat, or queue diagnostics failure should make `/health/deep` return degraded/non-`200` behavior and alert after the confirmation period.
-- Missing or stale worker heartbeat should make `/health/queues` return `"healthy":false`, causing the queue keyword monitor to fail even though the diagnostics endpoint can still return `200`.
+- Dashboard DB, Redis, or env failure makes `/api/health` return `503` with
+  `{"status":"degraded"`, failing the keyword and the status code.
+- Gateway DB, Redis, worker heartbeat, or queue-diagnostics failure makes
+  `/health/deep` return `503` the same way.
 
-Record this evidence before checking off the uptime item:
-
-- Monitor group:
-- Escalation policy or owner:
-- Dashboard monitor id, URL, required keyword, first passing check time:
-- Gateway deep monitor id, URL, required keyword, first passing check time:
-- Gateway queue monitor id, URL, required keyword, first passing check time:
-- Better Stack test notification recipient and time:
+These monitors cover "the process is dead." They structurally cannot see "the
+process is alive and something is wrong inside it" — that is what ops-alert
+routing below is for.
 
 ### Neon PITR
 
@@ -856,6 +865,38 @@ Do not check off the PITR item until the retention window is recorded here or in
 ### Ops Alert Log Routing
 
 Ops alerts emit structured Pino logs with `opsAlert: true` and stable `category`, `service`, `tags`, `extra`, and `fingerprint` fields. Forward both services' logs into Better Stack **Telemetry** — a Vercel log drain for the dashboard (needs Vercel Pro/Enterprise) and a **forwarder service** for the gateway, since **Railway has no native log drain** — then alert on `opsAlert` and `category`.
+
+#### Gateway → Telegram push (live since 2026-07-31)
+
+The log-drain path above is still deferred behind its paywalls. In the meantime
+the **gateway** pushes every alert it raises straight to an operator Telegram
+chat, which is the half external uptime monitors cannot see. Verified end to end
+in production on 2026-07-31 via `emit-controlled-ops-alert.ts queue_health`.
+
+- Set by `OPS_ALERT_TELEGRAM_CHAT_ID` on the Railway gateway service. **Unset
+  leaves alerts log-only** — the feature is inert until configured.
+- Use an operator chat you own, never a merchant binding. Alerts carry no
+  customer data, but they are internal diagnostics, not merchant-facing copy.
+- Covers the gateway's 13 call sites. The dashboard's remaining call sites
+  (`agent_failure`, `provider_send`, `provider_cleanup`) are still log-only; it
+  holds no `TELEGRAM_BOT_TOKEN`.
+
+Two design constraints in `apps/gateway/src/ops-alert-notify.ts` that must
+survive any edit:
+
+- It does **not** reuse `clients/telegram-client.sendMessage`. That path reports
+  its own failures through `recordProviderSendFailure`, which emits a
+  `provider_send` ops alert — routing through it would make a Telegram outage
+  generate alerts about Telegram, sent over Telegram. The dedicated sender
+  records nothing and never throws.
+- The payload carries level, message, and a whitelist of tags (`category`,
+  `service`, `queue`, `provider`, `channel`, `tool`). **`extra` is excluded and
+  `orgId`/`threadId` are dropped** for the same reason `/health/queues` is behind
+  auth (AUD-017): the alert push must not become the leak that route is not.
+
+Dispatch is fire-and-forget after the log write, so it can never delay or fail
+the caller that raised the alert, and a suppressed alert
+(`OPS_ALERTS_ENABLED=false`) never pushes.
 
 Better Stack log alerting is **query/threshold-based on a saved Telemetry chart**,
 not raw-text keyword matching: filter the structured fields into a chart, save it,
@@ -1085,7 +1126,7 @@ Do not mark the deploy track done until you have all of the following:
 - gateway `/health/queues` showed a healthy worker heartbeat
 - ops-alert log routing is configured and one controlled alert per guardrail category has routed correctly
 - `npm run verify:production` passed against the live URLs
-- Better Stack checks are passing for dashboard health, gateway deep health, and gateway queue health
+- Better Stack checks are passing for dashboard health and gateway deep health
 - Neon production PITR is enabled and the retention window is recorded
 - at least one real inbound message completed the full path:
   webhook accepted -> queue job created -> worker processed -> dashboard thread visible -> plan generated -> outbound reply sent
@@ -1099,5 +1140,4 @@ Reliability evidence to record before updating [`checklist.md`](checklist.md):
 - Ops alert `gmail_inbound`: log timestamp, routed owner, validation time
 - Better Stack dashboard monitor: monitor id, monitor URL, escalation policy or owner, required keyword, first passing check time
 - Better Stack gateway deep monitor: monitor id, monitor URL, escalation policy or owner, required keyword, first passing check time
-- Better Stack gateway queue monitor: monitor id, monitor URL, escalation policy or owner, required keyword, first passing check time
 - Neon PITR: branch, status, retention window, confirmation time
