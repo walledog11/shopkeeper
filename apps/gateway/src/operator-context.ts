@@ -170,13 +170,6 @@ export async function getContext(organizationId: string, chatId: string): Promis
   if (!row) return { ...EMPTY };
 
   let pendingPlans = readPendingPlanArray(row.pendingPlans);
-  // Dual-read: a plan parked in the legacy single slot before this release (the
-  // migration backfills existing rows; an old instance could still park there
-  // during a rolling deploy) surfaces as a one-item queue.
-  if (pendingPlans.length === 0) {
-    const legacy = readPendingPlan(row.pendingPlan);
-    if (legacy) pendingPlans = [legacy];
-  }
 
   return {
     pendingPlans,
@@ -418,19 +411,10 @@ export async function loadLivePendingPlans(
   return { ...context, pendingPlans: live, pendingPlan: mostRecentPendingPlan(live) };
 }
 
-// Normalize a stored pending-plan's tool calls into the RawToolCall shape the
-// approved-execution path expects. Legacy rows stored the input inline as sibling
-// keys rather than under `input`; fold those back so approval fires the exact
-// tool calls the merchant was shown.
+// Map stored pending-plan tool calls into the RawToolCall shape the approved
+// execution path expects.
 export function normalizeApprovedToolCalls(toolCalls: ToolCall[]): RawToolCall[] {
-  return toolCalls.map((toolCall) => {
-    const { id, name, input, ...rest } = toolCall;
-    return {
-      id,
-      name,
-      input: input !== undefined ? input : (Object.keys(rest).length > 0 ? rest : undefined),
-    };
-  });
+  return toolCalls.map(({ id, name, input }) => ({ id, name, input }));
 }
 
 /**

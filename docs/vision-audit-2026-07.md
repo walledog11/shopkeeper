@@ -114,7 +114,10 @@ Ranked findings elsewhere:
    dead iMessage keys were dropped from the dispatch error map. Since
    `dispatchMessage` has no iMessage dispatcher, an iMessage thread now returns
    "channel dispatch not implemented" up front instead of falling through to
-   "Unsupported channel." The `purge-legacy-imessage` job and its script stay
+   "Unsupported channel." ~~The `purge-legacy-imessage` job and its script stay~~
+   Legacy customer `imessage` thread purge tooling was retired 2026-07-30 after
+   `npm run audit:legacy-imessage-threads` reported zero rows; operator iMessage
+   (`sms_agent` + bindings) is unchanged.
    until a prod dry-run counts zero (see §5); only the dead reply path was
    removed here.
 
@@ -199,7 +202,8 @@ filed under one channel's directory.
 
 - ~~**The dead customer-iMessage branch** in `lib/agent/tools/thread.ts`~~ —
   removed 2026-07-21 (§2.4). Still pending: once a prod dry-run of
-  `purge-legacy-imessage` counts zero, remove the purge job and its script.
+  ~~`purge-legacy-imessage` counts zero, remove the purge job and its script.~~
+  Done 2026-07-30 — audit reported zero legacy `imessage` threads; purge tooling removed.
 - **The `sms` ChannelType enum value** — nothing ever creates a thread with
   it; it survives only in enum lists (`thread-constants.ts:7`,
   `channels.ts:84`, analytics event lists). Dropping it needs a migration, so

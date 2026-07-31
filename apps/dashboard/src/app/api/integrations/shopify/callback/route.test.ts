@@ -61,7 +61,6 @@ beforeEach(async () => {
   vi.stubEnv('SHOPIFY_CLIENT_ID', 'shopify-client-id');
   vi.stubEnv('SHOPIFY_CLIENT_SECRET', 'shopify-client-secret');
   vi.stubEnv('GATEWAY_INTERNAL_URL', 'http://gateway.test');
-  vi.stubEnv('GATEWAY_PUBLIC_URL', 'http://gateway.test');
   vi.mocked(auth).mockResolvedValue({
     userId: 'usr_oauth',
     orgId: org.clerkOrgId,

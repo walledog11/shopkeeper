@@ -294,6 +294,6 @@ These are candidates for verification, not deletion recommendations:
 - `apps/dashboard/src/app/sentry-example-page` and `api/sentry-example-api`: diagnostic scaffolding, correctly gated outside development; remove only if the operational Sentry test is no longer used.
 - `GATEWAY_PUBLIC_URL`: explicitly deprecated alias still accepted and tested by production checks; inspect deployed environments before removal.
 - WhatsApp-named digest queue/job constants and the email-named outbound sweep constant: intentionally retained to avoid orphaning live BullMQ repeatable jobs.
-- `apps/gateway/src/maintenance/purge-legacy-imessage.ts`: legacy-data cleanup, still referenced by tests/runbooks; verify production migration completion before retiring.
+- `apps/gateway/src/maintenance/purge-legacy-imessage.ts`: ~~legacy-data cleanup~~ retired 2026-07-30; use `npm run audit:legacy-imessage-threads`.
 - Operator-context legacy tool-call normalization in `apps/gateway/src/operator-context.ts`: supports stored rows written in the prior shape; retire only after a data migration proves no old rows remain.
 - Synchronous outbound-email path: compatibility/rollback path behind `OUTBOUND_EMAIL_ASYNC`, not dead until rollout is complete.

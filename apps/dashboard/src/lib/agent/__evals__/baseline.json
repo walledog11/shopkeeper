@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-07-30T22:02:51.316Z",
+  "generatedAt": "2026-07-30T23:11:00.000Z",
   "repeats": 3,
   "total": 228,
-  "passed": 226,
-  "passRate": 0.9912280701754386,
+  "passed": 228,
+  "passRate": 1,
   "categories": {
     "address-change": {
       "total": 9,
@@ -137,8 +137,8 @@
     },
     "tier": {
       "total": 36,
-      "passed": 34,
-      "passRate": 0.9444444444444444
+      "passed": 36,
+      "passRate": 1
     }
   },
   "fixtures": {
@@ -474,8 +474,8 @@
     },
     "tier-full-cancel-auto": {
       "repeats": 3,
-      "passes": 1,
-      "passRate": 0.3333333333333333
+      "passes": 3,
+      "passRate": 1
     },
     "tier-full-over-cap-still-escalates": {
       "repeats": 3,

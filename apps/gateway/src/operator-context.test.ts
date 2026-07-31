@@ -122,11 +122,13 @@ describe('updateContext + getContext round-trip', () => {
       data: {
         organizationId: org.id,
         chatId: 'malformed',
-        pendingPlan: {
-          threadId: 'thread_1',
-          instruction: 'check status',
-          rawToolCalls: [{ id: 'tc_1', name: 'get_order' }, { id: 'tc_2' }],
-        },
+        pendingPlans: [
+          {
+            threadId: 'thread_1',
+            instruction: 'check status',
+            rawToolCalls: [{ id: 'tc_1', name: 'get_order' }, { id: 'tc_2' }],
+          },
+        ],
         pendingDigest: {
           threadIds: ['thread_1', 123],
           sentAt: '2026-06-03T00:00:00.000Z',

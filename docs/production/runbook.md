@@ -673,16 +673,12 @@ Expected log tags: `category=provider_send`, `service=gateway`, `provider=imessa
 
 **Legacy customer iMessage threads (pre-rewire)**
 
-Pre-GA customer-support threads with `channel_type = imessage` are orphaned — iMessage is
-operator-only and no longer opens inbox tickets. Soft-delete them before GA:
+Completed 2026-07-30. Pre-GA customer-support rows on `channel_type = imessage` were
+migration tooling only; operator iMessage uses `sms_agent` plus
+`org_member_imessage_bindings` and is unaffected. Verify with:
 
 ```bash
-# Preview count
-cd apps/gateway
-npx tsx src/scripts/purge-legacy-imessage-threads.ts --dry-run
-
-# Apply (sets deleted_at + status closed)
-npx tsx src/scripts/purge-legacy-imessage-threads.ts
+npm run audit:legacy-imessage-threads
 ```
 
 Hard purge of soft-deleted rows follows the normal 90-day retention job in `maintenance/retention.ts`.

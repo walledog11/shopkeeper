@@ -582,10 +582,8 @@ describe('escalateToHuman', () => {
 
     const prevSecret = process.env.INTERNAL_API_SECRET;
     const prevGateway = process.env.GATEWAY_INTERNAL_URL;
-    const prevPublic = process.env.GATEWAY_PUBLIC_URL;
     process.env.INTERNAL_API_SECRET = 'test-internal-secret';
     process.env.GATEWAY_INTERNAL_URL = 'http://gateway.test';
-    delete process.env.GATEWAY_PUBLIC_URL;
 
     let resolveSeen: (() => void) | undefined;
     const seen = new Promise<void>((resolve) => {
@@ -628,8 +626,6 @@ describe('escalateToHuman', () => {
       else process.env.INTERNAL_API_SECRET = prevSecret;
       if (prevGateway === undefined) delete process.env.GATEWAY_INTERNAL_URL;
       else process.env.GATEWAY_INTERNAL_URL = prevGateway;
-      if (prevPublic === undefined) delete process.env.GATEWAY_PUBLIC_URL;
-      else process.env.GATEWAY_PUBLIC_URL = prevPublic;
     }
   });
 });

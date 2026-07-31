@@ -11,18 +11,22 @@ Last reviewed: 2026-07-30.
 | Candidate | Owner | Evidence | Removed |
 | --- | --- | --- | --- |
 | Sentry example page/API (`/sentry-example-page`, `/api/sentry-example-api`, `SENTRY_EXAMPLE_PAGE_ENABLED`) | Product engineering | Not referenced in production runbooks or error-tracking plan; gated outside development; zero production env usage expected | 2026-07-30 |
+| Deprecated `GATEWAY_PUBLIC_URL` alias | Platform / dashboard | Dashboard reads only `GATEWAY_INTERNAL_URL`; legacy alias removed from `gateway-url.ts`, test harness, and production env checker | 2026-07-30 |
+| Legacy `pending_plan` dual-read fallback | Operator channels | `npm run audit:operator-context-compatibility` reports zero `legacyPendingPlanColumn` and zero `dualReadFallbackRows` in production | 2026-07-30 |
+| Legacy operator tool-call inline-input normalization | Agent core | Same audit reports zero `legacyToolCalls`; `normalizeApprovedToolCalls` now maps `input` only | 2026-07-30 |
+| Legacy iMessage purge module | Operator / iMessage | `npm run audit:legacy-imessage-threads` reports zero active/soft-deleted `channel_type = imessage` rows; operator iMessage (`sms_agent` + bindings) unchanged | 2026-07-30 |
 
-## Open — awaiting evidence or product decision
+## Deferred — do not rename or remove without explicit migration / product sign-off
 
-| Candidate | Owner | Evidence required before removal | Status |
+These remain in code on purpose. Renaming BullMQ queue/job strings orphans live
+repeatable schedulers and can break operator digests and async outbound recovery
+(including iMessage).
+
+| Candidate | Owner | Gate | Status |
 | --- | --- | --- | --- |
-| Deprecated `GATEWAY_PUBLIC_URL` alias | Platform / dashboard | Query deployed Vercel env: confirm no host sets `GATEWAY_PUBLIC_URL` without matching `GATEWAY_INTERNAL_URL`; one release after clearing env | Open — alias still read in `gateway-url.ts` with mismatch guard |
-| Legacy iMessage purge module | Operator / iMessage | Production data audit: no pending purge jobs; runbook no longer references manual purge | Open — operational migration tooling |
-| Legacy operator tool-call shape normalization | Agent core | Count persisted `OperatorContext` rows with old JSON shape; migrate or backfill before dropping reader | Open |
-| Synchronous outbound email path | Email / messaging | `OUTBOUND_EMAIL_ASYNC` enabled in production; P4-01 recovery exercises complete; explicit async-only date from launch owner | Open — sync path is documented rollback rail |
-| Old operator-context pending-plan JSON parsing | Operator channels | Audit production `PendingPlan` JSON; confirm no legacy-only rows after `20260723000000_add_operator_pending_plans` backfill | Open — tied to P1-03 compatibility window |
-| WhatsApp-named BullMQ queue IDs | Gateway / platform | Repeatable-job listing in production Redis; explicit old-job removal + recreation plan if renamed | Open — storage compatibility names per AUD-021 |
-| `OUTBOUND_SEND_SWEEP` legacy string | Gateway maintenance | Confirm job name is channel-agnostic in ops docs and no external automation keys off the old label | Open — cosmetic unless renamed |
+| Synchronous outbound email path | Email / messaging | `npm run audit:outbound-email-mode` shows `asyncEnabled=false` until P4-01 recovery exercises complete and launch owner sets an async-only date | Deferred — documented rollback rail |
+| WhatsApp-named BullMQ queue IDs | Gateway / platform | `npm run audit:bullmq-compatibility-names` inventories live repeatable jobs; rename only after old Redis entries are removed and recreated | Deferred — storage compatibility names per AUD-021 |
+| `OUTBOUND_SEND_SWEEP` legacy string | Gateway maintenance | Same BullMQ audit; sweep is channel-agnostic (email + iMessage) | Deferred — cosmetic rename blocked on Redis migration |
 
 ## Product decisions blocking retirement
 
@@ -30,7 +34,7 @@ Last reviewed: 2026-07-30.
 | --- | --- | --- |
 | Whether Sentry diagnostic routes remain operational tooling | Launch owner | ~~Sentry example routes~~ (resolved — removed) |
 | Completion criteria/date for async-email-only operation | Launch owner / email | Sync outbound email path |
-| Merchant UX for `unknown` external actions | Product | None of the above candidates directly, but affects recovery runbook ownership |
+| Merchant UX for `unknown` external actions | Product | None of the deferred candidates directly, but affects recovery runbook ownership |
 
 ## Procedure per candidate
 
@@ -38,3 +42,14 @@ Last reviewed: 2026-07-30.
 2. Gather positive non-use evidence (env scan, row counts, job listing, runbook review).
 3. Remove one surface with tests and config/docs updates.
 4. Record completion in this file with evidence summary and date.
+
+## Audit commands
+
+```bash
+npm run audit:operator-context-compatibility
+npm run audit:legacy-imessage-threads
+npm run audit:bullmq-compatibility-names
+npm run audit:outbound-email-mode
+```
+
+Add `--strict` to any audit that supports it when gating a retirement PR.

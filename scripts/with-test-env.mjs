@@ -41,7 +41,6 @@ export function getTestEnv(baseEnv = process.env) {
     DASHBOARD_URL: baseEnv.DASHBOARD_URL || 'http://127.0.0.1:3100',
     DASHBOARD_INTERNAL_URL: baseEnv.DASHBOARD_INTERNAL_URL || 'http://127.0.0.1:3100',
     GATEWAY_INTERNAL_URL: baseEnv.GATEWAY_INTERNAL_URL || 'http://127.0.0.1:8180',
-    GATEWAY_PUBLIC_URL: baseEnv.GATEWAY_PUBLIC_URL || baseEnv.GATEWAY_INTERNAL_URL || 'http://127.0.0.1:8180',
     PORT: baseEnv.PORT || '8180',
     E2E_TEST_RUN: baseEnv.E2E_TEST_RUN || 'true',
     CLERK_SECRET_KEY: env.CLERK_SECRET_KEY || 'sk_test_clerk',

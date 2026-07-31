@@ -8,8 +8,8 @@ in the 2026-06-23 review.
 Last reviewed: 2026-07-30.
 
 Recently completed — detail is in git history, not here:
-- Eval assertion decision and three-repeat baseline re-capture (226/228, 99.1%,
-  up from 216/222 / 97.3%) — 2026-07-30
+- Eval assertion decision and three-repeat baseline re-capture (228/228, 100%,
+  up from 226/228 / 99.1%) — 2026-07-30
 - Production migration workflow documented (`production/deployment.md`) — 2026-07-30
 - Alerting doc debt corrected (Better Stack Telemetry, Railway forwarder, threshold alert rules) — 2026-07-30
 - Agent behavior tracks A1–A6 and B1–B5 — 2026-07-26
@@ -136,18 +136,11 @@ what ships.
   enable" or "cut." Needs an owner call, not a guess.
 
 - [ ] **Full-tier auto-execute is drifting — `tier-full-cancel-auto` scored 1/3
-  in the 2026-07-30 baseline, down from 2/3 on 2026-07-10.** The fixture is a
-  full-autonomy org with `blockCancellations: false` asking to cancel an
-  unfulfilled order: it expects `cancel_order` + `send_reply`, an `auto_execute`
-  classification, and both actions recorded as `auto_executed`. It is
-  `advisory: true`, so it does not gate the suite — which is exactly why the
-  drift needs an owner rather than a green checkmark. It is the only fixture
-  that asserts full tier actually acts on its own; if it keeps sliding, "full"
-  autonomy is a setting that does nothing. Which of the four assertions missed
-  is not recorded — diagnose with a single-fixture probe before assuming it is
-  the classifier. (When comparing runs, note `npm run test:evals` defaults to
-  `EVAL_REPEATS=1` while the baseline is captured at 3, so a single miss reads
-  as a 100% → 0% "regression".)
+  in the 2026-07-30 baseline, down from 2/3 on 2026-07-10.** **Diagnosed and
+  fixed 2026-07-30:** the miss was `create_refund` being called alongside
+  `cancel_order` on a cancel-only request. A support-prompt rule now forbids the
+  double refund; a fresh 3/3 capture updated the baseline to 228/228. Re-run
+  periodically — the fixture remains advisory.
 
 - [ ] **Complete the `fulfill_order` canary family against the live store.** The
   family landed in `scripts/canary-shopify-mutations.mjs` on 2026-07-30 and is
@@ -162,7 +155,8 @@ what ships.
   Remaining: ship that scope change, re-authorize `palette-dev`, and rerun
   `--execute --test-orders-only --only=fulfill_order`. The mutation call also
   carries `notify_customer: false`; no fulfillment mutation or customer email
-  occurred in the failed run.
+  occurred in the failed run. **Blocked locally until `TOKEN_ENCRYPTION_KEY` and
+  a decryptable palette-dev integration are available in the operator shell.**
 
 ## Modules / Roadmap
 

@@ -335,9 +335,6 @@ export function validateProductionEnv(target, options = {}) {
     );
   }
 
-  if (target === 'dashboard' && readEnv(env, 'GATEWAY_PUBLIC_URL')) {
-    warnings.push('GATEWAY_PUBLIC_URL is deprecated; use GATEWAY_INTERNAL_URL as the canonical dashboard gateway base URL');
-  }
 
   return {
     target,

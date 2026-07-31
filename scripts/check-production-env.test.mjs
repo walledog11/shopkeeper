@@ -105,22 +105,6 @@ test('dashboard launch contract allows NEXT_PUBLIC_APP_URL to be omitted', () =>
   assert.deepEqual(result.errors, []);
 });
 
-test('dashboard launch contract warns on deprecated GATEWAY_PUBLIC_URL usage', () => {
-  const result = validateProductionEnv('dashboard', {
-    scope: 'launch',
-    env: createDashboardLaunchEnv({
-      GATEWAY_PUBLIC_URL: 'https://gateway.example.com',
-    }),
-  });
-
-  assert.equal(
-    result.warnings.includes(
-      'GATEWAY_PUBLIC_URL is deprecated; use GATEWAY_INTERNAL_URL as the canonical dashboard gateway base URL'
-    ),
-    true
-  );
-});
-
 test('dashboard launch contract requires Clerk webhook signing secret', () => {
   const result = validateProductionEnv('dashboard', {
     scope: 'launch',
