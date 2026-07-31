@@ -79,8 +79,7 @@ describe('approve_pending_plan', () => {
         instruction: 'refund order #1001',
         rawToolCalls: [
           { id: 'tc1', name: 'add_internal_note', input: { text: 'note' } },
-          // Legacy inline-input shape (input spread as sibling keys) — normalized back.
-          { id: 'tc2', name: 'update_thread_status', status: 'closed' },
+          { id: 'tc2', name: 'update_thread_status', input: { status: 'closed' } },
         ],
       },
     });

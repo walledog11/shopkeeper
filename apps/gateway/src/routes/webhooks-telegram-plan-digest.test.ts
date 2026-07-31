@@ -52,7 +52,7 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
       pendingPlan: {
         threadId,
         instruction: 'refund #1',
-        rawToolCalls: [{ id: 'tc1', name: 'refundOrder', amount: 5 }],
+        rawToolCalls: [{ id: 'tc1', name: 'refundOrder', input: { amount: 5 } }],
       },
     });
 
