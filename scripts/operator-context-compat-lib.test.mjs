@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   analyzeOperatorContextRow,
-  analyzePendingPlan,
   hasLegacyInlineToolCall,
   summarizeOperatorContextCompatibility,
 } from './operator-context-compat-lib.mjs';

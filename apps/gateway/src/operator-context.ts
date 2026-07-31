@@ -169,7 +169,7 @@ export async function getContext(organizationId: string, chatId: string): Promis
   });
   if (!row) return { ...EMPTY };
 
-  let pendingPlans = readPendingPlanArray(row.pendingPlans);
+  const pendingPlans = readPendingPlanArray(row.pendingPlans);
 
   return {
     pendingPlans,
