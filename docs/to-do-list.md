@@ -8,6 +8,8 @@ in the 2026-06-23 review.
 Last reviewed: 2026-07-30.
 
 Recently completed — detail is in git history, not here:
+- Stale generated route validators no longer break local `typecheck` / `next
+  build` — non-canonical dist dirs moved to tsconfig `exclude` — 2026-07-30
 - Eval assertion decision and three-repeat baseline re-capture (228/228, 100%,
   up from 226/228 / 99.1%) — 2026-07-30
 - Full-tier `tier-full-cancel-auto` drift fixed (cancel-only prompt rule; 3/3) — 2026-07-30
@@ -112,15 +114,7 @@ Do these before treating production as ready.
 History for the eight closed operator-channel bugs:
 [archive/operator-channel-bugs.md](archive/operator-channel-bugs.md).
 
-- [ ] **Local `next build` / `npm run typecheck` fail on stale generated route
-  validators.** `apps/dashboard/tsconfig.json` includes `.next/types/**`,
-  `.next-dev/types/**` and `.next-e2e/types/**`, so a deleted route leaves every
-  existing dist dir's generated `validator.ts` importing source that no longer
-  exists. Currently failing on the Sentry example routes removed 2026-07-30:
-  `Cannot find module '../../src/app/sentry-example-page/page.js'`. CI builds
-  fresh so it never sees this; it only bites locally, and it recurs on every
-  route deletion. Rebuilding each dist dir clears it — the durable fix is to stop
-  type-checking stale dist dirs.
+No open bugs.
 
 ## Product Gaps
 
