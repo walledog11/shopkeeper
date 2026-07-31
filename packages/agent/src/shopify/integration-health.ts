@@ -57,6 +57,7 @@ export const SHOPIFY_OAUTH_SCOPES = [
   "read_products",
   "read_content",
   "write_gift_cards",
+  "write_discounts",
   "read_store_credit_accounts",
   "write_store_credit_account_transactions",
 ] as const;

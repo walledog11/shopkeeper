@@ -132,6 +132,12 @@ describe("missingShopifyScopes", () => {
     ]);
   });
 
+  it("reports the discount scope required by issue_discount", () => {
+    const withoutDiscounts = SHOPIFY_OAUTH_SCOPES.filter((scope) => scope !== "write_discounts");
+
+    expect(missingShopifyScopes(withoutDiscounts)).toEqual(["write_discounts"]);
+  });
+
   it("accepts a write grant in place of the implied read", () => {
     const impliedReads = SHOPIFY_OAUTH_SCOPES.filter((scope) => !scope.startsWith("read_"));
 
