@@ -89,6 +89,7 @@ describe('getGatewayOpsAlertConfig', () => {
   it('uses launch guardrail defaults', () => {
     expect(getGatewayOpsAlertConfig()).toEqual({
       enabled: true,
+      telegramChatId: null,
       windowSecs: 300,
       queueFailedThreshold: 10,
       queueWaitingThreshold: 100,
@@ -101,6 +102,7 @@ describe('getGatewayOpsAlertConfig', () => {
 
   it('respects explicit overrides', () => {
     vi.stubEnv('OPS_ALERTS_ENABLED', 'false');
+    vi.stubEnv('OPS_ALERT_TELEGRAM_CHAT_ID', ' 12345 ');
     vi.stubEnv('OPS_ALERT_WINDOW_SECS', '120');
     vi.stubEnv('QUEUE_ALERT_FAILED_THRESHOLD', '7');
     vi.stubEnv('QUEUE_ALERT_WAITING_THRESHOLD', '70');
@@ -111,6 +113,7 @@ describe('getGatewayOpsAlertConfig', () => {
 
     expect(getGatewayOpsAlertConfig()).toEqual({
       enabled: false,
+      telegramChatId: '12345',
       windowSecs: 120,
       queueFailedThreshold: 7,
       queueWaitingThreshold: 70,

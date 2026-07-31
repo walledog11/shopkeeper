@@ -102,6 +102,65 @@ describe('emitOpsAlert', () => {
     expect(result).toEqual({ logged: false, reason: 'disabled' });
     expect(calls).toHaveLength(0);
   });
+
+  it('pushes to the operator chat when one is configured', () => {
+    const { logger } = createTestLogger();
+    const dispatched: Array<{ chatId: string; message: string }> = [];
+
+    emitOpsAlert({
+      category: 'queue_health',
+      message: 'Inbound jobs are stuck',
+      tags: { queue: 'inbound' },
+    }, {
+      config: { ...DEFAULT_CONFIG, telegramChatId: '12345' },
+      logger,
+      dispatch: async (input, _scope, chatId) => {
+        dispatched.push({ chatId, message: input.message });
+        return true;
+      },
+    });
+
+    expect(dispatched).toEqual([{ chatId: '12345', message: 'Inbound jobs are stuck' }]);
+  });
+
+  it('stays log-only when no operator chat is configured', () => {
+    const { logger, calls } = createTestLogger();
+    let dispatchCount = 0;
+
+    emitOpsAlert({
+      category: 'queue_health',
+      message: 'Inbound jobs are stuck',
+    }, {
+      config: DEFAULT_CONFIG,
+      logger,
+      dispatch: async () => {
+        dispatchCount += 1;
+        return true;
+      },
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(dispatchCount).toBe(0);
+  });
+
+  it('does not push an alert that was suppressed by the kill switch', () => {
+    const { logger } = createTestLogger();
+    let dispatchCount = 0;
+
+    emitOpsAlert({
+      category: 'provider_send',
+      message: 'Provider failure',
+    }, {
+      config: { ...DEFAULT_CONFIG, enabled: false, telegramChatId: '12345' },
+      logger,
+      dispatch: async () => {
+        dispatchCount += 1;
+        return true;
+      },
+    });
+
+    expect(dispatchCount).toBe(0);
+  });
 });
 
 describe('incrementOpsAlertWindow', () => {

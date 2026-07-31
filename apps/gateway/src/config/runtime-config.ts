@@ -64,6 +64,8 @@ export interface GatewayWorkerRedisConfig {
 
 export interface GatewayOpsAlertConfig {
   enabled: boolean;
+  /** Operator chat for ops-alert pushes. Absent or null leaves alerts log-only. */
+  telegramChatId?: string | null;
   windowSecs: number;
   queueFailedThreshold: number;
   queueWaitingThreshold: number;
@@ -114,6 +116,7 @@ export function getGatewayWorkerRedisConfig(): GatewayWorkerRedisConfig {
 export function getGatewayOpsAlertConfig(): GatewayOpsAlertConfig {
   return {
     enabled: parseBooleanEnv('OPS_ALERTS_ENABLED', true),
+    telegramChatId: process.env.OPS_ALERT_TELEGRAM_CHAT_ID?.trim() || null,
     windowSecs: parsePositiveIntEnv('OPS_ALERT_WINDOW_SECS', 300),
     queueFailedThreshold: parsePositiveIntEnv('QUEUE_ALERT_FAILED_THRESHOLD', 10),
     queueWaitingThreshold: parsePositiveIntEnv('QUEUE_ALERT_WAITING_THRESHOLD', 100),
