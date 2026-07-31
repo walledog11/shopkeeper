@@ -1,7 +1,7 @@
 # Compatibility Retirement Backlog (P9-02)
 
-Evidence-gated removal of compatibility surfaces identified in
-[codebase-audit.md](codebase-audit.md). One candidate per pull request; never
+Evidence-gated removal of compatibility surfaces identified in the 2026-07-10
+codebase audit (in git history). One candidate per pull request; never
 batch unrelated retirements.
 
 Last reviewed: 2026-07-30.

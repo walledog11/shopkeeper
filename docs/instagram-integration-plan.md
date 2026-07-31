@@ -32,8 +32,8 @@ The repository now contains an end-to-end Instagram Login pipeline:
   removing local access.
 - The legacy development Page-token connection route has been removed.
 
-The older Facebook Login/Page-token diagnosis and migration rationale remain in
-[`docs/archive/instagram-decision-memo.md`](archive/instagram-decision-memo.md) as historical context (archived 2026-07-19). The defects catalogued there—fail-open
+The older Facebook Login/Page-token diagnosis and migration rationale are in git
+history (`docs/archive/instagram-decision-memo.md`, deleted 2026-07-30). The defects catalogued there—fail-open
 token/subscription behavior, partial batch handling, ambiguous tenant routing, ingestion-time reply
 windows, temporary media URLs, local-only disconnect, and fabricated token expiry—are addressed by
 the current implementation and focused automated coverage.

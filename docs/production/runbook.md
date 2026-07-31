@@ -596,8 +596,9 @@ Pass criteria:
 - Gateway logs `[Webhook] Photon delivery processed` with `status: 200` on a signed test inbound.
 - Dashboard Integrations shows iMessage Connect enabled (not disabled) when `IMESSAGE_LINE_HANDLE` is set.
 
-Full merchant flows (bind, plan push, approve) are Phase 1 in
-[`imessage-production-readiness-plan.md`](../archive/imessage-production-readiness-plan.md).
+Full merchant flows (bind, plan push, approve) were signed off 2026-07-08; the
+Phase 1 detail is in git history (`docs/archive/imessage-production-readiness-plan.md`,
+deleted 2026-07-30).
 
 ### iMessage down triage
 

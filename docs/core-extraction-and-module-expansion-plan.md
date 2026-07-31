@@ -1,9 +1,9 @@
 # Shopkeeper Core and Module Roadmap
 
-Current work only. The completed extraction and migration history is archived in
-[core-extraction-and-module-expansion-plan-archive-2026-06.md](archive/core-extraction-and-module-expansion-plan-archive-2026-06.md).
+Current work only. The completed extraction and migration history is in git
+history (archived plan deleted 2026-07-30).
 
-Last reviewed: 2026-07-24.
+Last reviewed: 2026-07-30.
 
 ## Current architecture
 
