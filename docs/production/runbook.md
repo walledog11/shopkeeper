@@ -865,10 +865,37 @@ Raised from **6 hours** to 7 days on 2026-07-31. Six hours does not survive a
 Friday-evening fault noticed on Saturday, which is the realistic failure mode for
 a solo operator. The increase is effectively free — see the cost note below.
 
-**Still owed: one restore test.** Branch from a timestamp an hour old, connect,
-confirm the data is there, delete the branch. Ten minutes, no cost. An untested
-restore is an assumption, and the moment you need it is the worst time to learn
-the console.
+**Restore tested 2026-08-01.** Branch `pitr-test` (`br-purple-poetry-ak42k8g4`)
+created from LSN `0/2168BC20` at `2026-07-31T23:07:29Z`, verified, deleted. All
+seven checked tables matched production exactly, and the Shopify access token
+**decrypted correctly on the restored branch** — the risk worth testing, since
+`TOKEN_ENCRYPTION_KEY` lives outside the database and a restore returning
+undecryptable rows is a restore in name only.
+
+Repeat this after any change to `TOKEN_ENCRYPTION_KEY` or the retention window.
+
+```bash
+# 1. Branch from a point in time. --parent takes a name OR a timestamp as a
+#    single value; `name@timestamp` is NOT valid syntax for create.
+#    --expires-at is a safety net so a forgotten branch cannot bill compute.
+neonctl branches create --project-id misty-bird-75162134 --name pitr-test \
+  --parent '<ISO8601 timestamp>' --expires-at '<ISO8601 +2h>'
+
+# 2. Connection string (do not echo it — it carries credentials)
+neonctl connection-string pitr-test --project-id misty-bird-75162134
+
+# 3. Verify with DATABASE_URL/DIRECT_DATABASE_URL overridden to that string.
+#    Compare row counts against production AND confirm an Integration
+#    accessToken still decrypts (the client carries the encryption extension).
+
+# 4. Always delete — a forgotten branch keeps its own compute, and compute is
+#    the entire Neon bill.
+neonctl branches delete pitr-test --project-id misty-bird-75162134
+```
+
+**Do not confuse `branches create --parent <timestamp>` (non-destructive, makes a
+new branch — this is the test) with `branches restore` (destructive, rewinds the
+target branch).** Never use the latter for a test.
 
 #### What PITR does not cover
 
@@ -1194,4 +1221,4 @@ Reliability evidence to record before updating [`checklist.md`](checklist.md):
 - Ops alert `gmail_inbound`: log timestamp, routed owner, validation time
 - Better Stack dashboard monitor: monitor id, monitor URL, escalation policy or owner, required keyword, first passing check time
 - Better Stack gateway deep monitor: monitor id, monitor URL, escalation policy or owner, required keyword, first passing check time
-- Neon PITR: recorded 2026-07-31 — branch `production`, enabled, 7 days (see "Neon PITR"); restore test still owed
+- Neon PITR: recorded 2026-07-31 — branch `production`, enabled, 7 days; restore tested 2026-08-01, counts matched and tokens decrypted (see "Neon PITR")

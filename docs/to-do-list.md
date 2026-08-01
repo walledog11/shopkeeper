@@ -44,12 +44,6 @@ dropping or de-advertising a channel.
     to dynamic. Per-request nonces and static prerendering are mutually
     exclusive; this is inherent, not a regression.
 
-- [ ] **Run one Neon restore test.** PITR is confirmed and raised to 7 days
-  (2026-07-31, evidence in [runbook.md](production/runbook.md) "Neon PITR"), but
-  it has never been exercised. Branch from a timestamp an hour old, connect,
-  confirm the data is there, delete the branch. Ten minutes, no cost. An
-  untested restore is an assumption.
-
 - [ ] **Better Stack Level 1 (log drains + escalation) — still DEFERRED until a
   paid beta (decided 2026-06-26).** Everything free is now done: two external
   uptime monitors and gateway ops-alert push to Telegram are live and verified
