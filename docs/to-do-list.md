@@ -3,7 +3,7 @@
 Open work only. Completed work is deleted, not archived — git history is the
 record. Do not add "recently completed" sections to this file.
 
-Last reviewed: 2026-07-30.
+Last reviewed: 2026-08-01.
 
 Roadmap for agent-core extraction and module expansion lives separately in
 [core-extraction-and-module-expansion-plan.md](core-extraction-and-module-expansion-plan.md);
@@ -27,9 +27,11 @@ dropping or de-advertising a channel.
   bad refund; it is spending another month hardening rails nobody has ridden.
   - Constraint to plan around: Instagram is behind Meta App Review, so merchant
     #1 is realistically **email forwarding + Shopify + phone**.
-  - Monitoring is ready: two external uptime monitors and gateway ops-alert
-    push to Telegram are live and verified (2026-07-31). Only the Neon retention
-    check remains below.
+  - Nothing operational is in the way. Monitoring and recoverability are live
+    and exercised, not merely configured — evidence in
+    [runbook.md](production/runbook.md) ("External Monitors", "Ops Alert Log
+    Routing", "Neon PITR"). Everything still open below either needs a merchant
+    to exercise it or is deliberately deferred behind a paywall.
 
 ## Pre-Release Blockers
 
