@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { MUTATIVE_INTENT_NO_ACTION_WARNING } from "./planner-safety/index.js"
-import { classifyHomePlan, isPlanWarningBlocking, planWarningTiers } from "./plan-preview.js"
+import { buildPlanPreview, classifyHomePlan, isPlanWarningBlocking, planWarningTiers } from "./plan-preview.js"
 import type { AgentPlan, OrgSettings, PlanStep, RawToolCall } from "./types.js"
 
 const sendReplyCall: RawToolCall = {
@@ -460,5 +460,76 @@ describe("planWarningTiers", () => {
     expect(tiers.blocking).toEqual([MUTATIVE_INTENT_NO_ACTION_WARNING])
     expect(tiers.informational).toEqual([])
     expect(isPlanWarningBlocking(MUTATIVE_INTENT_NO_ACTION_WARNING, warnedPlan)).toBe(true)
+  })
+})
+
+const trackingStep: PlanStep = {
+  id: "track_1",
+  tool: "get_order_tracking",
+  label: "Fetch order tracking",
+  description: "Check the carrier scan history for order #1042",
+  category: "read",
+  enabled: true,
+}
+
+describe("buildPlanPreview — merchant-facing copy", () => {
+  it("falls through to the customer's message when there is no plan", () => {
+    const preview = buildPlanPreview(null, null, "Where is my order?")
+
+    expect(preview.proposal).toBe("")
+    expect(preview.headline).toBe("Where is my order?")
+  })
+
+  it("leaves the proposal empty when the plan has nothing beyond its headline step", () => {
+    const preview = buildPlanPreview(
+      plan({ steps: [refundStep], rawToolCalls: [refundCall] }),
+      null,
+      "Please refund me.",
+    )
+
+    expect(preview.proposal).toBe("")
+  })
+
+  it("never emits the internal no-plan status string", () => {
+    for (const preview of [
+      buildPlanPreview(null, null, "Where is my order?"),
+      buildPlanPreview(null, "Customer asks about shipping", null),
+      buildPlanPreview(plan(), null, null),
+    ]) {
+      expect(preview.proposal).not.toContain("No plan generated")
+    }
+  })
+
+  it("reads action chains as prose, not as a joined step list", () => {
+    const preview = buildPlanPreview(
+      plan({
+        steps: [trackingStep, sendReplyStep],
+        rawToolCalls: [{ id: "track_1", name: "get_order_tracking", input: { order_id: "1042" } }, sendReplyCall],
+      }),
+      null,
+      "Where is my order?",
+    )
+
+    expect(preview.proposal).toBe("Fetch order tracking, then reply")
+    expect(preview.proposal).not.toContain(" + ")
+  })
+
+  it("uses the registry label for read steps instead of the planner's narration", () => {
+    const preview = buildPlanPreview(
+      plan({
+        steps: [trackingStep, refundStep, sendReplyStep],
+        rawToolCalls: [refundCall, sendReplyCall],
+      }),
+      null,
+      "Where is my order?",
+    )
+
+    expect(preview.proposal).not.toContain("carrier scan history")
+  })
+
+  it("keeps the description on non-read steps, where it carries the specifics", () => {
+    const preview = buildPlanPreview(askOperatorPlan(), null, "Do you ship to Canada?")
+
+    expect(preview.proposal).toBe("Do we ship to Canada, and at what rate?")
   })
 })

@@ -296,9 +296,14 @@ function warningLead(warning: string): string {
   return head.replace(/[.?!]+$/, "").trim()
 }
 
+// On a read step the description is the planner narrating its own lookup
+// ("Check the carrier scan history for order #1042"), so the registry label
+// reads better. Everywhere else the description carries the specifics the
+// merchant is deciding on ("Refund $20", the question being asked).
 function actionPhraseFor(step: PlanStep): string {
   const fixed = TOOL_PHRASE[step.tool]
   if (fixed) return fixed
+  if (step.category === "read" && step.label) return step.label
   if (step.description) return trim(step.description, 60)
   return step.label || step.tool.replace(/_/g, " ")
 }
@@ -314,18 +319,21 @@ function summarizeActionChain(plan: AgentPlan, excludeStepId?: string): string {
     phrases.push(phrase)
     if (phrases.length === 3) break
   }
-  return phrases.join(" + ")
+  return phrases.join(", then ")
 }
 
+// Empty when there is nothing of the agent's own to say. Callers fall through
+// to the customer's own message rather than printing the agent's internal
+// status where the merchant expects to read the ticket.
 function buildProposal(plan: AgentPlan | null, headlineStep?: PlanStep | null): string {
-  if (!plan) return "No plan generated — open ticket to draft reply"
+  if (!plan) return ""
   const warnings = (plan.warnings ?? []).slice(0, 2).flatMap((warning) => {
     const lead = warningLead(warning)
     return lead ? [lead] : []
   })
   const action = summarizeActionChain(plan, headlineStep?.id)
   if (warnings.length === 0 && !action) {
-    return "No plan generated — open ticket to draft reply"
+    return ""
   }
   if (warnings.length === 0) return action
   const left = warnings.join(". ")

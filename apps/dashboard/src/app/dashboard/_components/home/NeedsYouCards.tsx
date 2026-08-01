@@ -91,12 +91,17 @@ export function NeedsYouCard({
     })
   }
   if (bubbles.length === 0) {
-    bubbles.push({
-      key: "flag",
-      label: `${agentName} flagged this`,
-      text: item.proposalSummary,
-      tone: "flag",
-    })
+    const text = item.proposalSummary || item.contextLine || item.customerMessage
+    if (text) {
+      bubbles.push({
+        key: "flag",
+        // "Flagged this" is an alarm. Only ring it when the plan is actually
+        // consequential — a read-only lookup gets the neutral treatment.
+        label: isConsequential ? `${agentName} flagged this` : `${agentName} looked into this`,
+        text,
+        tone: isConsequential ? "flag" : "reply",
+      })
+    }
   }
 
   const approve = async () => {
