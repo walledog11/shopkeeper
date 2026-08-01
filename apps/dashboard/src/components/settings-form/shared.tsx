@@ -83,16 +83,13 @@ export function SectionCard({ title, description, children, variant = "settings"
   const descriptionClassName = variant === "board"
     ? "text-xs text-foreground/40 mt-1 leading-relaxed max-w-prose"
     : "text-xs text-foreground/35 mt-1 leading-relaxed max-w-prose"
-  const showHeader = variant !== "board"
 
   return (
     <div className={shellClassName}>
-      {showHeader && (
-        <div>
-          <h2 className={titleClassName}>{title}</h2>
-          <p className={descriptionClassName}>{description}</p>
-        </div>
-      )}
+      <div>
+        <h2 className={titleClassName}>{title}</h2>
+        <p className={descriptionClassName}>{description}</p>
+      </div>
       <div>{children}</div>
     </div>
   )
