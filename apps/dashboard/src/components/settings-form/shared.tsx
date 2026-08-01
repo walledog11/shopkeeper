@@ -39,7 +39,7 @@ export function ToggleRow({
   badgeColor,
 }: {
   label: string
-  description: string
+  description?: string
   checked: boolean
   onChange: (v: boolean) => void
   badge?: string
@@ -56,7 +56,7 @@ export function ToggleRow({
             </Badge>
           )}
         </div>
-        <p className="text-xs text-foreground/35 mt-0.5 leading-relaxed">{description}</p>
+        {description && <p className="text-xs text-foreground/35 mt-0.5 leading-relaxed">{description}</p>}
       </div>
       <Switch
         tone="amber"

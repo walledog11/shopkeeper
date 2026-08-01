@@ -6,7 +6,6 @@ interface Props {
   agentName: string
   totalCount: number
   topics: HomeClearedTopic[]
-  timeSavedHours: number
   repliesSent: number
 }
 
@@ -18,12 +17,7 @@ const TOPIC_COLORS: Record<string, { bar: string; text: string; bg: string }> = 
   General:           { bar: 'border-l-slate-400/70',  text: 'text-slate-300',   bg: 'bg-slate-400/10' },
 }
 
-function formatHours(hours: number): string {
-  if (hours < 1) return `${Math.round(hours * 60)}m`
-  return `${hours.toFixed(1)} hours`
-}
-
-export default function ClearedOvernight({ agentName, totalCount, topics, timeSavedHours, repliesSent }: Props) {
+export default function ClearedOvernight({ agentName, totalCount, topics, repliesSent }: Props) {
   if (totalCount === 0) return null
 
   return (
@@ -31,7 +25,7 @@ export default function ClearedOvernight({ agentName, totalCount, topics, timeSa
       <div className="flex items-baseline gap-3 flex-wrap">
         <h2 className="text-sm font-bold text-strong">{agentName} cleared overnight</h2>
         <span className="text-xs text-faint">
-          · Saved you ~{formatHours(timeSavedHours)} · {repliesSent} repl{repliesSent === 1 ? 'y' : 'ies'} sent
+          · {repliesSent} repl{repliesSent === 1 ? 'y' : 'ies'} sent
         </span>
         <Link
           href="/dashboard/review"

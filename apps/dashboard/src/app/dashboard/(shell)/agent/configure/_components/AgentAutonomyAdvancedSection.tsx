@@ -93,16 +93,16 @@ export function AgentAutonomyAdvancedSection({ controller }: { controller: Agent
 
       <div className="space-y-1.5">
         <MoneyInput
-          label="Max per gesture"
+          label="Largest single refund"
           hint="leave blank for no limit"
-          aria-label="Max per gesture"
+          aria-label="Largest single refund"
           value={maxRefundInput}
           onValueChange={value => {
             markExplicit("maxRefundAmount")
             setMaxRefundInput(value)
           }}
           placeholder="e.g. 50"
-          description="Largest single refund, store credit, or gift card the agent can issue."
+          description="Also caps a single store credit or gift card."
         />
         <OverrideHint
           path="maxRefundAmount"
@@ -136,9 +136,9 @@ export function AgentAutonomyAdvancedSection({ controller }: { controller: Agent
       </div>
 
       <MoneyInput
-        label="Daily goodwill cap"
+        label="Daily refund limit"
         hint="leave blank for no limit"
-        aria-label="Daily goodwill cap"
+        aria-label="Daily refund limit"
         value={dailyRefundCapInput}
         onValueChange={setDailyRefundCapInput}
         placeholder="e.g. 200"

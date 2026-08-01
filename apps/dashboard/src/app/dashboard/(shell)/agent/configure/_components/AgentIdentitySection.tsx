@@ -13,7 +13,7 @@ export function AgentIdentitySection({ controller }: { controller: AgentTabContr
       <div className="space-y-5">
         <LabeledTextInput
           label="Business name"
-          hint="shown in support emails and AI drafts"
+          hint={`shown in support emails and the replies ${settingsState.agentName} writes`}
           aria-label="Business name"
           value={businessName}
           onChange={e => setBusinessName(e.target.value)}

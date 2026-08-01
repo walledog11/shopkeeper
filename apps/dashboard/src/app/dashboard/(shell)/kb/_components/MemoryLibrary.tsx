@@ -48,13 +48,13 @@ function SourceCard({
             {recentTitles.map((title, index) => <span key={`${title}:${index}`} className="block truncate text-xs text-faint">{title}</span>)}
           </span>
         ) : (
-          <span className="block text-xs text-faint">No context saved yet</span>
+          <span className="block text-xs text-faint">Nothing saved yet</span>
         )}
       </span>
 
       <span className="flex items-center justify-between gap-3 text-xs">
         <span className="text-faint">{updated ? `Updated ${updated}` : ""}</span>
-        <span className="font-semibold text-muted-foreground group-hover:text-foreground">{active ? "Collapse" : "View context"}</span>
+        <span className="font-semibold text-muted-foreground group-hover:text-foreground">{active ? "Collapse" : "Open"}</span>
       </span>
     </button>
   )
@@ -64,7 +64,7 @@ function EntryCard({ page, onOpen }: { page: MemoryBookPage; onOpen: (() => void
   const content = (
     <>
       <span className="flex items-center justify-between gap-3 text-xs text-faint">
-        <span>{page.articleId ? "Saved context" : "Core context"}</span>
+        <span>{page.articleId ? "Note" : "From your settings"}</span>
         {page.updatedAt && <span className="shrink-0 tabular-nums">{formatDate(page.updatedAt)}</span>}
       </span>
       <span className="mt-5 block font-sans text-lg font-semibold leading-snug tracking-tight text-foreground line-clamp-2">
@@ -104,7 +104,7 @@ function FanOutPanel({
     <div className="w-full pb-2 pt-1 font-sans">
       <div className="flex flex-wrap items-end justify-between gap-3 px-1">
         <div>
-          <h2 className="text-sm font-semibold text-foreground">Context</h2>
+          <h2 className="text-sm font-semibold text-foreground">{settingsSource ? "From your settings" : "Notes"}</h2>
         </div>
         <div className="flex items-center gap-2">
           {source.canAddNote && <button type="button" onClick={onAddNote} className="inline-flex h-8 items-center rounded-md bg-foreground px-3 text-xs font-semibold text-background">Add note</button>}
@@ -136,8 +136,8 @@ function FanOutPanel({
         </div>
       ) : (
         <div className="mt-3 flex min-h-56 flex-col items-center justify-center rounded-3xl border border-dashed border-foreground/[0.10] bg-card/35 px-6 py-10 text-center font-sans">
-          <p className="text-sm font-semibold text-muted-foreground">No context here yet</p>
-          <p className="mt-1 max-w-sm text-xs leading-relaxed text-faint">{source.canAddNote ? "Add the first note to this source." : settingsSource ? "Add this context in your agent settings." : "Context will appear here as this source learns or syncs."}</p>
+          <p className="text-sm font-semibold text-muted-foreground">Nothing here yet</p>
+          <p className="mt-1 max-w-sm text-xs leading-relaxed text-faint">{source.canAddNote ? "Add the first note to this source." : settingsSource ? "Fill this in from your agent settings." : "Notes will appear here as this source learns or syncs."}</p>
           {source.canAddNote && <button type="button" onClick={onAddNote} className="mt-4 inline-flex h-8 items-center rounded-md bg-foreground px-3 text-xs font-semibold text-background">Add first note</button>}
         </div>
       )}

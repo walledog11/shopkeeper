@@ -16,7 +16,6 @@ describe("home summary view", () => {
       clearedTopics: [],
       briefingChannels: [],
       repeatCustomers: [],
-      timeSavedHours: 0,
     })
   })
 
@@ -28,6 +27,6 @@ describe("home summary view", () => {
     const view = buildHomeSummaryView(summary)
 
     expect(view.openCount).toBe(8)
-    expect(view.timeSavedHours).toBeCloseTo(0.7)
+    expect(view.overnightClearedCount).toBe(3)
   })
 })

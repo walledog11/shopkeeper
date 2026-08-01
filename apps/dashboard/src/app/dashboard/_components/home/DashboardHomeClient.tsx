@@ -61,7 +61,6 @@ export default function DashboardHomeClient({ userName, initialSummary }: Props)
               agentName={data.agentName}
               totalCount={data.overnightClearedCount}
               topics={data.clearedTopics}
-              timeSavedHours={data.timeSavedHours}
               repliesSent={data.repliesSent24h}
             />
           </div>

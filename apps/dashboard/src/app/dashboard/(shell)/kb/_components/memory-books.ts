@@ -171,7 +171,7 @@ export function buildMemoryBooks(
       title: isNotes ? "Your notes" : base.name,
       description: isNotes
         ? "Facts, policies, and instructions added by your team."
-        : "A collection of notes maintained by your team.",
+        : "Notes your team keeps in this group.",
       pages: recentFirst((manualByBase.get(base.id) ?? []).map(articlePage)),
       knowledgeBaseId: base.id,
       canAddNote: isNotes,

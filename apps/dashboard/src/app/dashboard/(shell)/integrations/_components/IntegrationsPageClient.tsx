@@ -288,7 +288,7 @@ function IntegrationsPageContent({
           comingSoon: !tiktokShopConfigured,
           description: tiktokShopConfigured
             ? def.description
-            : 'TikTok Shop buyer messaging is in beta. Configure Partner Center credentials to enable OAuth.',
+            : 'Buyer messages from your TikTok Shop, answered in the same inbox. Not open yet — we will turn it on for you when it is.',
           }
         : def
     }),

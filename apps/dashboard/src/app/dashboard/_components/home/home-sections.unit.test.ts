@@ -34,7 +34,6 @@ describe("home summary sections", () => {
       agentName: "Shopkeeper",
       totalCount: 0,
       topics: [],
-      timeSavedHours: 0,
       repliesSent: 0,
     }))).toBe("")
   })

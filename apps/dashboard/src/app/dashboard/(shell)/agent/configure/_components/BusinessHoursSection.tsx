@@ -42,7 +42,6 @@ export function BusinessHoursSection({
     <div className="space-y-5">
       <ToggleRow
           label="Enable after-hours away message"
-          description={`When a message arrives outside these hours, ${settingsState.agentName} holds the reply for your approval and sends the customer a quick acknowledgment.`}
           checked={settingsState.businessHoursEnabled}
           onChange={value => dispatch({ type: "set", patch: { businessHoursEnabled: value } })}
       />

@@ -9,17 +9,18 @@ export function ProactiveMonitoringSection({
   controller: AgentTabController
 }) {
   const { settingsState, dispatch } = controller
+  const agentName = settingsState.agentName
 
   return (
     <>
       <SectionCard
         title="Proactive shipping alerts"
-        description="Hourly USPS tracking checks for stalled shipments and delivery exceptions. When something looks off, Shopkeeper drafts a proactive customer heads-up for your approval — nothing sends automatically."
+        description={`Hourly USPS tracking checks for stalled shipments and delivery exceptions. When something looks off, ${agentName} drafts a proactive customer heads-up for your approval — nothing sends automatically.`}
         variant="board"
       >
         <ToggleRow
           label="Delivery-exception watch"
-          description="Requires the gateway DELIVERY_EXCEPTION_MONITOR_ENABLED flag. When enabled here, stalled or excepted USPS shipments can surface an approval plan on the customer's open ticket, or notify you directly when no ticket exists yet."
+          description="A stalled or excepted shipment surfaces an approval plan on the customer's open ticket, or reaches you directly when there is no ticket yet."
           checked={settingsState.deliveryExceptionWatchEnabled !== false}
           onChange={(value) => {
             dispatch({
@@ -31,12 +32,12 @@ export function ProactiveMonitoringSection({
       </SectionCard>
       <SectionCard
         title="Post-resolution check-ins"
-        description="A few days after a refund or exchange ticket closes, Shopkeeper nudges you to check back in with the customer. Nothing sends automatically — you reply and it drafts the note."
+        description={`A few days after a refund or exchange ticket closes, ${agentName} nudges you to check back in with the customer. Nothing sends automatically — you reply and it drafts the note.`}
         variant="board"
       >
         <ToggleRow
           label="Follow-up nudges"
-          description="Requires the gateway POST_RESOLUTION_FOLLOWUP_MONITOR_ENABLED flag. When enabled here, closed refund/exchange tickets surface a follow-up reminder on your operator channel after the wait below."
+          description="Closed refund and exchange tickets send you a reminder on your phone after the wait below."
           checked={settingsState.postResolutionFollowUpEnabled !== false}
           onChange={(value) => {
             dispatch({

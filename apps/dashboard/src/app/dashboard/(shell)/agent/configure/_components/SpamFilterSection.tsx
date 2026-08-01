@@ -15,7 +15,6 @@ export function SpamFilterSection({
   const toggle = (
     <ToggleRow
       label="Filter spam emails"
-      description="When off, every email lands in your inbox as a normal ticket."
       checked={settingsState.spamFilterEnabled ?? true}
       onChange={value => dispatch({ type: "set", patch: { spamFilterEnabled: value } })}
     />
