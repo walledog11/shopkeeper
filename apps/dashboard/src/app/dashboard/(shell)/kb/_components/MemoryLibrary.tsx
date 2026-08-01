@@ -31,7 +31,7 @@ function SourceCard({
       type="button"
       onClick={onOpen}
       aria-expanded={active}
-      className={`group flex h-72 w-full flex-col gap-3 rounded-3xl border bg-card px-5 py-5 text-left font-sans shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/25 ${
+      className={`group flex w-full flex-col gap-3 rounded-3xl border bg-card px-5 py-5 text-left font-sans shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/25 ${
         active ? "border-foreground/30" : "border-border hover:border-foreground/[0.16]"
       }`}
     >
@@ -42,7 +42,7 @@ function SourceCard({
         {source.description}
       </span>
 
-      <span className="mt-auto block border-t border-border pt-3">
+      <span className="block border-t border-border pt-3">
         {recentTitles.length > 0 ? (
           <span className="block space-y-1.5">
             {recentTitles.map((title, index) => <span key={`${title}:${index}`} className="block truncate text-xs text-faint">{title}</span>)}
@@ -71,7 +71,7 @@ function EntryCard({ page, onOpen }: { page: MemoryBookPage; onOpen: (() => void
         {page.title}
       </span>
       <span className="mt-2 block text-sm leading-relaxed text-muted-foreground line-clamp-5">{page.body}</span>
-      {onOpen && <span className="mt-auto border-t border-border pt-3 text-right text-xs font-semibold text-muted-foreground group-hover:text-foreground">Open</span>}
+      {onOpen && <span className="mt-4 border-t border-border pt-3 text-right text-xs font-semibold text-muted-foreground group-hover:text-foreground">Open</span>}
     </>
   )
 
@@ -79,12 +79,12 @@ function EntryCard({ page, onOpen }: { page: MemoryBookPage; onOpen: (() => void
     <button
       type="button"
       onClick={onOpen}
-      className="group flex h-72 w-full flex-col rounded-3xl border border-border bg-card px-5 py-5 text-left font-sans shadow-sm transition-colors hover:border-foreground/[0.16] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/25"
+      className="group flex w-full flex-col rounded-3xl border border-border bg-card px-5 py-5 text-left font-sans shadow-sm transition-colors hover:border-foreground/[0.16] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/25"
     >
       {content}
     </button>
   ) : (
-    <article className="flex h-72 w-full flex-col rounded-3xl border border-border bg-card px-5 py-5 font-sans shadow-sm">{content}</article>
+    <article className="flex w-full flex-col rounded-3xl border border-border bg-card px-5 py-5 font-sans shadow-sm">{content}</article>
   )
 }
 
