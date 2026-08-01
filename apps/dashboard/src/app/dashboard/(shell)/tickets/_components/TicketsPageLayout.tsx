@@ -308,7 +308,7 @@ export function TicketsPageLayout({
     <Dialog open={showConversation} onOpenChange={open => { if (!open) onBack() }}>
       <DialogContent
         showCloseButton={false}
-        className="left-0 top-0 flex h-[100dvh] max-h-[100dvh] w-full max-w-full translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-border bg-background p-0 pt-[env(safe-area-inset-top)] shadow-xl sm:left-1/2 sm:top-1/2 sm:h-[86vh] sm:max-h-[86vh] sm:w-[calc(100%-2rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:pt-0 sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl"
+        className="left-0 top-0 flex h-[100dvh] max-h-[100dvh] w-full max-w-full translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-border bg-background p-0 pt-[env(safe-area-inset-top)] shadow-xl sm:left-1/2 sm:top-1/2 sm:h-auto sm:max-h-[86vh] sm:w-[calc(100%-2rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:pt-0 sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl"
       >
         <DialogTitle className="sr-only">Conversation</DialogTitle>
         {lastDialogBodyRef.current}
