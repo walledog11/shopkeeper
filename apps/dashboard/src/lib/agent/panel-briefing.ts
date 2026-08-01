@@ -65,7 +65,7 @@ export function buildBriefingNarrativeSegments(input: BriefingCopyInput): Briefi
 
   if (needsYouCount > 0) {
     const segments: BriefingNarrativeSegment[] = [
-      { kind: "text", value: "I drafted replies for " },
+      { kind: "text", value: "I cleared " },
       { kind: "strong", value: String(overnightClearedCount) },
       { kind: "text", value: ` ticket${overnightClearedCount === 1 ? "" : "s"}` },
     ]

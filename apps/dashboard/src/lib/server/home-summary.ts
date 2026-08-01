@@ -10,14 +10,6 @@ import { getCustomerName } from "@/lib/messaging/customer-name"
 import { loadNeedsAttention } from "@/lib/server/home-needs-attention"
 import { getHomeSummaryWindows, loadHomeSummaryRows } from "@/lib/server/home-summary-queries"
 
-const TAG_SUBTITLES: Record<string, string> = {
-  Shipping: "WISMO replies sent",
-  Returns: "size swaps + refunds",
-  "Order Status": "tracking pulled & shared",
-  "Product Inquiry": "answered from KB",
-  General: "answered from KB",
-}
-
 function numberFromDb(value: bigint | number): number {
   return typeof value === "bigint" ? Number(value) : value
 }
@@ -62,7 +54,6 @@ export async function getHomeSummary(
   const topics: HomeClearedTopic[] = topicRows.map(row => ({
     tag: row.tag,
     count: numberFromDb(row.count),
-    subtitle: TAG_SUBTITLES[row.tag] ?? "auto-resolved",
   }))
 
   const repeatCustomers: HomeRepeatCustomer[] = repeatRows.map((row) => {

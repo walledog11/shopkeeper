@@ -25,7 +25,6 @@ export interface HomeNeedsAttentionItem {
 export interface HomeClearedTopic {
   tag: string
   count: number
-  subtitle: string
 }
 
 export interface HomeRepeatCustomer {

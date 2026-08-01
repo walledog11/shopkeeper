@@ -34,7 +34,22 @@ describe("home summary sections", () => {
       agentName: "Shopkeeper",
       totalCount: 0,
       topics: [],
-      repliesSent: 0,
     }))).toBe("")
+  })
+
+  it("names every cleared ticket in the overnight line", () => {
+    const markup = renderToStaticMarkup(createElement(ClearedOvernight, {
+      agentName: "Shopkeeper",
+      totalCount: 9,
+      topics: [
+        { tag: "Shipping", count: 3 },
+        { tag: "Returns", count: 2 },
+        { tag: "General", count: 1 },
+        { tag: "needs_human", count: 1 },
+      ],
+    }))
+
+    expect(markup).toContain("Shopkeeper cleared 9 overnight")
+    expect(markup).toContain("3 shipping, 2 returns, 3 other, 1 handed to you")
   })
 })

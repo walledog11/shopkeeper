@@ -66,7 +66,7 @@ describe("buildBriefingNarrativeSegments", () => {
     })
 
     const text = segments.map(segment => ("value" in segment ? segment.value : "")).join("")
-    expect(text).toContain("I drafted replies for")
+    expect(text).toContain("I cleared 3 tickets")
     expect(text).toContain("Email and Instagram")
     expect(text).toContain("still needs your eye")
   })
