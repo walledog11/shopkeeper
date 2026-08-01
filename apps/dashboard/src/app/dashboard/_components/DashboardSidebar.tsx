@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { OpenThreadCountProvider, useOpenThreadCountOverride } from "@/hooks/OpenThreadCountContext";
-import { useOpenThreadCountQuery } from "@/hooks/useThreads";
+import { useInboxBadgeCountQuery } from "@/hooks/useThreads";
 import type { AutonomyTier } from "@shopkeeper/agent/settings";
 import { MobileChromeProvider } from "./mobile-chrome/MobileChromeContext";
 import { MobileChromeSync } from "./mobile-chrome/MobileChromeSync";
@@ -16,7 +16,7 @@ function useDashboardOpenCount() {
   const pathname = usePathname();
   const onTickets = pathname.startsWith("/dashboard/tickets");
   const { override } = useOpenThreadCountOverride();
-  const { count: polledCount } = useOpenThreadCountQuery(!onTickets);
+  const { count: polledCount } = useInboxBadgeCountQuery(!onTickets);
   return onTickets ? (override ?? polledCount) : polledCount;
 }
 

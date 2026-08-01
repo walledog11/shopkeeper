@@ -19,10 +19,13 @@ function useIsDocumentVisible() {
   return isVisible;
 }
 
-export function useOpenThreadCountQuery(enabled = true) {
+// The Inbox badge counts the same set the Inbox opens on — threads waiting on
+// you — not every open thread. Counting all open threads made the badge drop
+// on navigation, because the ticket list overrides it with its own for-me count.
+export function useInboxBadgeCountQuery(enabled = true) {
   const isVisible = useIsDocumentVisible();
   const { data, error, isLoading, mutate } = useSWR<ThreadCount>(
-    enabled ? '/api/threads?status=open&count=true' : null,
+    enabled ? '/api/threads?status=open&forMe=true&count=true' : null,
     fetcher,
     { refreshInterval: isVisible ? (REALTIME_ENABLED ? 60000 : 15000) : 0 }
   );

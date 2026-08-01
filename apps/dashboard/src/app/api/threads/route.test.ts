@@ -223,6 +223,23 @@ describe('GET /api/threads', () => {
     expect(body.threads.map(t => t.id)).toEqual([escalatedThread.id]);
   });
 
+  it('counts only for-me threads when ?forMe=true&count=true', async () => {
+    const waiting = await createTestCustomer(org.id, 'count_waiting@test.com', { name: 'CountWaiting' });
+    const waitingThread = await createTestThread(org.id, waiting.id, ChannelType.email);
+    await createMessage({ threadId: waitingThread.id, contentText: 'help', senderType: SenderType.customer });
+
+    const replied = await createTestCustomer(org.id, 'count_replied@test.com', { name: 'CountReplied' });
+    const repliedThread = await createTestThread(org.id, replied.id, ChannelType.email);
+    await createMessage({ threadId: repliedThread.id, contentText: 'hi', senderType: SenderType.customer });
+    await createMessage({ threadId: repliedThread.id, contentText: 'on it', senderType: SenderType.agent });
+
+    const forMeRes = await GET(new Request('http://localhost:3000/api/threads?status=open&forMe=true&count=true'));
+    const allOpenRes = await GET(new Request('http://localhost:3000/api/threads?status=open&count=true'));
+
+    expect(await forMeRes.json()).toEqual({ count: 1 });
+    expect(await allOpenRes.json()).toEqual({ count: 2 });
+  });
+
   it('filters open threads by tag when ?tag=Returns', async () => {
     const returnsCustomer = await createTestCustomer(org.id, 'returns@test.com', { name: 'Returns' });
     const returnsThread = await createTestThread(org.id, returnsCustomer.id, ChannelType.email);

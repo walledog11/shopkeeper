@@ -96,7 +96,9 @@ export default function ConciergeBriefing({
               }
               className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-foreground text-background text-xs font-semibold hover:bg-foreground/90 transition-colors"
             >
-              {walkthroughCount > 0 ? `Walk me through ${walkthroughCount}` : `Ask ${agentName}`}
+              {walkthroughCount > 0
+                ? `Walk me through ${walkthroughCount} judgment call${walkthroughCount === 1 ? "" : "s"}`
+                : `Ask ${agentName}`}
             </button>
             <Link
               href="/dashboard/tickets"
