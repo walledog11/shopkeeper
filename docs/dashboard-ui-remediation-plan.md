@@ -7,10 +7,13 @@ Phase 0 merged and pushed 2026-08-01 (`9777bed7`). Phase 2 committed
 2026-08-01 (`dd2e5d1b`, `0b7f9088`), **not yet pushed**. All three open
 decisions are now resolved. Phases 4 and 5 open.
 
-**Outstanding verification debt:** nothing since Phase 1 has been
-screenshot-judged, because the preview harness under Verification was never
-checked in. Phase 4 cannot start without rebuilding it, and rebuilding it
-once also retires the Phase 1–2 debt.
+Phase 4 done 2026-08-01 (`c508b2c7`, `ce847240`, `f7445a5b`, `9f8f369e`,
+`32713113`), **not yet pushed** along with Phase 2. Only Phase 5 is open.
+
+**Verification debt cleared.** The preview harness is checked in at
+`scripts/seed-preview-store.mjs` (`01e299bb`), every Phase 4 change was
+judged on its own screenshot at 1440 and 390, and the Phase 1–3 output was
+verified against the live dashboard in the same pass.
 
 **Last updated:** 2026-08-01
 
@@ -347,7 +350,45 @@ plain `*.test.ts`, which has broken cross-package export changes before.
 
 ---
 
-## Phase 4 — Layout, one change per screenshot
+## Phase 4 — Layout — DONE 2026-08-01
+
+Five commits, `c508b2c7` / `ce847240` / `f7445a5b` / `9f8f369e` /
+`32713113`, each judged on its own screenshot at 1440 and 390. Root
+typecheck 10/10, dashboard lint clean, unit 510/510, integration 510
+passed/3 skipped.
+
+**The harness is checked in now** (`01e299bb`,
+`scripts/seed-preview-store.mjs`), so the next phase does not pay to
+rebuild it. This also retired the Phase 1–3 screenshot debt: their output
+was verified against the live dashboard while judging these five.
+
+What each item turned out to be:
+
+1. **Switch tone** — dead-branch removal, not a visual change. Both call
+   sites already passed `amber`; the `green` default was unreachable. The
+   `tone` prop is gone. Verified pixel-identical.
+2. **Memory cards** — as described. `h-72` + `mt-auto` gone.
+3. **Integrations cards** — two causes, not one: `h-52` on `CARD_SHELL`
+   *and* `min-h-[3.375rem]` on `CARD_DESCRIPTION` reserving three lines
+   for a one-line string. Both removed; eight cards now fit where six did.
+4. **Ticket detail** — the plan's prescription ("top-anchor short
+   conversations") did not match the observed bug. The timeline was
+   *already* top-anchored; the void sat between the last message and the
+   composer, because the drawer is pinned at `sm:h-[86vh]` whatever it
+   holds. Bottom-anchoring the timeline was tried first and only moved
+   the void above the messages, orphaning the context bar — reverted. The
+   fix is `sm:h-auto` under the same max-height. Verified at both ends,
+   including that a 26-message thread still caps at 86vh, auto-scrolls to
+   the newest message, and scrolls back to the first.
+5. **Home / Tickets** — the mobile half was real and is fixed: the two
+   banners now follow the deck, and the deck's top gap relaxes under
+   `sm`, so Approve clears the fold on a 390×844 phone (and the full card
+   clears it at 1440). The desktop half — "40–60% of the viewport empty
+   below the fold" — was **not** fixed and should be struck: with the
+   banners moved, what remains is a store with five tickets. Filling it
+   would mean inventing content, which is what this plan exists to remove.
+
+### Original findings
 
 Standing rule: never batch visual changes without judging each. Cheapest first.
 
