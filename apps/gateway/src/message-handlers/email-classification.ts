@@ -178,14 +178,18 @@ function deterministicE2EClassification(subject: string, body: string): Classifi
   };
 }
 
-// Fails open to 'genuine' so a classifier outage never drops legitimate mail.
-// orgId is passed so the call counts against the org's daily LLM spend cap;
-// if the org has hit its cap, we skip the classifier (still fail open).
+// Returns null when the classifier could not reach a verdict (API error, bad
+// response, or daily spend cap). Null means "no decision yet", not "genuine":
+// the caller leaves filterDecidedAt unset so SUMMARIZE_THREAD classifies on its
+// own retry. Writing a fail-open verdict here would set filterDecidedAt, which
+// is the lock that stops any later reclassification — a transient error would
+// mark a newsletter genuine forever.
+// orgId is passed so the call counts against the org's daily LLM spend cap.
 export async function classifyAndSummarizeNewEmail(
   organizationId: string,
   subject: string,
   body: string,
-): Promise<ClassificationResult> {
+): Promise<ClassificationResult | null> {
   const deterministic = deterministicE2EClassification(subject, body);
   if (deterministic) return deterministic;
 
@@ -234,17 +238,9 @@ export async function classifyAndSummarizeNewEmail(
     if (isSpendCapError(error)) {
       logger.warn({ organizationId }, '[Worker] Classifier skipped — daily LLM spend cap reached');
     } else {
-      logger.error({ err: error }, '[Worker] Classifier failed — failing open as genuine');
+      logger.error({ err: error }, '[Worker] Classifier failed — deferring to SUMMARIZE_THREAD');
     }
-    return {
-      title: subject?.trim()?.slice(0, 60) || 'New email',
-      summary: subject?.slice(0, 200) || 'New email',
-      tag: 'General',
-      filterStatus: 'genuine',
-      filterReason: isSpendCapError(error) ? 'Daily AI spend cap reached' : 'Classifier unavailable',
-      intents: emptyIntents(),
-      language: '',
-    };
+    return null;
   }
 }
 

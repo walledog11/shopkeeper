@@ -113,6 +113,19 @@ describe('Message worker — email branch', () => {
     expect(thread?.filterReason).toBe('Cold pitch — unclear if real customer.');
   });
 
+  it('leaves the filter undecided when the classifier fails, so SUMMARIZE_THREAD can classify', async () => {
+    getMockAnthropicCreate().mockRejectedValueOnce(new Error('overloaded'));
+
+    const handler = getCapturedHandlers().get('inbound-messages');
+    await handler!(makeEmailJob(org.id));
+
+    const thread = await db.thread.findFirst({ where: { organizationId: org.id, channelType: ChannelType.email } });
+    expect(thread).not.toBeNull();
+    expect(thread?.filterDecidedAt).toBeNull();
+    expect(thread?.filterReason).toBeNull();
+    expect(thread?.aiSummary).toBeNull();
+  });
+
   it('skips classifier and inherits status when customer already has an open thread', async () => {
     const existingCustomer = await db.customer.create({
       data: { organizationId: org.id, platformId: 'customer@example.com', name: 'Test Customer' },
