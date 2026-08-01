@@ -5,6 +5,7 @@ import {
 } from "./ticket-list-presentation"
 
 export const NEEDS_YOU_TIER_SECTIONS: readonly TicketTriageTier[] = [
+  "escalated",
   "answer",
   "review",
   "ready",
@@ -20,6 +21,7 @@ export const ALL_OPEN_TIER_SECTIONS: readonly TicketTriageTier[] = [
 const CLOSED_TIER_SECTIONS: readonly TicketTriageTier[] = ["closed"]
 
 export const TRIAGE_TIER_SECTION_LABELS: Record<TicketTriageTier, string> = {
+  escalated: "Flagged for you",
   answer: "Needs your answer",
   review: "Needs review",
   ready: "Ready to send",

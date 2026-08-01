@@ -20,6 +20,7 @@ function makeThread(overrides: Partial<Thread> & { id: string }): Thread {
     aiSummary: null,
     subject: 'Order question',
     tag: null,
+    escalatedAt: null,
     shopifyCustomerId: null,
     cachedPlanMessageId: null,
     cachedPlan: null,

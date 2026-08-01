@@ -18,6 +18,7 @@ import {
 } from "./resolve-ticket-coco-action"
 
 export type TicketTriageTier =
+  | "escalated"
   | "answer"
   | "review"
   | "ready"
@@ -41,6 +42,7 @@ export interface TicketListPresentation {
 }
 
 export const TRIAGE_TIER_SORT_ORDER: readonly TicketTriageTier[] = [
+  "escalated",
   "answer",
   "review",
   "ready",
@@ -60,6 +62,7 @@ export interface BuildTicketListPresentationInput {
     | "aiSummary"
     | "subject"
     | "tag"
+    | "escalatedAt"
     | "cachedPlan"
     | "cachedPlanMessageId"
     | "filterStatus"
@@ -124,6 +127,8 @@ function primaryStatusForTier(
   questionable: boolean,
 ): TicketListPresentation["primaryStatus"] {
   switch (tier) {
+    case "escalated":
+      return { label: "Flagged for you", tone: "caution" }
     case "answer":
       return { label: "Answer needed", tone: "caution" }
     case "review":
@@ -156,7 +161,7 @@ function applyQuestionableTrustRule(
   action: TicketCocoAction | null,
   hasPlan: boolean,
 ): { tier: TicketTriageTier; action: TicketCocoAction | null } {
-  if (tier === "answer") {
+  if (tier === "escalated" || tier === "answer") {
     return { tier, action }
   }
 
@@ -177,8 +182,10 @@ function resolveTier(
   hasPlan: boolean,
   classificationKind: HomePlanKind | null,
   awaitingReply: boolean,
+  escalated: boolean,
 ): TicketTriageTier {
   if (status === "closed" || activeTab === "closed") return "closed"
+  if (escalated) return "escalated"
   if (classificationKind === "needs_merchant_input") return "answer"
   if (questionable) return hasPlan ? "review" : "noise"
   if (hasPlan) return classificationKind === "quick_reply" ? "ready" : "review"
@@ -225,6 +232,7 @@ export function buildTicketListPresentation(
     hasPlan,
     classification?.kind ?? null,
     awaitingReply,
+    Boolean(thread.escalatedAt),
   )
 
   const lastCustomerMessageAt = latestCustomer?.sentAt ?? null
@@ -277,6 +285,7 @@ export interface TicketPresentationSource {
   aiTitle?: string | null
   subject: string
   tag: string
+  escalatedAt: string | null
   cachedPlan: unknown | null
   cachedPlanMessageId: string | null
   filterStatus: Thread["filterStatus"]
@@ -304,6 +313,7 @@ export function buildTicketListPresentationFromTicket(
       aiSummary: ticket.aiSummary,
       subject: ticket.subject,
       tag: ticket.tag,
+      escalatedAt: ticket.escalatedAt,
       cachedPlan: ticket.cachedPlan,
       cachedPlanMessageId: ticket.cachedPlanMessageId,
       filterStatus: ticket.filterStatus,

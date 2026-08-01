@@ -31,6 +31,7 @@ function createLoadingTicket(threadId: string): Ticket {
     preview: '',
     tag: 'Support',
     tagColor: 'text-slate-500 bg-slate-100 border-slate-200',
+    escalatedAt: null,
     aiSummary: '',
     status: 'open',
     lastCustomerMessageAt: null,

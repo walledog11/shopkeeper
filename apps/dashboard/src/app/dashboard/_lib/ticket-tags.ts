@@ -4,6 +4,7 @@ const TAG_STYLES: Record<string, { label: string; className: string }> = {
   "Order Status":    { label: "Order Status",    className: "bg-purple-500/15 text-purple-300" },
   "Product Inquiry": { label: "Product Inquiry", className: "bg-rose-500/15 text-rose-300" },
   General:           { label: "General",         className: "bg-slate-500/20 text-slate-300" },
+  needs_human:       { label: "Needs a human",   className: "bg-amber-500/15 text-amber-300" },
 }
 
 export function getTagStyle(tag: string | null | undefined) {

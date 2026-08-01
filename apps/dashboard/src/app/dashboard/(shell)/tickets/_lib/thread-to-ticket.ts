@@ -25,6 +25,7 @@ export function threadToTicket(thread: Thread, agentName?: string): Ticket {
     preview: lastMsg?.contentText || "No messages yet.",
     tag: thread.tag || "Support",
     tagColor: "text-slate-500 bg-slate-100 border-slate-200",
+    escalatedAt: thread.escalatedAt ?? null,
     aiSummary: thread.aiSummary || `${agentName ?? "Shopkeeper"} is reading this ticket…`,
     aiTitle: thread.aiTitle ?? null,
     status: thread.status,

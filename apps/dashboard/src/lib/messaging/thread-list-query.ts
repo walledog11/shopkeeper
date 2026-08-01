@@ -61,12 +61,16 @@ export function draftReadyPlanSql(organizationId: string) {
   `
 }
 
+// Escalated threads stay in scope regardless of who spoke last: the agent
+// handed the ticket over, so it is the merchant's whether or not the last
+// message was the agent's own "this is above my line" reply.
 export function forMeThreadSql(organizationId: string) {
   return Prisma.sql`
     t.status = 'open'
     AND ${canonicalInboxThreadSql(organizationId)}
     AND (
-      t.last_message_sender_type = 'customer'
+      t.escalated_at IS NOT NULL
+      OR t.last_message_sender_type = 'customer'
       OR (
         t.cached_plan IS NOT NULL
         AND t.cached_plan_message_id IS NOT NULL

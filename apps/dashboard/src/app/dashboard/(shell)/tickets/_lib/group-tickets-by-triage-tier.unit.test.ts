@@ -43,6 +43,7 @@ function baseTicket(overrides: Partial<Ticket> & Pick<Ticket, "id">): Ticket {
     preview: "Hi, where is my order?",
     tag: "Shipping",
     tagColor: "text-slate-500 bg-slate-100 border-slate-200",
+    escalatedAt: null,
     aiSummary: "Customer asking about order status",
     status: "open",
     lastCustomerMessageAt: now,
@@ -128,6 +129,45 @@ describe("groupTicketsByTriageTier", () => {
     expect(groups[3].collapsible).toBe(true)
     expect(groups[4].label).toBe("Possible spam")
     expect(groups[4].defaultExpanded).toBe(false)
+  })
+
+  it("puts escalated tickets in their own section ahead of everything else", () => {
+    const escalated = baseTicket({
+      id: "escalated-1",
+      escalatedAt: "2026-06-14T11:45:00.000Z",
+      tag: "needs_human",
+      lastMessageAt: "2026-06-14T11:45:00.000Z",
+      messages: [
+        {
+          id: "msg-customer-1",
+          sender: "customer",
+          text: "I will file a chargeback.",
+          time: "2026-06-14T11:30:00.000Z",
+          attachments: [],
+        },
+        {
+          id: "msg-agent-1",
+          sender: "agent",
+          text: "This one is above my line — the owner will follow up.",
+          time: "2026-06-14T11:40:00.000Z",
+          attachments: [],
+        },
+      ],
+    })
+    const answer = baseTicket({
+      id: "answer-1",
+      cachedPlan: cacheRecord(askOperatorPlan()),
+      cachedPlanMessageId: "msg-customer-1",
+      hasPlan: true,
+      lastMessageAt: "2026-06-14T12:15:00.000Z",
+    })
+
+    const groups = groupTicketsByTriageTier([answer, escalated], {})
+
+    expect(groups.map(group => group.tier)).toEqual(["escalated", "answer"])
+    expect(groups[0].label).toBe("Flagged for you")
+    expect(groups[0].collapsible).toBe(false)
+    expect(groups[0].tickets.map(ticket => ticket.id)).toEqual(["escalated-1"])
   })
 
   it("hides empty tiers", () => {

@@ -148,6 +148,7 @@ export interface Thread {
   aiTitle?: string | null;
   subject: string | null;
   tag: string | null;
+  escalatedAt: string | null;
   shopifyCustomerId: string | null;
   cachedPlanMessageId: string | null;
   cachedPlan: unknown | null;
@@ -172,6 +173,7 @@ export interface Ticket {
   preview: string;
   tag: string;
   tagColor: string;
+  escalatedAt: string | null;
   aiSummary: string;
   aiTitle?: string | null;
   status: ThreadStatus;

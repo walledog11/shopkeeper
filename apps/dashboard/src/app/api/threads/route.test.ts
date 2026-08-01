@@ -206,6 +206,23 @@ describe('GET /api/threads', () => {
     expect(body.threads.map(t => t.id)).toEqual([waitingThread.id]);
   });
 
+  it('keeps escalated threads in the for-me list even after the agent replied last', async () => {
+    const escalated = await createTestCustomer(org.id, 'for_me_escalated@test.com', { name: 'ForMeEscalated' });
+    const escalatedThread = await createTestThread(org.id, escalated.id, ChannelType.email);
+    await createMessage({ threadId: escalatedThread.id, contentText: 'chargeback', senderType: SenderType.customer });
+    await createMessage({ threadId: escalatedThread.id, contentText: 'above my line', senderType: SenderType.agent });
+    await db.thread.update({
+      where: { id: escalatedThread.id },
+      data: { escalatedAt: new Date(), tag: 'needs_human' },
+    });
+
+    const req = new Request('http://localhost:3000/api/threads?forMe=true');
+    const res = await GET(req);
+    const body = await res.json() as { threads: { id: string }[] };
+
+    expect(body.threads.map(t => t.id)).toEqual([escalatedThread.id]);
+  });
+
   it('filters open threads by tag when ?tag=Returns', async () => {
     const returnsCustomer = await createTestCustomer(org.id, 'returns@test.com', { name: 'Returns' });
     const returnsThread = await createTestThread(org.id, returnsCustomer.id, ChannelType.email);

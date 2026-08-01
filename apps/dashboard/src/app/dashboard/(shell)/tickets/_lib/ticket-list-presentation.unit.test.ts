@@ -98,6 +98,7 @@ function baseThread(overrides: Partial<Thread> = {}): BuildTicketListPresentatio
     aiSummary: "Customer asking about shipping times",
     subject: "Shipping question",
     tag: "Shipping",
+    escalatedAt: null,
     cachedPlan: cacheRecord(quickReplyPlan()),
     cachedPlanMessageId: customerMessageId,
     filterStatus: "genuine",
@@ -304,6 +305,68 @@ describe("buildTicketListPresentation", () => {
     expect(presentation.action).toBeNull()
   })
 
+  it("assigns escalated tier when the agent handed the ticket over", () => {
+    const presentation = buildTicketListPresentation({
+      thread: baseThread({
+        escalatedAt: "2026-06-14T11:45:00.000Z",
+        cachedPlan: null,
+        cachedPlanMessageId: null,
+        aiSummary: null,
+        messages: [
+          {
+            id: customerMessageId,
+            threadId: "thread-1",
+            senderType: "customer",
+            contentText: "I will file a chargeback.",
+            mediaUrl: null,
+            attachments: [],
+            sentAt: "2026-06-14T11:30:00.000Z",
+          },
+          {
+            id: "msg-agent-1",
+            threadId: "thread-1",
+            senderType: "agent",
+            contentText: "This one is above my line — the owner will follow up.",
+            mediaUrl: null,
+            attachments: [],
+            sentAt: "2026-06-14T11:40:00.000Z",
+          },
+        ],
+      }),
+      now,
+    })
+
+    expect(presentation.tier).toBe("escalated")
+    expect(presentation.primaryStatus).toEqual({ label: "Flagged for you", tone: "caution" })
+  })
+
+  it("keeps escalated tickets out of the questionable downgrade", () => {
+    const presentation = buildTicketListPresentation({
+      thread: baseThread({
+        escalatedAt: "2026-06-14T11:45:00.000Z",
+        filterStatus: "questionable",
+        cachedPlan: null,
+        cachedPlanMessageId: null,
+        aiSummary: null,
+      }),
+      now,
+    })
+
+    expect(presentation.tier).toBe("escalated")
+  })
+
+  it("still closes an escalated ticket once it is closed", () => {
+    const presentation = buildTicketListPresentation({
+      thread: baseThread({
+        escalatedAt: "2026-06-14T11:45:00.000Z",
+        status: "closed",
+      }),
+      now,
+    })
+
+    expect(presentation.tier).toBe("closed")
+  })
+
   it("hides subject on mobile queue views", () => {
     const forMe = buildTicketListPresentation({
       thread: baseThread(),
@@ -352,6 +415,7 @@ describe("buildTicketListPresentation", () => {
 
 describe("compareTicketTriageTier", () => {
   it("orders tiers for for_me sorting", () => {
+    expect(compareTicketTriageTier("escalated", "answer")).toBeLessThan(0)
     expect(compareTicketTriageTier("answer", "review")).toBeLessThan(0)
     expect(compareTicketTriageTier("review", "ready")).toBeLessThan(0)
     expect(compareTicketTriageTier("ready", "working")).toBeLessThan(0)
@@ -376,6 +440,7 @@ describe("buildTicketBriefSummary", () => {
       preview: "How long does shipping take?",
       tag: "Shipping",
       tagColor: "text-slate-500 bg-slate-100 border-slate-200",
+      escalatedAt: null,
       aiSummary: "Customer is asking about shipping times.",
       aiTitle: null,
       status: "open",
