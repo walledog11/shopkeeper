@@ -94,7 +94,10 @@ export function TicketQueueCard({
         onClick={onOpen}
         className="flex min-w-0 flex-col gap-2 border-0 bg-transparent p-0 text-left [font-family:inherit]"
       >
-        <TicketTagPill tag={ticket.tag} className="w-fit" />
+        <TicketTagPill
+          tag={presentation.tier === "escalated" ? null : ticket.tag}
+          className="w-fit"
+        />
         <h3 className="font-sans text-lg font-semibold leading-snug tracking-tight text-foreground line-clamp-2">
           {title}
         </h3>
