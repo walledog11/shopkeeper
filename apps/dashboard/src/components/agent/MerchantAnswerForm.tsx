@@ -115,7 +115,6 @@ export default function MerchantAnswerForm({ threadId, question, agentName, onAn
             </span>
           </div>
           <Switch
-            tone="amber"
             checked={saveToKb}
             onChange={saveToKb => updateState({ saveToKb })}
             disabled={isSubmitting || succeeded}

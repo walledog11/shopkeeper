@@ -59,7 +59,6 @@ export function ToggleRow({
         {description && <p className="text-xs text-foreground/35 mt-0.5 leading-relaxed">{description}</p>}
       </div>
       <Switch
-        tone="amber"
         checked={checked}
         onChange={onChange}
         ariaLabel={checked ? "Disable setting" : "Enable setting"}
