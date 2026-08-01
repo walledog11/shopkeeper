@@ -34,7 +34,7 @@ export function NeedsYouDeck({ items, agentName, onApproved }: Props) {
   }
 
   return (
-    <section id="needs-you" className="mt-10 flex flex-col gap-2.5">
+    <section id="needs-you" className="mt-5 sm:mt-10 flex flex-col gap-2.5">
       <StackDeck
         items={deck}
         className="flex flex-col gap-3 w-full"

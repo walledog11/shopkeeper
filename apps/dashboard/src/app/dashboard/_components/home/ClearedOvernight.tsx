@@ -40,7 +40,6 @@ export default function ClearedOvernight({ agentName, totalCount, topics }: Prop
       <h2 className="text-sm font-bold text-strong">
         {agentName} cleared {totalCount} overnight{breakdown ? ` — ${breakdown}` : ""}
       </h2>
-      <span className="text-xs text-faint">·</span>
       <Link
         href="/dashboard/review"
         className="text-xs font-semibold text-muted-foreground hover:text-strong transition-colors"

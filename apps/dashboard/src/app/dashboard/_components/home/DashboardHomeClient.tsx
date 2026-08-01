@@ -29,12 +29,6 @@ export default function DashboardHomeClient({ userName, initialSummary }: Props)
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <div className="flex flex-col min-h-full w-full max-w-2xl mx-auto px-5 md:px-6 lg:px-8 pt-3 pb-4 gap-3">
 
-          <WorkflowSetupBanner
-            steps={data.workflowSteps}
-          />
-
-          <HomeTelegramNudge connected={data.hasPhoneBound} />
-
           <div className="flex flex-col gap-3 min-w-0">
             <ConciergeBriefing
               greeting={greeting}
@@ -63,6 +57,12 @@ export default function DashboardHomeClient({ userName, initialSummary }: Props)
               topics={data.clearedTopics}
             />
           </div>
+
+          <WorkflowSetupBanner
+            steps={data.workflowSteps}
+          />
+
+          <HomeTelegramNudge connected={data.hasPhoneBound} />
         </div>
       </div>
     </div>

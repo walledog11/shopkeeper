@@ -28,7 +28,7 @@ function NeedsYouLoadingSkeleton() {
       id="needs-you"
       aria-busy="true"
       aria-label="Loading action plan cards"
-      className="mt-10 flex flex-col gap-2.5"
+      className="mt-5 sm:mt-10 flex flex-col gap-2.5"
     >
       <Card className={needsYouCardShellClassName("front")}>
         <div className="rounded-t-3xl border-b border-border/60 bg-card px-5 pb-4 pt-5 sm:px-6">
