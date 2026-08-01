@@ -1,16 +1,20 @@
 "use client"
 
-import { visibleAutonomyTiers } from "@/lib/agent/autonomy-tiers"
+import { effectiveRefundCap, visibleAutonomyTiers } from "@/lib/agent/autonomy-tiers"
 import { SectionCard } from "@/components/settings-form/shared"
+import { tierDefaultForPath } from "./agent-tab-helpers"
 import type { AgentTabController } from "./useAgentTabState"
 
 export function AgentAutonomySection({ controller }: { controller: AgentTabController }) {
   const {
     settingsState,
+    payload,
+    explicitOverrideSet,
     selectTier,
   } = controller
 
   const tierOptions = visibleAutonomyTiers(settingsState.autonomyTier)
+  const refundOverride = explicitOverrideSet.has("maxRefundAmount") ? payload.maxRefundAmount : null
 
   return (
     <div id="autonomy" className="scroll-mt-4">
@@ -27,6 +31,10 @@ export function AgentAutonomySection({ controller }: { controller: AgentTabContr
           {tierOptions.map(option => {
             const selected = settingsState.autonomyTier === option.id
             const disabled = option.comingSoon
+            const tierActs = tierDefaultForPath(option.id, "toolsEnabled.action") !== false
+            const cap = tierActs
+              ? effectiveRefundCap({ autonomyTier: option.id, maxRefundAmount: refundOverride })
+              : option.cap
             return (
               <button
                 key={option.id}
@@ -57,7 +65,12 @@ export function AgentAutonomySection({ controller }: { controller: AgentTabContr
                 </div>
                 <p className="mt-2 text-xs leading-relaxed text-faint">{option.blurb}</p>
                 {option.merchantFacing && (
-                  <p className="mt-2 font-mono text-xs uppercase tracking-[0.06em] text-faint">Refund cap ${option.cap}</p>
+                  <>
+                    <p className="mt-2 font-mono text-xs uppercase tracking-[0.06em] text-faint">Refund cap ${cap}</p>
+                    {cap !== option.cap && (
+                      <p className="mt-0.5 text-[11px] leading-relaxed text-faint">Your limit · tier default ${option.cap}</p>
+                    )}
+                  </>
                 )}
               </button>
             )
