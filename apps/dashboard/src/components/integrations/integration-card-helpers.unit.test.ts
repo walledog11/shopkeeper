@@ -43,6 +43,52 @@ function instagramIntegration(
   }
 }
 
+function shopifyIntegration(missingScopes?: string[]): Integration {
+  return {
+    id: "shopify-integration",
+    organizationId: "org-id",
+    platform: "shopify",
+    externalAccountId: "palette-dev.myshopify.com",
+    fromEmail: null,
+    tokenExpiresAt: null,
+    connectionState: "active",
+    ...(missingScopes && { missingScopes }),
+    createdAt: new Date().toISOString(),
+  }
+}
+
+describe("Shopify integration health", () => {
+  it("asks for a reconnect when the recorded grant is short of a capability", () => {
+    const integration = shopifyIntegration(["read_returns", "write_returns"])
+
+    expect(deriveIntegrationHealth("shopify", [integration], null)).toEqual({
+      state: "needs-attention",
+      note: "This store was connected before some newer Shopify actions existed — reconnect to enable them. Until then those actions fail when tried.",
+      canFix: true,
+    })
+  })
+
+  // An install that predates scope recording has no grant on file. Reporting
+  // that as a shortfall would send every such merchant through a pointless
+  // reconnect.
+  it("says nothing when the grant was never recorded", () => {
+    expect(deriveIntegrationHealth("shopify", [shopifyIntegration()], null)).toEqual({
+      state: "working",
+      note: null,
+      canFix: false,
+    })
+  })
+
+  it("reports the expired connection ahead of any shortfall", () => {
+    const integration = shopifyIntegration(["read_returns"])
+    integration.connectionState = "invalid"
+
+    expect(deriveIntegrationHealth("shopify", [integration], null)).toMatchObject({
+      note: "Your Shopify connection expired — order lookups and syncing have stopped.",
+    })
+  })
+})
+
 describe("Instagram integration health", () => {
   it("shows a transient health failure without asking the merchant to reconnect", () => {
     const integration = instagramIntegration("degraded", {

@@ -225,6 +225,11 @@ export function getEmailReceivingDisplay(
 const QUIET_CHANNEL_DAYS = 5
 const SHOPIFY_EXPIRED_NOTE =
   "Your Shopify connection expired — order lookups and syncing have stopped."
+// A token keeps whatever grant it was issued with, so a store connected before
+// a capability was added stays short of it until the merchant re-authorizes.
+// Without this the shortfall only shows up as a tool call failing mid-ticket.
+const SHOPIFY_SHORT_GRANT_NOTE =
+  "This store was connected before some newer Shopify actions existed — reconnect to enable them. Until then those actions fail when tried."
 
 export interface IntegrationHealth {
   state: PillState
@@ -268,6 +273,9 @@ export function deriveIntegrationHealth(
     }
     if (!isShopifyIntegrationLinked(connected[0])) {
       return { state: "not-connected", note: null, canFix: false }
+    }
+    if (connected[0].missingScopes?.length) {
+      return { state: "needs-attention", note: SHOPIFY_SHORT_GRANT_NOTE, canFix: true }
     }
   }
 

@@ -65,6 +65,41 @@ describe('/api/integrations', () => {
     expect(body[0]).not.toHaveProperty('refreshToken');
   });
 
+  it('reports the scopes a Shopify install is short of', async () => {
+    await db.integration.create({
+      data: {
+        organizationId: org.id,
+        platform: ChannelType.shopify,
+        externalAccountId: 'fixture-shop.myshopify.com',
+        accessToken: 'shpat_fixture',
+        metadata: { oauthScopes: ['read_orders', 'write_orders', 'read_customers'] },
+      },
+    });
+
+    const res = await GET();
+
+    const body = await res.json() as Array<Record<string, unknown>>;
+    expect(body[0].connectionState).toBe('active');
+    expect(body[0].missingScopes).toEqual(expect.arrayContaining(['read_returns', 'write_returns']));
+    expect(body[0].missingScopes).not.toContain('read_orders');
+  });
+
+  it('reports no shortfall for an install whose grant was never recorded', async () => {
+    await db.integration.create({
+      data: {
+        organizationId: org.id,
+        platform: ChannelType.shopify,
+        externalAccountId: 'fixture-shop.myshopify.com',
+        accessToken: 'shpat_fixture',
+      },
+    });
+
+    const res = await GET();
+
+    const body = await res.json() as Array<Record<string, unknown>>;
+    expect(body[0]).not.toHaveProperty('missingScopes');
+  });
+
   it('reports per-channel last activity and weekly thread counts', async () => {
     const integration = await db.integration.create({
       data: {

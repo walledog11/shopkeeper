@@ -62,6 +62,7 @@ export interface Integration {
   fromEmail: string | null;
   tokenExpiresAt: string | null;
   connectionState?: 'active' | 'invalid' | 'incomplete';
+  missingScopes?: string[];
   metadata?: unknown;
   createdAt: string;
   lastActivity?: string | null;

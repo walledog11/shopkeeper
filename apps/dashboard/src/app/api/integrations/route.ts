@@ -8,6 +8,7 @@ import { parseCreateIntegrationBody } from '@/app/api/integrations/_lib/validati
 import { CHANNEL_TYPE } from '@shopkeeper/agent/thread-constants';
 import {
   getShopifyConnectionState,
+  missingShopifyScopes,
   refreshShopifyIntegrationHealthIfDue,
 } from '@/lib/server/shopify-integration';
 import {
@@ -32,12 +33,23 @@ function analyticsIntegrationPlatform(platform: string): IntegrationPlatform | n
   return null;
 }
 
+// The grant a token was issued with, as recorded at install. Absent on installs
+// that predate the recording — which is why a missing list reports nothing
+// rather than "every scope is missing".
+function recordedShopifyScopes(metadata: unknown): string[] | null {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
+  const scopes = (metadata as Record<string, unknown>).oauthScopes;
+  if (!Array.isArray(scopes)) return null;
+  return scopes.filter((scope): scope is string => typeof scope === 'string');
+}
+
 function serializeIntegration<T extends {
   accessToken?: string | null;
   refreshToken?: string | null;
   createdAt?: Date;
   tokenExpiresAt?: Date | null;
   platform?: string;
+  metadata?: unknown;
 }>(
   integration: T,
   lastActivity?: string | null,
@@ -56,9 +68,14 @@ function serializeIntegration<T extends {
         tokenExpiresAt: integration.tokenExpiresAt ?? null,
       })
     : undefined;
+  const recordedScopes = integration.platform === 'shopify'
+    ? recordedShopifyScopes(integration.metadata)
+    : null;
+  const missingScopes = recordedScopes ? missingShopifyScopes(recordedScopes) : [];
   return {
     ...safe,
     ...(connectionState !== undefined && { connectionState }),
+    ...(missingScopes.length > 0 && { missingScopes }),
     ...(lastActivity !== undefined && { lastActivity }),
     ...(threadsThisWeek !== undefined && { threadsThisWeek }),
     ...(isDefaultEmail !== undefined && { isDefaultEmail }),
