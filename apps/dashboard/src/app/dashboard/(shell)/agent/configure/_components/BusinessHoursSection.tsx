@@ -6,7 +6,7 @@ import {
   SelectField,
 } from "./settings-form-fields"
 import { settingsSelectClassName } from "./settings-form-styles"
-import { SectionCard, ToggleRow } from "@/components/settings-form/shared"
+import { ToggleRow } from "@/components/settings-form/shared"
 import { TimezoneSelect } from "./TimezoneSelect"
 import type { AgentTabController } from "./useAgentTabState"
 
@@ -21,13 +21,7 @@ const HOUR_OPTIONS = Array.from({ length: 24 }, (_, hour) => ({
   label: formatHour(hour),
 }))
 
-export function BusinessHoursSection({
-  controller,
-  embedded = false,
-}: {
-  controller: AgentTabController
-  embedded?: boolean
-}) {
+export function BusinessHoursSection({ controller }: { controller: AgentTabController }) {
   const {
     settingsState,
     dispatch,
@@ -124,23 +118,15 @@ export function BusinessHoursSection({
     </div>
   )
 
-  if (embedded) {
-    return (
-      <div className="space-y-4">
-        <div>
-          <h3 className="text-sm font-semibold text-strong">After-hours away message</h3>
-          <p className="text-xs text-faint mt-0.5 leading-relaxed">
-            Outside these hours, I&apos;ll hold replies for your approval and send customers a quick acknowledgment so they&apos;re not left waiting.
-          </p>
-        </div>
-        {content}
-      </div>
-    )
-  }
-
   return (
-    <SectionCard title="After-hours away message" description="Outside your working hours, the agent holds replies for your approval and sends customers a quick acknowledgment. Overnight windows are supported.">
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-sm font-semibold text-strong">After-hours away message</h3>
+        <p className="text-xs text-faint mt-0.5 leading-relaxed">
+          Outside these hours, I&apos;ll hold replies for your approval and send customers a quick acknowledgment so they&apos;re not left waiting.
+        </p>
+      </div>
       {content}
-    </SectionCard>
+    </div>
   )
 }

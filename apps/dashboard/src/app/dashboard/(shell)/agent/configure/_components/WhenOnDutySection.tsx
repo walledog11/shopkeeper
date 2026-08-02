@@ -19,10 +19,10 @@ export function WhenOnDutySection({
       variant="board"
     >
       <div className="space-y-8">
-        <BusinessHoursSection controller={controller} embedded />
+        <BusinessHoursSection controller={controller} />
         {emailConnected && (
           <div className="border-t border-foreground/[0.08] pt-8">
-            <SpamFilterSection controller={controller} embedded />
+            <SpamFilterSection controller={controller} />
           </div>
         )}
       </div>

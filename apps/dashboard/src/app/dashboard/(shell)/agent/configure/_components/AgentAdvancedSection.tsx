@@ -12,9 +12,9 @@ export function AgentAdvancedSection({ controller }: { controller: AgentTabContr
       title="Advanced"
       description="Sample replies, reply language, and refund limit overrides."
     >
-      <AgentSampleRepliesSection controller={controller} embedded />
+      <AgentSampleRepliesSection controller={controller} />
       <div className="border-t border-foreground/[0.06] pt-5">
-        <AgentResponseSection controller={controller} embedded />
+        <AgentResponseSection controller={controller} />
       </div>
       <div className="border-t border-foreground/[0.06] pt-5">
         <AgentAutonomyAdvancedSection controller={controller} />

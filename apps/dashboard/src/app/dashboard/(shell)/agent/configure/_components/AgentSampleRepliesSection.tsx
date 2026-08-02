@@ -2,19 +2,12 @@
 
 import { Plus, Trash2 } from "lucide-react"
 import { CharacterCountTextarea, LabeledTextInput } from "./settings-form-fields"
-import { SectionCard } from "@/components/settings-form/shared"
 import type { AgentTabController } from "./useAgentTabState"
 
 const SAMPLE_REPLY_CAP = 10
 const SAMPLE_REPLY_BODY_MAX = 300
 
-export function AgentSampleRepliesSection({
-  controller,
-  embedded = false,
-}: {
-  controller: AgentTabController
-  embedded?: boolean
-}) {
+export function AgentSampleRepliesSection({ controller }: { controller: AgentTabController }) {
   const { settingsState, dispatch } = controller
   const sampleReplies = settingsState.sampleReplies ?? []
 
@@ -110,23 +103,15 @@ export function AgentSampleRepliesSection({
     </div>
   )
 
-  if (embedded) {
-    return (
-      <div className="space-y-4">
-        <div>
-          <h3 className="text-sm font-semibold text-strong">Sample replies</h3>
-          <p className="text-xs text-faint mt-0.5 leading-relaxed">
-            Show the agent up to 10 example replies. It will match their style and tone in customer-facing messages.
-          </p>
-        </div>
-        {content}
-      </div>
-    )
-  }
-
   return (
-    <SectionCard title="Sample replies" description="Show the agent up to 10 example replies. It will match their style and tone in customer-facing messages." variant="board">
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-sm font-semibold text-strong">Sample replies</h3>
+        <p className="text-xs text-faint mt-0.5 leading-relaxed">
+          Show the agent up to 10 example replies. It will match their style and tone in customer-facing messages.
+        </p>
+      </div>
       {content}
-    </SectionCard>
+    </div>
   )
 }
