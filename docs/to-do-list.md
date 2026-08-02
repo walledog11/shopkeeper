@@ -160,6 +160,23 @@ or a configured provider — none is a code task.
     from generic TikTok DMs — there is no generic-DM adapter and no verified
     public API for one.
 
+- [ ] **Four calls left over from the dashboard UI remediation pass** (plan
+  closed out and deleted 2026-08-01; the phases are in git history).
+  - Remove the `Auto-plan on ticket open` toggle
+    (`(shell)/agent/configure/_components/AgentDefaultBehaviorSection.tsx`)?
+    It exposes internal machinery as a preference and no merchant wants it off.
+  - Hide the flag-gated monitor toggles when the gateway flag is off, versus
+    showing a real "not available" state?
+  - The Customers page cannot show the people in the inbox — it is
+    Shopify-only. Still the open item from the June 2026 cleanup.
+  - An escalated ticket's list preview shows the *agent's* handoff reply, not
+    the customer's complaint, because `app/api/threads/route.ts:72` loads
+    `messages: take 1`. Honest but wrong-facing; fixing it is a list-query
+    cost decision.
+  - Small cleanup while in there: `AgentSampleRepliesSection`,
+    `AgentResponseSection`, `BusinessHoursSection`, and `SpamFilterSection`
+    each keep a non-`embedded` branch that no caller reaches.
+
 - [ ] **Domain / branding migration (was "Phase 6").** See
   [phase-6-external-services.md](phase-6-external-services.md) — 51 open steps,
   barely started. The app still runs on `useclerk.co` and
