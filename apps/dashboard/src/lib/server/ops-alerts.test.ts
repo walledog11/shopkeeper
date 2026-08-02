@@ -51,8 +51,9 @@ describe('dashboard ops alerts', () => {
     ]);
   });
 
-  it('logs alerts when enabled', () => {
+  it('logs alerts when enabled and pushes them to Sentry', () => {
     const { logger, calls } = createTestLogger();
+    const captured: Array<{ message: string; fingerprint: string[] }> = [];
 
     const result = emitOpsAlert({
       category: 'agent_failure',
@@ -61,14 +62,23 @@ describe('dashboard ops alerts', () => {
     }, {
       config: DEFAULT_CONFIG,
       logger,
+      capture: (input, scope) => {
+        captured.push({ message: input.message, fingerprint: scope.fingerprint });
+        return true;
+      },
     });
 
     expect(result).toEqual({ logged: true, reason: 'logged' });
     expect(calls).toHaveLength(1);
+    expect(captured).toEqual([{
+      message: 'Agent route failures exceeded threshold',
+      fingerprint: ['ops-alert', 'agent_failure', 'dashboard', 'tool:send_reply'],
+    }]);
   });
 
   it('skips logging when alerts are disabled', () => {
     const { logger, calls } = createTestLogger();
+    let captureCalls = 0;
 
     const result = emitOpsAlert({
       category: 'provider_send',
@@ -76,10 +86,15 @@ describe('dashboard ops alerts', () => {
     }, {
       config: { ...DEFAULT_CONFIG, enabled: false },
       logger,
+      capture: () => {
+        captureCalls += 1;
+        return true;
+      },
     });
 
     expect(result).toEqual({ logged: false, reason: 'disabled' });
     expect(calls).toHaveLength(0);
+    expect(captureCalls).toBe(0);
   });
 
   it('increments Upstash-compatible fixed-window counters', async () => {
