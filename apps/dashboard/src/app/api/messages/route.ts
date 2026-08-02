@@ -5,6 +5,7 @@ import { ApiError } from '@/lib/api/errors';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
 import { parseSendMessageBody } from '@/app/api/messages/_lib/validation';
 import { dispatchMessage } from '@/lib/messaging/dispatch-message';
+import { recordMerchantReply } from '@/lib/messaging/merchant-reply';
 import { captureVoiceEdit } from '@/lib/agent/voice-capture';
 import logger from '@/lib/server/logger';
 
@@ -39,17 +40,7 @@ export const POST = withOrgRoute(
       throw new ApiError(result.error ?? 'Failed to send message', 502);
     }
 
-    // Implicit-genuine feedback: replying to a non-genuine thread implies the merchant
-    // sees it as legit. Promote filtered → genuine; capture feedback either way.
-    if (thread.filterStatus !== 'genuine') {
-      await db.thread.update({
-        where: { id: threadId },
-        data: {
-          filterFeedback: 'confirmed_genuine',
-          ...(thread.filterStatus === 'filtered' && { filterStatus: 'genuine' }),
-        },
-      });
-    }
+    await recordMerchantReply(thread);
 
     // Brand-voice learning: if this reply diverges from the agent's drafted
     // reply, record the edit for the synthesis loop. Never let it fail the send.

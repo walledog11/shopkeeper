@@ -9,8 +9,9 @@
  * Response: 200 on success, 4xx/5xx on error.
  */
 import { NextResponse } from 'next/server';
-import { db, ThreadFilterStatus, ThreadFilterFeedback } from '@shopkeeper/db';
+import { db } from '@shopkeeper/db';
 import { dispatchMessage } from '@/lib/messaging/dispatch-message';
+import { recordMerchantReply } from '@/lib/messaging/merchant-reply';
 import { assertBillingWriteAllowed } from '@/lib/billing/write-gate';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import { withInternalRoute } from '@/lib/api/internal-route';
@@ -41,17 +42,7 @@ export const POST = withInternalRoute(
       return NextResponse.json({ error: result.error }, { status: 502 });
     }
 
-    // Same implicit-feedback rule as the dashboard /api/messages route:
-    // an outbound reply on a non-genuine thread means the merchant treats it as legit.
-    if (thread.filterStatus !== ThreadFilterStatus.genuine) {
-      await db.thread.update({
-        where: { id: threadId },
-        data: {
-          filterFeedback: ThreadFilterFeedback.confirmed_genuine,
-          ...(thread.filterStatus === ThreadFilterStatus.filtered && { filterStatus: ThreadFilterStatus.genuine }),
-        },
-      });
-    }
+    await recordMerchantReply(thread);
 
     return NextResponse.json({ ok: true });
   },

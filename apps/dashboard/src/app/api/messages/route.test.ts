@@ -359,6 +359,52 @@ describe('POST /api/messages', () => {
     expect(updated?.filterFeedback).toBe('confirmed_genuine');
   });
 
+  it('clears escalatedAt when the merchant replies so the ticket leaves Flagged for you', async () => {
+    const emailAddress = `support_esc_${org.id.slice(0, 8)}@acme.com`;
+    await createTestIntegration(org.id, {
+      platform: ChannelType.email,
+      externalAccountId: emailAddress,
+      fromEmail: emailAddress,
+    });
+
+    const customer = await createTestCustomer(org.id, 'escalated@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    await db.thread.update({
+      where: { id: thread.id },
+      data: { escalatedAt: new Date(), tag: 'needs_human' },
+    });
+
+    const req = new Request('http://localhost:3000/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId: thread.id, text: 'I have got this one — refunding now.' }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+
+    const updated = await db.thread.findUnique({ where: { id: thread.id } });
+    expect(updated?.escalatedAt).toBeNull();
+  });
+
+  it('leaves escalatedAt alone for an internal note', async () => {
+    const customer = await createTestCustomer(org.id, 'still-escalated@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    await db.thread.update({ where: { id: thread.id }, data: { escalatedAt: new Date() } });
+
+    const req = new Request('http://localhost:3000/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId: thread.id, text: 'Need to check with the supplier.', isNote: true }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+
+    const updated = await db.thread.findUnique({ where: { id: thread.id } });
+    expect(updated?.escalatedAt).not.toBeNull();
+  });
+
   it('writes confirmed_genuine on a questionable thread without changing filterStatus', async () => {
     const emailAddress = `support2_${org.id.slice(0, 8)}@acme.com`;
     await createTestIntegration(org.id, {
