@@ -121,26 +121,6 @@ or a configured provider — none is a code task.
   product call — add a trigger (the top bar is the obvious home), or drop the
   feature on the grounds that the merchant can just ask the agent.
 
-- [ ] **No merchant-facing warning when an install is short a scope.**
-  `missingShopifyScopes` (`packages/agent/src/shopify/integration-health.ts`) is
-  consumed only by the canary script — no dashboard surface tells a merchant
-  their install predates a capability. A store connected today, then a
-  capability added later, fails silently at the tool call. This is the same
-  silent-failure class as the `create_refund` and `create_shopify_order` bugs.
-  Verified 2026-07-31 by grep: the only non-test consumer is
-  `scripts/canary-shopify-mutations.mjs`.
-
-- [ ] **`SHOPIFY_OAUTH_SCOPES` does not drive the actual grant.** The app is on
-  Shopify **managed installation**: the granted scope list comes from the
-  Partner Dashboard app configuration, and the `scope` param built at
-  `apps/dashboard/src/app/api/integrations/shopify/auth/route.ts:50` is ignored.
-  Proof (2026-07-31): the grant contained 12 scopes the code has never
-  requested, which an authorize URL cannot produce. The constant now serves only
-  the canary's gap detection — it should either be documented as such or wired
-  to a real check, because as written it reads like the source of truth and is
-  not. This cost an hour of misdiagnosis; the earlier "ship the scope change"
-  instruction was never going to work.
-
 ## Product Gaps
 
 - [ ] **Decide the TikTok Shop disposition — it is built, not stubbed.** TikTok

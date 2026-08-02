@@ -41,9 +41,12 @@ export function isShopifyIntegrationSweepable(
   return isShopifyIntegrationOperational(integration);
 }
 
-// The scopes the install flow requests. A token keeps whatever grant it was
-// issued with, so an install that predates a capability expansion stays short
-// of this list until the merchant re-authorizes.
+// The scopes the tools need. Under Shopify managed installation this list does
+// not decide what a merchant grants — the Partner Dashboard app configuration
+// does — so read it as the expectation a real grant is checked against, not as
+// the request. A token keeps whatever grant it was issued with, so an install
+// that predates a capability expansion stays short of this list until the
+// merchant re-authorizes.
 export const SHOPIFY_OAUTH_SCOPES = [
   "read_customers",
   "write_customers",

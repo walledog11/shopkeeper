@@ -47,6 +47,11 @@ export async function POST(request: Request) {
 
   const authUrl = new URL(`https://${shopDomain}/admin/oauth/authorize`);
   authUrl.searchParams.set('client_id', oauthConfig.clientId);
+  // The app is on Shopify managed installation, so this param does not decide
+  // the grant — the Partner Dashboard app configuration does, and the token
+  // exchange has returned scopes this list never requested. Sent anyway because
+  // it is what a non-managed install would need; to change what a merchant
+  // actually grants, change the Partner Dashboard configuration.
   authUrl.searchParams.set('scope', SHOPIFY_OAUTH_SCOPES.join(','));
   authUrl.searchParams.set('redirect_uri', oauthConfig.redirectUri);
   authUrl.searchParams.set('state', state);
