@@ -24,6 +24,13 @@ export type Category = {
   articles: Article[]
 }
 
+// Help copy is static data, but the agent is named per org. Content writes
+// `{agent}` and every render point substitutes the merchant's own name, so the
+// help panel speaks the same way the rest of the dashboard does.
+export function withAgentName(text: string, agentName: string): string {
+  return text.replaceAll("{agent}", agentName)
+}
+
 export { gettingStarted } from "./getting-started"
 export { tickets } from "./tickets"
 export { aiFeatures } from "./ai-features"

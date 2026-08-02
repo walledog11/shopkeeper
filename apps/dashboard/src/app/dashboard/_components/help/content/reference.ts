@@ -40,7 +40,7 @@ export const reference: Category = {
           steps: [
             "Customer platform IDs and names (from the connected channel).",
             "Message content — the text of each message in a thread.",
-            "AI summaries — generated and stored per thread.",
+            "Ticket summaries — the one-line summary {agent} writes for each thread.",
             "Integration tokens — encrypted access credentials for connected channels.",
           ],
         },
@@ -53,8 +53,8 @@ export const reference: Category = {
           ],
         },
         {
-          heading: "AI and your data",
-          text: "When you use Draft with Shopkeeper or refresh a Shopkeeper Context summary, the conversation content is sent to an AI model to generate a response. This is used solely to produce the summary or draft — it is not used to train models.",
+          heading: "{agent} and your data",
+          text: "When {agent} drafts a reply, summarises a ticket, or answers a question you ask it, the conversation content is sent to an AI model to generate that response. It is used solely to produce the reply or summary — it is not used to train models.",
         },
       ],
     },

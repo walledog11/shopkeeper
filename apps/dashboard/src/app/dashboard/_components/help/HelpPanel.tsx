@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { X, ChevronLeft } from "lucide-react"
-import { ALL_CATEGORIES, type Category, type Article } from "./content/index"
+import { ALL_CATEGORIES, withAgentName, type Category, type Article } from "./content/index"
 import HelpHome from "./HelpHome"
 import HelpCategory from "./HelpCategory"
 import HelpArticle from "./HelpArticle"
@@ -13,7 +13,7 @@ type View =
   | { type: "category"; category: Category }
   | { type: "article"; category: Category; article: Article }
 
-export default function HelpPanel() {
+export default function HelpPanel({ agentName }: { agentName: string }) {
   const { isOpen, closeHelp } = useHelp()
   const [view, setView] = useState<View>({ type: "home" })
 
@@ -33,8 +33,8 @@ export default function HelpPanel() {
 
   const subtitle =
     view.type === "home" ? "Home"
-    : view.type === "category" ? view.category.title
-    : view.article.title
+    : view.type === "category" ? withAgentName(view.category.title, agentName)
+    : withAgentName(view.article.title, agentName)
 
   return (
     <div
@@ -73,17 +73,19 @@ export default function HelpPanel() {
             {view.type === "home" && (
               <HelpHome
                 categories={ALL_CATEGORIES}
+                agentName={agentName}
                 onSelectCategory={cat => setView({ type: "category", category: cat })}
               />
             )}
             {view.type === "category" && (
               <HelpCategory
                 category={view.category}
+                agentName={agentName}
                 onSelectArticle={article => handleSelectArticle(view.category, article)}
               />
             )}
             {view.type === "article" && (
-              <HelpArticle article={view.article} />
+              <HelpArticle article={view.article} agentName={agentName} />
             )}
           </div>
         </>

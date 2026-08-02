@@ -1,20 +1,22 @@
 "use client"
 
-import type { Article } from "./content/index"
+import { withAgentName, type Article } from "./content/index"
 
-export default function HelpArticle({ article }: { article: Article }) {
+export default function HelpArticle({ article, agentName }: { article: Article; agentName: string }) {
+  const named = (text: string) => withAgentName(text, agentName)
+
   return (
     <div className="p-5 space-y-5">
-      <h2 className="text-base font-bold text-foreground leading-snug">{article.title}</h2>
+      <h2 className="text-base font-bold text-foreground leading-snug">{named(article.title)}</h2>
 
       {article.body.map((section) => (
         <div key={section.heading ?? section.text ?? section.steps?.join("|") ?? section.tips?.join("|")} className="space-y-2">
           {section.heading && (
-            <p className="text-xs font-bold text-foreground uppercase tracking-wide">{section.heading}</p>
+            <p className="text-xs font-bold text-foreground uppercase tracking-wide">{named(section.heading)}</p>
           )}
 
           {section.text && (
-            <p className="text-sm text-muted-foreground leading-relaxed">{section.text}</p>
+            <p className="text-sm text-muted-foreground leading-relaxed">{named(section.text)}</p>
           )}
 
           {section.steps && (
@@ -24,7 +26,7 @@ export default function HelpArticle({ article }: { article: Article }) {
                   <span className="shrink-0 size-5 rounded-full bg-muted text-muted-foreground text-xs font-bold flex items-center justify-center mt-0.5">
                     {j + 1}
                   </span>
-                  {step}
+                  {named(step)}
                 </li>
               ))}
             </ol>
@@ -35,7 +37,7 @@ export default function HelpArticle({ article }: { article: Article }) {
               {section.tips.map((tip) => (
                 <p key={tip} className="text-xs text-amber-400 leading-relaxed flex gap-2">
                   <span className="shrink-0 mt-px">💡</span>
-                  {tip}
+                  {named(tip)}
                 </p>
               ))}
             </div>

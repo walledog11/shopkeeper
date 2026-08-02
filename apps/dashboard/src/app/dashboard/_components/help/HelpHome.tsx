@@ -1,13 +1,14 @@
 "use client"
 
-import type { Category } from "./content/index"
+import { withAgentName, type Category } from "./content/index"
 
 interface Props {
   categories: Category[]
+  agentName: string
   onSelectCategory: (category: Category) => void
 }
 
-export default function HelpHome({ categories, onSelectCategory }: Props) {
+export default function HelpHome({ categories, agentName, onSelectCategory }: Props) {
   return (
     <div className="p-5 space-y-3">
       <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Topics</p>
@@ -21,9 +22,9 @@ export default function HelpHome({ categories, onSelectCategory }: Props) {
             <span className="text-lg shrink-0">{cat.icon}</span>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-foreground group-hover:text-foreground transition-colors">
-                {cat.title}
+                {withAgentName(cat.title, agentName)}
               </p>
-              <p className="text-xs text-muted-foreground truncate mt-0.5">{cat.description}</p>
+              <p className="text-xs text-muted-foreground truncate mt-0.5">{withAgentName(cat.description, agentName)}</p>
             </div>
             <span className="text-xs font-semibold text-muted-foreground/60 shrink-0">
               {cat.articles.length}

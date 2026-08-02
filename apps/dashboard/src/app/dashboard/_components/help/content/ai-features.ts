@@ -2,70 +2,91 @@ import type { Category } from "./index"
 
 export const aiFeatures: Category = {
   id: "ai-features",
-  title: "AI Features",
-  description: "How Shopkeeper uses AI to help you respond faster",
+  title: "Working with {agent}",
+  description: "How {agent} drafts, acts, and asks before doing anything risky",
   icon: "✦",
   articles: [
     {
-      id: "shopkeeper-context",
-      title: "How Shopkeeper Context works",
+      id: "plans-and-approvals",
+      title: "Plans and approvals",
       body: [
         {
-          text: "Every open ticket has a Shopkeeper Context panel on the right side of the conversation. This is an AI-generated summary of the conversation that gives you instant context without reading every message.",
+          text: "When a customer message arrives, {agent} reads the thread, checks your store and your saved notes, and writes a plan: the reply it wants to send, plus any store actions it wants to take. Nothing leaves your store until the plan is approved.",
         },
         {
-          heading: "What it summarises",
+          heading: "Approving a plan",
           steps: [
-            "The customer's core question or complaint.",
-            "Key details mentioned (order numbers, product names, dates).",
-            "The current state of the conversation — whether it's been responded to or is still pending.",
+            "Open the dashboard home — tickets with a ready draft are in the deck under the greeting.",
+            "Read the draft reply and the actions listed with it.",
+            "Approve & send to run the plan as written, or Edit & send myself to write your own reply instead.",
+            "Approvals also arrive on your phone if you have linked Telegram or iMessage.",
           ],
         },
         {
-          heading: "Refreshing the summary",
+          heading: "When {agent} asks instead",
           steps: [
-            "Click the refresh icon (↺) next to the Shopkeeper Context heading.",
-            "Shopkeeper will re-analyse the full conversation and update the summary.",
-            "This is useful after you've sent a reply and the conversation has moved forward.",
+            "If the answer is not in your store or your notes, {agent} parks the ticket and asks you the question rather than guessing.",
+            "Answer it once and {agent} remembers it — the same question will not come back.",
+            "If a ticket is beyond what {agent} should handle, it hands the ticket to you and says so in the thread.",
           ],
         },
         {
           tips: [
-            "Summaries are generated automatically when a new message arrives.",
-            "Long conversations benefit most from refreshing — early summaries may not reflect recent messages.",
+            "Edits you make to a draft teach {agent} your voice — it is not wasted work.",
+            "A plan that is waiting on you never expires; nothing is sent behind your back.",
           ],
         },
       ],
     },
     {
-      id: "draft-with-shopkeeper",
-      title: "Drafting replies with AI",
+      id: "asking-your-agent",
+      title: "Asking {agent} directly",
       body: [
         {
-          text: "Draft with Shopkeeper reads the full conversation and generates a suggested reply in your brand's voice. You can edit it before sending.",
+          text: "You can talk to {agent} inside any ticket, without sending anything to the customer.",
         },
         {
           heading: "How to use it",
           steps: [
-            "Open any ticket in the Open tab.",
-            "Click Draft with Shopkeeper in the bottom-left of the composer.",
-            "Wait a moment while Shopkeeper analyses the thread.",
-            "The suggested reply appears in the text box — edit it as needed.",
-            "Click Send when you're happy with it.",
-          ],
-        },
-        {
-          heading: "How to get better drafts",
-          steps: [
-            "Go to Agent → Settings and fill in About your store with what you sell and any key policies (e.g. return window, shipping times). Your business name is on the same page.",
-            "Set a Brand Voice to tell Shopkeeper how to write — e.g. 'friendly and concise' or 'professional and formal'.",
-            "The more context you provide, the more accurate and on-brand the drafts will be.",
+            "Open a ticket and type @{agent} at the start of a message in the composer.",
+            "Ask a question — where an order is, what your policy says, what it would reply.",
+            "The answer stays internal. Nothing is sent to the customer until you send it.",
           ],
         },
         {
           tips: [
-            "Always review AI drafts before sending — they're a starting point, not a final answer.",
-            "If a draft misses the point, try refreshing the Shopkeeper Context summary first, then draft again.",
+            "This is read-only: asking {agent} a question can never issue a refund or edit an order.",
+            "The Concierge on the Agent page does the same thing across your whole store, not one ticket.",
+          ],
+        },
+      ],
+    },
+    {
+      id: "better-drafts",
+      title: "Getting better drafts",
+      body: [
+        {
+          text: "{agent} writes from what it knows about your store. The more of that you fill in, the less it has to ask you.",
+        },
+        {
+          heading: "Where to set it",
+          steps: [
+            "Agent → Settings → Your store: your business name, and About your store — what you sell, your return window, typical shipping times.",
+            "Brand voice: a short instruction on tone, for example 'friendly and direct, never over-apologise'.",
+            "Memory: notes, policies, and anything synced from Shopify. {agent} reads these before every draft.",
+          ],
+        },
+        {
+          heading: "Trust level",
+          steps: [
+            "Agent → Settings → Trust level controls how much {agent} does without asking.",
+            "At the lowest level it drafts and waits for you on everything.",
+            "Higher levels let it send routine replies on its own, still inside the refund and discount caps you set.",
+          ],
+        },
+        {
+          tips: [
+            "Review page shows everything {agent} has done, so you can raise the trust level on evidence rather than hope.",
           ],
         },
       ],

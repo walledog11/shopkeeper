@@ -119,7 +119,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <div className="flex-1 overflow-hidden flex flex-col min-w-0">
               {children}
             </div>
-            <HelpPanel />
+            <HelpPanel agentName={settings.agentName} />
             <AgentPanelRoot agentName={settings.agentName} />
           </div>
         </DashboardSidebar>

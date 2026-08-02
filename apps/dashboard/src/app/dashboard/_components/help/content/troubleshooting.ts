@@ -32,7 +32,7 @@ export const troubleshooting: Category = {
         {
           heading: "3. Check the correct tab",
           steps: [
-            "In the Inbox, make sure you're on the Open tab, not Closed.",
+            "In the Inbox, check All conversations — a ticket that needs nothing from you is not in the default queue.",
             "Clear any channel filters by clicking All.",
           ],
         },

@@ -3,7 +3,7 @@ import type { Category } from "./index"
 export const settings: Category = {
   id: "settings",
   title: "Account & agent settings",
-  description: "Account, billing, workspace admin, and how your AI agent works",
+  description: "Account, billing, workspace admin, and how {agent} works",
   icon: "⚙️",
   articles: [
     {
@@ -11,7 +11,7 @@ export const settings: Category = {
       title: "Updating your business name",
       body: [
         {
-          text: "Your business name is shown as the sender name in support emails and is used by Shopkeeper's AI when drafting replies. You usually set it during onboarding.",
+          text: "Your business name is shown as the sender name in support emails and is the name {agent} signs replies with. You usually set it during onboarding.",
         },
         {
           heading: "How to update it",
@@ -28,7 +28,7 @@ export const settings: Category = {
       title: "Store context and brand voice",
       body: [
         {
-          text: "Agent → Settings is where you configure how Shopkeeper represents your store and writes replies.",
+          text: "Agent → Settings is where you configure how {agent} represents your store and writes replies.",
         },
         {
           heading: "Where to find them",
@@ -41,7 +41,7 @@ export const settings: Category = {
         },
         {
           heading: "About your store",
-          text: "Optional details Shopkeeper reads before every draft. Include what you sell, your return / refund policy, typical shipping times, and any information customers frequently ask about. You do not need to repeat your business name here.",
+          text: "Optional details {agent} reads before every draft. Include what you sell, your return / refund policy, typical shipping times, and any information customers frequently ask about. You do not need to repeat your business name here.",
         },
         {
           heading: "Example",
@@ -49,7 +49,7 @@ export const settings: Category = {
         },
         {
           heading: "Brand Voice",
-          text: "A short instruction on tone. This is appended to every AI draft prompt.",
+          text: "A short instruction on tone. {agent} follows it in every reply it writes.",
         },
         {
           heading: "Example Brand Voices",

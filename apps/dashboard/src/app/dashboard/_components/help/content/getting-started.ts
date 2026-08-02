@@ -36,9 +36,9 @@ export const gettingStarted: Category = {
           heading: "Step 3 — Reply and resolve",
           steps: [
             "Click a ticket to open the conversation.",
-            "Type a reply in the composer at the bottom, or use Draft with Shopkeeper to generate an AI reply.",
+            "Approve the draft {agent} wrote, or type your own reply in the composer at the bottom.",
             "Hit Send to deliver your message back to the customer.",
-            "When the issue is resolved, click the Resolve button in the top-right of the conversation.",
+            "When the issue is resolved, click Close Ticket in the top-right of the conversation.",
           ],
         },
       ],
@@ -56,11 +56,11 @@ export const gettingStarted: Category = {
         },
         {
           heading: "Home",
-          text: "Your home page shows open ticket count, total resolved, and messages handled at a glance. Recent Activity shows the latest tickets across all channels. Needs Attention surfaces the most active open tickets.",
+          text: "Home opens with what {agent} did overnight and what is left for you. Tickets with a ready draft are stacked under the greeting — approve them one at a time without leaving the page.",
         },
         {
           heading: "Inbox",
-          text: "The Inbox is your main workspace. The left panel lists all tickets — filter by Open or Closed, and by channel using the icon chips. Click any ticket to open the conversation. The right panel shows customer info and the AI-generated context summary.",
+          text: "The Inbox is your main workspace. It groups open tickets by what they need from you — flagged for you, needs your answer, needs review — with everything else behind All conversations. Open a ticket and the bar above the conversation carries the customer and order context {agent} used.",
         },
         {
           heading: "Integrations",
