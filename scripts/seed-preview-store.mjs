@@ -281,17 +281,30 @@ async function main() {
     await article(shopifyBase.id, 'Refund policy', 'Refunds are issued to the original payment method within 5 business days of receipt.', ['Returns']);
     await article(wholesale.id, 'Minimum order', 'Wholesale opens at twelve units per colourway with net-30 terms after the first order.', []);
 
-    // Agent action audit trail for the Review page.
+    // Agent action audit trail for the Review page. Statuses and modes match
+    // the executor's real enums (success/error/policy_block/escalated/unknown
+    // and auto_executed/human_approved/read_only) so the page is judged against
+    // the states it actually renders.
     const actions = [
-      ['send_reply', 'communication', 'sent', 'auto', 'Answered a tracking question for order #1038.', t1.id],
-      ['get_order_status', 'read', 'ok', 'read_only', 'Looked up order #1038.', t1.id],
-      ['create_refund', 'action', 'blocked', 'approved', 'Refund of $128 exceeded the $75 cap.', t2.id],
-      ['send_reply', 'communication', 'sent', 'approved', 'Confirmed an exchange for order #1029.', t5.id],
-      ['escalate', 'internal', 'ok', 'auto', 'Handed order #1033 to the merchant.', t4.id],
-      ['search_kb', 'read', 'ok', 'read_only', 'Searched memory for international shipping.', t3.id],
-      ['issue_store_credit', 'action', 'ok', 'approved', 'Issued $40 of store credit for a late delivery.', t5.id],
+      ['send_reply', 'communication', 'success', 'auto_executed', 'Answered a tracking question for order #1038.', t1.id,
+        { text: 'Your order left the warehouse Tuesday and is due Thursday. Tracking: 9400 1112 0000 1234 5678.' }],
+      ['get_order_status', 'read', 'success', 'read_only', 'Looked up order #1038.', t1.id, { order_number: '1038' }],
+      ['create_refund', 'action', 'policy_block', 'human_approved', 'Refund of $128 exceeded the $75 cap.', t2.id,
+        { order_number: '1051', amount: 128 }],
+      ['send_reply', 'communication', 'success', 'human_approved', 'Confirmed an exchange for order #1029.', t5.id,
+        { text: "I've sent a return label for the king and put the super king aside for you." }],
+      ['escalate_to_human', 'internal', 'escalated', 'auto_executed', 'Handed order #1033 to the merchant.', t4.id,
+        { reason: 'Customer is threatening a chargeback and this is their third unanswered email.' }],
+      ['search_kb', 'read', 'success', 'read_only', 'Searched memory for international shipping.', t3.id,
+        { query: 'international shipping canada duty' }],
+      ['issue_store_credit', 'action', 'success', 'human_approved', 'Issued $40 of store credit for a late delivery.', t5.id,
+        { amount: 40 }],
+      ['send_email', 'communication', 'error', 'auto_executed', 'Postmark rejected the address.', t6.id,
+        { subject: 'Your linen care guide', body: 'Cool wash, line dry, warm iron while slightly damp.' }],
+      ['flag_order', 'action', 'success', 'auto_executed', 'Flagged order #1044: billing and shipping countries differ.', null,
+        { order_number: '1044' }],
     ];
-    for (const [index, [tool, category, status, mode, summary, threadId]] of actions.entries()) {
+    for (const [index, [tool, category, status, mode, summary, threadId, input]] of actions.entries()) {
       await prisma.agentAction.create({
         data: {
           turnId: randomUUID(),
@@ -299,7 +312,7 @@ async function main() {
           threadId,
           tool,
           category,
-          input: {},
+          input,
           status,
           mode,
           summary,
