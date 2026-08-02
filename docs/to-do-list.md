@@ -110,18 +110,19 @@ or a configured provider — none is a code task.
   Use the deployed `agent_failure` trigger from
   [alerting-evidence.md](production/alerting-evidence.md).
 
-## Known Bugs
-
-- [ ] **The help panel cannot be opened.** `HelpProvider` wraps the shell and
-  `HelpPanel` is mounted (`(shell)/layout.tsx`), but `openHelp` is called from
-  nowhere in the app — verified 2026-08-01 by grep, the only `useHelp()`
-  consumer is `HelpPanel` itself, and it only calls `closeHelp`. So ~950 lines
-  of help content across eight categories are unreachable. The content itself
-  was corrected and agent-name-aware as of `4eeb7628`; what remains is the
-  product call — add a trigger (the top bar is the obvious home), or drop the
-  feature on the grounds that the merchant can just ask the agent.
-
 ## Product Gaps
+
+- [ ] **Make the help content answerable by the agent, not just the dashboard.**
+  The panel is reachable as of 2026-08-01, but it is a dashboard-only surface
+  and "why did no tickets arrive today" is a question the merchant asks from
+  their phone. The agent cannot answer it today: `SUPPORT_STABLE_PREFIX` gives
+  it no product self-knowledge, so its only move is `escalate_to_human` —
+  escalating to the merchant who asked. The content is already
+  `Category → Article → Section`, close to `KbArticle` shape.
+  - **Operator-scoped only.** Product help in the shared customer-facing KB
+    means a customer asking about returns could be answered out of Shopkeeper's
+    own documentation. Per the agent-change invariants that also keeps it off
+    the shared registry and out of the eval gate.
 
 - [ ] **Decide the TikTok Shop disposition — it is built, not stubbed.** TikTok
   Shop is wired end to end and gated off by `TIKTOK_SHOP_ENABLED=false`:

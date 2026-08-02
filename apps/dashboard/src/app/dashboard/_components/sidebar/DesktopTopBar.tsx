@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
-import { ChevronDown, Search } from "lucide-react";
+import { ChevronDown, CircleHelp, Search } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,6 +14,7 @@ import { cn } from "@/lib/ui/cn";
 import AgentAvatar from "@/components/agent/AgentAvatar";
 import { useAgentPanel } from "../agent-panel/AgentPanelContext";
 import { useCommandPalette } from "../CommandPaletteContext";
+import { useHelp } from "../help/HelpContext";
 import { inboxNavItem, topBarDropdowns, type NavItem } from "../nav-items";
 import { OpenCountBadge } from "./OpenCountBadge";
 import { Logo } from "./Logo";
@@ -133,6 +134,7 @@ export function DesktopTopBar({
   const pathname = usePathname();
   const { open: openCmd } = useCommandPalette();
   const { open: openAgentPanel } = useAgentPanel();
+  const { openHelp } = useHelp();
   const inboxIsActive = isRouteActive(pathname, inboxNavItem.href);
 
   return (
@@ -196,6 +198,16 @@ export function DesktopTopBar({
           <kbd className="hidden xl:inline text-[10px] font-semibold bg-secondary px-1.5 py-0.5 rounded text-muted-foreground leading-none">
             ⌘K
           </kbd>
+        </button>
+
+        <button
+          type="button"
+          onClick={openHelp}
+          aria-label="Help"
+          title="Help"
+          className="flex items-center justify-center h-9 w-9 rounded-md border border-border bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors outline-none shrink-0"
+        >
+          <CircleHelp className="size-4 shrink-0" />
         </button>
 
         <OrgSwitcher navAuth={navAuth} onSwitching={onSwitching} variant="topBar" />

@@ -2,9 +2,10 @@
 
 import { usePathname } from "next/navigation";
 import type { MouseEvent } from "react";
-import { X } from "lucide-react";
+import { CircleHelp, X } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { usePanelBriefingData } from "../agent-panel/usePanelBriefingData";
+import { useHelp } from "../help/HelpContext";
 import { mobileNavSections } from "../nav-items";
 import { NavGroupList } from "./NavGroupList";
 import { OrgSwitcher } from "./OrgSwitcher";
@@ -31,6 +32,14 @@ export function MobileNavSheet({
   const pathname = usePathname();
   const { summary } = usePanelBriefingData(open);
   const needsYouCount = summary.metrics.needsYouCount;
+  const { openHelp } = useHelp();
+
+  // The sheet and the panel both own the screen on mobile, so hand off rather
+  // than stack them.
+  const handleOpenHelp = () => {
+    onClose();
+    openHelp();
+  };
 
   const handleNavClick = (e: MouseEvent<HTMLAnchorElement>, isActive: boolean) => {
     if (isActive) {
@@ -76,7 +85,15 @@ export function MobileNavSheet({
           />
         </div>
 
-        <div className="shrink-0 border-t border-border px-4 py-3">
+        <div className="shrink-0 border-t border-border px-4 py-3 space-y-1">
+          <button
+            type="button"
+            onClick={handleOpenHelp}
+            className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground"
+          >
+            <CircleHelp className="size-4 shrink-0" />
+            Help
+          </button>
           <LogOutButton navAuth={navAuth} variant="sheet" onClick={onClose} />
         </div>
       </SheetContent>
