@@ -9,12 +9,12 @@ import {
 import { getActionLogChannelInfo } from "@/lib/messaging/channels"
 import type { ActionLogEntry } from "@/types"
 import {
-  MODE_LABELS,
   TONE_STYLES,
   isErrorStatus,
   outcomeActions,
   outcomeTone,
   reviewItemChrome,
+  reviewModeNote,
   toOutputBlock,
   toolLabel,
   type OutputBlock,
@@ -75,6 +75,7 @@ export function ReviewDetail({
   const chrome = reviewItemChrome(entry)
   const Icon = REVIEW_ICONS[chrome.icon]
   const tone = REVIEW_TONE_CLASS[chrome.tone]
+  const modeNote = reviewModeNote(entry)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -99,7 +100,7 @@ export function ReviewDetail({
                 <Clock3 className="size-3" />
                 {new Date(entry.sentAt).toLocaleString()}
               </span>
-              {entry.mode && <span>{MODE_LABELS[entry.mode]}</span>}
+              {modeNote && <span>{modeNote}</span>}
               {entry.approver && <span>Approved by {entry.approver.displayName ?? entry.approver.id}</span>}
               {entry.threadTag && <span>{entry.threadTag}</span>}
             </div>

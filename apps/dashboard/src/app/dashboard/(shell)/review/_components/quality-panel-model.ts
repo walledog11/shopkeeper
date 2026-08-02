@@ -1,10 +1,11 @@
 import { TOOL_CATEGORIES, TOOL_LABELS } from "@shopkeeper/agent/tools"
+import type { ActionLogQueryFilters } from "@/hooks/useActionLogEntries"
 import type { ActionLogEntry } from "@/types"
 
 export type Tone = "reply" | "escalate" | "money" | "error" | "note"
-export type ReviewColumnId = "attention" | "auto" | "store" | "approved"
 export type ReviewItemTone = "attention" | "auto" | "store" | "approved" | "error" | "note"
 export type ReviewIconKey = "alert" | "check" | "message" | "note" | "store" | "tool"
+export type ReviewFilterId = "all" | "attention" | "store" | "auto" | "approved"
 
 export interface OutputBlock {
   key: string
@@ -14,13 +15,12 @@ export interface OutputBlock {
   tone: Tone
 }
 
-export interface ReviewColumnConfig {
-  id: ReviewColumnId
+export interface ReviewFilterConfig {
+  id: ReviewFilterId
   label: string
-  shortLabel: string
-  description: string
   emptyTitle: string
   emptyBody: string
+  query: ActionLogQueryFilters
 }
 
 export interface ReviewItemChrome {
@@ -29,53 +29,12 @@ export interface ReviewItemChrome {
   label: string
 }
 
-export const REVIEW_BOARD_COLUMNS: ReviewColumnConfig[] = [
-  {
-    id: "attention",
-    label: "Needs your eyes",
-    shortLabel: "Needs eyes",
-    description: "Escalations, flags, errors, and policy blocks.",
-    emptyTitle: "Nothing needs review",
-    emptyBody: "Escalations, failed tools, and fraud flags will land here.",
-  },
-  {
-    id: "auto",
-    label: "Auto-sent",
-    shortLabel: "Auto-sent",
-    description: "Replies and routine actions sent without approval.",
-    emptyTitle: "Nothing auto-sent",
-    emptyBody: "Autonomous replies and actions will appear here for spot checks.",
-  },
-  {
-    id: "store",
-    label: "Store actions",
-    shortLabel: "Store",
-    description: "Refunds, cancellations, order edits, and order creation.",
-    emptyTitle: "No store actions",
-    emptyBody: "Refunds, order edits, cancellations, and created orders will appear here.",
-  },
-  {
-    id: "approved",
-    label: "Approved / read-only",
-    shortLabel: "Approved",
-    description: "Human-approved work and read-only agent lookups.",
-    emptyTitle: "Nothing approved yet",
-    emptyBody: "Approved turns and read-only checks will appear here.",
-  },
-]
-
 export const TONE_STYLES: Record<Tone, { container: string; label: string }> = {
   reply: { container: "border-emerald-800/40 bg-emerald-900/[0.12]", label: "text-emerald-300" },
   escalate: { container: "border-amber-800/40 bg-amber-900/[0.12]", label: "text-amber-300" },
   money: { container: "border-amber-800/40 bg-amber-900/[0.12]", label: "text-amber-300" },
   error: { container: "border-red-800/40 bg-red-900/[0.12]", label: "text-red-300" },
   note: { container: "border-foreground/[0.08] bg-foreground/[0.03]", label: "text-foreground/45" },
-}
-
-export const MODE_LABELS: Record<NonNullable<ActionLogEntry["mode"]>, string> = {
-  auto_executed: "Auto-sent",
-  human_approved: "Approved",
-  read_only: "Read only",
 }
 
 export const STORE_ACTION_TOOLS = [
@@ -90,6 +49,47 @@ export const STORE_ACTION_TOOLS = [
   "issue_discount",
   "flag_order",
 ] as const
+
+// One list, filtered. Every label answers the same question — "show me what?"
+// — so the chips read as one set instead of the four registers the board's
+// column headings mixed.
+export const REVIEW_FILTERS: ReviewFilterConfig[] = [
+  {
+    id: "all",
+    label: "Everything",
+    emptyTitle: "Nothing logged yet",
+    emptyBody: "Every reply, lookup, and store action the agent takes is recorded here.",
+    query: {},
+  },
+  {
+    id: "attention",
+    label: "Needs review",
+    emptyTitle: "Nothing needs review",
+    emptyBody: "Escalations, failed tools, policy blocks, and fraud flags land here.",
+    query: { attention: true, excludeOperator: true },
+  },
+  {
+    id: "store",
+    label: "Store actions",
+    emptyTitle: "No store actions",
+    emptyBody: "Refunds, order edits, cancellations, and credits appear here.",
+    query: { tools: [...STORE_ACTION_TOOLS] },
+  },
+  {
+    id: "auto",
+    label: "Sent automatically",
+    emptyTitle: "Nothing sent automatically",
+    emptyBody: "Work the agent completed without asking you appears here.",
+    query: { modes: ["auto_executed"], excludeOperator: true },
+  },
+  {
+    id: "approved",
+    label: "You approved",
+    emptyTitle: "Nothing approved yet",
+    emptyBody: "Plans you approved before they ran appear here.",
+    query: { modes: ["human_approved"] },
+  },
+]
 
 const MONEY_TOOLS = new Set<string>(STORE_ACTION_TOOLS)
 
@@ -175,17 +175,6 @@ export function isAttentionEntry(entry: ActionLogEntry): boolean {
   )
 }
 
-export function isStoreActionEntry(entry: ActionLogEntry): boolean {
-  return entry.actions.some((action) => MONEY_TOOLS.has(action.tool))
-}
-
-export function classifyReviewItem(entry: ActionLogEntry): ReviewColumnId {
-  if (isAttentionEntry(entry)) return "attention"
-  if (isStoreActionEntry(entry)) return "store"
-  if (entry.mode === "auto_executed") return "auto"
-  return "approved"
-}
-
 export function reviewItemChrome(entry: ActionLogEntry): ReviewItemChrome {
   const errored = entry.actions.find((action) => isErrorStatus(action.status))
   if (errored) {
@@ -222,7 +211,28 @@ export function reviewItemChrome(entry: ActionLogEntry): ReviewItemChrome {
   return { tone: "approved", icon: "check", label: "Approved" }
 }
 
+// Who authorised the turn, but only when the status badge does not already say
+// so. The board rendered both unconditionally, which produced pairs like
+// "Auto reply" + "Auto-sent" and, at worst, "Approved" twice on one card.
+export function reviewModeNote(entry: ActionLogEntry): string | null {
+  if (!entry.mode) return null
+  const label = reviewItemChrome(entry).label
+
+  if (entry.mode === "auto_executed") {
+    return label.startsWith("Auto") ? null : "sent automatically"
+  }
+  if (entry.mode === "read_only") {
+    return label === "Read only" ? null : "read-only lookup"
+  }
+  return label === "Approved" ? null : "you approved"
+}
+
 export function primaryPreviewText(entry: ActionLogEntry): string {
+  // On a failure the failure is the story. Preferring the output block here
+  // previewed the body of an email that never sent.
+  const failed = entry.actions.find((action) => isErrorStatus(action.status))
+  if (failed) return failed.result.trim() || entry.summary.trim() || "No output recorded."
+
   const output = entry.actions.map(toOutputBlock).find((block): block is OutputBlock => block !== null)
   if (output?.text.trim()) return output.text.trim()
 

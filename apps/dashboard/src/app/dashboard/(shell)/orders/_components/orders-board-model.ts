@@ -59,8 +59,7 @@ const OPEN_FULFILLMENT = new Set([null, "", "unfulfilled", "partial", "partially
 /**
  * Assigns each order to exactly one board column. Column fetches overlap (an
  * unpaid order is also unfulfilled), so each column keeps only the orders whose
- * canonical classification matches it — the same dedupe approach the Review board
- * uses with classifyReviewItem.
+ * canonical classification matches it.
  */
 export function classifyOrder(order: OrderRow): OrderColumnId {
   if (CLOSED_FINANCIAL.has(order.financial_status)) return "refunded"
