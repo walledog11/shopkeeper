@@ -958,9 +958,9 @@ in production on 2026-07-31 via `emit-controlled-ops-alert.ts queue_health`.
   leaves alerts log-only** — the feature is inert until configured.
 - Use an operator chat you own, never a merchant binding. Alerts carry no
   customer data, but they are internal diagnostics, not merchant-facing copy.
-- Covers the gateway's 13 call sites. The dashboard's remaining call sites
-  (`agent_failure`, `provider_send`, `provider_cleanup`) are still log-only; it
-  holds no `TELEGRAM_BOT_TOKEN`.
+- Covers the gateway's 13 call sites. The dashboard holds no
+  `TELEGRAM_BOT_TOKEN`, so its three (`agent_failure`, `provider_send`,
+  `provider_cleanup`) take the Sentry path below instead.
 
 Two design constraints in `apps/gateway/src/ops-alert-notify.ts` that must
 survive any edit:
@@ -978,6 +978,29 @@ survive any edit:
 Dispatch is fire-and-forget after the log write, so it can never delay or fail
 the caller that raised the alert, and a suppressed alert
 (`OPS_ALERTS_ENABLED=false`) never pushes.
+
+#### Dashboard → Sentry capture (shipped 2026-08-01, production round-trip unverified)
+
+The dashboard's three sources capture to Sentry instead
+(`apps/dashboard/src/lib/server/ops-alert-notify.ts`), on the same
+fire-and-forget rule and off the same `emitOpsAlert` seam, so a source added
+later is covered without new wiring.
+
+- No configuration: the DSN in `sentry.server.config.ts` is the one already
+  carrying dashboard exceptions. `OPS_ALERTS_ENABLED=false` suppresses the
+  capture with the log.
+- `captureMessage`, not `captureException` — `buildOpsAlertScope` computes the
+  grouping fingerprint, and an exception would regroup by stack trace instead.
+- `extra` **is** kept here, unlike the Telegram push: Sentry is a private
+  surface and the identifiers are what make an alert actionable.
+- Unverified in production, and **`emit-controlled-ops-alert.ts` cannot verify
+  it**: that script is a standalone `tsx` process, where `instrumentation.ts`
+  never runs and `Sentry.captureMessage` is a no-op against an uninitialized
+  client. It proves the log line, not the capture. Use the deployed
+  `agent_failure` trigger in
+  [alerting-evidence.md](alerting-evidence.md) — an authenticated `POST
+  /api/agent` with no approved plan — which raises the alert inside the Next
+  runtime where Sentry is initialized.
 
 Better Stack log alerting is **query/threshold-based on a saved Telemetry chart**,
 not raw-text keyword matching: filter the structured fields into a chart, save it,

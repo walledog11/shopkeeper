@@ -46,6 +46,7 @@ incident, and below `QUEUE_ALERT_FAILED_THRESHOLD`. Clear it before controlled
 | Uptime monitor: dashboard `/api/health` (keyword `{"status":"ok"`) | ☑ | Configured 2026-07-31, Better Stack free tier |
 | Uptime monitor: gateway `/health/deep` (keyword `{"status":"ok"`) | ☑ | Configured 2026-07-31, Better Stack free tier |
 | Gateway ops-alert → Telegram push | ☑ | Verified in production 2026-07-31 via `emit-controlled-ops-alert.ts queue_health`; both test alerts delivered |
+| Dashboard ops-alert → Sentry capture | ☐ | Shipped 2026-08-01 (`lib/server/ops-alert-notify.ts`); needs a **deployed** trigger — see the Sentry caveat below |
 | Better Stack test notification sent | ☐ | Recipient: ___ Time: ___ |
 
 ## Controlled ops-alert validation
@@ -71,6 +72,14 @@ current production hosts.
 > below, the **[drain ✓]** trigger is the one that fires from the deployed
 > process and lands in Better Stack; **[counter-only]** triggers verify emit/TTL
 > logic locally.
+
+> **Sentry caveat (dashboard).** The same split applies to the dashboard's
+> Sentry capture, for a different reason: `emit-controlled-ops-alert.ts` is a
+> standalone `tsx` process, so `instrumentation.ts` never runs and
+> `Sentry.captureMessage` is a no-op against an uninitialized client. Only the
+> **[drain ✓]** `agent_failure` trigger — the authenticated `POST /api/agent` —
+> exercises the capture, because only it raises the alert inside the deployed
+> Next runtime.
 
 **`webhook_signature` — [drain ✓] (deployed gateway)**
 

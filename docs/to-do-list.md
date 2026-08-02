@@ -95,13 +95,20 @@ or a configured provider — none is a code task.
     Shopify approval for public apps.
   - Do it before merchant #2: changing scopes forces every connected merchant to
     re-consent, so the cost only goes up.
+  - **Do not drop `read_products` with `write_products`.** "Plus their implied
+    reads" is only safe for scopes the tools do not need, and `read_products`
+    is one of the 15 in `SHOPIFY_OAUTH_SCOPES`. Since 2026-08-01 a shortfall
+    is at least visible — the integrations card asks the merchant to reconnect
+    — but it would be visible on every connected store at once.
 
 - [ ] **Confirm a dashboard ops alert reaches Sentry in production.** The
   dashboard's three alert sources now capture to Sentry
-  (`lib/server/ops-alert-notify.ts`, 2026-08-01) the way the gateway's push to
-  Telegram; only the production round-trip is unverified. The gateway side has
-  a controlled trigger (`emit-controlled-ops-alert.ts`) — the dashboard needs
-  the equivalent one-off.
+  (`lib/server/ops-alert-notify.ts`, 2026-08-01) the way the gateway pushes to
+  Telegram; only the production round-trip is unverified. Note that
+  `emit-controlled-ops-alert.ts` will **not** prove it — as a standalone `tsx`
+  process it never runs `instrumentation.ts`, so the capture is a no-op there.
+  Use the deployed `agent_failure` trigger from
+  [alerting-evidence.md](production/alerting-evidence.md).
 
 ## Known Bugs
 
