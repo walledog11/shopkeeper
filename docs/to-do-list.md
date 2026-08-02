@@ -112,6 +112,15 @@ or a configured provider — none is a code task.
 
 ## Known Bugs
 
+- [ ] **The help panel cannot be opened.** `HelpProvider` wraps the shell and
+  `HelpPanel` is mounted (`(shell)/layout.tsx`), but `openHelp` is called from
+  nowhere in the app — verified 2026-08-01 by grep, the only `useHelp()`
+  consumer is `HelpPanel` itself, and it only calls `closeHelp`. So ~950 lines
+  of help content across eight categories are unreachable. The content itself
+  was corrected and agent-name-aware as of `4eeb7628`; what remains is the
+  product call — add a trigger (the top bar is the obvious home), or drop the
+  feature on the grounds that the merchant can just ask the agent.
+
 - [ ] **No merchant-facing warning when an install is short a scope.**
   `missingShopifyScopes` (`packages/agent/src/shopify/integration-health.ts`) is
   consumed only by the canary script — no dashboard surface tells a merchant

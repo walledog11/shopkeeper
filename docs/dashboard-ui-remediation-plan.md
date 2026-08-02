@@ -477,6 +477,27 @@ entries takes 7 clicks across 4 carousels. An audit trail's job is scanning.
    greeting — moved into the heading, with any remainder past the 4-tag query
    cap folded into "other" so the parts sum to the stated total.
 
+## Follow-ups raised by this plan — DONE 2026-08-01
+
+Both were surfaced while working the phases above and closed after Phase 5.
+
+- **`escalatedAt` never cleared** (`113b7e91`). Raised under Phase 1: an
+  escalated ticket sat in "Flagged for you" until close, so the section did
+  not drain on the merchant replying. Now cleared on a merchant reply
+  through one helper shared by the composer and `REPLY <n>` from the
+  operator digest — not by the agent's own sends, which cannot be told
+  apart by `senderType` (every outbound message is written as `agent`).
+  Verified live: the section disappears and the Inbox badge follows.
+- **Help content described a product that does not exist** (`4eeb7628`).
+  Raised under Phase 2. It documented "Draft with Shopkeeper" and a
+  right-hand "Shopkeeper Context" panel, neither of which is in the app,
+  plus Open/Closed tabs and a Home page of counters. Rewritten against the
+  real UI, and the register fixed with it: help copy now writes `{agent}`
+  and each render point substitutes the merchant's agent name.
+  - **New finding, not fixed — the help panel has no trigger.** `openHelp`
+    is called from nowhere, so none of it is reachable. That is a product
+    call, logged under Known Bugs in [to-do-list.md](to-do-list.md).
+
 ## Deferred — product calls, not code
 
 - Remove the `Auto-plan on ticket open` toggle entirely? It exposes internal
