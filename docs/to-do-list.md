@@ -96,19 +96,12 @@ or a configured provider — none is a code task.
   - Do it before merchant #2: changing scopes forces every connected merchant to
     re-consent, so the cost only goes up.
 
-- [ ] **Dashboard ops alerts still go nowhere.** The gateway pushes `opsAlert`
-  to Telegram as of 2026-07-31 (`apps/gateway/src/ops-alert-notify.ts`), covering
-  13 of 17 call sites and verified end to end in production the same day. The
-  dashboard's three — `agent_failure`
-  (`lib/server/agent-failure-alerts.ts`), `provider_send`
-  (`lib/server/provider-send-alerts.ts`), `provider_cleanup`
-  (`api/integrations/_lib/instagram-disconnect.ts`) — remain log-only, because
-  the dashboard has no `TELEGRAM_BOT_TOKEN`. Two options: a gateway internal
-  route the dashboard POSTs to (it already holds `GATEWAY_INTERNAL_URL` +
-  `INTERNAL_API_SECRET`), or route them to Sentry, whose `captureMessage` shape
-  the existing `buildOpsAlertScope` output already matches exactly
-  (`level`/`tags`/`extra`/`fingerprint`). Prefer Sentry if its DSN is live —
-  no new route, no new auth surface.
+- [ ] **Confirm a dashboard ops alert reaches Sentry in production.** The
+  dashboard's three alert sources now capture to Sentry
+  (`lib/server/ops-alert-notify.ts`, 2026-08-01) the way the gateway's push to
+  Telegram; only the production round-trip is unverified. The gateway side has
+  a controlled trigger (`emit-controlled-ops-alert.ts`) — the dashboard needs
+  the equivalent one-off.
 
 ## Known Bugs
 
@@ -153,9 +146,6 @@ or a configured provider — none is a code task.
     the customer's complaint, because `app/api/threads/route.ts:72` loads
     `messages: take 1`. Honest but wrong-facing; fixing it is a list-query
     cost decision.
-  - Small cleanup while in there: `AgentSampleRepliesSection`,
-    `AgentResponseSection`, `BusinessHoursSection`, and `SpamFilterSection`
-    each keep a non-`embedded` branch that no caller reaches.
 
 - [ ] **Domain / branding migration (was "Phase 6").** See
   [phase-6-external-services.md](phase-6-external-services.md) — 51 open steps,
