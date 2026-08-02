@@ -1,14 +1,14 @@
 # Dashboard UI remediation plan
 
-**Status:** Phases 0–3 done. Phase 1 merged and pushed to `master`
+**Status: every phase is done.** Phase 1 merged and pushed to `master`
 2026-07-31 (`9b47cdb7`, `6dcbdcf4`, `e3424b83`, `218570db`) and Phase 3 as
 `651bfa9d` — pushed straight to master at the merchant's request, no PR.
-Phase 0 merged and pushed 2026-08-01 (`9777bed7`). Phase 2 committed
-2026-08-01 (`dd2e5d1b`, `0b7f9088`), **not yet pushed**. All three open
-decisions are now resolved. Phases 4 and 5 open.
+Phase 0 merged and pushed 2026-08-01 (`9777bed7`). All three open
+decisions are resolved.
 
-Phase 4 done 2026-08-01 (`c508b2c7`, `ce847240`, `f7445a5b`, `9f8f369e`,
-`32713113`), **not yet pushed** along with Phase 2. Only Phase 5 is open.
+**Committed locally, not yet pushed:** Phase 2 (`dd2e5d1b`, `0b7f9088`),
+Phase 4 (`c508b2c7`, `ce847240`, `f7445a5b`, `9f8f369e`, `32713113`), and
+Phase 5 (`d5f8702e`), plus the harness (`01e299bb`, `b995bd82`).
 
 **Verification debt cleared.** The preview harness is checked in at
 `scripts/seed-preview-store.mjs` (`01e299bb`), every Phase 4 change was
@@ -412,7 +412,43 @@ Worth resolving as part of item 5 given product principle 2.
 
 ---
 
-## Phase 5 — Review page rebuild
+## Phase 5 — Review page rebuild — DONE 2026-08-01
+
+Shipped as `d5f8702e` (plus `b995bd82`, which fixed the seed). Screenshot-
+judged at 1440 and 390. Root typecheck 10/10, dashboard lint clean, unit
+508/508, integration 510 passed/3 skipped.
+
+All three findings held, and one more surfaced underneath them:
+
+- **The four decks are gone**, replaced by one reverse-chronological list
+  plus a filter row. Nine seeded entries now render at once; the board
+  showed four and needed seven clicks across four carousels.
+- **The filters query the server.** The board ran four overlapping
+  queries and then re-filtered each result client-side with
+  `classifyReviewItem`, so an entry could be fetched and silently
+  dropped. That mechanism is deleted, not reimplemented. Verified live:
+  Needs review returns 4, Store actions 3.
+- **The pill pairs are deduped by rule, not by deletion.** Both badges
+  rendered unconditionally. A row now carries one status pill, and the
+  authorisation appears as quiet prose only when the pill does not
+  already imply it — so "Policy block · you approved" survives (the
+  merchant approved a plan the policy engine then stopped) while "Read
+  only · Read only" cannot occur.
+- **"Approved / read-only" was two things.** Splitting it revealed that
+  read-only lookups were filed under approvals purely because they were
+  neither auto nor store. They are now separate.
+- **New, fixed:** an errored turn previewed the body of the email that
+  never sent, because `primaryPreviewText` preferred the output block
+  over the error. On a failure the failure is the story.
+
+**Harness note.** The stale-compile trap is real here: after the preview
+fix the browser still rendered the old text while the file on disk was
+correct. Proved it by grepping the *served* chunk for the new branch
+(absent), not by assuming — a dev-server restart flipped it to present.
+Worth checking the served bundle before believing a screenshot that
+disagrees with a passing unit test.
+
+### Original findings
 
 Last: a redesign, not a fix, and independent of everything above.
 
