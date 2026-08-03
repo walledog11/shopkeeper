@@ -21,6 +21,15 @@
 - Multi-tenant: every DB query is scoped by `organizationId`. `getOrCreateOrg()` maps Clerk org → DB `Organization`.
 - Ops alerts emit structured Pino logs (`opsAlert: true`) when thresholds are crossed; the dashboard also reports errors to Sentry (`@sentry/nextjs`).
 
+## Hosts & brand
+Marketing on the apex `useshopkeeper.com`, dashboard on `app.useshopkeeper.com` — **one Next.js app, one Vercel project**. `src/app/(marketing)/page.tsx` is `/`, `src/app/dashboard/` is `/dashboard/*`; nothing is split at the code level.
+
+The app lives on `app.` because the app origin is pinned into Google OAuth + restricted-scope verification, Shopify, Meta, Clerk, `DASHBOARD_URL`/`GATEWAY_INTERNAL_URL`, and Telegram deep links, while the marketing origin is pinned into nothing — marketing can later move to a CMS without touching any of them. `APP_URL` and `NEXT_PUBLIC_APP_URL` must both be `https://app.useshopkeeper.com`; they are equality-checked in production at `apps/dashboard/src/lib/env/index.ts`.
+
+Both hostnames serve every route, so `src/proxy/canonical-host.ts` 307s the app surfaces (`/dashboard`, `/onboarding`, `/select-org`, `/create-workspace`, `/api/integrations`) from any sibling host onto the `APP_URL` host. Without it the `*_oauth_*` handshake cookies — host-only — are set on whichever host the merchant started from and are gone after the provider hop, failing the state check on every connect. `/login` and `/signup` are deliberately *not* in that list; the signup funnel starts on the apex.
+
+**"Shopkeeper" is a working brand, not a registrable mark** — `SHOPKEEP` (Lightspeed, IC 042 SaaS) is live, incontestable, and a `+SHOPKEEPER` application was refused against it in 2024. Operating unregistered is a deliberate decision; see `docs/to-do-list.md` for the findings and the conditions for revisiting. **Never write "ShopKeep"** (no trailing `-er`) in any user-facing surface, bot username, or logo lockup — the `-er` is what distinguishes this product from that mark. Bot/handle convention is the `use` prefix (`@useshopkeeper`, `@useshopkeeperbot`), matching the handles already held on X and Instagram.
+
 ## Inbound flow
 External webhook → `apps/gateway/src/routes/webhooks.ts` (HMAC verify, enqueue BullMQ) → `apps/gateway/src/message-handlers/` (upsert customer/thread/message, sanitize prompt-injection, dedupe by `externalMessageId`, enqueue summary) → Claude tags + 1-sentence summary → gateway generates the agent plan in-process (`@shopkeeper/agent` planner, `message-handlers/generate-thread-plan.ts`) and caches it on the thread → Telegram notify bound org members. Dashboard polls `/api/threads?status=open` via SWR every 3s.
 
@@ -101,7 +110,7 @@ Standing rules for any change to agent behavior (promoted from the 2026-07 behav
 - `apps/gateway/src/start.ts` — gateway process bootstrap (role-aware: `server`, `worker`, or both)
 - `apps/gateway/src/worker.ts` — BullMQ worker entrypoint
 - `apps/gateway/src/maintenance/workers.ts` — daily IG token health + refresh, 90-day archive + purge, queue health monitor
-- `apps/gateway/src/health.ts` — `/health` and `/health/queues` diagnostic endpoints
+- `apps/gateway/src/health.ts` — `/health/deep` and `/health/queues` diagnostic endpoints (there is no bare `/health`)
 - `apps/dashboard/src/lib/server/redis.ts` — Upstash REST client + rate limiting
 - `apps/dashboard/src/instrumentation.ts` — env validation on server boot
 

@@ -17,6 +17,9 @@ Record sign-off evidence for ops-alert log routing and Better Stack Level 1 obse
 | Gateway `/health/deep` | `200`, `status=ok` |
 | Gateway `/health/queues` | `200`, `worker.healthy=true` |
 
+The dashboard host in this baseline is historical. Since 2026-08-02 the dashboard
+origin is `https://app.useshopkeeper.com`; the trigger commands below use it.
+
 ### Re-verified (2026-06-24)
 
 | Check | Result |
@@ -88,7 +91,7 @@ current production hosts.
 
 ```bash
 WEBHOOK_SIGNATURE_ALERT_THRESHOLD=1 \
-DASHBOARD_URL=https://dashboard-shopkeeper.vercel.app \
+DASHBOARD_URL=https://app.useshopkeeper.com \
 GATEWAY_URL=https://clerk-production-e37f.up.railway.app \
 npm run verify:production:alerts -- --execute webhook_signature
 ```
@@ -100,7 +103,7 @@ npm run verify:production:alerts -- --execute webhook_signature
 **`agent_failure` — [drain ✓] (deployed dashboard, authenticated)**
 
 1. On Vercel (dashboard): `AGENT_FAILURE_ALERT_THRESHOLD=1`, `OPS_ALERT_WINDOW_SECS=60`.
-2. As an authenticated test-org user, `POST https://dashboard-shopkeeper.vercel.app/api/agent`
+2. As an authenticated test-org user, `POST https://app.useshopkeeper.com/api/agent`
    with a valid test `threadId` and no approved plan → controlled `400`.
 3. Better Stack search: `opsAlert:true AND category:agent_failure AND service:dashboard`
 4. Restore `AGENT_FAILURE_ALERT_THRESHOLD=3` on Vercel.

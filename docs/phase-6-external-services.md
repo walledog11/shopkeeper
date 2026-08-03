@@ -1,256 +1,235 @@
-# Phase 6 — External Services Runbook
+# External service consoles — brand + domain residue
 
-Rename **Clerk → Shopkeeper** in every service outside the repo. Code changes for this phase are in the same deploy window.
+Everything left of the `useclerk.co` → `useshopkeeper.com` migration that lives in
+a third-party console. **No code task remains.** When these boxes are ticked this
+file has no reason to exist — delete it, git history is the record.
 
-**Primary domain: `useshopkeeper.com` — REGISTERED 2026-08-02 and attached to Vercel.**
+Architecture (why marketing is on the apex and the app on `app.`, the
+canonical-host redirect, the naming rule) is in `.claude/CLAUDE.md`. Trademark
+findings, production env gaps, and the Shopify scope trim are in
+[to-do-list.md](to-do-list.md) — not duplicated here.
 
-| Setting | Value |
+Reconciled against the live deployment 2026-08-02.
+
+## Values to paste into console fields
+
+| Field | Value |
 |---|---|
-| Marketing origin (apex) | `https://useshopkeeper.com` |
-| Dashboard origin | `https://app.useshopkeeper.com` |
+| App / product name | Shopkeeper |
+| Homepage | `https://useshopkeeper.com` |
+| Privacy policy | `https://useshopkeeper.com/privacy` |
+| Terms | `https://useshopkeeper.com/terms` |
+| OAuth redirect base | `https://app.useshopkeeper.com` |
 | Contact email | `hello@useshopkeeper.com` |
 | Inbound email | `inbound.useshopkeeper.com` |
+| Telegram bot | `@useshopkeeperbot` |
 
-Both hostnames are served by the **same Vercel project**. Marketing and dashboard
-are one Next.js app — `src/app/(marketing)/page.tsx` is `/`, `src/app/dashboard/`
-is `/dashboard/*` — so nothing is split at the code level and no host-based
-routing exists (the proxy at `src/proxy.ts` is Clerk auth + CSP only).
+Note the split: **homepage and legal pages are on the apex, OAuth redirect URIs
+are on `app.`** Getting this backwards in a console field is the easiest mistake
+here.
 
-**Why the app lives on `app.` and not the apex:** the app origin is pinned into
-Google OAuth + restricted-scope verification, Shopify, Meta, Clerk,
-`DASHBOARD_URL`/`GATEWAY_INTERNAL_URL`, and Telegram deep links. The marketing
-origin is pinned into nothing. Putting the app on a subdomain means marketing can
-later move to a CMS without any of those being touched. `APP_URL` and
-`NEXT_PUBLIC_APP_URL` must both be `https://app.useshopkeeper.com` — they are
-equality-checked in production at `apps/dashboard/src/lib/env/index.ts`.
+## Done
 
-Both hostnames serve every route, which broke every OAuth connect flow: the
-`*_oauth_*` handshake cookies are host-only, so a merchant onboarding on the apex
-set them there and got the provider hop back on `app.` (the `APP_URL` redirect
-URI), losing them — a state mismatch on every attempt. `src/proxy/canonical-host.ts`
-now 307s the app surfaces (`/dashboard`, `/onboarding`, `/select-org`,
-`/create-workspace`, `/api/integrations`) from any sibling host onto the `APP_URL`
-host. Marketing pages still serve from both (duplicate content); add a canonical
-tag for that separately. Preview and `*.vercel.app` hosts are untouched, since only
-hosts under the canonical host's parent domain are rewritten.
+- [x] Apex + `app.` on Vercel, SSL provisioned, both serving 200 (2026-08-02)
+- [x] `APP_URL` / `NEXT_PUBLIC_APP_URL` / `NEXT_PUBLIC_CONTACT_EMAIL` in Vercel
+- [x] Railway `DASHBOARD_URL`
+- [x] Shopify / Meta / Google OAuth **redirect URIs**
+- [x] Clerk dev → production instance cutover; `pk_live_` confirmed in the bundle
+- [x] Five Clerk CNAMEs in Vercel DNS, verified via `clerk deploy status`
+- [x] GitHub repo renamed; agent prefix migration run
 
-Set `NEXT_PUBLIC_CONTACT_EMAIL` in Vercel. The code fallback in
-`apps/dashboard/src/lib/brand.ts` is now `hello@useshopkeeper.com` — **that
-address must forward somewhere monitored before deploy**, or the app advertises a
-bouncing contact on its legal pages and Google's reviewer will hit it.
+## Open
 
-The earlier option table listed `shopkeeper.app` and `getshopkeeper.com`; both are registered and were never available. `shopkeeper.support`, `.ai`, `.io`, `.shop`, `.store`, `.co`, `.dev` are all taken too (checked 2026-08-02); only `.help`, `.one`, `.inc` were free, and `.help` was rejected because it welds the brand to the support wedge that the core is explicitly not supposed to couple to. The `use` prefix is the brand system, not a fallback — `@useshopkeeper` is already held on X and Instagram, so the domain matches the handles rather than the other way round. Register `@useshopkeeperbot` on Telegram for the same reason; `@ShopkeeperBot` is almost certainly taken and would break the pattern even if free.
+### DNS + mail
 
-**Trademark status — proceeding knowingly.** `SHOPKEEPER` is not registrable in
-software classes (see `to-do-list.md` for the Lightspeed `SHOPKEEP` findings).
-This domain is being used as a working brand pre-revenue, accepting that the mark
-can never be owned and that a forced rename is possible. Mitigation: no paid
-acquisition and no press launch under the name; revisit at ~50 paying merchants.
-A domain change after Gmail verification means redoing restricted-scope review
-and the CASA assessment, so that revisit is a real decision point, not a formality.
+The apex and the `inbound.` subdomain are two unrelated mail paths. The apex
+carries **your** mail; the subdomain carries **merchants' customers'** mail into
+the product. Having one does not give you the other.
 
-**Never write "ShopKeep" (no trailing `-er`) in any user-facing surface, bot username, or logo lockup.** `shopkeep.com` is ShopKeep POS, owned by Lightspeed, and live registered marks exist in that family for point-of-sale software. The `-er` is what distinguishes this product from that mark. Separately, `shopkeeper.com` is unrelated Amazon-seller software — expect no organic ranking on the bare word and optimize for brand terms instead.
+- [x] `hello@useshopkeeper.com` forwards to a monitored inbox — ImprovMX on the
+  apex (`mx1`/`mx2.improvmx.com`, SPF `include:spf.improvmx.com`), verified
+  2026-08-02. This is the contact published on `/privacy`, the data-deletion
+  intake path (`production/data-deletion.md`), and the address Google's reviewer
+  will use.
+- [x] MX for `inbound.useshopkeeper.com` → **Postmark** (`inbound.postmarkapp.com`
+  priority 10), verified propagated 2026-08-02. Note this is the merchant inbox,
+  not branding: the integrations card tells the merchant to forward support mail
+  to `${org.id}@${org.inboundEmailDomain}`
+  (`components/integrations/EmailForwardingDisclosure.tsx`).
+  - The apex ImprovMX records are independent and were not disturbed.
+- [ ] Point a gateway subdomain at Railway (only if moving off the
+  `*.up.railway.app` host)
 
----
+**No SPF/DKIM work is needed on `useshopkeeper.com` for outbound.** Replies send
+as the merchant's own address — `integration.fromEmail || integration.externalAccountId`
+(`apps/gateway/src/message-handlers/outbound-email.ts`) — so the Postmark domain
+verification that matters belongs to the merchant's domain and is part of
+onboarding them, not a record here. Clerk's auth mail is already covered by the
+`clkmail` / `clk._domainkey` / `clk2._domainkey` CNAMEs. Revisit only if
+Shopkeeper starts sending mail as itself.
 
-## Deploy order
+### Google
 
-Do these in sequence to avoid broken OAuth callbacks or webhooks mid-cutover.
-
-1. **Register new assets** (domain, Telegram bot username) without switching production traffic yet.
-2. **Update provider consoles** (OAuth apps, Stripe, Postmark, etc.) — add new URLs alongside old ones where supported.
-3. **Update Vercel + Railway env vars** (see checklist below).
-4. **Deploy dashboard** (Vercel) then **gateway** (Railway).
-5. **Run DB prefix migration** if production still has legacy agent prefixes.
-6. **Switch DNS** (or confirm domain unchanged).
-7. **Remove old OAuth redirect URIs** after smoke tests pass.
-8. **Rename GitHub repo** and local folder (optional, last).
-
----
-
-## Environment variables to update
-
-### Vercel (dashboard)
-
-| Variable | What to change |
-|---|---|
-| `APP_URL` | `https://app.useshopkeeper.com` |
-| `NEXT_PUBLIC_APP_URL` | `https://app.useshopkeeper.com` — equality-enforced against `APP_URL` in production |
-| `NEXT_PUBLIC_CONTACT_EMAIL` | `hello@useshopkeeper.com` |
-| `INBOUND_EMAIL_DOMAIN` | `inbound.useshopkeeper.com` |
-| `GATEWAY_INTERNAL_URL` | Gateway public URL if it changes |
-| `TELEGRAM_BOT_USERNAME` | `useshopkeeperbot` (after BotFather registration) |
-
-**Do not change:** `CLERK_*`, `CLERK_WEBHOOK_SECRET`, or the `/api/webhooks/clerk` route.
-
-### Railway (gateway)
-
-| Variable | What to change |
-|---|---|
-| `DASHBOARD_URL` | Same as dashboard `APP_URL` |
-| `DASHBOARD_INTERNAL_URL` | Vercel deployment URL if used for internal redirects |
-| `TELEGRAM_BOT_TOKEN` | New bot token if switching from `@ClerkBot` |
-| `TELEGRAM_WEBHOOK_SECRET` | Rotate if compromised during bot migration |
-
-After deploy, re-register the Telegram webhook:
-
-```bash
-cd apps/gateway
-tsx src/scripts/set-telegram-webhook.ts https://<gateway-host>/webhooks/telegram
-```
-
----
-
-## Service checklists
-
-### Clerk.com (auth vendor)
-
-- [ ] Dashboard → Application → rename display name to **Shopkeeper**
-- [ ] Keep existing API keys (`CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`)
-- [ ] Keep webhook endpoint `https://<dashboard>/api/webhooks/clerk`
-- [ ] If domain changes: add new allowed origins / redirect URLs in Clerk dashboard; remove old ones after cutover
-
-### Vercel
-
-- [ ] Rename project `clerk-dashboard` → `shopkeeper-dashboard` (cosmetic)
-- [ ] Add custom domain; update `APP_URL` / `NEXT_PUBLIC_APP_URL`
-- [ ] Update env vars from table above
-- [ ] Confirm build filter still uses `shopkeeper-dashboard` (`vercel.json`)
-- [ ] Redeploy and run `npm run verify:production:env`
-
-### Railway
-
-- [ ] Rename gateway service (cosmetic)
-- [ ] Update `DASHBOARD_URL` and related env vars
-- [ ] Redeploy; confirm `/health/deep` and `/health/queues` pass
-- [ ] Re-register Telegram webhook (see above)
-
-### Neon
-
-- [ ] Rename project (cosmetic only — `DATABASE_URL` host stays the same)
-
-### Stripe
-
-- [ ] Rename products (Starter, Pro, Scale) in Stripe Dashboard
-- [ ] Update checkout session description if customized
-- [ ] Receipt / statement descriptor if it mentions Clerk
-- [ ] Webhook endpoint stays `https://<dashboard>/api/billing/webhook` — update only if domain changes
+- [x] `useshopkeeper.com` verified in Google Search Console (2026-08-02)
+- [ ] OAuth **Branding** page: app name, homepage, privacy URL, authorized
+  domain. Distinct from the redirect URI, and still on the old host. With Search
+  Console done this plus the support mailbox is what remains on the Gmail gate —
+  see [production/google-gmail-verification-packet.md](production/google-gmail-verification-packet.md).
+- [ ] This is a *separate* OAuth client from the Clerk social-login one — do not
+  disturb the Clerk client while editing it.
 
 ### Postmark
 
-- [ ] Update sender display name to Shopkeeper
-- [ ] If inbound domain changes: configure `inbound.<domain>` in Postmark, update `INBOUND_EMAIL_DOMAIN`
-- [ ] Update MX records for new inbound subdomain
-- [ ] Smoke test: `VERIFY_INBOUND_EMAIL_TO=support@inbound.<domain> npm run verify:production`
+Account rebuilt 2026-08-02 on `useshopkeeper.com`. The original account was
+registered under an unrelated business domain with a fragile forwarding alias for
+login — an account-recovery risk on the mail path itself. Nothing had been
+configured on it, so it was abandoned rather than migrated.
+
+- [x] New account + server **Shopkeeper-production** (ID 20167846), Platform plan
+  for unlimited sending domains (Basic has no inbound at all)
+- [x] Inbound domain `inbound.useshopkeeper.com` set on the stream, MX live
+- [x] Inbound webhook → `POST /webhooks/email/inbound` on the gateway, basic auth
+  via `POSTMARK_INBOUND_USERNAME`/`PASSWORD`. Credentials must be **hex**, not
+  base64 — `/` and `+` break the userinfo section of the webhook URL.
+- [x] `POSTMARK_API_KEY` + `INBOUND_EMAIL_DOMAIN` set in Vercel production and
+  verified by pulling the deployed values
+- [x] End-to-end inbound proven: mail to the domain appears in Postmark Activity
+  and logs `event: unclaimed_recipient` on the gateway
+- [x] Removed the unused `POSTMARK_FROM_DOMAIN` (held the dead `mail.clerkapp.com`)
+- [x] Bounce webhook (id 25369388) on the **outbound** stream →
+  `POST /webhooks/email/bounce`, triggers `Bounce` + `SpamComplaint` only —
+  the handler discards every other `RecordType`. Verified 2026-08-02.
+  - Verify with `GET https://api.postmarkapp.com/webhooks`, **not** the
+    `BounceHookUrl` field on `GET /server` — that is the legacy server-level
+    hook and stays empty when a per-stream webhook is used.
+  - Attribution is by Postmark's own `MessageID`
+    (`PostmarkSender.send()` → `providerMessageId`), so only mail sent through
+    this server can be matched; anything else logs unattributed and is acked.
+- [x] `useshopkeeper.com` verified for sending — DKIM
+  (`20260803015353pm._domainkey`) and the `pm-bounces` Return-Path CNAME both
+  resolve publicly. SPF was deliberately left alone: Postmark authenticates via
+  DKIM and its own envelope sender, so no `include:` was added to the ImprovMX
+  record.
+- [ ] **Postmark account approval — this is the live blocker on outbound.** Until
+  it clears, every recipient must share the From address's domain: sending from
+  `hello@useshopkeeper.com` to an `icloud.com` address fails with *"While your
+  account is pending approval…"*. Config is otherwise correct — that error proves
+  the From domain, token, and integration all resolved.
+  - Describe the use case as transactional support replies sent in response to
+    inbound customer email, no marketing or bulk, **on behalf of merchants from
+    their own verified domains** — declare the multi-tenant model up front.
+  - To test before approval lands, make the test customer an address on
+    `useshopkeeper.com` so the same-domain rule is satisfied.
+- [ ] Per-merchant sending domains. Replies go out as the *merchant's* address,
+  so each merchant verifies their own domain at onboarding — recurring work, not
+  a one-time setup.
+- [ ] Sender display name → Shopkeeper
+- [ ] Smoke test:
+  `VERIFY_INBOUND_EMAIL_TO=support@inbound.useshopkeeper.com npm run verify:production`
+
+### Clerk
+
+- [ ] Application display name → Shopkeeper
+- [ ] Create the production webhook endpoint at
+  `https://app.useshopkeeper.com/api/webhooks/clerk`, then set
+  `CLERK_WEBHOOK_SECRET` in Vercel. Absent today, so **deletion propagation is
+  dead** — a member removed in Clerk keeps their `OrgMember` row, Telegram
+  binding, and operator access. The CLI cannot create webhook endpoints.
+- [ ] Delete the leftover dev-only application named `clerk`
+  (`app_3B9VBBAVoAaZGLuVuV5Ldw3atCJ`) once confirmed unused
 
 ### Shopify Partner Dashboard
 
+- [x] Scopes trimmed to the 15 in `SHOPIFY_OAUTH_SCOPES` (2026-08-02) — done at
+  zero connected merchants, so no re-consent was forced
+- [x] Connect smoke test passed on the new host, confirming the `034d60e4`
+  host-pinning fix and the popup-close fix against the deployed app
+- [x] Signup on the apex carries the Clerk session across the redirect to `app.`
+  — the seam flagged in `canonical-host.ts` is **not** a defect
 - [ ] App display name → Shopkeeper
-- [ ] Privacy policy URL → `https://<dashboard>/privacy`
-- [ ] OAuth redirect URLs if domain changes:
-  - `https://<dashboard>/api/integrations/shopify/callback`
+- [ ] Privacy policy URL
 
 ### Meta (Instagram)
 
 - [ ] App display name → Shopkeeper
 - [ ] Privacy policy URL
-- [ ] Valid OAuth redirect URIs if domain changes:
-  - `https://<dashboard>/api/integrations/instagram/callback`
 
-### Google (Gmail)
+### Stripe
 
-- [ ] OAuth consent screen app name → Shopkeeper
-- [ ] Authorized redirect URIs if domain changes:
-  - `https://<dashboard>/api/integrations/gmail/callback`
+Not cosmetic: product names appear at checkout and the statement descriptor lands
+on merchants' card statements.
+
+- [ ] Rename products (Starter, Pro, Scale)
+- [ ] Statement descriptor / receipts, if either mentions Clerk
+- [ ] Checkout session description, if customized
 
 ### Telegram (BotFather)
 
-Production bot migration (`@ClerkBot` → `@useshopkeeperbot`):
+**Priority: cosmetic. Group this with the other display-name items.** Nothing is
+broken — the bot works, bindings work, `TELEGRAM_BOT_USERNAME` is set in
+Production and Preview. The only defect is that the name a merchant sees at
+connect time is probably pre-rebrand. Telegram is also not the primary operator
+surface; **iMessage is**, and iMessage is identified by `IMESSAGE_LINE_HANDLE` —
+a phone number, platform-wide, with no username and no brand string in the bind
+path. None of this touches it.
 
-1. [ ] `/newbot` in @BotFather → register `@useshopkeeperbot`, display name **Shopkeeper**
-2. [ ] Copy new `TELEGRAM_BOT_TOKEN` to Railway
-3. [ ] Set `TELEGRAM_BOT_USERNAME=useshopkeeperbot` in Vercel
-4. [ ] Register webhook (script above)
-5. [ ] Smoke test: Connect Telegram from dashboard → `t.me/useshopkeeperbot?start=<token>`
-6. [ ] Notify existing merchants to re-link if bot username changed (old deep links break)
-7. [ ] Dev bot: repeat with `@useshopkeeperdevbot` for staging
+An earlier revision of this file called the migration "now or never." That was
+overstated and is struck. The re-link cost below scales with the number of bound
+merchants, so at zero it is zero, and you will see it coming long before it
+matters.
 
-### DNS
+**What the re-link cost actually is, and when it applies.**
+`OrgMemberTelegramChat` is keyed on `chatId`
+(`apps/gateway/src/routes/telegram/start-binding.ts:64`), and a Telegram `chatId`
+is a conversation with *one specific bot*. `operator-notify.ts:68` reads those
+rows to decide where to push plans, questions, and the briefing. A **new** bot
+has never spoken to those users, so bindings are dead and pushes fail silently.
+This applies **only** on the `/newbot` path — if step 0 says the username can be
+renamed in place, there is no re-link, now or ever, and the deferral question is
+moot.
 
-Migrating off `useclerk.co` to `useshopkeeper.com`:
+0. [ ] **Check BotFather first — this forks the whole migration.** If Bot
+   Settings lets you change the existing bot's @username, the token and every
+   `chatId` survive; only the stale `t.me/` URL breaks, and steps 2 and 7 are
+   unnecessary. Only fall through to `/newbot` if it doesn't.
+1. [ ] Rename to `@useshopkeeperbot` (or `/newbot` if step 0 says you must),
+   display name **Shopkeeper**
+2. [ ] New bot only: copy the new `TELEGRAM_BOT_TOKEN` to Railway
+3. [ ] Set `TELEGRAM_BOT_USERNAME=useshopkeeperbot` in Vercel (Production +
+   Preview — the existing var is set in both, last touched pre-rebrand), then
+   redeploy so the value reaches the server components that read it
+4. [ ] Re-register the webhook — **required on either path**, since it is bound
+   to the token and the host:
+   `cd apps/gateway && tsx src/scripts/set-telegram-webhook.ts https://clerk-production-e37f.up.railway.app/webhooks/telegram`
+5. [ ] Smoke test: connect Telegram from the dashboard →
+   `t.me/useshopkeeperbot?start=<token>`, then send `help` and confirm a reply
+6. [ ] Repeat with `@useshopkeeperdevbot` for staging
+7. [ ] New bot only: keep the old bot alive until every merchant has re-linked
 
-- [ ] Point apex `useshopkeeper.com` and `app.useshopkeeper.com` to Vercel
-- [ ] Point gateway subdomain to Railway (if using custom domain)
-- [ ] MX for `inbound.useshopkeeper.com` → Postmark
-- [ ] Update SPF/DKIM for the new sending domain
-- [ ] SSL: wait for Vercel/Railway auto-provision
-- [ ] Verify `useshopkeeper.com` in Google Search Console — this is the gate on Gmail
-  restricted-scope verification (see `production/google-gmail-verification-packet.md`)
+**Adjacent, not required now:** the Railway gateway host is still
+`clerk-production-e37f.up.railway.app` — pre-rebrand, but internal-only and never
+seen by merchants. If it is ever renamed, every registered webhook (Telegram,
+Postmark inbound, Meta, Shopify) must be re-pointed. Do it in the same sitting as
+step 4 or not at all, so the work happens once.
 
-### GitHub
-
-- [ ] Rename repo `clerk` → `shopkeeper` (Settings → General)
-- [ ] Update Vercel Git integration (usually auto-reconnects)
-- [ ] Update Railway deploy hook / connected repo
-- [ ] Update local remote: `git remote set-url origin git@github.com:<org>/shopkeeper.git`
-- [x] Rename local folder `~/dev/clerk` → `~/dev/shopkeeper` (2026-06-06)
-
-### Production DB — agent prefix migration
-
-- [x] Completed. Production messages were migrated off the legacy `__clerk_agent__` /
-  `__clerk_agent_note__` prefixes onto `__shopkeeper_agent__` / `__shopkeeper_agent_note__`.
-  The one-shot `migrate-agent-prefixes.ts` script and the legacy-prefix runtime
-  fallbacks were removed afterward.
-
----
-
-## Post-deploy verification
+## Closing verification
 
 ```bash
-# Env preflight
 npm run verify:production:env
 
-# Health + optional inbound email smoke
-DASHBOARD_URL='https://<dashboard>' \
+DASHBOARD_URL='https://app.useshopkeeper.com' \
 GATEWAY_URL='https://<gateway>' \
-VERIFY_INBOUND_EMAIL_TO='support@inbound.<domain>' \
+VERIFY_INBOUND_EMAIL_TO='support@inbound.useshopkeeper.com' \
 npm run verify:production
 ```
 
-Manual checks:
+Then by hand:
 
-1. Sign up / sign in (Clerk.com auth still works)
-2. Connect Shopify integration (OAuth redirect)
-3. Send inbound email → thread appears in inbox
+1. Sign up on the apex and confirm the session survives the redirect to `app.`
+2. Connect Shopify (OAuth round trip)
+3. Send inbound email → thread appears in the inbox
 4. Connect Telegram → bot replies with Shopkeeper branding
 5. Stripe checkout → product name shows Shopkeeper
-6. Clerk.com webhook: create/delete test org membership
+6. Clerk webhook: delete a test org membership, confirm the `OrgMember` row goes
 
----
-
-## Rollback
-
-- Keep old domain DNS alive for 48h after cutover
-- Keep old OAuth redirect URIs in provider consoles until smoke tests pass
-- Do not delete `@ClerkBot` until all merchants have re-linked to `@ShopkeeperBot`
-
----
-
-## Phase 6 progress
-
-- [x] Primary domain confirmed — `useshopkeeper.com` (2026-08-01)
-- [x] `useshopkeeper.com` registered + attached to Vercel (2026-08-02)
-- [ ] `app.useshopkeeper.com` added to the same Vercel project
-- [ ] `useshopkeeper.com` verified in Google Search Console (gates Gmail)
-- [ ] `hello@useshopkeeper.com` forwarding to a monitored inbox
-- [ ] Clerk.com application display name updated
-- [ ] Vercel env + domain updated
-- [ ] Railway env updated + Telegram webhook registered
-- [ ] Neon / Stripe renamed
-- [ ] Postmark sender + inbound domain updated
-- [ ] Shopify / Meta / Google OAuth consoles updated
-- [ ] Telegram bot migrated
-- [ ] DNS cutover (if applicable)
-- [ ] Agent prefix migration run (if applicable)
-- [ ] GitHub repo renamed
-- [ ] Post-deploy verification passed
+When all six pass, delete this file.

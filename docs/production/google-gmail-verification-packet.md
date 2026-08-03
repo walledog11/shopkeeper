@@ -1,43 +1,45 @@
 # Google Gmail restricted-scope verification packet
 
 Prepared from the production deployment and repository behavior on
-2026-07-29. This is an owner-ready working packet, not proof that Google has
-approved the app. Do not submit credentials, tokens, customer addresses,
-message content, or raw Gmail payloads.
+2026-07-29; domain rows reconciled against the live deployment 2026-08-02. This
+is an owner-ready working packet, not proof that Google has approved the app. Do
+not submit credentials, tokens, customer addresses, message content, or raw Gmail
+payloads.
 
 ## Submission status
 
 | Requirement | Current evidence | Owner action |
 |---|---|---|
 | Production app | Dashboard and two Railway gateway services are healthy | Keep production stable through review |
-| Homepage | `https://dashboard-shopkeeper.vercel.app/` returns 200 and identifies Shopkeeper | Move to an owned, Search Console-verified custom domain |
-| Privacy policy | `/privacy` exists; public-route and Google Limited Use disclosure fix is prepared | Deploy, legal-review, and recheck anonymously on the owned domain |
-| Terms | `/terms` exists; public-route fix is prepared | Deploy and recheck anonymously on the owned domain |
-| OAuth redirect | Current code derives `/api/integrations/gmail/callback` from `APP_URL` | Set the final custom-domain URI in Vercel and Google Console |
-| Authorized domains | Vercel account currently has no custom domains | Add and verify the owned domain in Search Console and OAuth Branding |
-| User support email | Live policy publishes `hello@useclerk.co` | Confirm mailbox ownership and brand consistency or replace it |
+| Homepage | `https://useshopkeeper.com/` returns 200 and identifies Shopkeeper (owned domain, live 2026-08-02) | Verify the domain in Search Console |
+| Privacy policy | `https://useshopkeeper.com/privacy` returns 200 anonymously and publishes `hello@useshopkeeper.com` | Legal-review the Limited Use disclosure |
+| Terms | `https://useshopkeeper.com/terms` returns 200 anonymously | — |
+| OAuth redirect | `https://app.useshopkeeper.com/api/integrations/gmail/callback` set in Vercel and Google Console (2026-08-02) | — |
+| Authorized domains | `useshopkeeper.com` attached to Vercel and **verified in Search Console (2026-08-02)**; not yet added to OAuth Branding | Add the domain on the Branding page |
+| User support email | Live policy publishes `hello@useshopkeeper.com`, forwarding via ImprovMX to a monitored inbox (verified 2026-08-02) | — |
 | Developer contacts | Not discoverable from the repository | Add at least two monitored owner/editor contacts |
-| Demo video | Script below is ready | Record after the alias canary and final domain are ready |
+| Demo video | Script below is ready | Record after the alias canary |
 | Restricted-scope assessment | `gmail.readonly` is restricted and server-side data is stored/transmitted | Complete the assessor/CASA path when Google initiates it |
 
-The current `*.vercel.app` homepage is not a domain the app owner can verify in
-Search Console. This is the principal pre-submission blocker. Google requires
-the homepage to be on a verified domain owned by the developer, the privacy
-policy to be on that domain and linked from the homepage, and authorized-domain
-ownership to be verified.
+The owned-domain blocker is resolved: the homepage, privacy policy, and terms all
+serve from `useshopkeeper.com`, which the app owner controls and has verified in
+Search Console, and `hello@useshopkeeper.com` reaches a monitored inbox. **The
+remaining pre-submission blockers are the OAuth Branding page (still carrying the
+old host), two developer contacts, the alias canary, and the demo video.**
+
+Note the apex/`app.` split when filling in console fields: the homepage and legal
+pages are on the **apex**, while the OAuth redirect URI is on **`app.`**.
 
 ## App identity and URLs
 
-Use these values only after replacing the host with the final owned domain:
-
 - App name: **Shopkeeper**
-- Homepage: `https://<owned-domain>/`
-- Privacy policy: `https://<owned-domain>/privacy`
-- Terms: `https://<owned-domain>/terms`
+- Homepage: `https://useshopkeeper.com/`
+- Privacy policy: `https://useshopkeeper.com/privacy`
+- Terms: `https://useshopkeeper.com/terms`
 - OAuth redirect URI:
-  `https://<owned-domain>/api/integrations/gmail/callback`
-- User support email: `<monitored support mailbox>`
-- Authorized domain: `<owned-domain>`
+  `https://app.useshopkeeper.com/api/integrations/gmail/callback`
+- User support email: `hello@useshopkeeper.com` (pending a monitored mailbox)
+- Authorized domain: `useshopkeeper.com`
 - Google Cloud project ID observed in production Gmail configuration:
   `shopkeeper-501301`
 
@@ -269,15 +271,20 @@ least every 12 months after the Letter of Assessment approval date.
 
 ## Final owner submission checklist
 
-- [ ] Attach an owned custom domain to Vercel.
-- [ ] Verify that domain in Google Search Console using a project owner/editor.
-- [ ] Set `APP_URL` and `NEXT_PUBLIC_APP_URL` to the final domain and redeploy.
-- [ ] Update the Google OAuth client redirect URI to the exact final callback.
-- [ ] Add only the final owned domain to OAuth Branding authorized domains.
-- [ ] Confirm homepage, privacy, and terms return 200 in an anonymous browser.
-- [ ] Confirm homepage visibly links the same privacy URL used in OAuth
-  Branding.
-- [ ] Confirm the support mailbox is monitored and matches the public brand.
+- [x] Attach an owned custom domain to Vercel. (`useshopkeeper.com`, 2026-08-02)
+- [x] Verify that domain in Google Search Console using a project owner/editor.
+  (2026-08-02)
+- [x] Set `APP_URL` and `NEXT_PUBLIC_APP_URL` to the final domain and redeploy.
+  (both `https://app.useshopkeeper.com`)
+- [x] Update the Google OAuth client redirect URI to the exact final callback.
+- [ ] Add only the final owned domain to OAuth Branding authorized domains, and
+  update the Branding app name / homepage / privacy URL — still the old host.
+- [x] Confirm homepage, privacy, and terms return 200 in an anonymous browser.
+  (verified 2026-08-02 on the apex)
+- [x] Confirm homepage visibly links the same privacy URL used in OAuth
+  Branding. (`href="/privacy"` on the apex homepage)
+- [x] Confirm the support mailbox is monitored and matches the public brand.
+  (`hello@useshopkeeper.com` via ImprovMX, 2026-08-02)
 - [ ] Add at least two current developer/project contacts.
 - [ ] Declare exactly the four scopes above in Google Cloud Data Access.
 - [ ] Paste the scope justifications above, adjusted only for final UI wording.

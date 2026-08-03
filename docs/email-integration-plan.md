@@ -625,4 +625,5 @@ Still open:
 - [`production/gmail-rollout-evidence-2026-07-29.md`](production/gmail-rollout-evidence-2026-07-29.md)
 - [`production/google-gmail-verification-packet.md`](production/google-gmail-verification-packet.md)
 - `docs/production/runbook.md`
-- `docs/phase-6-external-services.md`
+- `docs/phase-6-external-services.md` — Postmark inbound domain, MX, and SPF/DKIM
+  live here until that checklist is done and deleted; then `docs/to-do-list.md`

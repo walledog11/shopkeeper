@@ -8,7 +8,7 @@ Shopkeeper stores merchant workspace data, connected integration metadata, custo
 
 ## Intake
 
-1. Accept requests at the contact address configured in `NEXT_PUBLIC_CONTACT_EMAIL` (defaults to `hello@useclerk.co` until domain migration in Phase 6).
+1. Accept requests at the contact address configured in `NEXT_PUBLIC_CONTACT_EMAIL` (`hello@useshopkeeper.com`, published on `/privacy` since the 2026-08-02 domain migration, forwarding via ImprovMX to a monitored inbox).
 2. Confirm the request type: workspace deletion, customer export, customer deletion/redaction, or access correction.
 3. Verify the requester:
    - Workspace deletion must come from a Clerk.com organization admin.
