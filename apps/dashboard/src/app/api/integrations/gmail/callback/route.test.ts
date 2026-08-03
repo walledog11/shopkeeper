@@ -109,7 +109,7 @@ describe('POST /api/integrations/gmail/callback', () => {
     const res = await POST(new Request('http://localhost/api/integrations/gmail/callback?code=abc&state=other_state'));
 
     expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations?error=state_mismatch');
+    expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations/oauth/complete?error=state_mismatch');
     expect(mockFetch).not.toHaveBeenCalled();
     expect(mockLogger.error).toHaveBeenCalledWith('[Gmail OAuth] State mismatch — possible CSRF attempt');
     expect(analyticsSink.events).toEqual([
@@ -135,7 +135,7 @@ describe('POST /api/integrations/gmail/callback', () => {
     const res = await POST(new Request('http://localhost/api/integrations/gmail/callback?code=abc&state=state_123'));
 
     expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations?error=state_mismatch');
+    expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations/oauth/complete?error=state_mismatch');
     expect(mockFetch).not.toHaveBeenCalled();
     expect(mockLogger.error).toHaveBeenCalledWith(
       { savedUserId: 'someone_else', currentUserId: 'usr_oauth' },

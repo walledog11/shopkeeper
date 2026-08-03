@@ -5,7 +5,11 @@ type MiddlewareHandler = (
     (): Promise<{ userId: string | null; orgId: string | null }>;
     protect: () => Promise<unknown>;
   },
-  req: { nextUrl: { pathname: string }; url: string }
+  req: {
+    nextUrl: { pathname: string; search: string };
+    url: string;
+    headers: { get: (name: string) => string | null };
+  }
 ) => Promise<Response | undefined>;
 
 let capturedHandler: MiddlewareHandler;
@@ -41,8 +45,12 @@ function makeAuth(userId: string | null, orgId: string | null) {
   return { fn, protect };
 }
 
-function makeReq(pathname: string) {
-  return { nextUrl: { pathname }, url: `http://localhost${pathname}` };
+function makeReq(pathname: string, host: string | null = null) {
+  return {
+    nextUrl: { pathname, search: '' },
+    url: `http://localhost${pathname}`,
+    headers: { get: (name: string) => (name === 'host' ? host : null) },
+  };
 }
 
 describe('proxy middleware auth handling', () => {
@@ -96,6 +104,20 @@ describe('proxy middleware auth handling', () => {
     const res = await capturedHandler(fn as never, makeReq('/signup'));
     expect(res?.status).toBe(307);
     expect(res?.headers.get('location')).toContain('/dashboard');
+  });
+});
+
+describe('proxy canonical host handling', () => {
+  it('sends app surfaces on a sibling host to the APP_URL host before touching auth', async () => {
+    vi.stubEnv('APP_URL', 'https://app.useshopkeeper.com');
+    const { fn } = makeAuth(null, null);
+    const res = await capturedHandler(fn as never, makeReq('/onboarding', 'useshopkeeper.com'));
+    expect(res?.status).toBe(307);
+    expect(res?.headers.get('location')).toBe('https://app.useshopkeeper.com/onboarding');
+    expect(fn).not.toHaveBeenCalled();
+    vi.unstubAllEnvs();
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('E2E_AUTH_BYPASS', 'false');
   });
 });
 

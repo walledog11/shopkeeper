@@ -3,7 +3,7 @@ import { auth } from '@clerk/nextjs/server';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import {
-  oauthPageRedirect,
+  oauthCompleteResponse,
 } from './oauth-callback';
 import { ADMIN_REQUIRED_MESSAGE, isOrgAdmin } from '@/lib/api/permissions';
 import logger from '@/lib/server/logger';
@@ -120,7 +120,11 @@ export async function validateOAuthCallbackSession(options: {
     logger.error(`[${options.logPrefix}] State mismatch — possible CSRF attempt`);
     return {
       ok: false,
-      response: oauthPageRedirect(`${options.appUrl}/dashboard/integrations?error=${mismatchError}`),
+      // The completion page, not the integrations page: it is the only surface
+      // that closes the popup and shows the error. A bare page redirect from
+      // inside the popup renders a second app shell there instead, and for an
+      // un-onboarded org the onboarding guard turns that into a silent bounce.
+      response: oauthCompleteResponse(options.appUrl, { error: mismatchError, returnTo }),
       analyticsContext: {
         attemptId: savedState,
         clerkOrganizationId: clerkOrgId,
@@ -136,7 +140,7 @@ export async function validateOAuthCallbackSession(options: {
     );
     return {
       ok: false,
-      response: oauthPageRedirect(`${options.appUrl}/dashboard/integrations?error=${mismatchError}`),
+      response: oauthCompleteResponse(options.appUrl, { error: mismatchError, returnTo }),
       analyticsContext: {
         attemptId: savedState,
         clerkOrganizationId: clerkOrgId,

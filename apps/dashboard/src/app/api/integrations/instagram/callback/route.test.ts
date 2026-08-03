@@ -84,7 +84,7 @@ describe('POST /api/integrations/instagram/callback', () => {
     const response = await postCallback();
 
     expect(response.headers.get('location')).toBe(
-      'http://dashboard.test/dashboard/integrations?error=state_mismatch',
+      'http://dashboard.test/dashboard/integrations/oauth/complete?error=state_mismatch',
     );
     expect(mockFetch).not.toHaveBeenCalled();
     expect(await instagramIntegrationCount(org!.id)).toBe(0);

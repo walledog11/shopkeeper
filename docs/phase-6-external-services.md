@@ -24,9 +24,15 @@ later move to a CMS without any of those being touched. `APP_URL` and
 `NEXT_PUBLIC_APP_URL` must both be `https://app.useshopkeeper.com` — they are
 equality-checked in production at `apps/dashboard/src/lib/env/index.ts`.
 
-Initially both hostnames serve every route (duplicate content on the marketing
-pages). Tighten later with a canonical tag or a host redirect in `src/proxy.ts`;
-do not add new routing before the Google submission clears.
+Both hostnames serve every route, which broke every OAuth connect flow: the
+`*_oauth_*` handshake cookies are host-only, so a merchant onboarding on the apex
+set them there and got the provider hop back on `app.` (the `APP_URL` redirect
+URI), losing them — a state mismatch on every attempt. `src/proxy/canonical-host.ts`
+now 307s the app surfaces (`/dashboard`, `/onboarding`, `/select-org`,
+`/create-workspace`, `/api/integrations`) from any sibling host onto the `APP_URL`
+host. Marketing pages still serve from both (duplicate content); add a canonical
+tag for that separately. Preview and `*.vercel.app` hosts are untouched, since only
+hosts under the canonical host's parent domain are rewritten.
 
 Set `NEXT_PUBLIC_CONTACT_EMAIL` in Vercel. The code fallback in
 `apps/dashboard/src/lib/brand.ts` is now `hello@useshopkeeper.com` — **that

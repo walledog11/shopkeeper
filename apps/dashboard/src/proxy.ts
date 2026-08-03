@@ -1,12 +1,24 @@
 import { clerkMiddleware } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { isE2EAuthBypassEnabled } from '@/lib/e2e-auth'
+import { getCanonicalHostRedirect } from '@/proxy/canonical-host'
 import { CSP_REPORT_ENDPOINT, cspDirectives } from '@/proxy/content-security-policy'
 import { getPathAccessPolicy, isApiPath } from '@/proxy/path-access-policy'
 
 export default clerkMiddleware(async (auth, req) => {
   if (isE2EAuthBypassEnabled()) {
     return
+  }
+
+  // Before anything reads a cookie: the OAuth handshake cookies are host-only,
+  // so an app surface served off a sibling host silently breaks every connect.
+  const canonicalHostRedirect = getCanonicalHostRedirect(
+    req.headers.get('host'),
+    req.nextUrl.pathname,
+    req.nextUrl.search,
+  )
+  if (canonicalHostRedirect) {
+    return NextResponse.redirect(canonicalHostRedirect, 307)
   }
 
   const pathname = req.nextUrl.pathname
