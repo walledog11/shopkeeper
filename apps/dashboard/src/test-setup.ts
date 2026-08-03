@@ -25,6 +25,9 @@ for (const key of TEST_DEFAULT_KEYS) {
 
 if (!process.env.LOG_LEVEL) process.env.LOG_LEVEL = 'silent';
 if (!process.env.LOG_PRETTY) process.env.LOG_PRETTY = 'false';
+// The limiter fails closed without Upstash env, which 429s every rate-limited
+// route test. Set explicitly to opt back into enforcement.
+if (!process.env.E2E_TEST_RUN) process.env.E2E_TEST_RUN = 'true';
 process.env.E2E_OUTBOUND_MODE = 'live';
 
 installTestNetworkGuard();
