@@ -162,7 +162,101 @@ or a configured provider — none is a code task.
   defaults to `hello@useclerk.co`. **This blocks Google's Gmail restricted-scope
   verification**, which requires an owned, Search Console-verified custom domain
   (see [google-gmail-verification-packet.md](production/google-gmail-verification-packet.md)).
-  Pick the domain first; the rest of that runbook is DNS-dependent.
+  - **`useshopkeeper.com` REGISTERED 2026-08-02 and attached to Vercel.** Matches
+    the `@useshopkeeper` handles already held on X and Instagram. Marketing on the
+    apex, dashboard on `app.useshopkeeper.com`, both from the same Vercel project.
+    The name "Shopkeeper" stays as a **working brand**; the runbook records why,
+    plus the standing rule never to shorten it to "ShopKeep" (that mark is
+    Lightspeed's, in point-of-sale software).
+  - **Trademark cleared 2026-08-02 and the result is bad — proceeding knowingly.** `SHOPKEEP` (US Reg. 3936441, serial 77921264) is
+    LIVE, REGISTERED, renewed through 2031, §15 incontestable, standard-character,
+    owned by **Lightspeed Commerce USA** and actively maintained by outside IP
+    counsel. It covers IC 042 — "operating a website providing software as a
+    service (SAAS) for use with business management, namely, sales transaction
+    data management … inventory management" — which is this product's class and
+    increasingly its goods as order-ops and inventory modules land.
+  - **There is a direct 2024 precedent.** Application `+SHOPKEEPER` (serial
+    98265867, MarketNation Inc., IC 042 SaaS) was refused on 2024-08-15 under
+    **Trademark Act §2(d), likelihood of confusion, citing Reg. 3936441**, and
+    abandoned. Every other `SHOPKEEPER` application in software classes is also
+    dead. No live `SHOPKEEPER` mark exists in software.
+  - Consequence: **registering "Shopkeeper" for software is very likely refused**,
+    and a stylized logo does not help — SHOPKEEP is a standard-character mark, and
+    the refused `+SHOPKEEPER` was itself a composite. The one live IC 042 mark
+    containing the word (`NIMBLY THE SNAPPY SHOPKEEPER`, 87465478) survives because
+    an arbitrary coined term dominates it.
+  - **Decision 2026-08-02: option (c) — operate unregistered, as a working brand.**
+    Rationale: ~10 rounds of name search established that the `.com` namespace is
+    closed for anything pronounceable (~400 candidates checked, one free result),
+    the alternatives all scored worse, and the real blocker on this list is
+    merchant #1 — which does not require a final name. Accepting: the mark can
+    never be owned, there is no recourse against a copycat, and Lightspeed could
+    ask us to stop. **Mitigations: no paid acquisition and no press launch under
+    the name; revisit at ~50 paying merchants or before any marketing spend,
+    whichever comes first.** A domain change after Gmail verification means
+    redoing restricted-scope review *and* the CASA assessment, so treat that
+    revisit as a real decision point. Get a trademark attorney before spending on
+    the brand; the facts above are public-record, not legal advice.
+  - Names screened and rejected en route: Creance came back **clean** at USPTO
+    (nothing in IC 009/035/042) if a rename is ever forced — it is the known-good
+    fallback. Daiko was blocked by DAIKIN's standard-character IC 042 registration.
+  - **Domain migration DONE 2026-08-02 and verified.** Apex serves marketing,
+    `app.useshopkeeper.com` serves the dashboard, both from the same Vercel
+    project. Verified live: `APP_URL`/`NEXT_PUBLIC_APP_URL` both
+    `https://app.useshopkeeper.com` (the latter confirmed baked into the client
+    bundle), zero stale `dashboard-shopkeeper.vercel.app` references,
+    `hello@useshopkeeper.com` rendering on `/privacy`, gateway env contract OK.
+    Shopify/Meta/Google redirect URIs and Railway `DASHBOARD_URL` updated.
+    Remaining for the Gmail unblock: **Google OAuth Branding**, a real Shopify
+    connect smoke test, the Clerk production migration, then the demo video.
+
+- [x] **Clerk migrated dev → production, 2026-08-02.** The live instance was a
+  *development* one (`pk_test_…` on `premium-goblin-44.clerk.accounts.dev`).
+  Now: production instance `ins_3HNf1c6BNEOk38K6QIBoY8j1RG9` on
+  `useshopkeeper.com`, Frontend API at `clerk.useshopkeeper.com`, `pk_live_`/
+  `sk_live_` set across Production/Preview/Development (deliberate choice — all
+  three point at production), Google social connection configured with our own
+  OAuth client (a *separate* client from the Gmail one, so the restricted-scope
+  review isn't disturbed). Five CNAMEs added in Vercel DNS: `clerk`, `accounts`,
+  `clkmail`, `clk._domainkey`, `clk2._domainkey`. DNS/SSL/mail all verified
+  complete via `clerk deploy status`.
+  - **Users and orgs did NOT transfer** — dev and production instances have
+    separate databases. `getOrCreateOrg()` maps Clerk org IDs to `Organization`
+    rows, so any pre-existing rows are now orphaned. Re-onboard from scratch.
+  - **Landmine — do not misdiagnose this:** `curl .../dashboard` returns **404,
+    not a redirect**, on *both* instance types. Clerk's `auth.protect()` does a
+    `protect-rewrite` to `/_not-found` to hide protected routes from
+    unauthenticated clients. Only the `x-clerk-auth-reason` header differs
+    (`dev-browser-missing` → `session-token-and-uat-missing`). It is not a bug
+    and it is not a dev-instance symptom; verify auth in a browser.
+  - **Still open:** `CLERK_WEBHOOK_SECRET` is absent and the production webhook
+    endpoint does not exist yet. Create it in the Clerk dashboard pointing at
+    `https://app.useshopkeeper.com/api/webhooks/clerk`, then set the secret in
+    Vercel. Until then org-membership sync is dead. The CLI cannot create webhook
+    endpoints (`clerk webhooks` only streams/verifies locally).
+  - **Also open:** the Development scope stored `CLERK_SECRET_KEY` as
+    *non-sensitive* (readable via `vercel env pull`) while Production and Preview
+    marked it sensitive. Tighten it. And the leftover Clerk application named
+    `clerk` (`app_3B9VBBAVoAaZGLuVuV5Ldw3atCJ`, dev-only, from the old product
+    name) should be deleted once confirmed unused.
+
+- [ ] **Production env gaps found 2026-08-02** by
+  `check-production-env.mjs` run against pulled Vercel/Railway values:
+  - `CLERK_WEBHOOK_SECRET` is **absent entirely** in Vercel production, so
+    `/api/webhooks/clerk` cannot verify signatures and org-membership sync is
+    dead. Fix as part of the Clerk production migration above.
+  - `PRICE_ID_STARTER` and `PRICE_ID_PRO` are **missing** — only a legacy
+    `PRICE_ID` exists. Billing tiers are not fully wired.
+  - `INBOUND_EMAIL_DOMAIN` is still the example placeholder
+    **`inbound.yourapp.com`** — a domain that does not exist. Set to
+    `inbound.useshopkeeper.com` when Postmark inbound is configured (MX on that
+    subdomain; merge SPF, never add a second SPF record).
+  - Gateway warning: `REDIS_URL` is not using the TLS `rediss://` form, and
+    customer message payloads move through BullMQ over it.
+  - **Tooling caveat:** `vercel env pull` redacts sensitive vars to the literal
+    string `[SENSITIVE]`, so the checker reports bogus format failures for them
+    locally. To make it meaningful, run it as a Vercel build step where real
+    values are injected.
 
 - [ ] **Realtime inbox (SSE + Redis pub/sub) is built and parked.** Phases 1–2
   are implemented behind flags, off by default: gateway `realtime/{publish,token,sse}.ts`,
