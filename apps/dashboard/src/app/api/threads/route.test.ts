@@ -117,6 +117,24 @@ describe('GET /api/threads', () => {
     expect(body.threads[0].messages[0].contentText).toBe('Second message');
   });
 
+  it('keeps the latest customer message in preview when the agent replied last', async () => {
+    const customer = await createTestCustomer(org.id, 'cust_escalated', { name: 'Grace' });
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    const complaint = await createTestMessage(thread.id, 'My order never arrived', SenderType.customer);
+    const handoff = await createTestMessage(thread.id, 'Passing this to a human', SenderType.agent);
+    await db.message.update({ where: { id: complaint.id }, data: { sentAt: new Date('2024-01-01T00:00:00.000Z') } });
+    await db.message.update({ where: { id: handoff.id }, data: { sentAt: new Date('2024-01-01T00:01:00.000Z') } });
+
+    const req = new Request('http://localhost:3000/api/threads?preview=true');
+    const res = await GET(req);
+    const body = await res.json() as { threads: { messages: { contentText: string | null }[] }[] };
+
+    expect(body.threads[0].messages.map(message => message.contentText)).toEqual([
+      'My order never arrived',
+      'Passing this to a human',
+    ]);
+  });
+
   it('returns 401 when not authenticated', async () => {
     vi.mocked(auth).mockRejectedValueOnce(new Error('Unauthenticated'));
 

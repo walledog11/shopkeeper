@@ -10,6 +10,10 @@ import type { Thread, Ticket } from "@/types";
 export function threadToTicket(thread: Thread, agentName?: string): Ticket {
   const channel = getChannelInfo(thread.channelType);
   const lastMsg = thread.messages.filter((message) => message.senderType !== SENDER_TYPE.NOTE).at(-1);
+  const lastCustomerMsg = thread.messages.filter((message) => message.senderType === SENDER_TYPE.CUSTOMER).at(-1);
+  // On an escalated thread the newest message is the agent's handoff reply, which
+  // tells the merchant nothing about why it was escalated.
+  const previewMsg = thread.escalatedAt ? lastCustomerMsg ?? lastMsg : lastMsg;
   const planIsForLastMessage = getCurrentPlanForThread(thread, thread.messages) !== null;
 
   return {
@@ -22,15 +26,14 @@ export function threadToTicket(thread: Thread, agentName?: string): Ticket {
     time: formatTicketAge(thread.lastMessageAt),
     lastMessageAt: thread.lastMessageAt,
     subject: thread.subject || thread.aiTitle || thread.aiSummary || "New Inquiry",
-    preview: lastMsg?.contentText || "No messages yet.",
+    preview: previewMsg?.contentText || "No messages yet.",
     tag: thread.tag || "Support",
     tagColor: "text-slate-500 bg-slate-100 border-slate-200",
     escalatedAt: thread.escalatedAt ?? null,
     aiSummary: thread.aiSummary || `${agentName ?? "Shopkeeper"} is reading this ticket…`,
     aiTitle: thread.aiTitle ?? null,
     status: thread.status,
-    lastCustomerMessageAt:
-      thread.messages.filter((message) => message.senderType === SENDER_TYPE.CUSTOMER).at(-1)?.sentAt ?? null,
+    lastCustomerMessageAt: lastCustomerMsg?.sentAt ?? null,
     hasPlan: planIsForLastMessage,
     cachedPlan: thread.cachedPlan,
     cachedPlanMessageId: thread.cachedPlanMessageId,
