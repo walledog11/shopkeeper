@@ -7,7 +7,6 @@ import { fetcher } from "@/lib/api/fetcher"
 import {
   AgentAdvancedSection,
   AgentAutonomySection,
-  AgentDefaultBehaviorSection,
   AgentIdentitySection,
   MorningBriefingSection,
   ProactiveMonitoringSection,
@@ -53,7 +52,6 @@ export default function AgentTab(props: Props) {
       <div className="space-y-6">
         <AgentIdentitySection controller={controller} />
         <AgentAutonomySection controller={controller} />
-        <AgentDefaultBehaviorSection controller={controller} />
         <WhenOnDutySection controller={controller} emailConnected={emailConnected} />
         {shopifyConnected && <MorningBriefingSection controller={controller} />}
         {shopifyConnected && <ProactiveMonitoringSection controller={controller} />}
