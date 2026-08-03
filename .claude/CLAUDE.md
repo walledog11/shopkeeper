@@ -130,6 +130,7 @@ Both `DATABASE_URL`s append `?pgbouncer=true&connection_limit=1`. `TOKEN_ENCRYPT
 - Edit existing files. Don't create new ones unless necessary.
 - Tailwind classes, not inline `style`.
 - Real DB in tests; never mock the DB.
+- Run rate-limited route tests with `E2E_TEST_RUN=true`. `rate-limit.ts` fails **closed** unless `NODE_ENV === 'development'`, so with no Upstash env under vitest every request 429s and the suite looks broken. Nothing in `vitest.config.ts` or `test-setup.ts` sets the flag. A wall of 429s is this, not your change.
 - Target user is a solo merchant / small team — optimize for simplicity, not power-user features.
 - Skip end-of-task summaries. The diff speaks.
 

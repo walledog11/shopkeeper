@@ -148,19 +148,17 @@ or a configured provider — none is a code task.
     from generic TikTok DMs — there is no generic-DM adapter and no verified
     public API for one.
 
-- [ ] **Four calls left over from the dashboard UI remediation pass** (plan
+- [ ] **Two calls left over from the dashboard UI remediation pass** (plan
   closed out and deleted 2026-08-01; the phases are in git history).
-  - Remove the `Auto-plan on ticket open` toggle
-    (`(shell)/agent/configure/_components/AgentDefaultBehaviorSection.tsx`)?
-    It exposes internal machinery as a preference and no merchant wants it off.
-  - Hide the flag-gated monitor toggles when the gateway flag is off, versus
-    showing a real "not available" state?
   - The Customers page cannot show the people in the inbox — it is
     Shopify-only. Still the open item from the June 2026 cleanup.
-  - An escalated ticket's list preview shows the *agent's* handoff reply, not
-    the customer's complaint, because `app/api/threads/route.ts:72` loads
-    `messages: take 1`. Honest but wrong-facing; fixing it is a list-query
-    cost decision.
+  - The flag-gated monitor toggles: hide them when the gateway flag is off,
+    versus showing a real "not available" state? **Neither is buildable as
+    written.** The flags (`ORDER_RISK_MONITOR_ENABLED` and its siblings) are
+    *gateway* env vars, and the dashboard holds no reference to them — it cannot
+    tell whether a monitor is actually running. Both options need an endpoint
+    that reports gateway flag state first, so that endpoint is the decision, not
+    the toggle behavior.
 
 - [ ] **Domain / branding migration (was "Phase 6").** **The code and DNS side is
   done; the external consoles and the email leg are not.** What remains is
