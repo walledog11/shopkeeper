@@ -156,7 +156,15 @@ export interface HealthRouteDependencies {
 }
 
 export function registerHealthRoutes(app: Application, { redis }: HealthRouteDependencies): void {
-  // Public liveness probe. Reports coarse per-check status only — no queue
+  // Liveness only: is this process up and serving? Deliberately touches no
+  // dependency. Uptime monitors belong here, not on /health/deep — polling a
+  // DB check every few minutes holds the Neon compute above its scale-to-zero
+  // idle window and bills it around the clock.
+  app.get('/health', (_req, res) => {
+    res.json({ status: 'ok' });
+  });
+
+  // Readiness/diagnostics. Reports coarse per-check status only — no queue
   // counts, worker PID/timestamp, or failed-job tenant identifiers (AUD-017).
   // Detailed diagnostics are served behind auth on /health/queues.
   app.get('/health/deep', async (_req, res) => {

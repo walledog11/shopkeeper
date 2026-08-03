@@ -163,6 +163,16 @@ describe('health routes', () => {
     ]);
   });
 
+  describe('GET /health', () => {
+    it('reports liveness without querying the database', async () => {
+      const response = await request(createApp(createHealthyRedis())).get('/health');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ status: 'ok' });
+      expect(queryRaw).not.toHaveBeenCalled();
+    });
+  });
+
   describe('GET /health/deep', () => {
     it('reports coarse per-check status and 200 when healthy', async () => {
       const response = await request(createApp(createHealthyRedis())).get('/health/deep');

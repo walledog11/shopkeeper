@@ -110,7 +110,7 @@ Standing rules for any change to agent behavior (promoted from the 2026-07 behav
 - `apps/gateway/src/start.ts` — gateway process bootstrap (role-aware: `server`, `worker`, or both)
 - `apps/gateway/src/worker.ts` — BullMQ worker entrypoint
 - `apps/gateway/src/maintenance/workers.ts` — daily IG token health + refresh, 90-day archive + purge, queue health monitor
-- `apps/gateway/src/health.ts` — `/health/deep` and `/health/queues` diagnostic endpoints (there is no bare `/health`)
+- `apps/gateway/src/health.ts` — `/health` (liveness only, touches no dependency — point uptime monitors here; a recurring DB check keeps the Neon compute from scaling to zero), plus `/health/deep` and `/health/queues` diagnostic endpoints
 - `apps/dashboard/src/lib/server/redis.ts` — Upstash REST client + rate limiting
 - `apps/dashboard/src/instrumentation.ts` — env validation on server boot
 
