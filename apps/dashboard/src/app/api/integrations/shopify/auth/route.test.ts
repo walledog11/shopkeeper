@@ -52,7 +52,8 @@ describe('POST /api/integrations/shopify/auth', () => {
   it('sets OAuth state cookies and redirects to the normalized Shopify auth URL', async () => {
     const res = await POST(new Request('http://localhost/api/integrations/shopify/auth?shop=Fixture-Shop&returnTo=/dashboard/integrations'));
 
-    expect(res.status).toBe(307);
+    // 303 so the popup shell's POST becomes a GET on the hop to Shopify.
+    expect(res.status).toBe(303);
     const redirectUrl = new URL(res.headers.get('location')!);
     expect(redirectUrl.origin).toBe('https://fixture-shop.myshopify.com');
     expect(redirectUrl.pathname).toBe('/admin/oauth/authorize');

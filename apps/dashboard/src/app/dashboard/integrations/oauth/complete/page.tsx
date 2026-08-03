@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { OAuthPopupShell } from "@/components/integrations/OAuthPopupShell";
 import { OAUTH_ERROR_MESSAGES } from "@/lib/integrations/catalog";
+import { safeReturnTo } from "@/lib/security/safe-return-to";
 import {
   finishOAuthPopup,
   isOAuthPopupWindow,
@@ -34,6 +35,7 @@ function OAuthCompleteContent() {
   const searchParams = useSearchParams();
   const connected = safeConnected(searchParams.get("connected"));
   const error = safeError(searchParams.get("error"));
+  const returnTo = safeReturnTo(searchParams.get("returnTo"));
   const [closeBlocked, setCloseBlocked] = useState(false);
 
   useEffect(() => {
@@ -58,14 +60,14 @@ function OAuthCompleteContent() {
         return;
       }
 
-      const nextUrl = new URL("/dashboard/integrations", window.location.origin);
+      const nextUrl = new URL(returnTo ?? "/dashboard/integrations", window.location.origin);
       if (connected) nextUrl.searchParams.set("connected", connected);
       if (error) nextUrl.searchParams.set("error", error);
       window.location.replace(`${nextUrl.pathname}${nextUrl.search}`);
     }, OAUTH_COMPLETE_CLOSE_DELAY_MS);
 
     return () => window.clearTimeout(timer);
-  }, [connected, error]);
+  }, [connected, error, returnTo]);
 
   const success = Boolean(connected) && !error;
   const integrationLabel = connected ? CONNECTED_LABELS[connected] ?? "Integration" : null;

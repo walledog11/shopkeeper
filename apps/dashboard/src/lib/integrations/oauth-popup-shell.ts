@@ -1,5 +1,5 @@
 import { PRODUCT_NAME } from "@/lib/brand";
-import { OAUTH_POPUP_NAME, OAUTH_POPUP_SESSION_KEY } from "@/lib/integrations/oauth-flow";
+import { OAUTH_POPUP_SESSION_KEY } from "@/lib/integrations/oauth-flow";
 
 /** Design tokens aligned with apps/dashboard/src/app/globals.css */
 export const OAUTH_POPUP_TOKENS = {
@@ -354,7 +354,6 @@ export function renderGmailOAuthPopupHtml(options: {
   postLabel?: string;
 }): string {
   const title = escapeOAuthPopupHtml(options.title);
-  const popupName = serializeOAuthPopupScriptString(OAUTH_POPUP_NAME);
   const sessionKey = serializeOAuthPopupScriptString(OAUTH_POPUP_SESSION_KEY);
   const formMarkup =
     options.postAction && options.postLabel
@@ -363,9 +362,10 @@ export function renderGmailOAuthPopupHtml(options: {
   </form>
   <script>
     try {
-      if (window.name === ${popupName}) {
-        sessionStorage.setItem(${sessionKey}, "1");
-      }
+      // Unconditional: this shell is only ever served inside the OAuth popup
+      // flow, and window.name is cleared by the cross-origin hop to the
+      // provider — gating on it would defeat the fallback it exists to be.
+      sessionStorage.setItem(${sessionKey}, "1");
     } catch (e) {}
     document.getElementById("post-redirect-form").requestSubmit();
   </script>`
@@ -401,7 +401,6 @@ export function renderOAuthPopupHtml(options: {
   const footer = escapeOAuthPopupHtml(options.footer ?? "Securely redirecting you to authorize this connection.");
   const brand = escapeOAuthPopupHtml(PRODUCT_NAME);
   const state = options.state ?? "loading";
-  const popupName = serializeOAuthPopupScriptString(OAUTH_POPUP_NAME);
   const sessionKey = serializeOAuthPopupScriptString(OAUTH_POPUP_SESSION_KEY);
   const iconMarkup =
     state === "loading"
@@ -415,9 +414,10 @@ export function renderOAuthPopupHtml(options: {
   </form>
   <script>
     try {
-      if (window.name === ${popupName}) {
-        sessionStorage.setItem(${sessionKey}, "1");
-      }
+      // Unconditional: this shell is only ever served inside the OAuth popup
+      // flow, and window.name is cleared by the cross-origin hop to the
+      // provider — gating on it would defeat the fallback it exists to be.
+      sessionStorage.setItem(${sessionKey}, "1");
     } catch (e) {}
     document.getElementById("post-redirect-form").requestSubmit();
   </script>`

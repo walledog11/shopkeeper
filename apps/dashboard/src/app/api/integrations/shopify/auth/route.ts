@@ -55,5 +55,8 @@ export async function POST(request: Request) {
   authUrl.searchParams.set('scope', SHOPIFY_OAUTH_SCOPES.join(','));
   authUrl.searchParams.set('redirect_uri', oauthConfig.redirectUri);
   authUrl.searchParams.set('state', state);
-  return NextResponse.redirect(authUrl.toString());
+  // 303, not the NextResponse.redirect default of 307: the popup shell submits
+  // this route as POST, and 307 would preserve the method on the hop to
+  // Shopify's authorize endpoint, which only accepts GET.
+  return NextResponse.redirect(authUrl.toString(), 303);
 }
