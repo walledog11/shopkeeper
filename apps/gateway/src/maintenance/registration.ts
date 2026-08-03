@@ -60,6 +60,15 @@ export async function scheduleRepeatableJob(
   jobId: string,
   everyMs: number,
 ): Promise<void> {
+  // Changing `every` registers a second schedule rather than replacing the old
+  // one, and the stale schedule keeps firing forever. Drop any prior interval
+  // for this job before adding the current one.
+  for (const existing of await queue.getRepeatableJobs()) {
+    if (existing.name === name && Number(existing.every) !== everyMs) {
+      await queue.removeRepeatableByKey(existing.key);
+    }
+  }
+
   await queue.add(name, {}, {
     repeat: { every: everyMs },
     jobId,
