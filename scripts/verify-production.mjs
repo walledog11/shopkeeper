@@ -108,7 +108,7 @@ function assertCheck(data, checkPath, expectedValue) {
 }
 
 async function verifyDashboard(baseUrl) {
-  const url = buildUrl(baseUrl, '/api/health');
+  const url = buildUrl(baseUrl, '/api/health/deep');
   const { data } = await fetchJson(url, [200]);
   assertCheck(data, 'status', 'ok');
   assertCheck(data, 'checks.env.status', 'ok');

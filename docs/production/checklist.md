@@ -36,7 +36,8 @@ Notes:
   privacy policy is deployed, staging payload review passes, and production reports are saved.
 - Production migrations are run with both pooled `DATABASE_URL` and direct `DIRECT_DATABASE_URL`
   set, as shown in [deployment.md](deployment.md#deploy-order).
-- Dashboard deploy completes and `GET /api/health` returns healthy.
+- Dashboard deploy completes and `GET /api/health/deep` returns healthy (`/api/health` is
+  liveness only — it touches no dependency so uptime monitors cannot hold the DB awake).
 - Gateway deploy completes and `GET /health/deep` plus `GET /health/queues` return healthy.
 - `npm run verify:production` passes against the live dashboard and gateway URLs.
 

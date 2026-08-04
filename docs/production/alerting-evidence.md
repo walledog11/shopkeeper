@@ -46,11 +46,21 @@ incident, and below `QUEUE_ALERT_FAILED_THRESHOLD`. Clear it before controlled
 | Log alert rule `webhook_signature` | ☐ | Rule id: ___ |
 | Log alert rule `provider_send` | ☐ | Rule id: ___ |
 | Log alert rule `agent_failure` | ☐ | Rule id: ___ |
-| Uptime monitor: dashboard `/api/health` (keyword `{"status":"ok"`) | ☑ | Configured 2026-07-31, Better Stack free tier |
-| Uptime monitor: gateway `/health/deep` (keyword `{"status":"ok"`) | ☑ | Configured 2026-07-31, Better Stack free tier |
+| Uptime monitor: dashboard `/api/health` (keyword `{"status":"ok"`) | ☑ | Configured 2026-07-31, Better Stack free tier. Route became liveness-only 2026-08-03 — see the scale-to-zero note below |
+| Uptime monitor: gateway `/health` (keyword `{"status":"ok"`) | ☑ | Configured 2026-07-31, Better Stack free tier. Repointed off `/health/deep` 2026-08-03 — see the scale-to-zero note below |
 | Gateway ops-alert → Telegram push | ☑ | Verified in production 2026-07-31 via `emit-controlled-ops-alert.ts queue_health`; both test alerts delivered |
 | Dashboard ops-alert → Sentry capture | ☐ | Shipped 2026-08-01 (`lib/server/ops-alert-notify.ts`); needs a **deployed** trigger — see the Sentry caveat below |
 | Better Stack test notification sent | ☐ | Recipient: ___ Time: ___ |
+
+### Uptime monitors must not query Postgres
+
+Both uptime monitors originally polled a route that ran `SELECT 1`. At Better Stack's
+3-minute interval that resets Neon's 5-minute scale-to-zero timer before it can ever
+expire, so the compute never suspends and bills as always-on — roughly $19/mo against
+about $7 with scale-to-zero working. Point monitors at the liveness routes
+(`/api/health`, `/health`), which touch no dependency. Dependency coverage lives on
+`/api/health/deep` and `/health/deep`; if you monitor those, use an interval well above
+5 minutes so a wake cannot be held open.
 
 ## Controlled ops-alert validation
 
