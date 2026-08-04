@@ -5,7 +5,6 @@ import type { KeyboardEvent } from "react"
 import { useUser } from "@clerk/nextjs"
 import { useFillerPhrase } from "@/hooks/useFillerPhrase"
 import {
-  deleteAgentSessionHistory,
   fetchAgentSessionDetail,
   sendAgentChatInstruction,
   sessionToChatMessages,
@@ -46,7 +45,6 @@ export function useAgentChatState({ restoreSession = true }: UseAgentChatStatePr
     "Searching knowledge base…",
     "Pulling customer history…",
   ], isRunning)
-  const [showClearConfirm, setShowClearConfirm] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const sessionIdRef = useRef<string | null>(null)
@@ -193,22 +191,11 @@ export function useAgentChatState({ restoreSession = true }: UseAgentChatStatePr
     }
   }, [handleSend])
 
-  const handleClearHistory = useCallback(async () => {
-    setShowClearConfirm(false)
-    try {
-      await deleteAgentSessionHistory()
-      handleNewSession()
-    } catch {
-      // silent
-    }
-  }, [handleNewSession])
-
   return {
     appendAgentLine,
     fillerPhrase,
     firstName,
     greeting,
-    handleClearHistory,
     handleKeyDown,
     handleNewSession,
     handleSend,
@@ -219,8 +206,6 @@ export function useAgentChatState({ restoreSession = true }: UseAgentChatStatePr
     messages,
     messagesEndRef,
     setInput,
-    setShowClearConfirm,
-    showClearConfirm,
     textareaRef,
   }
 }

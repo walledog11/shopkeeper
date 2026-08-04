@@ -18,7 +18,6 @@ export interface RawInputs {
   maxDiscount: string
   dailyRefundCap: string
   dailyLLMSpendCap: string
-  maxIter: string
   digestHour: string
   digestSecondHour: string
   lowStockThreshold: string
@@ -293,7 +292,6 @@ export function buildSettingsPayload(state: OrgSettings, raw: RawInputs): OrgSet
   const parsedDiscount = raw.maxDiscount.trim() === "" ? null : Number(raw.maxDiscount)
   const parsedDaily = raw.dailyRefundCap.trim() === "" ? null : Number(raw.dailyRefundCap)
   const parsedLLM = raw.dailyLLMSpendCap.trim() === "" ? null : Number(raw.dailyLLMSpendCap)
-  const parsedIter = Number(raw.maxIter)
 
   return {
     ...state,
@@ -302,9 +300,6 @@ export function buildSettingsPayload(state: OrgSettings, raw: RawInputs): OrgSet
     maxDiscountPercent: parsedDiscount === null || isNaN(parsedDiscount) ? null : parsedDiscount,
     dailyRefundCap: parsedDaily === null || isNaN(parsedDaily) ? null : parsedDaily,
     dailyLLMSpendCapUsd: parsedLLM === null || isNaN(parsedLLM) ? null : parsedLLM,
-    maxIterations: isNaN(parsedIter) || parsedIter < 1
-      ? AGENT_SETTINGS_DEFAULTS.maxIterations
-      : parsedIter,
     digestHour: clampHour(raw.digestHour, AGENT_SETTINGS_DEFAULTS.digestHour),
     digestSecondHour: clampHour(raw.digestSecondHour, AGENT_SETTINGS_DEFAULTS.digestSecondHour),
     lowStockThreshold: parseLowStockThreshold(raw.lowStockThreshold),
@@ -319,7 +314,6 @@ export function rawInputsFor(settings: OrgSettings): RawInputs {
     maxDiscount: settings.maxDiscountPercent != null ? String(settings.maxDiscountPercent) : "",
     dailyRefundCap: settings.dailyRefundCap != null ? String(settings.dailyRefundCap) : "",
     dailyLLMSpendCap: settings.dailyLLMSpendCapUsd != null ? String(settings.dailyLLMSpendCapUsd) : "",
-    maxIter: String(settings.maxIterations ?? AGENT_SETTINGS_DEFAULTS.maxIterations),
     digestHour: String(settings.digestHour ?? AGENT_SETTINGS_DEFAULTS.digestHour),
     digestSecondHour: String(settings.digestSecondHour ?? AGENT_SETTINGS_DEFAULTS.digestSecondHour),
     lowStockThreshold: settings.lowStockThreshold != null ? String(settings.lowStockThreshold) : "",

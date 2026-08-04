@@ -3,12 +3,10 @@
 import { useCallback, useRef, useState, type ComponentProps, type CSSProperties, type RefObject } from "react"
 import { useFillerPhrase } from "@/hooks/useFillerPhrase"
 import { useIsMobile } from "@/hooks/useMobile"
-import { useThreadPresence } from "@/hooks/useThreadPresence"
 import { requestShopifyLinkFocus } from "@/lib/messaging/shopify-link-focus"
 import { useConversationAgentFlow } from "../../_hooks/useConversationAgentFlow"
 import ConversationHeader from "./ConversationHeader"
 import ConversationContextBar from "./ConversationContextBar"
-import PresenceBanner from "./PresenceBanner"
 import ChatTimeline from "./timeline/ChatTimeline"
 import NotesTimeline from "./timeline/NotesTimeline"
 import ConversationComposerArea from "./composer/ConversationComposerArea"
@@ -172,7 +170,6 @@ export default function ConversationView({
     'Finishing touches…',
   ], isAgentRunning)
 
-  const { presenceCount } = useThreadPresence(ticket.id)
   const conversationStyle = {
     "--ticket-visual-viewport-height": `${visualViewportHeight}px`,
   } as CSSProperties
@@ -267,7 +264,6 @@ export default function ConversationView({
       {activeTab === 'closed' && (
         <ConversationTabs noteCount={noteCount} value={viewTab} onValueChange={setViewTab} />
       )}
-      <PresenceBanner presenceCount={presenceCount} />
 
       <ConversationTimelinePanel
         agentName={agentName}

@@ -100,7 +100,3 @@ export async function sendAgentChatInstruction({
     ...(data?.awaitingApproval === true ? { awaitingApproval: true as const } : {}),
   }
 }
-
-export function deleteAgentSessionHistory(fetchImpl: FetchLike = fetch) {
-  return fetchImpl("/api/agent/sessions", { method: "DELETE" })
-}

@@ -97,7 +97,7 @@ Standing rules for any change to agent behavior (promoted from the 2026-07 behav
 - `agent/internal/route.ts` — gateway-only agent run (e.g. `sms_agent` from Telegram), requires `INTERNAL_API_SECRET`
 - `agent/io-send-internal/route.ts` — gateway-only provider send hop (send_reply/send_email delivery), requires `INTERNAL_API_SECRET`
 - `agent/chat/route.ts` — Concierge sessions
-- `agent/sessions/route.ts`, `agent/sessions/[id]/route.ts` — Concierge session list/detail
+- `agent/sessions/[id]/route.ts` — Concierge session transcript (restores the in-progress session on reload)
 - `agent/ask/route.ts` — composer read-only Q&A (`runAgent` with `readOnly: true`)
 - `agent/quick-approve/route.ts` — one-tap approval of a cached plan
 - `agent/actions/route.ts` — agent action audit log feed

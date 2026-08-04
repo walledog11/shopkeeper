@@ -56,7 +56,6 @@ describe("agent tab helpers", () => {
         maxDiscount: "15",
         dailyRefundCap: "",
         dailyLLMSpendCap: "not-a-number",
-        maxIter: "0",
         digestHour: "99",
         digestSecondHour: "",
         lowStockThreshold: "7",
@@ -70,7 +69,6 @@ describe("agent tab helpers", () => {
     expect(payload.maxDiscountPercent).toBe(15);
     expect(payload.dailyRefundCap).toBeNull();
     expect(payload.dailyLLMSpendCapUsd).toBeNull();
-    expect(payload.maxIterations).toBe(10);
     expect(payload.digestHour).toBe(23);
     expect(payload.digestSecondHour).toBe(17);
     expect(payload.lowStockThreshold).toBe(7);
@@ -83,7 +81,6 @@ describe("agent tab helpers", () => {
       maxRefundAmount: null,
       dailyRefundCap: 200,
       dailyLLMSpendCapUsd: 20,
-      maxIterations: 7,
       digestHour: 10,
       digestSecondHour: 18,
       lowStockThreshold: 5,
@@ -96,7 +93,6 @@ describe("agent tab helpers", () => {
       maxDiscount: "",
       dailyRefundCap: "200",
       dailyLLMSpendCap: "20",
-      maxIter: "7",
       digestHour: "10",
       digestSecondHour: "18",
       lowStockThreshold: "5",

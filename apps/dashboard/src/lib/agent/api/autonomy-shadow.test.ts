@@ -8,7 +8,6 @@ import {
 } from "@shopkeeper/db/test-helpers";
 import type { AgentPlan, OrgSettings, RawToolCall } from "@/types";
 import {
-  getAutonomyReadiness,
   recordShadowDecision,
   resolveShadowDecisionOnApproval,
 } from "@/lib/agent/api/autonomy-shadow";
@@ -99,33 +98,5 @@ describe("autonomy shadow decisions", () => {
     const row = await db.autonomyShadowDecision.findFirstOrThrow({ where: { organizationId: orgId } });
     expect(row.humanDecision).toBe("rejected");
     expect(row.agreement).toBe(false);
-  });
-
-  it("aggregates readiness with agreement rate and the dangerous-cell count", async () => {
-    const seed = await seedThread();
-    orgId = seed.orgId;
-
-    await recordShadowDecision({ ...seed, settings: broadSettings, plan: planWith([refundCall(40)]) });
-    await resolveShadowDecisionOnApproval({ ...seed, approvedToolCalls: [refundCall(40)] });
-
-    await recordShadowDecision({ ...seed, settings: broadSettings, plan: planWith([refundCall(90)]) });
-    await resolveShadowDecisionOnApproval({
-      ...seed,
-      approvedToolCalls: [{ id: "r1", name: "send_reply", input: { text: "hi" } }],
-    });
-
-    // A still-pending one.
-    await recordShadowDecision({ ...seed, settings: broadSettings, plan: planWith([refundCall(120)]) });
-
-    const readiness = await getAutonomyReadiness({ orgId });
-    expect(readiness.resolved).toBe(2);
-    expect(readiness.agreements).toBe(1);
-    expect(readiness.agreementRate).toBe(0.5);
-    expect(readiness.dangerousRejections).toBe(1);
-    expect(readiness.pending).toBe(1);
-    expect(readiness.byTier).toEqual([
-      { tier: "broad", resolved: 2, agreements: 1, agreementRate: 0.5, dangerousRejections: 1 },
-    ]);
-    expect(readiness.byTool[0]).toMatchObject({ tool: "create_refund", resolved: 2 });
   });
 });

@@ -37,7 +37,6 @@ export function AgentChatView({
     fillerPhrase,
     firstName,
     greeting,
-    handleClearHistory,
     handleNewSession,
     handleSendText,
     initial,
@@ -46,8 +45,6 @@ export function AgentChatView({
     messages,
     messagesEndRef,
     setInput,
-    setShowClearConfirm,
-    showClearConfirm,
     textareaRef,
   } = state
 
@@ -221,7 +218,7 @@ export function AgentChatView({
           <DialogHeader>
             <DialogTitle>Start fresh?</DialogTitle>
             <DialogDescription>
-              Same person, clean slate for a new task. Your previous desk thread stays in history — this just clears the panel.
+              Same person, clean slate for a new task. This just clears the panel.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -239,20 +236,6 @@ export function AgentChatView({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showClearConfirm} onOpenChange={(open) => !open && setShowClearConfirm(false)}>
-        <DialogContent showCloseButton={false} className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Clear all history?</DialogTitle>
-            <DialogDescription>
-              All past sessions will be permanently deleted and cannot be recovered.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" size="sm" onClick={() => setShowClearConfirm(false)}>Cancel</Button>
-            <Button variant="destructive" size="sm" onClick={handleClearHistory}>Delete all</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

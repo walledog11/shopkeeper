@@ -35,7 +35,6 @@ export function useAgentTabState({ settings, rawSettings, version, orgName, voic
   const [maxDiscountInput, setMaxDiscountInput] = useState<string>(initialRaw.maxDiscount)
   const [dailyRefundCapInput, setDailyRefundCapInput] = useState<string>(initialRaw.dailyRefundCap)
   const [dailyLLMSpendCapInput, setDailyLLMSpendCapInput] = useState<string>(initialRaw.dailyLLMSpendCap)
-  const [maxIterationsInput, setMaxIterationsInput] = useState<string>(initialRaw.maxIter)
   const [digestHourInput, setDigestHourInput] = useState<string>(initialRaw.digestHour)
   const [digestSecondHourInput, setDigestSecondHourInput] = useState<string>(initialRaw.digestSecondHour)
   const [lowStockThresholdInput, setLowStockThresholdInput] = useState<string>(initialRaw.lowStockThreshold)
@@ -58,7 +57,6 @@ export function useAgentTabState({ settings, rawSettings, version, orgName, voic
       maxDiscount: maxDiscountInput,
       dailyRefundCap: dailyRefundCapInput,
       dailyLLMSpendCap: dailyLLMSpendCapInput,
-      maxIter: maxIterationsInput,
       digestHour: digestHourInput,
       digestSecondHour: digestSecondHourInput,
       lowStockThreshold: lowStockThresholdInput,
@@ -71,7 +69,6 @@ export function useAgentTabState({ settings, rawSettings, version, orgName, voic
       maxDiscountInput,
       dailyRefundCapInput,
       dailyLLMSpendCapInput,
-      maxIterationsInput,
       digestHourInput,
       digestSecondHourInput,
       lowStockThresholdInput,
@@ -115,7 +112,6 @@ export function useAgentTabState({ settings, rawSettings, version, orgName, voic
     setMaxDiscountInput(raw.maxDiscount)
     setDailyRefundCapInput(raw.dailyRefundCap)
     setDailyLLMSpendCapInput(raw.dailyLLMSpendCap)
-    setMaxIterationsInput(raw.maxIter)
     setDigestHourInput(raw.digestHour)
     setDigestSecondHourInput(raw.digestSecondHour)
     setLowStockThresholdInput(raw.lowStockThreshold)
@@ -278,8 +274,6 @@ export function useAgentTabState({ settings, rawSettings, version, orgName, voic
     setDailyRefundCapInput,
     dailyLLMSpendCapInput,
     setDailyLLMSpendCapInput,
-    maxIterationsInput,
-    setMaxIterationsInput,
     digestHourInput,
     setDigestHourInput,
     digestSecondHourInput,

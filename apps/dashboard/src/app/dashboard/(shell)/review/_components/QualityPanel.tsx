@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useActionLogEntries } from "@/hooks/useActionLogEntries"
 import { HOME_SUMMARY_REFRESH_INTERVAL_MS } from "@/lib/home/summary-contract"
-import AutonomyReadinessCard from "./AutonomyReadinessCard"
 import { ReviewList } from "./ReviewList"
 import { REVIEW_FILTERS, type ReviewFilterId } from "./quality-panel-model"
 
@@ -50,10 +49,6 @@ export default function QualityPanel() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="relative z-20 shrink-0 px-3 pt-3 pb-3 empty:hidden">
-        <AutonomyReadinessCard />
-      </div>
-
       <ReviewList
         state={state}
         activeFilter={activeFilter}
