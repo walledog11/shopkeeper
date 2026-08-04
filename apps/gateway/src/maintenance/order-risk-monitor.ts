@@ -26,10 +26,23 @@ import {
 
 const ORDERS_PER_ORG = 10;
 
+// The sweep only looks back as far as the review queue can remember. jobId
+// dedupe holds only while the completed job is still in Redis
+// (PROCESSING_QUEUE_DEFAULTS retires it at 24h), so an unbounded "most recent
+// unfulfilled" query would re-review — and re-bill — every order that sits
+// unfulfilled longer than that, once an hour, forever. Bounding discovery to the
+// same 24h keeps the backstop doing its actual job: catching a missed
+// orders/created webhook, which is a recent event.
+const DISCOVERY_WINDOW_MS = 24 * ONE_HOUR_MS;
+
 async function fetchRecentUnfulfilledOrderIds(shop: string, accessToken: string): Promise<string[]> {
   const ctx: ShopifyContext = { shop, accessToken };
   try {
-    return await listRecentUnfulfilledOrderIds(ctx, ORDERS_PER_ORG);
+    return await listRecentUnfulfilledOrderIds(
+      ctx,
+      ORDERS_PER_ORG,
+      new Date(Date.now() - DISCOVERY_WINDOW_MS),
+    );
   } catch (err) {
     logger.warn(
       {

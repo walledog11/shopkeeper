@@ -62,6 +62,7 @@ export async function getOrderByName(
 export async function listRecentUnfulfilledOrderIds(
   ctx: ShopifyContext,
   limit = 10,
+  createdSince?: Date,
 ): Promise<string[]> {
   const data = await shopifyRestJson<{ orders?: { id: number }[] }>(ctx, "orders.json", {
     query: {
@@ -70,6 +71,7 @@ export async function listRecentUnfulfilledOrderIds(
       financial_status: "paid",
       limit,
       fields: "id",
+      ...(createdSince ? { created_at_min: createdSince.toISOString() } : {}),
     },
   });
 

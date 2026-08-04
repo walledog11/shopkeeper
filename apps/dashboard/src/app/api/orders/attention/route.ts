@@ -72,7 +72,17 @@ export const GET = withOrgRoute(
     const [flagRows, returnThreads] = await Promise.all([
       integration
         ? db.agentAction.findMany({
-            where: { organizationId: org.id, tool: 'flag_order', executedAt: { gte: integration.createdAt } },
+            // status must be 'escalated', not merely present: runOrderOps only
+            // treats a flag_order call as a finding when it comes back escalated,
+            // and rows written before 2026-08-04 recorded 'success' under older
+            // plumbing. Matching on the same condition keeps this feed's
+            // definition of "flagged" identical to the module's.
+            where: {
+              organizationId: org.id,
+              tool: 'flag_order',
+              status: 'escalated',
+              executedAt: { gte: integration.createdAt },
+            },
             orderBy: { executedAt: 'desc' },
             take: LIMIT,
             select: { id: true, input: true, instruction: true, summary: true, executedAt: true },

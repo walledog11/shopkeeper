@@ -29,7 +29,14 @@ function seedShopify(orgId: string, connectedAt: Date) {
   });
 }
 
-function seedFlagOrder(orgId: string, orderId: string, name: string, reason: string, executedAt: Date) {
+function seedFlagOrder(
+  orgId: string,
+  orderId: string,
+  name: string,
+  reason: string,
+  executedAt: Date,
+  status = 'escalated',
+) {
   return db.agentAction.create({
     data: {
       turnId: randomUUID(),
@@ -37,7 +44,7 @@ function seedFlagOrder(orgId: string, orderId: string, name: string, reason: str
       tool: 'flag_order',
       category: 'action',
       input: { reason },
-      status: 'success',
+      status,
       mode: 'auto_executed',
       durationMs: 12,
       instruction: `order-risk-review:${orderId}`,
@@ -98,6 +105,25 @@ describe('GET /api/orders/attention', () => {
 
     expect(body.findings).toEqual([]);
     expect(body.returns).toHaveLength(1);
+  });
+
+  it('excludes flag_order rows that did not come back escalated', async () => {
+    // Rows written before 2026-08-04 recorded 'success' on flag_order, under
+    // plumbing that never set flagReason — so the run did not actually treat the
+    // order as flagged. Surfacing them shows a finding the module never made.
+    await seedShopify(org.id, new Date('2026-06-01T00:00:00.000Z'));
+    await seedFlagOrder(
+      org.id,
+      '7317445509440',
+      '#PG1013',
+      'Random-looking email',
+      new Date('2026-06-10T00:00:00.000Z'),
+      'success',
+    );
+
+    const body = await getAttention();
+
+    expect(body.findings).toEqual([]);
   });
 
   it('returns no findings when no Shopify store is connected', async () => {

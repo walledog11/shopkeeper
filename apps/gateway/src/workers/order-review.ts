@@ -8,14 +8,82 @@ import {
   JOB,
   QUEUE,
 } from '../constants.js';
+import {
+  UNTRUSTED_CLOSE_TAG,
+  UNTRUSTED_OPEN_TAG,
+} from '@shopkeeper/agent/message-history';
 import { isOrderRiskMonitorEnabled } from '../config/runtime-config.js';
 import logger from '../logger.js';
+import { listOperatorBindings, notifyOperator } from '../operator-notify.js';
 import type { OrderReviewJobData } from '../types.js';
 import { registerJobFailureLogging } from './failure.js';
 import type { SharedGatewayWorkerOptions } from './resources.js';
 
 export interface OrderReviewWorkerRegistrationOptions {
   workerOptions: SharedGatewayWorkerOptions;
+}
+
+const MAX_REASON_CHARS = 200;
+
+// The reason is model-authored prose over order fields the buyer controls —
+// name, email, address lines, order notes — and notifyOperator mirrors the body
+// onto the operator thread, where a later operator turn reads it back as history
+// (operator mode runs with segregateUntrusted off, and a mirrored push is an
+// `agent` row, so nothing downstream will wrap it). Flatten it to one line, cap
+// the length, and defang forged boundary tags here. Full-blown wrapUntrusted is
+// deliberately not used: every existing call site wraps a MODEL-facing string,
+// and this string is what the merchant reads on their phone.
+function sanitizeFlagReason(reason: string): string {
+  const flat = reason
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(UNTRUSTED_OPEN_TAG)
+    .join('<customer_message >')
+    .split(UNTRUSTED_CLOSE_TAG)
+    .join('</customer_message >');
+  return flat.length > MAX_REASON_CHARS
+    ? `${flat.slice(0, MAX_REASON_CHARS - 1).trimEnd()}…`
+    : flat;
+}
+
+export function formatOrderFlagNotification(orderName: string, reason: string): string {
+  const detail = sanitizeFlagReason(reason);
+  return `Heads up — order ${orderName} looks worth a second look${detail ? `: ${detail}` : ''}. I haven't touched it; nothing is on hold.`;
+}
+
+// Decision 4 (2026-08-04): order-ops is notify-only. The flag reaches every bound
+// operator channel and stops there — no plan is parked, so the context patch is
+// empty and there is nothing for the merchant to approve. Best-effort by design:
+// notifyOperator swallows send failures rather than throwing, because a throw
+// here would fail the job and make BullMQ re-run the whole model review to retry
+// a text message.
+async function notifyFlaggedOrder(
+  organizationId: string,
+  orderId: string,
+  orderName: string,
+  reason: string,
+  traceId: string | undefined,
+): Promise<void> {
+  const bindings = await listOperatorBindings(organizationId);
+  if (bindings.length === 0) {
+    logger.info(
+      { organizationId, orderId, traceId },
+      '[OrderReview] order flagged but no operator channels are bound — finding recorded only',
+    );
+    return;
+  }
+
+  const body = formatOrderFlagNotification(orderName, reason);
+  const idempotencyKey = `order-risk:${organizationId}:${orderId}`;
+  let notified = 0;
+  for (const member of bindings) {
+    const result = await notifyOperator(organizationId, member, body, {}, { idempotencyKey });
+    if (result) notified += 1;
+  }
+  logger.info(
+    { organizationId, orderId, traceId, bindings: bindings.length, notified },
+    '[OrderReview] flag notification fanned out',
+  );
 }
 
 // Order-ops (module #2): runs the thread-less risk reviewer in-process in the
@@ -55,9 +123,9 @@ export function createOrderReviewWorker(
     });
     const settings = resolveAgentSettings(org?.settings as Partial<OrgSettings> | null);
 
-    // v1: flag/notify-only — the escalate sink is a quiet recorder. The finding
-    // itself persists in runOrderOps' audit batch; Telegram notify is a later
-    // swap of this sink, no core change.
+    // The sink stays a quiet recorder: it runs inside the model loop, and
+    // runOrderOps swallows anything it throws, so network I/O does not belong
+    // here. Operator delivery happens after the run returns, off the loop.
     const escalate = async (reason: string): Promise<void> => {
       logger.info({ organizationId, orderId, reason, traceId }, '[order-ops] order flagged for review');
     };
@@ -67,6 +135,13 @@ export function createOrderReviewWorker(
 
     if (result.flagged) {
       logger.info({ organizationId, orderId, reason: result.flagReason, traceId }, '[OrderReview] order flagged');
+      await notifyFlaggedOrder(
+        organizationId,
+        orderId,
+        ctx.order.name,
+        result.flagReason ?? '',
+        traceId,
+      );
     }
   }, options.workerOptions);
 

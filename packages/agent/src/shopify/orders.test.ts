@@ -34,6 +34,18 @@ describe("listRecentUnfulfilledOrderIds", () => {
     expect(url.searchParams.get("financial_status")).toBe("paid");
     expect(url.searchParams.get("limit")).toBe("10");
     expect(url.searchParams.get("fields")).toBe("id");
+    expect(url.searchParams.get("created_at_min")).toBeNull();
+  });
+
+  it("bounds discovery to the given window when one is supplied", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ orders: [{ id: 1001 }] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const since = new Date("2026-08-03T00:00:00.000Z");
+
+    await listRecentUnfulfilledOrderIds(ctx, 10, since);
+
+    const url = new URL(String(fetchMock.mock.calls[0]?.[0]));
+    expect(url.searchParams.get("created_at_min")).toBe("2026-08-03T00:00:00.000Z");
   });
 
   it("returns an empty list when Shopify responds with no orders", async () => {

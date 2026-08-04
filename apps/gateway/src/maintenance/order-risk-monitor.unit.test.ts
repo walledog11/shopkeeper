@@ -117,8 +117,26 @@ describe('runOrderRiskMonitor', () => {
     expect(listOrderIds).toHaveBeenCalledWith(
       expect.objectContaining({ shop: 'real.myshopify.com' }),
       expect.anything(),
+      expect.any(Date),
     );
     expect(queue.add).toHaveBeenCalledTimes(1);
+  });
+
+  it('bounds order discovery to the queue dedupe window', async () => {
+    isEnabled.mockReturnValue(true);
+    findMany.mockResolvedValue([
+      { organizationId: 'org-a', externalAccountId: 'a.myshopify.com', accessToken: 'token-a' },
+    ]);
+    listOrderIds.mockResolvedValue([]);
+
+    const before = Date.now();
+    await runOrderRiskMonitor({ add: vi.fn() } as never);
+    const after = Date.now();
+
+    const createdSince = listOrderIds.mock.calls[0]?.[2] as Date;
+    const twentyFourHours = 24 * 3_600_000;
+    expect(createdSince.getTime()).toBeGreaterThanOrEqual(before - twentyFourHours);
+    expect(createdSince.getTime()).toBeLessThanOrEqual(after - twentyFourHours);
   });
 
   it('isolates provider failures to the affected organization', async () => {
