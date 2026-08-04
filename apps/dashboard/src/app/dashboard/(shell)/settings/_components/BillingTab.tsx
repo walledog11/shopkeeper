@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import useSWR from "swr"
 import { useOrganization } from "@clerk/nextjs"
 import { fetcher } from "@/lib/api/fetcher"
@@ -45,6 +46,104 @@ async function openBillingPortal() {
   if (!res.ok) return
   const { url } = await res.json()
   window.location.href = url
+}
+
+const PLANS = [
+  { tier: 'starter', name: 'Starter', price: '$19', blurb: 'Unified inbox and AI drafts on every reply.' },
+  { tier: 'pro', name: 'Pro', price: '$49', blurb: 'Adds Shopify actions and approvals from your phone.' },
+] as const
+
+// The Stripe portal can only manage a subscription that already exists, so a
+// workspace with no plan needs checkout instead.
+function PlanPicker() {
+  const [tier, setTier] = useState<(typeof PLANS)[number]['tier']>('pro')
+  const [starting, setStarting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function startCheckout() {
+    setStarting(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/billing/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tier }),
+      })
+      const body = await res.json().catch(() => null)
+      if (res.ok && body?.url) {
+        window.location.href = body.url
+        return
+      }
+      setError(body?.error ?? 'Could not start checkout. Try again in a moment.')
+    } catch {
+      setError('Could not start checkout. Try again in a moment.')
+    }
+    setStarting(false)
+  }
+
+  return (
+    <div className="bg-card rounded-xl border border-border overflow-hidden">
+      <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-4 sm:gap-8 p-5 sm:p-6">
+        <div>
+          <h2 className="text-sm font-semibold text-strong">Choose a plan</h2>
+          <p className="text-xs text-faint mt-1 leading-relaxed">Every plan starts with 14 days free.</p>
+        </div>
+        <div className="space-y-4">
+          <div role="radiogroup" aria-label="Plan" className="space-y-2.5">
+            {PLANS.map(plan => {
+              const selected = plan.tier === tier
+              return (
+                <button
+                  key={plan.tier}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => setTier(plan.tier)}
+                  className={`flex w-full items-start gap-3 rounded-lg border px-4 py-3 text-left transition-colors ${
+                    selected
+                      ? 'border-foreground/[0.28] bg-foreground/[0.04]'
+                      : 'border-foreground/[0.10] hover:bg-foreground/[0.02]'
+                  }`}
+                >
+                  <span
+                    aria-hidden
+                    className={`mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border ${
+                      selected ? 'border-foreground/60' : 'border-foreground/25'
+                    }`}
+                  >
+                    {selected && <span className="size-2 rounded-full bg-foreground/70" />}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-baseline gap-2">
+                      <span className="text-sm font-semibold text-strong">{plan.name}</span>
+                      <span className="text-xs text-faint">{plan.price}/mo</span>
+                    </span>
+                    <span className="mt-0.5 block text-xs leading-relaxed text-faint">{plan.blurb}</span>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+
+          {error && (
+            <p className="flex items-start gap-2 text-xs text-red-400">
+              <AlertTriangle className="mt-px size-3.5 shrink-0" />
+              {error}
+            </p>
+          )}
+
+          <Button
+            size="sm"
+            onClick={startCheckout}
+            disabled={starting}
+            className="h-8 px-4 bg-foreground/[0.12] text-white hover:bg-foreground/[0.18] text-xs font-semibold disabled:opacity-40"
+          >
+            {starting ? <Loader2 className="size-3.5 animate-spin" /> : 'Start free trial'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default function BillingTab() {
@@ -114,13 +213,13 @@ export default function BillingTab() {
                   </p>
                 )}
               </div>
-              {isAdmin && (
+              {isAdmin && isActive && (
                 <Button
                   size="sm"
                   onClick={openBillingPortal}
                   className="h-8 px-4 bg-foreground/[0.12] text-white hover:bg-foreground/[0.18] text-xs font-semibold shrink-0"
                 >
-                  {isActive ? 'Manage plan' : 'Upgrade'}
+                  Manage plan
                 </Button>
               )}
             </div>
@@ -149,6 +248,8 @@ export default function BillingTab() {
           </div>
         </div>
       </div>
+
+      {isAdmin && !isActive && <PlanPicker />}
 
       <SettingsDisclosure
         title="Invoice history"
