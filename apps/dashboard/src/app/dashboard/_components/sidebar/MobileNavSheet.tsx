@@ -9,7 +9,6 @@ import { useHelp } from "../help/HelpContext";
 import { mobileNavSections } from "../nav-items";
 import { NavGroupList } from "./NavGroupList";
 import { OrgSwitcher } from "./OrgSwitcher";
-import { dispatchNavProgressStart } from "./sidebar-helpers";
 import { UserAvatarLink } from "./UserAvatarLink";
 import { LogOutButton } from "./LogOutButton";
 import type { NavAuth } from "./useNavAuth";
@@ -47,7 +46,6 @@ export function MobileNavSheet({
       return;
     }
     onClose();
-    dispatchNavProgressStart();
   };
 
   return (

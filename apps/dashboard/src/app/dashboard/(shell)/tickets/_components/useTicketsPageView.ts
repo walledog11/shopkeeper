@@ -23,7 +23,6 @@ import type {
 import type { ChannelType, OrgSettings, Thread } from "@/types"
 
 export interface TicketsPageClientProps {
-  initialForMeThreads: Thread[]
   hasShopify: boolean
   agentName: string
   connectedChannels: ChannelType[]
@@ -31,7 +30,6 @@ export interface TicketsPageClientProps {
 }
 
 export function useTicketsPageView({
-  initialForMeThreads,
   hasShopify,
   agentName,
   connectedChannels,
@@ -56,7 +54,6 @@ export function useTicketsPageView({
   } = useTicketThreadSources({
     activeView,
     channelFilter,
-    initialForMeThreads,
     loadAllSources: queryThreadId !== null,
     tagFilter,
   })

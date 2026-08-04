@@ -26,6 +26,10 @@ const nextConfig = {
   experimental: {
     // Next 16.2's Turbopack persistence can race compaction and delete its live cache.
     turbopackFileSystemCacheForDev: false,
+    // Dynamic segments default to 0, so every dashboard revisit re-fetched the RSC
+    // payload and re-showed the route skeleton. Nothing here reads freshness off the
+    // router cache — live data is SWR — so hold segments briefly between navigations.
+    staleTimes: { dynamic: 30 },
   },
   async headers() {
     return [

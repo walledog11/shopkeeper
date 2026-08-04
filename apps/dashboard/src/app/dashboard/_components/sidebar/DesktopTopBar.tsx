@@ -20,7 +20,6 @@ import { OpenCountBadge } from "./OpenCountBadge";
 import { Logo } from "./Logo";
 import { OrgSwitcher } from "./OrgSwitcher";
 import {
-  dispatchNavProgressStart,
   isRouteActive,
   topBarDropdownItemClass,
   topBarDropdownPanelClass,
@@ -30,11 +29,7 @@ import { UserAvatarLink } from "./UserAvatarLink";
 import type { NavAuth } from "./useNavAuth";
 
 function handleNavClick(e: MouseEvent<HTMLAnchorElement>, isActive: boolean) {
-  if (isActive) {
-    e.preventDefault();
-    return;
-  }
-  dispatchNavProgressStart();
+  if (isActive) e.preventDefault();
 }
 
 function NavDropdown({

@@ -48,18 +48,8 @@ function buildThreadListUrl(query: ThreadListQuery, pageIndex: number, previousP
   return `/api/threads?${params.toString()}`;
 }
 
-function queryMatchesInitial(query: ThreadListQuery) {
-  return Boolean(query.forMe)
-    && !query.hasDraft
-    && !query.tag
-    && !query.channelType
-    && !query.filterStatus
-    && (query.status ?? "open") === "open"
-}
-
 export function usePaginatedThreads(
   query: ThreadListQuery,
-  initialData?: Thread[],
   preview = false,
   enabled = true,
 ) {
@@ -76,16 +66,11 @@ export function usePaginatedThreads(
     return buildThreadListUrl(query, pageIndex, previousPageData, preview);
   };
 
-  const fbData: ThreadsPage[] | undefined = initialData && queryMatchesInitial(query)
-    ? [{ threads: initialData, nextCursor: null }]
-    : undefined;
-
   const { data: pages, error, isLoading, size, setSize, mutate: swrMutate } = useSWRInfinite<ThreadsPage>(
     getKey,
     fetcher,
     {
       refreshInterval: isVisible && enabled ? baseInterval : 0,
-      fallbackData: fbData,
       revalidateFirstPage: true,
     }
   );

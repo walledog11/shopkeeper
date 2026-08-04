@@ -23,23 +23,15 @@ interface OrdersResponse {
   }>
 }
 
-interface Options {
-  initialSummary: HomeSummary
-}
-
-export function useHomeData({ initialSummary }: Options) {
+export function useHomeData() {
   const {
     data: summaryData,
     isLoading: isSummaryLoading,
-    isValidating: isSummaryValidating,
     mutate: mutateSummary,
   } = useSWR<HomeSummary>(
     "/api/home-summary",
     fetcher,
-    {
-      fallbackData: initialSummary,
-      refreshInterval: HOME_SUMMARY_REFRESH_INTERVAL_MS,
-    },
+    { refreshInterval: HOME_SUMMARY_REFRESH_INTERVAL_MS },
   )
   const { data: integrations = [] } = useIntegrations()
   const { data: orgData } = useOrg()
@@ -51,8 +43,11 @@ export function useHomeData({ initialSummary }: Options) {
   const emailIntegration = integrations.find(integration => integration.platform === CHANNEL_TYPE.EMAIL)
   const hasEmailForwarding = isEmailIntegrationConfigured(emailIntegration)
 
+  // Until the first fetch lands there is no summary — render it as pending rather
+  // than letting the empty placeholder speak as if it were the real answer.
+  const hasSummary = summaryData != null
   const summary = summaryData ?? createEmptyHomeSummary()
-  const isInitialSummaryLoading = isSummaryLoading || (summaryData === initialSummary && isSummaryValidating)
+  const isInitialSummaryLoading = isSummaryLoading && !hasSummary
   const home = useMemo(() => buildHomeSummaryView(summary), [summary])
   const walkthroughItems = useMemo(
     () => selectWalkthroughItems(summary.needsAttention),
@@ -106,6 +101,7 @@ export function useHomeData({ initialSummary }: Options) {
     hasPhoneBound,
     workflowSteps,
     agentName,
+    isSummaryPending: isInitialSummaryLoading,
     isNeedsYouLoading: home.needsYouItems.length === 0 && isInitialSummaryLoading,
     refreshHomeSummary,
   }

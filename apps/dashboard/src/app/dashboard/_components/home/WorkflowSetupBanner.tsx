@@ -76,13 +76,15 @@ interface Step {
 
 interface Props {
   steps: Step[]
+  /** Step status is derived from the home summary; suppress the banner until it lands. */
+  pending?: boolean
 }
 
 function getStepKey(step: Step) {
   return `${step.label}:${step.href}`
 }
 
-export default function WorkflowSetupBanner({ steps }: Props) {
+export default function WorkflowSetupBanner({ steps, pending = false }: Props) {
   const [dismissed, setDismissed] = useState(() => readStoredBoolean(DISMISS_KEY))
   const [expanded, setExpanded] = useState(() => readStoredBoolean(EXPAND_KEY))
 
@@ -90,7 +92,7 @@ export default function WorkflowSetupBanner({ steps }: Props) {
   const trackedDoneCount = trackedSteps.filter(step => step.status === "done").length
   const totalCount = trackedSteps.length
 
-  const isVisible = dismissed === false && trackedDoneCount < totalCount
+  const isVisible = pending === false && dismissed === false && trackedDoneCount < totalCount
 
   const remaining = Math.max(totalCount - trackedDoneCount, 0)
   const progress = totalCount > 0 ? Math.min(Math.max(trackedDoneCount / totalCount, 0), 1) : 0

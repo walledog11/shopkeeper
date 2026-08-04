@@ -1,45 +1,23 @@
 import { Suspense } from "react"
-import { ChannelType, db, SenderType } from "@shopkeeper/db"
+import { ChannelType, db } from "@shopkeeper/db"
 import { getOrCreateOrg } from "@/lib/server/org"
 import { resolveAgentSettings } from "@shopkeeper/agent/settings"
-import { listThreadIdsBySqlFilters } from "@/lib/messaging/thread-list-query"
 import TicketsPageClient from "./_components/TicketsPageClient"
-import type { Thread, OrgSettings } from "@/types"
+import type { OrgSettings } from "@/types"
 
 const INBOX_CHANNEL_TYPES: ChannelType[] = [ChannelType.email, ChannelType.ig_dm, ChannelType.tiktok]
 
+// The thread list is owned by SWR on the client — it polls, paginates, and mutates
+// in place. Fetching a first page here too only delayed the route with rows the
+// client threw away on mount. Only the org-shaped props the first render needs
+// (which are cheap and stable) are resolved server-side.
 export default async function TicketsPage() {
   const org = await getOrCreateOrg()
 
-  const [{ ids: forMeIds }, integrations] = await Promise.all([
-    listThreadIdsBySqlFilters(org.id, { forMe: true, status: "open" }, { limit: 25 }),
-    db.integration.findMany({
-      where: { organizationId: org.id },
-      select: { platform: true },
-    }),
-  ])
-
-  const forMeThreadsRaw = forMeIds.length > 0
-    ? await db.thread.findMany({
-        where: { id: { in: forMeIds } },
-        include: {
-          customer: true,
-          messages: {
-            where: { NOT: { senderType: SenderType.note }, deletedAt: null },
-            orderBy: { sentAt: "desc" },
-            take: 1,
-          },
-        },
-      })
-    : []
-
-  const byId = new Map(forMeThreadsRaw.map(thread => [thread.id, thread]))
-  const orderedThreads = forMeIds.flatMap((id: string) => {
-    const thread = byId.get(id)
-    return thread ? [thread] : []
+  const integrations = await db.integration.findMany({
+    where: { organizationId: org.id },
+    select: { platform: true },
   })
-  const serializedThreads = JSON.stringify(orderedThreads)
-  const initialForMeThreads = JSON.parse(serializedThreads) as Thread[]
 
   const connectedChannels = INBOX_CHANNEL_TYPES.filter(channel =>
     integrations.some(integration => integration.platform === channel),
@@ -50,7 +28,6 @@ export default async function TicketsPage() {
   return (
     <Suspense fallback={null}>
       <TicketsPageClient
-        initialForMeThreads={initialForMeThreads}
         hasShopify={hasShopify}
         agentName={settings.agentName}
         connectedChannels={connectedChannels}

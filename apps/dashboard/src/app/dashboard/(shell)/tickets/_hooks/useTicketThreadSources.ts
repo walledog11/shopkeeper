@@ -4,7 +4,7 @@ import { useMemo } from "react"
 import { usePaginatedThreads } from "./usePaginatedThreads"
 import { useTicketTabCounts } from "./useTicketTabCounts"
 import type { TicketListView, TicketTagFilter } from "../_components/thread-list/constants"
-import type { ChannelType, Thread } from "@/types"
+import type { ChannelType } from "@/types"
 
 function buildListQuery(
   view: TicketListView,
@@ -30,11 +30,10 @@ function buildListQuery(
 export function useTicketThreadSources(input: {
   activeView: TicketListView
   channelFilter: ChannelType | null
-  initialForMeThreads: Thread[]
   loadAllSources?: boolean
   tagFilter: TicketTagFilter | null
 }) {
-  const { activeView, channelFilter, initialForMeThreads, loadAllSources = false, tagFilter } = input
+  const { activeView, channelFilter, loadAllSources = false, tagFilter } = input
   const forMeQuery = useMemo(
     () => buildListQuery("for_me", tagFilter, channelFilter),
     [channelFilter, tagFilter],
@@ -47,10 +46,10 @@ export function useTicketThreadSources(input: {
   const spamQuery = useMemo(() => buildListQuery("spam", null, null), [])
   const sourceEnabled = (view: TicketListView) => loadAllSources || activeView === view
 
-  const forMeSource = usePaginatedThreads(forMeQuery, initialForMeThreads, true, sourceEnabled("for_me"))
-  const allOpenSource = usePaginatedThreads(allOpenQuery, undefined, true, sourceEnabled("all_open"))
-  const closedSource = usePaginatedThreads(closedQuery, undefined, true, sourceEnabled("closed"))
-  const spamSource = usePaginatedThreads(spamQuery, undefined, true, sourceEnabled("spam"))
+  const forMeSource = usePaginatedThreads(forMeQuery, true, sourceEnabled("for_me"))
+  const allOpenSource = usePaginatedThreads(allOpenQuery, true, sourceEnabled("all_open"))
+  const closedSource = usePaginatedThreads(closedQuery, true, sourceEnabled("closed"))
+  const spamSource = usePaginatedThreads(spamQuery, true, sourceEnabled("spam"))
   const threadSources = {
     for_me: forMeSource,
     all_open: allOpenSource,

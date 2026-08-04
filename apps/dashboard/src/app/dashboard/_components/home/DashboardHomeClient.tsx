@@ -6,7 +6,6 @@ import ConciergeBriefing from "./ConciergeBriefing"
 import NeedsYou from "./NeedsYou"
 import ClearedOvernight from "./ClearedOvernight"
 import { useHomeData } from "./useHomeData"
-import type { HomeSummary } from "@/lib/home/summary-contract"
 
 function getGreeting(): string {
   const hour = new Date().getHours()
@@ -17,12 +16,11 @@ function getGreeting(): string {
 
 interface Props {
   userName: string
-  initialSummary: HomeSummary
 }
 
-export default function DashboardHomeClient({ userName, initialSummary }: Props) {
+export default function DashboardHomeClient({ userName }: Props) {
   const greeting = getGreeting()
-  const data = useHomeData({ initialSummary })
+  const data = useHomeData()
 
   return (
     <div className="@container h-full flex flex-col overflow-hidden bg-background">
@@ -42,6 +40,7 @@ export default function DashboardHomeClient({ userName, initialSummary }: Props)
               refundsPending={data.refundsPending}
               vipsInQueue={data.vipsInQueue}
               ordersToShip={data.ordersToShip}
+              isLoading={data.isSummaryPending}
             />
 
             <NeedsYou
@@ -60,6 +59,7 @@ export default function DashboardHomeClient({ userName, initialSummary }: Props)
 
           <WorkflowSetupBanner
             steps={data.workflowSteps}
+            pending={data.isSummaryPending}
           />
 
           <HomeTelegramNudge connected={data.hasPhoneBound} />

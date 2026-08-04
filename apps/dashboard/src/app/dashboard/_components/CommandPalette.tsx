@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/command";
 import { useAgentPanel } from "./agent-panel/AgentPanelContext";
 import { commandPaletteSections } from "./nav-items";
+import { dispatchNavProgressStart } from "./sidebar/sidebar-helpers";
 
 interface Props {
   open: boolean;
@@ -23,7 +24,9 @@ export default function CommandPalette({ open, onClose, agentName }: Props) {
   const { push } = useRouter();
   const { open: openAgentPanel } = useAgentPanel();
 
+  // Programmatic, so the shell's link delegation never sees it.
   function navigate(href: string) {
+    if (href !== window.location.pathname) dispatchNavProgressStart();
     push(href);
     onClose();
   }

@@ -1,12 +1,13 @@
 "use client"
 
 import { useRef, type ComponentProps, type ReactNode } from "react"
-import { AlertCircle, CheckCircle2, ChevronRight, Loader2, X } from "lucide-react"
+import { AlertCircle, CheckCircle2, ChevronRight, X } from "lucide-react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import type { ChannelType, Thread, Ticket } from "@/types"
 import type { TicketToast } from "../_hooks/useTicketActions"
 import { ConversationArchive } from "./archive/ConversationArchive"
 import { TicketQueue } from "./queue/TicketQueue"
+import { TicketQueueLoading } from "./queue/TicketQueueLoading"
 import type { TicketListView, TicketTagFilter } from "./thread-list/constants"
 import { viewToConversationTab as toConversationTab } from "./thread-list/constants"
 import ConversationView from "./conversation/ConversationView"
@@ -323,9 +324,7 @@ export function TicketsPageLayout({
           <QueueHeader onViewAll={() => onViewChange("all_open")} />
 
           {flags.listLoading && !activeTicketId ? (
-            <div className="flex flex-1 items-center justify-center">
-              <Loader2 className="size-5 animate-spin text-faint" />
-            </div>
+            <TicketQueueLoading />
           ) : (
             <TicketQueue
               tickets={filteredTickets}
