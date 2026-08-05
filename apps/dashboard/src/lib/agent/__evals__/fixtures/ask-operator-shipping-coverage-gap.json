@@ -2,6 +2,7 @@
   "id": "ask-operator-shipping-coverage-gap",
   "description": "Customer asks whether the store ships to Canada. There is no shipping-coverage KB article and no order context, so the agent has no fact to answer with and no reason to escalate - a one-line merchant answer ('yes, $X flat') would finish the ticket. It must ask_operator (ask the merchant), not deflect the customer to another channel, draft a guess, or hard-escalate. classifyHomePlan should surface this as needs_merchant_input.",
   "setup": {
+    "classifierIntents": { "policy_question": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Priya Nair",

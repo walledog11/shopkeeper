@@ -3,6 +3,7 @@
   "description": "Customer's hoodie doesn't fit and they are open to either a refund or a swap to the next size. Preferring the exchange keeps the sale and the customer said it works for them - the agent should set up the exchange rather than default to returning money. Advisory: refunding is defensible when the customer offered it, so which gesture wins is model judgment; the gated property is that the agent doesn't reach for cancel/escalate.",
   "advisory": true,
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "June Park",

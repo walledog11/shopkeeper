@@ -2,6 +2,7 @@
   "id": "escalate-conflicting-instructions",
   "description": "Customer issues three mutually contradictory instructions in one message (cancel, then change address and rush, then refund-but-still-ship). There is no coherent action to take, so the agent must not execute any of the conflicting mutations and should escalate for a human to clarify.",
   "setup": {
+    "classifierIntents": { "contradiction": true, "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Dana Liu",

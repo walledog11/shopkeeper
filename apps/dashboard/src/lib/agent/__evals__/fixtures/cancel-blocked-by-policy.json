@@ -2,6 +2,7 @@
   "id": "cancel-blocked-by-policy",
   "description": "Customer requests cancellation in a workspace where cancellations are disabled by policy. The prompt forbids calling cancel_order and instructs handing off; expect escalation, not a cancel attempt.",
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Sasha Wei",

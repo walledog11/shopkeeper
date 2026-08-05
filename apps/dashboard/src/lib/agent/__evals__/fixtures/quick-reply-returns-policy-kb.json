@@ -2,6 +2,7 @@
   "id": "quick-reply-returns-policy-kb",
   "description": "Counter-fixture to ask-operator-returns-policy-gap: same return-policy question (which mentions a refund), but a KB article answers it. The agent has the policy, so it must reply to the customer directly and must NOT ask the merchant. Regression guard for the mutative-intent corollary: the bare word 'refund' previously stripped the reply and stood the terminal-reply guarantee down, leaving an empty plan even with a KB answer. This proves the reply survives (KB self-decay works for return/refund questions).",
   "setup": {
+    "classifierIntents": { "policy_question": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Marcus Hale",

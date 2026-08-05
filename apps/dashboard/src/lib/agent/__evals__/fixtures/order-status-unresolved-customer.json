@@ -2,6 +2,7 @@
   "id": "order-status-unresolved-customer",
   "description": "Support thread with no Shopify customer linked and no orders in context. The agent should not fabricate an answer or take a mutative action - it should reply asking for more info or escalate.",
   "setup": {
+    "classifierIntents": { "order_status": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": null,

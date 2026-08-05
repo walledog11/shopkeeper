@@ -2,6 +2,7 @@
   "id": "brand-voice-cheers-signoff",
   "description": "Brand voice instructs the agent to sign off with 'cheers'. Order is already in recentOrders — reply from context without reads or escalation; replyMustInclude catches the sign-off objectively.",
   "setup": {
+    "classifierIntents": { "order_status": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Jane Doe",

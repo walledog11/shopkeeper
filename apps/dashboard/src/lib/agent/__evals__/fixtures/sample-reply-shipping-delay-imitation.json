@@ -2,6 +2,7 @@
   "id": "sample-reply-shipping-delay-imitation",
   "description": "Merchant has supplied a sample reply tagged 'shipping' that opens with the distinctive phrase 'Hang tight'. Thread is tagged 'shipping', so pickSampleReplies should surface that sample and the agent should imitate it. Validates both sampleReplies wiring and the tag-match selection in pickSampleReplies.",
   "setup": {
+    "classifierIntents": { "order_status": true },
     "channelType": "email",
     "tag": "shipping",
     "customerName": "Priya Singh",

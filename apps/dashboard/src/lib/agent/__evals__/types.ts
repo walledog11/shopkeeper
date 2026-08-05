@@ -1,5 +1,8 @@
 import type { OrgSettings } from "@/types";
 import type { AgentActionMode, AgentActionStatus, ShopifyOrderSummary } from "@shopkeeper/agent/context";
+import type { ClassifierIntents } from "@shopkeeper/agent/classifier-signals";
+
+export type ClassifierIntentKey = keyof ClassifierIntents;
 
 export interface FixtureMessage {
   senderType: "customer" | "agent" | "ai" | "note";
@@ -32,6 +35,16 @@ export interface ThreadSetup {
   openThreadCount?: number;
   orgSettings?: Partial<OrgSettings>;
   simulateToolResults?: SimulatedToolResult[];
+  /**
+   * Intents the inbound classifier would have written for this ticket's customer
+   * message. Only the true ones need listing; the rest default to false.
+   *
+   * Omitting this models a thread the classifier never ran on, which is a real
+   * production state (classifier outage, non-classified channel) — but it also
+   * means the planner tier gate sees no signals and stays on the judgment model,
+   * so a fixture without this cannot exercise the low-tier path.
+   */
+  classifierIntents?: Partial<Record<ClassifierIntentKey, boolean>>;
 }
 
 export interface ToolInputExpectation {

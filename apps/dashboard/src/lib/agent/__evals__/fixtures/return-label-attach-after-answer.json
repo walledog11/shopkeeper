@@ -2,6 +2,7 @@
   "id": "return-label-attach-after-answer",
   "description": "The merchant has answered the agent's earlier label question with a URL (the re-plan path after ask_operator). The agent must attach the label to the open return with attach_return_label and send the customer the label link - not re-ask the merchant, not escalate, and not leave the label out of the reply.",
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Iris Fontaine",

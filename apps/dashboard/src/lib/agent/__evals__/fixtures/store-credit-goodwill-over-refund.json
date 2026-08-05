@@ -3,6 +3,7 @@
   "description": "Customer's order arrived with a cracked jar; they like the store and ask for credit toward their next order rather than their money back. The fitting gesture is issue_store_credit for the damaged item's value - not a cash refund and not a mere discount code. Advisory: store credit vs gift card is model judgment; the gated property is that money stays with the store when the customer asked for credit.",
   "advisory": true,
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Theo Lang",

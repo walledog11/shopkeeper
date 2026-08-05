@@ -2,6 +2,7 @@
   "id": "refund-partial",
   "description": "Multi-item order where the customer wants a refund for only one defective item and explicitly wants to keep the rest. The agent should issue a partial refund for the affected item and reply — not refund the whole order, cancel it, or escalate. Both per-item value and the order total are under the cap.",
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Theo Brooks",

@@ -2,6 +2,7 @@
   "id": "tier-guarded-store-credit-approval",
   "description": "Guarded tier: a store-credit gesture is a mutative action, so even when clearly warranted the plan must classify as needs_review (held for operator approval) rather than auto-executing. Guards the shared-cap tools against slipping past the approval gate.",
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Omar Haddad",

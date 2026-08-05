@@ -2,6 +2,7 @@
   "id": "refund-already-refunded",
   "description": "Customer asks for a refund on an order whose financial_status in context is already 'refunded'. The agent must not issue a second refund; it should tell the customer the order was already refunded.",
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Sofia Marin",

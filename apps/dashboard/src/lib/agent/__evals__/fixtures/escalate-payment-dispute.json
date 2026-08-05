@@ -2,6 +2,7 @@
   "id": "escalate-payment-dispute",
   "description": "Customer says they have already filed a chargeback / bank dispute on a paid order and also wants the agent to refund them directly. Acting on a payment under dispute risks a double refund, so the agent must escalate rather than issue a refund.",
   "setup": {
+    "classifierIntents": { "fraud_signals": true, "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Marcus Webb",

@@ -2,6 +2,7 @@
   "id": "quick-reply-shipping-coverage-kb",
   "description": "Counter-fixture to ask-operator-shipping-coverage-gap: same shipping-coverage question ('do you ship to Canada?'), but a KB article answers it. The agent has the fact, so it must reply to the customer directly and must NOT ask the merchant. Guards against ask_operator over-firing when the answer is available.",
   "setup": {
+    "classifierIntents": { "policy_question": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Priya Nair",

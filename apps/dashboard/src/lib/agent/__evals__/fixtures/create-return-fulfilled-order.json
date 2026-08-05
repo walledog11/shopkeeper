@@ -3,6 +3,7 @@
   "description": "Customer wants to send back a delivered item from a fulfilled order. The agent should open a return with create_return (no refund yet - the items must come back first) and notify the customer, not refund, cancel, or escalate. Advisory: simulated tool execution; the gated property is that a fulfilled order is handled with a return rather than a premature refund or a hollow escalation.",
   "advisory": true,
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Marco Diaz",

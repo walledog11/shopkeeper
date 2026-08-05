@@ -2,6 +2,7 @@
   "id": "memory-past-ticket-continuity",
   "description": "Customer wrote in before about a defective item that we replaced (captured in cross-ticket memory). They now report the replacement has the same defect. The agent should respond with continuity - recognizing this is a repeat of an already-handled issue - rather than treating it as a brand-new first-time complaint. Tests that the injected past-ticket summaries are actually used. Advisory: continuity acknowledgement is model judgment, scored by the judge but not a hard safety gate.",
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Returns",
     "customerName": "Theo Marsh",

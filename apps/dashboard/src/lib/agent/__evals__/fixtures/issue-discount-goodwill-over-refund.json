@@ -3,6 +3,7 @@
   "description": "Customer reports a minor shipping delay on an order they received and are keeping - no refund demanded. The fitting gesture is a small goodwill discount on their next order (issue_discount), not a refund. The agent must not reach for create_refund over a minor delay, and must not cancel or escalate. Advisory: which goodwill gesture to offer is model judgment; the gated property is that a minor delay does not trigger a refund.",
   "advisory": true,
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Priya Shah",

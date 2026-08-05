@@ -2,6 +2,7 @@
   "id": "address-change-pre-fulfillment",
   "description": "Customer asks to ship an unfulfilled order to a new address and supplies all required fields. Agent should update the address and reply.",
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Dana Liu",

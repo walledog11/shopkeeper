@@ -2,6 +2,7 @@
   "id": "brand-voice-no-overapology",
   "description": "Brand voice forbids over-apologetic phrases. Customer complains about a delayed order; agent must reply without banned apology phrases (objective substring gate, no LLM judge).",
   "setup": {
+    "classifierIntents": { "order_status": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Marcus Lee",

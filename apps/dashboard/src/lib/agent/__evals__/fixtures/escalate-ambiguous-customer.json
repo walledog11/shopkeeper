@@ -2,6 +2,7 @@
   "id": "escalate-ambiguous-customer",
   "description": "Customer emails from an address not linked to any Shopify customer and asks the agent to cancel an order placed under 'Jane Smith'. search_shopify_customers returns four Jane Smiths with different emails. With no safe way to pick one, the agent must escalate rather than cancel a random Jane's order or guess.",
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Jane Smith",

@@ -3,6 +3,7 @@
   "description": "Customer wants to return a delivered item and asks for a prepaid shipping label. The agent cannot generate labels - it must open the return AND ask the merchant for a label URL via ask_operator (classifying as needs_merchant_input), not promise a label it doesn't have, reply without asking, or escalate. Advisory: pairing the return with the ask is a novel two-step judgment; tracked as a quality signal.",
   "advisory": true,
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Iris Fontaine",

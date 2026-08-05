@@ -11,6 +11,7 @@ import {
   type DbSenderType,
 } from "@shopkeeper/db"
 import type { AgentContext, AgentActionMode } from "@shopkeeper/agent/context"
+import { emptyIntents } from "@shopkeeper/agent/classifier-signals"
 import {
   CONTEXT_BUDGETS,
   budgetKbArticles,
@@ -69,6 +70,18 @@ function buildContext(
         : setup.aiSummary ?? null,
       shopifyCustomerId: setup.shopifyCustomerId ?? null,
     },
+    // Built here rather than in the fixture so the JSON only has to name the
+    // intents that fired. Left undefined when the fixture declares none, which
+    // keeps "the classifier never ran" a distinct, testable state.
+    ...(setup.classifierIntents
+      ? {
+          classifierSignals: {
+            version: 1,
+            language: "en",
+            intents: { ...emptyIntents(), ...setup.classifierIntents },
+          },
+        }
+      : {}),
     customer: {
       id: customerId,
       name: setup.customerName ?? null,

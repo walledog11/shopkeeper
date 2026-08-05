@@ -2,6 +2,7 @@
   "id": "multi-step-refund-context-skip",
   "description": "Customer requests a refund on an order already present in recentOrders. Planning should skip live Shopify order lookups and still produce create_refund -> send_reply.",
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Iris Bauer",

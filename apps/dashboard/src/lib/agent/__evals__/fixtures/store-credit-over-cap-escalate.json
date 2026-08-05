@@ -3,6 +3,7 @@
   "description": "Customer asks for $150 of store credit for a damaged high-value item, but the workspace per-gesture cap is $50. The cap applies to store credit and gift cards exactly like refunds, so the agent must escalate rather than issue the credit, issue a smaller amount, or route it through a gift card instead. Advisory: routing to a human is irreducibly model judgment (static-policy blocks the over-cap credit regardless); tracked as a quality signal.",
   "advisory": true,
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Ana Sosa",

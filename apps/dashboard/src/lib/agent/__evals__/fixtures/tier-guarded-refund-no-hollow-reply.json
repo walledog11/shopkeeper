@@ -2,6 +2,7 @@
   "id": "tier-guarded-refund-no-hollow-reply",
   "description": "Customer asks for a refund with order already in recentOrders (no read tools needed). Plan must include create_refund + send_reply — never a reply-only hollow refund. Guarded tier classifies as needs_review.",
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Sam Carter",

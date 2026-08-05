@@ -2,6 +2,7 @@
   "id": "address-change-missing-fields",
   "description": "Customer asks for an address change but only provides a street line - no city, state, or zip. The address-update tool requires all fields; agent must ask for the missing info instead of calling the tool with placeholders.",
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Ruth Cohen",

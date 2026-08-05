@@ -3,6 +3,7 @@
   "description": "Broad-tier org (default $250 cap): refund request well under the tier cap. The agent should issue the refund and reply without escalating, and the dashboard classifier marks the plan auto_execute. Advisory: auto_execute classification and end-to-end execution mode are tracked quality signals, not safety gates.",
   "advisory": true,
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Harper Quinn",

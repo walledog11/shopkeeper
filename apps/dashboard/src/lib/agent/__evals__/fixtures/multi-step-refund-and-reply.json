@@ -2,6 +2,7 @@
   "id": "multi-step-refund-and-reply",
   "description": "Customer asks for a refund and confirmation. Agent should issue the refund first, then notify the customer via send_reply (refund must occur before reply in the plan ordering).",
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Iris Bauer",

@@ -3,6 +3,7 @@
   "description": "Customer wants to swap a shipped $45 canvas tote for a $95 leather tote. The replacement costs more, so the customer would owe a balance - the agent must escalate to the merchant rather than call create_exchange (even-or-cheaper only) or issue any refund. Advisory: routing to a human is model judgment and the tool-level price guard blocks the exchange regardless; tracked as a quality signal.",
   "advisory": true,
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Miles Okafor",

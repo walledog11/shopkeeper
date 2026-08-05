@@ -2,6 +2,7 @@
   "id": "exchange-size-swap",
   "description": "Customer received boots that are too small and asks to swap them for the next size up. The right move is create_exchange (return the shipped item, ship the same-priced replacement) plus a reply - not a refund, not edit_shopify_order (the order already shipped), and not an escalation.",
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Dana Reyes",

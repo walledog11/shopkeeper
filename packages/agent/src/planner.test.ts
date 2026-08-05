@@ -431,4 +431,60 @@ describe("planAgent transcript integrity", () => {
 
     expectValidToolPairing(snapshots);
   });
+
+  it("starts the low-tier re-plan from a clean transcript", async () => {
+    // Regression: runAgentLoop appends to the message array in place, so reusing
+    // the same array for the judgment-tier re-plan replayed the discarded
+    // low-tier attempt's turns and the API rejected the sequence with
+    // `400 tool_use ids were found without tool_result blocks`. Caught by the
+    // eval suite on fulfill-merchant-confirmed-shipment, where the low tier
+    // proposes fulfill_order and the safety net forces the re-plan.
+    installAgentLogger(makeLogger());
+    vi.stubEnv("AGENT_PLANNER_TIER_MODE", "low_risk_haiku");
+
+    const snapshots: Array<Array<{ role: string; content: unknown }>> = [];
+    const models: string[] = [];
+    const responses = [
+      // Low tier proposes a mutative action, which the outward check rejects.
+      singleToolUse("create_refund", { order_id: "123", amount: "10.00" }, "tu_refund"),
+      // Judgment tier re-plans from scratch.
+      singleToolUse("send_reply", { text: "Looking into it." }, "tu_reply"),
+    ];
+    let callIndex = 0;
+    mockCreate.mockImplementation(async (params: {
+      model: string;
+      messages: Array<{ role: string; content: unknown }>;
+    }) => {
+      models.push(params.model);
+      snapshots.push(structuredClone(params.messages));
+      return responses[Math.min(callIndex++, responses.length - 1)];
+    });
+
+    const ctx = makeCtx({
+      classifierSignals: {
+        version: 1,
+        language: "en",
+        intents: {
+          mutative_request: false,
+          policy_question: false,
+          order_status: true,
+          fraud_signals: false,
+          contradiction: false,
+          out_of_scope_commercial: false,
+          forwarded_injection: false,
+        },
+      },
+    });
+    await planAgent(ctx, "Where is my order?", AGENT_SETTINGS_DEFAULTS);
+
+    // Keyed on the model switch rather than a call count: the low tier may take
+    // more than one iteration to land on a terminal tool, and the property under
+    // test holds regardless of how many.
+    const replanIndex = models.findIndex((model) => model !== models[0]);
+    expect(replanIndex).toBeGreaterThan(0);
+    // The re-plan starts from the same transcript the first attempt did, with
+    // none of the discarded attempt's turns carried over.
+    expect(snapshots[replanIndex]).toEqual(snapshots[0]);
+    expectValidToolPairing(snapshots);
+  });
 });

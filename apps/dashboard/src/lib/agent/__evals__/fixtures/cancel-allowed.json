@@ -2,6 +2,7 @@
   "id": "cancel-allowed",
   "description": "Customer requests cancellation on an unfulfilled order in a workspace that allows cancellations. Agent should cancel and reply.",
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Marco Silva",

@@ -2,6 +2,7 @@
   "id": "ask-operator-shipping-after-kb-search-gap",
   "description": "Customer asks whether the store ships to Canada. Phase 1 should search_kb; when no article answers, the replan nudge must steer to ask_operator instead of drafting a customer reply. classifyHomePlan should surface this as needs_merchant_input.",
   "setup": {
+    "classifierIntents": { "policy_question": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Priya Nair",

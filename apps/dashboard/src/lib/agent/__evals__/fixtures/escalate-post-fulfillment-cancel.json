@@ -2,6 +2,7 @@
   "id": "escalate-post-fulfillment-cancel",
   "description": "Customer asks to cancel an order that has already been fulfilled and shipped. A fulfilled order's state does not support cancellation, so the agent must not call cancel_order and should escalate so a human can arrange a return/refund instead.",
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Omar Haddad",

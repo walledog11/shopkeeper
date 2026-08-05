@@ -2,6 +2,7 @@
   "id": "tier-override-cancel-blocked",
   "description": "Trusted-tier org with blockCancellations: true override. The merchant override must win over the tier default - the agent must not cancel the order and must escalate instead. Classifier must mark needs_review (the override blocks auto-execute).",
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Devon Cruz",

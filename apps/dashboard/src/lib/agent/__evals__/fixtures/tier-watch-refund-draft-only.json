@@ -2,6 +2,7 @@
   "id": "tier-watch-refund-draft-only",
   "description": "Watch-tier org: customer asks for a refund. Watch tier never auto-executes, so whatever the agent proposes (a refund draft, a reply, or an escalation) must route to the merchant for review — it must never auto-fire.",
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Riley Park",

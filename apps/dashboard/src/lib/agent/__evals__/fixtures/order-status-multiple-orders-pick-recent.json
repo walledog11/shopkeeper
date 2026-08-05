@@ -2,6 +2,7 @@
   "id": "order-status-multiple-orders-pick-recent",
   "description": "Customer has two recent orders in context. They ask about 'my recent order' - per prompt rules the agent should infer the most recent and answer about it without refetching.",
   "setup": {
+    "classifierIntents": { "order_status": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Priya Khan",

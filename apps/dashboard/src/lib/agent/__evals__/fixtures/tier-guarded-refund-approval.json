@@ -2,6 +2,7 @@
   "id": "tier-guarded-refund-approval",
   "description": "Guarded-tier org: refund request under the $50 tier cap. The agent should produce a refund + reply plan, and the dashboard classifier must mark it as needs_review (mutative action gated behind approval).",
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Sam Carter",

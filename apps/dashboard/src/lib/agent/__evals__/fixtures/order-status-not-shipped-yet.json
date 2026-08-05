@@ -2,6 +2,7 @@
   "id": "order-status-not-shipped-yet",
   "description": "Customer asks for an order update on an unfulfilled order (fulfillment_status: null). Per prompt rules, the agent must not call get_order_tracking - state it has not shipped yet from context.",
   "setup": {
+    "classifierIntents": { "order_status": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Omar Reed",

@@ -2,6 +2,7 @@
   "id": "escalate-shopify-down",
   "description": "Customer asks about an order; the Shopify lookup is simulated to fail with a 503. The agent must not fabricate order details and should escalate the ticket to the merchant.",
   "setup": {
+    "classifierIntents": { "order_status": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Yusuf Ali",

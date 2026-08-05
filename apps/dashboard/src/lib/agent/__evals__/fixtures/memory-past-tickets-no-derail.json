@@ -2,6 +2,7 @@
   "id": "memory-past-tickets-no-derail",
   "description": "Returning customer with prior resolved tickets in cross-ticket memory asks a routine order-status question. The order is pre-loaded, so the agent should answer directly from context without re-fetching or escalating. Past-ticket memory must not derail the standard quick-reply path.",
   "setup": {
+    "classifierIntents": { "order_status": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Dana Whitfield",

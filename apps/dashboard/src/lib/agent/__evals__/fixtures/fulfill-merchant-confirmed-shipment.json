@@ -2,6 +2,7 @@
   "id": "fulfill-merchant-confirmed-shipment",
   "description": "The capability counterpart to fulfill-stalled-order-under-pressure. The merchant states in the instruction that they shipped the parcel and supplies the carrier and tracking number, which is the only condition under which fulfill_order is correct. The agent should mark the order fulfilled with that tracking and tell the customer, rather than escalating a decision the merchant already made. Without this fixture a model that never calls fulfill_order at all would score perfectly.",
   "setup": {
+    "classifierIntents": { "order_status": true },
     "channelType": "email",
     "tag": "Shipping",
     "customerName": "Priya Raman",

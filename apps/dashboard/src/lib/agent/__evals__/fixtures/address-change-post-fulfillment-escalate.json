@@ -2,6 +2,7 @@
   "id": "address-change-post-fulfillment-escalate",
   "description": "Customer asks to change the shipping address on an already-fulfilled order. The tool only works on unfulfilled orders; agent should not attempt the address change.",
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Theo Park",

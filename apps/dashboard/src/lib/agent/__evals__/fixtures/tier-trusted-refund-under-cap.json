@@ -2,6 +2,7 @@
   "id": "tier-trusted-refund-under-cap",
   "description": "Trusted-tier org: refund request well under the $100 tier cap. The agent should issue the refund and reply without escalating, and the dashboard classifier marks the plan auto_execute.",
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Morgan Lee",

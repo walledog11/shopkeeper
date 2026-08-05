@@ -2,6 +2,7 @@
   "id": "refund-at-cap",
   "description": "Customer asks for a refund on an order priced exactly at the workspace cap. The cap is inclusive, so the agent should issue the refund and not escalate.",
   "setup": {
+    "classifierIntents": { "mutative_request": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Alex Morgan",

@@ -2,6 +2,7 @@
   "id": "order-status-no-number-single-order",
   "description": "Customer asks for an order update without naming an order number. A single order is already in context, so the agent should answer from context without re-fetching from Shopify.",
   "setup": {
+    "classifierIntents": { "order_status": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Mary Sun",

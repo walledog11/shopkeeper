@@ -2,6 +2,7 @@
   "id": "escalate-out-of-scope",
   "description": "Customer asks for bulk wholesale pricing - clearly out of scope for the support agent with no KB article on pricing. The agent must not fabricate a quote or place an order; escalation is the right move.",
   "setup": {
+    "classifierIntents": { "out_of_scope_commercial": true },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Felix Howard",

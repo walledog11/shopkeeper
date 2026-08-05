@@ -82,10 +82,14 @@ export async function planAgent(
   const maxIterations = resolvedSettings.maxIterations > 0
     ? resolvedSettings.maxIterations
     : DEFAULT_MAX_ITERATIONS;
+  // A fresh copy per attempt: runAgentLoop appends assistant and tool-result
+  // turns to this array in place, so handing the same one to a re-plan would
+  // replay the discarded attempt's half-finished turns into the next model and
+  // the API rejects the sequence ("tool_use ids without tool_result blocks").
   const runLoop = (model: string) => runAgentLoop({
     ctx,
     mode: "capture",
-    messages: baseMessages,
+    messages: [...baseMessages],
     systemPromptBlocks,
     tools,
     model,
