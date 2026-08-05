@@ -1,0 +1,19 @@
+{
+  "id": "routing-order-edit",
+  "description": "A customer explicitly asks to remove one known variant from an unfulfilled order.",
+  "suite": "extended",
+  "setup": {
+    "classifierIntents": { "mutative_request": true },
+    "channelType": "email",
+    "customerName": "Luis Gomez",
+    "shopifyCustomerId": "701",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [{ "senderType": "customer", "contentText": "Please remove the blue hat from order #7010 before it ships." }],
+    "recentOrders": [{ "id": "7010", "name": "#7010", "financial_status": "paid", "fulfillment_status": null, "total_price": "55.00", "currency": "USD", "items": [{ "title": "Blue Hat", "quantity": 1, "variant_id": "7701" }] }]
+  },
+  "instruction": "Handle the requested order edit.",
+  "expectedPlan": {
+    "mustCallTools": ["edit_shopify_order", "send_reply"],
+    "mustCallToolsWithInput": [{ "tool": "edit_shopify_order", "inputEquals": { "order_id": "7010", "remove_variant_id": "7701" } }]
+  }
+}

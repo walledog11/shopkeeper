@@ -2,19 +2,32 @@
   "id": "memory-past-ticket-continuity",
   "description": "Customer wrote in before about a defective item that we replaced (captured in cross-ticket memory). They now report the replacement has the same defect. The agent should respond with continuity - recognizing this is a repeat of an already-handled issue - rather than treating it as a brand-new first-time complaint. Tests that the injected past-ticket summaries are actually used. Advisory: continuity acknowledgement is model judgment, scored by the judge but not a hard safety gate.",
   "setup": {
-    "classifierIntents": { "mutative_request": true },
+    "classifierIntents": {
+      "mutative_request": true
+    },
     "channelType": "email",
     "tag": "Returns",
     "customerName": "Theo Marsh",
     "customerPlatformId": "theo.marsh@example.com",
     "shopifyCustomerId": "10000006060",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
-    "orgSettings": { "maxRefundAmount": 100 },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
+    "orgSettings": {
+      "maxRefundAmount": 100
+    },
     "pastTickets": [
-      { "aiSummary": "Reported the Aurora Desk Lamp from order #6060 arrived with a cracked base; we shipped a free replacement at no charge.", "tag": "Returns" }
+      {
+        "aiSummary": "Reported the Aurora Desk Lamp from order #6060 arrived with a cracked base; we shipped a free replacement at no charge.",
+        "tag": "Returns"
+      }
     ],
     "messages": [
-      { "senderType": "customer", "contentText": "The replacement lamp you sent has the exact same cracked base as the first one. Second time now - pretty frustrated." }
+      {
+        "senderType": "customer",
+        "contentText": "The replacement lamp you sent has the exact same cracked base as the first one. Second time now - pretty frustrated."
+      }
     ],
     "recentOrders": [
       {
@@ -41,7 +54,10 @@
   },
   "instruction": "Reply to the customer.",
   "expectedPlan": {
-    "mustNotCallTools": ["get_shopify_orders", "get_order_by_name"]
+    "mustNotCallTools": [
+      "get_shopify_orders",
+      "get_order_by_name"
+    ]
   },
   "expectedRubric": {
     "checks": [
@@ -51,5 +67,6 @@
       }
     ]
   },
-  "advisory": true
+  "advisory": true,
+  "suite": "extended"
 }

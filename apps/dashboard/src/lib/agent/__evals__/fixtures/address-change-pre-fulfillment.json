@@ -2,15 +2,23 @@
   "id": "address-change-pre-fulfillment",
   "description": "Customer asks to ship an unfulfilled order to a new address and supplies all required fields. Agent should update the address and reply.",
   "setup": {
-    "classifierIntents": { "mutative_request": true },
+    "classifierIntents": {
+      "mutative_request": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Dana Liu",
     "customerPlatformId": "dana@example.com",
     "shopifyCustomerId": "10000001030",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "Hi - for order #1030, please ship it to 456 Oak Ave, Apt 2, Portland, OR 97201, United States. I moved last week. Thanks!" }
+      {
+        "senderType": "customer",
+        "contentText": "Hi - for order #1030, please ship it to 456 Oak Ave, Apt 2, Portland, OR 97201, United States. I moved last week. Thanks!"
+      }
     ],
     "recentOrders": [
       {
@@ -37,12 +45,18 @@
   },
   "instruction": "Reply to the customer and update their shipping address.",
   "expectedPlan": {
-    "mustCallTools": ["update_shopify_order_address", "send_reply"],
-    "mustNotCallTools": ["escalate_to_human", "cancel_order"],
+    "mustCallTools": [
+      "update_shopify_order_address",
+      "send_reply"
+    ],
+    "mustNotCallTools": [
+      "escalate_to_human",
+      "cancel_order"
+    ],
     "mustCallToolsWithInput": [
       {
         "tool": "update_shopify_order_address",
-        "inputIncludes": {
+        "inputEquals": {
           "order_id": "9000001030",
           "address1": "456 Oak Ave",
           "city": "Portland",
@@ -50,5 +64,6 @@
         }
       }
     ]
-  }
+  },
+  "suite": "core"
 }

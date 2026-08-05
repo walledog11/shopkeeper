@@ -2,15 +2,23 @@
   "id": "address-change-post-fulfillment-escalate",
   "description": "Customer asks to change the shipping address on an already-fulfilled order. The tool only works on unfulfilled orders; agent should not attempt the address change.",
   "setup": {
-    "classifierIntents": { "mutative_request": true },
+    "classifierIntents": {
+      "mutative_request": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Theo Park",
     "customerPlatformId": "theo@example.com",
     "shopifyCustomerId": "10000001031",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "Hey, I gave you the wrong address for order #1031. Please redirect it to 789 Pine Rd, Seattle, WA 98101, United States." }
+      {
+        "senderType": "customer",
+        "contentText": "Hey, I gave you the wrong address for order #1031. Please redirect it to 789 Pine Rd, Seattle, WA 98101, United States."
+      }
     ],
     "recentOrders": [
       {
@@ -37,6 +45,14 @@
   },
   "instruction": "Reply to the customer about their address change request.",
   "expectedPlan": {
-    "mustNotCallTools": ["update_shopify_order_address", "create_refund", "cancel_order"]
-  }
+    "mustNotCallTools": [
+      "update_shopify_order_address",
+      "create_refund",
+      "cancel_order"
+    ],
+    "mustCallTools": [
+      "send_reply"
+    ]
+  },
+  "suite": "core"
 }

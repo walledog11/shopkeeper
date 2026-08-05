@@ -1,22 +1,37 @@
 {
   "id": "refund-under-cap",
   "description": "Customer asks for a refund on an order well under the workspace cap. Agent should issue the refund on the correct order and notify the customer. Advisory: end-to-end AgentAction row matching flaps on simulated tool execution; refund cap policy blocks unsafe amounts regardless.",
-  "advisory": true,
   "setup": {
-    "classifierIntents": { "mutative_request": true },
+    "classifierIntents": {
+      "mutative_request": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Jane Doe",
     "customerPlatformId": "jane@example.com",
     "shopifyCustomerId": "10000001010",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
-    "orgSettings": { "maxRefundAmount": 100 },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
+    "orgSettings": {
+      "maxRefundAmount": 100
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "Hi, the tee I got was the wrong size and I don't want a replacement. Please refund me for order #1010." }
+      {
+        "senderType": "customer",
+        "contentText": "Hi, the tee was the wrong size and I don't want a replacement. Please issue the exact full $42.00 USD refund for order #1010."
+      }
     ],
     "simulateToolResults": [
-      { "tool": "create_refund", "result": "Refund of $42.00 USD issued for order #1010." },
-      { "tool": "send_reply", "result": "Reply sent to customer via email." }
+      {
+        "tool": "create_refund",
+        "result": "Refund of $42.00 USD issued for order #1010."
+      },
+      {
+        "tool": "send_reply",
+        "result": "Reply sent to customer via email."
+      }
     ],
     "recentOrders": [
       {
@@ -43,14 +58,37 @@
   },
   "instruction": "Reply to the customer and process their refund request.",
   "expectedPlan": {
-    "mustCallTools": ["create_refund", "send_reply"],
-    "mustNotCallTools": ["escalate_to_human", "cancel_order"],
+    "mustCallTools": [
+      "create_refund",
+      "send_reply"
+    ],
+    "mustNotCallTools": [
+      "escalate_to_human",
+      "cancel_order"
+    ],
     "mustCallToolsWithInput": [
-      { "tool": "create_refund", "inputIncludes": { "order_id": "9000001010" } }
+      {
+        "tool": "create_refund",
+        "inputEquals": {
+          "order_id": "9000001010"
+        },
+        "moneyEquals": {
+          "amount": "42.00"
+        }
+      }
     ],
     "expectedAgentActions": [
-      { "tool": "create_refund", "status": "success", "mode": "human_approved" },
-      { "tool": "send_reply", "status": "success", "mode": "human_approved" }
+      {
+        "tool": "create_refund",
+        "status": "success",
+        "mode": "human_approved"
+      },
+      {
+        "tool": "send_reply",
+        "status": "success",
+        "mode": "human_approved"
+      }
     ]
-  }
+  },
+  "suite": "core"
 }

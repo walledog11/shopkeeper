@@ -21,12 +21,6 @@ export function selectExecutableApprovedToolCalls(
     : approvedToolCalls;
 }
 
-function approvedActionsEmptyOutcome(supportThread: SupportContext["thread"] | null) {
-  return supportThread?.channelType === "dashboard_agent"
-    ? "approved_dashboard_actions_empty"
-    : "approved_plan_actions_empty";
-}
-
 export function approvedActionsCompleteOutcome(supportThread: SupportContext["thread"] | null) {
   return supportThread?.channelType === "dashboard_agent"
     ? "approved_dashboard_actions"

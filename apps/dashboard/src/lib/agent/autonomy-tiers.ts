@@ -37,7 +37,7 @@ export const AUTONOMY_TIERS: AutonomyTierOption[] = [
     id: "broad",
     label: "Broad",
     cap: 250,
-    blurb: "Refunds up to $250, bulk quotes, custom discount codes.",
+    blurb: "Exact full refunds and requested gift cards up to $250, plus bulk quotes.",
     comingSoon: true,
   },
   {

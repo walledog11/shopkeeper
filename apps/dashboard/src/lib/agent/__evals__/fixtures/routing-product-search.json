@@ -1,0 +1,18 @@
+{
+  "id": "routing-product-search",
+  "description": "A product availability question requires a catalog search and customer reply.",
+  "suite": "extended",
+  "setup": {
+    "channelType": "instagram",
+    "customerName": "Ari Kim",
+    "messages": [{ "senderType": "customer", "contentText": "Do you have the navy Pencil Half Zip in medium?" }],
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "recentOrders": [],
+    "simulateToolResults": [{ "tool": "search_shopify_products", "result": "Pencil Half Zip, Navy, Medium is available." }]
+  },
+  "instruction": "Answer the product availability question.",
+  "expectedPlan": {
+    "mustCallTools": ["search_shopify_products", "send_reply"],
+    "mustCallToolsWithInput": [{ "tool": "search_shopify_products", "textContains": { "query": "Pencil Half Zip" } }]
+  }
+}

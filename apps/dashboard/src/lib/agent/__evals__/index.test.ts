@@ -28,12 +28,21 @@ import {
   evalRepeats,
 } from "./runner";
 import type { Fixture, FixtureRunSummary } from "./types";
+import { validateFixtures } from "./fixture-validator";
 
 const FIXTURES_DIR = join(__dirname, "fixtures");
 
 function loadFixtures(): Fixture[] {
-  const files = readdirSync(FIXTURES_DIR).filter((f) => f.endsWith(".json"));
-  return files.map((f) => JSON.parse(readFileSync(join(FIXTURES_DIR, f), "utf8")) as Fixture);
+  const files = readdirSync(FIXTURES_DIR).filter((f) => f.endsWith(".json")).sort();
+  const fixtures = files.map((f) => JSON.parse(readFileSync(join(FIXTURES_DIR, f), "utf8")) as Fixture);
+  validateFixtures(fixtures, files);
+  return fixtures;
+}
+
+function requestedSuite(): "core" | "full" {
+  const value = process.env.EVAL_SUITE?.trim().toLowerCase() ?? "full";
+  if (value !== "core" && value !== "full") throw new Error(`Invalid EVAL_SUITE ${JSON.stringify(value)}`);
+  return value;
 }
 
 const hasRealKey =
@@ -43,8 +52,23 @@ const hasRealKey =
 const ANTHROPIC_API_HOST = "api.anthropic.com";
 
 describe.sequential("agent evals", () => {
+  const suite = requestedSuite();
+  const allFixtures = loadFixtures();
+  const fixtures = suite === "core"
+    ? allFixtures.filter(fixture => fixture.suite === "core")
+    : allFixtures;
+  if (fixtures.length === 0) {
+    it("executes at least one fixture", () => {
+      throw new Error(`EVAL_SUITE=${suite} selected zero fixtures`);
+    });
+    return;
+  }
+
   if (!hasRealKey) {
-    it.skip("requires ANTHROPIC_API_KEY to be set to a real key", () => {});
+    const requireKey = process.env.CI || process.env.REQUIRE_MODEL_EVALS === "1";
+    (requireKey ? it : it.skip)("requires ANTHROPIC_API_KEY to be set to a real key", () => {
+      if (requireKey) throw new Error("ANTHROPIC_API_KEY must be a real key; skipped model suites cannot pass CI");
+    });
     return;
   }
 
@@ -52,7 +76,6 @@ describe.sequential("agent evals", () => {
     allowTestNetworkHosts(ANTHROPIC_API_HOST);
   });
 
-  const fixtures = loadFixtures();
   const repeats = evalRepeats();
   const collected: FixtureRunSummary[] = [];
 
@@ -60,7 +83,17 @@ describe.sequential("agent evals", () => {
     it(
       `${fixture.id} — ${fixture.description}`,
       async () => {
-        const summary = await runFixtureRepeated(fixture, repeats);
+        let summary = await runFixtureRepeated(fixture, repeats);
+        if (suite === "core" && !fixture.advisory && summary.passes !== summary.repeats) {
+          const retries = await runFixtureRepeated(fixture, 2);
+          summary = {
+            id: fixture.id,
+            repeats: retries.repeats,
+            passes: retries.passes,
+            passRate: retries.passRate,
+            results: retries.results,
+          };
+        }
         collected.push(summary);
         // In update mode, persist after each fixture so an interrupted capture keeps
         // what already ran instead of losing everything when the final afterAll never fires.
@@ -78,12 +111,12 @@ describe.sequential("agent evals", () => {
         // Advisory fixtures are exempt: their pass-rate is still recorded (and baseline-gated),
         // but a 0/N draw does not red CI — the property they probe is model judgment, not a
         // safety gate. See Fixture.advisory.
-        if (fixture.advisory) {
+        if (fixture.advisory && suite === "full") {
           if (summary.passes === 0) {
             console.log(`  ~ advisory ${summary.id}: 0/${summary.repeats} (not gated)`);
           }
         } else {
-          expect(summary.passes).toBeGreaterThan(0);
+          expect(summary.passes).toBe(summary.repeats);
         }
       },
       // Generous: a multi-iteration agent run can take >60s under rate-limit backoff, and we
@@ -110,6 +143,8 @@ describe.sequential("agent evals", () => {
       console.log("[eval:baseline] wrote baseline.json");
       return;
     }
+
+    if (suite === "core") return;
 
     const baseline = loadBaseline();
     if (!baseline) {

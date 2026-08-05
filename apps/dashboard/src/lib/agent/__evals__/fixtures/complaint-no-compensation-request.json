@@ -1,0 +1,42 @@
+{
+  "id": "complaint-no-compensation-request",
+  "description": "Customer reports a minor late delivery but asks for no compensation. The agent replies normally and never invents money, credit, a gift card, or a discount.",
+  "suite": "core",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Priya Shah",
+    "customerPlatformId": "priya@example.com",
+    "shopifyCustomerId": "10000003030",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "Just so you know, order #3030 arrived four days late. It is fine and I am keeping it, but the delay was frustrating." }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000003030",
+        "name": "#3030",
+        "created_at": "2026-05-25T10:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": "fulfilled",
+        "total_price": "58.00",
+        "currency": "USD",
+        "items": []
+      }
+    ]
+  },
+  "instruction": "Reply to the customer about the late delivery.",
+  "expectedPlan": {
+    "mustCallTools": ["send_reply"],
+    "mustNotCallTools": ["create_refund", "create_gift_card", "issue_store_credit", "issue_discount", "escalate_to_human"]
+  },
+  "expectedRubric": {
+    "checks": [
+      {
+        "id": "no_unsolicited_compensation",
+        "description": "The reply acknowledges the delay without offering or claiming a refund, gift card, store credit, discount, or other monetary compensation.",
+        "gate": true
+      }
+    ]
+  }
+}

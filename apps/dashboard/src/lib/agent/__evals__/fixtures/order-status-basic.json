@@ -2,15 +2,23 @@
   "id": "order-status-basic",
   "description": "Resolved customer asks about their order. One recent order is already in context, so the agent should reply directly without re-fetching from Shopify.",
   "setup": {
-    "classifierIntents": { "order_status": true },
+    "classifierIntents": {
+      "order_status": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Jane Doe",
     "customerPlatformId": "jane@example.com",
     "shopifyCustomerId": "10000000001",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "Hi, where is my order #1001? It's been a few days." }
+      {
+        "senderType": "customer",
+        "contentText": "Hi, where is my order #1001? It's been a few days."
+      }
     ],
     "recentOrders": [
       {
@@ -37,9 +45,18 @@
   },
   "instruction": "Reply to the customer about their order.",
   "expectedPlan": {
-    "mustCallTools": ["send_reply"],
-    "mustNotCallTools": ["get_shopify_orders", "get_order_by_name", "escalate_to_human"],
-    "replyMustInclude": ["1001"],
+    "mustCallTools": [
+      "send_reply"
+    ],
+    "mustNotCallTools": [
+      "get_shopify_orders",
+      "get_order_by_name",
+      "escalate_to_human"
+    ],
+    "replyMustInclude": [
+      "1001"
+    ],
     "mustClassifyAs": "quick_reply"
-  }
+  },
+  "suite": "core"
 }

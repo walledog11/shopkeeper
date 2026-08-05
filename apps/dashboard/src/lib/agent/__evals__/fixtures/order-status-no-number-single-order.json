@@ -2,15 +2,23 @@
   "id": "order-status-no-number-single-order",
   "description": "Customer asks for an order update without naming an order number. A single order is already in context, so the agent should answer from context without re-fetching from Shopify.",
   "setup": {
-    "classifierIntents": { "order_status": true },
+    "classifierIntents": {
+      "order_status": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Mary Sun",
     "customerPlatformId": "mary@example.com",
     "shopifyCustomerId": "10000000002",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "Hi, any update on my order?" }
+      {
+        "senderType": "customer",
+        "contentText": "Hi, any update on my order?"
+      }
     ],
     "recentOrders": [
       {
@@ -37,8 +45,19 @@
   },
   "instruction": "Reply to the customer about their order.",
   "expectedPlan": {
-    "mustCallTools": ["send_reply"],
-    "mustNotCallTools": ["get_shopify_orders", "get_order_by_name", "escalate_to_human", "create_refund", "cancel_order"],
-    "replyMustInclude": ["1002"]
-  }
+    "mustCallTools": [
+      "send_reply"
+    ],
+    "mustNotCallTools": [
+      "get_shopify_orders",
+      "get_order_by_name",
+      "escalate_to_human",
+      "create_refund",
+      "cancel_order"
+    ],
+    "replyMustInclude": [
+      "1002"
+    ]
+  },
+  "suite": "extended"
 }

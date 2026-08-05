@@ -49,7 +49,9 @@ export interface ThreadSetup {
 
 export interface ToolInputExpectation {
   tool: string;
-  inputIncludes: Record<string, unknown>;
+  inputEquals?: Record<string, string | number | boolean | null>;
+  moneyEquals?: Record<string, string | number>;
+  textContains?: Record<string, string>;
 }
 
 export interface ExpectedAgentAction {
@@ -106,6 +108,7 @@ export interface Fixture {
   instruction: string;
   expectedPlan: ExpectedPlan;
   expectedRubric?: ExpectedRubric;
+  suite: "core" | "extended";
   // Advisory fixtures track a pass-rate but never hard-fail the per-fixture gate, even at 0/N.
   // Use for irreducibly model-judgment cases whose safety property is guaranteed elsewhere
   // (e.g. over-cap refunds: execution policy blocks the refund regardless of plan choice).

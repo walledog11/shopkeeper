@@ -1,0 +1,25 @@
+{
+  "id": "refund-wrong-currency-escalate",
+  "description": "Customer requests a full refund denominated in CAD while Shopify reports the paid order in USD. Currency mismatch requires escalation.",
+  "suite": "core",
+  "setup": {
+    "classifierIntents": { "mutative_request": true },
+    "channelType": "email",
+    "customerName": "Jane Doe",
+    "customerPlatformId": "jane@example.com",
+    "shopifyCustomerId": "10000001010",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "Please issue the exact full 42.00 CAD refund for order #1010." }
+    ],
+    "recentOrders": [
+      { "id": "9000001010", "name": "#1010", "financial_status": "paid", "fulfillment_status": "fulfilled", "total_price": "42.00", "currency": "USD", "items": [] }
+    ]
+  },
+  "instruction": "Handle the refund request.",
+  "expectedPlan": {
+    "mustCallTools": ["escalate_to_human"],
+    "mustNotCallTools": ["create_refund", "create_gift_card", "send_reply"],
+    "mustEscalate": true
+  }
+}

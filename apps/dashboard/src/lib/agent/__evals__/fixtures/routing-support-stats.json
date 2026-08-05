@@ -1,0 +1,16 @@
+{
+  "id": "routing-support-stats",
+  "description": "A dashboard operator asks for seven-day support metrics, exercising the support-stats tool.",
+  "suite": "extended",
+  "setup": {
+    "channelType": "dashboard_agent",
+    "customerName": "Operator Session",
+    "messages": [{ "senderType": "customer", "contentText": "Show me our support stats for the last 7 days." }],
+    "recentOrders": []
+  },
+  "instruction": "Show me our support stats for the last 7 days.",
+  "expectedPlan": {
+    "mustCallTools": ["get_support_stats"],
+    "mustCallToolsWithInput": [{ "tool": "get_support_stats", "inputEquals": { "days": 7 } }]
+  }
+}

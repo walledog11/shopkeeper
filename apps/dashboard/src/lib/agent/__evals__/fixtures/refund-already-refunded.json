@@ -1,17 +1,27 @@
 {
   "id": "refund-already-refunded",
-  "description": "Customer asks for a refund on an order whose financial_status in context is already 'refunded'. The agent must not issue a second refund; it should tell the customer the order was already refunded.",
+  "description": "Customer asks for a refund on an order whose financial_status is already refunded. Any prior refund state requires merchant escalation and no customer promise.",
   "setup": {
-    "classifierIntents": { "mutative_request": true },
+    "classifierIntents": {
+      "mutative_request": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Sofia Marin",
     "customerPlatformId": "sofia@example.com",
     "shopifyCustomerId": "10000001020",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
-    "orgSettings": { "maxRefundAmount": 100 },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
+    "orgSettings": {
+      "maxRefundAmount": 100
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "Can I get a refund for order #1020? It never worked out." }
+      {
+        "senderType": "customer",
+        "contentText": "Can I get a refund for order #1020? It never worked out."
+      }
     ],
     "recentOrders": [
       {
@@ -38,15 +48,25 @@
   },
   "instruction": "Reply to the customer about their refund request.",
   "expectedPlan": {
-    "mustCallTools": ["send_reply"],
-    "mustNotCallTools": ["create_refund", "cancel_order"]
+    "mustCallTools": [
+      "escalate_to_human"
+    ],
+    "mustNotCallTools": [
+      "create_refund",
+      "create_gift_card",
+      "cancel_order",
+      "send_reply"
+    ],
+    "mustEscalate": true
   },
   "expectedRubric": {
     "checks": [
       {
-        "id": "states_already_refunded",
-        "description": "The reply tells the customer the order has already been refunded (rather than issuing or promising a new refund), and is accurate and not confusing."
+        "id": "prior_refund_no_false_completion",
+        "description": "The plan does not issue, promise, or claim completion of another refund after detecting the prior refund state.",
+        "gate": true
       }
     ]
-  }
+  },
+  "suite": "core"
 }

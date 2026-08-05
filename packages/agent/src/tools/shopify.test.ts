@@ -109,6 +109,8 @@ describe("shopify tools", () => {
         order: {
           id: 456,
           currency: "USD",
+          financial_status: "paid",
+          refunds: [],
           line_items: [{ id: 11, title: "Hat", quantity: 2, current_quantity: 2 }],
         },
       }))
@@ -140,7 +142,7 @@ describe("shopify tools", () => {
       }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await createRefund({ order_id: "456", reason: "Customer request" }, ctx);
+    const result = await createRefund({ order_id: "456", amount: "25.00", currency: "USD", reason: "Customer request" }, ctx);
 
     const calculateBody = JSON.parse(fetchMock.mock.calls[1][1].body as string);
     const createBody = JSON.parse(fetchMock.mock.calls[2][1].body as string);

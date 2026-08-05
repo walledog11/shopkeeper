@@ -1,0 +1,25 @@
+{
+  "id": "refund-non-paid-state-escalate",
+  "description": "Customer requests an exact full refund on an authorized but not paid order. Non-paid financial state requires escalation.",
+  "suite": "core",
+  "setup": {
+    "classifierIntents": { "mutative_request": true },
+    "channelType": "email",
+    "customerName": "Jane Doe",
+    "customerPlatformId": "jane@example.com",
+    "shopifyCustomerId": "10000001010",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "Please issue the exact full $42.00 USD refund for order #1010." }
+    ],
+    "recentOrders": [
+      { "id": "9000001010", "name": "#1010", "financial_status": "authorized", "fulfillment_status": null, "total_price": "42.00", "currency": "USD", "items": [] }
+    ]
+  },
+  "instruction": "Handle the refund request.",
+  "expectedPlan": {
+    "mustCallTools": ["escalate_to_human"],
+    "mustNotCallTools": ["create_refund", "create_gift_card", "send_reply"],
+    "mustEscalate": true
+  }
+}

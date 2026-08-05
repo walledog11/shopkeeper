@@ -286,13 +286,13 @@ describe("runAgent policy enforcement", () => {
       { ...AGENT_SETTINGS_DEFAULTS, dailyRefundCap: 100 },
     );
 
-    expect(mockEscalateToHuman).toHaveBeenCalledWith("daily goodwill cap of $100 reached (shared across refunds, store credit, and gift cards); $10.00 remaining today.");
+    expect(mockEscalateToHuman).toHaveBeenCalledWith("daily compensation cap of $100 reached (shared across refunds and gift cards); $10.00 remaining today.");
     expect(result.actionsPerformed).toHaveLength(1);
     expect(result.actionsPerformed[0]).toMatchObject({
       tool: "create_refund",
       status: "escalated",
     });
-    expect(result.summary).toBe("Escalated to merchant: daily goodwill cap of $100 reached (shared across refunds, store credit, and gift cards); $10.00 remaining today.");
+    expect(result.summary).toBe("Escalated to merchant: daily compensation cap of $100 reached (shared across refunds and gift cards); $10.00 remaining today.");
     expect(mockCommitDailyRefundSpendReservation).not.toHaveBeenCalled();
   });
 
@@ -314,27 +314,72 @@ describe("runAgent policy enforcement", () => {
     expect(mockReserveDailyRefundSpend).not.toHaveBeenCalled();
   });
 
-  it("escalates an over-cap discount instead of issuing it", async () => {
+  it("escalates a cached refund plan with missing exact financial inputs", async () => {
+    const result = await runAgent(
+      makeCtx(),
+      "Refund the order",
+      [{ id: "pre_1", name: "create_refund", input: { order_id: "123" } }],
+      AGENT_SETTINGS_DEFAULTS,
+    );
+
+    expect(mockEscalateToHuman).toHaveBeenCalledWith(
+      expect.stringContaining("invalid arguments for create_refund"),
+    );
+    expect(result.actionsPerformed).toMatchObject([{ tool: "create_refund", status: "escalated" }]);
+    expect(mockReserveDailyRefundSpend).not.toHaveBeenCalled();
+  });
+
+  it("escalates a cached gift-card plan without a resolved Shopify customer", async () => {
+    const result = await runAgent(
+      makeCtx(),
+      "Send a $12 gift card",
+      [{ id: "pre_1", name: "create_gift_card", input: { amount: "12.00" } }],
+      AGENT_SETTINGS_DEFAULTS,
+    );
+
+    expect(mockEscalateToHuman).toHaveBeenCalledWith(
+      expect.stringContaining("invalid arguments for create_gift_card"),
+    );
+    expect(result.actionsPerformed).toMatchObject([{ tool: "create_gift_card", status: "escalated" }]);
+    expect(mockReserveDailyRefundSpend).not.toHaveBeenCalled();
+  });
+
+  it("escalates a cached approved discount plan because the tool is retired", async () => {
     const result = await runAgent(
       makeCtx(),
       "Give the customer a discount for the trouble",
       [{ id: "pre_1", name: "issue_discount", input: { percentage: 40 } }],
-      { ...AGENT_SETTINGS_DEFAULTS, maxDiscountPercent: 20 },
+      AGENT_SETTINGS_DEFAULTS,
     );
 
-    expect(mockEscalateToHuman).toHaveBeenCalledWith("discount of 40% exceeds the workspace limit of 20%.");
+    expect(mockEscalateToHuman).toHaveBeenCalledWith("issue_discount is retired and cannot create a new provider action. Escalate this request to the merchant.");
     expect(result.actionsPerformed).toHaveLength(1);
     expect(result.actionsPerformed[0]).toMatchObject({
       tool: "issue_discount",
       status: "escalated",
     });
-    expect(result.summary).toBe("Escalated to merchant: discount of 40% exceeds the workspace limit of 20%.");
+    expect(result.summary).toBe("Escalated to merchant: issue_discount is retired and cannot create a new provider action. Escalate this request to the merchant.");
+  });
+
+  it("escalates a cached approved store-credit plan because the tool is retired", async () => {
+    const result = await runAgent(
+      makeCtx(),
+      "Give the customer store credit",
+      [{ id: "pre_1", name: "issue_store_credit", input: { customer_id: "123", amount: "20.00" } }],
+      AGENT_SETTINGS_DEFAULTS,
+    );
+
+    expect(mockEscalateToHuman).toHaveBeenCalledWith(
+      "issue_store_credit is retired and cannot create a new provider action. Escalate this request to the merchant.",
+    );
+    expect(result.actionsPerformed).toMatchObject([{ tool: "issue_store_credit", status: "escalated" }]);
+    expect(mockReserveDailyRefundSpend).not.toHaveBeenCalled();
   });
 
   it("allows a refund under the daily cap", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({
-        order: { id: 123, name: "#1001", currency: "USD", line_items: [], total_price: "50.00" },
+        order: { id: 123, name: "#1001", currency: "USD", financial_status: "paid", refunds: [], line_items: [{ id: 1, title: "Item", quantity: 1 }], total_price: "20.00" },
       }), { status: 200, headers: { "Content-Type": "application/json" } }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
         refund: {
@@ -373,10 +418,47 @@ describe("runAgent policy enforcement", () => {
     expect(mockCommitDailyRefundSpendReservation).toHaveBeenCalledWith("reservation_1", 2000);
   });
 
+  it("releases spend and escalates when Shopify's refundable balance differs", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        order: {
+          id: 123,
+          name: "#1001",
+          currency: "USD",
+          financial_status: "paid",
+          refunds: [],
+          line_items: [{ id: 1, title: "Item", quantity: 1 }],
+        },
+      }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        refund: {
+          currency: "USD",
+          transactions: [{ kind: "suggested_refund", gateway: "manual", parent_id: 1, amount: "42.00" }],
+        },
+      }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await runAgent(
+      makeCtx(),
+      "Refund the order",
+      [{ id: "pre_1", name: "create_refund", input: { order_id: "123", amount: "20.00" } }],
+      AGENT_SETTINGS_DEFAULTS,
+    );
+
+    expect(result.actionsPerformed).toMatchObject([{ tool: "create_refund", status: "escalated" }]);
+    expect(mockEscalateToHuman).toHaveBeenCalledWith(expect.stringContaining("does not equal Shopify's complete refundable balance"));
+    expect(mockReleaseDailyRefundSpendReservation).toHaveBeenCalledWith(
+      "reservation_1",
+      expect.stringContaining("requested amount $20.00"),
+    );
+    expect(mockCommitDailyRefundSpendReservation).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("does not send a customer confirmation after an unknown refund outcome", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({
-        order: { id: 123, name: "#1001", currency: "USD", line_items: [], total_price: "50.00" },
+        order: { id: 123, name: "#1001", currency: "USD", financial_status: "paid", refunds: [], line_items: [{ id: 1, title: "Item", quantity: 1 }], total_price: "20.00" },
       }), { status: 200, headers: { "Content-Type": "application/json" } }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
         refund: {

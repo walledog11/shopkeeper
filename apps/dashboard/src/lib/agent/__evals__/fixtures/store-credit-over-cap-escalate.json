@@ -1,18 +1,27 @@
 {
   "id": "store-credit-over-cap-escalate",
-  "description": "Customer asks for $150 of store credit for a damaged high-value item, but the workspace per-gesture cap is $50. The cap applies to store credit and gift cards exactly like refunds, so the agent must escalate rather than issue the credit, issue a smaller amount, or route it through a gift card instead. Advisory: routing to a human is irreducibly model judgment (static-policy blocks the over-cap credit regardless); tracked as a quality signal.",
-  "advisory": true,
+  "description": "Customer explicitly requests a $150 store-credit gift card but the single-compensation limit is $50. The agent must escalate without issuing or substituting a smaller amount.",
   "setup": {
-    "classifierIntents": { "mutative_request": true },
+    "classifierIntents": {
+      "mutative_request": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Ana Sosa",
     "customerPlatformId": "ana@example.com",
     "shopifyCustomerId": "10000008080",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
-    "orgSettings": { "maxRefundAmount": 50 },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
+    "orgSettings": {
+      "maxRefundAmount": 50
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "The ceramic table lamp from order #8080 arrived shattered. I don't need the money back - just credit my account the $150 so I can pick something else." }
+      {
+        "senderType": "customer",
+        "contentText": "The ceramic table lamp from order #8080 arrived shattered. I don't need the money back - just credit my account the $150 so I can pick something else."
+      }
     ],
     "recentOrders": [
       {
@@ -39,8 +48,15 @@
   },
   "instruction": "Reply to the customer about their store credit request.",
   "expectedPlan": {
-    "mustCallTools": ["escalate_to_human"],
-    "mustNotCallTools": ["issue_store_credit", "create_gift_card", "create_refund"],
+    "mustCallTools": [
+      "escalate_to_human"
+    ],
+    "mustNotCallTools": [
+      "issue_store_credit",
+      "create_gift_card",
+      "create_refund"
+    ],
     "mustEscalate": true
-  }
+  },
+  "suite": "core"
 }

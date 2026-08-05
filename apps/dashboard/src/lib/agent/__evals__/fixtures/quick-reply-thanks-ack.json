@@ -3,23 +3,39 @@
   "description": "Customer sends a brief thank-you after a prior agent reply resolved their question. Expected: a single short send_reply step with no other tools, no status change, no internal note - the exact plan shape that classifyHomePlan treats as quick_reply for one-tap approval. Advisory: thank-you routing is irreducibly model judgment; no mutative action is at stake.",
   "advisory": true,
   "setup": {
-    "classifierIntents": { "order_status": true },
+    "classifierIntents": {
+      "order_status": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Riley Chen",
     "customerPlatformId": "riley@example.com",
     "shopifyCustomerId": "10000004001",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "Hi - when will order #1071 arrive?" },
-      { "senderType": "agent", "contentText": "Hi Riley, order #1071 shipped Tuesday with USPS and should arrive Friday. Tracking: 9400111202..." },
-      { "senderType": "customer", "contentText": "Awesome, thanks so much!" }
+      {
+        "senderType": "customer",
+        "contentText": "Hi - when will order #1071 arrive?"
+      },
+      {
+        "senderType": "agent",
+        "contentText": "Hi Riley, order #1071 shipped Tuesday with USPS and should arrive Friday. Tracking: 9400111202..."
+      },
+      {
+        "senderType": "customer",
+        "contentText": "Awesome, thanks so much!"
+      }
     ],
     "recentOrders": []
   },
   "instruction": "Reply to the customer.",
   "expectedPlan": {
-    "mustCallTools": ["send_reply"],
+    "mustCallTools": [
+      "send_reply"
+    ],
     "mustClassifyAs": "quick_reply",
     "mustNotCallTools": [
       "escalate_to_human",
@@ -36,5 +52,6 @@
       "get_shopify_orders",
       "search_shopify_customers"
     ]
-  }
+  },
+  "suite": "extended"
 }

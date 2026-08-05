@@ -2,16 +2,26 @@
   "id": "cancel-blocked-by-policy",
   "description": "Customer requests cancellation in a workspace where cancellations are disabled by policy. The prompt forbids calling cancel_order and instructs handing off; expect escalation, not a cancel attempt.",
   "setup": {
-    "classifierIntents": { "mutative_request": true },
+    "classifierIntents": {
+      "mutative_request": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Sasha Wei",
     "customerPlatformId": "sasha@example.com",
     "shopifyCustomerId": "10000001021",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
-    "orgSettings": { "blockCancellations": true },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
+    "orgSettings": {
+      "blockCancellations": true
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "Please cancel order #1021 - I no longer want it." }
+      {
+        "senderType": "customer",
+        "contentText": "Please cancel order #1021 - I no longer want it."
+      }
     ],
     "recentOrders": [
       {
@@ -38,8 +48,14 @@
   },
   "instruction": "Reply to the customer about their cancellation request.",
   "expectedPlan": {
-    "mustCallTools": ["escalate_to_human"],
-    "mustNotCallTools": ["cancel_order", "create_refund"],
+    "mustCallTools": [
+      "escalate_to_human"
+    ],
+    "mustNotCallTools": [
+      "cancel_order",
+      "create_refund"
+    ],
     "mustEscalate": true
-  }
+  },
+  "suite": "core"
 }

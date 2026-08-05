@@ -182,12 +182,12 @@ describe("goodwill spend reservation finalization", () => {
 
     expect(result).toEqual({
       status: "unknown",
-      result: "Unknown: the provider action completed but its goodwill budget record could not be finalized.",
+      result: "Unknown: the provider action completed but its compensation budget record could not be finalized.",
     });
     expect(mockCommitDailyRefundSpendReservation).toHaveBeenCalledWith("reservation_1", 600);
     expect(mockMarkDailyRefundSpendReservationUnknown).toHaveBeenCalledWith(
       "reservation_1",
-      "Unknown: the provider action completed but its goodwill budget record could not be finalized.",
+      "Unknown: the provider action completed but its compensation budget record could not be finalized.",
     );
     expect(mockReleaseDailyRefundSpendReservation).not.toHaveBeenCalled();
   });

@@ -328,6 +328,7 @@ export async function executeAgentToolCalls(
   const results: Awaited<ReturnType<typeof executeAgentToolCall>>[] = [];
   for (const toolCall of toolCalls) {
     results.push(await executeAgentToolCall(toolCall, input));
+    if (input.actionsPerformed.at(-1)?.status === "escalated") break;
   }
   return results;
 }

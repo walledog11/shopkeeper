@@ -3,20 +3,36 @@
   "description": "Full-tier org (default $1000 cap): refund request within policy and under the tier cap. The agent should issue the refund and reply without escalating, and the dashboard classifier marks the plan auto_execute. Advisory: auto_execute classification and end-to-end execution mode are tracked quality signals, not safety gates.",
   "advisory": true,
   "setup": {
-    "classifierIntents": { "mutative_request": true },
+    "classifierIntents": {
+      "mutative_request": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Noa Bennett",
     "customerPlatformId": "noa@example.com",
     "shopifyCustomerId": "10000004301",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
-    "orgSettings": { "autonomyTier": "full" },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
+    "orgSettings": {
+      "autonomyTier": "full"
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "Order #4301 - the sofa arrived with a torn cushion and I don't want a replacement. Please refund me the $600." }
+      {
+        "senderType": "customer",
+        "contentText": "Order #4301 - the sofa arrived with a torn cushion and I don't want a replacement. Please refund me the $600."
+      }
     ],
     "simulateToolResults": [
-      { "tool": "create_refund", "result": "Refund of $600.00 USD issued for order #4301." },
-      { "tool": "send_reply", "result": "Reply sent to customer via email." }
+      {
+        "tool": "create_refund",
+        "result": "Refund of $600.00 USD issued for order #4301."
+      },
+      {
+        "tool": "send_reply",
+        "result": "Reply sent to customer via email."
+      }
     ],
     "recentOrders": [
       {
@@ -43,15 +59,38 @@
   },
   "instruction": "Reply to the customer and process their refund request.",
   "expectedPlan": {
-    "mustCallTools": ["create_refund", "send_reply"],
-    "mustNotCallTools": ["escalate_to_human", "cancel_order"],
+    "mustCallTools": [
+      "create_refund",
+      "send_reply"
+    ],
+    "mustNotCallTools": [
+      "escalate_to_human",
+      "cancel_order"
+    ],
     "mustCallToolsWithInput": [
-      { "tool": "create_refund", "inputIncludes": { "order_id": "9000004301" } }
+      {
+        "tool": "create_refund",
+        "inputEquals": {
+          "order_id": "9000004301"
+        },
+        "moneyEquals": {
+          "amount": "600.00"
+        }
+      }
     ],
     "mustClassifyAs": "auto_execute",
     "expectedAgentActions": [
-      { "tool": "create_refund", "status": "success", "mode": "auto_executed" },
-      { "tool": "send_reply", "status": "success", "mode": "auto_executed" }
+      {
+        "tool": "create_refund",
+        "status": "success",
+        "mode": "auto_executed"
+      },
+      {
+        "tool": "send_reply",
+        "status": "success",
+        "mode": "auto_executed"
+      }
     ]
-  }
+  },
+  "suite": "extended"
 }

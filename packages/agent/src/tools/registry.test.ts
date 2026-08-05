@@ -80,10 +80,8 @@ const SHOPIFY_TOOL_ROUTES = [
   ["cancel_order", "cancelOrder"],
   ["create_shopify_order", "createShopifyOrder"],
   ["edit_shopify_order", "editShopifyOrder"],
-  ["issue_discount", "issueDiscount"],
   ["create_return", "createReturn"],
   ["create_exchange", "createExchange"],
-  ["issue_store_credit", "issueStoreCredit"],
   ["create_gift_card", "createGiftCard"],
   ["attach_return_label", "attachReturnLabel"],
   ["fulfill_order", "fulfillOrder"],
@@ -190,12 +188,20 @@ describe("agent tool registry", () => {
     const toolNames = TOOL_DEFINITIONS.map((definition) => definition.name);
 
     expect(Object.keys(VALID_TOOL_INPUTS).sort()).toEqual([...toolNames].sort());
-    expect(AGENT_TOOLS.map((tool) => tool.name)).toEqual(toolNames);
+    expect(AGENT_TOOLS.map((tool) => tool.name)).toEqual(
+      TOOL_DEFINITIONS.filter(definition => definition.availability === "active").map(definition => definition.name),
+    );
+    expect(AGENT_TOOLS.map(tool => tool.name)).not.toContain("issue_discount");
+    expect(AGENT_TOOLS.map(tool => tool.name)).not.toContain("issue_store_credit");
 
     for (const definition of TOOL_DEFINITIONS) {
       expect(TOOL_CATEGORIES[definition.name]).toBe(definition.category);
       expect(TOOL_LABELS[definition.name]).toBe(definition.labels.executed);
-      expect(TOOL_GROUPS[definition.group]).toContain(definition.name);
+      if (definition.availability === "active") {
+        expect(TOOL_GROUPS[definition.group]).toContain(definition.name);
+      } else {
+        expect(TOOL_GROUPS[definition.group]).not.toContain(definition.name);
+      }
     }
   });
 
@@ -234,6 +240,13 @@ describe("agent tool registry", () => {
     expect(() => definition.parse({ order_id: "2001" })).toThrow(/input.amount is required/);
   });
 
+  it("requires create_gift_card customer delivery identity", () => {
+    const definition = definitionFor("create_gift_card");
+
+    expect(definition.inputSchema.required).toEqual(["amount", "customer_id"]);
+    expect(() => definition.parse({ amount: "20.00" })).toThrow(/input.customer_id is required/);
+  });
+
   it("rejects unknown fields before execution", () => {
     const definition = definitionFor("send_reply");
 
@@ -259,6 +272,8 @@ describe("agent tool execution routing", () => {
       ...THREAD_TOOL_ROUTES.map(([name]) => name),
       "escalate_to_human",
       "ask_operator",
+      "issue_discount",
+      "issue_store_credit",
     ];
 
     expect([...new Set(routedNames)].sort()).toEqual(
@@ -277,6 +292,26 @@ describe("agent tool execution routing", () => {
     expect(result.message).toBe(depName);
     expect(deps[depName]).toHaveBeenCalledTimes(1);
   });
+
+  it.each(["issue_discount", "issue_store_credit"] as const)(
+    "never routes retired tool %s to a provider dependency",
+    async (name) => {
+      const ctx = makeCtx();
+      const deps = makeDeps();
+      const definition = definitionFor(name);
+      const result = await definition.execute(
+        definition.parse(VALID_TOOL_INPUTS[name]),
+        ctx,
+        AGENT_SETTINGS_DEFAULTS,
+        deps,
+      );
+
+      expect(definition.availability).toBe("retired");
+      expect(result.status).toBe("policy_block");
+      expect(deps.issueDiscount).not.toHaveBeenCalled();
+      expect(deps.issueStoreCredit).not.toHaveBeenCalled();
+    },
+  );
 
   it("routes get_support_stats through the stats dependency with clamped days", async () => {
     const ctx = makeCtx();

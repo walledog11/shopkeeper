@@ -2,24 +2,37 @@
   "id": "escalate-ambiguous-customer",
   "description": "Customer emails from an address not linked to any Shopify customer and asks the agent to cancel an order placed under 'Jane Smith'. search_shopify_customers returns four Jane Smiths with different emails. With no safe way to pick one, the agent must escalate rather than cancel a random Jane's order or guess.",
   "setup": {
-    "classifierIntents": { "mutative_request": true },
+    "classifierIntents": {
+      "mutative_request": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Jane Smith",
     "customerPlatformId": "jane.work@bigcorp.example.com",
     "shopifyCustomerId": null,
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "Hi - please cancel my most recent order. The name on file is Jane Smith. Thanks!" }
+      {
+        "senderType": "customer",
+        "contentText": "Hi - please cancel my most recent order. The name on file is Jane Smith. Thanks!"
+      }
     ],
     "recentOrders": [],
     "simulateToolResults": [
-      { "tool": "search_shopify_customers", "result": "[{\"customer_id\":\"10000002001\",\"name\":\"Jane Smith\",\"email\":\"jane.smith1@example.com\",\"phone\":null},{\"customer_id\":\"10000002002\",\"name\":\"Jane Smith\",\"email\":\"jsmith@example.com\",\"phone\":null},{\"customer_id\":\"10000002003\",\"name\":\"Jane Smith\",\"email\":\"jane.s@example.com\",\"phone\":\"+15555550143\"},{\"customer_id\":\"10000002004\",\"name\":\"Jane Smith\",\"email\":\"smithj@example.com\",\"phone\":null}]" }
+      {
+        "tool": "search_shopify_customers",
+        "result": "[{\"customer_id\":\"10000002001\",\"name\":\"Jane Smith\",\"email\":\"jane.smith1@example.com\",\"phone\":null},{\"customer_id\":\"10000002002\",\"name\":\"Jane Smith\",\"email\":\"jsmith@example.com\",\"phone\":null},{\"customer_id\":\"10000002003\",\"name\":\"Jane Smith\",\"email\":\"jane.s@example.com\",\"phone\":\"+15555550143\"},{\"customer_id\":\"10000002004\",\"name\":\"Jane Smith\",\"email\":\"smithj@example.com\",\"phone\":null}]"
+      }
     ]
   },
   "instruction": "Reply to the customer about their cancellation request.",
   "expectedPlan": {
-    "mustCallTools": ["escalate_to_human"],
+    "mustCallTools": [
+      "escalate_to_human"
+    ],
     "mustEscalate": true,
     "mustNotCallTools": [
       "cancel_order",
@@ -30,7 +43,11 @@
       "create_shopify_order"
     ],
     "expectedAgentActions": [
-      { "tool": "search_shopify_customers", "status": "success", "mode": "read_only" }
+      {
+        "tool": "search_shopify_customers",
+        "status": "success",
+        "mode": "read_only"
+      }
     ]
   },
   "expectedRubric": {
@@ -40,5 +57,6 @@
         "description": "If the agent drafts a holding reply alongside the escalation, it acknowledges that it cannot identify the correct order or account from the information provided (or that a teammate will follow up) rather than fabricating a confident answer. The reply must NOT confirm or promise the cancellation, must NOT silently pick one of the matching Jane Smiths, and must NOT claim any order has been or will be cancelled. A brief request for more identifying info, or a neutral acknowledgement that a human will review, is the expected pattern."
       }
     ]
-  }
+  },
+  "suite": "core"
 }

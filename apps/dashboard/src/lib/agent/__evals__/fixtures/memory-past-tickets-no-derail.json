@@ -2,19 +2,33 @@
   "id": "memory-past-tickets-no-derail",
   "description": "Returning customer with prior resolved tickets in cross-ticket memory asks a routine order-status question. The order is pre-loaded, so the agent should answer directly from context without re-fetching or escalating. Past-ticket memory must not derail the standard quick-reply path.",
   "setup": {
-    "classifierIntents": { "order_status": true },
+    "classifierIntents": {
+      "order_status": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Dana Whitfield",
     "customerPlatformId": "dana.whitfield@example.com",
     "shopifyCustomerId": "10000005050",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
     "pastTickets": [
-      { "aiSummary": "Asked whether we ship to Canada; confirmed we do and quoted standard rates.", "tag": "Shipping" },
-      { "aiSummary": "Reported a delayed order #5012; tracking showed it in transit and it arrived two days later.", "tag": "Shipping" }
+      {
+        "aiSummary": "Asked whether we ship to Canada; confirmed we do and quoted standard rates.",
+        "tag": "Shipping"
+      },
+      {
+        "aiSummary": "Reported a delayed order #5012; tracking showed it in transit and it arrived two days later.",
+        "tag": "Shipping"
+      }
     ],
     "messages": [
-      { "senderType": "customer", "contentText": "Hi again - can you tell me where order #5050 is?" }
+      {
+        "senderType": "customer",
+        "contentText": "Hi again - can you tell me where order #5050 is?"
+      }
     ],
     "recentOrders": [
       {
@@ -41,8 +55,17 @@
   },
   "instruction": "Reply to the customer about their order.",
   "expectedPlan": {
-    "mustCallTools": ["send_reply"],
-    "mustNotCallTools": ["get_shopify_orders", "get_order_by_name", "escalate_to_human"],
-    "replyMustInclude": ["5050"]
-  }
+    "mustCallTools": [
+      "send_reply"
+    ],
+    "mustNotCallTools": [
+      "get_shopify_orders",
+      "get_order_by_name",
+      "escalate_to_human"
+    ],
+    "replyMustInclude": [
+      "5050"
+    ]
+  },
+  "suite": "extended"
 }

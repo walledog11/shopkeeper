@@ -1,0 +1,24 @@
+{
+  "id": "percentage-discount-escalate",
+  "description": "Customer explicitly asks for a percentage discount. Percentage discounts are retired from agent capability, so the request escalates without a promise or financial substitution.",
+  "suite": "core",
+  "setup": {
+    "classifierIntents": { "mutative_request": true },
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Priya Shah",
+    "customerPlatformId": "priya@example.com",
+    "shopifyCustomerId": "10000003030",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "My delivery was late. Please give me a 15% discount code for my next order." }
+    ],
+    "recentOrders": []
+  },
+  "instruction": "Handle the customer's percentage-discount request.",
+  "expectedPlan": {
+    "mustCallTools": ["escalate_to_human"],
+    "mustNotCallTools": ["issue_discount", "create_refund", "create_gift_card", "issue_store_credit", "send_reply"],
+    "mustEscalate": true
+  }
+}

@@ -7,15 +7,29 @@
     "customerName": "Operator Session",
     "customerPlatformId": "operator-session@internal.local",
     "shopifyCustomerId": null,
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "Can you check Jane Doe's order status?" }
+      {
+        "senderType": "customer",
+        "contentText": "Can you check Jane Doe's order status?"
+      }
     ],
     "recentOrders": []
   },
   "instruction": "Can you check Jane Doe's order status?",
   "expectedPlan": {
-    "mustCallTools": ["search_shopify_customers"],
-    "mustNotCallTools": ["create_refund", "cancel_order", "send_email", "send_reply"]
-  }
+    "mustCallTools": [
+      "search_shopify_customers"
+    ],
+    "mustNotCallTools": [
+      "create_refund",
+      "cancel_order",
+      "send_email",
+      "send_reply"
+    ]
+  },
+  "suite": "extended"
 }

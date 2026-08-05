@@ -2,16 +2,26 @@
   "id": "multi-step-refund-and-reply",
   "description": "Customer asks for a refund and confirmation. Agent should issue the refund first, then notify the customer via send_reply (refund must occur before reply in the plan ordering).",
   "setup": {
-    "classifierIntents": { "mutative_request": true },
+    "classifierIntents": {
+      "mutative_request": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Iris Bauer",
     "customerPlatformId": "iris@example.com",
     "shopifyCustomerId": "10000001040",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
-    "orgSettings": { "maxRefundAmount": 100 },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
+    "orgSettings": {
+      "maxRefundAmount": 100
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "Order #1040 was the wrong color. Please refund me and let me know once it's done." }
+      {
+        "senderType": "customer",
+        "contentText": "Order #1040 was the wrong color. Please refund me and let me know once it's done."
+      }
     ],
     "recentOrders": [
       {
@@ -38,11 +48,31 @@
   },
   "instruction": "Reply to the customer and process their refund request.",
   "expectedPlan": {
-    "mustCallTools": ["create_refund", "send_reply"],
-    "mustCallToolsInOrder": ["create_refund", "send_reply"],
-    "mustNotCallTools": ["escalate_to_human", "cancel_order", "get_order_by_name", "get_shopify_orders"],
+    "mustCallTools": [
+      "create_refund",
+      "send_reply"
+    ],
+    "mustCallToolsInOrder": [
+      "create_refund",
+      "send_reply"
+    ],
+    "mustNotCallTools": [
+      "escalate_to_human",
+      "cancel_order",
+      "get_order_by_name",
+      "get_shopify_orders"
+    ],
     "mustCallToolsWithInput": [
-      { "tool": "create_refund", "inputIncludes": { "order_id": "9000001040" } }
+      {
+        "tool": "create_refund",
+        "inputEquals": {
+          "order_id": "9000001040"
+        },
+        "moneyEquals": {
+          "amount": "30.00"
+        }
+      }
     ]
-  }
+  },
+  "suite": "extended"
 }

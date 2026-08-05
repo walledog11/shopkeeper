@@ -6,120 +6,219 @@ on:
       - 'packages/agent/**'
       - 'apps/dashboard/src/lib/agent/**'
       - 'apps/dashboard/src/lib/messaging/**'
+      - 'apps/gateway/src/order-ops.eval.test.ts'
       - 'packages/db/refund-spend.ts'
       - '.github/workflows/evals.yml'
-  # Judge-scored run (Phase 0.2): nightly drift tracking + on-demand.
   schedule:
     - cron: '0 7 * * *'
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Full drift run or three-run baseline regeneration'
+        type: choice
+        options: [full, baseline]
+        default: full
+
+permissions:
+  contents: write
 
 jobs:
-  agent-evals:
-    name: Agent Eval Suite
-    # PR gate + manual dispatch. The nightly schedule is reserved for the judge-scored
-    # job below, so this judge-off gate doesn't double-run (or double-spend) on cron.
-    if: github.event_name != 'schedule'
+  core-dashboard:
+    name: Core dashboard eval gates
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      # Run each fixture 3× and gate on pass-rate, not a single coin-flip — trust-critical
-      # categories flap ±2 run-to-run. ~3× the per-PR eval spend; see runner.ts:evalRepeats.
-      EVAL_REPEATS: '3'
+      EVAL_SUITE: core
+      EVAL_REPEATS: '1'
+      REQUIRE_MODEL_EVALS: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+      - name: Require model credentials
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ] || [ "$ANTHROPIC_API_KEY" = "test-anthropic-key" ]; then
+            echo "ANTHROPIC_API_KEY must be configured with a real key; skipped model evals cannot pass."
+            exit 1
+          fi
       - name: Install dependencies
         run: npm ci
       - name: Start test services
         run: npm run test:services:up
       - name: Bootstrap test database
         run: node ./scripts/test-bootstrap.mjs
-      - name: Run agent eval suite
+      - name: Run each core fixture gate
         id: evals
         run: |
           set -o pipefail
           npm run test:evals -w apps/dashboard 2>&1 | tee eval-output.log
+      - name: Require executed fixtures and gate summary
+        run: |
+          test -s eval-output.log
+          grep -qE '^\[eval\] .+ passRate=' eval-output.log
+          grep -qE '^\[eval:gates\] hard-gated [1-9][0-9]*/[1-9][0-9]*' eval-output.log
       - name: Eval summary
         if: always()
         run: |
           {
-            echo "## Agent eval results"
-            echo ""
-            if [ "${{ steps.evals.outcome }}" = "success" ]; then
-              echo "Suite passed."
-            else
-              echo "Suite failed."
-            fi
-            echo ""
-            GATE_LINE=$(grep -E '^\[eval:gates\]' eval-output.log | tail -1 || true)
-            if [ -n "$GATE_LINE" ]; then
-              echo "**${GATE_LINE#\[eval:gates\] }**"
-              echo ""
-              echo "_Hard-gated fixtures must pass at least one repeat; advisory fixtures are tracked but do not fail the PR gate._"
-              echo ""
-            fi
+            echo "## Core dashboard eval results"
             echo '```'
-            grep -E '^\[eval(:summary|:gates|:cache)?\]' eval-output.log || echo "(no summary lines captured)"
+            grep -E '^\[eval(:summary|:gates|:cache|:usage)?\]' eval-output.log || echo "(required gate summary absent)"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Stop test services
-        if: ${{ always() }}
+        if: always()
         run: npm run test:services:down
 
-  agent-evals-judge:
-    name: Agent Eval Suite (judge-scored)
-    # Phase 0.2: runs WITH the LLM judge (RUN_JUDGE_EVALS=1) to track subjective rubric
-    # drift. On-demand (workflow_dispatch) + nightly (schedule) only — never on PRs, to
-    # keep per-push spend in check. Non-blocking: this run compares against the judge-OFF
-    # baseline.json, so extra rubric failures can drop the aggregate; continue-on-error
-    # keeps that from failing the workflow. It's a tracking signal, not a gate.
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+  core-gateway:
+    name: Gateway pre-filter and clear-fraud gates
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      EVAL_RETRY_HARD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Require model credentials
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ] || [ "$ANTHROPIC_API_KEY" = "test-anthropic-key" ]; then
+            echo "ANTHROPIC_API_KEY must be configured with a real key; skipped model evals cannot pass."
+            exit 1
+          fi
+      - name: Install dependencies
+        run: npm ci
+      - name: Start test services
+        run: npm run test:services:up
+      - name: Bootstrap test database
+        run: node ./scripts/test-bootstrap.mjs
+      - name: Run deterministic gateway pre-filter
+        run: |
+          set -o pipefail
+          npm run test:evals -w apps/gateway -- -t "order-ops deterministic pre-filter" 2>&1 | tee gateway-eval.log
+      - name: Run clear-fraud model gate
+        run: |
+          set -o pipefail
+          npm run test:evals -w apps/gateway -- -t "clear-fraud-multi-signal" 2>&1 | tee -a gateway-eval.log
+      - name: Require gateway gate summary
+        run: |
+          test -s gateway-eval.log
+          grep -q 'order-ops deterministic pre-filter' gateway-eval.log
+          grep -qE '^\[order-ops-eval:gates\] clear-fraud (1/1|retries 2/2)' gateway-eval.log
+      - name: Stop test services
+        if: always()
+        run: npm run test:services:down
+
+  full-nightly:
+    name: Full dashboard and gateway drift suite
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'full')
     runs-on: ubuntu-latest
     continue-on-error: true
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      EVAL_SUITE: full
+      EVAL_REPEATS: '1'
       RUN_JUDGE_EVALS: '1'
+      REQUIRE_MODEL_EVALS: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+      - name: Require model credentials
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ] || [ "$ANTHROPIC_API_KEY" = "test-anthropic-key" ]; then
+            echo "ANTHROPIC_API_KEY must be configured with a real key."
+            exit 1
+          fi
       - name: Install dependencies
         run: npm ci
       - name: Start test services
         run: npm run test:services:up
       - name: Bootstrap test database
         run: node ./scripts/test-bootstrap.mjs
-      - name: Run agent eval suite (judge on)
-        id: evals
+      - name: Run full dashboard suite with semantic judge
         run: |
           set -o pipefail
           npm run test:evals -w apps/dashboard 2>&1 | tee eval-output.log
-      - name: Eval summary
+      - name: Run full gateway suite
+        run: |
+          set -o pipefail
+          npm run test:evals -w apps/gateway 2>&1 | tee gateway-eval.log
+      - name: Nightly drift summary
         if: always()
         run: |
           {
-            echo "## Agent eval results (judge-scored)"
-            echo ""
-            if [ "${{ steps.evals.outcome }}" = "success" ]; then
-              echo "Suite passed (judge on)."
-            else
-              echo "Suite did not pass clean against the judge-off baseline (expected — tracking signal, non-blocking)."
-            fi
-            echo ""
-            GATE_LINE=$(grep -E '^\[eval:gates\]' eval-output.log | tail -1 || true)
-            if [ -n "$GATE_LINE" ]; then
-              echo "**${GATE_LINE#\[eval:gates\] }**"
-              echo ""
-            fi
+            echo "## Full nightly eval drift"
             echo '```'
-            grep -E '^\[eval(:summary|:gates|:cache)?\]' eval-output.log || echo "(no summary lines captured)"
+            grep -E '^(\[eval(:summary|:gates|:cache|:usage|:baseline)?\]|  [a-zA-Z~])' eval-output.log || echo "(dashboard summary absent)"
+            grep -E '^\[order-ops-eval' gateway-eval.log || echo "(gateway summary absent)"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Stop test services
-        if: ${{ always() }}
+        if: always()
+        run: npm run test:services:down
+
+  regenerate-baseline:
+    name: Regenerate full three-run baseline
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'baseline'
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      EVAL_SUITE: full
+      EVAL_REPEATS: '3'
+      RUN_JUDGE_EVALS: '1'
+      UPDATE_EVAL_BASELINE: '1'
+      REQUIRE_MODEL_EVALS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Require model credentials
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ] || [ "$ANTHROPIC_API_KEY" = "test-anthropic-key" ]; then
+            echo "ANTHROPIC_API_KEY must be configured with a real key."
+            exit 1
+          fi
+      - name: Install dependencies
+        run: npm ci
+      - name: Start test services
+        run: npm run test:services:up
+      - name: Bootstrap test database
+        run: node ./scripts/test-bootstrap.mjs
+      - name: Verify code before replacing the baseline
+        run: |
+          npm run lint
+          npm run typecheck
+          npm run test:unit
+          npm run test:integration
+      - name: Run full dashboard suite three times and write baseline
+        run: npm run test:evals:baseline -w apps/dashboard
+      - name: Run full gateway suite three times
+        run: |
+          for attempt in 1 2 3; do
+            npm run test:evals -w apps/gateway
+          done
+      - name: Commit regenerated baseline
+        run: |
+          if git diff --quiet -- apps/dashboard/src/lib/agent/__evals__/baseline.json; then
+            echo "Baseline was unchanged."
+            exit 0
+          fi
+          git config user.name "shopkeeper-eval-bot"
+          git config user.email "shopkeeper-eval-bot@users.noreply.github.com"
+          git add apps/dashboard/src/lib/agent/__evals__/baseline.json
+          git commit -m "chore(evals): regenerate full baseline"
+          git push
+      - name: Stop test services
+        if: always()
         run: npm run test:services:down

@@ -91,6 +91,23 @@ describe("organization settings contract", () => {
       read: true,
     });
   });
+
+  it("discards obsolete stored discount limits but rejects them in new writes", () => {
+    expect(normalizeStoredOrgSettings({
+      maxRefundAmount: 75,
+      maxDiscountPercent: 20,
+    })).toEqual({ maxRefundAmount: 75 });
+
+    expect(() => parseOrgSettingsPatch({ maxDiscountPercent: 20 })).toThrow(OrgSettingsValidationError);
+    try {
+      parseOrgSettingsPatch({ maxDiscountPercent: 20 });
+    } catch (error) {
+      expect((error as OrgSettingsValidationError).issues).toContainEqual({
+        path: "maxDiscountPercent",
+        message: "Unknown setting",
+      });
+    }
+  });
 });
 
 describe("business hours contract", () => {

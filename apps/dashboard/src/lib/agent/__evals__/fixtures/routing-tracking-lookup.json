@@ -1,0 +1,19 @@
+{
+  "id": "routing-tracking-lookup",
+  "description": "A customer explicitly asks for carrier tracking on a fulfilled order, exercising positive tracking-tool routing.",
+  "suite": "extended",
+  "setup": {
+    "channelType": "email",
+    "customerName": "Taylor Reed",
+    "shopifyCustomerId": "501",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [{ "senderType": "customer", "contentText": "What is the carrier tracking number for order #5010?" }],
+    "recentOrders": [{ "id": "5010", "name": "#5010", "financial_status": "paid", "fulfillment_status": "fulfilled", "total_price": "30.00", "currency": "USD", "items": [] }],
+    "simulateToolResults": [{ "tool": "get_order_tracking", "result": "UPS tracking 1Z5010 is in transit." }]
+  },
+  "instruction": "Answer the tracking question.",
+  "expectedPlan": {
+    "mustCallTools": ["get_order_tracking", "send_reply"],
+    "mustCallToolsWithInput": [{ "tool": "get_order_tracking", "inputEquals": { "order_id": "5010" } }]
+  }
+}

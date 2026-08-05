@@ -7,6 +7,7 @@ import type {
   Fixture,
   ToolInputExpectation,
 } from "./types"
+import { normalizeMoneyCents } from "./fixture-validator"
 
 function isSubsequence(needle: readonly string[], haystack: readonly string[]): boolean {
   let index = 0
@@ -16,18 +17,21 @@ function isSubsequence(needle: readonly string[], haystack: readonly string[]): 
   return index === needle.length
 }
 
-function inputContainsExpected(actual: unknown, expected: Record<string, unknown>): boolean {
+function inputMatchesExpected(actual: unknown, expected: ToolInputExpectation): boolean {
   if (actual === null || typeof actual !== "object") return false
   const actualObject = actual as Record<string, unknown>
-  for (const [key, value] of Object.entries(expected)) {
+  for (const [key, value] of Object.entries(expected.inputEquals ?? {})) {
     const received = actualObject[key]
-    if (typeof value === "string") {
-      if (typeof received !== "string" || !received.toLowerCase().includes(value.toLowerCase())) {
-        return false
-      }
-    } else if (received !== value) {
-      return false
-    }
+    if (received !== value) return false
+  }
+  for (const [key, value] of Object.entries(expected.moneyEquals ?? {})) {
+    const received = actualObject[key]
+    if ((typeof received !== "string" && typeof received !== "number")
+      || normalizeMoneyCents(received) !== normalizeMoneyCents(value)) return false
+  }
+  for (const [key, value] of Object.entries(expected.textContains ?? {})) {
+    const received = actualObject[key]
+    if (typeof received !== "string" || !received.toLowerCase().includes(value.toLowerCase())) return false
   }
   return true
 }
@@ -38,7 +42,7 @@ function findToolInputMatch(
 ): boolean {
   return rawToolCalls.some(toolCall => (
     toolCall.name === expectation.tool
-    && inputContainsExpected(toolCall.input, expectation.inputIncludes)
+    && inputMatchesExpected(toolCall.input, expectation)
   ))
 }
 
@@ -103,7 +107,7 @@ export function collectPlanExpectationFailures(
         .map(toolCall => JSON.stringify(toolCall.input))
         .join(" | ") || "(no calls)"
       failures.push(
-        `expected "${expectation.tool}" call with input including ${JSON.stringify(expectation.inputIncludes)}; observed: ${observed}`,
+        `expected "${expectation.tool}" call matching ${JSON.stringify(expectation)}; observed: ${observed}`,
       )
     }
   }

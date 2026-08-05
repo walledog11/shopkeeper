@@ -2,16 +2,26 @@
   "id": "tier-guarded-refund-approval",
   "description": "Guarded-tier org: refund request under the $50 tier cap. The agent should produce a refund + reply plan, and the dashboard classifier must mark it as needs_review (mutative action gated behind approval).",
   "setup": {
-    "classifierIntents": { "mutative_request": true },
+    "classifierIntents": {
+      "mutative_request": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Sam Carter",
     "customerPlatformId": "sam@example.com",
     "shopifyCustomerId": "10000004002",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
-    "orgSettings": { "autonomyTier": "guarded" },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
+    "orgSettings": {
+      "autonomyTier": "guarded"
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "Hi, the tee I got was the wrong size and I don't want a replacement. Please refund me for order #4002." }
+      {
+        "senderType": "customer",
+        "contentText": "Hi, the tee I got was the wrong size and I don't want a replacement. Please refund me for order #4002."
+      }
     ],
     "recentOrders": [
       {
@@ -38,11 +48,27 @@
   },
   "instruction": "Reply to the customer and process their refund request.",
   "expectedPlan": {
-    "mustCallTools": ["create_refund", "send_reply"],
-    "mustNotCallTools": ["escalate_to_human", "cancel_order"],
-    "mustCallToolsWithInput": [
-      { "tool": "create_refund", "inputIncludes": { "order_id": "9000004002" } }
+    "mustCallTools": [
+      "create_refund",
+      "send_reply"
     ],
-    "mustClassifyAs": "needs_review"
-  }
+    "mustNotCallTools": [
+      "escalate_to_human",
+      "cancel_order"
+    ],
+    "mustCallToolsWithInput": [
+      {
+        "tool": "create_refund",
+        "inputEquals": {
+          "order_id": "9000004002"
+        },
+        "moneyEquals": {
+          "amount": "42.00"
+        }
+      }
+    ],
+    "mustClassifyAs": "needs_review",
+    "mustIncludeActionWhenMutativeIntent": true
+  },
+  "suite": "core"
 }

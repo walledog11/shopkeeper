@@ -2,16 +2,26 @@
   "id": "cancel-allowed",
   "description": "Customer requests cancellation on an unfulfilled order in a workspace that allows cancellations. Agent should cancel and reply.",
   "setup": {
-    "classifierIntents": { "mutative_request": true },
+    "classifierIntents": {
+      "mutative_request": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Marco Silva",
     "customerPlatformId": "marco@example.com",
     "shopifyCustomerId": "10000001020",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
-    "orgSettings": { "blockCancellations": false },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
+    "orgSettings": {
+      "blockCancellations": false
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "Hi - please cancel order #1020. I changed my mind and don't need the item." }
+      {
+        "senderType": "customer",
+        "contentText": "Hi - please cancel order #1020. I changed my mind and don't need the item."
+      }
     ],
     "recentOrders": [
       {
@@ -38,10 +48,22 @@
   },
   "instruction": "Reply to the customer and process their cancellation request.",
   "expectedPlan": {
-    "mustCallTools": ["cancel_order", "send_reply"],
-    "mustNotCallTools": ["escalate_to_human", "create_refund"],
+    "mustCallTools": [
+      "cancel_order",
+      "send_reply"
+    ],
+    "mustNotCallTools": [
+      "escalate_to_human",
+      "create_refund"
+    ],
     "mustCallToolsWithInput": [
-      { "tool": "cancel_order", "inputIncludes": { "order_id": "9000001020" } }
+      {
+        "tool": "cancel_order",
+        "inputEquals": {
+          "order_id": "9000001020"
+        }
+      }
     ]
-  }
+  },
+  "suite": "core"
 }

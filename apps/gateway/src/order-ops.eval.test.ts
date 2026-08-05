@@ -346,7 +346,8 @@ describe.sequential('order-ops fraud-review evals', () => {
   });
 
   it(`${CLEAR_FRAUD.id} — ${CLEAR_FRAUD.description}`, async () => {
-    const repeats = 3;
+    const retryOnFailure = process.env.EVAL_RETRY_HARD === '1';
+    const repeats = 1;
     let flagged = 0;
     let lastReason: string | null = null;
     for (let i = 0; i < repeats; i += 1) {
@@ -359,7 +360,23 @@ describe.sequential('order-ops fraud-review evals', () => {
     console.log(
       `[order-ops-eval] ${CLEAR_FRAUD.id}: flagged ${flagged}/${repeats} (reason e.g. ${JSON.stringify(lastReason)})`,
     );
-    expect(flagged).toBeGreaterThanOrEqual(2);
+    if (flagged === repeats) {
+      console.log('[order-ops-eval:gates] clear-fraud 1/1');
+      return;
+    }
+    if (!retryOnFailure) {
+      console.log('[order-ops-eval:gates] clear-fraud 0/1');
+      expect(flagged).toBe(repeats);
+      return;
+    }
+
+    let retryFlags = 0;
+    for (let i = 0; i < 2; i += 1) {
+      const { result } = await runOrderOpsFixture(CLEAR_FRAUD);
+      if (result.flagged) retryFlags += 1;
+    }
+    console.log(`[order-ops-eval:gates] clear-fraud retries ${retryFlags}/2`);
+    expect(retryFlags).toBe(2);
   }, 240_000);
 
   for (const fixture of ADVISORY_FIXTURES) {

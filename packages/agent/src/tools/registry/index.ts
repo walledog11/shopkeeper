@@ -97,7 +97,7 @@ export const TOOL_GROUPS: Record<ToolGroup, readonly string[]> = TOOL_GROUP_ORDE
   (groups, group) => ({
     ...groups,
     [group]: TOOL_DEFINITIONS
-      .filter((definition) => definition.group === group)
+      .filter((definition) => definition.group === group && definition.availability === "active")
       .map((definition) => definition.name),
   }),
   {} as Record<ToolGroup, readonly string[]>,

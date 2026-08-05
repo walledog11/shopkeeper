@@ -2,13 +2,18 @@
   "id": "sample-reply-shipping-delay-imitation",
   "description": "Merchant has supplied a sample reply tagged 'shipping' that opens with the distinctive phrase 'Hang tight'. Thread is tagged 'shipping', so pickSampleReplies should surface that sample and the agent should imitate it. Validates both sampleReplies wiring and the tag-match selection in pickSampleReplies.",
   "setup": {
-    "classifierIntents": { "order_status": true },
+    "classifierIntents": {
+      "order_status": true
+    },
     "channelType": "email",
     "tag": "shipping",
     "customerName": "Priya Singh",
     "customerPlatformId": "priya@example.com",
     "shopifyCustomerId": "10000002003",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
     "orgSettings": {
       "sampleReplies": [
         {
@@ -26,7 +31,10 @@
       ]
     },
     "messages": [
-      { "senderType": "customer", "contentText": "Hey, just checking in on order #2003 — has it shipped yet? Wondering when I should expect it." }
+      {
+        "senderType": "customer",
+        "contentText": "Hey, just checking in on order #2003 — has it shipped yet? Wondering when I should expect it."
+      }
     ],
     "recentOrders": [
       {
@@ -53,9 +61,17 @@
   },
   "instruction": "Reply to the customer about their shipping question.",
   "expectedPlan": {
-    "mustCallTools": ["send_reply"],
-    "mustNotCallTools": ["escalate_to_human", "get_shopify_orders", "get_order_by_name"],
-    "replyMustInclude": ["tracking"]
+    "mustCallTools": [
+      "send_reply"
+    ],
+    "mustNotCallTools": [
+      "escalate_to_human",
+      "get_shopify_orders",
+      "get_order_by_name"
+    ],
+    "replyMustInclude": [
+      "tracking"
+    ]
   },
   "expectedRubric": {
     "checks": [
@@ -64,5 +80,6 @@
         "description": "Reply imitates the tone and shape of the merchant's 'shipping' sample reply in orgSettings.sampleReplies: opens with reassurance, mentions the order is in progress, references that a tracking link / shipping update is coming, and stays brief and warm rather than formal."
       }
     ]
-  }
+  },
+  "suite": "extended"
 }

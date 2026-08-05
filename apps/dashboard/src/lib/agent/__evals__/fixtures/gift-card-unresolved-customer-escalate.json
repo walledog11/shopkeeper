@@ -1,0 +1,23 @@
+{
+  "id": "gift-card-unresolved-customer-escalate",
+  "description": "Customer explicitly requests an exact $20 gift card, but no Shopify customer is resolved for delivery. Missing customer identity requires escalation.",
+  "suite": "core",
+  "setup": {
+    "classifierIntents": { "mutative_request": true },
+    "channelType": "email",
+    "customerName": null,
+    "customerPlatformId": "unknown@example.com",
+    "shopifyCustomerId": null,
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "Please send me a $20 gift card for the damaged mug." }
+    ],
+    "recentOrders": []
+  },
+  "instruction": "Handle the gift-card request.",
+  "expectedPlan": {
+    "mustCallTools": ["escalate_to_human"],
+    "mustNotCallTools": ["create_gift_card", "create_refund", "issue_store_credit", "issue_discount", "send_reply"],
+    "mustEscalate": true
+  }
+}

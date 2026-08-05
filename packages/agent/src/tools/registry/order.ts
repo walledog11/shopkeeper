@@ -14,8 +14,6 @@ import type {
   GetOrderByNameInput,
   GetOrderTrackingInput,
   GetShopifyOrdersInput,
-  IssueDiscountInput,
-  IssueStoreCreditInput,
   UpdateShopifyOrderAddressInput,
 } from "./types.js";
 
@@ -211,7 +209,7 @@ export const ORDER_TOOL_DEFINITIONS = [
   defineTool({
     name: "issue_discount",
     description:
-      "Issue a single-use percentage discount code as a goodwill gesture (a shipping delay, a minor complaint, a one-off apology). The code applies to the customer's NEXT order - it does NOT refund or change the current one. Prefer this over create_refund when the customer is staying and a small gesture resolves it; reach for a refund only when money must actually be returned. The percentage must be within the workspace discount cap. After issuing, always tell the customer the code in your reply.",
+      "Retired historical percentage-discount action. Kept only so old action records and reconciliation remain readable; new requests require merchant handling.",
     fields: {
       percentage: numberArg("Whole-number percentage off the customer's next order, e.g. 10 for 10% off. Must be within the workspace discount cap.", { required: true }),
       reason: stringArg("Short internal reason for the gesture (e.g. 'shipping delay'). Used only to label the discount inside Shopify."),
@@ -223,14 +221,14 @@ export const ORDER_TOOL_DEFINITIONS = [
     availability: "retired",
     label: "Issued discount code",
     planStepLabel: "Issue discount code",
-    execute: async (_input: IssueDiscountInput) => toolPolicyBlock(
+    execute: async () => toolPolicyBlock(
       "Error: issue_discount is retired. Percentage discounts require merchant handling.",
     ),
   }),
   defineTool({
     name: "create_return",
     description:
-      "Open a return (RMA) for items on a fulfilled Shopify order so the customer is authorized to send them back. This does NOT refund the customer or change the order total - it only creates the return; issue a refund separately with create_refund once the items are received, if a refund is owed. Use this when a customer wants to return what they got. By default it returns every returnable item on the order; pass variant_id (from the orders context) to return just that one item. Only works for items that have actually shipped.",
+      "Open a return (RMA) for items on a fulfilled Shopify order so the customer is authorized to send them back. This does NOT refund the customer or change the order total. If a later partial or item-only refund is owed, escalate it for merchant handling; create_refund is full-order-only. Use this when a customer wants to return what they got. By default it returns every returnable item on the order; pass variant_id (from the orders context) to return just that one item. Only works for items that have actually shipped.",
     fields: {
       order_id: stringArg("Shopify order ID (numeric). Use the id field from the orders context.", { required: true }),
       variant_id: stringArg("Variant ID of the single item to return, from the orders context. Omit to return all returnable items on the order."),
@@ -277,7 +275,7 @@ export const ORDER_TOOL_DEFINITIONS = [
   defineTool({
     name: "issue_store_credit",
     description:
-      "Add store credit to the customer's account as a goodwill gesture that keeps the money with the store. The credit applies automatically at checkout when the customer is logged in - no code needed. Prefer this over create_refund when the customer is owed money back but is staying with the store; prefer issue_discount for minor inconveniences that don't owe money. The amount counts against the same workspace caps as refunds. Requires the store to have store credit enabled - if this tool fails saying store credit is unavailable, call create_gift_card for the same amount instead.",
+      "Retired historical account-balance store-credit action. Kept only so old action records and reconciliation remain readable; explicit new store-credit language maps to create_gift_card.",
     fields: {
       customer_id: stringArg("Shopify customer ID (numeric).", { required: true }),
       amount: stringArg("Amount of store credit in the store's currency (e.g. '25.00'). Must be within the workspace refund cap.", { required: true }),
@@ -293,7 +291,7 @@ export const ORDER_TOOL_DEFINITIONS = [
       refundAmountLimits: true,
       dailyRefundSpendLimit: true,
     },
-    execute: async (_input: IssueStoreCreditInput) => toolPolicyBlock(
+    execute: async () => toolPolicyBlock(
       "Error: issue_store_credit is retired. Use an explicitly requested gift card or escalate.",
     ),
   }),
@@ -302,7 +300,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     description:
       "Create a fixed-value Shopify gift card only when the customer or merchant explicitly requested a gift card, store credit, or other fixed-value non-cash compensation. A resolved Shopify customer is required so Shopify can deliver the code. Never substitute this for an explicit refund and never invent it proactively. The amount uses the workspace compensation limits.",
     fields: {
-      amount: stringArg("Gift card value in the store's currency (e.g. '25.00'). Must be within the workspace refund cap.", { required: true }),
+      amount: stringArg("Gift card value in the store's currency (e.g. '25.00'). Must be within the workspace compensation limit.", { required: true }),
       customer_id: stringArg("Resolved Shopify customer ID (numeric). Required so Shopify delivers the gift card code to this customer.", { required: true }),
       reason: stringArg("Short internal reason for the gesture (e.g. 'damaged item'). Used only as a note inside Shopify."),
       expires_in_days: numberArg("Optional whole number of days until the gift card expires. Omit for no expiry."),

@@ -2,21 +2,31 @@
   "id": "ask-operator-global-shipping-gap",
   "description": "Customer asks whether the store ships globally. There is no shipping-coverage KB article, so the agent must ask_operator instead of drafting a customer reply or deflecting to managed channels. classifyHomePlan should surface this as needs_merchant_input.",
   "setup": {
-    "classifierIntents": { "policy_question": true },
+    "classifierIntents": {
+      "policy_question": true
+    },
     "channelType": "email",
     "tag": "GENERAL",
     "customerName": "Alex",
     "customerPlatformId": "alex@example.com",
     "shopifyCustomerId": null,
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "Are you shopping globally?" }
+      {
+        "senderType": "customer",
+        "contentText": "Are you shopping globally?"
+      }
     ],
     "recentOrders": []
   },
   "instruction": "Global Shopping Availability Question",
   "expectedPlan": {
-    "mustCallTools": ["ask_operator"],
+    "mustCallTools": [
+      "ask_operator"
+    ],
     "mustClassifyAs": "needs_merchant_input",
     "mustNotCallTools": [
       "send_reply",
@@ -24,5 +34,6 @@
       "create_refund",
       "cancel_order"
     ]
-  }
+  },
+  "suite": "extended"
 }

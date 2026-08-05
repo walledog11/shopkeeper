@@ -34,7 +34,7 @@ import {
 } from "./shopify.js";
 import { checkParsedStaticToolPolicy } from "./static-policy.js";
 import { getSupportStats } from "./support-stats.js";
-import { toolError, toolUnknown, type ToolResult, type ToolStatus } from "./result.js";
+import { toolError, toolPolicyBlock, toolUnknown, type ToolResult, type ToolStatus } from "./result.js";
 import type { BaseAgentContext } from "../agent-context.js";
 import type {
   AgentToolDefinition,
@@ -72,7 +72,12 @@ function prepareToolCall(
   try {
     return { ok: true, definition, input: definition.parse(args) };
   } catch (error) {
-    return { ok: false, result: toolError(`Error: ${formatToolInputValidationError(name, error)}`) };
+    const message = `Error: ${formatToolInputValidationError(name, error)}`;
+    const isCompensationTool = name === "create_refund" || name === "create_gift_card";
+    return {
+      ok: false,
+      result: isCompensationTool ? toolPolicyBlock(message) : toolError(message),
+    };
   }
 }
 
@@ -193,9 +198,9 @@ function committedSpendCents(result: ToolResult): number | null {
 
 function duplicateReservationResult(status: string): ToolResult {
   if (status === "released") {
-    return toolError("Error: this goodwill action was already attempted and released without a provider charge.");
+    return toolError("Error: this compensation action was already attempted and released without a provider charge.");
   }
-  return toolUnknown(`Unknown: this goodwill action already has a ${status} budget record and will not be sent to the provider again.`);
+  return toolUnknown(`Unknown: this compensation action already has a ${status} budget record and will not be sent to the provider again.`);
 }
 
 async function executePreparedTool(
@@ -216,7 +221,7 @@ async function executePreparedTool(
   const requestedCents = Math.round(amount * 100);
   if (!Number.isSafeInteger(requestedCents) || requestedCents <= 0) {
     return {
-      result: toolError("Error: goodwill amount must be a positive currency amount."),
+      result: toolError("Error: compensation amount must be a positive currency amount."),
       policyBlocked: true,
     };
   }
@@ -244,7 +249,7 @@ async function executePreparedTool(
     const cap = resolvedSettings.dailyRefundCap;
     return {
       result: toolError(formatPolicyError(
-        `daily goodwill cap of $${cap} reached (shared across refunds, store credit, and gift cards); $${(reservation.remainingCents / 100).toFixed(2)} remaining today.`,
+        `daily compensation cap of $${cap} reached (shared across refunds and gift cards); $${(reservation.remainingCents / 100).toFixed(2)} remaining today.`,
       )),
       policyBlocked: true,
     };
@@ -276,7 +281,7 @@ async function executePreparedTool(
 
   const committedCents = committedSpendCents(result);
   if (committedCents === null) {
-    const message = "Unknown: provider reported success but the committed goodwill amount could not be verified.";
+    const message = "Unknown: provider reported success but the committed compensation amount could not be verified.";
     await markDailyRefundSpendReservationUnknown(reservation.reservation.id, message);
     return { result: toolUnknown(message), policyBlocked: false };
   }
@@ -284,7 +289,7 @@ async function executePreparedTool(
     await commitDailyRefundSpendReservation(reservation.reservation.id, committedCents);
     return { result, policyBlocked: false };
   } catch {
-    const message = "Unknown: the provider action completed but its goodwill budget record could not be finalized.";
+    const message = "Unknown: the provider action completed but its compensation budget record could not be finalized.";
     await markDailyRefundSpendReservationUnknown(reservation.reservation.id, message).catch(() => undefined);
     return { result: toolUnknown(message), policyBlocked: false };
   }
@@ -349,7 +354,12 @@ export async function executeToolWithStatus(
   moduleTools?: Record<string, AgentToolDefinition>,
 ): Promise<ExecuteToolResult> {
   const prepared = prepareToolCall(name, args, moduleTools);
-  if (!prepared.ok) return { result: prepared.result.message, status: "error" };
+  if (!prepared.ok) {
+    return {
+      result: prepared.result.message,
+      status: prepared.result.status === "policy_block" ? "policy_block" : "error",
+    };
+  }
 
   const policyError = await enforceToolPolicy(prepared.definition, prepared.input, settings);
   if (policyError) return { result: policyError, status: "policy_block" };

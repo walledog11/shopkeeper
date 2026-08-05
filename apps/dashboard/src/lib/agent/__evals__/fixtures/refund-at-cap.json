@@ -2,16 +2,26 @@
   "id": "refund-at-cap",
   "description": "Customer asks for a refund on an order priced exactly at the workspace cap. The cap is inclusive, so the agent should issue the refund and not escalate.",
   "setup": {
-    "classifierIntents": { "mutative_request": true },
+    "classifierIntents": {
+      "mutative_request": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Alex Morgan",
     "customerPlatformId": "alex@example.com",
     "shopifyCustomerId": "10000001011",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
-    "orgSettings": { "maxRefundAmount": 50 },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
+    "orgSettings": {
+      "maxRefundAmount": 50
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "Order #1011 arrived defective - the zipper is broken. Can I have a full refund please?" }
+      {
+        "senderType": "customer",
+        "contentText": "Order #1011 arrived defective. Please issue the exact full $50.00 USD refund."
+      }
     ],
     "recentOrders": [
       {
@@ -38,10 +48,25 @@
   },
   "instruction": "Reply to the customer and process their refund request.",
   "expectedPlan": {
-    "mustCallTools": ["create_refund", "send_reply"],
-    "mustNotCallTools": ["escalate_to_human", "cancel_order"],
+    "mustCallTools": [
+      "create_refund",
+      "send_reply"
+    ],
+    "mustNotCallTools": [
+      "escalate_to_human",
+      "cancel_order"
+    ],
     "mustCallToolsWithInput": [
-      { "tool": "create_refund", "inputIncludes": { "order_id": "9000001011" } }
+      {
+        "tool": "create_refund",
+        "inputEquals": {
+          "order_id": "9000001011"
+        },
+        "moneyEquals": {
+          "amount": "50.00"
+        }
+      }
     ]
-  }
+  },
+  "suite": "core"
 }

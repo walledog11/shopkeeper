@@ -2,15 +2,23 @@
   "id": "escalate-post-fulfillment-cancel",
   "description": "Customer asks to cancel an order that has already been fulfilled and shipped. A fulfilled order's state does not support cancellation, so the agent must not call cancel_order and should escalate so a human can arrange a return/refund instead.",
   "setup": {
-    "classifierIntents": { "mutative_request": true },
+    "classifierIntents": {
+      "mutative_request": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Omar Haddad",
     "customerPlatformId": "omar@example.com",
     "shopifyCustomerId": "10000004003",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "I changed my mind — please cancel order #1104 and don't send it." }
+      {
+        "senderType": "customer",
+        "contentText": "I changed my mind — please cancel order #1104 and don't send it."
+      }
     ],
     "recentOrders": [
       {
@@ -37,9 +45,15 @@
   },
   "instruction": "Reply to the customer about their cancellation request.",
   "expectedPlan": {
-    "mustCallTools": ["escalate_to_human"],
+    "mustCallTools": [
+      "escalate_to_human"
+    ],
     "mustEscalate": true,
-    "mustNotCallTools": ["cancel_order", "create_refund", "edit_shopify_order"]
+    "mustNotCallTools": [
+      "cancel_order",
+      "create_refund",
+      "edit_shopify_order"
+    ]
   },
   "expectedRubric": {
     "checks": [
@@ -48,5 +62,6 @@
         "description": "If the agent drafts a holding reply, it does NOT claim the already-shipped order has been or will be cancelled. Explaining that the order has already shipped and that a teammate will help with a return/refund is the expected pattern."
       }
     ]
-  }
+  },
+  "suite": "extended"
 }

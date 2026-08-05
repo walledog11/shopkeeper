@@ -32,7 +32,7 @@ export function checkParsedStaticToolPolicy(
 
   if (definition.policy.refundAmountLimits) {
     const refundInput = input as CreateRefundInput;
-    const noun = definition.name === "create_refund" ? "refund" : "goodwill";
+    const noun = definition.name === "create_refund" ? "refund" : "gift card";
     const hasPerCallCap = settings.maxRefundAmount !== null && settings.maxRefundAmount > 0;
     const hasDailyCap = settings.dailyRefundCap !== null && settings.dailyRefundCap > 0;
 

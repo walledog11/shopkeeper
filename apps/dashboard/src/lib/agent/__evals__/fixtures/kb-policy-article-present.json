@@ -2,15 +2,23 @@
   "id": "kb-policy-article-present",
   "description": "Customer asks about return policy. A KB article with the answer is pre-loaded - the agent should reply directly from the pre-loaded content, no need to call search_kb.",
   "setup": {
-    "classifierIntents": { "policy_question": true },
+    "classifierIntents": {
+      "policy_question": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Liam Park",
     "customerPlatformId": "liam@example.com",
     "shopifyCustomerId": "10000000006",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "Hi, what is your return policy? How long do I have?" }
+      {
+        "senderType": "customer",
+        "contentText": "Hi, what is your return policy? How long do I have?"
+      }
     ],
     "kbArticles": [
       {
@@ -22,8 +30,17 @@
   },
   "instruction": "Reply to the customer about the return policy.",
   "expectedPlan": {
-    "mustCallTools": ["send_reply"],
-    "mustNotCallTools": ["create_refund", "escalate_to_human", "search_kb"],
-    "replyMustInclude": ["14 days"]
-  }
+    "mustCallTools": [
+      "send_reply"
+    ],
+    "mustNotCallTools": [
+      "create_refund",
+      "escalate_to_human",
+      "search_kb"
+    ],
+    "replyMustInclude": [
+      "14 days"
+    ]
+  },
+  "suite": "core"
 }

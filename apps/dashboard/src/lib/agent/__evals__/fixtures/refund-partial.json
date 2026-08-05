@@ -1,17 +1,27 @@
 {
   "id": "refund-partial",
-  "description": "Multi-item order where the customer wants a refund for only one defective item and explicitly wants to keep the rest. The agent should issue a partial refund for the affected item and reply — not refund the whole order, cancel it, or escalate. Both per-item value and the order total are under the cap.",
+  "description": "Multi-item order where the customer wants an item-only partial refund. Partial refunds are merchant-only, so the agent must escalate and must not promise or issue money.",
   "setup": {
-    "classifierIntents": { "mutative_request": true },
+    "classifierIntents": {
+      "mutative_request": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Theo Brooks",
     "customerPlatformId": "theo@example.com",
     "shopifyCustomerId": "10000001021",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
-    "orgSettings": { "maxRefundAmount": 100 },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
+    "orgSettings": {
+      "maxRefundAmount": 100
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "Order #1021 - the candle arrived cracked but the tote is fine. I just want a refund for the candle ($18), keeping the tote. Thanks!" }
+      {
+        "senderType": "customer",
+        "contentText": "Order #1021 - the candle arrived cracked but the tote is fine. I just want a refund for the candle ($18), keeping the tote. Thanks!"
+      }
     ],
     "recentOrders": [
       {
@@ -47,18 +57,25 @@
   },
   "instruction": "Reply to the customer and process their refund request.",
   "expectedPlan": {
-    "mustCallTools": ["create_refund", "send_reply"],
-    "mustNotCallTools": ["escalate_to_human", "cancel_order"],
-    "mustCallToolsWithInput": [
-      { "tool": "create_refund", "inputIncludes": { "order_id": "9000001021" } }
-    ]
+    "mustCallTools": [
+      "escalate_to_human"
+    ],
+    "mustNotCallTools": [
+      "create_refund",
+      "create_gift_card",
+      "cancel_order",
+      "send_reply"
+    ],
+    "mustEscalate": true
   },
   "expectedRubric": {
     "checks": [
       {
-        "id": "partial_not_full",
-        "description": "The refund and reply are scoped to the cracked candle only (a partial refund), not the full order value, and the reply does not offer to refund or take back the tote the customer wants to keep."
+        "id": "partial_refund_not_promised",
+        "description": "The plan does not claim or promise that the partial refund was completed and routes it to merchant review.",
+        "gate": true
       }
     ]
-  }
+  },
+  "suite": "core"
 }

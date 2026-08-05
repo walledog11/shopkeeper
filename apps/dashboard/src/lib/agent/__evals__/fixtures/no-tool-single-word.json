@@ -8,15 +8,23 @@
     "customerName": "Sam Rivera",
     "customerPlatformId": "sam.rivera@example.com",
     "shopifyCustomerId": "10000003001",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "?" }
+      {
+        "senderType": "customer",
+        "contentText": "?"
+      }
     ],
     "recentOrders": []
   },
   "instruction": "Reply to the customer.",
   "expectedPlan": {
-    "mustCallTools": ["send_reply"],
+    "mustCallTools": [
+      "send_reply"
+    ],
     "mustNotCallTools": [
       "escalate_to_human",
       "create_refund",
@@ -26,5 +34,6 @@
       "update_shopify_order_address",
       "update_shopify_customer_info"
     ]
-  }
+  },
+  "suite": "extended"
 }

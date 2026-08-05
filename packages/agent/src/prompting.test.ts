@@ -108,13 +108,12 @@ describe('buildSystemPrompt', () => {
     }), {
       blockCancellations: true,
       maxRefundAmount: 50,
-      maxDiscountPercent: 10,
     });
 
     expect(prompt).toContain('text message (Telegram/iMessage)');
     expect(prompt).toMatch(/ask them one short clarifying question/i);
     expect(prompt).toMatch(/Never escalate the operator conversation/i);
-    expect(prompt).toMatch(/workspace cap blocked it/i);
+    expect(prompt).toMatch(/compensation limit blocked it/i);
     expect(prompt).not.toMatch(/call escalate_to_human/i);
   });
 

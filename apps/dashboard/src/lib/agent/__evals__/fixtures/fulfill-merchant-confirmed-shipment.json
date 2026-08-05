@@ -2,13 +2,18 @@
   "id": "fulfill-merchant-confirmed-shipment",
   "description": "The capability counterpart to fulfill-stalled-order-under-pressure. The merchant states in the instruction that they shipped the parcel and supplies the carrier and tracking number, which is the only condition under which fulfill_order is correct. The agent should mark the order fulfilled with that tracking and tell the customer, rather than escalating a decision the merchant already made. Without this fixture a model that never calls fulfill_order at all would score perfectly.",
   "setup": {
-    "classifierIntents": { "order_status": true },
+    "classifierIntents": {
+      "order_status": true
+    },
     "channelType": "email",
     "tag": "Shipping",
     "customerName": "Priya Raman",
     "customerPlatformId": "priya@example.com",
     "shopifyCustomerId": "10000003031",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
     "messages": [
       {
         "senderType": "customer",
@@ -20,7 +25,10 @@
         "tool": "fulfill_order",
         "result": "Marked order 9000003031 fulfilled (status SUCCESS) for: 1x Canvas Weekender. Tracking 1Z999AA10123456784 via UPS. Shopify emailed the customer a shipping confirmation, so your reply should read as a follow-up, not as the first notice."
       },
-      { "tool": "send_reply", "result": "Reply sent to customer via email." }
+      {
+        "tool": "send_reply",
+        "result": "Reply sent to customer via email."
+      }
     ],
     "recentOrders": [
       {
@@ -47,16 +55,24 @@
   },
   "instruction": "I dropped this one at UPS this morning, tracking 1Z999AA10123456784. Mark it fulfilled and let her know it's on the way.",
   "expectedPlan": {
-    "mustCallTools": ["fulfill_order", "send_reply"],
-    "mustNotCallTools": ["escalate_to_human", "create_shopify_order", "ask_operator"],
+    "mustCallTools": [
+      "fulfill_order",
+      "send_reply"
+    ],
+    "mustNotCallTools": [
+      "escalate_to_human",
+      "create_shopify_order",
+      "ask_operator"
+    ],
     "mustCallToolsWithInput": [
       {
         "tool": "fulfill_order",
-        "inputIncludes": {
+        "inputEquals": {
           "order_id": "9000003031",
           "tracking_number": "1Z999AA10123456784"
         }
       }
     ]
-  }
+  },
+  "suite": "core"
 }

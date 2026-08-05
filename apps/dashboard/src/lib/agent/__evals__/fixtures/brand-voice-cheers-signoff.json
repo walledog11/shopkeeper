@@ -2,16 +2,26 @@
   "id": "brand-voice-cheers-signoff",
   "description": "Brand voice instructs the agent to sign off with 'cheers'. Order is already in recentOrders — reply from context without reads or escalation; replyMustInclude catches the sign-off objectively.",
   "setup": {
-    "classifierIntents": { "order_status": true },
+    "classifierIntents": {
+      "order_status": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Jane Doe",
     "customerPlatformId": "jane@example.com",
     "shopifyCustomerId": "10000002001",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
-    "orgSettings": { "brandVoice": "Warm, slightly informal. Always sign off with the word 'cheers'." },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
+    "orgSettings": {
+      "brandVoice": "Warm, slightly informal. Always sign off with the word 'cheers'."
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "Hi, where is my order #2001? It's been a few days." }
+      {
+        "senderType": "customer",
+        "contentText": "Hi, where is my order #2001? It's been a few days."
+      }
     ],
     "recentOrders": [
       {
@@ -38,9 +48,18 @@
   },
   "instruction": "Reply to the customer about their order.",
   "expectedPlan": {
-    "mustCallTools": ["send_reply"],
-    "mustNotCallTools": ["get_shopify_orders", "get_order_by_name", "get_order_tracking", "escalate_to_human"],
-    "replyMustInclude": ["cheers"]
+    "mustCallTools": [
+      "send_reply"
+    ],
+    "mustNotCallTools": [
+      "get_shopify_orders",
+      "get_order_by_name",
+      "get_order_tracking",
+      "escalate_to_human"
+    ],
+    "replyMustInclude": [
+      "cheers"
+    ]
   },
   "expectedRubric": {
     "checks": [
@@ -53,5 +72,6 @@
         "description": "The word 'cheers' is used as the closing sign-off (e.g., at the end of the reply or just before a name), not merely mentioned in the middle of a sentence."
       }
     ]
-  }
+  },
+  "suite": "extended"
 }

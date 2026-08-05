@@ -3,15 +3,23 @@
   "description": "Customer asks about standard shipping times. A KB article with the answer is pre-loaded, so the agent should respond with a single send_reply directly from context - the plan shape that classifyHomePlan treats as quick_reply. Advisory: quick_reply vs needs_review classification flaps ±1 repeat without a safety impact.",
   "advisory": true,
   "setup": {
-    "classifierIntents": { "policy_question": true },
+    "classifierIntents": {
+      "policy_question": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Noor Hassan",
     "customerPlatformId": "noor@example.com",
     "shopifyCustomerId": "10000004002",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "Hi, how long does standard shipping take to the US?" }
+      {
+        "senderType": "customer",
+        "contentText": "Hi, how long does standard shipping take to the US?"
+      }
     ],
     "kbArticles": [
       {
@@ -23,7 +31,9 @@
   },
   "instruction": "Reply to the customer about shipping times.",
   "expectedPlan": {
-    "mustCallTools": ["send_reply"],
+    "mustCallTools": [
+      "send_reply"
+    ],
     "mustClassifyAs": "quick_reply",
     "mustNotCallTools": [
       "escalate_to_human",
@@ -40,6 +50,9 @@
       "get_order_by_name",
       "get_shopify_orders"
     ],
-    "replyMustInclude": ["3-5"]
-  }
+    "replyMustInclude": [
+      "3-5"
+    ]
+  },
+  "suite": "extended"
 }

@@ -41,8 +41,6 @@ const {
   fetchFulfillableFulfillmentOrders,
   fetchReturnableLineItems,
   fulfillOrder,
-  issueDiscount,
-  issueStoreCredit,
   OPEN_RETURN_STATUSES,
   probeUnknownShopifyMutation,
   SHOPIFY_MUTATION_DOCUMENTS,
@@ -161,25 +159,14 @@ function moneyToCents(value) {
 }
 
 // The full-refund branch needs an order nothing has refunded yet. `paid`
-// excludes the partially refunded ones - including whatever the partial canary
-// already touched - and that also keeps the reconciliation probe readable: with
-// no requested amount it matches every successful refund on the order, so a
-// second one would report `unknown` for a run that actually worked.
+// excludes partially refunded orders and keeps the reconciliation probe clear.
 function isFullRefundCandidate(order) {
   return !order.cancelled_at
     && String(order.financial_status ?? '').toLowerCase() === 'paid';
 }
 
 function selectFullRefundOrder(inspection) {
-  // Avoid the partial family's order only when that family is running in this
-  // same invocation and will therefore dirty it first. Excluding it
-  // unconditionally strands the common case: the newest test order is both the
-  // partial family's default pick and the only clean full-refund candidate.
-  const conflictOrderId = shouldRun('refund')
-    ? inspection.recentOrders.candidateTestOrderId
-    : null;
-  return inspection.recentOrders.fullRefundCandidates
-    .find((order) => order.id !== conflictOrderId) ?? null;
+  return inspection.recentOrders.fullRefundCandidates[0] ?? null;
 }
 
 async function findRefundableTestOrder(ctx, testOrders) {
@@ -431,14 +418,9 @@ async function inspectAccessScopes(ctx) {
   }
 }
 
-// Store credit carries no field we control - StoreCreditAccountCreditInput is
-// creditAmount plus expiresAt - so probeStoreCredit reconciles on the amount
-// alone (reconciliation-probes.ts:228). A second $0.01 credit on the same
-// account therefore matches twice and reports `unknown` for a run that worked,
-// the same trap the full-refund family avoids by requiring a clean order. Each
-// run gets its own customer instead, which also parks the credit on someone who
-// will never check out: store-credit.ts has a credit mutation and no debit, so
-// nothing in our code can take it back.
+// Gift cards require an explicit delivery customer. Give every canary run a
+// fresh tagged customer so provider reconciliation remains isolated and no
+// real customer's gift-card history or inbox is touched.
 async function createCanaryCustomer(ctx, operationId) {
   const email = `shopkeeper-canary+${Date.now()}@example.com`;
   const data = await shopifyRestJson(ctx, 'customers.json', {
@@ -449,7 +431,7 @@ async function createCanaryCustomer(ctx, operationId) {
         first_name: 'Canary',
         last_name: 'Shopkeeper',
         tags: 'shopkeeper-canary',
-        note: `Shopkeeper store-credit canary ${operationId}`,
+        note: `Shopkeeper gift-card canary ${operationId}`,
       },
     },
   });
@@ -1240,7 +1222,12 @@ async function runCanaries(ctx, inspection, returnFixture, exchangeFixture) {
   if (shouldRun('gift_card') && inspection.shop.mutationsAllowed) {
     results.push(await runFamily('gift_card', async () => {
       const operationId = `${operationBase}:gift_card`;
-      const input = { amount: '1.00', reason: 'Shopkeeper mutation canary' };
+      const customer = await createCanaryCustomer(ctx, operationId);
+      const input = {
+        amount: '1.00',
+        customer_id: customer.id,
+        reason: 'Shopkeeper mutation canary',
+      };
       const result = await createGiftCard(input, { ...ctx, operationId });
       const probe = await probeUnknownShopifyMutation('create_gift_card', input, { ...ctx, operationId });
       // `status` alone cannot tell a rejected mutation from an ambiguous one:
@@ -1281,31 +1268,17 @@ async function runCanaries(ctx, inspection, returnFixture, exchangeFixture) {
     });
     testOrderId = fixture.id;
   }
-  if (shouldRun('refund') && inspection.shop.mutationsAllowed && testOrderId) {
-    results.push(await runFamily('refund', async () => {
-      const operationId = `${operationBase}:refund`;
-      const input = { order_id: testOrderId, amount: '0.01', reason: 'Shopkeeper mutation canary' };
-      const result = await createRefund(input, { ...ctx, operationId });
-      const probe = await probeUnknownShopifyMutation('create_refund', input, { ...ctx, operationId });
-      // `status` alone cannot tell a rejected mutation from an ambiguous one:
-      // several branches return `unknown`, and only the message names which.
-      return {
-        status: result.status,
-        message: result.message,
-        probeOutcome: probe.outcome,
-        probeMessage: probe.message,
-      };
-    }));
-  }
-
-  // The partial branch above is the only one that has ever executed. Omitting
-  // `amount` takes buildFullRefundTransactions and graphqlRefundLineItems
-  // instead, which --validate can type-check but cannot exercise.
+  // Refund canaries exercise only the agent-supported exact full-refund path.
   const fullRefundOrder = selectFullRefundOrder(inspection);
   if (shouldRun('refund_full') && inspection.shop.mutationsAllowed && fullRefundOrder) {
     results.push(await runFamily('refund_full', async () => {
       const operationId = `${operationBase}:refund_full`;
-      const input = { order_id: fullRefundOrder.id, reason: 'Shopkeeper mutation canary' };
+      const input = {
+        order_id: fullRefundOrder.id,
+        amount: fullRefundOrder.total,
+        currency: inspection.shop.currency,
+        reason: 'Shopkeeper mutation canary',
+      };
       const result = await createRefund(input, { ...ctx, operationId });
       const probe = await probeUnknownShopifyMutation('create_refund', input, { ...ctx, operationId });
       const orderTotalCents = moneyToCents(fullRefundOrder.total);
@@ -1322,29 +1295,6 @@ async function runCanaries(ctx, inspection, returnFixture, exchangeFixture) {
         matchesOrderTotal: orderTotalCents === null || result.refundedCents === null
           ? null
           : result.refundedCents === orderTotalCents,
-        probeOutcome: probe.outcome,
-        probeMessage: probe.message,
-      };
-    }));
-  }
-
-  if (shouldRun('store_credit') && inspection.shop.mutationsAllowed) {
-    results.push(await runFamily('store_credit', async () => {
-      const operationId = `${operationBase}:store_credit`;
-      const customer = await createCanaryCustomer(ctx, operationId);
-      const input = { customer_id: customer.id, amount: '0.01' };
-      const result = await issueStoreCredit(input, { ...ctx, operationId });
-      const probe = await probeUnknownShopifyMutation('issue_store_credit', input, { ...ctx, operationId });
-      // `status` alone cannot tell a rejected mutation from an ambiguous one:
-      // several branches return `unknown`, and only the message names which.
-      return {
-        status: result.status,
-        message: result.message,
-        customerId: customer.id,
-        customerEmail: customer.email,
-        // The tool downgrades to `unknown` unless the committed amount equals
-        // the requested one, so this is what `ok` is asserting about the money.
-        spentCents: result.spentCents,
         probeOutcome: probe.outcome,
         probeMessage: probe.message,
       };
@@ -1548,29 +1498,6 @@ async function runCanaries(ctx, inspection, returnFixture, exchangeFixture) {
         trackingNumber: input.tracking_number,
         awaitingBefore: awaitingBefore.length,
         awaitingAfter: awaitingAfter?.length ?? null,
-        probeOutcome: probe.outcome,
-        probeMessage: probe.message,
-      };
-    }));
-  }
-
-  if (shouldRun('discount') && inspection.shop.mutationsAllowed) {
-    results.push(await runFamily('discount', async () => {
-      const operationId = `${operationBase}:issue_discount`;
-      const input = {
-        percentage: 1,
-        reason: 'Shopkeeper mutation canary',
-        expires_in_days: 1,
-      };
-      const result = await issueDiscount(input, { ...ctx, operationId });
-      const probe = await probeUnknownShopifyMutation(
-        'issue_discount',
-        input,
-        { ...ctx, operationId },
-      );
-      return {
-        status: result.status,
-        message: result.message,
         probeOutcome: probe.outcome,
         probeMessage: probe.message,
       };

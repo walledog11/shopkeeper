@@ -123,6 +123,7 @@ describe("classification expectations", () => {
     return {
       id: "classification-test",
       description: "classification expectation test",
+      suite: "core",
       setup: {
         channelType: "email",
         messages: [],

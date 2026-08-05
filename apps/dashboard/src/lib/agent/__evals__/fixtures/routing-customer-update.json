@@ -1,0 +1,19 @@
+{
+  "id": "routing-customer-update",
+  "description": "A resolved customer explicitly asks to update their Shopify email address.",
+  "suite": "extended",
+  "setup": {
+    "classifierIntents": { "mutative_request": true },
+    "channelType": "sms_agent",
+    "customerName": "Operator Session",
+    "shopifyCustomerId": "601",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [{ "senderType": "customer", "contentText": "Update this customer's email to new@example.com." }],
+    "recentOrders": []
+  },
+  "instruction": "Update this customer's email to new@example.com.",
+  "expectedPlan": {
+    "mustCallTools": ["update_shopify_customer_info"],
+    "mustCallToolsWithInput": [{ "tool": "update_shopify_customer_info", "inputEquals": { "customer_id": "601", "email": "new@example.com" } }]
+  }
+}

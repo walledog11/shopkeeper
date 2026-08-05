@@ -19,6 +19,8 @@ function orderResponse() {
     order: {
       id: 456,
       currency: "USD",
+      financial_status: "paid",
+      refunds: [],
       line_items: [{ id: 11, title: "Hat", quantity: 1, current_quantity: 1 }],
     },
   });
@@ -86,10 +88,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-// The branch that had never executed against a real store: omitting `amount`
-// takes buildFullRefundTransactions and graphqlRefundLineItems instead of the
-// partial path. These assert the document variables, which is the half a live
-// canary run cannot isolate.
+// Every accepted call uses the full line-item and shipping path. The supplied
+// amount is an assertion against Shopify's complete refundable balance.
 describe("createRefund full-refund input", () => {
   async function fullRefundVariables() {
     const fetchMock = vi.fn()
@@ -109,7 +109,7 @@ describe("createRefund full-refund input", () => {
       }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await createRefund({ order_id: "456" }, ctx);
+    const result = await createRefund({ order_id: "456", amount: "25.50", currency: "USD" }, ctx);
     return { result, variables: JSON.parse(fetchMock.mock.calls[2][1].body as string).variables };
   }
 
@@ -135,7 +135,7 @@ describe("createRefund full-refund input", () => {
     expect(result).toMatchObject({ status: "ok", refundedCents: 2550 });
   });
 
-  it("asks for the shipping and line items the partial path leaves out", async () => {
+  it("always asks for full shipping and all refundable line items", async () => {
     const { variables } = await fullRefundVariables();
 
     expect(variables.input.shipping).toEqual({ fullRefund: true });
@@ -151,19 +151,69 @@ describe("createRefund full-refund input", () => {
     ]);
   });
 
-  it("sends neither of them when an amount is given", async () => {
+  it("policy-blocks a custom amount before mutation", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(orderResponse())
-      .mockResolvedValueOnce(multiTransactionCalculationResponse())
-      .mockResolvedValueOnce(refundResponse());
+      .mockResolvedValueOnce(multiTransactionCalculationResponse());
     vi.stubGlobal("fetch", fetchMock);
 
-    await createRefund({ order_id: "456", amount: "20.00" }, ctx);
-    const { input } = JSON.parse(fetchMock.mock.calls[2][1].body as string).variables;
+    const result = await createRefund({ order_id: "456", amount: "20.00" }, ctx);
 
-    expect(input.shipping).toBeUndefined();
-    expect(input.refundLineItems).toBeUndefined();
-    expect(input.transactions).toHaveLength(1);
+    expect(result).toMatchObject({ status: "policy_block", refundedCents: null, data: { code: "amount_mismatch" } });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ["partially_refunded", "order_not_paid"],
+    ["refunded", "order_not_paid"],
+    ["authorized", "order_not_paid"],
+    ["voided", "order_not_paid"],
+  ])("policy-blocks financial status %s before calculation", async (financialStatus, code) => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
+      order: {
+        id: 456,
+        currency: "USD",
+        financial_status: financialStatus,
+        refunds: [],
+        line_items: [{ id: 11, title: "Hat", quantity: 1, current_quantity: 1 }],
+      },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await createRefund({ order_id: "456", amount: "20.00" }, ctx);
+
+    expect(result).toMatchObject({ status: "policy_block", data: { code } });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("policy-blocks an existing refund record before calculation", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
+      order: {
+        id: 456,
+        currency: "USD",
+        financial_status: "paid",
+        refunds: [{ id: 1 }],
+        line_items: [{ id: 11, title: "Hat", quantity: 1, current_quantity: 1 }],
+      },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await createRefund({ order_id: "456", amount: "20.00" }, ctx);
+
+    expect(result).toMatchObject({ status: "policy_block", data: { code: "prior_refund" } });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("policy-blocks a requested currency mismatch before mutation", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(orderResponse())
+      .mockResolvedValueOnce(calculationResponse());
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await createRefund({ order_id: "456", amount: "20.00", currency: "CAD" }, ctx);
+
+    expect(result).toMatchObject({ status: "policy_block", data: { code: "currency_mismatch" } });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
 

@@ -7,15 +7,30 @@
     "customerName": "Operator Session",
     "customerPlatformId": "operator-session@internal.local",
     "shopifyCustomerId": null,
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "What's the status of order #1001?" }
+      {
+        "senderType": "customer",
+        "contentText": "What's the status of order #1001?"
+      }
     ],
     "recentOrders": []
   },
   "instruction": "What's the status of order #1001?",
   "expectedPlan": {
-    "mustCallTools": ["get_order_by_name"],
-    "mustNotCallTools": ["search_shopify_customers", "create_refund", "cancel_order", "send_email", "send_reply"]
-  }
+    "mustCallTools": [
+      "get_order_by_name"
+    ],
+    "mustNotCallTools": [
+      "search_shopify_customers",
+      "create_refund",
+      "cancel_order",
+      "send_email",
+      "send_reply"
+    ]
+  },
+  "suite": "extended"
 }

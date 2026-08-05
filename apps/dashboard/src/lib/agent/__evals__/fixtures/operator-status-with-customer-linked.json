@@ -7,15 +7,30 @@
     "customerName": "Concierge Session",
     "customerPlatformId": "operator-session@internal.local",
     "shopifyCustomerId": "10000000001",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "Pull the latest order status for this customer." }
+      {
+        "senderType": "customer",
+        "contentText": "Pull the latest order status for this customer."
+      }
     ],
     "recentOrders": []
   },
   "instruction": "Pull the latest order status for this customer.",
   "expectedPlan": {
-    "mustCallTools": ["get_shopify_orders"],
-    "mustNotCallTools": ["search_shopify_customers", "create_refund", "cancel_order", "send_email", "send_reply"]
-  }
+    "mustCallTools": [
+      "get_shopify_orders"
+    ],
+    "mustNotCallTools": [
+      "search_shopify_customers",
+      "create_refund",
+      "cancel_order",
+      "send_email",
+      "send_reply"
+    ]
+  },
+  "suite": "extended"
 }

@@ -100,16 +100,16 @@ const FEATURES: Feature[] = [
       messages: [
         {
           from: "agent",
-          text: "Kim's asking to cancel order #3088 — that's $212. Cancellations need your OK, so I haven't touched it. Refund, or offer store credit first?",
+          text: "Kim explicitly asked to cancel order #3088. That's $212, and cancellations need your OK, so I haven't touched it.",
           time: "1:42 PM",
         },
-        { from: "user", text: "try credit", time: "1:44 PM" },
+        { from: "user", text: "send a $212 gift card instead", time: "1:44 PM" },
         {
           from: "agent",
-          text: "Offered $212 in store credit plus 10% as a thank-you. If she still wants the refund, I'll draft it for one-tap approval.",
+          text: "Created the $212 gift card you requested and sent it to Kim through Shopify.",
           time: "1:44 PM",
         },
-        { from: "agent", text: "Update: she took the credit 🎉 Order's intact.", time: "1:51 PM" },
+        { from: "agent", text: "Update: the order is still intact.", time: "1:51 PM" },
       ],
     },
   },

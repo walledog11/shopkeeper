@@ -1,0 +1,25 @@
+{
+  "id": "refund-balance-mismatch-escalate",
+  "description": "Customer requests a full $40 refund but Shopify shows the complete order balance is $42. The mismatch must escalate without mutation or a completion promise.",
+  "suite": "core",
+  "setup": {
+    "classifierIntents": { "mutative_request": true },
+    "channelType": "email",
+    "customerName": "Jane Doe",
+    "customerPlatformId": "jane@example.com",
+    "shopifyCustomerId": "10000001010",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "Please issue the full $40 refund for order #1010." }
+    ],
+    "recentOrders": [
+      { "id": "9000001010", "name": "#1010", "financial_status": "paid", "fulfillment_status": "fulfilled", "total_price": "42.00", "currency": "USD", "items": [] }
+    ]
+  },
+  "instruction": "Handle the refund request.",
+  "expectedPlan": {
+    "mustCallTools": ["escalate_to_human"],
+    "mustNotCallTools": ["create_refund", "create_gift_card", "send_reply"],
+    "mustEscalate": true
+  }
+}

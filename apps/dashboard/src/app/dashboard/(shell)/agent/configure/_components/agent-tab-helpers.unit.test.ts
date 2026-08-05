@@ -53,7 +53,6 @@ describe("agent tab helpers", () => {
       makeSettings({ agentName: "   " }),
       {
         maxRefund: "12.50",
-        maxDiscount: "15",
         dailyRefundCap: "",
         dailyLLMSpendCap: "not-a-number",
         digestHour: "99",
@@ -66,7 +65,6 @@ describe("agent tab helpers", () => {
 
     expect(payload.agentName).toBe("Shopkeeper");
     expect(payload.maxRefundAmount).toBe(12.5);
-    expect(payload.maxDiscountPercent).toBe(15);
     expect(payload.dailyRefundCap).toBeNull();
     expect(payload.dailyLLMSpendCapUsd).toBeNull();
     expect(payload.digestHour).toBe(23);
@@ -90,7 +88,6 @@ describe("agent tab helpers", () => {
 
     expect(raw).toEqual({
       maxRefund: "",
-      maxDiscount: "",
       dailyRefundCap: "200",
       dailyLLMSpendCap: "20",
       digestHour: "10",

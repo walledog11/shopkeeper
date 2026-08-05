@@ -1,0 +1,23 @@
+{
+  "id": "gift-card-missing-amount-escalate",
+  "description": "Customer requests a gift card but gives no fixed value. Vague non-cash compensation must escalate without inventing an amount.",
+  "suite": "core",
+  "setup": {
+    "classifierIntents": { "mutative_request": true },
+    "channelType": "email",
+    "customerName": "Mia Chen",
+    "customerPlatformId": "mia@example.com",
+    "shopifyCustomerId": "10000005551",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "The mug arrived chipped. Please send me a gift card for the trouble." }
+    ],
+    "recentOrders": []
+  },
+  "instruction": "Handle the gift-card request.",
+  "expectedPlan": {
+    "mustCallTools": ["escalate_to_human"],
+    "mustNotCallTools": ["create_gift_card", "create_refund", "issue_store_credit", "issue_discount", "send_reply"],
+    "mustEscalate": true
+  }
+}

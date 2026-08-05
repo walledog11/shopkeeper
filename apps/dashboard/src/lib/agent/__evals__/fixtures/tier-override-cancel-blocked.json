@@ -2,16 +2,27 @@
   "id": "tier-override-cancel-blocked",
   "description": "Trusted-tier org with blockCancellations: true override. The merchant override must win over the tier default - the agent must not cancel the order and must escalate instead. Classifier must mark needs_review (the override blocks auto-execute).",
   "setup": {
-    "classifierIntents": { "mutative_request": true },
+    "classifierIntents": {
+      "mutative_request": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Devon Cruz",
     "customerPlatformId": "devon@example.com",
     "shopifyCustomerId": "10000004801",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
-    "orgSettings": { "autonomyTier": "trusted", "blockCancellations": true },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
+    "orgSettings": {
+      "autonomyTier": "trusted",
+      "blockCancellations": true
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "Please cancel order #4801 - I no longer want it." }
+      {
+        "senderType": "customer",
+        "contentText": "Please cancel order #4801 - I no longer want it."
+      }
     ],
     "recentOrders": [
       {
@@ -38,7 +49,14 @@
   },
   "instruction": "Reply to the customer about their cancellation request.",
   "expectedPlan": {
-    "mustNotCallTools": ["cancel_order", "create_refund"],
-    "mustClassifyAs": "needs_review"
-  }
+    "mustNotCallTools": [
+      "cancel_order",
+      "create_refund"
+    ],
+    "mustClassifyAs": "needs_review",
+    "mustCallTools": [
+      "send_reply"
+    ]
+  },
+  "suite": "core"
 }

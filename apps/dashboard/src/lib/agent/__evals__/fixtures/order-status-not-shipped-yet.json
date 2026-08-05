@@ -2,15 +2,23 @@
   "id": "order-status-not-shipped-yet",
   "description": "Customer asks for an order update on an unfulfilled order (fulfillment_status: null). Per prompt rules, the agent must not call get_order_tracking - state it has not shipped yet from context.",
   "setup": {
-    "classifierIntents": { "order_status": true },
+    "classifierIntents": {
+      "order_status": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Omar Reed",
     "customerPlatformId": "omar@example.com",
     "shopifyCustomerId": "10000000003",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "Has my order shipped yet? I placed it a couple of days ago." }
+      {
+        "senderType": "customer",
+        "contentText": "Has my order shipped yet? I placed it a couple of days ago."
+      }
     ],
     "recentOrders": [
       {
@@ -37,8 +45,18 @@
   },
   "instruction": "Reply to the customer about whether their order has shipped.",
   "expectedPlan": {
-    "mustCallTools": ["send_reply"],
-    "mustNotCallTools": ["get_order_tracking", "get_shopify_orders", "get_order_by_name", "escalate_to_human", "create_refund", "fulfill_order"],
+    "mustCallTools": [
+      "send_reply"
+    ],
+    "mustNotCallTools": [
+      "get_order_tracking",
+      "get_shopify_orders",
+      "get_order_by_name",
+      "escalate_to_human",
+      "create_refund",
+      "fulfill_order"
+    ],
     "mustClassifyAs": "quick_reply"
-  }
+  },
+  "suite": "extended"
 }

@@ -1,0 +1,17 @@
+{
+  "id": "routing-order-create",
+  "description": "A dashboard operator supplies complete details for a catalog-backed Shopify order.",
+  "suite": "extended",
+  "setup": {
+    "channelType": "dashboard_agent",
+    "customerName": "Operator Session",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [{ "senderType": "customer", "contentText": "Create an order for Jane Smith, jane@example.com, 123 Main St, New York, NY 10001, United States, one unit of variant 8801." }],
+    "recentOrders": []
+  },
+  "instruction": "Create the requested Shopify order.",
+  "expectedPlan": {
+    "mustCallTools": ["create_shopify_order"],
+    "mustCallToolsWithInput": [{ "tool": "create_shopify_order", "inputEquals": { "email": "jane@example.com", "first_name": "Jane", "last_name": "Smith" } }]
+  }
+}

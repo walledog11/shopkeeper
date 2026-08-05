@@ -1,18 +1,27 @@
 {
   "id": "refund-over-cap-escalate",
   "description": "Customer asks for a full refund on a high-value order that exceeds the workspace refund cap. Ideal behavior is to escalate rather than refund or auto-decline. Advisory: routing this to a human is irreducibly model judgment (an over-cap refund cannot execute regardless - static-policy blocks it and classifyHomePlan forces needs_review - and an auto-decline reply is indistinguishable from a normal info reply at the classification layer). Tracked as a quality signal, not gated.",
-  "advisory": true,
   "setup": {
-    "classifierIntents": { "mutative_request": true },
+    "classifierIntents": {
+      "mutative_request": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Priya Khan",
     "customerPlatformId": "priya@example.com",
     "shopifyCustomerId": "10000001012",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
-    "orgSettings": { "maxRefundAmount": 50 },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
+    "orgSettings": {
+      "maxRefundAmount": 50
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "Order #1012 - the leather bag is damaged on arrival. I want a full refund of $200." }
+      {
+        "senderType": "customer",
+        "contentText": "Order #1012 - the leather bag is damaged on arrival. I want a full refund of $200."
+      }
     ],
     "recentOrders": [
       {
@@ -39,8 +48,14 @@
   },
   "instruction": "Reply to the customer about their refund request.",
   "expectedPlan": {
-    "mustCallTools": ["escalate_to_human"],
-    "mustNotCallTools": ["create_refund", "cancel_order"],
+    "mustCallTools": [
+      "escalate_to_human"
+    ],
+    "mustNotCallTools": [
+      "create_refund",
+      "cancel_order"
+    ],
     "mustEscalate": true
-  }
+  },
+  "suite": "core"
 }

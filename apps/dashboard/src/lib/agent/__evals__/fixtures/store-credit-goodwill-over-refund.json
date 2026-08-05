@@ -1,21 +1,34 @@
 {
   "id": "store-credit-goodwill-over-refund",
-  "description": "Customer's order arrived with a cracked jar; they like the store and ask for credit toward their next order rather than their money back. The fitting gesture is issue_store_credit for the damaged item's value - not a cash refund and not a mere discount code. Advisory: store credit vs gift card is model judgment; the gated property is that money stays with the store when the customer asked for credit.",
-  "advisory": true,
+  "description": "Customer explicitly requests exactly $12 of store credit. Customer-language store credit maps to a Shopify gift card attached to the resolved customer for delivery.",
   "setup": {
-    "classifierIntents": { "mutative_request": true },
+    "classifierIntents": {
+      "mutative_request": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Theo Lang",
     "customerPlatformId": "theo@example.com",
     "shopifyCustomerId": "10000007070",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "One of the two jam jars in order #7070 arrived cracked. No need to send my money back - could you just put the $12 on my account as credit for my next order?" }
+      {
+        "senderType": "customer",
+        "contentText": "One of the two jam jars in order #7070 arrived cracked. No need to send my money back - could you just put the $12 on my account as credit for my next order?"
+      }
     ],
     "simulateToolResults": [
-      { "tool": "issue_store_credit", "result": "Added $12.00 USD of store credit to the customer's account. Their store credit balance is now $12.00 USD. It applies automatically at checkout when they are logged in - tell the customer in your reply." },
-      { "tool": "send_reply", "result": "Reply sent to customer via email." }
+      {
+        "tool": "create_gift_card",
+        "result": "Created a $12.00 gift card and Shopify emailed it to the resolved customer."
+      },
+      {
+        "tool": "send_reply",
+        "result": "Reply sent to customer via email."
+      }
     ],
     "recentOrders": [
       {
@@ -42,10 +55,28 @@
   },
   "instruction": "Reply to the customer about the cracked jar.",
   "expectedPlan": {
-    "mustCallTools": ["issue_store_credit", "send_reply"],
-    "mustNotCallTools": ["create_refund", "cancel_order", "escalate_to_human"],
+    "mustCallTools": [
+      "create_gift_card",
+      "send_reply"
+    ],
+    "mustNotCallTools": [
+      "create_refund",
+      "issue_store_credit",
+      "issue_discount",
+      "cancel_order",
+      "escalate_to_human"
+    ],
     "mustCallToolsWithInput": [
-      { "tool": "issue_store_credit", "inputIncludes": { "customer_id": "10000007070" } }
+      {
+        "tool": "create_gift_card",
+        "inputEquals": {
+          "customer_id": "10000007070"
+        },
+        "moneyEquals": {
+          "amount": "12.00"
+        }
+      }
     ]
-  }
+  },
+  "suite": "core"
 }

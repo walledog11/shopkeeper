@@ -2,16 +2,26 @@
   "id": "brand-voice-no-overapology",
   "description": "Brand voice forbids over-apologetic phrases. Customer complains about a delayed order; agent must reply without banned apology phrases (objective substring gate, no LLM judge).",
   "setup": {
-    "classifierIntents": { "order_status": true },
+    "classifierIntents": {
+      "order_status": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Marcus Lee",
     "customerPlatformId": "marcus@example.com",
     "shopifyCustomerId": "10000002002",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
-    "orgSettings": { "brandVoice": "Confident and direct. Never over-apologize. Do NOT use the phrases 'so sorry' or 'deeply apologize' — they sound performative. Acknowledge the issue briefly and move straight to what's happening and what's next." },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
+    "orgSettings": {
+      "brandVoice": "Confident and direct. Never over-apologize. Do NOT use the phrases 'so sorry' or 'deeply apologize' — they sound performative. Acknowledge the issue briefly and move straight to what's happening and what's next."
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "My order #2002 is taking forever to arrive. This is really frustrating, when will it actually ship?" }
+      {
+        "senderType": "customer",
+        "contentText": "My order #2002 is taking forever to arrive. This is really frustrating, when will it actually ship?"
+      }
     ],
     "recentOrders": [
       {
@@ -38,9 +48,17 @@
   },
   "instruction": "Reply to the customer about their delayed order.",
   "expectedPlan": {
-    "mustCallTools": ["send_reply"],
-    "mustNotCallTools": ["escalate_to_human"],
-    "replyMustNotInclude": ["so sorry", "deeply apologize", "i apologize"]
+    "mustCallTools": [
+      "send_reply"
+    ],
+    "mustNotCallTools": [
+      "escalate_to_human"
+    ],
+    "replyMustNotInclude": [
+      "so sorry",
+      "deeply apologize",
+      "i apologize"
+    ]
   },
   "expectedRubric": {
     "checks": [
@@ -50,5 +68,6 @@
         "required": false
       }
     ]
-  }
+  },
+  "suite": "extended"
 }

@@ -19,6 +19,7 @@ function promptTokens(result: EvalResult): number {
 const LONG_CONTEXT_FIXTURE: Fixture = {
   id: "context-budget-long-thread",
   description: "A long resolved conversation still answers the latest return-policy question.",
+  suite: "extended",
   setup: {
     channelType: "email",
     tag: "Returns",

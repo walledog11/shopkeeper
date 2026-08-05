@@ -2,15 +2,23 @@
   "id": "multi-step-address-change-and-reply",
   "description": "Customer asks to update their shipping address and confirm. Agent should update the address first, then notify the customer (address update must occur before reply in the plan ordering).",
   "setup": {
-    "classifierIntents": { "mutative_request": true },
+    "classifierIntents": {
+      "mutative_request": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Otto Reyes",
     "customerPlatformId": "otto@example.com",
     "shopifyCustomerId": "10000001041",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "Please ship order #1041 to 100 Broadway, New York, NY 10001, United States. Let me know once it's updated." }
+      {
+        "senderType": "customer",
+        "contentText": "Please ship order #1041 to 100 Broadway, New York, NY 10001, United States. Let me know once it's updated."
+      }
     ],
     "recentOrders": [
       {
@@ -37,13 +45,22 @@
   },
   "instruction": "Reply to the customer and update their shipping address.",
   "expectedPlan": {
-    "mustCallTools": ["update_shopify_order_address", "send_reply"],
-    "mustCallToolsInOrder": ["update_shopify_order_address", "send_reply"],
-    "mustNotCallTools": ["escalate_to_human", "cancel_order"],
+    "mustCallTools": [
+      "update_shopify_order_address",
+      "send_reply"
+    ],
+    "mustCallToolsInOrder": [
+      "update_shopify_order_address",
+      "send_reply"
+    ],
+    "mustNotCallTools": [
+      "escalate_to_human",
+      "cancel_order"
+    ],
     "mustCallToolsWithInput": [
       {
         "tool": "update_shopify_order_address",
-        "inputIncludes": {
+        "inputEquals": {
           "order_id": "9000001041",
           "address1": "100 Broadway",
           "city": "New York",
@@ -51,5 +68,6 @@
         }
       }
     ]
-  }
+  },
+  "suite": "extended"
 }

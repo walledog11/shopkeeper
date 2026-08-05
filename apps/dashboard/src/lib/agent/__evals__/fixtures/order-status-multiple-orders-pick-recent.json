@@ -2,15 +2,23 @@
   "id": "order-status-multiple-orders-pick-recent",
   "description": "Customer has two recent orders in context. They ask about 'my recent order' - per prompt rules the agent should infer the most recent and answer about it without refetching.",
   "setup": {
-    "classifierIntents": { "order_status": true },
+    "classifierIntents": {
+      "order_status": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Priya Khan",
     "customerPlatformId": "priya@example.com",
     "shopifyCustomerId": "10000000004",
-    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
     "messages": [
-      { "senderType": "customer", "contentText": "Hey, where is my recent order?" }
+      {
+        "senderType": "customer",
+        "contentText": "Hey, where is my recent order?"
+      }
     ],
     "recentOrders": [
       {
@@ -57,10 +65,21 @@
   },
   "instruction": "Reply to the customer about their recent order.",
   "expectedPlan": {
-    "mustCallTools": ["send_reply"],
-    "mustNotCallTools": ["get_shopify_orders", "get_order_by_name", "escalate_to_human"],
-    "replyMustInclude": ["1005"],
-    "replyMustNotInclude": ["1004"],
+    "mustCallTools": [
+      "send_reply"
+    ],
+    "mustNotCallTools": [
+      "get_shopify_orders",
+      "get_order_by_name",
+      "escalate_to_human"
+    ],
+    "replyMustInclude": [
+      "1005"
+    ],
+    "replyMustNotInclude": [
+      "1004"
+    ],
     "mustClassifyAs": "quick_reply"
-  }
+  },
+  "suite": "extended"
 }
