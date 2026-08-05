@@ -233,13 +233,64 @@ describe('formatDigestMessage', () => {
   it('includes handled and waiting sections when provided', () => {
     const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW);
     const msg = formatDigestMessage(buckets, null, {
-      handledSection: 'Since your last briefing I handled 1 thing:\n- Refunded Sarah $12',
+      handledSection: 'Since your last briefing I refunded Sarah $12.',
       waitingSection: "One thing's still waiting on your OK:\n- $12 refund for Sarah",
     });
-    expect(msg).toContain('Since your last briefing I handled 1 thing');
-    expect(msg).toContain('Refunded Sarah $12');
+    expect(msg).toContain('Since your last briefing I refunded Sarah $12.');
     expect(msg).toContain("still waiting on your OK");
     expect(msg).toContain("You've got one open ticket");
+  });
+
+  it('reconciles the open count against the list above instead of printing two numbers', () => {
+    const buckets = bucketDigestThreads(
+      Array.from({ length: 5 }, () => makeThread({ filterStatus: 'genuine', ageHours: 1 })),
+      NOW,
+    );
+    const msg = formatDigestMessage(buckets, null, {
+      waitingSection: 'Four things are still waiting on your OK:\n1. a\n2. b\n3. c\n4. d',
+      waitingOpenCount: 4,
+    });
+    expect(msg).toContain("You've got five open tickets, four of them above.");
+  });
+
+  it('does not spend "them" twice in one sentence', () => {
+    const buckets = bucketDigestThreads(
+      [
+        ...Array.from({ length: 2 }, () => makeThread({ filterStatus: 'genuine', ageHours: 30 })),
+        ...Array.from({ length: 3 }, () => makeThread({ filterStatus: 'genuine', ageHours: 2 })),
+      ],
+      NOW,
+    );
+    const msg = formatDigestMessage(buckets, null, { waitingSection: 'x', waitingOpenCount: 4 });
+    expect(msg).toContain('four of them above. Two of the five have been sitting over a day');
+  });
+
+  it('says so plainly when the waiting list is the whole open queue', () => {
+    const buckets = bucketDigestThreads(
+      [makeThread({ filterStatus: 'genuine' }), makeThread({ filterStatus: 'genuine' })],
+      NOW,
+    );
+    expect(formatDigestMessage(buckets, null, { waitingSection: 'x', waitingOpenCount: 2 }))
+      .toContain("You've got two open tickets, all of them above.");
+
+    const one = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW);
+    expect(formatDigestMessage(one, null, { waitingSection: 'x', waitingOpenCount: 1 }))
+      .toContain("You've got one open ticket, the one above.");
+  });
+
+  it('never claims more waiting items than there are open tickets', () => {
+    // Parked plans can sit on threads that are pending, closed, or filtered.
+    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW);
+    const msg = formatDigestMessage(buckets, null, { waitingSection: 'x', waitingOpenCount: 4 });
+    expect(msg).toContain("You've got one open ticket, the one above.");
+  });
+
+  it('drops the sign-off when something is already waiting on the merchant', () => {
+    const msg = formatDigestMessage(bucketDigestThreads([], NOW), null, {
+      waitingSection: "One thing's still waiting on your OK:\n- $12 refund for Sarah",
+      waitingOpenCount: 0,
+    });
+    expect(msg).not.toContain("I'll shout if anything comes in.");
   });
 
   it('includes the weekly summary line when provided and omits it otherwise', () => {
@@ -332,7 +383,16 @@ describe('formatWeeklySummaryLine', () => {
 
   it('rounds long resolution times to hours', () => {
     const line = formatWeeklySummaryLine(makeStats({ resolution: { closedCount: 4, avgMinutes: 200 } }));
-    expect(line).toContain('4 resolved in 3h on average');
+    expect(line).toContain('four resolved in 3h on average');
+  });
+
+  it('spells small ticket counts, so the same noun is not rendered two ways', () => {
+    // "You've got five open tickets" and "5 tickets in" four lines apart is what
+    // reads as inconsistent. Durations and the window length stay in digits.
+    expect(formatWeeklySummaryLine(makeStats({
+      tickets: { total: 5, byTag: [{ tag: 'Order Status', count: 4 }], byChannel: [], byDay: [] },
+      resolution: { closedCount: 0, avgMinutes: null },
+    }))).toBe('Last 7 days: five tickets in, mostly Order Status.');
   });
 
   it('drops the topic part for a one-off tag and for the General catch-all', () => {

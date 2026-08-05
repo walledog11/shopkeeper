@@ -100,12 +100,15 @@ export function formatSalesPulseLine(
   current: OrderWindowSummary,
   prior?: OrderWindowSummary | null,
 ): string | null {
-  const priorLabel = prior
+  // A comparison against zero is not a comparison. "This time last week it was
+  // 0 orders and $0" costs the merchant a line to learn nothing, so the clause
+  // only earns its place when last week actually had something in it.
+  const priorLabel = prior && prior.orderCount > 0
     ? `${prior.orderCount} order${prior.orderCount === 1 ? "" : "s"} and ${formatMoney(prior.revenueTotal, prior.currency ?? current.currency)}`
     : null;
 
   if (current.orderCount === 0) {
-    if (!prior || prior.orderCount === 0) return null;
+    if (!priorLabel) return null;
     return `No orders since your last briefing. This time last week you had ${priorLabel}.`;
   }
 

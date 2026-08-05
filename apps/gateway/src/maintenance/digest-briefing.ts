@@ -30,10 +30,12 @@ export interface WaitingItem {
 const COUNT_WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
 
 /**
- * Spell out small counts of *things in the merchant's queue* — "three open
- * tickets" reads like a person, "3 open tickets" like a dashboard. Metrics
- * (orders, revenue, tickets-per-week) stay in digits; they are numbers the
- * merchant is meant to compare, not sentences.
+ * Spell out small counts of *tickets and queued work* — "three open tickets"
+ * reads like a person, "3 open tickets" like a dashboard. The rule is per noun,
+ * not per section: the weekly stat line says "five tickets in" too, because the
+ * same noun rendered two ways four lines apart is what reads as inconsistent.
+ * Money, durations, order counts and window lengths stay in digits; those are
+ * numbers the merchant is meant to compare, not sentences.
  */
 export function countWord(count: number): string {
   return COUNT_WORDS[count] ?? String(count);
@@ -123,6 +125,47 @@ function parkedActionLabel(
   return `${step.label.toLowerCase()}${forCustomer}`;
 }
 
+const WAITING_TOPIC_TRUNC = 72;
+
+// How long the merchant has left this sitting. The header already frames the
+// list as waiting on them, so the parenthetical only carries the duration —
+// which is the one thing that tells them which of these to open first.
+export function formatWaitingAge(now: Date, since: Date | null): string | null {
+  if (!since) return null;
+  const ms = now.getTime() - since.getTime();
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  const hours = Math.floor(ms / 3_600_000);
+  if (hours < 1) return 'waiting under an hour';
+  if (hours < 24) return `waiting ${hours} hour${hours === 1 ? '' : 's'}`;
+  const days = Math.floor(hours / 24);
+  return `waiting ${days} day${days === 1 ? '' : 's'}`;
+}
+
+// What the ticket is actually about. Four bullets that all read "Reply to
+// Canary" carry exactly one bit of information — the count — so every line has
+// to name its subject, not just the verb. `General` is the classifier's
+// catch-all, so it is worth no more than saying nothing.
+export function waitingTopic(aiSummary: string | null, tag: string | null): string | null {
+  const summary = aiSummary?.trim();
+  if (summary) {
+    const clipped = summary.length > WAITING_TOPIC_TRUNC
+      ? `${summary.slice(0, WAITING_TOPIC_TRUNC)}…`
+      : summary;
+    // The line closes on a parenthetical, so a summary's own full stop would
+    // land mid-sentence.
+    return clipped.replace(/\.$/, '');
+  }
+  const trimmedTag = tag?.trim();
+  return trimmedTag && trimmedTag !== 'General' ? trimmedTag : null;
+}
+
+// Colon between action and subject, matching the flagged block's `1. Alice:
+// summary`. No em-dash anywhere: that is the tell that a machine wrote it.
+function waitingLine(action: string, topic: string | null, age: string | null): string {
+  const withTopic = topic ? `${action}: ${topic}` : action;
+  return age ? `${withTopic} (${age})` : withTopic;
+}
+
 // A bare noun phrase for one bullet. The "still waiting on your OK" framing
 // lives in the section header, so repeating it per item just pads the text; and
 // the action labels already name the customer ("reply to Sarah"), so a
@@ -159,13 +202,32 @@ async function isPlanExecutionResolved(
   return execution != null && execution.status !== 'pending' && execution.status !== 'claimed';
 }
 
+const IRREGULAR_PAST: Record<string, string> = { set: 'Set', put: 'Put' };
+
+// Plan-step labels are imperative ("Issue refund", "Cancel order"), but this
+// section reports what already happened — and the one-item form folds the label
+// into a sentence beginning "I …", so the leading verb has to be past tense.
+function pastTenseLabel(label: string): string {
+  const [verb, ...rest] = label.split(' ');
+  if (!verb) return label;
+  const lower = verb.toLowerCase();
+  const past = IRREGULAR_PAST[lower]
+    ?? (lower.endsWith('e')
+      ? `${verb}d`
+      : /[^aeiou]y$/.test(lower)
+        ? `${verb.slice(0, -1)}ied`
+        : `${verb}ed`);
+  return rest.length > 0 ? `${past} ${rest.join(' ')}` : past;
+}
+
+// No name is a reason to drop the subject, not to print one. "Replied to
+// Customer" is a placeholder leaking into the merchant's morning text.
 function describeHandledExecution(execution: {
   mode: string | null;
   thread: { customer: { name: string | null } } | null;
   actions: Array<{ tool: string; input: unknown; status: string }>;
 }): string | null {
   const firstName = customerFirstName(execution.thread?.customer?.name ?? null);
-  const subject = firstName ?? 'Customer';
   const successfulActions = execution.actions.filter((action) => (
     action.status === 'success' || action.status === 'escalated'
   ));
@@ -173,17 +235,18 @@ function describeHandledExecution(execution: {
   const refund = successfulActions.find((action) => action.tool === 'create_refund');
   if (refund) {
     const amount = extractRefundAmount(refund.input);
-    return amount ? `Refunded ${subject} ${amount}` : `Refunded ${subject}`;
+    if (firstName) return amount ? `Refunded ${firstName} ${amount}` : `Refunded ${firstName}`;
+    return amount ? `Issued a ${amount} refund` : 'Issued a refund';
   }
 
   if (successfulActions.some((action) => action.tool === 'send_reply' || action.tool === 'send_email')) {
-    return `Replied to ${subject}`;
+    return firstName ? `Replied to ${firstName}` : 'Sent a reply';
   }
 
   const primary = successfulActions.find((action) => action.tool !== 'add_internal_note');
   if (!primary) return null;
-  const label = PLAN_STEP_LABELS[primary.tool] ?? primary.tool.replace(/_/g, ' ');
-  return `${label} for ${subject}`;
+  const label = pastTenseLabel(PLAN_STEP_LABELS[primary.tool] ?? primary.tool.replace(/_/g, ' '));
+  return firstName ? `${label} for ${firstName}` : label;
 }
 
 export async function loadHandledRollup(
@@ -240,6 +303,16 @@ export function formatHandledSection(rollup: HandledRollup): string | null {
   const total = rollup.approvedCount + rollup.autoCount;
   if (total === 0) return null;
 
+  // One thing does not need a count, a breakdown, and a bullet: "I handled one
+  // thing, including one reply: - Replied to Sarah" is the same fact three
+  // times. Fold it into the sentence, the way the flagged block already names a
+  // lone ticket instead of printing a list of one.
+  if (total === 1 && rollup.notableLines.length === 1) {
+    const line = rollup.notableLines[0]!;
+    const sentence = `Since your last briefing I ${line.charAt(0).toLowerCase()}${line.slice(1)}.`;
+    return rollup.autoCount === 1 ? `${sentence}\n\nThat one ran without needing you.` : sentence;
+  }
+
   // "including", not a comma list: an execution that refunded *and* replied is
   // counted by both counters, so the parts do not have to sum to the total.
   const detailParts: string[] = [];
@@ -267,7 +340,18 @@ export function formatHandledSection(rollup: HandledRollup): string | null {
   return lines.join('\n');
 }
 
-async function loadOperatorWaitingItems(organizationId: string): Promise<WaitingItem[]> {
+// When the customer last wrote in, which is what "waiting 2 days" means to the
+// merchant. Falls back to the thread's own clock when a thread carries no
+// inbound message rows.
+function waitingSince(thread: {
+  updatedAt: Date;
+  messages: Array<{ sentAt: Date }>;
+} | null): Date | null {
+  if (!thread) return null;
+  return thread.messages[0]?.sentAt ?? thread.updatedAt;
+}
+
+async function loadOperatorWaitingItems(organizationId: string, now: Date): Promise<WaitingItem[]> {
   const contexts = await db.operatorContext.findMany({
     where: {
       organizationId,
@@ -292,18 +376,33 @@ async function loadOperatorWaitingItems(organizationId: string): Promise<Waiting
 
       const thread = await db.thread.findFirst({
         where: { id: pendingPlan.threadId, organizationId },
-        select: { customer: { select: { name: true } } },
+        select: {
+          updatedAt: true,
+          aiSummary: true,
+          tag: true,
+          customer: { select: { name: true } },
+          messages: {
+            where: { deletedAt: null, senderType: { not: SENDER_TYPE.NOTE } },
+            orderBy: [{ sentAt: 'desc' }, { id: 'desc' }],
+            take: 1,
+            select: { sentAt: true },
+          },
+        },
       });
       const dedupeKey = pendingPlan.planId
         ?? `${pendingPlan.threadId}:${pendingPlan.planHash ?? ''}:${pendingPlan.instructionHash ?? ''}`;
       items.push({
         dedupeKey,
         threadId: pendingPlan.threadId,
-        line: waitingPhrase(
-          thread?.customer?.name ?? pendingPlan.customerName ?? null,
-          pendingPlan.rawToolCalls,
-          pendingPlan.instruction,
-          pendingPlan.actionLabel,
+        line: waitingLine(
+          waitingPhrase(
+            thread?.customer?.name ?? pendingPlan.customerName ?? null,
+            pendingPlan.rawToolCalls,
+            pendingPlan.instruction,
+            pendingPlan.actionLabel,
+          ),
+          waitingTopic(thread?.aiSummary ?? null, thread?.tag ?? null),
+          formatWaitingAge(now, waitingSince(thread)),
         ),
       });
     }
@@ -329,12 +428,14 @@ async function loadStaleThreadWaitingItems(
       cachedPlan: true,
       cachedPlanMessageId: true,
       updatedAt: true,
+      aiSummary: true,
+      tag: true,
       customer: { select: { name: true } },
       messages: {
         where: { deletedAt: null, senderType: { not: SENDER_TYPE.NOTE } },
         orderBy: [{ sentAt: 'desc' }, { id: 'desc' }],
         take: 1,
-        select: { id: true, senderType: true },
+        select: { id: true, senderType: true, sentAt: true },
       },
     },
   });
@@ -359,10 +460,14 @@ async function loadStaleThreadWaitingItems(
     items.push({
       dedupeKey,
       threadId: thread.id,
-      line: waitingPhrase(
-        thread.customer?.name ?? null,
-        plan.rawToolCalls,
-        cached.instruction,
+      line: waitingLine(
+        waitingPhrase(
+          thread.customer?.name ?? null,
+          plan.rawToolCalls,
+          cached.instruction,
+        ),
+        waitingTopic(thread.aiSummary, thread.tag),
+        formatWaitingAge(now, waitingSince(thread)),
       ),
     });
   }
@@ -373,7 +478,7 @@ export async function loadWaitingOnYouItems(
   organizationId: string,
   now: Date,
 ): Promise<WaitingItem[]> {
-  const operatorItems = await loadOperatorWaitingItems(organizationId);
+  const operatorItems = await loadOperatorWaitingItems(organizationId, now);
   const seen = new Set<string>();
   const merged: WaitingItem[] = [];
 
@@ -391,13 +496,39 @@ export async function loadWaitingOnYouItems(
     merged.push(item);
   }
 
+  // Operator-parked plans first, in queue order, then the stale-thread ones.
+  // Do not re-sort: this list is *numbered* in the message, and the operator
+  // ledger numbers `pendingPlans` in the same order, so "the second one" has to
+  // mean the same plan on both sides. (`selectPendingPlan` fails closed on an
+  // ordinal past the end of the queue, so the stale-thread tail is safe.)
   return merged;
 }
 
 export function formatWaitingSection(items: WaitingItem[]): string | null {
   if (items.length === 0) return null;
-  const header = items.length === 1
-    ? "One thing's still waiting on your OK:"
-    : `${capitalize(countWord(items.length))} things are still waiting on your OK:`;
-  return [header, ...items.map((item) => `- ${item.line}`)].join('\n');
+
+  if (items.length === 1) {
+    return [
+      "One thing's still waiting on your OK:",
+      `- ${items[0]!.line}`,
+      // Its own line with air above it: a sentence that closes a block reads as
+      // one more bullet without the gap. Yes/no is safe here — there is exactly
+      // one plan for the fast path to land on.
+      ``,
+      'Want me to go ahead with it?',
+    ].join('\n');
+  }
+
+  return [
+    `${capitalize(countWord(items.length))} things are still waiting on your OK:`,
+    // Numbered, so the merchant has a handle to approve one of several — the
+    // same affordance the flagged list already gives.
+    ...items.map((item, index) => `${index + 1}. ${item.line}`),
+    // Deliberately not "want me to send those?" — a bare yes against a list hits
+    // the keyword fast path, which approves only the most recent plan. Asking
+    // which ones keeps the merchant's one-word answer from meaning something
+    // narrower than they intended.
+    ``,
+    'Tell me which ones to go ahead with.',
+  ].join('\n');
 }

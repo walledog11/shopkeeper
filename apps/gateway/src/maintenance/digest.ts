@@ -105,7 +105,10 @@ function formatDurationShort(minutes: number): string {
 export function formatWeeklySummaryLine(stats: SupportStatsSummary): string | null {
   if (stats.tickets.total < WEEKLY_SUMMARY_MIN_TICKETS) return null;
 
-  const parts = [`${stats.tickets.total} tickets in`];
+  // Ticket counts spell out here too. "You've got five open tickets" three
+  // lines above "5 tickets in" is the same noun rendered two ways in one
+  // message; the window length and the durations stay in digits.
+  const parts = [`${countWord(stats.tickets.total)} tickets in`];
   const topTag = stats.tickets.byTag[0];
   // `General` is the classifier's catch-all, not a topic worth naming.
   if (topTag && topTag.count > 1 && topTag.tag !== 'General') {
@@ -114,8 +117,8 @@ export function formatWeeklySummaryLine(stats: SupportStatsSummary): string | nu
   if (stats.resolution.closedCount > 0) {
     parts.push(
       stats.resolution.avgMinutes != null
-        ? `${stats.resolution.closedCount} resolved in ${formatDurationShort(stats.resolution.avgMinutes)} on average`
-        : `${stats.resolution.closedCount} resolved`,
+        ? `${countWord(stats.resolution.closedCount)} resolved in ${formatDurationShort(stats.resolution.avgMinutes)} on average`
+        : `${countWord(stats.resolution.closedCount)} resolved`,
     );
   }
   return `Last 7 days: ${parts.join(', ')}.`;
@@ -126,22 +129,41 @@ export interface DigestMessageExtras {
   opener?: string | null;
   handledSection?: string | null;
   waitingSection?: string | null;
+  /**
+   * How many of the items in `waitingSection` are also counted as open tickets
+   * below, so the two numbers can be stated as one fact instead of two.
+   */
+  waitingOpenCount?: number;
   garnishLines?: string[];
 }
 
 // One sentence about the open queue, plus the only urgency split the merchant
 // can act on differently: what has been sitting long enough to be embarrassing.
-function inboxSentence(genuineCount: number, urgent: number): string {
+function inboxSentence(genuineCount: number, urgent: number, waitingAbove: number): string {
   // Claims only the reply queue, never "your inbox is clear" — that reads as a
   // contradiction when a flagged ticket is named in the next breath.
   if (genuineCount === 0) return "Nothing's waiting on a reply.";
 
-  const opening = `You've got ${countWord(genuineCount)} open ticket${genuineCount === 1 ? '' : 's'}.`;
+  // Reconcile against the list above rather than printing two counts from two
+  // queries and leaving the merchant to work out whether they overlap.
+  const covered = Math.min(waitingAbove, genuineCount);
+  const relation = covered === 0
+    ? '.'
+    : covered === genuineCount
+      ? genuineCount === 1 ? ', the one above.' : ', all of them above.'
+      : `, ${countWord(covered)} of them above.`;
+
+  const opening = `You've got ${countWord(genuineCount)} open ticket${genuineCount === 1 ? '' : 's'}${relation}`;
   if (urgent === 0) return opening;
   if (urgent === genuineCount) {
     return `${opening} ${genuineCount === 1 ? "It's" : "They've all"} been sitting over a day.`;
   }
-  return `${opening} ${capitalize(countWord(urgent))} of them ${urgent === 1 ? 'has' : 'have'} been sitting over a day, so I'd start there.`;
+  // "four of them above. Two of them have been sitting" — once the relation
+  // clause has spent the pronoun, a second "them" no longer has one referent.
+  const subject = covered === 0
+    ? `${capitalize(countWord(urgent))} of them`
+    : `${capitalize(countWord(urgent))} of the ${countWord(genuineCount)}`;
+  return `${opening} ${subject} ${urgent === 1 ? 'has' : 'have'} been sitting over a day, so I'd start there.`;
 }
 
 function flaggedBlurb(thread: DigestThreadRow): string {
@@ -187,7 +209,7 @@ export function formatDigestMessage(
   // Group by topic, not by data source. These two are the same news ("nothing
   // here needs you"), so they belong in one breath. Everything the merchant has
   // to act on gets its own block below.
-  const status = [inboxSentence(genuine.length, urgent)];
+  const status = [inboxSentence(genuine.length, urgent, extras?.waitingOpenCount ?? 0)];
   if (filteredCount > 0) status.push(spamSentence(filteredCount));
   lines.push(status.join(' '));
 
@@ -241,9 +263,11 @@ export function formatDigestMessage(
   // merchant reaches them by muscle memory, not by being drilled every morning.
   // Plain prose resolves too: the model's ledger carries each flagged ticket's
   // id next to the ordinal the merchant saw (`buildDigestLedgerSection`).
-  // The flagged ask already landed against its subject above; a fully quiet
-  // inbox just gets a sign-off so the message doesn't trail into nothing.
-  if (questionable.length === 0 && genuine.length === 0) {
+  // The flagged and waiting asks already landed against their subjects above; a
+  // fully quiet inbox just gets a sign-off so the message doesn't trail into
+  // nothing. "I'll shout if anything comes in" on top of a list of things
+  // already waiting on the merchant would contradict itself.
+  if (questionable.length === 0 && genuine.length === 0 && !extras?.waitingSection) {
     lines.push(``, `I'll shout if anything comes in.`);
   }
 
@@ -302,11 +326,17 @@ export async function buildOrgDigest(
   if (openThreads.length === 0 && !hasBriefingContent) return null;
 
   const buckets = bucketDigestThreads(openThreads, now);
+  // Only the waiting items that are also counted as open tickets — a parked
+  // plan can sit on a thread that is pending, closed, or filtered, and claiming
+  // it as part of the open count would be a number the merchant can't square.
+  const genuineIds = new Set(buckets.genuine.map((thread) => thread.id));
+  const waitingOpenCount = waitingItems.filter((item) => genuineIds.has(item.threadId)).length;
+
   return {
     message: formatDigestMessage(
       buckets,
       weeklyStats ? formatWeeklySummaryLine(weeklyStats) : null,
-      { opener: options.opener ?? null, handledSection, waitingSection, garnishLines },
+      { opener: options.opener ?? null, handledSection, waitingSection, waitingOpenCount, garnishLines },
     ),
     pendingDigest: {
       threadIds: buckets.questionable.slice(0, DIGEST_QUESTIONABLE_LIMIT).map((t) => t.id),

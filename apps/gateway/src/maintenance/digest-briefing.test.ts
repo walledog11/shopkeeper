@@ -78,6 +78,26 @@ describe('formatHandledSection', () => {
     })).toBeNull();
   });
 
+  it('folds a single handled item into one sentence instead of a list of one', () => {
+    expect(formatHandledSection({
+      approvedCount: 1,
+      autoCount: 0,
+      replyCount: 1,
+      refundCount: 0,
+      notableLines: ['Replied to Sarah'],
+    })).toBe('Since your last briefing I replied to Sarah.');
+  });
+
+  it('keeps the autonomy line on a single folded item', () => {
+    expect(formatHandledSection({
+      approvedCount: 0,
+      autoCount: 1,
+      replyCount: 1,
+      refundCount: 0,
+      notableLines: ['Replied to Sarah'],
+    })).toBe('Since your last briefing I replied to Sarah.\n\nThat one ran without needing you.');
+  });
+
   it('summarizes committed work and notable lines', () => {
     const section = formatHandledSection({
       approvedCount: 1,
@@ -160,16 +180,69 @@ describe('loadWaitingOnYouItems', () => {
       rawToolCalls: [{ id: 'tc1', name: 'create_refund', input: { amount: 12 } }],
     };
 
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        aiSummary: 'Order arrived damaged, wants money back.',
+        updatedAt: new Date(NOW.getTime() - 26 * 3_600_000),
+      },
+    });
+
     await updateContext(org.id, 'chat-1', { pendingPlan });
     await updateContext(org.id, 'chat-2', { pendingPlan });
 
     const items = await loadWaitingOnYouItems(org.id, NOW);
     expect(items).toHaveLength(1);
-    expect(items[0]?.line).toBe('$12 refund for Sarah');
+    // Action, then what it's about, then how long it has sat: without the last
+    // two, four pending replies to one customer render as four identical lines.
+    expect(items[0]?.line).toBe(
+      '$12 refund for Sarah: Order arrived damaged, wants money back (waiting 1 day)',
+    );
     // The "still waiting on your OK" framing belongs to the header, once.
     expect(formatWaitingSection(items)).toBe(
-      "One thing's still waiting on your OK:\n- $12 refund for Sarah",
+      "One thing's still waiting on your OK:\n"
+      + '- $12 refund for Sarah: Order arrived damaged, wants money back (waiting 1 day)\n'
+      + '\n'
+      + 'Want me to go ahead with it?',
     );
+  });
+
+  it('numbers several waiting items and never invites a bare yes across them', async () => {
+    // Two pending plans for the *same* customer: the case the old copy rendered
+    // as two identical "Reply to Canary" bullets.
+    for (const [index, summary] of [
+      ['a', 'Asking where order 1042 is.'],
+      ['b', 'Wants to change the shipping address.'],
+    ] as const) {
+      const customer = await createTestCustomer(org.id, `canary-${index}@example.com`, { name: 'Canary Reid' });
+      const thread = await createTestThread(org.id, customer.id, 'email');
+      await db.thread.update({
+        where: { id: thread.id },
+        data: { aiSummary: summary, updatedAt: new Date(NOW.getTime() - 5 * 3_600_000) },
+      });
+      await updateContext(org.id, `chat-${index}`, {
+        pendingPlan: {
+          threadId: thread.id,
+          instruction: 'Answer the customer',
+          planId: `bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb${index === 'a' ? '1' : '2'}`,
+          actionLabel: 'reply to Canary',
+          rawToolCalls: [{ id: 'tc1', name: 'send_reply', input: { text: 'Hi' } }],
+        },
+      });
+    }
+
+    const items = await loadWaitingOnYouItems(org.id, NOW);
+    expect(items).toHaveLength(2);
+    const section = formatWaitingSection(items)!;
+    expect(section).toContain('Two things are still waiting on your OK:');
+    expect(section).toContain('1. Reply to Canary: ');
+    expect(section).toContain('2. Reply to Canary: ');
+    // Every line differs by subject, so the list is worth reading.
+    expect(section).toContain('Asking where order 1042 is (waiting 5 hours)');
+    expect(section).toContain('Wants to change the shipping address (waiting 5 hours)');
+    // A bare "yes" here would approve only the most recent plan.
+    expect(section.trimEnd().endsWith('Tell me which ones to go ahead with.')).toBe(true);
+    expect(section).not.toMatch(/Want me to send (any of )?those\?/);
   });
 
   it('includes stale dashboard plans that still need review', async () => {
@@ -190,6 +263,23 @@ describe('loadWaitingOnYouItems', () => {
     expect(items).toHaveLength(1);
     expect(items[0]?.line).toContain('Bob');
     expect(formatWaitingSection(items)).toContain("still waiting on your OK");
+  });
+
+  it('never names a customer it does not have', async () => {
+    const customer = await createTestCustomer(org.id, 'anon@example.com');
+    const thread = await createTestThread(org.id, customer.id, 'email');
+    await updateContext(org.id, 'chat-anon', {
+      pendingPlan: {
+        threadId: thread.id,
+        instruction: 'Answer the customer',
+        planId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+        rawToolCalls: [{ id: 'tc1', name: 'send_reply', input: { text: 'Hi' } }],
+      },
+    });
+
+    const items = await loadWaitingOnYouItems(org.id, NOW);
+    expect(items[0]?.line).not.toContain('Customer');
+    expect(items[0]?.line).toContain('the customer');
   });
 
   it('ignores stale plans on threads outside the support inbox', async () => {

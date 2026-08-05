@@ -106,4 +106,13 @@ describe("formatSalesPulseLine", () => {
       "No orders since your last briefing. This time last week you had 9 orders and $1420.",
     );
   });
+
+  it("drops the comparison against an empty prior week", () => {
+    const current = { orderCount: 2, revenueTotal: 310, currency: "USD" };
+    const empty = { orderCount: 0, revenueTotal: 0, currency: null };
+
+    expect(formatSalesPulseLine(current, empty)).toBe(
+      "2 orders and $310 since your last briefing.",
+    );
+  });
 });
