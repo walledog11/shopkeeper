@@ -6,6 +6,7 @@ import { isOperatorChannel } from "./intent.js";
 import { isMerchantAnswerPlanningInstruction } from "./kb-learned.js";
 import logger from "./logger.js";
 import { buildMessageHistory } from "./message-history.js";
+import { decidePlannerTier, isLowRiskPlanOutcome } from "./planner-model-tier.js";
 import {
   appendInitialPlanningWarnings,
   appendPlanningReadWarnings,
@@ -78,19 +79,43 @@ export async function planAgent(
     instructionHash,
   }, "[agent:plan] start");
 
-  const loop = await runAgentLoop({
+  const maxIterations = resolvedSettings.maxIterations > 0
+    ? resolvedSettings.maxIterations
+    : DEFAULT_MAX_ITERATIONS;
+  const runLoop = (model: string) => runAgentLoop({
     ctx,
     mode: "capture",
     messages: baseMessages,
     systemPromptBlocks,
     tools,
-    model: pickModel("agent_run"),
-    maxIterations: resolvedSettings.maxIterations > 0 ? resolvedSettings.maxIterations : DEFAULT_MAX_ITERATIONS,
+    model,
+    maxIterations,
     maxTokensPerCall: 4096,
     settings,
     usageTotals,
     captureReprompt: !operatorMode,
   });
+
+  const tier = decidePlannerTier(ctx, { operatorMode });
+  let loop = await runLoop(tier.useLowTier ? pickModel("agent_plan_low_risk") : pickModel("agent_run"));
+
+  // The cheap tier is trusted to reply, ask, or escalate — nothing else. If it
+  // proposed real work, throw the plan away and re-plan on the judgment tier
+  // rather than let a mutative action be decided down-tier. Capture mode means
+  // nothing was executed, so the discarded plan has no side effects; the cost of
+  // being wrong is one wasted Haiku call.
+  let tierDowngraded = tier.useLowTier;
+  if (tier.useLowTier && !isLowRiskPlanOutcome(loop.rawToolCalls)) {
+    logger.info({
+      orgId: ctx.orgId,
+      threadId: ctx.thread.id,
+      purpose: "agent_plan",
+      proposedToolCalls: loop.rawToolCalls.map(toolCall => toolCall.name),
+      instructionHash,
+    }, "[agent:plan] low-tier plan proposed non-trivial work — re-planning on judgment tier");
+    tierDowngraded = false;
+    loop = await runLoop(pickModel("agent_run"));
+  }
 
   // Structural cleanup that survives Phase 3 (order-state checks, not prose):
   // drop refunds for already-refunded orders and empty send_reply calls.
@@ -146,6 +171,10 @@ export async function planAgent(
     routingSignals: routing?.signals ?? null,
     modelCalls: usageTotals.modelCalls,
     usageTotals,
+    // Rollout observability: group by plannerTierReason to see which intents are
+    // being downgraded, and watch plannerTierDowngraded against reply quality.
+    plannerTierReason: tier.reason,
+    plannerTierDowngraded: tierDowngraded,
     readToolCalls: loop.readBlocks.map(block => block.name),
     rawToolCallCount: rawToolCalls.length,
     rawToolCalls: rawToolCalls.map(toolCall => toolCall.name),

@@ -21,8 +21,9 @@ export const AI_MODEL = HAIKU_MODEL;
 // A call's purpose, not its channel. Enumerated in full so each call site is
 // explicit about its tier even when it resolves to Haiku.
 export type ModelTask =
-  | "agent_run"     // the shared agent loop: end-to-end runs + capture-mode planning
-  | "composer_ask"; // run.ts read-only Q&A
+  | "agent_run"           // the shared agent loop: end-to-end runs + capture-mode planning
+  | "agent_plan_low_risk" // planning a ticket the classifier called informational (see planner-model-tier.ts)
+  | "composer_ask";       // run.ts read-only Q&A
 
 const SONNET_TASKS: ReadonlySet<ModelTask> = new Set<ModelTask>([
   "agent_run",
