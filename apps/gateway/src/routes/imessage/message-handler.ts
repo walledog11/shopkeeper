@@ -7,7 +7,14 @@ import { isDigestCommand, isPendingPlanCommand, parseTelegramCommand } from '../
 import { handleDigestCommand } from '../telegram/digest-commands.js';
 import { HELP_TEXT } from '../telegram/format.js';
 import { handlePendingPlanCommand } from '../telegram/pending-plan-commands.js';
-import { progressOnlyPresence, type OperatorMessageContext, type OperatorReply } from '../operator-message.js';
+import {
+  progressOnlyPresence,
+  SILENT_CHANNEL_PROGRESS_THRESHOLD_MS,
+  type OperatorMessageContext,
+  type OperatorPresence,
+  type OperatorReply,
+} from '../operator-message.js';
+import { withImessageTyping } from '../../clients/spectrum.js';
 import { buildMirroredReply } from '../../operator-thread-mirror.js';
 import { handleImessageBinding } from './binding.js';
 
@@ -92,6 +99,19 @@ export interface ImessageOperatorTurnParams {
   body: string;
   reply: OperatorReply;
   turnId?: string;
+  /** Enables the native typing indicator; without it the turn is silent until it answers. */
+  spaceId?: string | null;
+}
+
+// Two acknowledgements, because iMessage gives the merchant nothing on its own
+// while a turn runs. The native "…" bubble lands immediately so the text is
+// visibly received; the worded fallback follows a couple of seconds later for
+// turns that are actually slow, and covers the case where the indicator could
+// not be raised at all.
+function imessagePresence(reply: OperatorReply, spaceId: string | null | undefined): OperatorPresence {
+  const withProgressText = progressOnlyPresence(reply, SILENT_CHANNEL_PROGRESS_THRESHOLD_MS);
+  if (!spaceId) return withProgressText;
+  return (progress, work) => withImessageTyping(spaceId, () => withProgressText(progress, work));
 }
 
 // The operator turn for one bound iMessage message: keyword fast paths
@@ -100,7 +120,7 @@ export interface ImessageOperatorTurnParams {
 // identical logic; they differ only in the injected reply (provider send) and
 // when the webhook is acknowledged. Mirrors runTelegramOperatorTurn.
 export async function runImessageOperatorTurn(params: ImessageOperatorTurnParams): Promise<void> {
-  const { organizationId, clerkUserId, senderId, body, reply, turnId } = params;
+  const { organizationId, clerkUserId, senderId, body, reply, turnId, spaceId } = params;
 
   const chatId = senderId;
   const operatorKey = `imessage:${senderId}`;
@@ -119,7 +139,7 @@ export async function runImessageOperatorTurn(params: ImessageOperatorTurnParams
     reply,
     senderRef: operatorKey,
     ...(turnId ? { turnId } : {}),
-    presence: progressOnlyPresence(reply),
+    presence: imessagePresence(reply, spaceId),
   };
   const mirroredReply = buildMirroredReply(organizationId, operatorKey, body, reply);
   const commandMessage: OperatorMessageContext = { ...baseMessage, reply: mirroredReply };
@@ -177,5 +197,6 @@ export async function handleImessageOperatorMessage(message: ImessageOperatorInb
     senderId: message.senderId,
     body: message.body,
     reply: message.reply,
+    spaceId: message.spaceId,
   });
 }

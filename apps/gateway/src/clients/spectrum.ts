@@ -7,6 +7,9 @@ import { recordProviderSendFailureInBackground } from '../provider-send-alerts.j
 
 type ImessageProviderConfig = ReturnType<typeof imessage.config>;
 
+// Matches the Telegram presence refresh cadence (`presence.ts`).
+const TYPING_REFRESH_MS = 4000;
+
 export type ImessageSpectrumApp = SpectrumInstance<[ImessageProviderConfig]>;
 
 export interface ImessageSendTarget {
@@ -43,9 +46,62 @@ function isSpectrumTransportError(error: unknown): boolean {
     || message.includes('Channel has been shut down');
 }
 
-async function loadImessageSpace(spaceId: string): Promise<ImessageSendTarget> {
+async function loadImessageSpaceHandle(spaceId: string) {
   const app = await getPlatformSpectrumApp();
   return imessage(app).space.get(spaceId);
+}
+
+async function loadImessageSpace(spaceId: string): Promise<ImessageSendTarget> {
+  return loadImessageSpaceHandle(spaceId);
+}
+
+// iMessage shows a real "…" bubble the moment this fires, which is the only
+// instant acknowledgement the channel has — Telegram's 👀 reaction and chat
+// action have no iMessage equivalent. Best-effort throughout: a merchant whose
+// typing indicator fails must still get their answer, so every failure here is
+// swallowed and the caller's work runs regardless.
+export async function withImessageTyping<T>(
+  spaceId: string,
+  work: () => Promise<T>,
+): Promise<T> {
+  let space: Awaited<ReturnType<typeof loadImessageSpaceHandle>>;
+  try {
+    space = await loadImessageSpaceHandle(spaceId);
+  } catch (error) {
+    logger.debug({ err: error, spaceId }, '[Spectrum] Typing indicator space load failed');
+    return work();
+  }
+
+  // try/catch, not just .catch(): a synchronous throw here (missing method on an
+  // older provider build) would otherwise escape and fail the whole turn over a
+  // cosmetic signal.
+  const startTyping = () => {
+    try {
+      void space.startTyping().catch((error: unknown) => {
+        logger.debug({ err: error, spaceId }, '[Spectrum] Typing indicator failed');
+      });
+    } catch (error) {
+      logger.debug({ err: error, spaceId }, '[Spectrum] Typing indicator unavailable');
+    }
+  };
+
+  // iMessage expires the indicator on its own, so refresh it for turns that
+  // outlast one interval rather than letting the bubble vanish mid-thought.
+  startTyping();
+  const refresh = setInterval(startTyping, TYPING_REFRESH_MS);
+
+  try {
+    return await work();
+  } finally {
+    clearInterval(refresh);
+    try {
+      void space.stopTyping().catch((error: unknown) => {
+        logger.debug({ err: error, spaceId }, '[Spectrum] Stopping typing indicator failed');
+      });
+    } catch (error) {
+      logger.debug({ err: error, spaceId }, '[Spectrum] Stopping typing indicator unavailable');
+    }
+  }
 }
 
 function invalidatePlatformSpectrumApp(): void {

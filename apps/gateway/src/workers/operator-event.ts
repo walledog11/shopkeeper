@@ -131,6 +131,7 @@ async function processImessageOperatorEvent(event: OperatorEvent, claimToken: st
       body: event.body,
       reply,
       turnId: event.id,
+      spaceId: event.spaceId,
     }),
   );
 }

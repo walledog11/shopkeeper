@@ -23,17 +23,29 @@ export interface OperatorMessageContext {
   turnId?: string;
 }
 
-const PROGRESS_THRESHOLD_MS = 10000;
+/**
+ * How long to wait before saying "working on it" in words.
+ *
+ * Telegram can afford 10s because its 👀 reaction and typing action land
+ * instantly, so the merchant already knows the message arrived. A transport with
+ * no such affordance has nothing on screen until this fires, and ten seconds of
+ * silence reads as "the app didn't get my text" — so it speaks up quickly.
+ */
+export const PROGRESS_THRESHOLD_MS = 10000;
+export const SILENT_CHANNEL_PROGRESS_THRESHOLD_MS = 2500;
 
 // Minimal channel-agnostic presence: sends one "still working" reply if the work
 // outlasts the threshold. Used by transports that lack a typing indicator.
-export function progressOnlyPresence(reply: OperatorReply): OperatorPresence {
+export function progressOnlyPresence(
+  reply: OperatorReply,
+  thresholdMs: number = PROGRESS_THRESHOLD_MS,
+): OperatorPresence {
   return async (progress, work) => {
     const timer = setTimeout(() => {
       reply(buildProgressCopy(progress)).catch((err) =>
         logger.warn({ err }, '[Operator] Progress message failed'),
       );
-    }, PROGRESS_THRESHOLD_MS);
+    }, thresholdMs);
     try {
       return await work();
     } finally {
