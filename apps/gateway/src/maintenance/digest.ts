@@ -43,6 +43,7 @@ export interface DigestThreadRow {
   updatedAt: Date;
   tag: string | null;
   filterStatus: DbThreadFilterStatus;
+  filterDecidedAt: Date | null;
   aiSummary: string | null;
   filterReason: string | null;
   customer: { name: string | null };
@@ -58,7 +59,19 @@ export interface DigestBuckets {
   topTags: string;
 }
 
-export function bucketDigestThreads(threads: DigestThreadRow[], now: Date): DigestBuckets {
+/**
+ * `filedSince` scopes the spam count to work done since the last briefing.
+ * Nothing ever closes a filtered thread — it is created open and sits there
+ * until `purgeFilteredThreads` hard-deletes it a week later — so counting every
+ * filtered thread still open is a running total, not a report. Said with "I
+ * filed", a running total claims credit every morning for the same spam, and
+ * ratchets up all week.
+ */
+export function bucketDigestThreads(
+  threads: DigestThreadRow[],
+  now: Date,
+  filedSince: Date,
+): DigestBuckets {
   const genuine: DigestThreadRow[] = [];
   const questionable: DigestThreadRow[] = [];
   let filteredCount = 0;
@@ -72,7 +85,9 @@ export function bucketDigestThreads(threads: DigestThreadRow[], now: Date): Dige
       continue;
     }
     if (t.filterStatus === ThreadFilterStatus.filtered) {
-      filteredCount++;
+      // An undecided timestamp is not evidence of recent work, so it does not
+      // get claimed as any.
+      if (t.filterDecidedAt && t.filterDecidedAt >= filedSince) filteredCount++;
       continue;
     }
 
@@ -102,8 +117,19 @@ function formatDurationShort(minutes: number): string {
 
 // Null below three tickets a week: a stat line about one ticket is noise the
 // merchant already read three lines further up.
-export function formatWeeklySummaryLine(stats: SupportStatsSummary): string | null {
+//
+// Also null when the week has no story the message hasn't already told. With
+// nothing resolved and every ticket that came in still open, "five tickets in"
+// is the same five tickets the line above just called open — one set described
+// twice, which reads as two numbers that need reconciling. A resolution figure
+// or volume above the open count is new information; neither, and the line is
+// restating.
+export function formatWeeklySummaryLine(
+  stats: SupportStatsSummary,
+  openCount: number,
+): string | null {
   if (stats.tickets.total < WEEKLY_SUMMARY_MIN_TICKETS) return null;
+  if (stats.resolution.closedCount === 0 && stats.tickets.total <= openCount) return null;
 
   // Ticket counts spell out here too. "You've got five open tickets" three
   // lines above "5 tickets in" is the same noun rendered two ways in one
@@ -307,6 +333,7 @@ export async function buildOrgDigest(
         updatedAt: true,
         tag: true,
         filterStatus: true,
+        filterDecidedAt: true,
         aiSummary: true,
         filterReason: true,
         customer: { select: { name: true } },
@@ -325,7 +352,7 @@ export async function buildOrgDigest(
 
   if (openThreads.length === 0 && !hasBriefingContent) return null;
 
-  const buckets = bucketDigestThreads(openThreads, now);
+  const buckets = bucketDigestThreads(openThreads, now, since);
   // Only the waiting items that are also counted as open tickets — a parked
   // plan can sit on a thread that is pending, closed, or filtered, and claiming
   // it as part of the open count would be a number the merchant can't square.
@@ -335,7 +362,7 @@ export async function buildOrgDigest(
   return {
     message: formatDigestMessage(
       buckets,
-      weeklyStats ? formatWeeklySummaryLine(weeklyStats) : null,
+      weeklyStats ? formatWeeklySummaryLine(weeklyStats, buckets.genuine.length) : null,
       { opener: options.opener ?? null, handledSection, waitingSection, waitingOpenCount, garnishLines },
     ),
     pendingDigest: {

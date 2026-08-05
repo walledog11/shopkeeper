@@ -6,11 +6,15 @@ import { bucketDigestThreads, buildOrgDigest, formatDigestMessage, formatWeeklyS
 
 const NOW = new Date('2026-04-29T12:00:00Z');
 const HOUR = 3_600_000;
+// Stands in for the last-briefing cursor: the spam count reports what was filed
+// since then, not every filtered thread still sitting open.
+const FILED_SINCE = new Date(NOW.getTime() - 24 * HOUR);
 
 function makeThread(overrides: Partial<{
   id: string;
   filterStatus: 'genuine' | 'questionable' | 'filtered';
   ageHours: number;
+  filterDecidedAt: Date | null;
   tag: string | null;
   customerName: string | null;
   aiSummary: string | null;
@@ -22,6 +26,9 @@ function makeThread(overrides: Partial<{
     updatedAt: new Date(NOW.getTime() - ageHours * HOUR),
     tag: overrides.tag === undefined ? 'Support' : overrides.tag,
     filterStatus: (overrides.filterStatus ?? ThreadFilterStatus.genuine) as 'genuine' | 'questionable' | 'filtered',
+    filterDecidedAt: overrides.filterDecidedAt === undefined
+      ? new Date(NOW.getTime() - ageHours * HOUR)
+      : overrides.filterDecidedAt,
     aiSummary: overrides.aiSummary ?? null,
     filterReason: overrides.filterReason ?? null,
     customer: { name: overrides.customerName === undefined ? 'Jane' : overrides.customerName },
@@ -37,7 +44,7 @@ describe('bucketDigestThreads', () => {
       makeThread({ filterStatus: 'filtered' }),
       makeThread({ filterStatus: 'filtered' }),
     ];
-    const b = bucketDigestThreads(threads, NOW);
+    const b = bucketDigestThreads(threads, NOW, FILED_SINCE);
     expect(b.genuine).toHaveLength(2);
     expect(b.questionable).toHaveLength(1);
     expect(b.filteredCount).toBe(2);
@@ -51,7 +58,7 @@ describe('bucketDigestThreads', () => {
       makeThread({ filterStatus: 'questionable', ageHours: 30 }), // does NOT count
       makeThread({ filterStatus: 'filtered', ageHours: 30 }),     // does NOT count
     ];
-    const b = bucketDigestThreads(threads, NOW);
+    const b = bucketDigestThreads(threads, NOW, FILED_SINCE);
     expect(b.urgent).toBe(1);
     expect(b.stale).toBe(1);
     expect(b.fresh).toBe(1);
@@ -64,12 +71,26 @@ describe('bucketDigestThreads', () => {
       makeThread({ filterStatus: 'genuine', tag: 'Shipping' }),
       makeThread({ filterStatus: 'questionable', tag: 'Spam' }), // ignored for tags
     ];
-    const b = bucketDigestThreads(threads, NOW);
+    const b = bucketDigestThreads(threads, NOW, FILED_SINCE);
     expect(b.topTags).toBe('Refund (2) · Shipping (1)');
   });
 
+  it('counts only spam filed since the last briefing, not every filtered thread still open', () => {
+    // Nothing closes a filtered thread, so without the window the same spam is
+    // re-reported every morning and the number ratchets up all week.
+    const threads = [
+      makeThread({ filterStatus: 'filtered', ageHours: 2 }),
+      makeThread({ filterStatus: 'filtered', ageHours: 40 }),
+      makeThread({ filterStatus: 'filtered', ageHours: 70 }),
+      // Filtered before the classifier recorded a decision: not evidence of
+      // recent work, so not claimed as any.
+      makeThread({ filterStatus: 'filtered', ageHours: 2, filterDecidedAt: null }),
+    ];
+    expect(bucketDigestThreads(threads, NOW, FILED_SINCE).filteredCount).toBe(1);
+  });
+
   it('returns zero counts when no threads provided', () => {
-    const b = bucketDigestThreads([], NOW);
+    const b = bucketDigestThreads([], NOW, FILED_SINCE);
     expect(b.genuine).toEqual([]);
     expect(b.questionable).toEqual([]);
     expect(b.filteredCount).toBe(0);
@@ -87,6 +108,7 @@ describe('formatDigestMessage', () => {
         makeThread({ filterStatus: 'genuine', ageHours: 1 }),
       ],
       NOW,
+      FILED_SINCE,
     );
     const msg = formatDigestMessage(buckets);
     expect(msg).toContain("You've got three open tickets.");
@@ -95,13 +117,13 @@ describe('formatDigestMessage', () => {
   });
 
   it('says the inbox is clear rather than reporting a zero', () => {
-    const msg = formatDigestMessage(bucketDigestThreads([], NOW));
+    const msg = formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE));
     expect(msg).toContain("Nothing's waiting on a reply.");
     expect(msg).not.toContain('Open tickets');
   });
 
   it('greets with the supplied opener ahead of everything else', () => {
-    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW);
+    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW, FILED_SINCE);
     const msg = formatDigestMessage(buckets, null, { opener: 'Morning, Ada here.' });
     expect(msg.startsWith('Morning, Ada here.\n')).toBe(true);
   });
@@ -119,6 +141,7 @@ describe('formatDigestMessage', () => {
           makeThread({ filterStatus: 'filtered' }),
         ],
         NOW,
+        FILED_SINCE,
       ),
       'Last 7 days: 38 tickets in, 29 resolved.',
       { opener: 'Morning, Ada here.', handledSection: 'Handled two things.', waitingSection: 'One waiting.' },
@@ -133,6 +156,7 @@ describe('formatDigestMessage', () => {
         makeThread({ filterStatus: 'questionable', customerName: 'Bob', aiSummary: 'Refund request without order #' }),
       ],
       NOW,
+      FILED_SINCE,
     );
     const msg = formatDigestMessage(buckets);
     expect(msg).toContain("There are two I wasn't sure about:");
@@ -141,7 +165,7 @@ describe('formatDigestMessage', () => {
   });
 
   it('never teaches command syntax — it closes with a question', () => {
-    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'questionable' })], NOW);
+    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'questionable' })], NOW, FILED_SINCE);
     const msg = formatDigestMessage(buckets);
     expect(msg.trimEnd().endsWith('Want me to do anything with it?')).toBe(true);
     expect(msg).not.toMatch(/<n>|<text>|OPEN|SPAM|REPLY|Shortcuts|"open 1"|"spam 1"/);
@@ -154,6 +178,7 @@ describe('formatDigestMessage', () => {
       bucketDigestThreads(
         [makeThread({ filterStatus: 'questionable' }), makeThread({ filterStatus: 'questionable' })],
         NOW,
+        FILED_SINCE,
       ),
     );
     expect(msg).toContain('Want me to do anything with those?');
@@ -164,6 +189,7 @@ describe('formatDigestMessage', () => {
     const buckets = bucketDigestThreads(
       [makeThread({ filterStatus: 'questionable', customerName: 'Carl', aiSummary: null, filterReason: 'No order context, generic body' })],
       NOW,
+      FILED_SINCE,
     );
     const msg = formatDigestMessage(buckets);
     expect(msg).toContain("There's one I wasn't sure about, from Carl.\nNo order context, generic body.");
@@ -173,6 +199,7 @@ describe('formatDigestMessage', () => {
     const buckets = bucketDigestThreads(
       [makeThread({ filterStatus: 'questionable', customerName: 'Alice', aiSummary: 'Asking about wholesale pricing' })],
       NOW,
+      FILED_SINCE,
     );
     const msg = formatDigestMessage(buckets);
     expect(msg).toContain("There's one I wasn't sure about, from Alice.\nAsking about wholesale pricing.");
@@ -187,6 +214,7 @@ describe('formatDigestMessage', () => {
         makeThread({ filterStatus: 'filtered' }),
       ],
       NOW,
+      FILED_SINCE,
     );
     const blocks = formatDigestMessage(buckets).split('\n\n');
     // Status the merchant need not act on, in one breath.
@@ -203,7 +231,7 @@ describe('formatDigestMessage', () => {
     const many = Array.from({ length: 13 }, (_, i) =>
       makeThread({ filterStatus: 'questionable', customerName: `User${i}` }),
     );
-    const buckets = bucketDigestThreads(many, NOW);
+    const buckets = bucketDigestThreads(many, NOW, FILED_SINCE);
     const msg = formatDigestMessage(buckets);
     expect(msg).toContain("There are 13 I wasn't sure about:");
     expect(msg).toContain('1. User0');
@@ -213,25 +241,25 @@ describe('formatDigestMessage', () => {
   });
 
   it('mentions spam filing only when something was filed', () => {
-    const withFiltered = bucketDigestThreads([makeThread({ filterStatus: 'filtered' })], NOW);
+    const withFiltered = bucketDigestThreads([makeThread({ filterStatus: 'filtered' })], NOW, FILED_SINCE);
     expect(formatDigestMessage(withFiltered)).toContain('I filed one as spam.');
 
-    const without = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW);
+    const without = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW, FILED_SINCE);
     expect(formatDigestMessage(without)).not.toContain('as spam');
   });
 
   it('just ends when there are open tickets and nothing flagged', () => {
-    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW);
+    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW, FILED_SINCE);
     expect(formatDigestMessage(buckets).trimEnd()).toBe("You've got one open ticket.");
   });
 
   it('signs off rather than trailing away when everything is clear', () => {
-    const msg = formatDigestMessage(bucketDigestThreads([], NOW));
+    const msg = formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE));
     expect(msg.trimEnd().endsWith("I'll shout if anything comes in.")).toBe(true);
   });
 
   it('includes handled and waiting sections when provided', () => {
-    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW);
+    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW, FILED_SINCE);
     const msg = formatDigestMessage(buckets, null, {
       handledSection: 'Since your last briefing I refunded Sarah $12.',
       waitingSection: "One thing's still waiting on your OK:\n- $12 refund for Sarah",
@@ -245,6 +273,7 @@ describe('formatDigestMessage', () => {
     const buckets = bucketDigestThreads(
       Array.from({ length: 5 }, () => makeThread({ filterStatus: 'genuine', ageHours: 1 })),
       NOW,
+      FILED_SINCE,
     );
     const msg = formatDigestMessage(buckets, null, {
       waitingSection: 'Four things are still waiting on your OK:\n1. a\n2. b\n3. c\n4. d',
@@ -260,6 +289,7 @@ describe('formatDigestMessage', () => {
         ...Array.from({ length: 3 }, () => makeThread({ filterStatus: 'genuine', ageHours: 2 })),
       ],
       NOW,
+      FILED_SINCE,
     );
     const msg = formatDigestMessage(buckets, null, { waitingSection: 'x', waitingOpenCount: 4 });
     expect(msg).toContain('four of them above. Two of the five have been sitting over a day');
@@ -269,24 +299,25 @@ describe('formatDigestMessage', () => {
     const buckets = bucketDigestThreads(
       [makeThread({ filterStatus: 'genuine' }), makeThread({ filterStatus: 'genuine' })],
       NOW,
+      FILED_SINCE,
     );
     expect(formatDigestMessage(buckets, null, { waitingSection: 'x', waitingOpenCount: 2 }))
       .toContain("You've got two open tickets, all of them above.");
 
-    const one = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW);
+    const one = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW, FILED_SINCE);
     expect(formatDigestMessage(one, null, { waitingSection: 'x', waitingOpenCount: 1 }))
       .toContain("You've got one open ticket, the one above.");
   });
 
   it('never claims more waiting items than there are open tickets', () => {
     // Parked plans can sit on threads that are pending, closed, or filtered.
-    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW);
+    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW, FILED_SINCE);
     const msg = formatDigestMessage(buckets, null, { waitingSection: 'x', waitingOpenCount: 4 });
     expect(msg).toContain("You've got one open ticket, the one above.");
   });
 
   it('drops the sign-off when something is already waiting on the merchant', () => {
-    const msg = formatDigestMessage(bucketDigestThreads([], NOW), null, {
+    const msg = formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE), null, {
       waitingSection: "One thing's still waiting on your OK:\n- $12 refund for Sarah",
       waitingOpenCount: 0,
     });
@@ -294,13 +325,13 @@ describe('formatDigestMessage', () => {
   });
 
   it('includes the weekly summary line when provided and omits it otherwise', () => {
-    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW);
+    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW, FILED_SINCE);
     expect(formatDigestMessage(buckets, 'Last 7 days: 5 tickets in.')).toContain('Last 7 days: 5 tickets in.');
     expect(formatDigestMessage(buckets)).not.toContain('Last 7 days');
   });
 
   it('inserts Shopify garnish lines before the weekly summary', () => {
-    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine', tag: 'Shipping' })], NOW);
+    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine', tag: 'Shipping' })], NOW, FILED_SINCE);
     const msg = formatDigestMessage(
       buckets,
       'Last 7 days: 5 tickets in.',
@@ -346,15 +377,29 @@ describe('buildOrgDigest — inbox scope', () => {
     expect(digest?.message).toContain("You've got one open ticket");
   });
 
-  it('still counts filtered threads for the filtered line', async () => {
+  it('counts filtered threads for the filtered line only inside the briefing window', async () => {
     org = await createTestOrg();
     const genuine = await createTestCustomer(org.id, 'real@example.com', { name: 'Real' });
     const spammer = await createTestCustomer(org.id, 'spam@example.com', { name: 'Spammer' });
+    const oldSpammer = await createTestCustomer(org.id, 'old-spam@example.com', { name: 'Old Spammer' });
     await createTestThread(org.id, genuine.id, 'email');
     const filtered = await createTestThread(org.id, spammer.id, 'email');
+    const oldFiltered = await createTestThread(org.id, oldSpammer.id, 'email');
     await db.thread.update({
       where: { id: filtered.id },
-      data: { filterStatus: ThreadFilterStatus.filtered },
+      data: {
+        filterStatus: ThreadFilterStatus.filtered,
+        filterDecidedAt: new Date(NOW.getTime() - 2 * HOUR),
+      },
+    });
+    // Filed days ago and still open, because nothing closes a filtered thread.
+    // Re-reporting it would claim the same work every morning.
+    await db.thread.update({
+      where: { id: oldFiltered.id },
+      data: {
+        filterStatus: ThreadFilterStatus.filtered,
+        filterDecidedAt: new Date(NOW.getTime() - 72 * HOUR),
+      },
     });
 
     const digest = await buildOrgDigest(org.id, NOW);
@@ -376,13 +421,13 @@ describe('formatWeeklySummaryLine', () => {
   }
 
   it('renders ticket count, top topic, and resolution', () => {
-    expect(formatWeeklySummaryLine(makeStats())).toBe(
+    expect(formatWeeklySummaryLine(makeStats(), 5)).toBe(
       'Last 7 days: 38 tickets in, mostly Shipping, 29 resolved in 42m on average.',
     );
   });
 
   it('rounds long resolution times to hours', () => {
-    const line = formatWeeklySummaryLine(makeStats({ resolution: { closedCount: 4, avgMinutes: 200 } }));
+    const line = formatWeeklySummaryLine(makeStats({ resolution: { closedCount: 4, avgMinutes: 200 } }), 5);
     expect(line).toContain('four resolved in 3h on average');
   });
 
@@ -392,23 +437,42 @@ describe('formatWeeklySummaryLine', () => {
     expect(formatWeeklySummaryLine(makeStats({
       tickets: { total: 5, byTag: [{ tag: 'Order Status', count: 4 }], byChannel: [], byDay: [] },
       resolution: { closedCount: 0, avgMinutes: null },
-    }))).toBe('Last 7 days: five tickets in, mostly Order Status.');
+    }), 2)).toBe('Last 7 days: five tickets in, mostly Order Status.');
   });
 
   it('drops the topic part for a one-off tag and for the General catch-all', () => {
     expect(formatWeeklySummaryLine(makeStats({
       tickets: { total: 9, byTag: [{ tag: 'Shipping', count: 1 }], byChannel: [], byDay: [] },
-    }))).not.toContain('mostly');
+    }), 5)).not.toContain('mostly');
 
     expect(formatWeeklySummaryLine(makeStats({
       tickets: { total: 9, byTag: [{ tag: 'General', count: 7 }], byChannel: [], byDay: [] },
-    }))).not.toContain('mostly');
+    }), 5)).not.toContain('mostly');
   });
 
   it('stays silent below three tickets a week', () => {
     expect(formatWeeklySummaryLine(makeStats({
       tickets: { total: 1, byTag: [], byChannel: [], byDay: [] },
       resolution: { closedCount: 0, avgMinutes: null },
-    }))).toBeNull();
+    }), 0)).toBeNull();
+  });
+
+  it('stays silent when the week is the same tickets the open count just named', () => {
+    // Five in, none resolved, five still open: "five tickets in" is the same
+    // five the line above called open, and reads as a number to reconcile.
+    const stalled = makeStats({
+      tickets: { total: 5, byTag: [{ tag: 'Order Status', count: 4 }], byChannel: [], byDay: [] },
+      resolution: { closedCount: 0, avgMinutes: null },
+    });
+    expect(formatWeeklySummaryLine(stalled, 5)).toBeNull();
+
+    // A resolution story is new information even at the same volume.
+    expect(formatWeeklySummaryLine(makeStats({
+      tickets: { total: 5, byTag: [{ tag: 'Order Status', count: 4 }], byChannel: [], byDay: [] },
+      resolution: { closedCount: 3, avgMinutes: 30 },
+    }), 5)).toContain('three resolved');
+
+    // So is volume the open count does not account for.
+    expect(formatWeeklySummaryLine(stalled, 2)).toContain('five tickets in');
   });
 });
