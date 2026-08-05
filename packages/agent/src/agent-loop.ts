@@ -1,6 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { anthropic } from "./ai/anthropic.js";
 import logger from "./logger.js";
+import { resolveModelTuning } from "./model-tuning.js";
 import { recordSpend } from "./spend.js";
 import {
   createModelUsageMetrics,
@@ -175,6 +176,10 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
       system: systemPromptBlocks,
       messages,
       tools,
+      // Explicit rather than inherited: see model-tuning.ts. Resolved per call
+      // because it depends on the model (Haiku rejects effort) and on the mode
+      // (thinking is only tuned for planning).
+      ...resolveModelTuning(model, mode),
     });
 
     const toolUseBlocks = response.content.filter(
