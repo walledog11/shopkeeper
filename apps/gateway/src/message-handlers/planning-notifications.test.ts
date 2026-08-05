@@ -129,7 +129,7 @@ describe('formatOperatorPlanMessage', () => {
       },
     );
 
-    expect(message).toContain('New email from Jane — needs a refund');
+    expect(message).toContain('New email from Jane.\nNeeds a refund.');
     expect(message).toContain("Here's what I'd do:");
     expect(message).toContain('1. Email Jane');
     expect(message).toContain('2. Refund');
@@ -138,6 +138,40 @@ describe('formatOperatorPlanMessage', () => {
     expect(message).toContain('Sound good?');
     expect(message).not.toContain('New ticket');
     expect(message).not.toContain('skip 1');
+  });
+
+  it('states a single non-send step as a sentence, never as a one-item list', () => {
+    const message = formatOperatorPlanMessage(
+      'Jane Doe',
+      ChannelType.email,
+      'Customer wants their order cancelled.',
+      [{ category: 'write', tool: 'cancel_order', description: 'Cancel the order', label: 'Cancel order', enabled: true }],
+      { rawToolCalls: [{ name: 'cancel_order', input: {} }] },
+    );
+
+    expect(message).toContain("I'd cancel order for Jane.");
+    expect(message).not.toContain("Here's what I'd do:");
+    expect(message).not.toMatch(/^1\. /m);
+    expect(message).toContain('Sound good?');
+  });
+
+  it('writes no em-dashes of its own', () => {
+    // Summaries are customer-derived and may legitimately contain one, so this
+    // fixture is dash-free and asserts only the card's own copy.
+    const message = formatOperatorPlanMessage(
+      'Jane Doe',
+      ChannelType.email,
+      'Customer wants a refund.',
+      [{ category: 'write', tool: 'issue_refund', description: 'Issue refund', label: 'Refund', enabled: true }],
+      {
+        threadId: 'thread_1',
+        dashboardUrl: 'https://dashboard.example.com',
+        rawToolCalls: [{ name: 'issue_refund', input: {} }],
+        queueNotice: { kind: 'replaces', customerName: 'Sarah Lee' },
+      },
+    );
+
+    expect(message).not.toContain('—');
   });
 
   it('presents a lone reply on a DM thread as a draft, never as an email', () => {
@@ -153,7 +187,7 @@ describe('formatOperatorPlanMessage', () => {
       },
     );
 
-    expect(message).toContain('New Instagram DM from Sarah — customer asked when the next restock will occur.');
+    expect(message).toContain('New Instagram DM from Sarah.\nCustomer asked when the next restock will occur.');
     expect(message).toContain('I\'d reply:\n"It drops in about a month!"');
     expect(message).toContain('Good to send?');
     expect(message).not.toContain('Email');
@@ -191,7 +225,7 @@ describe('formatOperatorPlanMessage', () => {
       },
     );
 
-    expect(message).toContain('Sarah replied on Instagram — customer is asking when the snowboard restocks.');
+    expect(message).toContain('Sarah replied on Instagram.\nCustomer is asking when the snowboard restocks.');
     expect(message).not.toContain('New Instagram DM');
   });
 
@@ -203,7 +237,7 @@ describe('formatOperatorPlanMessage', () => {
       plan.steps,
       { stage: { isFollowUp: true, newMessages: 3 } },
     );
-    expect(followUp).toContain('Sarah sent 3 more messages on Instagram — customer sent more details.');
+    expect(followUp).toContain('Sarah sent 3 more messages on Instagram.\nCustomer sent more details.');
 
     const fresh = formatOperatorPlanMessage(
       null,
@@ -212,7 +246,7 @@ describe('formatOperatorPlanMessage', () => {
       plan.steps,
       { stage: { isFollowUp: false, newMessages: 2 } },
     );
-    expect(fresh).toContain('New Instagram DM (2 messages) — customer asked two things.');
+    expect(fresh).toContain('New Instagram DM (2 messages).\nCustomer asked two things.');
   });
 
   it('asks for a send on reply-only plans without a draft excerpt', () => {
@@ -237,7 +271,7 @@ describe('formatOperatorPlanMessage', () => {
       { queueNotice: { kind: 'replaces', customerName: 'Sarah Chen' } },
     );
 
-    expect(message).toContain("(This replaces the earlier plan for Sarah — that one's still on your dashboard.)");
+    expect(message).toContain("(This replaces the earlier plan for Sarah. That one's still on your dashboard.)");
     expect(message.indexOf('This replaces')).toBeLessThan(message.indexOf('Good to send?'));
   });
 
@@ -250,7 +284,7 @@ describe('formatOperatorPlanMessage', () => {
       { queueNotice: { kind: 'replaces', customerName: null } },
     );
 
-    expect(message).toContain("(This replaces an earlier plan — it's still on your dashboard.)");
+    expect(message).toContain("(This replaces an earlier plan. It's still on your dashboard.)");
   });
 
   it('omits the disclosure when nothing is being overwritten', () => {
@@ -429,7 +463,7 @@ describe('sendOperatorPlanNotification', () => {
     );
 
     const [, , body] = notifyOperatorSpy.mock.calls[0] ?? [];
-    expect(body).toContain("(This replaces the earlier plan for Bob — that one's still on your dashboard.)");
+    expect(body).toContain("(This replaces the earlier plan for Bob. That one's still on your dashboard.)");
   });
 
   it('omits the disclosure when the parked plan is for the same thread', async () => {

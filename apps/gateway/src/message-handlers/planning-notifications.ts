@@ -159,12 +159,21 @@ export function customerFirstName(customerName: string | null): string | null {
   return customerName ? customerName.split(' ')[0] ?? null : null;
 }
 
-function formatHeaderLine(
+// Summaries are model-written and arrive with or without a final stop; without
+// one they run into whatever follows.
+function endSentence(text: string): string {
+  return /[.!?…"']$/.test(text.trim()) ? text.trim() : `${text.trim()}.`;
+}
+
+// Two lines, not one joined by an em-dash. The summary is model-written prose
+// that routinely carries its own commas, colons and quotes, so splicing it after
+// a dash produces a sentence with three kinds of punctuation fighting.
+function formatHeaderLines(
   customerName: string | null,
   channelType: DbChannelType,
   summary: string,
   stage: ConversationStage,
-): string {
+): string[] {
   const firstName = customerFirstName(customerName);
   let lead: string;
   if (stage.isFollowUp) {
@@ -177,7 +186,7 @@ function formatHeaderLine(
     const burst = stage.newMessages > 1 ? ` (${stage.newMessages} messages)` : '';
     lead = `New ${channelNoun(channelType)}${from}${burst}`;
   }
-  return `${lead} — ${lowerFirst(summary)}`;
+  return [`${lead}.`, endSentence(summary)];
 }
 
 function isSendStep(step: PlanStep): boolean {
@@ -229,10 +238,17 @@ export function formatOperatorPlanMessage(
   // The actual draft the merchant is approving, so approval is not sight-unseen.
   const draftBody = options?.rawToolCalls ? firstDraftExcerpt(options.rawToolCalls) : null;
 
-  const lines: string[] = [formatHeaderLine(customerName, channelType, summary, stage)];
+  const lines: string[] = formatHeaderLines(customerName, channelType, summary, stage);
 
   if (actionableSteps.length === 1 && isSendStep(actionableSteps[0]!) && draftBody) {
     lines.push('', "I'd reply:", `"${draftBody}"`);
+  } else if (actionableSteps.length === 1) {
+    // One step is not a list. Numbering a single item is the tell that a machine
+    // wrote the card; say it as a sentence instead. parkedActionLabel already
+    // renders the phrase that completes "I won't …", which completes "I'd …" too.
+    const only = parkedActionLabel(actionableSteps, customerName);
+    lines.push('', only ? `I'd ${only}.` : `I'd ${lowerFirst(actionableSteps[0]!.label || actionableSteps[0]!.description)}.`);
+    if (draftBody) lines.push('', `The reply: "${draftBody}"`);
   } else if (actionableSteps.length > 0) {
     const stepLines = actionableSteps.map((step, index) => {
       if (step.tool === 'send_reply') return `${index + 1}. Reply to ${firstName ?? 'the customer'}`;
@@ -255,12 +271,12 @@ export function formatOperatorPlanMessage(
       const earlierName = customerFirstName(notice.customerName);
       if (notice.kind === 'replaces') {
         lines.push('', earlierName
-          ? `(This replaces the earlier plan for ${earlierName} — that one's still on your dashboard.)`
-          : "(This replaces an earlier plan — it's still on your dashboard.)");
+          ? `(This replaces the earlier plan for ${earlierName}. That one's still on your dashboard.)`
+          : "(This replaces an earlier plan. It's still on your dashboard.)");
       } else {
         lines.push('', earlierName
-          ? `(This pushes out the oldest waiting plan — ${earlierName}'s — to stay under your limit; it's still on your dashboard.)`
-          : "(This pushes out the oldest waiting plan to stay under your limit; it's still on your dashboard.)");
+          ? `(This pushes out ${earlierName}'s plan to stay under your limit. It's still on your dashboard.)`
+          : "(This pushes out the oldest waiting plan to stay under your limit. It's still on your dashboard.)");
       }
     }
   }
@@ -301,8 +317,8 @@ function formatAutoExecutionMessage(
   // Neutral possessive header: by the time this fans out, the agent's own reply
   // is already in the thread, so fresh-vs-follow-up detection would misread it.
   const headline = firstName
-    ? `${firstName}'s ${noun} — ${lowerFirst(summary)}`
-    : `${noun.charAt(0).toUpperCase()}${noun.slice(1)} — ${lowerFirst(summary)}`;
+    ? `${firstName}'s ${noun}.`
+    : `${noun.charAt(0).toUpperCase()}${noun.slice(1)}.`;
   const actionableSteps = plan.steps.filter((step) => step.category !== 'read');
   const stepLines = actionableSteps.map((step, index) => `${index + 1}. ${step.description || step.label}`);
   const statusLine = result.autoExecutionStatus === 'error'
@@ -311,6 +327,7 @@ function formatAutoExecutionMessage(
 
   const lines: (string | null)[] = [
     headline,
+    endSentence(summary),
     '',
     statusLine,
     ...stepLines,
@@ -403,7 +420,7 @@ function formatQuestionMessage(
   stage: ConversationStage,
 ): string {
   return [
-    formatHeaderLine(customerName, channelType, summary, stage),
+    ...formatHeaderLines(customerName, channelType, summary, stage),
     '',
     `${question} I'll draft the reply once I know.`,
   ].join('\n');

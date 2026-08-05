@@ -54,14 +54,17 @@ async function main() {
     create: { organizationId: orgId, platformId: customerEmail, name: customerName },
   });
 
-  const aiSummary = 'Customer is happy with a candle order and asks for burn/longevity tips.';
+  // The card header quotes aiSummary, so it has to describe the PROMPT actually
+  // used — a mismatched summary reads as a bug on the merchant's phone.
+  const aiSummary = process.env.AI_SUMMARY
+    ?? 'Customer is happy with a candle order and asks for burn/longevity tips.';
   const thread = await db.thread.create({
     data: {
       organizationId: orgId,
       customerId: customer.id,
       channelType: 'email',
       status: 'open',
-      subject: 'Live interpretation test',
+      subject: process.env.SUBJECT ?? 'Live interpretation test',
       aiSummary,
       tag: 'Support',
     },
@@ -90,6 +93,23 @@ async function main() {
   if (!plan || plan.rawToolCalls.length === 0 || !generated.identity) {
     console.error('Planner produced no actionable tool calls — try a different PROMPT');
     console.error('  (one that yields a reply/refund, not a "no action needed" plan).');
+    console.error('  thread:', thread.id, ' customer:', customer.id, '(delete these before retrying)');
+    await db.$disconnect();
+    process.exit(1);
+  }
+
+  // The real inbound flow routes a plan whose only move is ask_operator to
+  // sendOperatorQuestionNotification (ai-summary-flow.ts), which pushes the
+  // actual question. Pushing it as a plan card instead — which is all this
+  // script knows how to do — produces a card that proposes "Ask the merchant"
+  // and then asks "Sound good?", which is not a thing production ever sends.
+  // Refuse rather than stage a bug that isn't real.
+  if (generated.merchantQuestion) {
+    console.error('Planner chose to ask the merchant, not to act:');
+    console.error(`  "${generated.merchantQuestion}"`);
+    console.error('  Production would send this via sendOperatorQuestionNotification, not a plan card.');
+    console.error('  Pick a PROMPT the agent can act on unaided (an order lookup beats a policy');
+    console.error('  question when the KB is thin).');
     console.error('  thread:', thread.id, ' customer:', customer.id, '(delete these before retrying)');
     await db.$disconnect();
     process.exit(1);
