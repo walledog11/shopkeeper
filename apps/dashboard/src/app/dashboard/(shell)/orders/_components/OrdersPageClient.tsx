@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useSWRConfig } from "swr"
 import { Search, ShoppingBag, X } from "lucide-react"
+import { OrdersPageSkeleton } from "@/app/dashboard/_components/skeletons"
 import { isShopifyIntegrationActive, isShopifyOrdersUnavailable } from "@/lib/integrations/shopify-connection"
 import { INTEGRATIONS_SWR_KEY, useIntegrations } from "@/hooks/useIntegrations"
 import { useCursorListState } from "@/lib/api/use-cursor-list-state"
@@ -99,6 +100,10 @@ export default function OrdersPageClient() {
     [needsFulfillment, unpaid, fulfilled],
   )
 
+  const boardInitialLoading = boardEnabled && ORDER_BOARD_COLUMNS.every(
+    column => columns[column.id].isLoading && columns[column.id].entries.length === 0,
+  )
+
   const search = useCursorListState<OrderRow, OrdersResponse>({
     enabled: ordersEnabled && searchActive,
     buildUrl: () => `/api/orders?q=${encodeURIComponent(debouncedSearch)}`,
@@ -130,6 +135,10 @@ export default function OrdersPageClient() {
     const qs = params.toString()
     router.replace(qs ? `/dashboard/orders?${qs}` : "/dashboard/orders", { scroll: false })
   }, [router, searchParams])
+
+  if (integrationsLoading && ordersEnabled) {
+    return <OrdersPageSkeleton />
+  }
 
   if (isShopifyDisconnected) {
     return (
@@ -218,6 +227,16 @@ export default function OrdersPageClient() {
                 emptyDescription="Try a different name, email, or order number."
               />
             </>
+          ) : boardInitialLoading ? (
+            <div className="grid gap-6 lg:grid-cols-3" aria-busy="true" aria-label="Loading orders">
+              {ORDER_BOARD_COLUMNS.map(column => (
+                <div key={column.id} className="space-y-2.5">
+                  <div className="mb-3 h-4 w-28 animate-pulse rounded-md bg-foreground/[0.07]" />
+                  <div className="h-36 animate-pulse rounded-2xl border border-border bg-card" />
+                  <div className="h-36 animate-pulse rounded-2xl border border-border bg-card" />
+                </div>
+              ))}
+            </div>
           ) : (
             <>
               <NeedsYouSection enabled={boardEnabled} shop={shop} />

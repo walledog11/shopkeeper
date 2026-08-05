@@ -23,7 +23,7 @@ export type ToolExecMode = "execute" | "capture" | "read_only";
 
 // The tools that end a support turn — the customer/operator hears back, or a
 // human takes over. In capture mode the loop stops once one is proposed.
-export const TERMINAL_TOOL_NAMES = new Set([
+const TERMINAL_TOOL_NAMES = new Set([
   "send_reply",
   "send_email",
   "escalate_to_human",

@@ -271,7 +271,7 @@ async function executePreparedTool(
   }
   if (result.status !== "ok") {
     await releaseDailyRefundSpendReservation(reservation.reservation.id, result.message);
-    return { result, policyBlocked: false };
+    return { result, policyBlocked: result.status === "policy_block" };
   }
 
   const committedCents = committedSpendCents(result);
@@ -333,6 +333,7 @@ const TOOL_STATUS_TO_EXECUTE_STATUS: Record<ToolStatus, ExecuteToolResult["statu
   ok: "success",
   not_found: "success",
   error: "error",
+  policy_block: "policy_block",
   escalated: "escalated",
   unknown: "unknown",
 };

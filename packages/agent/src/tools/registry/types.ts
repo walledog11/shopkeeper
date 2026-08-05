@@ -54,6 +54,7 @@ export interface GetOrderByNameInput {
 export interface CreateRefundInput {
   order_id: string;
   amount: string;
+  currency?: string;
   reason?: string;
 }
 
@@ -150,7 +151,7 @@ export interface IssueStoreCreditInput {
 
 export interface CreateGiftCardInput {
   amount: string;
-  customer_id?: string;
+  customer_id: string;
   reason?: string;
   expires_in_days?: number;
 }
@@ -266,8 +267,9 @@ export interface ToolPolicyMetadata {
   dailyRefundSpendLimit?: boolean;
   cancellationDisabled?: boolean;
   customLineItemsDisabled?: boolean;
-  discountPercentLimit?: boolean;
 }
+
+export type ToolAvailability = "active" | "retired";
 
 export type ToolParser<TInput> = (input: unknown) => TInput;
 
@@ -284,6 +286,7 @@ export interface AgentToolDefinition<TInput = unknown, TName extends string = st
     planStep: string;
   };
   policy: ToolPolicyMetadata;
+  availability: ToolAvailability;
   execute(
     input: TInput,
     ctx: BaseAgentContext,

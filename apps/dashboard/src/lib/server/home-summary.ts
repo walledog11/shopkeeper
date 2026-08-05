@@ -1,4 +1,6 @@
 import type { OrgSettings } from "@/types"
+import { db } from "@shopkeeper/db"
+import { listRecentUnfulfilledOrderIds } from "@shopkeeper/agent/shopify"
 import {
   lastUtcDayKeys,
   type HomeClearedTopic,
@@ -9,6 +11,9 @@ import { getChannelInfo } from "@/lib/messaging/channels"
 import { getCustomerName } from "@/lib/messaging/customer-name"
 import { loadNeedsAttention } from "@/lib/server/home-needs-attention"
 import { getHomeSummaryWindows, loadHomeSummaryRows } from "@/lib/server/home-summary-queries"
+import { isShopifyIntegrationOperational } from "@/lib/server/shopify-integration"
+
+const ORDERS_TO_SHIP_LIMIT = 10
 
 function numberFromDb(value: bigint | number): number {
   return typeof value === "bigint" ? Number(value) : value
@@ -23,17 +28,51 @@ function initialsOf(name: string): string {
     .toUpperCase() || "?"
 }
 
+async function loadOrdersToShip(organizationId: string): Promise<number | null> {
+  const integration = await db.integration.findFirst({
+    where: { organizationId, platform: "shopify", accessToken: { not: null } },
+    orderBy: { createdAt: "desc" },
+    select: {
+      accessToken: true,
+      tokenExpiresAt: true,
+      externalAccountId: true,
+    },
+  })
+
+  if (!integration || !isShopifyIntegrationOperational(integration)) {
+    return null
+  }
+
+  const shop = integration.externalAccountId
+  const accessToken = integration.accessToken
+  if (!shop || !accessToken) return null
+
+  try {
+    const orderIds = await listRecentUnfulfilledOrderIds(
+      { shop, accessToken },
+      ORDERS_TO_SHIP_LIMIT,
+    )
+    return orderIds.length
+  } catch {
+    return null
+  }
+}
+
 export async function getHomeSummary(
   organizationId: string,
   settings: Partial<OrgSettings> | null,
   now = new Date(),
 ): Promise<HomeSummary> {
   const windows = getHomeSummaryWindows(now)
-  const [{ metricRows, dailyRows, topicRows, channelRows, repeatRows }, needsAttention] =
-    await Promise.all([
-      loadHomeSummaryRows(organizationId, now, windows),
-      loadNeedsAttention(organizationId, settings, now),
-    ])
+  const [
+    { metricRows, dailyRows, topicRows, channelRows, repeatRows },
+    needsAttention,
+    ordersToShip,
+  ] = await Promise.all([
+    loadHomeSummaryRows(organizationId, now, windows),
+    loadNeedsAttention(organizationId, settings, now),
+    loadOrdersToShip(organizationId),
+  ])
 
   const metric = metricRows[0] ?? {
     open_count: BigInt(0),
@@ -93,5 +132,6 @@ export async function getHomeSummary(
       channelNames: channelRows.map(row => getChannelInfo(row.channel_type).name),
     },
     repeatCustomers,
+    ordersToShip,
   }
 }

@@ -1,9 +1,7 @@
 "use client"
 
-import useSWR from "swr"
 import { useOrganization } from "@clerk/nextjs"
 import type { OrgSettings, OrgSettingsPatch, VoiceProposal } from "@/types"
-import { fetcher } from "@/lib/api/fetcher"
 import {
   AgentAdvancedSection,
   AgentAutonomySection,
@@ -21,10 +19,8 @@ interface Props {
   version: string
   orgName: string
   voiceProposal: VoiceProposal | null
-}
-
-interface IntegrationRow {
-  platform: string
+  emailConnected: boolean
+  shopifyConnected: boolean
 }
 
 export default function AgentTab(props: Props) {
@@ -36,9 +32,7 @@ export default function AgentTab(props: Props) {
   // page; the save bar tells them why they can't apply a change.
   const { membership } = useOrganization()
   const isAdmin = membership?.role === "org:admin"
-  const { data: integrations } = useSWR<IntegrationRow[]>("/api/integrations", fetcher)
-  const emailConnected = integrations?.some(row => row.platform === "email") ?? false
-  const shopifyConnected = integrations?.some(row => row.platform === "shopify") ?? false
+  const { emailConnected, shopifyConnected } = props
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6 pb-20">

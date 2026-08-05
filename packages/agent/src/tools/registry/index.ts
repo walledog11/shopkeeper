@@ -47,6 +47,7 @@ export type {
   ToolCapability,
   ToolExecutionDeps,
   ToolGroup,
+  ToolAvailability,
   ToolParser,
   ToolPolicyMetadata,
   UpdateShopifyCustomerInfoInput,
@@ -110,7 +111,9 @@ export const PLAN_STEP_LABELS: Record<string, string> = Object.fromEntries(
   TOOL_DEFINITIONS.map((definition) => [definition.name, definition.labels.planStep])
 );
 
-export const AGENT_TOOLS: Anthropic.Tool[] = TOOL_DEFINITIONS.map((definition) => ({
+export const AGENT_TOOLS: Anthropic.Tool[] = TOOL_DEFINITIONS
+  .filter((definition) => definition.availability === "active")
+  .map((definition) => ({
   name: definition.name,
   description: definition.description,
   input_schema: definition.inputSchema,

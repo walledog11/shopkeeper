@@ -38,7 +38,6 @@ const SETTINGS_KEYS = [
   "toolsEnabled",
   "maxRefundAmount",
   "dailyRefundCap",
-  "maxDiscountPercent",
   "dailyLLMSpendCapUsd",
   "blockCancellations",
   "blockCustomLineItems",
@@ -69,6 +68,8 @@ const SETTINGS_KEYS = [
   "postResolutionFollowUpEnabled",
   "postResolutionFollowUpDays",
 ] as const satisfies readonly (keyof OrgSettings)[];
+
+const OBSOLETE_STORED_SETTINGS_KEYS = ["maxDiscountPercent"] as const;
 
 const BOOLEAN_FIELDS = [
   "autoPlanOnOpen",
@@ -243,24 +244,6 @@ function readNullableNonNegativeNumber(
   addIssue(context, key, "Expected null or a non-negative finite number");
 }
 
-function readNullablePercent(
-  value: Record<string, unknown>,
-  key: string,
-  output: Record<string, unknown>,
-  context: ParseContext,
-): void {
-  if (!hasOwn(value, key)) return;
-  const candidate = value[key];
-  if (
-    candidate === null
-    || (typeof candidate === "number" && Number.isFinite(candidate) && candidate >= 0 && candidate <= 100)
-  ) {
-    output[key] = candidate;
-    return;
-  }
-  addIssue(context, key, "Expected null or a number from 0 to 100");
-}
-
 function readInteger(
   value: Record<string, unknown>,
   key: string,
@@ -283,7 +266,7 @@ function readInteger(
   addIssue(context, key, `Expected an integer from ${min} to ${max}`);
 }
 
-export function isValidTimeZone(value: string): boolean {
+function isValidTimeZone(value: string): boolean {
   if (value.trim() === "") return true;
   try {
     new Intl.DateTimeFormat("en-US", { timeZone: value }).format();
@@ -425,7 +408,14 @@ function parseSettingsObject(value: unknown, mode: ParseMode): OrgSettingsPatch 
     return {};
   }
 
-  rejectUnknownKeys(value, SETTINGS_KEYS, "", context);
+  rejectUnknownKeys(
+    value,
+    mode === "stored"
+      ? [...SETTINGS_KEYS, ...OBSOLETE_STORED_SETTINGS_KEYS]
+      : SETTINGS_KEYS,
+    "",
+    context,
+  );
   const output: Record<string, unknown> = {};
 
   for (const key of BOOLEAN_FIELDS) readBoolean(value, key, output, context);
@@ -437,7 +427,6 @@ function parseSettingsObject(value: unknown, mode: ParseMode): OrgSettingsPatch 
   for (const key of OFFSET_FIELDS) readInteger(value, key, -12, 14, output, context);
   for (const key of TIMEZONE_FIELDS) readTimezone(value, key, output, context);
 
-  readNullablePercent(value, "maxDiscountPercent", output, context);
   readNullableNonNegativeNumber(value, "lowStockThreshold", output, context);
   readInteger(value, "maxIterations", 1, 100, output, context);
   readInteger(value, "postResolutionFollowUpDays", 1, 90, output, context);

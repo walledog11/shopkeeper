@@ -30,7 +30,7 @@ type TrackingShipment = {
 let uspsAccessToken: USPSAccessToken | null = null;
 const USPS_REQUEST_TIMEOUT_MS = 15_000;
 
-export class USPSRequestTimeoutError extends Error {
+class USPSRequestTimeoutError extends Error {
   constructor(cause: unknown) {
     super(`USPS request timed out after ${USPS_REQUEST_TIMEOUT_MS}ms`, { cause });
     this.name = "USPSRequestTimeoutError";

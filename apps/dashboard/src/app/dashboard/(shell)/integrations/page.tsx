@@ -1,5 +1,6 @@
 import { Suspense } from "react"
 import { auth } from "@clerk/nextjs/server"
+import { IntegrationsPageSkeleton } from "@/app/dashboard/_components/skeletons"
 import IntegrationsPageClient from "./_components/IntegrationsPageClient"
 import { normalizeTelegramBotUsername } from "@/lib/integrations/telegram-visibility"
 import { normalizeImessageLineHandle } from "@/lib/integrations/imessage-visibility"
@@ -15,7 +16,7 @@ export default async function IntegrationsPage() {
   const tiktokShopConfigured = isTikTokShopOAuthConfigured()
 
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<IntegrationsPageSkeleton />}>
       <IntegrationsPageClient
         telegramBotUsername={telegramBotUsername}
         imessageHandle={imessageHandle}

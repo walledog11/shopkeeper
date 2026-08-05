@@ -8,7 +8,7 @@ import {
   tierDefaultForPath,
   type AutonomyOverridePath,
 } from "./agent-tab-helpers"
-import { MoneyInput, NumberInput } from "./settings-form-fields"
+import { MoneyInput } from "./settings-form-fields"
 import { ToggleRow } from "@/components/settings-form/shared"
 import type { AgentTabController } from "./useAgentTabState"
 
@@ -19,9 +19,6 @@ function tierLabel(tier: AutonomyTier): string {
 function formatOverrideValue(path: AutonomyOverridePath, value: unknown): string {
   if (path === "maxRefundAmount") {
     return typeof value === "number" ? `$${value}` : "No limit"
-  }
-  if (path === "maxDiscountPercent") {
-    return typeof value === "number" ? `${value}%` : "No limit"
   }
   if (typeof value === "boolean") return value ? "On" : "Off"
   return value == null ? "Not set" : String(value)
@@ -76,8 +73,6 @@ export function AgentAutonomyAdvancedSection({ controller }: { controller: Agent
     resetAutonomyOverride,
     setAutonomyOverride,
     setMaxRefundInput,
-    maxDiscountInput,
-    setMaxDiscountInput,
     dailyRefundCapInput,
     setDailyRefundCapInput,
   } = controller
@@ -85,7 +80,7 @@ export function AgentAutonomyAdvancedSection({ controller }: { controller: Agent
   return (
     <div className="space-y-5">
       <div>
-        <h3 className="text-sm font-semibold text-strong">Refund and discount limits</h3>
+        <h3 className="text-sm font-semibold text-strong">Compensation limits</h3>
         <p className="text-xs text-faint mt-0.5 leading-relaxed">
           Override the caps that come with your trust level. Leave blank to use the tier default.
         </p>
@@ -93,16 +88,16 @@ export function AgentAutonomyAdvancedSection({ controller }: { controller: Agent
 
       <div className="space-y-1.5">
         <MoneyInput
-          label="Largest single refund"
+          label="Largest single compensation"
           hint="leave blank for no limit"
-          aria-label="Largest single refund"
+          aria-label="Largest single compensation"
           value={maxRefundInput}
           onValueChange={value => {
             markExplicit("maxRefundAmount")
             setMaxRefundInput(value)
           }}
           placeholder="e.g. 50"
-          description="Also caps a single store credit or gift card."
+          description="Caps each exact full refund or explicitly requested gift card."
         />
         <OverrideHint
           path="maxRefundAmount"
@@ -113,36 +108,14 @@ export function AgentAutonomyAdvancedSection({ controller }: { controller: Agent
         />
       </div>
 
-      <div className="space-y-1.5">
-        <NumberInput
-          label="Max discount %"
-          hint="leave blank for no limit"
-          aria-label="Max discount percent"
-          value={maxDiscountInput}
-          onValueChange={value => {
-            markExplicit("maxDiscountPercent")
-            setMaxDiscountInput(value)
-          }}
-          placeholder="e.g. 15"
-          description="Largest single-use discount code the agent can issue. Set 0 to disable discounts."
-        />
-        <OverrideHint
-          path="maxDiscountPercent"
-          tier={autonomyTier}
-          payload={payload}
-          explicitOverrideSet={explicitOverrideSet}
-          onReset={resetAutonomyOverride}
-        />
-      </div>
-
       <MoneyInput
-        label="Daily refund limit"
+        label="Daily compensation limit"
         hint="leave blank for no limit"
-        aria-label="Daily refund limit"
+        aria-label="Daily compensation limit"
         value={dailyRefundCapInput}
         onValueChange={setDailyRefundCapInput}
         placeholder="e.g. 200"
-        description="Total the agent can give back per day — refunds, store credit, and gift cards share this pool."
+        description="Total the agent can issue per day across exact full refunds and gift cards."
       />
 
       <div className="space-y-1 border-t border-foreground/[0.06] pt-5">

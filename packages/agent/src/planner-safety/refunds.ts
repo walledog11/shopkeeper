@@ -7,7 +7,7 @@ function isOrderFullyRefunded(order: ShopifyOrderSummary): boolean {
   return order.financial_status?.toLowerCase() === "refunded"
 }
 
-export function refundTargetOrders(
+function refundTargetOrders(
   ctx: AgentContext,
   instruction: string,
 ): ShopifyOrderSummary[] {

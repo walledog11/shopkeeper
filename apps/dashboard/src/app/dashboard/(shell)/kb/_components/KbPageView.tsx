@@ -1,6 +1,7 @@
 "use client"
 
 import { Check, Loader2, Plus, Search, X } from "lucide-react"
+import { MemoryLibrarySkeleton } from "@/app/dashboard/_components/skeletons"
 import { DashboardDetailDialog } from "@/app/dashboard/_components/board/DashboardDetailDialog"
 import { useMobileChromeOverride } from "@/app/dashboard/_components/mobile-chrome/MobileChromeContext"
 import { useIsMobile } from "@/hooks/useMobile"
@@ -46,7 +47,27 @@ export function KbPageView({ state }: { state: KbPageState }) {
         </div>
       </div>
 
-      {isLoading ? <div className="flex flex-1 items-center justify-center"><Loader2 className="size-5 animate-spin text-faint" /></div> : <div className="custom-scrollbar flex-1 overflow-y-auto"><div className="px-4 py-6 pb-16 sm:px-6 lg:px-8"><MemoryLibrary books={visibleBooks} hasActiveSearch={filtered} selectedBookId={selectedBookId} onSelectBook={selectBook} onCloseBook={closeBook} onAddNote={beginAddContext} onOpenArticle={expandArticle} /></div></div>}
+      {isLoading ? (
+        <div className="custom-scrollbar flex-1 overflow-y-auto">
+          <div className="px-4 py-6 pb-16 sm:px-6 lg:px-8">
+            <MemoryLibrarySkeleton />
+          </div>
+        </div>
+      ) : (
+        <div className="custom-scrollbar flex-1 overflow-y-auto">
+          <div className="px-4 py-6 pb-16 sm:px-6 lg:px-8">
+            <MemoryLibrary
+              books={visibleBooks}
+              hasActiveSearch={filtered}
+              selectedBookId={selectedBookId}
+              onSelectBook={selectBook}
+              onCloseBook={closeBook}
+              onAddNote={beginAddContext}
+              onOpenArticle={expandArticle}
+            />
+          </div>
+        </div>
+      )}
 
       <DashboardDetailDialog open={isCreatingArticle} title={correctionTarget ? "Correct memory" : "Add note"} maxWidthClassName="sm:max-w-2xl" onClose={closeContextComposer}>
         <div className="flex min-h-0 flex-1 flex-col">

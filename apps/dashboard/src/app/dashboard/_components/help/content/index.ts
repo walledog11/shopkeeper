@@ -31,15 +31,6 @@ export function withAgentName(text: string, agentName: string): string {
   return text.replaceAll("{agent}", agentName)
 }
 
-export { gettingStarted } from "./getting-started"
-export { tickets } from "./tickets"
-export { aiFeatures } from "./ai-features"
-export { integrations } from "./integrations"
-export { settings } from "./settings"
-export { troubleshooting } from "./troubleshooting"
-export { reference } from "./reference"
-export { tips } from "./tips"
-
 import { gettingStarted } from "./getting-started"
 import { tickets } from "./tickets"
 import { aiFeatures } from "./ai-features"
@@ -48,6 +39,17 @@ import { settings } from "./settings"
 import { troubleshooting } from "./troubleshooting"
 import { reference } from "./reference"
 import { tips } from "./tips"
+
+export {
+  gettingStarted,
+  tickets,
+  aiFeatures,
+  integrations,
+  settings,
+  troubleshooting,
+  reference,
+  tips,
+}
 
 export const ALL_CATEGORIES: Category[] = [
   gettingStarted,

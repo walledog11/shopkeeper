@@ -63,6 +63,7 @@ export interface ShopifyOrder {
   line_items?: ShopifyOrderLineItem[];
   shipping_address?: ShopifyCustomerAddress | null;
   customer?: { id: number | string } | null;
+  refunds?: Array<{ id?: number | string }>;
 }
 
 export interface ShopifyTransaction {

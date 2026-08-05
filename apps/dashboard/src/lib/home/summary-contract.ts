@@ -61,6 +61,8 @@ export interface HomeSummary {
     channelNames: string[]
   }
   repeatCustomers: HomeRepeatCustomer[]
+  /** Paid, unfulfilled open orders (Shopify). Null when Shopify is not connected. */
+  ordersToShip: number | null
 }
 
 function utcDayKey(date: Date): string {
@@ -109,5 +111,6 @@ export function createEmptyHomeSummary(now = new Date()): HomeSummary {
       channelNames: [],
     },
     repeatCustomers: [],
+    ordersToShip: null,
   }
 }

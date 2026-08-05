@@ -16,14 +16,7 @@ import { useOperatorChannels } from "@/hooks/useOperatorChannels"
 import { isEmailIntegrationConfigured } from "@/lib/integrations/onboarding-setup"
 import { isShopifyIntegrationActive } from "@/lib/integrations/shopify-connection"
 
-interface OrdersResponse {
-  orders: Array<{
-    fulfillment_status: string | null
-    financial_status: string
-  }>
-}
-
-export function useHomeData() {
+export function useHomeData(initialHomeSummary?: HomeSummary) {
   const {
     data: summaryData,
     isLoading: isSummaryLoading,
@@ -31,7 +24,10 @@ export function useHomeData() {
   } = useSWR<HomeSummary>(
     "/api/home-summary",
     fetcher,
-    { refreshInterval: HOME_SUMMARY_REFRESH_INTERVAL_MS },
+    {
+      refreshInterval: HOME_SUMMARY_REFRESH_INTERVAL_MS,
+      ...(initialHomeSummary ? { fallbackData: initialHomeSummary } : {}),
+    },
   )
   const { data: integrations = [] } = useIntegrations()
   const { data: orgData } = useOrg()
@@ -55,16 +51,7 @@ export function useHomeData() {
   )
   const walkthroughCount = walkthroughItems.length
 
-  const { data: ordersData } = useSWR<OrdersResponse>(
-    hasShopify ? "/api/orders?limit=10" : null,
-    fetcher,
-    { refreshInterval: 300_000, revalidateOnFocus: false },
-  )
-
-  const ordersToShip = useMemo(() => {
-    if (!ordersData?.orders) return null
-    return ordersData.orders.filter(order => order.fulfillment_status == null && order.financial_status === "paid").length
-  }, [ordersData])
+  const ordersToShip = summary.ordersToShip
 
   const hasReceivedTicket = useMemo(() => (
     summary.metrics.openCount > 0
@@ -102,7 +89,6 @@ export function useHomeData() {
     workflowSteps,
     agentName,
     isSummaryPending: isInitialSummaryLoading,
-    isNeedsYouLoading: home.needsYouItems.length === 0 && isInitialSummaryLoading,
     refreshHomeSummary,
   }
 }

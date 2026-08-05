@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
+import { SettingsPageSkeleton } from "@/app/dashboard/_components/skeletons"
 import AccountSettingsSection from "./AccountSettingsSection"
 import WorkspaceTab from "./workspace/WorkspaceTab"
 import BillingTab from "./BillingTab"
@@ -23,7 +24,7 @@ function scrollToHash(hash: string) {
 
 export default function SettingsPageClient(props: Props) {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<SettingsPageSkeleton />}>
       <SettingsPageContent {...props} />
     </Suspense>
   )

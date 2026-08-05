@@ -1,22 +1,10 @@
-import type { KbArticle, KnowledgeBase } from "@/types"
+import type { KbArticle } from "@/types"
 import { requestJson } from "@/lib/api/fetcher"
 
 type ArticleInput = {
   title: string
   body: string
   tags: string[]
-}
-
-export function createKnowledgeBase(name: string) {
-  return requestJson<{ knowledgeBase: KnowledgeBase }>(
-    "/api/kb/bases",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-    },
-    "Failed to create folder.",
-  )
 }
 
 export async function deleteKnowledgeBase(id: string) {

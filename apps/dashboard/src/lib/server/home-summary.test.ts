@@ -141,6 +141,7 @@ describe("getHomeSummary", () => {
     expect(summary.needsAttention).toEqual([])
     expect(summary.overnight.topics).toEqual([])
     expect(summary.repeatCustomers).toEqual([])
+    expect(summary.ordersToShip).toBeNull()
   })
 
   it("counts all replies and daily comparison metrics while applying canonical inbox filters", async () => {

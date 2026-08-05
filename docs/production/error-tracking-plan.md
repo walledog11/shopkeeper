@@ -201,8 +201,8 @@ Docs:
 The repo previously had a working Sentry integration (removed in commit `d5f9b7a`). Note the correction at the top of this document: the **dashboard** has since been re-wired to sentry.io directly, so the list below is now accurate for the **gateway** and describes a re-pointing job for the dashboard. Restore these patterns with Better Stack endpoints:
 
 - Opt-in init when `SENTRY_DSN` is set — local dev, CI, and e2e work without error tracking
-- Shared `resolveRelease()` using `RAILWAY_GIT_COMMIT_SHA` / `VERCEL_GIT_COMMIT_SHA`
-- Shared `scrubErrorEvent()` in `packages/agent/observability` to strip tokens, emails, bodies, and cookies
+- Release tagging from `RAILWAY_GIT_COMMIT_SHA` / `VERCEL_GIT_COMMIT_SHA` (set directly in `Sentry.init` or via a small per-app helper)
+- Shared redaction policy in `packages/agent/observability` via `scrubValue()` and `PINO_REDACT_PATHS` (tokens, emails, bodies, cookies) — a Sentry `beforeSend` wrapper still needs to be added when Level 2 ships
 - Ops alerts stay Pino-only for paging; optional dual-write to Better Stack Errors for triage grouping only (no duplicate alert rules)
 - Gateway source maps uploaded post-`tsc` via build script
 
@@ -245,7 +245,7 @@ Do **not** run `npx @sentry/wizard -i nextjs` at the monorepo root — it will n
 | `SENTRY_PROJECT` | Production, Preview | Build | Better Stack application ID |
 | `SENTRY_URL` | Production, Preview | Build | Better Stack source-map upload URL (e.g. `https://us-east-9-sourcemaps.betterstackdata.com`) |
 
-Release tracking uses `VERCEL_GIT_COMMIT_SHA` via `resolveRelease()`.
+Release tracking uses `VERCEL_GIT_COMMIT_SHA` (e.g. `release: process.env.VERCEL_GIT_COMMIT_SHA ? \`shopkeeper@${process.env.VERCEL_GIT_COMMIT_SHA}\` : undefined`).
 
 #### Code files
 
@@ -295,9 +295,9 @@ export async function register() {
 Shared server/edge config:
 
 - `dsn: process.env.SENTRY_DSN`
-- `release: resolveRelease()`
+- `release` from `VERCEL_GIT_COMMIT_SHA` (see above)
 - `sendDefaultPii: false`
-- `beforeSend: errorBeforeSend`
+- `beforeSend` hook that runs event context through `scrubValue()` from `@shopkeeper/agent/observability` (to be added — see Shared package below)
 
 #### CSP (if using `tunnelRoute`)
 
@@ -310,15 +310,19 @@ Dashboard CSP is report-only today. If a tunnel route is added to avoid ad-block
 ```typescript
 // apps/gateway/src/instrument.ts
 import * as Sentry from '@sentry/node';
-import { resolveRelease, errorBeforeSend } from '@shopkeeper/agent/observability';
+import { scrubValue } from '@shopkeeper/agent/observability';
+
+const release = process.env.RAILWAY_GIT_COMMIT_SHA
+  ? `shopkeeper@${process.env.RAILWAY_GIT_COMMIT_SHA}`
+  : process.env.SENTRY_RELEASE;
 
 if (process.env.SENTRY_DSN) {
   Sentry.init({
     dsn: process.env.SENTRY_DSN,
     environment: process.env.NODE_ENV ?? 'production',
-    release: resolveRelease(),
+    release,
     sendDefaultPii: false,
-    beforeSend: errorBeforeSend,
+    beforeSend: (event) => scrubValue(event) as typeof event,
     enableLogs: true,
     integrations: [Sentry.pinoIntegration({ log: { levels: ['warn', 'error'] } })],
     tracesSampleRate: 0.1,
@@ -352,13 +356,24 @@ Restore `scripts/upload-sourcemaps.mjs` (or equivalent) pointed at Better Stack'
 
 ### Shared package (`packages/agent/observability`)
 
-Restore these exports (removed 2026-06-07):
+**Currently exported** (from `packages/agent/src/observability/`):
 
-- `resolveRelease()` — returns `shopkeeper@${VERCEL_GIT_COMMIT_SHA | RAILWAY_GIT_COMMIT_SHA | SENTRY_RELEASE}`
-- `scrubErrorEvent()` — strip tokens, emails, bodies, cookies from event payloads
-- `errorBeforeSend()` — thin wrapper used by both SDKs
+Redaction (`redaction.ts`):
 
-Per-app thin wrappers:
+- `PINO_REDACT_PATHS` — path list for Pino `redact` config (tokens, emails, bodies, cookies, auth headers)
+- `REDACTED` / `REDACTED_EMAIL` — censor placeholders
+- `scrubValue(value, key?, depth?)` — recursive scrubber for arbitrary objects (emails in strings, sensitive keys)
+
+Ops alerts (`ops-alerts.ts`):
+
+- `OPS_ALERT_CATEGORIES`, `emitOpsAlert()`, `buildOpsAlertScope()`, `incrementOpsAlertWindow()`, and related types
+
+**Not yet present** — add when implementing Level 2:
+
+- A shared Sentry `beforeSend` helper that applies `scrubValue()` to event payloads (dashboard and gateway can share one thin wrapper, or inline `scrubValue` in each `Sentry.init` as shown above)
+- Optional `resolveRelease()` convenience if both apps want identical `shopkeeper@${SHA}` formatting
+
+Per-app thin wrappers (to be added):
 
 - `apps/dashboard/src/lib/observability/errors.ts`
 - `apps/gateway/src/observability/errors.ts`
@@ -398,7 +413,7 @@ Handled primarily by [operational-guardrails.md](operational-guardrails.md) and 
 
 ### Phase 1 — Level 2 errors only (post-launch)
 
-- Restore shared scrubbing + release helpers in `packages/agent/observability`
+- Add Sentry `beforeSend` wrappers that reuse `scrubValue()` from `packages/agent/observability`
 - Dashboard: `@sentry/nextjs` + Better Stack DSN and upload env vars
 - Gateway: `instrument.ts` + `--import` + Express error handler
 - Restore gateway source map upload script and Railway build step
@@ -449,7 +464,7 @@ Handled primarily by [operational-guardrails.md](operational-guardrails.md) and 
 
 - [ ] Add `@sentry/nextjs` to `apps/dashboard`
 - [ ] Add `@sentry/node` to `apps/gateway`
-- [ ] Restore `packages/agent/observability` error helpers + tests
+- [ ] Add Sentry `beforeSend` wrappers using `scrubValue()` from `packages/agent/observability` (+ tests)
 - [ ] Add dashboard config files and wrap `next.config.js`
 - [ ] Extend `apps/dashboard/src/instrumentation.ts`
 - [ ] Add `apps/gateway/src/instrument.ts` and fix `start.ts` `--import`
@@ -478,7 +493,7 @@ Ops alerts emit `opsAlert: true` Pino logs into Better Stack Telemetry. **Keep l
 
 ### Event scrubbing must stay in sync with log redaction
 
-OAuth and provider token leakage was fixed in Pino via `PINO_REDACT_PATHS`. `scrubErrorEvent()` must apply the same policy to error event context, breadcrumbs, and exception messages. Add redaction tests alongside restored helpers.
+OAuth and provider token leakage was fixed in Pino via `PINO_REDACT_PATHS`. Any Sentry `beforeSend` hook must apply the same policy by running event context through `scrubValue()` from `packages/agent/observability`. Redaction tests already cover `scrubValue` and `PINO_REDACT_PATHS` in `packages/agent/src/observability/redaction.test.ts`; add Sentry-specific tests when the `beforeSend` wrapper ships.
 
 ### CSP and client SDK
 

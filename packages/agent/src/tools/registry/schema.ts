@@ -38,6 +38,7 @@ interface DefineToolOptions<TInput, TName extends string> {
   capabilities: readonly ToolCapability[];
   label: string;
   planStepLabel: string;
+  availability?: "active" | "retired";
   policy?: Partial<Omit<ToolPolicyMetadata, "categoryPermission">> & {
     categoryPermission?: boolean;
   };
@@ -199,6 +200,7 @@ export function defineTool<const TName extends string, TInput>(
       categoryPermission: true,
       ...definition.policy,
     },
+    availability: definition.availability ?? "active",
     execute: definition.execute,
   };
 }

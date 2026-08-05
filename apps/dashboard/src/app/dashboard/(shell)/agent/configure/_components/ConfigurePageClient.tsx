@@ -9,6 +9,8 @@ interface Props {
   version: string
   orgName: string
   voiceProposal: VoiceProposal | null
+  emailConnected: boolean
+  shopifyConnected: boolean
 }
 
 export default function ConfigurePageClient(props: Props) {
@@ -21,6 +23,8 @@ export default function ConfigurePageClient(props: Props) {
           version={props.version}
           orgName={props.orgName}
           voiceProposal={props.voiceProposal}
+          emailConnected={props.emailConnected}
+          shopifyConnected={props.shopifyConnected}
         />
       </div>
     </div>

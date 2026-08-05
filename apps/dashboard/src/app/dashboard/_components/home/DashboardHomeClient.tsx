@@ -5,6 +5,8 @@ import HomeTelegramNudge from "./HomeTelegramNudge"
 import ConciergeBriefing from "./ConciergeBriefing"
 import NeedsYou from "./NeedsYou"
 import ClearedOvernight from "./ClearedOvernight"
+import { HomePageSkeleton } from "@/app/dashboard/_components/skeletons"
+import type { HomeSummary } from "@/lib/home/summary-contract"
 import { useHomeData } from "./useHomeData"
 
 function getGreeting(): string {
@@ -16,11 +18,16 @@ function getGreeting(): string {
 
 interface Props {
   userName: string
+  initialHomeSummary: HomeSummary
 }
 
-export default function DashboardHomeClient({ userName }: Props) {
+export default function DashboardHomeClient({ userName, initialHomeSummary }: Props) {
   const greeting = getGreeting()
-  const data = useHomeData()
+  const data = useHomeData(initialHomeSummary)
+
+  if (data.isSummaryPending) {
+    return <HomePageSkeleton />
+  }
 
   return (
     <div className="@container h-full flex flex-col overflow-hidden bg-background">
@@ -40,13 +47,11 @@ export default function DashboardHomeClient({ userName }: Props) {
               refundsPending={data.refundsPending}
               vipsInQueue={data.vipsInQueue}
               ordersToShip={data.ordersToShip}
-              isLoading={data.isSummaryPending}
             />
 
             <NeedsYou
               items={data.needsYouItems}
               agentName={data.agentName}
-              isLoading={data.isNeedsYouLoading}
               onApproved={data.refreshHomeSummary}
             />
 
@@ -59,7 +64,6 @@ export default function DashboardHomeClient({ userName }: Props) {
 
           <WorkflowSetupBanner
             steps={data.workflowSteps}
-            pending={data.isSummaryPending}
           />
 
           <HomeTelegramNudge connected={data.hasPhoneBound} />

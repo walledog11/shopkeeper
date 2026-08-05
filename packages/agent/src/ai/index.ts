@@ -14,10 +14,6 @@ import { readModelUsage } from "../usage.js";
 export const HAIKU_MODEL = "claude-haiku-4-5-20251001";
 export const SONNET_MODEL = "claude-sonnet-5";
 
-// Single source of truth for non-agent AI calls (drafts, summaries,
-// classification/tagging). Agent call sites pick their tier via pickModel().
-export const AI_MODEL = HAIKU_MODEL;
-
 // A call's purpose, not its channel. Enumerated in full so each call site is
 // explicit about its tier even when it resolves to Haiku.
 export type ModelTask =
@@ -72,7 +68,7 @@ export async function generateText(
   }
 
   const response = await anthropic.messages.create({
-    model: AI_MODEL,
+    model: HAIKU_MODEL,
     max_tokens: options?.maxTokens ?? 1024,
     temperature: options?.temperature ?? 0.5,
     system: systemPrompt,
@@ -80,7 +76,7 @@ export async function generateText(
   });
 
   if (options?.orgId) {
-    await recordSpend(options.orgId, readModelUsage(response), AI_MODEL);
+    await recordSpend(options.orgId, readModelUsage(response), HAIKU_MODEL);
   }
 
   const textBlock = response.content.find(

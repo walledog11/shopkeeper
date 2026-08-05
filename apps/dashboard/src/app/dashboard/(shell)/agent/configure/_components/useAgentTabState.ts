@@ -32,7 +32,6 @@ export function useAgentTabState({ settings, rawSettings, version, orgName, voic
   const initialNameRef = useRef(orgName)
   const initialRaw = useMemo(() => rawInputsFor(settings), [settings])
   const [maxRefundInput, setMaxRefundInput] = useState<string>(initialRaw.maxRefund)
-  const [maxDiscountInput, setMaxDiscountInput] = useState<string>(initialRaw.maxDiscount)
   const [dailyRefundCapInput, setDailyRefundCapInput] = useState<string>(initialRaw.dailyRefundCap)
   const [dailyLLMSpendCapInput, setDailyLLMSpendCapInput] = useState<string>(initialRaw.dailyLLMSpendCap)
   const [digestHourInput, setDigestHourInput] = useState<string>(initialRaw.digestHour)
@@ -54,7 +53,6 @@ export function useAgentTabState({ settings, rawSettings, version, orgName, voic
   const payload = useMemo(
     () => buildSettingsPayload(settingsState, {
       maxRefund: maxRefundInput,
-      maxDiscount: maxDiscountInput,
       dailyRefundCap: dailyRefundCapInput,
       dailyLLMSpendCap: dailyLLMSpendCapInput,
       digestHour: digestHourInput,
@@ -66,7 +64,6 @@ export function useAgentTabState({ settings, rawSettings, version, orgName, voic
     [
       settingsState,
       maxRefundInput,
-      maxDiscountInput,
       dailyRefundCapInput,
       dailyLLMSpendCapInput,
       digestHourInput,
@@ -109,7 +106,6 @@ export function useAgentTabState({ settings, rawSettings, version, orgName, voic
     dispatch({ type: "reset", payload: hydrated })
     setExplicitOverridePaths(explicit)
     setMaxRefundInput(raw.maxRefund)
-    setMaxDiscountInput(raw.maxDiscount)
     setDailyRefundCapInput(raw.dailyRefundCap)
     setDailyLLMSpendCapInput(raw.dailyLLMSpendCap)
     setDigestHourInput(raw.digestHour)
@@ -135,9 +131,6 @@ export function useAgentTabState({ settings, rawSettings, version, orgName, voic
     if (!explicitOverrideSet.has("maxRefundAmount")) {
       setMaxRefundInput(rawInputsFor(next).maxRefund)
     }
-    if (!explicitOverrideSet.has("maxDiscountPercent")) {
-      setMaxDiscountInput(rawInputsFor(next).maxDiscount)
-    }
   }
 
   function setAutonomyOverride(path: AutonomyOverridePath, value: unknown) {
@@ -151,9 +144,6 @@ export function useAgentTabState({ settings, rawSettings, version, orgName, voic
     dispatch({ type: "reset", payload: next })
     if (path === "maxRefundAmount") {
       setMaxRefundInput(rawInputsFor(next).maxRefund)
-    }
-    if (path === "maxDiscountPercent") {
-      setMaxDiscountInput(rawInputsFor(next).maxDiscount)
     }
   }
 
@@ -268,8 +258,6 @@ export function useAgentTabState({ settings, rawSettings, version, orgName, voic
     businessNameInvalid,
     maxRefundInput,
     setMaxRefundInput,
-    maxDiscountInput,
-    setMaxDiscountInput,
     dailyRefundCapInput,
     setDailyRefundCapInput,
     dailyLLMSpendCapInput,

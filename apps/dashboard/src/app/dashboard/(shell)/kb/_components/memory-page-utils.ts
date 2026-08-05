@@ -9,15 +9,6 @@ import type { ArticleWithBase } from "./kb-page-utils"
 export type MemorySourceFilter = "all" | MemoryArticleSource
 export type MemoryTopicFilter = "all" | string
 
-export const MEMORY_SOURCE_FILTERS: { value: MemorySourceFilter; label: string }[] = [
-  { value: "all", label: "Any source" },
-  { value: "learned", label: "Learned" },
-  { value: "shopify", label: "Shopify" },
-  { value: "manual", label: "Your notes" },
-]
-
-const MEMORY_TOPIC_ORDER = ["shipping", "returns", "discounts", "wholesale", "other"] as const
-
 export function memoryCardTitle(article: ArticleWithBase): string {
   if (articleMemorySource(article) !== "learned") return article.title
   for (const line of article.body.split("\n")) {
@@ -56,22 +47,6 @@ export function isMemoryCorrection(article: ArticleWithBase): boolean {
 
 export function memoryArticleTopic(article: ArticleWithBase): string {
   return (article.tags ?? []).find(isMemoryTopicTag)?.toLowerCase() ?? "other"
-}
-
-export function groupMemoryArticlesByTopic(articles: ArticleWithBase[]) {
-  const buckets = new Map<string, ArticleWithBase[]>()
-  for (const article of articles) {
-    const topic = memoryArticleTopic(article)
-    buckets.set(topic, [...(buckets.get(topic) ?? []), article])
-  }
-  return [...buckets.entries()]
-    .sort(([left], [right]) => {
-      const leftIndex = MEMORY_TOPIC_ORDER.indexOf(left as typeof MEMORY_TOPIC_ORDER[number])
-      const rightIndex = MEMORY_TOPIC_ORDER.indexOf(right as typeof MEMORY_TOPIC_ORDER[number])
-      return (leftIndex < 0 ? MEMORY_TOPIC_ORDER.length : leftIndex)
-        - (rightIndex < 0 ? MEMORY_TOPIC_ORDER.length : rightIndex)
-    })
-    .map(([topic, topicArticles]) => ({ topic, articles: topicArticles }))
 }
 
 export function collectMemoryTopicFilters(articles: ArticleWithBase[]): string[] {

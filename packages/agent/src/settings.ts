@@ -29,7 +29,6 @@ export type BusinessHoursSettings = Pick<
 
 export const AUTONOMY_OVERRIDE_PATHS = [
   "maxRefundAmount",
-  "maxDiscountPercent",
   "blockCancellations",
   "blockCustomLineItems",
   "toolsEnabled.action",
@@ -55,7 +54,6 @@ export const AGENT_SETTINGS_DEFAULTS: OrgSettings = {
   },
   maxRefundAmount: null,
   dailyRefundCap: null,
-  maxDiscountPercent: null,
   dailyLLMSpendCapUsd: null,
   blockCancellations: false,
   blockCustomLineItems: false,
@@ -80,7 +78,6 @@ export const AGENT_SETTINGS_DEFAULTS: OrgSettings = {
 export const TIER_DEFAULTS: Record<AutonomyTier, Partial<OrgSettings>> = {
   watch: {
     maxRefundAmount: 0,
-    maxDiscountPercent: 0,
     toolsEnabled: {
       action: false,
       communication: false,
@@ -90,19 +87,15 @@ export const TIER_DEFAULTS: Record<AutonomyTier, Partial<OrgSettings>> = {
   },
   guarded: {
     maxRefundAmount: 50,
-    maxDiscountPercent: 15,
   },
   trusted: {
     maxRefundAmount: 100,
-    maxDiscountPercent: 20,
   },
   broad: {
     maxRefundAmount: 250,
-    maxDiscountPercent: 30,
   },
   full: {
     maxRefundAmount: 1000,
-    maxDiscountPercent: 50,
   },
 };
 

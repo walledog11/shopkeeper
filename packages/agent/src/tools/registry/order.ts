@@ -1,5 +1,6 @@
 import { noShopify, cancelReasons, requireShopify, returnReasons, maybeRecordReturnWatch, maybeRecordFollowUpWatch } from "./helpers.js";
 import { arrayArg, booleanArg, defineTool, numberArg, stringArg } from "./schema.js";
+import { toolPolicyBlock } from "../result.js";
 import type {
   AttachReturnLabelInput,
   CancelOrderInput,
@@ -97,10 +98,11 @@ export const ORDER_TOOL_DEFINITIONS = [
   defineTool({
     name: "create_refund",
     description:
-      "Issue a refund on a Shopify order. Always pass an explicit amount (for a full refund, use the order's total from the orders context) so the refund can be validated against the workspace refund limit.",
+      "Issue an exact full-order refund only when the customer or merchant explicitly requested a full refund. Pass the identified paid order, its complete current refundable balance, and its currency. Partial, item-only, vague, mismatched, previously refunded, chargeback, and non-paid requests must be escalated instead.",
     fields: {
       order_id: stringArg("Shopify order ID (numeric).", { required: true }),
       amount: stringArg("Amount to refund in the store's currency (e.g. '19.99'). For a full refund, use the order's total from context. Always provide this.", { required: true }),
+      currency: stringArg("Three-letter store currency from the identified order (for example 'USD')."),
       reason: stringArg("Reason for the refund (e.g. 'Item not received', 'Wrong item sent')."),
     },
     category: "action",
@@ -218,15 +220,12 @@ export const ORDER_TOOL_DEFINITIONS = [
     category: "action",
     group: "order",
     capabilities: ["shopify"],
+    availability: "retired",
     label: "Issued discount code",
     planStepLabel: "Issue discount code",
-    policy: {
-      discountPercentLimit: true,
-    },
-    execute: async (input: IssueDiscountInput, ctx, _settings, deps) => {
-      const shopify = requireShopify(ctx);
-      return shopify ? deps.issueDiscount(input, shopify) : noShopify;
-    },
+    execute: async (_input: IssueDiscountInput) => toolPolicyBlock(
+      "Error: issue_discount is retired. Percentage discounts require merchant handling.",
+    ),
   }),
   defineTool({
     name: "create_return",
@@ -287,26 +286,24 @@ export const ORDER_TOOL_DEFINITIONS = [
     category: "action",
     group: "order",
     capabilities: ["shopify"],
+    availability: "retired",
     label: "Issued store credit",
     planStepLabel: "Issue store credit",
     policy: {
       refundAmountLimits: true,
       dailyRefundSpendLimit: true,
     },
-    execute: async (input: IssueStoreCreditInput, ctx, _settings, deps) => {
-      const shopify = requireShopify(ctx);
-      if (!shopify) return noShopify;
-
-      return deps.issueStoreCredit(input, shopify);
-    },
+    execute: async (_input: IssueStoreCreditInput) => toolPolicyBlock(
+      "Error: issue_store_credit is retired. Use an explicitly requested gift card or escalate.",
+    ),
   }),
   defineTool({
     name: "create_gift_card",
     description:
-      "Create a Shopify gift card as a goodwill gesture that keeps the money with the store. Always pass customer_id when known - Shopify then emails the gift card code to the customer, so your reply can say the code is on its way by email. Without customer_id the code is only shown once in the tool result and your reply MUST include it. Works for any store (unlike issue_store_credit, which needs store credit enabled). Prefer this or issue_store_credit over create_refund when the customer is owed money back but is staying with the store. The amount counts against the same workspace caps as refunds.",
+      "Create a fixed-value Shopify gift card only when the customer or merchant explicitly requested a gift card, store credit, or other fixed-value non-cash compensation. A resolved Shopify customer is required so Shopify can deliver the code. Never substitute this for an explicit refund and never invent it proactively. The amount uses the workspace compensation limits.",
     fields: {
       amount: stringArg("Gift card value in the store's currency (e.g. '25.00'). Must be within the workspace refund cap.", { required: true }),
-      customer_id: stringArg("Shopify customer ID (numeric). Always provide it when known - Shopify emails the gift card code to this customer."),
+      customer_id: stringArg("Resolved Shopify customer ID (numeric). Required so Shopify delivers the gift card code to this customer.", { required: true }),
       reason: stringArg("Short internal reason for the gesture (e.g. 'damaged item'). Used only as a note inside Shopify."),
       expires_in_days: numberArg("Optional whole number of days until the gift card expires. Omit for no expiry."),
     },

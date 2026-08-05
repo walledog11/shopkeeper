@@ -3,7 +3,6 @@ import type {
   AgentToolDefinition,
   CreateRefundInput,
   CreateShopifyOrderInput,
-  IssueDiscountInput,
 } from "./registry/index.js";
 import { formatToolInputValidationError, getToolDefinition } from "./registry/index.js";
 
@@ -16,6 +15,13 @@ export function checkParsedStaticToolPolicy(
   input: unknown,
   settings: OrgSettings,
 ): StaticPolicyResult {
+  if (definition.availability === "retired") {
+    return {
+      blocked: true,
+      reason: `${definition.name} is retired and cannot create a new provider action. Escalate this request to the merchant.`,
+    };
+  }
+
   if (definition.policy.categoryPermission && !settings.toolsEnabled[definition.category]) {
     return { blocked: true, reason: `${definition.category} tools are disabled by the workspace owner.` };
   }
@@ -42,14 +48,6 @@ export function checkParsedStaticToolPolicy(
       if (hasPerCallCap && amount > (settings.maxRefundAmount as number)) {
         return { blocked: true, reason: `${noun} amount $${refundInput.amount} exceeds the workspace limit of $${settings.maxRefundAmount}.` };
       }
-    }
-  }
-
-  if (definition.policy.discountPercentLimit) {
-    const discountInput = input as IssueDiscountInput;
-    const cap = settings.maxDiscountPercent;
-    if (cap !== null && cap >= 0 && discountInput.percentage > cap) {
-      return { blocked: true, reason: `discount of ${discountInput.percentage}% exceeds the workspace limit of ${cap}%.` };
     }
   }
 

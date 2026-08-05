@@ -116,9 +116,17 @@ export default function ConciergeBriefing({
             )}
             <Link
               href="/dashboard/tickets"
-              className="text-xs font-medium text-muted-foreground hover:text-strong transition-colors"
+              className={`text-xs font-medium transition-colors ${
+                isLoading
+                  ? "pointer-events-none text-transparent"
+                  : "text-muted-foreground hover:text-strong"
+              }`}
             >
-              Browse all tickets
+              {isLoading ? (
+                <Skeleton className="inline-block h-3 w-24 rounded-full bg-foreground/[0.06]" />
+              ) : (
+                "Browse all tickets"
+              )}
             </Link>
           </div>
         </div>

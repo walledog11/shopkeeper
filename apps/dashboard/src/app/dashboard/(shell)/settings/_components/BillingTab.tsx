@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { SettingsDisclosure } from "@/components/settings-form/shared"
 import { formatUnixDate } from "@/lib/format/date"
 import { CreditCard, Loader2, ExternalLink, CheckCircle2, AlertTriangle, XCircle, Clock } from "lucide-react"
+import { Pulse } from "@/app/dashboard/_components/skeletons"
 
 interface BillingInfo {
   status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'none'
@@ -155,8 +156,20 @@ export default function BillingTab() {
 
   if (isLoading) {
     return (
-      <div id="billing" className="flex items-center justify-center rounded-xl border border-border bg-card py-16">
-        <Loader2 className="size-5 animate-spin text-faint" />
+      <div id="billing" className="scroll-mt-6 space-y-6" aria-busy="true" aria-label="Loading billing">
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
+          <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-[180px_1fr] sm:gap-8 sm:p-6">
+            <div className="space-y-2">
+              <Pulse className="h-4 w-16 rounded-md" />
+              <Pulse className="h-3 w-full rounded-md bg-foreground/[0.05]" />
+            </div>
+            <div className="space-y-4">
+              <Pulse className="h-5 w-24 rounded-md" />
+              <Pulse className="h-10 w-full rounded-lg" />
+              <Pulse className="h-24 w-full rounded-lg bg-foreground/[0.05]" />
+            </div>
+          </div>
+        </div>
       </div>
     )
   }

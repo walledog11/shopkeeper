@@ -9,7 +9,7 @@ import {
   type ShopifyContext,
   type ShopifyGraphqlUserError,
 } from "./client.js";
-import { toolError, toolOk, toolUnknown, type ToolResult } from "../tools/result.js";
+import { toolError, toolOk, toolPolicyBlock, toolUnknown, type ToolResult } from "../tools/result.js";
 import type {
   ShopifyCalculatedRefundLineItem,
   ShopifyOrder,
@@ -106,30 +106,6 @@ function buildFullRefundTransactions(calculation: RefundCalculation): ShopifyTra
   ));
 }
 
-function buildPartialRefundTransactions(calculation: RefundCalculation, amount: string): ShopifyTransaction[] {
-  let remainingCents = moneyToCents(amount);
-  const transactions: ShopifyTransaction[] = [];
-
-  for (const transaction of calculatedTransactions(calculation)) {
-    const maxRefundable = transaction.maximum_refundable ?? transaction.amount;
-    const availableCents = moneyToCents(maxRefundable);
-    const refundCents = Math.min(remainingCents, availableCents);
-
-    if (refundCents > 0) {
-      transactions.push(normalizeRefundTransaction(transaction, centsToMoney(refundCents)));
-      remainingCents -= refundCents;
-    }
-
-    if (remainingCents === 0) break;
-  }
-
-  if (remainingCents > 0) {
-    throw new ShopifyInputError("Requested refund amount exceeds the amount Shopify reports as refundable.");
-  }
-
-  return transactions;
-}
-
 async function calculateRefund(
   ctx: ShopifyContext,
   orderId: string,
@@ -183,30 +159,87 @@ export async function createRefund(
   let mutationStarted = false;
   try {
     const orderId = requireNumericId(input.order_id, "order_id");
-    const amount = input.amount !== undefined ? requireAmount(input.amount, "amount") : undefined;
+    const amount = requireAmount(input.amount, "amount");
+    const requestedCents = moneyToCents(amount);
+    const requestedCurrency = optionalString(input.currency)?.toUpperCase();
     const note = optionalString(input.reason) ?? "";
 
     const orderData = await shopifyRestJson<{ order?: ShopifyOrder }>(ctx, `orders/${orderId}.json`, {
-      query: { fields: "id,name,currency,line_items,total_price,current_total_price,financial_status" },
+      query: { fields: "id,name,currency,line_items,total_price,current_total_price,financial_status,refunds" },
     });
 
     if (!orderData.order) {
-      return { ...toolError(`Error: could not create refund - order ${orderId} was not returned by Shopify.`), refundedCents: null };
+      return {
+        ...toolPolicyBlock(`Error: refund policy blocked - order ${orderId} could not be resolved at Shopify.`, { code: "order_unresolved" }),
+        refundedCents: null,
+      };
+    }
+
+    const financialStatus = orderData.order.financial_status?.toLowerCase() ?? "unknown";
+    if (financialStatus !== "paid") {
+      return {
+        ...toolPolicyBlock(`Error: refund policy blocked - order ${orderId} has financial status "${financialStatus}"; only a fully paid order with no prior refund can be refunded by the agent.`, { code: "order_not_paid", financialStatus }),
+        refundedCents: null,
+      };
+    }
+    if ((orderData.order.refunds?.length ?? 0) > 0) {
+      return {
+        ...toolPolicyBlock(`Error: refund policy blocked - order ${orderId} already has a refund record and requires merchant review.`, { code: "prior_refund" }),
+        refundedCents: null,
+      };
     }
 
     const refundLineItems = buildRefundLineItems(orderData.order);
-    if (refundLineItems.length === 0 && !amount) {
-      return { ...toolError("Error: could not create refund - no refundable line items were found on this order."), refundedCents: null };
+    if (refundLineItems.length === 0) {
+      return {
+        ...toolPolicyBlock("Error: refund policy blocked - Shopify returned no refundable line items for the complete order.", { code: "no_refundable_line_items" }),
+        refundedCents: null,
+      };
     }
 
     const calculation = await calculateRefund(ctx, orderId, refundLineItems);
-    const currency = calculation.refund?.currency ?? orderData.order.currency;
-    const transactions = amount
-      ? buildPartialRefundTransactions(calculation, amount)
-      : buildFullRefundTransactions(calculation);
+    const orderCurrency = orderData.order.currency?.toUpperCase();
+    const calculationCurrency = calculation.refund?.currency?.toUpperCase();
+    const currency = calculationCurrency ?? orderCurrency;
+    if (!currency || (orderCurrency && calculationCurrency && orderCurrency !== calculationCurrency)) {
+      return {
+        ...toolPolicyBlock("Error: refund policy blocked - Shopify returned a missing or mismatched refund currency.", { code: "currency_mismatch", orderCurrency, calculationCurrency }),
+        refundedCents: null,
+      };
+    }
+    if (requestedCurrency && requestedCurrency !== currency) {
+      return {
+        ...toolPolicyBlock(`Error: refund policy blocked - requested currency ${requestedCurrency} does not match Shopify currency ${currency}.`, { code: "currency_mismatch", requestedCurrency, currency }),
+        refundedCents: null,
+      };
+    }
+
+    const transactions = buildFullRefundTransactions(calculation);
 
     if (transactions.length === 0) {
-      return { ...toolError("Error: could not create refund - Shopify did not return refundable transactions."), refundedCents: null };
+      return {
+        ...toolPolicyBlock("Error: refund policy blocked - Shopify did not return a complete refundable balance.", { code: "no_refundable_balance" }),
+        refundedCents: null,
+      };
+    }
+    if (transactions.some(transaction => transaction.currency && transaction.currency.toUpperCase() !== currency)) {
+      return {
+        ...toolPolicyBlock("Error: refund policy blocked - a refundable transaction uses a different currency from the order.", { code: "currency_mismatch" }),
+        refundedCents: null,
+      };
+    }
+    const refundableCents = transactions.reduce(
+      (total, transaction) => total + moneyToCents(transaction.amount),
+      0,
+    );
+    if (requestedCents !== refundableCents) {
+      return {
+        ...toolPolicyBlock(
+          `Error: refund policy blocked - requested amount $${centsToMoney(requestedCents)} does not equal Shopify's complete refundable balance of $${centsToMoney(refundableCents)}. Partial or custom refunds require merchant handling.`,
+          { code: "amount_mismatch", requestedCents, refundableCents, currency },
+        ),
+        refundedCents: null,
+      };
     }
 
     const idempotencyKey = shopifyIdempotencyKey(ctx.operationId);
@@ -215,14 +248,10 @@ export async function createRefund(
       notify: true,
       note,
       ...(currency ? { currency } : {}),
-      ...(!amount
-        ? {
-            shipping: { fullRefund: true },
-            refundLineItems: graphqlRefundLineItems(
-              calculation.refund?.refund_line_items ?? refundLineItems,
-            ),
-          }
-        : {}),
+      shipping: { fullRefund: true },
+      refundLineItems: graphqlRefundLineItems(
+        calculation.refund?.refund_line_items ?? refundLineItems,
+      ),
       transactions: graphqlRefundTransactions(orderId, transactions),
     };
     mutationStarted = true;
@@ -275,6 +304,12 @@ export async function createRefund(
     if (mutationStarted && isAmbiguousShopifyMutationError(err)) {
       return {
         ...toolUnknown(`Unknown: the refund request may have committed at Shopify, but its final state could not be confirmed. Do not retry or confirm it to the customer until it is reconciled. ${formatShopifyToolError("refund reconciliation failed", err)}`),
+        refundedCents: null,
+      };
+    }
+    if (!mutationStarted && err instanceof ShopifyInputError) {
+      return {
+        ...toolPolicyBlock(`Error: refund policy blocked - ${err.message}`, { code: "invalid_refund_input" }),
         refundedCents: null,
       };
     }

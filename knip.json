@@ -1,0 +1,48 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreExportsUsedInFile": true,
+  "ignoreFiles": ["**/coverage/**"],
+  "rules": {
+    "files": "error",
+    "exports": "off",
+    "types": "off",
+    "dependencies": "off",
+    "devDependencies": "off",
+    "unlisted": "off",
+    "binaries": "off",
+    "duplicates": "off"
+  },
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/**/*.{mjs,ts}"],
+      "project": ["scripts/**/*.{mjs,ts,d.mts}", "e2e/**/*.{ts,cts}"],
+      "ignoreFiles": ["scripts/**", "e2e/**"]
+    },
+    "apps/dashboard": {
+      "entry": [
+        "src/app/**/*.{ts,tsx}",
+        "next.config.js",
+        "postcss.config.mjs"
+      ],
+      "project": ["src/**/*.{ts,tsx}"],
+      "ignoreFiles": ["src/scripts/**"]
+    },
+    "apps/gateway": {
+      "entry": ["src/{start,index,worker}.ts"],
+      "project": ["src/**/*.ts"],
+      "ignoreFiles": ["src/scripts/**"]
+    },
+    "packages/agent": {
+      "project": ["src/**/*.ts"]
+    },
+    "packages/db": {
+      "project": ["*.ts"]
+    },
+    "packages/email": {
+      "project": ["src/**/*.ts"]
+    },
+    "packages/analytics": {
+      "project": ["src/**/*.ts"]
+    }
+  }
+}

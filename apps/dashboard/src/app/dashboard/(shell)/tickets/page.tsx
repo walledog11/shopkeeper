@@ -1,5 +1,6 @@
 import { Suspense } from "react"
 import { ChannelType, db } from "@shopkeeper/db"
+import { TicketsPageSkeleton } from "@/app/dashboard/_components/skeletons"
 import { getOrCreateOrg } from "@/lib/server/org"
 import { resolveAgentSettings } from "@shopkeeper/agent/settings"
 import TicketsPageClient from "./_components/TicketsPageClient"
@@ -26,7 +27,7 @@ export default async function TicketsPage() {
   const settings = resolveAgentSettings(org.settings as Partial<OrgSettings> | null)
 
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<TicketsPageSkeleton />}>
       <TicketsPageClient
         hasShopify={hasShopify}
         agentName={settings.agentName}

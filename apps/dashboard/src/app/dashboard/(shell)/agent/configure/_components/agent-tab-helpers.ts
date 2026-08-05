@@ -15,7 +15,6 @@ export type AgentSettingsAction =
 
 export interface RawInputs {
   maxRefund: string
-  maxDiscount: string
   dailyRefundCap: string
   dailyLLMSpendCap: string
   digestHour: string
@@ -289,7 +288,6 @@ function parseLowStockThreshold(value: string): number | null {
 
 export function buildSettingsPayload(state: OrgSettings, raw: RawInputs): OrgSettings {
   const parsedMax = raw.maxRefund.trim() === "" ? null : Number(raw.maxRefund)
-  const parsedDiscount = raw.maxDiscount.trim() === "" ? null : Number(raw.maxDiscount)
   const parsedDaily = raw.dailyRefundCap.trim() === "" ? null : Number(raw.dailyRefundCap)
   const parsedLLM = raw.dailyLLMSpendCap.trim() === "" ? null : Number(raw.dailyLLMSpendCap)
 
@@ -297,7 +295,6 @@ export function buildSettingsPayload(state: OrgSettings, raw: RawInputs): OrgSet
     ...state,
     agentName: state.agentName.trim() || AGENT_SETTINGS_DEFAULTS.agentName,
     maxRefundAmount: parsedMax === null || isNaN(parsedMax) ? null : parsedMax,
-    maxDiscountPercent: parsedDiscount === null || isNaN(parsedDiscount) ? null : parsedDiscount,
     dailyRefundCap: parsedDaily === null || isNaN(parsedDaily) ? null : parsedDaily,
     dailyLLMSpendCapUsd: parsedLLM === null || isNaN(parsedLLM) ? null : parsedLLM,
     digestHour: clampHour(raw.digestHour, AGENT_SETTINGS_DEFAULTS.digestHour),
@@ -311,7 +308,6 @@ export function buildSettingsPayload(state: OrgSettings, raw: RawInputs): OrgSet
 export function rawInputsFor(settings: OrgSettings): RawInputs {
   return {
     maxRefund: settings.maxRefundAmount != null ? String(settings.maxRefundAmount) : "",
-    maxDiscount: settings.maxDiscountPercent != null ? String(settings.maxDiscountPercent) : "",
     dailyRefundCap: settings.dailyRefundCap != null ? String(settings.dailyRefundCap) : "",
     dailyLLMSpendCap: settings.dailyLLMSpendCapUsd != null ? String(settings.dailyLLMSpendCapUsd) : "",
     digestHour: String(settings.digestHour ?? AGENT_SETTINGS_DEFAULTS.digestHour),
