@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
+import { summarizeUsage } from "./usage"
 import type {
   CategoryScore,
   EvalBaseline,
@@ -64,6 +65,7 @@ export function summarizeResults(summaries: readonly FixtureRunSummary[]): EvalB
     total,
     passed,
     passRate: total === 0 ? 0 : passed / total,
+    usage: summarizeUsage(summaries),
     categories: Object.fromEntries(Object.keys(categories).sort().map(key => [key, categories[key]])),
     fixtures: Object.fromEntries(Object.keys(fixtures).sort().map(key => [key, fixtures[key]])),
   }

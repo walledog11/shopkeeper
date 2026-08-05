@@ -19,6 +19,7 @@ import {
   formatSummary,
   formatGateSummary,
   formatUsageBreakdown,
+  formatUsageDelta,
   shouldUpdateBaseline,
   writeBaseline,
   loadBaseline,
@@ -116,6 +117,12 @@ describe.sequential("agent evals", () => {
         "[eval:baseline] no committed baseline; skipping regression gate. Run with UPDATE_EVAL_BASELINE=1 to create one.",
       );
       return;
+    }
+
+    // Cost movement, reported but never gated: a tuning change is allowed to
+    // cost more if it scores better, and that call is the merchant's, not CI's.
+    if (summary.usage && baseline.usage) {
+      console.log(formatUsageDelta(summary.usage, baseline.usage));
     }
 
     const threshold = regressionThreshold();

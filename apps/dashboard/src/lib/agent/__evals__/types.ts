@@ -163,6 +163,23 @@ export interface FixtureRunSummary {
   results: EvalResult[];
 }
 
+/**
+ * Token totals for a captured baseline, so a run that changes what the models
+ * cost has something to be measured against. Pass rates alone cannot answer
+ * "did this get cheaper", which is the question every model-tuning change asks —
+ * `thinking` in particular bills as output tokens, so it shows up in
+ * `planner.outputTokens` and nowhere else.
+ *
+ * `runs` is what makes two baselines comparable: totals move when the fixture
+ * count or repeats change, per-run averages do not.
+ */
+export interface BaselineUsage {
+  runs: number;
+  planner: PhaseUsage;
+  run: PhaseUsage;
+  judge: PhaseUsage;
+}
+
 export interface EvalBaseline {
   generatedAt: string;
   // Repeats-per-fixture used to generate this baseline. `total`/`passed` count individual
@@ -171,6 +188,8 @@ export interface EvalBaseline {
   total: number;
   passed: number;
   passRate: number;
+  // Absent on baselines captured before token totals were recorded.
+  usage?: BaselineUsage;
   categories: Record<string, CategoryScore>;
   fixtures: Record<string, FixtureScore>;
 }

@@ -38,7 +38,7 @@ export {
   writeBaseline,
 } from "./baseline"
 export { mutativeIntentActionFailures } from "./assertions"
-export { formatUsageBreakdown, probeSystemPromptCacheRead } from "./usage"
+export { formatUsageBreakdown, formatUsageDelta, probeSystemPromptCacheRead } from "./usage"
 
 const simulatedToolResults = vi.hoisted(() => ({
   current: null as Map<string, string> | null,
