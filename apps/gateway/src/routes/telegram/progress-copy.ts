@@ -14,7 +14,10 @@ export function buildProgressCopy(progress: ProgressContext): string {
         ? `Running the approved plan for ${progress.orderNumber}…`
         : 'Running the approved plan…';
     case 'free-form':
-      return 'Working on that…';
+      // Reads as a continuation, not a receipt. By the time this fires both
+      // channels have already shown a typing indicator, so the merchant knows
+      // the message landed; what they no longer know is whether it is stuck.
+      return 'Still on it…';
     case 'digest-reply':
       return progress.ticketIndex != null
         ? `Sending your reply on ticket ${progress.ticketIndex}…`

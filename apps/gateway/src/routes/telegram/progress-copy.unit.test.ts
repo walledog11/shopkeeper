@@ -15,11 +15,11 @@ describe('buildProgressCopy', () => {
   });
 
   it('describes free-form work generically, ignoring any order number', () => {
-    expect(buildProgressCopy({ kind: 'free-form' })).toBe('Working on that…');
+    expect(buildProgressCopy({ kind: 'free-form' })).toBe('Still on it…');
     expect(buildProgressCopy({
       kind: 'free-form',
       orderNumber: '#5678',
-    })).toBe('Working on that…');
+    })).toBe('Still on it…');
   });
 
   it('describes digest replies with a ticket index', () => {

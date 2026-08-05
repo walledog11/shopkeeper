@@ -26,13 +26,18 @@ export interface OperatorMessageContext {
 /**
  * How long to wait before saying "working on it" in words.
  *
- * Telegram can afford 10s because its 👀 reaction and typing action land
- * instantly, so the merchant already knows the message arrived. A transport with
- * no such affordance has nothing on screen until this fires, and ten seconds of
- * silence reads as "the app didn't get my text" — so it speaks up quickly.
+ * The right delay depends entirely on what else the merchant can see:
+ *
+ * - Telegram gets a 👀 reaction and a typing action instantly, so 10s.
+ * - iMessage raises a native typing bubble (verified live), which answers
+ *   "did it arrive?" on its own. Words there are only worth sending once the
+ *   bubble alone starts reading as a hang, so they wait much longer.
+ * - With no indicator at all, the words *are* the acknowledgement and a long
+ *   silence reads as "the app didn't get my text" — so they come quickly.
  */
 export const PROGRESS_THRESHOLD_MS = 10000;
 export const SILENT_CHANNEL_PROGRESS_THRESHOLD_MS = 2500;
+export const TYPING_INDICATOR_PROGRESS_THRESHOLD_MS = 25000;
 
 // Minimal channel-agnostic presence: sends one "still working" reply if the work
 // outlasts the threshold. Used by transports that lack a typing indicator.

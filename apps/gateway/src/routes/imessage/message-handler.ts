@@ -10,6 +10,7 @@ import { handlePendingPlanCommand } from '../telegram/pending-plan-commands.js';
 import {
   progressOnlyPresence,
   SILENT_CHANNEL_PROGRESS_THRESHOLD_MS,
+  TYPING_INDICATOR_PROGRESS_THRESHOLD_MS,
   type OperatorMessageContext,
   type OperatorPresence,
   type OperatorReply,
@@ -103,14 +104,18 @@ export interface ImessageOperatorTurnParams {
   spaceId?: string | null;
 }
 
-// Two acknowledgements, because iMessage gives the merchant nothing on its own
-// while a turn runs. The native "…" bubble lands immediately so the text is
-// visibly received; the worded fallback follows a couple of seconds later for
-// turns that are actually slow, and covers the case where the indicator could
-// not be raised at all.
+// The native "…" bubble is the acknowledgement whenever it can be raised: it
+// lands immediately and is what a person texting actually looks like, so a
+// "Working on that…" alongside it is just a second notification saying what the
+// merchant can already see. Words are held back for turns long enough that the
+// bubble alone reads as a hang.
+//
+// Without a space there is no bubble to raise, and the words become the only
+// acknowledgement the channel has — so they come quickly instead.
 function imessagePresence(reply: OperatorReply, spaceId: string | null | undefined): OperatorPresence {
-  const withProgressText = progressOnlyPresence(reply, SILENT_CHANNEL_PROGRESS_THRESHOLD_MS);
-  if (!spaceId) return withProgressText;
+  if (!spaceId) return progressOnlyPresence(reply, SILENT_CHANNEL_PROGRESS_THRESHOLD_MS);
+
+  const withProgressText = progressOnlyPresence(reply, TYPING_INDICATOR_PROGRESS_THRESHOLD_MS);
   return (progress, work) => withImessageTyping(spaceId, () => withProgressText(progress, work));
 }
 
