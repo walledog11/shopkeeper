@@ -96,7 +96,7 @@ export async function loadLowStockLine(
     const items = await listLowStockVariants(ctx, threshold, {
       timeoutMs: SHOPIFY_GARNISH_TIMEOUT_MS,
     });
-    return formatLowStockLine(items, threshold);
+    return formatLowStockLine(items);
   } catch (error) {
     logGarnishFailure(organizationId, 'low_stock', error);
     return null;

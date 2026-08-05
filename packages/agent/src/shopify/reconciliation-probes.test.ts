@@ -273,17 +273,19 @@ describe("probeUnknownShopifyMutation", () => {
   // The code is per-operation, so an unrelated card of the same value is not
   // this operation's card.
   it("does not read another gift card of the same value as this operation's", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
-      data: {
-        giftCards: {
-          nodes: [{
-            id: "gid://shopify/GiftCard/2",
-            initialValue: { amount: "25.00" },
-            note: "Goodwill for a late delivery",
-          }],
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(jsonResponse({
+        data: {
+          giftCards: {
+            nodes: [{
+              id: "gid://shopify/GiftCard/2",
+              initialValue: { amount: "25.00" },
+              note: "Goodwill for a late delivery",
+            }],
+          },
         },
-      },
-    })));
+      }))
+      .mockResolvedValueOnce(jsonResponse({ data: { giftCards: { nodes: [] } } })));
 
     const result = await probeUnknownShopifyMutation(
       "create_gift_card",
@@ -291,7 +293,32 @@ describe("probeUnknownShopifyMutation", () => {
       { ...ctx, operationId: giftCardOperationId },
     );
 
-    expect(result).toMatchObject({ outcome: "no_effect" });
+    expect(result).toMatchObject({ outcome: "still_unknown" });
+  });
+
+  it("falls back to recent cards when Shopify code search misses a committed card", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ data: { giftCards: { nodes: [] } } }))
+      .mockResolvedValueOnce(jsonResponse({
+        data: {
+          giftCards: {
+            nodes: [{
+              id: "gid://shopify/GiftCard/1",
+              initialValue: { amount: "25.00" },
+              note: `Shopkeeper operation: ${giftCardCode}`,
+              lastCharacters: giftCardCode.slice(-4),
+            }],
+          },
+        },
+      })));
+
+    const result = await probeUnknownShopifyMutation(
+      "create_gift_card",
+      { amount: "25.00" },
+      { ...ctx, operationId: giftCardOperationId },
+    );
+
+    expect(result).toMatchObject({ outcome: "committed", spentCents: 2500 });
   });
 
   it("cannot reconcile a gift card without a stable operation identity", async () => {

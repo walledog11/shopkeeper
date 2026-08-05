@@ -28,6 +28,7 @@ import {
   CREATED_ORDER_TAG_SEARCH_QUERY,
   CUSTOMER_STORE_CREDIT_TRANSACTIONS_QUERY,
   GIFT_CARDS_BY_CODE_QUERY,
+  RECENT_GIFT_CARDS_QUERY,
   RETURN_RECONCILIATION_QUERY,
 } from "./reconciliation-probes.js";
 import { ORDER_RETURNS_QUERY } from "./return-labels.js";
@@ -63,6 +64,10 @@ export const SHOPIFY_QUERY_DOCUMENTS: Record<string, ShopifyQueryDocument> = {
   giftCardsByCode: {
     document: GIFT_CARDS_BY_CODE_QUERY,
     variables: { query: "code:shopkeeper-validation" },
+  },
+  recentGiftCards: {
+    document: RECENT_GIFT_CARDS_QUERY,
+    variables: {},
   },
   customerStoreCreditTransactions: {
     document: CUSTOMER_STORE_CREDIT_TRANSACTIONS_QUERY,

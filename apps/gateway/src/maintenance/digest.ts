@@ -7,6 +7,8 @@ import logger from '../logger.js';
 import { listOperatorBindings, notifyOperator } from '../operator-notify.js';
 import { digestNotificationIdempotencyKey } from '../operator-notify-idempotency.js';
 import {
+  capitalize,
+  countWord,
   formatHandledSection,
   formatWaitingSection,
   loadHandledRollup,
@@ -28,6 +30,7 @@ const TWENTY_FOUR_HOURS_MS = 24 * ONE_HOUR_MS;
 
 export const DIGEST_QUESTIONABLE_LIMIT = 10;
 const DIGEST_SUMMARY_TRUNC = 90;
+const WEEKLY_SUMMARY_MIN_TICKETS = 3;
 const DIGEST_INTERVALS: Record<string, number> = {
   every_4h: 4,
   every_6h: 6,
@@ -97,24 +100,70 @@ function formatDurationShort(minutes: number): string {
   return `${Math.round(minutes / (24 * 60))}d`;
 }
 
-export function formatWeeklySummaryLine(stats: SupportStatsSummary): string {
-  const parts = [`${stats.tickets.total} new ticket${stats.tickets.total === 1 ? '' : 's'}`];
+// Null below three tickets a week: a stat line about one ticket is noise the
+// merchant already read three lines further up.
+export function formatWeeklySummaryLine(stats: SupportStatsSummary): string | null {
+  if (stats.tickets.total < WEEKLY_SUMMARY_MIN_TICKETS) return null;
+
+  const parts = [`${stats.tickets.total} tickets in`];
   const topTag = stats.tickets.byTag[0];
-  if (topTag) parts.push(`top topic ${topTag.tag} (${topTag.count})`);
+  // `General` is the classifier's catch-all, not a topic worth naming.
+  if (topTag && topTag.count > 1 && topTag.tag !== 'General') {
+    parts.push(`mostly ${topTag.tag}`);
+  }
   if (stats.resolution.closedCount > 0) {
     parts.push(
       stats.resolution.avgMinutes != null
-        ? `${stats.resolution.closedCount} resolved, avg ${formatDurationShort(stats.resolution.avgMinutes)}`
+        ? `${stats.resolution.closedCount} resolved in ${formatDurationShort(stats.resolution.avgMinutes)} on average`
         : `${stats.resolution.closedCount} resolved`,
     );
   }
-  return `Last 7 days: ${parts.join(' · ')}`;
+  return `Last 7 days: ${parts.join(', ')}.`;
 }
 
 export interface DigestMessageExtras {
+  /** Greeting in the agent's own voice; the scheduled worker supplies it. */
+  opener?: string | null;
   handledSection?: string | null;
   waitingSection?: string | null;
   garnishLines?: string[];
+}
+
+// One sentence about the open queue, plus the only urgency split the merchant
+// can act on differently: what has been sitting long enough to be embarrassing.
+function inboxSentence(genuineCount: number, urgent: number): string {
+  // Claims only the reply queue, never "your inbox is clear" — that reads as a
+  // contradiction when a flagged ticket is named in the next breath.
+  if (genuineCount === 0) return "Nothing's waiting on a reply.";
+
+  const opening = `You've got ${countWord(genuineCount)} open ticket${genuineCount === 1 ? '' : 's'}.`;
+  if (urgent === 0) return opening;
+  if (urgent === genuineCount) {
+    return `${opening} ${genuineCount === 1 ? "It's" : "They've all"} been sitting over a day.`;
+  }
+  return `${opening} ${capitalize(countWord(urgent))} of them ${urgent === 1 ? 'has' : 'have'} been sitting over a day, so I'd start there.`;
+}
+
+function flaggedBlurb(thread: DigestThreadRow): string {
+  const blurb = (thread.aiSummary ?? thread.filterReason ?? '').trim();
+  return blurb.length > DIGEST_SUMMARY_TRUNC ? `${blurb.slice(0, DIGEST_SUMMARY_TRUNC)}…` : blurb;
+}
+
+// Summaries are model-written and land with or without a final stop. Inlined
+// into a paragraph, a missing one runs two sentences together.
+function endSentence(text: string): string {
+  return /[.!?…"']$/.test(text) ? text : `${text}.`;
+}
+
+// Just the disclosure that the agent binned things on the merchant's behalf.
+// The 7-day retention window is deliberately not mentioned: there is no
+// un-filter path on the operator channel (REVIEW relists *flagged*, not
+// filtered), so quoting a deadline against a decision they cannot reverse is
+// noise every single morning.
+function spamSentence(filteredCount: number): string {
+  return filteredCount === 1
+    ? `I filed one as spam.`
+    : `I filed ${countWord(filteredCount)} as spam.`;
 }
 
 export function formatDigestMessage(
@@ -122,9 +171,12 @@ export function formatDigestMessage(
   weeklyLine?: string | null,
   extras?: DigestMessageExtras,
 ): string {
-  const { genuine, questionable, filteredCount, urgent, stale, fresh, topTags } = buckets;
+  const { genuine, questionable, filteredCount, urgent } = buckets;
   const lines: string[] = [];
 
+  if (extras?.opener) {
+    lines.push(extras.opener, '');
+  }
   if (extras?.handledSection) {
     lines.push(extras.handledSection, '');
   }
@@ -132,31 +184,50 @@ export function formatDigestMessage(
     lines.push(extras.waitingSection, '');
   }
 
-  lines.push(`Here's your support inbox:`, ``, `Open tickets: ${genuine.length}`);
-
-  if (urgent > 0) lines.push(`  No reply >24h: ${urgent}`);
-  if (stale > 0) lines.push(`  Needs attention (4-24h): ${stale}`);
-  if (fresh > 0) lines.push(`  Recent (<4h): ${fresh}`);
+  // Group by topic, not by data source. These two are the same news ("nothing
+  // here needs you"), so they belong in one breath. Everything the merchant has
+  // to act on gets its own block below.
+  const status = [inboxSentence(genuine.length, urgent)];
+  if (filteredCount > 0) status.push(spamSentence(filteredCount));
+  lines.push(status.join(' '));
 
   if (questionable.length > 0) {
-    lines.push(``, `Flagged (review needed): ${questionable.length}`);
-    const shown = questionable.slice(0, DIGEST_QUESTIONABLE_LIMIT);
-    shown.forEach((t, i) => {
-      const name = t.customer.name ?? 'Unknown';
-      const blurb = (t.aiSummary ?? t.filterReason ?? '').trim();
-      const truncated = blurb.length > DIGEST_SUMMARY_TRUNC ? `${blurb.slice(0, DIGEST_SUMMARY_TRUNC)}…` : blurb;
-      lines.push(`${i + 1}. ${name}${truncated ? ` — ${truncated}` : ''}`);
-    });
-    if (questionable.length > shown.length) {
-      lines.push(`  …and ${questionable.length - shown.length} more`);
+    lines.push(``);
+    if (questionable.length === 1) {
+      // A list of one is a tell that a machine wrote it. The ordinal it loses is
+      // only an affordance for the `spam 1` keyword path, which still parses,
+      // and the model resolves prose from the ids in its own ledger.
+      // Name and summary sit on separate lines because the summary is
+      // model-written prose that often carries its own colon and quotes —
+      // inline, the punctuation collides and the sentence stops scanning.
+      const only = questionable[0]!;
+      const blurb = flaggedBlurb(only);
+      lines.push(`There's one I wasn't sure about, from ${only.customer.name ?? 'someone new'}.`);
+      if (blurb) lines.push(endSentence(blurb));
+    } else {
+      // Numbering earns its place once there is genuinely a list: it is the index
+      // the merchant types back (`spam 2`) and the order of `pendingDigest.threadIds`.
+      lines.push(`There are ${countWord(questionable.length)} I wasn't sure about:`);
+      const shown = questionable.slice(0, DIGEST_QUESTIONABLE_LIMIT);
+      shown.forEach((t, i) => {
+        const name = t.customer.name ?? 'Unknown';
+        const blurb = flaggedBlurb(t);
+        // Colon, not a dash: summaries often open with a capitalized proper
+        // noun, so a comma would read as a sentence fragment collision.
+        lines.push(`${i + 1}. ${name}${blurb ? `: ${blurb}` : ''}`);
+      });
+      if (questionable.length > shown.length) {
+        lines.push(`  …and ${questionable.length - shown.length} more`);
+      }
     }
+    // The ask belongs against the thing it is asking about, not floating at the
+    // end of the message two blocks away from its subject — but it still gets
+    // its own line with air above it. A sentence that closes a block always
+    // does; jammed against the content it reads as one more detail.
+    lines.push(``, questionable.length === 1
+      ? `Want me to do anything with it?`
+      : `Want me to do anything with those?`);
   }
-
-  if (filteredCount > 0) {
-    lines.push(``, `Filtered: ${filteredCount} (auto-removed in 7d)`);
-  }
-
-  if (topTags) lines.push(``, `Topics: ${topTags}`);
 
   for (const line of extras?.garnishLines ?? []) {
     lines.push(``, line);
@@ -164,10 +235,16 @@ export function formatDigestMessage(
 
   if (weeklyLine) lines.push(``, weeklyLine);
 
-  lines.push(``);
-  lines.push(`Text me anytime for your inbox — or send an order number (e.g. #1234) for ticket details.`);
-  if (questionable.length > 0) {
-    lines.push(`Shortcuts: OPEN <n> · SPAM <n> · REPLY <n> <text> · REVIEW to relist flagged tickets.`);
+  // No command syntax anywhere. An employee ending a briefing asks a question or
+  // says nothing — they don't teach you their shortcuts. The keyword fast paths
+  // (`open 1`, `spam 1`, …) still parse and are still documented in HELP; the
+  // merchant reaches them by muscle memory, not by being drilled every morning.
+  // Plain prose resolves too: the model's ledger carries each flagged ticket's
+  // id next to the ordinal the merchant saw (`buildDigestLedgerSection`).
+  // The flagged ask already landed against its subject above; a fully quiet
+  // inbox just gets a sign-off so the message doesn't trail into nothing.
+  if (questionable.length === 0 && genuine.length === 0) {
+    lines.push(``, `I'll shout if anything comes in.`);
   }
 
   return lines.join('\n');
@@ -189,6 +266,7 @@ export async function buildOrgDigest(
   organizationId: string,
   now: Date,
   settings: Record<string, unknown> = {},
+  options: { opener?: string | null } = {},
 ): Promise<OrgDigest | null> {
   const since = resolveHandledWindowStart(settings, now);
   const [openThreads, weeklyStats, handledRollup, waitingItems, garnishLines] = await Promise.all([
@@ -228,7 +306,7 @@ export async function buildOrgDigest(
     message: formatDigestMessage(
       buckets,
       weeklyStats ? formatWeeklySummaryLine(weeklyStats) : null,
-      { handledSection, waitingSection, garnishLines },
+      { opener: options.opener ?? null, handledSection, waitingSection, garnishLines },
     ),
     pendingDigest: {
       threadIds: buckets.questionable.slice(0, DIGEST_QUESTIONABLE_LIMIT).map((t) => t.id),
@@ -238,7 +316,26 @@ export async function buildOrgDigest(
   };
 }
 
-const FIRST_BRIEFING_PREAMBLE = "Good morning — here's your first rundown. You'll get one like this every morning.";
+function timeOfDayGreeting(localHour: number): string {
+  if (localHour < 12) return 'Morning';
+  if (localHour < 17) return 'Afternoon';
+  return 'Evening';
+}
+
+// The agent says hello in its own name before reporting anything — the same
+// voice `buildBindWelcome` and `buildFirstNightMessage` already use. Only the
+// scheduled send greets; a merchant who just texted SUMMARY gets the answer.
+export function buildDigestOpener(
+  agentName: string,
+  settings: Record<string, unknown>,
+  now: Date,
+  firstBriefing: boolean,
+): string {
+  const greeting = timeOfDayGreeting(localHourAndDay(resolveTz(settings), now).hour);
+  return firstBriefing
+    ? `${greeting}, ${agentName} here with your first rundown. You'll get one like this every day.`
+    : `${greeting}, ${agentName} here.`;
+}
 
 // The welcome briefing sent when the first scheduled digest lands on an empty
 // inbox: introduce the morning ritual and show what the agent has already
@@ -253,13 +350,13 @@ export async function buildFirstNightMessage(
   });
   const store = storeName?.trim() ? storeName.trim() : 'your store';
 
-  const lines = [`Good morning — ${agentName} here with your first rundown.`, '', 'It was quiet overnight — no new tickets came in.', ''];
+  const lines = [`Good morning, ${agentName} here with your first rundown.`, '', 'It was quiet overnight. No new tickets came in.', ''];
   if (syncedArticles > 0) {
     lines.push(
-      `While it was slow I read through ${store} — ${syncedArticles} ${syncedArticles === 1 ? 'page is' : 'pages are'} now in my memory, so I can answer questions about returns, shipping, and your products.`,
+      `While it was slow I read through ${store}. ${syncedArticles} ${syncedArticles === 1 ? 'page is' : 'pages are'} now in my memory, so I can answer questions about returns, shipping, and your products.`,
     );
   } else {
-    lines.push(`I'm set up and watching ${store}'s inbox — the moment a customer writes in, I'll get to work.`);
+    lines.push(`I'm set up and watching ${store}'s inbox. The moment a customer writes in, I'll get to work.`);
   }
   lines.push(
     '',
@@ -292,7 +389,10 @@ export async function sendScheduledDigests(): Promise<void> {
   for (const org of eligibleOrgs) {
     const orgSettings = (org.settings as Record<string, unknown> | null) ?? {};
     const firstBriefingPending = orgSettings.firstBriefingPending === true;
-    const digest = await buildOrgDigest(org.id, now, orgSettings);
+    const agentName = resolveAgentSettings(org.settings).agentName;
+    const digest = await buildOrgDigest(org.id, now, orgSettings, {
+      opener: buildDigestOpener(agentName, orgSettings, now, firstBriefingPending),
+    });
 
     // A brand-new merchant with an empty inbox would otherwise never get a
     // first digest. Send a welcome briefing once so they see the morning ritual.
@@ -302,11 +402,10 @@ export async function sendScheduledDigests(): Promise<void> {
     let pendingDigest: OrgDigest['pendingDigest'];
     let flaggedCount = 0;
     if (digest) {
-      message = firstBriefingPending ? `${FIRST_BRIEFING_PREAMBLE}\n\n${digest.message}` : digest.message;
+      message = digest.message;
       pendingDigest = digest.pendingDigest;
       flaggedCount = digest.flaggedCount;
     } else {
-      const agentName = resolveAgentSettings(org.settings).agentName;
       message = await buildFirstNightMessage(org.id, org.name, agentName);
       pendingDigest = { threadIds: [], sentAt: now.toISOString() };
     }

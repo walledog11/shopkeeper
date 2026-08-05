@@ -79,7 +79,7 @@ describe("formatSalesPulseLine", () => {
     const prior = { orderCount: 9, revenueTotal: 1420, currency: "USD" };
 
     expect(formatSalesPulseLine(current, prior)).toBe(
-      "Sales since your last briefing: 12 orders · $1847 (vs 9 orders · $1420 last week)",
+      "12 orders and $1847 since your last briefing. This time last week it was 9 orders and $1420.",
     );
   });
 
@@ -87,7 +87,23 @@ describe("formatSalesPulseLine", () => {
     const current = { orderCount: 1, revenueTotal: 25.5, currency: "USD" };
 
     expect(formatSalesPulseLine(current)).toBe(
-      "Sales since your last briefing: 1 order · $25.50",
+      "1 order and $25.50 since your last briefing.",
+    );
+  });
+
+  it("stays silent when both windows are empty", () => {
+    const empty = { orderCount: 0, revenueTotal: 0, currency: null };
+
+    expect(formatSalesPulseLine(empty)).toBeNull();
+    expect(formatSalesPulseLine(empty, empty)).toBeNull();
+  });
+
+  it("reports a quiet window only when last week was not quiet", () => {
+    const empty = { orderCount: 0, revenueTotal: 0, currency: null };
+    const prior = { orderCount: 9, revenueTotal: 1420, currency: "USD" };
+
+    expect(formatSalesPulseLine(empty, prior)).toBe(
+      "No orders since your last briefing. This time last week you had 9 orders and $1420.",
     );
   });
 });

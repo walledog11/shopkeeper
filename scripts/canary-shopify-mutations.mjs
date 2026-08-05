@@ -11,6 +11,7 @@
 //
 //   node scripts/canary-shopify-mutations.mjs
 //   node scripts/canary-shopify-mutations.mjs --shop=example.myshopify.com
+//   node scripts/canary-shopify-mutations.mjs --integration-id=<uuid>
 //   node scripts/canary-shopify-mutations.mjs --execute --only=gift_card,refund
 //   node scripts/canary-shopify-mutations.mjs --execute --test-orders-only --only=cancel_order
 //   node scripts/canary-shopify-mutations.mjs --validate
@@ -58,6 +59,20 @@ const ALLOW_LIVE_STORE = args.has('--allow-live-store');
 const TEST_ORDERS_ONLY = args.has('--test-orders-only');
 const ONLY = readCsvArg('--only=');
 const SHOP = readValueArg('--shop=');
+const INTEGRATION_ID = readValueArg('--integration-id=');
+const RECONCILE_GIFT_CARD_CODE = readValueArg('--reconcile-gift-card-code=');
+
+if (SHOP && INTEGRATION_ID) {
+  throw new Error('Pass only one of --shop or --integration-id.');
+}
+if (
+  RECONCILE_GIFT_CARD_CODE
+  && (EXECUTE || VALIDATE || ONLY || !/^[a-z0-9]{20}$/i.test(RECONCILE_GIFT_CARD_CODE))
+) {
+  throw new Error(
+    '--reconcile-gift-card-code requires a 20-character code and cannot be combined with --execute, --validate, or --only.',
+  );
+}
 
 const TEST_ORDER_ONLY_FAMILIES = new Set([
   'cancel_order',
@@ -65,6 +80,7 @@ const TEST_ORDER_ONLY_FAMILIES = new Set([
   'update_shopify_order_address',
   'return_label',
   'fulfill_order',
+  'order_risk_fixture',
 ]);
 
 if (
@@ -166,6 +182,64 @@ function selectFullRefundOrder(inspection) {
     .find((order) => order.id !== conflictOrderId) ?? null;
 }
 
+async function findRefundableTestOrder(ctx, testOrders) {
+  for (const order of testOrders.filter(isFullRefundCandidate)) {
+    try {
+      const orderId = String(order.id);
+      const orderData = await shopifyRestJson(ctx, `orders/${orderId}.json`, {
+        query: { fields: 'id,line_items' },
+      });
+      const refundLineItems = (orderData.order?.line_items ?? []).flatMap((lineItem) => {
+        const quantity = Number(lineItem.current_quantity ?? lineItem.quantity ?? 0);
+        return lineItem.id != null && quantity > 0
+          ? [{ line_item_id: lineItem.id, quantity, restock_type: 'no_restock' }]
+          : [];
+      });
+      const calculation = await shopifyRestJson(ctx, `orders/${orderId}/refunds/calculate.json`, {
+        method: 'POST',
+        body: {
+          refund: {
+            shipping: { full_refund: true },
+            refund_line_items: refundLineItems,
+          },
+        },
+      });
+      const transactions = calculation.refund?.transactions
+        ?? calculation.refund?.suggested_transactions
+        ?? [];
+      if (transactions.some((transaction) => (
+        moneyToCents(transaction.maximum_refundable ?? transaction.amount) >= 1
+      ))) {
+        return order;
+      }
+    } catch {
+      // Eligibility is advisory. The mutation retains its own validation and
+      // reconciliation, so an unreadable candidate is safer to skip.
+    }
+  }
+  return null;
+}
+
+async function reconcileGiftCardCode(ctx, code) {
+  const data = await shopifyGraphql(ctx, `query RecentGiftCardCanaries {
+    giftCards(first: 50, sortKey: CREATED_AT, reverse: true) {
+      nodes { id initialValue { amount } note lastCharacters }
+    }
+  }`, {}, { maxRetries: 1 });
+  const normalizedCode = code.toLowerCase();
+  const matches = (data.giftCards?.nodes ?? []).filter((card) => (
+    card.id
+    && moneyToCents(card.initialValue?.amount ?? '0') === 100
+    && card.note?.includes(`Shopkeeper operation: ${normalizedCode}`)
+    && card.lastCharacters?.toLowerCase() === normalizedCode.slice(-4)
+  ));
+  return {
+    outcome: matches.length === 1 ? 'committed' : matches.length > 1 ? 'ambiguous' : 'not_found',
+    matches: matches.length,
+    amountCents: matches.length === 1 ? moneyToCents(matches[0].initialValue?.amount ?? '0') : null,
+  };
+}
+
 async function loadShopifyIntegration() {
   const rows = await db.integration.findMany({
     where: { platform: 'shopify' },
@@ -196,9 +270,11 @@ async function loadShopifyIntegration() {
     }
   }
 
-  const matches = SHOP
-    ? candidates.filter((row) => normalizeShop(row.externalAccountId) === normalizeShop(SHOP))
-    : candidates;
+  const matches = INTEGRATION_ID
+    ? candidates.filter((row) => row.id === INTEGRATION_ID)
+    : SHOP
+      ? candidates.filter((row) => normalizeShop(row.externalAccountId) === normalizeShop(SHOP))
+      : candidates;
 
   if (matches.length !== 1) {
     const available = candidates.map((row) => row.externalAccountId).join(', ') || 'none';
@@ -207,7 +283,11 @@ async function loadShopifyIntegration() {
       : '';
     if (matches.length === 0) {
       throw new Error(
-        `${SHOP ? `No usable Shopify integration matched --shop=${SHOP}.` : 'No usable Shopify integration was found.'}`
+        `${INTEGRATION_ID
+          ? `No usable Shopify integration matched --integration-id=${INTEGRATION_ID}.`
+          : SHOP
+            ? `No usable Shopify integration matched --shop=${SHOP}.`
+            : 'No usable Shopify integration was found.'}`
         + ` Usable: ${available}.${detail}`,
       );
     }
@@ -238,6 +318,7 @@ async function inspectStore(ctx) {
     const shop = shopData.shop;
     const testOrders = orders.filter((order) => order.test === true);
     const liveOrders = orders.filter((order) => order.test !== true);
+    const refundableTestOrder = await findRefundableTestOrder(ctx, testOrders);
     const planName = String(shop?.plan_name ?? 'unknown');
     const isDevelopmentPlan = DEVELOPMENT_PLANS.has(planName.toLowerCase());
     const mutationsAllowed = isDevelopmentPlan || ALLOW_LIVE_STORE || TEST_ORDERS_ONLY;
@@ -263,7 +344,7 @@ async function inspectStore(ctx) {
         totalSampled: orders.length,
         testCount: testOrders.length,
         liveCount: liveOrders.length,
-        candidateTestOrderId: testOrders[0]?.id ? String(testOrders[0].id) : null,
+        candidateTestOrderId: refundableTestOrder?.id ? String(refundableTestOrder.id) : null,
         testOrderIds: testOrders.map((order) => String(order.id)),
         fullRefundCandidates: testOrders.filter(isFullRefundCandidate).map((order) => ({
           id: String(order.id),
@@ -420,6 +501,8 @@ async function createCanaryOrderFixture(
   {
     family,
     variants,
+    financialStatus = 'PENDING',
+    transaction = null,
   },
 ) {
   if (!Array.isArray(variants) || variants.length === 0) {
@@ -440,11 +523,12 @@ async function createCanaryOrderFixture(
     order: {
       email,
       test: true,
-      financialStatus: 'PENDING',
+      financialStatus,
       lineItems: variants.map((variant) => ({
         variantId: `gid://shopify/ProductVariant/${variant.id}`,
         quantity: 1,
       })),
+      ...(transaction ? { transactions: [transaction] } : {}),
       customer: {
         toUpsert: {
           email,
@@ -503,6 +587,75 @@ async function createCanaryOrderFixture(
     name: order.name ?? null,
     customerId: String(order.customer.id).replace(/^gid:\/\/shopify\/Customer\//, ''),
     variants,
+  };
+}
+
+async function createOrderRiskCanaryFixture(ctx, currency) {
+  const email = `shopkeeper-order-risk-canary+${Date.now()}@example.com`;
+  const variables = {
+    order: {
+      email,
+      test: true,
+      financialStatus: 'PENDING',
+      lineItems: [{
+        title: 'Shopkeeper order-risk canary',
+        quantity: 1,
+        priceSet: { shopMoney: { amount: '300.00', currencyCode: currency } },
+      }],
+      customer: {
+        toUpsert: { email, firstName: 'Canary', lastName: 'Shopkeeper' },
+      },
+      billingAddress: {
+        firstName: 'Canary',
+        lastName: 'Shopkeeper',
+        address1: '1 Canary Test St',
+        city: 'Portland',
+        provinceCode: 'OR',
+        zip: '97201',
+        countryCode: 'US',
+      },
+      shippingAddress: {
+        firstName: 'Canary',
+        lastName: 'Shopkeeper',
+        address1: '1 Canary Test St',
+        city: 'Vancouver',
+        provinceCode: 'BC',
+        zip: 'V6B 1A1',
+        countryCode: 'CA',
+      },
+      tags: ['shopkeeper-canary', 'shopkeeper-order-risk-canary'],
+    },
+    options: { sendReceipt: false, sendFulfillmentReceipt: false },
+  };
+  const skipped = await shopifyGraphql(
+    ctx,
+    skippedMutationDocument({
+      document: CANARY_FULFILLED_ORDER_CREATE_MUTATION,
+      rootField: 'orderCreate',
+    }),
+    variables,
+    { maxRetries: 0 },
+  );
+  if (skipped && typeof skipped === 'object' && 'orderCreate' in skipped) {
+    throw new Error('Shopify did not honor @skip for the order-risk fixture preflight.');
+  }
+  const data = await shopifyGraphql(
+    ctx,
+    CANARY_FULFILLED_ORDER_CREATE_MUTATION,
+    variables,
+    { maxRetries: 0 },
+  );
+  const userErrors = data.orderCreate?.userErrors ?? [];
+  if (userErrors.length > 0) {
+    throw new Error(`Could not create order-risk test order: ${userErrors.map((error) => error.message).join(', ')}`);
+  }
+  const order = data.orderCreate?.order;
+  if (!order?.id || order.test !== true) {
+    throw new Error('Shopify did not return a test order for the order-risk fixture.');
+  }
+  return {
+    id: String(order.id).replace(/^gid:\/\/shopify\/Order\//, ''),
+    name: order.name ?? null,
   };
 }
 
@@ -1101,7 +1254,33 @@ async function runCanaries(ctx, inspection, returnFixture, exchangeFixture) {
     }));
   }
 
-  const testOrderId = inspection.recentOrders.candidateTestOrderId;
+  let testOrderId = inspection.recentOrders.candidateTestOrderId;
+  if (shouldRun('refund') && inspection.shop.mutationsAllowed && !testOrderId) {
+    const variants = await loadActiveVariants(ctx);
+    const variant = variants.find((entry) => entry.priceCents != null && entry.priceCents > 0);
+    if (!variant) {
+      throw new Error('Cannot create refund fixture: the store has no positive-price active variant.');
+    }
+    const amount = (variant.priceCents / 100).toFixed(2);
+    const fixture = await createCanaryOrderFixture(ctx, {
+      family: 'refund',
+      variants: [variant],
+      financialStatus: 'PAID',
+      transaction: {
+        amountSet: {
+          shopMoney: {
+            amount,
+            currencyCode: inspection.shop.currency,
+          },
+        },
+        gateway: 'shopkeeper_canary',
+        kind: 'SALE',
+        status: 'SUCCESS',
+        test: true,
+      },
+    });
+    testOrderId = fixture.id;
+  }
   if (shouldRun('refund') && inspection.shop.mutationsAllowed && testOrderId) {
     results.push(await runFamily('refund', async () => {
       const operationId = `${operationBase}:refund`;
@@ -1196,6 +1375,18 @@ async function runCanaries(ctx, inspection, returnFixture, exchangeFixture) {
         message: result.message,
         probeOutcome: probe.outcome,
         probeMessage: probe.message,
+      };
+    }));
+  }
+
+  if (shouldRun('order_risk_fixture') && inspection.shop.mutationsAllowed) {
+    results.push(await runFamily('order_risk_fixture', async () => {
+      const fixture = await createOrderRiskCanaryFixture(ctx, inspection.shop.currency);
+      return {
+        status: 'ok',
+        message: `Created controlled order-risk test fixture ${fixture.name ?? fixture.id}.`,
+        orderId: fixture.id,
+        orderName: fixture.name,
       };
     }));
   }
@@ -1514,7 +1705,13 @@ const exchangeFixture = exchangeReturnFixture
   : null;
 
 const report = {
-  mode: EXECUTE ? 'execute' : VALIDATE ? 'validate' : 'inspect',
+  mode: EXECUTE
+    ? 'execute'
+    : VALIDATE
+      ? 'validate'
+      : RECONCILE_GIFT_CARD_CODE
+        ? 'reconcile-gift-card'
+        : 'inspect',
   organizationFingerprint: fingerprint(organizationId),
   integrationFingerprint: fingerprint(integrationId),
   selectedShop: ctx.shop,
@@ -1529,6 +1726,9 @@ const report = {
   queryValidation: [],
   uncoveredMutationDocuments: VALIDATE ? uncoveredMutationDocuments() : [],
   canaries: EXECUTE ? await runCanaries(ctx, inspection, returnFixture, exchangeFixture) : [],
+  giftCardReconciliation: RECONCILE_GIFT_CARD_CODE
+    ? await reconcileGiftCardCode(ctx, RECONCILE_GIFT_CARD_CODE)
+    : null,
   returnFixture,
   exchangeFixture,
   notes: [],
@@ -1559,7 +1759,12 @@ if (EXECUTE && TEST_ORDERS_ONLY) {
     'Safety mode active: every selected family creates a new Shopify test order and never selects a live order.',
   );
 }
-if (EXECUTE && inspection.shop.mutationsAllowed && shouldRun('refund') && !inspection.recentOrders.candidateTestOrderId) {
+if (
+  EXECUTE
+  && inspection.shop.mutationsAllowed
+  && shouldRun('refund')
+  && !report.canaries.some((entry) => entry.family === 'refund')
+) {
   report.notes.push('Refund canary skipped: no recent test order was found.');
 }
 if (EXECUTE && inspection.shop.mutationsAllowed && shouldRun('return_label') && !returnFixture?.id) {

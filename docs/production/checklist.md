@@ -1,6 +1,11 @@
 # Production Checklist
 
-Last reviewed: 2026-06-28.
+Last reviewed: 2026-08-04.
+
+The latest attempted production sign-off is recorded in
+[pre-release-validation-2026-08-04.md](pre-release-validation-2026-08-04.md).
+It contains passing evidence plus unresolved launch blockers; do not treat that
+run as a completed sign-off.
 
 This is the short release gate for production readiness. Keep detailed deploy procedure in
 [deployment.md](deployment.md) and operational response steps in [runbook.md](runbook.md).

@@ -27,6 +27,22 @@ export interface WaitingItem {
   line: string;
 }
 
+const COUNT_WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+
+/**
+ * Spell out small counts of *things in the merchant's queue* — "three open
+ * tickets" reads like a person, "3 open tickets" like a dashboard. Metrics
+ * (orders, revenue, tickets-per-week) stay in digits; they are numbers the
+ * merchant is meant to compare, not sentences.
+ */
+export function countWord(count: number): string {
+  return COUNT_WORDS[count] ?? String(count);
+}
+
+export function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 export function resolveHandledWindowStart(
   settings: Record<string, unknown>,
   now: Date,
@@ -107,6 +123,10 @@ function parkedActionLabel(
   return `${step.label.toLowerCase()}${forCustomer}`;
 }
 
+// A bare noun phrase for one bullet. The "still waiting on your OK" framing
+// lives in the section header, so repeating it per item just pads the text; and
+// the action labels already name the customer ("reply to Sarah"), so a
+// possessive subject on top of them reads as "Sarah's reply to Sarah".
 function waitingPhrase(
   customerName: string | null,
   rawToolCalls: Array<{ id: string; name: string; input?: unknown }>,
@@ -114,25 +134,20 @@ function waitingPhrase(
   actionLabel?: string,
 ): string {
   const firstName = customerFirstName(customerName);
-  const subject = firstName ? `${firstName}'s` : 'A ticket';
+  const forCustomer = firstName ? ` for ${firstName}` : '';
+
   const refundAmount = extractRefundAmount(
     rawToolCalls.find((toolCall) => toolCall.name === 'create_refund')?.input,
   );
-  if (refundAmount) {
-    return `${subject} ${refundAmount} refund — still waiting on your OK`;
-  }
-  if (actionLabel) {
-    return `${subject} ${actionLabel} — still waiting on your OK`;
-  }
-  const parked = parkedActionLabel(rawToolCallsToSteps(rawToolCalls), customerName);
-  if (parked) {
-    return `${subject} ${parked} — still waiting on your OK`;
-  }
+  if (refundAmount) return `${refundAmount} refund${forCustomer}`;
+
+  const label = actionLabel ?? parkedActionLabel(rawToolCallsToSteps(rawToolCalls), customerName);
+  if (label) return label.charAt(0).toUpperCase() + label.slice(1);
+
   const trimmed = instruction.trim();
   const summary = trimmed.length > 72 ? `${trimmed.slice(0, 72)}…` : trimmed;
-  return summary
-    ? `${subject} ${summary} — still waiting on your OK`
-    : `${subject} — still waiting on your OK`;
+  if (!summary) return firstName ? `A ticket${forCustomer}` : 'A ticket';
+  return firstName ? `${firstName}: ${summary}` : summary;
 }
 
 async function isPlanExecutionResolved(
@@ -225,23 +240,29 @@ export function formatHandledSection(rollup: HandledRollup): string | null {
   const total = rollup.approvedCount + rollup.autoCount;
   if (total === 0) return null;
 
-  const summaryParts: string[] = [];
+  // "including", not a comma list: an execution that refunded *and* replied is
+  // counted by both counters, so the parts do not have to sum to the total.
+  const detailParts: string[] = [];
   if (rollup.refundCount > 0) {
-    summaryParts.push(`${rollup.refundCount} refund${rollup.refundCount === 1 ? '' : 's'}`);
+    detailParts.push(`${countWord(rollup.refundCount)} refund${rollup.refundCount === 1 ? '' : 's'}`);
   }
   if (rollup.replyCount > 0) {
-    summaryParts.push(`${rollup.replyCount} repl${rollup.replyCount === 1 ? 'y' : 'ies'} sent`);
+    detailParts.push(`${countWord(rollup.replyCount)} repl${rollup.replyCount === 1 ? 'y' : 'ies'}`);
   }
-  if (rollup.autoCount > 0) {
-    summaryParts.push(`${rollup.autoCount} auto-handled`);
-  }
-  if (rollup.approvedCount > 0) {
-    summaryParts.push(`${rollup.approvedCount} approved by you`);
-  }
+  const detail = detailParts.length > 0 ? `, including ${detailParts.join(' and ')}` : '';
+  const lead = `Since your last briefing I handled ${countWord(total)} ${total === 1 ? 'thing' : 'things'}${detail}`;
 
-  const lines = ['Since your last briefing:', summaryParts.join(' · ')];
+  const lines = [rollup.notableLines.length > 0 ? `${lead}:` : `${lead}.`];
   if (rollup.notableLines.length > 0) {
     lines.push(...rollup.notableLines.map((line) => `- ${line}`));
+  }
+  // Trust line: say plainly how much of that ran without the merchant. Blank
+  // line above it for the same reason the digest's closing ask gets one — a
+  // sentence that concludes a block reads as another bullet without the air.
+  if (rollup.autoCount > 0) {
+    lines.push(``, rollup.autoCount === total
+      ? `${total === 1 ? 'That one' : 'Those'} ran without needing you.`
+      : `${capitalize(countWord(rollup.autoCount))} of those ran without needing you.`);
   }
   return lines.join('\n');
 }
@@ -375,6 +396,8 @@ export async function loadWaitingOnYouItems(
 
 export function formatWaitingSection(items: WaitingItem[]): string | null {
   if (items.length === 0) return null;
-  const lines = ['Waiting on you:', ...items.map((item) => `- ${item.line}`)];
-  return lines.join('\n');
+  const header = items.length === 1
+    ? "One thing's still waiting on your OK:"
+    : `${capitalize(countWord(items.length))} things are still waiting on your OK:`;
+  return [header, ...items.map((item) => `- ${item.line}`)].join('\n');
 }

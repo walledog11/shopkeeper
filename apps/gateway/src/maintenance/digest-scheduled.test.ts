@@ -119,7 +119,7 @@ describe('sendScheduledDigests — first-night briefing', () => {
     const messages = myMessages();
     expect(messages).toHaveLength(1);
     expect(messages[0]).toContain('first rundown');
-    expect(messages[0]).toContain('Open tickets:');
+    expect(messages[0]).toContain("You've got one open ticket");
 
     expect((await readSettings(org.id)).firstBriefingPending).toBe(false);
   });

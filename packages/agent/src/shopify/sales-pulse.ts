@@ -93,19 +93,24 @@ function formatMoney(amount: number, currency: string | null): string {
   return `${rounded} ${currency}`;
 }
 
+// Null when there is nothing to report — a briefing that says "0 orders · $0
+// (vs 0 orders · $0 last week)" reads like a cron job. A quiet window is only
+// worth a sentence when the same window last week was not quiet.
 export function formatSalesPulseLine(
   current: OrderWindowSummary,
   prior?: OrderWindowSummary | null,
-): string {
-  const revenue = formatMoney(current.revenueTotal, current.currency);
-  const orderLabel = `${current.orderCount} order${current.orderCount === 1 ? "" : "s"}`;
-  let line = `Sales since your last briefing: ${orderLabel} · ${revenue}`;
+): string | null {
+  const priorLabel = prior
+    ? `${prior.orderCount} order${prior.orderCount === 1 ? "" : "s"} and ${formatMoney(prior.revenueTotal, prior.currency ?? current.currency)}`
+    : null;
 
-  if (prior) {
-    const priorRevenue = formatMoney(prior.revenueTotal, prior.currency ?? current.currency);
-    const priorOrders = `${prior.orderCount} order${prior.orderCount === 1 ? "" : "s"}`;
-    line += ` (vs ${priorOrders} · ${priorRevenue} last week)`;
+  if (current.orderCount === 0) {
+    if (!prior || prior.orderCount === 0) return null;
+    return `No orders since your last briefing. This time last week you had ${priorLabel}.`;
   }
 
-  return line;
+  const revenue = formatMoney(current.revenueTotal, current.currency);
+  const orderLabel = `${current.orderCount} order${current.orderCount === 1 ? "" : "s"}`;
+  const line = `${orderLabel} and ${revenue} since your last briefing.`;
+  return priorLabel ? `${line} This time last week it was ${priorLabel}.` : line;
 }

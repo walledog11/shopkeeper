@@ -10,6 +10,8 @@ interface MockQueueInstance {
   name: string;
   options: unknown;
   add: ReturnType<typeof vi.fn>;
+  getRepeatableJobs: ReturnType<typeof vi.fn>;
+  removeRepeatableByKey: ReturnType<typeof vi.fn>;
   close: ReturnType<typeof vi.fn>;
 }
 
@@ -42,6 +44,8 @@ vi.mock('bullmq', () => ({
     this.name = name;
     this.options = options;
     this.add = vi.fn().mockResolvedValue({ id: `${name}-job` });
+    this.getRepeatableJobs = vi.fn().mockResolvedValue([]);
+    this.removeRepeatableByKey = vi.fn().mockResolvedValue(undefined);
     this.close = vi.fn().mockResolvedValue(undefined);
     queueInstances.push(this);
   }),

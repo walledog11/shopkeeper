@@ -14,6 +14,7 @@ export const publicRoutePatterns = [
   "/signup(.*)",
   "/demo-film",
   "/api/health(.*)",
+  "/api/security/csp-report",
   "/api/billing/webhook(.*)",
   "/api/webhooks(.*)",
   "/api/integrations/shopify/callback(.*)",

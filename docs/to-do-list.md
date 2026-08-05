@@ -16,23 +16,6 @@ not removal candidates. Frame their tasks as "build/finish," and treat
 onboarding sequencing as ordering channels behind the v1 wedge — never as
 dropping or de-advertising a channel.
 
-## The one that matters
-
-- [ ] **Get design partner / merchant #1.** Every remaining rollout gate below
-  is blocked on real traffic and unblockable any other way — a design partner
-  *is* the canary. The trust-critical engineering (durable execution claims,
-  identity-checked approval, escalation-over-confidence, spend/refund caps,
-  audit trail, durable operator ingestion) is done and tested to a standard most
-  launched products don't meet. The failure mode to guard against now is not a
-  bad refund; it is spending another month hardening rails nobody has ridden.
-  - Constraint to plan around: Instagram is behind Meta App Review, so merchant
-    #1 is realistically **email forwarding + Shopify + phone**.
-  - Nothing operational is in the way. Monitoring and recoverability are live
-    and exercised, not merely configured — evidence in
-    [runbook.md](production/runbook.md) ("External Monitors", "Ops Alert Log
-    Routing", "Neon PITR"). Everything still open below either needs a merchant
-    to exercise it or is deliberately deferred behind a paywall.
-
 ## Pre-Release Blockers
 
 - [ ] **Flip CSP `reportOnly` to `false`** in `apps/dashboard/src/proxy.ts`. The
@@ -67,14 +50,13 @@ dropping or de-advertising a channel.
     `emit-controlled-ops-alert.ts` verified, live health baseline recorded,
     per-category trigger cheatsheet written.
 
-## Rollout Gates Blocked On Real Traffic
+## Rollout Gates Requiring Production Evidence
 
 Carried from the codebase-cleanup plan at its closeout (2026-07-30); the plan's
-80 completed items are in git history. Every item here needs production traffic
-or a configured provider — none is a code task.
+80 completed items are in git history. A merchant and real traffic are available;
+every item here now needs a production canary or observation window, or a
+configured provider. None is a code task.
 
-- [ ] Canary refund, store-credit, and gift-card reservations independently;
-  observe cap totals and duplicate suppression against Shopify dev stores.
 - [ ] Run the strict reservation audit through the production observation window
   with no unexplained stale or `unknown` rows. (The `unknown-outcome-sweep`
   worker landed 2026-07-21; proving it against production traffic is the gate.)

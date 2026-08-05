@@ -84,6 +84,8 @@ vi.mock('bullmq', () => ({
   }),
   Queue: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
     this.add = vi.fn().mockResolvedValue({ id: 'mock-summary-job' });
+    this.getRepeatableJobs = vi.fn().mockResolvedValue([]);
+    this.removeRepeatableByKey = vi.fn().mockResolvedValue(undefined);
     this.close = vi.fn().mockResolvedValue(undefined);
   }),
 }));

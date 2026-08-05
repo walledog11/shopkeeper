@@ -67,8 +67,8 @@ describe('loadDigestShopifyGarnish', () => {
     const lines = await loadDigestShopifyGarnish('org-1', { lowStockThreshold: 5 }, new Date('2026-04-29T12:00:00Z'));
 
     expect(lines).toEqual([
-      'Sales since your last briefing: 3 orders · $120 (vs 2 orders · $80 last week)',
-      'Low stock (≤5): Hat (Blue) · 1 left',
+      '3 orders and $120 since your last briefing. This time last week it was 2 orders and $80.',
+      'Running low:\n- Hat (Blue) is down to 1',
     ]);
   });
 

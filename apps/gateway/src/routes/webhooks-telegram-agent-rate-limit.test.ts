@@ -82,9 +82,10 @@ describe('POST /webhooks/telegram — help & summary', () => {
     await processPendingOperatorEvents(org.id);
     await waitForReplies(1);
     const text = lastReplyText();
-    expect(text).toMatch(/support inbox/i);
-    expect(text).toMatch(/Flagged \(review needed\): 1/);
-    expect(text).toMatch(/1\. Dana — Wholesale pricing question/);
+    // On-demand SUMMARY answers straight out — the greeting is the scheduled
+    // send's job, not a reply to a merchant who just asked.
+    expect(text).toMatch(/^Nothing's waiting on a reply\./);
+    expect(text).toContain("There's one I wasn't sure about, from Dana.\nWholesale pricing question.");
 
     const ctx = await getContext(org.id, chatId);
     expect(ctx.pendingDigest?.threadIds).toEqual([flagged.id]);

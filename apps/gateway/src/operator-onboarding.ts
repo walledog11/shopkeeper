@@ -22,11 +22,11 @@ export interface BindWelcomeParams {
 export function buildBindWelcome({ agentName, storeName }: BindWelcomeParams): string {
   const store = storeName?.trim() ? `${storeName.trim()}'s inbox` : 'your inbox';
   return [
-    `Hi — it's ${agentName}. We're connected, and I'm watching ${store} from now on.`,
+    `Hi, it's ${agentName}. We're connected, and I'm watching ${store} from now on.`,
     '',
     "When something needs your call I'll text you here first. Every morning you'll get a rundown of what came in overnight and what I handled.",
     '',
-    "Text SUMMARY anytime for your open tickets, HELP for what I can do, or just tell me what you need — like 'refund #1234'.",
+    "Text SUMMARY anytime for your open tickets, HELP for what I can do, or just tell me what you need, like 'refund #1234'.",
   ].join('\n');
 }
 

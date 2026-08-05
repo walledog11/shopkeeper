@@ -67,6 +67,12 @@ describe('proxy middleware auth handling', () => {
     expect(res).toBeUndefined();
   });
 
+  it('lets browsers submit CSP reports without an authenticated session', async () => {
+    const { fn } = makeAuth(null, null);
+    const res = await capturedHandler(fn as never, makeReq('/api/security/csp-report'));
+    expect(res).toBeUndefined();
+  });
+
   it('returns 403 JSON when authenticated but no active org for API paths', async () => {
     const { fn } = makeAuth('usr_1', null);
     const res = await capturedHandler(fn as never, makeReq('/api/threads'));

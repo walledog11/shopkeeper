@@ -73,20 +73,20 @@ function formatVariantLabel(item: LowStockVariant): string {
   const variantLabel = item.variantTitle === "Default Title"
     ? item.productTitle
     : `${item.productTitle} (${item.variantTitle})`;
-  const left = item.inventoryQuantity === 1 ? "1 left" : `${item.inventoryQuantity} left`;
-  return `${variantLabel} · ${left}`;
+  return `- ${variantLabel} is down to ${item.inventoryQuantity}`;
 }
 
+// Bulleted rather than middot-joined: with a `·` between the product and its
+// count *and* between products, a two-item list reads as one four-item list.
 export function formatLowStockLine(
   items: LowStockVariant[],
-  threshold: number,
   totalFound?: number,
 ): string | null {
   if (items.length === 0) return null;
 
-  const shown = items.map(formatVariantLabel).join(" · ");
-  const overflow = totalFound != null && totalFound > items.length
-    ? ` · +${totalFound - items.length} more`
-    : "";
-  return `Low stock (≤${threshold}): ${shown}${overflow}`;
+  const lines = ["Running low:", ...items.map(formatVariantLabel)];
+  if (totalFound != null && totalFound > items.length) {
+    lines.push(`- …and ${totalFound - items.length} more`);
+  }
+  return lines.join("\n");
 }

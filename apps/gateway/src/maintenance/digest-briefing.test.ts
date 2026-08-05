@@ -86,10 +86,22 @@ describe('formatHandledSection', () => {
       refundCount: 1,
       notableLines: ['Refunded Sarah $12', 'Replied to Bob'],
     });
-    expect(section).toContain('Since your last briefing');
-    expect(section).toContain('1 refund');
-    expect(section).toContain('2 replies sent');
+    expect(section).toContain('Since your last briefing I handled two things');
+    expect(section).toContain('one refund');
+    expect(section).toContain('two replies');
     expect(section).toContain('Refunded Sarah $12');
+    expect(section).toContain('One of those ran without needing you.');
+  });
+
+  it('omits the autonomy line when the merchant approved everything', () => {
+    const section = formatHandledSection({
+      approvedCount: 2,
+      autoCount: 0,
+      replyCount: 2,
+      refundCount: 0,
+      notableLines: [],
+    });
+    expect(section).toBe('Since your last briefing I handled two things, including two replies.');
   });
 });
 
@@ -153,8 +165,11 @@ describe('loadWaitingOnYouItems', () => {
 
     const items = await loadWaitingOnYouItems(org.id, NOW);
     expect(items).toHaveLength(1);
-    expect(items[0]?.line).toContain('Sarah');
-    expect(items[0]?.line).toContain('still waiting on your OK');
+    expect(items[0]?.line).toBe('$12 refund for Sarah');
+    // The "still waiting on your OK" framing belongs to the header, once.
+    expect(formatWaitingSection(items)).toBe(
+      "One thing's still waiting on your OK:\n- $12 refund for Sarah",
+    );
   });
 
   it('includes stale dashboard plans that still need review', async () => {
@@ -174,7 +189,7 @@ describe('loadWaitingOnYouItems', () => {
     const items = await loadWaitingOnYouItems(org.id, NOW);
     expect(items).toHaveLength(1);
     expect(items[0]?.line).toContain('Bob');
-    expect(formatWaitingSection(items)).toContain('Waiting on you');
+    expect(formatWaitingSection(items)).toContain("still waiting on your OK");
   });
 
   it('ignores stale plans on threads outside the support inbox', async () => {

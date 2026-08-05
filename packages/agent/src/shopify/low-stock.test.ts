@@ -47,14 +47,23 @@ describe("formatLowStockLine", () => {
     const line = formatLowStockLine([
       { productTitle: "Canvas Hat", variantTitle: "Blue", inventoryQuantity: 2 },
       { productTitle: "Classic Tee", variantTitle: "M", inventoryQuantity: 1 },
-    ], 5);
+    ]);
 
     expect(line).toBe(
-      "Low stock (≤5): Canvas Hat (Blue) · 2 left · Classic Tee (M) · 1 left",
+      "Running low:\n- Canvas Hat (Blue) is down to 2\n- Classic Tee (M) is down to 1",
     );
   });
 
+  it("appends an overflow bullet when more variants were found than shown", () => {
+    const line = formatLowStockLine(
+      [{ productTitle: "Canvas Hat", variantTitle: "Blue", inventoryQuantity: 2 }],
+      4,
+    );
+
+    expect(line).toBe("Running low:\n- Canvas Hat (Blue) is down to 2\n- …and 3 more");
+  });
+
   it("returns null when there are no low-stock variants", () => {
-    expect(formatLowStockLine([], 5)).toBeNull();
+    expect(formatLowStockLine([])).toBeNull();
   });
 });
