@@ -20,9 +20,14 @@ export function customerInitials(name: string): string {
   if (!trimmed) return "?"
   const at = trimmed.indexOf("@")
   const base = at > 0 ? trimmed.slice(0, at) : trimmed
-  const parts = base.split(/\s+/).filter(Boolean)
-  const letters = parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : base.slice(0, 2)
-  return letters.toUpperCase()
+  // Strip punctuation per word, or a name like "Sarah (P7 canary)" initials as "S(".
+  const parts = base
+    .split(/\s+/)
+    .map(part => part.replace(/[^\p{L}\p{N}]/gu, ""))
+    .filter(Boolean)
+  if (parts.length === 0) return "?"
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
 export function timeAgoShort(date: Date, now: Date): string {

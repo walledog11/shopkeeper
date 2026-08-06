@@ -73,34 +73,32 @@ export function TicketQueueCard({
         isActive ? "border-foreground/30" : "border-border"
       }`}
     >
-      <div className="flex items-center gap-3">
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-border bg-foreground/[0.05] text-[13px] font-semibold text-strong">
-          {initials}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2">
-            <span className="truncate text-sm font-semibold text-strong">{presentation.customerLabel}</span>
-            <span className="shrink-0 text-xs tabular-nums text-faint">{presentation.timeAgo}</span>
-          </div>
-          <span className="mt-0.5 flex items-center gap-1.5 text-xs text-faint">
-            <Image src={ticket.logo} width={12} height={12} alt="" className="size-3 shrink-0 object-contain opacity-55" />
-            {presentation.channelName}
-          </span>
-        </div>
-      </div>
-
       <button
         type="button"
         onClick={onOpen}
         className="flex min-w-0 flex-col gap-2 border-0 bg-transparent p-0 text-left [font-family:inherit]"
       >
+        <div className="flex w-full items-baseline justify-between gap-4">
+          <h3 className="min-w-0 flex-1 font-sans text-lg font-semibold leading-snug tracking-tight text-foreground line-clamp-2">
+            {title}
+          </h3>
+          <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+            <Image src={ticket.logo} width={14} height={14} alt={presentation.channelName} className="size-3.5 shrink-0 object-contain opacity-55" />
+            <span className="tabular-nums">{presentation.timeAgo}</span>
+          </span>
+        </div>
+
+        <span className="inline-flex max-w-full items-center gap-1.5 text-[11px] font-semibold text-foreground/35">
+          <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-foreground/[0.08] text-[9px] font-bold text-muted-foreground">
+            {initials}
+          </span>
+          <span className="truncate">{presentation.customerLabel}</span>
+        </span>
+
         <TicketTagPill
           tag={presentation.tier === "escalated" ? null : ticket.tag}
           className="w-fit"
         />
-        <h3 className="font-sans text-lg font-semibold leading-snug tracking-tight text-foreground line-clamp-2">
-          {title}
-        </h3>
         {preview && (
           <p className="text-sm leading-relaxed text-muted-foreground line-clamp-3">{preview}</p>
         )}
