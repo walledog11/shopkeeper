@@ -6,9 +6,15 @@ import { normalizeTelegramBotUsername } from "@/lib/integrations/telegram-visibi
 import { normalizeImessageLineHandle } from "@/lib/integrations/imessage-visibility"
 import { isGmailNativeInboundEnabled, isInstagramIntegrationEnabledForOrg } from "@/lib/env"
 import { isTikTokShopOAuthConfigured } from "@/lib/tiktok-shop/config"
+import { getOrCreateOrg } from "@/lib/server/org"
+import { getTelegramMemberStatus } from "@/lib/server/telegram-integration"
 
 export default async function IntegrationsPage() {
-  const { orgId } = await auth()
+  const { orgId, userId } = await auth()
+  const org = await getOrCreateOrg()
+  const initialTelegramStatus = userId
+    ? await getTelegramMemberStatus(org.id, userId)
+    : null
   const telegramBotUsername = normalizeTelegramBotUsername(process.env.TELEGRAM_BOT_USERNAME)
   const imessageHandle = normalizeImessageLineHandle(process.env.IMESSAGE_LINE_HANDLE)
   const gmailNativeInboundEnabled = isGmailNativeInboundEnabled()
@@ -19,6 +25,7 @@ export default async function IntegrationsPage() {
     <Suspense fallback={<IntegrationsPageSkeleton />}>
       <IntegrationsPageClient
         telegramBotUsername={telegramBotUsername}
+        initialTelegramStatus={initialTelegramStatus}
         imessageHandle={imessageHandle}
         gmailNativeInboundEnabled={gmailNativeInboundEnabled}
         instagramIntegrationEnabled={instagramIntegrationEnabled}

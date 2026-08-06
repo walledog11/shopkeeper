@@ -8,29 +8,11 @@ import { getChannelInfoByName } from "@/lib/messaging/channels"
 import type { HomeNeedsAttentionItem } from "@/lib/home/summary-contract"
 import {
   BUBBLE_TONE,
+  isInboundTone,
   needsYouCardShellClassName,
   type BubbleTone,
   type NeedsYouCardVariant,
 } from "./needs-you-card-styles"
-
-function tagPillClassName(tag: string): string {
-  const normalized = tag.trim().toLowerCase()
-
-  if (normalized.includes("return") || normalized.includes("refund")) {
-    return "bg-amber-100 text-amber-800 border-amber-200/70"
-  }
-  if (normalized.includes("ship") || normalized.includes("order")) {
-    return "bg-sky-100 text-sky-800 border-sky-200/70"
-  }
-  if (normalized.includes("vip")) {
-    return "bg-violet-100 text-violet-800 border-violet-200/70"
-  }
-  if (normalized === "general" || normalized === "support") {
-    return "bg-stone-200/90 text-stone-600 border-stone-300/60"
-  }
-
-  return "bg-orange-100/90 text-orange-800 border-orange-200/70"
-}
 
 export function NeedsYouCardShell({
   confirming = false,
@@ -69,7 +51,7 @@ export function NeedsYouCardShell({
 
 export function NeedsYouCardHeader({ children }: { children: ReactNode }) {
   return (
-    <div className="relative z-10 rounded-t-3xl border-b border-border/60 bg-card px-5 pb-4 pt-5 sm:px-6">
+    <div className="relative z-10 rounded-t-3xl border-b border-border/60 bg-card px-5 py-4 sm:px-6">
       {children}
     </div>
   )
@@ -91,107 +73,84 @@ export function NeedsYouCardFooter({ children }: { children: ReactNode }) {
   )
 }
 
-export function NeedsYouTagBadge({ tag }: { tag: string }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5",
-        "text-[11px] font-semibold uppercase tracking-[0.08em]",
-        tagPillClassName(tag),
-      )}
-    >
-      {tag.trim()}
-    </span>
-  )
-}
-
-export function NeedsYouCardHeaderRow({
-  item,
-  tag,
-}: {
-  item: HomeNeedsAttentionItem
-  tag?: string | null
-}) {
+export function NeedsYouCardHeaderRow({ item }: { item: HomeNeedsAttentionItem }) {
   const channel = getChannelInfoByName(item.channelName)
+  const orderRef = item.orderRef?.trim()
+  // The headline is usually thread.aiTitle, which tends to name the order itself.
+  const showOrderRef = orderRef && !item.headline.includes(orderRef.replace(/^#/, ""))
 
   return (
-    <div className="flex items-center justify-between gap-3">
-      {tag?.trim() ? (
-        <NeedsYouTagBadge tag={tag.trim()} />
-      ) : (
-        <span aria-hidden className="shrink-0" />
-      )}
+    <div className="flex items-baseline justify-between gap-4">
+      <h3 className="min-w-0 flex-1 text-balance font-sans text-xl font-semibold leading-tight tracking-tight text-foreground line-clamp-2 sm:text-2xl">
+        {item.headline}
+      </h3>
 
-      <div className="inline-flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+      <div className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+        {item.isVip && (
+          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.08em] text-violet-700">
+            VIP
+          </span>
+        )}
+        {showOrderRef && (
+          <>
+            <span className="font-medium tabular-nums text-strong">{orderRef}</span>
+            <span className="text-faint">{"\u00b7"}</span>
+          </>
+        )}
         <Image
           src={channel.logo}
-          alt=""
+          alt={item.channelName}
           width={14}
           height={14}
           className="size-3.5 shrink-0 object-contain opacity-55"
         />
-        <span>{item.channelName}</span>
-        <span className="text-faint">{"\u00b7"}</span>
         <span className="tabular-nums">{item.timeAgo}</span>
       </div>
     </div>
   )
 }
 
-export function NeedsYouCustomerName({ name }: { name: string | null }) {
-  if (!name?.trim()) return null
-
-  return (
-    <p className="mt-1.5 text-sm font-medium text-muted-foreground">{name.trim()}</p>
-  )
-}
-
-export function NeedsYouCardTitle({ children }: { children: ReactNode }) {
-  return (
-    <h3 className="mt-2 text-balance font-sans text-xl font-semibold leading-tight tracking-tight text-foreground line-clamp-3 sm:text-2xl">
-      {children}
-    </h3>
-  )
-}
-
 export function NeedsYouBubble({
   label,
   tone,
-  agentName,
+  initial,
   children,
   flush = false,
 }: {
   label: string
   tone: BubbleTone
-  agentName?: string
+  initial?: string
   children: ReactNode
   flush?: boolean
 }) {
   const styles = BUBBLE_TONE[tone]
-  const agentInitial = agentName?.trim()?.[0]?.toUpperCase()
+  const inbound = isInboundTone(tone)
+  const chip = initial ? (
+    <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-foreground/[0.08] text-[9px] font-bold text-muted-foreground">
+      {initial}
+    </span>
+  ) : null
 
   return (
-    <div className={cn(flush ? "" : "mt-4", "flex flex-col gap-1")}>
+    <div
+      className={cn(
+        flush ? "" : "mt-4",
+        "flex flex-col gap-1.5",
+        inbound ? "items-start" : "items-end",
+      )}
+    >
       <span
         className={cn(
-          "inline-flex items-center gap-1.5 self-start text-[11px] font-semibold",
+          "inline-flex max-w-full items-center gap-1.5 text-[11px] font-semibold",
           styles.label,
         )}
       >
-        {tone === "reply" && agentInitial && (
-          <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-foreground/[0.08] text-[9px] font-bold text-muted-foreground">
-            {agentInitial}
-          </span>
-        )}
-        {label}
+        {inbound && chip}
+        <span className="truncate">{label}</span>
+        {!inbound && chip}
       </span>
-      <div
-        className={cn(
-          "rounded-2xl border px-4 py-3",
-          styles.bubble,
-        )}
-      >
-        {tone === "customer" ? (
+      <div className={cn("max-w-[85%] px-4 py-3 shadow-sm", styles.bubble)}>
+        {inbound ? (
           <p className="text-sm leading-relaxed text-strong line-clamp-3">
             {children}
           </p>

@@ -41,3 +41,18 @@ export function ComposerSkeleton() {
     </div>
   )
 }
+
+/** Timeline + composer placeholders while the thread payload is still loading. */
+export function ConversationBodySkeleton() {
+  return (
+    <div
+      data-testid="inline-ticket-conversation-state"
+      className="mobile-ticket-conversation flex h-full min-h-0 min-w-0 flex-col bg-background"
+    >
+      <div className="mobile-ticket-timeline flex-1 overflow-y-auto custom-scrollbar bg-background p-5 space-y-4">
+        <TimelineSkeleton />
+      </div>
+      <ComposerSkeleton />
+    </div>
+  )
+}

@@ -2,10 +2,8 @@
 
 import { Suspense, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import useSWR from "swr"
 import { useOrganization } from "@clerk/nextjs"
 import { CheckCircle2, AlertCircle, AlertTriangle, Info } from "lucide-react"
-import { fetcher } from "@/lib/api/fetcher"
 import { cn } from "@/lib/ui/cn"
 import { useIntegrations } from "@/hooks/useIntegrations"
 import { getEmailProvider } from "@shopkeeper/email/providers"
@@ -17,6 +15,7 @@ import {
   type OAuthDoneMessage,
 } from "@/lib/integrations/oauth-flow"
 import { filterOperatorPlatformConfigs } from "@/lib/integrations/operator-channel-visibility"
+import type { TelegramMemberStatus } from "@/lib/integrations/telegram-status"
 import IntegrationCard from "@/components/integrations/IntegrationCard"
 import { CARD_ACTIONS, CARD_DESCRIPTION, CARD_SHELL } from "@/components/integrations/integration-card-styles"
 import TelegramCard from "@/components/integrations/TelegramCard"
@@ -71,12 +70,14 @@ function renderIntegrationSkeletonSection(
 
 export default function IntegrationsPageClient({
   telegramBotUsername,
+  initialTelegramStatus,
   imessageHandle,
   gmailNativeInboundEnabled,
   instagramIntegrationEnabled,
   tiktokShopConfigured,
 }: {
   telegramBotUsername: string | null
+  initialTelegramStatus: TelegramMemberStatus | null
   imessageHandle: string | null
   gmailNativeInboundEnabled: boolean
   instagramIntegrationEnabled: boolean
@@ -86,6 +87,7 @@ export default function IntegrationsPageClient({
     <Suspense fallback={null}>
       <IntegrationsPageContent
         telegramBotUsername={telegramBotUsername}
+        initialTelegramStatus={initialTelegramStatus}
         imessageHandle={imessageHandle}
         gmailNativeInboundEnabled={gmailNativeInboundEnabled}
         instagramIntegrationEnabled={instagramIntegrationEnabled}
@@ -97,12 +99,14 @@ export default function IntegrationsPageClient({
 
 function IntegrationsPageContent({
   telegramBotUsername,
+  initialTelegramStatus,
   imessageHandle,
   gmailNativeInboundEnabled,
   instagramIntegrationEnabled,
   tiktokShopConfigured,
 }: {
   telegramBotUsername: string | null
+  initialTelegramStatus: TelegramMemberStatus | null
   imessageHandle: string | null
   gmailNativeInboundEnabled: boolean
   instagramIntegrationEnabled: boolean
@@ -112,7 +116,6 @@ function IntegrationsPageContent({
   const { membership } = useOrganization()
   const isAdmin = membership?.role === 'org:admin'
   const { data, mutate } = useIntegrations()
-  const { data: telegramStatus } = useSWR<{ connected: boolean; botUsername: string | null }>('/api/integrations/telegram', fetcher)
   const integrations = useMemo(() => data ?? [], [data])
   const loaded = data !== undefined
   const [openId, setOpenId] = useState<string | null>(null)
@@ -268,8 +271,12 @@ function IntegrationsPageContent({
   const alertCount = integrations.filter(hasIntegrationTokenAlert).length
 
   const telegramAvailability = useMemo(
-    () => ({ botUsername: telegramBotUsername ?? telegramStatus?.botUsername ?? null }),
-    [telegramBotUsername, telegramStatus?.botUsername],
+    () => ({
+      botUsername: telegramBotUsername
+        ?? initialTelegramStatus?.botUsername
+        ?? null,
+    }),
+    [telegramBotUsername, initialTelegramStatus?.botUsername],
   )
   const runtimePlatformConfig = useMemo(
     () => PLATFORM_CONFIG.map(def => {
@@ -308,7 +315,14 @@ function IntegrationsPageContent({
 
   function renderIntegrationCard(def: PlatformConfig) {
     if (def.id === 'telegram') {
-      return <TelegramCard key={def.id} config={def} botUsername={telegramBotUsername} />
+      return (
+        <TelegramCard
+          key={def.id}
+          config={def}
+          botUsername={telegramBotUsername}
+          initialStatus={initialTelegramStatus}
+        />
+      )
     }
 
     if (def.id === 'imessage') {

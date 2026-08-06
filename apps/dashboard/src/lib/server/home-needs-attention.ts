@@ -8,7 +8,7 @@ import {
 } from "@/lib/home/summary-contract"
 import { canonicalInboxThreadWhere } from "@/lib/messaging/inbox-filter"
 import { getChannelInfo } from "@/lib/messaging/channels"
-import { realCustomerName, timeAgoShort } from "@/lib/messaging/customer-display"
+import { customerDisplayLabel, timeAgoShort } from "@/lib/messaging/customer-display"
 import { currentPlanPredicate, type ThreadIdRow } from "@/lib/server/home-summary-queries"
 
 function clampCustomerMessage(text: string | null, max = 300): string {
@@ -83,7 +83,11 @@ export async function loadNeedsAttention(
     return [{
       threadId: thread.id,
       kind,
-      customerName: realCustomerName(thread.customer),
+      // Real name, else the email/handle they wrote in from. Null only when the
+      // customer record carries neither — "Unknown Customer" is not worth showing.
+      customerName: thread.customer?.name || thread.customer?.platformId
+        ? customerDisplayLabel(thread.customer)
+        : null,
       customerMessage: clampCustomerMessage(latestMessage.contentText),
       channelName: getChannelInfo(thread.channelType as ChannelType).name,
       timeAgo: timeAgoShort(latestMessage.sentAt, now),

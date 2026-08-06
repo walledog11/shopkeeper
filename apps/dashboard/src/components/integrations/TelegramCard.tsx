@@ -5,6 +5,7 @@ import useSWR from "swr"
 import { cn } from "@/lib/ui/cn"
 import { fetcher } from "@/lib/api/fetcher"
 import type { PlatformConfig } from "@/lib/integrations/catalog"
+import type { TelegramMemberStatus } from "@/lib/integrations/telegram-status"
 import {
   CARD_ACTIONS,
   CARD_BUTTON_DISABLED,
@@ -23,18 +24,6 @@ import {
 } from "./TelegramConfigureSections"
 
 const MAX_TELEGRAM_DEVICES = 3
-
-interface TelegramChat {
-  chatId: string
-  connectedAt: string
-  displayLabel: string | null
-}
-
-interface TelegramStatus {
-  connected: boolean
-  chats: TelegramChat[]
-  botUsername: string | null
-}
 
 interface TelegramCardState {
   connectUrl: string | null
@@ -59,11 +48,17 @@ function mergeState(state: TelegramCardState, patch: Partial<TelegramCardState>)
 export default function TelegramCard({
   config,
   botUsername: configuredBotUsername,
+  initialStatus,
 }: {
   config: PlatformConfig
   botUsername: string | null
+  initialStatus?: TelegramMemberStatus | null
 }) {
-  const { data: status, mutate } = useSWR<TelegramStatus>('/api/integrations/telegram', fetcher)
+  const { data: status, mutate } = useSWR<TelegramMemberStatus>(
+    '/api/integrations/telegram',
+    fetcher,
+    initialStatus ? { fallbackData: initialStatus } : undefined,
+  )
 
   const [{ connectUrl, connecting, disconnecting, error, open }, updateState] =
     useReducer(mergeState, INITIAL_STATE)

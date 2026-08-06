@@ -10,17 +10,12 @@ import { auth } from "@clerk/nextjs/server";
 import { ApiError, UnauthorizedError } from "@/lib/api/errors";
 import { withOrgRoute } from "@/lib/api/route";
 import { normalizeTelegramBotUsername } from "@/lib/integrations/telegram-visibility";
+import { getTelegramMemberStatus } from "@/lib/server/telegram-integration";
 
 const MAX_TELEGRAM_DEVICES = 3;
 
 function getBotUsername(): string | null {
   return normalizeTelegramBotUsername(process.env.TELEGRAM_BOT_USERNAME);
-}
-
-function formatChatLabel(chat: { displayName: string | null; username: string | null }): string | null {
-  if (chat.displayName) return chat.displayName;
-  if (chat.username) return `@${chat.username.replace(/^@+/, "")}`;
-  return null;
 }
 
 export const GET = withOrgRoute(
@@ -29,31 +24,8 @@ export const GET = withOrgRoute(
     const { userId } = await auth();
     if (!userId) throw new UnauthorizedError();
 
-    const member = await db.orgMember.findUnique({
-      where: { organizationId_clerkUserId: { organizationId: org.id, clerkUserId: userId } },
-      select: {
-        telegramChats: {
-          select: {
-            chatId: true,
-            createdAt: true,
-            displayName: true,
-            username: true,
-          },
-          orderBy: { createdAt: "asc" },
-        },
-      },
-    });
-
-    const chats = member?.telegramChats ?? [];
-    return NextResponse.json({
-      connected: chats.length > 0,
-      chats: chats.map((c) => ({
-        chatId: c.chatId,
-        connectedAt: c.createdAt.toISOString(),
-        displayLabel: formatChatLabel(c),
-      })),
-      botUsername: getBotUsername(),
-    });
+    const status = await getTelegramMemberStatus(org.id, userId);
+    return NextResponse.json(status);
   },
 );
 

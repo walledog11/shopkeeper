@@ -15,6 +15,16 @@ export function customerDisplayLabel(
   return realCustomerName(customer) ?? getCustomerName(customer)
 }
 
+export function customerInitials(name: string): string {
+  const trimmed = name.trim()
+  if (!trimmed) return "?"
+  const at = trimmed.indexOf("@")
+  const base = at > 0 ? trimmed.slice(0, at) : trimmed
+  const parts = base.split(/\s+/).filter(Boolean)
+  const letters = parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : base.slice(0, 2)
+  return letters.toUpperCase()
+}
+
 export function timeAgoShort(date: Date, now: Date): string {
   const minutes = Math.floor((now.getTime() - date.getTime()) / 60_000)
   if (minutes < 1) return "just now"

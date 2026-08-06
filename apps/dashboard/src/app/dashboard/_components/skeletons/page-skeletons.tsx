@@ -248,3 +248,35 @@ export function AgentConfigurePageSkeleton() {
     </PageShell>
   )
 }
+
+const TEAM_MEMBER_ROW_KEYS = ["member-skeleton-1", "member-skeleton-2", "member-skeleton-3"]
+
+export function TeamPageSkeleton() {
+  return (
+    <PageShell className="h-full overflow-y-auto bg-background">
+      <div className="mx-auto max-w-3xl space-y-6 px-4 py-5 pb-10 md:px-8 md:py-7" aria-busy="true" aria-label="Loading team">
+        <div className="flex items-center justify-end">
+          <Pulse className="h-9 w-32 rounded-md" />
+        </div>
+
+        <div className="overflow-hidden rounded-xl border border-border bg-card">
+          <div className="border-b border-border px-5 py-3.5">
+            <Pulse className="h-4 w-20 rounded-md" />
+          </div>
+          <div className="divide-y divide-border">
+            {TEAM_MEMBER_ROW_KEYS.map(key => (
+              <div key={key} className="flex items-center gap-3 px-5 py-3.5">
+                <Pulse className="size-9 shrink-0 rounded-full" />
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <Pulse className="h-3.5 w-40 rounded-md" />
+                  <Pulse className="h-3 w-56 max-w-full rounded-md bg-foreground/[0.04]" />
+                </div>
+                <Pulse className="h-5 w-16 shrink-0 rounded-md bg-foreground/[0.05]" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </PageShell>
+  )
+}

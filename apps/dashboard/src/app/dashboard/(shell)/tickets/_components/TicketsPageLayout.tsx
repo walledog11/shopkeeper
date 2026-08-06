@@ -11,6 +11,7 @@ import { TicketQueueLoading } from "./queue/TicketQueueLoading"
 import type { TicketListView, TicketTagFilter } from "./thread-list/constants"
 import { viewToConversationTab as toConversationTab } from "./thread-list/constants"
 import ConversationView from "./conversation/ConversationView"
+import { ConversationBodySkeleton } from "./conversation/ConversationSkeletons"
 import { ConversationLoadState } from "./TicketsPageStates"
 
 type ConversationViewProps = ComponentProps<typeof ConversationView>
@@ -282,8 +283,10 @@ export function TicketsPageLayout({
           flags={flags}
         />
       </div>
-    ) : (
+    ) : activeThreadError ? (
       <ConversationLoadState error={activeThreadError} compact />
+    ) : (
+      <ConversationBodySkeleton />
     )
   ) : null
 

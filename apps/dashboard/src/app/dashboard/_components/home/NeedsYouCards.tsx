@@ -4,6 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { AlertCircle, Loader2 } from "lucide-react"
 import MerchantAnswerForm from "@/components/agent/MerchantAnswerForm"
+import { customerInitials } from "@/lib/messaging/customer-display"
 import type { HomeNeedsAttentionItem } from "@/lib/home/summary-contract"
 import {
   NeedsYouBubble,
@@ -12,8 +13,6 @@ import {
   NeedsYouCardHeader,
   NeedsYouCardHeaderRow,
   NeedsYouCardShell,
-  NeedsYouCardTitle,
-  NeedsYouCustomerName,
   NeedsYouPrimaryButton,
 } from "./needs-you-card-ui"
 import type { BubbleTone } from "./needs-you-card-styles"
@@ -33,18 +32,21 @@ export function NeedsYouCard({
   const [approvalError, setApprovalError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
 
+  const customerName = item.customerName?.trim()
+  const customerLabel = customerName || "Customer"
+  const customerInitial = customerName ? customerInitials(customerName) : undefined
+  const agentInitial = agentName.trim()[0]?.toUpperCase()
+
   if (item.kind === "needs_merchant_input") {
     return (
       <NeedsYouCardShell>
         <NeedsYouCardHeader>
-          <NeedsYouCardHeaderRow item={item} tag={item.tag} />
-          <NeedsYouCardTitle>{item.headline}</NeedsYouCardTitle>
-          <NeedsYouCustomerName name={item.customerName} />
+          <NeedsYouCardHeaderRow item={item} />
         </NeedsYouCardHeader>
 
         <NeedsYouCardBody>
           {item.customerMessage && (
-            <NeedsYouBubble label="Customer" tone="customer">
+            <NeedsYouBubble label={customerLabel} tone="customer" initial={customerInitial}>
               {item.customerMessage}
             </NeedsYouBubble>
           )}
@@ -142,14 +144,12 @@ export function NeedsYouCard({
   return (
     <NeedsYouCardShell confirming={confirming}>
       <NeedsYouCardHeader>
-        <NeedsYouCardHeaderRow item={item} tag={item.tag} />
-        <NeedsYouCardTitle>{item.headline}</NeedsYouCardTitle>
-        <NeedsYouCustomerName name={item.customerName} />
+        <NeedsYouCardHeaderRow item={item} />
       </NeedsYouCardHeader>
 
       <NeedsYouCardBody>
         {item.customerMessage && (
-          <NeedsYouBubble label="Customer" tone="customer">
+          <NeedsYouBubble label={customerLabel} tone="customer" initial={customerInitial}>
             {item.customerMessage}
           </NeedsYouBubble>
         )}
@@ -160,7 +160,7 @@ export function NeedsYouCard({
               key={bubble.key}
               label={bubble.label}
               tone={bubble.tone}
-              agentName={agentName}
+              initial={agentInitial}
               flush
             >
               {bubble.text}

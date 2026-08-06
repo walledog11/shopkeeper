@@ -3,6 +3,7 @@
 import { ArrowLeft, CheckCircle2, Loader2, RotateCcw, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { customerInitials } from "@/lib/messaging/customer-display"
 import type { TicketCocoAction } from "../../_lib/resolve-ticket-coco-action"
 
 interface Props {
@@ -26,16 +27,6 @@ const COCO_ACTION_CLASS: Record<NonNullable<TicketCocoAction>["variant"], string
   loading: "border-border text-muted-foreground hover:bg-transparent hover:text-muted-foreground",
 }
 
-function initialsOf(name: string): string {
-  const trimmed = name.trim()
-  if (!trimmed) return "?"
-  const at = trimmed.indexOf("@")
-  const base = at > 0 ? trimmed.slice(0, at) : trimmed
-  const parts = base.split(/\s+/).filter(Boolean)
-  const letters = parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : base.slice(0, 2)
-  return letters.toUpperCase()
-}
-
 export default function ConversationHeader({
   activeTab,
   cocoAction,
@@ -49,7 +40,7 @@ export default function ConversationHeader({
   embedded = false,
 }: Props) {
   const BackIcon = embedded ? X : ArrowLeft
-  const initials = initialsOf(customer)
+  const initials = customerInitials(customer)
 
   const identity = (
     <>

@@ -10,22 +10,27 @@ export const BUBBLE_TONE: Record<
 > = {
   customer: {
     label: "text-foreground/35",
-    bubble: "bg-muted/50 border-border shadow-inner",
+    bubble: "bg-muted/50 border border-border rounded-2xl rounded-tl-md",
   },
   action: {
     label: "text-amber-700/70",
-    bubble:
-      "bg-gradient-to-br from-amber-600/[0.12] to-amber-600/[0.04] border-amber-600/20 shadow-sm",
+    bubble: "bg-amber-600/[0.14] border border-amber-600/25 rounded-2xl rounded-tr-md",
   },
   reply: {
+    // Heavier than ChatTimeline's 0.14: here there is one agent bubble and it is
+    // what Approve acts on, so it should read as kin to that button.
     label: "text-foreground/35",
-    bubble: "bg-foreground/[0.04] border-border shadow-sm",
+    bubble: "bg-foreground/[0.18] rounded-2xl rounded-tr-md",
   },
   flag: {
     label: "text-amber-700/70",
-    bubble:
-      "bg-gradient-to-br from-amber-600/[0.12] to-amber-600/[0.04] border-amber-600/20 shadow-sm",
+    bubble: "bg-amber-600/[0.14] border border-amber-600/25 rounded-2xl rounded-tr-md",
   },
+}
+
+/** Inbound sits left; everything the agent produces sits right, as in ChatTimeline. */
+export function isInboundTone(tone: BubbleTone): boolean {
+  return tone === "customer"
 }
 
 export function needsYouCardShellClassName(variant: NeedsYouCardVariant = "front") {

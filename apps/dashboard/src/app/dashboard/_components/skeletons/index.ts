@@ -9,6 +9,7 @@ export {
   OrdersPageSkeleton,
   ReviewPageSkeleton,
   SettingsPageSkeleton,
+  TeamPageSkeleton,
   TicketsArchivePageSkeleton,
   TicketsPageSkeleton,
 } from "./page-skeletons"

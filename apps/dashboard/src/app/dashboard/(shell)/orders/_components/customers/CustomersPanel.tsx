@@ -61,7 +61,6 @@ export default function CustomersPanel({ query }: { query: string }) {
     data,
     handleCustomerUpdated,
     isLoading,
-    isValidating,
     isLoadingMore,
     loadMore,
     loadMoreError,
@@ -74,13 +73,13 @@ export default function CustomersPanel({ query }: { query: string }) {
   return (
     <>
       <div className="space-y-5">
-        {isSearchMode && (
+        {isSearchMode && !isLoading && (
           <p className="text-xs font-medium text-faint">
-            {isLoading ? "Searching…" : `${allCustomers.length} result${allCustomers.length !== 1 ? "s" : ""}`}
+            {`${allCustomers.length} result${allCustomers.length !== 1 ? "s" : ""}`}
           </p>
         )}
 
-        {(isLoading || isValidating) && allCustomers.length === 0 ? (
+        {isLoading && allCustomers.length === 0 ? (
           <CustomerListSkeleton />
         ) : allCustomers.length === 0 ? (
           <CustomersEmptyState isSearch={isSearchMode} query={query} />
