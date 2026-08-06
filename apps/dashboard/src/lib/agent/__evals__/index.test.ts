@@ -65,7 +65,10 @@ describe.sequential("agent evals", () => {
   }
 
   if (!hasRealKey) {
-    const requireKey = process.env.CI || process.env.REQUIRE_MODEL_EVALS === "1";
+    // Only the eval workflows demand a real key (they set REQUIRE_MODEL_EVALS=1).
+    // The regular CI coverage run sweeps this file in with `src/**/*.test.ts` and
+    // has no key, so keying off `process.env.CI` would red every push.
+    const requireKey = process.env.REQUIRE_MODEL_EVALS === "1";
     (requireKey ? it : it.skip)("requires ANTHROPIC_API_KEY to be set to a real key", () => {
       if (requireKey) throw new Error("ANTHROPIC_API_KEY must be a real key; skipped model suites cannot pass CI");
     });
