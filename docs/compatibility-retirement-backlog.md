@@ -28,6 +28,7 @@ repeatable schedulers and can break operator digests and async outbound recovery
 | Synchronous outbound email path | Email / messaging | `npm run audit:outbound-email-mode` shows `asyncEnabled=false` until P4-01 recovery exercises complete and launch owner sets an async-only date | Deferred — documented rollback rail |
 | WhatsApp-named BullMQ queue IDs | Gateway / platform | `npm run audit:bullmq-compatibility-names` inventories live repeatable jobs; rename only after old Redis entries are removed and recreated | Deferred — storage compatibility names per AUD-021 |
 | `OUTBOUND_SEND_SWEEP` legacy string | Gateway maintenance | Same BullMQ audit; sweep is channel-agnostic (email + iMessage) | Deferred — cosmetic rename blocked on Redis migration |
+| `dashboard_agent` ChannelType enum value | Operator channels | Nothing has written it since the Concierge moved onto `sms_agent` operator threads (2026-08-06), but a Postgres enum value cannot be dropped while rows reference it — and historical rows do. Needs those rows re-channelled or purged first; the display mappings stay meanwhile so history still renders | Deferred — live rows reference it |
 
 ## Product decisions blocking retirement
 
