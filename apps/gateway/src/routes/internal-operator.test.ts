@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
-import { ChannelType, db } from '@shopkeeper/db';
+import { ChannelType, SpendCapError, db, usdToNanoDollars } from '@shopkeeper/db';
 import {
   createTestOrg,
   createTestCustomer,
@@ -9,14 +9,21 @@ import {
   cleanupTestData,
 } from '@shopkeeper/db/test-helpers';
 
-const { sendMessageSpy } = vi.hoisted(() => ({
+const { sendMessageSpy, executeAgentTurnSpy } = vi.hoisted(() => ({
   sendMessageSpy: vi.fn().mockResolvedValue(true),
+  executeAgentTurnSpy: vi.fn(),
 }));
 
 vi.mock('../clients/telegram-client.js', () => ({
   isTelegramConfigured: vi.fn(() => true),
   sendMessage: sendMessageSpy,
   setWebhook: vi.fn(),
+}));
+
+// Only the model turn is stubbed — the billing gate, thread resolution, ledger,
+// and module tools all run against the real database.
+vi.mock('@shopkeeper/agent/turn', () => ({
+  executeAgentTurn: executeAgentTurnSpy,
 }));
 
 vi.mock('ioredis', () => ({
@@ -29,6 +36,8 @@ vi.mock('ioredis', () => ({
 }));
 
 import { registerInternalOperatorRoutes } from './internal-operator.js';
+import { getContext, updateContext } from '../operator-context.js';
+import { resolveOperatorMemberKey } from '../operator-identity.js';
 
 function createApp() {
   const app = express();
@@ -49,6 +58,11 @@ beforeEach(async () => {
   process.env.INTERNAL_API_SECRET = SECRET;
   process.env.DASHBOARD_URL = 'http://dashboard.test';
   sendMessageSpy.mockClear();
+  executeAgentTurnSpy.mockReset();
+  executeAgentTurnSpy.mockResolvedValue({
+    summary: 'Nothing urgent.',
+    actionsPerformed: [],
+  });
   org = await createTestOrg();
 });
 
@@ -207,5 +221,175 @@ describe('POST /internal/operator/escalate', () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ notified: 1 });
     expect(sendMessageSpy).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('POST /internal/operator/turn', () => {
+  function turnBody(instruction = "what's in my inbox?") {
+    return {
+      organizationId: org.id,
+      clerkUserId: 'usr_desk',
+      instruction,
+    };
+  }
+
+  it('returns 401 when x-internal-secret is missing', async () => {
+    const res = await request(app).post('/internal/operator/turn').send(turnBody());
+
+    expect(res.status).toBe(401);
+    expect(executeAgentTurnSpy).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when a required field is missing', async () => {
+    const res = await request(app)
+      .post('/internal/operator/turn')
+      .set('x-internal-secret', SECRET)
+      .send({ organizationId: org.id, clerkUserId: 'usr_desk' });
+
+    expect(res.status).toBe(400);
+    expect(executeAgentTurnSpy).not.toHaveBeenCalled();
+  });
+
+  // The Concierge has no thread of its own: it resolves the merchant's durable
+  // operator thread from their membership, which is the one their phone uses.
+  it("runs the turn on the caller's operator thread with the operator module tools", async () => {
+    const res = await request(app)
+      .post('/internal/operator/turn')
+      .set('x-internal-secret', SECRET)
+      .send(turnBody());
+
+    expect(res.status).toBe(200);
+
+    const member = await db.orgMember.findUniqueOrThrow({
+      where: { organizationId_clerkUserId: { organizationId: org.id, clerkUserId: 'usr_desk' } },
+    });
+    const thread = await db.thread.findFirstOrThrow({
+      where: { organizationId: org.id, operatorKey: `member:${member.id}` },
+    });
+    expect(thread.channelType).toBe('sms_agent');
+    expect(res.body).toEqual({
+      threadId: thread.id,
+      summary: 'Nothing urgent.',
+      actionsPerformed: [],
+      awaitingApproval: false,
+    });
+
+    const params = executeAgentTurnSpy.mock.calls[0][0];
+    expect(params).toMatchObject({
+      orgId: org.id,
+      threadId: thread.id,
+      instruction: "what's in my inbox?",
+      operatorLedger: "Nothing is awaiting the merchant's decision.",
+    });
+    expect(Object.keys(params.moduleTools).sort()).toEqual([
+      'answer_operator_question',
+      'approve_pending_plan',
+      'get_ticket',
+      'list_active_tickets',
+      'mark_ticket_spam',
+      'reject_pending_plan',
+      'revise_pending_plan',
+      'send_ticket_reply',
+    ]);
+  });
+
+  it('reports a still-parked plan so the panel can offer approval', async () => {
+    const customer = await createTestCustomer(org.id, 'ticket@example.com');
+    const ticket = await createTestThread(org.id, customer.id, ChannelType.email);
+    const memberKey = await resolveOperatorMemberKey(org.id, 'usr_desk');
+    await updateContext(org.id, memberKey, {
+      pendingPlan: { threadId: ticket.id, instruction: 'refund #1002', rawToolCalls: [] },
+    });
+
+    const res = await request(app)
+      .post('/internal/operator/turn')
+      .set('x-internal-secret', SECRET)
+      .send(turnBody('what is waiting on me?'));
+
+    expect(res.status).toBe(200);
+    expect(res.body.awaitingApproval).toBe(true);
+  });
+
+  it('maps a spend-cap failure to the 429 the dashboard passes through', async () => {
+    executeAgentTurnSpy.mockRejectedValueOnce(
+      new SpendCapError(usdToNanoDollars(25), usdToNanoDollars(25)),
+    );
+
+    const res = await request(app)
+      .post('/internal/operator/turn')
+      .set('x-internal-secret', SECRET)
+      .send(turnBody());
+
+    expect(res.status).toBe(429);
+    expect(res.body).toMatchObject({ code: 'spend_cap_reached', currentUsd: 25, capUsd: 25 });
+  });
+});
+
+// A button press is a decision already made — it resolves the plan without a
+// model call, the way the messaging channels' keyword fast path does.
+describe('POST /internal/operator/plan-decision', () => {
+  async function parkPlan(planId: string) {
+    const customer = await createTestCustomer(org.id, `${planId}@example.com`);
+    const ticket = await createTestThread(org.id, customer.id, ChannelType.email);
+    const memberKey = await resolveOperatorMemberKey(org.id, 'usr_desk');
+    await updateContext(org.id, memberKey, {
+      pendingPlan: { threadId: ticket.id, instruction: 'refund #1002', rawToolCalls: [], planId },
+    });
+    return { memberKey, ticket };
+  }
+
+  it('returns 401 when x-internal-secret is missing', async () => {
+    const res = await request(app)
+      .post('/internal/operator/plan-decision')
+      .send({ organizationId: org.id, clerkUserId: 'usr_desk', planId: 'p1', decision: 'dismiss' });
+
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 400 for a decision it does not recognize', async () => {
+    const res = await request(app)
+      .post('/internal/operator/plan-decision')
+      .set('x-internal-secret', SECRET)
+      .send({ organizationId: org.id, clerkUserId: 'usr_desk', planId: 'p1', decision: 'maybe' });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('dismisses the named plan and leaves the queue empty', async () => {
+    const { memberKey } = await parkPlan('plan-dismiss-1');
+
+    const res = await request(app)
+      .post('/internal/operator/plan-decision')
+      .set('x-internal-secret', SECRET)
+      .send({
+        organizationId: org.id,
+        clerkUserId: 'usr_desk',
+        planId: 'plan-dismiss-1',
+        decision: 'dismiss',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ summary: 'Plan dismissed.' });
+    expect((await getContext(org.id, memberKey)).pendingPlans).toEqual([]);
+    expect(executeAgentTurnSpy).not.toHaveBeenCalled();
+  });
+
+  // Addressed by planId, not by position: a plan someone resolved on their phone
+  // must not let a stale panel act on whatever is sitting in that slot now.
+  it('returns 409 when the plan is no longer queued', async () => {
+    const { memberKey } = await parkPlan('plan-live-1');
+
+    const res = await request(app)
+      .post('/internal/operator/plan-decision')
+      .set('x-internal-secret', SECRET)
+      .send({
+        organizationId: org.id,
+        clerkUserId: 'usr_desk',
+        planId: 'plan-already-gone',
+        decision: 'approve',
+      });
+
+    expect(res.status).toBe(409);
+    expect((await getContext(org.id, memberKey)).pendingPlans).toHaveLength(1);
   });
 });

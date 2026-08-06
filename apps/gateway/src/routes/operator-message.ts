@@ -12,12 +12,20 @@ export type OperatorPresence = <T>(progress: ProgressContext, work: () => Promis
 // on this shape; each transport (Telegram, iMessage) constructs it from its own
 // webhook payload.
 export interface OperatorMessageContext {
+  /** The device this message came from: a Telegram chat id or an iMessage sender id. */
   chatId: string;
   body: string;
   reply: OperatorReply;
   presence: OperatorPresence;
-  // Stable operator reference for thread resolution / audit, e.g. `telegram:<id>`.
+  // Who is talking, not what they typed on: `member:<orgMemberId>`. Keys the
+  // durable operator thread and the pending ledger, so all of a person's
+  // transports share both.
   senderRef: string;
+  // The device, namespaced by channel (`telegram:<chatId>` / `imessage:<senderId>`).
+  // Only used to spare the transport a merchant is already looking at from being
+  // re-notified about the exchange it is having. Absent for the dashboard, which
+  // receives no push.
+  deliveryRef?: string;
   // Durable operator-event UUID when this turn came through the queued P4-03
   // path. It becomes the AgentAction turnId for direct recovery correlation.
   turnId?: string;

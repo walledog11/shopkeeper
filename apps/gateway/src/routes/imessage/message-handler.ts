@@ -2,6 +2,7 @@ import { db, findOrgMemberBindToken, looksLikeOrgMemberBindToken } from '@shopke
 import logger from '../../logger.js';
 import { buildOrgDigest } from '../../maintenance/digest.js';
 import { getContext, loadLivePendingPlans, updateContext } from '../../operator-context.js';
+import { resolveOperatorMemberKey } from '../../operator-identity.js';
 import { executeFreeFormInstruction } from '../telegram/agent-execution.js';
 import { isDigestCommand, isPendingPlanCommand, parseTelegramCommand } from '../telegram/command-parser.js';
 import { handleDigestCommand } from '../telegram/digest-commands.js';
@@ -128,11 +129,14 @@ export async function runImessageOperatorTurn(params: ImessageOperatorTurnParams
   const { organizationId, clerkUserId, senderId, body, reply, turnId, spaceId } = params;
 
   const chatId = senderId;
-  const operatorKey = `imessage:${senderId}`;
+  const deliveryRef = `imessage:${senderId}`;
+  // State is keyed to the person, so this handle sees the same pending queue the
+  // merchant's other transports do.
+  const memberKey = await resolveOperatorMemberKey(organizationId, clerkUserId);
   const context = await loadLivePendingPlans(
     organizationId,
-    chatId,
-    await getContext(organizationId, chatId),
+    memberKey,
+    await getContext(organizationId, memberKey),
   );
 
   // Freeform turns persist their own thread messages, so they keep the raw reply.
@@ -142,11 +146,12 @@ export async function runImessageOperatorTurn(params: ImessageOperatorTurnParams
     chatId,
     body,
     reply,
-    senderRef: operatorKey,
+    senderRef: memberKey,
+    deliveryRef,
     ...(turnId ? { turnId } : {}),
     presence: imessagePresence(reply, spaceId),
   };
-  const mirroredReply = buildMirroredReply(organizationId, operatorKey, body, reply);
+  const mirroredReply = buildMirroredReply(organizationId, memberKey, body, reply);
   const commandMessage: OperatorMessageContext = { ...baseMessage, reply: mirroredReply };
 
   const command = parseTelegramCommand(body);
@@ -167,7 +172,7 @@ export async function runImessageOperatorTurn(params: ImessageOperatorTurnParams
       await mirroredReply('Nothing new in your support inbox right now.');
       return;
     }
-    await updateContext(organizationId, chatId, { pendingDigest: digest.pendingDigest });
+    await updateContext(organizationId, memberKey, { pendingDigest: digest.pendingDigest });
     await mirroredReply(digest.message);
     return;
   }

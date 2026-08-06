@@ -20,7 +20,6 @@ export {
   consumeThreadCachedPlan,
   clearThreadPlanCache,
   formatApproverId,
-  isAutoExecuteEnabled,
   getExecutablePlanToolCalls,
   findFailedToolResult,
 } from "@shopkeeper/agent/plan-execution";

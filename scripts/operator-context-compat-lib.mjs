@@ -26,9 +26,6 @@ export function analyzePendingPlan(plan) {
 
 export function analyzeOperatorContextRow(row) {
   const queuedPlans = Array.isArray(row.pendingPlans) ? row.pendingPlans : [];
-  const legacyPendingPlanColumn = row.pendingPlan != null;
-  const dualReadFallback =
-    legacyPendingPlanColumn && (row.pendingPlans == null || queuedPlans.length === 0);
 
   let identityLessQueuedPlans = 0;
   let legacyToolCalls = 0;
@@ -42,18 +39,7 @@ export function analyzeOperatorContextRow(row) {
     legacyToolCalls += analysis.legacyToolCalls;
   }
 
-  if (dualReadFallback) {
-    const legacyPlan = analyzePendingPlan(row.pendingPlan);
-    if (legacyPlan.valid) {
-      queuedPlanCount += 1;
-      if (legacyPlan.identityLess) identityLessQueuedPlans += 1;
-      legacyToolCalls += legacyPlan.legacyToolCalls;
-    }
-  }
-
   return {
-    legacyPendingPlanColumn,
-    dualReadFallback,
     queuedPlanCount,
     identityLessQueuedPlans,
     legacyToolCalls,
@@ -63,26 +49,19 @@ export function analyzeOperatorContextRow(row) {
 export function summarizeOperatorContextCompatibility(rows) {
   const summary = {
     totalRows: rows.length,
-    legacyPendingPlanColumn: 0,
-    dualReadFallbackRows: 0,
     identityLessQueuedPlans: 0,
     legacyToolCalls: 0,
     queuedPlanCount: 0,
-    safeToRetireLegacyPendingPlanColumn: true,
     safeToRetireLegacyToolCallShape: true,
   };
 
   for (const row of rows) {
     const analysis = analyzeOperatorContextRow(row);
-    if (analysis.legacyPendingPlanColumn) summary.legacyPendingPlanColumn += 1;
-    if (analysis.dualReadFallback) summary.dualReadFallbackRows += 1;
     summary.identityLessQueuedPlans += analysis.identityLessQueuedPlans;
     summary.legacyToolCalls += analysis.legacyToolCalls;
     summary.queuedPlanCount += analysis.queuedPlanCount;
   }
 
-  summary.safeToRetireLegacyPendingPlanColumn =
-    summary.legacyPendingPlanColumn === 0 && summary.dualReadFallbackRows === 0;
   summary.safeToRetireLegacyToolCallShape = summary.legacyToolCalls === 0;
 
   return summary;

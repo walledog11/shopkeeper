@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ChannelType, SpendCapError, db, usdToNanoDollars } from "@shopkeeper/db";
+import { ChannelType, SenderType, db } from "@shopkeeper/db";
 import {
   cleanupTestData,
   createTestCustomer,
@@ -12,55 +12,22 @@ vi.mock("@clerk/nextjs/server", () => ({
   clerkClient: vi.fn(),
 }));
 
-const {
-  mockBuildContext,
-  mockExecuteAgentTurn,
-  mockHashInstructionForLog,
-  mockPlanAgent,
-  mockRecordAgentRouteFailure,
-  mockResolveAgentSettings,
-  mockRunAgent,
-} = vi.hoisted(() => ({
-  mockBuildContext: vi.fn().mockResolvedValue({ messages: [] }),
-  mockExecuteAgentTurn: vi.fn().mockResolvedValue({
-    summary: "Done",
-    actionsPerformed: [],
-  }),
-  mockHashInstructionForLog: vi.fn().mockReturnValue("hash_test"),
-  mockPlanAgent: vi.fn(),
+const { mockPostGatewayOperatorTurn, mockRecordAgentRouteFailure } = vi.hoisted(() => ({
+  mockPostGatewayOperatorTurn: vi.fn(),
   mockRecordAgentRouteFailure: vi.fn().mockResolvedValue(null),
-  mockResolveAgentSettings: vi.fn().mockReturnValue({ requireApprovalForActions: false }),
-  mockRunAgent: vi.fn().mockResolvedValue({
-    summary: "Done",
-    actionsPerformed: [],
-  }),
 }));
 
-vi.mock("@/lib/agent/runner", () => ({
-  buildContext: mockBuildContext,
-  hashInstructionForLog: mockHashInstructionForLog,
-  planAgent: mockPlanAgent,
-  runAgent: mockRunAgent,
+vi.mock("@/lib/agent/api/gateway-operator-turn", () => ({
+  postGatewayOperatorTurn: mockPostGatewayOperatorTurn,
 }));
-
-vi.mock("@/lib/agent/api/execution", () => ({
-  executeAgentTurn: mockExecuteAgentTurn,
-}));
-
-vi.mock("@shopkeeper/agent/settings", async () => {
-  const actual = await vi.importActual<typeof import("@shopkeeper/agent/settings")>("@shopkeeper/agent/settings");
-  return {
-    ...actual,
-    resolveAgentSettings: mockResolveAgentSettings,
-  };
-});
 
 vi.mock("@/lib/server/agent-failure-alerts", () => ({
   recordAgentRouteFailure: mockRecordAgentRouteFailure,
 }));
 
+import { memberOperatorKey } from "@shopkeeper/agent/internal-thread";
 import { auth } from "@clerk/nextjs/server";
-import { POST } from "./route";
+import { GET, POST } from "./route";
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 
@@ -70,234 +37,63 @@ beforeEach(async () => {
     userId: "usr_test",
     orgId: org.clerkOrgId,
   } as ReturnType<typeof auth> extends Promise<infer T> ? T : never);
+  mockPostGatewayOperatorTurn.mockResolvedValue({
+    status: 200,
+    payload: { threadId: "op_thread", summary: "Done", actionsPerformed: [] },
+  });
 });
 
 afterEach(async () => {
   await cleanupTestData(org?.id);
   vi.clearAllMocks();
-  mockExecuteAgentTurn.mockResolvedValue({
-    summary: "Done",
-    actionsPerformed: [],
-  });
-  mockResolveAgentSettings.mockReturnValue({ requireApprovalForActions: false });
-  mockHashInstructionForLog.mockReturnValue("hash_test");
 });
 
 describe("POST /api/agent/chat", () => {
-  it("rejects dashboard sessions owned by another user", async () => {
-    const otherCustomer = await createTestCustomer(org.id, "dashboard:usr_other");
-    const otherSession = await createTestThread(org.id, otherCustomer.id, ChannelType.dashboard_agent);
-
-    const req = new Request("http://localhost:3000/api/agent/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ instruction: "Hello", sessionId: otherSession.id }),
-    });
-
-    const res = await POST(req);
-    expect(res.status).toBe(404);
-    expect(mockRunAgent).not.toHaveBeenCalled();
-  });
-
-  it("creates a new session for the authenticated user", async () => {
-    const req = new Request("http://localhost:3000/api/agent/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ instruction: "Help me" }),
-    });
-
-    const res = await POST(req);
-    const body = await res.json() as { sessionId: string };
+  // No session to create or resolve: the gateway owns the thread, so the route
+  // hands over identity and instruction and nothing else.
+  it("runs the turn on the gateway operator path", async () => {
+    const res = await POST(jsonReq({ instruction: "Help me" }));
+    const body = await res.json() as { summary: string; awaitingApproval: boolean };
 
     expect(res.status).toBe(200);
-    expect(body.sessionId).toBeTruthy();
-
-    const thread = await db.thread.findUnique({ where: { id: body.sessionId } });
-    expect(thread?.channelType).toBe("dashboard_agent");
-    expect(mockExecuteAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
-      orgId: org.id,
-      threadId: body.sessionId,
+    expect(body).toEqual({ summary: "Done", actionsPerformed: [], awaitingApproval: false });
+    expect(mockPostGatewayOperatorTurn).toHaveBeenCalledWith({
+      organizationId: org.id,
+      clerkUserId: "usr_test",
       instruction: "Help me",
-      failureRoute: "/api/agent/chat",
-    }));
+    });
   });
 
-  it("returns an approval prompt and stores the pending action plan when action approval is required", async () => {
-    mockResolveAgentSettings.mockReturnValue({ requireApprovalForActions: true });
-    mockPlanAgent.mockResolvedValueOnce({
-      instruction: "Create an order for Jane",
-      steps: [{
-        id: "act_1",
-        tool: "create_shopify_order",
-        label: "Create order",
-        description: "Create a Shopify order",
-        category: "action",
-        enabled: true,
-      }],
-      rawToolCalls: [{
-        id: "act_1",
-        name: "create_shopify_order",
-        input: {
-          first_name: "Jane",
-          email: "jane@example.com",
-          line_items: [{ variant_id: "gid://shopify/ProductVariant/1", quantity: 1 }],
-        },
-      }],
+  it("passes the gateway's pending-plan signal through as awaitingApproval", async () => {
+    mockPostGatewayOperatorTurn.mockResolvedValueOnce({
+      status: 200,
+      payload: { summary: "Here's the draft", actionsPerformed: [], awaitingApproval: true },
     });
 
-    const res = await POST(jsonReq({ instruction: "Create an order for Jane" }));
-    const body = await res.json() as { sessionId: string; awaitingApproval?: boolean; summary: string };
+    const res = await POST(jsonReq({ instruction: "Refund 1234" }));
 
-    expect(res.status).toBe(200);
-    expect(body.awaitingApproval).toBe(true);
-    expect(body.summary).toContain("Reply yes to create it");
-    expect(mockExecuteAgentTurn).not.toHaveBeenCalled();
-
-    const thread = await db.thread.findUniqueOrThrow({
-      where: { id: body.sessionId },
-      select: { cachedPlan: true, messages: { select: { senderType: true, contentText: true }, orderBy: { sentAt: "asc" } } },
-    });
-    expect(thread.cachedPlan).toMatchObject({
-      kind: "dashboard_pending_approval",
-      instruction: "Create an order for Jane",
-      instructionHash: "hash_test",
-    });
-    expect(thread.messages.map((message) => message.senderType)).toEqual(["customer", "agent"]);
+    expect(await res.json()).toMatchObject({ awaitingApproval: true });
   });
 
-  it("claims a pending dashboard plan before approved actions execute", async () => {
-    mockResolveAgentSettings.mockReturnValue({ requireApprovalForActions: true });
-    mockPlanAgent.mockResolvedValueOnce({
-      instruction: "Create an order for Jane",
-      steps: [{
-        id: "act_1",
-        tool: "create_shopify_order",
-        label: "Create order",
-        description: "Create a Shopify order",
-        category: "action",
-        enabled: true,
-      }],
-      rawToolCalls: [{
-        id: "act_1",
-        name: "create_shopify_order",
-        input: { email: "jane@example.com", line_items: [] },
-      }],
+  it("passes the gateway's spend-cap response through unchanged", async () => {
+    mockPostGatewayOperatorTurn.mockResolvedValueOnce({
+      status: 429,
+      payload: { error: "AI spend cap reached for today.", code: "spend_cap_reached", currentUsd: 25, capUsd: 25 },
     });
-
-    const planned = await POST(jsonReq({ instruction: "Create an order for Jane" }));
-    const plannedBody = await planned.json() as { sessionId: string };
-    mockExecuteAgentTurn.mockResolvedValueOnce({
-      summary: "Order created.",
-      actionsPerformed: [{
-        tool: "create_shopify_order",
-        result: "Created order #1001",
-        status: "success",
-      }],
-    });
-
-    const approved = await POST(jsonReq({ instruction: "yes", sessionId: plannedBody.sessionId }));
-    expect(approved.status).toBe(200);
-    expect(mockExecuteAgentTurn).toHaveBeenLastCalledWith(expect.objectContaining({
-      auditMode: "human_approved",
-      executionId: expect.any(String),
-      approval: expect.objectContaining({ approverId: "usr_test" }),
-    }));
-
-    const execution = await db.planExecution.findFirstOrThrow({
-      where: { organizationId: org.id, threadId: plannedBody.sessionId },
-    });
-    expect(execution.status).toBe("committed");
-    const thread = await db.thread.findUniqueOrThrow({ where: { id: plannedBody.sessionId } });
-    expect(thread.cachedPlan).toBeNull();
-  });
-
-  it("auto-executes planned dashboard actions when trusted rollout is enabled", async () => {
-    mockResolveAgentSettings.mockReturnValue({
-      autonomyTier: "trusted",
-      autoExecuteMode: "live",
-      requireApprovalForActions: false,
-      maxRefundAmount: 100,
-      dailyRefundCap: null,
-      blockCancellations: false,
-      blockCustomLineItems: false,
-      toolsEnabled: { action: true, communication: true, internal: true, read: true },
-    });
-    mockPlanAgent.mockResolvedValueOnce({
-      instruction: "Refund Jane",
-      steps: [{
-        id: "refund_1",
-        tool: "create_refund",
-        label: "Issue refund",
-        description: "Refund $20",
-        category: "action",
-        enabled: true,
-      }, {
-        id: "send_1",
-        tool: "send_reply",
-        label: "Notify customer",
-        description: "Tell Jane the refund was issued",
-        category: "communication",
-        enabled: true,
-      }],
-      rawToolCalls: [{
-        id: "refund_1",
-        name: "create_refund",
-        input: { order_id: "gid://shopify/Order/1", amount: "20.00" },
-      }, {
-        id: "send_1",
-        name: "send_reply",
-        input: { text: "I've issued the $20 refund." },
-      }],
-    });
-    mockExecuteAgentTurn.mockResolvedValueOnce({
-      summary: "Refund issued.",
-      actionsPerformed: [{ tool: "create_refund", result: "Refund of $20.00 issued successfully." }],
-    });
-
-    const res = await POST(jsonReq({ instruction: "Refund Jane" }));
-    const body = await res.json() as { sessionId: string; autoExecuted?: boolean; summary: string };
-
-    expect(res.status).toBe(200);
-    expect(body.autoExecuted).toBe(true);
-    expect(body.summary).toBe("Refund issued.");
-    expect(mockExecuteAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
-      instruction: "Refund Jane",
-      approvedToolCalls: [{
-        id: "refund_1",
-        name: "create_refund",
-        input: { order_id: "gid://shopify/Order/1", amount: "20.00" },
-      }],
-      auditMode: "auto_executed",
-    }));
-
-    const thread = await db.thread.findUniqueOrThrow({
-      where: { id: body.sessionId },
-      select: { cachedPlan: true },
-    });
-    expect(thread.cachedPlan).toBeNull();
-    const execution = await db.planExecution.findFirstOrThrow({
-      where: { organizationId: org.id, threadId: body.sessionId },
-    });
-    expect(execution.status).toBe("committed");
-    expect(mockExecuteAgentTurn).toHaveBeenLastCalledWith(expect.objectContaining({
-      executionId: execution.id,
-    }));
-  });
-
-  it("maps spend-cap failures to the public 429 response", async () => {
-    mockExecuteAgentTurn.mockRejectedValueOnce(
-      new SpendCapError(usdToNanoDollars(25), usdToNanoDollars(25)),
-    );
 
     const res = await POST(jsonReq({ instruction: "Summarize today's tickets" }));
     const body = await res.json() as { code?: string; currentUsd?: number; capUsd?: number };
 
     expect(res.status).toBe(429);
     expect(body).toMatchObject({ code: "spend_cap_reached", currentUsd: 25, capUsd: 25 });
+    expect(mockRecordAgentRouteFailure).not.toHaveBeenCalled();
   });
 
-  it("records route failures for AI execution errors", async () => {
-    mockExecuteAgentTurn.mockRejectedValueOnce(new Error("Anthropic unavailable"));
+  it("records a route failure when the gateway turn fails", async () => {
+    mockPostGatewayOperatorTurn.mockResolvedValueOnce({
+      status: 500,
+      payload: { error: "Internal Server Error" },
+    });
 
     const res = await POST(jsonReq({ instruction: "Draft a response" }));
 
@@ -310,6 +106,71 @@ describe("POST /api/agent/chat", () => {
       getCounterClient: expect.any(Function),
       onError: expect.any(Function),
     }));
+  });
+});
+
+describe("GET /api/agent/chat", () => {
+  // Continuity is the reason to open the panel: it shows the conversation the
+  // merchant has been having on their phone, not an empty composer.
+  it("returns the member's durable operator thread, oldest first", async () => {
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: "usr_test" },
+    });
+    const customer = await createTestCustomer(org.id, memberOperatorKey(member.id));
+    const thread = await db.thread.create({
+      data: {
+        organizationId: org.id,
+        customerId: customer.id,
+        channelType: ChannelType.sms_agent,
+        status: "open",
+        operatorKey: memberOperatorKey(member.id),
+      },
+    });
+    // Explicit timestamps: the route reads the newest window and reverses it, so
+    // ordering is the thing under test and must not depend on insert timing.
+    await db.message.createMany({
+      data: [
+        {
+          threadId: thread.id,
+          organizationId: org.id,
+          senderType: SenderType.customer,
+          contentText: "refund 1234",
+          sentAt: new Date("2026-08-06T10:00:00.000Z"),
+        },
+        {
+          threadId: thread.id,
+          organizationId: org.id,
+          senderType: SenderType.agent,
+          contentText: "Refunded $12 to Sarah.",
+          sentAt: new Date("2026-08-06T10:00:01.000Z"),
+        },
+        // Agent-turn audit notes are plumbing, not conversation.
+        {
+          threadId: thread.id,
+          organizationId: org.id,
+          senderType: SenderType.note,
+          contentText: "__shopkeeper_agent__{}",
+          sentAt: new Date("2026-08-06T10:00:02.000Z"),
+        },
+      ],
+    });
+
+    const res = await GET(new Request("http://localhost:3000/api/agent/chat"));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      messages: [
+        { role: "user", text: "refund 1234" },
+        { role: "agent", text: "Refunded $12 to Sarah." },
+      ],
+    });
+  });
+
+  it("returns an empty transcript before the merchant has said anything", async () => {
+    const res = await GET(new Request("http://localhost:3000/api/agent/chat"));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ messages: [] });
   });
 });
 

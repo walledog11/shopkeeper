@@ -14,6 +14,8 @@ export interface AgentPanelOpenContext {
   threadId?: string;
   customerName?: string;
   walkthrough?: { items: WalkthroughItem[] };
+  /** Typed at the palette instead of the composer. Seeds the composer, unsent. */
+  instruction?: string;
 }
 
 export function buildAgentPanelHref(options?: {

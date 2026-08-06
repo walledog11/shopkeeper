@@ -13,44 +13,34 @@ export async function resolveInternalAgentThread(params: ResolveInternalAgentThr
   return { id: thread.id, channelType: thread.channelType };
 }
 
-// The merchant's single durable operator thread for one binding. `operatorKey`
-// is the binding ref (`imessage:<senderId>` / `telegram:<chatId>`), so every
-// freeform turn and mirrored notification from that binding lands on one thread
-// — never sharded per order and never auto-closed by session logic.
+// The operator key identifies the *person*, not the device they happened to text
+// from. Telegram, iMessage and the dashboard Concierge all resolve to the same
+// key for one OrgMember, so they share one durable thread and one pending queue.
+export function memberOperatorKey(orgMemberId: string): string {
+  return `member:${orgMemberId}`;
+}
+
+// The merchant's single durable operator thread. Every freeform turn and mirrored
+// notification for that person lands here — never sharded per transport or per
+// order, and never auto-closed by session logic.
 export async function resolveOperatorThread(
   orgId: string,
   operatorKey: string,
 ): Promise<{ id: string; channelType: string }> {
-  const customer = await db.customer.upsert({
-    where: { organizationId_platformId: { organizationId: orgId, platformId: operatorKey } },
-    update: {},
-    create: { organizationId: orgId, platformId: operatorKey },
-  });
-
+  // Read before write: a merchant whose thread was re-keyed by the Phase 2
+  // backfill still hangs off their original per-binding customer, and upserting
+  // first would leave a stray operator customer behind on every turn.
   const existing = await db.thread.findFirst({
     where: { organizationId: orgId, operatorKey },
     select: { id: true, channelType: true },
   });
   if (existing) return { id: existing.id, channelType: existing.channelType };
 
-  // Adopt a pre-Phase-B operator thread for this binding: before operatorKey
-  // existed, the merchant's operator conversation was a plain open sms_agent
-  // thread on this same (operator) customer. Reuse it — creating a second open
-  // thread would violate the one-open-thread-per-customer-per-channel index.
-  const legacy = await db.thread.findFirst({
-    where: {
-      organizationId: orgId,
-      customerId: customer.id,
-      channelType: "sms_agent",
-      status: "open",
-      operatorKey: null,
-    },
-    select: { id: true, channelType: true },
+  const customer = await db.customer.upsert({
+    where: { organizationId_platformId: { organizationId: orgId, platformId: operatorKey } },
+    update: {},
+    create: { organizationId: orgId, platformId: operatorKey },
   });
-  if (legacy) {
-    await db.thread.update({ where: { id: legacy.id }, data: { operatorKey } });
-    return { id: legacy.id, channelType: legacy.channelType };
-  }
 
   try {
     const created = await db.thread.create({

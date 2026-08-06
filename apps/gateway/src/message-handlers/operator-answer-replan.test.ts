@@ -31,6 +31,9 @@ import { applyOperatorAnswerReplan } from './operator-answer-replan.js';
 import { getContext, updateContext } from '../operator-context.js';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
+// Operator state is keyed to the person, so every transport in these cases writes
+// and reads this one queue.
+const MEMBER_KEY = 'member:00000000-0000-4000-8000-0000000000aa';
 
 beforeEach(async () => {
   org = await createTestOrg();
@@ -78,10 +81,10 @@ describe('applyOperatorAnswerReplan', () => {
 
     const message = await applyOperatorAnswerReplan({
       organizationId: org.id,
-      chatId: 'chat_1',
+      memberKey: MEMBER_KEY,
       threadId: thread.id,
       answer: 'Yes, $15 flat to Canada.',
-      senderRef: 'telegram:chat_1',
+      deliveryRef: 'telegram:chat_1',
     });
 
     expect(message).toContain('already handled');
@@ -154,10 +157,10 @@ describe('applyOperatorAnswerReplan', () => {
 
     const message = await applyOperatorAnswerReplan({
       organizationId: org.id,
-      chatId: 'chat_2',
+      memberKey: MEMBER_KEY,
       threadId: thread.id,
       answer: 'Yes, $15 flat to Canada.',
-      senderRef: 'imessage:chat_2',
+      deliveryRef: 'imessage:chat_2',
     });
 
     // The return is a model-facing draft summary carrying the concrete draft, not
@@ -167,9 +170,9 @@ describe('applyOperatorAnswerReplan', () => {
     expect(message).not.toContain('Reply "yes" to send');
     expect(planAgentSpy).toHaveBeenCalledTimes(1);
 
-    // This device is excluded from the fan-out, so it must park the display
-    // fields itself or a later "no" here loses the named dismissal.
-    const updatedCtx = await getContext(org.id, 'chat_2');
+    // The answering device is excluded from the fan-out, so the turn must park the
+    // display fields itself or a later "no" here loses the named dismissal.
+    const updatedCtx = await getContext(org.id, MEMBER_KEY);
     expect(updatedCtx.pendingPlan).toMatchObject({
       threadId: thread.id,
       instruction: 'Shipping to Canada',
@@ -188,7 +191,7 @@ describe('applyOperatorAnswerReplan', () => {
         rawToolCalls: [{ id: 'tc_reply', name: 'send_reply', input: { text: 'Yes, we ship to Canada for $15 flat.' } }],
       }),
       'Shipping to Canada',
-      expect.objectContaining({ exclude: { channel: 'imessage', contextKey: 'chat_2' } }),
+      expect.objectContaining({ exclude: { channel: 'imessage', deliveryKey: 'chat_2' } }),
     );
   });
 
@@ -200,16 +203,16 @@ describe('applyOperatorAnswerReplan', () => {
       where: { id: thread.id },
       data: { cachedPlanMessageId: custMsg.id, aiSummary: 'Shipping to Canada' },
     });
-    await updateContext(org.id, 'chat_3', { pendingQuestion: { threadId: thread.id, question: 'Ship to Canada?' } });
+    await updateContext(org.id, MEMBER_KEY, { pendingQuestion: { threadId: thread.id, question: 'Ship to Canada?' } });
 
     planAgentSpy.mockRejectedValue(new Error('boom'));
 
     const message = await applyOperatorAnswerReplan({
       organizationId: org.id,
-      chatId: 'chat_3',
+      memberKey: MEMBER_KEY,
       threadId: thread.id,
       answer: 'Yes, $15 flat.',
-      senderRef: 'telegram:chat_3',
+      deliveryRef: 'telegram:chat_3',
     });
 
     expect(message).toContain("couldn't draft the reply");

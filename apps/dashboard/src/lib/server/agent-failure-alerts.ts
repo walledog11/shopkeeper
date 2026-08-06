@@ -10,6 +10,7 @@ export const AGENT_FAILURE_ROUTES = [
   '/api/agent',
   '/api/agent/chat',
   '/api/agent/quick-approve',
+  '/api/agent/pending',
   'unknown',
 ] as const;
 

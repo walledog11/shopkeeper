@@ -110,7 +110,7 @@ describe('buildSystemPrompt', () => {
       maxRefundAmount: 50,
     });
 
-    expect(prompt).toContain('text message (Telegram/iMessage)');
+    expect(prompt).toContain('Telegram, iMessage, or the dashboard');
     expect(prompt).toMatch(/ask them one short clarifying question/i);
     expect(prompt).toMatch(/Never escalate the operator conversation/i);
     expect(prompt).toMatch(/compensation limit blocked it/i);

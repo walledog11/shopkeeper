@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest"
 import {
+  fetchOperatorTranscript,
   sendAgentChatInstruction,
-  sessionToChatMessages,
-  SESSION_KEY,
+  transcriptToChatMessages,
 } from "./agent-chat-session"
 
 function jsonResponse(body: unknown, init?: ResponseInit) {
@@ -10,41 +10,29 @@ function jsonResponse(body: unknown, init?: ResponseInit) {
 }
 
 describe("sendAgentChatInstruction", () => {
-  it("retries without a stale session after a 404", async () => {
-    const fetchImpl = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ error: "Session not found" }, { status: 404 }))
-      .mockResolvedValueOnce(jsonResponse({ sessionId: "new-session", summary: "Done", actionsPerformed: [] }, { status: 200 }))
-    const onStaleSession = vi.fn()
-    const storage = { removeItem: vi.fn() }
+  it("posts only the instruction — the gateway owns the thread", async () => {
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => jsonResponse({
+      summary: "Done",
+      actionsPerformed: [],
+    }, { status: 200 }))
 
     await expect(sendAgentChatInstruction({
       fetchImpl,
       instruction: "check this order",
-      onStaleSession,
-      sessionId: "old-session",
-      storage,
     })).resolves.toEqual({
       ok: true,
-      sessionId: "new-session",
       summary: "Done",
       actionsPerformed: [],
     })
 
-    expect(onStaleSession).toHaveBeenCalledOnce()
-    expect(storage.removeItem).toHaveBeenCalledWith(SESSION_KEY)
-    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    expect(fetchImpl).toHaveBeenCalledOnce()
     expect(JSON.parse((fetchImpl.mock.calls[0][1] as RequestInit).body as string)).toEqual({
-      instruction: "check this order",
-      sessionId: "old-session",
-    })
-    expect(JSON.parse((fetchImpl.mock.calls[1][1] as RequestInit).body as string)).toEqual({
       instruction: "check this order",
     })
   })
 
   it("returns awaiting approval responses from the chat API", async () => {
     const fetchImpl = vi.fn(async () => jsonResponse({
-      sessionId: "session-1",
       summary: "Here's what I'll put together…",
       actionsPerformed: [],
       awaitingApproval: true,
@@ -53,11 +41,8 @@ describe("sendAgentChatInstruction", () => {
     await expect(sendAgentChatInstruction({
       fetchImpl,
       instruction: "create an order",
-      sessionId: null,
-      storage: { removeItem: vi.fn() },
     })).resolves.toEqual({
       ok: true,
-      sessionId: "session-1",
       summary: "Here's what I'll put together…",
       actionsPerformed: [],
       awaitingApproval: true,
@@ -70,8 +55,6 @@ describe("sendAgentChatInstruction", () => {
     await expect(sendAgentChatInstruction({
       fetchImpl,
       instruction: "refund",
-      sessionId: null,
-      storage: { removeItem: vi.fn() },
     })).resolves.toEqual({
       ok: false,
       error: "Plan failed",
@@ -79,11 +62,17 @@ describe("sendAgentChatInstruction", () => {
   })
 })
 
-describe("sessionToChatMessages", () => {
-  it("maps restored session turns into chat messages", () => {
-    const messages = sessionToChatMessages({
-      id: "session-1",
-      createdAt: "2026-06-05T12:00:00.000Z",
+describe("fetchOperatorTranscript", () => {
+  it("reports unavailable rather than throwing when the panel can't restore", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse({ error: "nope" }, { status: 500 }))
+
+    await expect(fetchOperatorTranscript(fetchImpl)).resolves.toEqual({ status: "unavailable" })
+  })
+})
+
+describe("transcriptToChatMessages", () => {
+  it("maps the operator thread's turns into chat messages", () => {
+    const messages = transcriptToChatMessages({
       messages: [
         { role: "user", text: "Hi" },
         { role: "agent", text: "Hello" },
@@ -94,6 +83,5 @@ describe("sessionToChatMessages", () => {
       { role: "user", text: "Hi" },
       { role: "agent", summary: "Hello", actions: [] },
     ])
-    expect(messages[0].role !== "thinking" && messages[0].timestamp).toEqual(new Date("2026-06-05T12:00:00.000Z"))
   })
 })

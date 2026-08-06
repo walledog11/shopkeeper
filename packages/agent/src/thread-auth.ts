@@ -3,32 +3,6 @@ import { BadRequestError, NotFoundError } from "./errors.js";
 import { SENDER_TYPE } from "./thread-constants.js";
 import type { PlanThreadMessage } from "./plan-cache-shape.js";
 
-type DashboardCustomerClient = Pick<typeof db, "customer">;
-
-export function getDashboardPlatformId(userId: string): string {
-  return `dashboard:${userId}`;
-}
-
-export async function getOrCreateDashboardCustomer(
-  orgId: string,
-  userId: string,
-  client: DashboardCustomerClient = db,
-) {
-  return client.customer.upsert({
-    where: {
-      organizationId_platformId: {
-        organizationId: orgId,
-        platformId: getDashboardPlatformId(userId),
-      },
-    },
-    update: {},
-    create: {
-      organizationId: orgId,
-      platformId: getDashboardPlatformId(userId),
-    },
-  });
-}
-
 export async function requireOrgThread(threadId: string, orgId: string) {
   const thread = await db.thread.findFirst({
     where: {

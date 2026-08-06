@@ -16,7 +16,6 @@ const strict = process.argv.includes('--strict');
 
 const rows = await db.operatorContext.findMany({
   select: {
-    pendingPlan: true,
     pendingPlans: true,
   },
 });
@@ -28,10 +27,7 @@ const report = {
 
 console.log(JSON.stringify(report, null, 2));
 
-if (
-  strict
-  && (!report.safeToRetireLegacyPendingPlanColumn || !report.safeToRetireLegacyToolCallShape)
-) {
+if (strict && !report.safeToRetireLegacyToolCallShape) {
   process.exitCode = 1;
 }
 

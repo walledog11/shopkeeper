@@ -45,13 +45,13 @@ const settings = resolveAgentSettings(null);
 const baseCtx = { orgId: 'org', orgName: 'Store', recentMessages: [], shopify: null } as unknown as BaseAgentContext;
 const emptyDeps = {} as never;
 
-async function buildTools(chatId: string) {
-  const context = await getContext(org.id, chatId);
+async function buildTools(memberKey: string) {
+  const context = await getContext(org.id, memberKey);
   return buildOperatorSessionTools({
     organizationId: org.id,
     clerkUserId: 'usr_1',
-    chatId,
-    senderRef: `telegram:${chatId}`,
+    memberKey,
+    deliveryRef: 'telegram:chat_1',
     context,
   });
 }
@@ -72,8 +72,8 @@ afterEach(async () => {
 
 describe('approve_pending_plan', () => {
   it('executes the stored tool calls verbatim and clears the pending plan', async () => {
-    const chatId = 'chat_approve';
-    await updateContext(org.id, chatId, {
+    const memberKey = 'member:approve';
+    await updateContext(org.id, memberKey, {
       pendingPlan: {
         threadId: 'ticket_thread_1',
         instruction: 'refund order #1001',
@@ -83,7 +83,7 @@ describe('approve_pending_plan', () => {
         ],
       },
     });
-    const tools = await buildTools(chatId);
+    const tools = await buildTools(memberKey);
 
     const result = await tools.approve_pending_plan.execute({}, baseCtx, settings, emptyDeps);
 
@@ -98,15 +98,15 @@ describe('approve_pending_plan', () => {
       clerkUserId: 'usr_1',
     });
     expect(result).toEqual({ status: 'ok', message: 'Done.' });
-    expect((await getContext(org.id, chatId)).pendingPlan).toBeNull();
+    expect((await getContext(org.id, memberKey)).pendingPlan).toBeNull();
   });
 
   it('refuses to approve a plan targeting the current thread (re-entrancy guard)', async () => {
-    const chatId = 'chat_guard';
-    await updateContext(org.id, chatId, {
+    const memberKey = 'member:guard';
+    await updateContext(org.id, memberKey, {
       pendingPlan: { threadId: 'same_thread', instruction: 'x', rawToolCalls: [] },
     });
-    const tools = await buildTools(chatId);
+    const tools = await buildTools(memberKey);
 
     const result = await tools.approve_pending_plan.execute(
       {},
@@ -118,7 +118,7 @@ describe('approve_pending_plan', () => {
     expect(result.status).toBe('error');
     expect(mockExecuteOperatorAgentTurn).not.toHaveBeenCalled();
     // The plan is left parked — a guard hit is not a dismissal.
-    expect((await getContext(org.id, chatId)).pendingPlan).not.toBeNull();
+    expect((await getContext(org.id, memberKey)).pendingPlan).not.toBeNull();
   });
 
   it('resolves a stale stable plan on every device after claim rejection', async () => {
@@ -151,52 +151,52 @@ describe('approve_pending_plan', () => {
   });
 
   it('returns a tool error when plan execution reports a dispatch failure', async () => {
-    const chatId = 'chat_dispatch_fail';
+    const memberKey = 'member:dispatch_fail';
     mockExecuteOperatorAgentTurn.mockResolvedValueOnce({
       summary: 'Error: message dispatch failed (500). Reference: req-1.',
       threadId: 'ticket_thread_1',
       actionsPerformed: [],
     });
-    await updateContext(org.id, chatId, {
+    await updateContext(org.id, memberKey, {
       pendingPlan: { threadId: 'ticket_thread_1', instruction: 'x', rawToolCalls: [] },
     });
-    const tools = await buildTools(chatId);
+    const tools = await buildTools(memberKey);
 
     const result = await tools.approve_pending_plan.execute({}, baseCtx, settings, emptyDeps);
 
     expect(result.status).toBe('error');
     expect(result.message).toContain("couldn't send the customer message");
-    expect((await getContext(org.id, chatId)).pendingPlan).not.toBeNull();
+    expect((await getContext(org.id, memberKey)).pendingPlan).not.toBeNull();
   });
 
   it('keeps the pending plan parked when execution throws', async () => {
-    const chatId = 'chat_throw';
+    const memberKey = 'member:throw';
     mockExecuteOperatorAgentTurn.mockRejectedValueOnce(new Error('boom'));
-    await updateContext(org.id, chatId, {
+    await updateContext(org.id, memberKey, {
       pendingPlan: { threadId: 'ticket_thread_1', instruction: 'x', rawToolCalls: [] },
     });
-    const tools = await buildTools(chatId);
+    const tools = await buildTools(memberKey);
 
     const result = await tools.approve_pending_plan.execute({}, baseCtx, settings, emptyDeps);
 
     expect(result.status).toBe('error');
-    expect((await getContext(org.id, chatId)).pendingPlan).not.toBeNull();
+    expect((await getContext(org.id, memberKey)).pendingPlan).not.toBeNull();
   });
 
   it('executes the plan named by plan_ref and leaves the sibling queued', async () => {
-    const chatId = 'chat_select';
-    await appendPendingPlan(org.id, chatId, {
+    const memberKey = 'member:select';
+    await appendPendingPlan(org.id, memberKey, {
       threadId: 'thread_sarah', instruction: 'refund Sarah', rawToolCalls: [],
       planId: 'plan-sarah', customerName: 'Sarah Chen',
     }, 3);
-    await appendPendingPlan(org.id, chatId, {
+    await appendPendingPlan(org.id, memberKey, {
       threadId: 'thread_jake', instruction: 'exchange Jake', rawToolCalls: [],
       planId: 'plan-jake', customerName: 'Jake Long',
     }, 3);
     mockExecuteOperatorAgentTurn.mockResolvedValueOnce({
       summary: 'Refunded Sarah.', threadId: 'thread_sarah', actionsPerformed: [],
     });
-    const tools = await buildTools(chatId);
+    const tools = await buildTools(memberKey);
 
     const result = await tools.approve_pending_plan.execute({ plan_ref: 'Sarah' }, baseCtx, settings, emptyDeps);
 
@@ -206,18 +206,18 @@ describe('approve_pending_plan', () => {
       expect.objectContaining({ threadId: 'thread_sarah' }),
     );
     // Jake's plan is untouched.
-    expect((await getContext(org.id, chatId)).pendingPlans.map((plan) => plan.planId)).toEqual(['plan-jake']);
+    expect((await getContext(org.id, memberKey)).pendingPlans.map((plan) => plan.planId)).toEqual(['plan-jake']);
   });
 
   it('asks which plan when several are pending and no ref is given', async () => {
-    const chatId = 'chat_ambiguous';
-    await appendPendingPlan(org.id, chatId, {
+    const memberKey = 'member:ambiguous';
+    await appendPendingPlan(org.id, memberKey, {
       threadId: 't1', instruction: 'a', rawToolCalls: [], planId: 'p1', customerName: 'Sarah',
     }, 3);
-    await appendPendingPlan(org.id, chatId, {
+    await appendPendingPlan(org.id, memberKey, {
       threadId: 't2', instruction: 'b', rawToolCalls: [], planId: 'p2', customerName: 'Jake',
     }, 3);
-    const tools = await buildTools(chatId);
+    const tools = await buildTools(memberKey);
 
     const result = await tools.approve_pending_plan.execute({}, baseCtx, settings, emptyDeps);
 
@@ -225,22 +225,22 @@ describe('approve_pending_plan', () => {
     expect(result.message).toContain('ask which one');
     expect(mockExecuteOperatorAgentTurn).not.toHaveBeenCalled();
     // Nothing resolved — both plans still pending.
-    expect((await getContext(org.id, chatId)).pendingPlans).toHaveLength(2);
+    expect((await getContext(org.id, memberKey)).pendingPlans).toHaveLength(2);
   });
 });
 
 describe('reject_pending_plan', () => {
   it('clears the pending plan', async () => {
-    const chatId = 'chat_reject';
-    await updateContext(org.id, chatId, {
+    const memberKey = 'member:reject';
+    await updateContext(org.id, memberKey, {
       pendingPlan: { threadId: 'ticket', instruction: 'x', rawToolCalls: [] },
     });
-    const tools = await buildTools(chatId);
+    const tools = await buildTools(memberKey);
 
     const result = await tools.reject_pending_plan.execute({}, baseCtx, settings, emptyDeps);
 
     expect(result).toEqual({ status: 'ok', message: 'Plan dismissed.' });
-    expect((await getContext(org.id, chatId)).pendingPlan).toBeNull();
+    expect((await getContext(org.id, memberKey)).pendingPlan).toBeNull();
   });
 
   it('errors when no plan is pending', async () => {
@@ -252,7 +252,7 @@ describe('reject_pending_plan', () => {
 
 describe('revise_pending_plan', () => {
   it('records the guidance as a note, re-plans, and re-parks a fresh plan', async () => {
-    const chatId = 'chat_revise';
+    const memberKey = 'member:revise';
     const customer = await createTestCustomer(org.id, 'cust@example.com', { name: 'Jane Doe' });
     const thread = await createTestThread(org.id, customer.id, 'email', { tag: 'Support' });
     const custMsg = await createTestMessage(thread.id, 'Can I get a discount?', SenderType.customer);
@@ -275,10 +275,10 @@ describe('revise_pending_plan', () => {
       data: { cachedPlan: cacheRecord as object, cachedPlanMessageId: custMsg.id, aiSummary: 'Discount request' },
     });
 
-    await updateContext(org.id, chatId, {
+    await updateContext(org.id, memberKey, {
       pendingPlan: { threadId: thread.id, instruction: 'Discount request', rawToolCalls: [] },
     });
-    const tools = await buildTools(chatId);
+    const tools = await buildTools(memberKey);
 
     planAgentSpy.mockResolvedValue({
       instruction: 'Discount request',
@@ -301,7 +301,7 @@ describe('revise_pending_plan', () => {
     });
     expect(note?.contentText).toBe('Merchant note for the agent: Give them 10% off');
 
-    const updated = await getContext(org.id, chatId);
+    const updated = await getContext(org.id, memberKey);
     expect(updated.pendingPlan).toMatchObject({ threadId: thread.id, instruction: 'Discount request' });
     expect(updated.pendingPlan?.rawToolCalls).toEqual([
       { id: 'r1', name: 'send_reply', input: { text: 'Here is 10% off.' } },
@@ -314,7 +314,7 @@ describe('revise_pending_plan', () => {
       'Discount request',
       expect.anything(),
       'Discount request',
-      expect.objectContaining({ exclude: { channel: 'telegram', contextKey: chatId } }),
+      expect.objectContaining({ exclude: { channel: 'telegram', deliveryKey: 'chat_1' } }),
     );
   });
 
@@ -328,7 +328,7 @@ describe('revise_pending_plan', () => {
 
 describe('answer_operator_question', () => {
   it('records the answer as a Q/A note, re-plans, clears the question, and parks the draft', async () => {
-    const chatId = 'chat_answer';
+    const memberKey = 'member:answer';
     const customer = await createTestCustomer(org.id, 'cust@example.com', { name: 'Jane Doe' });
     const thread = await createTestThread(org.id, customer.id, 'email', { tag: 'Support' });
     const custMsg = await createTestMessage(thread.id, 'Do you ship to Canada?', SenderType.customer);
@@ -349,10 +349,10 @@ describe('answer_operator_question', () => {
       data: { cachedPlan: cacheRecord as object, cachedPlanMessageId: custMsg.id, aiSummary: 'Shipping question' },
     });
 
-    await updateContext(org.id, chatId, {
+    await updateContext(org.id, memberKey, {
       pendingQuestion: { threadId: thread.id, question: 'Do we ship to Canada?' },
     });
-    const tools = await buildTools(chatId);
+    const tools = await buildTools(memberKey);
 
     planAgentSpy.mockResolvedValue({
       instruction: 'Shipping question',
@@ -376,7 +376,7 @@ describe('answer_operator_question', () => {
     expect(note?.contentText).toContain('Q: Do we ship to Canada?');
     expect(note?.contentText).toContain('A: Yes, $15 flat to Canada.');
 
-    const updated = await getContext(org.id, chatId);
+    const updated = await getContext(org.id, memberKey);
     expect(updated.pendingQuestion).toBeNull();
     expect(updated.pendingPlan).toMatchObject({ threadId: thread.id, instruction: 'Shipping question' });
   });

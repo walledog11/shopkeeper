@@ -8,6 +8,16 @@ import {
   createTestThread,
 } from '@shopkeeper/db/test-helpers';
 
+// One person with two bound devices: the fan-out sends twice but parks once.
+const ORG_MEMBER_ID = '00000000-0000-4000-8000-0000000000aa';
+const TELEGRAM_BINDING = { channel: 'telegram', orgMemberId: ORG_MEMBER_ID, chatId: 'chat_1' };
+const IMESSAGE_BINDING = {
+  channel: 'imessage',
+  orgMemberId: ORG_MEMBER_ID,
+  senderId: 'sender_2',
+  spaceId: 'space_2',
+};
+
 const { listOperatorBindingsSpy, mockLogger, notifyOperatorSpy } = vi.hoisted(() => ({
   listOperatorBindingsSpy: vi.fn(),
   mockLogger: {
@@ -24,6 +34,8 @@ vi.mock('../logger.js', () => ({
 }));
 
 vi.mock('../operator-notify.js', () => ({
+  bindingDeliveryKey: (binding: { channel: string; chatId?: string; senderId?: string }) =>
+    (binding.channel === 'telegram' ? binding.chatId : binding.senderId),
   listOperatorBindings: listOperatorBindingsSpy,
   notifyOperator: notifyOperatorSpy,
   OperatorNotifyError: class OperatorNotifyError extends Error {
@@ -344,10 +356,7 @@ describe('sendOperatorPlanNotification', () => {
   it('uses critical notification policy for each bound operator', async () => {
     const org = await createTestOrg();
     orgId = org.id;
-    listOperatorBindingsSpy.mockResolvedValue([
-      { channel: 'telegram', chatId: 'chat_1' },
-      { channel: 'imessage', senderId: 'sender_2', spaceId: 'space_2' },
-    ]);
+    listOperatorBindingsSpy.mockResolvedValue([TELEGRAM_BINDING, IMESSAGE_BINDING]);
     notifyOperatorSpy.mockResolvedValue({ channel: 'telegram', chatId: 'chat_1' });
 
     await sendOperatorPlanNotification(
@@ -396,7 +405,7 @@ describe('sendOperatorPlanNotification', () => {
   it('propagates critical notification failures so the worker job can retry', async () => {
     const org = await createTestOrg();
     orgId = org.id;
-    listOperatorBindingsSpy.mockResolvedValue([{ channel: 'telegram', chatId: 'chat_1' }]);
+    listOperatorBindingsSpy.mockResolvedValue([TELEGRAM_BINDING]);
     notifyOperatorSpy.mockRejectedValue(new OperatorNotifyError('Telegram send failed'));
 
     await expect(
@@ -415,10 +424,7 @@ describe('sendOperatorPlanNotification', () => {
   it('does not fail the job when at least one channel delivers on partial fan-out failure', async () => {
     const org = await createTestOrg();
     orgId = org.id;
-    listOperatorBindingsSpy.mockResolvedValue([
-      { channel: 'telegram', chatId: 'chat_1' },
-      { channel: 'imessage', senderId: 'sender_2', spaceId: 'space_2' },
-    ]);
+    listOperatorBindingsSpy.mockResolvedValue([TELEGRAM_BINDING, IMESSAGE_BINDING]);
     notifyOperatorSpy
       .mockResolvedValueOnce({ channel: 'telegram', chatId: 'chat_1' })
       .mockRejectedValueOnce(new OperatorNotifyError('iMessage send failed'));
@@ -441,7 +447,7 @@ describe('sendOperatorPlanNotification', () => {
   it('appends the overwrite disclosure when a different thread\'s plan is already parked', async () => {
     const org = await createTestOrg();
     orgId = org.id;
-    await updateContext(org.id, 'chat_1', {
+    await updateContext(org.id, `member:${ORG_MEMBER_ID}`, {
       pendingPlan: {
         threadId: OTHER_THREAD_ID,
         instruction: 'Handle earlier request',
@@ -449,7 +455,7 @@ describe('sendOperatorPlanNotification', () => {
         customerName: 'Bob Lee',
       },
     });
-    listOperatorBindingsSpy.mockResolvedValue([{ channel: 'telegram', chatId: 'chat_1' }]);
+    listOperatorBindingsSpy.mockResolvedValue([TELEGRAM_BINDING]);
     notifyOperatorSpy.mockResolvedValue({ channel: 'telegram', chatId: 'chat_1' });
 
     await sendOperatorPlanNotification(
@@ -469,7 +475,7 @@ describe('sendOperatorPlanNotification', () => {
   it('omits the disclosure when the parked plan is for the same thread', async () => {
     const org = await createTestOrg();
     orgId = org.id;
-    await updateContext(org.id, 'chat_1', {
+    await updateContext(org.id, `member:${ORG_MEMBER_ID}`, {
       pendingPlan: {
         threadId: THREAD_ID,
         instruction: 'Earlier draft on the same ticket',
@@ -477,7 +483,7 @@ describe('sendOperatorPlanNotification', () => {
         customerName: 'Jane Doe',
       },
     });
-    listOperatorBindingsSpy.mockResolvedValue([{ channel: 'telegram', chatId: 'chat_1' }]);
+    listOperatorBindingsSpy.mockResolvedValue([TELEGRAM_BINDING]);
     notifyOperatorSpy.mockResolvedValue({ channel: 'telegram', chatId: 'chat_1' });
 
     await sendOperatorPlanNotification(
@@ -497,10 +503,7 @@ describe('sendOperatorPlanNotification', () => {
 
 describe('sendOperatorQuestionNotification', () => {
   it('parks pendingQuestion and clears pendingPlan on each operator, critical policy', async () => {
-    listOperatorBindingsSpy.mockResolvedValue([
-      { channel: 'telegram', chatId: 'chat_1' },
-      { channel: 'imessage', senderId: 'sender_2', spaceId: 'space_2' },
-    ]);
+    listOperatorBindingsSpy.mockResolvedValue([TELEGRAM_BINDING, IMESSAGE_BINDING]);
     notifyOperatorSpy.mockResolvedValue({ channel: 'telegram', chatId: 'chat_1' });
 
     await sendOperatorQuestionNotification(
@@ -543,7 +546,7 @@ describe('sendOperatorQuestionNotification', () => {
   });
 
   it('propagates critical notification failures so the worker job can retry', async () => {
-    listOperatorBindingsSpy.mockResolvedValue([{ channel: 'telegram', chatId: 'chat_1' }]);
+    listOperatorBindingsSpy.mockResolvedValue([TELEGRAM_BINDING]);
     notifyOperatorSpy.mockRejectedValue(new OperatorNotifyError('Telegram send failed'));
 
     await expect(
@@ -568,7 +571,7 @@ describe('sendOperatorQuestionNotification', () => {
       await appendPendingPlan(org.id, 'chat_1', {
         threadId: OTHER_THREAD_ID, instruction: 'other thread plan', rawToolCalls: [], planId: 'plan-other',
       }, 3);
-      listOperatorBindingsSpy.mockResolvedValue([{ channel: 'telegram', chatId: 'chat_1' }]);
+      listOperatorBindingsSpy.mockResolvedValue([TELEGRAM_BINDING]);
       notifyOperatorSpy.mockResolvedValue({ channel: 'telegram', chatId: 'chat_1' });
 
       await sendOperatorQuestionNotification(
@@ -591,7 +594,7 @@ describe('sendOperatorQuestionNotification', () => {
 
 describe('sendOperatorAutoExecutionNotification', () => {
   it('swallows notification failures without rethrowing', async () => {
-    listOperatorBindingsSpy.mockResolvedValue([{ channel: 'telegram', chatId: 'chat_1' }]);
+    listOperatorBindingsSpy.mockResolvedValue([TELEGRAM_BINDING]);
     notifyOperatorSpy.mockRejectedValue(new Error('network down'));
 
     await expect(

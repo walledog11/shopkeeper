@@ -1,11 +1,17 @@
 /**
- * Per-member operator notification routing.
+ * Per-binding operator notification routing.
  *
- * Sends the body to the member's bound operator channel — Telegram chat or
- * iMessage space — and persists the matching `OperatorContext` patch so the
- * inbound webhook can resolve `pendingPlan` / `pendingDigest` on the next
- * reply. Context is keyed the same way each channel's inbound handler keys it:
- * Telegram by `chatId`, iMessage by `senderId`.
+ * Sends the body to one bound operator channel — a Telegram chat or an iMessage
+ * space — and persists the matching `OperatorContext` patch so the next inbound
+ * reply can resolve `pendingPlan` / `pendingDigest`.
+ *
+ * Delivery and state are keyed differently on purpose. Delivery is per *device*
+ * (`deliveryKey`: Telegram chat id / iMessage sender id), so a merchant with two
+ * bound transports sees the card on both. State is per *person*
+ * (`memberOperatorKey`), so both cards refer to the same parked plan and either
+ * one can resolve it. Fanning out over several bindings of one member therefore
+ * writes the same context repeatedly — `appendPendingPlan` upserts by threadId
+ * and the patch is idempotent, so the queue holds one entry either way.
  *
  * Notification policy:
  * - **critical** — plan approval prompts and escalations. Send failures throw
@@ -20,6 +26,7 @@ import logger from './logger.js';
 import { isTelegramConfigured, sendMessage as telegramSend } from './clients/telegram-client.js';
 import { isImessageConfigured, sendImessageToSpace } from './clients/spectrum.js';
 import { stripMarkdown } from './message-handlers/strip-markdown.js';
+import { memberOperatorKey } from '@shopkeeper/agent/internal-thread';
 import { appendPendingPlan, updateContext, type OperatorContext, type PendingPlan } from './operator-context.js';
 import { mirrorOperatorMessage } from './operator-thread-mirror.js';
 import {
@@ -30,8 +37,14 @@ import {
 export type OperatorNotifyPolicy = 'critical' | 'best-effort';
 
 export type OperatorBinding =
-  | { channel: 'telegram'; chatId: string }
-  | { channel: 'imessage'; senderId: string; spaceId: string };
+  | { channel: 'telegram'; orgMemberId: string; chatId: string }
+  | { channel: 'imessage'; orgMemberId: string; senderId: string; spaceId: string };
+
+// The device this binding delivers to — what provider sends and per-device
+// delivery idempotency are keyed by. Not the state key: see `memberOperatorKey`.
+export function bindingDeliveryKey(binding: OperatorBinding): string {
+  return binding.channel === 'telegram' ? binding.chatId : binding.senderId;
+}
 
 export interface OperatorNotifyOptions {
   policy?: OperatorNotifyPolicy;
@@ -67,18 +80,27 @@ export async function listOperatorBindings(organizationId: string): Promise<Oper
   const [telegramChats, imessageBindings] = await Promise.all([
     db.orgMemberTelegramChat.findMany({
       where: { orgMember: { organizationId } },
-      select: { chatId: true },
+      select: { chatId: true, orgMemberId: true },
     }),
     db.orgMemberImessageBinding.findMany({
       where: { orgMember: { organizationId } },
-      select: { senderId: true, spaceId: true },
+      select: { senderId: true, spaceId: true, orgMemberId: true },
     }),
   ]);
 
   return [
-    ...telegramChats.map(({ chatId }): OperatorBinding => ({ channel: 'telegram', chatId })),
+    ...telegramChats.map(({ chatId, orgMemberId }): OperatorBinding => ({
+      channel: 'telegram',
+      orgMemberId,
+      chatId,
+    })),
     ...imessageBindings.map(
-      ({ senderId, spaceId }): OperatorBinding => ({ channel: 'imessage', senderId, spaceId }),
+      ({ senderId, spaceId, orgMemberId }): OperatorBinding => ({
+        channel: 'imessage',
+        orgMemberId,
+        senderId,
+        spaceId,
+      }),
     ),
   ];
 }
@@ -118,18 +140,19 @@ export async function notifyOperator(
 ): Promise<OperatorNotifyResult | null> {
   const policy = options.policy ?? 'best-effort';
   const label = member.channel === 'telegram' ? 'Telegram' : 'iMessage';
-  const contextKey = member.channel === 'telegram' ? member.chatId : member.senderId;
+  const deliveryKey = bindingDeliveryKey(member);
+  const memberKey = memberOperatorKey(member.orgMemberId);
   const persistContextPatch = async () => {
     if (options.appendPlan) {
       await appendPendingPlan(
         organizationId,
-        contextKey,
+        memberKey,
         options.appendPlan.plan,
         options.appendPlan.maxDepth,
       );
     }
     if (Object.keys(contextPatch).length > 0) {
-      await updateContext(organizationId, contextKey, contextPatch);
+      await updateContext(organizationId, memberKey, contextPatch);
     }
   };
 
@@ -141,19 +164,19 @@ export async function notifyOperator(
   }
 
   const idempotencyKey = options.idempotencyKey ?? null;
-  if (idempotencyKey && await wasOperatorNotifyDelivered(member.channel, contextKey, idempotencyKey)) {
+  if (idempotencyKey && await wasOperatorNotifyDelivered(member.channel, deliveryKey, idempotencyKey)) {
     logger.info(
       {
         organizationId,
         channel: member.channel,
-        chatId: contextKey,
+        chatId: deliveryKey,
         idempotencyKey,
         ...(options.threadId ? { threadId: options.threadId } : {}),
       },
       '[OperatorNotify] Duplicate delivery skipped',
     );
     await persistContextPatch();
-    return { channel: member.channel, chatId: contextKey };
+    return { channel: member.channel, chatId: deliveryKey };
   }
 
   try {
@@ -172,22 +195,22 @@ export async function notifyOperator(
         throw new OperatorNotifyError(`${label} send failed`);
       }
       logger.warn(
-        { chatId: contextKey, channel: member.channel, organizationId },
+        { chatId: deliveryKey, channel: member.channel, organizationId },
         '[OperatorNotify] Send failed',
       );
       return null;
     }
 
     if (idempotencyKey) {
-      await markOperatorNotifyDelivered(member.channel, contextKey, idempotencyKey);
+      await markOperatorNotifyDelivered(member.channel, deliveryKey, idempotencyKey);
     }
 
     // The push is part of the merchant's conversation — mirror it onto their
     // operator thread so the agent can see what a later reply refers to. The
     // duplicate-delivery branch above already mirrored on the original send.
-    await mirrorOperatorMessage(organizationId, `${member.channel}:${contextKey}`, 'agent', body);
+    await mirrorOperatorMessage(organizationId, memberKey, 'agent', body);
 
-    return { channel: member.channel, chatId: contextKey };
+    return { channel: member.channel, chatId: deliveryKey };
   } catch (error) {
     if (policy === 'critical') {
       if (error instanceof OperatorNotifyError) {
@@ -197,7 +220,7 @@ export async function notifyOperator(
     }
 
     logger.error(
-      { err: (error as Error).message, chatId: contextKey, channel: member.channel, organizationId },
+      { err: (error as Error).message, chatId: deliveryKey, channel: member.channel, organizationId },
       '[OperatorNotify] Send failed',
     );
     return null;

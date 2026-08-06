@@ -10,6 +10,7 @@ import {
   questionNotificationIdempotencyKey,
 } from '../operator-notify-idempotency.js';
 import {
+  bindingDeliveryKey,
   listOperatorBindings,
   notifyOperator,
   OperatorNotifyError,
@@ -18,13 +19,14 @@ import {
 } from '../operator-notify.js';
 import type { AgentPlan, PlanStep } from '../types.js';
 import type { PlanIdentity, PrecomputedPlanResult } from './planning-types.js';
-import { firstDraftExcerpt } from './operator-ledger.js';
+import { firstDraftExcerpt, type OperatorSurface } from './operator-ledger.js';
 import { getContext, resolvePendingPlanContexts, removePendingPlanForThread, type PendingPlan } from '../operator-context.js';
+import { memberOperatorKey } from '@shopkeeper/agent/internal-thread';
 import { getOperatorPlanQueueMax } from '../config/runtime-config.js';
 
 export interface OperatorNotificationExclude {
   channel: OperatorBinding['channel'];
-  contextKey: string;
+  deliveryKey: string;
 }
 
 // Honesty disclosure about what parking a plan card does to the operator's queue.
@@ -33,16 +35,15 @@ export type QueueNotice =
   | { kind: 'evicts'; customerName: string | null }
   | { kind: 'stacked'; waiting: number };
 
-function operatorContextKey(member: OperatorBinding): string {
-  return member.channel === 'telegram' ? member.chatId : member.senderId;
-}
-
+// Excludes the one device the merchant just answered on, not the person: their
+// other bound transport still gets the card, because it is not showing this
+// exchange.
 function shouldExcludeMember(
   member: OperatorBinding,
   exclude: OperatorNotificationExclude | undefined,
 ): boolean {
   if (!exclude || member.channel !== exclude.channel) return false;
-  return operatorContextKey(member) === exclude.contextKey;
+  return bindingDeliveryKey(member) === exclude.deliveryKey;
 }
 
 // Critical fan-out: continue after per-channel failures so a BullMQ retry does not
@@ -82,7 +83,7 @@ async function notifyCriticalToAllOperators(
         );
       } else {
         logger.warn(
-          { organizationId, threadId, chatId: operatorContextKey(member), channel: member.channel },
+          { organizationId, threadId, chatId: bindingDeliveryKey(member), channel: member.channel },
           `[Worker] ${logLabel} failed`,
         );
       }
@@ -93,7 +94,7 @@ async function notifyCriticalToAllOperators(
           err: (error as Error).message,
           organizationId,
           threadId,
-          chatId: operatorContextKey(member),
+          chatId: bindingDeliveryKey(member),
           channel: member.channel,
         },
         `[Worker] ${logLabel} failed`,
@@ -291,7 +292,11 @@ export function formatOperatorPlanMessage(
 // a plan. Unlike formatOperatorPlanMessage (the operator-facing card fanned out to
 // the merchant's other channels), this is read by the model, which relays it in its
 // own words — so it carries the concrete draft, not the yes/no card footer.
-export function formatOperatorDraftSummary(customerName: string | null, plan: AgentPlan): string {
+export function formatOperatorDraftSummary(
+  customerName: string | null,
+  plan: AgentPlan,
+  surface: OperatorSurface = 'messaging',
+): string {
   const name = customerName ? customerName.split(' ')[0] : 'the customer';
   const actionableSteps = plan.steps.filter((step) => step.category !== 'read');
   const stepList = actionableSteps.map((step) => step.label || step.description).join('; ');
@@ -301,7 +306,9 @@ export function formatOperatorDraftSummary(customerName: string | null, plan: Ag
     `Re-drafted the plan for ${name} (${actionableSteps.length} step${actionableSteps.length !== 1 ? 's' : ''}: ${stepList}).`,
   ];
   if (draftBody) parts.push(`Draft: "${draftBody}"`);
-  parts.push("It's parked for the merchant's approval — they can reply yes to send it or ask for more changes.");
+  parts.push(surface === 'desk'
+    ? "It's parked for the merchant's approval — they can approve it on the plan itself or ask for more changes."
+    : "It's parked for the merchant's approval — they can reply yes to send it or ask for more changes.");
   return parts.join(' ');
 }
 
@@ -368,7 +375,7 @@ export async function sendOperatorAutoExecutionNotification(
     if (result.identity) {
       await resolvePendingPlanContexts(
         organizationId,
-        operatorContextKey(bindings[0]!),
+        memberOperatorKey(bindings[0]!.orgMemberId),
         {
           threadId,
           instruction: result.instruction,
@@ -390,7 +397,7 @@ export async function sendOperatorAutoExecutionNotification(
           );
         } else {
           logger.warn(
-            { organizationId, threadId, chatId: operatorContextKey(member), channel: member.channel },
+            { organizationId, threadId, chatId: bindingDeliveryKey(member), channel: member.channel },
             '[Worker] Auto-execution notification failed',
           );
         }
@@ -400,7 +407,7 @@ export async function sendOperatorAutoExecutionNotification(
             err: (error as Error).message,
             organizationId,
             threadId,
-            chatId: operatorContextKey(member),
+            chatId: bindingDeliveryKey(member),
             channel: member.channel,
           },
           '[Worker] Auto-execution notification failed',
@@ -516,7 +523,7 @@ export async function sendOperatorPlanNotification(
       // the critical push's failure surface, so drop the line silently.
       let queueNotice: QueueNotice | undefined;
       try {
-        const existing = await getContext(organizationId, operatorContextKey(member));
+        const existing = await getContext(organizationId, memberOperatorKey(member.orgMemberId));
         // A thread holds one pending plan, so a same-thread park is a replace, not
         // a stack — only other-thread plans matter for the disclosure.
         const others = existing.pendingPlans.filter((parked) => parked.threadId !== threadId);

@@ -110,7 +110,7 @@ describe('updateContext + getContext round-trip', () => {
     await db.operatorContext.create({
       data: {
         organizationId: org.id,
-        chatId: 'malformed-question',
+        memberKey: 'malformed-question',
         pendingQuestion: { threadId: 'thread_1' },
       },
     });
@@ -121,7 +121,7 @@ describe('updateContext + getContext round-trip', () => {
     await db.operatorContext.create({
       data: {
         organizationId: org.id,
-        chatId: 'malformed',
+        memberKey: 'malformed',
         pendingPlans: [
           {
             threadId: 'thread_1',
@@ -226,7 +226,7 @@ describe('updateContext slot isolation', () => {
       question: 'Do we ship to Canada?',
     };
     await db.operatorContext.create({
-      data: { organizationId: org.id, chatId: 'isolation', pendingQuestion: question },
+      data: { organizationId: org.id, memberKey: 'isolation', pendingQuestion: question },
     });
 
     const plan: PendingPlan = {
@@ -249,7 +249,7 @@ describe('updateContext slot isolation', () => {
   it('does not clobber when two different slots are updated concurrently', async () => {
     const digest: PendingDigest = { threadIds: ['t1'], sentAt: '2026-07-20T00:00:00.000Z' };
     await db.operatorContext.create({
-      data: { organizationId: org.id, chatId: 'concurrent', pendingDigest: digest },
+      data: { organizationId: org.id, memberKey: 'concurrent', pendingDigest: digest },
     });
 
     const plan: PendingPlan = {

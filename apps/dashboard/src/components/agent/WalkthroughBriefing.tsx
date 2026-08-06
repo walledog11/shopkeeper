@@ -9,6 +9,23 @@ import { AgentMessageMarkdown } from "@/components/agent/AgentMessageMarkdown"
 import type { WalkthroughItem } from "@/lib/agent/panel"
 import { buildWalkthroughBriefing } from "./walkthrough-briefing-logic"
 
+// Opening, per-item outcome, and closing lines. Rendered inside the walkthrough
+// region rather than pushed into the message stream: they are the state of a
+// list, not turns in a conversation, and they must not survive it.
+export function WalkthroughNote({ agentName, text }: { agentName: string; text: string }) {
+  return (
+    <div className="flex items-start gap-3">
+      <AgentAvatar agentName={agentName} size="md" className="mt-0.5" />
+      <div className="min-w-0 max-w-[75%] flex-1">
+        <span className="mb-2 block text-xs font-medium text-foreground">{agentName}</span>
+        <div className="rounded-2xl rounded-tl-sm border border-border bg-green-600/20 px-4 py-2.5 text-sm text-foreground shadow-sm">
+          <AgentMessageMarkdown text={text} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function WalkthroughCard({
   item,
   agentName,

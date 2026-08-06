@@ -15,7 +15,6 @@ type WalkthroughContext = NonNullable<AgentPanelOpenContext["walkthrough"]>
 
 interface UseAgentWalkthroughProps {
   walkthrough: WalkthroughContext | null
-  appendAgentLine: (summary: string) => void
 }
 
 interface WalkthroughInstruction {
@@ -23,47 +22,33 @@ interface WalkthroughInstruction {
   displayText?: string
 }
 
-export function useAgentWalkthrough({
-  walkthrough,
-  appendAgentLine,
-}: UseAgentWalkthroughProps) {
+// The walkthrough is a list the merchant works through, not a conversation. Its
+// commentary is derived from where the list stands — no line is written into the
+// chat transcript, because none of it was ever said by the agent.
+export function useAgentWalkthrough({ walkthrough }: UseAgentWalkthroughProps) {
   const walkthroughItems = useMemo(() => walkthrough?.items ?? [], [walkthrough])
   const walkthroughKey = useMemo(() => (
     walkthrough ? walkthroughItems.map(item => item.threadId).join("|") : null
   ), [walkthrough, walkthroughItems])
   const [walkthroughIndex, setWalkthroughIndex] = useState(0)
+  const [decisionNotes, setDecisionNotes] = useState<string[]>([])
   const currentWalkthroughItem = walkthrough ? walkthroughItems[walkthroughIndex] ?? null : null
   const walkthroughDone = walkthrough != null && isWalkthroughComplete(walkthroughItems, walkthroughIndex)
 
-  const openedRef = useRef(false)
-  const closedRef = useRef(false)
   const previousWalkthroughKeyRef = useRef<string | null | undefined>(undefined)
 
   useEffect(() => {
     if (previousWalkthroughKeyRef.current === walkthroughKey) return
     previousWalkthroughKeyRef.current = walkthroughKey
-    openedRef.current = false
-    closedRef.current = false
     setWalkthroughIndex(0)
+    setDecisionNotes([])
   }, [walkthroughKey])
-
-  useEffect(() => {
-    if (!walkthrough || openedRef.current) return
-    openedRef.current = true
-    appendAgentLine(buildWalkthroughOpening(walkthroughItems))
-  }, [walkthrough, walkthroughItems, appendAgentLine])
-
-  useEffect(() => {
-    if (!walkthrough || !walkthroughDone || closedRef.current) return
-    closedRef.current = true
-    appendAgentLine(WALKTHROUGH_CLOSING)
-  }, [walkthrough, walkthroughDone, appendAgentLine])
 
   const handleWalkthroughDecision = useCallback((item: WalkthroughItem, decision: WalkthroughDecision) => {
     const result = resolveWalkthroughDecision({ item, index: walkthroughIndex, decision })
-    appendAgentLine(result.agentLine)
+    setDecisionNotes(prev => [...prev, result.agentLine])
     setWalkthroughIndex(result.nextIndex)
-  }, [appendAgentLine, walkthroughIndex])
+  }, [walkthroughIndex])
 
   const buildWalkthroughInstruction = useCallback((visibleText: string): WalkthroughInstruction => {
     if (!currentWalkthroughItem) return { text: visibleText }
@@ -77,8 +62,11 @@ export function useAgentWalkthrough({
   return {
     buildWalkthroughInstruction,
     currentWalkthroughItem,
+    decisionNotes,
     handleWalkthroughDecision,
+    walkthroughClosing: walkthroughDone ? WALKTHROUGH_CLOSING : null,
     walkthroughIndex,
     walkthroughItems,
+    walkthroughOpening: walkthrough ? buildWalkthroughOpening(walkthroughItems) : null,
   }
 }

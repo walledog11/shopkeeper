@@ -355,21 +355,18 @@ async function loadOperatorWaitingItems(organizationId: string, now: Date): Prom
   const contexts = await db.operatorContext.findMany({
     where: {
       organizationId,
-      OR: [{ pendingPlans: { not: Prisma.DbNull } }, { pendingPlan: { not: Prisma.DbNull } }],
+      pendingPlans: { not: Prisma.DbNull },
     },
-    select: { chatId: true, pendingPlans: true, pendingPlan: true },
+    select: { pendingPlans: true },
   });
 
   const items: WaitingItem[] = [];
   for (const context of contexts) {
-    // Prefer the queue; fall back to the legacy single slot for un-backfilled rows.
-    const queued = Array.isArray(context.pendingPlans)
+    const plans = (Array.isArray(context.pendingPlans)
       ? context.pendingPlans
           .map(parseStoredPendingPlan)
           .filter((plan): plan is NonNullable<typeof plan> => plan !== null)
-      : [];
-    const legacy = queued.length === 0 ? parseStoredPendingPlan(context.pendingPlan) : null;
-    const plans = queued.length > 0 ? queued : legacy ? [legacy] : [];
+      : []);
 
     for (const pendingPlan of plans) {
       if (await isPlanExecutionResolved(organizationId, pendingPlan.planId)) continue;

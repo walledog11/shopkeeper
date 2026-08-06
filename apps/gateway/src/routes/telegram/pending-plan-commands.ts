@@ -37,7 +37,7 @@ export async function handlePendingPlanCommand(
   command: PendingPlanCommand,
   context: OperatorContext,
 ): Promise<boolean> {
-  const { chatId, reply, presence } = message;
+  const { chatId, senderRef: memberKey, reply, presence } = message;
   const pendingPlan = mostRecentPendingPlan(context.pendingPlans);
   if (!pendingPlan) return false;
   // Everything but the most-recent plan stays parked; name it in the reply.
@@ -45,7 +45,7 @@ export async function handlePendingPlanCommand(
 
   const { threadId, instruction, rawToolCalls } = pendingPlan;
   if (command.type === 'plan-dismiss') {
-    await clearPendingPlan(organizationId, chatId, pendingPlan);
+    await clearPendingPlan(organizationId, memberKey, pendingPlan);
     // Older parked plans carry no actionLabel.
     const dismissed = pendingPlan.actionLabel ? `Dismissed — I won't ${pendingPlan.actionLabel}.` : 'Plan dismissed.';
     await reply(`${dismissed}${stillWaitingSuffix(remaining)}`);
@@ -84,7 +84,7 @@ export async function handlePendingPlanCommand(
       },
       () => runApprovedPendingPlan({
         organizationId,
-        chatId,
+        memberKey,
         clerkUserId,
         threadId,
         instruction,

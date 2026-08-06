@@ -15,8 +15,10 @@ import { applyOperatorAnswerReplan } from './operator-answer-replan.js';
 export interface OperatorSessionToolDeps {
   organizationId: string;
   clerkUserId: string;
-  chatId: string;
-  senderRef: string;
+  /** `member:<orgMemberId>` — the pending queue these tools read and resolve. */
+  memberKey: string;
+  /** `telegram:<chatId>` / `imessage:<senderId>`; absent on the dashboard. */
+  deliveryRef?: string;
   // Snapshot of the operator context at the start of the turn. Supplies the
   // pending plan / question the control tools act on; the model interprets the
   // merchant's intent and fires the matching tool.
@@ -55,7 +57,7 @@ const planRefField = stringArg(
 export function buildOperatorSessionTools(
   deps: OperatorSessionToolDeps,
 ): Record<string, AgentToolDefinition> {
-  const { organizationId, clerkUserId, chatId, senderRef, context } = deps;
+  const { organizationId, clerkUserId, memberKey, deliveryRef, context } = deps;
 
   const approvePendingPlan = defineTool({
     name: 'approve_pending_plan',
@@ -85,7 +87,7 @@ export function buildOperatorSessionTools(
       try {
         summary = await runApprovedPendingPlan({
           organizationId,
-          chatId,
+          memberKey,
           clerkUserId,
           threadId: pendingPlan.threadId,
           instruction: pendingPlan.instruction,
@@ -120,7 +122,7 @@ export function buildOperatorSessionTools(
     execute: async (input: PlanRefInput) => {
       const selected = selectPendingPlan(context.pendingPlans, input.plan_ref);
       if ('error' in selected) return toolError(selected.error);
-      await clearPendingPlan(organizationId, chatId, selected.plan);
+      await clearPendingPlan(organizationId, memberKey, selected.plan);
       return toolOk('Plan dismissed.');
     },
   });
@@ -148,10 +150,10 @@ export function buildOperatorSessionTools(
       const pendingPlan = selected.plan;
       const message = await applyOperatorAnswerReplan({
         organizationId,
-        chatId,
+        memberKey,
         threadId: pendingPlan.threadId,
         answer: input.guidance,
-        senderRef,
+        ...(deliveryRef ? { deliveryRef } : {}),
       });
       return toolOk(message);
     },
@@ -173,13 +175,13 @@ export function buildOperatorSessionTools(
     execute: async (input: AnswerQuestionInput) => {
       const pendingQuestion = context.pendingQuestion;
       if (!pendingQuestion) return toolError('Error: no question is awaiting the merchant\'s answer.');
-      await updateContext(organizationId, chatId, { pendingQuestion: null });
+      await updateContext(organizationId, memberKey, { pendingQuestion: null });
       const message = await applyOperatorAnswerReplan({
         organizationId,
-        chatId,
+        memberKey,
         threadId: pendingQuestion.threadId,
         answer: input.answer,
-        senderRef,
+        ...(deliveryRef ? { deliveryRef } : {}),
       });
       return toolOk(message);
     },

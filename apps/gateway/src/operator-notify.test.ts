@@ -48,8 +48,12 @@ import {
   type OperatorBinding,
 } from './operator-notify.js';
 
-const TELEGRAM_MEMBER: OperatorBinding = { channel: 'telegram', chatId: 'chat_1' };
-const IMESSAGE_MEMBER: OperatorBinding = { channel: 'imessage', senderId: 'sender_1', spaceId: 'space_1' };
+const ORG_MEMBER_ID = '00000000-0000-4000-8000-0000000000aa';
+// Delivery is per device; state is per person. Both bindings below belong to the
+// same member, so both write this one key.
+const MEMBER_KEY = `member:${ORG_MEMBER_ID}`;
+const TELEGRAM_MEMBER: OperatorBinding = { channel: 'telegram', orgMemberId: ORG_MEMBER_ID, chatId: 'chat_1' };
+const IMESSAGE_MEMBER: OperatorBinding = { channel: 'imessage', orgMemberId: ORG_MEMBER_ID, senderId: 'sender_1', spaceId: 'space_1' };
 
 beforeEach(() => {
   vi.mocked(isTelegramConfigured).mockReturnValue(true);
@@ -76,7 +80,7 @@ describe('notifyOperator (telegram)', () => {
     );
 
     expect(result).toEqual({ channel: 'telegram', chatId: 'chat_1' });
-    expect(updateContextSpy).toHaveBeenCalledWith('org_1', 'chat_1', { pendingPlan: null });
+    expect(updateContextSpy).toHaveBeenCalledWith('org_1', MEMBER_KEY, { pendingPlan: null });
   });
 
   it('persists context before send, then returns null on best-effort HTTP send failure', async () => {
@@ -90,7 +94,7 @@ describe('notifyOperator (telegram)', () => {
     );
 
     expect(result).toBeNull();
-    expect(updateContextSpy).toHaveBeenCalledWith('org_1', 'chat_1', { pendingPlan: null });
+    expect(updateContextSpy).toHaveBeenCalledWith('org_1', MEMBER_KEY, { pendingPlan: null });
     expect(mockLogger.warn).toHaveBeenCalledWith(
       { chatId: 'chat_1', channel: 'telegram', organizationId: 'org_1' },
       '[OperatorNotify] Send failed',
@@ -110,7 +114,7 @@ describe('notifyOperator (telegram)', () => {
       ),
     ).rejects.toThrow(OperatorNotifyError);
 
-    expect(updateContextSpy).toHaveBeenCalledWith('org_1', 'chat_1', { pendingPlan: null });
+    expect(updateContextSpy).toHaveBeenCalledWith('org_1', MEMBER_KEY, { pendingPlan: null });
   });
 
   it('persists the pending-plan slot before delivering the card', async () => {
@@ -228,7 +232,7 @@ describe('notifyOperator (imessage)', () => {
       threadId: null,
       spaceId: 'space_1',
     });
-    expect(updateContextSpy).toHaveBeenCalledWith('org_1', 'sender_1', { pendingPlan: null });
+    expect(updateContextSpy).toHaveBeenCalledWith('org_1', MEMBER_KEY, { pendingPlan: null });
   });
 
   it('throws on critical send failure', async () => {
@@ -306,7 +310,7 @@ describe('notifyOperator (imessage)', () => {
     expect(result).toEqual({ channel: 'imessage', chatId: 'sender_1' });
     expect(sendImessageToSpaceSpy).not.toHaveBeenCalled();
     expect(markDeliveredSpy).not.toHaveBeenCalled();
-    expect(updateContextSpy).toHaveBeenCalledWith('org_1', 'sender_1', { pendingPlan: null });
+    expect(updateContextSpy).toHaveBeenCalledWith('org_1', MEMBER_KEY, { pendingPlan: null });
     expect(mockLogger.info).toHaveBeenCalledWith(
       expect.objectContaining({ idempotencyKey: 'idem_1', channel: 'imessage' }),
       '[OperatorNotify] Duplicate delivery skipped',
@@ -362,8 +366,13 @@ describe('listOperatorBindings', () => {
       const bindings = await listOperatorBindings(org.id);
 
       expect(bindings).toEqual([
-        { channel: 'telegram', chatId: `chat-${org.id}` },
-        { channel: 'imessage', senderId: `sender-${org.id}`, spaceId: `space-${org.id}` },
+        { channel: 'telegram', orgMemberId: member.id, chatId: `chat-${org.id}` },
+        {
+          channel: 'imessage',
+          orgMemberId: member.id,
+          senderId: `sender-${org.id}`,
+          spaceId: `space-${org.id}`,
+        },
       ]);
     } finally {
       await cleanupTestData(otherOrg.id);

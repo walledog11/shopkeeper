@@ -4,7 +4,7 @@ Evidence-gated removal of compatibility surfaces identified in the 2026-07-10
 codebase audit (in git history). One candidate per pull request; never
 batch unrelated retirements.
 
-Last reviewed: 2026-07-30.
+Last reviewed: 2026-08-06.
 
 ## Completed
 
@@ -15,6 +15,7 @@ Last reviewed: 2026-07-30.
 | Legacy `pending_plan` dual-read fallback | Operator channels | `npm run audit:operator-context-compatibility` reports zero `legacyPendingPlanColumn` and zero `dualReadFallbackRows` in production | 2026-07-30 |
 | Legacy operator tool-call inline-input normalization | Agent core | Same audit reports zero `legacyToolCalls`; `normalizeApprovedToolCalls` now maps `input` only | 2026-07-30 |
 | Legacy iMessage purge module | Operator / iMessage | `npm run audit:legacy-imessage-threads` reports zero active/soft-deleted `channel_type = imessage` rows; operator iMessage (`sms_agent` + bindings) unchanged | 2026-07-30 |
+| `operator_contexts.pending_plan` column | Operator channels | Dual-read retired 2026-07-30; audit showed zero live rows in the column; migration `20260806120000_drop_operator_pending_plan_column` | 2026-08-06 |
 
 ## Deferred — do not rename or remove without explicit migration / product sign-off
 

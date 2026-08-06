@@ -1,14 +1,15 @@
 import { Loader2, X } from "lucide-react"
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import type { KeyboardEvent } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { formatClockTime } from "@/lib/format/date"
 import AgentAvatar from "@/components/agent/AgentAvatar"
 import AgentPanelBriefing from "@/app/dashboard/_components/agent-panel/AgentPanelBriefing"
+import AgentPanelPendingLedger from "@/app/dashboard/_components/agent-panel/AgentPanelPendingLedger"
 import AgentPanelTelegramNudge from "@/app/dashboard/_components/agent-panel/AgentPanelTelegramNudge"
 import type { AgentPanelOpenContext } from "@/lib/agent/panel"
-import { WalkthroughCard } from "@/components/agent/WalkthroughBriefing"
+import { WalkthroughCard, WalkthroughNote } from "@/components/agent/WalkthroughBriefing"
 import type { PanelSuggestionChip } from "@/lib/agent/panel-briefing"
 import { AgentChatComposer } from "./AgentChatComposer"
 import { AgentChatMessage } from "./AgentChatMessage"
@@ -20,7 +21,7 @@ export interface AgentChatClientProps {
   compact?: boolean
   embedded?: boolean
   onClose?: () => void
-  restoreSession?: boolean
+  restoreHistory?: boolean
   openContext?: AgentPanelOpenContext | null
 }
 
@@ -31,13 +32,12 @@ export function AgentChatView({
   onClose,
   openContext,
   state,
-}: Omit<AgentChatClientProps, "restoreSession"> & { state: AgentChatState }) {
+}: Omit<AgentChatClientProps, "restoreHistory"> & { state: AgentChatState }) {
   const {
-    appendAgentLine,
     fillerPhrase,
     firstName,
     greeting,
-    handleNewSession,
+    handleClearPanel,
     handleSendText,
     initial,
     input,
@@ -49,19 +49,33 @@ export function AgentChatView({
   } = state
 
   const [showStartFreshConfirm, setShowStartFreshConfirm] = useState(false)
-  const isEmptyBriefing = messages.length === 0 && (compact || embedded)
   const walkthrough = openContext?.walkthrough ?? null
+  // The bottom-anchored layout belongs to the briefing. A walkthrough fills the
+  // panel from the top, and no longer pads itself with chat lines to get there.
+  const isEmptyBriefing = messages.length === 0 && !walkthrough && (compact || embedded)
 
   const {
     buildWalkthroughInstruction,
     currentWalkthroughItem,
+    decisionNotes,
     handleWalkthroughDecision,
+    walkthroughClosing,
     walkthroughIndex,
     walkthroughItems,
-  } = useAgentWalkthrough({
-    walkthrough,
-    appendAgentLine,
-  })
+    walkthroughOpening,
+  } = useAgentWalkthrough({ walkthrough })
+
+  // An instruction carried in from ⌘K lands in the composer rather than sending
+  // itself: the palette knows the intent, but "refund 1234" is the merchant's
+  // send to make.
+  const seededInstructionRef = useRef<string | null>(null)
+  useEffect(() => {
+    const instruction = openContext?.instruction?.trim()
+    if (!instruction || seededInstructionRef.current === instruction) return
+    seededInstructionRef.current = instruction
+    setInput(instruction)
+    textareaRef.current?.focus()
+  }, [openContext?.instruction, setInput, textareaRef])
 
   const handleSendInput = useCallback(async () => {
     const visibleText = input.trim()
@@ -112,6 +126,14 @@ export function AgentChatView({
             compact ? "pb-6 pt-14" : "py-6"
           } ${isEmptyBriefing ? "flex min-h-full flex-col justify-end" : "space-y-6"}`}
         >
+        {/* The ledger leads. A walkthrough is already a decision list, so the two
+            never stack. */}
+        {!walkthrough && (
+          <div className={isEmptyBriefing ? "mb-8" : undefined}>
+            <AgentPanelPendingLedger />
+          </div>
+        )}
+
         {messages.length === 0 && !compact && !embedded && (
           <div className="max-w-xl mx-auto">
             <div className="bg-card border border-border rounded-xl p-5">
@@ -135,10 +157,10 @@ export function AgentChatView({
           />
         )}
 
-        {messages.map((msg) => {
+        {messages.map((msg, index) => {
           if (msg.role === "user") {
             return (
-              <div key={messageKey(msg)} className="flex justify-end items-end gap-2.5">
+              <div key={messageKey(msg, index)} className="flex justify-end items-end gap-2.5">
                 <div className="flex flex-col items-end gap-1 max-w-[70%]">
                   <span className="text-xs text-muted-foreground">{formatClockTime(msg.timestamp)}</span>
                   <div className="bg-card border border-border text-foreground text-sm rounded-2xl rounded-tr-sm px-4 py-2.5 shadow-sm">
@@ -154,7 +176,7 @@ export function AgentChatView({
 
           if (msg.role === "thinking") {
             return (
-              <div key={messageKey(msg)} className="flex items-start gap-3">
+              <div key={messageKey(msg, index)} className="flex items-start gap-3">
                 <AgentAvatar agentName={agentName} size="md" className="mt-0.5" />
                 <div className="flex items-center gap-2 text-sm text-muted-foreground pt-1">
                   <Loader2 className="size-3.5 animate-spin text-green-500" />
@@ -166,7 +188,7 @@ export function AgentChatView({
 
           return (
             <AgentChatMessage
-              key={messageKey(msg)}
+              key={messageKey(msg, index)}
               agentName={agentName}
               message={msg}
               isRunning={isRunning}
@@ -176,17 +198,26 @@ export function AgentChatView({
           )
         })}
 
-        {currentWalkthroughItem && (
-          <WalkthroughCard
-            key={currentWalkthroughItem.threadId}
-            item={currentWalkthroughItem}
-            agentName={agentName}
-            position={walkthroughIndex + 1}
-            total={walkthroughItems.length}
-            disabled={isRunning}
-            onApproved={() => handleWalkthroughDecision(currentWalkthroughItem, "approved")}
-            onSkip={() => handleWalkthroughDecision(currentWalkthroughItem, "skipped")}
-          />
+        {walkthrough && (
+          <div className="space-y-6">
+            {walkthroughOpening && <WalkthroughNote agentName={agentName} text={walkthroughOpening} />}
+            {decisionNotes.map((note, index) => (
+              <WalkthroughNote key={`${index}-${note}`} agentName={agentName} text={note} />
+            ))}
+            {currentWalkthroughItem && (
+              <WalkthroughCard
+                key={currentWalkthroughItem.threadId}
+                item={currentWalkthroughItem}
+                agentName={agentName}
+                position={walkthroughIndex + 1}
+                total={walkthroughItems.length}
+                disabled={isRunning}
+                onApproved={() => handleWalkthroughDecision(currentWalkthroughItem, "approved")}
+                onSkip={() => handleWalkthroughDecision(currentWalkthroughItem, "skipped")}
+              />
+            )}
+            {walkthroughClosing && <WalkthroughNote agentName={agentName} text={walkthroughClosing} />}
+          </div>
         )}
 
         <div ref={messagesEndRef} />
@@ -197,7 +228,7 @@ export function AgentChatView({
         <AgentPanelTelegramNudge
           agentName={agentName}
           enabled
-          showConnectBanner={messages.length === 0}
+          showConnectBanner={messages.length === 0 && !walkthrough}
         />
       )}
 
@@ -227,7 +258,7 @@ export function AgentChatView({
               size="sm"
               onClick={() => {
                 setShowStartFreshConfirm(false)
-                handleNewSession()
+                handleClearPanel()
               }}
             >
               Start fresh

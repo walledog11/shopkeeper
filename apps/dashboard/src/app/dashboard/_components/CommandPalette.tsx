@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Bot } from "lucide-react";
+import { useState } from "react";
+import { Bot, Sparkles } from "lucide-react";
 import {
   CommandDialog,
   CommandEmpty,
@@ -23,6 +24,7 @@ interface Props {
 export default function CommandPalette({ open, onClose, agentName }: Props) {
   const { push } = useRouter();
   const { open: openAgentPanel } = useAgentPanel();
+  const [query, setQuery] = useState("");
 
   // Programmatic, so the shell's link delegation never sees it.
   function navigate(href: string) {
@@ -31,21 +33,48 @@ export default function CommandPalette({ open, onClose, agentName }: Props) {
     onClose();
   }
 
-  function openDeskChat() {
-    openAgentPanel({ source: "command" });
+  function openDeskChat(instruction?: string) {
+    openAgentPanel({ source: "command", ...(instruction ? { instruction } : {}) });
+    setQuery("");
     onClose();
   }
 
+  // What the merchant typed is already an instruction when it names an intent
+  // ("refund 1234"); the palette hands it to the panel instead of making them
+  // retype it. forceMount because cmdk would filter this row out against itself.
+  const instruction = query.trim();
+
   return (
     <CommandDialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <CommandInput placeholder="Search pages and actions…" />
+      <CommandInput
+        placeholder={`Search pages, or tell ${agentName} what to do…`}
+        value={query}
+        onValueChange={setQuery}
+      />
       <CommandList>
-        <CommandEmpty>No results found.</CommandEmpty>
+        {/* An instruction is always a result, and cmdk does not count force-mounted
+            rows — without this, typing one shows "No results found." above it. */}
+        {!instruction && <CommandEmpty>No results found.</CommandEmpty>}
         <CommandGroup heading="Quick actions">
+          {instruction && (
+            <CommandItem
+              forceMount
+              value={`__instruct__${instruction}`}
+              onSelect={() => openDeskChat(instruction)}
+              className="gap-3 cursor-pointer"
+            >
+              <div className="size-7 rounded-md bg-muted flex items-center justify-center shrink-0">
+                <Sparkles className="size-3.5 text-muted-foreground" />
+              </div>
+              <span className="flex-1 min-w-0 truncate text-sm font-medium">
+                Ask {agentName}: {instruction}
+              </span>
+            </CommandItem>
+          )}
           <CommandItem
             value={`Chat with ${agentName}`}
             keywords={["agent", "chat", "concierge", "desk", agentName]}
-            onSelect={openDeskChat}
+            onSelect={() => openDeskChat()}
             className="gap-3 cursor-pointer"
           >
             <div className="size-7 rounded-md bg-muted flex items-center justify-center shrink-0">

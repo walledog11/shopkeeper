@@ -43,7 +43,7 @@ export default function AgentPanelRoot({ agentName }: Props) {
                 agentName={agentName}
                 compact
                 openContext={openContext}
-                restoreSession={!openContext?.walkthrough}
+                restoreHistory={!openContext?.walkthrough}
                 onClose={close}
               />
             </m.div>
@@ -61,7 +61,7 @@ export default function AgentPanelRoot({ agentName }: Props) {
                   agentName={agentName}
                   compact
                   openContext={openContext}
-                  restoreSession={!openContext?.walkthrough}
+                  restoreHistory={!openContext?.walkthrough}
                   onClose={close}
                 />
               </div>

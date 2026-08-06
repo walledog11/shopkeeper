@@ -1,10 +1,11 @@
 /**
  * Operator-channel conversation context.
  *
- * Persists per-(org, channel-context key) state in operator_contexts. The key is
- * a Telegram chat id (string-encoded int64) or an iMessage sender id. Those
- * identifier spaces are currently disjoint; a future shared-key migration must
- * add an explicit channel column before changing that assumption.
+ * Persists per-(org, person) state in operator_contexts. The key is
+ * `member:<orgMemberId>` — every transport the merchant reaches the agent from
+ * (Telegram, iMessage, the dashboard Concierge) resolves to it, so there is one
+ * pending queue per person rather than one per bound device. Approving on the
+ * phone therefore clears the plan the laptop is showing.
  */
 
 import { db, Prisma } from '@shopkeeper/db';
@@ -163,9 +164,9 @@ function toJsonObject(value: PendingPlan | PendingDigest | PendingQuestion): Pri
   return JSON.parse(JSON.stringify(value)) as PrismaTypes.InputJsonObject;
 }
 
-export async function getContext(organizationId: string, chatId: string): Promise<OperatorContext> {
+export async function getContext(organizationId: string, memberKey: string): Promise<OperatorContext> {
   const row = await db.operatorContext.findUnique({
-    where: { organizationId_chatId: { organizationId, chatId } },
+    where: { organizationId_memberKey: { organizationId, memberKey } },
   });
   if (!row) return { ...EMPTY };
 
@@ -186,24 +187,21 @@ export async function getContext(organizationId: string, chatId: string): Promis
 // Postgres serializes them on the row lock and both land. Slots not named in
 // `updates` are left exactly as stored.
 //
-// The `pendingPlan` key is the legacy single-plan API: it *replaces* the whole
-// queue with `[plan]` (or clears it) and nulls the dead singular column. Parking
-// that must preserve other threads' queued plans goes through `appendPendingPlan`,
-// not here.
+// The `pendingPlan` key replaces the whole queue with `[plan]` (or clears it).
+// Parking that must preserve other threads' queued plans goes through
+// `appendPendingPlan`, not here.
 export async function updateContext(
   organizationId: string,
-  chatId: string,
+  memberKey: string,
   updates: Partial<Omit<OperatorContext, 'pendingPlans'>>,
 ): Promise<void> {
   const data: {
-    pendingPlan?: typeof Prisma.DbNull;
     pendingPlans?: PrismaTypes.InputJsonValue | typeof Prisma.DbNull;
     pendingDigest?: PrismaTypes.InputJsonValue | typeof Prisma.DbNull;
     pendingQuestion?: PrismaTypes.InputJsonValue | typeof Prisma.DbNull;
   } = {};
   if ('pendingPlan' in updates) {
     data.pendingPlans = updates.pendingPlan ? [toJsonObject(updates.pendingPlan)] : Prisma.DbNull;
-    data.pendingPlan = Prisma.DbNull;
   }
   if ('pendingDigest' in updates) {
     data.pendingDigest = updates.pendingDigest ? toJsonObject(updates.pendingDigest) : Prisma.DbNull;
@@ -213,23 +211,24 @@ export async function updateContext(
   }
 
   await db.operatorContext.upsert({
-    where: { organizationId_chatId: { organizationId, chatId } },
+    where: { organizationId_memberKey: { organizationId, memberKey } },
     update: data,
-    create: { organizationId, chatId, ...data },
+    create: { organizationId, memberKey, ...data },
   });
 }
 
 // Resolve only the exact parked plan that was acted on by removing that one
-// element from the queue (and clearing a matching legacy single slot), leaving
-// every sibling plan intact. New plans resolve across every bound device by
-// stable planId. Legacy identity-less plans resolve only on the acting device and
-// only if the full parked value still matches, preserving a newer notification
-// that may have arrived during execution. Each raw UPDATE is a single atomic
-// statement, so the removal races cleanly against a concurrent `appendPendingPlan`
-// on the same row (they serialize on the row lock).
+// element from the queue, leaving every sibling plan intact. New plans resolve
+// across every operator in the org
+// by stable planId — a teammate's queue must not keep offering a plan someone
+// already ran. Legacy identity-less plans resolve only on the acting member's own
+// queue and only if the full parked value still matches, preserving a newer
+// notification that may have arrived during execution. Each raw UPDATE is a
+// single atomic statement, so the removal races cleanly against a concurrent
+// `appendPendingPlan` on the same row (they serialize on the row lock).
 export async function resolvePendingPlanContexts(
   organizationId: string,
-  chatId: string,
+  memberKey: string,
   expected: PendingPlan,
 ): Promise<void> {
   if (expected.planId) {
@@ -241,13 +240,9 @@ export async function resolvePendingPlanContexts(
             SELECT jsonb_agg(element)
             FROM jsonb_array_elements(COALESCE(pending_plans, '[]'::jsonb)) AS element
             WHERE element->>'planId' IS DISTINCT FROM ${planId}
-          ), '[]'::jsonb),
-          pending_plan = CASE WHEN pending_plan->>'planId' = ${planId} THEN NULL ELSE pending_plan END
+          ), '[]'::jsonb)
       WHERE organization_id = ${organizationId}::uuid
-        AND (
-          pending_plans @> ${planIdMatch}::jsonb
-          OR pending_plan->>'planId' = ${planId}
-        )`;
+        AND pending_plans @> ${planIdMatch}::jsonb`;
     return;
   }
 
@@ -259,17 +254,13 @@ export async function resolvePendingPlanContexts(
           SELECT jsonb_agg(element)
           FROM jsonb_array_elements(COALESCE(pending_plans, '[]'::jsonb)) AS element
           WHERE element <> ${expectedJson}::jsonb
-        ), '[]'::jsonb),
-        pending_plan = CASE WHEN pending_plan = ${expectedJson}::jsonb THEN NULL ELSE pending_plan END
-    WHERE organization_id = ${organizationId}::uuid AND chat_id = ${chatId}
-      AND (
-        pending_plans @> ${expectedContains}::jsonb
-        OR pending_plan = ${expectedJson}::jsonb
-      )`;
+        ), '[]'::jsonb)
+    WHERE organization_id = ${organizationId}::uuid AND member_key = ${memberKey}
+      AND pending_plans @> ${expectedContains}::jsonb`;
 }
 
-// Remove any queued plan for one thread across every bound device (and clear a
-// matching legacy single slot), leaving other threads' plans intact. Used when a
+// Remove any queued plan for one thread across every operator in the org,
+// leaving other threads' plans intact. Used when a
 // thread transitions from "plan drafted" to "question pending" — its old plan is
 // superseded, but a whole-queue clear would silently drop unrelated threads'
 // plans (the A6 harm). Atomic single statement.
@@ -284,23 +275,19 @@ export async function removePendingPlanForThread(
           SELECT jsonb_agg(element)
           FROM jsonb_array_elements(COALESCE(pending_plans, '[]'::jsonb)) AS element
           WHERE element->>'threadId' IS DISTINCT FROM ${threadId}
-        ), '[]'::jsonb),
-        pending_plan = CASE WHEN pending_plan->>'threadId' = ${threadId} THEN NULL ELSE pending_plan END
+        ), '[]'::jsonb)
     WHERE organization_id = ${organizationId}::uuid
-      AND (
-        pending_plans @> ${threadMatch}::jsonb
-        OR pending_plan->>'threadId' = ${threadId}
-      )`;
+      AND pending_plans @> ${threadMatch}::jsonb`;
 }
 
 // Park a plan on the queue, upserting by threadId (a thread holds at most one
 // pending plan) and trimming to the newest `maxDepth`. The row-lock transaction
 // serializes concurrent parks so none is lost, and the threadId upsert makes the
 // append idempotent under BullMQ retry — re-appending the same plan yields one
-// entry. Nulls the dead legacy single slot on every write.
+// entry.
 export async function appendPendingPlan(
   organizationId: string,
-  chatId: string,
+  memberKey: string,
   plan: PendingPlan,
   maxDepth: number,
 ): Promise<void> {
@@ -310,17 +297,17 @@ export async function appendPendingPlan(
     // concurrent first parks both INSERT and one hits the unique constraint. ON
     // CONFLICT DO NOTHING is atomic and blocks on the index until the other commits.
     await tx.$executeRaw`
-      INSERT INTO operator_contexts (id, organization_id, chat_id, updated_at)
-      VALUES (gen_random_uuid(), ${organizationId}::uuid, ${chatId}, now())
-      ON CONFLICT (organization_id, chat_id) DO NOTHING`;
+      INSERT INTO operator_contexts (id, organization_id, member_key, updated_at)
+      VALUES (gen_random_uuid(), ${organizationId}::uuid, ${memberKey}, now())
+      ON CONFLICT (organization_id, member_key) DO NOTHING`;
     // Lock the row so concurrent parks serialize here; a plain findUnique under
     // Read Committed would let two parks read the same array and drop one.
     await tx.$queryRaw`
       SELECT 1 FROM operator_contexts
-      WHERE organization_id = ${organizationId}::uuid AND chat_id = ${chatId}
+      WHERE organization_id = ${organizationId}::uuid AND member_key = ${memberKey}
       FOR UPDATE`;
     const row = await tx.operatorContext.findUnique({
-      where: { organizationId_chatId: { organizationId, chatId } },
+      where: { organizationId_memberKey: { organizationId, memberKey } },
       select: { pendingPlans: true },
     });
     const current = readPendingPlanArray(row?.pendingPlans);
@@ -329,8 +316,8 @@ export async function appendPendingPlan(
       plan,
     ].slice(-depth);
     await tx.operatorContext.update({
-      where: { organizationId_chatId: { organizationId, chatId } },
-      data: { pendingPlans: next.map(toJsonObject), pendingPlan: Prisma.DbNull },
+      where: { organizationId_memberKey: { organizationId, memberKey } },
+      data: { pendingPlans: next.map(toJsonObject) },
     });
   });
 }
@@ -390,7 +377,7 @@ export function selectPendingPlan(plans: PendingPlan[], ref?: string): SelectPen
 // Called once per turn before the ledger and control tools read the context.
 export async function loadLivePendingPlans(
   organizationId: string,
-  chatId: string,
+  memberKey: string,
   context: OperatorContext,
 ): Promise<OperatorContext> {
   if (context.pendingPlans.length === 0) return context;
@@ -400,7 +387,7 @@ export async function loadLivePendingPlans(
     if (plan.planId) {
       const execution = await getPlanExecution(organizationId, plan.planId).catch(() => null);
       if (execution && execution.status !== 'pending' && execution.status !== 'claimed') {
-        await resolvePendingPlanContexts(organizationId, chatId, plan).catch(() => undefined);
+        await resolvePendingPlanContexts(organizationId, memberKey, plan).catch(() => undefined);
         continue;
       }
     }

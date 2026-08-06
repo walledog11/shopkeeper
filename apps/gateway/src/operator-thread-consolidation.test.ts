@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@shopkeeper/db';
 import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers';
 
-// Phase B: one durable operator thread per binding, with notifications and the
+// One durable operator thread per *person* (Phase 2), with notifications and the
 // merchant's texts mirrored onto it. The core turn, billing gate, lock deps, and
-// transport send are the only host seams stubbed — resolveOperatorThread and the
-// mirror run against the real test DB.
+// transport send are the only host seams stubbed — resolveOperatorThread, the
+// pending queue, and the mirror run against the real test DB.
 const {
   mockExecuteAgentTurn,
   mockAssertBilling,
@@ -29,11 +29,17 @@ vi.mock('./clients/telegram-client.js', () => ({
   sendMessage: telegramSendSpy,
 }));
 
-import { resolveOperatorThread } from '@shopkeeper/agent/internal-thread';
+import { memberOperatorKey, resolveOperatorThread } from '@shopkeeper/agent/internal-thread';
 import { executeOperatorAgentTurn } from './message-handlers/execute-operator-agent-turn.js';
+import { getContext } from './operator-context.js';
+import { resolveOperatorMemberKey } from './operator-identity.js';
 import { notifyOperator } from './operator-notify.js';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
+
+async function createMember(clerkUserId: string) {
+  return db.orgMember.create({ data: { organizationId: org.id, clerkUserId } });
+}
 
 beforeEach(async () => {
   org = await createTestOrg();
@@ -45,72 +51,73 @@ afterEach(async () => {
   await cleanupTestData(org?.id);
 });
 
-describe('operator thread consolidation (Phase B)', () => {
-  it('lands two free-form texts from one binding on a single thread', async () => {
+describe('operator thread consolidation', () => {
+  it('lands two free-form texts from one person on a single thread', async () => {
+    const memberKey = await resolveOperatorMemberKey(org.id, 'usr_1');
     const first = await executeOperatorAgentTurn({
       orgId: org.id,
       instruction: 'where is order #1001?',
-      operatorKey: 'imessage:+15550001111',
-      senderPhone: 'imessage:+15550001111',
+      operatorKey: memberKey,
       clerkUserId: 'usr_1',
     });
     const second = await executeOperatorAgentTurn({
       orgId: org.id,
       instruction: 'and #1002?',
-      operatorKey: 'imessage:+15550001111',
-      senderPhone: 'imessage:+15550001111',
+      operatorKey: memberKey,
       clerkUserId: 'usr_1',
     });
 
     expect(second.threadId).toBe(first.threadId);
     const threads = await db.thread.findMany({
-      where: { organizationId: org.id, operatorKey: 'imessage:+15550001111' },
+      where: { organizationId: org.id, operatorKey: memberKey },
     });
     expect(threads).toHaveLength(1);
     expect(threads[0].channelType).toBe('sms_agent');
   });
 
-  it('adopts a pre-Phase-B operator thread (null operatorKey) instead of creating a second', async () => {
-    const operatorKey = 'imessage:+15550002222';
-    // Precondition: the merchant already has a legacy open sms_agent thread on
-    // the operator customer, created before operatorKey existed (so it is null).
-    // The one-open-thread-per-customer-per-channel index would reject a second.
-    const customer = await db.customer.create({
-      data: { organizationId: org.id, platformId: operatorKey },
-    });
-    const legacy = await db.thread.create({
-      data: {
-        organizationId: org.id,
-        customerId: customer.id,
-        channelType: 'sms_agent',
-        status: 'open',
-        operatorKey: null,
-      },
+  // The Phase 2 payoff: two transports, one conversation. Both bindings resolve
+  // the same Clerk user, so texting from the phone and typing in the Concierge
+  // continue the same thread rather than forking two memories.
+  it('lands both of one person\'s transports on the same thread', async () => {
+    const member = await createMember('usr_multi');
+    await db.orgMemberTelegramChat.create({ data: { orgMemberId: member.id, chatId: '900900' } });
+    await db.orgMemberImessageBinding.create({
+      data: { orgMemberId: member.id, senderId: '+15550001111', spaceId: 'space_1' },
     });
 
-    const resolved = await resolveOperatorThread(org.id, operatorKey);
+    const fromPhone = await executeOperatorAgentTurn({
+      orgId: org.id,
+      instruction: 'x',
+      operatorKey: await resolveOperatorMemberKey(org.id, 'usr_multi'),
+      senderPhone: 'imessage:+15550001111',
+      clerkUserId: 'usr_multi',
+    });
+    const fromDesk = await executeOperatorAgentTurn({
+      orgId: org.id,
+      instruction: 'y',
+      operatorKey: await resolveOperatorMemberKey(org.id, 'usr_multi'),
+      clerkUserId: 'usr_multi',
+    });
 
-    expect(resolved.id).toBe(legacy.id);
+    expect(fromDesk.threadId).toBe(fromPhone.threadId);
     const threads = await db.thread.findMany({
       where: { organizationId: org.id, channelType: 'sms_agent' },
     });
     expect(threads).toHaveLength(1);
-    expect(threads[0].operatorKey).toBe(operatorKey);
+    expect(threads[0].operatorKey).toBe(memberOperatorKey(member.id));
   });
 
-  it('gives two bindings two separate threads', async () => {
+  it('gives two teammates two separate threads', async () => {
     const a = await executeOperatorAgentTurn({
       orgId: org.id,
       instruction: 'x',
-      operatorKey: 'imessage:+15550001111',
-      senderPhone: 'imessage:+15550001111',
+      operatorKey: await resolveOperatorMemberKey(org.id, 'usr_1'),
       clerkUserId: 'usr_1',
     });
     const b = await executeOperatorAgentTurn({
       orgId: org.id,
       instruction: 'y',
-      operatorKey: 'telegram:900900',
-      senderPhone: 'telegram:900900',
+      operatorKey: await resolveOperatorMemberKey(org.id, 'usr_2'),
       clerkUserId: 'usr_2',
     });
 
@@ -121,11 +128,12 @@ describe('operator thread consolidation (Phase B)', () => {
     expect(threads).toHaveLength(2);
   });
 
-  it('mirrors a plan notification onto the binding thread as an agent message', async () => {
+  it('mirrors a plan notification onto the member thread as an agent message', async () => {
+    const member = await createMember('usr_notify');
     const body = 'Proposed plan (2 steps): refund #1002';
     const result = await notifyOperator(
       org.id,
-      { channel: 'telegram', chatId: '900900' },
+      { channel: 'telegram', orgMemberId: member.id, chatId: '900900' },
       body,
       { pendingPlan: null },
     );
@@ -133,11 +141,43 @@ describe('operator thread consolidation (Phase B)', () => {
     expect(result).toEqual({ channel: 'telegram', chatId: '900900' });
     expect(telegramSendSpy).toHaveBeenCalledTimes(1);
 
-    const thread = await resolveOperatorThread(org.id, 'telegram:900900');
+    const thread = await resolveOperatorThread(org.id, memberOperatorKey(member.id));
     const messages = await db.message.findMany({
       where: { threadId: thread.id, senderType: 'agent' },
     });
     expect(messages).toHaveLength(1);
     expect(messages[0].contentText).toBe(body);
+  });
+
+  // Two live views of one queue: a card fanned out to the phone must be the same
+  // parked plan the desk reads, or approving in one place leaves the other still
+  // offering it.
+  it('parks one plan for a person no matter which binding delivered the card', async () => {
+    const member = await createMember('usr_queue');
+    const customer = await db.customer.create({
+      data: { organizationId: org.id, platformId: 'queue-ticket@example.com' },
+    });
+    const ticket = await db.thread.create({
+      data: {
+        organizationId: org.id,
+        customerId: customer.id,
+        channelType: 'email',
+        status: 'open',
+      },
+    });
+    const plan = { threadId: ticket.id, instruction: 'refund #1002', rawToolCalls: [] };
+
+    for (const binding of [
+      { channel: 'telegram' as const, orgMemberId: member.id, chatId: '900900' },
+      { channel: 'telegram' as const, orgMemberId: member.id, chatId: '900901' },
+    ]) {
+      await notifyOperator(org.id, binding, 'Proposed plan', {}, {
+        appendPlan: { plan, maxDepth: 5 },
+      });
+    }
+
+    const context = await getContext(org.id, memberOperatorKey(member.id));
+    expect(context.pendingPlans).toHaveLength(1);
+    expect(context.pendingPlan?.threadId).toBe(ticket.id);
   });
 });

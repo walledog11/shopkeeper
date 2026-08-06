@@ -67,6 +67,29 @@ describe('renderOperatorLedger', () => {
     expect(ledger).toContain('Refunded $12 for the delay');
   });
 
+  // Same plan, different affordance: the desk resolves it with a button, a phone
+  // with a reply, and telling either one to do the other's thing is wrong copy.
+  it('names the affordance the merchant actually has on this surface', async () => {
+    const customer = await createTestCustomer(org.id, 'surface@example.com', { name: 'Ann Lee' });
+    const thread = await createTestThread(org.id, customer.id, 'email');
+    const context: OperatorContext = {
+      ...EMPTY,
+      pendingPlans: [{
+        threadId: thread.id,
+        instruction: 'Refund request',
+        rawToolCalls: [{ id: 'tc1', name: 'send_reply', input: { text: 'On its way.' } }],
+      }],
+    };
+
+    const desk = await renderOperatorLedger(org.id, context, 'desk');
+    expect(desk).toContain('Approve and Dismiss button');
+    expect(desk).not.toContain('reply yes to approve');
+
+    const messaging = await renderOperatorLedger(org.id, context, 'messaging');
+    expect(messaging).toContain('yes to approve');
+    expect(messaging).not.toContain('Approve and Dismiss button');
+  });
+
   it('renders a pending question', async () => {
     const ledger = await renderOperatorLedger(org.id, {
       ...EMPTY,

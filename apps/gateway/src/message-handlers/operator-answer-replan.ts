@@ -22,12 +22,15 @@ import {
 import { appendPendingPlan, type PendingPlan, type ToolCall } from '../operator-context.js';
 import { getOperatorPlanQueueMax } from '../config/runtime-config.js';
 
-function answeringChannelFromSenderRef(senderRef: string): OperatorNotificationExclude | null {
-  if (senderRef.startsWith('imessage:')) {
-    return { channel: 'imessage', contextKey: senderRef.slice('imessage:'.length) };
+// The transport the merchant is answering on already sees this exchange, so it is
+// dropped from the plan fan-out. The dashboard passes no delivery ref (it gets no
+// push), which reads here as "exclude nothing".
+function answeringChannelFromDeliveryRef(deliveryRef?: string): OperatorNotificationExclude | null {
+  if (deliveryRef?.startsWith('imessage:')) {
+    return { channel: 'imessage', deliveryKey: deliveryRef.slice('imessage:'.length) };
   }
-  if (senderRef.startsWith('telegram:')) {
-    return { channel: 'telegram', contextKey: senderRef.slice('telegram:'.length) };
+  if (deliveryRef?.startsWith('telegram:')) {
+    return { channel: 'telegram', deliveryKey: deliveryRef.slice('telegram:'.length) };
   }
   return null;
 }
@@ -40,13 +43,15 @@ function toPendingPlanToolCalls(
 
 export interface OperatorAnswerReplanParams {
   organizationId: string;
-  chatId: string;
+  // `member:<orgMemberId>` — the queue the re-drafted plan is parked on.
+  memberKey: string;
   threadId: string;
   // The merchant's freeform text: an answer to a pending question, or revision
   // guidance for a pending plan. Recorded as a note, saved to the KB as a
   // reusable fact, and folded into the re-plan.
   answer: string;
-  senderRef: string;
+  /** `telegram:<chatId>` / `imessage:<senderId>`; absent on the dashboard. */
+  deliveryRef?: string;
 }
 
 // Ingests a merchant's answer/guidance for a thread and re-drafts its plan:
@@ -58,7 +63,7 @@ export interface OperatorAnswerReplanParams {
 export async function applyOperatorAnswerReplan(
   params: OperatorAnswerReplanParams,
 ): Promise<string> {
-  const { organizationId, chatId, threadId, senderRef } = params;
+  const { organizationId, memberKey, threadId, deliveryRef } = params;
   const answer = params.answer.trim();
 
   const [thread, latestConversation, meta] = await Promise.all([
@@ -156,10 +161,15 @@ export async function applyOperatorAnswerReplan(
     return "Saved your answer, but I couldn't draft the reply just now — please try again in a moment.";
   }
 
-  const exclude = answeringChannelFromSenderRef(senderRef);
+  const exclude = answeringChannelFromDeliveryRef(deliveryRef);
   const customerName = meta?.customer?.name ?? null;
-  const draftSummary = formatOperatorDraftSummary(customerName, notifyPlan);
-  // This device is excluded from the fan-out below, so it parks its own copy —
+  const draftSummary = formatOperatorDraftSummary(
+    customerName,
+    notifyPlan,
+    deliveryRef ? 'messaging' : 'desk',
+  );
+  // The answering device is excluded from the fan-out below, so this parks the
+  // merchant's own copy —
   // including the display fields the fan-out would otherwise have supplied.
   const actionLabel = parkedActionLabel(notifyPlan.steps, customerName);
   const pendingPlan: PendingPlan = {
@@ -178,7 +188,7 @@ export async function applyOperatorAnswerReplan(
 
   // Upsert by threadId: the revised draft replaces this thread's own queued entry
   // and leaves other threads' pending plans intact.
-  await appendPendingPlan(organizationId, chatId, pendingPlan, getOperatorPlanQueueMax());
+  await appendPendingPlan(organizationId, memberKey, pendingPlan, getOperatorPlanQueueMax());
 
   // The answering operator gets the draft summary as this call's return value (the
   // control tool relays it through the model); here we only fan the operator card

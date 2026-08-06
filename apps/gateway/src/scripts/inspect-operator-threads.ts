@@ -4,7 +4,8 @@ loadGatewayEnv();
 
 // THROWAWAY read-only — show every operator (sms_agent) thread for the org with
 // its operator_key + the customer's platform_id, plus the bindings, so we can
-// confirm the adoption fix keys correctly for BOTH Telegram and iMessage.
+// confirm one live thread per person keyed `member:<orgMemberId>` and the
+// pre-merge per-binding threads left closed behind it.
 
 async function main() {
   const { db } = await import('@shopkeeper/db');
@@ -12,14 +13,16 @@ async function main() {
 
   const tg = await db.orgMemberTelegramChat.findMany({
     where: { orgMember: { organizationId: orgId } },
-    select: { chatId: true },
+    select: { chatId: true, orgMemberId: true },
   });
   const im = await db.orgMemberImessageBinding.findMany({
     where: { orgMember: { organizationId: orgId } },
-    select: { senderId: true },
+    select: { senderId: true, orgMemberId: true },
   });
-  console.log('bindings → telegram operatorKeys:', tg.map((t) => `telegram:${t.chatId}`));
-  console.log('bindings → imessage operatorKeys:', im.map((b) => `imessage:${b.senderId}`));
+  // Every binding of one person collapses onto that person's member key, which is
+  // the operator_key every thread below should now carry.
+  console.log('bindings → telegram:', tg.map((t) => `${t.chatId} → member:${t.orgMemberId}`));
+  console.log('bindings → imessage:', im.map((b) => `${b.senderId} → member:${b.orgMemberId}`));
 
   const threads = await db.$queryRawUnsafe<
     { id: string; status: string; operator_key: string | null; platform_id: string; customer_id: string }[]

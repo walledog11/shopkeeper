@@ -130,11 +130,22 @@ export function parseAgentAnswerBody(body: unknown) {
   };
 }
 
+export function parseAgentPlanDecisionBody(body: unknown) {
+  const candidate = requireObject(body);
+  const decision = requireNonEmptyString(candidate.decision, "decision");
+  if (decision !== "approve" && decision !== "dismiss") {
+    invalidField("decision", 'decision must be "approve" or "dismiss"');
+  }
+  return {
+    planId: requireNonEmptyString(candidate.planId, "planId"),
+    decision: decision as "approve" | "dismiss",
+  };
+}
+
 export function parseAgentChatBody(body: unknown) {
   const candidate = requireObject(body);
   return {
     instruction: requireTrimmedInstruction(candidate.instruction),
-    sessionId: parseOptionalString(candidate.sessionId, "sessionId"),
   };
 }
 

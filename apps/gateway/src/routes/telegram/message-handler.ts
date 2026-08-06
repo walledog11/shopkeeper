@@ -2,6 +2,7 @@ import { db } from '@shopkeeper/db';
 import logger from '../../logger.js';
 import { buildOrgDigest } from '../../maintenance/digest.js';
 import { getContext, loadLivePendingPlans, updateContext } from '../../operator-context.js';
+import { resolveOperatorMemberKey } from '../../operator-identity.js';
 import { executeFreeFormInstruction } from './agent-execution.js';
 import {
   isDigestCommand,
@@ -55,11 +56,14 @@ export interface TelegramOperatorTurnParams {
 // when the webhook is acknowledged.
 export async function runTelegramOperatorTurn(params: TelegramOperatorTurnParams): Promise<void> {
   const { organizationId, clerkUserId, chatId, body, messageId, reply, turnId } = params;
-  const operatorKey = `telegram:${chatId}`;
+  const deliveryRef = `telegram:${chatId}`;
+  // State is keyed to the person, so this chat sees the same pending queue the
+  // merchant's other transports do.
+  const memberKey = await resolveOperatorMemberKey(organizationId, clerkUserId);
   const context = await loadLivePendingPlans(
     organizationId,
-    chatId,
-    await getContext(organizationId, chatId),
+    memberKey,
+    await getContext(organizationId, memberKey),
   );
 
   // Freeform turns persist their own thread messages, so they keep the raw reply.
@@ -69,12 +73,13 @@ export async function runTelegramOperatorTurn(params: TelegramOperatorTurnParams
     chatId,
     body,
     reply,
-    senderRef: operatorKey,
+    senderRef: memberKey,
+    deliveryRef,
     ...(turnId ? { turnId } : {}),
     presence: (progress, work) =>
       withOperatorPresence({ chatId, messageId, reply, progress }, work),
   };
-  const mirroredReply = buildMirroredReply(organizationId, operatorKey, body, reply);
+  const mirroredReply = buildMirroredReply(organizationId, memberKey, body, reply);
   const commandMessage: OperatorMessageContext = { ...baseMessage, reply: mirroredReply };
 
   const command = parseTelegramCommand(body);
@@ -95,7 +100,7 @@ export async function runTelegramOperatorTurn(params: TelegramOperatorTurnParams
       await mirroredReply('Nothing new in your support inbox right now.');
       return;
     }
-    await updateContext(organizationId, chatId, { pendingDigest: digest.pendingDigest });
+    await updateContext(organizationId, memberKey, { pendingDigest: digest.pendingDigest });
     await mirroredReply(digest.message);
     return;
   }

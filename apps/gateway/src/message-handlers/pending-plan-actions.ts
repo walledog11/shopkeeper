@@ -13,7 +13,7 @@ import { executeOperatorApprovedCachedPlan } from './execute-operator-agent-turn
 // run is not a dismissal.
 export async function runApprovedPendingPlan(params: {
   organizationId: string;
-  chatId: string;
+  memberKey: string;
   clerkUserId: string;
   threadId: string;
   instruction: string;
@@ -45,12 +45,12 @@ export async function runApprovedPendingPlan(params: {
         || error instanceof BadRequestError
         || (execution && execution.status !== 'pending'))
     ) {
-      await resolvePendingPlanContexts(params.organizationId, params.chatId, params.pendingPlan);
+      await resolvePendingPlanContexts(params.organizationId, params.memberKey, params.pendingPlan);
     }
     throw error;
   }
   if (!isPlanExecutionFailureMessage(summary)) {
-    await resolvePendingPlanContexts(params.organizationId, params.chatId, params.pendingPlan);
+    await resolvePendingPlanContexts(params.organizationId, params.memberKey, params.pendingPlan);
   }
   return summary || 'Done.';
 }
@@ -59,8 +59,8 @@ export async function runApprovedPendingPlan(params: {
 // path and the reject_pending_plan control tool.
 export async function clearPendingPlan(
   organizationId: string,
-  chatId: string,
+  memberKey: string,
   expected: PendingPlan,
 ): Promise<void> {
-  await resolvePendingPlanContexts(organizationId, chatId, expected);
+  await resolvePendingPlanContexts(organizationId, memberKey, expected);
 }

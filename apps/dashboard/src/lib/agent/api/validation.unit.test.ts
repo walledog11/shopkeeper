@@ -5,6 +5,7 @@ import {
   parseActionLogCursorQuery,
   parseAgentAskBody,
   parseAgentInternalBody,
+  parseAgentPlanDecisionBody,
   parseAgentRouteBody,
 } from "@/lib/agent/api/validation";
 
@@ -17,6 +18,28 @@ describe("agent api validation", () => {
       threadId: "thread_123",
       instruction: "What should I say?",
     });
+  });
+
+  it("parses pending-plan button decisions", () => {
+    expect(parseAgentPlanDecisionBody({
+      planId: "plan_123",
+      decision: "approve",
+    })).toEqual({
+      planId: "plan_123",
+      decision: "approve",
+    });
+  });
+
+  it("rejects pending-plan decisions it does not recognize", () => {
+    try {
+      parseAgentPlanDecisionBody({ planId: "plan_123", decision: "maybe" });
+      throw new Error("Expected parseAgentPlanDecisionBody to throw");
+    } catch (error) {
+      expect(error).toBeInstanceOf(BadRequestError);
+      expect((error as BadRequestError).details).toEqual([
+        { code: "invalid", field: "decision", message: 'decision must be "approve" or "dismiss"' },
+      ]);
+    }
   });
 
   it("parses approved tool calls for the agent route", () => {

@@ -2,61 +2,39 @@
  * Dashboard Agent Chat API
  *
  * Clerk-auth'd endpoint for the dashboard desk chat panel.
- * Bootstraps a dashboard_agent session on first message, then reuses it.
  *
- * Body:    { instruction: string, sessionId?: string }
- * Response: { sessionId: string, summary: string, actionsPerformed: ActionEntry[] }
+ * The panel is a view of the merchant's one operator relationship, not a chat
+ * session of its own: the turn runs on the gateway's operator path against the
+ * durable operator thread their phone talks to, so module tools, the pending-state
+ * ledger, and the control tools all apply, and an approval given here clears the
+ * plan showing on Telegram.
+ *
+ * POST  { instruction: string }
+ *       -> { summary, actionsPerformed, awaitingApproval }
+ * GET   -> { messages: Array<{ role, text }> }  the thread so far
  */
 import { NextResponse } from "next/server";
 
 export const maxDuration = 60;
-import { db } from "@shopkeeper/db";
 import { auth } from "@clerk/nextjs/server";
 import { UnauthorizedError } from "@/lib/api/errors";
 import { readRequiredJsonObject } from "@/lib/api/body";
 import { withOrgRoute } from "@/lib/api/route";
-import { executeAgentTurn } from "@/lib/agent/api/execution";
-import { resolveAgentSettings } from "@shopkeeper/agent/settings";
-import {
-  buildRevisedDashboardInstruction,
-  clearDashboardPendingApproval,
-  dismissDashboardPendingApproval,
-  executeDashboardPendingApproval,
-  getDashboardApprovalReplyKind,
-  planDashboardApproval,
-  readDashboardPendingApproval,
-  shouldPlanBeforeExecuting,
-} from "@/lib/agent/api/dashboard-approval";
-import { createDashboardAgentSession, resolveDashboardAgentSession } from "@/lib/agent/api/sessions";
+import { postGatewayOperatorTurn } from "@/lib/agent/api/gateway-operator-turn";
+import { getOperatorTranscript } from "@/lib/agent/api/operator-transcript";
 import { parseAgentChatBody } from "@/lib/agent/api/validation";
 import { recordAgentRouteFailure } from "@/lib/server/agent-failure-alerts";
 import { getRedis } from "@/lib/server/redis";
 import logger from "@/lib/server/logger";
-import { captureAgentPlanDecided } from "@/lib/server/product-analytics";
-import type { OrgSettings } from "@/types";
 
-function dashboardActionResponse(
-  sessionId: string,
-  planned: Awaited<ReturnType<typeof planDashboardApproval>>,
-): NextResponse | null {
-  if (!planned) return null;
-
-  if ("autoExecuted" in planned) {
-    return NextResponse.json({
-      sessionId,
-      summary: planned.result.summary,
-      actionsPerformed: planned.result.actionsPerformed,
-      autoExecuted: true,
-    });
-  }
-
-  return NextResponse.json({
-    sessionId,
-    summary: planned.approval.summary,
-    actionsPerformed: [],
-    awaitingApproval: true,
-  });
-}
+export const GET = withOrgRoute(
+  { context: "Agent chat GET", errorMessage: "Failed to load conversation" },
+  async ({ org }) => {
+    const { userId } = await auth();
+    if (!userId) throw new UnauthorizedError();
+    return NextResponse.json({ messages: await getOperatorTranscript(org.id, userId) });
+  },
+);
 
 export const POST = withOrgRoute(
   {
@@ -82,131 +60,28 @@ export const POST = withOrgRoute(
     const { userId } = await auth();
     if (!userId) throw new UnauthorizedError();
 
-    const { instruction, sessionId } = parseAgentChatBody(await readRequiredJsonObject(request));
-    const settings = resolveAgentSettings(org.settings as Partial<OrgSettings> | null);
+    const { instruction } = parseAgentChatBody(await readRequiredJsonObject(request));
 
-    let resolvedSessionId: string;
-
-    if (sessionId) {
-      resolvedSessionId = (await resolveDashboardAgentSession(org.id, userId, sessionId)).id;
-    } else {
-      const thread = await createDashboardAgentSession(org.id, userId);
-      resolvedSessionId = thread.id;
-    }
-
-    const thread = await db.thread.findUnique({
-      where: { id: resolvedSessionId },
-      select: { cachedPlan: true },
-    });
-    const pendingApproval = readDashboardPendingApproval(thread?.cachedPlan);
-
-    if (pendingApproval) {
-      const replyKind = getDashboardApprovalReplyKind(instruction);
-      if (replyKind === "approve") {
-        const result = await executeDashboardPendingApproval({
-          orgId: org.id,
-          threadId: resolvedSessionId,
-          approval: pendingApproval,
-          turnInstruction: instruction,
-          settings,
-          approverId: userId,
-        });
-        await clearDashboardPendingApproval(resolvedSessionId, pendingApproval.planId);
-        if (pendingApproval.planId) {
-          void captureAgentPlanDecided({
-            changed: false,
-            channel: 'dashboard_agent',
-            decision: 'approved',
-            organizationId: org.id,
-            planId: pendingApproval.planId,
-          });
-        }
-
-        return NextResponse.json({
-          sessionId: resolvedSessionId,
-          summary: result.summary,
-          actionsPerformed: result.actionsPerformed,
-        });
-      }
-
-      if (replyKind === "dismiss") {
-        const summary = await dismissDashboardPendingApproval(
-          resolvedSessionId,
-          instruction,
-          pendingApproval.planId,
-        );
-        if (pendingApproval.planId) {
-          void captureAgentPlanDecided({
-            changed: false,
-            channel: 'dashboard_agent',
-            decision: 'dismissed',
-            organizationId: org.id,
-            planId: pendingApproval.planId,
-          });
-        }
-        return NextResponse.json({
-          sessionId: resolvedSessionId,
-          summary,
-          actionsPerformed: [],
-        });
-      }
-
-      const revisedInstruction = buildRevisedDashboardInstruction(pendingApproval, instruction);
-      if (pendingApproval.planId) {
-        void captureAgentPlanDecided({
-          changed: false,
-          channel: 'dashboard_agent',
-          decision: 'regenerated',
-          organizationId: org.id,
-          planId: pendingApproval.planId,
-        });
-      }
-      const revised = await planDashboardApproval({
-        orgId: org.id,
-        threadId: resolvedSessionId,
-        instruction: revisedInstruction,
-        displayInstruction: instruction,
-        settings,
-      });
-
-      if (revised && "autoExecuted" in revised) {
-        await clearDashboardPendingApproval(resolvedSessionId, pendingApproval.planId);
-      }
-
-      const response = dashboardActionResponse(resolvedSessionId, revised);
-      if (response) return response;
-
-      await clearDashboardPendingApproval(resolvedSessionId, pendingApproval.planId);
-    }
-
-    if (shouldPlanBeforeExecuting(instruction)) {
-      const planned = await planDashboardApproval({
-        orgId: org.id,
-        threadId: resolvedSessionId,
-        instruction,
-        settings,
-      });
-
-      const response = dashboardActionResponse(resolvedSessionId, planned);
-      if (response) return response;
-    }
-
-    const result = await executeAgentTurn({
-      orgId: org.id,
-      threadId: resolvedSessionId,
+    const { status, payload } = await postGatewayOperatorTurn({
+      organizationId: org.id,
+      clerkUserId: userId,
       instruction,
-      failureRoute: "/api/agent/chat",
-      orgSettings: settings,
-      persistUserMessage: true,
-      persistAgentMessage: true,
-      persistAuditNote: true,
-      persistAuditNoteWhenNoActions: false,
     });
+
+    // A reached gateway's 4xx already carries a merchant-readable reason (spend
+    // cap, billing gate, validation) — pass it through. A 5xx is ours: throw so
+    // the route's onError records the failure alert.
+    if (status >= 500) {
+      throw new Error(`[agent/chat] gateway operator turn failed with ${status}`);
+    }
+    if (status !== 200) {
+      return NextResponse.json(payload ?? { error: "Failed to run agent" }, { status });
+    }
 
     return NextResponse.json({
-      sessionId: resolvedSessionId,
-      summary: result.summary,
-      actionsPerformed: result.actionsPerformed,
+      summary: payload?.summary ?? "",
+      actionsPerformed: payload?.actionsPerformed ?? [],
+      awaitingApproval: payload?.awaitingApproval === true,
     });
   },
 );

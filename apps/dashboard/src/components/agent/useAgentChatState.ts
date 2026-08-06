@@ -5,30 +5,32 @@ import type { KeyboardEvent } from "react"
 import { useUser } from "@clerk/nextjs"
 import { useFillerPhrase } from "@/hooks/useFillerPhrase"
 import {
-  fetchAgentSessionDetail,
+  fetchOperatorTranscript,
   sendAgentChatInstruction,
-  sessionToChatMessages,
-  SESSION_KEY,
+  transcriptToChatMessages,
   type ChatMessage,
 } from "./agent-chat-session"
 
 interface UseAgentChatStateProps {
-  restoreSession?: boolean
+  /** Load the operator thread's history on mount. Off for surfaces that open on a blank slate. */
+  restoreHistory?: boolean
 }
 
 interface SendInstructionOptions {
   displayText?: string
 }
 
-export function messageKey(message: ChatMessage): string {
+// Restored history shares one load timestamp, so position is what actually
+// distinguishes two identical lines in a transcript.
+export function messageKey(message: ChatMessage, index: number): string {
   if (message.role === "thinking") return "thinking"
   const time = message.timestamp.toISOString()
   return message.role === "user"
-    ? `user-${time}-${message.text}`
-    : `agent-${time}-${message.summary}`
+    ? `user-${index}-${time}-${message.text}`
+    : `agent-${index}-${time}-${message.summary}`
 }
 
-export function useAgentChatState({ restoreSession = true }: UseAgentChatStateProps) {
+export function useAgentChatState({ restoreHistory = true }: UseAgentChatStateProps) {
   const { user } = useUser()
   const firstName = user?.firstName ?? ""
   const initial = (user?.firstName?.[0] ?? user?.emailAddresses?.[0]?.emailAddress?.[0] ?? "U").toUpperCase()
@@ -47,71 +49,31 @@ export function useAgentChatState({ restoreSession = true }: UseAgentChatStatePr
   ], isRunning)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const sessionIdRef = useRef<string | null>(null)
-  const restoreSessionRef = useRef(restoreSession)
+  const restoreHistoryRef = useRef(restoreHistory)
 
-  const fetchSessionDetail = useCallback(async (id: string) => {
-    try {
-      const result = await fetchAgentSessionDetail(id)
-      if (result.status === "missing") {
-        localStorage.removeItem(SESSION_KEY)
-        sessionIdRef.current = null
-        return null
-      }
-      return result.status === "ok" ? result.session : null
-    } catch (err) {
-      console.error("[AgentChat] fetchSessionDetail failed:", err)
-      return null
-    }
-  }, [])
-
-  const handleNewSession = useCallback(() => {
-    sessionIdRef.current = null
+  // Clears the panel only. The conversation itself is the merchant's durable
+  // operator thread — shared with their phone — and is not something a button
+  // here should end.
+  const handleClearPanel = useCallback(() => {
     setMessages([])
-    localStorage.removeItem(SESSION_KEY)
     textareaRef.current?.focus()
   }, [])
 
-  const appendAgentLine = useCallback((summary: string) => {
-    setMessages(prev => [...prev, { role: "agent", summary, actions: [], timestamp: new Date() }])
-  }, [])
-
   useEffect(() => {
-    if (!restoreSessionRef.current) {
-      localStorage.removeItem(SESSION_KEY)
+    if (!restoreHistoryRef.current) {
       textareaRef.current?.focus()
       return
     }
 
-    const params = new URLSearchParams(window.location.search)
-    const deepLinked = params.get("session")
-    const stored = localStorage.getItem(SESSION_KEY)
-    const target = deepLinked ?? stored
-    if (!target) return
-
-    void fetchSessionDetail(target).then((session) => {
-      if (!session) {
-        if (deepLinked && stored && stored !== deepLinked) {
-          void fetchSessionDetail(stored).then((fallback) => {
-            if (!fallback) return
-            sessionIdRef.current = fallback.id
-            setMessages(sessionToChatMessages(fallback))
-          })
-        }
-        return
-      }
-      sessionIdRef.current = session.id
-      localStorage.setItem(SESSION_KEY, session.id)
-      setMessages(sessionToChatMessages(session))
-    })
-
-    if (deepLinked) {
-      params.delete("session")
-      const search = params.toString()
-      const newUrl = `${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`
-      window.history.replaceState(null, "", newUrl)
-    }
-  }, [fetchSessionDetail])
+    void fetchOperatorTranscript()
+      .then((result) => {
+        if (result.status !== "ok" || result.transcript.messages.length === 0) return
+        setMessages(transcriptToChatMessages(result.transcript))
+      })
+      .catch((err) => {
+        console.error("[AgentChat] fetchOperatorTranscript failed:", err)
+      })
+  }, [])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -123,7 +85,6 @@ export function useAgentChatState({ restoreSession = true }: UseAgentChatStatePr
     if (!trimmed || !displayText || isRunning) return
 
     const sentAt = new Date()
-    const sessionId = sessionIdRef.current
     setIsRunning(true)
     setMessages(prev => [
       ...prev,
@@ -132,14 +93,7 @@ export function useAgentChatState({ restoreSession = true }: UseAgentChatStatePr
     ])
 
     try {
-      const result = await sendAgentChatInstruction({
-        instruction: trimmed,
-        onStaleSession: () => {
-          sessionIdRef.current = null
-        },
-        sessionId,
-        storage: localStorage,
-      })
+      const result = await sendAgentChatInstruction({ instruction: trimmed })
 
       if (!result.ok) {
         setMessages(prev => [
@@ -148,9 +102,6 @@ export function useAgentChatState({ restoreSession = true }: UseAgentChatStatePr
         ])
         return
       }
-
-      sessionIdRef.current = result.sessionId
-      localStorage.setItem(SESSION_KEY, result.sessionId)
 
       setMessages(prev => [
         ...prev.slice(0, -1),
@@ -192,12 +143,11 @@ export function useAgentChatState({ restoreSession = true }: UseAgentChatStatePr
   }, [handleSend])
 
   return {
-    appendAgentLine,
     fillerPhrase,
     firstName,
     greeting,
     handleKeyDown,
-    handleNewSession,
+    handleClearPanel,
     handleSend,
     handleSendText,
     initial,

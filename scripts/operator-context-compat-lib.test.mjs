@@ -17,18 +17,18 @@ test('detects legacy inline tool-call shape', () => {
   );
 });
 
-test('flags dual-read fallback rows and identity-less queued plans', () => {
+test('flags identity-less queued plans and legacy tool-call shapes', () => {
   const row = {
-    pendingPlan: {
-      threadId: 'thread-a',
-      instruction: 'reply',
-      rawToolCalls: [{ id: 'tc1', name: 'send_reply', text: 'hi' }],
-    },
-    pendingPlans: null,
+    pendingPlans: [
+      {
+        threadId: 'thread-a',
+        instruction: 'reply',
+        rawToolCalls: [{ id: 'tc1', name: 'send_reply', text: 'hi' }],
+      },
+    ],
   };
 
   const analysis = analyzeOperatorContextRow(row);
-  assert.equal(analysis.dualReadFallback, true);
   assert.equal(analysis.legacyToolCalls, 1);
   assert.equal(analysis.identityLessQueuedPlans, 1);
 });
@@ -36,7 +36,6 @@ test('flags dual-read fallback rows and identity-less queued plans', () => {
 test('summarizes a clean database as safe to retire', () => {
   const summary = summarizeOperatorContextCompatibility([
     {
-      pendingPlan: null,
       pendingPlans: [
         {
           threadId: 'thread-a',
@@ -48,6 +47,5 @@ test('summarizes a clean database as safe to retire', () => {
     },
   ]);
 
-  assert.equal(summary.safeToRetireLegacyPendingPlanColumn, true);
   assert.equal(summary.safeToRetireLegacyToolCallShape, true);
 });

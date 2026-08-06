@@ -34,6 +34,8 @@ beforeEach(() => {
 });
 
 describe('POST /webhooks/telegram — pending plan commands', () => {
+  // Operator state hangs off the person, so binding a chat also tells us which
+  // queue that chat's messages will read.
   async function bindMember(chatId: string) {
     const member = await db.orgMember.create({
       data: { organizationId: org.id, clerkUserId: `usr_${chatId}` },
@@ -41,14 +43,14 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
     await db.orgMemberTelegramChat.create({
       data: { orgMemberId: member.id, chatId },
     });
-    return member;
+    return `member:${member.id}`;
   }
 
   it('"yes" runs the agent with rawToolCalls as approvedToolCalls', async () => {
     const chatId = '5555001';
-    await bindMember(chatId);
+    const memberKey = await bindMember(chatId);
     const threadId = '00000000-0000-4000-8000-000000000001';
-    await updateContext(org.id, chatId, {
+    await updateContext(org.id, memberKey, {
       pendingPlan: {
         threadId,
         instruction: 'refund #1',
@@ -81,15 +83,15 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
     });
     expect(lastReplyText()).toBe('Refunded.');
 
-    const ctx = await getContext(org.id, chatId);
+    const ctx = await getContext(org.id, memberKey);
     expect(ctx.pendingPlan).toBeNull();
   });
 
   it('"skip 1" drops the first actionable tool call', async () => {
     const chatId = '5555002';
-    await bindMember(chatId);
+    const memberKey = await bindMember(chatId);
     const threadId = '00000000-0000-4000-8000-000000000002';
-    await updateContext(org.id, chatId, {
+    await updateContext(org.id, memberKey, {
       pendingPlan: {
         threadId,
         instruction: 'do things',
@@ -121,9 +123,9 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
 
   it('"skip 1" re-drafts terminal send when a send_reply is present', async () => {
     const chatId = '5555004';
-    await bindMember(chatId);
+    const memberKey = await bindMember(chatId);
     const threadId = '00000000-0000-4000-8000-000000000003';
-    await updateContext(org.id, chatId, {
+    await updateContext(org.id, memberKey, {
       pendingPlan: {
         threadId,
         instruction: 'update address',
@@ -160,8 +162,8 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
   // Older parked plans have no actionLabel — the fast path must still answer.
   it('"no" clears pendingPlan without calling the agent', async () => {
     const chatId = '5555003';
-    await bindMember(chatId);
-    await updateContext(org.id, chatId, {
+    const memberKey = await bindMember(chatId);
+    await updateContext(org.id, memberKey, {
       pendingPlan: { threadId: 't', instruction: 'i', rawToolCalls: [] },
     });
     await request(app)
@@ -173,14 +175,14 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
     await waitForReplies(1);
     expect(lastReplyText()).toBe('Plan dismissed.');
     expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
-    const ctx = await getContext(org.id, chatId);
+    const ctx = await getContext(org.id, memberKey);
     expect(ctx.pendingPlan).toBeNull();
   });
 
   it('"no" names the dropped action when the plan parked a label', async () => {
     const chatId = '5555005';
-    await bindMember(chatId);
-    await updateContext(org.id, chatId, {
+    const memberKey = await bindMember(chatId);
+    await updateContext(org.id, memberKey, {
       pendingPlan: {
         threadId: 't',
         instruction: 'refund #1',
@@ -198,7 +200,7 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
     await waitForReplies(1);
     expect(lastReplyText()).toBe("Dismissed — I won't reply to Sarah.");
     expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
-    const ctx = await getContext(org.id, chatId);
+    const ctx = await getContext(org.id, memberKey);
     expect(ctx.pendingPlan).toBeNull();
   });
 });
@@ -225,7 +227,7 @@ describe('POST /webhooks/telegram — digest commands', () => {
         aiSummary: opts.aiSummary ?? null,
       },
     });
-    await updateContext(org.id, chatId, {
+    await updateContext(org.id, `member:${member.id}`, {
       pendingDigest: { threadIds: [thread.id], sentAt: new Date().toISOString() },
     });
     return { chatId, threadId: thread.id };

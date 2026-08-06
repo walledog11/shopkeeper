@@ -22,7 +22,7 @@ export interface ExecuteOperatorAgentTurnParams {
   senderPhone?: string;
   clerkUserId?: string;
   // Free-form turns resolve the merchant's single durable operator thread from
-  // this binding key. Reviewed-plan execution must use
+  // this member key. Reviewed-plan execution must use
   // executeOperatorApprovedCachedPlan so it cannot bypass the durable claim.
   operatorKey: string;
   operatorLedger?: string;

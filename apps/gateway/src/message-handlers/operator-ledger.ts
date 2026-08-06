@@ -6,6 +6,17 @@ import type { OperatorContext, ToolCall } from '../operator-context.js';
 const NOTHING_PENDING = "Nothing is awaiting the merchant's decision.";
 const DRAFT_EXCERPT_LIMIT = 600;
 
+/** Where the merchant is reading this turn. Same ledger, different affordance. */
+export type OperatorSurface = 'desk' | 'messaging';
+
+// A pending plan is resolved by a button on the dashboard and by a reply on a
+// phone. Telling a merchant who is looking at an Approve button to "reply yes" is
+// wrong copy, so the ledger names the affordance they actually have.
+const PLAN_AFFORDANCE: Record<OperatorSurface, string> = {
+  desk: "How the merchant acts on this: they are on the dashboard, where every plan above carries its own Approve and Dismiss button. Do not tell them to reply yes or text back — say you're waiting on their go-ahead.",
+  messaging: 'How the merchant acts on this: they are texting, so they answer here — yes to approve, no to dismiss, or a change to re-draft.',
+};
+
 // The customer-facing body a send tool would deliver. Used both to surface the
 // draft the merchant is approving (ledger) and to summarize a re-drafted plan.
 export function extractSendDraftBody(toolCall: { name: string; input?: unknown }): string | null {
@@ -49,6 +60,7 @@ export function firstDraftExcerpt(rawToolCalls: readonly { name: string; input?:
 export async function renderOperatorLedger(
   organizationId: string,
   context: OperatorContext,
+  surface: OperatorSurface = 'messaging',
 ): Promise<string> {
   const { pendingPlans, pendingQuestion, pendingDigest } = context;
 
@@ -72,6 +84,8 @@ export async function renderOperatorLedger(
         `- What it's about: ${plan.instruction}`,
         ...(steps.length > 0 ? ['- Actions it will take:', ...steps] : []),
         ...(draft ? ['- Draft message the merchant is approving:', `  "${draft}"`] : []),
+        '',
+        PLAN_AFFORDANCE[surface],
       ].join('\n');
     }
 
@@ -89,6 +103,7 @@ export async function renderOperatorLedger(
         ...(draft ? ['   Draft message the merchant is approving:', `     "${draft}"`] : []),
       );
     });
+    lines.push('', PLAN_AFFORDANCE[surface]);
     return lines.join('\n');
   }
 

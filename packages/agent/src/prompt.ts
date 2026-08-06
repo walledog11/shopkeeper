@@ -227,15 +227,9 @@ const OPERATOR_INSTRUCTIONS = `- Take action only when you are confident. When t
 - Lead with the answer, then the detail. Answer a yes/no question with "Yes" or "No" first.
 - Length follows the answer, not a fixed rule. One or two sentences when it is simple. When you are relaying several facts about the same thing (order number, date, total, status, item, address), give them a couple of short sentences on separate lines instead of one long sentence full of commas and parentheses. Plain line breaks are good; they are not lists.`;
 
-const DASHBOARD_OPERATOR_INSTRUCTIONS = `- Take action only when you are confident. When you are not - the operator's request is ambiguous, the customer is unresolved, a tool failed, or the request is out of scope - call escalate_to_human instead of guessing.
-- Sending, emailing, notifying, or contacting a customer is done by calling send_email. Don't claim you sent something you didn't.
-- Do NOT call send_reply or add_internal_note.
-- After all tools finish, you MUST respond with a text summary of what you found or did. Include the actual data (e.g. address, order total, customer name) - never just say "Done".
-- Be conversational and friendly, like a helpful teammate. Avoid technical jargon. No bullet lists, no markdown. Keep it to 1-2 sentences.`;
-
 // Appended only when a pending-state ledger and the operator control tools are in
-// play (gateway operator turns). The "## Pending state" section tells you what, if
-// anything, is awaiting the merchant's decision; these tools effect the decision.
+// play. The "## Pending state" section tells you what, if anything, is awaiting
+// the merchant's decision; these tools effect the decision.
 const OPERATOR_CONTROL_TOOL_INSTRUCTIONS = `- When a plan is awaiting the merchant's decision (see "## Pending state") and their message is about that plan:
   - If they clearly approve it (yes / send it / go ahead / looks good), call approve_pending_plan. It runs exactly the drafted actions - you cannot change what it sends.
   - If they clearly decline it (no / don't / cancel / drop it), call reject_pending_plan.
@@ -248,7 +242,7 @@ const OPERATOR_CONTROL_TOOL_INSTRUCTIONS = `- When a plan is awaiting the mercha
   - If they want to send a reply on a flagged ticket, call send_ticket_reply with the ticket id and their exact reply text. Multiple digest actions in one message are allowed.
   - To open or read a flagged ticket, call get_ticket with its id — do not invent index numbers.
 - A message about something else entirely (an order lookup, a brand-new instruction) is handled normally with your other tools and MUST NOT touch the pending plan, question, or digest unless the merchant is clearly referring to it.
-- After a control tool runs, state plainly what happened, quoting the concrete action (e.g. "Sent - Sarah gets the $12 refund." or "Re-drafted it warmer with 10% off - reply yes when you're happy.").`;
+- After a control tool runs, state plainly what happened, quoting the concrete action (e.g. "Sent - Sarah gets the $12 refund." or "Re-drafted it warmer with 10% off - approve it when you're happy."). How the merchant approves depends on where they are; the pending-state section says which.`;
 
 // Appended alongside the control tools: the gateway operator turn also carries
 // the read-only inbox tools, which are the only way to see tickets other than
@@ -283,9 +277,6 @@ export function buildSystemPromptParts(ctx: AgentContext, settings?: Partial<Org
       : "No Shopify customer ID is pre-loaded for this thread. If you need to look up or act on a customer, call search_shopify_customers first to resolve their ID.";
 
   if (isOperatorMode) {
-    const isGatewayOperator = ctx.thread.channelType === "sms_agent";
-    const channel = isGatewayOperator ? "text message (Telegram/iMessage)" : "the dashboard";
-
     const linkedCustomerSection = ctx.thread.shopifyCustomerId
       ? `\n\n## Linked Shopify customer\n${ctx.linkedShopifyCustomerName ?? "(name unavailable)"} (ID: ${ctx.thread.shopifyCustomerId}). Use this ID directly for Shopify tools unless the operator names a different customer.`
       : "";
@@ -294,28 +285,23 @@ export function buildSystemPromptParts(ctx: AgentContext, settings?: Partial<Org
       ? `\n\n## Customer's recent orders (use these IDs directly — no need to re-fetch unless the operator asks)\n${recentOrdersJson(ctx)}`
       : "";
 
-    // The ledger is present only on gateway operator turns, which also carry the
-    // control tools. So the "## Pending state" section and the control-tool
-    // instructions travel together — the dashboard Concierge has neither.
+    // The "## Pending state" section and the control-tool instructions travel
+    // together: both are present exactly when the turn carries a ledger. Since
+    // Phase 2 every operator turn does, whichever transport the merchant used.
     const pendingStateSection = ctx.operatorLedger
       ? `\n\n## Pending state\n${promptText(ctx.operatorLedger, CONTEXT_BUDGETS.operatorLedgerChars)}`
       : "";
-    const gatewayInstructions = ctx.operatorLedger
+    const instructions = ctx.operatorLedger
       ? `${OPERATOR_INSTRUCTIONS}\n${OPERATOR_CONTROL_TOOL_INSTRUCTIONS}\n${OPERATOR_INBOX_TOOL_INSTRUCTIONS}`
       : OPERATOR_INSTRUCTIONS;
-    const instructions = isGatewayOperator ? gatewayInstructions : DASHBOARD_OPERATOR_INSTRUCTIONS;
-    const untrustedGuidance = isGatewayOperator
-      ? OPERATOR_UNTRUSTED_CONTENT_GUIDANCE
-      : UNTRUSTED_CONTENT_GUIDANCE;
-    const guardrailVariant = isGatewayOperator ? "operator" : "support";
 
     return {
       stable: "",
       volatile: composeSystemPrompt({
-        identity: `You are ${s.agentName}, an AI action assistant for ${ctx.orgName}. You are receiving instructions from a team member via ${channel}.`,
+        identity: `You are ${s.agentName}, an AI action assistant for ${ctx.orgName}. You are receiving instructions from a team member. They reach you from wherever they are — Telegram, iMessage, or the dashboard — and it is the same conversation either way.`,
         context: `## Integrations\n${shopifyNote}\n${shopifyCustomerNote}\n${OPERATOR_INTEGRATION_GUIDANCE}${linkedCustomerSection}${ordersSection}${buildStoreProfileSection(ctx.orgName, s.aiContext)}${pendingStateSection}`,
         instructions,
-        trailer: `${untrustedGuidance}${buildGuardrailSection(s, guardrailVariant)}${buildLanguageSection(s, "operator")}`,
+        trailer: `${OPERATOR_UNTRUSTED_CONTENT_GUIDANCE}${buildGuardrailSection(s, "operator")}${buildLanguageSection(s, "operator")}`,
       }),
     };
   }
