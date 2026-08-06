@@ -30,10 +30,10 @@ export interface ReviewItemChrome {
 }
 
 export const TONE_STYLES: Record<Tone, { container: string; label: string }> = {
-  reply: { container: "border-emerald-800/40 bg-emerald-900/[0.12]", label: "text-emerald-300" },
-  escalate: { container: "border-amber-800/40 bg-amber-900/[0.12]", label: "text-amber-300" },
-  money: { container: "border-amber-800/40 bg-amber-900/[0.12]", label: "text-amber-300" },
-  error: { container: "border-red-800/40 bg-red-900/[0.12]", label: "text-red-300" },
+  reply: { container: "border-emerald-200/40 bg-emerald-100/[0.12]", label: "text-emerald-700" },
+  escalate: { container: "border-amber-200/40 bg-amber-100/[0.12]", label: "text-amber-700" },
+  money: { container: "border-amber-200/40 bg-amber-100/[0.12]", label: "text-amber-700" },
+  error: { container: "border-red-200/40 bg-red-100/[0.12]", label: "text-red-700" },
   note: { container: "border-foreground/[0.08] bg-foreground/[0.03]", label: "text-foreground/45" },
 }
 

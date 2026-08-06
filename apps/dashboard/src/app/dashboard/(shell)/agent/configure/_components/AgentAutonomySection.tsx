@@ -50,10 +50,10 @@ export function AgentAutonomySection({ controller }: { controller: AgentTabContr
                 } ${disabled ? "opacity-45 cursor-not-allowed hover:border-foreground/[0.10] hover:bg-foreground/[0.025]" : ""}`}
               >
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`size-2.5 rounded-full border ${selected ? "border-white bg-white" : "border-foreground/25"}`} />
+                  <span className={`size-2.5 rounded-full border ${selected ? "border-foreground bg-foreground" : "border-foreground/25"}`} />
                   <span className="text-sm font-semibold text-strong">{option.label}</span>
                   {option.recommended && (
-                    <span className="rounded-sm border border-emerald-300/25 bg-emerald-300/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.06em] text-emerald-300">
+                    <span className="rounded-sm border border-emerald-700/25 bg-emerald-700/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.06em] text-emerald-700">
                       Recommended
                     </span>
                   )}

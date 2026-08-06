@@ -61,9 +61,9 @@ const COLUMN_ICON: Record<OrderColumnId, ComponentType<{ className?: string }>> 
 }
 
 const ORDER_TONE: Record<OrderColumnId, { icon: string; border: string }> = {
-  needs_fulfillment: { icon: "border-amber-500/20 bg-amber-500/10 text-amber-300", border: "hover:border-amber-500/25" },
-  unpaid: { icon: "border-rose-500/20 bg-rose-500/10 text-rose-300", border: "hover:border-rose-500/25" },
-  fulfilled: { icon: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300", border: "hover:border-emerald-500/25" },
+  needs_fulfillment: { icon: "border-amber-500/20 bg-amber-500/10 text-amber-700", border: "hover:border-amber-500/25" },
+  unpaid: { icon: "border-rose-500/20 bg-rose-500/10 text-rose-700", border: "hover:border-rose-500/25" },
+  fulfilled: { icon: "border-emerald-500/20 bg-emerald-500/10 text-emerald-700", border: "hover:border-emerald-500/25" },
   refunded: { icon: "border-foreground/[0.10] bg-foreground/[0.05] text-muted-foreground", border: "hover:border-foreground/[0.16]" },
 }
 
@@ -373,7 +373,7 @@ function OrderStackColumn({
   const errorContent = useMemo(() => (
     <BoardColumnError
       className="rounded-2xl"
-      textClassName="text-red-300"
+      textClassName="text-red-700"
       onRetry={state.onRetry}
     />
   ), [state.onRetry])

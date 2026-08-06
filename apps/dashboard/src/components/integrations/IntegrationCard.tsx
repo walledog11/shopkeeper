@@ -106,7 +106,7 @@ export default function IntegrationCard({ config, connected, onConnect, onUpdate
         <IntegrationCardHeader config={config} />
         <p className={CARD_DESCRIPTION}>{config.description}</p>
         {isConnected && connected[0].isDefaultEmail && (
-          <p className="text-xs font-medium text-emerald-400/90">Default for new emails</p>
+          <p className="text-xs font-medium text-emerald-600/90">Default for new emails</p>
         )}
 
         <div className={CARD_ACTIONS}>

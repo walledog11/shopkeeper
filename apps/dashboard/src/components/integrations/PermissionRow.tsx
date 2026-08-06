@@ -41,7 +41,7 @@ export function PermissionActionLink({
         type="button"
         onClick={onClick}
         disabled={disabled}
-        className="text-sm font-semibold text-foreground/90 hover:text-white transition-colors disabled:opacity-50"
+        className="text-sm font-semibold text-foreground/90 hover:text-foreground transition-colors disabled:opacity-50"
       >
         {children}
       </button>

@@ -9,7 +9,7 @@ import { PermissionRow } from "./PermissionRow"
 
 function StatusBadge({ enabled }: { enabled: boolean }) {
   return enabled ? (
-    <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-300">
+    <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
       <Check className="size-3.5" />
       On
     </span>
@@ -67,7 +67,7 @@ export function ShopifyPermissionRows() {
       <div className="border-t border-foreground/[0.06] px-4 py-3">
         <Link
           href={agentConfigureHref("autonomy")}
-          className="text-xs font-semibold text-amber-300 transition-colors hover:text-amber-200"
+          className="text-xs font-semibold text-amber-700 transition-colors hover:text-amber-800"
         >
           Change in Configure →
         </Link>

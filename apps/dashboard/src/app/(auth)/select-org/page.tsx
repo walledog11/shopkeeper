@@ -83,7 +83,7 @@ export default function SelectOrgPage() {
                 <Button
                   onClick={() => push("/onboarding")}
                   size="lg"
-                  className="gap-2 bg-green-400 text-green-950 hover:bg-green-300"
+                  className="gap-2 bg-green-600 text-green-950 hover:bg-green-700"
                 >
                   <Sparkles className="size-4" />
                   Create your first workspace
@@ -116,11 +116,11 @@ export default function SelectOrgPage() {
                         <OrgAvatar
                           name={org.name}
                           imageUrl={org.imageUrl}
-                          className="size-9 shrink-0 rounded-md border border-border bg-muted text-xs font-semibold text-white/70"
+                          className="size-9 shrink-0 rounded-md border border-border bg-muted text-xs font-semibold text-foreground/70"
                         />
 
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-white">{org.name}</p>
+                          <p className="truncate text-sm font-semibold text-foreground">{org.name}</p>
                           <p className="mt-0.5 text-xs uppercase tracking-wider text-muted-foreground">
                             {formatRole(membership.role)}
                           </p>
@@ -128,7 +128,7 @@ export default function SelectOrgPage() {
 
                         <div className="flex items-center text-muted-foreground transition-colors group-hover:text-foreground">
                           {isPending ? (
-                            <Loader2 className="size-4 animate-spin text-green-400" />
+                            <Loader2 className="size-4 animate-spin text-green-600" />
                           ) : (
                             <ArrowRight className="size-4" />
                           )}
@@ -141,7 +141,7 @@ export default function SelectOrgPage() {
             )}
 
             {error ? (
-              <div className="border-t border-border px-6 py-4 text-sm text-red-300">
+              <div className="border-t border-border px-6 py-4 text-sm text-red-700">
                 {error}
               </div>
             ) : null}

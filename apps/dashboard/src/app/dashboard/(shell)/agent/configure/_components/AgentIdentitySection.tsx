@@ -75,10 +75,10 @@ function VoiceProposalCard({
   onResolve: (action: "approve" | "dismiss") => void
 }) {
   return (
-    <div className="rounded-md border border-violet-300/30 bg-violet-300/[0.06] p-3.5 space-y-3">
+    <div className="rounded-md border border-violet-700/30 bg-violet-700/[0.06] p-3.5 space-y-3">
       <div className="flex items-start gap-2.5">
-        <div className="mt-0.5 size-6 shrink-0 rounded-md bg-violet-300/15 flex items-center justify-center">
-          <Sparkles className="size-3.5 text-violet-300" />
+        <div className="mt-0.5 size-6 shrink-0 rounded-md bg-violet-700/15 flex items-center justify-center">
+          <Sparkles className="size-3.5 text-violet-700" />
         </div>
         <div className="min-w-0">
           <p className="text-sm font-semibold text-strong">Suggested brand voice update</p>
@@ -100,7 +100,7 @@ function VoiceProposalCard({
           type="button"
           onClick={() => onResolve("approve")}
           disabled={busy !== null}
-          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-violet-400 hover:bg-violet-300 disabled:opacity-50 text-black text-xs font-semibold transition-colors"
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-background text-xs font-semibold transition-colors"
         >
           {busy === "approve" ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
           Use this voice

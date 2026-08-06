@@ -387,7 +387,7 @@ function IntegrationsPageContent({
 
         {/* Attention banner — only when something needs fixing */}
         {alertCount > 0 && (
-          <div className="flex items-center gap-3 rounded-lg px-4 py-3 text-sm border border-amber-400/[0.20] bg-amber-400/[0.04] text-amber-400">
+          <div className="flex items-center gap-3 rounded-lg px-4 py-3 text-sm border border-amber-600/[0.20] bg-amber-600/[0.04] text-amber-600">
             <AlertTriangle className="size-4 shrink-0" />
             <span>
               {alertCount} connection{alertCount > 1 ? 's' : ''} need{alertCount > 1 ? '' : 's'} attention — use the Fix button below.
@@ -427,8 +427,8 @@ function IntegrationsPageContent({
           className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-secondary border border-border text-foreground text-sm font-medium px-4 py-2.5 rounded-md shadow-lg cursor-pointer hover:bg-accent transition-colors"
         >
           {toast.tone === 'error'
-            ? <AlertCircle className="size-4 text-red-400 shrink-0" />
-            : <CheckCircle2 className="size-4 text-green-400 shrink-0" />
+            ? <AlertCircle className="size-4 text-red-600 shrink-0" />
+            : <CheckCircle2 className="size-4 text-green-600 shrink-0" />
           }
           {toast.message}
         </button>

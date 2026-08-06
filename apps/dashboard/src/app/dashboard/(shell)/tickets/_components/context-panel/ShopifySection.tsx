@@ -307,7 +307,7 @@ function ShopifySectionContent({ thread, shopify, onLinkShopifyCustomer }: Shopi
           onEditingChange={(editing) => dispatch({ type: "editing", editing })}
           onSaved={handleCustomerSaved}
         />
-        {linkError && <p className="mt-2 text-xs text-red-400">{linkError}</p>}
+        {linkError && <p className="mt-2 text-xs text-red-600">{linkError}</p>}
       </>
     )
   } else {

@@ -47,7 +47,7 @@ const paperElements: ClerkElementOverrides = {
   headerTitle: "text-[#2b2118] font-semibold tracking-tight",
   headerSubtitle: "text-stone-500",
   socialButtonsBlockButton:
-    "h-11 rounded-full border border-stone-900/12 bg-white text-[#2b2118] shadow-none hover:bg-stone-50",
+    "h-11 rounded-full border border-stone-900/12 bg-foreground text-[#2b2118] shadow-none hover:bg-stone-50",
   socialButtonsBlockButtonText: "font-medium",
   dividerLine: "bg-stone-900/10",
   dividerText: "text-xs font-medium text-stone-400",
@@ -67,7 +67,7 @@ const paperElements: ClerkElementOverrides = {
     "rounded-xl border border-stone-900/12 bg-[#f6f2eb] text-[#2b2118] shadow-none focus:border-[#2b2118]/25 focus:ring-2 focus:ring-[#2b2118]/8",
   formFieldInputShowPasswordButton: "text-stone-500 hover:text-[#2b2118]",
   alternativeMethodsBlockButton:
-    "h-11 rounded-full border border-stone-900/12 bg-white text-[#2b2118] shadow-none hover:bg-stone-50",
+    "h-11 rounded-full border border-stone-900/12 bg-foreground text-[#2b2118] shadow-none hover:bg-stone-50",
   ...hiddenFooterElements,
 };
 
@@ -78,26 +78,26 @@ const inkElements: ClerkElementOverrides = {
   headerTitle: "text-[#f6f2eb] font-semibold tracking-tight",
   headerSubtitle: "text-[#f6f2eb]/55",
   socialButtonsBlockButton:
-    "h-11 rounded-full border border-white/14 bg-white/[0.05] text-[#f6f2eb] shadow-none hover:bg-white/[0.09]",
+    "h-11 rounded-full border border-foreground/14 bg-foreground/[0.05] text-[#f6f2eb] shadow-none hover:bg-foreground/[0.09]",
   socialButtonsBlockButtonText: "font-medium text-[#f6f2eb]",
-  dividerLine: "bg-white/10",
+  dividerLine: "bg-foreground/10",
   dividerText: "text-xs font-medium text-[#f6f2eb]/45",
   formFieldLabel: "text-sm font-medium text-[#f6f2eb]/75",
   formFieldInput:
-    "h-11 rounded-xl border border-white/12 bg-white/[0.06] text-[#f6f2eb] shadow-none placeholder:text-[#f6f2eb]/30 focus:border-white/25 focus:ring-2 focus:ring-white/10",
+    "h-11 rounded-xl border border-foreground/12 bg-foreground/[0.06] text-[#f6f2eb] shadow-none placeholder:text-[#f6f2eb]/30 focus:border-foreground/25 focus:ring-2 focus:ring-foreground/10",
   formFieldHintText: "text-xs text-[#f6f2eb]/45",
   formButtonPrimary:
-    "!bg-[#d6c4aa] !text-[#1a120c] h-11 rounded-full border border-white/20 font-semibold shadow-[inset_0_1px_0_rgba(255,245,235,0.5)] hover:!bg-[#e4d2b6]",
+    "!bg-[#d6c4aa] !text-[#1a120c] h-11 rounded-full border border-foreground/20 font-semibold shadow-[inset_0_1px_0_rgba(255,245,235,0.5)] hover:!bg-[#e4d2b6]",
   formButtonPrimaryIcon: "!text-[#1a120c]",
   identityPreviewText: "text-[#f6f2eb]",
   identityPreviewEditButtonIcon: "text-[#cdbfa3]",
   alertText: "text-sm text-[#f6f2eb]",
   formResendCodeLink: "font-medium text-[#cdbfa3] hover:text-[#f6f2eb]",
   otpCodeFieldInput:
-    "rounded-xl border border-white/12 bg-white/[0.06] text-[#f6f2eb] shadow-none focus:border-white/25 focus:ring-2 focus:ring-white/10",
+    "rounded-xl border border-foreground/12 bg-foreground/[0.06] text-[#f6f2eb] shadow-none focus:border-foreground/25 focus:ring-2 focus:ring-foreground/10",
   formFieldInputShowPasswordButton: "text-[#f6f2eb]/45 hover:text-[#f6f2eb]",
   alternativeMethodsBlockButton:
-    "h-11 rounded-full border border-white/14 bg-white/[0.05] text-[#f6f2eb] shadow-none hover:bg-white/[0.09]",
+    "h-11 rounded-full border border-foreground/14 bg-foreground/[0.05] text-[#f6f2eb] shadow-none hover:bg-foreground/[0.09]",
   ...hiddenFooterElements,
 };
 

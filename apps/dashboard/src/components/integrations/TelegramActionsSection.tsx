@@ -50,7 +50,7 @@ export function TelegramActionsSection({
                   setConfirmingDisconnectAll(false)
                   onDisconnectAll()
                 }}
-                className="text-xs font-semibold text-red-400 hover:text-red-300 transition-colors whitespace-nowrap shrink-0"
+                className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors whitespace-nowrap shrink-0"
               >
                 Confirm
               </button>

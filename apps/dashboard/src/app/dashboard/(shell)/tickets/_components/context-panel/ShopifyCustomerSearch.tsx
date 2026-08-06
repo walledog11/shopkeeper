@@ -66,8 +66,8 @@ export function ShopifyCustomerSearch({
         </span>
       </div>
 
-      {linkError && <p className="text-xs text-red-400">{linkError}</p>}
-      {searchError && <p className="text-xs text-red-400">Unable to search customers.</p>}
+      {linkError && <p className="text-xs text-red-600">{linkError}</p>}
+      {searchError && <p className="text-xs text-red-600">Unable to search customers.</p>}
 
       {customers?.length === 0 && (
         <p className="text-xs text-muted-foreground">No customers found.</p>

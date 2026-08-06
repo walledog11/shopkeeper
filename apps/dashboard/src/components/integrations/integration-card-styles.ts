@@ -17,7 +17,7 @@ export const CARD_ACTIONS = "mt-auto flex w-full shrink-0 gap-2 pt-4"
 export const CARD_BUTTON = cn("h-10 flex-1 rounded-[10px] text-[17px] font-medium transition-colors", CARD_BUTTON_FOCUS)
 export const CARD_BUTTON_PRIMARY = cn(CARD_BUTTON, "bg-primary text-primary-foreground hover:bg-primary/90")
 export const CARD_BUTTON_SECONDARY = cn(CARD_BUTTON, "bg-secondary hover:bg-accent border border-border text-secondary-foreground")
-export const CARD_BUTTON_AMBER = cn(CARD_BUTTON, "bg-amber-400/10 hover:bg-amber-400/15 border border-amber-400/25 text-amber-300")
+export const CARD_BUTTON_AMBER = cn(CARD_BUTTON, "bg-amber-600/10 hover:bg-amber-600/15 border border-amber-600/25 text-amber-700")
 export const CARD_BUTTON_DISABLED = cn(CARD_BUTTON, "bg-muted text-muted-foreground cursor-default")
 export const INTEGRATION_CONFIGURE_DIALOG_CLASS = cn(
   "bg-popover border-border rounded-2xl p-6 gap-5 sm:max-w-[420px]",

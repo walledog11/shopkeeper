@@ -46,7 +46,18 @@
   --radius-4xl: calc(var(--radius) + 16px);
 }
 
-/* Dark tonal — this is the single active theme */
+/* ── Paper — the single active theme.
+
+   Every surface that consumes these tokens (dashboard, onboarding, auth,
+   not-found, global-error) is cream/ink. The marketing site does not use them
+   at all; it lives in its own --m-* namespace in marketing.css.
+
+   There is deliberately no dark theme and no --color-white/--color-black
+   inversion: utilities mean what they say, so `text-white` is white and
+   `text-amber-700` is amber-700. Reach for the semantic tokens below
+   (foreground/muted-foreground/strong/faint/card/border) rather than raw
+   palette shades, and use shades that are legible on cream — roughly 600–800
+   for text and 100–200 for chip fills. ── */
 :root {
   --radius: 0.5rem;
 
@@ -54,119 +65,6 @@
      `font-sans`). Without this the var is undefined and the whole app falls
      back to a system font. */
   --font-google-sans-flex: "Google Sans Flex";
-
-  /* Base surfaces — layered dark */
-  --background: #000000;
-  --foreground: #ffffff;
-
-  /* Cards sit one level above background */
-  --card: #111111;
-  --card-foreground: #ffffff;
-
-  /* Popovers / dropdowns */
-  --popover: #181818;
-  --popover-foreground: #ffffff;
-
-  /* Primary = yellow brand accent (used sparingly) */
-  --primary: #fbbf24;
-  --primary-foreground: #0a0a0a;
-
-  /* Secondary = subtle fills */
-  --secondary: #1c1c1c;
-  --secondary-foreground: rgba(255, 255, 255, 0.85);
-
-  /* Muted */
-  --muted: #191919;
-  --muted-foreground: rgba(255, 255, 255, 0.40);
-
-  /* Text emphasis ramp (canonical doc lives in the paper block below) */
-  --text-strong: rgba(255, 255, 255, 0.80);
-  --text-faint: rgba(255, 255, 255, 0.30);
-
-  /* Accent = hover/active fills */
-  --accent: #1e1e1e;
-  --accent-foreground: #ffffff;
-
-  /* Destructive = red, semantic only */
-  --destructive: oklch(0.577 0.245 27.325);
-
-  /* Borders and inputs */
-  --border: rgba(255, 255, 255, 0.08);
-  --input: rgba(255, 255, 255, 0.10);
-  --ring: rgba(255, 255, 255, 0.20);
-
-  /* Charts */
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-
-  /* Sidebar — darkest surface layer */
-  --sidebar: #0a0a0a;
-  --sidebar-foreground: #ffffff;
-  --sidebar-primary: #fbbf24;
-  --sidebar-primary-foreground: #0a0a0a;
-  --sidebar-accent: #1a1a1a;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: rgba(255, 255, 255, 0.06);
-  --sidebar-ring: rgba(255, 255, 255, 0.15);
-}
-
-/* Keep .dark in sync for any shadcn components that check for it */
-.dark {
-  --background: #000000;
-  --foreground: #ffffff;
-  --card: #0c0c0c;
-  --card-foreground: #ffffff;
-  --popover: #181818;
-  --popover-foreground: #ffffff;
-  --primary: #fbbf24;
-  --primary-foreground: #0a0a0a;
-  --secondary: #1c1c1c;
-  --secondary-foreground: rgba(255, 255, 255, 0.85);
-  --muted: #191919;
-  --muted-foreground: rgba(255, 255, 255, 0.40);
-  --text-strong: rgba(255, 255, 255, 0.80);
-  --text-faint: rgba(255, 255, 255, 0.30);
-  --accent: #1e1e1e;
-  --accent-foreground: #ffffff;
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: rgba(255, 255, 255, 0.08);
-  --input: rgba(255, 255, 255, 0.10);
-  --ring: rgba(255, 255, 255, 0.20);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: #0a0a0a;
-  --sidebar-foreground: #ffffff;
-  --sidebar-primary: #fbbf24;
-  --sidebar-primary-foreground: #0a0a0a;
-  --sidebar-accent: #1a1a1a;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-ring: rgba(255, 255, 255, 0.15);
-}
-
-/* ── Paper theme — the product surfaces match the marketing site's cream/ink world.
-   Hung on body:has() so portaled surfaces (dialogs, popovers, command palette)
-   inherit it too, not just descendants of the shell div.
-
-   Token inversion: Tailwind v4 resolves hardcoded `*-white` / `*-black`
-   utilities through --color-white / --color-black, so legacy dark-theme
-   classes (text-white/55, bg-white/[0.04], text-black on accent CTAs…)
-   retheme to ink-on-paper without touching component files.
-
-   Accent ramps: shades 100–400 were tuned for a black canvas, so they remap
-   to their readable-on-paper counterparts (200→800, 300→700, 400→600);
-   800/900 dark-surface tints remap to light chip tints (800→200, 900→100).
-   Shades 500–700 are identity — new code should use those directly. ── */
-body:has(.dashboard-shell),
-body:has(.onboarding-shell) {
-  --color-white: #2b2118;
-  --color-black: #f6f2eb;
 
   --background: #f6f2eb;
   --foreground: #2b2118;
@@ -189,12 +87,22 @@ body:has(.onboarding-shell) {
      Primary content and page titles stay on text-foreground (100%). */
   --text-strong: rgba(43, 33, 24, 0.80);
   --text-faint: rgba(43, 33, 24, 0.35);
+
   --accent: rgba(43, 33, 24, 0.06);
   --accent-foreground: #2b2118;
   --destructive: #b91c1c;
   --border: rgba(43, 33, 24, 0.10);
   --input: rgba(43, 33, 24, 0.12);
   --ring: rgba(43, 33, 24, 0.30);
+
+  /* Charts */
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+
+  /* Sidebar — the recessed paper tone */
   --sidebar: #efe9df;
   --sidebar-foreground: #2b2118;
   --sidebar-primary: #2b2118;
@@ -203,67 +111,6 @@ body:has(.onboarding-shell) {
   --sidebar-accent-foreground: #2b2118;
   --sidebar-border: rgba(43, 33, 24, 0.08);
   --sidebar-ring: rgba(43, 33, 24, 0.25);
-
-  --color-blue-200: #1e40af;
-  --color-blue-300: #1d4ed8;
-  --color-blue-400: #2563eb;
-  --color-blue-800: #bfdbfe;
-  --color-blue-900: #dbeafe;
-
-  --color-green-200: #166534;
-  --color-green-300: #15803d;
-  --color-green-400: #16a34a;
-  --color-green-800: #bbf7d0;
-  --color-green-900: #dcfce7;
-
-  --color-emerald-200: #065f46;
-  --color-emerald-300: #047857;
-  --color-emerald-400: #059669;
-  --color-emerald-800: #a7f3d0;
-  --color-emerald-900: #d1fae5;
-
-  --color-amber-200: #92400e;
-  --color-amber-300: #b45309;
-  --color-amber-400: #d97706;
-  --color-amber-800: #fde68a;
-  --color-amber-900: #fef3c7;
-
-  --color-red-200: #991b1b;
-  --color-red-300: #b91c1c;
-  --color-red-400: #dc2626;
-  --color-red-800: #fecaca;
-  --color-red-900: #fee2e2;
-
-  --color-violet-200: #5b21b6;
-  --color-violet-300: #6d28d9;
-  --color-violet-400: #7c3aed;
-  --color-violet-800: #ddd6fe;
-  --color-violet-900: #ede9fe;
-
-  --color-sky-200: #075985;
-  --color-sky-300: #0369a1;
-  --color-sky-400: #0284c7;
-
-  --color-rose-200: #9f1239;
-  --color-rose-300: #be123c;
-
-  --color-yellow-200: #854d0e;
-  --color-yellow-300: #a16207;
-
-  --color-orange-300: #c2410c;
-  --color-purple-300: #7e22ce;
-  --color-pink-400: #db2777;
-  --color-indigo-400: #4f46e5;
-
-  --color-slate-300: #57534e;
-  --color-slate-400: #57534e;
-
-  /* Hardcoded dark surfaces become recessed paper tones */
-  --color-neutral-950: #efe9df;
-  --color-zinc-950: #efe9df;
-  --color-zinc-900: #ece5d8;
-  --color-slate-900: #efe9df;
-  --color-neutral-800: #e3dbcc;
 }
 
 /* Paper grain over the whole shell, dialogs included */

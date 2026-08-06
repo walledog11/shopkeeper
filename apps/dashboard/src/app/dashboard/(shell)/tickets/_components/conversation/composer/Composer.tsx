@@ -33,7 +33,7 @@ export default function Composer(props: ComposerProps) {
     : "border-border bg-card focus-within:border-foreground/30"
 
   const sendTone = isNoteTab
-    ? "bg-amber-500 text-black hover:bg-amber-400"
+    ? "bg-amber-500 text-background hover:bg-amber-600"
     : "bg-foreground text-background hover:bg-foreground/90"
 
   return (

@@ -56,7 +56,7 @@ export function MobileHubHeader({
           onClick={() => openAgentPanel({ source: "command" })}
           aria-label="Open agent"
           title="Open agent"
-          className="p-0.5 rounded-full border border-border bg-white hover:bg-white/90 transition-colors"
+          className="p-0.5 rounded-full border border-border bg-foreground hover:bg-foreground/90 transition-colors"
         >
           <AgentAvatar agentName={agentName} size="sm" imageSrc="/logos/coco-header-icon.png" />
         </button>
@@ -65,7 +65,7 @@ export function MobileHubHeader({
           type="button"
           onClick={onOpenNav}
           aria-label="Open navigation"
-          className="p-2 rounded-md text-muted-foreground hover:text-white hover:bg-foreground/[0.08] transition-colors"
+          className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-foreground/[0.08] transition-colors"
         >
           <Menu className="size-5" />
         </button>

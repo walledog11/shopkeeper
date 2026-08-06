@@ -66,12 +66,12 @@ export function ReviewRow({
             <span className="text-xs text-faint">{channel.name}</span>
             {modeNote && <span className="text-xs text-faint">· {modeNote}</span>}
             {isNew && (
-              <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-200">
+              <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-800">
                 New
               </span>
             )}
             {feedback === "good" && (
-              <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-200">
+              <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-800">
                 Good
               </span>
             )}

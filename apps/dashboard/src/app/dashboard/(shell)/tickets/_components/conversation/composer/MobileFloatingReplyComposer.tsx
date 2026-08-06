@@ -104,7 +104,7 @@ export default function MobileFloatingReplyComposer({
             data-testid="reply-composer-send"
             disabled={sendDisabled}
             onClick={() => onSend(false)}
-            className="inline-flex h-10 items-center gap-2 rounded-2xl bg-emerald-500 px-4 text-sm font-semibold text-[#ffffff] transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-10 items-center gap-2 rounded-2xl bg-emerald-500 px-4 text-sm font-semibold text-[#ffffff] transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isSending ? (
               <>
@@ -121,7 +121,7 @@ export default function MobileFloatingReplyComposer({
         </div>
 
         {error && (
-          <p className="mt-2 text-xs font-medium text-red-400">{error}</p>
+          <p className="mt-2 text-xs font-medium text-red-600">{error}</p>
         )}
       </div>
     </div>

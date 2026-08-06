@@ -1,0 +1,164 @@
+import { NextResponse } from "next/server"
+import { db } from "@shopkeeper/db"
+import { NotFoundError } from "@/lib/api/errors"
+import { parseNextPageInfo, shopifyRest } from "@shopkeeper/agent/shopify"
+import {
+  isShopifyIntegrationOperational,
+  shopifyRouteErrorResponse,
+} from "@/lib/server/shopify-integration"
+
+export const ORDER_FIELDS =
+  "id,name,created_at,financial_status,fulfillment_status,total_price,current_total_price,customer,line_items"
+
+export interface ShopifyOrderRaw {
+  id: number
+  name: string
+  created_at: string
+  financial_status: string
+  fulfillment_status: string | null
+  total_price: string
+  current_total_price: string
+  customer: { id: number; first_name: string; last_name: string; email: string } | null
+  line_items: {
+    title: string
+    quantity: number
+    current_quantity: number
+    variant_title: string | null
+  }[]
+}
+
+export interface NormalizedOrder {
+  id: number
+  name: string
+  created_at: string
+  financial_status: string
+  fulfillment_status: string | null
+  total_price: string
+  customer: { id: number; name: string; email: string } | null
+  line_items: { title: string; quantity: number; variant_title: string | null }[]
+}
+
+export interface OrdersPageResult {
+  orders: NormalizedOrder[]
+  nextPageInfo: string | null
+  shop: string
+}
+
+export interface ShopifyOrdersQuery {
+  fulfillmentStatus?: string
+  financialStatus?: string
+  q?: string
+  pageInfo?: string
+  limit?: number
+}
+
+export function normalizeOrder(order: ShopifyOrderRaw): NormalizedOrder {
+  return {
+    id: order.id,
+    name: order.name,
+    created_at: order.created_at,
+    financial_status: order.financial_status,
+    fulfillment_status: order.fulfillment_status,
+    total_price: order.current_total_price ?? order.total_price,
+    customer: order.customer
+      ? {
+          id: order.customer.id,
+          name: [order.customer.first_name, order.customer.last_name].filter(Boolean).join(" "),
+          email: order.customer.email,
+        }
+      : null,
+    line_items: order.line_items.flatMap(lineItem => lineItem.current_quantity > 0
+      ? [{
+          title: lineItem.title,
+          quantity: lineItem.current_quantity,
+          variant_title: lineItem.variant_title || null,
+        }]
+      : []),
+  }
+}
+
+type ShopifyIntegration = {
+  id: string
+  organizationId: string
+  externalAccountId: string
+  accessToken: string
+}
+
+export async function getOperationalShopifyIntegration(organizationId: string): Promise<ShopifyIntegration> {
+  const integration = await db.integration.findFirst({
+    where: { organizationId, platform: "shopify", accessToken: { not: null } },
+    orderBy: { createdAt: "desc" },
+  })
+
+  if (!integration?.accessToken || !isShopifyIntegrationOperational(integration)) {
+    throw new NotFoundError("no_integration")
+  }
+
+  return {
+    id: integration.id,
+    organizationId: integration.organizationId,
+    externalAccountId: integration.externalAccountId,
+    accessToken: integration.accessToken,
+  }
+}
+
+function buildShopifyOrdersQuery(query: ShopifyOrdersQuery): Record<string, string | number> {
+  const limit = Math.min(query.limit ?? 25, 50)
+  const fulfillmentStatus = query.fulfillmentStatus ?? "any"
+  const financialStatus = query.financialStatus ?? "any"
+  const q = query.q ?? ""
+  const pageInfo = query.pageInfo ?? ""
+
+  if (pageInfo) {
+    return { page_info: pageInfo, limit, fields: ORDER_FIELDS }
+  }
+  if (q) {
+    return q.includes("@")
+      ? { status: "any", limit, fields: ORDER_FIELDS, email: q }
+      : { status: "any", limit, fields: ORDER_FIELDS, name: q.startsWith("#") ? q : `#${q}` }
+  }
+  return {
+    status: "any",
+    limit,
+    fields: ORDER_FIELDS,
+    ...(fulfillmentStatus !== "any" ? { fulfillment_status: fulfillmentStatus } : {}),
+    ...(financialStatus !== "any" ? { financial_status: financialStatus } : {}),
+  }
+}
+
+export async function listShopifyOrders(
+  integration: ShopifyIntegration,
+  query: ShopifyOrdersQuery,
+): Promise<OrdersPageResult> {
+  const shop = integration.externalAccountId
+  const ctx = { shop, accessToken: integration.accessToken }
+  const shopifyQuery = buildShopifyOrdersQuery(query)
+
+  const { data, headers } = await shopifyRest<{ orders?: ShopifyOrderRaw[] }>(
+    ctx,
+    "orders.json",
+    { query: shopifyQuery, maxRetries: 0 },
+  )
+
+  const orders = (data.orders ?? []).map(normalizeOrder)
+  return {
+    orders,
+    nextPageInfo: parseNextPageInfo(headers),
+    shop,
+  }
+}
+
+export async function listShopifyOrdersForOrg(
+  organizationId: string,
+  query: ShopifyOrdersQuery,
+): Promise<OrdersPageResult> {
+  const integration = await getOperationalShopifyIntegration(organizationId)
+  return listShopifyOrders(integration, query)
+}
+
+export async function shopifyOrdersErrorResponse(
+  err: unknown,
+  integration: ShopifyIntegration,
+): Promise<NextResponse | null> {
+  return shopifyRouteErrorResponse(err, integration, integration.organizationId)
+}

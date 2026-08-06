@@ -5,7 +5,7 @@ import { AlertCircle, CheckCircle2, Inbox, Loader2 } from "lucide-react"
 export function TicketsErrorState() {
   return (
     <div className="flex size-full items-center justify-center bg-background">
-      <div className="text-red-400 text-sm font-medium">Failed to connect to database.</div>
+      <div className="text-red-600 text-sm font-medium">Failed to connect to database.</div>
     </div>
   )
 }

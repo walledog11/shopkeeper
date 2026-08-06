@@ -150,7 +150,7 @@ export function TicketRow({
           }`}
         >
           <div className={`absolute left-0 top-0 bottom-0 w-0.5 rounded-r-full ${
-            isActive ? "bg-green-400" : "bg-transparent"
+            isActive ? "bg-green-600" : "bg-transparent"
           }`} />
 
           <button type="button"
@@ -349,7 +349,7 @@ function TicketRowHoverAction({ action }: { action: TicketRowAction }) {
       onClick={event => { event.stopPropagation(); action.run() }}
       title={action.kind === "spam" ? "Mark as spam" : "Recover to inbox"}
       className={`absolute right-4 top-3 flex items-center justify-end opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity ${
-        action.kind === "spam" ? "text-muted-foreground hover:text-red-400" : "text-muted-foreground hover:text-emerald-400"
+        action.kind === "spam" ? "text-muted-foreground hover:text-red-600" : "text-muted-foreground hover:text-emerald-600"
       }`}
     >
       {action.kind === "spam"

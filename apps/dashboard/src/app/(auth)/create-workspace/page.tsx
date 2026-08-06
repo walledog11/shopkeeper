@@ -73,7 +73,7 @@ export default function CreateWorkspacePage() {
           <CardContent className="px-6 py-5">
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <label htmlFor="workspace-name" className="block text-xs font-semibold text-white/60">
+                <label htmlFor="workspace-name" className="block text-xs font-semibold text-foreground/60">
                   Workspace name
                 </label>
                 <Input
@@ -84,15 +84,15 @@ export default function CreateWorkspacePage() {
                   maxLength={MAX_NAME_LENGTH}
                   disabled={pending}
                   autoFocus
-                  className="h-10 text-sm bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25"
+                  className="h-10 text-sm bg-foreground/[0.06] border-foreground/[0.12] text-foreground/80 placeholder:text-foreground/25"
                 />
               </div>
-              {error ? <p className="text-sm text-red-300">{error}</p> : null}
+              {error ? <p className="text-sm text-red-700">{error}</p> : null}
               <Button
                 type="submit"
                 size="lg"
                 disabled={pending || !name.trim()}
-                className="w-full gap-2 bg-green-400 text-green-950 hover:bg-green-300"
+                className="w-full gap-2 bg-green-600 text-green-950 hover:bg-green-700"
               >
                 {pending ? (
                   <Loader2 className="size-4 animate-spin" />

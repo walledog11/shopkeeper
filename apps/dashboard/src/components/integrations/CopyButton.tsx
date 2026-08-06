@@ -19,7 +19,7 @@ export function CopyButton({ text }: { text: string }) {
       className="ml-1 text-foreground/20 hover:text-foreground/50 transition-colors"
     >
       {copied
-        ? <Check className="size-3 text-emerald-400" />
+        ? <Check className="size-3 text-emerald-600" />
         : <Copy className="size-3" />
       }
     </button>

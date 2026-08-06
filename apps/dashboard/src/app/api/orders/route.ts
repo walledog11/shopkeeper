@@ -1,114 +1,36 @@
-import { NextResponse } from 'next/server';
-import { db } from '@shopkeeper/db';
-import { NotFoundError } from '@/lib/api/errors';
-import { withOrgRoute } from '@/lib/api/route';
-import { parseNextPageInfo, shopifyRest } from '@shopkeeper/agent/shopify';
+import { NextResponse } from "next/server"
+import { withOrgRoute } from "@/lib/api/route"
 import {
-  isShopifyIntegrationOperational,
-  shopifyRouteErrorResponse,
-} from '@/lib/server/shopify-integration';
+  getOperationalShopifyIntegration,
+  listShopifyOrders,
+  shopifyOrdersErrorResponse,
+} from "@/app/api/orders/_lib/orders-service"
 
-export const dynamic = 'force-dynamic';
-
-const ORDER_FIELDS = 'id,name,created_at,financial_status,fulfillment_status,total_price,current_total_price,customer,line_items';
+export const dynamic = "force-dynamic"
 
 export const GET = withOrgRoute(
   {
-    context: 'Orders GET',
-    errorMessage: 'Failed to fetch orders',
-    rateLimit: { key: 'orders:get', limit: 30, windowSecs: 60 },
+    context: "Orders GET",
+    errorMessage: "Failed to fetch orders",
+    rateLimit: { key: "orders:get", limit: 30, windowSecs: 60 },
   },
   async ({ org, request }) => {
-    const integration = await db.integration.findFirst({
-      where: { organizationId: org.id, platform: 'shopify', accessToken: { not: null } },
-      orderBy: { createdAt: 'desc' },
-    });
+    const integration = await getOperationalShopifyIntegration(org.id)
+    const { searchParams } = new URL(request.url)
 
-    if (!integration || !isShopifyIntegrationOperational(integration)) {
-      throw new NotFoundError('no_integration');
-    }
-
-    const shop = integration.externalAccountId;
-    const ctx = { shop, accessToken: integration.accessToken! };
-    const { searchParams } = new URL(request.url);
-
-    const fulfillmentStatus = searchParams.get('fulfillment_status') ?? 'any';
-    const financialStatus = searchParams.get('financial_status') ?? 'any';
-    const q = searchParams.get('q') ?? '';
-    const pageInfo = searchParams.get('page_info') ?? '';
-    const limit = Math.min(parseInt(searchParams.get('limit') ?? '25', 10), 50);
-
-    // Build the query — cursor pagination (page_info) and search are mutually exclusive
-    let query: Record<string, string | number>;
-    if (pageInfo) {
-      query = { page_info: pageInfo, limit, fields: ORDER_FIELDS };
-    } else if (q) {
-      query = q.includes('@')
-        ? { status: 'any', limit, fields: ORDER_FIELDS, email: q }
-        : { status: 'any', limit, fields: ORDER_FIELDS, name: q.startsWith('#') ? q : `#${q}` };
-    } else {
-      query = {
-        status: 'any',
-        limit,
-        fields: ORDER_FIELDS,
-        ...(fulfillmentStatus !== 'any' ? { fulfillment_status: fulfillmentStatus } : {}),
-        ...(financialStatus !== 'any' ? { financial_status: financialStatus } : {}),
-      };
-    }
-
-    let data: { orders?: ShopifyOrderRaw[] };
-    let headers: Headers;
     try {
-      ({ data, headers } = await shopifyRest<{ orders?: ShopifyOrderRaw[] }>(ctx, 'orders.json', { query, maxRetries: 0 }));
+      const result = await listShopifyOrders(integration, {
+        fulfillmentStatus: searchParams.get("fulfillment_status") ?? "any",
+        financialStatus: searchParams.get("financial_status") ?? "any",
+        q: searchParams.get("q") ?? "",
+        pageInfo: searchParams.get("page_info") ?? "",
+        limit: parseInt(searchParams.get("limit") ?? "25", 10),
+      })
+      return NextResponse.json(result)
     } catch (err) {
-      const response = await shopifyRouteErrorResponse(err, integration, org.id);
-      if (response) return response;
-      throw err;
+      const response = await shopifyOrdersErrorResponse(err, integration)
+      if (response) return response
+      throw err
     }
-
-    const orders: ShopifyOrderRaw[] = data.orders ?? [];
-    const nextPageInfo = parseNextPageInfo(headers);
-
-    // Normalize to the shape the client needs
-    const normalized = orders.map(normalizeOrder);
-
-    return NextResponse.json({ orders: normalized, nextPageInfo, shop });
   },
-);
-
-// ── Types & normalization ─────────────────────────────────────────────────────
-
-interface ShopifyOrderRaw {
-  id: number;
-  name: string;
-  created_at: string;
-  financial_status: string;
-  fulfillment_status: string | null;
-  total_price: string;
-  current_total_price: string;
-  customer: { id: number; first_name: string; last_name: string; email: string } | null;
-  line_items: { title: string; quantity: number; current_quantity: number; variant_title: string | null }[];
-}
-
-function normalizeOrder(o: ShopifyOrderRaw) {
-  return {
-    id: o.id,
-    name: o.name,
-    created_at: o.created_at,
-    financial_status: o.financial_status,
-    fulfillment_status: o.fulfillment_status,
-    total_price: o.current_total_price ?? o.total_price,
-    customer: o.customer
-      ? {
-          id: o.customer.id,
-          name: [o.customer.first_name, o.customer.last_name].filter(Boolean).join(' '),
-          email: o.customer.email,
-        }
-      : null,
-    line_items: o.line_items.flatMap(li => li.current_quantity > 0 ? [{
-        title: li.title,
-        quantity: li.current_quantity,
-        variant_title: li.variant_title || null,
-      }] : []),
-  };
-}
+)

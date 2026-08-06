@@ -48,7 +48,7 @@ function DataExportSection({ state }: { state: WorkspaceTabState }) {
           Useful for backups or migrating off Shopkeeper. Doesn&apos;t include integration tokens, billing data, or audit logs.
         </p>
         <div className="flex items-center gap-2 shrink-0">
-          {exportError && <p className="text-xs text-red-400">{exportError}</p>}
+          {exportError && <p className="text-xs text-red-600">{exportError}</p>}
           <Button
             variant="outline"
             size="sm"
@@ -104,7 +104,7 @@ function GdprExportSection({ state }: { state: WorkspaceTabState }) {
             Export data
           </Button>
         </div>
-        {gdprError && <p className="text-xs text-red-400">{gdprError}</p>}
+        {gdprError && <p className="text-xs text-red-600">{gdprError}</p>}
         <p className="text-xs text-faint">
           Message data is retained for 90 days, then archived. Archived threads are purged after another 90 days.
         </p>
@@ -145,7 +145,7 @@ function DangerZone({ orgName, state }: { orgName: string; state: WorkspaceTabSt
   return (
     <div id="danger" className="scroll-mt-6 rounded-md border border-red-500/20 overflow-hidden">
       <div className="px-6 py-4 bg-red-500/[0.06] border-b border-red-500/15">
-        <h2 className="text-sm font-semibold text-red-400">Danger Zone</h2>
+        <h2 className="text-sm font-semibold text-red-600">Danger Zone</h2>
         <p className="text-xs text-faint mt-0.5">These actions are permanent and cannot be undone.</p>
       </div>
       <div className="p-5 sm:p-6 space-y-5">
@@ -153,8 +153,8 @@ function DangerZone({ orgName, state }: { orgName: string; state: WorkspaceTabSt
           <div>
             <p className="text-sm font-semibold text-strong">Clear all ticket history</p>
             <p className="text-xs text-faint mt-0.5">Permanently deletes all threads and messages for this workspace. This affects every member of the workspace.</p>
-            {clearError && <p className="text-xs text-red-400 mt-1">{clearError}</p>}
-            {clearSuccess && <p className="text-xs text-green-400 mt-1">All ticket history has been cleared.</p>}
+            {clearError && <p className="text-xs text-red-600 mt-1">{clearError}</p>}
+            {clearSuccess && <p className="text-xs text-green-600 mt-1">All ticket history has been cleared.</p>}
           </div>
           {confirmClear ? (
             <div className="flex items-center gap-2 shrink-0">
@@ -179,7 +179,7 @@ function DangerZone({ orgName, state }: { orgName: string; state: WorkspaceTabSt
               variant="outline"
               size="sm"
               onClick={() => setConfirmClear(true)}
-              className="h-7 px-3 text-xs font-semibold text-red-400 border-red-500/30 bg-red-500/[0.06] hover:bg-red-500/[0.12] hover:text-red-300 self-start shrink-0"
+              className="h-7 px-3 text-xs font-semibold text-red-600 border-red-500/30 bg-red-500/[0.06] hover:bg-red-500/[0.12] hover:text-red-700 self-start shrink-0"
             >
               Clear history
             </Button>
@@ -194,7 +194,7 @@ function DangerZone({ orgName, state }: { orgName: string; state: WorkspaceTabSt
                 Permanently delete <span className="text-muted-foreground font-medium">{orgName}</span> and all of its data — tickets, customers, integrations, memory, and billing. Every member will lose access.
               </p>
               {isOnlyWorkspace && (
-                <p className="text-xs text-amber-400/80 mt-1.5">
+                <p className="text-xs text-amber-600/80 mt-1.5">
                   This is your only workspace. Create another workspace first, or delete your account from{" "}
                   <a href="#account" className="font-semibold text-muted-foreground hover:text-strong">
                     account settings
@@ -212,7 +212,7 @@ function DangerZone({ orgName, state }: { orgName: string; state: WorkspaceTabSt
                 setDeleteOpen(true)
               }}
               disabled={isOnlyWorkspace}
-              className="h-7 px-3 text-xs font-semibold text-red-400 border-red-500/30 bg-red-500/[0.06] hover:bg-red-500/[0.12] hover:text-red-300 self-start shrink-0"
+              className="h-7 px-3 text-xs font-semibold text-red-600 border-red-500/30 bg-red-500/[0.06] hover:bg-red-500/[0.12] hover:text-red-700 self-start shrink-0"
             >
               <Trash2 className="size-3" />
               Delete workspace
@@ -250,7 +250,7 @@ function DeleteWorkspaceDialog({ orgName, state }: { orgName: string; state: Wor
     >
       <DialogContent className="border-foreground/10">
         <DialogHeader>
-          <DialogTitle className="text-white">Delete {orgName}?</DialogTitle>
+          <DialogTitle className="text-foreground">Delete {orgName}?</DialogTitle>
           <DialogDescription>
             This permanently removes the workspace, all tickets, customers, integrations, and memory. Any active subscription will be cancelled. This cannot be undone.
           </DialogDescription>
@@ -268,7 +268,7 @@ function DeleteWorkspaceDialog({ orgName, state }: { orgName: string; state: Wor
             disabled={deleting}
             className="h-9 text-sm bg-foreground/[0.06] border-foreground/[0.12] text-strong placeholder:text-faint"
           />
-          {deleteError && <p className="text-xs text-red-400">{deleteError}</p>}
+          {deleteError && <p className="text-xs text-red-600">{deleteError}</p>}
         </div>
         <DialogFooter>
           <Button

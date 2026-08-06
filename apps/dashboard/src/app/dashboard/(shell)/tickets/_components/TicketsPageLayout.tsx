@@ -114,12 +114,12 @@ function CorrectReplyBanner({
   onDismiss: () => void
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-amber-600/20 bg-amber-600/[0.08] px-4 py-2 text-xs text-amber-800 shrink-0">
+    <div className="flex items-center justify-between gap-3 border-b border-amber-600/20 bg-amber-600/[0.08] px-4 py-2 text-xs text-amber-200 shrink-0">
       <span>Send the reply you&apos;d prefer — {agentName} will learn from the difference.</span>
       <button
         type="button"
         onClick={onDismiss}
-        className="inline-flex items-center gap-1 text-amber-700/70 hover:text-amber-900 transition-colors shrink-0"
+        className="inline-flex items-center gap-1 text-amber-700/70 hover:text-amber-100 transition-colors shrink-0"
         aria-label="Dismiss"
       >
         <X className="size-3.5" />
@@ -293,8 +293,8 @@ export function TicketsPageLayout({
   const toastNode = toast ? (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-foreground text-background text-sm font-medium px-4 py-2.5 rounded-full shadow-lg pointer-events-none">
       {toast.tone === 'error'
-        ? <AlertCircle className="size-4 text-red-400 shrink-0" />
-        : <CheckCircle2 className="size-4 text-emerald-400 shrink-0" />
+        ? <AlertCircle className="size-4 text-red-600 shrink-0" />
+        : <CheckCircle2 className="size-4 text-emerald-600 shrink-0" />
       }
       {toast.message}
     </div>

@@ -47,7 +47,7 @@ export function TelegramConnectBody({
       {connectUrl && (
         <ConfigureSection title="Connect">
           <div className="px-4 py-4 flex flex-col items-center gap-3">
-            <div className="rounded-lg bg-white p-2 shadow-sm">
+            <div className="rounded-lg bg-foreground p-2 shadow-sm">
               <QRCodeSVG
                 value={connectUrl}
                 size={176}

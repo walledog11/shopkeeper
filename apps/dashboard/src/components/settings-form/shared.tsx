@@ -17,7 +17,7 @@ export function SaveButton({ saving, saved, onClick, disabled }: {
       size="sm"
       onClick={onClick}
       disabled={disabled || saving}
-      className="h-8 px-4 bg-foreground/[0.12] text-white hover:bg-foreground/[0.18] text-xs font-semibold disabled:opacity-40 min-w-[80px]"
+      className="h-8 px-4 bg-foreground/[0.12] text-foreground hover:bg-foreground/[0.18] text-xs font-semibold disabled:opacity-40 min-w-[80px]"
     >
       {saving ? (
         <Loader2 className="size-3.5 animate-spin" />

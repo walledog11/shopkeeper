@@ -11,14 +11,10 @@ import { INTEGRATIONS_SWR_KEY, useIntegrations } from "@/hooks/useIntegrations"
 import { useCursorListState } from "@/lib/api/use-cursor-list-state"
 import CustomersPanel from "./customers/CustomersPanel"
 import NeedsYouSection from "./NeedsYouSection"
-import { OrdersBoard, OrdersSearchResults, type OrderColumnState, type OrdersBoardState } from "./OrdersBoard"
-import {
-  ORDER_BOARD_COLUMNS,
-  classifyOrder,
-  type BoardColumnId,
-  type OrderRow,
-} from "./orders-board-model"
+import { OrdersBoard, OrdersSearchResults } from "./OrdersBoard"
+import { ORDER_BOARD_COLUMNS, type OrderRow } from "./orders-board-model"
 import { fetchOrdersPage, type OrdersResponse } from "./order-requests"
+import { useOrdersBoard } from "./use-orders-board"
 
 const GLASS_SHELL_CLASS =
   "space-y-2 rounded-[22px] border border-foreground/[0.08] bg-card/60 px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_18px_50px_rgba(43,33,24,0.13)] backdrop-blur-2xl backdrop-saturate-150 supports-[backdrop-filter]:bg-card/45"
@@ -35,36 +31,6 @@ function parseShopTab(value: string | null): ShopTab {
 async function fetchColumnPage(pageInfo: string) {
   const page = await fetchOrdersPage(pageInfo)
   return { items: page.orders, nextPageInfo: page.nextPageInfo }
-}
-
-function useOrderColumn(
-  columnId: BoardColumnId,
-  enabled: boolean,
-  onLoaded: (response: OrdersResponse) => void,
-): OrderColumnState {
-  const query = (ORDER_BOARD_COLUMNS.find((column) => column.id === columnId) ?? ORDER_BOARD_COLUMNS[0]).query
-  const list = useCursorListState<OrderRow, OrdersResponse>({
-    enabled,
-    buildUrl: () => `/api/orders?${query}`,
-    fetchPage: fetchColumnPage,
-    loadMoreErrorMessage: "Unable to load more orders.",
-    onInitialLoad: onLoaded,
-    selectInitialPage: (response) => ({ items: response.orders, nextPageInfo: response.nextPageInfo }),
-  })
-  const entries = useMemo(
-    () => list.allItems.filter((order) => classifyOrder(order) === columnId),
-    [list.allItems, columnId],
-  )
-  return {
-    entries,
-    error: list.error,
-    hasMore: Boolean(list.nextPageInfo),
-    isLoading: list.isLoading,
-    isValidating: list.isValidating,
-    isLoadingMore: list.isLoadingMore,
-    onLoadMore: list.loadMore,
-    onRetry: () => { void list.mutate() },
-  }
 }
 
 export default function OrdersPageClient() {
@@ -87,21 +53,13 @@ export default function OrdersPageClient() {
   const searchActive = debouncedSearch.length > 0
   const boardEnabled = ordersEnabled && !searchActive
 
-  const onLoaded = useCallback((response: OrdersResponse) => {
-    if (response.shop) setShop((prev) => prev ?? response.shop)
+  const onShopLoaded = useCallback((loadedShop: string) => {
+    if (loadedShop) setShop(prev => prev ?? loadedShop)
   }, [])
 
-  const needsFulfillment = useOrderColumn("needs_fulfillment", boardEnabled, onLoaded)
-  const unpaid = useOrderColumn("unpaid", boardEnabled, onLoaded)
-  const fulfilled = useOrderColumn("fulfilled", boardEnabled, onLoaded)
-
-  const columns: OrdersBoardState = useMemo(
-    () => ({ needs_fulfillment: needsFulfillment, unpaid, fulfilled }),
-    [needsFulfillment, unpaid, fulfilled],
-  )
-
-  const boardInitialLoading = boardEnabled && ORDER_BOARD_COLUMNS.every(
-    column => columns[column.id].isLoading && columns[column.id].entries.length === 0,
+  const { columns, error: boardError, isInitialLoading: boardInitialLoading } = useOrdersBoard(
+    boardEnabled,
+    onShopLoaded,
   )
 
   const search = useCursorListState<OrderRow, OrdersResponse>({
@@ -109,14 +67,14 @@ export default function OrdersPageClient() {
     buildUrl: () => `/api/orders?q=${encodeURIComponent(debouncedSearch)}`,
     fetchPage: fetchColumnPage,
     loadMoreErrorMessage: "Unable to load more orders.",
-    onInitialLoad: onLoaded,
+    onInitialLoad: (response) => onShopLoaded(response.shop),
     selectInitialPage: (response) => ({ items: response.orders, nextPageInfo: response.nextPageInfo }),
   })
 
   const hasActiveShopify = integrations.some(
-    (integration) => integration.platform === "shopify" && isShopifyIntegrationActive(integration),
+    integration => integration.platform === "shopify" && isShopifyIntegrationActive(integration),
   )
-  const primaryError = searchActive ? search.error : needsFulfillment.error
+  const primaryError = searchActive ? search.error : boardError
   const isShopifyDisconnected = !integrationsLoading && (
     !hasActiveShopify || (ordersEnabled && isShopifyOrdersUnavailable(primaryError))
   )
@@ -195,7 +153,7 @@ export default function OrdersPageClient() {
                     aria-selected={active}
                     onClick={() => setShopTab(tab.id)}
                     className={`h-7 flex-1 rounded-full px-3 text-xs font-semibold transition-colors md:flex-none ${
-                      active ? "bg-foreground/[0.12] text-white" : "text-muted-foreground hover:bg-foreground/[0.06] hover:text-strong"
+                      active ? "bg-foreground/[0.12] text-foreground" : "text-muted-foreground hover:bg-foreground/[0.06] hover:text-strong"
                     }`}
                   >
                     {tab.label}

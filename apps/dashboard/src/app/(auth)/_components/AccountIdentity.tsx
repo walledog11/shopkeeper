@@ -14,10 +14,10 @@ export function AccountIdentity({ fullName, email, imageUrl }: AccountIdentityPr
       <OrgAvatar
         name={fullName}
         imageUrl={imageUrl}
-        className="size-9 shrink-0 rounded-full bg-white/20 text-xs font-bold text-white ring-1 ring-white/20"
+        className="size-9 shrink-0 rounded-full bg-foreground/20 text-xs font-bold text-foreground ring-1 ring-foreground/20"
       />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-white">{fullName}</p>
+        <p className="truncate text-sm font-semibold text-foreground">{fullName}</p>
         {email ? <p className="truncate text-xs text-muted-foreground">{email}</p> : null}
       </div>
     </div>

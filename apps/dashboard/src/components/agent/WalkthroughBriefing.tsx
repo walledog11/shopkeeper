@@ -109,7 +109,7 @@ export function WalkthroughCard({
             onClick={onApproveClick}
             className={
               confirming
-                ? "rounded-full bg-amber-600 hover:bg-amber-700 text-white"
+                ? "rounded-full bg-amber-600 hover:bg-amber-700 text-foreground"
                 : isConsequential
                   ? "rounded-full bg-green-600 hover:bg-green-700 text-primary-foreground ring-2 ring-amber-500/60 ring-offset-1 ring-offset-background"
                   : "rounded-full bg-green-600 hover:bg-green-700 text-primary-foreground"

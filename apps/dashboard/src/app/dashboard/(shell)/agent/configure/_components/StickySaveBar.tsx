@@ -20,18 +20,18 @@ export function StickySaveBar({
       <div className="flex items-center justify-between gap-3 rounded-[22px] border border-foreground/[0.10] bg-card/85 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.34),0_-18px_50px_rgba(0,0,0,0.35)] backdrop-blur-2xl backdrop-saturate-150 supports-[backdrop-filter]:bg-card/72">
         <div className="flex items-center gap-2 min-w-0">
           {!canSave ? (
-            <p className="text-xs text-amber-300 truncate">Only workspace admins can change agent settings.</p>
+            <p className="text-xs text-amber-700 truncate">Only workspace admins can change agent settings.</p>
           ) : staleVersion ? (
-            <p className="text-xs text-amber-300 truncate">Settings were updated in another tab. Reset to load the latest, then reapply your changes.</p>
+            <p className="text-xs text-amber-700 truncate">Settings were updated in another tab. Reset to load the latest, then reapply your changes.</p>
           ) : error ? (
-            <p className="text-xs text-red-400 truncate">{error}</p>
+            <p className="text-xs text-red-600 truncate">{error}</p>
           ) : saved && !isDirty ? (
-            <p className="text-xs text-emerald-400 inline-flex items-center gap-1.5">
+            <p className="text-xs text-emerald-600 inline-flex items-center gap-1.5">
               <Check className="size-3.5" /> Saved
             </p>
           ) : (
             <>
-              <span className="size-1.5 rounded-full bg-amber-400 shrink-0" aria-hidden />
+              <span className="size-1.5 rounded-full bg-amber-600 shrink-0" aria-hidden />
               <p className="text-xs text-strong">Unsaved changes</p>
             </>
           )}
@@ -49,7 +49,7 @@ export function StickySaveBar({
             size="sm"
             onClick={save}
             disabled={!canSave || saving || !isDirty || businessHoursInvalid || businessNameInvalid}
-            className="h-8 px-4 bg-amber-400 text-black hover:bg-amber-300 text-xs font-semibold disabled:opacity-40 min-w-[90px]"
+            className="h-8 px-4 bg-amber-600 text-background hover:bg-amber-700 text-xs font-semibold disabled:opacity-40 min-w-[90px]"
           >
             {saving ? <Loader2 className="size-3.5 animate-spin" /> : "Save changes"}
           </Button>

@@ -20,7 +20,7 @@ export function ArticleEditDetail({ editDraft, editError, isSaving, onCancelEdit
         <div><label htmlFor="memory-note-body" className="mb-2 block text-xs font-semibold text-muted-foreground">Context</label><textarea id="memory-note-body" value={editDraft.body} onChange={event => onEditDraftChange(draft => ({ ...draft, body: event.target.value }))} rows={14} className={`${inputCls} resize-none`} /></div>
       </div>
       <div className="shrink-0 border-t border-border bg-background px-5 py-4 sm:px-6">
-        {editError && <p className="mb-3 text-xs text-red-400">{editError}</p>}
+        {editError && <p className="mb-3 text-xs text-red-600">{editError}</p>}
         <div className="flex justify-end gap-2"><button type="button" onClick={onCancelEdit} className="px-3 py-1.5 text-xs text-faint hover:text-strong">Cancel</button><button type="button" onClick={onSaveEdit} disabled={isSaving || !editDraft.title.trim() || !editDraft.body.trim()} className="flex items-center gap-1.5 rounded-md bg-foreground px-3 py-1.5 text-xs font-semibold text-background disabled:opacity-40">{isSaving ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}Save changes</button></div>
       </div>
     </div>

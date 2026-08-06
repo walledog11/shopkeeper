@@ -17,7 +17,7 @@ const TITLE_CLASS = "truncate text-xs font-semibold uppercase tracking-normal te
 const RETURNS_LOADING = <div className="h-[68px] animate-pulse rounded-2xl border border-border bg-card" />
 const RETURNS_ERROR = (
   <div className="rounded-2xl border border-red-500/15 bg-red-500/[0.06] px-4 py-3.5">
-    <p className="text-sm font-semibold text-red-300">Couldn&apos;t load return requests.</p>
+    <p className="text-sm font-semibold text-red-700">Couldn&apos;t load return requests.</p>
   </div>
 )
 const RETURNS_EMPTY = (
@@ -96,7 +96,7 @@ function FindingRow({ finding, shop }: { finding: OrderAttentionFinding; shop: s
     <RowShell
       href={adminHref ?? "/dashboard/review"}
       external={Boolean(adminHref)}
-      tone="border-amber-500/20 bg-amber-500/10 text-amber-300"
+      tone="border-amber-500/20 bg-amber-500/10 text-amber-700"
       icon={Flag}
       title={finding.orderName}
       detail={finding.reason}
@@ -109,7 +109,7 @@ function ReturnRow({ entry }: { entry: OrderAttentionReturn }) {
   return (
     <RowShell
       href={`/dashboard/tickets?thread=${entry.threadId}`}
-      tone="border-sky-500/20 bg-sky-500/10 text-sky-300"
+      tone="border-sky-500/20 bg-sky-500/10 text-sky-700"
       icon={Undo2}
       title={entry.customerName}
       detail={entry.summary ?? "Return request"}

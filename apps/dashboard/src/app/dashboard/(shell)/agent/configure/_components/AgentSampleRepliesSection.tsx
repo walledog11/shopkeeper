@@ -30,7 +30,7 @@ export function AgentSampleRepliesSection({ controller }: { controller: AgentTab
               type="button"
               onClick={() => dispatch({ type: "set", patch: { sampleReplies: sampleReplies.filter(reply => reply.id !== sample.id) } })}
               aria-label="Remove sample reply"
-              className="text-faint hover:text-red-400 transition-colors p-1 -m-1"
+              className="text-faint hover:text-red-600 transition-colors p-1 -m-1"
             >
               <Trash2 className="size-3.5" />
             </button>

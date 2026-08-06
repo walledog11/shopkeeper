@@ -7,8 +7,6 @@ import { AnimatePresence, LazyMotion, domAnimation, m } from "motion/react"
 
 const DISMISS_KEY = 'workflowSetupBannerDismissed'
 const EXPAND_KEY = 'workflowSetupBannerExpanded'
-const PROGRESS_RING_RADIUS = 8
-const PROGRESS_RING_CIRCUMFERENCE = 2 * Math.PI * PROGRESS_RING_RADIUS
 
 function readStoredBoolean(key: string) {
   try {
@@ -95,8 +93,6 @@ export default function WorkflowSetupBanner({ steps, pending = false }: Props) {
   const isVisible = pending === false && dismissed === false && trackedDoneCount < totalCount
 
   const remaining = Math.max(totalCount - trackedDoneCount, 0)
-  const progress = totalCount > 0 ? Math.min(Math.max(trackedDoneCount / totalCount, 0), 1) : 0
-  const progressOffset = PROGRESS_RING_CIRCUMFERENCE * (1 - progress)
   const summary = `${remaining} left to finish setup`
 
   function dismiss() {
@@ -129,37 +125,6 @@ export default function WorkflowSetupBanner({ steps, pending = false }: Props) {
               className="flex items-center gap-3 min-w-0 flex-1 text-left"
               aria-expanded={expanded}
             >
-              <m.div
-                aria-hidden="true"
-                whileHover={{ scale: 1.08 }}
-                transition={{ duration: 0.16, ease: "easeOut" }}
-                className="size-5 shrink-0"
-              >
-                <svg viewBox="0 0 20 20" className="size-5">
-                  <circle
-                    cx="10"
-                    cy="10"
-                    r={PROGRESS_RING_RADIUS}
-                    fill="none"
-                    strokeWidth="2"
-                    className="stroke-green-400/15"
-                  />
-                  <m.circle
-                    cx="10"
-                    cy="10"
-                    r={PROGRESS_RING_RADIUS}
-                    fill="none"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    className="stroke-green-400"
-                    strokeDasharray={PROGRESS_RING_CIRCUMFERENCE}
-                    initial={false}
-                    animate={{ strokeDashoffset: progressOffset }}
-                    transition={{ duration: 0.28, ease: "easeOut" }}
-                    transform="rotate(-90 10 10)"
-                  />
-                </svg>
-              </m.div>
               <div className="flex items-center gap-2.5 min-w-0 flex-1">
                 <span className="text-xs font-semibold text-strong shrink-0">
                   Workflow setup · {trackedDoneCount} of {totalCount}
@@ -175,16 +140,14 @@ export default function WorkflowSetupBanner({ steps, pending = false }: Props) {
                 <ChevronDown className="size-3.5 text-faint" />
               </m.div>
             </button>
-            <m.button
+            <button
               type="button"
               onClick={dismiss}
-              whileHover={{ scale: 1.06 }}
-              whileTap={{ scale: 0.94 }}
               className="size-6 rounded flex items-center justify-center text-faint hover:text-strong hover:bg-foreground/[0.04] transition-colors shrink-0"
               aria-label="Dismiss"
             >
               <X className="size-3.5" />
-            </m.button>
+            </button>
           </div>
 
           <AnimatePresence initial={false}>
@@ -208,8 +171,8 @@ export default function WorkflowSetupBanner({ steps, pending = false }: Props) {
                           variants={stepItemVariants}
                           className="flex items-center gap-3 px-2.5 py-2 rounded-md"
                         >
-                          <span className="size-4 rounded-full bg-green-400/15 border border-green-400/40 flex items-center justify-center shrink-0">
-                            <Check className="size-2.5 text-green-400" />
+                          <span className="size-4 rounded-full bg-green-600/15 border border-green-600/40 flex items-center justify-center shrink-0">
+                            <Check className="size-2.5 text-green-600" />
                           </span>
                           <span className="text-xs text-faint line-through truncate flex-1">
                             {step.label}
@@ -224,7 +187,7 @@ export default function WorkflowSetupBanner({ steps, pending = false }: Props) {
                           className="group flex items-center gap-3 px-2.5 py-2 rounded-md hover:bg-foreground/[0.03] transition-colors"
                         >
                           <span className="size-4 rounded-full border border-foreground/25 shrink-0" />
-                          <span className="text-xs text-strong group-hover:text-white truncate flex-1">
+                          <span className="text-xs text-strong group-hover:text-foreground truncate flex-1">
                             {step.label}
                             {step.optional ? <span className="text-faint"> · optional</span> : null}
                           </span>

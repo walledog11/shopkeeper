@@ -68,7 +68,7 @@ export function OrgSwitcher({
             <OrgAvatar
               name={organization?.name}
               imageUrl={organization?.imageUrl}
-              className="size-6 rounded-md bg-green-500/20 text-[13px] font-bold text-green-300 shrink-0"
+              className="size-6 rounded-md bg-green-500/20 text-[13px] font-bold text-green-700 shrink-0"
             />
           )}
           {isTopBar ? (
@@ -114,7 +114,7 @@ export function OrgSwitcher({
                   className="size-5 rounded bg-muted text-xs text-muted-foreground shrink-0"
                 />
                 <span className="flex-1 text-xs font-medium truncate">{mem.organization.name}</span>
-                {isActive && <span className="size-1.5 rounded-full bg-green-400 shrink-0" />}
+                {isActive && <span className="size-1.5 rounded-full bg-green-600 shrink-0" />}
               </DropdownMenuItem>
             );
           })}

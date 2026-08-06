@@ -29,12 +29,12 @@ export default function NotesTimeline({
     return (
       <div className="flex flex-col items-center justify-center h-full text-center gap-3">
         <div className="size-10 rounded-md bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
-          <Users className="size-4 text-violet-400" />
+          <Users className="size-4 text-violet-600" />
         </div>
         <div>
           <p className="text-sm font-semibold text-muted-foreground">No internal activity yet</p>
           <p className="text-xs text-faint mt-1">
-            Type <span className="font-mono font-semibold text-violet-400">@{agentName.toLowerCase()}</span> to ask {agentName}, or add a note for your team.
+            Type <span className="font-mono font-semibold text-violet-600">@{agentName.toLowerCase()}</span> to ask {agentName}, or add a note for your team.
           </p>
         </div>
       </div>
@@ -48,16 +48,16 @@ export default function NotesTimeline({
           <div className="flex gap-3">
             {msg.isAgentNote ? (
               <div className="size-7 rounded-full bg-violet-500/15 flex items-center justify-center shrink-0 mt-0.5">
-                <Bot className="size-3.5 text-violet-400" />
+                <Bot className="size-3.5 text-violet-600" />
               </div>
             ) : (
-              <div className="size-7 rounded-full bg-amber-400/20 flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold text-amber-400">
+              <div className="size-7 rounded-full bg-amber-600/20 flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold text-amber-600">
                 {(msg.author ?? "Y")[0].toUpperCase()}
               </div>
             )}
             <div className="flex-1 min-w-0">
               <div className="flex items-baseline gap-1.5 mb-1.5">
-                <span className={`text-[12px] font-semibold ${msg.isAgentNote ? "text-violet-400" : "text-muted-foreground"}`}>
+                <span className={`text-[12px] font-semibold ${msg.isAgentNote ? "text-violet-600" : "text-muted-foreground"}`}>
                   {msg.author ?? "You"}
                 </span>
                 <span className="text-xs text-faint">added a note</span>
@@ -65,7 +65,7 @@ export default function NotesTimeline({
               </div>
               <div className={msg.isAgentNote
                 ? "bg-violet-500/10 border border-violet-500/20 rounded-lg rounded-tl-sm px-3.5 py-2.5"
-                : "bg-amber-400/10 border border-amber-400/20 rounded-lg rounded-tl-sm px-3.5 py-2.5"
+                : "bg-amber-600/10 border border-amber-600/20 rounded-lg rounded-tl-sm px-3.5 py-2.5"
               }>
                 <p className="text-[13px] text-strong leading-relaxed">{msg.text}</p>
               </div>
@@ -84,18 +84,18 @@ export default function NotesTimeline({
               </div>
             )}
             <div className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-foreground/[0.08] text-strong rounded-md rounded-tr-sm">
-              <span className="text-violet-400 font-semibold">@{agentName.toLowerCase()}</span>{" "}
+              <span className="text-violet-600 font-semibold">@{agentName.toLowerCase()}</span>{" "}
               {turn.instruction}
             </div>
           </div>
           <div className="flex flex-col gap-1 items-start">
             <div className="flex items-center gap-1.5 mb-0.5 ml-1">
-              <Bot className="size-3 text-violet-400" />
-              <span className="text-xs font-semibold text-violet-400">{agentName}</span>
+              <Bot className="size-3 text-violet-600" />
+              <span className="text-xs font-semibold text-violet-600">{agentName}</span>
             </div>
             <div className="px-4 py-3 max-w-[80%] bg-violet-500/10 border border-violet-500/20 rounded-md rounded-tl-sm space-y-2">
               {turn.error ? (
-                <p className="text-xs text-red-400">{turn.error}</p>
+                <p className="text-xs text-red-600">{turn.error}</p>
               ) : (
                 <>
                   {turn.actions.length > 0 && (
@@ -107,10 +107,10 @@ export default function NotesTimeline({
                         return (
                           <div key={`${action.tool}-${action.result}`} className="flex items-center gap-1.5">
                             {isError
-                              ? <AlertCircle className="size-3 text-red-400 shrink-0" />
-                              : <Check className="size-3 text-green-400 shrink-0" />
+                              ? <AlertCircle className="size-3 text-red-600 shrink-0" />
+                              : <Check className="size-3 text-green-600 shrink-0" />
                             }
-                            <span className={`text-xs ${isError ? "text-red-400" : "text-faint"}`}>
+                            <span className={`text-xs ${isError ? "text-red-600" : "text-faint"}`}>
                               {isError ? action.result : (TOOL_LABELS[action.tool] ?? action.tool)}
                             </span>
                           </div>
@@ -133,18 +133,18 @@ export default function NotesTimeline({
           {pendingInstruction && (
             <div className="flex flex-col gap-1 items-end">
               <div className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-foreground/[0.08] text-strong rounded-md rounded-tr-sm">
-                <span className="text-violet-400 font-semibold">@{agentName.toLowerCase()}</span>{" "}
+                <span className="text-violet-600 font-semibold">@{agentName.toLowerCase()}</span>{" "}
                 {pendingInstruction}
               </div>
             </div>
           )}
           <div className="flex flex-col gap-1 items-start">
             <div className="flex items-center gap-1.5 mb-0.5 ml-1">
-              <Bot className="size-3 text-violet-400" />
-              <span className="text-xs font-semibold text-violet-400">{agentName}</span>
+              <Bot className="size-3 text-violet-600" />
+              <span className="text-xs font-semibold text-violet-600">{agentName}</span>
             </div>
             <div className="px-4 py-3 bg-violet-500/10 border border-violet-500/20 rounded-md rounded-tl-sm">
-              <div className="flex items-center gap-1.5 text-xs text-violet-400">
+              <div className="flex items-center gap-1.5 text-xs text-violet-600">
                 <RefreshCw className="size-3 animate-spin" />
                 {isPlanLoading ? planPhrase : runPhrase}
               </div>

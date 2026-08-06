@@ -11,9 +11,9 @@ import {
 } from "./customers-page-utils"
 
 const SEGMENT_TONE: Record<CustomerSegment, string> = {
-  vip: "border-amber-500/20 bg-amber-500/10 text-amber-300",
-  repeat: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
-  new: "border-sky-500/20 bg-sky-500/10 text-sky-300",
+  vip: "border-amber-500/20 bg-amber-500/10 text-amber-700",
+  repeat: "border-emerald-500/20 bg-emerald-500/10 text-emerald-700",
+  new: "border-sky-500/20 bg-sky-500/10 text-sky-700",
   prospect: "border-foreground/[0.08] bg-foreground/[0.04] text-muted-foreground",
 }
 

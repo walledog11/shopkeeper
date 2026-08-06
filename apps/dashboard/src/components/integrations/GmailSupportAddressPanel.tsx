@@ -39,7 +39,7 @@ export function GmailSupportAddressPanel({
           onKeyDown={(event) => {
             if (event.key === "Enter") onSave()
           }}
-          className="h-10 flex-1 border-foreground/[0.10] bg-foreground/[0.03] text-sm text-white placeholder:text-foreground/30"
+          className="h-10 flex-1 border-foreground/[0.10] bg-foreground/[0.03] text-sm text-foreground placeholder:text-foreground/30"
         />
         <div className="flex shrink-0 items-center gap-1.5">
           {loading && <Loader2 className="size-3.5 animate-spin text-foreground/50" />}

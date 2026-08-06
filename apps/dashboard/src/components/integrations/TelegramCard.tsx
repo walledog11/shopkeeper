@@ -150,7 +150,7 @@ export default function TelegramCard({
         config={config}
         statusLine={dialogStatusLine}
       >
-        {error && <p className="text-xs text-red-400">{error}</p>}
+        {error && <p className="text-xs text-red-600">{error}</p>}
 
         {isConnected ? (
           <>

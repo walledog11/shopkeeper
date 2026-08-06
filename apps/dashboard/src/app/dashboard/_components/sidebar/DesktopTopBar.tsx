@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { useState, type MouseEvent } from "react";
 import { ChevronDown, CircleHelp, Search } from "lucide-react";
 import {
   DropdownMenu,
@@ -44,34 +44,10 @@ function NavDropdown({
   const pathname = usePathname();
   const isGroupActive = items.some((item) => isRouteActive(pathname, item.href));
   const [open, setOpen] = useState(false);
-  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clearCloseTimer = () => {
-    if (closeTimerRef.current) {
-      clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = null;
-    }
-  };
-
-  const openMenu = () => {
-    clearCloseTimer();
-    setOpen(true);
-  };
-
-  const scheduleClose = () => {
-    clearCloseTimer();
-    closeTimerRef.current = setTimeout(() => setOpen(false), 120);
-  };
-
-  useEffect(() => () => clearCloseTimer(), []);
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
-      <DropdownMenuTrigger
-        asChild
-        onMouseEnter={openMenu}
-        onMouseLeave={scheduleClose}
-      >
+      <DropdownMenuTrigger asChild>
         <button type="button" className={cn("group", topBarNavTriggerClass(isGroupActive))}>
           <span>{label}</span>
           <ChevronDown className="size-3.5 text-sidebar-foreground/40 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
@@ -81,8 +57,6 @@ function NavDropdown({
         align="center"
         sideOffset={10}
         className={topBarDropdownPanelClass}
-        onMouseEnter={openMenu}
-        onMouseLeave={scheduleClose}
       >
         {items.map((item) => {
           const itemIsActive = isRouteActive(pathname, item.href);
@@ -155,7 +129,7 @@ export function DesktopTopBar({
             <OpenCountBadge
               openCount={openCount}
               animate
-              className="min-w-[18px] h-[18px] px-1 rounded-md text-[10px] font-bold flex items-center justify-center bg-green-400 text-black tabular-nums leading-none"
+              className="min-w-[18px] h-[18px] px-1 rounded-md text-[10px] font-bold flex items-center justify-center bg-green-600 text-background tabular-nums leading-none"
             />
           )}
         </Link>
@@ -177,7 +151,7 @@ export function DesktopTopBar({
           onClick={() => openAgentPanel({ source: "command" })}
           aria-label="Open agent"
           title="Open agent"
-          className="flex items-center justify-center p-0.5 rounded-full border border-border bg-white hover:bg-white/90 transition-colors shrink-0"
+          className="flex items-center justify-center p-0.5 rounded-full border border-border bg-foreground hover:bg-foreground/90 transition-colors shrink-0"
         >
           <AgentAvatar agentName={agentName} size="sm" imageSrc="/logos/coco-header-icon.png" />
         </button>

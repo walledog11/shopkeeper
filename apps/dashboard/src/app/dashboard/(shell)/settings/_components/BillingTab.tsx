@@ -22,9 +22,9 @@ interface BillingInfo {
 }
 
 const STATUS_CONFIG = {
-  active:   { label: 'Active',   icon: CheckCircle2,    className: 'text-green-400 bg-green-400/10 border-green-400/20' },
-  trialing: { label: 'Trial',    icon: Clock,           className: 'text-blue-400 bg-blue-400/10 border-blue-400/20' },
-  past_due: { label: 'Past due', icon: AlertTriangle,   className: 'text-amber-400 bg-amber-400/10 border-amber-400/20' },
+  active:   { label: 'Active',   icon: CheckCircle2,    className: 'text-green-600 bg-green-600/10 border-green-600/20' },
+  trialing: { label: 'Trial',    icon: Clock,           className: 'text-blue-600 bg-blue-600/10 border-blue-600/20' },
+  past_due: { label: 'Past due', icon: AlertTriangle,   className: 'text-amber-600 bg-amber-600/10 border-amber-600/20' },
   canceled: { label: 'Canceled', icon: XCircle,         className: 'text-faint bg-foreground/[0.06] border-foreground/[0.10]' },
   none:     { label: 'Free',     icon: CheckCircle2,    className: 'text-faint bg-foreground/[0.06] border-foreground/[0.10]' },
 }
@@ -127,7 +127,7 @@ function PlanPicker() {
           </div>
 
           {error && (
-            <p className="flex items-start gap-2 text-xs text-red-400">
+            <p className="flex items-start gap-2 text-xs text-red-600">
               <AlertTriangle className="mt-px size-3.5 shrink-0" />
               {error}
             </p>
@@ -137,7 +137,7 @@ function PlanPicker() {
             size="sm"
             onClick={startCheckout}
             disabled={starting}
-            className="h-8 px-4 bg-foreground/[0.12] text-white hover:bg-foreground/[0.18] text-xs font-semibold disabled:opacity-40"
+            className="h-8 px-4 bg-foreground/[0.12] text-foreground hover:bg-foreground/[0.18] text-xs font-semibold disabled:opacity-40"
           >
             {starting ? <Loader2 className="size-3.5 animate-spin" /> : 'Start free trial'}
           </Button>
@@ -176,7 +176,7 @@ export default function BillingTab() {
 
   if (error || !data) {
     return (
-      <div id="billing" className="flex items-center gap-2 rounded-xl border border-border bg-card px-5 py-6 text-sm text-red-400 sm:px-6">
+      <div id="billing" className="flex items-center gap-2 rounded-xl border border-border bg-card px-5 py-6 text-sm text-red-600 sm:px-6">
         <AlertTriangle className="size-4 shrink-0" />
         Failed to load billing information.
       </div>
@@ -216,7 +216,7 @@ export default function BillingTab() {
                   </p>
                 )}
                 {data.status === 'trialing' && trialDaysLeft !== null && (
-                  <p className="text-xs text-blue-400 font-medium">
+                  <p className="text-xs text-blue-600 font-medium">
                     {trialDaysLeft} day{trialDaysLeft !== 1 ? 's' : ''} left in trial
                   </p>
                 )}
@@ -230,7 +230,7 @@ export default function BillingTab() {
                 <Button
                   size="sm"
                   onClick={openBillingPortal}
-                  className="h-8 px-4 bg-foreground/[0.12] text-white hover:bg-foreground/[0.18] text-xs font-semibold shrink-0"
+                  className="h-8 px-4 bg-foreground/[0.12] text-foreground hover:bg-foreground/[0.18] text-xs font-semibold shrink-0"
                 >
                   Manage plan
                 </Button>
@@ -289,7 +289,7 @@ export default function BillingTab() {
                     <td className="hidden px-5 py-3.5 sm:table-cell">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${
                         inv.status === 'paid'
-                          ? 'text-green-400 bg-green-400/10 border-green-400/20'
+                          ? 'text-green-600 bg-green-600/10 border-green-600/20'
                           : 'text-faint bg-foreground/[0.06] border-foreground/[0.10]'
                       }`}>
                         {inv.status ?? '—'}

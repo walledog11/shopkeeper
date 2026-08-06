@@ -24,7 +24,7 @@ function AttachmentList({ attachments }: { attachments: string[] }) {
       {attachments.map((url) => (
         isImageAttachmentUrl(url)
           ? <Image key={url} src={url} alt="attachment" width={240} height={160} unoptimized className="h-auto max-w-[240px] rounded-md border border-foreground/[0.10]" />
-          : <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 underline">Download attachment</a>
+          : <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 underline">Download attachment</a>
       ))}
     </div>
   )
@@ -93,12 +93,12 @@ export default function ChatTimeline({
               </span>
             ) : isFailed ? (
               <div className="flex items-center gap-1.5 mx-1">
-                <AlertTriangle className="size-3 text-red-400" />
-                <span className="text-xs text-red-400">Failed to send</span>
+                <AlertTriangle className="size-3 text-red-600" />
+                <span className="text-xs text-red-600">Failed to send</span>
                 <span className="text-xs text-faint">·</span>
                 <button type="button"
                   onClick={() => onRetrySend?.(msg.id)}
-                  className="text-xs font-semibold text-red-400 hover:text-red-300 transition-colors"
+                  className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors"
                 >
                   Retry
                 </button>
@@ -107,15 +107,15 @@ export default function ChatTimeline({
               // No retry affordance: the same address bounced once already, so
               // the merchant needs to fix the address or reach them elsewhere.
               <div className="flex items-center gap-1.5 mx-1 max-w-[80%]">
-                <AlertTriangle className="size-3 shrink-0 text-red-400" />
-                <span className="text-xs text-red-400">
+                <AlertTriangle className="size-3 shrink-0 text-red-600" />
+                <span className="text-xs text-red-600">
                   Bounced — the customer never received this. See the note for the reason.
                 </span>
               </div>
             ) : isUnknown ? (
               <div className="flex items-center gap-1.5 mx-1 max-w-[80%]">
-                <AlertTriangle className="size-3 shrink-0 text-amber-400" />
-                <span className="text-xs text-amber-400">
+                <AlertTriangle className="size-3 shrink-0 text-amber-600" />
+                <span className="text-xs text-amber-600">
                   Delivery unconfirmed — check provider activity before retrying
                 </span>
               </div>
@@ -141,12 +141,12 @@ export default function ChatTimeline({
             {failedMessage.text}
           </div>
           <div className="flex items-center gap-1.5 mx-1">
-            <AlertTriangle className="size-3 text-red-400" />
-            <span className="text-xs text-red-400">Failed to send</span>
+            <AlertTriangle className="size-3 text-red-600" />
+            <span className="text-xs text-red-600">Failed to send</span>
             <span className="text-xs text-faint">·</span>
             <button type="button"
               onClick={() => onRetry?.(failedMessage.id)}
-              className="text-xs font-semibold text-red-400 hover:text-red-300 transition-colors"
+              className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors"
             >
               Retry
             </button>

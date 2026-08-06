@@ -33,9 +33,9 @@ export default function HelpArticle({ article, agentName }: { article: Article; 
           )}
 
           {section.tips && (
-            <div className="bg-amber-400/10 border border-amber-400/20 rounded-md px-3.5 py-3 space-y-1.5">
+            <div className="bg-amber-600/10 border border-amber-600/20 rounded-md px-3.5 py-3 space-y-1.5">
               {section.tips.map((tip) => (
-                <p key={tip} className="text-xs text-amber-400 leading-relaxed flex gap-2">
+                <p key={tip} className="text-xs text-amber-600 leading-relaxed flex gap-2">
                   <span className="shrink-0 mt-px">💡</span>
                   {named(tip)}
                 </p>

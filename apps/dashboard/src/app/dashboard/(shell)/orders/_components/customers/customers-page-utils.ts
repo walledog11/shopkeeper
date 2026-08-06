@@ -76,9 +76,9 @@ export function customerSegment(c: CustomerRow): CustomerSegment {
 
 export function fulfillmentStyle(status: string | null) {
   switch (status) {
-    case "fulfilled":  return { label: "Fulfilled",   cls: "text-green-400 bg-green-400/10 border-green-400/20" }
-    case "partial":    return { label: "Partial",     cls: "text-amber-400 bg-amber-400/10 border-amber-400/20" }
+    case "fulfilled":  return { label: "Fulfilled",   cls: "text-green-600 bg-green-600/10 border-green-600/20" }
+    case "partial":    return { label: "Partial",     cls: "text-amber-600 bg-amber-600/10 border-amber-600/20" }
     case "restocked":  return { label: "Restocked",   cls: "text-foreground/40 bg-foreground/[0.06] border-foreground/[0.10]" }
-    default:           return { label: "Unfulfilled", cls: "text-amber-400 bg-amber-400/10 border-amber-400/20" }
+    default:           return { label: "Unfulfilled", cls: "text-amber-600 bg-amber-600/10 border-amber-600/20" }
   }
 }

@@ -34,14 +34,14 @@ export function MemoryArticleExpandDialog({ article, deleteError, isDeleting, on
               <span />
               {source === "manual" ? (
                 <div className="flex gap-2">
-                  <button type="button" onClick={onDelete} disabled={isDeleting} aria-label="Delete memory" className="inline-flex size-8 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-red-500/[0.07] hover:text-red-400 disabled:opacity-40">{isDeleting ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}</button>
+                  <button type="button" onClick={onDelete} disabled={isDeleting} aria-label="Delete memory" className="inline-flex size-8 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-red-500/[0.07] hover:text-red-600 disabled:opacity-40">{isDeleting ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}</button>
                   <button type="button" onClick={onEdit} className="inline-flex h-8 items-center gap-1.5 rounded-md bg-foreground px-3 text-xs font-semibold text-background"><Pencil className="size-3.5" />Edit note</button>
                 </div>
               ) : (
                 <button type="button" onClick={onCorrect} className="inline-flex h-8 items-center gap-1.5 rounded-md bg-foreground px-3 text-xs font-semibold text-background"><Pencil className="size-3.5" />Correct this</button>
               )}
             </div>
-            {deleteError && <p className="mt-3 text-xs text-red-400">{deleteError}</p>}
+            {deleteError && <p className="mt-3 text-xs text-red-600">{deleteError}</p>}
           </div>
         </div>
       ) : null}

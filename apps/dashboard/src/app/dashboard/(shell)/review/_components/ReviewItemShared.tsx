@@ -33,28 +33,28 @@ export const REVIEW_TONE_CLASS: Record<
   { icon: string; badge: string; border: string }
 > = {
   attention: {
-    icon: "border-amber-500/20 bg-amber-500/10 text-amber-300",
-    badge: "border-amber-500/20 bg-amber-500/10 text-amber-200",
+    icon: "border-amber-500/20 bg-amber-500/10 text-amber-700",
+    badge: "border-amber-500/20 bg-amber-500/10 text-amber-800",
     border: "hover:border-amber-500/25",
   },
   auto: {
-    icon: "border-sky-500/20 bg-sky-500/10 text-sky-300",
-    badge: "border-sky-500/20 bg-sky-500/10 text-sky-200",
+    icon: "border-sky-500/20 bg-sky-500/10 text-sky-700",
+    badge: "border-sky-500/20 bg-sky-500/10 text-sky-800",
     border: "hover:border-sky-500/25",
   },
   store: {
-    icon: "border-amber-500/20 bg-amber-500/10 text-amber-300",
-    badge: "border-amber-500/20 bg-amber-500/10 text-amber-200",
+    icon: "border-amber-500/20 bg-amber-500/10 text-amber-700",
+    badge: "border-amber-500/20 bg-amber-500/10 text-amber-800",
     border: "hover:border-amber-500/25",
   },
   approved: {
-    icon: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
-    badge: "border-emerald-500/20 bg-emerald-500/10 text-emerald-200",
+    icon: "border-emerald-500/20 bg-emerald-500/10 text-emerald-700",
+    badge: "border-emerald-500/20 bg-emerald-500/10 text-emerald-800",
     border: "hover:border-emerald-500/25",
   },
   error: {
-    icon: "border-red-500/20 bg-red-500/10 text-red-300",
-    badge: "border-red-500/20 bg-red-500/10 text-red-200",
+    icon: "border-red-500/20 bg-red-500/10 text-red-700",
+    badge: "border-red-500/20 bg-red-500/10 text-red-800",
     border: "hover:border-red-500/25",
   },
   note: {
@@ -99,8 +99,8 @@ export function ReviewFeedbackControls({
           onClick={() => onFeedbackChange(feedback === "good" ? null : "good")}
           className={`inline-flex items-center gap-1 font-semibold transition-colors ${
             feedback === "good"
-              ? "text-emerald-300"
-              : "text-faint hover:text-emerald-200"
+              ? "text-emerald-700"
+              : "text-faint hover:text-emerald-800"
           }`}
         >
           <ThumbsUp className="size-3" />
@@ -110,7 +110,7 @@ export function ReviewFeedbackControls({
       {showSoundsOff && correctionHref && (
         <Link
           href={correctionHref}
-          className="inline-flex items-center gap-1 font-semibold text-faint transition-colors hover:text-amber-200"
+          className="inline-flex items-center gap-1 font-semibold text-faint transition-colors hover:text-amber-800"
         >
           <ThumbsDown className="size-3" />
           Sounds off

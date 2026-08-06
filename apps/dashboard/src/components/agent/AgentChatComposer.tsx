@@ -25,7 +25,7 @@ export function AgentChatComposer({
 }) {
   return (
     <div className="shrink-0 min-w-0 px-5 md:px-6 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] md:pb-4">
-      <div className="min-w-0 w-full rounded-xl border border-border bg-card px-4 pt-3 pb-3 transition-all focus-within:border-green-400/50 focus-within:ring-1 focus-within:ring-violet-400/20">
+      <div className="min-w-0 w-full rounded-xl border border-border bg-card px-4 pt-3 pb-3 transition-all focus-within:border-green-600/50 focus-within:ring-1 focus-within:ring-violet-600/20">
         <textarea
           aria-label="Agent message"
           ref={textareaRef}
@@ -64,7 +64,7 @@ export function AgentChatComposer({
               type="button"
               onClick={onSend}
               disabled={!input.trim() || isRunning}
-              className="flex items-center gap-1 text-xs font-medium bg-green-600 text-white rounded-lg px-3 py-1.5 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-1 text-xs font-medium bg-green-600 text-foreground rounded-lg px-3 py-1.5 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               {isRunning
                 ? <Loader2 className="size-3.5 animate-spin" />

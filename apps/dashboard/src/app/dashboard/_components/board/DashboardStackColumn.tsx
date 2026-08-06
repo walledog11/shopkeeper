@@ -135,7 +135,7 @@ export function BoardColumnEmpty({
 
 export function BoardColumnError({
   className,
-  textClassName = "text-red-200",
+  textClassName = "text-red-800",
   onRetry,
 }: {
   className?: string

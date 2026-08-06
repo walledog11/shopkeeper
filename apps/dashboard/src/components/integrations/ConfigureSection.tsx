@@ -15,7 +15,7 @@ export function ConfigureSection({
   return (
     <section className={cn("space-y-2.5", className)}>
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold text-white">{title}</h3>
+        <h3 className="text-sm font-semibold text-foreground">{title}</h3>
         {action}
       </div>
       <div className="rounded-xl border border-foreground/[0.10] bg-foreground/[0.02] overflow-hidden divide-y divide-foreground/[0.06]">

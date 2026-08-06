@@ -23,7 +23,7 @@ export function getToolChipVariant(action: ActionEntry): ToolChipVariant {
 
 export const TOOL_CHIP_CLASS: Record<ToolChipVariant, string> = {
   read: "bg-muted/50 text-muted-foreground border border-border/60",
-  executed: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-  pending: "bg-amber-600/10 text-amber-700 dark:text-amber-400 border border-amber-600/25",
-  error: "bg-red-500/10 text-red-400",
+  executed: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-600",
+  pending: "bg-amber-600/10 text-amber-700 dark:text-amber-600 border border-amber-600/25",
+  error: "bg-red-500/10 text-red-600",
 };

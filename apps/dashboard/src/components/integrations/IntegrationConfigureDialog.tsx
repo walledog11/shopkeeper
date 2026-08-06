@@ -52,7 +52,7 @@ export function IntegrationConfigureDialog({
                 {showStatusPill && <StatusPill state={statusState} />}
               </div>
               {statusLine && (
-                <DialogDescription className={cn("text-xs text-muted-foreground", statusNote && "text-amber-400/90")}>
+                <DialogDescription className={cn("text-xs text-muted-foreground", statusNote && "text-amber-600/90")}>
                   {statusLine}
                 </DialogDescription>
               )}

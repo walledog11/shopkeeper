@@ -2,9 +2,9 @@ import type { TicketListPresentationStatusTone } from "../../_lib/ticket-list-pr
 
 const TONE_CLASS: Record<TicketListPresentationStatusTone, string> = {
   send: "bg-emerald-500 text-[#ffffff] shadow-sm",
-  caution: "bg-amber-500/15 text-amber-400",
+  caution: "bg-amber-500/15 text-amber-600",
   neutral: "bg-foreground/10 text-muted-foreground",
-  danger: "bg-red-500/10 text-red-400",
+  danger: "bg-red-500/10 text-red-600",
 }
 
 interface TicketRowStatusPillProps {

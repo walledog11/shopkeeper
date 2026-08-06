@@ -110,7 +110,7 @@ function GmailEmailSection({
 function GmailReadyNote({ isWorkspace }: { isWorkspace: boolean }) {
   return (
     <div className="flex items-start gap-2 px-1 text-xs leading-relaxed text-foreground/45">
-      <Check className="mt-0.5 size-3.5 shrink-0 text-emerald-400/80" aria-hidden />
+      <Check className="mt-0.5 size-3.5 shrink-0 text-emerald-600/80" aria-hidden />
       <p>
         {isWorkspace
           ? "Google Workspace is connected. Customer emails will appear here when they arrive at your support address."
@@ -157,7 +157,7 @@ function GmailActionsSection({
           <button
             type="button"
             onClick={onConfirmDelete}
-            className="shrink-0 text-xs font-semibold whitespace-nowrap text-red-400 transition-colors hover:text-red-300"
+            className="shrink-0 text-xs font-semibold whitespace-nowrap text-red-600 transition-colors hover:text-red-700"
           >
             Confirm
           </button>

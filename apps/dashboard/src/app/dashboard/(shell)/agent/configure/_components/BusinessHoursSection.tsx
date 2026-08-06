@@ -59,7 +59,7 @@ export function BusinessHoursSection({ controller }: { controller: AgentTabContr
                     })}
                     className={`h-8 w-12 rounded-md border text-xs font-semibold transition-all ${
                       settingsState.businessHoursDays.includes(value)
-                        ? "bg-foreground/[0.15] text-white border-foreground/[0.35]"
+                        ? "bg-foreground/[0.15] text-foreground border-foreground/[0.35]"
                         : "bg-transparent border-foreground/[0.12] text-faint hover:border-foreground/[0.22] hover:text-muted-foreground"
                     }`}
                   >
@@ -85,11 +85,11 @@ export function BusinessHoursSection({ controller }: { controller: AgentTabContr
                 onChange={setBusinessHoursEndInput}
                 options={HOUR_OPTIONS}
                 widthClassName="w-40"
-                selectClassName={businessHoursInvalid ? "border-red-400/60" : undefined}
+                selectClassName={businessHoursInvalid ? "border-red-600/60" : undefined}
               />
             </div>
             {businessHoursInvalid && (
-              <p className="text-xs text-red-400">Opening and closing times must be different.</p>
+              <p className="text-xs text-red-600">Opening and closing times must be different.</p>
             )}
 
             <div className="space-y-1.5">

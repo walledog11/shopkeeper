@@ -50,7 +50,7 @@ function OverrideHint({
           <button
             type="button"
             onClick={() => onReset(path)}
-            className="ml-2 font-semibold text-amber-300 hover:text-amber-200"
+            className="ml-2 font-semibold text-amber-700 hover:text-amber-800"
           >
             Reset to tier default
           </button>

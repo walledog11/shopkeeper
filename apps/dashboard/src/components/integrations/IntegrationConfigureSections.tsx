@@ -231,7 +231,7 @@ export function IntegrationActionsSection({
                     setConfirmingId(null)
                     onDisconnect(integration.id)
                   }}
-                  className="text-xs font-semibold text-red-400 hover:text-red-300 transition-colors whitespace-nowrap shrink-0"
+                  className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors whitespace-nowrap shrink-0"
                 >
                   Confirm
                 </button>
@@ -250,7 +250,7 @@ export function IntegrationActionsSection({
       {kbSyncResult && (
         <p className={cn(
           "text-xs px-1",
-          kbSyncResult.startsWith("Sync failed") ? "text-red-400" : "text-emerald-400",
+          kbSyncResult.startsWith("Sync failed") ? "text-red-600" : "text-emerald-600",
         )}>
           {kbSyncResult}
         </p>

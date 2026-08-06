@@ -1,11 +1,23 @@
 import { requestJson } from "@/lib/api/fetcher"
-import type { OrderRow } from "./orders-board-model"
+import type { BoardColumnId, OrderRow } from "./orders-board-model"
 
 export interface OrdersResponse {
   orders: OrderRow[]
   nextPageInfo: string | null
   shop: string
 }
+
+export interface OrdersBoardColumnResponse {
+  orders: OrderRow[]
+  nextPageInfo: string | null
+}
+
+export interface OrdersBoardResponse {
+  shop: string
+  columns: Record<BoardColumnId, OrdersBoardColumnResponse>
+}
+
+export const ORDERS_BOARD_SWR_KEY = "/api/orders/board"
 
 export interface StartOrderThreadInput {
   shopifyCustomerId: string
@@ -36,6 +48,29 @@ export interface OrderAttentionResponse {
 
 function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === "string"
+}
+
+export async function fetchOrdersBoard(): Promise<OrdersBoardResponse> {
+  const fallback = "Unable to load orders."
+  const payload = await requestJson<Partial<OrdersBoardResponse>>(
+    ORDERS_BOARD_SWR_KEY,
+    {},
+    fallback,
+  )
+  if (
+    typeof payload.shop !== "string"
+    || !payload.columns
+    || typeof payload.columns !== "object"
+  ) {
+    throw new Error(fallback)
+  }
+  for (const columnId of ["needs_fulfillment", "unpaid", "fulfilled"] as const) {
+    const column = payload.columns[columnId]
+    if (!column || !Array.isArray(column.orders) || !isNullableString(column.nextPageInfo)) {
+      throw new Error(fallback)
+    }
+  }
+  return payload as OrdersBoardResponse
 }
 
 export async function fetchOrdersPage(pageInfo: string): Promise<OrdersResponse> {

@@ -12,7 +12,7 @@ export function StatusPill({ state }: { state: PillState }) {
       )
     case 'needs-attention':
       return (
-        <output className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-300 bg-amber-400/[0.05] border border-amber-400/30 rounded-full px-3 py-1">
+        <output className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-600/[0.05] border border-amber-600/30 rounded-full px-3 py-1">
           <AlertTriangle className="size-3.5" />
           Needs attention
         </output>

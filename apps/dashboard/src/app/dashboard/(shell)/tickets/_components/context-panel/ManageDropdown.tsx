@@ -58,7 +58,7 @@ export function ManageDropdown({ items }: ManageDropdownProps) {
               role="menuitem"
               className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors ${
                 item.danger
-                  ? 'text-muted-foreground hover:text-red-400 hover:bg-red-400/[0.08]'
+                  ? 'text-muted-foreground hover:text-red-600 hover:bg-red-600/[0.08]'
                   : 'text-muted-foreground hover:bg-foreground/[0.05]'
               }`}
             >

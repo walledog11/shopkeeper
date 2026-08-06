@@ -205,7 +205,7 @@ function TeamPageContent(props: Props) {
                     <button type="button"
                       onClick={() => handleRemoveMember(member.userId)}
                       disabled={removing === member.userId}
-                      className="p-1.5 rounded-md text-faint hover:text-red-400 hover:bg-red-400/[0.08] transition-colors disabled:opacity-50"
+                      className="p-1.5 rounded-md text-faint hover:text-red-600 hover:bg-red-600/[0.08] transition-colors disabled:opacity-50"
                       title="Remove member"
                     >
                       <Trash2 className="size-4" />
@@ -239,7 +239,7 @@ function TeamPageContent(props: Props) {
                     <button type="button"
                       onClick={() => handleRevokeInvite(invite.id)}
                       disabled={removing === invite.id}
-                      className="p-1.5 rounded-md text-faint hover:text-red-400 hover:bg-red-400/[0.08] transition-colors disabled:opacity-50"
+                      className="p-1.5 rounded-md text-faint hover:text-red-600 hover:bg-red-600/[0.08] transition-colors disabled:opacity-50"
                       title="Revoke invitation"
                     >
                       <X className="size-4" />

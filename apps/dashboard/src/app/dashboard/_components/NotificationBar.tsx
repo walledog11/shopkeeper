@@ -47,23 +47,10 @@ function saveDismissed(ids: Set<string>) {
 
 export default function NotificationBar({ notifications }: NotificationBarProps) {
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => loadDismissed());
-  const [current, setCurrent] = useState(0);
-  const directionRef = useRef(1);
   const barRef = useRef<HTMLDivElement>(null);
 
   const visibleNotifications = notifications.filter(n => !dismissedIds.has(n.id));
   const count = visibleNotifications.length;
-
-  const safeIndex = Math.min(current, Math.max(0, count - 1));
-
-  useEffect(() => {
-    if (count <= 1) return;
-    const id = setInterval(() => {
-      directionRef.current = 1;
-      setCurrent(c => (c + 1) % count);
-    }, 5000);
-    return () => clearInterval(id);
-  }, [count]);
 
   function dismiss(id: string) {
     setDismissedIds(prev => {
@@ -71,10 +58,11 @@ export default function NotificationBar({ notifications }: NotificationBarProps)
       saveDismissed(next);
       return next;
     });
-    if (current >= count - 1) setCurrent(Math.max(0, count - 2));
   }
 
-  const n = count > 0 ? visibleNotifications[safeIndex] : null;
+  // Always the oldest outstanding notification. Dismissing it reveals the next
+  // one — the merchant advances the queue, not a timer.
+  const n = count > 0 ? visibleNotifications[0] : null;
   const type = n?.type ?? "info";
   const styles = TYPE_STYLES[type];
   const Icon = TYPE_ICONS[type];
@@ -107,59 +95,46 @@ export default function NotificationBar({ notifications }: NotificationBarProps)
           className={`relative z-20 flex items-center justify-center pl-3 pr-10 md:px-10 text-xs md:text-sm shrink-0 border-b overflow-hidden ${styles.bar}`}
         >
           <div className="py-2 md:py-3 flex items-center gap-2 md:gap-2.5">
-            <AnimatePresence mode="wait" custom={directionRef.current}>
-              <m.div
-                key={n.id}
-                custom={directionRef.current}
-                variants={{
-                  enter: (d: number) => ({ opacity: 0, y: d * 8 }),
-                  center: { opacity: 1, y: 0 },
-                  exit: (d: number) => ({ opacity: 0, y: d * -8 }),
-                }}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{ duration: 0.18, ease: "easeInOut" }}
-                className="flex items-center gap-2.5 transition-colors"
-              >
-                <Icon className={`size-4 shrink-0 ${styles.icon}`} />
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className={`font-bold whitespace-nowrap ${styles.title}`}>{n.title}</span>
-                  {n.message && <span className="font-normal text-muted-foreground hidden sm:inline whitespace-nowrap">{n.message}</span>}
-                  {n.action && (
-                    <>
-                      {" "}
-                      {n.action.href ? (
-                        <Link
-                          href={n.action.href}
-                          className={`font-semibold underline underline-offset-2 hover:opacity-70 transition-opacity whitespace-nowrap ${styles.action}`}
-                        >
-                          {n.action.label}
-                        </Link>
-                      ) : (
-                        <button type="button"
-                          onClick={n.action.onClick}
-                          className={`font-semibold underline underline-offset-2 hover:opacity-70 transition-opacity whitespace-nowrap ${styles.action}`}
-                        >
-                          {n.action.label}
-                        </button>
-                      )}
-                    </>
+            <Icon className={`size-4 shrink-0 ${styles.icon}`} />
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className={`font-bold whitespace-nowrap ${styles.title}`}>{n.title}</span>
+              {n.message && <span className="font-normal text-muted-foreground hidden sm:inline whitespace-nowrap">{n.message}</span>}
+              {n.action && (
+                <>
+                  {" "}
+                  {n.action.href ? (
+                    <Link
+                      href={n.action.href}
+                      className={`font-semibold underline underline-offset-2 hover:opacity-70 transition-opacity whitespace-nowrap ${styles.action}`}
+                    >
+                      {n.action.label}
+                    </Link>
+                  ) : (
+                    <button type="button"
+                      onClick={n.action.onClick}
+                      className={`font-semibold underline underline-offset-2 hover:opacity-70 transition-opacity whitespace-nowrap ${styles.action}`}
+                    >
+                      {n.action.label}
+                    </button>
                   )}
-                </div>
-              </m.div>
-            </AnimatePresence>
+                </>
+              )}
+              {count > 1 && (
+                <span className="shrink-0 tabular-nums text-muted-foreground">
+                  +{count - 1} more
+                </span>
+              )}
+            </div>
           </div>
 
-          <m.button
+          <button
+            type="button"
             onClick={() => dismiss(n.id)}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
             className="absolute right-3 p-1.5 rounded hover:bg-foreground/10 transition-colors"
             aria-label="Dismiss"
           >
             <X className="size-4" />
-          </m.button>
+          </button>
         </m.div>
       )}
     </AnimatePresence>

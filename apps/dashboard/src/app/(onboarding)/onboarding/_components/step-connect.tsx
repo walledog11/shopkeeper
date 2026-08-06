@@ -40,7 +40,7 @@ export function StepConnect({ telegramBotUsername, imessageHandle }: {
       </Lede>
 
       {!imessageAvailable && !telegramAvailable ? (
-        <div className="mt-6 w-full max-w-[560px] rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-6 text-left text-[13px] leading-relaxed text-white/60">
+        <div className="mt-6 w-full max-w-[560px] rounded-2xl border border-foreground/10 bg-foreground/[0.04] px-6 py-6 text-left text-[13px] leading-relaxed text-foreground/60">
           Messaging isn&apos;t set up on this deployment yet — you&apos;ll approve replies and read briefings
           right here in the dashboard for now.
         </div>
@@ -51,7 +51,7 @@ export function StepConnect({ telegramBotUsername, imessageHandle }: {
         </div>
       )}
 
-      <div className="mt-5 flex w-full max-w-[560px] items-center gap-2.5 border-t border-dashed border-white/[0.07] pt-4 text-left text-[12px] leading-snug text-white/45">
+      <div className="mt-5 flex w-full max-w-[560px] items-center gap-2.5 border-t border-dashed border-foreground/[0.07] pt-4 text-left text-[12px] leading-snug text-foreground/45">
         {anyConnected ? (
           <>
             <span className="inline-flex size-4 items-center justify-center rounded bg-foreground/[0.08] text-foreground">
@@ -106,14 +106,14 @@ function ChannelShell({ icon: Icon, name, tagline, connected, children }: {
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="text-[15px] font-semibold text-white">{name}</span>
+            <span className="text-[15px] font-semibold text-foreground">{name}</span>
             {connected && (
               <span className="rounded-full bg-foreground/[0.08] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-foreground/60">
                 Linked
               </span>
             )}
           </div>
-          <div className="mt-0.5 truncate text-[12px] text-white/45">{tagline}</div>
+          <div className="mt-0.5 truncate text-[12px] text-foreground/45">{tagline}</div>
         </div>
       </div>
       <div className="mt-4">{children}</div>
@@ -144,7 +144,7 @@ function MintButton({ label, onClick, minting }: { label: string; onClick: () =>
 
 function WaitingRow() {
   return (
-    <div className="flex items-center gap-2 text-[12px] text-white/45">
+    <div className="flex items-center gap-2 text-[12px] text-foreground/45">
       <Loader2 className="size-3.5 animate-spin" /> Waiting for your text…
     </div>
   );
@@ -201,11 +201,11 @@ function ImessageConnector({ handle }: { handle: string }) {
 
   return (
     <ChannelShell icon={Smartphone} name="iMessage" tagline="Text me from your iPhone" connected={connected}>
-      {error && <p className="mb-2 text-[12px] text-red-400">{error}</p>}
+      {error && <p className="mb-2 text-[12px] text-red-600">{error}</p>}
 
       {connected ? (
-        <p className="text-[12.5px] text-white/70">
-          Linked to <span className="font-medium text-white">{formatHandleLabel(handles[handles.length - 1].displayLabel)}</span>.
+        <p className="text-[12.5px] text-foreground/70">
+          Linked to <span className="font-medium text-foreground">{formatHandleLabel(handles[handles.length - 1].displayLabel)}</span>.
         </p>
       ) : deepLink ? (
         <div className="flex flex-col items-center gap-3">
@@ -218,31 +218,31 @@ function ImessageConnector({ handle }: { handle: string }) {
           >
             <Smartphone className="size-4" /> Open Messages
           </a>
-          <p className="text-center text-[12px] leading-snug text-white/50">
+          <p className="text-center text-[12px] leading-snug text-foreground/50">
             <span className="hidden sm:inline">On another device, scan the code. </span>
             Messages opens with your private connection code ready to send.
           </p>
           <div className="flex w-full items-center gap-2">
-            <code className="flex-1 truncate rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-2 font-mono text-[12px] text-white/80">
+            <code className="flex-1 truncate rounded-md border border-foreground/10 bg-foreground/[0.04] px-2.5 py-2 font-mono text-[12px] text-foreground/80">
               {token}
             </code>
             <button
               type="button"
               onClick={copyToken}
               aria-label="Copy connect code"
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-md border border-white/10 text-white/60 transition-colors hover:bg-white/[0.06] hover:text-white"
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-md border border-foreground/10 text-foreground/60 transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
             >
               {copied ? <Check className="size-3.5 text-foreground" /> : <Copy className="size-3.5" />}
             </button>
           </div>
-          <p className="w-full text-[12px] leading-snug text-white/50">
-            Or text this code to <span className="font-medium text-white/70">{handle}</span>.
+          <p className="w-full text-[12px] leading-snug text-foreground/50">
+            Or text this code to <span className="font-medium text-foreground/70">{handle}</span>.
           </p>
           <div className="w-full"><WaitingRow /></div>
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          <ol className="list-inside list-decimal space-y-1 text-[12.5px] leading-relaxed text-white/55">
+          <ol className="list-inside list-decimal space-y-1 text-[12.5px] leading-relaxed text-foreground/55">
             <li>Create a private connection code</li>
             <li>Open Messages or scan the code from another device</li>
             <li>Send the prefilled message</li>
@@ -291,23 +291,23 @@ function TelegramConnector() {
 
   return (
     <ChannelShell icon={Send} name="Telegram" tagline="Approve and chat from anywhere" connected={connected}>
-      {error && <p className="mb-2 text-[12px] text-red-400">{error}</p>}
+      {error && <p className="mb-2 text-[12px] text-red-600">{error}</p>}
 
       {connected ? (
-        <p className="text-[12.5px] text-white/70">
-          Linked{chats[chats.length - 1].displayLabel ? <> to <span className="font-medium text-white">{chats[chats.length - 1].displayLabel}</span></> : ""}.
+        <p className="text-[12.5px] text-foreground/70">
+          Linked{chats[chats.length - 1].displayLabel ? <> to <span className="font-medium text-foreground">{chats[chats.length - 1].displayLabel}</span></> : ""}.
         </p>
       ) : url ? (
         <div className="flex flex-col items-center gap-3">
           <QrFrame value={url} title="Telegram connect QR code" />
-          <p className="text-center text-[11.5px] leading-snug text-white/45">
+          <p className="text-center text-[11.5px] leading-snug text-foreground/45">
             Scan with your phone, or open Telegram and tap Start.
           </p>
           <a
             href={url}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-white/10 bg-white/[0.06] px-3 text-[12.5px] font-medium text-white/85 transition-colors hover:bg-white/[0.10]"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-foreground/10 bg-foreground/[0.06] px-3 text-[12.5px] font-medium text-foreground/85 transition-colors hover:bg-foreground/[0.10]"
           >
             <ExternalLink className="size-4" /> Open Telegram
           </a>
@@ -315,7 +315,7 @@ function TelegramConnector() {
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          <ol className="list-inside list-decimal space-y-1 text-[12.5px] leading-relaxed text-white/55">
+          <ol className="list-inside list-decimal space-y-1 text-[12.5px] leading-relaxed text-foreground/55">
             <li>Tap the button below — opens the Shopkeeper bot</li>
             <li>Tap Start in Telegram to link this device</li>
             <li>Approve replies and get updates from there</li>

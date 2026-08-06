@@ -129,7 +129,7 @@ export function ImessageBindingSection({ handle }: { handle: string | null }) {
       <div className="px-4 py-4 flex flex-col items-center gap-3">
         {deepLink && (
           <>
-            <div className="rounded-lg bg-white p-2 shadow-sm">
+            <div className="rounded-lg bg-foreground p-2 shadow-sm">
               <QRCodeSVG
                 value={deepLink}
                 size={176}
@@ -160,7 +160,7 @@ export function ImessageBindingSection({ handle }: { handle: string | null }) {
               aria-label="Copy connect code"
               className="shrink-0 inline-flex items-center justify-center h-9 px-3 rounded-md border border-foreground/[0.08] text-foreground/60 hover:text-foreground/90 hover:bg-foreground/[0.04] transition-colors"
             >
-              {copied ? <Check className="size-3.5 text-emerald-400" /> : <Copy className="size-3.5" />}
+              {copied ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
             </button>
           </div>
           <p className="text-xs text-foreground/35 leading-relaxed">
@@ -179,7 +179,7 @@ export function ImessageBindingSection({ handle }: { handle: string | null }) {
 
   return (
     <div className="space-y-5">
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && <p className="text-xs text-red-600">{error}</p>}
 
       {isConnected ? (
         <>
@@ -238,7 +238,7 @@ export function ImessageBindingSection({ handle }: { handle: string | null }) {
                     updateState({ confirmingDeleteAll: false })
                     void unlink("all")
                   }}
-                  className="text-xs font-semibold text-red-400 hover:text-red-300 transition-colors whitespace-nowrap shrink-0"
+                  className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors whitespace-nowrap shrink-0"
                 >
                   Confirm
                 </button>

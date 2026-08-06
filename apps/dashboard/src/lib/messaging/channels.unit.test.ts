@@ -13,11 +13,11 @@ describe("channel metadata", () => {
       name: "Email",
       label: "Email",
       logo: "/logos/email.svg",
-      badgeClassName: "bg-blue-500/15 text-blue-400",
+      badgeClassName: "bg-blue-500/15 text-blue-600",
     });
     expect(getChannelLabel("dashboard_agent")).toBe("Dashboard");
     expect(getChannelLabel("sms_agent")).toBe("Telegram");
-    expect(getChannelBadgeClassName("ig_dm")).toBe("bg-pink-500/15 text-pink-400");
+    expect(getChannelBadgeClassName("ig_dm")).toBe("bg-pink-500/15 text-pink-600");
   });
 
   it("falls back consistently for workspace and unknown channels", () => {

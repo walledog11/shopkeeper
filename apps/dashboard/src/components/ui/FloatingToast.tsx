@@ -28,8 +28,8 @@ export default function FloatingToast({
       className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full bg-foreground px-4 py-2.5 text-sm font-medium text-background shadow-lg pointer-events-none"
     >
       {tone === "error"
-        ? <AlertCircle aria-hidden className="size-4 shrink-0 text-red-400" />
-        : <CheckCircle2 aria-hidden className="size-4 shrink-0 text-emerald-400" />
+        ? <AlertCircle aria-hidden className="size-4 shrink-0 text-red-600" />
+        : <CheckCircle2 aria-hidden className="size-4 shrink-0 text-emerald-600" />
       }
       {message}
     </output>

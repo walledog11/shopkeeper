@@ -268,7 +268,7 @@ function MarketingAuthShell({
           >
             <div className={cn("space-y-6", hasAside ? "max-w-xl" : "text-center")}>
               {eyebrow ? (
-                <div className="inline-flex w-fit items-center gap-2 rounded-full border border-stone-900/10 bg-white/80 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">
+                <div className="inline-flex w-fit items-center gap-2 rounded-full border border-stone-900/10 bg-foreground/80 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">
                   <span className="size-2 rounded-full bg-[#2f7a4a]" />
                   {eyebrow}
                 </div>

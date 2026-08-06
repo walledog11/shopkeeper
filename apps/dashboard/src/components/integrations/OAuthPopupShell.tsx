@@ -22,8 +22,8 @@ export function OAuthPopupShell({
       <div
         className={cn(
           "mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl",
-          state === "success" && "bg-emerald-400/10 text-emerald-400",
-          state === "error" && "bg-red-400/10 text-red-400",
+          state === "success" && "bg-emerald-600/10 text-emerald-600",
+          state === "error" && "bg-red-600/10 text-red-600",
           state === "loading" && "bg-muted text-muted-foreground",
         )}
       >

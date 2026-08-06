@@ -20,9 +20,9 @@ interface Props {
 }
 
 const COCO_ACTION_CLASS: Record<NonNullable<TicketCocoAction>["variant"], string> = {
-  send: "border-emerald-600/30 text-emerald-700 hover:bg-emerald-600/10 hover:text-emerald-800",
+  send: "border-emerald-600/30 text-emerald-700 hover:bg-emerald-600/10 hover:text-emerald-200",
   draft: "border-border text-strong hover:bg-foreground/[0.06] hover:text-strong",
-  caution: "border-amber-600/30 text-amber-700 hover:bg-amber-600/10 hover:text-amber-800",
+  caution: "border-amber-600/30 text-amber-700 hover:bg-amber-600/10 hover:text-amber-200",
   neutral: "border-border text-strong hover:bg-foreground/[0.06] hover:text-strong",
   loading: "border-border text-muted-foreground hover:bg-transparent hover:text-muted-foreground",
 }

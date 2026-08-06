@@ -176,7 +176,7 @@ export function StackDeck<T>({
         <div className={className} data-testid={testId}>
           <LazyMotion features={domMax}>
             <div className="relative select-none">
-              <div className="absolute inset-x-6 -bottom-2 h-4 rounded-full bg-black/5 blur-md pointer-events-none" aria-hidden />
+              <div className="absolute inset-x-6 -bottom-2 h-4 rounded-full bg-background/5 blur-md pointer-events-none" aria-hidden />
               <div className="relative" style={{ marginTop: peek.marginTop, marginBottom: peek.marginBottom }}>
                 <div ref={frontCardRef} className="relative z-10">
                   <SwipeCard
@@ -241,7 +241,7 @@ export function StackDeck<T>({
     <div className={className} data-testid={testId}>
       <LazyMotion features={domMax}>
         <div className="relative select-none">
-          <div className="absolute inset-x-6 -bottom-2 h-4 rounded-full bg-black/5 blur-md pointer-events-none" aria-hidden />
+          <div className="absolute inset-x-6 -bottom-2 h-4 rounded-full bg-background/5 blur-md pointer-events-none" aria-hidden />
           <div className="relative" style={{ marginTop: peek.marginTop, marginBottom: peek.marginBottom }}>
             {(peekItem || n > 2) && (
               <div className="absolute inset-0 z-0 pointer-events-none" aria-hidden>
