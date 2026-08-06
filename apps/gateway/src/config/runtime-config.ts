@@ -181,6 +181,26 @@ export function isPostResolutionFollowUpMonitorEnabled(): boolean {
   return parseBooleanEnv('POST_RESOLUTION_FOLLOWUP_MONITOR_ENABLED', false);
 }
 
+export interface GatewayRuntimeFlags {
+  monitors: {
+    orderRisk: boolean;
+    returnLifecycle: boolean;
+    deliveryException: boolean;
+    postResolutionFollowUp: boolean;
+  };
+}
+
+export function getGatewayRuntimeFlags(): GatewayRuntimeFlags {
+  return {
+    monitors: {
+      orderRisk: isOrderRiskMonitorEnabled(),
+      returnLifecycle: isReturnLifecycleMonitorEnabled(),
+      deliveryException: isDeliveryExceptionMonitorEnabled(),
+      postResolutionFollowUp: isPostResolutionFollowUpMonitorEnabled(),
+    },
+  };
+}
+
 // Max pending plans held per operator context (A6-step-2 queue). Default 1
 // reproduces the pre-queue single-slot overwrite exactly; raise it (bounded 1–5)
 // to let plans stack and be individually approved. Enablement is gated on P1

@@ -95,7 +95,7 @@ function logSearchHint(category, service) {
 function printPrerequisites() {
   console.log('[verify-production-alerts] Prerequisites');
   console.log('  1. Better Stack log drains configured for Vercel (dashboard) and Railway (gateway).');
-  console.log('  2. Log alert rules exist for all four categories (see docs/production/error-tracking-plan.md).');
+  console.log('  2. Log alert rules exist for all four categories (see docs/production/runbook.md and alerting-evidence.md).');
   console.log('  3. Temporarily lower the threshold under test to 1 and set OPS_ALERT_WINDOW_SECS=60.');
   console.log('  4. Record evidence in docs/production/alerting-evidence.md after each category.');
   console.log('  5. Restore default thresholds and confirm OPS_ALERTS_ENABLED=false silences threshold alerts.');

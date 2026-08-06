@@ -12,6 +12,8 @@ const CANONICAL_HOST_PATH_PATTERNS = [
   "/onboarding(.*)",
   "/select-org(.*)",
   "/create-workspace(.*)",
+  "/login(.*)",
+  "/signup(.*)",
   "/api/integrations(.*)",
 ] as const;
 

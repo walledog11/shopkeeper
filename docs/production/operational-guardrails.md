@@ -183,7 +183,7 @@ Completion gate:
 
 ### Phase 5: Production rollout and log routing
 
-Roll out after targeted tests pass. Configure Better Stack Level 1 per [error-tracking-plan.md](error-tracking-plan.md) (log drains, keyword alerts, uptime monitors).
+Roll out after targeted tests pass. Configure Better Stack Level 1 per [runbook.md](runbook.md) (log drains, keyword alerts, uptime monitors).
 
 - [x] Run `npm run lint`, `npm run test:unit`, `npm run test:integration`, `npm run test:e2e:smoke`, and `npm run build`.
 - [ ] Deploy with default thresholds first, then tune only after observing real traffic.
@@ -268,7 +268,7 @@ When agent/tool alerts fire:
 
 ## Assumptions
 
-- Structured logs routed through Vercel/Railway log drains to Better Stack are the only v1 alert channel (see [error-tracking-plan.md](error-tracking-plan.md)).
+- Structured logs routed through Vercel/Railway log drains to Better Stack are the only v1 alert channel (see [runbook.md](runbook.md)).
 - Scope is launch blockers only, not a full ops dashboard.
 - Redis is acceptable for short-window alert aggregation because both dashboard and gateway already depend on Redis for production guardrails.
 - No database migration is needed.

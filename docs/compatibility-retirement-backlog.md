@@ -10,7 +10,7 @@ Last reviewed: 2026-08-06.
 
 | Candidate | Owner | Evidence | Removed |
 | --- | --- | --- | --- |
-| Sentry example page/API (`/sentry-example-page`, `/api/sentry-example-api`, `SENTRY_EXAMPLE_PAGE_ENABLED`) | Product engineering | Not referenced in production runbooks or error-tracking plan; gated outside development; zero production env usage expected | 2026-07-30 |
+| Sentry example page/API (`/sentry-example-page`, `/api/sentry-example-api`, `SENTRY_EXAMPLE_PAGE_ENABLED`) | Product engineering | Not referenced in production runbooks; gated outside development; zero production env usage expected | 2026-07-30 |
 | Deprecated `GATEWAY_PUBLIC_URL` alias | Platform / dashboard | Dashboard reads only `GATEWAY_INTERNAL_URL`; legacy alias removed from `gateway-url.ts`, test harness, and production env checker | 2026-07-30 |
 | Legacy `pending_plan` dual-read fallback | Operator channels | `npm run audit:operator-context-compatibility` reports zero `legacyPendingPlanColumn` and zero `dualReadFallbackRows` in production | 2026-07-30 |
 | Legacy operator tool-call inline-input normalization | Agent core | Same audit reports zero `legacyToolCalls`; `normalizeApprovedToolCalls` now maps `input` only | 2026-07-30 |

@@ -10,7 +10,9 @@
 3. Trust is binary — one bad refund undoes months of goodwill. Bias toward escalation over confident wrong action; failure modes matter more than success modes.
 4. Every workflow module shares one general-purpose agent core. The core must not couple to support specifically.
 
-**Direction & roadmap:** `docs/core-extraction-and-module-expansion-plan.md` (agent-core extraction into a shared package, durable gateway-worker runtime, module #2 order-ops). Read it before assuming the support-only framing when touching agent architecture. The agent core now lives in `packages/agent/` (`@shopkeeper/agent`) and is consumed by both apps (extraction Track 2 complete); the remaining roadmap direction is moving more execution into the gateway worker.
+**Architecture:** The agent core lives in `packages/agent/` (`@shopkeeper/agent`) and is consumed by both apps. The gateway runs durable inbound, planning, and module work in-process; the dashboard owns interactive UI and provider-coupled delivery. Host-specific locks, logging, alerts, and delivery are injected at the package boundary. More execution continues to move into the gateway worker. Read this before assuming a support-only framing when touching agent architecture.
+
+**Modules:** Support is v1 (built). Order-ops (module #2) is code-complete and monitoring-only behind `ORDER_RISK_MONITOR_ENABLED` — flag-and-notify only, no autonomy tiers, no plan surface. Open rollout gates are in `docs/to-do-list.md`. WhatsApp is the next customer-support adapter (reuse the existing Meta app and inbound pipeline).
 
 ## Stack
 - `apps/dashboard/` — Next.js 15 (app router), Tailwind, SWR, Clerk.com auth → Vercel
@@ -90,6 +92,9 @@ Standing rules for any change to agent behavior (promoted from the 2026-07 behav
 - **Ticket text is untrusted.** Any customer-derived prose reaching an operator turn is wrapped in `<customer_message>` tags (`wrapUntrusted` in `packages/agent/src/message-history.ts`) — tool results, `aiSummary`, digest/briefing blurbs, and pending-state ledger text, not just raw message bodies.
 - **Deterministic keyword fast paths stay** (`yes`/`no`/`OPEN n`/…). They're a latency win and muscle memory; make the model path capable and the fast-path copy warmer rather than removing them.
 - Proactive/mutative monitors are flag-gated and notify-only until their rollout gate lands; enabling a flag never bypasses a gate.
+- Keep the agent core host-agnostic and thread-optional. Add narrow injected seams only for real host differences. New modules reuse the existing run, spend, policy, observability, and tool contracts — no speculative plugin framework.
+- Read-only and flag-only modules may ship behind a feature flag. External writes require reviewable shadow evidence and an explicit rollout gate **distinct from** the monitor flag.
+- **Order-ops** stays flag-and-notify-only: `runOrderOps` selects read tools plus `flag_order` only. It sits outside autonomy tiers (`flag_order` sets `policy.categoryPermission: false`). Before any mutating order action: shadow period, P1 execution-claim rollout verified, per-module cap enforcement proven, and a separate rollout gate from `ORDER_RISK_MONITOR_ENABLED`.
 
 ## Key API routes (`apps/dashboard/src/app/api/`)
 - `agent/route.ts` — execute run on a ticket

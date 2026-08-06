@@ -3,7 +3,7 @@
 Record sign-off evidence for ops-alert log routing and Better Stack Level 1 observability. Do not mark the production alerting to-do complete until every row below is filled.
 
 **Procedure:** [runbook.md](runbook.md) (Ops Alert Log Routing, Controlled Alert Validation)  
-**Implementation reference:** [operational-guardrails.md](operational-guardrails.md), [error-tracking-plan.md](error-tracking-plan.md)  
+**Implementation reference:** [operational-guardrails.md](operational-guardrails.md), [runbook.md](runbook.md) (Ops Alert Log Routing)  
 **Helper script:** `npm run verify:production:alerts`
 
 ## Baseline health (2026-06-09)

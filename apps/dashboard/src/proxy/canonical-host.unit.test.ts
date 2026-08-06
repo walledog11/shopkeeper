@@ -23,6 +23,16 @@ describe('getCanonicalHostRedirect', () => {
     );
   });
 
+  it('moves auth entry points off the marketing apex so Clerk cookies survive', () => {
+    vi.stubEnv('APP_URL', 'https://app.useshopkeeper.com');
+    expect(getCanonicalHostRedirect('useshopkeeper.com', '/login', '')).toBe(
+      'https://app.useshopkeeper.com/login',
+    );
+    expect(getCanonicalHostRedirect('useshopkeeper.com', '/signup', '?redirect_url=%2Fonboarding')).toBe(
+      'https://app.useshopkeeper.com/signup?redirect_url=%2Fonboarding',
+    );
+  });
+
   it('leaves requests already on the canonical host alone', () => {
     vi.stubEnv('APP_URL', 'https://app.useshopkeeper.com');
     expect(getCanonicalHostRedirect('app.useshopkeeper.com', '/onboarding', '')).toBeNull();

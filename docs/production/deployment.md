@@ -130,7 +130,7 @@ Both were caught by `migrate status`, not by an error at deploy time.
   `GATEWAY_QUEUE_DIAGNOSTICS_CACHE_MS`,
   `GATEWAY_ENABLE_MAINTENANCE_WORKERS`.
 - Vercel and Railway build the shared DB and agent packages before their apps so package output is current during deploy.
-- **Dashboard (Vercel):** `next build` only; no Level 2 error-tracking SDK or source-map upload step at launch (see [error-tracking-plan.md](error-tracking-plan.md)).
+- **Dashboard (Vercel):** `next build` only; no gateway error SDK or source-map upload step at launch (dashboard uses `@sentry/nextjs` → sentry.io; see [runbook.md](runbook.md)).
 - **Gateway (Railway):** `npm run build` is compile-only (`tsc`); no source-map upload at launch.
 - The dashboard health endpoint is `/api/health`.
 - The gateway readiness endpoints are `/health/deep` and `/health/queues`.

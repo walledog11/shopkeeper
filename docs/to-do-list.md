@@ -3,11 +3,9 @@
 Open work only. Completed work is deleted, not archived — git history is the
 record. Do not add "recently completed" sections to this file.
 
-Last reviewed: 2026-08-02.
+Last reviewed: 2026-08-06.
 
-Roadmap for agent-core extraction and module expansion lives separately in
-[core-extraction-and-module-expansion-plan.md](core-extraction-and-module-expansion-plan.md);
-this file is the near-term task list.
+Single source of truth for open product, production, and module tasks.
 
 **Guiding principle for pending integrations.** Shopkeeper is still in active
 development — channels and features are being added, not finalized. Pending
@@ -43,9 +41,8 @@ dropping or de-advertising a channel.
   phone/SMS paging are Better Stack's paid tier. At one hand-held merchant,
   email plus a Telegram push is sufficient paging.
   - **When resumed**, the checklist lives in
-    [runbook.md](production/runbook.md),
-    [error-tracking-plan.md](production/error-tracking-plan.md) and
-    [alerting-evidence.md](production/alerting-evidence.md). Prep is already
+    [runbook.md](production/runbook.md) (External Monitors, Ops Alert Log Routing)
+    and [alerting-evidence.md](production/alerting-evidence.md). Prep is already
     done (2026-06-24): `scripts/verify-production-alerts.mjs` +
     `emit-controlled-ops-alert.ts` verified, live health baseline recorded,
     per-category trigger cheatsheet written.
@@ -70,25 +67,39 @@ configured provider. None is a code task.
   been enabled in production.)
 - [ ] Observe provider-timeout/error telemetry through the normal canary
   windows; keep provider-specific rollback controls.
+- [ ] **Order-ops prod evidence** (code complete 2026-08-04; worker has
+  `ORDER_RISK_MONITOR_ENABLED=1`). Confirm a production `AgentAction` row from
+  the current build: `tool = 'flag_order'`, `status = 'escalated'`,
+  `executed_at` after the 2026-08-04 19:49 UTC deploy. Pre-deploy rows with
+  `status = 'success'` are from an earlier build and don't count. See
+  [pre-release-validation-2026-08-04.md](production/pre-release-validation-2026-08-04.md)
+  for the controlled canary; the webhook gateway still has the flag off, so live
+  `orders/created` traffic is not admitted until launch owner flips it.
+- [ ] **Order-ops backstop and alerting.** Unit-covered; observe one real hourly
+  sweep and one real `opsAlert` failure path in production.
+- [ ] **Gmail restricted-scope verification and live canary.** Code deployed;
+  Google OAuth Branding page, developer contacts, alias canary, and demo video
+  remain — see
+  [google-gmail-verification-packet.md](production/google-gmail-verification-packet.md).
+  Record scheduled catch-up/renewal evidence and close the 24-hour health window
+  ([gmail-rollout-evidence-2026-07-29.md](production/gmail-rollout-evidence-2026-07-29.md)).
+- [ ] **Instagram Advanced Access.** Implementation and Standard Access acceptance
+  are complete. External merchant launch gated on Meta App Review approval and a
+  non-role merchant account completing the full DM loop (connect → inbound →
+  approve reply → disconnect/reconnect). Ops in [runbook.md](production/runbook.md).
+- [ ] **PostHog production reports (Phase 4).** `@shopkeeper/analytics` Phases
+  1–3 shipped. Run `npm run provision:posthog-reports` against the production
+  project; report definitions in
+  [posthog-reports.md](production/posthog-reports.md).
+- [ ] **PostHog verification and rollout (Phase 5).** Staging payload review,
+  privacy policy deployment, then enable `PRODUCT_ANALYTICS_ENABLED` in production.
+  Keep `false` until the privacy policy ships.
 
-- [ ] **Trim the over-granted Shopify scopes in the Partner Dashboard.** The
-  `palette-dev` grant is 38 scopes; the app uses 15. Over-granted and unused by
-  any tool: `write_products`, `write_inventory`, `write_shipping`,
-  `write_reports`, `write_price_rules`, `write_privacy_settings`,
-  `write_legal_policies`, `write_draft_orders`, `write_gift_card_transactions`,
-  `read_analytics`, `read_reports`, plus their implied reads. Write access to
-  inventory and shipping that nothing uses is the wrong default for a
-  trust-first product.
-  - **Keep `read_all_orders` deliberately** — without it Shopify caps order
-    queries at 60 days and support lookups on older orders quietly fail. Needs
-    Shopify approval for public apps.
-  - Do it before merchant #2: changing scopes forces every connected merchant to
-    re-consent, so the cost only goes up.
-  - **Do not drop `read_products` with `write_products`.** "Plus their implied
-    reads" is only safe for scopes the tools do not need, and `read_products`
-    is one of the 15 in `SHOPIFY_OAUTH_SCOPES`. Since 2026-08-01 a shortfall
-    is at least visible — the integrations card asks the merchant to reconnect
-    — but it would be visible on every connected store at once.
+- [x] **Trim the over-granted Shopify scopes in the Partner Dashboard.** Done
+  2026-08-02 at zero connected merchants (no re-consent forced); scopes now match
+  the 15 in `SHOPIFY_OAUTH_SCOPES`. Connect smoke test passed on
+  `app.useshopkeeper.com` — details in
+  [phase-6-external-services.md](phase-6-external-services.md).
 
 - [ ] **Confirm a dashboard ops alert reaches Sentry in production.** The
   dashboard's three alert sources now capture to Sentry
@@ -134,13 +145,14 @@ configured provider. None is a code task.
   closed out and deleted 2026-08-01; the phases are in git history).
   - The Customers page cannot show the people in the inbox — it is
     Shopify-only. Still the open item from the June 2026 cleanup.
+  - [x] **Gateway runtime-flags endpoint.** `GET /internal/runtime-flags` on the
+    gateway (auth via `x-internal-secret`), proxied at
+    `GET /api/gateway/runtime-flags` for the dashboard. Exposes
+    `ORDER_RISK_MONITOR_ENABLED` and its three sibling monitor flags from
+    `runtime-config.ts`.
   - The flag-gated monitor toggles: hide them when the gateway flag is off,
-    versus showing a real "not available" state? **Neither is buildable as
-    written.** The flags (`ORDER_RISK_MONITOR_ENABLED` and its siblings) are
-    *gateway* env vars, and the dashboard holds no reference to them — it cannot
-    tell whether a monitor is actually running. Both options need an endpoint
-    that reports gateway flag state first, so that endpoint is the decision, not
-    the toggle behavior.
+    versus showing a real "not available" state? **Now buildable** — decide hide
+    vs "not available" and wire `ProactiveMonitoringSection`.
 
 - [ ] **Domain / branding migration (was "Phase 6").** **The code and DNS side is
   done; the external consoles and the email leg are not.** What remains is
@@ -214,14 +226,11 @@ configured provider. None is a code task.
     the Shopify scope trim + connect smoke test, the Telegram bot migration, then
     the demo video. Search Console, the apex mailbox, the domain, and the whole
     **Postmark receive path incl. bounces** are done.
-  - **Unverified seam: the signup funnel starts on the apex.** `/login` and
-    `/signup` are not in `CANONICAL_HOST_PATH_PATTERNS`
-    (`apps/dashboard/src/proxy/canonical-host.ts`), and every marketing CTA is a
-    relative `/signup`, so a merchant signs up on the apex and is redirected
-    cross-host to `app.` at `/onboarding`. Clerk production cookies should be
-    domain-wide on `.useshopkeeper.com` and survive it, but this is the same
-    host-split shape that broke every OAuth connect in `034d60e4`. Verify in a
-    browser, or add both paths to the canonical list.
+  - [x] **Unverified seam: the signup funnel starts on the apex.** `/login` and
+    `/signup` are now in `CANONICAL_HOST_PATH_PATTERNS`
+    (`apps/dashboard/src/proxy/canonical-host.ts`), so marketing CTAs that land
+    on the apex redirect to `app.` before Clerk sets cookies. Verified in unit
+    tests; still worth a browser smoke on production.
 
 - [x] **Clerk migrated dev → production, 2026-08-02.** The live instance was a
   *development* one (`pk_test_…` on `premium-goblin-44.clerk.accounts.dev`).
@@ -280,7 +289,9 @@ configured provider. None is a code task.
     `TOKEN_ENCRYPTION_KEY=""` on a pull — all three demonstrably have values.
     - **Use `vercel env ls <env>` presence as the reliable check**, never a
       pulled value. The three findings above were re-verified that way on
-      2026-08-02 and are genuine absences.
+      2026-08-02 and are genuine absences. Re-checked 2026-08-06:
+      `CLERK_WEBHOOK_SECRET` is still absent in Vercel production (live
+      `POST /api/webhooks/clerk` returns `{"error":"Webhook not configured"}`).
     - For format/content checks, run the checker as a Vercel build step where
       real values are injected.
 
@@ -294,26 +305,11 @@ configured provider. None is a code task.
   billed for connection lifetime) and never use Postgres `LISTEN/NOTIFY` (pins a
   Neon connection, defeats autosuspend).
 
-## Modules / Roadmap
+## Reference Docs
 
-- [ ] **Order-ops (module #2): autonomy.** Code-complete but monitoring-only —
-  flag/notify behind `ORDER_RISK_MONITOR_ENABLED`, no autonomy. Eval fixtures
-  landed 2026-07-22 (`apps/gateway/src/order-ops.eval.test.ts`). The single
-  remaining-work list lives in
-  [core-extraction-and-module-expansion-plan.md](core-extraction-and-module-expansion-plan.md)
-  — don't re-copy it here.
-
-## Live Integration Plans
-
-Active, still-open plans kept out of this file:
-
-- [email-integration-plan.md](email-integration-plan.md) — Gmail/Postmark;
-  Google restricted-scope verification and the live canary matrix remain.
-- [instagram-integration-plan.md](instagram-integration-plan.md) — one open
-  item: Meta Advanced Access approval plus a non-role merchant loop.
-- [product-instrumentation-plan.md](product-instrumentation-plan.md) — PostHog
-  Phase 4 run against the production project, then Phase 5 verification.
-  `PRODUCT_ANALYTICS_ENABLED` stays `false` until the privacy policy ships.
 - [compatibility-retirement-backlog.md](compatibility-retirement-backlog.md) —
-  its "Deferred" section is a live landmine list; read before renaming any
-  BullMQ queue or job string.
+  read before renaming any BullMQ queue or job string.
+- [phase-6-external-services.md](phase-6-external-services.md) — console-only
+  brand/domain checklist; delete when its six closing checks pass.
+- [production/posthog-reports.md](production/posthog-reports.md) — PostHog report
+  definitions and provisioning for product analytics rollout.

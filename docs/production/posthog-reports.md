@@ -1,9 +1,7 @@
-# PostHog Reports (product-instrumentation Phase 4)
+# PostHog Reports (product analytics rollout)
 
-The four saved reports required by
-[`product-instrumentation-plan.md`](../product-instrumentation-plan.md) Phase 4,
-specified against the **actual** event wire schema in `packages/analytics/src`
-(`events.ts` + `sanitize.ts` `getEventProperties`), not the plan's prose. Property
+The four saved reports required for production analytics rollout, specified against the **actual** event wire schema in `packages/analytics/src`
+(`events.ts` + `sanitize.ts` `getEventProperties`). Property
 keys below are the exact snake_case names PostHog receives.
 
 Create these in the **production** PostHog project, and mirror them in staging (or

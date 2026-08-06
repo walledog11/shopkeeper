@@ -4,6 +4,7 @@ import webhookRoutes from './routes/webhooks.js';
 import { bodyLimitErrorHandler } from './routes/body-parsers.js';
 import internalOperatorRoutes from './routes/internal-operator.js';
 import internalQueueRoutes from './routes/internal-queue.js';
+import internalRuntimeRoutes from './routes/internal-runtime.js';
 import { getGatewayDashboardUrl, validateGatewayEnv } from './config/env.js';
 import { registerHealthRoutes } from './health.js';
 import logger from './logger.js';
@@ -46,6 +47,7 @@ export async function startGatewayServer() {
   app.use('/webhooks', webhookRoutes);
   app.use('/internal', internalOperatorRoutes);
   app.use('/internal', internalQueueRoutes);
+  app.use('/internal', internalRuntimeRoutes);
 
   // Live dashboard updates: holds browser SSE connections on this (server-role)
   // process and pushes Redis-published thread events. No-op unless enabled.

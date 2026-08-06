@@ -1006,8 +1006,9 @@ Better Stack log alerting is **query/threshold-based on a saved Telemetry chart*
 not raw-text keyword matching: filter the structured fields into a chart, save it,
 and attach a threshold rule. This is why the `category` / `service` / `fingerprint`
 field values are a stable contract — rewording an alert message is safe, renaming
-a field silently breaks paging. Full setup lives in
-[error-tracking-plan.md](error-tracking-plan.md).
+a field silently breaks paging. Sign-off evidence:
+[alerting-evidence.md](alerting-evidence.md). Paywalled Level 1 items are
+deferred in [to-do-list.md](../to-do-list.md).
 
 Alert categories:
 

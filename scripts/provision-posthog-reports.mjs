@@ -1,4 +1,4 @@
-// product-instrumentation Phase 4: provision the four merchant-activation
+// PostHog product analytics rollout: provision the four merchant-activation
 // PostHog reports (activation funnel, time to value, agent quality, weekly
 // retention) plus the "Meaningful activity" retention Action, grouped onto one
 // dashboard. Definitions mirror docs/production/posthog-reports.md and the real
