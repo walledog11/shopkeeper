@@ -1,7 +1,7 @@
 "use client"
 
 import WorkflowSetupBanner from "./WorkflowSetupBanner"
-import HomeTelegramNudge from "./HomeTelegramNudge"
+import HomeChannelNudge from "./HomeChannelNudge"
 import ConciergeBriefing from "./ConciergeBriefing"
 import NeedsYou from "./NeedsYou"
 import ClearedOvernight from "./ClearedOvernight"
@@ -18,12 +18,19 @@ function getGreeting(): string {
 
 interface Props {
   userName: string
+  agentName: string
   initialHomeSummary: HomeSummary
+  instagramAvailable: boolean
 }
 
-export default function DashboardHomeClient({ userName, initialHomeSummary }: Props) {
+export default function DashboardHomeClient({
+  userName,
+  agentName,
+  initialHomeSummary,
+  instagramAvailable,
+}: Props) {
   const greeting = getGreeting()
-  const data = useHomeData(initialHomeSummary)
+  const data = useHomeData(initialHomeSummary, agentName)
 
   if (data.isSummaryPending) {
     return <HomePageSkeleton />
@@ -33,6 +40,17 @@ export default function DashboardHomeClient({ userName, initialHomeSummary }: Pr
     <div className="@container h-full flex flex-col overflow-hidden bg-background">
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <div className="flex flex-col min-h-full w-full max-w-2xl mx-auto px-5 md:px-6 lg:px-8 pt-3 pb-4 gap-3">
+
+          <WorkflowSetupBanner
+            steps={data.workflowSteps}
+          />
+
+          <HomeChannelNudge
+            hasPhoneBound={data.hasPhoneBound}
+            hasEmail={data.hasEmailForwarding}
+            hasInstagram={data.hasInstagram}
+            instagramAvailable={instagramAvailable}
+          />
 
           <div className="flex flex-col gap-3 min-w-0">
             <ConciergeBriefing
@@ -61,12 +79,6 @@ export default function DashboardHomeClient({ userName, initialHomeSummary }: Pr
               topics={data.clearedTopics}
             />
           </div>
-
-          <WorkflowSetupBanner
-            steps={data.workflowSteps}
-          />
-
-          <HomeTelegramNudge connected={data.hasPhoneBound} />
         </div>
       </div>
     </div>

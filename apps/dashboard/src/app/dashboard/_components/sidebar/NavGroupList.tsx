@@ -5,6 +5,10 @@ import type { MouseEvent } from "react";
 import { cn } from "@/lib/ui/cn";
 import type { NavItem, NavSection } from "../nav-items";
 import { formatOpenCount, isRouteActive } from "./sidebar-helpers";
+import {
+  dashboardNavPrefetchHandlers,
+  useDashboardNavPrefetch,
+} from "./useDashboardNavPrefetch";
 
 function itemBadgeCount(item: NavItem, needsYouCount: number, openCount: number): number | null {
   if (item.href === "/dashboard/review" && needsYouCount > 0) return needsYouCount;
@@ -27,6 +31,8 @@ export function NavGroupList({
   openCount?: number;
   onNavigate: (e: MouseEvent<HTMLAnchorElement>, isActive: boolean) => void;
 }) {
+  const prefetchNav = useDashboardNavPrefetch();
+
   return (
     <div className="flex flex-col gap-5">
       {sections.map((section) => {
@@ -48,6 +54,7 @@ export function NavGroupList({
                     key={item.href}
                     href={item.href}
                     onClick={(e) => onNavigate(e, isActive)}
+                    {...dashboardNavPrefetchHandlers(prefetchNav, item.href)}
                     className={cn(
                       "flex items-center gap-3 px-4 py-3.5 transition-colors",
                       isActive

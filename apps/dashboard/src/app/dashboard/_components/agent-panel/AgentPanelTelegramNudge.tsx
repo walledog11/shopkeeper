@@ -1,7 +1,7 @@
 "use client"
 
 import { useOperatorChannels } from "@/hooks/useOperatorChannels"
-import TelegramConnectBanner from "@/app/dashboard/_components/TelegramConnectBanner"
+import ChannelConnectBanner from "@/app/dashboard/_components/ChannelConnectBanner"
 
 interface Props {
   agentName: string
@@ -20,9 +20,9 @@ export default function AgentPanelTelegramNudge({
 
   if (!anyBound && showConnectBanner) {
     return (
-      <TelegramConnectBanner className="shrink-0 mx-5 md:mx-6">
+      <ChannelConnectBanner className="shrink-0 mx-5 md:mx-6">
         Message {agentName} from your phone —
-      </TelegramConnectBanner>
+      </ChannelConnectBanner>
     )
   }
 

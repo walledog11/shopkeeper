@@ -1,14 +1,20 @@
 import Link from "next/link"
-import type { ReactNode } from "react"
+import type { ComponentType, ReactNode } from "react"
 import { MessageCircle } from "lucide-react"
 import { cn } from "@/lib/ui/cn"
 
-export default function TelegramConnectBanner({
+export default function ChannelConnectBanner({
   children,
   className,
+  href = "/dashboard/integrations#telegram",
+  actionLabel = "Connect Telegram",
+  icon: Icon = MessageCircle,
 }: {
   children: ReactNode
   className?: string
+  href?: string
+  actionLabel?: string
+  icon?: ComponentType<{ className?: string; "aria-hidden"?: boolean }>
 }) {
   return (
     <div
@@ -17,13 +23,13 @@ export default function TelegramConnectBanner({
         className,
       )}
     >
-      <MessageCircle className="mr-1.5 inline size-3.5 -mt-px" aria-hidden />
+      <Icon className="mr-1.5 inline size-3.5 -mt-px" aria-hidden />
       {children}{" "}
       <Link
-        href="/dashboard/integrations#telegram"
+        href={href}
         className="font-semibold underline decoration-blue-700/30 underline-offset-2 hover:decoration-blue-700/60"
       >
-        Connect Telegram
+        {actionLabel}
       </Link>
     </div>
   )

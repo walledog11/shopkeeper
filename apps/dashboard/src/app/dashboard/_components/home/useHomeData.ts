@@ -10,13 +10,12 @@ import {
 import { buildHomeSummaryView } from "@/lib/home/summary-view"
 import { selectWalkthroughItems } from "@/lib/home/walkthrough"
 import { CHANNEL_TYPE } from "@shopkeeper/agent/thread-constants"
-import { useOrg } from "@/hooks/useOrg"
 import { useIntegrations } from "@/hooks/useIntegrations"
 import { useOperatorChannels } from "@/hooks/useOperatorChannels"
 import { isEmailIntegrationConfigured } from "@/lib/integrations/onboarding-setup"
 import { isShopifyIntegrationActive } from "@/lib/integrations/shopify-connection"
 
-export function useHomeData(initialHomeSummary?: HomeSummary) {
+export function useHomeData(initialHomeSummary?: HomeSummary, agentName?: string) {
   const {
     data: summaryData,
     isLoading: isSummaryLoading,
@@ -30,7 +29,6 @@ export function useHomeData(initialHomeSummary?: HomeSummary) {
     },
   )
   const { data: integrations = [] } = useIntegrations()
-  const { data: orgData } = useOrg()
   const { anyBound: hasPhoneBound } = useOperatorChannels()
 
   const hasShopify = integrations.some(integration =>
@@ -38,6 +36,7 @@ export function useHomeData(initialHomeSummary?: HomeSummary) {
   )
   const emailIntegration = integrations.find(integration => integration.platform === CHANNEL_TYPE.EMAIL)
   const hasEmailForwarding = isEmailIntegrationConfigured(emailIntegration)
+  const hasInstagram = integrations.some(integration => integration.platform === CHANNEL_TYPE.IG_DM)
 
   // Until the first fetch lands there is no summary — render it as pending rather
   // than letting the empty placeholder speak as if it were the real answer.
@@ -74,7 +73,7 @@ export function useHomeData(initialHomeSummary?: HomeSummary) {
     home.hasSentReply,
   ])
 
-  const agentName = (orgData?.settings?.agentName ?? AGENT_SETTINGS_DEFAULTS.agentName) as string
+  const resolvedAgentName = agentName ?? AGENT_SETTINGS_DEFAULTS.agentName
   const refreshHomeSummary = useCallback(() => {
     void mutateSummary()
   }, [mutateSummary])
@@ -85,9 +84,11 @@ export function useHomeData(initialHomeSummary?: HomeSummary) {
     walkthroughCount,
     ordersToShip,
     hasShopify,
+    hasEmailForwarding,
+    hasInstagram,
     hasPhoneBound,
     workflowSteps,
-    agentName,
+    agentName: resolvedAgentName,
     isSummaryPending: isInitialSummaryLoading,
     refreshHomeSummary,
   }

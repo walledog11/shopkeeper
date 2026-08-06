@@ -27,6 +27,10 @@ import {
 } from "./sidebar-helpers";
 import { UserAvatarLink } from "./UserAvatarLink";
 import type { NavAuth } from "./useNavAuth";
+import {
+  dashboardNavPrefetchHandlers,
+  useDashboardNavPrefetch,
+} from "./useDashboardNavPrefetch";
 
 function handleNavClick(e: MouseEvent<HTMLAnchorElement>, isActive: boolean) {
   if (isActive) e.preventDefault();
@@ -36,10 +40,12 @@ function NavDropdown({
   label,
   items,
   onNavigate,
+  prefetchNav,
 }: {
   label: string;
   items: readonly NavItem[];
   onNavigate: (e: MouseEvent<HTMLAnchorElement>, isActive: boolean) => void;
+  prefetchNav: (href: string) => void;
 }) {
   const pathname = usePathname();
   const isGroupActive = items.some((item) => isRouteActive(pathname, item.href));
@@ -66,6 +72,7 @@ function NavDropdown({
               <Link
                 href={item.href}
                 onClick={(e) => onNavigate(e, itemIsActive)}
+                {...dashboardNavPrefetchHandlers(prefetchNav, item.href)}
                 className={cn(
                   "flex w-full items-start gap-3 rounded-xl px-3 py-3 transition-colors hover:bg-accent",
                   itemIsActive && "bg-accent",
@@ -101,6 +108,7 @@ export function DesktopTopBar({
   navAuth: NavAuth;
 }) {
   const pathname = usePathname();
+  const prefetchNav = useDashboardNavPrefetch();
   const { open: openCmd } = useCommandPalette();
   const { open: openAgentPanel } = useAgentPanel();
   const { openHelp } = useHelp();
@@ -122,6 +130,7 @@ export function DesktopTopBar({
         <Link
           href={inboxNavItem.href}
           onClick={(e) => handleNavClick(e, inboxIsActive)}
+          {...dashboardNavPrefetchHandlers(prefetchNav, inboxNavItem.href)}
           className={topBarNavTriggerClass(inboxIsActive)}
         >
           <span>{inboxNavItem.name}</span>
@@ -140,6 +149,7 @@ export function DesktopTopBar({
             label={label}
             items={items}
             onNavigate={handleNavClick}
+            prefetchNav={prefetchNav}
           />
         ))}
 
