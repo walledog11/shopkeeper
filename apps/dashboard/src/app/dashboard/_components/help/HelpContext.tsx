@@ -6,6 +6,7 @@ interface HelpContextValue {
   isOpen: boolean
   openHelp: () => void
   closeHelp: () => void
+  toggleHelp: () => void
 }
 
 const HelpContext = createContext<HelpContextValue | null>(null)
@@ -15,7 +16,11 @@ export function HelpProvider({ children }: { children: ReactNode }) {
 
   const openHelp = useCallback(() => setIsOpen(true), [])
   const closeHelp = useCallback(() => setIsOpen(false), [])
-  const value = useMemo(() => ({ isOpen, openHelp, closeHelp }), [closeHelp, isOpen, openHelp])
+  const toggleHelp = useCallback(() => setIsOpen(v => !v), [])
+  const value = useMemo(
+    () => ({ isOpen, openHelp, closeHelp, toggleHelp }),
+    [closeHelp, isOpen, openHelp, toggleHelp],
+  )
 
   return (
     <HelpContext.Provider value={value}>

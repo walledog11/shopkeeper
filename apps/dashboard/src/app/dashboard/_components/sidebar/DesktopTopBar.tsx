@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type MouseEvent } from "react";
-import { ChevronDown, CircleHelp, Search } from "lucide-react";
+import { ChevronDown, CircleHelp, Search, X } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -111,7 +111,7 @@ export function DesktopTopBar({
   const prefetchNav = useDashboardNavPrefetch();
   const { open: openCmd } = useCommandPalette();
   const { open: openAgentPanel } = useAgentPanel();
-  const { openHelp } = useHelp();
+  const { isOpen: helpIsOpen, toggleHelp } = useHelp();
   const inboxIsActive = isRouteActive(pathname, inboxNavItem.href);
 
   return (
@@ -181,12 +181,18 @@ export function DesktopTopBar({
 
         <button
           type="button"
-          onClick={openHelp}
-          aria-label="Help"
-          title="Help"
-          className="flex items-center justify-center h-9 w-9 rounded-md border border-border bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors outline-none shrink-0"
+          onClick={toggleHelp}
+          aria-label={helpIsOpen ? "Close help" : "Help"}
+          title={helpIsOpen ? "Close help" : "Help"}
+          aria-expanded={helpIsOpen}
+          className={cn(
+            "flex items-center justify-center h-9 w-9 rounded-md border border-border transition-colors outline-none shrink-0",
+            helpIsOpen
+              ? "bg-muted text-foreground"
+              : "bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted",
+          )}
         >
-          <CircleHelp className="size-4 shrink-0" />
+          {helpIsOpen ? <X className="size-4 shrink-0" /> : <CircleHelp className="size-4 shrink-0" />}
         </button>
 
         <OrgSwitcher navAuth={navAuth} onSwitching={onSwitching} variant="topBar" />

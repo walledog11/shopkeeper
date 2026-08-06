@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { X, ChevronLeft } from "lucide-react"
 import { ALL_CATEGORIES, withAgentName, type Category, type Article } from "./content/index"
 import HelpHome from "./HelpHome"
@@ -21,10 +21,11 @@ export default function HelpPanel({ agentName }: { agentName: string }) {
     setView({ type: "article", category, article })
   }
 
-  const handleClose = () => {
-    setView({ type: "home" })
-    closeHelp()
-  }
+  // Reset on open, not on close — resetting on close would snap the panel back
+  // to Home mid-collapse.
+  useEffect(() => {
+    if (isOpen) setView({ type: "home" })
+  }, [isOpen])
 
   const goBack = () => {
     if (view.type === "article") setView({ type: "category", category: view.category })
@@ -38,58 +39,63 @@ export default function HelpPanel({ agentName }: { agentName: string }) {
 
   return (
     <div
-      className={`shrink-0 border-l border-border bg-background flex flex-col overflow-hidden transition-all duration-300 ease-in-out
-        ${isOpen ? "fixed inset-0 z-50 w-full md:static md:w-72" : "w-0"}
+      className={`shrink-0 border-border bg-background flex flex-col overflow-hidden transition-[width] duration-300 ease-in-out
+        ${isOpen ? "fixed inset-0 z-50 w-full md:static md:w-[331px] md:border-l" : "w-0"}
       `}
+      aria-hidden={!isOpen}
+      inert={!isOpen}
     >
-      {isOpen && (
-        <>
-          {/* Header */}
-          <div className="flex items-start justify-between px-5 pt-5 pb-4 border-b border-border shrink-0">
-            <div className="flex items-start gap-2 min-w-0">
-              {view.type !== "home" && (
-                <button type="button"
-                  onClick={goBack}
-                  className="mt-0.5 text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                >
-                  <ChevronLeft className="size-4" />
-                </button>
-              )}
-              <div className="min-w-0">
-                <p className="text-base font-bold text-foreground leading-none">Help</p>
-                <p className="text-xs text-muted-foreground mt-1 truncate">{subtitle}</p>
-              </div>
+      {/* Fixed-width so the contents lay out identically at every frame of the
+          width transition — otherwise the text reflows as the panel grows. */}
+      <div className="flex h-full w-screen flex-col overflow-hidden md:w-[331px]">
+        {/* Header */}
+        <div className="flex items-start justify-between px-5 pt-5 pb-4 border-b border-border shrink-0">
+          <div className="flex items-start gap-2 min-w-0">
+            {view.type !== "home" && (
+              <button type="button"
+                onClick={goBack}
+                className="mt-0.5 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+              >
+                <ChevronLeft className="size-4" />
+              </button>
+            )}
+            <div className="min-w-0">
+              <p className="text-base font-bold text-foreground leading-none">Help</p>
+              <p className="text-xs text-muted-foreground mt-1 truncate">{subtitle}</p>
             </div>
-            <button type="button"
-              onClick={handleClose}
-              className="size-7 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-border/70 transition-colors shrink-0 mt-0.5"
-            >
-              <X className="size-3.5" />
-            </button>
           </div>
+          {/* Desktop closes from the top-bar button, which becomes an X while
+              the panel is open; on mobile that bar is behind the overlay. */}
+          <button type="button"
+            onClick={closeHelp}
+            aria-label="Close help"
+            className="md:hidden size-7 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-border/70 transition-colors shrink-0 mt-0.5"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
 
-          {/* Body */}
-          <div className="flex-1 overflow-y-auto">
-            {view.type === "home" && (
-              <HelpHome
-                categories={ALL_CATEGORIES}
-                agentName={agentName}
-                onSelectCategory={cat => setView({ type: "category", category: cat })}
-              />
-            )}
-            {view.type === "category" && (
-              <HelpCategory
-                category={view.category}
-                agentName={agentName}
-                onSelectArticle={article => handleSelectArticle(view.category, article)}
-              />
-            )}
-            {view.type === "article" && (
-              <HelpArticle article={view.article} agentName={agentName} />
-            )}
-          </div>
-        </>
-      )}
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto">
+          {view.type === "home" && (
+            <HelpHome
+              categories={ALL_CATEGORIES}
+              agentName={agentName}
+              onSelectCategory={cat => setView({ type: "category", category: cat })}
+            />
+          )}
+          {view.type === "category" && (
+            <HelpCategory
+              category={view.category}
+              agentName={agentName}
+              onSelectArticle={article => handleSelectArticle(view.category, article)}
+            />
+          )}
+          {view.type === "article" && (
+            <HelpArticle article={view.article} agentName={agentName} />
+          )}
+        </div>
+      </div>
     </div>
   )
 }
