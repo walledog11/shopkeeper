@@ -98,9 +98,10 @@ empty string, indistinguishable from unset.
 - [ ] **Shopify app config → CLI (M0a of storefront chat).** Started 2026-08-07;
   rollback reference in
   [production/shopify-app-config-reference.md](production/shopify-app-config-reference.md).
-  Next physical step is installing the Shopify CLI (absent from `PATH` and from
-  the repo) and taking the verbatim export via `shopify app config link`, which
-  pulls without pushing. M0a migrates at the **exact current 15-scope set** — a
+  Shopify CLI landed 2026-08-07 as a root devDependency (`npx shopify`, 4.6.1).
+  Next physical step is taking the verbatim export via `shopify app config
+  link`, which pulls without pushing. M0a migrates at the **exact current
+  15-scope set** — a
   re-authorization prompt during it is a defect, not a side effect. Still open:
   the repo has **no compliance webhook handlers** for the three mandatory topics,
   so the export decides whether that is a real gap. Not gated on anything; M1

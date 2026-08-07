@@ -173,10 +173,12 @@ api_version = "TODO(export)"
 
 Console and CLI steps that cannot be done from the repo.
 
-- [ ] **Install the Shopify CLI.** Not on `PATH` and not a dependency of this
-  repo. Decide global (`npm i -g @shopify/cli`) versus a root devDependency —
-  the latter touches `package.json` and the lockfile and therefore CI, so it
-  wants its own commit.
+- [x] **Install the Shopify CLI.** Done 2026-08-07 — `@shopify/cli@^4.6.1` as a
+  root devDependency, so the version is pinned in the lockfile and every machine
+  runs the same one. Invoke as `npx shopify`. Adds 14 packages and no new audit
+  findings; the 8 that `npm audit` reports are pre-existing and none of them are
+  in the added tree. `knip.json` sets `devDependencies: "off"`, so nothing
+  importing it does not fail `lint:knip`.
 - [ ] **Capture the verbatim export.** `shopify app config link` against the
   production app pulls remote configuration into a local TOML *without* pushing
   anything, which makes it the cleanest verbatim export. Pulling is safe; the

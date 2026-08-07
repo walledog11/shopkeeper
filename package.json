@@ -72,6 +72,7 @@
     "@clerk/testing": "^2.0.22",
     "@eslint/js": "^9.39.4",
     "@playwright/test": "^1.59.1",
+    "@shopify/cli": "^4.6.1",
     "@types/node": "^22.19.17",
     "dotenv": "^16.4.5",
     "eslint": "^9",
