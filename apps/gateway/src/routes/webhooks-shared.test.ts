@@ -4,7 +4,11 @@ import { createTestIntegration, createTestOrg } from '@shopkeeper/db/test-helper
 import { resolveOrganizationId } from './webhooks-shared.js';
 
 describe('resolveOrganizationId', () => {
-  const shopDomain = 'duplicate-shop.myshopify.com';
+  // Exercised on tiktok, not shopify: integrations_shopify_account_unique (and
+  // its ig_dm twin) now make a cross-org duplicate impossible for those
+  // platforms, so the newest-wins ordering is only reachable for tiktok and
+  // email — the platforms that can still legitimately share an external account.
+  const sharedAccountId = 'duplicate-seller-account';
   let orgIds: string[] = [];
   let integrationIds: string[] = [];
 
@@ -20,7 +24,7 @@ describe('resolveOrganizationId', () => {
   });
 
   it('returns null when no integration matches', async () => {
-    await expect(resolveOrganizationId(ChannelType.shopify, 'missing.myshopify.com')).resolves.toBeNull();
+    await expect(resolveOrganizationId(ChannelType.tiktok, 'missing-seller-account')).resolves.toBeNull();
   });
 
   it('prefers the newest integration when multiple orgs share one external account', async () => {
@@ -29,12 +33,12 @@ describe('resolveOrganizationId', () => {
     orgIds.push(olderOrg.id, newerOrg.id);
 
     const olderIntegration = await createTestIntegration(olderOrg.id, {
-      platform: ChannelType.shopify,
-      externalAccountId: shopDomain,
+      platform: ChannelType.tiktok,
+      externalAccountId: sharedAccountId,
     });
     const newerIntegration = await createTestIntegration(newerOrg.id, {
-      platform: ChannelType.shopify,
-      externalAccountId: shopDomain,
+      platform: ChannelType.tiktok,
+      externalAccountId: sharedAccountId,
     });
     integrationIds.push(olderIntegration.id, newerIntegration.id);
 
@@ -47,6 +51,6 @@ describe('resolveOrganizationId', () => {
       data: { createdAt: new Date('2026-06-01T00:00:00.000Z') },
     });
 
-    await expect(resolveOrganizationId(ChannelType.shopify, shopDomain)).resolves.toBe(newerOrg.id);
+    await expect(resolveOrganizationId(ChannelType.tiktok, sharedAccountId)).resolves.toBe(newerOrg.id);
   });
 });
