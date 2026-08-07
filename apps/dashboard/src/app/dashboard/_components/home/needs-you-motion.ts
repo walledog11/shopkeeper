@@ -9,7 +9,8 @@ export type StackPeekConfig = {
   marginBottom: number
 }
 
-// Back cards fan up and to the left, tilted (Orders/Review boards).
+// Back cards fan up and to the left, tilted. StackDeck's fallback only — every
+// deck on the dashboard passes STACKED_BELOW_PEEK so the stacks read alike.
 export const DEFAULT_STACK_PEEK: StackPeekConfig = {
   depth: { x: -8, y: -7, rotate: -1.8, scale: 0.015, opacity: 0.16 },
   origin: "top center",

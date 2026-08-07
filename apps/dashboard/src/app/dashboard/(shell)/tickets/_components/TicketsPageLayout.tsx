@@ -114,12 +114,12 @@ function CorrectReplyBanner({
   onDismiss: () => void
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-amber-600/20 bg-amber-600/[0.08] px-4 py-2 text-xs text-amber-200 shrink-0">
+    <div className="flex items-center justify-between gap-3 border-b border-amber-600/20 bg-amber-600/[0.08] px-4 py-2 text-xs text-amber-700 shrink-0">
       <span>Send the reply you&apos;d prefer — {agentName} will learn from the difference.</span>
       <button
         type="button"
         onClick={onDismiss}
-        className="inline-flex items-center gap-1 text-amber-700/70 hover:text-amber-100 transition-colors shrink-0"
+        className="inline-flex items-center gap-1 text-amber-700/70 hover:text-amber-700 transition-colors shrink-0"
         aria-label="Dismiss"
       >
         <X className="size-3.5" />

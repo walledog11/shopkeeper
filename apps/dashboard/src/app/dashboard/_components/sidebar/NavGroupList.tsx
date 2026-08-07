@@ -83,8 +83,8 @@ export function NavGroupList({
                         className={cn(
                           "ml-1 min-w-[20px] h-5 px-1.5 rounded-lg text-xs font-bold flex items-center justify-center tabular-nums shrink-0",
                           item.badge
-                            ? "bg-green-600/15 text-green-200"
-                            : "bg-amber-500/15 text-amber-200",
+                            ? "bg-green-600/15 text-green-700"
+                            : "bg-amber-500/15 text-amber-700",
                         )}
                       >
                         {formatOpenCount(badgeCount)}

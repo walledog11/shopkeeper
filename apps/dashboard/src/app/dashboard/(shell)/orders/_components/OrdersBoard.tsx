@@ -21,6 +21,8 @@ import {
   BoardColumnLoading,
   DashboardStackColumn,
 } from "@/app/dashboard/_components/board/DashboardStackColumn"
+import { STACKED_BELOW_PEEK } from "@/app/dashboard/_components/home/needs-you-motion"
+import { useIsMobile } from "@/hooks/useMobile"
 import { errorMessageFromUnknown } from "@/lib/api/fetcher"
 import { formatRelativeTime, formatShortDate } from "@/lib/format/date"
 import {
@@ -400,6 +402,7 @@ function OrderStackColumn({
       )}
       deckLabels={{ previous: "Previous order", next: "Next order" }}
       variant={variant}
+      peek={STACKED_BELOW_PEEK}
       stackTestId="orders-stack-deck"
       expandedTestId="orders-stack-expanded"
       gridTestId="orders-grid"
@@ -420,6 +423,10 @@ function OrderStackColumn({
 export function OrdersBoard({ columns, shop }: { columns: OrdersBoardState; shop: string | null }) {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [expandedColumns, setExpandedColumns] = useState<Partial<Record<BoardColumnId, boolean>>>({})
+  // The grid earns its keep on a wide screen, where it scans several orders at
+  // once. On a phone it collapses to a flat one-per-row list — the only stack on
+  // the dashboard that isn't a deck — so the featured column decks there too.
+  const isMobile = useIsMobile()
 
   const allOrders = Object.values(columns).flatMap((column) => column.entries)
   const selectedOrder = selectedId !== null ? allOrders.find((order) => order.id === selectedId) ?? null : null
@@ -437,7 +444,7 @@ export function OrdersBoard({ columns, shop }: { columns: OrdersBoardState; shop
   return (
     <>
       <div className="space-y-10">
-        <OrderStackColumn {...columnProps(featured.id)} variant="grid" />
+        <OrderStackColumn {...columnProps(featured.id)} variant={isMobile ? "deck" : "grid"} />
 
         <ReturnRequestsSection />
 
