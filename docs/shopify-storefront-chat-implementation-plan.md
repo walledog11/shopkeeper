@@ -92,12 +92,13 @@ it.
 - Export the current Dev Dashboard app configuration verbatim before touching
   anything. Record it in `docs/production/` as the rollback reference. **Started
   2026-08-07** in
-  [production/shopify-app-config-reference.md](production/shopify-app-config-reference.md):
-  the code-derived expectation (scopes, redirect URI, webhook endpoint and
-  topics) is captured there for the export to be diffed against, along with a
-  draft TOML. The verbatim export itself is still outstanding — `shopify app
-  config link` pulls remote config to a local file without pushing, which makes
-  it the cleanest way to take it.
+  [production/shopify-app-config-reference.md](production/shopify-app-config-reference.md).
+  **Done 2026-08-07** — the verbatim export is checked in beside it as
+  `shopify-app-config-export-2026-08-07.toml`, pulled via `shopify app config
+  link` against `shopkeeper-production`. Scopes matched the code-derived
+  prediction exactly, which is what M0a's parity promise rests on. **That export
+  *is* the M0a file** — the CLI generated it from the live app, so nothing needs
+  authoring and the earlier hand-written draft was deleted as a hazard.
 - Create a **throwaway dev app** and land the TOML there first. Never
   `config link` the production app against an unverified file.
 - Link the root `shopify.app.toml` to the production app only after the dev-app
@@ -111,11 +112,21 @@ it.
 - Confirm which mandatory compliance webhooks the app already owes
   (`customers/data_request`, `customers/redact`, `shop/redact`) and that the
   TOML declares them identically to the current Dashboard configuration.
-  **Finding 2026-08-07: the repo has no handlers for any of the three.** The
-  export decides whether the Dashboard declares them against a live endpoint, a
-  dead one, or not at all. Do not resolve this by pointing them at
-  `/webhooks/shopify` — its topic allowlist rejects them, so they would fail
-  silently, which is worse than being absent.
+  **Resolved 2026-08-07 by the export: the app declares none of the three, and
+  registers none of them per-shop either.** The repo has no handlers for them
+  and no subscription exists — a real pre-existing gap, but one M0a inherits
+  rather than causes, so M0a still migrates at parity. It becomes blocking for
+  App Store distribution, which is already in this plan's deferred list. Closing
+  it means writing the three handlers first, then declaring the topics — not
+  pointing them at `/webhooks/shopify`, whose topic allowlist rejects them into
+  silent failure.
+
+  The same export corrected a wrong assumption in this plan's framing: the five
+  order/uninstall webhooks are **not** Dashboard-configured. They are registered
+  per-shop against the REST Admin API on every OAuth callback
+  (`integrations/shopify/callback/route.ts:368-392`), and app config declares no
+  subscriptions at all. So the TOML must **not** declare them — doing so would
+  double-deliver every order event.
 
 ### Done when
 

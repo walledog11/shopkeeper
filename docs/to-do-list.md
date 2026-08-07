@@ -98,14 +98,20 @@ empty string, indistinguishable from unset.
 - [ ] **Shopify app config → CLI (M0a of storefront chat).** Started 2026-08-07;
   rollback reference in
   [production/shopify-app-config-reference.md](production/shopify-app-config-reference.md).
-  Shopify CLI landed 2026-08-07 as a root devDependency (`npx shopify`, 4.6.1).
-  Next physical step is taking the verbatim export via `shopify app config
-  link`, which pulls without pushing. M0a migrates at the **exact current
-  15-scope set** — a
-  re-authorization prompt during it is a defect, not a side effect. Still open:
-  the repo has **no compliance webhook handlers** for the three mandatory topics,
-  so the export decides whether that is a real gap. Not gated on anything; M1
-  itself still waits on a live merchant.
+  Shopify CLI landed 2026-08-07 as a root devDependency (`npx shopify`, 4.6.1),
+  and the **verbatim export is captured** — scopes matched the code-derived
+  prediction exactly, so M0a migrates at parity and the export *is* the M0a
+  file. Next physical step is the throwaway dev app and the round-trip; linking
+  production is the one-way step and everything before it is reversible. A
+  re-authorization prompt during M0a is a defect, not a side effect. Not gated
+  on anything; M1 itself still waits on a live merchant.
+- [ ] **Shopify compliance webhooks are declared nowhere.**
+  `customers/data_request`, `customers/redact`, `shop/redact` have no handlers
+  in the repo, no app-level declaration, and no per-shop registration —
+  confirmed against the 2026-08-07 config export. Pre-existing, inherited by M0a
+  rather than caused by it, and **blocking for App Store distribution**. Fix is
+  handlers first, then declare the topics; pointing them at `/webhooks/shopify`
+  would fail silently against its topic allowlist.
 - [ ] **Shopify app proxy + `write_app_proxy` (M0b).** Split out of M0 on
   2026-08-07 because declaring a proxy requires that scope, which raises a
   re-auth prompt on connected stores (they keep working either way — Shopify

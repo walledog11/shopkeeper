@@ -9,11 +9,17 @@ This record contains sanitized configuration only. It intentionally omits the
 client secret, access tokens, and the app secret. `SHOPIFY_CLIENT_ID` and
 `SHOPIFY_CLIENT_SECRET` live in Vercel; `SHOPIFY_APP_SECRET` lives in both.
 
-Started 2026-08-07. **The verbatim export is not captured yet** — see
-"Outstanding" at the bottom. Everything in "Expected configuration" below is
-derived from the source tree, not from the Dashboard, and exists so the export
-has something to be diffed against. Where they disagree, **the Dashboard is
-authoritative** and the difference is a finding, not a typo to correct.
+**Verbatim export captured 2026-08-07** via `shopify app config link
+--client-id … --path <scratch>` against app `shopkeeper-production`, org
+`40511769`. It is checked in beside this file as
+[shopify-app-config-export-2026-08-07.toml](shopify-app-config-export-2026-08-07.toml)
+— named so it does **not** match the `shopify.app*.toml` pattern the CLI
+discovers, so no stray `shopify app deploy` can ever target it.
+
+"Expected configuration" below is the code-derived prediction written *before*
+the export, kept because the divergences are the interesting part. Where the two
+disagree, **the export is authoritative**. See "Export divergences" for what
+actually differed.
 
 ## Expected configuration (code-derived)
 
@@ -64,35 +70,95 @@ Endpoint: `POST https://clerk-production-e37f.up.railway.app/webhooks/shopify`
 | `orders/cancelled` | queued |
 | `app/uninstalled` | handled separately, before the topic allowlist |
 
-There is **no webhook registration code anywhere in the repo** — no
-`webhookSubscriptions` mutation, no `registerWebhook` call. Subscriptions are
-Dashboard-configured, which is exactly why the TOML becomes authoritative the
-moment the app is CLI-linked.
+**Correction (2026-08-07).** An earlier revision of this file — and the commit
+message that introduced it, `ea1d12ee` — claimed there was "no webhook
+registration code anywhere in the repo" and concluded subscriptions were
+Dashboard-configured. **Both halves are wrong.** The registration lives at
+`apps/dashboard/src/app/api/integrations/shopify/callback/route.ts:368-392`: on
+every OAuth callback the app POSTs each of `SHOPIFY_WEBHOOK_TOPICS`
+(`route.ts:30`, the same five topics above) to the REST Admin `webhooks.json`,
+pointing at `${GATEWAY_INTERNAL_URL}/webhooks/shopify`. The original grep
+searched for `webhookSubscriptions`/`registerWebhook`/`topics:` and matched none
+of them, because this is REST rather than GraphQL.
+
+So subscriptions are **per-shop, registered at install time** — not app-level
+config. The export confirms it from the other side: `[webhooks]` carries an
+`api_version` and no subscriptions at all.
+
+This matters for M0a. Because the five order topics are per-shop, the TOML does
+not need to declare them and **must not** start doing so casually: app-level
+subscriptions and per-shop subscriptions would both fire, double-delivering
+every order event to a gateway whose dedupe is keyed on `externalMessageId`, not
+on webhook ID.
+
+## Export divergences
+
+What the export said versus what the code predicted. Scopes matched exactly —
+all 15, same set, different order — which is the one that mattered most, since
+M0a's whole promise rests on migrating at parity.
+
+| Field | Predicted | Actual | Note |
+| --- | --- | --- | --- |
+| `access_scopes.scopes` | 15 scopes | same 15 | ✅ parity confirmed |
+| `optional_scopes` | — | `[ ]` | empty |
+| `use_legacy_install_flow` | `false` | `false` | ✅ managed installation |
+| `application_url` | `https://app.useshopkeeper.com` | same | ✅ |
+| `webhooks.api_version` | `TODO(export)` | `2026-04` | — |
+| `webhooks.subscriptions` | 5 topics | **none** | per-shop instead; see Webhooks above |
+| `[app_proxy]` | absent | absent | ✅ as expected, M0b adds it |
+| `embedded` | `false` | **`true`** | see below |
+| `auth.redirect_urls` | 1 entry | **2 entries** | see below |
+
+**`embedded = true`.** Predicted `false` because the dashboard is a standalone
+Next.js app with no App Bridge anywhere in the tree. Production says otherwise.
+Left exactly as-is for M0a — parity means carrying it across even when it looks
+wrong — but worth understanding before anyone "corrects" it, because flipping it
+changes how Shopify frames the app in admin.
+
+**Two redirect URLs.** The export allows both the canonical
+`https://app.useshopkeeper.com/api/integrations/shopify/callback` and
+`https://dashboard-shopkeeper.vercel.app/api/integrations/shopify/callback` —
+the raw Vercel alias, which `vercel inspect` confirms is a live alias on the
+production deployment. Carry both across in M0a; dropping one is a behaviour
+change, not a cleanup.
+
+It is worth knowing *why* the second one is load-bearing-looking but risky. Per
+`.claude/CLAUDE.md`, the `*_oauth_*` handshake cookies are host-only, and
+`src/proxy/canonical-host.ts` 307s `/api/integrations` onto the `APP_URL` host
+precisely so a connect started on a sibling host does not lose them across the
+provider hop. A merchant who somehow began OAuth on the Vercel alias would be
+redirected back to that alias — and the canonical-host redirect is what saves
+the flow. Removing the alias from this list is plausibly correct eventually; it
+is not an M0a decision.
 
 ## Findings
 
-### 1. No compliance webhook handlers exist
+### 1. Compliance webhooks are declared nowhere and handled nowhere — RESOLVED
 
 `customers/data_request`, `customers/redact`, and `shop/redact` have **zero
 handlers in the source tree**. The only GDPR-adjacent route is
 `/api/org/gdpr-export`, which is the merchant exporting their own workspace data
 — unrelated to Shopify's mandatory topics.
 
-Shopify requires all three for any app distributed through the App Store, and
-`shopify app deploy` will carry whatever the TOML declares. Three cases, and the
-export decides which:
+The export settles the open question, and lands on the worst of the three cases
+this section originally listed: **the app declares nothing.** `[webhooks]` in
+the export holds `api_version = "2026-04"` and no subscriptions, and the
+per-shop registration list (`SHOPIFY_WEBHOOK_TOPICS`) contains only the five
+order/uninstall topics. All three compliance topics are absent from both paths.
 
-- Dashboard declares them pointing at a live endpoint → find it, because it
-  isn't in this repo.
-- Dashboard declares them pointing at a dead URL → pre-existing compliance gap
-  that M0a surfaces but does not cause.
-- Dashboard declares nothing → the TOML must not invent them either, or the
-  first deploy starts sending traffic at handlers that do not exist.
+This is a **pre-existing compliance gap, not something M0a causes** — the app is
+in exactly this state in production today. But it becomes blocking the moment
+distribution is on the table, since Shopify requires all three for any app in
+the App Store, and "App Store listing" already sits in this plan's deferred
+list.
 
-Do not paper over this by declaring the topics in the TOML and pointing them at
-`/webhooks/shopify`. That endpoint's topic allowlist
-(`webhooks-shopify.ts:15`) does not include them, so they would be rejected —
-a silently failing compliance webhook is worse than an absent one.
+Do not paper over it by declaring the topics in the TOML and pointing them at
+`/webhooks/shopify`. That endpoint's topic allowlist (`webhooks-shopify.ts:15`)
+does not include them, so they would be rejected — a silently failing compliance
+webhook is worse than an absent one. Closing this properly means writing the
+three handlers first, then declaring the topics.
+
+Out of scope for M0a, which must migrate at parity. Tracked separately.
 
 ### 2. `write_app_proxy` is required, which broke the original M0's no-new-scopes invariant
 
@@ -127,47 +193,32 @@ block belong to M0b and must not appear in whatever lands during M0a — if a
 re-authorization prompt shows up during the migration, that has to read as a
 defect rather than an expected side effect.
 
-## Draft TOML
+## The M0a file
 
-**Not** at the repo root, deliberately. Placing a `shopify.app.toml` at the root
-makes it the target of any stray `shopify app deploy`, and the plan's rule is
-that the production app is never linked against an unverified file. Move it to
-the root only when landing it on the throwaway dev app.
+The hand-written draft that used to live here is deleted. It is obsolete, and
+keeping it would be actively harmful — it invented `[[webhooks.subscriptions]]`
+blocks the production app does not have, which would have double-delivered every
+order event alongside the per-shop registrations.
 
-Values marked `TODO(export)` are the ones only the Dashboard can settle. This is
-the **M0a** file: 15 scopes, no proxy.
+**The M0a file is the export, verbatim.** That is what migrating at parity means:
+[shopify-app-config-export-2026-08-07.toml](shopify-app-config-export-2026-08-07.toml)
+is already a valid, complete, CLI-authoritative config for this app, because the
+CLI generated it from the live app. Nothing needs authoring.
 
-```toml
-client_id = "TODO(export)"
-name = "TODO(export)"
-application_url = "https://app.useshopkeeper.com"
-embedded = false                       # TODO(export) — confirm; app is standalone, not App Bridge
+Rules for handling it:
 
-[access_scopes]
-scopes = "read_customers,write_customers,read_orders,write_orders,write_order_edits,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders,read_returns,write_returns,read_products,read_content,write_gift_cards,write_discounts,read_store_credit_accounts,write_store_credit_account_transactions"
-use_legacy_install_flow = false        # managed installation
+- **Do not add `[[webhooks.subscriptions]]`.** The five order/uninstall topics
+  are registered per-shop at OAuth callback. Declaring them at app level too
+  would double-deliver.
+- **Do not add `[app_proxy]` or `write_app_proxy`.** That is M0b.
+- **Do not add `compliance_topics`.** Finding 1 — no handlers exist yet.
+- **Do not "fix" `embedded = true` or drop the second redirect URL.** Both look
+  wrong and both are what production has. See "Export divergences."
 
-[auth]
-redirect_urls = [
-  "https://app.useshopkeeper.com/api/integrations/shopify/callback"
-]
-
-[webhooks]
-api_version = "TODO(export)"
-
-  [[webhooks.subscriptions]]
-  topics = ["app/uninstalled"]
-  uri = "https://clerk-production-e37f.up.railway.app/webhooks/shopify"
-
-  [[webhooks.subscriptions]]
-  topics = ["orders/create", "orders/fulfilled", "orders/updated", "orders/cancelled"]
-  uri = "https://clerk-production-e37f.up.railway.app/webhooks/shopify"
-
-  # compliance_topics deliberately absent pending finding 1.
-
-# [app_proxy] deliberately absent — it requires write_app_proxy, which is
-# M0b. Adding either here would break M0a's no-prompt guarantee.
-```
+Which reduces M0a to: copy the export to the repo root as `shopify.app.toml`,
+land it on the throwaway dev app, verify the round-trip, then link production.
+The file content is a solved problem; the remaining risk is entirely in the
+deploy path.
 
 ## Outstanding
 
@@ -179,20 +230,24 @@ Console and CLI steps that cannot be done from the repo.
   findings; the 8 that `npm audit` reports are pre-existing and none of them are
   in the added tree. `knip.json` sets `devDependencies: "off"`, so nothing
   importing it does not fail `lint:knip`.
-- [ ] **Capture the verbatim export.** `shopify app config link` against the
-  production app pulls remote configuration into a local TOML *without* pushing
-  anything, which makes it the cleanest verbatim export. Pulling is safe; the
-  one-way step is `shopify app deploy` afterward. Commit the pulled file here,
-  then diff it against "Expected configuration" above and record every
-  divergence.
-- [ ] **Settle finding 1** from that export — what the Dashboard actually
-  declares for the three compliance topics.
+- [x] **Capture the verbatim export.** Done 2026-08-07 against
+  `shopkeeper-production` (org `40511769`). Confirmed read-only: the CLI's own
+  verbose trace shows only `appByKey` / `specifications` **queries** and a local
+  file write, no mutation. Divergences recorded above.
+- [x] **Settle finding 1** — resolved by the export. The app declares no
+  compliance topics at all, and none are registered per-shop either. Real
+  pre-existing gap; blocking only for App Store distribution, not for M0a.
+- [ ] **Write the three compliance webhook handlers** and declare the topics —
+  separately from M0a, which migrates at parity. Blocking for distribution.
 - [x] **Decide finding 2** — split applied 2026-08-07. M0a migrates at the
   current scope set; M0b adds the proxy and `write_app_proxy` separately.
-- [ ] **Create the throwaway dev app** and land the TOML there first. Deploy,
-  install on a dev store, confirm granted scopes and webhook topics match the
-  export exactly.
-- [ ] **Link production** only after that round-trip passes.
+- [ ] **Create the throwaway dev app** and land the export TOML there first.
+  Deploy, install on a dev store, confirm granted scopes match the export
+  exactly. Note webhook topics will **not** appear at app level — they arrive
+  per-shop on OAuth callback, so verify them by connecting the dev store through
+  the app rather than by reading app config.
+- [ ] **Link production** only after that round-trip passes. This is the one-way
+  step; everything before it is reversible.
 - [ ] **M0b, after M0a settles** — add `write_app_proxy` and the `[app_proxy]`
   block (`url`, `subpath`, `prefix`, all required), dev app first, with the
   merchant-facing explanation of the prompt written before deploy.
