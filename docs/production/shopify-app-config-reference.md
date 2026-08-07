@@ -216,9 +216,8 @@ Rules for handling it:
   wrong and both are what production has. See "Export divergences."
 
 Which reduces M0a to: copy the export to the repo root as `shopify.app.toml`,
-land it on the throwaway dev app, verify the round-trip, then link production.
-The file content is a solved problem; the remaining risk is entirely in the
-deploy path.
+rehearse it on a dev app, verify the round-trip, then link production. The file
+content is a solved problem; the remaining risk is entirely in the deploy path.
 
 ## Outstanding
 
@@ -241,13 +240,19 @@ Console and CLI steps that cannot be done from the repo.
   separately from M0a, which migrates at parity. Blocking for distribution.
 - [x] **Decide finding 2** — split applied 2026-08-07. M0a migrates at the
   current scope set; M0b adds the proxy and `write_app_proxy` separately.
-- [ ] **Create the throwaway dev app** and land the export TOML there first.
-  Deploy, install on a dev store, confirm granted scopes match the export
-  exactly. Note webhook topics will **not** appear at app level — they arrive
-  per-shop on OAuth callback, so verify them by connecting the dev store through
-  the app rather than by reading app config.
-- [ ] **Link production** only after that round-trip passes. This is the one-way
-  step; everything before it is reversible.
+- [ ] **Rehearse on a dev app** — preferring one already installed on a dev store
+  over a fresh throwaway, since only an existing install rehearses "a connected
+  merchant survives the migration." Record `npx shopify app versions list` first;
+  `deploy` overwrites the target's name, URLs, and scopes, and
+  `npx shopify app release --version <recorded>` is how you put it back. Confirm
+  a restorable prior version actually exists before betting a working dev app on
+  it. Webhook topics will **not** appear at app level — they arrive per-shop on
+  OAuth callback, so verify them by connecting the dev store through the app
+  rather than by reading app config.
+- [ ] **Link production** only after that round-trip passes. Config values are
+  recoverable by re-releasing a prior version; what does not obviously reverse is
+  the Dashboard→CLI **management model** switch. That is the step to be careful
+  about.
 - [ ] **M0b, after M0a settles** — add `write_app_proxy` and the `[app_proxy]`
   block (`url`, `subpath`, `prefix`, all required), dev app first, with the
   merchant-facing explanation of the prompt written before deploy.

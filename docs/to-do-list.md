@@ -101,8 +101,10 @@ empty string, indistinguishable from unset.
   Shopify CLI landed 2026-08-07 as a root devDependency (`npx shopify`, 4.6.1),
   and the **verbatim export is captured** — scopes matched the code-derived
   prediction exactly, so M0a migrates at parity and the export *is* the M0a
-  file. Next physical step is the throwaway dev app and the round-trip; linking
-  production is the one-way step and everything before it is reversible. A
+  file. Next physical step is the dev-app rehearsal — prefer one already
+  installed on a dev store over a throwaway, since only an existing install
+  tests that a connected merchant survives the migration; record
+  `app versions list` first, because `app release --version` is the undo. A
   re-authorization prompt during M0a is a defect, not a side effect. Not gated
   on anything; M1 itself still waits on a live merchant.
 - [ ] **Shopify compliance webhooks are declared nowhere.**

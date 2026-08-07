@@ -83,9 +83,21 @@ parameter, decides what a merchant actually grants.
 A theme app extension requires the Shopify CLI and `shopify app deploy`, which
 makes the TOML authoritative for scopes, webhook subscriptions, redirect URLs,
 and proxy configuration — against the live install path for every connected
-merchant. A mismatched TOML changes what the next install grants. This is a
-one-way migration and it gets its own milestone with no feature work riding on
-it.
+merchant. A mismatched TOML changes what the next install grants. It gets its own
+milestone with no feature work riding on it.
+
+**What is actually one-way, corrected 2026-08-07.** Config *values* are not.
+`shopify app deploy` creates an app version — "a snapshot of your app
+configuration and all extensions" — and `shopify app release --version <v>`
+re-releases an earlier one, with `shopify app versions list` to enumerate them.
+`deploy --no-release` stages a version without releasing it at all. So a bad
+config deploy is recoverable by re-releasing the prior version.
+
+What does not obviously reverse is the **management model** switch: moving the
+app from Dashboard-configured to CLI/TOML-authoritative. Treat that as the
+irreversible act, and the config contents as recoverable. This is a narrower
+claim than the original "this is a one-way migration," and it is the one worth
+being careful about.
 
 ### Changes
 
@@ -99,11 +111,37 @@ it.
   prediction exactly, which is what M0a's parity promise rests on. **That export
   *is* the M0a file** — the CLI generated it from the live app, so nothing needs
   authoring and the earlier hand-written draft was deleted as a hazard.
-- Create a **throwaway dev app** and land the TOML there first. Never
-  `config link` the production app against an unverified file.
+- Rehearse on a dev app before production. **Prefer a dev app that is already
+  installed on a dev store over a fresh throwaway** (revised 2026-08-07). A
+  throwaway has no installs, so it cannot exercise the requirement that actually
+  matters here — that an *existing connected install keeps working* across a
+  Dashboard→CLI migration. An already-installed dev app is the only rehearsal
+  that covers it.
+
+  The cost is that `deploy` overwrites the target's config: the export would
+  rename it to `shopkeeper-production`, repoint `application_url` and the
+  redirect URLs, and replace its scopes. Recoverable, but record the starting
+  point first rather than trusting that:
+
+  ```
+  npx shopify app versions list          # record the current version FIRST
+  # link the dev app, deploy, verify the dev-store install
+  npx shopify app release --version <recorded>   # restore it
+  ```
+
+  Confirm `versions list` actually shows a restorable prior version before
+  betting a working dev app on the rollback. If it does not, or if the dev app
+  is load-bearing for day-to-day work, use a throwaway and accept that the
+  existing-install question goes unrehearsed until production.
+- Note that **no dev app tests the byte-exact export**: `client_id` and `name`
+  necessarily differ on any target that is not production. The rehearsal
+  verifies the deploy flow, what a fresh install grants, and whether an existing
+  install survives — not the literal file.
 - Link the root `shopify.app.toml` to the production app only after the dev-app
-  TOML round-trips: deploy, install on a dev store, confirm granted scopes and
-  webhook topics match the exported reference exactly.
+  round-trip passes: deploy, install on a dev store, confirm granted scopes match
+  the exported reference exactly. Webhook topics will **not** appear at app level
+  — they are registered per-shop on OAuth callback — so verify those by
+  connecting the dev store through the app, not by reading app config.
 - Preserve managed installation and the existing scope set, byte for byte. M0a
   adds **no** scopes — an unchanged scope set means no re-authorization prompt
   for any already-connected merchant. The 15-scope list is in the reference doc;
@@ -169,8 +207,8 @@ not have to ship in the same change, and it should not.
   on the dashboard host. Per Shopify's schema all three keys are required —
   `url`, `subpath` (alphanumeric, ≤30 chars, not `admin`/`services`/`password`/
   `login`), and `prefix` (one of `a`, `apps`, `community`, `tools`).
-- Land it on the throwaway dev app first and confirm the proxy resolves, exactly
-  as M0a did for the base configuration.
+- Land it on the same dev app M0a rehearsed on and confirm the proxy resolves,
+  exactly as M0a did for the base configuration.
 - Decide and write the merchant-facing explanation for the prompt **before**
   deploying, not after the first merchant sees it. Connected merchants at this
   point are few enough to tell directly.
