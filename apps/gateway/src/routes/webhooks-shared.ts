@@ -23,8 +23,12 @@ export function getRateLimitRedis(): IORedis {
 }
 
 export async function resolveOrganizationId(platform: DbChannelType, externalAccountId: string): Promise<string | null> {
+  // Multiple orgs can share the same external account during reconnect/testing.
+  // Webhooks must land on the newest integration so routing matches the live
+  // merchant workspace, not an arbitrary findFirst row.
   const integration = await db.integration.findFirst({
     where: { platform, externalAccountId },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     select: { organizationId: true },
   });
   return integration?.organizationId ?? null;
