@@ -23,6 +23,8 @@ Where the merchant talks to the AI agent:
 
 These are not customer support inboxes. They are where the merchant approves actions, asks questions, gives instructions, and receives summaries.
 
+WhatsApp is deprioritized as of 2026-08-07. Telegram and iMessage already cover this layer, so WhatsApp would be a third route to the same place rather than new reach, and its US penetration is low in the market Shopkeeper targets. It stays on the roadmap and is not a removal candidate — build it when a merchant asks for it, not as the default next channel.
+
 ## 3. System-of-Action Integrations
 
 Where Shopkeeper reads business context and executes approved work:
@@ -45,6 +47,7 @@ The dashboard should not be positioned as the primary day-to-day inbox. It is th
 - Do not assume email is the primary support channel.
 - Do not assume Postmark/domain forwarding is the default onboarding flow.
 - Do not treat WhatsApp/iMessage as customer-origin channels.
+- Do not propose WhatsApp as the next channel to build, and do not offer it as the alternative when a customer-origin channel is judged not ready. Adding a merchant-control channel does not substitute for adding customer reach.
 - Do not hide or deprioritize Instagram merely because it is technically incomplete; Instagram is strategically core.
 - Do not treat TikTok generic DMs and TikTok Shop buyer messages as the same thing.
 
@@ -57,7 +60,7 @@ Customer messages from social/email -> AI understands Shopify context -> merchan
 That means the product should optimize for:
 
 - Customer intake from Instagram first, with Gmail as the simple fallback.
-- Fast merchant control from phone-native channels, especially iMessage and WhatsApp.
+- Fast merchant control from phone-native channels, especially iMessage and Telegram — the two that are live.
 - Shopify-backed action plans, not generic chatbot replies.
 - Clear approval, execution, and audit trails.
 - A dashboard that supports setup and trust, without making the product feel like another helpdesk queue.

@@ -5,11 +5,14 @@ so shoppers can ask a question on the storefront and have it land in the
 merchant's existing ticket, planning, approval, and Shopify-action pipelines.
 
 **Not scheduled.** Written down so the shape is decided, not because it is next.
-The next customer-support adapter is WhatsApp (reuses the existing Meta app and
-inbound pipeline); this one adds a public, unauthenticated surface plus a
-Shopify app-configuration migration. See "When to pick this up" below.
+It adds a public, unauthenticated surface plus a one-way Shopify
+app-configuration migration, which is why it carries its own milestones. See
+"When to pick this up" below.
 
-Last reviewed: 2026-08-06.
+This is the only new **customer-origin** channel on the table. Nothing else
+proposed adds a way for a customer to reach the merchant.
+
+Last reviewed: 2026-08-07.
 
 ## Scope decision
 
@@ -35,14 +38,25 @@ forcing every already-connected merchant to re-authorize.
 
 Not part of this plan, and settled before M1 starts.
 
-- **The realtime subsystem enabled in production.** M1 depends on gateway Redis
-  pub/sub and SSE (`apps/gateway/src/realtime/{publish,sse,token}.ts`,
-  `apps/dashboard/src/lib/realtime/*`). Decision closed 2026-08-06: finish and
-  enable, not delete — the code is wired end to end and the publish half already
-  runs unflagged in production. Remaining work is env and a prod canary, tracked
-  in [to-do-list.md](to-do-list.md). This plan does not inherit it silently:
-  there it is optional polish over a 15s poll, here it is shopper-facing and
-  latency-critical, so M1 starts only once the canary is clean.
+- **The realtime subsystem proven in production.** Decision closed 2026-08-06:
+  finish and enable, not delete — the code is wired end to end
+  (`apps/gateway/src/realtime/{publish,sse,token}.ts`,
+  `apps/dashboard/src/lib/realtime/*`) and the publish half already runs
+  unflagged in production. Remaining work is env and a prod canary, tracked
+  under "Prove in prod" in [to-do-list.md](to-do-list.md). This plan does not
+  inherit it silently: there it is optional polish over a 15s poll, here it is
+  shopper-facing and latency-critical, so M1 starts only once the canary is
+  clean.
+
+  **This is a gate on the infrastructure, not a component M1 reuses.** The
+  existing SSE is org-scoped in every dimension: `sse.ts` keys its connection
+  map on `orgId`, `token.ts` verifies an `{orgId, exp}` payload signed with
+  `INTERNAL_API_SECRET`, `publish.ts` uses a single global `REALTIME_CHANNEL`,
+  and the CORS header admits exactly one origin (the dashboard). M1 needs
+  session-scoped fan-out, a different signing secret, a storefront channel, and
+  multi-origin CORS — see the transport bullets below. What the canary buys is
+  proof that gateway Redis pub/sub and long-lived SSE survive Railway under
+  real traffic. Budget M1 for a second SSE implementation, not for plumbing.
 
 
 ## M0 — Shopify app configuration migration
@@ -151,6 +165,16 @@ such map is updated. Budget for `DASHBOARD_CHANNEL_TYPES`, `OPERATOR_CHANNEL_ORD
   ticket; create `shopify_chat` threads linked to the existing Shopify
   integration; reuse the existing summary, classification, planning,
   notification, and escalation processing.
+- **Both of those thread-create paths run into `threads_one_open_per_customer`**
+  — a partial unique index over (organization, customer, channel) `WHERE status
+  = 'open'`, created in migration
+  `20260405000000_add_idempotency_and_thread_uniqueness` and **absent from
+  `schema.prisma`**. Prisma will not warn, will not generate a typed constraint
+  error, and the failure surfaces as a raw Postgres unique violation under
+  concurrency. This drift has already broken thread-create work once. Design the
+  session lock and the closed-thread rollover against the index as it exists in
+  the database, and decide up front whether a losing racer retries onto the
+  winner's thread or surfaces a send failure to the widget.
 - Extend outbound dispatch so manual, approved, and autonomously executed
   `send_reply` operations persist normally and publish to the matching
   storefront session. This is a small change: `lib/messaging/dispatch-message.ts`
@@ -229,7 +253,20 @@ email and Instagram agent down with it.
   and other channels usable.
 - Session-first-message races, closed-thread rollover, idempotent client
   retries, 4,000-character truncation, rate limits, spam filtering, uninstall
-  revocation.
+  revocation. Race coverage must assert against real
+  `threads_one_open_per_customer` behaviour — two concurrent first messages on
+  one session resolve to a single open thread, and rollover after close does not
+  collide with a thread the merchant reopened.
+- **Eval gate.** Adding a `guest` authentication state to agent context and
+  filtering tools by it changes the shared support-planner surface: storefront
+  threads are planned by the same `generateThreadPlan` path as every other
+  ticket, so the standing invariant in `.claude/CLAUDE.md` applies and the gate
+  runs before M1 ships. Either run it, or state in the PR why guest state is
+  provably unreachable from the planner. Two things to know before leaning on
+  it: the fixtures carry no `classifierSignals`, so the gate has never exercised
+  production's `computeClassifierRouting` path, and eval runs are expensive
+  enough to need justifying — use single-fixture probes for diagnosis, not a
+  tune-then-rerun loop.
 - Guest static-policy enforcement against order searches, customer reads,
   refunds, cancellations, edits, credits, discounts, and prompt-injection
   attempts — including a shopper who supplies a real order number and email and
@@ -316,6 +353,14 @@ listing, and public distribution.
 ## When to pick this up
 
 After a merchant is live and proving the existing support loop, and after the
-realtime canary in [to-do-list.md](to-do-list.md) is clean. Until both hold,
-WhatsApp is the better next channel: more inbound coverage for less new surface,
-reusing the Meta app and inbound pipeline already in place.
+realtime subsystem is enabled and canaried in production.
+
+**Do not answer "not yet" with "do WhatsApp instead"** (decision 2026-08-07).
+WhatsApp is a merchant-control channel, not a customer-origin one — see
+[product-truth.md](product-truth.md) §2 and its guardrails — so it is not an
+alternative to this plan on any axis. Shipping it would add a third way for the
+merchant to talk to the agent next to Telegram and iMessage, which is not the
+gap this plan fills. It is also a weak wedge in the US market Shopkeeper
+targets, where WhatsApp penetration is low. If storefront chat is not ready,
+the alternative is more depth on the channels customers already arrive
+through — not another operator channel.

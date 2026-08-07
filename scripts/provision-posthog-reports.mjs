@@ -23,6 +23,10 @@
 //   POSTHOG_ENVIRONMENT       environment property filter (default production)
 //   POSTHOG_DASHBOARD_NAME    dashboard name (default "Merchant Activation")
 
+import { loadLocalEnv } from './load-local-env.mjs';
+
+loadLocalEnv();
+
 const DRY_RUN = process.argv.slice(2).includes('--dry-run');
 
 const API_HOST = (process.env.POSTHOG_API_HOST ?? 'https://us.posthog.com').replace(/\/$/, '');

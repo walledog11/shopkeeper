@@ -1,6 +1,6 @@
 # Shopkeeper — AI operating layer for solo & small e-commerce businesses
 
-**Vision:** a general-purpose AI agent that runs the operational work of a small Shopify business and is reachable from wherever the merchant is (Telegram and iMessage now; WhatsApp next; the dashboard is one surface, not *the* surface). The flagship experience is the proactive messaging loop: plan approvals, questions, escalations, and the morning briefing arrive as texts on the merchant's phone — the dashboard is for setup and review, not the daily driver. Over time the same agent core (memory, approval/autonomy, multi-channel interaction, tool use) extends across workflow modules: support → order operations → inventory & supplier → marketing → finance.
+**Vision:** a general-purpose AI agent that runs the operational work of a small Shopify business and is reachable from wherever the merchant is (Telegram and iMessage now; the dashboard is one surface, not *the* surface). The flagship experience is the proactive messaging loop: plan approvals, questions, escalations, and the morning briefing arrive as texts on the merchant's phone — the dashboard is for setup and review, not the daily driver. Over time the same agent core (memory, approval/autonomy, multi-channel interaction, tool use) extends across workflow modules: support → order operations → inventory & supplier → marketing → finance.
 
 **V1 wedge = customer support.** Only the support module is built today. The architecture assumes more modules will share one *general-purpose* core, not a support-coupled one — support remains the V1 focus and the thing that must ship. Solo merchants and small teams. Multi-channel support inbox + AI agent that reads/writes Shopify directly.
 
@@ -12,7 +12,9 @@
 
 **Architecture:** The agent core lives in `packages/agent/` (`@shopkeeper/agent`) and is consumed by both apps. The gateway runs durable inbound, planning, and module work in-process; the dashboard owns interactive UI and provider-coupled delivery. Host-specific locks, logging, alerts, and delivery are injected at the package boundary. More execution continues to move into the gateway worker. Read this before assuming a support-only framing when touching agent architecture.
 
-**Modules:** Support is v1 (built). Order-ops (module #2) is code-complete and monitoring-only behind `ORDER_RISK_MONITOR_ENABLED` — flag-and-notify only, no autonomy tiers, no plan surface. Open rollout gates are in `docs/to-do-list.md`. WhatsApp is the next customer-support adapter (reuse the existing Meta app and inbound pipeline).
+**Modules:** Support is v1 (built). Order-ops (module #2) is code-complete and monitoring-only behind `ORDER_RISK_MONITOR_ENABLED` — flag-and-notify only, no autonomy tiers, no plan surface. Open rollout gates are in `docs/to-do-list.md`.
+
+**Channel priority — do not propose WhatsApp as the next channel** (decision 2026-08-07). WhatsApp is a *merchant-control* channel, not a customer-origin one (`docs/product-truth.md` §2 and its guardrails), so building it adds a third way for the merchant to reach the agent alongside Telegram and iMessage — it does not add a way for customers to reach the merchant. It is also a weak wedge in the US market Shopkeeper targets, where WhatsApp penetration is low. Treat it as built-when-a-merchant-asks, never as the default next thing. It stays on the roadmap and is not a removal candidate.
 
 ## Stack
 - `apps/dashboard/` — Next.js 15 (app router), Tailwind, SWR, Clerk.com auth → Vercel

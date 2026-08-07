@@ -105,11 +105,11 @@ One Trends tile per line (all filtered to `environment = production`):
 
 | Report | Saved name | Production URL | Owner | Last verified |
 | --- | --- | --- | --- | --- |
-| Activation funnel | | | | |
-| Time to value | | | | |
-| Agent quality | | | | |
-| Weekly retention | | | | |
-| Dashboard ("Merchant Activation") | | | | |
+| Activation funnel | Activation funnel | https://us.posthog.com/project/491135/insight/9UvwXlwz | | 2026-08-07 |
+| Time to value | Time to value | https://us.posthog.com/project/491135/insight/aoJgkkGs | | 2026-08-07 |
+| Agent quality | Agent quality (5 trends) | https://us.posthog.com/project/491135/dashboard/1967199 | | 2026-08-07 |
+| Weekly retention | Weekly retention | https://us.posthog.com/project/491135/insight/ndm0nEDT | | 2026-08-07 |
+| Dashboard ("Merchant Activation") | Merchant Activation | https://us.posthog.com/project/491135/dashboard/1967199 | | 2026-08-07 |
 
 ## Verification
 

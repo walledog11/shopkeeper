@@ -164,16 +164,76 @@ The previous maintenance deployment completed at `2026-07-30T00:00:00.296Z`.
 The repeat schedule is anchored to 00:00/12:00 UTC, so the first hardening
 maintenance run is due at 2026-07-30T12:00Z (05:00 PDT).
 
-- [ ] Record the first `catchupsEnqueued=1` maintenance completion.
-- [ ] Record the corresponding deterministic job ID:
+- [x] Record the first `catchupsEnqueued=1` maintenance completion.
+- [x] Record the corresponding deterministic job ID:
   `gmail-sync-maintenance-5581f606-029b-4b12-951a-89af960d859c-<12-hour-bucket>`.
-- [ ] Confirm `lastSyncedAt` is monotonic and checkpoint is at least `39912`.
-- [ ] Confirm the overdue daily renewal advances `watchLastRenewedAt` and watch
+- [x] Confirm `lastSyncedAt` is monotonic and checkpoint is at least `39912`.
+- [x] Confirm the overdue daily renewal advances `watchLastRenewedAt` and watch
   expiration without replacing the established checkpoint.
-- [ ] Re-run deep health, authenticated queue health, and error-log checks after
+- [x] Re-run deep health, authenticated queue health, and error-log checks after
   12 hours.
-- [ ] Re-run those checks after 24 hours and confirm both services still run the
+- [x] Re-run those checks after 24 hours and confirm both services still run the
   same release SHA.
+
+**Closeout recorded 2026-08-07 UTC.** Palette reconnected Gmail twice after the
+2026-07-29 rollout (`77dbd90d-5935-4f6d-910d-4a8dcd6db88d`,
+`4a0520c1-8ac3-4963-8015-6c96909463e3`). The original rollout integration
+(`5581f606-029b-4b12-951a-89af960d859c`) is superseded and sits in
+`reauthorization_required` / `watch_authentication`; it is not on the live
+canary path. Operator follow-up: disconnect the stale row in Integrations when
+convenient — it does not block the closed health window on the active rows.
+
+### 24-hour health window evidence (2026-08-07T06:18Z)
+
+| Check | Result |
+|---|---|
+| `npm run verify:production` | Passed (`DASHBOARD_URL=https://useshopkeeper.com`, gateway deep health + authenticated queue health) |
+| Gateway `gmail-sync` queue | `completed=37`, `failed=0` |
+| Gateway `gmail-watch-maintenance` queue | `completed=68`, `failed=0`, `delayed=1` |
+| Strict 240h Gmail outbound audit | `sent=1`, zero blockers |
+| Railway `shopkeeper` + `Gateway Worker` deploy SHA | `399e0d13b8468c088be04402379af1c8a0cc43f1` (both services, deployed 2026-08-07 06:05 UTC) |
+
+Active integration snapshot (Palette):
+
+| Integration ID | Inbound status | History checkpoint | Last synced at | Watch last renewed at |
+|---|---|---:|---|---|
+| `77dbd90d-5935-4f6d-910d-4a8dcd6db88d` | `active` | `44683` | `2026-08-07T02:21:36.888Z` | `2026-08-06T12:00:00.067Z` |
+| `4a0520c1-8ac3-4963-8015-6c96909463e3` | `active` | `44683` | `2026-08-07T02:21:36.888Z` | `2026-08-07T00:00:00.100Z` |
+
+Recent `gmail-watch-maintenance` completions (return value from BullMQ):
+
+| Finished (UTC) | checked | renewed | catchupsEnqueued | failed | alerts |
+|---|---:|---:|---:|---:|---:|
+| `2026-08-07T00:00:03.683Z` | 2 | 1 | 2 | 0 | 0 |
+| `2026-08-06T12:00:03.039Z` | 2 | 1 | 2 | 0 | 0 |
+| `2026-08-06T00:00:04.661Z` | 2 | 1 | 2 | 0 | 0 |
+
+Deterministic maintenance catch-up job IDs (completed, `source=maintenance`):
+
+| Job ID | Finished (UTC) |
+|---|---|
+| `gmail-sync-maintenance-77dbd90d-5935-4f6d-910d-4a8dcd6db88d-41343` | `2026-08-06T12:00:03.867Z` |
+| `gmail-sync-maintenance-4a0520c1-8ac3-4963-8015-6c96909463e3-41343` | `2026-08-06T12:00:04.095Z` |
+| `gmail-sync-maintenance-77dbd90d-5935-4f6d-910d-4a8dcd6db88d-41344` | `2026-08-07T00:00:04.890Z` |
+| `gmail-sync-maintenance-4a0520c1-8ac3-4963-8015-6c96909463e3-41344` | `2026-08-07T00:00:04.594Z` |
+
+`watchLastRenewedAt` advanced on the active rows without checkpoint regression
+(`44683` ≥ pre-deploy `39912`). Daily renewal ran at `2026-08-07T00:00Z` on
+integration `4a0520c1-…`; the `2026-08-06T12:00Z` bucket renewed integration
+`77dbd90d-…`.
+
+Inspect-only recovery on the superseded integration at closeout:
+
+```json
+{
+  "execute": false,
+  "integrationId": "5581f606-029b-4b12-951a-89af960d859c",
+  "inboundStatus": "reauthorization_required",
+  "lastError": "watch_authentication"
+}
+```
+
+Exit notice: `Execute only for sync_recovery_truncated` — no enqueue, no mutation.
 
 ## Async outbound Gmail canary
 

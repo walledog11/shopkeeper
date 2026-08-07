@@ -3,12 +3,13 @@
 Open work only. Completed work is deleted, not archived — git history is the
 record. Do not add "recently completed" sections to this file.
 
-Last reviewed: 2026-08-06.
+Last reviewed: 2026-08-07.
 
-Single source of truth for open product, production, and module tasks.
+Single source of truth for **actionable** open work. Evidence checklists, console
+residue, failure-drill procedures, and standing policies live in the linked docs
+below — not duplicated here.
 
 Work is grouped by **what kind of action** it needs, not by when it was filed.
-Read the bucket that matches how you are working today.
 
 **Guiding principle for pending integrations.** Shopkeeper is still in active
 development — channels and features are being added, not finalized. Pending
@@ -16,6 +17,12 @@ integrations (Instagram DM, TikTok, WhatsApp) are work to *finish and build*,
 not removal candidates. Frame their tasks as "build/finish," and treat
 onboarding sequencing as ordering channels behind the v1 wedge — never as
 dropping or de-advertising a channel.
+
+Not a removal candidate is not the same as next in line. WhatsApp is
+deprioritized as of 2026-08-07 — it is a merchant-control channel, so it adds a
+third route alongside Telegram and iMessage rather than new customer reach, and
+US penetration is low in the target market. Do not propose it as the next
+channel to build. See [product-truth.md](product-truth.md) §2.
 
 ---
 
@@ -25,121 +32,57 @@ dropping or de-advertising a channel.
 Shipped code that needs a production canary, observation window, or configured
 provider. **None of these is a code task.**
 
-### Core rails
-
-- [ ] Run the strict reservation audit through the production observation window
-  with no unexplained stale or `unknown` rows. (`unknown-outcome-sweep` worker
-  landed 2026-07-21.)
-- [ ] Exercise crash-after-acceptance / stale-processing / manual-retry email
-  recovery under the documented no-resend rules.
-- [ ] Canary Postmark **outbound** send and bounce attribution under real traffic.
-  Inbound is configured and proven end to end as of 2026-08-02 (server
-  `Shopkeeper-production`, ID 20167846).
-- [ ] Keep the synchronous email rollback rail until the async canary and
-  stale-claim observation window are clean. (`OUTBOUND_EMAIL_ASYNC` has never
-  been enabled in production.)
-- [ ] Observe provider-timeout/error telemetry through the normal canary
-  windows; keep provider-specific rollback controls.
-
-### Order-ops
-
-- [ ] **Prod evidence** (code complete 2026-08-04; worker has
-  `ORDER_RISK_MONITOR_ENABLED=1`). Confirm a production `AgentAction` row from
-  the current build: `tool = 'flag_order'`, `status = 'escalated'`,
-  `executed_at` after the 2026-08-04 19:49 UTC deploy. Pre-deploy rows with
-  `status = 'success'` are from an earlier build and don't count. See
-  [pre-release-validation-2026-08-04.md](production/pre-release-validation-2026-08-04.md);
-  the webhook gateway still has the flag off, so live `orders/created` traffic is
-  not admitted until launch owner flips it.
-- [ ] **Backstop and alerting.** Unit-covered; observe one real hourly sweep and
-  one real `opsAlert` failure path in production.
-
-### Channel and analytics rollout
-
-- [ ] **Realtime inbox (SSE + Redis pub/sub) — enable in production.** Decided
-  2026-08-06: finish and enable, not delete. The subsystem is wired end to end
-  (gateway `realtime/{publish,token,sse}.ts` mounted at `index.ts`, dashboard
-  `/api/realtime/token` + `RealtimeProvider` mounted in the shell layout), and
-  `publishThreadEvent` already runs **unflagged** in production from 11 call
-  sites — only the SSE serving side is gated. The CSP `connect-src` fix landed
-  2026-08-06; remaining work is env plus a canary:
-  1. Railway: `GATEWAY_REALTIME_ENABLED=true`.
-  2. Vercel: `NEXT_PUBLIC_GATEWAY_EVENTS_URL=https://clerk-production-e37f.up.railway.app`,
-     then **redeploy** — `NEXT_PUBLIC_*` is inlined at build time, not a runtime flip.
-  3. `cd apps/gateway && npm run realtime:smoke -- --org-id=<prod org> --url=<gateway>`
-     (asserts delivery *and* cross-org non-delivery).
-  4. Confirm `[Realtime] Subscribed` in gateway logs and no new reports at
-     `/api/security/csp-report`.
-  Rollback: unset the Vercel var and redeploy; polling returns to 15s.
-  **Failure mode to watch:** if SSE cannot connect, `RealtimeProvider` retries
-  silently forever while polling has already slowed to 60s/120s — the inbox gets
-  slower with nothing surfaced. Verify step 4 before walking away.
-  Standing cost traps: never hold SSE on Vercel functions; never use Postgres
-  `LISTEN/NOTIFY` (pins a Neon connection).
-- [ ] **Gmail live canary.** Code deployed; record scheduled catch-up/renewal
-  evidence and close the 24-hour health window
-  ([gmail-rollout-evidence-2026-07-29.md](production/gmail-rollout-evidence-2026-07-29.md)).
-  Console prep for restricted-scope review is in Console / config.
+- [ ] **Postmark outbound canary.** Send and bounce attribution under real
+  traffic. Inbound is proven end to end as of 2026-08-02 (server
+  `Shopkeeper-production`, ID 20167846). Account approval, sender setup, and
+  smoke steps live in
+  [phase-6-external-services.md](phase-6-external-services.md) (Postmark
+  section).
 - [ ] **Instagram Advanced Access.** Implementation and Standard Access acceptance
   are complete. Launch gated on Meta App Review and a non-role merchant account
   completing the full DM loop (connect → inbound → approve reply →
   disconnect/reconnect). Ops in [runbook.md](production/runbook.md).
-- [ ] **PostHog Phase 4.** Run `npm run provision:posthog-reports` against the
-  production project; definitions in
-  [posthog-reports.md](production/posthog-reports.md).
-- [ ] **PostHog Phase 5.** Staging payload review, privacy policy deployment,
-  then enable `PRODUCT_ANALYTICS_ENABLED` in production. Keep `false` until the
-  privacy policy ships.
-
-### Alerting and security gates
-
-- [ ] **Confirm a dashboard ops alert reaches Sentry in production.** Dashboard
-  alert sources capture to Sentry (`lib/server/ops-alert-notify.ts`, 2026-08-01);
-  only the production round-trip is unverified. `emit-controlled-ops-alert.ts`
-  will **not** prove it — as a standalone `tsx` process it never runs
-  `instrumentation.ts`. Use the deployed `agent_failure` trigger from
-  [alerting-evidence.md](production/alerting-evidence.md).
+- [ ] **Realtime inbox (SSE + Redis pub/sub).** Decision 2026-08-06: finish and
+  enable, not delete. `publishThreadEvent` already runs **unflagged** in
+  production from 10 call sites — only the SSE serving side is gated, and the
+  CSP `connect-src` fix landed 2026-08-06. Remaining is env plus a canary, and
+  there are **two** gates: Railway `GATEWAY_REALTIME_ENABLED=true`, then Vercel
+  `NEXT_PUBLIC_GATEWAY_EVENTS_URL=https://clerk-production-e37f.up.railway.app`
+  followed by a **redeploy** — `NEXT_PUBLIC_*` is inlined at build time, not a
+  runtime flip. Verify with `cd apps/gateway && npm run realtime:smoke --
+  --org-id=<prod org> --url=<gateway>` (asserts delivery *and* cross-org
+  non-delivery), then confirm `[Realtime] Subscribed` in gateway logs with no
+  new `/api/security/csp-report` hits. Rollback: unset the Vercel var and
+  redeploy; polling returns to 15s. **Failure mode to watch:** if SSE cannot
+  connect, `RealtimeProvider` retries silently forever while polling has already
+  slowed to 60s/120s — the inbox gets slower with nothing surfaced, so check the
+  logs before walking away. Standing cost traps: never hold SSE on Vercel
+  functions; never use Postgres `LISTEN/NOTIFY` (pins a Neon connection).
+  **Gates M1 of**
+  [shopify-storefront-chat-implementation-plan.md](shopify-storefront-chat-implementation-plan.md).
+- [x] **Dashboard ops alert → Sentry.** Production round-trip verified
+  2026-08-07 via deployed `agent_failure` trigger (`POST /api/agent`, no
+  approved plan). Evidence in
+  [alerting-evidence.md](production/alerting-evidence.md). Spot-check the
+  Sentry issue in the UI if you want a second pair of eyes — local CLI tokens
+  are `org:ci` only.
 
 ---
+
 
 ## Console / config
 
 External consoles, env vars, and provider dashboards. No application code.
 
-### Brand and domain closeout
-
-Tracked in [phase-6-external-services.md](phase-6-external-services.md) — delete
-that file once its six closing checks pass. Code and DNS migration are done
-(2026-08-02); hosts architecture lives in `.claude/CLAUDE.md`.
-
-- [ ] Postmark sender signature for **outbound** email.
-- [ ] Google OAuth **Branding** page (still shows old host).
-- [ ] Telegram bot display-name migration (cosmetic; not launch-blocking).
-- [ ] Gmail restricted-scope packet: OAuth branding, two developer contacts,
-  alias canary, demo video — see
-  [google-gmail-verification-packet.md](production/google-gmail-verification-packet.md).
-
-### Production env
-
-Found 2026-08-02 by `check-production-env.mjs`. Re-verify with
-`vercel env ls <env>` for presence — `vercel env pull` redacts sensitive vars to
-an **empty string**, indistinguishable from unset.
-
-- [ ] `PRICE_ID_STARTER` and `PRICE_ID_PRO` — missing in Vercel production;
-  only legacy `PRICE_ID` exists. Create Stripe prices and set both vars before
-  enabling two-tier billing.
-- [ ] Gateway `REDIS_URL` — switch to TLS `rediss://` form; customer message
-  payloads move through BullMQ over Redis.
-
-### Clerk hygiene
-
-- [ ] Mark `CLERK_SECRET_KEY` as sensitive in the Development scope (Production
-  and Preview already do).
-- [ ] Delete leftover Clerk application `clerk`
-  (`app_3B9VBBAVoAaZGLuVuV5Ldw3atCJ`, dev-only, old product name) once confirmed
-  unused.
+**All brand, domain, OAuth branding, Postmark approval, Clerk/Shopify/Meta
+display names, Telegram migration, and Gmail restricted-scope packet work:**
+[phase-6-external-services.md](phase-6-external-services.md). Delete that file
+when its closing verification passes. Re-verify env presence with
+`vercel env ls production` — `vercel env pull` redacts sensitive vars to an
+empty string, indistinguishable from unset.
 
 ---
+
 
 ## Parked / decide
 
@@ -154,47 +97,39 @@ resume. Gated-off integrations cost nothing to keep dark.
   SaaS in Partner Center. Keep TikTok Shop buyer messages separate from generic
   TikTok DMs (no generic-DM adapter exists).
 
-- [ ] **Server-seed the remaining client-fetched pages.** Polish, not
-  correctness — no hydration mismatch, just a skeleton flash per visit.
-  `(shell)/review/page.tsx` and `(shell)/kb/page.tsx` are bare one-liners, and
-  `(shell)/integrations/page.tsx` seeds only the Telegram status while the card
-  list client-fetches. All three read our own Postgres; use the
-  `initialHomeSummary` pattern from `(shell)/page.tsx`. Orders and tickets are
-  deliberately excluded (live Shopify API; SWR owns the thread list). Before
-  seeding any page that branches on `useIsMobile` in markup, read the comment on
-  that hook. Render-boundary mismatches were all fixed 2026-08-06 — the
-  ruled-out set (`useIsDocumentVisible`, `OrgSwitcher`'s `mounted` gate,
-  `useMediaQuery`, `useNavAuth`, and all of `app/(marketing)`) is clean and does
-  not need re-checking.
+**Resume when triggered** (not open checkboxes):
 
-- [ ] **Better Stack Level 1 (log drains + escalation).** Deferred until paid beta
-  (decided 2026-06-26). Free tier done: external uptime monitors and gateway
-  ops-alert → Telegram verified 2026-07-31
-  ([runbook.md](production/runbook.md)). Remaining is paywalled (Vercel log
-  drains, Railway drain, phone/SMS paging). Checklist when resumed:
-  [runbook.md](production/runbook.md),
-  [alerting-evidence.md](production/alerting-evidence.md).
+| Trigger | Work | Where |
+| --- | --- | --- |
+| Privacy policy ships | PostHog Phase 5: staging payload review, then `PRODUCT_ANALYTICS_ENABLED=true` | [posthog-reports.md](production/posthog-reports.md) |
+| Two-tier billing ships | Create Stripe `PRICE_ID_STARTER` / `PRICE_ID_PRO` and set in Vercel production | [phase-6-external-services.md](phase-6-external-services.md) (Stripe) |
+| Redis TLS migration | Gateway `REDIS_URL` → `rediss://` on both services | [compatibility-retirement-backlog.md](compatibility-retirement-backlog.md) |
+| Paid beta | Better Stack Level 1 log drains + escalation (free tier done 2026-07-31) | [runbook.md](production/runbook.md), [alerting-evidence.md](production/alerting-evidence.md) |
 
-- [ ] **Brand / trademark revisit.** Decision 2026-08-02: operate "Shopkeeper"
-  unregistered as a working brand. `SHOPKEEP` (Lightspeed, IC 042) blocks
-  registration; `+SHOPKEEPER` was refused §2(d) in 2024. Mitigations: no paid
-  acquisition or press launch under the name; revisit at ~50 paying merchants or
-  before any marketing spend. Known-good rename fallback if forced: **Creance**
-  (clean at USPTO in IC 009/035/042). Domain change after Gmail verification
-  redoes restricted-scope review and CASA — treat as a real decision point. Get
-  a trademark attorney before brand spend; public-record facts here, not legal
-  advice.
+**Decisions on record** (not tasks): operate "Shopkeeper" unregistered
+(2026-08-02); revisit trademark at ~50 paying merchants or before marketing
+spend. Sync outbound email remains the rollback rail until async recovery
+exercises complete — policy in
+[compatibility-retirement-backlog.md](compatibility-retirement-backlog.md), not a
+checkbox here. Email stale-claim / manual-retry drills:
+[alerting-evidence.md](production/alerting-evidence.md),
+[runbook.md](production/runbook.md).
 
 ---
+
 
 ## Reference docs
 
 - [compatibility-retirement-backlog.md](compatibility-retirement-backlog.md) —
   read before renaming any BullMQ queue or job string.
 - [phase-6-external-services.md](phase-6-external-services.md) — console-only
-  brand/domain checklist; delete when its six closing checks pass.
+  brand/domain checklist; delete when closing verification passes.
+- [production/pre-release-validation-2026-08-04.md](production/pre-release-validation-2026-08-04.md) —
+  2026-08-04 production validation evidence.
+- [production/gmail-rollout-evidence-2026-07-29.md](production/gmail-rollout-evidence-2026-07-29.md) —
+  Gmail native inbound soak (scheduled observation closed 2026-08-07).
 - [production/posthog-reports.md](production/posthog-reports.md) — PostHog report
-  definitions and provisioning for product analytics rollout.
+  definitions and provisioning.
 - [production/runbook.md](production/runbook.md) — ops, monitors, channel rollout.
 - [production/alerting-evidence.md](production/alerting-evidence.md) — controlled
   alert triggers and verification cheatsheet.

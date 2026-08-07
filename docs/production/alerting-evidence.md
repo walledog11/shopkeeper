@@ -1,6 +1,9 @@
 # Production Alerting Evidence
 
-Record sign-off evidence for ops-alert log routing and Better Stack Level 1 observability. Do not mark the production alerting to-do complete until every row below is filled.
+Record sign-off evidence for ops-alert log routing and Better Stack Level 1
+observability. Better Stack paid tier is deferred until paid beta — see
+[to-do-list.md](../to-do-list.md). Do not mark Level 1 configuration complete
+until every row below is filled.
 
 **Procedure:** [runbook.md](runbook.md) (Ops Alert Log Routing, Controlled Alert Validation)  
 **Implementation reference:** [operational-guardrails.md](operational-guardrails.md), [runbook.md](runbook.md) (Ops Alert Log Routing)  
@@ -49,7 +52,7 @@ incident, and below `QUEUE_ALERT_FAILED_THRESHOLD`. Clear it before controlled
 | Uptime monitor: dashboard `/api/health` (keyword `{"status":"ok"`) | ☑ | Configured 2026-07-31, Better Stack free tier. Route became liveness-only 2026-08-03 — see the scale-to-zero note below |
 | Uptime monitor: gateway `/health` (keyword `{"status":"ok"`) | ☑ | Configured 2026-07-31, Better Stack free tier. Repointed off `/health/deep` 2026-08-03 — see the scale-to-zero note below |
 | Gateway ops-alert → Telegram push | ☑ | Verified in production 2026-07-31 via `emit-controlled-ops-alert.ts queue_health`; both test alerts delivered |
-| Dashboard ops-alert → Sentry capture | ☐ | Shipped 2026-08-01 (`lib/server/ops-alert-notify.ts`); needs a **deployed** trigger — see the Sentry caveat below |
+| Dashboard ops-alert → Sentry capture | ☑ | Deployed `agent_failure` trigger verified 2026-08-07 (`POST /api/agent`, Palette test org); Vercel log `opsAlert:true category:agent_failure` at `2026-08-07T08:40:11.883Z`; no `[OpsAlert] Sentry capture errored`. Spot-check Sentry UI for `Repeated agent route failure: route=/api/agent` (CLI tokens here are `org:ci` only — no `event:read`) |
 | Better Stack test notification sent | ☐ | Recipient: ___ Time: ___ |
 
 ### Uptime monitors must not query Postgres
@@ -69,7 +72,7 @@ Temporarily set `OPS_ALERT_WINDOW_SECS=60` and threshold `1` for the category un
 | Category | Trigger method | Log timestamp (UTC) | Better Stack alert received | Routed owner | Validated by | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | `webhook_signature` | Unsigned `POST /webhooks/shopify` or `npm run verify:production:alerts -- --execute webhook_signature` | | ☐ | | | |
-| `agent_failure` | Authenticated `POST /api/agent` (no plan) or `emit-controlled-ops-alert.ts agent_failure` | | ☐ | | | |
+| `agent_failure` | Authenticated `POST /api/agent` (no plan) or `emit-controlled-ops-alert.ts agent_failure` | 2026-08-07T08:40:11.883Z | ☐ | launch owner | agent (automated) | Deployed trigger: Clerk session JWT → `POST https://app.useshopkeeper.com/api/agent` (no `approvedToolCalls`) ×3 → `400`. Test used `AGENT_FAILURE_ALERT_THRESHOLD=1`, `OPS_ALERT_WINDOW_SECS=60`; restored to `3` / `300` on Vercel production and redeployed 2026-08-07. Vercel log drain confirmed; Better Stack rule not exercised in this pass |
 | `provider_send` | `cd apps/dashboard && npx tsx src/scripts/emit-controlled-ops-alert.ts provider_send <test-org-id>` | | ☐ | | | |
 | `queue_health` | `cd apps/gateway && npx tsx src/scripts/emit-controlled-ops-alert.ts queue_health` | | ☐ | | | |
 

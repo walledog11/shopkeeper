@@ -66,24 +66,42 @@ Unit tests, typecheck, lint, and live query-schema validation pass.
 
 ## Remaining blockers
 
-### Dashboard production environment contract
+Updated 2026-08-07. Open launch gates are tracked in
+[to-do-list.md](../to-do-list.md); this section records what was still open
+from the 2026-08-04 run and what has since cleared.
 
-The Vercel production environment is missing:
+### Resolved after 2026-08-04
 
-- `CLERK_WEBHOOK_SECRET`
+- **`CLERK_WEBHOOK_SECRET`** — set in Vercel production; unsigned probe returns
+  `Invalid signature` (verified 2026-08-06). See
+  [phase-6-external-services.md](../phase-6-external-services.md) (Clerk).
+- **CSP report collector** — `/api/security/csp-report` is public; enforced CSP
+  includes gateway SSE `connect-src` (deployed `399e0d13`, 2026-08-07).
+- **Gmail scheduled observation** — 24-hour health window closed 2026-08-07. See
+  [gmail-rollout-evidence-2026-07-29.md](gmail-rollout-evidence-2026-07-29.md).
+- **Strict reservation audit (post-observation)** — re-run after the Gmail
+  observation window closed 2026-08-07. `npm run audit:refund-spend-reservations
+  -- --strict --hours=96` against production: three `committed` rows, 102
+  reserved/committed cents, zero `unknown`, zero stale (verified 2026-08-07).
+- **Live order-risk traffic** — `ORDER_RISK_MONITOR_ENABLED=1` on both Railway
+  services (`shopkeeper` webhook gateway and `Gateway Worker`; verified
+  2026-08-07 via `GET /internal/runtime-flags` → `monitors.orderRisk: true`).
+  Production order `#1025` (Shopify id `6133857124586`) reviewed live
+  2026-08-07T07:00:07Z: `[OrderRiskMonitor] Scan complete` → `[order-ops] run
+  complete` with `flagged=false` (returning customer, benign — no operator
+  alert). Escalation path (`flag_order` + operator notify) remains proven on
+  controlled canaries `#1022` (2026-08-04) and `#1023` (2026-08-07).
+
+### Still open from this validation
+
+#### Dashboard production environment contract
+
+Still missing before two-tier billing:
+
 - `PRICE_ID_STARTER`
 - `PRICE_ID_PRO`
 
-These configured variables all contain the same invalid sentinel rather than
-values matching their contracts:
-
-- `NEXT_PUBLIC_APP_URL`
-- `POSTHOG_HOST`
-- `GMAIL_NATIVE_INBOUND`
-- `GMAIL_PUBSUB_TOPIC`
-- `GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT`
-
-Replace the sentinels, add the missing values, and rerun:
+Re-verify any remaining sentinel values:
 
 ```bash
 node scripts/check-production-env.mjs dashboard \
@@ -91,40 +109,25 @@ node scripts/check-production-env.mjs dashboard \
   --env-file=<fresh-production-vercel-env-file>
 ```
 
-The Vercel project is also configured for Node.js 24.x while the repository
-declares Node.js 22.x. Align the project setting to Node.js 22.x before the
-release candidate deploy.
+The Vercel project may still be configured for Node.js 24.x while the repository
+declares Node.js 22.x. Align the project setting to Node.js 22.x if not already
+done.
 
-### CSP reporting
-
-An unauthenticated, sanitized production CSP report returned `401`, so browser
-reports cannot currently reach the collector. The local fix adds
-`/api/security/csp-report` to the public route policy and includes proxy-policy
-tests. It is intentionally not deployed from the current dirty worktree,
-because that would also deploy unrelated in-progress changes.
-
-After the fix is deployed, repeat the Shopify OAuth popup smoke test, review
-the report-only observation window, and only then change CSP from report-only
-to enforced.
-
-### Shopify follow-up
+#### Shopify follow-up
 
 The connected `palette-dev` store retains 38 OAuth scopes; trim it to the 15
-used scopes before merchant number two. Repeat the strict reservation and
-unknown-outcome audits after the production observation window before closing
-that rollout gate.
+used scopes before merchant number two.
 
-### Email, Sentry, and order-risk evidence
+#### Email and Sentry evidence
 
-- `OUTBOUND_EMAIL_ASYNC` remains disabled, and the production outbound-email
-  audit has no Postmark rows. The Postmark send/bounce canary and the documented
-  stale-claim/manual-retry recovery exercises remain open.
-- Dashboard `agent_failure` capture still needs one controlled request from an
-  authenticated production browser session and confirmation in Sentry.
-- The controlled order-risk review and notification passed. The worker has
-  `ORDER_RISK_MONITOR_ENABLED=1`, but the webhook gateway has it set to `false`,
-  so real `orders/created` webhooks are not admitted to the review queue. Align
-  the gateway flag only when the launch owner approves live review traffic.
+- Postmark outbound canary and stale-claim/manual-retry recovery exercises —
+  tracked in [to-do-list.md](../to-do-list.md) and
+  [phase-6-external-services.md](../phase-6-external-services.md) (Postmark).
+- Dashboard `agent_failure` capture → Sentry — tracked in
+  [alerting-evidence.md](alerting-evidence.md).
+
+`OUTBOUND_EMAIL_ASYNC` remains disabled by policy; sync path is the documented
+rollback rail ([compatibility-retirement-backlog.md](../compatibility-retirement-backlog.md)).
 
 ## Local changes from this validation
 
