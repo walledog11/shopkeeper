@@ -62,6 +62,7 @@ describe('executeFreeFormInstruction', () => {
       'mark_ticket_spam',
       'reject_pending_plan',
       'revise_pending_plan',
+      'search_product_help',
       'send_ticket_reply',
     ]);
   });
