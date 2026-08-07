@@ -37,7 +37,7 @@ export const POST = withOrgRoute(
     const [thread, latestConversation, threadMeta] = await Promise.all([
       requireOrgThread(threadId, org.id),
       getLatestConversationMessage(threadId),
-      db.thread.findUnique({ where: { id: threadId }, select: { tag: true } }),
+      db.thread.findFirst({ where: { id: threadId, organizationId: org.id }, select: { tag: true } }),
     ]);
     const pendingCustomerMessageId = latestConversation
       ? getPendingCustomerMessageId([latestConversation])

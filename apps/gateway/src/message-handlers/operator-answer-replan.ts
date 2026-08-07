@@ -69,8 +69,8 @@ export async function applyOperatorAnswerReplan(
   const [thread, latestConversation, meta] = await Promise.all([
     requireOrgThread(threadId, organizationId),
     getLatestConversationMessage(threadId),
-    db.thread.findUnique({
-      where: { id: threadId },
+    db.thread.findFirst({
+      where: { id: threadId, organizationId },
       select: {
         tag: true,
         channelType: true,

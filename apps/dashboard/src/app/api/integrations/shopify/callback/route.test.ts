@@ -54,6 +54,7 @@ import { auth } from '@clerk/nextjs/server';
 import { POST } from './route';
 
 let org: Awaited<ReturnType<typeof createTestOrg>> | null;
+const extraOrgIds: string[] = [];
 
 beforeEach(async () => {
   org = await createTestOrg();
@@ -70,6 +71,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await cleanupTestData(org?.id);
+  for (const orgId of extraOrgIds.splice(0)) await cleanupTestData(orgId);
   org = null;
   vi.clearAllMocks();
   vi.unstubAllEnvs();
@@ -81,13 +83,13 @@ describe('POST /api/integrations/shopify/callback', () => {
       shopify_oauth_state: 'state_123',
       shopify_oauth_org: org!.clerkOrgId,
       shopify_oauth_user: 'usr_oauth',
-      shopify_oauth_shop: 'fixture-shop.myshopify.com',
+      shopify_oauth_shop: 'shopify-callback-fixture.myshopify.com',
     });
     mockFetch.mockRejectedValueOnce(new DOMException('timed out', 'TimeoutError'));
 
     const res = await POST(new Request(signedCallbackUrl({
       code: 'oauth_code',
-      shop: 'fixture-shop.myshopify.com',
+      shop: 'shopify-callback-fixture.myshopify.com',
       state: 'state_123',
     })));
 
@@ -112,12 +114,12 @@ describe('POST /api/integrations/shopify/callback', () => {
       shopify_oauth_state: 'state_123',
       shopify_oauth_org: org!.clerkOrgId,
       shopify_oauth_user: 'usr_oauth',
-      shopify_oauth_shop: 'fixture-shop.myshopify.com',
+      shopify_oauth_shop: 'shopify-callback-fixture.myshopify.com',
     });
     mockFetch
       .mockResolvedValueOnce(jsonResponse({ access_token: 'shpat_fixture' }))
       .mockResolvedValueOnce(jsonResponse({ shop: { id: 1, name: 'Evil Shop', myshopify_domain: 'evil-shop.myshopify.com' } }))
-      .mockResolvedValueOnce(jsonResponse({ shop: { id: 2, name: 'Fixture Shop', myshopify_domain: 'fixture-shop.myshopify.com' } }));
+      .mockResolvedValueOnce(jsonResponse({ shop: { id: 2, name: 'Fixture Shop', myshopify_domain: 'shopify-callback-fixture.myshopify.com' } }));
 
     const res = await POST(new Request(signedCallbackUrl({
       code: 'oauth_code',
@@ -131,7 +133,7 @@ describe('POST /api/integrations/shopify/callback', () => {
     expect(mockLogger.error).toHaveBeenCalledWith(
       {
         shop: 'evil-shop.myshopify.com',
-        savedShop: 'fixture-shop.myshopify.com',
+        savedShop: 'shopify-callback-fixture.myshopify.com',
         authorizedShopId: 1,
         requestedShopId: 2,
       },
@@ -184,7 +186,7 @@ describe('POST /api/integrations/shopify/callback', () => {
       shopify_oauth_state: 'state_123',
       shopify_oauth_org: org!.clerkOrgId,
       shopify_oauth_user: 'usr_oauth',
-      shopify_oauth_shop: 'fixture-shop.myshopify.com',
+      shopify_oauth_shop: 'shopify-callback-fixture.myshopify.com',
       shopify_oauth_return: '/dashboard/settings',
     });
     mockFetch
@@ -192,7 +194,7 @@ describe('POST /api/integrations/shopify/callback', () => {
         access_token: 'shpat_fixture',
         scope: 'write_orders, read_orders,write_orders,READ_PRODUCTS',
       }))
-      .mockResolvedValueOnce(jsonResponse({ shop: { id: 7, name: 'Fixture Shop', myshopify_domain: 'fixture-shop.myshopify.com' } }))
+      .mockResolvedValueOnce(jsonResponse({ shop: { id: 7, name: 'Fixture Shop', myshopify_domain: 'shopify-callback-fixture.myshopify.com' } }))
       .mockResolvedValueOnce(jsonResponse({ webhook: { id: 1 } }))
       .mockResolvedValueOnce(jsonResponse({ errors: 'topic disabled' }, { status: 422 }))
       .mockResolvedValueOnce(jsonResponse({ webhook: { id: 3 } }))
@@ -201,7 +203,7 @@ describe('POST /api/integrations/shopify/callback', () => {
 
     const res = await POST(new Request(signedCallbackUrl({
       code: 'oauth_code',
-      shop: 'fixture-shop.myshopify.com',
+      shop: 'shopify-callback-fixture.myshopify.com',
       state: 'state_123',
     })));
 
@@ -211,7 +213,7 @@ describe('POST /api/integrations/shopify/callback', () => {
     const integration = await db.integration.findFirstOrThrow({
       where: { organizationId: org!.id, platform: ChannelType.shopify },
     });
-    expect(integration.externalAccountId).toBe('fixture-shop.myshopify.com');
+    expect(integration.externalAccountId).toBe('shopify-callback-fixture.myshopify.com');
     expect(integration.accessToken).toBe('shpat_fixture');
     expect(integration.fromEmail).toBe('Fixture Shop');
     expect(integration.metadata).toEqual({
@@ -220,7 +222,7 @@ describe('POST /api/integrations/shopify/callback', () => {
 
     expect(mockFetch).toHaveBeenCalledTimes(7);
     expect(mockLogger.warn).toHaveBeenCalledWith(
-      { topic: 'orders/fulfilled', shop: 'fixture-shop.myshopify.com', err: { errors: 'topic disabled' } },
+      { topic: 'orders/fulfilled', shop: 'shopify-callback-fixture.myshopify.com', err: { errors: 'topic disabled' } },
       '[Shopify OAuth] Webhook registration failed',
     );
     expect(mockRecordProviderSendFailure).toHaveBeenCalledWith(
@@ -230,9 +232,52 @@ describe('POST /api/integrations/shopify/callback', () => {
       expect.objectContaining({
         integrationId: integration.id,
         detail: 'Shopify webhook registration failed for orders/fulfilled',
-        extra: { topic: 'orders/fulfilled', shop: 'fixture-shop.myshopify.com' },
+        extra: { topic: 'orders/fulfilled', shop: 'shopify-callback-fixture.myshopify.com' },
       }),
     );
+  });
+
+  it('rejects a store owned by another workspace before registering webhooks', async () => {
+    const otherOrg = await createTestOrg();
+    extraOrgIds.push(otherOrg.id);
+    await db.integration.create({
+      data: {
+        organizationId: otherOrg.id,
+        platform: ChannelType.shopify,
+        externalAccountId: 'shopify-callback-fixture.myshopify.com',
+        accessToken: 'shpat_other_workspace',
+      },
+    });
+    mockSavedCookies({
+      shopify_oauth_state: 'state_123',
+      shopify_oauth_org: org!.clerkOrgId,
+      shopify_oauth_user: 'usr_oauth',
+      shopify_oauth_shop: 'shopify-callback-fixture.myshopify.com',
+    });
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'shpat_fixture' }))
+      .mockResolvedValueOnce(jsonResponse({ shop: { id: 7, name: 'Fixture Shop', myshopify_domain: 'shopify-callback-fixture.myshopify.com' } }));
+
+    const res = await POST(new Request(signedCallbackUrl({
+      code: 'oauth_code',
+      shop: 'shopify-callback-fixture.myshopify.com',
+      state: 'state_123',
+    })));
+
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe(
+      'http://dashboard.test/dashboard/integrations/oauth/complete?error=shopify_store_in_use',
+    );
+    // No integration for the caller, no webhook registration, and the incumbent
+    // workspace's row is untouched.
+    expect(await db.integration.count({
+      where: { organizationId: org!.id, platform: ChannelType.shopify },
+    })).toBe(0);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    const incumbent = await db.integration.findFirstOrThrow({
+      where: { organizationId: otherOrg.id, platform: ChannelType.shopify },
+    });
+    expect(incumbent.accessToken).toBe('shpat_other_workspace');
   });
 
   it('preserves unrelated Shopify metadata when refreshed scopes are persisted', async () => {
@@ -240,7 +285,7 @@ describe('POST /api/integrations/shopify/callback', () => {
       data: {
         organizationId: org!.id,
         platform: ChannelType.shopify,
-        externalAccountId: 'fixture-shop.myshopify.com',
+        externalAccountId: 'shopify-callback-fixture.myshopify.com',
         accessToken: 'shpat_old',
         metadata: {
           oauthScopes: ['read_orders'],
@@ -253,7 +298,7 @@ describe('POST /api/integrations/shopify/callback', () => {
       shopify_oauth_state: 'state_123',
       shopify_oauth_org: org!.clerkOrgId,
       shopify_oauth_user: 'usr_oauth',
-      shopify_oauth_shop: 'fixture-shop.myshopify.com',
+      shopify_oauth_shop: 'shopify-callback-fixture.myshopify.com',
     });
     mockFetch
       .mockResolvedValueOnce(jsonResponse({
@@ -264,7 +309,7 @@ describe('POST /api/integrations/shopify/callback', () => {
         shop: {
           id: 7,
           name: 'Fixture Shop',
-          myshopify_domain: 'fixture-shop.myshopify.com',
+          myshopify_domain: 'shopify-callback-fixture.myshopify.com',
         },
       }))
       .mockResolvedValueOnce(jsonResponse({ webhook: { id: 1 } }))
@@ -275,7 +320,7 @@ describe('POST /api/integrations/shopify/callback', () => {
 
     const res = await POST(new Request(signedCallbackUrl({
       code: 'oauth_code',
-      shop: 'fixture-shop.myshopify.com',
+      shop: 'shopify-callback-fixture.myshopify.com',
       state: 'state_123',
     })));
 

@@ -142,14 +142,29 @@ export async function POST(request: Request) {
 
     const canonicalShopDomain = shopIdentityResult.shop.myshopifyDomain;
     const shopName = shopIdentityResult.shop.name;
-    const existingIntegration = await db.integration.findFirst({
-      where: {
+    // A store belongs to one workspace. Without this, a second workspace that
+    // completes OAuth for an already-connected store takes over its webhook
+    // stream — resolveOrganizationId routes to the newest integration — and the
+    // store's buyer records start landing in the wrong inbox while the original
+    // workspace goes quiet. Mirrors the Instagram guard.
+    const storeIntegrations = await db.integration.findMany({
+      where: { platform: 'shopify', externalAccountId: canonicalShopDomain },
+      select: { organizationId: true, metadata: true },
+    });
+    if (storeIntegrations.some((row) => row.organizationId !== org.id)) {
+      logger.warn(
+        { shop: canonicalShopDomain, orgId: org.id },
+        '[Shopify OAuth] Store already connected to another workspace — rejecting',
+      );
+      await captureIntegrationConnectionFailed({
+        attemptId,
+        failureCategory: 'validation_failed',
         organizationId: org.id,
         platform: 'shopify',
-        externalAccountId: canonicalShopDomain,
-      },
-      select: { metadata: true },
-    });
+      });
+      return oauthCompleteResponse(appUrl, { error: 'shopify_store_in_use', returnTo });
+    }
+    const existingIntegration = storeIntegrations.find((row) => row.organizationId === org.id);
     const metadata = mergeShopifyOAuthScopes(existingIntegration?.metadata, oauthScopes);
 
     const shopifyIntegration = await upsertRaceSafeIntegration({

@@ -26,7 +26,7 @@ const {
 
 vi.mock('@shopkeeper/db', async (importOriginal) => ({
   ...await importOriginal<typeof import('@shopkeeper/db')>(),
-  db: { thread: { findUnique: findThread, update: threadUpdate } },
+  db: { thread: { findFirst: findThread, update: threadUpdate } },
   createMessage,
 }));
 vi.mock('@/lib/server/org', () => ({ getOrCreateOrg: getOrg }));

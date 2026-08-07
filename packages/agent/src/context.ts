@@ -170,7 +170,7 @@ export async function buildContext(
   }
 
   const openThreadCountPromise = db.thread.count({
-    where: { customerId: thread.customerId, status: "open" },
+    where: { organizationId: orgId, customerId: thread.customerId, status: "open" },
   });
 
   const dbName = thread.customer.name?.includes("@") ? null : (thread.customer.name ?? null);

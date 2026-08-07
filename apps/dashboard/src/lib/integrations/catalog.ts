@@ -167,4 +167,5 @@ export const OAUTH_ERROR_MESSAGES: Record<string, string> = {
   shopify_server_error: 'Something went wrong connecting your Shopify store. Please try again.',
   shopify_invalid_callback: 'Invalid callback from Shopify. Please try again.',
   shopify_shop_mismatch: 'The Shopify store that authorized the app did not match the store you entered. Please try again.',
+  shopify_store_in_use: 'This Shopify store is already connected to another Shopkeeper workspace.',
 }
