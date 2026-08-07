@@ -1,4 +1,4 @@
-export const CHANNEL = { IG_DM: 'ig_dm', EMAIL: 'email', SHOPIFY: 'shopify', IMESSAGE: 'imessage', TIKTOK: 'tiktok' } as const;
+export const CHANNEL = { IG_DM: 'ig_dm', EMAIL: 'email', SHOPIFY: 'shopify', SHOPIFY_CHAT: 'shopify_chat', IMESSAGE: 'imessage', TIKTOK: 'tiktok' } as const;
 export const STATUS = { OPEN: 'open' } as const;
 export const MODEL = {
   CLAUDE: 'claude-haiku-4-5-20251001',

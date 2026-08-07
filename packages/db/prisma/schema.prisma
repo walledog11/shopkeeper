@@ -21,6 +21,9 @@ enum ChannelType {
   sms_agent
   dashboard_agent
   imessage
+  // Storefront chat (customer-origin). Distinct from `shopify`, which is the
+  // merchant's store integration and its email-fallback behavior.
+  shopify_chat
 }
 
 enum EmailProvider {
@@ -158,6 +161,7 @@ model Organization {
   followUpWatches         FollowUpWatch[]
   stripeWebhookEvents     StripeWebhookEvent[]
   messages                Message[]
+  storefrontChatSessions  StorefrontChatSession[]
 
   @@index([clerkOrgId])
   @@map("organizations")
@@ -287,10 +291,11 @@ model Integration {
   metadata          Json?          @default("{}") @db.JsonB
   createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz
 
-  organization            Organization   @relation("OrganizationIntegrations", fields: [organizationId], references: [id], onDelete: Cascade)
-  defaultForOrganizations Organization[] @relation("DefaultEmailIntegration")
-  replyThreads            Thread[]       @relation("ThreadReplyIntegration")
+  organization            Organization            @relation("OrganizationIntegrations", fields: [organizationId], references: [id], onDelete: Cascade)
+  defaultForOrganizations Organization[]          @relation("DefaultEmailIntegration")
+  replyThreads            Thread[]                @relation("ThreadReplyIntegration")
   messages                Message[]
+  storefrontChatSessions  StorefrontChatSession[]
 
   @@unique([organizationId, emailProvider])
   // Supporting identity for database-level tenant-consistency foreign keys.
@@ -317,8 +322,9 @@ model Customer {
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
   deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  threads      Thread[]
+  organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  threads                Thread[]
+  storefrontChatSessions StorefrontChatSession[]
 
   // platformId is unique per org, not globally — two orgs can share the same customer email
   @@unique([organizationId, platformId])
@@ -372,6 +378,8 @@ model Thread {
   returnWatches    ReturnWatch[]
   shipmentWatches  ShipmentWatch[]
   followUpWatches  FollowUpWatch[]
+
+  storefrontChatSessions StorefrontChatSession[]
 
   @@unique([organizationId, operatorKey])
   @@unique([organizationId, id], map: "threads_organization_id_id_key")
@@ -797,4 +805,40 @@ model AutonomyShadowDecision {
   @@index([organizationId, humanDecision])
   @@index([organizationId, threadId, humanDecision])
   @@map("autonomy_shadow_decisions")
+}
+
+// One shopper's storefront chat session, keyed to the browser by a resume secret
+// we only ever store hashed. Bootstrap creates the session; the customer and
+// thread are created on the first actual message, so both stay null until then
+// and an abandoned widget open costs one row and no ticket.
+//
+// M1 is guest-only: there are deliberately no token columns and no verified
+// customer column. Verified sessions (M2) add those, and adding them here early
+// would invite the guest path to read something it must never trust.
+model StorefrontChatSession {
+  id               String    @id @default(uuid()) @db.Uuid
+  organizationId   String    @map("organization_id") @db.Uuid
+  integrationId    String    @map("integration_id") @db.Uuid
+  customerId       String?   @map("customer_id") @db.Uuid
+  threadId         String?   @map("thread_id") @db.Uuid
+  storefrontHost   String    @map("storefront_host") @db.VarChar(255)
+  resumeSecretHash String    @map("resume_secret_hash") @db.VarChar(64)
+  lastSeenAt       DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  integration  Integration  @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  customer     Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  thread       Thread?      @relation(fields: [threadId], references: [id], onDelete: SetNull)
+
+  // Supporting identity for database-level tenant-consistency foreign keys,
+  // matching the convention on integrations/customers/threads.
+  @@unique([organizationId, id], map: "storefront_chat_sessions_organization_id_id_key")
+  // Revocation on uninstall/disconnect sweeps by integration.
+  @@index([integrationId, revokedAt])
+  @@index([organizationId, lastSeenAt(sort: Desc)])
+  @@index([expiresAt])
+  @@map("storefront_chat_sessions")
 }

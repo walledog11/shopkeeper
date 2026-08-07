@@ -43,6 +43,12 @@ const CHANNEL_INFO: Record<ChannelType, ChannelInfo> = {
     logo: '/logos/shopify.svg',
     badgeClassName: 'bg-green-500/15 text-green-600',
   },
+  shopify_chat: {
+    name: 'Storefront chat',
+    label: 'Storefront chat',
+    logo: '/logos/shopify.svg',
+    badgeClassName: 'bg-green-500/15 text-green-600',
+  },
   imessage: {
     name: 'iMessage',
     label: 'iMessage',

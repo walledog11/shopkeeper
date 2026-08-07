@@ -19,11 +19,15 @@ export const INTEGRATION_FAILURE_CATEGORIES = [
 ] as const;
 export type IntegrationFailureCategory = (typeof INTEGRATION_FAILURE_CATEGORIES)[number];
 
+// Mirrors the ChannelType enum. `analyticsChannel()` uses this as a runtime
+// allowlist and drops events for anything absent, so a channel added to the
+// database enum but not here is silently missing from product analytics.
 export const MESSAGE_CHANNELS = [
   'ig_dm',
   'email',
   'tiktok',
   'shopify',
+  'shopify_chat',
   'sms',
   'sms_agent',
   'dashboard_agent',
