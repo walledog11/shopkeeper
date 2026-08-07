@@ -21,7 +21,7 @@ export function makeCustomerEditDraft(customer: CustomerRow): EditState {
   }
 }
 
-export function buildCustomerUpdatePayload(customerId: CustomerRow["id"], draft: EditState) {
+export function buildCustomerUpdatePayload(customerId: number, draft: EditState) {
   return {
     customerId,
     updates: {
@@ -41,7 +41,7 @@ export function buildCustomerUpdatePayload(customerId: CustomerRow["id"], draft:
 }
 
 export async function saveCustomerUpdates(
-  customerId: CustomerRow["id"],
+  customerId: number,
   draft: EditState,
   fetchImpl: FetchLike = fetch,
 ) {
@@ -63,11 +63,14 @@ export async function saveCustomerUpdates(
 }
 
 export async function startCustomerSupportThread(customer: CustomerRow, fetchImpl: FetchLike = fetch) {
+  if (!customer.shopifyCustomerId) {
+    throw new Error("This customer is not linked to Shopify.")
+  }
   const res = await fetchImpl("/api/threads/shopify", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      shopifyCustomerId: String(customer.id),
+      shopifyCustomerId: String(customer.shopifyCustomerId),
       customerEmail: customer.email,
       customerName: fullName(customer),
     }),

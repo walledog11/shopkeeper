@@ -17,8 +17,8 @@ function useCustomersPanelState(query: string) {
   const { mapItems, ...list } = useCursorListState<CustomerRow, CustomersResponse>({
     buildUrl: () => (
       query.length >= 1
-        ? `/api/shopify/customers?q=${encodeURIComponent(query)}`
-        : "/api/shopify/customers"
+        ? `/api/customers?q=${encodeURIComponent(query)}`
+        : "/api/customers"
     ),
     fetchPage: async (pageInfo) => {
       const page = await fetchCustomersPage(pageInfo)

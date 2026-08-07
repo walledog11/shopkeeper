@@ -3,7 +3,10 @@ import type { ShopifyAddress, ShopifyOrder } from "@/types/shopify"
 export type { ShopifyAddress, ShopifyOrder }
 
 export interface CustomerRow {
-  id: number
+  source: "shopify" | "inbox"
+  id: string
+  inboxCustomerId: string | null
+  shopifyCustomerId: number | null
   first_name: string
   last_name: string
   email: string
@@ -12,6 +15,9 @@ export interface CustomerRow {
   total_spent: string
   created_at: string
   default_address: ShopifyAddress | null
+  threadCount?: number
+  channels?: string[]
+  lastMessageAt?: string | null
 }
 
 export interface CustomerDetailResponse {
@@ -67,6 +73,9 @@ export const SEGMENT_LABEL: Record<CustomerSegment, string> = {
 export const VIP_LTV_THRESHOLD = 500
 
 export function customerSegment(c: CustomerRow): CustomerSegment {
+  if (c.source === "inbox" && c.orders_count === 0) {
+    return c.threadCount && c.threadCount > 0 ? "repeat" : "prospect"
+  }
   const spent = parseFloat(c.total_spent)
   if (!isNaN(spent) && spent >= VIP_LTV_THRESHOLD) return "vip"
   if (c.orders_count >= 2) return "repeat"

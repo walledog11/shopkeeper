@@ -33,12 +33,23 @@ export function useCustomerDrawerState({
   const { push } = useRouter()
 
   const { data, mutate } = useSWR<CustomerDetailResponse>(
-    `/api/shopify/customer?customerId=${initial.id}`,
+    initial.source === "shopify" && initial.shopifyCustomerId
+      ? `/api/shopify/customer?customerId=${initial.shopifyCustomerId}`
+      : null,
     fetcher,
     { revalidateOnFocus: false },
   )
 
-  const customer = data?.customer ?? initial
+  const customer = data?.customer
+    ? {
+        ...initial,
+        ...data.customer,
+        source: initial.source,
+        inboxCustomerId: initial.inboxCustomerId,
+        shopifyCustomerId: initial.shopifyCustomerId ?? Number(data.customer.id),
+        id: initial.id,
+      }
+    : initial
   const orders: ShopifyOrder[] = data?.orders ?? []
   const detailShop = data?.shop ?? shop
   const isLoadingDetail = !data
@@ -63,7 +74,7 @@ export function useCustomerDrawerState({
     setIsSaving(true)
     setSaveError(null)
     try {
-      const updated = await saveCustomerUpdates(customer.id, draft)
+      const updated = await saveCustomerUpdates(customer.shopifyCustomerId!, draft)
       const nextCustomer = { ...customer, ...updated } as CustomerRow
       void mutate(
         data
@@ -89,6 +100,14 @@ export function useCustomerDrawerState({
   const [threadError, setThreadError] = useState<string | null>(null)
 
   const handleStartThread = async () => {
+    if (customer.source !== "shopify" || !customer.shopifyCustomerId) {
+      if (customer.inboxCustomerId) {
+        push(`/dashboard/tickets?customer=${customer.inboxCustomerId}`)
+        return
+      }
+      setThreadError("No inbox history is available for this customer yet.")
+      return
+    }
     setIsStartingThread(true)
     setThreadError(null)
     try {
@@ -101,8 +120,8 @@ export function useCustomerDrawerState({
     }
   }
 
-  const shopifyAdminUrl = detailShop
-    ? `https://${detailShop}/admin/customers/${customer.id}`
+  const shopifyAdminUrl = customer.source === "shopify" && detailShop && customer.shopifyCustomerId
+    ? `https://${detailShop}/admin/customers/${customer.shopifyCustomerId}`
     : null
   const addr = customer.default_address
   const hasAddress = !!(addr?.address1 || addr?.city || addr?.province || addr?.zip || addr?.country_name)
@@ -126,7 +145,7 @@ export function useCustomerDrawerState({
     saveError,
     setDraft,
     shopifyAdminUrl,
-    startEdit,
+    startEdit: customer.source === "shopify" && customer.shopifyCustomerId ? startEdit : undefined,
     threadError,
   }
 }

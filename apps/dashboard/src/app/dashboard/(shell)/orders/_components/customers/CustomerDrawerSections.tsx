@@ -131,7 +131,7 @@ export function CustomerDrawerView({
         <section>
           <div className="flex items-center justify-between mb-2.5">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Details</span>
-            {!isEditing && (
+            {!isEditing && startEdit && (
               <button type="button"
                 onClick={startEdit}
                 className="text-muted-foreground hover:text-foreground transition-colors"

@@ -12,7 +12,10 @@ function jsonResponse(body: unknown, init?: ResponseInit) {
 }
 
 const customer: CustomerRow = {
-  id: 123,
+  source: "shopify",
+  id: "123",
+  inboxCustomerId: null,
+  shopifyCustomerId: 123,
   first_name: "Maya",
   last_name: "Stone",
   email: "maya@example.com",

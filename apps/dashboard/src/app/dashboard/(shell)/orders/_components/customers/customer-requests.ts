@@ -8,7 +8,7 @@ function isNullableString(value: unknown): value is string | null {
 export async function fetchCustomersPage(pageInfo: string): Promise<CustomersResponse> {
   const fallback = "Unable to load more customers."
   const payload = await requestJson<Partial<CustomersResponse>>(
-    `/api/shopify/customers?page_info=${encodeURIComponent(pageInfo)}`,
+    `/api/customers?page_info=${encodeURIComponent(pageInfo)}`,
     {},
     fallback,
   )
