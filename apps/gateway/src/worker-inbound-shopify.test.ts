@@ -9,9 +9,9 @@ import {
 } from './test-fixtures/worker-test-helpers.js';
 
 describe('Message worker — shopify branch', () => {
-  it('creates customer + thread + message for orders/created with customer email', async () => {
+  it('creates customer + thread + message for orders/create with customer email', async () => {
     const handler = getCapturedHandlers().get('inbound-messages');
-    await handler!(makeShopifyJob(org.id, 'orders/created', { email: 'jane@shop.com', first_name: 'Jane', last_name: 'Doe' }));
+    await handler!(makeShopifyJob(org.id, 'orders/create', { email: 'jane@shop.com', first_name: 'Jane', last_name: 'Doe' }));
 
     const customer = await db.customer.findFirst({
       where: { organizationId: org.id, platformId: 'jane@shop.com' },
@@ -29,6 +29,25 @@ describe('Message worker — shopify branch', () => {
     expect(message?.contentText).toBe('New order #1001 was placed.');
   });
 
+  it('records order events as notes so the planner never answers them as customer messages', async () => {
+    const handler = getCapturedHandlers().get('inbound-messages');
+    await handler!(makeShopifyJob(org.id, 'orders/updated', { email: 'synthetic@shop.com' }));
+
+    const customer = await db.customer.findFirst({
+      where: { organizationId: org.id, platformId: 'synthetic@shop.com' },
+    });
+    const thread = await db.thread.findFirst({
+      where: { organizationId: org.id, customerId: customer!.id, channelType: ChannelType.shopify },
+    });
+    const message = await db.message.findFirst({ where: { threadId: thread!.id } });
+
+    // A note is invisible to getPendingCustomerMessageId, so no plan is
+    // generated and no operator card is pushed for an event nobody sent.
+    expect(message?.senderType).toBe('note');
+    expect(thread?.lastMessageSenderType).toBeNull();
+    expect(thread?.subject).toBe('Order #1001');
+  });
+
   it('creates message with correct text for orders/fulfilled', async () => {
     const handler = getCapturedHandlers().get('inbound-messages');
     await handler!(makeShopifyJob(org.id, 'orders/fulfilled', { email: 'bob@shop.com' }));
@@ -41,7 +60,7 @@ describe('Message worker — shopify branch', () => {
 
   it('uses shopify_${id} as platformId when customer has no email', async () => {
     const handler = getCapturedHandlers().get('inbound-messages');
-    await handler!(makeShopifyJob(org.id, 'orders/created', { id: 99999, first_name: 'No Email' }));
+    await handler!(makeShopifyJob(org.id, 'orders/create', { id: 99999, first_name: 'No Email' }));
 
     const customer = await db.customer.findFirst({
       where: { organizationId: org.id, platformId: 'shopify_99999' },
@@ -52,7 +71,7 @@ describe('Message worker — shopify branch', () => {
 
   it('drops the event when customer has neither email nor id', async () => {
     const handler = getCapturedHandlers().get('inbound-messages');
-    await handler!(makeShopifyJob(org.id, 'orders/created', null));
+    await handler!(makeShopifyJob(org.id, 'orders/create', null));
 
     const threads = await db.thread.findMany({
       where: { organizationId: org.id, channelType: ChannelType.shopify },
@@ -120,7 +139,7 @@ describe('Message worker — shopify branch', () => {
     const externalMessageId = 'shopify:retry-shop.myshopify.com:duplicate-webhook-001';
     const job = makeShopifyJob(
       org.id,
-      'orders/created',
+      'orders/create',
       { email: 'shopify-duplicate@example.com' },
       {},
       { inboundMessageId: externalMessageId },

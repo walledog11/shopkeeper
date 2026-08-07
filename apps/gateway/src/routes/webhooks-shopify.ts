@@ -12,7 +12,7 @@ import {
   recordWebhookSignatureFailure,
 } from './webhooks-signature-alerts.js';
 
-const SHOPIFY_SUPPORTED_TOPICS = new Set(['orders/created', 'orders/fulfilled', 'orders/updated', 'orders/cancelled']);
+const SHOPIFY_SUPPORTED_TOPICS = new Set(['orders/create', 'orders/fulfilled', 'orders/updated', 'orders/cancelled']);
 
 export function registerShopifyWebhookRoutes(router: Router): void {
   router.post('/shopify', webhookJsonParser(), async (req: Request, res: Response) => {
@@ -117,7 +117,7 @@ export function registerShopifyWebhookRoutes(router: Router): void {
       // Flag-gated; the stable jobId dedupes webhook retries so each order is
       // reviewed once. The per-order agent run happens in-process in the worker.
       const orderId = (req.body as { id?: number | string } | undefined)?.id;
-      if (topic === 'orders/created' && isOrderRiskMonitorEnabled() && orderId != null) {
+      if (topic === 'orders/create' && isOrderRiskMonitorEnabled() && orderId != null) {
         await getOrderReviewQueue().add(
           JOB.ORDER_REVIEW,
           { organizationId, orderId: String(orderId), traceId },

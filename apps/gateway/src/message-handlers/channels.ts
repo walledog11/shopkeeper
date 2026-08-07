@@ -363,7 +363,7 @@ export async function handleShopifyJob(job: Job<InboundJobData>, aiSummaryQueue:
     : (email?.split('@')[0] ?? null);
 
   const EVENT_MESSAGES: Record<string, string> = {
-    'orders/created': `New order ${orderName} was placed.`,
+    'orders/create': `New order ${orderName} was placed.`,
     'orders/fulfilled': `Order ${orderName} has been fulfilled.`,
     'orders/updated': `Order ${orderName} has been updated.`,
     'orders/cancelled': `Order ${orderName} has been cancelled.`,
@@ -374,8 +374,10 @@ export async function handleShopifyJob(job: Job<InboundJobData>, aiSummaryQueue:
     await processInboundMessage(organizationId, platformId, CHANNEL.SHOPIFY, messageText, aiSummaryQueue, {
       customerName,
       initialTag: 'Order Status',
+      subject: `Order ${orderName}`,
       externalMessageId: job.data.inboundMessageId,
       traceId,
+      synthetic: true,
     });
     logger.info({ platformId, organizationId, topic, traceId }, '[Worker] Successfully saved Shopify order event');
   } catch (error) {

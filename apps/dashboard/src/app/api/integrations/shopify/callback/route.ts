@@ -27,7 +27,7 @@ import {
   isProviderRequestTimeoutError,
 } from '@/lib/server/provider-fetch';
 
-const SHOPIFY_WEBHOOK_TOPICS = ['orders/created', 'orders/fulfilled', 'orders/updated', 'orders/cancelled', 'app/uninstalled'];
+const SHOPIFY_WEBHOOK_TOPICS = ['orders/create', 'orders/fulfilled', 'orders/updated', 'orders/cancelled', 'app/uninstalled'];
 
 export async function GET(request: Request) {
   return createPostRedirectResponse(request, 'Finish Shopify connection');

@@ -261,7 +261,7 @@ describe('POST /webhooks/shopify', () => {
       .post('/webhooks/shopify')
       .set('Content-Type', 'application/json')
       .set('x-shopify-hmac-sha256', sig)
-      .set('x-shopify-topic', 'orders/created')
+      .set('x-shopify-topic', 'orders/create')
       .set('x-shopify-shop-domain', shopDomain)
       .set('x-shopify-webhook-id', 'webhook-1001')
       .send(body);
@@ -274,7 +274,7 @@ describe('POST /webhooks/shopify', () => {
     expect(jobData).toMatchObject({
       platform: 'shopify',
       organizationId: org.id,
-      topic: 'orders/created',
+      topic: 'orders/create',
       inboundMessageId: `shopify:${shopDomain}:webhook-1001`,
     });
   });
@@ -285,7 +285,7 @@ describe('POST /webhooks/shopify', () => {
     const res = await request(app)
       .post('/webhooks/shopify')
       .set('Content-Type', 'application/json')
-      .set('x-shopify-topic', 'orders/created')
+      .set('x-shopify-topic', 'orders/create')
       .set('x-shopify-shop-domain', 'shop.myshopify.com')
       .send(body);
 
@@ -303,7 +303,7 @@ describe('POST /webhooks/shopify', () => {
       .post('/webhooks/shopify')
       .set('Content-Type', 'application/json')
       .set('x-shopify-hmac-sha256', 'wrongsig')
-      .set('x-shopify-topic', 'orders/created')
+      .set('x-shopify-topic', 'orders/create')
       .set('x-shopify-shop-domain', 'shop.myshopify.com')
       .send(body);
 
@@ -336,7 +336,7 @@ describe('POST /webhooks/shopify', () => {
       .post('/webhooks/shopify')
       .set('Content-Type', 'application/json')
       .set('x-shopify-hmac-sha256', sig)
-      .set('x-shopify-topic', 'orders/created')
+      .set('x-shopify-topic', 'orders/create')
       .set('x-shopify-shop-domain', 'unknown-shop.myshopify.com')
       .send(body);
 
@@ -352,7 +352,7 @@ describe('POST /webhooks/shopify', () => {
       .post('/webhooks/shopify')
       .set('Content-Type', 'application/json')
       .set('x-shopify-hmac-sha256', sig)
-      .set('x-shopify-topic', 'orders/created')
+      .set('x-shopify-topic', 'orders/create')
       .send(body);
 
     expect(res.status).toBe(400);

@@ -51,7 +51,7 @@ describe('request body budgets', () => {
       .set('Content-Type', 'application/json')
       .set('x-shopify-hmac-sha256', hmacSha256Base64(SHOPIFY_SECRET, OVER_WEBHOOK_BUDGET))
       .set('x-shopify-shop-domain', 'test-shop.myshopify.com')
-      .set('x-shopify-topic', 'orders/created')
+      .set('x-shopify-topic', 'orders/create')
       .send(OVER_WEBHOOK_BUDGET);
 
     expect(res.status).toBe(413);

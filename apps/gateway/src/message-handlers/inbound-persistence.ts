@@ -69,6 +69,12 @@ export interface ProcessMessageOptions {
   // Only true for a real customer-authored provider message. Synthetic
   // provider events such as Shopify order webhooks are not activation input.
   isRealCustomerMessage?: boolean;
+  // A provider event the customer did not write (Shopify order webhooks). It
+  // lands as a note so the planner never reads it as a pending request and
+  // drafts a reply to a customer who said nothing, and it skips the summary
+  // job: notes are excluded from the classifier conversation, so the LLM call
+  // would run on empty text.
+  synthetic?: boolean;
 }
 
 function normalizeExternalMessageId(externalMessageId: string | null | undefined): string | null {
@@ -96,6 +102,7 @@ export async function processInboundMessage(
     precomputed = null,
     lockAsGenuine = false,
     isRealCustomerMessage = false,
+    synthetic = false,
   }: ProcessMessageOptions = {},
 ): Promise<{ thread: Awaited<ReturnType<typeof db.thread.create>>; isNew: boolean } | null> {
   messageText = sanitizeUserInput(messageText);
@@ -191,7 +198,7 @@ export async function processInboundMessage(
         data: {
           threadId: thread!.id,
           organizationId,
-          senderType: SenderType.customer,
+          senderType: synthetic ? SenderType.note : SenderType.customer,
           contentText: messageText,
           ...(providerMessageId && { externalMessageId: providerMessageId }),
           ...(integrationId && { integrationId }),
@@ -199,24 +206,28 @@ export async function processInboundMessage(
           ...(providerSentAt && { sentAt: providerSentAt }),
         },
       });
-      await tx.thread.update({
-        where: { id: thread!.id },
-        data: {
-          cachedPlanMessageId: null,
-          cachedPlan: Prisma.DbNull,
-        },
-      });
-      await tx.thread.updateMany({
-        where: {
-          id: thread!.id,
-          organizationId,
-          lastMessageAt: { lte: created.sentAt },
-        },
-        data: {
-          lastMessageAt: created.sentAt,
-          lastMessageSenderType: created.senderType,
-        },
-      });
+      // A note is not a conversation turn: it neither invalidates a pending
+      // plan nor advances the thread's last-message cursor.
+      if (!synthetic) {
+        await tx.thread.update({
+          where: { id: thread!.id },
+          data: {
+            cachedPlanMessageId: null,
+            cachedPlan: Prisma.DbNull,
+          },
+        });
+        await tx.thread.updateMany({
+          where: {
+            id: thread!.id,
+            organizationId,
+            lastMessageAt: { lte: created.sentAt },
+          },
+          data: {
+            lastMessageAt: created.sentAt,
+            lastMessageSenderType: created.senderType,
+          },
+        });
+      }
       if (routeReceivedAt) {
         await tx.thread.updateMany({
           where: {
@@ -254,15 +265,17 @@ export async function processInboundMessage(
     });
   }
 
-  await enqueueAiSummaryJob(aiSummaryQueue, {
-    threadId: thread!.id,
-    organizationId,
-    sourceMessageId: message.id,
-    customerName: customer.name ?? null,
-    channelType,
-    traceId: traceId ?? undefined,
-    ...(precomputed && { skipSummary: true }),
-  });
+  if (!synthetic) {
+    await enqueueAiSummaryJob(aiSummaryQueue, {
+      threadId: thread!.id,
+      organizationId,
+      sourceMessageId: message.id,
+      customerName: customer.name ?? null,
+      channelType,
+      traceId: traceId ?? undefined,
+      ...(precomputed && { skipSummary: true }),
+    });
+  }
 
   // Live inbox: tell connected dashboards a thread changed so they revalidate.
   await publishThreadEvent(organizationId, thread!.id);
