@@ -42,24 +42,38 @@ provider. **None of these is a code task.**
   are complete. Launch gated on Meta App Review and a non-role merchant account
   completing the full DM loop (connect → inbound → approve reply →
   disconnect/reconnect). Ops in [runbook.md](production/runbook.md).
-- [ ] **Realtime inbox (SSE + Redis pub/sub).** Decision 2026-08-06: finish and
-  enable, not delete. `publishThreadEvent` already runs **unflagged** in
-  production from 10 call sites — only the SSE serving side is gated, and the
-  CSP `connect-src` fix landed 2026-08-06. Remaining is env plus a canary, and
-  there are **two** gates: Railway `GATEWAY_REALTIME_ENABLED=true`, then Vercel
+- [x] **Realtime inbox (SSE + Redis pub/sub).** Decision 2026-08-06: finish and
+  enable, not delete. Both gates are set and the canary passed **2026-08-07**:
+  Railway `GATEWAY_REALTIME_ENABLED=true`, Vercel
   `NEXT_PUBLIC_GATEWAY_EVENTS_URL=https://clerk-production-e37f.up.railway.app`
-  followed by a **redeploy** — `NEXT_PUBLIC_*` is inlined at build time, not a
-  runtime flip. Verify with `cd apps/gateway && npm run realtime:smoke --
-  --org-id=<prod org> --url=<gateway>` (asserts delivery *and* cross-org
-  non-delivery), then confirm `[Realtime] Subscribed` in gateway logs with no
-  new `/api/security/csp-report` hits. Rollback: unset the Vercel var and
-  redeploy; polling returns to 15s. **Failure mode to watch:** if SSE cannot
-  connect, `RealtimeProvider` retries silently forever while polling has already
-  slowed to 60s/120s — the inbox gets slower with nothing surfaced, so check the
-  logs before walking away. Standing cost traps: never hold SSE on Vercel
-  functions; never use Postgres `LISTEN/NOTIFY` (pins a Neon connection).
-  **Gates M1 of**
+  inlined into the serving build (`NEXT_PUBLIC_*` is build-time, not a runtime
+  flip). Evidence: `realtime:smoke` PASS against prod (delivery *and* cross-org
+  non-delivery); `[Realtime] Subscribed channel:"realtime:thread"` in the
+  `shopkeeper` service logs; live `connect-src` on `app.useshopkeeper.com`
+  includes the gateway origin; and a signed-in browser on `/dashboard/tickets`
+  refetched `/api/threads` within a second of a publish, against a 20s control
+  window with zero requests — so the merchant-facing `RealtimeProvider` stream
+  is live, not just the transport. Rollback: unset the Vercel var and redeploy;
+  polling returns to 15s. **Failure mode to watch:** if SSE cannot connect,
+  `RealtimeProvider` retries silently forever while polling has already slowed
+  to 60s/120s — the inbox gets slower with nothing surfaced, so check the logs
+  before walking away. Standing cost traps: never hold SSE on Vercel functions;
+  never use Postgres `LISTEN/NOTIFY` (pins a Neon connection). **No longer
+  gates M1 of**
   [shopify-storefront-chat-implementation-plan.md](shopify-storefront-chat-implementation-plan.md).
+
+  Re-running the smoke needs prod Redis over the `REDIS_PUBLIC_URL` TCP proxy —
+  the gateway's own `REDIS_URL` is `redis.railway.internal` and never resolves
+  from a laptop — plus `NODE_ENV=production` so `loadGatewayEnv` does not
+  override it with the local `.env`:
+
+  ```
+  cd apps/gateway
+  REDIS_PUB=$(railway variables --service Redis --json | node -e '…REDIS_PUBLIC_URL…')
+  NODE_ENV=production railway run --service shopkeeper -- sh -c \
+    "NODE_ENV=production REDIS_URL='$REDIS_PUB' npx tsx src/scripts/realtime-smoke.ts \
+     --org-id=<prod org> --url=https://clerk-production-e37f.up.railway.app"
+  ```
 - [x] **Dashboard ops alert → Sentry.** Production round-trip verified
   2026-08-07 via deployed `agent_failure` trigger (`POST /api/agent`, no
   approved plan). Evidence in
@@ -80,6 +94,23 @@ display names, Telegram migration, and Gmail restricted-scope packet work:**
 when its closing verification passes. Re-verify env presence with
 `vercel env ls production` — `vercel env pull` redacts sensitive vars to an
 empty string, indistinguishable from unset.
+
+- [ ] **Shopify app config → CLI (M0a of storefront chat).** Started 2026-08-07;
+  rollback reference in
+  [production/shopify-app-config-reference.md](production/shopify-app-config-reference.md).
+  Next physical step is installing the Shopify CLI (absent from `PATH` and from
+  the repo) and taking the verbatim export via `shopify app config link`, which
+  pulls without pushing. M0a migrates at the **exact current 15-scope set** — a
+  re-authorization prompt during it is a defect, not a side effect. Still open:
+  the repo has **no compliance webhook handlers** for the three mandatory topics,
+  so the export decides whether that is a real gap. Not gated on anything; M1
+  itself still waits on a live merchant.
+- [ ] **Shopify app proxy + `write_app_proxy` (M0b).** Split out of M0 on
+  2026-08-07 because declaring a proxy requires that scope, which raises a
+  re-auth prompt on connected stores (they keep working either way — Shopify
+  backfills). Runs after M0a and must be live before M1 can be tested end to
+  end, but does not ship with it. Write the merchant-facing explanation before
+  deploying.
 
 ---
 

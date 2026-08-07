@@ -30,23 +30,31 @@ lookup is where both the disclosure risk and the token-custody cost live. And
 because guest mode needs no `customer_read_*` scopes, M1 can ship without
 forcing every already-connected merchant to re-authorize.
 
-- **M0** — Shopify app-configuration migration. No features.
+- **M0a** — Shopify app-configuration migration. No features, no new scopes.
+- **M0b** — App proxy and `write_app_proxy`. The scope change, isolated.
 - **M1** — Guest-only storefront chat. The shippable milestone.
 - **M2** — Verified sessions. Deferred; sketched, not specified.
+
+M0 was split in two on 2026-08-07, once it was confirmed that declaring an app
+proxy requires the `write_app_proxy` access scope. The original M0 promised both
+a CLI migration *and* an unchanged scope set, and those turned out to be
+incompatible. Separating them keeps the one-way, every-merchant-affecting
+migration free of any scope change, so that if a re-authorization prompt appears
+it belongs to exactly one milestone and one cause.
 
 ## Prerequisites
 
 Not part of this plan, and settled before M1 starts.
 
-- **The realtime subsystem proven in production.** Decision closed 2026-08-06:
-  finish and enable, not delete — the code is wired end to end
-  (`apps/gateway/src/realtime/{publish,sse,token}.ts`,
-  `apps/dashboard/src/lib/realtime/*`) and the publish half already runs
-  unflagged in production. Remaining work is env and a prod canary, tracked
-  under "Prove in prod" in [to-do-list.md](to-do-list.md). This plan does not
-  inherit it silently: there it is optional polish over a 15s poll, here it is
-  shopper-facing and latency-critical, so M1 starts only once the canary is
-  clean.
+- **The realtime subsystem proven in production.** ✅ **Cleared 2026-08-07.**
+  Decision closed 2026-08-06 was finish and enable, not delete; both env gates
+  are now set and the canary passed — `realtime:smoke` green against prod
+  (delivery and cross-org non-delivery), `[Realtime] Subscribed` in the gateway
+  logs, and a signed-in browser confirmed revalidating off a real push against a
+  silent control window. Evidence under "Prove in prod" in
+  [to-do-list.md](to-do-list.md). This plan did not inherit it silently: there it
+  was optional polish over a 15s poll, here it is shopper-facing and
+  latency-critical, which is why M1 waited on it.
 
   **This is a gate on the infrastructure, not a component M1 reuses.** The
   existing SSE is org-scoped in every dimension: `sse.ts` keys its connection
@@ -59,7 +67,10 @@ Not part of this plan, and settled before M1 starts.
   real traffic. Budget M1 for a second SSE implementation, not for plumbing.
 
 
-## M0 — Shopify app configuration migration
+## M0a — Shopify app configuration migration
+
+No features, and **no scope change**. If this milestone raises a
+re-authorization prompt on any store, something went wrong.
 
 ### Why this is separate
 
@@ -79,29 +90,88 @@ it.
 ### Changes
 
 - Export the current Dev Dashboard app configuration verbatim before touching
-  anything. Record it in `docs/production/` as the rollback reference.
+  anything. Record it in `docs/production/` as the rollback reference. **Started
+  2026-08-07** in
+  [production/shopify-app-config-reference.md](production/shopify-app-config-reference.md):
+  the code-derived expectation (scopes, redirect URI, webhook endpoint and
+  topics) is captured there for the export to be diffed against, along with a
+  draft TOML. The verbatim export itself is still outstanding — `shopify app
+  config link` pulls remote config to a local file without pushing, which makes
+  it the cleanest way to take it.
 - Create a **throwaway dev app** and land the TOML there first. Never
   `config link` the production app against an unverified file.
 - Link the root `shopify.app.toml` to the production app only after the dev-app
   TOML round-trips: deploy, install on a dev store, confirm granted scopes and
   webhook topics match the exported reference exactly.
-- Preserve managed installation and the existing scope set. M0 adds **no**
-  scopes — an unchanged scope set means no re-authorization prompt for any
-  already-connected merchant.
-- Configure the app proxy: `/apps/shopkeeper-chat` → `/api/storefront-chat/proxy`
-  on the dashboard host. Verify whether app-proxy declaration in the TOML needs
-  an access scope at all before writing `write_app_proxy` anywhere — an invalid
-  scope string fails the install outright, and proxies are normally declared in
-  app config rather than granted.
+- Preserve managed installation and the existing scope set, byte for byte. M0a
+  adds **no** scopes — an unchanged scope set means no re-authorization prompt
+  for any already-connected merchant. The 15-scope list is in the reference doc;
+  the app proxy and `write_app_proxy` are **not** part of this milestone, which
+  is the whole reason it can make this promise.
 - Confirm which mandatory compliance webhooks the app already owes
   (`customers/data_request`, `customers/redact`, `shop/redact`) and that the
   TOML declares them identically to the current Dashboard configuration.
+  **Finding 2026-08-07: the repo has no handlers for any of the three.** The
+  export decides whether the Dashboard declares them against a live endpoint, a
+  dead one, or not at all. Do not resolve this by pointing them at
+  `/webhooks/shopify` — its topic allowlist rejects them, so they would fail
+  silently, which is worse than being absent.
 
 ### Done when
 
 Production app is CLI-configured, a fresh install on a dev store grants exactly
 the pre-migration scope set, an existing connected merchant's integration keeps
 working with no re-auth prompt, and the exported reference config is checked in.
+
+## M0b — App proxy and `write_app_proxy`
+
+The scope change, isolated from the migration and from the widget. Small, but it
+is the only milestone in this plan that touches what existing merchants have
+granted, which is why it is not folded into either neighbour.
+
+### Why this is separate
+
+Declaring an app proxy requires the `write_app_proxy` access scope — confirmed
+2026-08-07 against Shopify's app-proxies documentation, which states it directly.
+The app-configuration reference page omits it entirely, and that omission is
+what made the original M0 believe it could migrate *and* stay scope-neutral.
+
+Adding the scope raises a re-authorization prompt for active merchants. It does
+not break them: stores that never accept it are backfilled server-side by
+Shopify and keep working. But a prompt is merchant-visible, and on a product
+whose first principle is that trust is binary, it should arrive attached to a
+feature the merchant asked for rather than to invisible plumbing.
+
+Kept out of M0a so the migration's "no prompt" claim is falsifiable — if a
+prompt appears during M0a, it is a defect, not an expected side effect.
+
+Kept out of M1 as a milestone so the scope change can land and settle on its own
+schedule, ahead of the widget. M1's bootstrap route depends on the proxy
+existing, so M0b must be live before M1 can be tested end to end — but it does
+not have to ship in the same change, and it should not.
+
+### Changes
+
+- Add `write_app_proxy` to `[access_scopes]` in the TOML, on top of the exact
+  15-scope set M0a preserved. This is the only scope this plan adds before M2.
+- Configure the app proxy: `/apps/shopkeeper-chat` → `/api/storefront-chat/proxy`
+  on the dashboard host. Per Shopify's schema all three keys are required —
+  `url`, `subpath` (alphanumeric, ≤30 chars, not `admin`/`services`/`password`/
+  `login`), and `prefix` (one of `a`, `apps`, `community`, `tools`).
+- Land it on the throwaway dev app first and confirm the proxy resolves, exactly
+  as M0a did for the base configuration.
+- Decide and write the merchant-facing explanation for the prompt **before**
+  deploying, not after the first merchant sees it. Connected merchants at this
+  point are few enough to tell directly.
+- Expect the storefront-chat routes to 404 until M1 lands. That is correct — a
+  configured proxy pointing at an unbuilt route is inert, and shipping the scope
+  early is the entire point of the split.
+
+### Done when
+
+The production app declares the proxy, `write_app_proxy` is granted or backfilled
+on every connected store, no merchant's existing integration has degraded, and
+the prompt has been explained to whoever saw it.
 
 ## M1 — Guest-only storefront chat
 
@@ -288,7 +358,8 @@ email and Instagram agent down with it.
 ### Rollout
 
 - Ship database and channel support first, then dark gateway/dashboard routes,
-  then the disabled theme extension. M0 has already settled app configuration.
+  then the disabled theme extension. M0a has already settled app configuration
+  and M0b the proxy, so no step here touches app config or scopes.
 - Gate globally with `STOREFRONT_CHAT_ENABLED=false` and per integration with
   `storefrontChat.enabled=false`.
 - Enable on the controlled dev store, then one merchant workspace in approval
@@ -352,8 +423,9 @@ listing, and public distribution.
 
 ## When to pick this up
 
-After a merchant is live and proving the existing support loop, and after the
-realtime subsystem is enabled and canaried in production.
+After a merchant is live and proving the existing support loop. The realtime
+prerequisite is no longer outstanding — it was canaried clean 2026-08-07 — so
+the merchant condition is the only one left.
 
 **Do not answer "not yet" with "do WhatsApp instead"** (decision 2026-08-07).
 WhatsApp is a merchant-control channel, not a customer-origin one — see
