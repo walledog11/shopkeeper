@@ -18,8 +18,11 @@ export interface OnboardingChannelConfig {
   shopifySimulatorEnabled: boolean;
 }
 
-export function OnboardingExperience(channels: OnboardingChannelConfig) {
-  const flow = useOnboardingFlow();
+export function OnboardingExperience({
+  pinnedStepIndex,
+  ...channels
+}: OnboardingChannelConfig & { pinnedStepIndex: number | null }) {
+  const flow = useOnboardingFlow(pinnedStepIndex);
   return <OnboardingExperienceView flow={flow} channels={channels} />;
 }
 

@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useState } from "react";
 import { UserPlus, X, Shield, User, Mail, Trash2 } from "lucide-react";
-import { timeAgo } from "@/lib/format/date";
+import { timeAgoShort } from "@/lib/messaging/customer-display"
 import { errorMessageFromUnknown } from "@/lib/api/fetcher";
 import { OrgAvatar } from "@/components/OrgAvatar";
 import { Badge } from "@/components/ui/badge";
@@ -84,7 +84,7 @@ function useTeamPageState({ initialMembers, initialInvitations, initialShowInvit
     setInviteError("");
     try {
       const newInvite = await inviteTeamMember(inviteEmail.trim(), inviteRole);
-      setInvitations(prev => [newInvite, ...prev]);
+      setInvitations(prev => [{ ...newInvite, invitedAgo: "just now" }, ...prev]);
       setInviteEmail("");
       setShowInviteModal(false);
     } catch (err) {
@@ -199,7 +199,7 @@ function TeamPageContent(props: Props) {
                   </div>
                   <RolePill role={member.role} />
                   <span className="hidden md:block text-xs text-faint shrink-0">
-                    Joined {timeAgo(new Date(member.createdAt).toISOString())}
+                    Joined {member.joinedAgo}
                   </span>
                   {isAdmin && !isSelf && (
                     <button type="button"
@@ -232,7 +232,7 @@ function TeamPageContent(props: Props) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-muted-foreground truncate">{invite.emailAddress}</p>
-                    <p className="text-xs text-faint">Invited {timeAgo(new Date(invite.createdAt).toISOString())}</p>
+                    <p className="text-xs text-faint">Invited {invite.invitedAgo}</p>
                   </div>
                   <RolePill role={invite.role} />
                   {isAdmin && (

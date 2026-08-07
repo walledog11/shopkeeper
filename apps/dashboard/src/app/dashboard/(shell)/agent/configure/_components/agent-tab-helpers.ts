@@ -173,7 +173,7 @@ const OFFSET_TO_CURATED_ZONE: Record<number, string> = {
   [13]: "Pacific/Fiji",
 }
 
-function browserTz(): string {
+export function resolveBrowserTimezone(): string {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York"
   } catch {
@@ -181,13 +181,29 @@ function browserTz(): string {
   }
 }
 
-function hydrateTz(existing: string | undefined, legacyOffset: number | undefined): string {
+function hydrateTzFromStorage(existing: string | undefined, legacyOffset: number | undefined): string | undefined {
   if (existing && existing.trim() !== "" && !existing.startsWith("Etc/")) return existing
   if (typeof legacyOffset === "number") {
     const mapped = OFFSET_TO_CURATED_ZONE[Math.round(legacyOffset)]
     if (mapped) return mapped
   }
-  return browserTz()
+  return undefined
+}
+
+function hydrateTz(existing: string | undefined, legacyOffset: number | undefined): string {
+  return hydrateTzFromStorage(existing, legacyOffset) ?? resolveBrowserTimezone()
+}
+
+export function hydrateSettingsFromStorage(settings: OrgSettings): OrgSettings {
+  return {
+    ...settings,
+    digestTimezone: hydrateTzFromStorage(settings.digestTimezone, settings.digestTimezoneOffset)
+      ?? settings.digestTimezone
+      ?? "",
+    businessHoursTimezone: hydrateTzFromStorage(settings.businessHoursTimezone, settings.businessHoursTimezoneOffset)
+      ?? settings.businessHoursTimezone
+      ?? "",
+  }
 }
 
 export function hydrateSettings(settings: OrgSettings): OrgSettings {

@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useReducer, useRef, useState } from "react"
+import { useEffect, useMemo, useReducer, useRef, useState } from "react"
 import { useSWRConfig } from "swr"
 import {
   agentSettingsReducer,
@@ -9,8 +9,10 @@ import {
   buildSettingsPayload,
   collectExplicitOverridePaths,
   hydrateSettings,
+  hydrateSettingsFromStorage,
   rawInputsFor,
   resetPathToTierDefault,
+  resolveBrowserTimezone,
   writeSettingsPath,
   type AutonomyOverridePath,
 } from "./agent-tab-helpers"
@@ -27,7 +29,23 @@ interface UseAgentTabStateProps {
 
 export function useAgentTabState({ settings, rawSettings, version, orgName, voiceProposal }: UseAgentTabStateProps) {
   const { mutate } = useSWRConfig()
-  const [settingsState, dispatch] = useReducer(agentSettingsReducer, settings, hydrateSettings)
+  const [settingsState, dispatch] = useReducer(agentSettingsReducer, settings, hydrateSettingsFromStorage)
+  const browserTimezoneRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    const browserTimezone = resolveBrowserTimezone()
+    browserTimezoneRef.current = browserTimezone
+    const patch: Partial<OrgSettings> = {}
+    if (!settingsState.digestTimezone?.trim() || settingsState.digestTimezone.startsWith("Etc/")) {
+      patch.digestTimezone = browserTimezone
+    }
+    if (!settingsState.businessHoursTimezone?.trim() || settingsState.businessHoursTimezone.startsWith("Etc/")) {
+      patch.businessHoursTimezone = browserTimezone
+    }
+    if (Object.keys(patch).length > 0) {
+      dispatch({ type: "set", patch })
+    }
+  }, [settingsState.businessHoursTimezone, settingsState.digestTimezone])
   const [businessName, setBusinessName] = useState(orgName)
   const initialNameRef = useRef(orgName)
   const initialRaw = useMemo(() => rawInputsFor(settings), [settings])

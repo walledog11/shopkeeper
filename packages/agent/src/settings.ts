@@ -151,7 +151,7 @@ function offsetToIanaFallback(offset: number): string {
   return `Etc/GMT${rounded > 0 ? "-" : "+"}${Math.abs(rounded)}`;
 }
 
-function localHourAndDay(timeZone: string, now: Date): { hour: number; day: BusinessHoursDay } {
+export function localHourAndDay(timeZone: string, now: Date): { hour: number; day: BusinessHoursDay } {
   try {
     const parts = new Intl.DateTimeFormat("en-US", {
       timeZone,
@@ -171,6 +171,13 @@ function localHourAndDay(timeZone: string, now: Date): { hour: number; day: Busi
       day: BUSINESS_HOURS_DAYS[now.getUTCDay() === 0 ? 6 : now.getUTCDay() - 1],
     };
   }
+}
+
+export function localGreeting(timeZone: string, now = new Date()): string {
+  const { hour } = localHourAndDay(timeZone, now);
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
 }
 
 export function isWithinBusinessHours(settings: BusinessHoursSettings, now = new Date()): boolean {

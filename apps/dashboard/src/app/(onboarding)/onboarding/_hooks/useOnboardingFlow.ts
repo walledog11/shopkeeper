@@ -14,11 +14,7 @@ import useSWR from "swr";
 import { useClerk, useOrganization, useOrganizationList, useUser } from "@clerk/nextjs";
 import { useIntegrations } from "@/hooks/useIntegrations";
 import { fetcher } from "@/lib/api/fetcher";
-import {
-  isEmailIntegrationConfigured,
-  resolveOnboardingStepIndex,
-  type OnboardingResumeStep,
-} from "@/lib/integrations/onboarding-setup";
+import { isEmailIntegrationConfigured } from "@/lib/integrations/onboarding-setup";
 import { isShopifyIntegrationActive } from "@/lib/integrations/shopify-connection";
 import { captureClientProductEvent } from "@/lib/product-events";
 import {
@@ -55,40 +51,30 @@ function resolveBrowserTimezone(): string | undefined {
   }
 }
 
-function readStepParam(): OnboardingResumeStep | null {
-  if (typeof window === "undefined") return null;
-  const value = new URLSearchParams(window.location.search).get("step");
-  if (value === "shopify" || value === "email" || value === "plan") return value;
-  return null;
-}
-
-function readInitialOnboardingState() {
-  if (typeof window === "undefined") return { data: DEFAULT_DATA, idx: 0 };
+// Saved progress lives in localStorage, which the server cannot read. Rendering
+// the resumed step during the first render would hydrate a different step than
+// the server sent and discard the whole wizard subtree, so the read happens on
+// mount instead. The `?step=` half of the old initializer is resolved
+// server-side and arrives as `pinnedStepIndex`.
+function readStoredOnboardingState(): { data: Partial<OnboardingData>; idx: number } | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    const stepParam = readStepParam();
-    if (!raw) {
-      return {
-        data: DEFAULT_DATA,
-        idx: resolveOnboardingStepIndex(stepParam, 0, STEPS.map(step => step.id)),
-      };
-    }
+    if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<OnboardingData & { idx: number }>;
     const savedIdx = typeof parsed.idx === "number"
       ? Math.min(STEPS.length - 1, Math.max(0, parsed.idx))
       : 0;
-    return {
-      data: { ...DEFAULT_DATA, ...parsed },
-      idx: resolveOnboardingStepIndex(stepParam, savedIdx, STEPS.map(step => step.id)),
-    };
+    return { data: parsed, idx: savedIdx };
   } catch {
-    return { data: DEFAULT_DATA, idx: 0 };
+    return null;
   }
 }
 
 interface OnboardingState {
   idx: number;
   data: OnboardingData;
+  /** False until the mount-time localStorage read lands; gates persistence. */
+  hydrated: boolean;
   saving: boolean;
   emailSaving: boolean;
   orgEnsuring: boolean;
@@ -97,6 +83,8 @@ interface OnboardingState {
 }
 
 type OnboardingAction =
+  | { type: "hydrate"; data: OnboardingData; idx: number }
+  | { type: "hydrateSkipped" }
   | { type: "patchData"; patch: Partial<OnboardingData> }
   | { type: "prefillEmail"; email: string }
   | { type: "setIdx"; idx: number }
@@ -107,11 +95,11 @@ type OnboardingAction =
   | { type: "advance" }
   | { type: "back" };
 
-function createInitialOnboardingState(): OnboardingState {
-  const initial = readInitialOnboardingState();
+function createInitialOnboardingState(pinnedStepIndex: number | null): OnboardingState {
   return {
-    idx: initial.idx,
-    data: initial.data,
+    idx: pinnedStepIndex ?? 0,
+    data: DEFAULT_DATA,
+    hydrated: false,
     saving: false,
     emailSaving: false,
     orgEnsuring: false,
@@ -122,6 +110,10 @@ function createInitialOnboardingState(): OnboardingState {
 
 function onboardingReducer(state: OnboardingState, action: OnboardingAction): OnboardingState {
   switch (action.type) {
+    case "hydrate":
+      return { ...state, data: action.data, idx: action.idx, hydrated: true };
+    case "hydrateSkipped":
+      return state.hydrated ? state : { ...state, hydrated: true };
     case "patchData":
       return { ...state, data: { ...state.data, ...action.patch } };
     case "prefillEmail":
@@ -150,7 +142,7 @@ function onboardingReducer(state: OnboardingState, action: OnboardingAction): On
   }
 }
 
-export function useOnboardingFlow() {
+export function useOnboardingFlow(pinnedStepIndex: number | null) {
   const router = useRouter();
   const { user } = useUser();
   const { signOut } = useClerk();
@@ -159,34 +151,58 @@ export function useOnboardingFlow() {
     userMemberships: { infinite: false },
   });
 
-  const [state, dispatch] = useReducer(onboardingReducer, undefined, createInitialOnboardingState);
+  const [state, dispatch] = useReducer(onboardingReducer, pinnedStepIndex, createInitialOnboardingState);
   const { data, emailSaving, idx, orgEnsureFailed, orgEnsuring, saving } = state;
   const [shopifySimulating, setShopifySimulating] = useState(false);
   const orgCreationInFlight = useRef(false);
   const founderPrefillApplied = useRef(false);
   const storePrefillApplied = useRef(false);
+  const hydrationStarted = useRef(false);
 
+  // A `?step=` in the URL still wins over saved progress, exactly as it did when
+  // both were read together — the server resolved it into `pinnedStepIndex`.
   useEffect(() => {
-    if (founderPrefillApplied.current || !user?.firstName) return;
+    if (hydrationStarted.current) return;
+    hydrationStarted.current = true;
+    const stored = readStoredOnboardingState();
+    if (!stored) {
+      dispatch({ type: "hydrateSkipped" });
+      return;
+    }
+    dispatch({
+      type: "hydrate",
+      data: { ...DEFAULT_DATA, ...stored.data },
+      idx: pinnedStepIndex ?? stored.idx,
+    });
+  }, [pinnedStepIndex]);
+
+  // Both prefills wait for hydration: they only fill a blank field, and before
+  // the saved state lands every field still looks blank, so running early would
+  // overwrite the merchant's own answers with the Clerk values.
+  useEffect(() => {
+    if (!state.hydrated || founderPrefillApplied.current || !user?.firstName) return;
     founderPrefillApplied.current = true;
     if (!data.founderName.trim()) {
       dispatch({ type: "patchData", patch: { founderName: user.firstName } });
     }
-  }, [data.founderName, user?.firstName]);
+  }, [data.founderName, state.hydrated, user?.firstName]);
 
   useEffect(() => {
-    if (storePrefillApplied.current || !organization?.name) return;
+    if (!state.hydrated || storePrefillApplied.current || !organization?.name) return;
     storePrefillApplied.current = true;
     if (!data.storeName.trim()) {
       dispatch({ type: "patchData", patch: { storeName: organization.name } });
     }
-  }, [data.storeName, organization?.name]);
+  }, [data.storeName, organization?.name, state.hydrated]);
 
   useEffect(() => {
+    // Writing before the mount-time read lands would persist the defaults over
+    // the merchant's saved progress.
+    if (!state.hydrated) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...data, idx }));
     } catch {}
-  }, [data, idx]);
+  }, [data, idx, state.hydrated]);
 
   const { data: integrationData, mutate: refreshIntegrations } = useIntegrations({
     enabled: !!organization,

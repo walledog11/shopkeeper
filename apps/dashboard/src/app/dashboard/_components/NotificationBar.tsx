@@ -4,6 +4,9 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { X, Info, AlertTriangle, Sparkles } from "lucide-react";
 import { AnimatePresence, LazyMotion, domAnimation, m } from "motion/react";
+import {
+  writeDismissedNotificationIdsCookie,
+} from "@/lib/dashboard-dismissals";
 
 export interface Notification {
   id: string;
@@ -15,6 +18,7 @@ export interface Notification {
 
 interface NotificationBarProps {
   notifications: Notification[];
+  initialDismissedIds: string[];
 }
 
 const TYPE_STYLES: Record<NonNullable<Notification["type"]>, { bar: string; icon: string; title: string; action: string }> = {
@@ -29,24 +33,8 @@ const TYPE_ICONS = {
   success: Sparkles,
 };
 
-const STORAGE_KEY = "notificationBar_dismissed";
-
-function loadDismissed(): Set<string> {
-  if (typeof window === "undefined") return new Set();
-  try {
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
-    return new Set(Array.isArray(stored) ? stored : []);
-  } catch {
-    return new Set();
-  }
-}
-
-function saveDismissed(ids: Set<string>) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify([...ids]));
-}
-
-export default function NotificationBar({ notifications }: NotificationBarProps) {
-  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => loadDismissed());
+export default function NotificationBar({ notifications, initialDismissedIds }: NotificationBarProps) {
+  const [dismissedIds, setDismissedIds] = useState(() => new Set(initialDismissedIds));
   const barRef = useRef<HTMLDivElement>(null);
 
   const visibleNotifications = notifications.filter(n => !dismissedIds.has(n.id));
@@ -55,7 +43,7 @@ export default function NotificationBar({ notifications }: NotificationBarProps)
   function dismiss(id: string) {
     setDismissedIds(prev => {
       const next = new Set(prev).add(id);
-      saveDismissed(next);
+      writeDismissedNotificationIdsCookie(next);
       return next;
     });
   }

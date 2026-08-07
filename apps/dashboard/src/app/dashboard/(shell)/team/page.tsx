@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
+import { timeAgoShort } from '@/lib/messaging/customer-display';
 import TeamPageClient from './_components/TeamPageClient';
 
 interface TeamPageProps {
@@ -13,6 +14,7 @@ export default async function TeamPage({ searchParams }: TeamPageProps) {
   const isAdmin = orgRole === 'org:admin';
   const params = await searchParams;
   const initialShowInviteModal = isAdmin && params?.invite === '1';
+  const now = new Date();
 
   const client = await clerkClient();
   const [memberships, invitations] = await Promise.all([
@@ -29,6 +31,7 @@ export default async function TeamPage({ searchParams }: TeamPageProps) {
     identifier: m.publicUserData?.identifier ?? '',
     role: m.role,
     createdAt: m.createdAt,
+    joinedAgo: timeAgoShort(new Date(m.createdAt), now),
   }));
 
   const pendingInvitations = invitations.data.map(i => ({
@@ -36,6 +39,7 @@ export default async function TeamPage({ searchParams }: TeamPageProps) {
     emailAddress: i.emailAddress,
     role: i.role,
     createdAt: i.createdAt,
+    invitedAgo: timeAgoShort(new Date(i.createdAt), now),
   }));
 
   return (

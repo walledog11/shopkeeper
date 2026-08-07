@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { HelpProvider } from "../_components/help/HelpContext";
 import NotificationBar, { type Notification } from "../_components/NotificationBar";
@@ -14,9 +15,14 @@ import { getOrCreateOrg } from "@/lib/server/org";
 import { getIncompleteOnboardingRedirect } from "@/lib/server/onboarding-guard";
 import { resolveAgentSettings } from "@shopkeeper/agent/settings";
 import { getChannelInfo } from "@/lib/messaging/channels";
+import { countThreadsBySqlFilters } from "@/lib/messaging/thread-list-query";
 import { isEmailAuthReauthorizationRequired } from "@shopkeeper/email/providers";
 import { db } from "@shopkeeper/db";
 import type { OrgSettings } from "@/types";
+import {
+  parseDismissedNotificationIds,
+  NOTIFICATION_DISMISSALS_COOKIE,
+} from "@/lib/dashboard-dismissals";
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -35,10 +41,22 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   // Integration token expired or expiring within 7 days.
   // Gmail access tokens refresh automatically — only flag email when OAuth reauth is required.
-  const integrations = await db.integration.findMany({
-    where: { organizationId: org.id },
-    select: { platform: true, tokenExpiresAt: true, metadata: true },
-  });
+  const [integrations, inboxBadgeCount] = await Promise.all([
+    db.integration.findMany({
+      where: { organizationId: org.id },
+      select: { platform: true, tokenExpiresAt: true, metadata: true },
+    }),
+    // The inbox badge polls this same count client-side; seeding it keeps it from
+    // rendering 0 and popping on every route. These filters mirror the query string
+    // in `useInboxBadgeCountQuery` exactly — diverge and the badge moves on first poll.
+    countThreadsBySqlFilters(org.id, {
+      forMe: true,
+      hasDraft: false,
+      needsReply: false,
+      wantsFiltered: false,
+      status: "open",
+    }),
+  ]);
   const expiringIntegrations = integrations.filter((integration) => {
     if (integration.platform === "email") {
       return isEmailAuthReauthorizationRequired(integration);
@@ -100,6 +118,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
     });
   }
 
+  const cookieStore = await cookies();
+  const dismissedNotificationIds = parseDismissedNotificationIds(
+    cookieStore.get(NOTIFICATION_DISMISSALS_COOKIE)?.value,
+  );
+  const visibleNotifications = notifications.filter(notification => !dismissedNotificationIds.has(notification.id));
+
   return (
     <HelpProvider>
       <AgentPanelProvider>
@@ -112,9 +136,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
         style={{ "--m-serif": "Georgia, 'Times New Roman', serif" } as React.CSSProperties}
       >
         <RealtimeProvider />
-        <NotificationBar notifications={notifications} />
+        <NotificationBar
+          notifications={visibleNotifications}
+          initialDismissedIds={[...dismissedNotificationIds]}
+        />
         <NavProgressBar />
-        <DashboardSidebar initialAutonomyTier={settings.autonomyTier ?? "guarded"} agentName={settings.agentName}>
+        <DashboardSidebar
+          initialAutonomyTier={settings.autonomyTier ?? "guarded"}
+          agentName={settings.agentName}
+          initialInboxCount={inboxBadgeCount}
+        >
           <div className="flex-1 overflow-hidden flex min-h-0">
             <div className="flex-1 overflow-hidden flex flex-col min-w-0">
               {children}

@@ -13,12 +13,13 @@ const QUERY_OPTIONS = {
 }
 
 function useLastVisit(): string | null {
-  const [lastVisit] = useState<string | null>(() => (
-    typeof window === "undefined" ? null : window.localStorage.getItem(LAST_VISIT_KEY)
-  ))
+  const [lastVisit, setLastVisit] = useState<string | null>(null)
+
   useEffect(() => {
+    setLastVisit(window.localStorage.getItem(LAST_VISIT_KEY))
     window.localStorage.setItem(LAST_VISIT_KEY, new Date().toISOString())
   }, [])
+
   return lastVisit
 }
 

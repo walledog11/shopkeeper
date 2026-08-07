@@ -5,6 +5,7 @@ import { fetcher } from "@/lib/api/fetcher"
 import {
   HOME_SUMMARY_REFRESH_INTERVAL_MS,
   createEmptyHomeSummary,
+  type HomeChannelState,
   type HomeSummary,
 } from "@/lib/home/summary-contract"
 import { buildHomeSummaryView } from "@/lib/home/summary-view"
@@ -15,7 +16,11 @@ import { useOperatorChannels } from "@/hooks/useOperatorChannels"
 import { isEmailIntegrationConfigured } from "@/lib/integrations/onboarding-setup"
 import { isShopifyIntegrationActive } from "@/lib/integrations/shopify-connection"
 
-export function useHomeData(initialHomeSummary?: HomeSummary, agentName?: string) {
+export function useHomeData(
+  initialHomeSummary?: HomeSummary,
+  agentName?: string,
+  initialChannelState?: HomeChannelState,
+) {
   const {
     data: summaryData,
     isLoading: isSummaryLoading,
@@ -28,15 +33,30 @@ export function useHomeData(initialHomeSummary?: HomeSummary, agentName?: string
       ...(initialHomeSummary ? { fallbackData: initialHomeSummary } : {}),
     },
   )
-  const { data: integrations = [] } = useIntegrations()
-  const { anyBound: hasPhoneBound } = useOperatorChannels()
+  const { data: integrationsData } = useIntegrations()
+  const { anyBound, isLoading: isOperatorChannelsLoading } = useOperatorChannels()
 
-  const hasShopify = integrations.some(integration =>
-    integration.platform === CHANNEL_TYPE.SHOPIFY && isShopifyIntegrationActive(integration),
-  )
+  // Until each fetch lands, answer from the server-rendered seed rather than
+  // from "nothing loaded yet" — the two read the same rows, so the banners that
+  // depend on them render their final state on the first paint.
+  const integrations = integrationsData ?? []
+  const hasIntegrations = integrationsData != null
   const emailIntegration = integrations.find(integration => integration.platform === CHANNEL_TYPE.EMAIL)
-  const hasEmailForwarding = isEmailIntegrationConfigured(emailIntegration)
-  const hasInstagram = integrations.some(integration => integration.platform === CHANNEL_TYPE.IG_DM)
+
+  const hasShopify = hasIntegrations
+    ? integrations.some(integration =>
+        integration.platform === CHANNEL_TYPE.SHOPIFY && isShopifyIntegrationActive(integration),
+      )
+    : initialChannelState?.hasShopify ?? false
+  const hasEmailForwarding = hasIntegrations
+    ? isEmailIntegrationConfigured(emailIntegration)
+    : initialChannelState?.hasEmailForwarding ?? false
+  const hasInstagram = hasIntegrations
+    ? integrations.some(integration => integration.platform === CHANNEL_TYPE.IG_DM)
+    : initialChannelState?.hasInstagram ?? false
+  const hasPhoneBound = isOperatorChannelsLoading
+    ? initialChannelState?.hasPhoneBound ?? false
+    : anyBound
 
   // Until the first fetch lands there is no summary — render it as pending rather
   // than letting the empty placeholder speak as if it were the real answer.

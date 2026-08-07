@@ -65,6 +65,14 @@ export interface HomeSummary {
   ordersToShip: number | null
 }
 
+/** Server-rendered seed for the connection booleans the home banners read. */
+export interface HomeChannelState {
+  hasShopify: boolean
+  hasEmailForwarding: boolean
+  hasInstagram: boolean
+  hasPhoneBound: boolean
+}
+
 function utcDayKey(date: Date): string {
   return date.toISOString().slice(0, 10)
 }

@@ -12,11 +12,11 @@ import { DesktopTopBar } from "./sidebar/DesktopTopBar";
 import { MobileNavSheet } from "./sidebar/MobileNavSheet";
 import { useNavAuth } from "./sidebar/useNavAuth";
 
-function useDashboardOpenCount() {
+function useDashboardOpenCount(initialInboxCount: number) {
   const pathname = usePathname();
   const onTickets = pathname.startsWith("/dashboard/tickets");
   const { override } = useOpenThreadCountOverride();
-  const { count: polledCount } = useInboxBadgeCountQuery(!onTickets);
+  const { count: polledCount } = useInboxBadgeCountQuery(!onTickets, initialInboxCount);
   return onTickets ? (override ?? polledCount) : polledCount;
 }
 
@@ -24,12 +24,14 @@ function DashboardSidebarContent({
   children,
   initialAutonomyTier,
   agentName,
+  initialInboxCount,
 }: {
   children: React.ReactNode;
   initialAutonomyTier: AutonomyTier;
   agentName: string;
+  initialInboxCount: number;
 }) {
-  const openCount = useDashboardOpenCount();
+  const openCount = useDashboardOpenCount(initialInboxCount);
   const navAuth = useNavAuth(initialAutonomyTier);
   const [isSwitching, setIsSwitching] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -91,14 +93,20 @@ export default function DashboardSidebar({
   children,
   initialAutonomyTier,
   agentName,
+  initialInboxCount,
 }: {
   children: React.ReactNode;
   initialAutonomyTier: AutonomyTier;
   agentName: string;
+  initialInboxCount: number;
 }) {
   return (
     <OpenThreadCountProvider>
-      <DashboardSidebarContent initialAutonomyTier={initialAutonomyTier} agentName={agentName}>
+      <DashboardSidebarContent
+        initialAutonomyTier={initialAutonomyTier}
+        agentName={agentName}
+        initialInboxCount={initialInboxCount}
+      >
         {children}
       </DashboardSidebarContent>
     </OpenThreadCountProvider>

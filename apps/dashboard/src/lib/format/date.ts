@@ -1,3 +1,6 @@
+// Relative-time helpers below use the runtime clock and are intended for client
+// components. When rendering dates on the server, pass `timeZone` explicitly —
+// typically the org's business-hours zone — so day boundaries stay deterministic.
 export type DateInput = string | number | Date | null | undefined;
 
 interface RelativeParts {

@@ -6,31 +6,31 @@ import ConciergeBriefing from "./ConciergeBriefing"
 import NeedsYou from "./NeedsYou"
 import ClearedOvernight from "./ClearedOvernight"
 import { HomePageSkeleton } from "@/app/dashboard/_components/skeletons"
-import type { HomeSummary } from "@/lib/home/summary-contract"
+import type { HomeChannelState, HomeSummary } from "@/lib/home/summary-contract"
 import { useHomeData } from "./useHomeData"
-
-function getGreeting(): string {
-  const hour = new Date().getHours()
-  if (hour < 12) return "Good morning"
-  if (hour < 17) return "Good afternoon"
-  return "Good evening"
-}
 
 interface Props {
   userName: string
   agentName: string
+  greeting: string
   initialHomeSummary: HomeSummary
+  initialChannelState: HomeChannelState
+  workflowBannerDismissed: boolean
+  workflowBannerExpanded: boolean
   instagramAvailable: boolean
 }
 
 export default function DashboardHomeClient({
   userName,
   agentName,
+  greeting,
   initialHomeSummary,
+  initialChannelState,
+  workflowBannerDismissed,
+  workflowBannerExpanded,
   instagramAvailable,
 }: Props) {
-  const greeting = getGreeting()
-  const data = useHomeData(initialHomeSummary, agentName)
+  const data = useHomeData(initialHomeSummary, agentName, initialChannelState)
 
   if (data.isSummaryPending) {
     return <HomePageSkeleton />
@@ -43,6 +43,8 @@ export default function DashboardHomeClient({
 
           <WorkflowSetupBanner
             steps={data.workflowSteps}
+            initialDismissed={workflowBannerDismissed}
+            initialExpanded={workflowBannerExpanded}
           />
 
           <HomeChannelNudge

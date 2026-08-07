@@ -9,6 +9,7 @@ export interface TeamMember {
   identifier: string
   role: string
   createdAt: number
+  joinedAgo: string
 }
 
 export interface TeamInvitation {
@@ -16,6 +17,7 @@ export interface TeamInvitation {
   emailAddress: string
   role: string
   createdAt: number
+  invitedAgo: string
 }
 
 export async function inviteTeamMember(emailAddress: string, role: string): Promise<TeamInvitation> {

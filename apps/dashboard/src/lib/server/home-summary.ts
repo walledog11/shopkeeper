@@ -3,10 +3,12 @@ import { db } from "@shopkeeper/db"
 import { listRecentUnfulfilledOrderIds } from "@shopkeeper/agent/shopify"
 import {
   lastUtcDayKeys,
+  type HomeChannelState,
   type HomeClearedTopic,
   type HomeRepeatCustomer,
   type HomeSummary,
 } from "@/lib/home/summary-contract"
+import { isEmailIntegrationConfigured } from "@/lib/integrations/onboarding-setup"
 import { getChannelInfo } from "@/lib/messaging/channels"
 import { getCustomerName } from "@/lib/messaging/customer-name"
 import { loadNeedsAttention } from "@/lib/server/home-needs-attention"
@@ -55,6 +57,48 @@ async function loadOrdersToShip(organizationId: string): Promise<number | null> 
     return orderIds.length
   } catch {
     return null
+  }
+}
+
+// The setup banner and the channel nudge key off these four booleans. The client
+// keeps them fresh through SWR, but with no server answer they all start false,
+// so both elements mount on first paint and unmount once the fetches land —
+// shifting everything below them. Render from this instead and they settle once.
+export async function getHomeChannelState(
+  organizationId: string,
+  clerkUserId: string | null,
+): Promise<HomeChannelState> {
+  const [integrations, member] = await Promise.all([
+    db.integration.findMany({
+      where: { organizationId },
+      select: {
+        platform: true,
+        accessToken: true,
+        tokenExpiresAt: true,
+        fromEmail: true,
+        externalAccountId: true,
+        metadata: true,
+      },
+    }),
+    clerkUserId
+      ? db.orgMember.findUnique({
+          where: { organizationId_clerkUserId: { organizationId, clerkUserId } },
+          select: {
+            _count: { select: { telegramChats: true, imessageBindings: true } },
+          },
+        })
+      : null,
+  ])
+
+  const shopify = integrations.find(integration => integration.platform === "shopify")
+
+  return {
+    hasShopify: shopify ? isShopifyIntegrationOperational(shopify) : false,
+    hasEmailForwarding: isEmailIntegrationConfigured(
+      integrations.find(integration => integration.platform === "email"),
+    ),
+    hasInstagram: integrations.some(integration => integration.platform === "ig_dm"),
+    hasPhoneBound: (member?._count.telegramChats ?? 0) + (member?._count.imessageBindings ?? 0) > 0,
   }
 }
 

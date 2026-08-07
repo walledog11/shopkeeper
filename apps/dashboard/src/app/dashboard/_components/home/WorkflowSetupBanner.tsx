@@ -4,25 +4,10 @@ import Link from "next/link"
 import { useState } from "react"
 import { Check, ChevronDown, ChevronRight, X } from "lucide-react"
 import { AnimatePresence, LazyMotion, domAnimation, m } from "motion/react"
-
-const DISMISS_KEY = 'workflowSetupBannerDismissed'
-const EXPAND_KEY = 'workflowSetupBannerExpanded'
-
-function readStoredBoolean(key: string) {
-  try {
-    return localStorage.getItem(key) === 'true'
-  } catch {
-    return false
-  }
-}
-
-function writeStoredBoolean(key: string, value: boolean) {
-  try {
-    localStorage.setItem(key, value ? 'true' : 'false')
-  } catch {
-    // Storage can be unavailable in private browsing or restricted contexts.
-  }
-}
+import {
+  writeWorkflowBannerDismissedCookie,
+  writeWorkflowBannerExpandedCookie,
+} from "@/lib/dashboard-dismissals"
 
 const bannerTransition = {
   type: "spring" as const,
@@ -76,15 +61,22 @@ interface Props {
   steps: Step[]
   /** Step status is derived from the home summary; suppress the banner until it lands. */
   pending?: boolean
+  initialDismissed?: boolean
+  initialExpanded?: boolean
 }
 
 function getStepKey(step: Step) {
   return `${step.label}:${step.href}`
 }
 
-export default function WorkflowSetupBanner({ steps, pending = false }: Props) {
-  const [dismissed, setDismissed] = useState(() => readStoredBoolean(DISMISS_KEY))
-  const [expanded, setExpanded] = useState(() => readStoredBoolean(EXPAND_KEY))
+export default function WorkflowSetupBanner({
+  steps,
+  pending = false,
+  initialDismissed = false,
+  initialExpanded = false,
+}: Props) {
+  const [dismissed, setDismissed] = useState(initialDismissed)
+  const [expanded, setExpanded] = useState(initialExpanded)
 
   const trackedSteps = steps.filter(step => !step.optional)
   const trackedDoneCount = trackedSteps.filter(step => step.status === "done").length
@@ -96,19 +88,21 @@ export default function WorkflowSetupBanner({ steps, pending = false }: Props) {
   const summary = `${remaining} left to finish setup`
 
   function dismiss() {
-    writeStoredBoolean(DISMISS_KEY, true)
+    writeWorkflowBannerDismissedCookie()
     setDismissed(true)
   }
 
   function toggle() {
     const next = !expanded
     setExpanded(next)
-    writeStoredBoolean(EXPAND_KEY, next)
+    writeWorkflowBannerExpandedCookie(next)
   }
 
   return (
     <LazyMotion features={domAnimation}>
-    <AnimatePresence>
+    {/* `initial={false}` so the banner is already at full height on the first
+        paint — animating in from height 0 pushed the whole page down on load. */}
+    <AnimatePresence initial={false}>
       {isVisible && (
         <m.div
           key="workflow-setup-banner"
