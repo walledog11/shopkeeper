@@ -197,6 +197,10 @@
     "./merchant-answer-kb": {
       "types": "./dist/merchant-answer-kb.d.ts",
       "default": "./dist/merchant-answer-kb.js"
+    },
+    "./product-help": {
+      "types": "./dist/product-help/index.d.ts",
+      "default": "./dist/product-help/index.js"
     }
   },
   "scripts": {

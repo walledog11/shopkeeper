@@ -2,6 +2,7 @@ import { renderOperatorLedger } from './operator-ledger.js';
 import { buildOperatorSessionTools } from './operator-session-tools.js';
 import { buildOperatorInboxTools } from './operator-inbox-tools.js';
 import { buildOperatorDigestTools } from './operator-digest-tools.js';
+import { buildOperatorProductHelpTools } from './operator-product-help-tools.js';
 import {
   executeOperatorAgentTurn,
   type ExecuteOperatorAgentTurnResult,
@@ -46,6 +47,7 @@ export async function runOperatorFreeFormTurn(
     }),
     ...buildOperatorInboxTools({ organizationId }),
     ...buildOperatorDigestTools({ organizationId, context }),
+    ...buildOperatorProductHelpTools(),
   };
 
   return presence(

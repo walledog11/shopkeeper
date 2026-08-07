@@ -39,8 +39,9 @@ export default function HelpPanel({ agentName }: { agentName: string }) {
 
   return (
     <div
-      className={`shrink-0 border-border bg-background flex flex-col overflow-hidden transition-[width] duration-300 ease-in-out
-        ${isOpen ? "fixed inset-0 z-50 w-full md:static md:w-[331px] md:border-l" : "w-0"}
+      className={`fixed inset-0 z-50 w-full border-border bg-background flex flex-col overflow-hidden transition-transform duration-300 ease-in-out
+        md:static md:inset-auto md:z-auto md:shrink-0 md:translate-x-0 md:transition-[width]
+        ${isOpen ? "translate-x-0 md:w-[331px] md:border-l" : "translate-x-full md:w-0"}
       `}
       aria-hidden={!isOpen}
       inert={!isOpen}

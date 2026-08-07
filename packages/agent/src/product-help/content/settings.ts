@@ -1,4 +1,4 @@
-import type { Category } from "./index"
+import type { Category } from "./index.js"
 
 export const settings: Category = {
   id: "settings",
