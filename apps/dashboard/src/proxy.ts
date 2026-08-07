@@ -50,11 +50,11 @@ export default clerkMiddleware(async (auth, req) => {
 }, {
   // Clerk mints the nonce, stamps it onto its own script tag and the forwarded
   // request headers Next reads to nonce its bundles, and merges these
-  // directives into its defaults. Still report-only: enforcement waits on the
-  // violation-telemetry window.
+  // directives into its defaults. Enforced after report-only observation
+  // (2026-08-06): auth, Shopify OAuth, and dashboard flows clean in prod logs.
   contentSecurityPolicy: {
     strict: true,
-    reportOnly: true,
+    reportOnly: false,
     reportTo: CSP_REPORT_ENDPOINT,
     directives: cspDirectives,
   },

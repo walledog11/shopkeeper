@@ -128,10 +128,10 @@ describe('proxy canonical host handling', () => {
 });
 
 describe('proxy content security policy', () => {
-  it('requests a nonce-based strict policy that stays report-only', () => {
+  it('requests a nonce-based strict enforced policy', () => {
     expect(capturedOptions.contentSecurityPolicy).toMatchObject({
       strict: true,
-      reportOnly: true,
+      reportOnly: false,
       reportTo: '/api/security/csp-report',
     });
   });
