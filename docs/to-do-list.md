@@ -19,16 +19,6 @@ dropping or de-advertising a channel.
 
 ---
 
-## Build
-
-Code changes. Pick from here when sitting down to implement.
-
-- [x] **Flip CSP `reportOnly` to `false`** in `apps/dashboard/src/proxy.ts`
-  — enforced 2026-08-06 after report-only observation; prod header is
-  `Content-Security-Policy` (not `-Report-Only`). Collector stays enabled.
-  Surviving `'unsafe-inline'` is Clerk's deliberate CSP2 fallback; do not remove.
-
----
 
 ## Prove in prod
 
@@ -89,8 +79,6 @@ provider. **None of these is a code task.**
   will **not** prove it — as a standalone `tsx` process it never runs
   `instrumentation.ts`. Use the deployed `agent_failure` trigger from
   [alerting-evidence.md](production/alerting-evidence.md).
-- [x] **CSP gate.** Report-only observation clean (2026-08-06); enforcement live
-  on `app.useshopkeeper.com`.
 
 ---
 
