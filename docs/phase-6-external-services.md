@@ -130,11 +130,9 @@ configured on it, so it was abandoned rather than migrated.
 ### Clerk
 
 - [ ] Application display name → Shopkeeper
-- [ ] Create the production webhook endpoint at
-  `https://app.useshopkeeper.com/api/webhooks/clerk`, then set
-  `CLERK_WEBHOOK_SECRET` in Vercel. Absent today, so **deletion propagation is
-  dead** — a member removed in Clerk keeps their `OrgMember` row, Telegram
-  binding, and operator access. The CLI cannot create webhook endpoints.
+- [x] Production webhook endpoint at
+  `https://app.useshopkeeper.com/api/webhooks/clerk` with `CLERK_WEBHOOK_SECRET`
+  in Vercel — verified 2026-08-06 (`Invalid signature` on unsigned probe).
 - [ ] Delete the leftover dev-only application named `clerk`
   (`app_3B9VBBAVoAaZGLuVuV5Ldw3atCJ`) once confirmed unused
 

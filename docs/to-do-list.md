@@ -23,30 +23,6 @@ dropping or de-advertising a channel.
 
 Code changes. Pick from here when sitting down to implement.
 
-- [ ] **Make the help content answerable by the agent, not just the dashboard.**
-  The panel shipped 2026-08-01, but "why did no tickets arrive today" is a
-  question merchants ask from their phone. The agent cannot answer it today:
-  `SUPPORT_STABLE_PREFIX` gives it no product self-knowledge, so its only move is
-  `escalate_to_human` — escalating to the merchant who asked. Content is already
-  `Category → Article → Section`, close to `KbArticle` shape
-  (`apps/dashboard/src/app/dashboard/_components/help/content/`).
-  - **Operator-scoped only.** Product help in the shared customer-facing KB
-    means a customer asking about returns could be answered out of Shopkeeper's
-    own documentation. Per agent-change invariants, keep it off the shared
-    registry and out of the eval gate.
-
-- [ ] **Customers page: show inbox people, not just Shopify.** `CustomersPanel`
-  only calls `/api/shopify/customers`. Merchants who get DMs and email without a
-  Shopify customer record are invisible here. Needs an org-scoped inbox/customer
-  data source and UI; decide deduping against Shopify identities.
-
-- [ ] **Wire `ProactiveMonitoringSection` to gateway runtime flags.** The
-  endpoint is done (`GET /internal/runtime-flags` → `GET /api/gateway/runtime-flags`).
-  Remaining: fetch flags on the Agent configure page; for each monitor toggle
-  (`deliveryException`, `postResolutionFollowUp`, and eventually `orderRisk` /
-  `returnLifecycle`), decide **hide when off** vs **show "not available"**, then
-  implement in `ProactiveMonitoringSection.tsx`.
-
 - [x] **Flip CSP `reportOnly` to `false`** in `apps/dashboard/src/proxy.ts`
   — enforced 2026-08-06 after report-only observation; prod header is
   `Content-Security-Policy` (not `-Report-Only`). Collector stays enabled.
@@ -169,6 +145,19 @@ resume. Gated-off integrations cost nothing to keep dark.
   Confirm Customer Service API availability for US merchants and third-party
   SaaS in Partner Center. Keep TikTok Shop buyer messages separate from generic
   TikTok DMs (no generic-DM adapter exists).
+
+- [ ] **Server-seed the remaining client-fetched pages.** Polish, not
+  correctness — no hydration mismatch, just a skeleton flash per visit.
+  `(shell)/review/page.tsx` and `(shell)/kb/page.tsx` are bare one-liners, and
+  `(shell)/integrations/page.tsx` seeds only the Telegram status while the card
+  list client-fetches. All three read our own Postgres; use the
+  `initialHomeSummary` pattern from `(shell)/page.tsx`. Orders and tickets are
+  deliberately excluded (live Shopify API; SWR owns the thread list). Before
+  seeding any page that branches on `useIsMobile` in markup, read the comment on
+  that hook. Render-boundary mismatches were all fixed 2026-08-06 — the
+  ruled-out set (`useIsDocumentVisible`, `OrgSwitcher`'s `mounted` gate,
+  `useMediaQuery`, `useNavAuth`, and all of `app/(marketing)`) is clean and does
+  not need re-checking.
 
 - [ ] **Realtime inbox (SSE + Redis pub/sub).** Phases 1–2 implemented behind
   flags, off by default: gateway `realtime/{publish,token,sse}.ts`, dashboard
