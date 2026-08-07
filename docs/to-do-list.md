@@ -56,6 +56,26 @@ provider. **None of these is a code task.**
 
 ### Channel and analytics rollout
 
+- [ ] **Realtime inbox (SSE + Redis pub/sub) — enable in production.** Decided
+  2026-08-06: finish and enable, not delete. The subsystem is wired end to end
+  (gateway `realtime/{publish,token,sse}.ts` mounted at `index.ts`, dashboard
+  `/api/realtime/token` + `RealtimeProvider` mounted in the shell layout), and
+  `publishThreadEvent` already runs **unflagged** in production from 11 call
+  sites — only the SSE serving side is gated. The CSP `connect-src` fix landed
+  2026-08-06; remaining work is env plus a canary:
+  1. Railway: `GATEWAY_REALTIME_ENABLED=true`.
+  2. Vercel: `NEXT_PUBLIC_GATEWAY_EVENTS_URL=https://clerk-production-e37f.up.railway.app`,
+     then **redeploy** — `NEXT_PUBLIC_*` is inlined at build time, not a runtime flip.
+  3. `cd apps/gateway && npm run realtime:smoke -- --org-id=<prod org> --url=<gateway>`
+     (asserts delivery *and* cross-org non-delivery).
+  4. Confirm `[Realtime] Subscribed` in gateway logs and no new reports at
+     `/api/security/csp-report`.
+  Rollback: unset the Vercel var and redeploy; polling returns to 15s.
+  **Failure mode to watch:** if SSE cannot connect, `RealtimeProvider` retries
+  silently forever while polling has already slowed to 60s/120s — the inbox gets
+  slower with nothing surfaced. Verify step 4 before walking away.
+  Standing cost traps: never hold SSE on Vercel functions; never use Postgres
+  `LISTEN/NOTIFY` (pins a Neon connection).
 - [ ] **Gmail live canary.** Code deployed; record scheduled catch-up/renewal
   evidence and close the 24-hour health window
   ([gmail-rollout-evidence-2026-07-29.md](production/gmail-rollout-evidence-2026-07-29.md)).
@@ -146,12 +166,6 @@ resume. Gated-off integrations cost nothing to keep dark.
   ruled-out set (`useIsDocumentVisible`, `OrgSwitcher`'s `mounted` gate,
   `useMediaQuery`, `useNavAuth`, and all of `app/(marketing)`) is clean and does
   not need re-checking.
-
-- [ ] **Realtime inbox (SSE + Redis pub/sub).** Phases 1–2 implemented behind
-  flags, off by default: gateway `realtime/{publish,token,sse}.ts`, dashboard
-  `RealtimeProvider` + `lib/realtime/*`. Polling stays the 60s safety net.
-  Decide: finish and enable, or delete. Cost traps if resumed: never hold SSE on
-  Vercel functions; never use Postgres `LISTEN/NOTIFY` (pins a Neon connection).
 
 - [ ] **Better Stack Level 1 (log drains + escalation).** Deferred until paid beta
   (decided 2026-06-26). Free tier done: external uptime monitors and gateway
