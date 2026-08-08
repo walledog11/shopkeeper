@@ -252,11 +252,43 @@ the **repo root** with `--path`, not from inside the scratch directory — `npx
 shopify` outside the workspace resolves a `shopify` package from the registry
 instead of the pinned `@shopify/cli` devDependency.
 
-Not yet proven: what a **release** does to an existing install — the
-re-authorization prompt and whether managed installation survives. That needs
-`app release --version shopkeeper-dev-4` and an inspection of the install, which
-also breaks local-dev OAuth until `release --version shopkeeper-dev-3` restores
-it.
+### Release outcome
+
+`shopkeeper-dev-4` was then released. Results:
+
+- **The existing install survived.** Still 1 install, still dated
+  **June 14, 2026** — the original date, so it was not dropped and re-added. A
+  released config change, including a scope reduction from 26 to 15, left the
+  installation intact.
+- **`palette-dev` is a *store*, not an app.** It is the dev store
+  `shopkeeper-dev` is installed on. Worth writing down because the name collides
+  with the "Palette" Shopkeeper workspace and sent this investigation looking for
+  an app that does not exist.
+- The rehearsal **removed** scopes rather than adding them, so it did not
+  exercise the re-authorization prompt. That is fine for M0a, which is parity and
+  adds nothing. **M0b does add `write_app_proxy`, and that path remains
+  unrehearsed.**
+
+### The migration is smaller than this plan assumed
+
+`shopkeeper-production` **is already a versioned app** — eight releases,
+`shopkeeper-production-1` on 2026-06-15 through `shopkeeper-production-8` on
+2026-08-03, with `-8` currently active.
+
+So M0a is not a conversion from "Dashboard-configured" to "CLI-authoritative."
+The app already lives in the versioned model the CLI operates on; `deploy` would
+create `shopkeeper-production-9` exactly as `-8` was created, and `-8` stays
+available to re-release. The plan's framing of an irreversible management-model
+switch does not survive contact with the actual app.
+
+What remains true: version 9 becomes the released config, so its *contents* must
+be right. That risk is now handled by `--no-release` plus Dev Dashboard review.
+
+### Unrelated production issue found
+
+`shopkeeper-production` monitoring reports a **50.0% webhook failure rate over 7
+days, flagged "High"**, at 494 ms p90 response time. Nothing to do with M0a —
+found while confirming the app's version history. Not investigated here.
 
 ## Outstanding
 

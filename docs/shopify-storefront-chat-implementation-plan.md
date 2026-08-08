@@ -100,11 +100,16 @@ reviewable in the Dev Dashboard first. Evidence in the reference doc. This means
 M0a's production step can be **staged, inspected, and only then released**,
 which is a materially safer shape than this plan originally assumed.
 
-What does not obviously reverse is the **management model** switch: moving the
-app from Dashboard-configured to CLI/TOML-authoritative. Treat that as the
-irreversible act, and the config contents as recoverable. This is a narrower
-claim than the original "this is a one-way migration," and it is the one worth
-being careful about.
+**And the management-model switch turns out not to exist** (2026-08-07).
+`shopkeeper-production` is *already* a versioned app — eight releases between
+2026-06-15 and 2026-08-03, `-8` active. There is no conversion from
+Dashboard-configured to CLI-authoritative to perform: the app already lives in
+the model the CLI operates on, `deploy` simply creates version 9, and `-8`
+remains available to re-release.
+
+So this milestone has no irreversible step at all. What is left is ordinary care
+that version 9's *contents* are right — handled by staging with `--no-release`
+and reviewing in the Dev Dashboard before releasing.
 
 ### Changes
 
