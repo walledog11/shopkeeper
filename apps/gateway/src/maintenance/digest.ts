@@ -4,13 +4,16 @@ import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { db, ThreadFilterStatus, type DbThreadFilterStatus } from '@shopkeeper/db';
 import { JOB, QUEUE } from '../constants.js';
 import logger from '../logger.js';
-import { listOperatorBindings, notifyOperator } from '../operator-notify.js';
+import { listOperatorBindings, notifyOperator, type OperatorBinding, type OperatorNotifyResult } from '../operator-notify.js';
 import { digestNotificationIdempotencyKey } from '../operator-notify-idempotency.js';
 import {
   capitalize,
   countWord,
   formatHandledSection,
-  formatWaitingSection,
+  formatOtherOpenSection,
+  resolveOtherOpenSection,
+  formatWaitingAsk,
+  formatWaitingList,
   loadHandledRollup,
   loadWaitingOnYouItems,
   finalizeDigestSend,
@@ -154,42 +157,25 @@ export interface DigestMessageExtras {
   /** Greeting in the agent's own voice; the scheduled worker supplies it. */
   opener?: string | null;
   handledSection?: string | null;
+  /** Numbered approval list without the closing ask. */
   waitingSection?: string | null;
-  /**
-   * How many of the items in `waitingSection` are also counted as open tickets
-   * below, so the two numbers can be stated as one fact instead of two.
-   */
-  waitingOpenCount?: number;
+  /** Closing ask for the approval list; lands after everything else. */
+  waitingAsk?: string | null;
+  /** Compact roll-up of open tickets not named in the waiting list. */
+  otherOpenSection?: string | null;
   garnishLines?: string[];
 }
 
-// One sentence about the open queue, plus the only urgency split the merchant
-// can act on differently: what has been sitting long enough to be embarrassing.
-function inboxSentence(genuineCount: number, urgent: number, waitingAbove: number): string {
-  // Claims only the reply queue, never "your inbox is clear" — that reads as a
-  // contradiction when a flagged ticket is named in the next breath.
+function simpleInboxSentence(genuineCount: number, urgent: number): string {
   if (genuineCount === 0) return "Nothing's waiting on a reply.";
 
-  // Reconcile against the list above rather than printing two counts from two
-  // queries and leaving the merchant to work out whether they overlap.
-  const covered = Math.min(waitingAbove, genuineCount);
-  const relation = covered === 0
-    ? '.'
-    : covered === genuineCount
-      ? genuineCount === 1 ? ', the one above.' : ', all of them above.'
-      : `, ${countWord(covered)} of them above.`;
-
-  const opening = `You've got ${countWord(genuineCount)} open ticket${genuineCount === 1 ? '' : 's'}${relation}`;
-  if (urgent === 0) return opening;
+  let line = `You've got ${countWord(genuineCount)} open ticket${genuineCount === 1 ? '' : 's'}.`;
   if (urgent === genuineCount) {
-    return `${opening} ${genuineCount === 1 ? "It's" : "They've all"} been sitting over a day.`;
+    line += ` ${genuineCount === 1 ? "It's" : "They've all"} been sitting over a day.`;
+  } else if (urgent > 0) {
+    line += ` ${capitalize(countWord(urgent))} ${urgent === 1 ? 'has' : 'have'} been sitting over a day.`;
   }
-  // "four of them above. Two of them have been sitting" — once the relation
-  // clause has spent the pronoun, a second "them" no longer has one referent.
-  const subject = covered === 0
-    ? `${capitalize(countWord(urgent))} of them`
-    : `${capitalize(countWord(urgent))} of the ${countWord(genuineCount)}`;
-  return `${opening} ${subject} ${urgent === 1 ? 'has' : 'have'} been sitting over a day, so I'd start there.`;
+  return line;
 }
 
 function flaggedBlurb(thread: DigestThreadRow): string {
@@ -221,6 +207,7 @@ export function formatDigestMessage(
 ): string {
   const { genuine, questionable, filteredCount, urgent } = buckets;
   const lines: string[] = [];
+  const hasWaiting = Boolean(extras?.waitingSection);
 
   if (extras?.opener) {
     lines.push(extras.opener, '');
@@ -229,75 +216,78 @@ export function formatDigestMessage(
     lines.push(extras.handledSection, '');
   }
   if (extras?.waitingSection) {
-    lines.push(extras.waitingSection, '');
+    lines.push(extras.waitingSection);
+  }
+  if (extras?.otherOpenSection) {
+    lines.push('', extras.otherOpenSection);
   }
 
-  // Group by topic, not by data source. These two are the same news ("nothing
-  // here needs you"), so they belong in one breath. Everything the merchant has
-  // to act on gets its own block below.
-  const status = [inboxSentence(genuine.length, urgent, extras?.waitingOpenCount ?? 0)];
-  if (filteredCount > 0) status.push(spamSentence(filteredCount));
-  lines.push(status.join(' '));
+  if (!hasWaiting) {
+    const status: string[] = [simpleInboxSentence(genuine.length, urgent)];
+    if (filteredCount > 0) status.push(spamSentence(filteredCount));
+    if (lines.length > 0) lines.push('');
+    lines.push(status.join(' '));
+  } else if (filteredCount > 0) {
+    lines.push('', spamSentence(filteredCount));
+  }
 
   if (questionable.length > 0) {
-    lines.push(``);
+    lines.push('');
     if (questionable.length === 1) {
-      // A list of one is a tell that a machine wrote it. The ordinal it loses is
-      // only an affordance for the `spam 1` keyword path, which still parses,
-      // and the model resolves prose from the ids in its own ledger.
-      // Name and summary sit on separate lines because the summary is
-      // model-written prose that often carries its own colon and quotes —
-      // inline, the punctuation collides and the sentence stops scanning.
       const only = questionable[0]!;
       const blurb = flaggedBlurb(only);
       lines.push(`There's one I wasn't sure about, from ${only.customer.name ?? 'someone new'}.`);
       if (blurb) lines.push(endSentence(blurb));
     } else {
-      // Numbering earns its place once there is genuinely a list: it is the index
-      // the merchant types back (`spam 2`) and the order of `pendingDigest.threadIds`.
       lines.push(`There are ${countWord(questionable.length)} I wasn't sure about:`);
       const shown = questionable.slice(0, DIGEST_QUESTIONABLE_LIMIT);
       shown.forEach((t, i) => {
         const name = t.customer.name ?? 'Unknown';
         const blurb = flaggedBlurb(t);
-        // Colon, not a dash: summaries often open with a capitalized proper
-        // noun, so a comma would read as a sentence fragment collision.
         lines.push(`${i + 1}. ${name}${blurb ? `: ${blurb}` : ''}`);
       });
       if (questionable.length > shown.length) {
         lines.push(`  …and ${questionable.length - shown.length} more`);
       }
     }
-    // The ask belongs against the thing it is asking about, not floating at the
-    // end of the message two blocks away from its subject — but it still gets
-    // its own line with air above it. A sentence that closes a block always
-    // does; jammed against the content it reads as one more detail.
-    lines.push(``, questionable.length === 1
-      ? `Want me to do anything with it?`
-      : `Want me to do anything with those?`);
+    lines.push('', questionable.length === 1
+      ? 'Want me to do anything with it?'
+      : 'Want me to do anything with those?');
   }
 
   for (const line of extras?.garnishLines ?? []) {
-    lines.push(``, line);
+    lines.push('', line);
   }
 
-  if (weeklyLine) lines.push(``, weeklyLine);
+  if (!hasWaiting && weeklyLine) {
+    lines.push('', weeklyLine);
+  }
 
-  // No command syntax anywhere. An employee ending a briefing asks a question or
-  // says nothing — they don't teach you their shortcuts. The keyword fast paths
-  // (`open 1`, `spam 1`, …) still parse and are still documented in HELP; the
-  // merchant reaches them by muscle memory, not by being drilled every morning.
-  // Plain prose resolves too: the model's ledger carries each flagged ticket's
-  // id next to the ordinal the merchant saw (`buildDigestLedgerSection`).
-  // The flagged and waiting asks already landed against their subjects above; a
-  // fully quiet inbox just gets a sign-off so the message doesn't trail into
-  // nothing. "I'll shout if anything comes in" on top of a list of things
-  // already waiting on the merchant would contradict itself.
-  if (questionable.length === 0 && genuine.length === 0 && !extras?.waitingSection) {
-    lines.push(``, `I'll shout if anything comes in.`);
+  if (extras?.waitingAsk) {
+    lines.push('', extras.waitingAsk);
+  }
+
+  if (questionable.length === 0 && genuine.length === 0 && !extras?.waitingAsk && !extras?.waitingSection) {
+    lines.push('', `I'll shout if anything comes in.`);
   }
 
   return lines.join('\n');
+}
+
+/** Deliver the briefing as a single operator-channel message. */
+export async function deliverOrgDigest(
+  organizationId: string,
+  member: OperatorBinding,
+  digest: OrgDigest,
+  idempotencyKey: string,
+): Promise<OperatorNotifyResult | null> {
+  return notifyOperator(
+    organizationId,
+    member,
+    digest.message,
+    { pendingDigest: digest.pendingDigest },
+    { idempotencyKey },
+  );
 }
 
 export interface OrgDigest {
@@ -347,23 +337,35 @@ export async function buildOrgDigest(
   ]);
 
   const handledSection = formatHandledSection(handledRollup);
-  const waitingSection = formatWaitingSection(waitingItems);
+  const waitingSection = formatWaitingList(waitingItems);
+  const waitingAsk = formatWaitingAsk(waitingItems);
   const hasBriefingContent = Boolean(handledSection || waitingSection);
 
   if (openThreads.length === 0 && !hasBriefingContent) return null;
 
   const buckets = bucketDigestThreads(openThreads, now, since);
-  // Only the waiting items that are also counted as open tickets — a parked
-  // plan can sit on a thread that is pending, closed, or filtered, and claiming
-  // it as part of the open count would be a number the merchant can't square.
-  const genuineIds = new Set(buckets.genuine.map((thread) => thread.id));
-  const waitingOpenCount = waitingItems.filter((item) => genuineIds.has(item.threadId)).length;
+  const waitingThreadIds = new Set(waitingItems.map((item) => item.threadId));
+  const otherOpenThreads = buckets.genuine.filter((thread) => !waitingThreadIds.has(thread.id));
+  const otherOpenSection = resolveOtherOpenSection(waitingItems.length, otherOpenThreads);
+
+  const weeklyLine = waitingSection
+    ? null
+    : weeklyStats
+      ? formatWeeklySummaryLine(weeklyStats, buckets.genuine.length)
+      : null;
 
   return {
     message: formatDigestMessage(
       buckets,
-      weeklyStats ? formatWeeklySummaryLine(weeklyStats, buckets.genuine.length) : null,
-      { opener: options.opener ?? null, handledSection, waitingSection, waitingOpenCount, garnishLines },
+      weeklyLine,
+      {
+        opener: options.opener ?? null,
+        handledSection,
+        waitingSection,
+        waitingAsk,
+        otherOpenSection,
+        garnishLines,
+      },
     ),
     pendingDigest: {
       threadIds: buckets.questionable.slice(0, DIGEST_QUESTIONABLE_LIMIT).map((t) => t.id),
@@ -470,7 +472,9 @@ export async function sendScheduledDigests(): Promise<void> {
     const bindings = await listOperatorBindings(org.id);
     const idempotencyKey = digestNotificationIdempotencyKey(org.id, pendingDigest.sentAt);
     for (const member of bindings) {
-      const result = await notifyOperator(org.id, member, message, { pendingDigest }, { idempotencyKey });
+      const result = digest
+        ? await deliverOrgDigest(org.id, member, digest, idempotencyKey)
+        : await notifyOperator(org.id, member, message, { pendingDigest }, { idempotencyKey });
       if (result) {
         logger.info(
           { organizationId: org.id, chatId: result.chatId, flagged: flaggedCount, firstBriefing: firstBriefingPending },

@@ -12,6 +12,9 @@ export const DIGEST_CURSOR_KEY = 'lastSuccessfulDigestAt';
 export const WAITING_PLAN_MIN_AGE_MS = 3 * 3_600_000;
 export const DEFAULT_HANDLED_LOOKBACK_MS = 24 * 3_600_000;
 const NOTABLE_HANDLED_LIMIT = 5;
+const DIGEST_OTHER_OPEN_LIMIT = 2;
+/** When this many approvals are queued, skip the also-open roll-up. */
+export const WAITING_HIDE_OTHER_OPEN_AT = 3;
 
 export interface HandledRollup {
   approvedCount: number;
@@ -125,7 +128,80 @@ function parkedActionLabel(
   return `${step.label.toLowerCase()}${forCustomer}`;
 }
 
-const WAITING_TOPIC_TRUNC = 72;
+// One iMessage line of context — truncate at a word boundary, never mid-word.
+const BRIEFING_TOPIC_MAX = 80;
+
+const BRIEFING_TAG_LABELS: Record<string, string> = {
+  'Order Status': "where's my order?",
+  Shipping: 'shipping question',
+  Refund: 'refund request',
+};
+
+function briefingTagLabel(tag: string): string {
+  return BRIEFING_TAG_LABELS[tag] ?? tag;
+}
+
+function briefingSubjectName(customerName: string | null): string | null {
+  const firstName = customerFirstName(customerName);
+  if (!firstName || firstName.toLowerCase() === 'customer') return null;
+  return firstName;
+}
+
+function truncateAtWord(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text;
+  const slice = text.slice(0, maxLen);
+  const lastSpace = slice.lastIndexOf(' ');
+  const clipped = lastSpace > maxLen * 0.5 ? slice.slice(0, lastSpace) : slice;
+  return `${clipped}…`;
+}
+
+function extractOrderRef(text: string): string | null {
+  const orderMatch = text.match(/\border\s*(#?\d{3,})\b/i);
+  if (orderMatch) {
+    const raw = orderMatch[1];
+    return raw.startsWith('#') ? raw : `#${raw}`;
+  }
+  const hashMatch = text.match(/(#\d{3,})/);
+  return hashMatch ? hashMatch[1] : null;
+}
+
+// Digest copy, not dashboard `aiSummary` prose. Strips ticket-system phrasing
+// and pulls order numbers into the line header so two Canary tickets read
+// differently at a glance.
+function briefingTopicFromSummary(summary: string, orderRef: string | null): string {
+  let text = summary.trim();
+  text = text.replace(/^Customer (states|reports|wrote|sent|is asking|asked) (that )?/i, '');
+  text = text.replace(/^a single word:\s*/i, '');
+  text = text.replace(/^a brief notification that /i, '');
+  if (orderRef) {
+    const num = orderRef.replace('#', '');
+    text = text.replace(new RegExp(`\\border\\s*#?${num}\\b`, 'gi'), '');
+    text = text.replace(new RegExp(`#${num}\\b`, 'g'), '');
+  }
+  text = text.replace(/\s+/g, ' ').trim();
+  text = text.replace(/^that /i, '');
+  text = text.replace(/^["'](.+)["']\.?$/, '$1');
+  text = text.replace(/, but provides no details?/i, ', no details');
+  text = text.replace(/has been /gi, '');
+  text = text.replace(/, stated twice/i, ', repeated');
+  text = text.replace(/, repeated twice without further detail or question/i, ', repeated, no details');
+  text = text.replace(/without further detail or question/i, 'no details');
+  text = text.replace(/\bwhere\s+is\b/gi, 'where it is');
+  text = text.replace(/ on their unfulfilled order/i, '');
+  text = text.replace(/ and mentions an upcoming trip/i, ', trip soon');
+  text = text.replace(/^for a /i, '');
+  return truncateAtWord(text.replace(/\.$/, ''), BRIEFING_TOPIC_MAX);
+}
+
+function isReplyPlan(
+  rawToolCalls: Array<{ id: string; name: string; input?: unknown }>,
+  actionLabel?: string,
+): boolean {
+  if (actionLabel?.toLowerCase().includes('reply')) return true;
+  return rawToolCalls.some((toolCall) => (
+    toolCall.name === 'send_reply' || toolCall.name === 'send_email'
+  ));
+}
 
 // How long the merchant has left this sitting. The header already frames the
 // list as waiting on them, so the parenthetical only carries the duration —
@@ -148,15 +224,12 @@ export function formatWaitingAge(now: Date, since: Date | null): string | null {
 export function waitingTopic(aiSummary: string | null, tag: string | null): string | null {
   const summary = aiSummary?.trim();
   if (summary) {
-    const clipped = summary.length > WAITING_TOPIC_TRUNC
-      ? `${summary.slice(0, WAITING_TOPIC_TRUNC)}…`
-      : summary;
-    // The line closes on a parenthetical, so a summary's own full stop would
-    // land mid-sentence.
-    return clipped.replace(/\.$/, '');
+    const orderRef = extractOrderRef(summary);
+    const topic = briefingTopicFromSummary(summary, orderRef);
+    return topic || null;
   }
   const trimmedTag = tag?.trim();
-  return trimmedTag && trimmedTag !== 'General' ? trimmedTag : null;
+  return trimmedTag && trimmedTag !== 'General' ? briefingTagLabel(trimmedTag) : null;
 }
 
 // Colon between action and subject, matching the flagged block's `1. Alice:
@@ -188,9 +261,124 @@ function waitingPhrase(
   if (label) return label.charAt(0).toUpperCase() + label.slice(1);
 
   const trimmed = instruction.trim();
-  const summary = trimmed.length > 72 ? `${trimmed.slice(0, 72)}…` : trimmed;
+  const summary = truncateAtWord(trimmed, BRIEFING_TOPIC_MAX);
   if (!summary) return firstName ? `A ticket${forCustomer}` : 'A ticket';
   return firstName ? `${firstName}: ${summary}` : summary;
+}
+
+export function formatWaitingItemLine(params: {
+  customerName: string | null;
+  aiSummary: string | null;
+  tag: string | null;
+  rawToolCalls: Array<{ id: string; name: string; input?: unknown }>;
+  instruction: string;
+  actionLabel?: string;
+  now: Date;
+  since: Date | null;
+}): string {
+  const {
+    customerName,
+    aiSummary,
+    tag,
+    rawToolCalls,
+    instruction,
+    actionLabel,
+    now,
+    since,
+  } = params;
+  const age = formatWaitingAge(now, since);
+  const agePart = age ? ` (${age})` : '';
+  const subjectName = briefingSubjectName(customerName);
+
+  const refundAmount = extractRefundAmount(
+    rawToolCalls.find((toolCall) => toolCall.name === 'create_refund')?.input,
+  );
+  if (refundAmount) {
+    const topic = waitingTopic(aiSummary, tag);
+    const head = subjectName ? `${refundAmount} refund · ${subjectName}` : `${refundAmount} refund`;
+    return topic ? `${head}: ${topic}${agePart}` : `${head}${agePart}`;
+  }
+
+  const summary = aiSummary?.trim();
+  if (summary && isReplyPlan(rawToolCalls, actionLabel)) {
+    const orderRef = extractOrderRef(summary);
+    const topic = briefingTopicFromSummary(summary, orderRef);
+    const tagFallback = waitingTopic(null, tag);
+    const subject = orderRef && subjectName
+      ? `${subjectName} · ${orderRef}`
+      : orderRef
+        ? orderRef
+        : subjectName ?? 'Someone';
+    const detail = topic || tagFallback;
+    if (detail) return `${subject}: ${detail}${agePart}`;
+    return `${subject}${agePart}`;
+  }
+
+  return waitingLine(
+    waitingPhrase(customerName, rawToolCalls, instruction, actionLabel),
+    waitingTopic(aiSummary, tag),
+    age,
+  );
+}
+
+// Compact one-line label for open tickets the merchant hasn't already seen above.
+export function formatBriefingTicketLine(
+  customerName: string | null,
+  aiSummary: string | null,
+  tag: string | null,
+): string {
+  const subjectName = briefingSubjectName(customerName);
+  const summary = aiSummary?.trim();
+  if (summary) {
+    const orderRef = extractOrderRef(summary);
+    const topic = briefingTopicFromSummary(summary, orderRef);
+    const subject = orderRef && subjectName
+      ? `${subjectName} · ${orderRef}`
+      : orderRef
+        ? orderRef
+        : subjectName ?? 'Someone';
+    return topic ? `${subject}: ${topic}` : subject;
+  }
+  const tagTopic = waitingTopic(null, tag);
+  if (subjectName) return tagTopic ? `${subjectName}: ${tagTopic}` : subjectName;
+  return tagTopic ?? 'Open ticket';
+}
+
+export function resolveOtherOpenSection(
+  waitingCount: number,
+  threads: Array<{
+    aiSummary: string | null;
+    tag: string | null;
+    customer: { name: string | null };
+  }>,
+): string | null {
+  if (waitingCount >= WAITING_HIDE_OTHER_OPEN_AT) return null;
+  return formatOtherOpenSection(threads);
+}
+
+export function formatOtherOpenSection(
+  threads: Array<{
+    aiSummary: string | null;
+    tag: string | null;
+    customer: { name: string | null };
+  }>,
+): string | null {
+  if (threads.length === 0) return null;
+
+  const lines = ['Also open:'];
+  const shown = threads.slice(0, DIGEST_OTHER_OPEN_LIMIT);
+  for (const thread of shown) {
+    lines.push(`- ${formatBriefingTicketLine(
+      thread.customer?.name ?? null,
+      thread.aiSummary,
+      thread.tag,
+    )}`);
+  }
+  const remaining = threads.length - shown.length;
+  if (remaining > 0) {
+    lines.push(`…and ${countWord(remaining)} more`);
+  }
+  return lines.join('\n');
 }
 
 async function isPlanExecutionResolved(
@@ -299,9 +487,11 @@ export async function loadHandledRollup(
   return { approvedCount, autoCount, replyCount, refundCount, notableLines };
 }
 
-export function formatHandledSection(rollup: HandledRollup): string | null {
+export function formatHandledSection(rollup: HandledRollup): string {
   const total = rollup.approvedCount + rollup.autoCount;
-  if (total === 0) return null;
+  if (total === 0) {
+    return 'Since your last briefing I didn\'t send any replies or refunds.';
+  }
 
   // One thing does not need a count, a breakdown, and a bullet: "I handled one
   // thing, including one reply: - Replied to Sarah" is the same fact three
@@ -391,16 +581,16 @@ async function loadOperatorWaitingItems(organizationId: string, now: Date): Prom
       items.push({
         dedupeKey,
         threadId: pendingPlan.threadId,
-        line: waitingLine(
-          waitingPhrase(
-            thread?.customer?.name ?? pendingPlan.customerName ?? null,
-            pendingPlan.rawToolCalls,
-            pendingPlan.instruction,
-            pendingPlan.actionLabel,
-          ),
-          waitingTopic(thread?.aiSummary ?? null, thread?.tag ?? null),
-          formatWaitingAge(now, waitingSince(thread)),
-        ),
+        line: formatWaitingItemLine({
+          customerName: thread?.customer?.name ?? pendingPlan.customerName ?? null,
+          aiSummary: thread?.aiSummary ?? null,
+          tag: thread?.tag ?? null,
+          rawToolCalls: pendingPlan.rawToolCalls,
+          instruction: pendingPlan.instruction,
+          actionLabel: pendingPlan.actionLabel,
+          now,
+          since: waitingSince(thread),
+        }),
       });
     }
   }
@@ -457,15 +647,15 @@ async function loadStaleThreadWaitingItems(
     items.push({
       dedupeKey,
       threadId: thread.id,
-      line: waitingLine(
-        waitingPhrase(
-          thread.customer?.name ?? null,
-          plan.rawToolCalls,
-          cached.instruction,
-        ),
-        waitingTopic(thread.aiSummary, thread.tag),
-        formatWaitingAge(now, waitingSince(thread)),
-      ),
+      line: formatWaitingItemLine({
+        customerName: thread.customer?.name ?? null,
+        aiSummary: thread.aiSummary,
+        tag: thread.tag,
+        rawToolCalls: plan.rawToolCalls,
+        instruction: cached.instruction,
+        now,
+        since: waitingSince(thread),
+      }),
     });
   }
   return items;
@@ -501,31 +691,32 @@ export async function loadWaitingOnYouItems(
   return merged;
 }
 
-export function formatWaitingSection(items: WaitingItem[]): string | null {
+export function formatWaitingList(items: WaitingItem[]): string | null {
   if (items.length === 0) return null;
 
   if (items.length === 1) {
     return [
       "One thing's still waiting on your OK:",
       `- ${items[0]!.line}`,
-      // Its own line with air above it: a sentence that closes a block reads as
-      // one more bullet without the gap. Yes/no is safe here — there is exactly
-      // one plan for the fast path to land on.
-      ``,
-      'Want me to go ahead with it?',
     ].join('\n');
   }
 
   return [
     `${capitalize(countWord(items.length))} things are still waiting on your OK:`,
-    // Numbered, so the merchant has a handle to approve one of several — the
-    // same affordance the flagged list already gives.
     ...items.map((item, index) => `${index + 1}. ${item.line}`),
-    // Deliberately not "want me to send those?" — a bare yes against a list hits
-    // the keyword fast path, which approves only the most recent plan. Asking
-    // which ones keeps the merchant's one-word answer from meaning something
-    // narrower than they intended.
-    ``,
-    'Tell me which ones to go ahead with.',
   ].join('\n');
+}
+
+export function formatWaitingAsk(items: WaitingItem[]): string | null {
+  if (items.length === 0) return null;
+  return items.length === 1
+    ? 'Want me to go ahead with it?'
+    : 'Tell me which ones to go ahead with.';
+}
+
+export function formatWaitingSection(items: WaitingItem[]): string | null {
+  const list = formatWaitingList(items);
+  const ask = formatWaitingAsk(items);
+  if (!list || !ask) return null;
+  return `${list}\n\n${ask}`;
 }

@@ -22,8 +22,8 @@ loadGatewayEnv();
 async function main() {
   const { db } = await import('@shopkeeper/db');
   const { resolveAgentSettings } = await import('@shopkeeper/agent/settings');
-  const { buildOrgDigest, buildDigestOpener } = await import('../maintenance/digest.js');
-  const { listOperatorBindings, notifyOperator } = await import('../operator-notify.js');
+  const { buildOrgDigest, buildDigestOpener, deliverOrgDigest } = await import('../maintenance/digest.js');
+  const { listOperatorBindings } = await import('../operator-notify.js');
 
   const orgId = process.env.ORG_ID?.trim();
   if (!orgId) {
@@ -67,13 +67,8 @@ async function main() {
   }
 
   for (const member of bindings) {
-    const result = await notifyOperator(
-      org.id,
-      member,
-      digest.message,
-      { pendingDigest: digest.pendingDigest },
-      { idempotencyKey: null },
-    );
+    const idempotencyKey = `verify-digest-copy-${now.toISOString()}`;
+    const result = await deliverOrgDigest(org.id, member, digest, idempotencyKey);
     console.log(result ? `Sent via ${result.channel} (${result.chatId})` : `FAILED on ${member.channel}`);
   }
 

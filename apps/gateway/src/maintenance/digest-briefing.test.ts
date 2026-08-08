@@ -11,7 +11,11 @@ import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import {
   DIGEST_CURSOR_KEY,
+  formatBriefingTicketLine,
   formatHandledSection,
+  formatOtherOpenSection,
+  resolveOtherOpenSection,
+  formatWaitingItemLine,
   formatWaitingSection,
   loadHandledRollup,
   loadWaitingOnYouItems,
@@ -68,14 +72,14 @@ describe('resolveHandledWindowStart', () => {
 });
 
 describe('formatHandledSection', () => {
-  it('returns null when nothing was handled', () => {
+  it('returns a quiet line when nothing was handled', () => {
     expect(formatHandledSection({
       approvedCount: 0,
       autoCount: 0,
       replyCount: 0,
       refundCount: 0,
       notableLines: [],
-    })).toBeNull();
+    })).toBe('Since your last briefing I didn\'t send any replies or refunds.');
   });
 
   it('folds a single handled item into one sentence instead of a list of one', () => {
@@ -166,6 +170,109 @@ describe('loadHandledRollup', () => {
   });
 });
 
+describe('resolveOtherOpenSection', () => {
+  it('skips the roll-up when enough approvals are already queued', () => {
+    expect(resolveOtherOpenSection(3, [{
+      customer: { name: 'Bob' },
+      aiSummary: 'Refund',
+      tag: null,
+    }])).toBeNull();
+  });
+
+  it('still lists hidden tickets when only one or two need approval', () => {
+    const section = resolveOtherOpenSection(2, [{
+      customer: { name: 'Bob' },
+      aiSummary: 'Wants a refund on order 1043',
+      tag: null,
+    }]);
+    expect(section).toContain('Also open:');
+    expect(section).toContain('Bob');
+  });
+});
+
+describe('formatOtherOpenSection', () => {
+  it('summarizes hidden open tickets with order-first labels', () => {
+    const section = formatOtherOpenSection([
+      {
+        customer: { name: 'Bob Lee' },
+        aiSummary: 'Customer reports that order #1043 was cancelled',
+        tag: 'Order Status',
+      },
+      {
+        customer: { name: 'Jane Doe' },
+        aiSummary: 'Asking about shipping times',
+        tag: null,
+      },
+    ]);
+    expect(section).toContain('Also open:');
+    expect(section).toContain('Bob · #1043:');
+    expect(section).toContain('Jane: Asking about shipping times');
+  });
+
+  it('caps the roll-up and shows a more line', () => {
+    const section = formatOtherOpenSection([
+      { customer: { name: 'A' }, aiSummary: 'One', tag: null },
+      { customer: { name: 'B' }, aiSummary: 'Two', tag: null },
+      { customer: { name: 'C' }, aiSummary: 'Three', tag: null },
+      { customer: { name: 'D' }, aiSummary: 'Four', tag: null },
+    ]);
+    expect(section).toContain('…and two more');
+    expect(section).not.toContain('- D:');
+  });
+});
+
+describe('formatBriefingTicketLine', () => {
+  it('matches waiting-line order-first style without age', () => {
+    expect(formatBriefingTicketLine(
+      'Adam Jones',
+      'Customer states that order #1025 has been updated, but provides no details',
+      null,
+    )).toBe('Adam · #1025: updated, no details');
+  });
+
+  it('tightens ticket-system summaries for the briefing', () => {
+    expect(formatBriefingTicketLine(
+      'Samsonite',
+      'Customer sent a brief notification that order #1024 updated, repeated twice without further detail or question',
+      null,
+    )).toBe('Samsonite · #1024: updated, repeated, no details');
+
+    expect(formatBriefingTicketLine(
+      'Walle',
+      'Customer is asking for a shipping update on their unfulfilled order and mentions an upcoming trip',
+      null,
+    )).toBe('Walle: shipping update, trip soon');
+
+    expect(formatBriefingTicketLine(
+      null,
+      'Customer wrote a single word: "Testing."',
+      null,
+    )).toBe('Someone: Testing');
+  });
+
+  it('maps classifier tags to plain language', () => {
+    expect(formatBriefingTicketLine('Ayumu', null, 'Order Status')).toBe('Ayumu: where\'s my order?');
+  });
+});
+
+describe('formatWaitingItemLine', () => {
+  it('does not truncate briefing topics mid-word', () => {
+    const line = formatWaitingItemLine({
+      customerName: 'Adam Jones',
+      aiSummary: 'Customer states that order #1025 has been updated, but provides no details about what changed',
+      tag: null,
+      rawToolCalls: [{ id: 'tc1', name: 'send_reply', input: { text: 'Hi' } }],
+      instruction: 'Answer the customer',
+      actionLabel: 'reply to Adam',
+      now: NOW,
+      since: new Date(NOW.getTime() - 26 * 3_600_000),
+    });
+    expect(line).toContain('Adam · #1025:');
+    expect(line).toContain('updated, no details');
+    expect(line).not.toContain('detai…');
+  });
+});
+
 describe('loadWaitingOnYouItems', () => {
   it('dedupes operator pending plans by stable plan id', async () => {
     const customer = await createTestCustomer(org.id, 'sarah@example.com', { name: 'Sarah Jones' });
@@ -196,12 +303,12 @@ describe('loadWaitingOnYouItems', () => {
     // Action, then what it's about, then how long it has sat: without the last
     // two, four pending replies to one customer render as four identical lines.
     expect(items[0]?.line).toBe(
-      '$12 refund for Sarah: Order arrived damaged, wants money back (waiting 1 day)',
+      '$12 refund · Sarah: Order arrived damaged, wants money back (waiting 1 day)',
     );
     // The "still waiting on your OK" framing belongs to the header, once.
     expect(formatWaitingSection(items)).toBe(
       "One thing's still waiting on your OK:\n"
-      + '- $12 refund for Sarah: Order arrived damaged, wants money back (waiting 1 day)\n'
+      + '- $12 refund · Sarah: Order arrived damaged, wants money back (waiting 1 day)\n'
       + '\n'
       + 'Want me to go ahead with it?',
     );
@@ -235,10 +342,10 @@ describe('loadWaitingOnYouItems', () => {
     expect(items).toHaveLength(2);
     const section = formatWaitingSection(items)!;
     expect(section).toContain('Two things are still waiting on your OK:');
-    expect(section).toContain('1. Reply to Canary: ');
-    expect(section).toContain('2. Reply to Canary: ');
+    expect(section).toContain('1. Canary · #1042: ');
+    expect(section).toContain('2. Canary: ');
     // Every line differs by subject, so the list is worth reading.
-    expect(section).toContain('Asking where order 1042 is (waiting 5 hours)');
+    expect(section).toContain('Asking where it is (waiting 5 hours)');
     expect(section).toContain('Wants to change the shipping address (waiting 5 hours)');
     // A bare "yes" here would approve only the most recent plan.
     expect(section.trimEnd().endsWith('Tell me which ones to go ahead with.')).toBe(true);

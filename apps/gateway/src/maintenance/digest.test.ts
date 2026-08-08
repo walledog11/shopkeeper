@@ -100,6 +100,48 @@ describe('bucketDigestThreads', () => {
 });
 
 describe('formatDigestMessage', () => {
+  it('keeps the briefing in one message when approvals are pending', () => {
+    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW, FILED_SINCE);
+    const msg = formatDigestMessage(buckets, null, {
+      opener: 'Morning, Ada here.',
+      handledSection: 'Since your last briefing I replied to Sarah.',
+      waitingSection: "One thing's still waiting on your OK:\n- refund",
+      waitingAsk: 'Want me to go ahead with it?',
+    });
+    expect(msg).toContain('Morning, Ada here.');
+    expect(msg).toContain('replied to Sarah');
+    expect(msg).toContain('still waiting on your OK');
+    expect(msg).not.toContain("You've got one open ticket");
+    expect(msg.trimEnd().endsWith('Want me to go ahead with it?')).toBe(true);
+  });
+
+  it('lists open tickets not already shown in the waiting block', () => {
+    const buckets = bucketDigestThreads(
+      [
+        makeThread({ filterStatus: 'genuine', customerName: 'Jane', aiSummary: 'Asking where order 1042 is' }),
+        makeThread({ filterStatus: 'genuine', customerName: 'Bob', aiSummary: 'Wants a refund on order 1043' }),
+      ],
+      NOW,
+      FILED_SINCE,
+    );
+    const msg = formatDigestMessage(buckets, null, {
+      waitingSection: 'x',
+      otherOpenSection: 'Also open:\n- Bob · #1043: Wants a refund',
+    });
+    expect(msg).toContain('Also open:');
+    expect(msg).toContain('Bob · #1043');
+    expect(msg).not.toContain("You've got two open tickets");
+  });
+
+  it('omits weekly stats while approvals are still pending', () => {
+    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW, FILED_SINCE);
+    const msg = formatDigestMessage(buckets, 'Last 7 days: 5 tickets in.', {
+      waitingSection: 'Two things are still waiting on your OK:\n1. a\n2. b',
+      waitingAsk: 'Tell me which ones to go ahead with.',
+    });
+    expect(msg).not.toContain('Last 7 days');
+  });
+
   it('states the open count as a sentence and surfaces only the over-a-day split', () => {
     const buckets = bucketDigestThreads(
       [
@@ -112,7 +154,7 @@ describe('formatDigestMessage', () => {
     );
     const msg = formatDigestMessage(buckets);
     expect(msg).toContain("You've got three open tickets.");
-    expect(msg).toContain('One of them has been sitting over a day');
+    expect(msg).toContain('One has been sitting over a day');
     expect(msg).not.toMatch(/Open tickets:|4-24h|<4h/);
   });
 
@@ -263,13 +305,15 @@ describe('formatDigestMessage', () => {
     const msg = formatDigestMessage(buckets, null, {
       handledSection: 'Since your last briefing I refunded Sarah $12.',
       waitingSection: "One thing's still waiting on your OK:\n- $12 refund for Sarah",
+      waitingAsk: 'Want me to go ahead with it?',
     });
     expect(msg).toContain('Since your last briefing I refunded Sarah $12.');
     expect(msg).toContain("still waiting on your OK");
-    expect(msg).toContain("You've got one open ticket");
+    expect(msg).not.toContain("You've got one open ticket");
+    expect(msg).toContain('Want me to go ahead with it?');
   });
 
-  it('reconciles the open count against the list above instead of printing two numbers', () => {
+  it('does not narrate what the agent is working on when approvals are queued', () => {
     const buckets = bucketDigestThreads(
       Array.from({ length: 5 }, () => makeThread({ filterStatus: 'genuine', ageHours: 1 })),
       NOW,
@@ -277,48 +321,17 @@ describe('formatDigestMessage', () => {
     );
     const msg = formatDigestMessage(buckets, null, {
       waitingSection: 'Four things are still waiting on your OK:\n1. a\n2. b\n3. c\n4. d',
-      waitingOpenCount: 4,
+      waitingAsk: 'Tell me which ones to go ahead with.',
     });
-    expect(msg).toContain("You've got five open tickets, four of them above.");
-  });
-
-  it('does not spend "them" twice in one sentence', () => {
-    const buckets = bucketDigestThreads(
-      [
-        ...Array.from({ length: 2 }, () => makeThread({ filterStatus: 'genuine', ageHours: 30 })),
-        ...Array.from({ length: 3 }, () => makeThread({ filterStatus: 'genuine', ageHours: 2 })),
-      ],
-      NOW,
-      FILED_SINCE,
-    );
-    const msg = formatDigestMessage(buckets, null, { waitingSection: 'x', waitingOpenCount: 4 });
-    expect(msg).toContain('four of them above. Two of the five have been sitting over a day');
-  });
-
-  it('says so plainly when the waiting list is the whole open queue', () => {
-    const buckets = bucketDigestThreads(
-      [makeThread({ filterStatus: 'genuine' }), makeThread({ filterStatus: 'genuine' })],
-      NOW,
-      FILED_SINCE,
-    );
-    expect(formatDigestMessage(buckets, null, { waitingSection: 'x', waitingOpenCount: 2 }))
-      .toContain("You've got two open tickets, all of them above.");
-
-    const one = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW, FILED_SINCE);
-    expect(formatDigestMessage(one, null, { waitingSection: 'x', waitingOpenCount: 1 }))
-      .toContain("You've got one open ticket, the one above.");
-  });
-
-  it('never claims more waiting items than there are open tickets', () => {
-    // Parked plans can sit on threads that are pending, closed, or filtered.
-    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW, FILED_SINCE);
-    const msg = formatDigestMessage(buckets, null, { waitingSection: 'x', waitingOpenCount: 4 });
-    expect(msg).toContain("You've got one open ticket, the one above.");
+    expect(msg).not.toContain("I'm working on");
+    expect(msg).not.toContain("You've got five open tickets");
+    expect(msg.trimEnd().endsWith('Tell me which ones to go ahead with.')).toBe(true);
   });
 
   it('drops the sign-off when something is already waiting on the merchant', () => {
     const msg = formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE), null, {
       waitingSection: "One thing's still waiting on your OK:\n- $12 refund for Sarah",
+      waitingAsk: 'Want me to go ahead with it?',
       waitingOpenCount: 0,
     });
     expect(msg).not.toContain("I'll shout if anything comes in.");

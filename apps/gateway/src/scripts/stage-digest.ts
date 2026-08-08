@@ -87,8 +87,8 @@ const FIXTURES: Fixture[] = [
 
 async function main() {
   const { db } = await import('@shopkeeper/db');
-  const { buildOrgDigest } = await import('../maintenance/digest.js');
-  const { listOperatorBindings, notifyOperator } = await import('../operator-notify.js');
+  const { buildOrgDigest, deliverOrgDigest } = await import('../maintenance/digest.js');
+  const { listOperatorBindings } = await import('../operator-notify.js');
   const { digestNotificationIdempotencyKey } = await import('../operator-notify-idempotency.js');
 
   const now = new Date();
@@ -228,12 +228,11 @@ async function main() {
   const idempotencyKey = digestNotificationIdempotencyKey(orgId, digest.pendingDigest.sentAt);
   let delivered = 0;
   for (const member of bindings) {
-    const result = await notifyOperator(
+    const result = await deliverOrgDigest(
       orgId,
       member,
-      digest.message,
-      { pendingDigest: digest.pendingDigest },
-      { idempotencyKey },
+      digest,
+      idempotencyKey,
     );
     if (result) delivered++;
   }
