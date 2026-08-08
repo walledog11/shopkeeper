@@ -7,13 +7,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 // Canonicalization per Shopify: drop `signature`, sort keys, join each key with
 // its value as `key=value` (comma-joining repeated values), concatenate with no
 // separator between pairs.
-export function verifyAppProxySignature(
-  url: URL,
-  appSecret: string
-): boolean {
-  const signature = url.searchParams.get("signature");
-  if (!signature) return false;
-
+export function appProxyCanonicalString(url: URL): string {
   const grouped = new Map<string, string[]>();
   for (const [key, value] of url.searchParams.entries()) {
     if (key === "signature") continue;
@@ -22,12 +16,25 @@ export function verifyAppProxySignature(
     else grouped.set(key, [value]);
   }
 
-  const canonical = [...grouped.keys()]
+  // Shopify builds each "key=value" first and sorts the resulting strings, not
+  // the keys. Sorting keys instead differs whenever one key is a prefix of
+  // another, so match their order exactly.
+  return [...grouped.entries()]
+    .map(([key, values]) => `${key}=${values.join(",")}`)
     .sort()
-    .map((key) => `${key}=${grouped.get(key)!.join(",")}`)
     .join("");
+}
 
-  const expected = createHmac("sha256", appSecret).update(canonical).digest("hex");
+export function verifyAppProxySignature(
+  url: URL,
+  appSecret: string
+): boolean {
+  const signature = url.searchParams.get("signature");
+  if (!signature) return false;
+
+  const expected = createHmac("sha256", appSecret)
+    .update(appProxyCanonicalString(url))
+    .digest("hex");
 
   const provided = Buffer.from(signature, "utf8");
   const computed = Buffer.from(expected, "utf8");

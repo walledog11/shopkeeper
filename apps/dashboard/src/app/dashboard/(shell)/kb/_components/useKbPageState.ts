@@ -4,8 +4,8 @@ import { useMemo, useState } from "react"
 import useSWR from "swr"
 import { resolveEffectiveMemoryArticles } from "@shopkeeper/agent/kb-memory"
 import { errorMessageFromUnknown, fetcher } from "@/lib/api/fetcher"
-import type { KnowledgeBase, SampleReply, VoiceProposal } from "@/types"
 import type { ContextCategory } from "@/lib/memory/context"
+import type { KbPageData } from "@/lib/server/kb-page-data"
 import { createContext, deleteArticle, updateArticle } from "./kb-page-requests"
 import {
   collectMemoryTopicFilters,
@@ -20,19 +20,10 @@ import { buildMemoryBooks, filterMemoryBooks } from "./memory-books"
 const emptyArticleDraft = (): { body: string; category: ContextCategory } => ({ body: "", category: "auto" })
 const emptyEditDraft = () => ({ title: "", body: "" })
 
-interface KbApiResponse {
-  knowledgeBases: KnowledgeBase[]
-  storeProfile: {
-    name: string
-    aiContext: string
-    brandVoice: string
-    sampleReplies: SampleReply[]
-    voiceProposal: VoiceProposal | null
-  }
-}
-
-export function useKbPageState() {
-  const { data, isLoading, mutate } = useSWR<KbApiResponse>("/api/kb", fetcher)
+export function useKbPageState(initialKbData?: KbPageData) {
+  const { data, isLoading, mutate } = useSWR<KbPageData>("/api/kb", fetcher, {
+    ...(initialKbData ? { fallbackData: initialKbData } : {}),
+  })
   const knowledgeBases = useMemo(() => data?.knowledgeBases ?? [], [data])
   const storeProfile = useMemo(
     () => data?.storeProfile ?? { name: "", aiContext: "", brandVoice: "", sampleReplies: [], voiceProposal: null },

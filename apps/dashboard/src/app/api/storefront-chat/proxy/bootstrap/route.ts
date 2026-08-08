@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@shopkeeper/db";
 import { normalizeShopifyShopDomain } from "@/lib/shopify/oauth";
-import { verifyAppProxySignature, isProxyTimestampFresh } from "@/lib/shopify/app-proxy";
+import { verifyAppProxySignature, isProxyTimestampFresh, appProxyCanonicalString } from "@/lib/shopify/app-proxy";
 import {
   mintSessionToken,
   createResumeSecret,
@@ -18,6 +18,24 @@ export async function POST(request: Request) {
 
   const url = new URL(request.url);
   if (!verifyAppProxySignature(url, appSecret) || !isProxyTimestampFresh(url)) {
+    // TEMPORARY diagnostics — remove once the storefront round-trip is proven.
+    // Deliberately never echoes the secret, only what Shopify sent and what we
+    // canonicalized from it.
+    if (process.env.STOREFRONT_CHAT_DEBUG_SIGNATURE === "1") {
+      return NextResponse.json(
+        {
+          error: "invalid signature",
+          debug: {
+            params: [...url.searchParams.entries()].map(([k, v]) =>
+              k === "signature" ? [k, `${v.slice(0, 8)}…`] : [k, v]
+            ),
+            canonical: appProxyCanonicalString(url),
+            timestampFresh: isProxyTimestampFresh(url),
+          },
+        },
+        { status: 401 }
+      );
+    }
     return NextResponse.json({ error: "invalid signature" }, { status: 401 });
   }
 

@@ -28,8 +28,6 @@ import { hasIntegrationTokenAlert } from "@/components/integrations/integration-
 import { Skeleton } from "@/components/ui/skeleton"
 import type { Integration } from "@/types"
 
-// ── Page ───────────────────────────────────────────────────────────────────────
-
 const INTEGRATION_CARD_GRID = "grid items-stretch gap-4 grid-cols-[repeat(auto-fill,minmax(340px,1fr))]"
 
 function renderIntegrationSkeletonSection(
@@ -75,6 +73,7 @@ export default function IntegrationsPageClient({
   gmailNativeInboundEnabled,
   instagramIntegrationEnabled,
   tiktokShopConfigured,
+  initialIntegrations,
 }: {
   telegramBotUsername: string | null
   initialTelegramStatus: TelegramMemberStatus | null
@@ -82,6 +81,7 @@ export default function IntegrationsPageClient({
   gmailNativeInboundEnabled: boolean
   instagramIntegrationEnabled: boolean
   tiktokShopConfigured: boolean
+  initialIntegrations?: Integration[]
 }) {
   return (
     <Suspense fallback={null}>
@@ -92,6 +92,7 @@ export default function IntegrationsPageClient({
         gmailNativeInboundEnabled={gmailNativeInboundEnabled}
         instagramIntegrationEnabled={instagramIntegrationEnabled}
         tiktokShopConfigured={tiktokShopConfigured}
+        initialIntegrations={initialIntegrations}
       />
     </Suspense>
   )
@@ -104,6 +105,7 @@ function IntegrationsPageContent({
   gmailNativeInboundEnabled,
   instagramIntegrationEnabled,
   tiktokShopConfigured,
+  initialIntegrations,
 }: {
   telegramBotUsername: string | null
   initialTelegramStatus: TelegramMemberStatus | null
@@ -111,11 +113,14 @@ function IntegrationsPageContent({
   gmailNativeInboundEnabled: boolean
   instagramIntegrationEnabled: boolean
   tiktokShopConfigured: boolean
+  initialIntegrations?: Integration[]
 }) {
   const searchParams = useSearchParams()
   const { membership } = useOrganization()
   const isAdmin = membership?.role === 'org:admin'
-  const { data, mutate } = useIntegrations()
+  const { data, mutate } = useIntegrations({
+    fallbackData: initialIntegrations,
+  })
   const integrations = useMemo(() => data ?? [], [data])
   const loaded = data !== undefined
   const [openId, setOpenId] = useState<string | null>(null)

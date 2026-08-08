@@ -26,6 +26,7 @@ export interface ActionLogPage {
 export interface UseActionLogEntriesOptions {
   refreshInterval?: number
   revalidateOnFocus?: boolean
+  initialPage?: ActionLogPage
 }
 
 const EMPTY_ACTION_LOG_FILTERS: ActionLogQueryFilters = {}
@@ -109,6 +110,7 @@ export function useActionLogEntries(
   } = useSWRInfinite<ActionLogPage>(getKey, fetcher, {
     refreshInterval: options.refreshInterval ?? 0,
     revalidateOnFocus: options.revalidateOnFocus ?? false,
+    ...(options.initialPage ? { fallbackData: [options.initialPage] } : {}),
   })
 
   const entries = useMemo(() => data?.flatMap((page) => page.entries) ?? [], [data])

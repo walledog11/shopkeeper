@@ -25,6 +25,7 @@ function useIsDocumentVisible() {
 export function useIntegrations(options?: {
   enabled?: boolean
   refreshInterval?: number
+  fallbackData?: Integration[]
 }) {
   const enabled = options?.enabled ?? true
   const isVisible = useIsDocumentVisible()
@@ -37,6 +38,7 @@ export function useIntegrations(options?: {
       refreshInterval: enabled && isVisible ? refreshInterval : 0,
       revalidateOnFocus: true,
       dedupingInterval: 2_000,
+      ...(options?.fallbackData ? { fallbackData: options.fallbackData } : {}),
     },
   )
 }

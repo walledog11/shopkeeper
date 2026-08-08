@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { useActionLogEntries } from "@/hooks/useActionLogEntries"
+import { useActionLogEntries, type ActionLogPage } from "@/hooks/useActionLogEntries"
 import { HOME_SUMMARY_REFRESH_INTERVAL_MS } from "@/lib/home/summary-contract"
 import { ReviewList } from "./ReviewList"
 import { REVIEW_FILTERS, type ReviewFilterId } from "./quality-panel-model"
@@ -23,7 +23,11 @@ function useLastVisit(): string | null {
   return lastVisit
 }
 
-export default function QualityPanel() {
+export default function QualityPanel({
+  initialActionLogPage,
+}: {
+  initialActionLogPage?: ActionLogPage
+}) {
   const lastVisit = useLastVisit()
   const [activeFilter, setActiveFilter] = useState<ReviewFilterId>("all")
 
@@ -31,7 +35,12 @@ export default function QualityPanel() {
     () => (REVIEW_FILTERS.find(filter => filter.id === activeFilter) ?? REVIEW_FILTERS[0]).query,
     [activeFilter],
   )
-  const query = useActionLogEntries(filters, QUERY_OPTIONS)
+  const query = useActionLogEntries(filters, {
+    ...QUERY_OPTIONS,
+    ...(activeFilter === "all" && initialActionLogPage
+      ? { initialPage: initialActionLogPage }
+      : {}),
+  })
 
   const state = useMemo(() => ({
     entries: query.entries,
