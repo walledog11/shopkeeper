@@ -5,38 +5,53 @@ import { cn } from "@/lib/ui/cn";
 import { EmailForwardingSetupPanel } from "@/components/integrations/EmailForwardingDisclosure";
 import { GmailSupportAddressPanel } from "@/components/integrations/GmailSupportAddressPanel";
 import { Accent, Headline, Lede } from "./primitives";
-import { RETURN_TO, type IntegrationRow, type OnboardingData } from "./model";
-
-type EmailProvider = "gmail" | "postmark" | null;
+import type { Integration } from "@/types";
+import { RETURN_TO, type OnboardingData } from "./model";
 
 export function StepEmail({
   data,
   update,
   emailConnected,
-  emailIntegration,
+  forwardingIntegration,
+  gmailIntegration,
   orgReady,
   orgLoading,
   orgError,
   onRetryOrg,
   emailSaving,
-  onSaveEmail,
+  onSaveForwarding,
+  onSaveGmail,
   onOAuth,
 }: {
   data: OnboardingData;
   update: (p: Partial<OnboardingData>) => void;
   emailConnected: boolean;
-  emailIntegration: IntegrationRow | undefined;
+  forwardingIntegration: Integration | undefined;
+  gmailIntegration: Integration | undefined;
   orgReady: boolean;
   orgLoading: boolean;
   orgError: boolean;
   onRetryOrg: () => void;
   emailSaving: boolean;
-  onSaveEmail: () => void;
+  onSaveForwarding: (email: string) => void;
+  onSaveGmail: (email: string) => void;
   onOAuth: (url: string) => void;
 }) {
   const [forwardingOpen, setForwardingOpen] = useState(false);
   const returnTo = encodeURIComponent(RETURN_TO);
-  const connectedProvider = providerOf(emailIntegration);
+  const connectedEmail = data.primaryEmail
+    || gmailIntegration?.fromEmail
+    || gmailIntegration?.externalAccountId
+    || forwardingIntegration?.fromEmail
+    || forwardingIntegration?.externalAccountId;
+  const gmailEmail = data.gmailEmail
+    || gmailIntegration?.fromEmail
+    || gmailIntegration?.externalAccountId
+    || data.primaryEmail;
+  const forwardingEmail = data.forwardingEmail
+    || forwardingIntegration?.fromEmail
+    || forwardingIntegration?.externalAccountId
+    || data.primaryEmail;
 
   return (
     <div className="flex flex-col items-center">
@@ -55,17 +70,17 @@ export function StepEmail({
             <div>
               <div className="text-[13px] font-semibold text-foreground">Email connected</div>
               <div className="mt-0.5 text-[12.5px] text-foreground/55">
-                {data.primaryEmail || emailIntegration?.externalAccountId || "Your support inbox"} is ready.
+                {connectedEmail || "Your support inbox"} is ready.
               </div>
             </div>
           </div>
-          {connectedProvider === "gmail" && (
+          {gmailIntegration && (
             <div className="border-t border-foreground/[0.08]">
               <GmailSupportAddressPanel
-                email={data.primaryEmail}
-                setEmail={value => update({ primaryEmail: value })}
+                email={gmailEmail}
+                setEmail={value => update({ gmailEmail: value })}
                 loading={emailSaving}
-                onSave={onSaveEmail}
+                onSave={() => onSaveGmail(gmailEmail)}
               />
             </div>
           )}
@@ -77,7 +92,7 @@ export function StepEmail({
           name="Gmail"
           logo="/logos/gmail.png"
           description="Connect Gmail or Google Workspace and reply from your existing address."
-          connected={connectedProvider === "gmail"}
+          connected={Boolean(gmailIntegration)}
           actionLabel="Connect Gmail"
           onConnect={() => onOAuth(`/api/integrations/gmail/auth?returnTo=${returnTo}`)}
         />
@@ -95,7 +110,7 @@ export function StepEmail({
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-2 text-[13.5px] font-semibold text-foreground">
               Forward another inbox
-              {connectedProvider === "postmark" && (
+              {forwardingIntegration && (
                 <span className="rounded-full bg-foreground/[0.08] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-foreground/60">
                   Connected
                 </span>
@@ -135,11 +150,11 @@ export function StepEmail({
 
             {!orgLoading && orgReady && (
               <EmailForwardingSetupPanel
-                isConnected={connectedProvider === "postmark"}
-                email={data.primaryEmail}
-                setEmail={value => update({ primaryEmail: value })}
+                isConnected={Boolean(forwardingIntegration)}
+                email={forwardingEmail}
+                setEmail={value => update({ forwardingEmail: value })}
                 loading={emailSaving}
-                onSave={onSaveEmail}
+                onSave={() => onSaveForwarding(forwardingEmail)}
               />
             )}
           </div>
@@ -191,16 +206,4 @@ function ChannelCard({
       </button>
     </div>
   );
-}
-
-function providerOf(integration: IntegrationRow | undefined): EmailProvider {
-  if (!integration) return null;
-  const metadata = integration.metadata;
-  if (typeof metadata !== "object" || metadata === null || !("provider" in metadata)) {
-    return "postmark";
-  }
-  const provider = metadata.provider;
-  return provider === "gmail" || provider === "postmark"
-    ? provider
-    : null;
 }

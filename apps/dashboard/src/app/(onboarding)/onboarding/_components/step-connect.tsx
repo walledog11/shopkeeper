@@ -1,32 +1,35 @@
 import { useEffect, useReducer, useRef, type ComponentType } from "react";
-import useSWR from "swr";
 import { Check, Copy, ExternalLink, Loader2, Send, Smartphone } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
-import { fetcher } from "@/lib/api/fetcher";
 import { buildSmsDeepLink, formatHandleLabel } from "@/lib/imessage-connect";
 import { captureClientProductEvent } from "@/lib/product-events";
 import { cn } from "@/lib/ui/cn";
+import type {
+  ImessageStatus,
+  TelegramStatus,
+} from "./model";
 import { Accent, Headline, Lede } from "./primitives";
 
-interface TelegramStatus {
-  connected: boolean;
-  chats: { chatId: string; displayLabel: string | null }[];
-}
+type RefreshStatus = () => unknown | Promise<unknown>;
 
-interface ImessageStatus {
-  connected: boolean;
-  handles: { senderId: string; displayLabel: string }[];
-}
-
-export function StepConnect({ telegramBotUsername, imessageHandle }: {
+export function StepConnect({
+  imessageHandle,
+  imessageStatus,
+  onRefreshImessage,
+  onRefreshTelegram,
+  telegramBotUsername,
+  telegramStatus,
+}: {
+  imessageStatus: ImessageStatus | undefined;
   telegramBotUsername: string | null;
   imessageHandle: string | null;
+  onRefreshImessage: RefreshStatus;
+  onRefreshTelegram: RefreshStatus;
+  telegramStatus: TelegramStatus | undefined;
 }) {
   const imessageAvailable = Boolean(imessageHandle);
   const telegramAvailable = Boolean(telegramBotUsername);
 
-  const { data: telegramStatus } = useSWR<TelegramStatus>("/api/integrations/telegram", fetcher);
-  const { data: imessageStatus } = useSWR<ImessageStatus>("/api/integrations/imessage/bind", fetcher);
   const anyConnected = Boolean(telegramStatus?.connected || imessageStatus?.connected);
 
   return (
@@ -46,8 +49,16 @@ export function StepConnect({ telegramBotUsername, imessageHandle }: {
         </div>
       ) : (
         <div className="mt-6 grid w-full max-w-[560px] grid-cols-1 gap-4 text-left md:grid-cols-2">
-          {imessageAvailable && <ImessageConnector handle={imessageHandle as string} />}
-          {telegramAvailable && <TelegramConnector />}
+          {imessageAvailable && (
+            <ImessageConnector
+              handle={imessageHandle as string}
+              onRefresh={onRefreshImessage}
+              status={imessageStatus}
+            />
+          )}
+          {telegramAvailable && (
+            <TelegramConnector onRefresh={onRefreshTelegram} status={telegramStatus} />
+          )}
         </div>
       )}
 
@@ -150,21 +161,24 @@ function WaitingRow() {
   );
 }
 
-function ImessageConnector({ handle }: { handle: string }) {
-  const { data, mutate } = useSWR<ImessageStatus>("/api/integrations/imessage/bind", fetcher);
+function ImessageConnector({ handle, onRefresh, status }: {
+  handle: string;
+  onRefresh: RefreshStatus;
+  status: ImessageStatus | undefined;
+}) {
   const [{ connectValue: token, minting, copied, error }, update] = useReducer(mergeState, INITIAL_CONNECTOR_STATE);
   const handleCountAtMint = useRef(0);
 
-  const handles = data?.handles ?? [];
+  const handles = status?.handles ?? [];
   const connected = handles.length > 0;
   const deepLink = token ? buildSmsDeepLink(handle, token) : null;
 
   // Poll while a code is showing so the freshly linked handle appears.
   useEffect(() => {
     if (!token) return;
-    const id = setInterval(() => { void mutate(); }, 3500);
+    const id = setInterval(() => { void onRefresh(); }, 3500);
     return () => clearInterval(id);
-  }, [token, mutate]);
+  }, [token, onRefresh]);
 
   // Once the texted code lands, the handle list grows — clear the code.
   useEffect(() => {
@@ -254,19 +268,21 @@ function ImessageConnector({ handle }: { handle: string }) {
   );
 }
 
-function TelegramConnector() {
-  const { data, mutate } = useSWR<TelegramStatus>("/api/integrations/telegram", fetcher);
+function TelegramConnector({ onRefresh, status }: {
+  onRefresh: RefreshStatus;
+  status: TelegramStatus | undefined;
+}) {
   const [{ connectValue: url, minting, error }, update] = useReducer(mergeState, INITIAL_CONNECTOR_STATE);
   const chatCountAtMint = useRef(0);
 
-  const chats = data?.chats ?? [];
+  const chats = status?.chats ?? [];
   const connected = chats.length > 0;
 
   useEffect(() => {
     if (!url) return;
-    const id = setInterval(() => { void mutate(); }, 3500);
+    const id = setInterval(() => { void onRefresh(); }, 3500);
     return () => clearInterval(id);
-  }, [url, mutate]);
+  }, [onRefresh, url]);
 
   useEffect(() => {
     if (!url || chats.length <= chatCountAtMint.current) return;

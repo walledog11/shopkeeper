@@ -105,6 +105,7 @@ function entryToRow(params: CommonRecordParams & {
     threadId: params.threadId ?? null,
     customerId: params.customerId ?? null,
     executionId: params.executionId ?? null,
+    providerOperationKey: params.entry.providerOperationKey ?? null,
     tool: params.entry.tool,
     category: deriveCategory(params.entry),
     input: toJsonInput(params.entry.input),

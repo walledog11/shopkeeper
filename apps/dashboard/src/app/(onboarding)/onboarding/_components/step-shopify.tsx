@@ -3,8 +3,9 @@ import { Check, ChevronRight, FlaskConical, Loader2, ShoppingBag, Sparkles } fro
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/ui/cn";
+import type { Integration } from "@/types";
 import { Accent, Headline, Lede } from "./primitives";
-import { RETURN_TO, type IntegrationRow, type KbSyncState, type OnboardingData } from "./model";
+import { RETURN_TO, type KbSyncState, type OnboardingData } from "./model";
 
 export function StepShopify({
   data,
@@ -18,7 +19,7 @@ export function StepShopify({
 }: {
   data: OnboardingData;
   connected: boolean;
-  shopifyRow: IntegrationRow | undefined;
+  shopifyRow: Integration | undefined;
   kbSync: KbSyncState;
   onOAuth: (url: string) => void;
   onSimulate: () => Promise<boolean>;

@@ -631,6 +631,7 @@ model AgentAction {
   threadId         String?   @map("thread_id") @db.Uuid
   customerId       String?   @map("customer_id") @db.Uuid
   executionId      String?   @map("execution_id") @db.Uuid
+  providerOperationKey String? @map("provider_operation_key") @db.VarChar(255)
   tool             String    @db.VarChar(64)
   category         String    @db.VarChar(32)
   input            Json      @db.JsonB
@@ -657,6 +658,7 @@ model AgentAction {
   @@index([organizationId, threadId])
   @@index([organizationId, tool, executedAt])
   @@index([organizationId, status])
+  @@index([providerOperationKey])
   @@index([turnId])
   @@index([executionId])
   @@map("agent_actions")

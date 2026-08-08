@@ -141,6 +141,7 @@ export interface ActionEntry {
   tool: string;
   result: string;
   input?: unknown;
+  providerOperationKey?: string;
   durationMs?: number;
   status?: AgentActionStatus;
   mode?: AgentActionMode;

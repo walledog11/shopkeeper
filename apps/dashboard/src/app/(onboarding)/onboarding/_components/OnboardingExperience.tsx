@@ -35,10 +35,11 @@ function OnboardingExperienceView({
 }) {
   const {
     data,
-    emailRow,
+    emailIntegrations,
     exit,
     idx,
     kbSync,
+    messaging,
     shopifyRow,
     status,
     step,
@@ -67,7 +68,21 @@ function OnboardingExperienceView({
       <div className="flex max-h-[calc(100dvh-3rem)] w-full max-w-[900px] flex-col overflow-hidden rounded-[28px] border border-[rgba(255,255,255,0.55)] bg-background/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_1px_2px_rgba(43,33,24,0.05),0_28px_70px_-28px_rgba(43,33,24,0.32)] backdrop-blur-2xl sm:max-h-[calc(100dvh-5rem)]">
         <main className="flex flex-1 flex-col overflow-y-auto px-4 py-6 sm:px-7">
           <div key={step.id} className="m-auto w-full max-w-[640px] animate-[ob-fade-in_360ms_ease]">
-          {stepId === "intro" && <StepIntro data={data} update={handlers.update} />}
+          {status.error && (
+            <div
+              role="alert"
+              className="mx-auto mb-4 max-w-[560px] rounded-xl border border-destructive/20 bg-destructive/[0.06] px-4 py-3 text-center text-[13px] text-destructive"
+            >
+              {status.error}
+            </div>
+          )}
+          {stepId === "intro" && (
+            <StepIntro
+              data={data}
+              onSubmit={() => { void handlers.next(); }}
+              update={handlers.update}
+            />
+          )}
           {stepId === "shopify" && (
             <StepShopify
               data={data}
@@ -82,7 +97,11 @@ function OnboardingExperienceView({
           )}
           {stepId === "connect" && (
             <StepConnect
+              imessageStatus={messaging.imessageStatus}
+              onRefreshImessage={messaging.refreshImessage}
+              onRefreshTelegram={messaging.refreshTelegram}
               telegramBotUsername={channels.telegramBotUsername}
+              telegramStatus={messaging.telegramStatus}
               imessageHandle={channels.imessageHandle}
             />
           )}
@@ -91,13 +110,19 @@ function OnboardingExperienceView({
               data={data}
               update={handlers.update}
               emailConnected={status.hasEmailReady}
-              emailIntegration={emailRow}
+              forwardingIntegration={emailIntegrations.forwarding}
+              gmailIntegration={emailIntegrations.gmail}
               orgReady={status.orgReady}
               orgLoading={status.orgEnsuring}
               orgError={status.orgEnsureFailed}
               onRetryOrg={() => { void handlers.ensureOrganization(); }}
               emailSaving={status.emailSaving}
-              onSaveEmail={() => { void handlers.saveEmailIntegration(data.primaryEmail); }}
+              onSaveForwarding={(email) => {
+                void handlers.saveEmailIntegration(email, "postmark");
+              }}
+              onSaveGmail={(email) => {
+                void handlers.saveEmailIntegration(email, "gmail");
+              }}
               onOAuth={handlers.launchOAuth}
             />
           )}

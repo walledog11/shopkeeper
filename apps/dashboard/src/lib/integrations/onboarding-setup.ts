@@ -2,6 +2,7 @@ import { getEmailProvider } from "@shopkeeper/email/providers"
 
 export type EmailIntegrationLike = {
   platform?: string
+  emailProvider?: "gmail" | "postmark" | null
   fromEmail?: string | null
   externalAccountId?: string
   metadata?: unknown | null

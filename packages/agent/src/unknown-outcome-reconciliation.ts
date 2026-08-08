@@ -54,6 +54,7 @@ function committedSpendCents(result: ShopifyReconciliationProbeResult): number |
 async function findUnknownReservationForAction(params: {
   organizationId: string;
   executionId: string | null;
+  providerOperationKey: string | null;
   tool: string;
   input: Prisma.JsonValue;
 }): Promise<RefundSpendReservation | null> {
@@ -62,7 +63,11 @@ async function findUnknownReservationForAction(params: {
       organizationId: params.organizationId,
       tool: params.tool,
       status: "unknown",
-      ...(params.executionId ? { operationKey: { startsWith: `${params.executionId}:` } } : {}),
+      ...(params.providerOperationKey
+        ? { operationKey: params.providerOperationKey }
+        : params.executionId
+          ? { operationKey: { startsWith: `${params.executionId}:` } }
+          : {}),
     },
     orderBy: { updatedAt: "asc" },
     take: 20,
@@ -126,6 +131,7 @@ export async function reconcileUnknownAgentAction(params: {
   actionId: string;
   organizationId: string;
   executionId: string | null;
+  providerOperationKey: string | null;
   tool: string;
   input: Prisma.JsonValue;
   shopify: ShopifyContext | null;
@@ -145,11 +151,13 @@ export async function reconcileUnknownAgentAction(params: {
     const reservation = await findUnknownReservationForAction({
       organizationId: params.organizationId,
       executionId: params.executionId,
+      providerOperationKey: params.providerOperationKey,
       tool: params.tool,
       input: params.input,
     });
     const operationId = reservation?.operationKey
-      ?? (params.executionId ? `${params.executionId}:reconcile` : undefined);
+      ?? params.providerOperationKey
+      ?? undefined;
     const probe = await probeUnknownShopifyMutation(
       params.tool,
       params.input,
@@ -157,6 +165,12 @@ export async function reconcileUnknownAgentAction(params: {
     );
 
     if (probe.outcome === "committed" || probe.outcome === "no_effect") {
+      // Resolve the money ledger first. If action finalization then fails, its
+      // still-unknown row is safe to probe again; the inverse ordering can leave
+      // a terminal action hiding an unresolved reservation.
+      if (reservation) {
+        await applyReservationProbeResult(reservation, probe);
+      }
       await db.agentAction.updateMany({
         where: { id: params.actionId, status: "unknown" },
         data: {
@@ -165,9 +179,6 @@ export async function reconcileUnknownAgentAction(params: {
           errorDetail: probe.outcome === "no_effect" ? probe.message : null,
         },
       });
-      if (reservation) {
-        await applyReservationProbeResult(reservation, probe);
-      }
       resolved = true;
     }
   }
@@ -223,6 +234,7 @@ export async function reconcileUnknownOutcomesForOrganization(params: {
         tool: true,
         input: true,
         executionId: true,
+        providerOperationKey: true,
       },
     });
     if (unknownActions.length === 0) {
@@ -236,6 +248,7 @@ export async function reconcileUnknownOutcomesForOrganization(params: {
         actionId: action.id,
         organizationId: params.organizationId,
         executionId: action.executionId,
+        providerOperationKey: action.providerOperationKey,
         tool: action.tool,
         input: action.input,
         shopify: params.shopify,

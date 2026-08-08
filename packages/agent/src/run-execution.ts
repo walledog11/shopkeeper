@@ -227,6 +227,9 @@ export async function executeAgentToolCall(
   let status: AgentActionStatus;
   let errorDetail: string | undefined;
   let threw = false;
+  const providerOperationKey = operationScopeId && ctx.shopify
+    ? `${operationScopeId}:${toolCall.id}`
+    : undefined;
 
   if (readOnly && category !== "read") {
     result = `Error: ${toolCall.name} is not available in private ask mode.`;
@@ -242,12 +245,12 @@ export async function executeAgentToolCall(
     errorDetail = result;
   } else {
     try {
-      const toolContext = operationScopeId && ctx.shopify
+      const toolContext = providerOperationKey && ctx.shopify
         ? {
             ...ctx,
             shopify: {
               ...ctx.shopify,
-              operationId: `${operationScopeId}:${toolCall.id}`,
+              operationId: providerOperationKey,
             },
           }
         : ctx;
@@ -305,6 +308,7 @@ export async function executeAgentToolCall(
     tool: toolCall.name,
     result,
     input: toolCall.input,
+    ...(providerOperationKey ? { providerOperationKey } : {}),
     durationMs,
     status,
     category,

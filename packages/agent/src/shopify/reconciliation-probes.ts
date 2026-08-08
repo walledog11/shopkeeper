@@ -1,4 +1,19 @@
-import type { AttachReturnLabelInput, CancelOrderInput, CreateExchangeInput, CreateGiftCardInput, CreateRefundInput, CreateReturnInput, CreateShopifyOrderInput, EditShopifyOrderInput, FulfillOrderInput, IssueDiscountInput, IssueStoreCreditInput, UpdateShopifyOrderAddressInput } from "../tools/index.js";
+import {
+  parseToolInput,
+  type AttachReturnLabelInput,
+  type CancelOrderInput,
+  type CreateExchangeInput,
+  type CreateGiftCardInput,
+  type CreateRefundInput,
+  type CreateReturnInput,
+  type CreateShopifyOrderInput,
+  type EditShopifyOrderInput,
+  type FulfillOrderInput,
+  type IssueDiscountInput,
+  type IssueStoreCreditInput,
+  type ToolName,
+  type UpdateShopifyOrderAddressInput,
+} from "../tools/index.js";
 import { discountCodeForOperation, findDiscountsByCode } from "./discounts.js";
 import { fetchFulfillableFulfillmentOrders, fetchOrderFulfillmentTrackingNumbers } from "./fulfillment.js";
 import { addressMatches, buildOrderAddress } from "./order-address.js";
@@ -19,31 +34,6 @@ export type ShopifyReconciliationProbeResult =
   | { outcome: "committed"; message: string; spentCents?: number | null }
   | { outcome: "no_effect"; message: string }
   | { outcome: "still_unknown"; message: string };
-
-export const RECONCILABLE_SHOPIFY_MUTATION_TOOLS = new Set([
-  "create_refund",
-  "cancel_order",
-  "create_shopify_order",
-  "create_gift_card",
-  "issue_store_credit",
-  "edit_shopify_order",
-  "update_shopify_order_address",
-  "create_return",
-  "create_exchange",
-  "attach_return_label",
-  "issue_discount",
-  "fulfill_order",
-]);
-
-// Shares the operation name FindShopkeeperCreatedOrder with
-// order-creation.ts's CREATED_ORDER_LOOKUP_QUERY but selects fewer fields: an
-// operation name is scoped to its own document, so this is two documents rather
-// than one duplicated. Both are registered and validated separately.
-export const CREATED_ORDER_TAG_SEARCH_QUERY = `query FindShopkeeperCreatedOrder($query: String!) {
-  orders(first: 2, query: $query, sortKey: CREATED_AT, reverse: true) {
-    nodes { legacyResourceId name tags }
-  }
-}`;
 
 export const GIFT_CARDS_BY_CODE_QUERY = `query GiftCardsByCode($query: String!) {
   giftCards(first: 2, query: $query) {
@@ -114,12 +104,6 @@ function operationTag(operationId?: string): string | null {
 function giftCardCode(operationId?: string): string | null {
   if (!operationId) return null;
   return shopifyIdempotencyKey(operationId).replaceAll("-", "").slice(0, 20);
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null;
 }
 
 function stillUnknown(message: string): ShopifyReconciliationProbeResult {
@@ -199,11 +183,9 @@ async function probeCancellation(
   return committed(`Reconciled cancellation for order ${data.order.name ?? orderId}.`);
 }
 
-// Shopify's order *search* is index-backed and lags the write by far more than
-// a probe can wait: order #1008 was still unfindable by `tag:` after three
-// attempts across four seconds, while a REST lookup filtered by email returned
-// it carrying that same tag. So the direct query is the reconciliation path and
-// search is only the fallback for an input with no email to filter on.
+// Shopify's order search index lags writes, so reconciliation uses the required
+// customer email to query orders directly and filters the result by operation
+// tag. A miss remains unknown because visibility cannot prove non-creation.
 const ORDER_LOOKUP_ATTEMPTS = 3;
 const ORDER_LOOKUP_BACKOFF_MS = 2000;
 
@@ -236,18 +218,6 @@ async function findCreatedOrdersByEmail(
     .map((order) => ({ id: String(order.id), name: order.name }));
 }
 
-async function findCreatedOrdersByTagSearch(
-  ctx: ShopifyContext,
-  tag: string,
-): Promise<Array<{ id: string; name?: string }>> {
-  const data = await shopifyGraphql<{
-    orders?: { nodes?: Array<{ legacyResourceId?: string | null; name?: string | null; tags?: string[] | null }> } | null;
-  }>(ctx, CREATED_ORDER_TAG_SEARCH_QUERY, { query: `tag:${tag}` }, { maxRetries: 1 });
-  return (data.orders?.nodes ?? [])
-    .filter((order) => order.tags?.includes(tag))
-    .map((order) => ({ id: order.legacyResourceId ?? "unknown", name: order.name ?? undefined }));
-}
-
 async function probeCreatedOrder(
   input: CreateShopifyOrderInput,
   ctx: ShopifyContext,
@@ -256,13 +226,11 @@ async function probeCreatedOrder(
   if (!tag) {
     return stillUnknown("Order creation reconciliation requires a stable operation identity.");
   }
-  const email = optionalString(input.email);
+  const email = input.email;
 
   for (let attempt = 0; attempt < ORDER_LOOKUP_ATTEMPTS; attempt += 1) {
     if (attempt > 0) await sleep(ORDER_LOOKUP_BACKOFF_MS);
-    const matches = email
-      ? await findCreatedOrdersByEmail(ctx, email, tag)
-      : await findCreatedOrdersByTagSearch(ctx, tag);
+    const matches = await findCreatedOrdersByEmail(ctx, email, tag);
     if (matches.length === 1) {
       return committed(`Reconciled created order ${matches[0]!.name ?? matches[0]!.id}.`);
     }
@@ -277,9 +245,8 @@ async function probeCreatedOrder(
   // this tool means a duplicate real order against a customer.
   // `order-creation.ts`'s own post-failure reconciliation already refuses to
   // conclude from the same miss; this matches it.
-  const forEmail = email ? ` for ${email}` : "";
   return stillUnknown(
-    `No Shopify order with operation tag ${tag} was found${forEmail} after ${ORDER_LOOKUP_ATTEMPTS} attempts. This does not prove the order was not created — review it before creating another.`,
+    `No Shopify order with operation tag ${tag} was found for ${email} after ${ORDER_LOOKUP_ATTEMPTS} attempts. This does not prove the order was not created — review it before creating another.`,
   );
 }
 
@@ -674,45 +641,51 @@ async function probeDiscount(
   );
 }
 
+type ReconciliationProbe = (
+  input: unknown,
+  ctx: ShopifyContext,
+) => Promise<ShopifyReconciliationProbeResult>;
+
+function defineReconciliationProbe<TInput>(
+  tool: ToolName,
+  probe: (input: TInput, ctx: ShopifyContext) => Promise<ShopifyReconciliationProbeResult>,
+): ReconciliationProbe {
+  return (input, ctx) => probe(parseToolInput(tool, input) as TInput, ctx);
+}
+
+const SHOPIFY_RECONCILIATION_PROBES = {
+  create_refund: defineReconciliationProbe<CreateRefundInput>("create_refund", probeRefund),
+  cancel_order: defineReconciliationProbe<CancelOrderInput>("cancel_order", probeCancellation),
+  create_shopify_order: defineReconciliationProbe<CreateShopifyOrderInput>("create_shopify_order", probeCreatedOrder),
+  create_gift_card: defineReconciliationProbe<CreateGiftCardInput>("create_gift_card", probeGiftCard),
+  issue_store_credit: defineReconciliationProbe<IssueStoreCreditInput>("issue_store_credit", probeStoreCredit),
+  edit_shopify_order: defineReconciliationProbe<EditShopifyOrderInput>("edit_shopify_order", probeOrderEdit),
+  update_shopify_order_address: defineReconciliationProbe<UpdateShopifyOrderAddressInput>("update_shopify_order_address", probeOrderAddress),
+  create_return: defineReconciliationProbe<CreateReturnInput>("create_return", probeReturn),
+  create_exchange: defineReconciliationProbe<CreateExchangeInput>("create_exchange", probeReturn),
+  attach_return_label: defineReconciliationProbe<AttachReturnLabelInput>("attach_return_label", probeReturnLabel),
+  issue_discount: defineReconciliationProbe<IssueDiscountInput>("issue_discount", probeDiscount),
+  fulfill_order: defineReconciliationProbe<FulfillOrderInput>("fulfill_order", probeFulfillment),
+} satisfies Partial<Record<ToolName, ReconciliationProbe>>;
+
+export const RECONCILABLE_SHOPIFY_MUTATION_TOOLS: ReadonlySet<string> = new Set(
+  Object.keys(SHOPIFY_RECONCILIATION_PROBES),
+);
+
 export async function probeUnknownShopifyMutation(
   tool: string,
   input: unknown,
   ctx: ShopifyContext,
 ): Promise<ShopifyReconciliationProbeResult> {
-  const record = asRecord(input);
-  if (!record) {
-    return stillUnknown(`Tool ${tool} has no structured input to reconcile.`);
+  const probe = Object.prototype.hasOwnProperty.call(SHOPIFY_RECONCILIATION_PROBES, tool)
+    ? SHOPIFY_RECONCILIATION_PROBES[tool as keyof typeof SHOPIFY_RECONCILIATION_PROBES]
+    : undefined;
+  if (!probe) {
+    return stillUnknown(`Tool ${tool} does not have a Shopify reconciliation probe.`);
   }
 
   try {
-    switch (tool) {
-      case "create_refund":
-        return await probeRefund(record as unknown as CreateRefundInput, ctx);
-      case "cancel_order":
-        return await probeCancellation(record as unknown as CancelOrderInput, ctx);
-      case "create_shopify_order":
-        return await probeCreatedOrder(record as unknown as CreateShopifyOrderInput, ctx);
-      case "create_gift_card":
-        return await probeGiftCard(record as unknown as CreateGiftCardInput, ctx);
-      case "issue_store_credit":
-        return await probeStoreCredit(record as unknown as IssueStoreCreditInput, ctx);
-      case "edit_shopify_order":
-        return await probeOrderEdit(record as unknown as EditShopifyOrderInput, ctx);
-      case "update_shopify_order_address":
-        return await probeOrderAddress(record as unknown as UpdateShopifyOrderAddressInput, ctx);
-      case "create_return":
-        return await probeReturn(record as unknown as CreateReturnInput, ctx);
-      case "create_exchange":
-        return await probeReturn(record as unknown as CreateExchangeInput, ctx);
-      case "attach_return_label":
-        return await probeReturnLabel(record as unknown as AttachReturnLabelInput, ctx);
-      case "issue_discount":
-        return await probeDiscount(record as unknown as IssueDiscountInput, ctx);
-      case "fulfill_order":
-        return await probeFulfillment(record as unknown as FulfillOrderInput, ctx);
-      default:
-        return stillUnknown(`Tool ${tool} does not have a Shopify reconciliation probe.`);
-    }
+    return await probe(input, ctx);
   } catch (error) {
     return stillUnknown(formatShopifyToolError(`${tool} reconciliation probe failed`, error));
   }

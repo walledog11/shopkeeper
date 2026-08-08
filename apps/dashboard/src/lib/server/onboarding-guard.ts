@@ -24,11 +24,10 @@ export async function getIncompleteOnboardingRedirect(
   })
 
   const shopify = integrations.find(integration => integration.platform === "shopify")
-  const email = integrations.find(integration => integration.platform === "email")
   const step = resolveOnboardingRedirectStep({
     onboardingCompletedAt: normalized.onboardingCompletedAt,
     hasShopify: shopify ? isShopifyIntegrationOperational(shopify) : false,
-    hasEmail: isEmailIntegrationConfigured(email),
+    hasEmail: integrations.some(isEmailIntegrationConfigured),
   })
 
   return step ? `/onboarding?step=${step}` : null

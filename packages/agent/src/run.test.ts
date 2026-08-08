@@ -351,6 +351,32 @@ describe("runAgent moduleTools seam", () => {
     });
   });
 
+  it("preserves the provider operation key on the action audit entry", async () => {
+    const moduleExecute = vi.fn().mockResolvedValue({ status: "ok", message: "control effected." });
+    const controlTool = makeModuleTool(moduleExecute);
+    mockCreate
+      .mockResolvedValueOnce(toolUse("test_control_tool", { guidance: "send it" }, "tool_call_7"))
+      .mockResolvedValueOnce(endTurn("All set."));
+
+    const result = await runAgent(
+      makeCtx({ shopify: { shop: "test.myshopify.com", accessToken: "test" } }),
+      "approve it",
+      undefined,
+      undefined,
+      {
+        executionId: "execution_42",
+        moduleTools: { test_control_tool: controlTool },
+      },
+    );
+
+    expect(moduleExecute.mock.calls[0]?.[1]?.shopify?.operationId)
+      .toBe("execution_42:tool_call_7");
+    expect(result.actionsPerformed[0]?.providerOperationKey)
+      .toBe("execution_42:tool_call_7");
+    expect(mockRecordAgentActionsBatch.mock.calls.at(-1)?.[0]?.actions[0]?.providerOperationKey)
+      .toBe("execution_42:tool_call_7");
+  });
+
   it("does not offer module tools in read-only mode", async () => {
     mockCreate.mockResolvedValueOnce(endTurn("Answered."));
     const controlTool = makeModuleTool(vi.fn());

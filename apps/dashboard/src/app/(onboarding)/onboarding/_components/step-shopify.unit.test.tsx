@@ -37,10 +37,13 @@ describe("StepShopify", () => {
       simulatorEnabled: true,
       shopifyRow: {
         id: "shopify-integration",
+        organizationId: "org-1",
         platform: "shopify",
         externalAccountId: "demo-store.shopkeeper.test",
         fromEmail: null,
+        tokenExpiresAt: null,
         metadata: { simulated: true },
+        createdAt: "2026-08-07T00:00:00.000Z",
       },
     }));
 

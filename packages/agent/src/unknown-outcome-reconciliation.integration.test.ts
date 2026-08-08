@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { db } from "@shopkeeper/db";
 import {
   markDailyRefundSpendReservationUnknown,
@@ -11,10 +11,12 @@ import {
 } from "./execution-ledger.js";
 import {
   reconcileStaleReservedRefundSpendReservations,
+  reconcileUnknownAgentAction,
   runUnknownOutcomeReconciliation,
   STALE_CLAIMED_EXECUTION_ERROR,
   STALE_RESERVED_SPEND_ERROR,
 } from "./unknown-outcome-reconciliation.js";
+import { shopifyOperationTag } from "./shopify/client.js";
 
 const ELEVEN_MINUTES_AGO = () => new Date(Date.now() - 11 * 60 * 1000);
 
@@ -22,6 +24,7 @@ describe("unknown outcome reconciliation", () => {
   let orgId: string | null = null;
 
   afterEach(async () => {
+    vi.unstubAllGlobals();
     await cleanupTestData(orgId);
     orgId = null;
   });
@@ -142,5 +145,72 @@ describe("unknown outcome reconciliation", () => {
       where: { id: reserved.reservation.id },
     });
     expect(updated.status).toBe("unknown");
+  });
+
+  it("reconciles an order creation with the exact persisted provider operation key", async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
+    const execution = await db.planExecution.create({
+      data: {
+        planId: crypto.randomUUID(),
+        organizationId: org.id,
+        status: "unknown",
+        claimToken: crypto.randomUUID(),
+        claimedAt: ELEVEN_MINUTES_AGO(),
+        completedAt: new Date(),
+        planHash: "hash",
+        instructionHash: "hash",
+      },
+    });
+    const providerOperationKey = `${execution.id}:tool_call_create_order`;
+    const input = {
+      email: "buyer@example.com",
+      first_name: "Test",
+      last_name: "Buyer",
+      address1: "1 Main St",
+      city: "San Francisco",
+      province: "CA",
+      zip: "94105",
+      country: "US",
+      line_items: [{ variant_id: "1", quantity: 1 }],
+    };
+    const action = await db.agentAction.create({
+      data: {
+        turnId: crypto.randomUUID(),
+        organizationId: org.id,
+        executionId: execution.id,
+        providerOperationKey,
+        tool: "create_shopify_order",
+        category: "action",
+        input,
+        output: "Unknown provider result",
+        status: "unknown",
+        mode: "human_approved",
+        durationMs: 1,
+      },
+    });
+    const tag = shopifyOperationTag(providerOperationKey);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      orders: [{ id: 123, name: "#1001", tags: tag }],
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    })));
+
+    const outcome = await reconcileUnknownAgentAction({
+      actionId: action.id,
+      organizationId: org.id,
+      executionId: execution.id,
+      providerOperationKey,
+      tool: action.tool,
+      input,
+      shopify: { shop: "test.myshopify.com", accessToken: "test" },
+    });
+
+    expect(outcome).toBe("resolved");
+    await expect(db.agentAction.findUniqueOrThrow({ where: { id: action.id } }))
+      .resolves.toMatchObject({ status: "success", providerOperationKey });
+    await expect(db.planExecution.findUniqueOrThrow({ where: { id: execution.id } }))
+      .resolves.toMatchObject({ status: "committed" });
   });
 });

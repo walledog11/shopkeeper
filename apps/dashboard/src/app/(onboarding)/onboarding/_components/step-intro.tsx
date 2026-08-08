@@ -5,13 +5,21 @@ import type { OnboardingData } from "./model";
 
 export function StepIntro({
   data,
+  onSubmit,
   update,
 }: {
   data: OnboardingData;
+  onSubmit: () => void;
   update: (patch: Partial<OnboardingData>) => void;
 }) {
   return (
-    <div className="flex flex-col items-center text-center">
+    <form
+      className="flex flex-col items-center text-center"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit();
+      }}
+    >
       <Headline>
         Customer support, handled.
         <Accent>You approve before anything sends.</Accent>
@@ -49,7 +57,7 @@ export function StepIntro({
       <p className="mt-5 max-w-[420px] text-[12.5px] leading-relaxed text-foreground/45">
         Every reply and Shopify action is recorded, and you start in approval mode — nothing goes out without you.
       </p>
-    </div>
+    </form>
   );
 }
 

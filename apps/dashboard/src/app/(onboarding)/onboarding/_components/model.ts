@@ -1,23 +1,24 @@
 export const RETURN_TO = "/onboarding";
 export const STORAGE_KEY = "concierge-onboarding-v2";
 export type StepId = "intro" | "shopify" | "email" | "connect" | "plan";
-export type OnboardingPlatform = "email" | "shopify";
 
-export interface OnboardingData {
-  storeName: string;
-  founderName: string;
-  primaryEmail: string;
+export interface TelegramStatus {
+  connected: boolean;
+  chats: { chatId: string; displayLabel: string | null }[];
 }
 
-export type IntegrationRow = {
-  id: string;
-  platform: string;
-  emailProvider?: "gmail" | "postmark" | null;
-  externalAccountId: string;
-  fromEmail: string | null;
-  metadata?: unknown;
-  lastActivity?: string | null;
-};
+export interface ImessageStatus {
+  connected: boolean;
+  handles: { senderId: string; displayLabel: string }[];
+}
+
+export interface OnboardingData {
+  forwardingEmail: string;
+  storeName: string;
+  founderName: string;
+  gmailEmail: string;
+  primaryEmail: string;
+}
 
 export type KbSyncState = {
   status: "idle" | "syncing" | "done" | "error";
@@ -26,15 +27,17 @@ export type KbSyncState = {
 };
 
 export const DEFAULT_DATA: OnboardingData = {
+  forwardingEmail: "",
   storeName: "",
   founderName: "",
+  gmailEmail: "",
   primaryEmail: "",
 };
 
-export const STEPS: Array<{ id: StepId; label: string }> = [
-  { id: "intro",   label: "Your operator" },
-  { id: "shopify", label: "Shopify" },
-  { id: "email",   label: "Channels" },
-  { id: "connect", label: "Your phone" },
-  { id: "plan",    label: "Review" },
+export const STEPS: ReadonlyArray<{ id: StepId }> = [
+  { id: "intro" },
+  { id: "shopify" },
+  { id: "email" },
+  { id: "connect" },
+  { id: "plan" },
 ];

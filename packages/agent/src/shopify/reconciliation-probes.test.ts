@@ -9,6 +9,20 @@ const ctx = {
   operationId: "execution-1:refund_step",
 };
 
+const createdOrderInput = {
+  email: "buyer@example.com",
+  first_name: "Test",
+  last_name: "Buyer",
+  address1: "1 Main St",
+  city: "San Francisco",
+  province: "CA",
+  zip: "94105",
+  country: "US",
+  line_items: [{ variant_id: "1", quantity: 1 }],
+};
+
+const giftCardInput = { amount: "25.00", customer_id: "123" };
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -159,7 +173,7 @@ describe("probeUnknownShopifyMutation", () => {
 
     const result = await probeUnknownShopifyMutation(
       "create_shopify_order",
-      { email: "buyer@example.com", line_items: [{ variant_id: "1", quantity: 1 }] },
+      createdOrderInput,
       { ...ctx, operationId: "execution-1:create_order" },
     );
 
@@ -182,7 +196,7 @@ describe("probeUnknownShopifyMutation", () => {
 
       const pending = probeUnknownShopifyMutation(
         "create_shopify_order",
-        { email: "buyer@example.com", line_items: [{ variant_id: "1", quantity: 1 }] },
+        createdOrderInput,
         { ...ctx, operationId: "execution-1:create_order" },
       );
       const [result] = await Promise.all([pending, vi.runAllTimersAsync()]);
@@ -193,31 +207,19 @@ describe("probeUnknownShopifyMutation", () => {
     }
   });
 
-  // Without an email there is nothing to filter on, so search is all that is
-  // left — and it is allowed to need a retry.
-  it("falls back to the tag search when the input carries no email", async () => {
-    vi.useFakeTimers();
-    try {
-      const tag = shopifyOperationTag("execution-1:create_order");
-      const fetchMock = vi.fn()
-        .mockResolvedValueOnce(jsonResponse({ data: { orders: { nodes: [] } } }))
-        .mockResolvedValueOnce(jsonResponse({
-          data: { orders: { nodes: [{ legacyResourceId: "9001", name: "#1007", tags: [tag] }] } },
-        }));
-      vi.stubGlobal("fetch", fetchMock);
+  it("rejects incomplete persisted order input before querying Shopify", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
 
-      const pending = probeUnknownShopifyMutation(
-        "create_shopify_order",
-        { line_items: [{ variant_id: "1", quantity: 1 }] },
-        { ...ctx, operationId: "execution-1:create_order" },
-      );
-      const [result] = await Promise.all([pending, vi.runAllTimersAsync()]);
+    const result = await probeUnknownShopifyMutation(
+      "create_shopify_order",
+      { line_items: [{ variant_id: "1", quantity: 1 }] },
+      { ...ctx, operationId: "execution-1:create_order" },
+    );
 
-      expect(result).toMatchObject({ outcome: "committed" });
-      expect(String(fetchMock.mock.calls[0]![0])).toContain("graphql");
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(result).toMatchObject({ outcome: "still_unknown" });
+    expect(result.message).toContain("input.email is required");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   // The defect this guards: reporting a confident no_effect for an order that
@@ -232,7 +234,7 @@ describe("probeUnknownShopifyMutation", () => {
 
       const pending = probeUnknownShopifyMutation(
         "create_shopify_order",
-        { email: "buyer@example.com", line_items: [{ variant_id: "1", quantity: 1 }] },
+        createdOrderInput,
         { ...ctx, operationId: "execution-1:create_order" },
       );
       const [result] = await Promise.all([pending, vi.runAllTimersAsync()]);
@@ -263,7 +265,7 @@ describe("probeUnknownShopifyMutation", () => {
 
     const result = await probeUnknownShopifyMutation(
       "create_gift_card",
-      { amount: "25.00" },
+      giftCardInput,
       { ...ctx, operationId: giftCardOperationId },
     );
 
@@ -289,7 +291,7 @@ describe("probeUnknownShopifyMutation", () => {
 
     const result = await probeUnknownShopifyMutation(
       "create_gift_card",
-      { amount: "25.00" },
+      giftCardInput,
       { ...ctx, operationId: giftCardOperationId },
     );
 
@@ -314,7 +316,7 @@ describe("probeUnknownShopifyMutation", () => {
 
     const result = await probeUnknownShopifyMutation(
       "create_gift_card",
-      { amount: "25.00" },
+      giftCardInput,
       { ...ctx, operationId: giftCardOperationId },
     );
 
@@ -327,7 +329,7 @@ describe("probeUnknownShopifyMutation", () => {
 
     const result = await probeUnknownShopifyMutation(
       "create_gift_card",
-      { amount: "25.00" },
+      giftCardInput,
       { ...ctx, operationId: undefined },
     );
 
@@ -686,5 +688,78 @@ describe("probeUnknownShopifyMutation", () => {
 
     expect(result).toMatchObject({ outcome: "still_unknown" });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  const fulfillmentOrdersResponse = (remainingQuantity: number) => jsonResponse({
+    data: {
+      order: {
+        id: "gid://shopify/Order/456",
+        fulfillmentOrders: {
+          edges: remainingQuantity > 0 ? [{
+            node: {
+              id: "gid://shopify/FulfillmentOrder/1",
+              status: "OPEN",
+              lineItems: {
+                edges: [{
+                  node: {
+                    id: "gid://shopify/FulfillmentOrderLineItem/1",
+                    remainingQuantity,
+                    lineItem: { name: "Canary tee" },
+                  },
+                }],
+              },
+            },
+          }] : [],
+        },
+      },
+    },
+  });
+
+  it("commits an untracked fulfillment when nothing remains fulfillable", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(fulfillmentOrdersResponse(0)));
+
+    const result = await probeUnknownShopifyMutation(
+      "fulfill_order",
+      { order_id: "456" },
+      ctx,
+    );
+
+    expect(result).toMatchObject({ outcome: "committed" });
+  });
+
+  it("rules out an untracked fulfillment while items remain fulfillable", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(fulfillmentOrdersResponse(1)));
+
+    const result = await probeUnknownShopifyMutation(
+      "fulfill_order",
+      { order_id: "456" },
+      ctx,
+    );
+
+    expect(result).toMatchObject({ outcome: "no_effect" });
+  });
+
+  it("commits a fulfillment carrying this call's tracking number", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(fulfillmentOrdersResponse(0))
+      .mockResolvedValueOnce(jsonResponse({
+        data: {
+          order: {
+            fulfillments: [{
+              id: "gid://shopify/Fulfillment/1",
+              status: "SUCCESS",
+              trackingInfo: [{ number: "TRACK-123" }],
+            }],
+          },
+        },
+      })));
+
+    const result = await probeUnknownShopifyMutation(
+      "fulfill_order",
+      { order_id: "456", tracking_number: "TRACK-123" },
+      ctx,
+    );
+
+    expect(result).toMatchObject({ outcome: "committed" });
   });
 });

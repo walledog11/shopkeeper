@@ -25,7 +25,6 @@ import {
 } from "./fulfillment.js";
 import { CREATED_ORDER_LOOKUP_QUERY } from "./order-creation.js";
 import {
-  CREATED_ORDER_TAG_SEARCH_QUERY,
   CUSTOMER_STORE_CREDIT_TRANSACTIONS_QUERY,
   GIFT_CARDS_BY_CODE_QUERY,
   RECENT_GIFT_CARDS_QUERY,
@@ -55,10 +54,6 @@ export const SHOPIFY_QUERY_DOCUMENTS: Record<string, ShopifyQueryDocument> = {
   },
   createdOrderLookup: {
     document: CREATED_ORDER_LOOKUP_QUERY,
-    variables: { query: "tag:shopkeeper-op-validation" },
-  },
-  createdOrderTagSearch: {
-    document: CREATED_ORDER_TAG_SEARCH_QUERY,
     variables: { query: "tag:shopkeeper-op-validation" },
   },
   giftCardsByCode: {
