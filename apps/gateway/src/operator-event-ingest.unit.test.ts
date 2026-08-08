@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { JOB, QUEUE } from './constants.js';
+import { JOB } from './constants.js';
 
 const queueAdd = vi.fn();
 const queueGetJob = vi.fn();
@@ -17,7 +17,7 @@ vi.mock('./operator-event-store.js', () => ({
 }));
 
 import { ensureOperatorEventEnqueued, ingestAndEnqueueOperatorEvent } from './operator-event-ingest.js';
-import { ingestOperatorEvent } from './operator-event-store.js';
+import { ingestOperatorEvent, type IngestOperatorEventResult } from './operator-event-store.js';
 
 describe('ensureOperatorEventEnqueued', () => {
   beforeEach(() => {
@@ -89,7 +89,7 @@ describe('ingestAndEnqueueOperatorEvent', () => {
     vi.mocked(ingestOperatorEvent).mockResolvedValue({
       created: true,
       event: { id: 'event-4', organizationId: 'org-4' },
-    });
+    } as IngestOperatorEventResult);
 
     const result = await ingestAndEnqueueOperatorEvent({
       organizationId: 'org-4',
