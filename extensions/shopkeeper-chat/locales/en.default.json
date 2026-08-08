@@ -1,0 +1,13 @@
+{
+  "shopkeeper_chat": {
+    "launcher_label": "Chat with us",
+    "panel_title": "Chat with us",
+    "close": "Close chat",
+    "message_label": "Message",
+    "message_placeholder": "Type a message…",
+    "send": "Send",
+    "greeting": "Hi! Ask us anything about our products or policies.",
+    "error_start": "We couldn't start the chat just now. Please try again shortly.",
+    "error_send": "Not delivered. Check your connection and try again."
+  }
+}

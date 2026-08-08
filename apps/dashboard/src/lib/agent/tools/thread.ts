@@ -105,7 +105,8 @@ export async function sendReply(
   if (
     thread.channelType !== CHANNEL_TYPE.IG_DM &&
     thread.channelType !== CHANNEL_TYPE.TIKTOK &&
-    thread.channelType !== CHANNEL_TYPE.EMAIL
+    thread.channelType !== CHANNEL_TYPE.EMAIL &&
+    thread.channelType !== CHANNEL_TYPE.SHOPIFY_CHAT
   ) {
     return toolError(`Error: channel dispatch not implemented for ${thread.channelType}.`);
   }

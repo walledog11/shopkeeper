@@ -23,6 +23,10 @@ export const publicRoutePatterns = [
   "/api/agent/io-send-internal(.*)",
   "/api/messages/auto-ack(.*)",
   "/api/messages/internal(.*)",
+  // First shopper-facing public route on this list — everything else here is a
+  // webhook or an OAuth callback. Authentication is Shopify's app-proxy
+  // signature plus a session bearer token, enforced in the routes themselves.
+  "/api/storefront-chat/proxy(.*)",
 ] as const;
 
 const signedInNoOrgRoutePatterns = [

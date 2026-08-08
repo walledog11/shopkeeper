@@ -3,6 +3,9 @@ export const CHANNEL_TYPE = {
   EMAIL: 'email',
   TIKTOK: 'tiktok',
   SHOPIFY: 'shopify',
+  // Storefront chat widget. Distinct from SHOPIFY, which is merchant-side and
+  // falls back to email — this one delivers into the shopper's open widget.
+  SHOPIFY_CHAT: 'shopify_chat',
   IMESSAGE: 'imessage',
   SMS: 'sms',
   SMS_AGENT: 'sms_agent',

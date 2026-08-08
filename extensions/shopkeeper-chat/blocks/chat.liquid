@@ -1,0 +1,63 @@
+{% comment %}
+  Shopkeeper storefront chat launcher. Mounts an isolated widget into a
+  Shadow DOM so the theme's CSS cannot reach it and ours cannot leak out.
+  All backend calls go through the app proxy at /apps/shopkeeper-chat, which
+  Shopify signs — the widget never talks to app.useshopkeeper.com directly.
+{% endcomment %}
+
+<div
+  id="shopkeeper-chat-root"
+  data-shop="{{ shop.permanent_domain }}"
+  data-proxy="/apps/{{ block.settings.proxy_subpath | default: 'shopkeeper-chat' }}"
+  data-greeting="{{ block.settings.greeting | escape }}"
+  data-launcher-label="{{ block.settings.launcher_label | escape }}"
+  data-accent="{{ block.settings.accent_color }}"
+  data-position="{{ block.settings.position }}"
+  data-page-url="{{ canonical_url }}"
+></div>
+
+<script src="{{ 'shopkeeper-chat.js' | asset_url }}" defer></script>
+
+{% schema %}
+{
+  "name": "Shopkeeper Chat",
+  "target": "body",
+  "settings": [
+    {
+      "type": "text",
+      "id": "launcher_label",
+      "label": "Launcher label",
+      "default": "Chat with us"
+    },
+    {
+      "type": "text",
+      "id": "greeting",
+      "label": "Greeting",
+      "default": "Hi! Ask us anything about our products or policies."
+    },
+    {
+      "type": "color",
+      "id": "accent_color",
+      "label": "Accent color",
+      "default": "#1f1b16"
+    },
+    {
+      "type": "select",
+      "id": "position",
+      "label": "Position",
+      "options": [
+        { "value": "right", "label": "Bottom right" },
+        { "value": "left", "label": "Bottom left" }
+      ],
+      "default": "right"
+    },
+    {
+      "type": "text",
+      "id": "proxy_subpath",
+      "label": "App proxy subpath",
+      "info": "Only change this if the app proxy subpath was customized.",
+      "default": "shopkeeper-chat"
+    }
+  ]
+}
+{% endschema %}
