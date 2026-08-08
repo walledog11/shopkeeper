@@ -284,11 +284,65 @@ switch does not survive contact with the actual app.
 What remains true: version 9 becomes the released config, so its *contents* must
 be right. That risk is now handled by `--no-release` plus Dev Dashboard review.
 
-### Unrelated production issue found
+### Unrelated production issue found — investigated 2026-08-07, already fixed
 
 `shopkeeper-production` monitoring reports a **50.0% webhook failure rate over 7
 days, flagged "High"**, at 494 ms p90 response time. Nothing to do with M0a —
-found while confirming the app's version history. Not investigated here.
+found while confirming the app's version history.
+
+**Every failure predates 2026-08-04 ~23:35 UTC. Nothing is broken now.** The
+window is trailing, so the number decays on its own as clean days accumulate.
+
+Per-topic: `orders/updated` 17 deliveries / 41.176% failed, `orders/cancelled`
+7 / 71.429%, `orders/fulfilled` 1 / 100%, `orders/create` 1 / 0%. That is 26
+deliveries and 13 failures — 50.0% exactly.
+
+The route has no per-topic branch except the `orders/create` review enqueue, so
+a topic-correlated rate has to be time-correlated. It is:
+
+- `orders/fulfilled` had **one** delivery and it failed. The only fulfillment in
+  the window is order #1018 on 2026-07-31.
+- Order #1019 (2026-08-04 23:13 UTC, created and cancelled) produced **no rows**.
+- Order #1020 (23:35 UTC) produced the **first** webhook-derived message in the
+  database, at 23:35:29 UTC. Every delivery after it succeeded, including 6/6 on
+  Aug 7.
+- `orders/create` shows 0% because it was only registered on Aug 7 at 07:24 UTC
+  — see the topic-name bug in `b1bd4fb8` — and exactly one order followed it.
+
+The failures were **fast pre-I/O rejections**, not timeouts or slow 500s.
+Measured against production: a wrong-secret 401 returns in 24–125 ms, a success
+carrying a real order payload in 144–362 ms. The two single-delivery rows
+bracket those exactly (117 ms failed, 250 ms succeeded), and failure rate is
+monotonically anticorrelated with average response time across all four topics.
+
+Not an outage — Postmark and Gmail inbound landed on the gateway every day
+across the failure window. Not a code change — `webhooks-shopify.ts` was
+untouched between 2026-07-24 and 2026-08-07, and no push landed at the
+transition. That leaves a Railway environment change, and the only
+Shopify-route-specific input is `SHOPIFY_APP_SECRET`.
+
+**Unproven step:** Railway exposes no variable history through the CLI and keeps
+only 20 deployments (back to Aug 7), so the variable that changed cannot be
+recovered. That it is fixed is measured; the cause is inferred.
+
+**The local secret is not the bug — do not "fix" it.** `apps/gateway/.env` holds
+`708f4bfa…` against production's `38150f36…`, and that is correct:
+`apps/dashboard/.env.local` pins `SHOPIFY_CLIENT_ID = d572ec7e…`, so local dev
+runs against the **`shopkeeper-dev`** app and `708f4bfa…` is that app's secret.
+Overwriting it with production's would break the local Shopify flow.
+
+What it does mean is that the local gateway pairs a **dev Shopify app** with the
+**production database**, so a script that loads the local env and signs a payload
+will 401 against production while reading real production rows. Sign prod probes
+with the value pulled from Railway, not from `.env`. It also shows how the dev
+secret could plausibly reach Railway by copy-paste — the mechanism behind the
+inferred cause above, not evidence for it.
+
+Current state, verified 2026-08-07: 55+ signed probes across all five topics
+plus 9 replays of real order payloads, all 200. Use
+`apps/gateway/src/scripts/inspect-shopify-webhooks.ts` to list what Shopify
+actually holds — the REST `webhooks.json` list is the only place per-shop
+subscriptions are visible, and they never appear in app config.
 
 ## Outstanding
 
