@@ -219,6 +219,45 @@ Which reduces M0a to: copy the export to the repo root as `shopify.app.toml`,
 rehearse it on a dev app, verify the round-trip, then link production. The file
 content is a solved problem; the remaining risk is entirely in the deploy path.
 
+## Rehearsal evidence — 2026-08-07
+
+Run against **`shopkeeper-dev`** (client `d572ec7e98dcdf62bed17032929fbc46`, org
+`40511769` "The Case Market"). Note there is no `palette-dev` app; "Palette" is
+a Shopkeeper workspace name, not a Shopify app. `shopkeeper-dev` is the local
+development app — `application_url` was `http://localhost:3000/...` with a
+26-scope set much broader than production's 15.
+
+Proven:
+
+- **The production export is a valid CLI config.** The CLI validated it and
+  staged it without error, so nothing in the exported file needs fixing before
+  M0a.
+- **`deploy --no-release` stages without touching the live app.** It created
+  `shopkeeper-dev-4` while `shopkeeper-dev-3` stayed `★ active`, confirmed via
+  `app versions list`. This is the single most useful finding here: **the
+  production migration can be staged and reviewed in the Dev Dashboard before
+  anything goes live.**
+- **The staged version renders the intended values exactly** — the production 15
+  scopes, both redirect URLs, `https://app.useshopkeeper.com`, `embedded = true`,
+  `api_version 2026-04`, and no webhook subscriptions.
+- **Rollback history is real** — four versions listed, restorable with
+  `app release --version`.
+- **`embedded = true` is not a production anomaly.** `shopkeeper-dev` carries it
+  too, as does `api_version = "2026-04"`. Both apps were set up the same way, so
+  the divergence noted above is house style rather than misconfiguration.
+
+Flag conflicts worth knowing: `--no-release` cannot be combined with
+`--allow-updates` or `--allow-deletes`; the CLI errors out. And run the CLI from
+the **repo root** with `--path`, not from inside the scratch directory — `npx
+shopify` outside the workspace resolves a `shopify` package from the registry
+instead of the pinned `@shopify/cli` devDependency.
+
+Not yet proven: what a **release** does to an existing install — the
+re-authorization prompt and whether managed installation survives. That needs
+`app release --version shopkeeper-dev-4` and an inspection of the install, which
+also breaks local-dev OAuth until `release --version shopkeeper-dev-3` restores
+it.
+
 ## Outstanding
 
 Console and CLI steps that cannot be done from the repo.

@@ -93,6 +93,13 @@ re-releases an earlier one, with `shopify app versions list` to enumerate them.
 `deploy --no-release` stages a version without releasing it at all. So a bad
 config deploy is recoverable by re-releasing the prior version.
 
+**Verified on a real app, not just from docs.** A rehearsal on `shopkeeper-dev`
+staged the production export as `shopkeeper-dev-4` while `shopkeeper-dev-3`
+remained active — the live app was untouched and the staged version was
+reviewable in the Dev Dashboard first. Evidence in the reference doc. This means
+M0a's production step can be **staged, inspected, and only then released**,
+which is a materially safer shape than this plan originally assumed.
+
 What does not obviously reverse is the **management model** switch: moving the
 app from Dashboard-configured to CLI/TOML-authoritative. Treat that as the
 irreversible act, and the config contents as recoverable. This is a narrower
