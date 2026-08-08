@@ -84,10 +84,11 @@ function prepareToolCall(
 async function enforceToolPolicy(
   definition: AgentToolDefinition,
   input: unknown,
+  ctx: BaseAgentContext,
   settings?: OrgSettings,
 ): Promise<string | null> {
   const s = resolveAgentSettings(settings);
-  const staticResult = checkParsedStaticToolPolicy(definition, input, s);
+  const staticResult = checkParsedStaticToolPolicy(definition, input, s, { authState: ctx.authState });
   if (staticResult.blocked) return formatPolicyError(staticResult.reason);
 
   return null;
@@ -304,7 +305,7 @@ export async function executeTool(
   const prepared = prepareToolCall(name, args);
   if (!prepared.ok) return prepared.result.message;
 
-  const policyError = await enforceToolPolicy(prepared.definition, prepared.input, settings);
+  const policyError = await enforceToolPolicy(prepared.definition, prepared.input, ctx, settings);
   if (policyError) return policyError;
   const capabilityError = unmetToolCapability(prepared.definition, ctx);
   if (capabilityError) return capabilityError.message;
@@ -322,7 +323,7 @@ export async function executeToolStructured(
   const prepared = prepareToolCall(name, args);
   if (!prepared.ok) return prepared.result;
 
-  const policyError = await enforceToolPolicy(prepared.definition, prepared.input, settings);
+  const policyError = await enforceToolPolicy(prepared.definition, prepared.input, ctx, settings);
   if (policyError) return toolError(policyError);
   const capabilityError = unmetToolCapability(prepared.definition, ctx);
   if (capabilityError) return capabilityError;
@@ -361,7 +362,7 @@ export async function executeToolWithStatus(
     };
   }
 
-  const policyError = await enforceToolPolicy(prepared.definition, prepared.input, settings);
+  const policyError = await enforceToolPolicy(prepared.definition, prepared.input, ctx, settings);
   if (policyError) return { result: policyError, status: "policy_block" };
   const capabilityError = unmetToolCapability(prepared.definition, ctx);
   if (capabilityError) return { result: capabilityError.message, status: "error" };

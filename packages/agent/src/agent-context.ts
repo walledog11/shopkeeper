@@ -70,12 +70,22 @@ export interface AgentRecentMessage {
   attachments?: AgentMessageAttachment[];
 }
 
+// Who the agent is talking to, when that is not simply "the merchant's known
+// customer". `guest` is an anonymous storefront shopper: no verified identity,
+// and nothing they say — an order number, an email, a Shopify ID — makes them
+// one. It lives on the base context because enforcement happens in the shared
+// executor, which is module-agnostic. Absent means the channel carries its own
+// identity (email address, IG sender, operator binding) as it always has.
+// M2 adds "verified" here when Customer Account OAuth binds a real customer.
+export type AgentAuthState = "guest";
+
 // Module-agnostic agent context: the org identity and the conversation any
 // module's agent loop operates on. Future modules compose their own context on
 // top of this base.
 export interface BaseAgentContext {
   orgId: string;
   orgName: string;
+  authState?: AgentAuthState;
   recentMessages: AgentRecentMessage[];
   shopify: {
     shop: string;

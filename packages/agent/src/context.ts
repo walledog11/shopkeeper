@@ -1,7 +1,7 @@
 import { db } from "@shopkeeper/db";
 import { parseClassifierSignals } from "./classifier-signals.js";
 import { shopifyRestJson, type ShopifyContext } from "./shopify/client.js";
-import { isOperatorChannel } from "./thread-constants.js";
+import { CHANNEL_TYPE, isOperatorChannel } from "./thread-constants.js";
 import { MEMORY_OVERRIDE_TAG, memoryOverrideTargetIds } from "./kb-memory.js";
 import { hydrateAgentMessageImages } from "./image-attachments.js";
 import logger from "./logger.js";
@@ -202,6 +202,10 @@ export async function buildContext(
 
   const isOperator = isOperatorChannel(thread.channelType);
   const isGatewayOperator = thread.channelType === "sms_agent";
+  // The single place a conversation becomes a guest. Storefront chat is the only
+  // channel whose sender is anonymous by construction: every other channel
+  // carries an identity the merchant's provider already established.
+  const isGuest = thread.channelType === CHANNEL_TYPE.SHOPIFY_CHAT;
 
   // Cross-ticket memory: the customer's most recent resolved tickets. Skipped in
   // operator channels, where the thread's "customer" is the operator/concierge
@@ -371,6 +375,7 @@ export async function buildContext(
 
   return {
     ...base,
+    ...(isGuest ? { authState: "guest" as const } : {}),
     thread: {
       id: thread.id,
       status: thread.status,

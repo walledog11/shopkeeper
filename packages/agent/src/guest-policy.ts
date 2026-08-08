@@ -1,0 +1,45 @@
+import type { BaseAgentContext } from "./agent-context.js";
+
+// What an anonymous storefront shopper is allowed to reach. An allowlist, not a
+// denylist: a tool added to the registry tomorrow is unavailable to guests until
+// someone decides otherwise, which is the failure direction we want.
+//
+// Everything customer-specific is absent by construction. No order reads, no
+// customer reads, no Shopify mutation — not because the prompt discourages them
+// but because the tools are not in the set and the executor refuses them if a
+// plan names one anyway.
+//
+// Two exclusions worth stating, since neither is an order read or a mutation:
+// `send_email` is out because a guest has no verified address — the only address
+// available is one they typed, and mailing it on request turns the widget into
+// an open relay aimed at strangers. `get_support_stats` is out because it
+// reports the merchant's business, not the shopper's question.
+export const GUEST_TOOL_NAMES = [
+  // Answer from what is public: policy, FAQ, product information.
+  "search_kb",
+  "search_shopify_products",
+  // Talk back, and get a human when that is the honest answer.
+  "send_reply",
+  "escalate_to_human",
+  "ask_operator",
+  // Internal housekeeping. None of it reaches the shopper or Shopify, and
+  // without it a storefront ticket cannot be tagged, noted or closed like every
+  // other ticket in the inbox.
+  "add_internal_note",
+  "update_thread_status",
+  "update_thread_tag",
+] as const;
+
+const GUEST_TOOL_SET: ReadonlySet<string> = new Set(GUEST_TOOL_NAMES);
+
+export function isGuestContext(ctx: Pick<BaseAgentContext, "authState"> | null | undefined): boolean {
+  return ctx?.authState === "guest";
+}
+
+export function isGuestAllowedTool(name: string): boolean {
+  return GUEST_TOOL_SET.has(name);
+}
+
+export function guestToolBlockReason(name: string): string {
+  return `${name} is not available in storefront chat, where the visitor is anonymous and unverified. Tell them plainly that you cannot look up order or account details here, and hand off — point them to email or escalate to the merchant.`;
+}

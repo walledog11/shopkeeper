@@ -2,6 +2,7 @@ import { buildSplitCachedSystemPrompt } from "./ai/anthropic.js";
 import { pickModel } from "./ai/index.js";
 import type { AgentContext } from "./agent-context.js";
 import { runAgentLoop } from "./agent-loop.js";
+import { GUEST_TOOL_NAMES, isGuestContext } from "./guest-policy.js";
 import { isOperatorChannel } from "./intent.js";
 import { isMerchantAnswerPlanningInstruction } from "./kb-learned.js";
 import logger from "./logger.js";
@@ -58,7 +59,13 @@ export async function planAgent(
   // A merchant-answer replan must reply to the customer with the supplied answer,
   // never re-park the ticket — so drop ask_operator from its tool set.
   const merchantAnswerReplan = isMerchantAnswerPlanningInstruction(instruction);
-  let tools = selectAgentTools(settings);
+  // An anonymous storefront shopper plans against the guest allowlist. Narrowing
+  // here rather than at execution means the model never drafts a plan step it
+  // would be refused for, so the shopper is never promised a lookup that cannot
+  // happen.
+  let tools = isGuestContext(ctx)
+    ? selectAgentTools(settings, GUEST_TOOL_NAMES)
+    : selectAgentTools(settings);
   if (merchantAnswerReplan) {
     tools = tools.filter(tool => tool.name !== "ask_operator");
   }

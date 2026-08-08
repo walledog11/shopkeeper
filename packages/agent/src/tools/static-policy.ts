@@ -1,3 +1,5 @@
+import type { AgentAuthState } from "../agent-context.js";
+import { guestToolBlockReason, isGuestAllowedTool } from "../guest-policy.js";
 import type { OrgSettings } from "../types.js";
 import type {
   AgentToolDefinition,
@@ -10,11 +12,23 @@ export type StaticPolicyResult =
   | { blocked: false }
   | { blocked: true; reason: string };
 
+export interface StaticPolicyOptions {
+  authState?: AgentAuthState;
+}
+
 export function checkParsedStaticToolPolicy(
   definition: AgentToolDefinition,
   input: unknown,
   settings: OrgSettings,
+  options?: StaticPolicyOptions,
 ): StaticPolicyResult {
+  // First, and independent of settings: no workspace configuration can widen
+  // what an anonymous visitor reaches. Tool selection already omits these, so
+  // arriving here means a plan named a tool the guest set never offered.
+  if (options?.authState === "guest" && !isGuestAllowedTool(definition.name)) {
+    return { blocked: true, reason: guestToolBlockReason(definition.name) };
+  }
+
   if (definition.availability === "retired") {
     return {
       blocked: true,
@@ -68,9 +82,18 @@ export function checkStaticToolPolicy(
   name: string,
   args: unknown,
   settings: OrgSettings,
+  options?: StaticPolicyOptions,
 ): StaticPolicyResult {
   const definition = getToolDefinition(name);
   if (!definition) return { blocked: false };
+
+  // Ahead of parsing: whether a guest may call a tool at all does not depend on
+  // whether the arguments are well-formed, and reporting a validation error for
+  // a tool they can never call would be a misleading answer to the real
+  // question.
+  if (options?.authState === "guest" && !isGuestAllowedTool(definition.name)) {
+    return { blocked: true, reason: guestToolBlockReason(definition.name) };
+  }
 
   let input: unknown;
   try {
@@ -79,5 +102,5 @@ export function checkStaticToolPolicy(
     return { blocked: true, reason: formatToolInputValidationError(name, error) };
   }
 
-  return checkParsedStaticToolPolicy(definition, input, settings);
+  return checkParsedStaticToolPolicy(definition, input, settings, options);
 }

@@ -6,6 +6,7 @@ import { buildSystemPromptParts, buildComposerAskPrompt } from "./prompt.js";
 import { isOperatorChannel } from "./intent.js";
 import { buildMessageHistory } from "./message-history.js";
 import { runAgentLoop } from "./agent-loop.js";
+import { GUEST_TOOL_NAMES, isGuestAllowedTool, isGuestContext } from "./guest-policy.js";
 import type { ActionEntry, BaseAgentContext, AgentResult } from "./agent-context.js";
 import type { PersistedAgentAction } from "./agent-actions.js";
 import { createModelUsageMetrics, hashInstructionForLog } from "./usage.js";
@@ -182,9 +183,15 @@ export async function runAgent(
   if (!isSupportContext(ctx)) {
     return finish({ summary: "This agent run requires a support context.", actionsPerformed }, "unsupported_context");
   }
+  // Guest narrowing composes with read-only rather than replacing it: a
+  // composer-ask on a storefront thread gets the intersection, which is the
+  // stricter of the two in every case.
+  const guestMode = isGuestContext(ctx);
   const selectedCoreTools = readOnly
-    ? selectAgentTools(settings, READ_TOOL_NAMES)
-    : selectAgentTools(settings).filter((tool) => (
+    ? selectAgentTools(settings, guestMode
+        ? READ_TOOL_NAMES.filter((name) => isGuestAllowedTool(name))
+        : READ_TOOL_NAMES)
+    : selectAgentTools(settings, guestMode ? GUEST_TOOL_NAMES : null).filter((tool) => (
         !gatewayOperatorMode || !OPERATOR_HIDDEN_TOOL_NAMES.has(tool.name)
       ));
   const tools = readOnly
