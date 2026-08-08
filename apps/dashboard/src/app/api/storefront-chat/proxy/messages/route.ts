@@ -3,14 +3,27 @@ import { db } from "@shopkeeper/db";
 import { getGatewayBaseUrl } from "@/lib/server/gateway-url";
 import { verifyAppProxySignature, isProxyTimestampFresh } from "@/lib/shopify/app-proxy";
 import { verifySessionToken, type StorefrontTokenPayload } from "@/lib/storefront-chat/session-token";
+import {
+  isStorefrontChatGloballyEnabled,
+  isStorefrontChatEnabledForIntegration,
+} from "@/lib/storefront-chat/enabled";
 
 const MAX_TEXT_LENGTH = 4000;
+
+interface AuthorizedSession {
+  session: StorefrontTokenPayload;
+  threadId: string | null;
+}
 
 // Both checks are required and neither is redundant: the proxy signature proves
 // the request came through Shopify for this shop, the bearer token proves it is
 // this session. Without the token any shopper on the storefront could read
 // another shopper's conversation by guessing a session id.
-function authorize(request: Request): { url: URL; session: StorefrontTokenPayload } | NextResponse {
+async function authorize(request: Request): Promise<AuthorizedSession | NextResponse> {
+  if (!isStorefrontChatGloballyEnabled()) {
+    return NextResponse.json({ error: "disabled" }, { status: 403 });
+  }
+
   const appSecret = process.env.SHOPIFY_APP_SECRET;
   if (!appSecret) return NextResponse.json({ error: "not configured" }, { status: 503 });
 
@@ -24,26 +37,34 @@ function authorize(request: Request): { url: URL; session: StorefrontTokenPayloa
   const session = token ? verifySessionToken(token) : null;
   if (!session) return NextResponse.json({ error: "invalid session" }, { status: 401 });
 
-  return { url, session };
+  // The merchant flag is re-read here rather than trusted from the token: a
+  // token minted while chat was enabled otherwise keeps working for its whole
+  // hour of TTL, which is not what a kill switch means. The same read proves
+  // the session is still live, so it costs no extra round trip.
+  const record = await db.storefrontChatSession.findFirst({
+    where: { id: session.sessionId, organizationId: session.orgId, revokedAt: null },
+    select: { threadId: true, integration: { select: { metadata: true } } },
+  });
+  if (!record) return NextResponse.json({ error: "session not found" }, { status: 404 });
+  if (!isStorefrontChatEnabledForIntegration(record.integration.metadata)) {
+    return NextResponse.json({ error: "disabled" }, { status: 403 });
+  }
+
+  return { session, threadId: record.threadId };
 }
 
 export async function GET(request: Request) {
-  const authorized = authorize(request);
+  const authorized = await authorize(request);
   if (authorized instanceof NextResponse) return authorized;
-  const { session } = authorized;
+  const { session, threadId } = authorized;
 
-  const record = await db.storefrontChatSession.findFirst({
-    where: { id: session.sessionId, organizationId: session.orgId, revokedAt: null },
-    select: { threadId: true },
-  });
-  if (!record) return NextResponse.json({ error: "session not found" }, { status: 404 });
-  if (!record.threadId) return NextResponse.json({ messages: [] });
+  if (!threadId) return NextResponse.json({ messages: [] });
 
   // Internal notes and agent transcripts never leave Shopkeeper — only what the
   // customer is meant to see.
   const messages = await db.message.findMany({
     where: {
-      threadId: record.threadId,
+      threadId,
       organizationId: session.orgId,
       senderType: { in: ["customer", "agent", "ai"] },
     },
@@ -63,7 +84,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const authorized = authorize(request);
+  const authorized = await authorize(request);
   if (authorized instanceof NextResponse) return authorized;
   const { session } = authorized;
 

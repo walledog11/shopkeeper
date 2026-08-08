@@ -119,9 +119,14 @@
         locale: document.documentElement.lang || null
       })
     }).then(function (r) {
+      // Disabled is not an error the shopper should read about: the widget
+      // simply is not there. Either switch — platform or merchant — lands here,
+      // and removing the host takes the shadow root and the poller with it.
+      if (r.status === 403) { root.remove(); return null; }
       if (!r.ok) throw new Error("bootstrap " + r.status);
       return r.json();
     }).then(function (data) {
+      if (!data) return;
       session = data;
       if (data.sessionId) {
         store({ sessionId: data.sessionId, resumeToken: data.resumeToken || prior.resumeToken });

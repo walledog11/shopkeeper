@@ -7,10 +7,20 @@ import {
   createResumeSecret,
   hashResumeSecret,
 } from "@/lib/storefront-chat/session-token";
+import {
+  isStorefrontChatGloballyEnabled,
+  isStorefrontChatEnabledForIntegration,
+} from "@/lib/storefront-chat/enabled";
 
 const SESSION_TTL_DAYS = 30;
 
 export async function POST(request: Request) {
+  // Checked before the signature so a disabled platform does no work at all,
+  // and reveals nothing beyond the feature being off.
+  if (!isStorefrontChatGloballyEnabled()) {
+    return NextResponse.json({ error: "disabled" }, { status: 403 });
+  }
+
   const appSecret = process.env.SHOPIFY_APP_SECRET;
   if (!appSecret) {
     return NextResponse.json({ error: "not configured" }, { status: 503 });
@@ -28,10 +38,15 @@ export async function POST(request: Request) {
 
   const integration = await db.integration.findFirst({
     where: { platform: "shopify", externalAccountId: shopDomain },
-    select: { id: true, organizationId: true },
+    select: { id: true, organizationId: true, metadata: true },
   });
   if (!integration) {
     return NextResponse.json({ error: "shop not connected" }, { status: 404 });
+  }
+  // A connected store is not a chat-enabled store. Until the merchant turns it
+  // on, the app embed being active in the theme is not consent.
+  if (!isStorefrontChatEnabledForIntegration(integration.metadata)) {
+    return NextResponse.json({ error: "disabled" }, { status: 403 });
   }
 
   const body = await request.json().catch(() => ({}));
