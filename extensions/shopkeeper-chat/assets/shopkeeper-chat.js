@@ -9,10 +9,16 @@
   var greeting = root.dataset.greeting || "";
   var launcherLabel = root.dataset.launcherLabel || "Chat with us";
 
+  // Inline, because a theme rule like `div:empty { display: none }` out-specifies
+  // anything we can write in :host. Belt and braces with the light-DOM child in
+  // chat.liquid: that stops :empty matching, this survives any other theme rule
+  // that targets the host by id or class.
+  root.style.display = "block";
+
   var shadow = root.attachShadow({ mode: "open" });
   shadow.innerHTML = [
     "<style>",
-    ":host { all: initial; }",
+    ":host { all: initial; display: block; }",
     "*, *::before, *::after { box-sizing: border-box; }",
     ".launcher {",
     "  position: fixed; bottom: 20px; " + side + ": 20px; z-index: 2147483000;",

@@ -3,6 +3,14 @@
   Shadow DOM so the theme's CSS cannot reach it and ours cannot leak out.
   All backend calls go through the app proxy at /apps/shopkeeper-chat, which
   Shopify signs — the widget never talks to app.useshopkeeper.com directly.
+
+  The <span hidden> is load-bearing. Themes commonly ship a tidy-up rule like
+  `div:empty { display: none }` (Dawn does), and a shadow root does NOT count as
+  light-DOM children for :empty — so the host matches, gets display:none, and
+  the entire widget silently collapses to 0x0 while every element inside it
+  reports as visible. A light-DOM child that never renders (the shadow root
+  replaces it, there is no slot) is what stops the rule matching. The JS also
+  sets an inline display, because `div:empty` out-specifies `:host`.
 {% endcomment %}
 
 <div
@@ -14,7 +22,7 @@
   data-accent="{{ block.settings.accent_color }}"
   data-position="{{ block.settings.position }}"
   data-page-url="{{ canonical_url }}"
-></div>
+><span hidden></span></div>
 
 <script src="{{ 'shopkeeper-chat.js' | asset_url }}" defer></script>
 
