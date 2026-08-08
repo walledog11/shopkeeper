@@ -6,11 +6,11 @@ merchant's existing ticket, planning, approval, and Shopify-action pipelines.
 
 **In progress, and further along than the milestone list below implies.** M0a and
 M0b both shipped on 2026-08-07, in one `shopify.app.toml` released as
-`shopkeeper-production-9`. M1's transport shipped the same evening and, since the
-migration was applied on 2026-08-08, a shopper message *can* reach a ticket —
-none has yet. The guest tool policy and the spend containment that make that
-surface safe do **not** exist. Read the M1 status block before anything else in
-this file.
+`shopkeeper-production-9`. M1's transport shipped the same evening, the migration
+was applied on 2026-08-08, and **later that day a real shopper message travelled
+the whole inbound pipeline on the dev store** — session, ticket, classification,
+summary, cached plan, operator notify. The guest tool policy exists; the spend
+containment does not. Read the M1 status block before anything else in this file.
 
 This is the only new **customer-origin** channel on the table. Nothing else
 proposed adds a way for a customer to reach the merchant.
@@ -39,7 +39,8 @@ forcing every already-connected merchant to re-authorize.
   reasoning but not, in the end, as a separate deploy.
   ✅ **Shipped 2026-08-07**, in the same file and version as M0a.
 - **M1** — Guest-only storefront chat. The shippable milestone. 🚧 **Partially
-  built** — transport end to end, no guest policy, no budget, no kill switch.
+  built** — transport, guest policy and kill switches all shipped and the inbound
+  half is proven live on the dev store; no budget, no merchant-facing setup UI.
 - **M2** — Verified sessions. Deferred; sketched, not specified.
 
 M0 was split in two on 2026-08-07, once it was confirmed that declaring an app
@@ -273,9 +274,19 @@ Met: version 9 declares `[app_proxy]` (`/apps/shopkeeper-chat` →
 requests reached the bootstrap route, which is how the signature bug in
 `a0cad69c` was found and fixed.
 
-Not met: the grant/backfill state on the connected store is unchecked, and the
-merchant-facing explanation was never written. Both are small, and both are
-still owed.
+Not met: the merchant-facing explanation was never written, and is still owed.
+
+**Partial answer on the grant state, 2026-08-08.** The connected integration's
+recorded `oauthScopes` holds 11 scopes and `write_app_proxy` is not among them.
+This is *not* evidence of a broken proxy — Shopify-signed requests reach the
+bootstrap route and did so again during the live run above, because that scope
+governs the app *declaring* a proxy through the CLI, not a merchant's install
+serving one. Treat the stored list as possibly stale rather than authoritative:
+it holds 11 entries where this plan describes a 15-scope set, so it is more
+likely a partial record written at OAuth time than a true picture of the grant.
+Reading it out of `Integration.metadata` is not the same as asking Shopify, and
+the real check — does the connected store show a re-authorization prompt — is
+still unperformed.
 
 ## M1 — Guest-only storefront chat 🚧 partially built
 
@@ -284,6 +295,42 @@ knowledge base and public product information, escalates, and asks the merchant.
 It discloses nothing customer-specific and mutates nothing, ever, on any input.
 
 ### Status — 2026-08-08
+
+**Turned on and proven inbound, 2026-08-08.** Both switches were flipped in
+production and a real message was sent from the dev storefront. Every inbound
+link worked on the first attempt, with no code change required:
+
+| Link | Evidence |
+| --- | --- |
+| Platform switch | `STOREFRONT_CHAT_ENABLED=true` added to Vercel production (stored *Sensitive*, so its value cannot be read back through the CLI or dashboard — to change it, remove and re-add). Production redeployed from the then-current deployment so no code rode along. Confirmed live because `bootstrap` began returning `401 invalid signature` instead of `403 disabled` — the global check at the top of the route runs before the signature check, so the two states are distinguishable without a signed request. |
+| Merchant switch | `Integration.metadata.storefrontChat.enabled = true` on `9598dee1…`, org Palette, shop `palette-dev-3peukw16.myshopify.com`. Written as a merge so the existing `oauthScopes` survived. There is still no UI for this. |
+| Gateway | `/internal/storefront-chat/message` returns `401` without the internal secret and a bogus sibling path returns `404`, proving the route is mounted and deployed, on a Railway build from after every storefront commit. |
+| Bootstrap | Session `56283855…` created, bound to the org, integration and storefront host. No customer and no thread yet, as designed — an abandoned widget open costs one row and never an empty ticket. |
+| Ingest → ticket | Thread `a45c5ff9…`, `channelType: shopify_chat`, `status: open`, one `senderType: customer` message. |
+| Classification + summary | Tag `General`, `aiSummary` "Customer wrote a single word: \"Testing.\"" |
+| Plan precompute | `cachedPlan` v5: a single `send_reply` greeting, `routing.decision: auto_execute`, one warning. |
+| Operator notify | A pending plan for this thread landed on operator context `member:ae24ef3b…` nine seconds after the thread was created. |
+| Autonomy held | Org settings are `autonomyTier: guarded`, `autoExecuteMode: off`, so the plan parked for approval and did **not** auto-execute despite the planner's `auto_execute` routing preference. Correct precedence. |
+
+**Not yet proven, and it is the other half of the loop.** Nothing has exercised
+approve → dispatch → `storefrontChatSession` lookup → persist → widget poll. The
+run above stopped at a parked plan. Until an approval delivers a reply into the
+widget, the milestone's "done when" is unmet.
+
+**The guest policy is also still untested live.** "Testing" produced a plain
+greeting on `send_reply`, which is on the allowlist, so nothing tried to reach an
+order. The refusal path is covered by 50 unit tests and by zero real messages.
+The message that would prove it asks for an order by number and supplies an email
+— the case the policy exists for.
+
+**A warning fires on every storefront plan and should not.** The cached plan
+carried *"Couldn't find a Shopify customer — verify the correct account is linked
+before approving."* For a guest shopper there is no Shopify customer by
+construction, so this appears on every plan and asks the merchant to do something
+impossible. It is the same shape as the July `search_kb` benign-warning bug that
+wrongly blocked `auto_execute` and `quick_reply` — a warning that is always
+present is a warning nobody reads, and this one may also be suppressing
+`quick_reply` classification. Exempt it for `shopify_chat` threads.
 
 **Built** (`c3733e33`, `de2ee92f`, `97232cc0`, `a0cad69c`):
 
@@ -318,7 +365,9 @@ It discloses nothing customer-specific and mutates nothing, ever, on any input.
   trusted from the session token, so disabling takes effect immediately instead
   of at the end of the token's hour. The widget removes itself on a 403 rather
   than showing an error. Setting the merchant flag is a `metadata` write for
-  now — the integration-card toggle is still unbuilt.
+  now — the integration-card toggle is still unbuilt. **Both switches are now on
+  for the Palette dev store** (see the table above); they remain off everywhere
+  else, and off is still the default for any new install.
 - **The guest tool policy** (2026-08-08). `authState: "guest"` on the agent
   context, set in `buildContext` for `shopify_chat` threads and nowhere else.
   Enforced in three places: the planner and the run loop select from
@@ -351,7 +400,10 @@ shoppers:
   Instagram agents with it.
 - **Merchant setup** — no integration-card toggle, theme-editor deep link, or
   Inbox-bubble warning. The switches exist; the UI to flip the merchant one does
-  not, so enabling a store means writing `Integration.metadata` directly.
+  not, so enabling a store means writing `Integration.metadata` directly — which
+  is exactly how the dev store was enabled on 2026-08-08. Tolerable for a store
+  the author controls, and the blocker for the "one merchant workspace in
+  approval mode" rollout step, which cannot ask a merchant to run a script.
 - **Session revocation and retention.** The `(integration_id, revoked_at)` index
   exists for the sweep; the sweep does not. Nothing revokes on uninstall,
   disconnect, or workspace deletion, and `retention.ts` / `purge.ts` do not know
@@ -359,13 +411,24 @@ shoppers:
 - **Most of the test plan**, and the eval gate — which becomes owed the moment
   guest state touches the planner.
 
-**Standing risk.** Both switches are off, so no shopper reaches the agent today.
-With the guest policy landed, what a shopper *could* reach is now bounded — no
-order or customer data, no Shopify mutation, at any autonomy tier. What is still
-unbounded is **spend**: an anonymous stranger's messages bill the org's daily LLM
-cap, and exhausting it takes the merchant's email and Instagram agents down with
-it. **Do not turn on `STOREFRONT_CHAT_ENABLED` outside a controlled test store
-until the storefront budget exists.**
+**Standing risk — changed 2026-08-08, both switches are now on.** They are on for
+exactly one store: `palette-dev-3peukw16.myshopify.com`, a dev store the author
+controls, which is the controlled test store this plan always contemplated. That
+is the intended shape, not a breach of the gate — but the gate is now the *only*
+thing standing between an anonymous stranger and the org's LLM budget, so it is
+worth stating plainly what it rests on.
+
+With the guest policy landed, what a shopper can reach is bounded — no order or
+customer data, no Shopify mutation, at any autonomy tier. What is still unbounded
+is **spend**: an anonymous stranger's messages bill the org's daily LLM cap, and
+exhausting it takes the merchant's email and Instagram agents down with it. There
+is no per-session, per-IP, or per-shop limit anywhere in the path.
+
+The exposure today is a dev store with no traffic and no inbound links, so the
+realistic risk is low. It stops being low the moment this is enabled on a store
+with a public URL. **Do not enable `storefrontChat` on any store that is not a
+controlled test store until the storefront budget exists.** The platform switch
+being on means that is now a one-field DB write away, with nothing to catch it.
 
 ### Data model
 
@@ -575,9 +638,14 @@ email and Instagram agent down with it.
   enabled. The sequence is still the right one for the remaining work; treat it
   as the plan for landing the flags, not as a description of what happened.
 - Gate globally with `STOREFRONT_CHAT_ENABLED=false` and per integration with
-  `storefrontChat.enabled=false`.
+  `storefrontChat.enabled=false`. ✅ Both switches built and defaulting off;
+  both deliberately turned **on** in production on 2026-08-08 for the dev store.
 - Enable on the controlled dev store, then one merchant workspace in approval
-  mode, before any live-autonomy store.
+  mode, before any live-autonomy store. ✅ **Dev store done 2026-08-08** —
+  `palette-dev-3peukw16.myshopify.com`, in `guarded`/`off`, which is approval
+  mode. The next step in this sequence is blocked twice over: on the storefront
+  budget, and on a merchant-flippable toggle, since a real merchant workspace
+  cannot be enabled with a DB write.
 - Add `shopify_chat` to ticket filters, channel labels, analytics unions,
   operational alerts, provider-send metrics, integration health, and production
   audit scripts.
@@ -593,6 +661,15 @@ A shopper on the dev store can ask a question, the merchant sees a ticket with a
 plan, approving it delivers the reply into the widget, and a shopper attempting
 order disclosure through any phrasing gets an honest handoff — with the
 storefront budget provably isolated from the org cap.
+
+Against that bar, as of 2026-08-08:
+
+- ✅ A shopper on the dev store can ask a question.
+- ✅ The merchant sees a ticket with a plan, and is notified on a bound operator
+  channel.
+- ❌ Approving it delivers the reply into the widget — **never exercised**.
+- ❌ Order disclosure gets an honest handoff — unit-tested, never exercised live.
+- ❌ Storefront budget isolated from the org cap — does not exist.
 
 ## M2 — Verified sessions (deferred)
 
@@ -645,7 +722,9 @@ and the surface is live enough to be pointed at a storefront by a theme toggle.
 
 The merchant condition still governs **enabling** it: no store that is not a
 controlled test store until the guest policy, the storefront budget, and the
-kill switches exist.
+kill switches exist. Two of those three now exist, and on 2026-08-08 the feature
+was enabled on exactly the controlled test store that condition permits. The
+budget is the one still missing, and it is what keeps this at one dev store.
 
 **Do not answer "not yet" with "do WhatsApp instead"** (decision 2026-08-07).
 WhatsApp is a merchant-control channel, not a customer-origin one — see
