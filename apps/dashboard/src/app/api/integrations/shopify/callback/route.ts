@@ -342,6 +342,17 @@ async function resolveShopifyAuthorizedShop({
   return { ok: true, shop: authorizedShop };
 }
 
+// Every reconnect replays all five topics, and Shopify 422s the ones that are
+// already subscribed to this address. That is the expected outcome, not a
+// provider failure — alerting on it fired four false alarms per reconnect and
+// buried the 422s that do matter, like a topic name Shopify rejects outright.
+function isDuplicateWebhookError(err: unknown): boolean {
+  if (!(err instanceof ShopifyRequestError) || err.status !== 422) return false;
+  const address = (err.payload as { errors?: { address?: unknown } } | undefined)?.errors?.address;
+  const messages = Array.isArray(address) ? address : [address];
+  return messages.some((m) => typeof m === 'string' && m.includes('has already been taken'));
+}
+
 async function registerShopifyWebhooks({
   accessToken,
   integrationId,
@@ -379,6 +390,10 @@ async function registerShopifyWebhooks({
         );
         logger.info({ topic, shop }, '[Shopify OAuth] Webhook registered');
       } catch (err) {
+        if (isDuplicateWebhookError(err)) {
+          logger.info({ topic, shop }, '[Shopify OAuth] Webhook already registered');
+          return;
+        }
         const detail = err instanceof ShopifyRequestError ? err.payload ?? {} : err;
         logger.warn({ topic, shop, err: detail }, '[Shopify OAuth] Webhook registration failed');
         void recordProviderSendFailure('shopify', 'webhook_registration', orgId, {

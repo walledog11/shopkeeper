@@ -237,6 +237,37 @@ describe('POST /api/integrations/shopify/callback', () => {
     );
   });
 
+  it('stays silent when a reconnect re-registers a topic Shopify already holds', async () => {
+    mockSavedCookies({
+      shopify_oauth_state: 'state_123',
+      shopify_oauth_org: org!.clerkOrgId,
+      shopify_oauth_user: 'usr_oauth',
+      shopify_oauth_shop: 'shopify-callback-fixture.myshopify.com',
+      shopify_oauth_return: '/dashboard/settings',
+    });
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'shpat_fixture', scope: 'read_orders' }))
+      .mockResolvedValueOnce(jsonResponse({ shop: { id: 7, name: 'Fixture Shop', myshopify_domain: 'shopify-callback-fixture.myshopify.com' } }))
+      .mockResolvedValueOnce(jsonResponse({ webhook: { id: 1 } }))
+      .mockResolvedValueOnce(jsonResponse({ errors: { address: ['for this topic has already been taken'] } }, { status: 422 }))
+      .mockResolvedValueOnce(jsonResponse({ errors: { address: ['for this topic has already been taken'] } }, { status: 422 }))
+      .mockResolvedValueOnce(jsonResponse({ errors: { address: ['for this topic has already been taken'] } }, { status: 422 }))
+      .mockResolvedValueOnce(jsonResponse({ errors: { address: ['for this topic has already been taken'] } }, { status: 422 }));
+
+    const res = await POST(new Request(signedCallbackUrl({
+      code: 'oauth_code',
+      shop: 'shopify-callback-fixture.myshopify.com',
+      state: 'state_123',
+    })));
+
+    expect(res.status).toBe(303);
+    expect(mockRecordProviderSendFailure).not.toHaveBeenCalled();
+    expect(mockLogger.warn).not.toHaveBeenCalledWith(
+      expect.anything(),
+      '[Shopify OAuth] Webhook registration failed',
+    );
+  });
+
   it('rejects a store owned by another workspace before registering webhooks', async () => {
     const otherOrg = await createTestOrg();
     extraOrgIds.push(otherOrg.id);
