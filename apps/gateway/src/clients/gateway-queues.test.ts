@@ -62,6 +62,10 @@ describe('getGatewayBullMqQueue', () => {
     });
   });
 
+  it('rejects an empty queue name', () => {
+    expect(() => getGatewayBullMqQueue('   ')).toThrow('Queue name is required');
+  });
+
   it('closes and clears cached queues on shutdown', async () => {
     const inbound = getGatewayBullMqQueue(QUEUE.INBOUND);
     await closeGatewayBullMqQueues();
