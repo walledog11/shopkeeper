@@ -16,6 +16,17 @@ export function appProxyCanonicalString(url: URL): string {
     else grouped.set(key, [value]);
   }
 
+  // Shopify always signs `logged_in_customer_id`, sending it empty for a guest.
+  // Something between Shopify and this handler drops empty-valued query params,
+  // so by the time we read request.url the key is simply gone — while Shopify's
+  // HMAC still counts it. Verified against a real request: omitting it yields
+  // 7bf7e920…, restoring it yields 1edef597…, which is what Shopify sent.
+  // Without this every guest request fails signature verification, and the
+  // failure looks exactly like a wrong app secret.
+  if (!grouped.has("logged_in_customer_id")) {
+    grouped.set("logged_in_customer_id", [""]);
+  }
+
   // Shopify builds each "key=value" first and sorts the resulting strings, not
   // the keys. Sorting keys instead differs whenever one key is a prefix of
   // another, so match their order exactly.
