@@ -4,15 +4,18 @@ A text-only "Shopkeeper Chat" theme app extension on the existing Shopify app,
 so shoppers can ask a question on the storefront and have it land in the
 merchant's existing ticket, planning, approval, and Shopify-action pipelines.
 
-**Not scheduled.** Written down so the shape is decided, not because it is next.
-It adds a public, unauthenticated surface plus a one-way Shopify
-app-configuration migration, which is why it carries its own milestones. See
-"When to pick this up" below.
+**In progress, and further along than the milestone list below implies.** M0a and
+M0b both shipped on 2026-08-07, in one `shopify.app.toml` released as
+`shopkeeper-production-9`. M1's transport shipped the same evening and, since the
+migration was applied on 2026-08-08, a shopper message *can* reach a ticket —
+none has yet. The guest tool policy and the spend containment that make that
+surface safe do **not** exist. Read the M1 status block before anything else in
+this file.
 
 This is the only new **customer-origin** channel on the table. Nothing else
 proposed adds a way for a customer to reach the merchant.
 
-Last reviewed: 2026-08-07.
+Last reviewed: 2026-08-08.
 
 ## Scope decision
 
@@ -31,8 +34,12 @@ because guest mode needs no `customer_read_*` scopes, M1 can ship without
 forcing every already-connected merchant to re-authorize.
 
 - **M0a** — Shopify app-configuration migration. No features, no new scopes.
-- **M0b** — App proxy and `write_app_proxy`. The scope change, isolated.
-- **M1** — Guest-only storefront chat. The shippable milestone.
+  ✅ **Shipped 2026-08-07**, together with M0b.
+- **M0b** — App proxy and `write_app_proxy`. The scope change, isolated in
+  reasoning but not, in the end, as a separate deploy.
+  ✅ **Shipped 2026-08-07**, in the same file and version as M0a.
+- **M1** — Guest-only storefront chat. The shippable milestone. 🚧 **Partially
+  built** — transport end to end, no guest policy, no budget, no kill switch.
 - **M2** — Verified sessions. Deferred; sketched, not specified.
 
 M0 was split in two on 2026-08-07, once it was confirmed that declaring an app
@@ -41,6 +48,14 @@ a CLI migration *and* an unchanged scope set, and those turned out to be
 incompatible. Separating them keeps the one-way, every-merchant-affecting
 migration free of any scope change, so that if a re-authorization prompt appears
 it belongs to exactly one milestone and one cause.
+
+**The split survived as reasoning and dissolved as sequencing** (2026-08-07).
+Once the rehearsal established that `shopkeeper-production` was already a
+versioned app, M0a had no irreversible step left to isolate — and a two-deploy
+sequence isolating nothing is just two deploys. Both landed in one file, in
+`de2ee92f`. The falsifiability the split bought is therefore gone: if a
+re-authorization prompt appeared, it belongs to `write_app_proxy` by elimination
+rather than by construction, because that is the only scope version 9 added.
 
 ## Prerequisites
 
@@ -67,10 +82,16 @@ Not part of this plan, and settled before M1 starts.
   real traffic. Budget M1 for a second SSE implementation, not for plumbing.
 
 
-## M0a — Shopify app configuration migration
+## M0a — Shopify app configuration migration ✅ shipped 2026-08-07
 
 No features, and **no scope change**. If this milestone raises a
 re-authorization prompt on any store, something went wrong.
+
+**Outcome.** `shopify.app.toml` is in the repo root — the verbatim production
+export, unchanged apart from the M0b additions — and was deployed as
+`shopkeeper-production-9` in `de2ee92f`. `-8` remains available to re-release.
+The reasoning below is kept as the record of why this was treated as dangerous
+and why that turned out to be wrong.
 
 ### Why this is separate
 
@@ -178,13 +199,25 @@ and reviewing in the Dev Dashboard before releasing.
   subscriptions at all. So the TOML must **not** declare them — doing so would
   double-deliver every order event.
 
-### Done when
+### Done when — and what was actually verified
 
-Production app is CLI-configured, a fresh install on a dev store grants exactly
-the pre-migration scope set, an existing connected merchant's integration keeps
-working with no re-auth prompt, and the exported reference config is checked in.
+Original bar: production app is CLI-configured, a fresh install on a dev store
+grants exactly the pre-migration scope set, an existing connected merchant's
+integration keeps working with no re-auth prompt, and the exported reference
+config is checked in.
 
-## M0b — App proxy and `write_app_proxy`
+Met: the config is checked in, production is CLI-configured at version 9, and
+the dev-app rehearsal proved an **existing** install survives a released config
+change — `shopkeeper-dev` kept its single install at its original June 14 date
+across a 26→15 scope reduction.
+
+Not met, and worth knowing rather than assuming: **no fresh install was
+performed** on a dev store to confirm what version 9 grants, and **no connected
+production merchant has been checked for a re-authorization prompt** since the
+release. There is one connected Shopify store in production, so that check is
+cheap when someone wants it.
+
+## M0b — App proxy and `write_app_proxy` ✅ shipped 2026-08-07
 
 The scope change, isolated from the migration and from the widget. Small, but it
 is the only milestone in this plan that touches what existing merchants have
@@ -228,17 +261,111 @@ not have to ship in the same change, and it should not.
   configured proxy pointing at an unbuilt route is inert, and shipping the scope
   early is the entire point of the split.
 
-### Done when
+### Done when — and what was actually verified
 
-The production app declares the proxy, `write_app_proxy` is granted or backfilled
-on every connected store, no merchant's existing integration has degraded, and
-the prompt has been explained to whoever saw it.
+Original bar: the production app declares the proxy, `write_app_proxy` is granted
+or backfilled on every connected store, no merchant's existing integration has
+degraded, and the prompt has been explained to whoever saw it.
 
-## M1 — Guest-only storefront chat
+Met: version 9 declares `[app_proxy]` (`/apps/shopkeeper-chat` →
+`https://app.useshopkeeper.com/api/storefront-chat/proxy`) with
+`write_app_proxy` in `[access_scopes]`, and the proxy resolves — Shopify-signed
+requests reached the bootstrap route, which is how the signature bug in
+`a0cad69c` was found and fixed.
+
+Not met: the grant/backfill state on the connected store is unchecked, and the
+merchant-facing explanation was never written. Both are small, and both are
+still owed.
+
+## M1 — Guest-only storefront chat 🚧 partially built
 
 Shoppers can start immediately and anonymously. Shopkeeper answers from the
 knowledge base and public product information, escalates, and asks the merchant.
 It discloses nothing customer-specific and mutates nothing, ever, on any input.
+
+### Status — 2026-08-08
+
+**Built** (`c3733e33`, `de2ee92f`, `97232cc0`, `a0cad69c`):
+
+- The theme app extension in `extensions/shopkeeper-chat` — a `body`-targeted
+  app embed rendering into a Shadow DOM, with launcher label, greeting, accent
+  and position as theme settings. It **polls**; SSE was deliberately deferred.
+- `ChannelType.shopify_chat` and `StorefrontChatSession`, migration
+  `20260807120000_add_storefront_chat` — **applied to production 2026-08-08**.
+  It had been merged and deployed but never run, so until that morning bootstrap
+  would have 500'd on session create and no shopper message could land. Nothing
+  has yet flowed end to end in production.
+- `POST /api/storefront-chat/proxy/bootstrap` and `GET|POST
+  /api/storefront-chat/proxy/messages` on the dashboard, both behind the
+  app-proxy signature *and* a session bearer token; tokens signed with
+  `STOREFRONT_CHAT_SIGNING_SECRET` (set in Vercel production), resume secrets
+  stored hashed.
+- The proxy signature verifier, separate from the webhook one, including the
+  restored empty `logged_in_customer_id` that Shopify signs and the request
+  drops — established by measurement against a real request, with unit tests.
+- Gateway `/internal/storefront-chat/message` → `processInboundMessage`, so
+  storefront messages inherit dedupe, classification, summary, plan precompute,
+  operator notify, and the existing `threads_one_open_per_customer` P2002
+  re-find rather than a parallel pipeline.
+- Outbound: `sendReply`'s channel allowlist and `dispatch-message.ts` persist
+  into the session's thread, refusing a revoked session.
+- Channel plumbing across `CHANNEL_INFO`, the gateway `CHANNEL` constants, the
+  analytics union, and the agent package's `CHANNEL_TYPE`.
+- **The kill switches** (2026-08-08). `STOREFRONT_CHAT_ENABLED` is the platform
+  switch and `Integration.metadata.storefrontChat.enabled` the merchant's;
+  **both default off**, and a storefront is chattable only when both are on.
+  Enforced in bootstrap and re-read on every `/messages` call rather than
+  trusted from the session token, so disabling takes effect immediately instead
+  of at the end of the token's hour. The widget removes itself on a 403 rather
+  than showing an error. Setting the merchant flag is a `metadata` write for
+  now — the integration-card toggle is still unbuilt.
+- **The guest tool policy** (2026-08-08). `authState: "guest"` on the agent
+  context, set in `buildContext` for `shopify_chat` threads and nowhere else.
+  Enforced in three places: the planner and the run loop select from
+  `GUEST_TOOL_NAMES`, and `checkStaticToolPolicy` refuses anything outside it
+  ahead of argument parsing, so a plan that names a forbidden tool is blocked at
+  execution rather than merely absent from the tool list. The allowlist is
+  knowledge base, product search, `send_reply`, escalation, merchant questions,
+  and internal thread housekeeping — no order read, no customer read, no Shopify
+  mutation, and additionally no `send_email` (a guest's address is unverified)
+  or `get_support_stats` (the merchant's business, not the shopper's question).
+  A guest-only prompt branch tells the agent to say plainly that it cannot look
+  up orders here and hand off.
+- Tests: cross-tenant data-model tests, app-proxy signature unit tests, switch
+  enforcement on both proxy routes, and 50 guest-policy tests — every registry
+  tool classified allowed-or-forbidden so a new tool cannot land unclassified,
+  refusal asserted per forbidden tool and across every autonomy tier including
+  `full`, and non-guest results asserted unchanged.
+
+**Not built** — everything that makes the surface safe to point at real
+shoppers:
+
+- **The local acknowledgement in approval mode** — the one bullet of the guest
+  section still outstanding. The widget shows the shopper's own message
+  optimistically but nothing acknowledges that a reply is coming while a plan
+  waits for the merchant, and the acknowledgement must not be persisted as a
+  `Message` or it invalidates the pending plan.
+- **Abuse and spend containment.** Neither proxy route touches `rate-limit.ts`;
+  there is no per-session, per-IP, or per-shop budget. Anonymous traffic bills
+  against the org's daily LLM cap and can exhaust the merchant's email and
+  Instagram agents with it.
+- **Merchant setup** — no integration-card toggle, theme-editor deep link, or
+  Inbox-bubble warning. The switches exist; the UI to flip the merchant one does
+  not, so enabling a store means writing `Integration.metadata` directly.
+- **Session revocation and retention.** The `(integration_id, revoked_at)` index
+  exists for the sweep; the sweep does not. Nothing revokes on uninstall,
+  disconnect, or workspace deletion, and `retention.ts` / `purge.ts` do not know
+  about sessions.
+- **Most of the test plan**, and the eval gate — which becomes owed the moment
+  guest state touches the planner.
+
+**Standing risk.** Both switches are off, so no shopper reaches the agent today.
+With the guest policy landed, what a shopper *could* reach is now bounded — no
+order or customer data, no Shopify mutation, at any autonomy tier. What is still
+unbounded is **spend**: an anonymous stranger's messages bill the org's daily LLM
+cap, and exhausting it takes the merchant's email and Instagram agents down with
+it. **Do not turn on `STOREFRONT_CHAT_ENABLED` outside a controlled test store
+until the storefront budget exists.**
 
 ### Data model
 
@@ -316,7 +443,10 @@ such map is updated. Budget for `DASHBOARD_CHANNEL_TYPES`, `OPERATOR_CHANNEL_ORD
   refetches history after an invalidation. Fall back to 15-second polling when
   SSE is unavailable, with optimistic states and same-client-message-ID retry.
 
-### Guest tool policy
+### Guest tool policy — ✅ built 2026-08-08
+
+Every bullet below is implemented except the local acknowledgement, which is
+called out in the status block above.
 
 - Add `guest` authentication state to agent context. M1 has no other state.
 - Allow knowledge base, policy, and non-customer-specific product information.
@@ -335,7 +465,7 @@ such map is updated. Budget for `DASHBOARD_CHANNEL_TYPES`, `OPERATOR_CHANNEL_ORD
   orders here yet and hand off (escalate or point to email). Do not ship a
   sign-in affordance that leads nowhere.
 
-### Abuse and spend containment
+### Abuse and spend containment — 🚧 none of this is built
 
 This is the first surface where an anonymous stranger can trigger LLM spend with
 no account, and it needs its own budget. `packages/db/spend-store.ts` keys spend
@@ -388,16 +518,33 @@ email and Instagram agent down with it.
   `threads_one_open_per_customer` behaviour — two concurrent first messages on
   one session resolve to a single open thread, and rollover after close does not
   collide with a thread the merchant reopened.
-- **Eval gate.** Adding a `guest` authentication state to agent context and
-  filtering tools by it changes the shared support-planner surface: storefront
-  threads are planned by the same `generateThreadPlan` path as every other
-  ticket, so the standing invariant in `.claude/CLAUDE.md` applies and the gate
-  runs before M1 ships. Either run it, or state in the PR why guest state is
-  provably unreachable from the planner. Two things to know before leaning on
-  it: the fixtures carry no `classifierSignals`, so the gate has never exercised
-  production's `computeClassifierRouting` path, and eval runs are expensive
-  enough to need justifying — use single-fixture probes for diagnosis, not a
-  tune-then-rerun loop.
+- **Eval gate — owed, not yet run** (as of 2026-08-08). The guest policy landed
+  and it does touch shared planner files, so the standing invariant in
+  `.claude/CLAUDE.md` applies. The argument for not running it *yet*, to be
+  weighed rather than assumed:
+
+  - The non-guest system prompt is **byte-identical** — verified by rendering
+    `buildSystemPromptParts` for an email thread against the same function at
+    `HEAD` and diffing, not by reading the diff.
+  - Every guest branch is gated on `authState === "guest"`, which `buildContext`
+    sets only for `shopify_chat`. Non-guest tool selection resolves to the same
+    call it always made (`selectAgentTools(settings, null)` and
+    `selectAgentTools(settings)` are the same filter), and a test asserts static
+    policy returns identical results with and without the options object.
+  - No eval fixture is a `shopify_chat` thread, so the gate as it exists cannot
+    exercise the new path at all — a run would re-measure an unchanged surface.
+
+  What that argument does **not** cover: the gate is also a regression net for
+  changes whose effect nobody predicted, which is precisely the class this
+  reasoning cannot rule out. The recommendation is to run it once before
+  storefront chat is enabled anywhere, together with the storefront-budget
+  change, so one run covers both. Still true when that happens: the fixtures
+  carry no `classifierSignals`, so the gate has never exercised production's
+  `computeClassifierRouting` path, and eval runs are expensive enough to need
+  justifying — single-fixture probes for diagnosis, no tune-then-rerun loop.
+- **Guest fixtures do not exist yet.** Adding a `shopify_chat` fixture to the
+  eval set is the only way the gate will ever cover guest behaviour; without one
+  the policy is covered by unit tests alone.
 - Guest static-policy enforcement against order searches, customer reads,
   refunds, cancellations, edits, credits, discounts, and prompt-injection
   attempts — including a shopper who supplies a real order number and email and
@@ -421,6 +568,12 @@ email and Instagram agent down with it.
 - Ship database and channel support first, then dark gateway/dashboard routes,
   then the disabled theme extension. M0a has already settled app configuration
   and M0b the proxy, so no step here touches app config or scopes.
+
+  **This ordering was not followed** (2026-08-07). Database and channel support
+  shipped first as intended, but the routes went out live rather than dark —
+  there is no flag to darken them with — and the theme extension deployed
+  enabled. The sequence is still the right one for the remaining work; treat it
+  as the plan for landing the flags, not as a description of what happened.
 - Gate globally with `STOREFRONT_CHAT_ENABLED=false` and per integration with
   `storefrontChat.enabled=false`.
 - Enable on the controlled dev store, then one merchant workspace in approval
@@ -484,9 +637,15 @@ listing, and public distribution.
 
 ## When to pick this up
 
-After a merchant is live and proving the existing support loop. The realtime
-prerequisite is no longer outstanding — it was canaried clean 2026-08-07 — so
-the merchant condition is the only one left.
+It was picked up on 2026-08-07, the day the realtime prerequisite cleared and
+ahead of the merchant condition below. That is a defensible call — the
+transport is the part that benefits from being built before a merchant is
+waiting on it — but it does mean the *unbuilt* half of M1 is the safety half,
+and the surface is live enough to be pointed at a storefront by a theme toggle.
+
+The merchant condition still governs **enabling** it: no store that is not a
+controlled test store until the guest policy, the storefront budget, and the
+kill switches exist.
 
 **Do not answer "not yet" with "do WhatsApp instead"** (decision 2026-08-07).
 WhatsApp is a merchant-control channel, not a customer-origin one — see

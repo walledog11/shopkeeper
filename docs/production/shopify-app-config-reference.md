@@ -5,6 +5,12 @@ Rollback reference for **M0a** and **M0b** of
 the migration from Dev-Dashboard-configured app settings to a CLI-authoritative
 `shopify.app.toml`.
 
+**Both shipped 2026-08-07** as `shopkeeper-production-9`, in one file rather than
+two deploys. This file stays useful as the rollback path: `-8` is the
+pre-storefront-chat configuration and remains re-releasable with
+`npx shopify app release --version shopkeeper-production-8`. See "Outstanding"
+for what was skipped along the way.
+
 This record contains sanitized configuration only. It intentionally omits the
 client secret, access tokens, and the app secret. `SHOPIFY_CLIENT_ID` and
 `SHOPIFY_CLIENT_SECRET` live in Vercel; `SHOPIFY_APP_SECRET` lives in both.
@@ -365,19 +371,29 @@ Console and CLI steps that cannot be done from the repo.
   separately from M0a, which migrates at parity. Blocking for distribution.
 - [x] **Decide finding 2** — split applied 2026-08-07. M0a migrates at the
   current scope set; M0b adds the proxy and `write_app_proxy` separately.
-- [ ] **Rehearse on a dev app** — preferring one already installed on a dev store
-  over a fresh throwaway, since only an existing install rehearses "a connected
-  merchant survives the migration." Record `npx shopify app versions list` first;
-  `deploy` overwrites the target's name, URLs, and scopes, and
-  `npx shopify app release --version <recorded>` is how you put it back. Confirm
-  a restorable prior version actually exists before betting a working dev app on
-  it. Webhook topics will **not** appear at app level — they arrive per-shop on
-  OAuth callback, so verify them by connecting the dev store through the app
-  rather than by reading app config.
-- [ ] **Link production** only after that round-trip passes. Config values are
-  recoverable by re-releasing a prior version; what does not obviously reverse is
-  the Dashboard→CLI **management model** switch. That is the step to be careful
-  about.
-- [ ] **M0b, after M0a settles** — add `write_app_proxy` and the `[app_proxy]`
-  block (`url`, `subpath`, `prefix`, all required), dev app first, with the
-  merchant-facing explanation of the prompt written before deploy.
+- [x] **Rehearse on a dev app** — done 2026-08-07 against `shopkeeper-dev`,
+  which was already installed on the `palette-dev` store. Evidence and outcome
+  under "Rehearsal evidence" above: staged with `--no-release`, reviewed,
+  released, and the existing install survived a 26→15 scope reduction with its
+  original June 14 install date intact.
+- [x] **Link production** — done 2026-08-07. `shopify.app.toml` is in the repo
+  root and released as `shopkeeper-production-9` (commit `de2ee92f`); `-8`
+  remains re-releasable. The management-model switch this item was cautious
+  about does not exist — the app was already versioned, as recorded above.
+- [x] **M0b** — shipped in the same file and the same version rather than as a
+  second deploy, once M0a had no irreversible step left to isolate.
+  `write_app_proxy` is in `[access_scopes]` and `[app_proxy]` points
+  `/apps/shopkeeper-chat` at `https://app.useshopkeeper.com/api/storefront-chat/proxy`.
+  The proxy resolves — Shopify-signed requests reached the route, which is how
+  the empty `logged_in_customer_id` signature bug was found.
+- [ ] **Two M0b follow-ups were skipped, not completed.** The merchant-facing
+  explanation of the re-authorization prompt was supposed to be written before
+  deploying and was not, and nobody has checked whether the one connected
+  production store shows `write_app_proxy` as granted or backfilled — or whether
+  it prompted at all.
+- [x] **Apply `20260807120000_add_storefront_chat` to production** — done
+  2026-08-08 via `prisma migrate deploy`. Verified after: `shopify_chat` is in
+  the `ChannelType` enum and `storefront_chat_sessions` exists with all seven
+  foreign keys including the three tenant-consistency ones. It had been merged
+  and deployed on 2026-08-07 but never run, so the storefront routes were live
+  against a database with no table behind them.

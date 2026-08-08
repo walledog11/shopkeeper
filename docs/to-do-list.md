@@ -3,7 +3,7 @@
 Open work only. Completed work is deleted, not archived — git history is the
 record. Do not add "recently completed" sections to this file.
 
-Last reviewed: 2026-08-07.
+Last reviewed: 2026-08-08.
 
 Single source of truth for **actionable** open work. Evidence checklists, console
 residue, failure-drill procedures, and standing policies live in the linked docs
@@ -23,6 +23,30 @@ deprioritized as of 2026-08-07 — it is a merchant-control channel, so it adds 
 third route alongside Telegram and iMessage rather than new customer reach, and
 US penetration is low in the target market. Do not propose it as the next
 channel to build. See [product-truth.md](product-truth.md) §2.
+
+---
+
+
+## Build
+
+Code work that is started and not finished.
+
+- [ ] **Storefront chat M1 — the safety half.** Transport shipped 2026-08-07;
+  the migration, both kill switches (`STOREFRONT_CHAT_ENABLED` and
+  `Integration.metadata.storefrontChat.enabled`, default off) and the guest tool
+  policy landed 2026-08-08. A guest now reaches knowledge base, product search,
+  replies and escalation only — no order read, no customer read, no Shopify
+  mutation at any autonomy tier, refused in static policy and not merely absent
+  from the tool list. Still missing: **the storefront spend budget and rate
+  limits** — anonymous traffic bills the org's daily LLM cap and can take email
+  and Instagram down with it, which is now the only thing standing between here
+  and a controlled canary. Then the integration-card toggle, the session
+  revocation sweep, the approval-mode local acknowledgement, and the rest of the
+  test plan. **The eval gate is owed** — argument for deferring it is recorded
+  in the plan; run it before enabling anywhere, batched with the budget change.
+  **Do not set `STOREFRONT_CHAT_ENABLED` outside a controlled test store until
+  the budget lands.** Full status and spec:
+  [shopify-storefront-chat-implementation-plan.md](shopify-storefront-chat-implementation-plan.md).
 
 ---
 
@@ -95,18 +119,15 @@ when its closing verification passes. Re-verify env presence with
 `vercel env ls production` — `vercel env pull` redacts sensitive vars to an
 empty string, indistinguishable from unset.
 
-- [ ] **Shopify app config → CLI (M0a of storefront chat).** Started 2026-08-07;
-  rollback reference in
+- [ ] **Confirm the connected store survived app version 9.** `shopify.app.toml`
+  shipped 2026-08-07 as `shopkeeper-production-9`, adding `write_app_proxy` and
+  the `[app_proxy]` block (M0a and M0b, both closed). Two console checks were
+  never done: whether the one connected production store shows the new scope as
+  granted or backfilled, and whether it raised a re-authorization prompt. Also
+  still owed from M0b — the merchant-facing explanation of that prompt, which
+  was supposed to be written *before* deploying. `-8` remains re-releasable;
+  reference in
   [production/shopify-app-config-reference.md](production/shopify-app-config-reference.md).
-  Shopify CLI landed 2026-08-07 as a root devDependency (`npx shopify`, 4.6.1),
-  and the **verbatim export is captured** — scopes matched the code-derived
-  prediction exactly, so M0a migrates at parity and the export *is* the M0a
-  file. Next physical step is the dev-app rehearsal — prefer one already
-  installed on a dev store over a throwaway, since only an existing install
-  tests that a connected merchant survives the migration; record
-  `app versions list` first, because `app release --version` is the undo. A
-  re-authorization prompt during M0a is a defect, not a side effect. Not gated
-  on anything; M1 itself still waits on a live merchant.
 - [ ] **Shopify compliance webhooks are declared nowhere.**
   `customers/data_request`, `customers/redact`, `shop/redact` have no handlers
   in the repo, no app-level declaration, and no per-shop registration —
@@ -114,12 +135,6 @@ empty string, indistinguishable from unset.
   rather than caused by it, and **blocking for App Store distribution**. Fix is
   handlers first, then declare the topics; pointing them at `/webhooks/shopify`
   would fail silently against its topic allowlist.
-- [ ] **Shopify app proxy + `write_app_proxy` (M0b).** Split out of M0 on
-  2026-08-07 because declaring a proxy requires that scope, which raises a
-  re-auth prompt on connected stores (they keep working either way — Shopify
-  backfills). Runs after M0a and must be live before M1 can be tested end to
-  end, but does not ship with it. Write the merchant-facing explanation before
-  deploying.
 
 ---
 
