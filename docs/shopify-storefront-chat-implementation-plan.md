@@ -10,8 +10,10 @@ M0b both shipped on 2026-08-07, in one `shopify.app.toml` released as
 was applied on 2026-08-08, and **later that day the whole loop ran on the dev
 store** — a real shopper message became a session, ticket, classification,
 summary, cached plan and operator notification, and an approval delivered the
-reply back into the widget. The guest tool policy exists; the spend containment
-does not. Read the M1 status block before anything else in this file.
+reply back into the widget. The guest tool policy and the spend containment both
+exist as of that evening. What is still missing is the merchant-facing half —
+a toggle, session revocation, exhaustion alerting — and the eval gate. Read the
+M1 status block before anything else in this file.
 
 This is the only new **customer-origin** channel on the table. Nothing else
 proposed adds a way for a customer to reach the merchant.
@@ -40,9 +42,10 @@ forcing every already-connected merchant to re-authorize.
   reasoning but not, in the end, as a separate deploy.
   ✅ **Shipped 2026-08-07**, in the same file and version as M0a.
 - **M1** — Guest-only storefront chat. The shippable milestone. 🚧 **Partially
-  built** — transport, guest policy and kill switches all shipped, and the full
-  ask → ticket → plan → approve → reply loop is proven live on the dev store; no
-  budget, no merchant-facing setup UI, and the refusal path never exercised live.
+  built** — transport, guest policy, kill switches and the spend budget all
+  shipped, and the full ask → ticket → plan → approve → reply loop is proven live
+  on the dev store; no merchant-facing setup UI, no session revocation, no
+  exhaustion alerting, and the refusal path never exercised live.
 - **M2** — Verified sessions. Deferred; sketched, not specified.
 
 M0 was split in two on 2026-08-07, once it was confirmed that declaring an app
@@ -397,11 +400,25 @@ line, not classification.
   or `get_support_stats` (the merchant's business, not the shopper's question).
   A guest-only prompt branch tells the agent to say plainly that it cannot look
   up orders here and hand off.
+- **The spend budget** (2026-08-08, `85d990cc`). Four layers claimed in
+  `apps/gateway/src/storefront-chat-budget.ts` from the internal route *before*
+  `processInboundMessage`: per-session and per-IP fixed-window burst limits on
+  gateway Redis, then per-session (`StorefrontChatSession.messageCount`) and
+  per-shop-per-day (`storefront_chat_daily_usage`) message budgets in Postgres.
+  Refusals return 429 with shopper-facing copy, which the dashboard passes
+  through with `Retry-After` rather than flattening to a 502, and which the
+  widget renders as a note rather than a delivery failure. Counters move only on
+  an admitted message. Details and the accepted trade-offs are in "Abuse and
+  spend containment" below.
 - Tests: cross-tenant data-model tests, app-proxy signature unit tests, switch
-  enforcement on both proxy routes, and 50 guest-policy tests — every registry
-  tool classified allowed-or-forbidden so a new tool cannot land unclassified,
-  refusal asserted per forbidden tool and across every autonomy tier including
-  `full`, and non-guest results asserted unchanged.
+  enforcement on both proxy routes, 50 guest-policy tests — every registry tool
+  classified allowed-or-forbidden so a new tool cannot land unclassified, refusal
+  asserted per forbidden tool and across every autonomy tier including `full`,
+  and non-guest results asserted unchanged — plus five budget tests on the
+  gateway route (per-session ceiling, per-shop ceiling, burst refusal,
+  admitted-only accounting, per-integration attribution) and three on the
+  dashboard hop (429 passthrough, address forwarding, genuine failure still
+  502). Two guest tests on the planning warning.
 
 **Not built** — everything that makes the surface safe to point at real
 shoppers:
@@ -420,9 +437,15 @@ shoppers:
 - **Session revocation and retention.** The `(integration_id, revoked_at)` index
   exists for the sweep; the sweep does not. Nothing revokes on uninstall,
   disconnect, or workspace deletion, and `retention.ts` / `purge.ts` do not know
-  about sessions.
-- **Most of the test plan**, and the eval gate — which becomes owed the moment
-  guest state touches the planner.
+  about sessions. `storefront_chat_daily_usage` is likewise unswept — it grows
+  one row per shop per day forever.
+- **Budget exhaustion alerting and content filtering.** Exhaustion logs a warning
+  and the daily counter deliberately climbs past its ceiling so sustained abuse
+  stays distinguishable from a shop that merely reached its limit — but nothing
+  reaches the merchant, and nothing inspects what a first message actually says.
+  The budget bounds volume, not content.
+- **Most of the test plan**, and the eval gate — which became owed the moment
+  guest state touched the planner, and is still unpaid. See the test plan.
 
 **Standing risk — reduced 2026-08-08, and no longer the same risk.** Both
 switches are on for exactly one store: `palette-dev-3peukw16.myshopify.com`, a
@@ -453,6 +476,15 @@ going further — see the rollout section.
   expiry, revoked-at. **No token columns and no verified-customer column** —
   those arrive with M2.
 - Anonymous customers use `platformId = shopify_chat:<session-id>`.
+- Add the budget counters: `StorefrontChatSession.messageCount` (lifetime per
+  session — the session itself expires, and a shopper who clears it to reset the
+  count lands on the per-shop and per-IP layers instead) and
+  `StorefrontChatDailyUsage` keyed uniquely on `(integration_id, day)` so
+  concurrent shoppers on one shop increment atomically. Migration
+  `20260808120000_add_storefront_chat_budget`, purely additive. **Deliberately
+  not `llm_daily_spend`** — exhausting the storefront must degrade the widget
+  alone and leave the merchant's email and Instagram agents running, which a
+  shared counter cannot express.
 - Store only the hash of a 32-byte browser resume secret; never the secret.
 - Revoke sessions on app uninstall, Shopify disconnect, merchant chat
   disablement, workspace deletion, and customer deletion.
@@ -621,8 +653,10 @@ against a real storefront request the next time someone is in there.
 - Unit — app-proxy signature canonicalization, duplicate parameters, timestamp
   replay rejection, shop binding, origin binding, token expiry, resume-secret
   hashing, CORS.
-- Unit — storefront budget exhaustion degrades the widget and leaves the org cap
-  and other channels usable.
+- ✅ Storefront budget exhaustion degrades the widget and leaves the org cap and
+  other channels usable. Covered on the gateway route rather than as a pure unit
+  test, because the property worth asserting is a database one: after a refusal,
+  `llm_daily_spend` is empty for the org.
 - Session-first-message races, closed-thread rollover, idempotent client
   retries, 4,000-character truncation, rate limits, spam filtering, uninstall
   revocation. Race coverage must assert against real
@@ -647,12 +681,24 @@ against a real storefront request the next time someone is in there.
 
   What that argument does **not** cover: the gate is also a regression net for
   changes whose effect nobody predicted, which is precisely the class this
-  reasoning cannot rule out. The recommendation is to run it once before
-  storefront chat is enabled anywhere, together with the storefront-budget
-  change, so one run covers both. Still true when that happens: the fixtures
-  carry no `classifierSignals`, so the gate has never exercised production's
-  `computeClassifierRouting` path, and eval runs are expensive enough to need
-  justifying — single-fixture probes for diagnosis, no tune-then-rerun loop.
+  reasoning cannot rule out.
+
+  **That bundling plan lapsed, and saying so is the point of writing it down.**
+  The recommendation here was to run the gate once together with the
+  storefront-budget change so one run covered both. The budget shipped on
+  2026-08-08 (`85d990cc`) and no eval run happened. Two things soften it and
+  neither dissolves it: the budget change touches no agent-package file at all —
+  it lives in the gateway route, the gateway config and the dashboard hop — and
+  the one shared-surface change that did land alongside it, the guest planning
+  warning (`405e1dea`), is gated on `isGuestContext` with a test asserting the
+  email path is byte-identical. So the debt is unchanged in size rather than
+  grown. It is still owed, and the next agent-surface change is the moment to
+  stop deferring it.
+
+  Still true when that happens: the fixtures carry no `classifierSignals`, so the
+  gate has never exercised production's `computeClassifierRouting` path, and eval
+  runs are expensive enough to need justifying — single-fixture probes for
+  diagnosis, no tune-then-rerun loop.
 - **Guest fixtures do not exist yet.** Adding a `shopify_chat` fixture to the
   eval set is the only way the gate will ever cover guest behaviour; without one
   the policy is covered by unit tests alone.
@@ -773,16 +819,21 @@ listing, and public distribution.
 ## When to pick this up
 
 It was picked up on 2026-08-07, the day the realtime prerequisite cleared and
-ahead of the merchant condition below. That is a defensible call — the
-transport is the part that benefits from being built before a merchant is
-waiting on it — but it does mean the *unbuilt* half of M1 is the safety half,
-and the surface is live enough to be pointed at a storefront by a theme toggle.
+ahead of the merchant condition below. That is a defensible call — the transport
+is the part that benefits from being built before a merchant is waiting on it —
+and over 2026-08-08 the safety half caught up: guest policy, kill switches and
+the spend budget all landed, and the loop was proven end to end.
 
-The merchant condition still governs **enabling** it: no store that is not a
+The merchant condition governed **enabling** it: no store that is not a
 controlled test store until the guest policy, the storefront budget, and the
-kill switches exist. Two of those three now exist, and on 2026-08-08 the feature
-was enabled on exactly the controlled test store that condition permits. The
-budget is the one still missing, and it is what keeps this at one dev store.
+kill switches exist. **All three now exist** (2026-08-08), and the feature is
+enabled on exactly the controlled test store that condition permits. That
+condition is therefore met — it is no longer what holds this at one dev store.
+
+What holds it there now is narrower and merchant-facing: there is no toggle a
+merchant can flip, nothing revokes sessions on uninstall, and nothing tells a
+merchant their storefront hit its ceiling. A second store is a UI problem and an
+operability problem, not a safety one.
 
 **Do not answer "not yet" with "do WhatsApp instead"** (decision 2026-08-07).
 WhatsApp is a merchant-control channel, not a customer-origin one — see
