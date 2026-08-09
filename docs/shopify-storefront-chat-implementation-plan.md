@@ -20,12 +20,13 @@ What is still missing is the merchant-facing half — a toggle, session
 revocation, exhaustion alerting — the eval gate, and above all **M1.5**, without
 which the channel cannot answer "where is my order" at all.
 
-**One live regression is outstanding as of 2026-08-08:** guest order questions
-escalate with no shopper-visible reply, so the person on the storefront gets
-silence. The cause is `applyEscalationRouting` deleting the reply, the fix is
-about ten lines on the shared planner surface, and it is waiting on a decision
-about the eval gate — see the M1.5 interim section. Read that and the M1 status
-block before anything else in this file.
+**That regression is fixed as of 2026-08-08, and not yet verified live.**
+`applyEscalationRouting` now preserves `send_reply` for guest
+contexts, so a guest order question replies *and* escalates instead of going
+silent. Unit-tested on both sides — guests keep the reply, every other channel is
+byte-identical — and the escalation-routed slice of the eval gate passes. What
+has not happened is a message sent from the dev storefront, which is how the last
+three defects on this feature were actually caught. See the M1.5 interim section.
 
 This is the only new **customer-origin** channel on the table. Nothing else
 proposed adds a way for a customer to reach the merchant.
@@ -997,16 +998,26 @@ should not also fire off a reply that pre-empts the human. It is wrong only for
 guest storefront, where escalation is the normal terminal state for the most
 common question, so "drop the reply" means silence.
 
-**The fix and why it is not done.** `applyEscalationRouting` needs to preserve
-`send_reply` for guest contexts; it currently receives only `(rawToolCalls,
-reason)`, so the guest flag has to be threaded in. Roughly ten lines — but
-`planner-routing.ts` is the shared support-planner surface that every channel's
-planner runs through, not a `guestMode` ternary in a prompt string. The standing
-invariant in `.claude/CLAUDE.md` applies with full force, and this is the first
-storefront change where it does rather than being a technicality. **Pending a
-decision: fix forward with the eval gate (recommended — the gate is owed
-anyway, and M1.5 will touch this same path), fix forward without it, or revert
-`5864a0e1` and `a5ed6482` to restore the old deflecting reply.**
+**The fix, made 2026-08-08.** `applyEscalationRouting` takes an optional
+`{ keepReply }` and `planner.ts` passes `isGuestContext(ctx)`. Guests keep
+`send_reply` ahead of the escalation; with the flag false the filter reduces to
+the old reads-only one, so every other channel is byte-identical — asserted
+directly rather than reasoned about. `a5ed6482` stops being inert the moment this
+lands, since the prompt already demands the reply first.
+
+The residual gap: nothing *structurally* guarantees a guest reply exists. The
+router now preserves one if the model drafted it, and the guest prompt branch
+demands it, but a guest plan that contains no `send_reply` still escalates
+silently. Fixing that properly means authoring shopper-facing copy in the router,
+which is worse than the prompt covering it — so it is a known edge, not an
+oversight.
+
+**The eval gate, paid 2026-08-08.** Not the full suite: the change executes only
+inside the `escalate` branch, so the run was scoped to the twelve fixtures that
+reach `applyEscalationRouting` — the four intent escalations (fraud, forwarded
+injection, contradiction, out-of-scope) and the three structural ones
+(`fulfilled_cancel`, `ambiguous_customer`, `read_error`). Eleven passed. The
+twelfth is the finding below.
 
 Even once fixed, the interim's weakness stands: there is no push, so the shopper
 has to come back to the tab. The session survives in `localStorage`, so
@@ -1015,6 +1026,81 @@ returning works. That is why this is interim and not the answer.
 One thing it did buy immediately: `CIRCULAR_CHANNEL_DEFLECTION_WARNING` is now
 correct by construction rather than by exemption, because nothing points at a
 managed channel anymore.
+
+### The gate was already red, and had been for three days
+
+Running it surfaced a failure that has nothing to do with storefront chat.
+`prompt-injection-forwarded-email` fails 0/3 — and fails 0/3 with the storefront
+change stashed, which is how it was established as pre-existing rather than
+assumed to be.
+
+The cause is structural. `26531b55` (2026-08-05) added
+`"mustCallTools": ["send_reply"]` to that fixture, whose setup also carries
+`forwarded_injection: true` — one of the four `ESCALATE_INTENT_KEYS`. So the
+fixture routes to `escalate`, `applyEscalationRouting` deletes every non-read
+call, and the assertion demands a reply the router guarantees cannot survive. No
+model output can satisfy it.
+
+It reads as a fresh regression because `baseline.json` was last written
+2026-07-30, six days *before* the fixture gained that assertion. The baseline
+still records 100% from the previous version of the fixture, so the aggregate
+gate fires against a number that was never measured on the fixture as it exists.
+
+**Two things follow, and the second is the uncomfortable one.** The gate is only
+red once somebody runs it, so a fixture edit that could never pass sat on master
+for three days unnoticed — the same "shipped ≠ verified" shape as the unapplied
+migration and the stale gateway build, in a third place. And the defect the fixture
+was asserting against is real on the support path too: a forwarded-injection
+thread escalates with no reply, so that customer gets silence.
+
+Resolved by pinning the behaviour the router actually guarantees —
+`mustCallTools: ["escalate_to_human"]` — rather than deleting the line, which
+would have let the fixture pass on an empty plan and made it weaker than before.
+Verified 3/3 after the change.
+
+**And regenerating the baseline found the suite is far worse than one fixture.**
+A full capture (85 fixtures × 3 repeats, 22 minutes) came back at **87.1%, with
+13 fixtures failing or flaky** — seven of them 0/3. They are pre-existing, not
+storefront damage: three were re-run at `HEAD` with every change stashed and
+failed identically. They split into two opposite drifts, which is why no single
+tuning change explains them — over-escalation (`tier-override-cancel-blocked`,
+`routing-order-edit`, `tier-guarded-store-credit-approval` and two
+prompt-injection fixtures collapse to a bare `escalate_to_human` where real work
+plus a reply was expected) and under-escalation (`refund-already-refunded`,
+`refund-no-amount`, both `gift-card-*-escalate` fixtures reply instead of
+escalating).
+
+**The baseline was deliberately not adopted.** Committing it would record 0/3 as
+the expected rate for seven fixtures, which does not lower the bar so much as
+delete those tests — a gate that expects failure cannot detect it. The stale
+2026-07-30 baseline is wrong too, but it is wrong in the safe direction: it keeps
+the suite red, and red is the accurate reading. The capture was not checked in
+and is cheap to reproduce (`npm run test:evals:baseline -w apps/dashboard`).
+**Fix the thirteen, then capture.**
+
+One of the seven was not a model failure at all. `routing-product-search` sat at
+0/3 having *never executed* — its `channelType` was `"instagram"`, which is not a
+member of `ChannelType` (`ig_dm` is), so every repeat died in `db.thread.create`
+with the model never called. `fixture-validator.ts` should have caught it and
+could not: its hand-maintained `CHANNELS` set blessed `instagram` and `telegram`,
+neither of which exists in the enum, while rejecting `ig_dm`, `imessage`, `sms`,
+`tiktok` and `shopify_chat`, all of which do. Both are fixed and the fixture now
+passes 3/3.
+
+**That validator gap was also silently blocking this plan's own eval work.** The
+test plan says a `shopify_chat` fixture is the only way the gate will ever cover
+guest behaviour — and the validator would have rejected one on sight. Adding a
+guest fixture is now unblocked.
+
+**The decision behind that, stated so it can be reversed knowingly:** injection
+escalations stay silent on email. Extending `keepReply` there was the alternative
+and was rejected — a forwarded-injection thread is the one case where the model
+has been actively manipulated, so it is the worst possible moment to have it
+generate customer-facing text, and product principle 3 puts failure modes ahead
+of success modes. Email also absorbs silence in a way an open chat window cannot:
+the merchant sees the ticket and answers, and hours of delay is ordinary there.
+That asymmetry is exactly why guest storefront needed the opposite answer, and it
+is the reason `keepReply` is a guest flag rather than an escalation-wide one.
 
 ### The operator card, fixed 2026-08-08 (`07051933`)
 
@@ -1044,6 +1130,21 @@ verified by live phone round-trip.
   unidentified visitor was called "the customer", asserting a relationship
   nobody has verified on the one channel where the person can type any name they
   like. Now "storefront chat" and "Someone on your storefront".
+
+**A fifth defect, caused by the routing fix and found by reading the code rather
+than the card.** Preserving the guest reply makes an escalation plan two steps
+instead of one, which dropped it out of the `escalateOnly` branch and back into
+the generic numbered renderer — reintroducing "2. Escalate to merchant" as a step
+the merchant is asked to authorise, which is the exact circular ask the first
+bullet removed. `escalateOnly` now keys on whether anything *approvable* remains
+after the escalation is set aside, so the handoff never appears as a numbered
+step; paired with a reply it renders as "Then it's yours: …" under the draft, and
+the card asks "Good to send?" because a send is the only thing being approved.
+
+This was never guest-specific: any model-elected `[send_reply,
+escalate_to_human]` plan on any channel has always rendered that circular step.
+The fix improves those too. Gateway-side operator copy, so it ships without the
+eval gate and is owed a live phone round-trip.
 
 ## M2 — Verified sessions (deferred, and largely superseded)
 
