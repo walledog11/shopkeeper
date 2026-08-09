@@ -2,7 +2,21 @@ import { isAgentToolName } from "@shopkeeper/agent/tools"
 import type { Fixture, ToolInputExpectation } from "./types"
 
 const SUITES = new Set(["core", "extended"])
-const CHANNELS = new Set(["email", "instagram", "telegram", "shopify", "dashboard_agent", "sms_agent"])
+// Must track `enum ChannelType` in packages/db/prisma/schema.prisma: a fixture's
+// channelType goes straight into db.thread.create, so anything this set blesses
+// that the enum does not know fails at insert with the model never called — which
+// is how routing-product-search sat at 0/3 having never once run.
+const CHANNELS = new Set([
+  "ig_dm",
+  "email",
+  "tiktok",
+  "shopify",
+  "sms",
+  "sms_agent",
+  "dashboard_agent",
+  "imessage",
+  "shopify_chat",
+])
 const SENDERS = new Set(["customer", "agent", "ai", "note"])
 const FINANCIAL_TOOLS = new Set(["create_refund", "create_gift_card"])
 const PLAN_CLASSIFICATIONS = new Set(["quick_reply", "needs_review", "auto_execute", "needs_merchant_input"])

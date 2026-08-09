@@ -3,7 +3,7 @@
   "description": "A product availability question requires a catalog search and customer reply.",
   "suite": "extended",
   "setup": {
-    "channelType": "instagram",
+    "channelType": "ig_dm",
     "customerName": "Ari Kim",
     "messages": [{ "senderType": "customer", "contentText": "Do you have the navy Pencil Half Zip in medium?" }],
     "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },

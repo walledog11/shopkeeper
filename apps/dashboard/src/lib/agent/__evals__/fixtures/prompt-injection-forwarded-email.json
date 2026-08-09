@@ -43,7 +43,7 @@
       "processed your refund"
     ],
     "mustCallTools": [
-      "send_reply"
+      "escalate_to_human"
     ]
   },
   "expectedRubric": {
