@@ -277,35 +277,47 @@ export function formatOperatorPlanMessage(
 
   const lines: string[] = formatHeaderLines(customerName, channelType, summary, stage);
 
-  // Escalation is the one plan whose whole content is "this is yours now". The
-  // generic single-step rendering turned that into "I'd escalate to merchant." —
-  // addressed to the merchant, which reads as asking their permission to tell
-  // them something they are being told. Say what it is and why instead.
-  const escalateOnly =
-    actionableSteps.length === 1 && actionableSteps[0]!.tool === 'escalate_to_human';
+  // Escalation is never something the merchant approves — it is the statement
+  // that the thread is theirs now. Alone it is the whole card. Alongside a reply
+  // it is context for that reply, not item 2 in a list they are asked to
+  // authorise, so it comes out of the numbered steps either way. (A guest
+  // storefront escalation always arrives paired with a reply, because a shopper
+  // sitting in an open chat window cannot be left in silence.)
+  const escalationStep = actionableSteps.find((step) => step.tool === 'escalate_to_human');
+  const approvableSteps = actionableSteps.filter((step) => step.tool !== 'escalate_to_human');
+  const escalateOnly = escalationStep !== undefined && approvableSteps.length === 0;
 
   if (escalateOnly) {
     const reason = options?.rawToolCalls ? escalationReason(options.rawToolCalls) : null;
     lines.push('', reason
       ? `This one needs you: ${endSentence(reason)}`
       : "This one needs you — I can't answer it myself.");
-  } else if (actionableSteps.length === 1 && isSendStep(actionableSteps[0]!) && draftBody) {
+  } else if (approvableSteps.length === 1 && isSendStep(approvableSteps[0]!) && draftBody) {
     lines.push('', "I'd reply:", `"${draftBody}"`);
-  } else if (actionableSteps.length === 1) {
+  } else if (approvableSteps.length === 1) {
     // One step is not a list. Numbering a single item is the tell that a machine
     // wrote the card; say it as a sentence instead. parkedActionLabel already
     // renders the phrase that completes "I won't …", which completes "I'd …" too.
-    const only = parkedActionLabel(actionableSteps, customerName);
-    lines.push('', only ? `I'd ${only}.` : `I'd ${lowerFirst(actionableSteps[0]!.label || actionableSteps[0]!.description)}.`);
+    const only = parkedActionLabel(approvableSteps, customerName);
+    lines.push('', only ? `I'd ${only}.` : `I'd ${lowerFirst(approvableSteps[0]!.label || approvableSteps[0]!.description)}.`);
     if (draftBody) lines.push('', `The reply: "${draftBody}"`);
-  } else if (actionableSteps.length > 0) {
-    const stepLines = actionableSteps.map((step, index) => {
+  } else if (approvableSteps.length > 0) {
+    const stepLines = approvableSteps.map((step, index) => {
       if (step.tool === 'send_reply') return `${index + 1}. Reply to ${firstName ?? 'the customer'}`;
       if (step.tool === 'send_email') return `${index + 1}. Email ${firstName ?? 'the customer'}`;
       return `${index + 1}. ${step.label || step.description}`;
     });
     lines.push('', "Here's what I'd do:", ...stepLines);
     if (draftBody) lines.push('', `The reply: "${draftBody}"`);
+  }
+
+  // The reply goes out and the thread still lands on them. Without this the
+  // merchant approves the reply and reasonably reads that as the whole answer.
+  if (escalationStep && !escalateOnly) {
+    const reason = options?.rawToolCalls ? escalationReason(options.rawToolCalls) : null;
+    lines.push('', reason
+      ? `Then it's yours: ${endSentence(reason)}`
+      : "Then it's yours — I can't take it further myself.");
   }
 
   if (options?.threadId && options.dashboardUrl) {
@@ -336,7 +348,7 @@ export function formatOperatorPlanMessage(
     // where it sits instead of asking them to authorise it.
     lines.push('', "Nothing's gone out — it's waiting on you.");
   } else {
-    const replyOnly = actionableSteps.length > 0 && actionableSteps.every(isSendStep);
+    const replyOnly = approvableSteps.length > 0 && approvableSteps.every(isSendStep);
     lines.push('', replyOnly ? 'Good to send?' : 'Sound good?');
   }
 

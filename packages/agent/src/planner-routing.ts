@@ -298,15 +298,29 @@ export function routePlan(input: RoutePlanInput): RoutingOutcome {
 // Materializes an `escalate` routing decision onto the plan: keep reads, drop
 // every other tool call, and terminate with a single escalate_to_human. If the
 // model already elected escalation, its call (and reason) is preserved.
+//
+// `keepReply` is the guest-storefront exception, and only that. Dropping the
+// reply is right for support — escalating a refund dispute should not also fire
+// off a message that pre-empts the human who is about to handle it. It is wrong
+// for a shopper sitting in front of an open chat window, where an escalation is
+// invisible and a deleted reply is indistinguishable from the widget being
+// broken. On that channel escalation is the normal terminal state for the most
+// common question, so the reply goes out and the thread still lands on the
+// merchant.
 export function applyEscalationRouting(
   rawToolCalls: readonly RawToolCall[],
   reason: string,
+  options?: { keepReply?: boolean },
 ): RawToolCall[] {
-  const reads = rawToolCalls.filter((toolCall) => TOOL_CATEGORIES[toolCall.name] === "read");
+  const kept = rawToolCalls.filter(
+    (toolCall) =>
+      TOOL_CATEGORIES[toolCall.name] === "read" ||
+      (options?.keepReply === true && toolCall.name === "send_reply"),
+  );
   const existing = rawToolCalls.find((toolCall) => toolCall.name === "escalate_to_human");
-  if (existing) return [...reads, existing];
+  if (existing) return [...kept, existing];
   return [
-    ...reads,
+    ...kept,
     { id: "tu_route_escalate", name: "escalate_to_human", input: { reason } },
   ];
 }

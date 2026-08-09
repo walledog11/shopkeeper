@@ -228,6 +228,32 @@ describe('formatOperatorPlanMessage', () => {
     expect(message).toContain("Nothing's gone out — it's waiting on you.");
   });
 
+  it('keeps an escalation out of the numbered steps when it rides with a reply', () => {
+    const message = formatOperatorPlanMessage(
+      null,
+      ChannelType.shopify_chat,
+      'Visitor asked where order #1026 is.',
+      [
+        { category: 'write', tool: 'send_reply', description: 'Reply to customer', label: 'Reply', enabled: true },
+        { category: 'write', tool: 'escalate_to_human', description: 'Escalate to merchant', label: 'Escalate to merchant', enabled: true },
+      ],
+      {
+        rawToolCalls: [
+          { name: 'send_reply', input: { text: "I can't see order details here — the shop will come back to you right here." } },
+          { name: 'escalate_to_human', input: { reason: 'They want order status I cannot look up from the storefront' } },
+        ],
+      },
+    );
+
+    // The shopper gets an answer and the merchant still gets the thread. The
+    // handoff is stated, never offered as step 2 for them to authorise.
+    expect(message).toContain('I\'d reply:');
+    expect(message).not.toContain('1. Reply');
+    expect(message).not.toContain('Escalate to merchant');
+    expect(message).toContain("Then it's yours: They want order status I cannot look up from the storefront.");
+    expect(message).toContain('Good to send?');
+  });
+
   it('does not call an unidentified storefront visitor a customer', () => {
     const message = formatOperatorPlanMessage(
       null,

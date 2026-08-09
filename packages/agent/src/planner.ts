@@ -157,7 +157,11 @@ export async function planAgent(
       readResultsMap: loop.readResults,
     });
     if (outcome.decision === "escalate") {
-      rawToolCalls = applyEscalationRouting(rawToolCalls, outcome.escalationReason ?? "Needs human review.");
+      rawToolCalls = applyEscalationRouting(
+        rawToolCalls,
+        outcome.escalationReason ?? "Needs human review.",
+        { keepReply: isGuestContext(ctx) },
+      );
     }
     for (const warning of outcome.warnings) {
       if (!warnings.includes(warning)) warnings.push(warning);

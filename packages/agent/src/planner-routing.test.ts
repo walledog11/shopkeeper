@@ -339,4 +339,40 @@ describe("applyEscalationRouting", () => {
     const out = applyEscalationRouting([escalate], "templated reason");
     expect(out).toEqual([escalate]);
   });
+
+  it("keeps the reply ahead of the escalation for a guest", () => {
+    const calls: RawToolCall[] = [
+      { id: "tu_kb", name: "search_kb", input: {} },
+      { id: "tu_reply", name: "send_reply", input: { text: "I can't see order details here." } },
+    ];
+    const out = applyEscalationRouting(calls, "Needs a human.", { keepReply: true });
+    expect(out.map((call) => call.name)).toEqual(["search_kb", "send_reply", "escalate_to_human"]);
+  });
+
+  it("keeps the reply ahead of a model-elected escalation for a guest", () => {
+    const reply: RawToolCall = { id: "tu_reply", name: "send_reply", input: { text: "Hi." } };
+    const out = applyEscalationRouting([escalate, reply], "templated reason", { keepReply: true });
+    expect(out.map((call) => call.name)).toEqual(["send_reply", "escalate_to_human"]);
+  });
+
+  it("still drops mutations for a guest", () => {
+    const calls: RawToolCall[] = [
+      { id: "tu_reply", name: "send_reply", input: { text: "Hi." } },
+      { id: "tu_refund", name: "create_refund", input: {} },
+    ];
+    const out = applyEscalationRouting(calls, "Needs a human.", { keepReply: true });
+    expect(out.map((call) => call.name)).toEqual(["send_reply", "escalate_to_human"]);
+  });
+
+  it("drops the reply when keepReply is not set", () => {
+    const calls: RawToolCall[] = [
+      { id: "tu_reply", name: "send_reply", input: { text: "Hi." } },
+    ];
+    expect(applyEscalationRouting(calls, "r", {}).map((call) => call.name)).toEqual([
+      "escalate_to_human",
+    ]);
+    expect(applyEscalationRouting(calls, "r", { keepReply: false }).map((call) => call.name)).toEqual(
+      ["escalate_to_human"],
+    );
+  });
 });
