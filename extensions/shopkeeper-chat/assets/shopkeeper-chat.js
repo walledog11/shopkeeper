@@ -99,10 +99,26 @@
     try { localStorage.setItem(storageKey, JSON.stringify(value)); } catch (e) { /* private mode */ }
   }
 
+  // Text of messages already on screen as optimistic bubbles, waiting for the
+  // server's own copy to come back on a poll. The optimistic bubble carries no
+  // id — the send endpoint answers 202 before the message is persisted, so there
+  // is no id to carry — which means the polled copy looks brand new and the
+  // shopper watches their own message appear twice. Matching on text is enough:
+  // the only thing being reconciled is a message this browser just sent.
+  var awaitingEcho = [];
+
+  function dropEcho(text) {
+    var i = awaitingEcho.indexOf(text);
+    if (i !== -1) awaitingEcho.splice(i, 1);
+    return i !== -1;
+  }
+
   function render(messages) {
     (messages || []).forEach(function (m) {
       if (seen[m.id]) return;
       seen[m.id] = true;
+      // Already on screen from the optimistic append — adopt the id and move on.
+      if (m.from === "customer" && dropEcho(m.text)) return;
       append(m.text, m.from === "customer" ? "me" : "them");
     });
   }
@@ -191,6 +207,7 @@
     input.value = "";
     sendBtn.disabled = true;
     var pending = append(text, "me");
+    awaitingEcho.push(text);
     var clientMessageId = String(Date.now()) + "-" + Math.random().toString(36).slice(2, 10);
 
     fetch(proxy + "/messages", {
@@ -203,6 +220,9 @@
       // broken. The server supplies the wording; it knows which limit was hit.
       if (r.status === 429) {
         return r.json().catch(function () { return {}; }).then(function (body) {
+          // Nothing was accepted, so nothing will echo back. Releasing the entry
+          // stops it from swallowing an identical message the shopper retries.
+          dropEcho(text);
           pending.style.opacity = "0.5";
           append(body.shopperMessage || "Too many messages just now. Try again in a moment.", "note");
         });
@@ -210,6 +230,7 @@
       if (!r.ok) throw new Error("send " + r.status);
       setTimeout(poll, 1200);
     }).catch(function () {
+      dropEcho(text);
       pending.style.opacity = "0.5";
       append("Not delivered. Check your connection and try again.", "note");
     }).finally(function () {
