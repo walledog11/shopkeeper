@@ -85,7 +85,8 @@ describe('POST /webhooks/telegram — help & summary', () => {
     const text = lastReplyText();
     // On-demand SUMMARY answers straight out — the greeting is the scheduled
     // send's job, not a reply to a merchant who just asked.
-    expect(text).toMatch(/^Nothing's waiting on a reply\./);
+    expect(text).toMatch(/Since your last briefing I didn't send any replies or refunds\./);
+    expect(text).toContain("Nothing's waiting on a reply.");
     expect(text).toContain("There's one I wasn't sure about, from Dana.\nWholesale pricing question.");
 
     const ctx = await getContext(org.id, memberKey);
@@ -103,7 +104,9 @@ describe('POST /webhooks/telegram — help & summary', () => {
 
     await processPendingOperatorEvents(org.id);
     await waitForReplies(1);
-    expect(lastReplyText()).toMatch(/nothing new in your support inbox/i);
+    expect(lastReplyText()).toMatch(/Since your last briefing I didn't send any replies or refunds\./);
+    expect(lastReplyText()).toContain("Nothing's waiting on a reply.");
+    expect(lastReplyText()).toContain("I'll shout if anything comes in.");
   });
 });
 

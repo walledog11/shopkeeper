@@ -16,7 +16,9 @@ import {
   loadHandledRollup,
   loadWaitingOnYouItems,
   finalizeDigestSend,
+  redactBriefingContacts,
   resolveHandledWindowStart,
+  truncateBriefingText,
 } from './digest-briefing.js';
 import { loadDigestShopifyGarnish } from './digest-shopify-garnish.js';
 import {
@@ -44,8 +46,10 @@ export interface DigestThreadRow {
   id: string;
   updatedAt: Date;
   tag: string | null;
+  channelType: string;
   filterStatus: DbThreadFilterStatus;
   filterDecidedAt: Date | null;
+  aiTitle: string | null;
   aiSummary: string | null;
   filterReason: string | null;
   customer: { name: string | null };
@@ -177,9 +181,11 @@ function simpleInboxSentence(genuineCount: number, urgent: number): string {
   return line;
 }
 
+// Slicing at a character count lands mid-word, and a raw address here becomes a
+// tappable mailto in the middle of the merchant's morning text.
 function flaggedBlurb(thread: DigestThreadRow): string {
   const blurb = (thread.aiSummary ?? thread.filterReason ?? '').trim();
-  return blurb.length > DIGEST_SUMMARY_TRUNC ? `${blurb.slice(0, DIGEST_SUMMARY_TRUNC)}…` : blurb;
+  return truncateBriefingText(redactBriefingContacts(blurb), DIGEST_SUMMARY_TRUNC);
 }
 
 // Summaries are model-written and land with or without a final stop. Inlined
@@ -298,14 +304,16 @@ export interface OrgDigest {
 /**
  * Build the support-inbox digest for one org from its open threads, ready to
  * send and to seed `OperatorContext.pendingDigest` for follow-up commands.
- * Returns null when the org has no open tickets. Shared by the scheduled digest
- * worker and the on-demand `SUMMARY` operator command.
+ * Returns null when the org has no open tickets and nothing waiting on the
+ * operator. Scheduled sends pass `includeEmptyInbox: false` so a quiet inbox
+ * falls through to the first-night welcome or is skipped; on-demand `SUMMARY`
+ * keeps the default and still reports what was handled since the last briefing.
  */
 export async function buildOrgDigest(
   organizationId: string,
   now: Date,
   settings: Record<string, unknown> = {},
-  options: { opener?: string | null } = {},
+  options: { opener?: string | null; includeEmptyInbox?: boolean } = {},
 ): Promise<OrgDigest | null> {
   const since = resolveHandledWindowStart(settings, now);
   const [openThreads, weeklyStats, handledRollup, waitingItems, garnishLines] = await Promise.all([
@@ -321,8 +329,10 @@ export async function buildOrgDigest(
         id: true,
         updatedAt: true,
         tag: true,
+        channelType: true,
         filterStatus: true,
         filterDecidedAt: true,
+        aiTitle: true,
         aiSummary: true,
         filterReason: true,
         customer: { select: { name: true } },
@@ -338,9 +348,9 @@ export async function buildOrgDigest(
   const handledSection = formatHandledSection(handledRollup);
   const waitingSection = formatWaitingList(waitingItems);
   const waitingAsk = formatWaitingAsk(waitingItems);
-  const hasBriefingContent = Boolean(handledSection || waitingSection);
+  const includeEmptyInbox = options.includeEmptyInbox ?? true;
 
-  if (openThreads.length === 0 && !hasBriefingContent) return null;
+  if (openThreads.length === 0 && !waitingSection && !includeEmptyInbox) return null;
 
   const buckets = bucketDigestThreads(openThreads, now, since);
   const waitingThreadIds = new Set(waitingItems.map((item) => item.threadId));
@@ -450,6 +460,7 @@ export async function sendScheduledDigests(): Promise<void> {
     const agentName = resolveAgentSettings(org.settings).agentName;
     const digest = await buildOrgDigest(org.id, now, orgSettings, {
       opener: buildDigestOpener(agentName, orgSettings, now, firstBriefingPending),
+      includeEmptyInbox: false,
     });
 
     // A brand-new merchant with an empty inbox would otherwise never get a

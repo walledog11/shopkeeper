@@ -6,6 +6,7 @@ import { PLAN_STEP_LABELS } from '@shopkeeper/agent/tools';
 import { SENDER_TYPE } from '@shopkeeper/agent/thread-constants';
 import { db } from '@shopkeeper/db';
 import { Prisma } from '@prisma/client';
+import { CHANNEL } from '../constants.js';
 import { parseStoredPendingPlan } from '../operator-context.js';
 
 export const DIGEST_CURSOR_KEY = 'lastSuccessfulDigestAt';
@@ -128,8 +129,9 @@ function parkedActionLabel(
   return `${step.label.toLowerCase()}${forCustomer}`;
 }
 
-// One iMessage line of context — truncate at a word boundary, never mid-word.
-const BRIEFING_TOPIC_MAX = 80;
+// One iMessage line of context. The classifier already writes `aiTitle` at 3-to-6
+// words, so this cap is a backstop for the summary fallback, not the usual path.
+const BRIEFING_TOPIC_MAX = 60;
 
 const BRIEFING_TAG_LABELS: Record<string, string> = {
   'Order Status': "where's my order?",
@@ -147,12 +149,16 @@ function briefingSubjectName(customerName: string | null): string | null {
   return firstName;
 }
 
-function truncateAtWord(text: string, maxLen: number): string {
+// Nobody on storefront chat has identified themselves, so there is no name to
+// print — but "Someone" twice in one list says less than the channel does.
+const VISITOR_SUBJECT = 'Storefront visitor';
+
+export function truncateBriefingText(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text;
   const slice = text.slice(0, maxLen);
   const lastSpace = slice.lastIndexOf(' ');
   const clipped = lastSpace > maxLen * 0.5 ? slice.slice(0, lastSpace) : slice;
-  return `${clipped}…`;
+  return `${clipped.replace(/[\s,;:(-]+$/, '')}…`;
 }
 
 function extractOrderRef(text: string): string | null {
@@ -165,42 +171,90 @@ function extractOrderRef(text: string): string | null {
   return hashMatch ? hashMatch[1] : null;
 }
 
-// Digest copy, not dashboard `aiSummary` prose. Strips ticket-system phrasing
-// and pulls order numbers into the line header so two Canary tickets read
-// differently at a glance.
-function briefingTopicFromSummary(summary: string, orderRef: string | null): string {
-  let text = summary.trim();
-  text = text.replace(/^Customer (states|reports|wrote|sent|is asking|asked) (that )?/i, '');
-  text = text.replace(/^a single word:\s*/i, '');
-  text = text.replace(/^a brief notification that /i, '');
-  if (orderRef) {
-    const num = orderRef.replace('#', '');
-    text = text.replace(new RegExp(`\\border\\s*#?${num}\\b`, 'gi'), '');
-    text = text.replace(new RegExp(`#${num}\\b`, 'g'), '');
-  }
-  text = text.replace(/\s+/g, ' ').trim();
-  text = text.replace(/^that /i, '');
-  text = text.replace(/^["'](.+)["']\.?$/, '$1');
-  text = text.replace(/, but provides no details?/i, ', no details');
-  text = text.replace(/has been /gi, '');
-  text = text.replace(/, stated twice/i, ', repeated');
-  text = text.replace(/, repeated twice without further detail or question/i, ', repeated, no details');
-  text = text.replace(/without further detail or question/i, 'no details');
-  text = text.replace(/\bwhere\s+is\b/gi, 'where it is');
-  text = text.replace(/ on their unfulfilled order/i, '');
-  text = text.replace(/ and mentions an upcoming trip/i, ', trip soon');
-  text = text.replace(/^for a /i, '');
-  return truncateAtWord(text.replace(/\.$/, ''), BRIEFING_TOPIC_MAX);
+// An address or link in a briefing line is noise the merchant cannot act on,
+// and iMessage renders it as a tappable link mid-sentence.
+export function redactBriefingContacts(text: string): string {
+  return text
+    .replace(/[^\s<>()]+@[^\s<>()]+\.[a-z]{2,}/gi, 'their email')
+    .replace(/https?:\/\/\S+/gi, 'a link');
 }
 
-function isReplyPlan(
-  rawToolCalls: Array<{ id: string; name: string; input?: unknown }>,
-  actionLabel?: string,
-): boolean {
-  if (actionLabel?.toLowerCase().includes('reply')) return true;
-  return rawToolCalls.some((toolCall) => (
-    toolCall.name === 'send_reply' || toolCall.name === 'send_email'
-  ));
+// Removing anything from mid-sentence strands the punctuation that framed it:
+// "for four orders (#1019, #1020)" became "for four orders (,".
+function tidyPunctuation(text: string): string {
+  return text
+    .replace(/\(\s*[,;]\s*/g, '(')
+    .replace(/\(\s*\)/g, '')
+    .replace(/\s+([,;.!?])/g, '$1')
+    .replace(/([,;])(?:\s*[,;])+/g, '$1')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/[\s,;:(-]+$/, '')
+    .trim();
+}
+
+// One structural rule, not a list of remembered phrasings: drop the
+// "Customer <verb>" opener the classifier is prompted to write. Per-ticket
+// rewrites used to live here (", stated twice" → ", repeated"; "and mentions an
+// upcoming trip" → ", trip soon"). Each was fitted to one morning's summaries
+// and left the next morning's to fall through raw.
+const SUMMARY_PREAMBLE =
+  /^(?:the\s+)?(?:customer|visitor|shopper|sender|someone)\s+(?:states?|reports?|writes?|wrote|sent|says?|said|is\s+asking|asks?|asked|requests?|requested|wants?|mentions?|notes?|claims?|provides?|provided)\s+(?:that\s+|for\s+|about\s+|whether\s+|if\s+)?/i;
+
+// The classifier's own tic for a fragmentary message, straight from its prompt.
+const SINGLE_WORD_PREAMBLE = /^a\s+single\s+word:\s*/i;
+
+function topicFromSummary(summary: string): string {
+  const withoutPreamble = summary
+    .trim()
+    .replace(SUMMARY_PREAMBLE, '')
+    .replace(SINGLE_WORD_PREAMBLE, '')
+    // The article belonged to the verb that was just removed.
+    .replace(/^(?:an?|the)\s+/i, '');
+  const firstSentence = withoutPreamble.split(/(?<=[.!?])\s+/)[0] ?? withoutPreamble;
+  return firstSentence
+    .replace(/^["'](.+)["']$/, '$1')
+    .replace(/\.$/, '');
+}
+
+/**
+ * The one line of context a briefing item gets. `aiTitle` is the classifier's
+ * own 3-to-6-word subject line naming the topic — which is exactly the unit a
+ * phone briefing needs. `aiSummary` is the dashboard's full third-person
+ * sentence, capped at 1,000 characters; squeezing that down to a phone line is
+ * what produced the mid-sentence truncations.
+ */
+export function briefingTopic(
+  aiTitle: string | null,
+  aiSummary: string | null,
+  tag: string | null,
+): string | null {
+  const title = aiTitle?.trim();
+  const summary = aiSummary?.trim();
+  const base = title || (summary ? topicFromSummary(summary) : '');
+  const cleaned = tidyPunctuation(redactBriefingContacts(base));
+  if (cleaned) return truncateBriefingText(capitalize(cleaned), BRIEFING_TOPIC_MAX);
+
+  const trimmedTag = tag?.trim();
+  if (!trimmedTag || trimmedTag === 'General') return null;
+  return capitalize(briefingTagLabel(trimmedTag));
+}
+
+// Who the item is about. The order number earns its place in the subject only
+// when the topic doesn't already carry it — cutting it out of the topic to
+// avoid the repeat is what stranded the punctuation.
+function briefingSubject(
+  customerName: string | null,
+  channelType: string | null,
+  orderRef: string | null,
+  topic: string | null,
+): string {
+  const name = briefingSubjectName(customerName)
+    ?? (channelType === CHANNEL.SHOPIFY_CHAT ? VISITOR_SUBJECT : null);
+  const alreadyInTopic = orderRef != null
+    && (topic ?? '').includes(orderRef.replace('#', ''));
+  const ref = orderRef && !alreadyInTopic ? orderRef : null;
+  if (name && ref) return `${name} · ${ref}`;
+  return ref ?? name ?? 'Someone';
 }
 
 // How long the merchant has left this sitting. The header already frames the
@@ -215,21 +269,6 @@ export function formatWaitingAge(now: Date, since: Date | null): string | null {
   if (hours < 24) return `waiting ${hours} hour${hours === 1 ? '' : 's'}`;
   const days = Math.floor(hours / 24);
   return `waiting ${days} day${days === 1 ? '' : 's'}`;
-}
-
-// What the ticket is actually about. Four bullets that all read "Reply to
-// Canary" carry exactly one bit of information — the count — so every line has
-// to name its subject, not just the verb. `General` is the classifier's
-// catch-all, so it is worth no more than saying nothing.
-export function waitingTopic(aiSummary: string | null, tag: string | null): string | null {
-  const summary = aiSummary?.trim();
-  if (summary) {
-    const orderRef = extractOrderRef(summary);
-    const topic = briefingTopicFromSummary(summary, orderRef);
-    return topic || null;
-  }
-  const trimmedTag = tag?.trim();
-  return trimmedTag && trimmedTag !== 'General' ? briefingTagLabel(trimmedTag) : null;
 }
 
 // Colon between action and subject, matching the flagged block's `1. Alice:
@@ -261,13 +300,15 @@ function waitingPhrase(
   if (label) return label.charAt(0).toUpperCase() + label.slice(1);
 
   const trimmed = instruction.trim();
-  const summary = truncateAtWord(trimmed, BRIEFING_TOPIC_MAX);
+  const summary = truncateBriefingText(trimmed, BRIEFING_TOPIC_MAX);
   if (!summary) return firstName ? `A ticket${forCustomer}` : 'A ticket';
   return firstName ? `${firstName}: ${summary}` : summary;
 }
 
 export function formatWaitingItemLine(params: {
   customerName: string | null;
+  channelType?: string | null;
+  aiTitle?: string | null;
   aiSummary: string | null;
   tag: string | null;
   rawToolCalls: Array<{ id: string; name: string; input?: unknown }>;
@@ -278,6 +319,8 @@ export function formatWaitingItemLine(params: {
 }): string {
   const {
     customerName,
+    channelType,
+    aiTitle,
     aiSummary,
     tag,
     rawToolCalls,
@@ -288,35 +331,32 @@ export function formatWaitingItemLine(params: {
   } = params;
   const age = formatWaitingAge(now, since);
   const agePart = age ? ` (${age})` : '';
-  const subjectName = briefingSubjectName(customerName);
+  const topic = briefingTopic(aiTitle ?? null, aiSummary, tag);
+  const orderRef = extractOrderRef(`${aiTitle ?? ''} ${aiSummary ?? ''}`);
 
+  // Money leads: an amount is the one thing worth reading before the name.
   const refundAmount = extractRefundAmount(
     rawToolCalls.find((toolCall) => toolCall.name === 'create_refund')?.input,
   );
   if (refundAmount) {
-    const topic = waitingTopic(aiSummary, tag);
+    const subjectName = briefingSubjectName(customerName);
     const head = subjectName ? `${refundAmount} refund · ${subjectName}` : `${refundAmount} refund`;
     return topic ? `${head}: ${topic}${agePart}` : `${head}${agePart}`;
   }
 
-  const summary = aiSummary?.trim();
-  if (summary && isReplyPlan(rawToolCalls, actionLabel)) {
-    const orderRef = extractOrderRef(summary);
-    const topic = briefingTopicFromSummary(summary, orderRef);
-    const tagFallback = waitingTopic(null, tag);
-    const subject = orderRef && subjectName
-      ? `${subjectName} · ${orderRef}`
-      : orderRef
-        ? orderRef
-        : subjectName ?? 'Someone';
-    const detail = topic || tagFallback;
-    if (detail) return `${subject}: ${detail}${agePart}`;
-    return `${subject}${agePart}`;
+  // The subject slot is for a person or an order, never a tool label: a line
+  // reading "Escalate to merchant: about tracking numbers" has spent its most
+  // scannable position on a word the section header already said.
+  if (topic) {
+    const subject = briefingSubject(customerName, channelType ?? null, orderRef, topic);
+    return `${subject}: ${topic}${agePart}`;
   }
 
+  // Nothing describes the ticket, so the parked action is the only information
+  // there is.
   return waitingLine(
     waitingPhrase(customerName, rawToolCalls, instruction, actionLabel),
-    waitingTopic(aiSummary, tag),
+    null,
     age,
   );
 }
@@ -324,44 +364,36 @@ export function formatWaitingItemLine(params: {
 // Compact one-line label for open tickets the merchant hasn't already seen above.
 export function formatBriefingTicketLine(
   customerName: string | null,
+  aiTitle: string | null,
   aiSummary: string | null,
   tag: string | null,
+  channelType?: string | null,
 ): string {
-  const subjectName = briefingSubjectName(customerName);
-  const summary = aiSummary?.trim();
-  if (summary) {
-    const orderRef = extractOrderRef(summary);
-    const topic = briefingTopicFromSummary(summary, orderRef);
-    const subject = orderRef && subjectName
-      ? `${subjectName} · ${orderRef}`
-      : orderRef
-        ? orderRef
-        : subjectName ?? 'Someone';
-    return topic ? `${subject}: ${topic}` : subject;
-  }
-  const tagTopic = waitingTopic(null, tag);
-  if (subjectName) return tagTopic ? `${subjectName}: ${tagTopic}` : subjectName;
-  return tagTopic ?? 'Open ticket';
+  const topic = briefingTopic(aiTitle, aiSummary, tag);
+  const orderRef = extractOrderRef(`${aiTitle ?? ''} ${aiSummary ?? ''}`);
+  const subject = briefingSubject(customerName, channelType ?? null, orderRef, topic);
+  if (topic) return `${subject}: ${topic}`;
+  return subject === 'Someone' ? 'Open ticket' : subject;
+}
+
+export interface BriefingTicketRow {
+  aiTitle?: string | null;
+  aiSummary: string | null;
+  tag: string | null;
+  channelType?: string | null;
+  customer: { name: string | null };
 }
 
 export function resolveOtherOpenSection(
   waitingCount: number,
-  threads: Array<{
-    aiSummary: string | null;
-    tag: string | null;
-    customer: { name: string | null };
-  }>,
+  threads: BriefingTicketRow[],
 ): string | null {
   if (waitingCount >= WAITING_HIDE_OTHER_OPEN_AT) return null;
   return formatOtherOpenSection(threads);
 }
 
 export function formatOtherOpenSection(
-  threads: Array<{
-    aiSummary: string | null;
-    tag: string | null;
-    customer: { name: string | null };
-  }>,
+  threads: BriefingTicketRow[],
 ): string | null {
   if (threads.length === 0) return null;
 
@@ -370,8 +402,10 @@ export function formatOtherOpenSection(
   for (const thread of shown) {
     lines.push(`- ${formatBriefingTicketLine(
       thread.customer?.name ?? null,
+      thread.aiTitle ?? null,
       thread.aiSummary,
       thread.tag,
+      thread.channelType ?? null,
     )}`);
   }
   const remaining = threads.length - shown.length;
@@ -408,8 +442,18 @@ function pastTenseLabel(label: string): string {
   return rest.length > 0 ? `${past} ${rest.join(' ')}` : past;
 }
 
-// No name is a reason to drop the subject, not to print one. "Replied to
-// Customer" is a placeholder leaking into the merchant's morning text.
+/**
+ * No name is a reason to drop the subject, not to print one — "Replied to
+ * Customer" is a placeholder leaking into the merchant's morning text.
+ *
+ * Returning null is also the right answer when the only thing left to say is
+ * the count. Three unnamed replies rendered as three "Sent a reply" bullets
+ * under a lead that already read "including three replies" is the same fact
+ * printed twice, the second time as a list that looks broken. Replies and
+ * refunds have their own counters, so a bullet earns its place only by naming a
+ * customer or an amount; every other tool keeps its label, which the counters
+ * never mention.
+ */
 function describeHandledExecution(execution: {
   mode: string | null;
   thread: { customer: { name: string | null } } | null;
@@ -424,11 +468,11 @@ function describeHandledExecution(execution: {
   if (refund) {
     const amount = extractRefundAmount(refund.input);
     if (firstName) return amount ? `Refunded ${firstName} ${amount}` : `Refunded ${firstName}`;
-    return amount ? `Issued a ${amount} refund` : 'Issued a refund';
+    return amount ? `Issued a ${amount} refund` : null;
   }
 
   if (successfulActions.some((action) => action.tool === 'send_reply' || action.tool === 'send_email')) {
-    return firstName ? `Replied to ${firstName}` : 'Sent a reply';
+    return firstName ? `Replied to ${firstName}` : null;
   }
 
   const primary = successfulActions.find((action) => action.tool !== 'add_internal_note');
@@ -478,9 +522,11 @@ export async function loadHandledRollup(
       refundCount += 1;
     }
 
+    // Two customers can share a first name and two refunds can share an amount;
+    // the merchant reads the repeat as a rendering bug either way.
     if (notableLines.length < NOTABLE_HANDLED_LIMIT) {
       const line = describeHandledExecution(execution);
-      if (line) notableLines.push(line);
+      if (line && !notableLines.includes(line)) notableLines.push(line);
     }
   }
 
@@ -497,10 +543,15 @@ export function formatHandledSection(rollup: HandledRollup): string {
   // thing, including one reply: - Replied to Sarah" is the same fact three
   // times. Fold it into the sentence, the way the flagged block already names a
   // lone ticket instead of printing a list of one.
-  if (total === 1 && rollup.notableLines.length === 1) {
-    const line = rollup.notableLines[0]!;
-    const sentence = `Since your last briefing I ${line.charAt(0).toLowerCase()}${line.slice(1)}.`;
-    return rollup.autoCount === 1 ? `${sentence}\n\nThat one ran without needing you.` : sentence;
+  if (total === 1 && rollup.notableLines.length <= 1) {
+    // With nobody to name, "I handled one thing, including one reply" counts a
+    // single event twice; say the event.
+    const line = rollup.notableLines[0]
+      ?? (rollup.replyCount === 1 ? 'sent one reply' : rollup.refundCount === 1 ? 'issued one refund' : null);
+    if (line) {
+      const sentence = `Since your last briefing I ${line.charAt(0).toLowerCase()}${line.slice(1)}.`;
+      return rollup.autoCount === 1 ? `${sentence}\n\nThat one ran without needing you.` : sentence;
+    }
   }
 
   // "including", not a comma list: an execution that refunded *and* replied is
@@ -565,8 +616,10 @@ async function loadOperatorWaitingItems(organizationId: string, now: Date): Prom
         where: { id: pendingPlan.threadId, organizationId },
         select: {
           updatedAt: true,
+          aiTitle: true,
           aiSummary: true,
           tag: true,
+          channelType: true,
           customer: { select: { name: true } },
           messages: {
             where: { deletedAt: null, senderType: { not: SENDER_TYPE.NOTE } },
@@ -583,6 +636,8 @@ async function loadOperatorWaitingItems(organizationId: string, now: Date): Prom
         threadId: pendingPlan.threadId,
         line: formatWaitingItemLine({
           customerName: thread?.customer?.name ?? pendingPlan.customerName ?? null,
+          channelType: thread?.channelType ?? null,
+          aiTitle: thread?.aiTitle ?? null,
           aiSummary: thread?.aiSummary ?? null,
           tag: thread?.tag ?? null,
           rawToolCalls: pendingPlan.rawToolCalls,
@@ -615,8 +670,10 @@ async function loadStaleThreadWaitingItems(
       cachedPlan: true,
       cachedPlanMessageId: true,
       updatedAt: true,
+      aiTitle: true,
       aiSummary: true,
       tag: true,
+      channelType: true,
       customer: { select: { name: true } },
       messages: {
         where: { deletedAt: null, senderType: { not: SENDER_TYPE.NOTE } },
@@ -649,6 +706,8 @@ async function loadStaleThreadWaitingItems(
       threadId: thread.id,
       line: formatWaitingItemLine({
         customerName: thread.customer?.name ?? null,
+        channelType: thread.channelType,
+        aiTitle: thread.aiTitle,
         aiSummary: thread.aiSummary,
         tag: thread.tag,
         rawToolCalls: plan.rawToolCalls,
@@ -701,9 +760,13 @@ export function formatWaitingList(items: WaitingItem[]): string | null {
     ].join('\n');
   }
 
+  // Blank lines between the items, not just around the block. Each of these
+  // wraps to two or three lines on a phone, so consecutive lines run the end of
+  // one approval into the start of the next and the list reads as a paragraph.
   return [
     `${capitalize(countWord(items.length))} things are still waiting on your OK:`,
-    ...items.map((item, index) => `${index + 1}. ${item.line}`),
+    '',
+    items.map((item, index) => `${index + 1}. ${item.line}`).join('\n\n'),
   ].join('\n');
 }
 

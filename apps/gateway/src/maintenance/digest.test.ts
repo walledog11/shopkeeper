@@ -17,6 +17,8 @@ function makeThread(overrides: Partial<{
   filterDecidedAt: Date | null;
   tag: string | null;
   customerName: string | null;
+  channelType: string;
+  aiTitle: string | null;
   aiSummary: string | null;
   filterReason: string | null;
 }> = {}) {
@@ -25,6 +27,8 @@ function makeThread(overrides: Partial<{
     id: overrides.id ?? `t-${Math.random().toString(16).slice(2)}`,
     updatedAt: new Date(NOW.getTime() - ageHours * HOUR),
     tag: overrides.tag === undefined ? 'Support' : overrides.tag,
+    channelType: overrides.channelType ?? 'email',
+    aiTitle: overrides.aiTitle ?? null,
     filterStatus: (overrides.filterStatus ?? ThreadFilterStatus.genuine) as 'genuine' | 'questionable' | 'filtered',
     filterDecidedAt: overrides.filterDecidedAt === undefined
       ? new Date(NOW.getTime() - ageHours * HOUR)

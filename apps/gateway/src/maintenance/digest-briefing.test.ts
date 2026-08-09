@@ -195,6 +195,7 @@ describe('formatOtherOpenSection', () => {
     const section = formatOtherOpenSection([
       {
         customer: { name: 'Bob Lee' },
+        aiTitle: 'Cancelled Order',
         aiSummary: 'Customer reports that order #1043 was cancelled',
         tag: 'Order Status',
       },
@@ -205,7 +206,7 @@ describe('formatOtherOpenSection', () => {
       },
     ]);
     expect(section).toContain('Also open:');
-    expect(section).toContain('Bob · #1043:');
+    expect(section).toContain('Bob · #1043: Cancelled Order');
     expect(section).toContain('Jane: Asking about shipping times');
   });
 
@@ -222,43 +223,63 @@ describe('formatOtherOpenSection', () => {
 });
 
 describe('formatBriefingTicketLine', () => {
-  it('matches waiting-line order-first style without age', () => {
+  // The classifier writes `aiTitle` as a short subject line naming the topic.
+  // That is the briefing's unit; `aiSummary` is the dashboard's full sentence.
+  it('prefers the classifier title over the dashboard summary', () => {
     expect(formatBriefingTicketLine(
       'Adam Jones',
-      'Customer states that order #1025 has been updated, but provides no details',
+      'Order Update With No Detail',
+      'Customer states that order #1025 has been updated, but provides no details about what changed or when it ships',
       null,
-    )).toBe('Adam · #1025: updated, no details');
+    )).toBe('Adam · #1025: Order Update With No Detail');
   });
 
-  it('tightens ticket-system summaries for the briefing', () => {
+  it('leaves the order number in the topic rather than cutting it out', () => {
     expect(formatBriefingTicketLine(
-      'Samsonite',
-      'Customer sent a brief notification that order #1024 updated, repeated twice without further detail or question',
+      'Bob Lee',
+      'Where Is Order #1043',
       null,
-    )).toBe('Samsonite · #1024: updated, repeated, no details');
+      null,
+    )).toBe('Bob: Where Is Order #1043');
+  });
 
+  it('falls back to the summary when a thread predates the title field', () => {
     expect(formatBriefingTicketLine(
       'Walle',
-      'Customer is asking for a shipping update on their unfulfilled order and mentions an upcoming trip',
       null,
-    )).toBe('Walle: shipping update, trip soon');
+      'Customer is asking for a shipping update and mentions an upcoming trip',
+      null,
+    )).toBe('Walle: Shipping update and mentions an upcoming trip');
 
     expect(formatBriefingTicketLine(
+      null,
       null,
       'Customer wrote a single word: "Testing."',
       null,
     )).toBe('Someone: Testing');
   });
 
+  it('names the channel when storefront chat gives it no name to use', () => {
+    expect(formatBriefingTicketLine(
+      null,
+      'Order Status Without Order Number',
+      null,
+      null,
+      'shopify_chat',
+    )).toBe('Storefront visitor: Order Status Without Order Number');
+  });
+
   it('maps classifier tags to plain language', () => {
-    expect(formatBriefingTicketLine('Ayumu', null, 'Order Status')).toBe('Ayumu: where\'s my order?');
+    expect(formatBriefingTicketLine('Ayumu', null, null, 'Order Status'))
+      .toBe("Ayumu: Where's my order?");
   });
 });
 
 describe('formatWaitingItemLine', () => {
-  it('does not truncate briefing topics mid-word', () => {
+  it('uses the classifier title instead of truncating the summary', () => {
     const line = formatWaitingItemLine({
       customerName: 'Adam Jones',
+      aiTitle: 'Order Update With No Detail',
       aiSummary: 'Customer states that order #1025 has been updated, but provides no details about what changed',
       tag: null,
       rawToolCalls: [{ id: 'tc1', name: 'send_reply', input: { text: 'Hi' } }],
@@ -267,9 +288,45 @@ describe('formatWaitingItemLine', () => {
       now: NOW,
       since: new Date(NOW.getTime() - 26 * 3_600_000),
     });
-    expect(line).toContain('Adam · #1025:');
-    expect(line).toContain('updated, no details');
-    expect(line).not.toContain('detai…');
+    expect(line).toBe('Adam · #1025: Order Update With No Detail (waiting 1 day)');
+  });
+
+  // The old line read "Escalate to merchant: about tracking numbers and
+  // shipping addresses for four different orders (,…" — a tool label in the
+  // most scannable position, and punctuation stranded by lifting out an order
+  // number the line then truncated anyway.
+  it('never spends the subject slot on a tool label', () => {
+    const line = formatWaitingItemLine({
+      customerName: null,
+      channelType: 'email',
+      aiTitle: 'Tracking And Address Changes',
+      aiSummary: 'Customer is asking about tracking numbers and shipping addresses for four different orders (#1019, #1020, #1021, #1022)',
+      tag: null,
+      rawToolCalls: [{ id: 'tc1', name: 'escalate_to_human', input: { reason: 'four orders' } }],
+      instruction: 'Ask the merchant',
+      now: NOW,
+      since: new Date(NOW.getTime() - 11 * 3_600_000),
+    });
+    // With no name to print, the order number is a better subject than
+    // "Someone" — and a far better one than the name of the tool.
+    expect(line).toBe('#1019: Tracking And Address Changes (waiting 11 hours)');
+    expect(line).not.toContain('Escalate to merchant');
+  });
+
+  it('never leaves stranded punctuation or a live address in the line', () => {
+    const line = formatWaitingItemLine({
+      customerName: null,
+      aiTitle: null,
+      aiSummary: 'Customer provided an email address (adoaiere983403984@yahoo.com) in response to a request for order details',
+      tag: null,
+      rawToolCalls: [{ id: 'tc1', name: 'send_reply', input: { text: 'Hi' } }],
+      instruction: 'Answer the customer',
+      now: NOW,
+      since: new Date(NOW.getTime() - 9 * 3_600_000),
+    });
+    expect(line).not.toContain('@');
+    expect(line).not.toMatch(/[(,;:\s]…/);
+    expect(line).toContain('their email');
   });
 });
 
@@ -342,11 +399,11 @@ describe('loadWaitingOnYouItems', () => {
     expect(items).toHaveLength(2);
     const section = formatWaitingSection(items)!;
     expect(section).toContain('Two things are still waiting on your OK:');
-    expect(section).toContain('1. Canary · #1042: ');
-    expect(section).toContain('2. Canary: ');
     // Every line differs by subject, so the list is worth reading.
-    expect(section).toContain('Asking where it is (waiting 5 hours)');
-    expect(section).toContain('Wants to change the shipping address (waiting 5 hours)');
+    expect(section).toContain('1. Canary: Asking where order 1042 is (waiting 5 hours)');
+    expect(section).toContain('2. Canary: Wants to change the shipping address (waiting 5 hours)');
+    // Wrapped items run together without air between them.
+    expect(section).toContain('(waiting 5 hours)\n\n2.');
     // A bare "yes" here would approve only the most recent plan.
     expect(section.trimEnd().endsWith('Tell me which ones to go ahead with.')).toBe(true);
     expect(section).not.toMatch(/Want me to send (any of )?those\?/);
@@ -375,6 +432,10 @@ describe('loadWaitingOnYouItems', () => {
   it('never names a customer it does not have', async () => {
     const customer = await createTestCustomer(org.id, 'anon@example.com');
     const thread = await createTestThread(org.id, customer.id, 'email');
+    await db.thread.update({
+      where: { id: thread.id },
+      data: { aiTitle: 'Damaged Sweater Return', tag: 'Returns' },
+    });
     await updateContext(org.id, 'chat-anon', {
       pendingPlan: {
         threadId: thread.id,
@@ -385,8 +446,10 @@ describe('loadWaitingOnYouItems', () => {
     });
 
     const items = await loadWaitingOnYouItems(org.id, NOW);
+    // "Customer" is a placeholder, not a name. With nothing to print, the
+    // subject falls back to a generic word and the topic carries the line.
     expect(items[0]?.line).not.toContain('Customer');
-    expect(items[0]?.line).toContain('the customer');
+    expect(items[0]?.line).toBe('Someone: Damaged Sweater Return');
   });
 
   it('ignores stale plans on threads outside the support inbox', async () => {
