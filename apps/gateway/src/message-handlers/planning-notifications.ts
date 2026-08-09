@@ -270,6 +270,10 @@ export function formatOperatorPlanMessage(
 ): string {
   const stage = options?.stage ?? FRESH_STAGE;
   const firstName = customerFirstName(customerName);
+  // A storefront visitor has not identified themselves, so the nameless fallback
+  // cannot call them a customer either — the same reason the header says
+  // "Someone on your storefront" rather than "the customer".
+  const namelessNoun = channelType === CHANNEL.SHOPIFY_CHAT ? 'the visitor' : 'the customer';
   const actionableSteps = steps.filter((step) => step.category !== 'read');
 
   // The actual draft the merchant is approving, so approval is not sight-unseen.
@@ -303,8 +307,8 @@ export function formatOperatorPlanMessage(
     if (draftBody) lines.push('', `The reply: "${draftBody}"`);
   } else if (approvableSteps.length > 0) {
     const stepLines = approvableSteps.map((step, index) => {
-      if (step.tool === 'send_reply') return `${index + 1}. Reply to ${firstName ?? 'the customer'}`;
-      if (step.tool === 'send_email') return `${index + 1}. Email ${firstName ?? 'the customer'}`;
+      if (step.tool === 'send_reply') return `${index + 1}. Reply to ${firstName ?? namelessNoun}`;
+      if (step.tool === 'send_email') return `${index + 1}. Email ${firstName ?? namelessNoun}`;
       return `${index + 1}. ${step.label || step.description}`;
     });
     lines.push('', "Here's what I'd do:", ...stepLines);
