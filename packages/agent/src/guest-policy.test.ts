@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import type { AgentContext } from "./agent-context.js";
 import { GUEST_TOOL_NAMES, isGuestAllowedTool, isGuestContext } from "./guest-policy.js";
+import { appendInitialPlanningWarnings } from "./planner-read-tools.js";
 import { resolveAgentSettings, type AutonomyTier } from "./settings.js";
 import { TOOL_DEFINITIONS, selectAgentTools } from "./tools/registry/index.js";
 import { checkStaticToolPolicy } from "./tools/static-policy.js";
@@ -43,6 +45,51 @@ describe("guest state", () => {
     expect(isGuestContext({})).toBe(false);
     expect(isGuestContext(null)).toBe(false);
     expect(isGuestContext(undefined)).toBe(false);
+  });
+});
+
+describe("planning warnings", () => {
+  function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
+    return {
+      orgId: "org_test",
+      orgName: "Test Store",
+      customer: { id: "customer_test", name: null, platformId: "shopify_chat:session_test" },
+      recentMessages: [{ senderType: "customer", contentText: "Do you ship to Canada?" }],
+      openThreadCount: 1,
+      pastTickets: [],
+      shopify: { shop: "test-store.myshopify.com", accessToken: "shpat_test" },
+      recentOrders: [],
+      linkedShopifyCustomerName: null,
+      kbArticles: [],
+      thread: {
+        id: "thread_test",
+        status: "open",
+        channelType: "shopify_chat",
+        tag: null,
+        aiSummary: null,
+        shopifyCustomerId: null,
+      },
+      escalate: () => Promise.resolve(),
+      ...overrides,
+    };
+  }
+
+  it("does not ask the merchant to link a Shopify customer a guest cannot have", () => {
+    const warnings: string[] = [];
+    appendInitialPlanningWarnings({ ctx: makeCtx(GUEST), operatorMode: false, warnings });
+    expect(warnings).toEqual([]);
+  });
+
+  it("still raises it on a normal channel with no linked customer", () => {
+    const warnings: string[] = [];
+    appendInitialPlanningWarnings({
+      ctx: makeCtx({ thread: { ...makeCtx().thread, channelType: "email" } }),
+      operatorMode: false,
+      warnings,
+    });
+    expect(warnings).toEqual([
+      "Couldn't find a Shopify customer - verify the correct account is linked before approving.",
+    ]);
   });
 });
 

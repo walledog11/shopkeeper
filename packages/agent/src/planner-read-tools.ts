@@ -4,6 +4,7 @@ import type { OrgSettings } from "./types.js";
 import { executeToolStructured } from "./tools/executor.js";
 import type { ToolStatus } from "./tools/result.js";
 import type { AgentContext, ShopifyOrderSummary } from "./agent-context.js";
+import { isGuestContext } from "./guest-policy.js";
 import { normalizeOrderName } from "./order-reference.js";
 
 type PlanningReadToolResult = {
@@ -57,7 +58,10 @@ export function appendInitialPlanningWarnings(input: {
   warnings: string[];
 }): void {
   const { ctx, operatorMode, warnings } = input;
-  if (ctx.shopify && !ctx.thread.shopifyCustomerId && !operatorMode) {
+  // A guest shopper has no Shopify customer by construction, so this would fire
+  // on every storefront plan and ask the merchant to verify a link that cannot
+  // exist. A warning present on every plan is a warning nobody reads.
+  if (ctx.shopify && !ctx.thread.shopifyCustomerId && !operatorMode && !isGuestContext(ctx)) {
     warnings.push("Couldn't find a Shopify customer - verify the correct account is linked before approving.");
   }
 }
