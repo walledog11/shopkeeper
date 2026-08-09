@@ -45,6 +45,18 @@ describe('POST /api/integrations/gmail/auth', () => {
     ]));
     expect(scopes).not.toContain('https://www.googleapis.com/auth/gmail.modify');
 
-    expect(mockCookieSet).toHaveBeenCalledWith('gmail_oauth_return', '/dashboard/integrations', expect.any(Object));
+    const state = redirectUrl.searchParams.get('state');
+    expect(mockCookieSet).toHaveBeenCalledWith(
+      `gmail_oauth_attempt_${state}`,
+      expect.any(String),
+      expect.objectContaining({ httpOnly: true, maxAge: 600 }),
+    );
+    const attempt = JSON.parse(Buffer.from(mockCookieSet.mock.calls[0][1], 'base64url').toString());
+    expect(attempt).toMatchObject({
+      userId: 'usr_oauth',
+      orgId: 'org_oauth',
+      mode: 'redirect',
+      returnTo: '/dashboard/integrations',
+    });
   });
 });

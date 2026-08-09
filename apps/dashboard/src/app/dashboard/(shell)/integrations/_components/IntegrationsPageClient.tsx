@@ -7,7 +7,8 @@ import { CheckCircle2, AlertCircle, AlertTriangle, Info } from "lucide-react"
 import { cn } from "@/lib/ui/cn"
 import { useIntegrations } from "@/hooks/useIntegrations"
 import { getEmailProvider } from "@shopkeeper/email/providers"
-import { OAUTH_ERROR_MESSAGES, INTEGRATION_CHANNEL_SECTIONS, PLATFORM_CONFIG, sortPlatformConfigsByChannelKind, type IntegrationChannelKind, type PlatformConfig } from "@/lib/integrations/catalog"
+import { INTEGRATION_CHANNEL_SECTIONS, PLATFORM_CONFIG, sortPlatformConfigsByChannelKind, type IntegrationChannelKind, type PlatformConfig } from "@/lib/integrations/catalog"
+import { OAUTH_ERROR_MESSAGES, parseOAuthOutcome } from "@/lib/integrations/oauth-contract"
 import {
   openOAuthPopup,
   subscribeOAuthDone,
@@ -136,36 +137,36 @@ function IntegrationsPageContent({
 
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString())
-    const connected = params.get('connected')
-    const error = params.get('error')
-    if (connected === 'instagram') showToast('success', 'Instagram connected.')
-    else if (connected === 'shopify') showToast('success', 'Shopify store connected.')
-    else if (connected === 'gmail') {
+    const outcome = parseOAuthOutcome(params)
+    if (outcome?.status === 'connected' && outcome.provider === 'instagram') showToast('success', 'Instagram connected.')
+    else if (outcome?.status === 'connected' && outcome.provider === 'shopify') showToast('success', 'Shopify store connected.')
+    else if (outcome?.status === 'connected' && outcome.provider === 'gmail') {
       showToast('success', 'Gmail connected.')
       if (!gmailNativeInboundEnabled) {
         setOpenId('gmail')
       }
     }
-    else if (connected === 'tiktok-shop') showToast('success', 'TikTok Shop connected.')
-    else if (error) showToast('error', OAUTH_ERROR_MESSAGES[error] ?? 'An unexpected error occurred.')
+    else if (outcome?.status === 'connected' && outcome.provider === 'tiktok-shop') showToast('success', 'TikTok Shop connected.')
+    else if (outcome?.status === 'failed') showToast('error', OAUTH_ERROR_MESSAGES[outcome.error])
   }, [gmailNativeInboundEnabled, searchParams, showToast])
 
   const handleOAuthResult = useEffectEvent((payload: OAuthDoneMessage) => {
     void mutate()
-    if (payload.error) {
-      showToast('error', OAUTH_ERROR_MESSAGES[payload.error] ?? 'An unexpected error occurred.')
+    if (payload.outcome.status === 'failed') {
+      showToast('error', OAUTH_ERROR_MESSAGES[payload.outcome.error])
       return
     }
-    if (payload.connected === 'gmail' && !gmailNativeInboundEnabled) {
+    const provider = payload.outcome.provider
+    if (provider === 'gmail' && !gmailNativeInboundEnabled) {
       setOpenId('gmail')
     }
-    if (payload.connected === 'instagram') {
+    if (provider === 'instagram') {
       showToast('success', 'Instagram connected.')
-    } else if (payload.connected === 'shopify') {
+    } else if (provider === 'shopify') {
       showToast('success', 'Shopify store connected.')
-    } else if (payload.connected === 'gmail') {
+    } else if (provider === 'gmail') {
       showToast('success', 'Gmail connected.')
-    } else if (payload.connected === 'tiktok-shop') {
+    } else if (provider === 'tiktok-shop') {
       showToast('success', 'TikTok Shop connected.')
     }
   })
@@ -189,12 +190,12 @@ function IntegrationsPageContent({
   }, [integrations, loaded, showToast])
 
   const launchOAuth = useCallback((url: string, onClosed?: () => void) => {
-    const popup = openOAuthPopup(url)
-    if (!popup) {
+    const launch = openOAuthPopup(url)
+    if (launch.mode === 'redirect') {
       onClosed?.()
       return
     }
-    watchOAuthPopup(popup, () => {
+    watchOAuthPopup(launch.popup, () => {
       void mutate()
       onClosed?.()
     })

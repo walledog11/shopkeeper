@@ -35,7 +35,7 @@ describe('POST /api/integrations/tiktok-shop/auth', () => {
   it('sets OAuth state cookies and redirects to TikTok Shop authorization', async () => {
     const res = await POST(new Request('http://localhost/api/integrations/tiktok-shop/auth?returnTo=/dashboard/integrations'));
 
-    expect(res.status).toBe(307);
+    expect(res.status).toBe(303);
     const redirectUrl = new URL(res.headers.get('location')!);
     expect(redirectUrl.origin).toBe('https://auth.tiktok.test');
     expect(redirectUrl.searchParams.get('app_key')).toBe('tts-app-key');
@@ -45,10 +45,12 @@ describe('POST /api/integrations/tiktok-shop/auth', () => {
     expect(redirectUrl.searchParams.get('scope')).toBe('buyer.message,shop.info');
     expect(redirectUrl.searchParams.get('state')).toMatch(/^[a-f0-9]{32}$/);
 
-    expect(mockCookieSet).toHaveBeenCalledWith('tiktok_shop_oauth_state', redirectUrl.searchParams.get('state'), expect.objectContaining({ httpOnly: true }));
-    expect(mockCookieSet).toHaveBeenCalledWith('tiktok_shop_oauth_org', 'org_oauth', expect.any(Object));
-    expect(mockCookieSet).toHaveBeenCalledWith('tiktok_shop_oauth_user', 'usr_oauth', expect.any(Object));
-    expect(mockCookieSet).toHaveBeenCalledWith('tiktok_shop_oauth_return', '/dashboard/integrations', expect.any(Object));
+    expect(mockCookieSet).toHaveBeenCalledWith(
+      `tiktok-shop_oauth_attempt_${redirectUrl.searchParams.get('state')}`,
+      expect.any(String),
+      expect.objectContaining({ httpOnly: true, maxAge: 600 }),
+    );
+    expect(mockCookieSet).toHaveBeenCalledTimes(1);
   });
 
   it('returns 500 when enabled but provider OAuth config is incomplete', async () => {

@@ -215,9 +215,9 @@ export function useOnboardingFlow(pinnedStepIndex: number | null) {
         platform,
       });
     }
-    const popup = openOAuthPopup(url);
-    if (!popup) return;
-    watchOAuthPopup(popup, () => {
+    const launch = openOAuthPopup(url);
+    if (launch.mode === 'redirect') return;
+    watchOAuthPopup(launch.popup, () => {
       void refreshIntegrations();
     });
   }, [ensureOrganization, refreshIntegrations]);

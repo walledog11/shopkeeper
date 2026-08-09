@@ -52,7 +52,7 @@ describe('POST /api/integrations/instagram/auth', () => {
     });
     expect(createSessionCookies).toHaveBeenCalledWith(
       request,
-      { prefix: 'ig' },
+      { provider: 'instagram' },
       { orgId: 'org_123', userId: 'user_123' },
     );
   });

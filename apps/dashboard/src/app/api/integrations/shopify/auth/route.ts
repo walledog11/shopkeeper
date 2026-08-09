@@ -7,6 +7,7 @@ import {
   createOAuthSessionCookies,
   requireAuthenticatedOAuthSession,
 } from '@/app/api/integrations/_lib/oauth-session';
+import { oauthProviderRedirect } from '@/app/api/integrations/_lib/oauth-callback';
 
 export async function GET(request: Request) {
   return createPostRedirectResponse(request, 'Connect Shopify');
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
 
   const { state } = await createOAuthSessionCookies(
     request,
-    { prefix: 'shopify' },
+    { provider: 'shopify' },
     session,
     { shop: shopDomain },
   );
@@ -58,5 +59,5 @@ export async function POST(request: Request) {
   // 303, not the NextResponse.redirect default of 307: the popup shell submits
   // this route as POST, and 307 would preserve the method on the hop to
   // Shopify's authorize endpoint, which only accepts GET.
-  return NextResponse.redirect(authUrl.toString(), 303);
+  return oauthProviderRedirect(authUrl);
 }

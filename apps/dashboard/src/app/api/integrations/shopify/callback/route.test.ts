@@ -80,7 +80,7 @@ afterEach(async () => {
 describe('POST /api/integrations/shopify/callback', () => {
   it('bounds token exchange and preserves a typed timeout', async () => {
     mockSavedCookies({
-      shopify_oauth_state: 'state_123',
+      shopify_oauth_state: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       shopify_oauth_org: org!.clerkOrgId,
       shopify_oauth_user: 'usr_oauth',
       shopify_oauth_shop: 'shopify-callback-fixture.myshopify.com',
@@ -90,12 +90,12 @@ describe('POST /api/integrations/shopify/callback', () => {
     const res = await POST(new Request(signedCallbackUrl({
       code: 'oauth_code',
       shop: 'shopify-callback-fixture.myshopify.com',
-      state: 'state_123',
+      state: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     })));
 
     expect(res.status).toBe(303);
     expect(res.headers.get('location')).toBe(
-      'http://dashboard.test/dashboard/integrations/oauth/complete?error=shopify_server_error',
+      'http://dashboard.test/dashboard/integrations/oauth/complete?provider=shopify&status=failed&error=shopify_server_error&mode=redirect',
     );
     expect(mockLogger.error).toHaveBeenCalledWith(
       {
@@ -111,7 +111,7 @@ describe('POST /api/integrations/shopify/callback', () => {
 
   it('rejects a callback for a different shop after verifying shop identity', async () => {
     mockSavedCookies({
-      shopify_oauth_state: 'state_123',
+      shopify_oauth_state: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       shopify_oauth_org: org!.clerkOrgId,
       shopify_oauth_user: 'usr_oauth',
       shopify_oauth_shop: 'shopify-callback-fixture.myshopify.com',
@@ -124,11 +124,11 @@ describe('POST /api/integrations/shopify/callback', () => {
     const res = await POST(new Request(signedCallbackUrl({
       code: 'oauth_code',
       shop: 'evil-shop.myshopify.com',
-      state: 'state_123',
+      state: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     })));
 
     expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations/oauth/complete?error=shopify_shop_mismatch');
+    expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations/oauth/complete?provider=shopify&status=failed&error=shopify_shop_mismatch&mode=redirect');
     expect(mockFetch).toHaveBeenCalledTimes(3);
     expect(mockLogger.error).toHaveBeenCalledWith(
       {
@@ -143,7 +143,7 @@ describe('POST /api/integrations/shopify/callback', () => {
 
   it('accepts myshopify domain aliases for the same store', async () => {
     mockSavedCookies({
-      shopify_oauth_state: 'state_123',
+      shopify_oauth_state: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       shopify_oauth_org: org!.clerkOrgId,
       shopify_oauth_user: 'usr_oauth',
       shopify_oauth_shop: 'almond-9567.myshopify.com',
@@ -161,11 +161,11 @@ describe('POST /api/integrations/shopify/callback', () => {
     const res = await POST(new Request(signedCallbackUrl({
       code: 'oauth_code',
       shop: 'rxcemn-vt.myshopify.com',
-      state: 'state_123',
+      state: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     })));
 
     expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations/oauth/complete?connected=shopify');
+    expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations/oauth/complete?provider=shopify&status=connected&mode=redirect');
     expect(mockLogger.info).toHaveBeenCalledWith(
       {
         shop: 'rxcemn-vt.myshopify.com',
@@ -183,7 +183,7 @@ describe('POST /api/integrations/shopify/callback', () => {
 
   it('persists the active org integration and soft-fails webhook registration errors', async () => {
     mockSavedCookies({
-      shopify_oauth_state: 'state_123',
+      shopify_oauth_state: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       shopify_oauth_org: org!.clerkOrgId,
       shopify_oauth_user: 'usr_oauth',
       shopify_oauth_shop: 'shopify-callback-fixture.myshopify.com',
@@ -204,11 +204,11 @@ describe('POST /api/integrations/shopify/callback', () => {
     const res = await POST(new Request(signedCallbackUrl({
       code: 'oauth_code',
       shop: 'shopify-callback-fixture.myshopify.com',
-      state: 'state_123',
+      state: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     })));
 
     expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations/oauth/complete?connected=shopify&returnTo=%2Fdashboard%2Fsettings');
+    expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations/oauth/complete?provider=shopify&status=connected&mode=redirect&returnTo=%2Fdashboard%2Fsettings');
 
     const integration = await db.integration.findFirstOrThrow({
       where: { organizationId: org!.id, platform: ChannelType.shopify },
@@ -239,7 +239,7 @@ describe('POST /api/integrations/shopify/callback', () => {
 
   it('stays silent when a reconnect re-registers a topic Shopify already holds', async () => {
     mockSavedCookies({
-      shopify_oauth_state: 'state_123',
+      shopify_oauth_state: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       shopify_oauth_org: org!.clerkOrgId,
       shopify_oauth_user: 'usr_oauth',
       shopify_oauth_shop: 'shopify-callback-fixture.myshopify.com',
@@ -257,7 +257,7 @@ describe('POST /api/integrations/shopify/callback', () => {
     const res = await POST(new Request(signedCallbackUrl({
       code: 'oauth_code',
       shop: 'shopify-callback-fixture.myshopify.com',
-      state: 'state_123',
+      state: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     })));
 
     expect(res.status).toBe(303);
@@ -280,7 +280,7 @@ describe('POST /api/integrations/shopify/callback', () => {
       },
     });
     mockSavedCookies({
-      shopify_oauth_state: 'state_123',
+      shopify_oauth_state: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       shopify_oauth_org: org!.clerkOrgId,
       shopify_oauth_user: 'usr_oauth',
       shopify_oauth_shop: 'shopify-callback-fixture.myshopify.com',
@@ -292,12 +292,12 @@ describe('POST /api/integrations/shopify/callback', () => {
     const res = await POST(new Request(signedCallbackUrl({
       code: 'oauth_code',
       shop: 'shopify-callback-fixture.myshopify.com',
-      state: 'state_123',
+      state: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     })));
 
     expect(res.status).toBe(303);
     expect(res.headers.get('location')).toBe(
-      'http://dashboard.test/dashboard/integrations/oauth/complete?error=shopify_store_in_use',
+      'http://dashboard.test/dashboard/integrations/oauth/complete?provider=shopify&status=failed&error=shopify_store_in_use&mode=redirect',
     );
     // No integration for the caller, no webhook registration, and the incumbent
     // workspace's row is untouched.
@@ -326,7 +326,7 @@ describe('POST /api/integrations/shopify/callback', () => {
       },
     });
     mockSavedCookies({
-      shopify_oauth_state: 'state_123',
+      shopify_oauth_state: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       shopify_oauth_org: org!.clerkOrgId,
       shopify_oauth_user: 'usr_oauth',
       shopify_oauth_shop: 'shopify-callback-fixture.myshopify.com',
@@ -352,7 +352,7 @@ describe('POST /api/integrations/shopify/callback', () => {
     const res = await POST(new Request(signedCallbackUrl({
       code: 'oauth_code',
       shop: 'shopify-callback-fixture.myshopify.com',
-      state: 'state_123',
+      state: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     })));
 
     expect(res.status).toBe(303);
@@ -369,9 +369,17 @@ describe('POST /api/integrations/shopify/callback', () => {
 });
 
 function mockSavedCookies(values: Record<string, string>) {
+  const prefix = 'shopify';
+  const state = values[`${prefix}_oauth_state`];
+  const attempt = Buffer.from(JSON.stringify({
+    userId: values[`${prefix}_oauth_user`],
+    orgId: values[`${prefix}_oauth_org`],
+    returnTo: values[`${prefix}_oauth_return`] ?? null,
+    mode: 'redirect',
+    extra: { shop: values[`${prefix}_oauth_shop`] },
+  })).toString('base64url');
   mockCookieGet.mockImplementation((name: string) => {
-    const value = values[name];
-    return value ? { value } : undefined;
+    return name === `${prefix}_oauth_attempt_${state}` ? { value: attempt } : undefined;
   });
 }
 

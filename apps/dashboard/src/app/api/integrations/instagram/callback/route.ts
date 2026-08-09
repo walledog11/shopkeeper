@@ -15,8 +15,7 @@ import {
   persistInstagramConnection,
 } from '@/app/api/integrations/_lib/instagram-connection';
 import {
-  integrationsResponse,
-  oauthDestinationResponse,
+  oauthCompleteResponse,
   resolveOAuthOrganization,
 } from '@/app/api/integrations/_lib/oauth-callback';
 import {
@@ -118,6 +117,11 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const oauthConfig = getInstagramOAuthCallbackConfig();
   if (!oauthConfig) {
+    if (process.env.APP_URL) {
+      return oauthCompleteResponse(process.env.APP_URL, {
+        outcome: { status: 'failed', provider: 'instagram', error: 'provider_unavailable' },
+      });
+    }
     return NextResponse.json({ error: 'OAuth callback is not configured' }, { status: 500 });
   }
   const { appId, appSecret, appUrl, redirectUri } = oauthConfig;
@@ -142,7 +146,7 @@ export async function POST(request: Request) {
   const callbackSession = await validateOAuthCallbackSession({
     appUrl,
     logPrefix: 'IG OAuth',
-    prefix: 'ig',
+    provider: 'instagram',
     state,
   });
   if (!callbackSession.ok) {
@@ -154,9 +158,15 @@ export async function POST(request: Request) {
     return callbackSession.response;
   }
 
-  const { attemptId, clerkOrgId, returnTo } = callbackSession.session;
+  const { attemptId, clerkOrgId, mode, returnTo } = callbackSession.session;
   const orgResult = await resolveOAuthOrganization(clerkOrgId, 'IG OAuth');
-  if (!orgResult.ok) return integrationsResponse(appUrl, { error: orgResult.error });
+  if (!orgResult.ok) {
+    return oauthCompleteResponse(appUrl, {
+      outcome: { status: 'failed', provider: 'instagram', error: orgResult.error },
+      mode,
+      returnTo,
+    });
+  }
   const organizationId = orgResult.org.id;
   const fail = async (
     error: InstagramOAuthError,
@@ -168,7 +178,11 @@ export async function POST(request: Request) {
       organizationId,
       platform: 'ig_dm',
     });
-    return integrationsResponse(appUrl, { error });
+    return oauthCompleteResponse(appUrl, {
+      outcome: { status: 'failed', provider: 'instagram', error },
+      mode,
+      returnTo,
+    });
   };
 
   if (providerError) {
@@ -331,7 +345,11 @@ export async function POST(request: Request) {
       });
     }
 
-    return oauthDestinationResponse(appUrl, returnTo, 'instagram');
+    return oauthCompleteResponse(appUrl, {
+      outcome: { status: 'connected', provider: 'instagram' },
+      mode,
+      returnTo,
+    });
   } catch (error) {
     logger.error(
       { errorClass: error instanceof Error ? error.name : 'UnknownError' },

@@ -2,13 +2,13 @@ import { NextResponse } from "next/server";
 import { createPostRedirectResponse } from "@/lib/server/post-redirect-response";
 import {
   getTikTokShopOAuthAuthorizeConfig,
-  TIKTOK_SHOP_OAUTH_COOKIE_PREFIX,
 } from "@/lib/tiktok-shop/config";
 import { buildTikTokShopAuthorizeUrl } from "@/lib/tiktok-shop/client";
 import {
   createOAuthSessionCookies,
   requireAuthenticatedOAuthSession,
 } from "@/app/api/integrations/_lib/oauth-session";
+import { oauthProviderRedirect } from "@/app/api/integrations/_lib/oauth-callback";
 
 export async function GET(request: Request) {
   return createPostRedirectResponse(request, "Connect TikTok Shop");
@@ -29,9 +29,9 @@ export async function POST(request: Request) {
 
   const { state } = await createOAuthSessionCookies(
     request,
-    { prefix: TIKTOK_SHOP_OAUTH_COOKIE_PREFIX },
+    { provider: "tiktok-shop" },
     session,
   );
 
-  return NextResponse.redirect(buildTikTokShopAuthorizeUrl(oauthConfig, state).toString());
+  return oauthProviderRedirect(buildTikTokShopAuthorizeUrl(oauthConfig, state));
 }

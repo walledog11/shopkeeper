@@ -1,13 +1,21 @@
+import {
+  isOAuthFlowMode,
+  isOAuthOutcome,
+  OAUTH_DONE_MESSAGE_TYPE,
+  type OAuthDoneMessage,
+  type OAuthFlowMode,
+} from './oauth-contract';
+
+export { OAUTH_DONE_MESSAGE_TYPE } from './oauth-contract';
+export type { OAuthDoneMessage } from './oauth-contract';
+
 export const OAUTH_POPUP_NAME = 'shopkeeper_oauth_popup';
 export const OAUTH_POPUP_SESSION_KEY = 'shopkeeper-oauth-popup';
 export const OAUTH_RESULT_CHANNEL = 'shopkeeper-oauth-result';
-export const OAUTH_DONE_MESSAGE_TYPE = 'shopkeeper-oauth-done';
 
-export interface OAuthDoneMessage {
-  type: typeof OAUTH_DONE_MESSAGE_TYPE;
-  connected: string | null;
-  error: string | null;
-}
+export type OAuthLaunchResult =
+  | { mode: 'popup'; popup: Window }
+  | { mode: 'redirect' };
 
 export function buildOAuthAuthUrl(path: string, params: Record<string, string | undefined>): string {
   const url = new URL(path, typeof window === 'undefined' ? 'http://localhost' : window.location.origin);
@@ -17,10 +25,16 @@ export function buildOAuthAuthUrl(path: string, params: Record<string, string | 
   return `${url.pathname}${url.search}`;
 }
 
-export function markOAuthPopupSession(): void {
+function withOAuthMode(value: string, mode: OAuthFlowMode): string {
+  const url = new URL(value, window.location.origin);
+  url.searchParams.set('mode', mode);
+  return url.origin === window.location.origin ? `${url.pathname}${url.search}${url.hash}` : url.toString();
+}
+
+export function markOAuthPopupSession(target?: Window): void {
   if (typeof window === 'undefined') return;
   try {
-    sessionStorage.setItem(OAUTH_POPUP_SESSION_KEY, '1');
+    (target ?? window).sessionStorage.setItem(OAUTH_POPUP_SESSION_KEY, '1');
   } catch {
     // Ignore storage failures in restricted contexts.
   }
@@ -35,10 +49,9 @@ export function clearOAuthPopupSession(): void {
   }
 }
 
-/** Detect OAuth popup even after cross-origin redirects null out window.opener. */
+/** Used only when callback state was unavailable and no trusted mode reached the completion URL. */
 export function isOAuthPopupWindow(): boolean {
   if (typeof window === 'undefined') return false;
-  if (window.name === OAUTH_POPUP_NAME) return true;
   try {
     return sessionStorage.getItem(OAUTH_POPUP_SESSION_KEY) === '1';
   } catch {
@@ -46,17 +59,25 @@ export function isOAuthPopupWindow(): boolean {
   }
 }
 
+export function resolveOAuthCompletionMode(value: unknown): OAuthFlowMode {
+  if (isOAuthFlowMode(value)) return value;
+  return isOAuthPopupWindow() ? 'popup' : 'redirect';
+}
+
 export function publishOAuthDone(payload: OAuthDoneMessage): void {
   if (typeof window === 'undefined') return;
 
+  let postedToOpener = false;
   if (window.opener && window.opener !== window) {
     try {
       window.opener.postMessage(payload, window.location.origin);
+      postedToOpener = true;
     } catch {
       // Cross-origin redirects can break opener references.
     }
   }
 
+  if (postedToOpener) return;
   try {
     const channel = new BroadcastChannel(OAUTH_RESULT_CHANNEL);
     channel.postMessage(payload);
@@ -97,26 +118,26 @@ export function finishOAuthPopup(payload: OAuthDoneMessage): void {
   window.close();
 }
 
-export function openOAuthPopup(url: string): Window | null {
-  if (typeof window === 'undefined') return null;
+export function openOAuthPopup(url: string): OAuthLaunchResult {
+  if (typeof window === 'undefined') return { mode: 'redirect' };
 
   const desktop = window.matchMedia('(min-width: 768px)').matches;
   if (!desktop) {
-    markOAuthPopupSession();
-    window.location.href = url;
-    return null;
+    window.location.href = withOAuthMode(url, 'redirect');
+    return { mode: 'redirect' };
   }
 
   const features = 'width=720,height=820,menubar=no,toolbar=no,location=no,status=no';
-  const popup = window.open(url, OAUTH_POPUP_NAME, features);
+  const popup = window.open('', OAUTH_POPUP_NAME, features);
   if (!popup) {
-    markOAuthPopupSession();
-    window.location.href = url;
-    return null;
+    window.location.href = withOAuthMode(url, 'redirect');
+    return { mode: 'redirect' };
   }
 
+  markOAuthPopupSession(popup);
+  popup.location.href = withOAuthMode(url, 'popup');
   popup.focus();
-  return popup;
+  return { mode: 'popup', popup };
 }
 
 export function watchOAuthPopup(popup: Window, onClosed: () => void): () => void {
@@ -133,5 +154,5 @@ export function watchOAuthPopup(popup: Window, onClosed: () => void): () => void
 export function isOAuthDoneMessage(data: unknown): data is OAuthDoneMessage {
   if (!data || typeof data !== 'object') return false;
   const message = data as Partial<OAuthDoneMessage>;
-  return message.type === OAUTH_DONE_MESSAGE_TYPE;
+  return message.type === OAUTH_DONE_MESSAGE_TYPE && isOAuthOutcome(message.outcome);
 }

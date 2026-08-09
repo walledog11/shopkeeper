@@ -1,7 +1,5 @@
 import { normalizeAbsoluteUrl, readEnv } from "@/lib/env/helpers";
 
-export const TIKTOK_SHOP_OAUTH_COOKIE_PREFIX = "tiktok_shop";
-
 export type TikTokShopHttpMethod = "GET" | "POST";
 
 export interface TikTokShopOAuthAuthorizeConfig {

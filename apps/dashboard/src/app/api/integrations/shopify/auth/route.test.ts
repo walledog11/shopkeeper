@@ -61,10 +61,17 @@ describe('POST /api/integrations/shopify/auth', () => {
     expect(redirectUrl.searchParams.get('redirect_uri')).toBe('http://dashboard.test/api/integrations/shopify/callback');
     expect(redirectUrl.searchParams.get('state')).toMatch(/^[a-f0-9]{32}$/);
 
-    expect(mockCookieSet).toHaveBeenCalledWith('shopify_oauth_state', redirectUrl.searchParams.get('state'), expect.objectContaining({ httpOnly: true }));
-    expect(mockCookieSet).toHaveBeenCalledWith('shopify_oauth_org', 'org_oauth', expect.any(Object));
-    expect(mockCookieSet).toHaveBeenCalledWith('shopify_oauth_user', 'usr_oauth', expect.any(Object));
-    expect(mockCookieSet).toHaveBeenCalledWith('shopify_oauth_shop', 'fixture-shop.myshopify.com', expect.any(Object));
-    expect(mockCookieSet).toHaveBeenCalledWith('shopify_oauth_return', '/dashboard/integrations', expect.any(Object));
+    expect(mockCookieSet).toHaveBeenCalledWith(
+      `shopify_oauth_attempt_${redirectUrl.searchParams.get('state')}`,
+      expect.any(String),
+      expect.objectContaining({ httpOnly: true, maxAge: 600 }),
+    );
+    const attempt = JSON.parse(Buffer.from(mockCookieSet.mock.calls[0][1], 'base64url').toString());
+    expect(attempt).toMatchObject({
+      userId: 'usr_oauth',
+      orgId: 'org_oauth',
+      returnTo: '/dashboard/integrations',
+      extra: { shop: 'fixture-shop.myshopify.com' },
+    });
   });
 });

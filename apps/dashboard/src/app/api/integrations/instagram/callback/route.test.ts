@@ -58,7 +58,7 @@ beforeEach(async () => {
     orgId: org.clerkOrgId,
   } as ReturnType<typeof auth> extends Promise<infer T> ? T : never);
   mockSavedCookies({
-    ig_oauth_state: 'state_123',
+    ig_oauth_state: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     ig_oauth_org: org.clerkOrgId,
     ig_oauth_user: 'usr_oauth',
     ig_oauth_return: '/dashboard/settings',
@@ -76,7 +76,7 @@ afterEach(async () => {
 describe('POST /api/integrations/instagram/callback', () => {
   it('rejects a state mismatch before calling Instagram or mutating the database', async () => {
     mockSavedCookies({
-      ig_oauth_state: 'different_state',
+      ig_oauth_state: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
       ig_oauth_org: org!.clerkOrgId,
       ig_oauth_user: 'usr_oauth',
     });
@@ -84,7 +84,7 @@ describe('POST /api/integrations/instagram/callback', () => {
     const response = await postCallback();
 
     expect(response.headers.get('location')).toBe(
-      'http://dashboard.test/dashboard/integrations/oauth/complete?error=state_mismatch',
+      'http://dashboard.test/dashboard/integrations/oauth/complete?provider=instagram&status=failed&error=state_mismatch',
     );
     expect(mockFetch).not.toHaveBeenCalled();
     expect(await instagramIntegrationCount(org!.id)).toBe(0);
@@ -97,7 +97,9 @@ describe('POST /api/integrations/instagram/callback', () => {
     const response = await postCallback();
 
     expect(response.status).toBe(303);
-    expect(response.headers.get('location')).toBe('http://dashboard.test/dashboard/settings');
+    expect(response.headers.get('location')).toBe(
+      'http://dashboard.test/dashboard/integrations/oauth/complete?provider=instagram&status=connected&mode=redirect&returnTo=%2Fdashboard%2Fsettings',
+    );
 
     const integration = await db.integration.findFirstOrThrow({
       where: { organizationId: org!.id, platform: ChannelType.ig_dm },
@@ -150,7 +152,7 @@ describe('POST /api/integrations/instagram/callback', () => {
     const response = await postCallback();
 
     expect(response.headers.get('location')).toBe(
-      'http://dashboard.test/dashboard/integrations?error=long_lived_token_failed',
+      'http://dashboard.test/dashboard/integrations/oauth/complete?provider=instagram&status=failed&error=long_lived_token_failed&mode=redirect&returnTo=%2Fdashboard%2Fsettings',
     );
     expect(await instagramIntegrationCount(org!.id)).toBe(0);
     expect(mockFetch).toHaveBeenCalledTimes(2);
@@ -164,7 +166,7 @@ describe('POST /api/integrations/instagram/callback', () => {
     const response = await postCallback();
 
     expect(response.headers.get('location')).toBe(
-      'http://dashboard.test/dashboard/integrations?error=missing_instagram_permissions',
+      'http://dashboard.test/dashboard/integrations/oauth/complete?provider=instagram&status=failed&error=missing_instagram_permissions&mode=redirect&returnTo=%2Fdashboard%2Fsettings',
     );
     expect(await instagramIntegrationCount(org!.id)).toBe(0);
     expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -176,7 +178,7 @@ describe('POST /api/integrations/instagram/callback', () => {
     const response = await postCallback();
 
     expect(response.headers.get('location')).toBe(
-      'http://dashboard.test/dashboard/integrations?error=not_professional_account',
+      'http://dashboard.test/dashboard/integrations/oauth/complete?provider=instagram&status=failed&error=not_professional_account&mode=redirect&returnTo=%2Fdashboard%2Fsettings',
     );
     expect(await instagramIntegrationCount(org!.id)).toBe(0);
     expect(mockFetch).toHaveBeenCalledTimes(3);
@@ -191,7 +193,7 @@ describe('POST /api/integrations/instagram/callback', () => {
     const response = await postCallback();
 
     expect(response.headers.get('location')).toBe(
-      'http://dashboard.test/dashboard/integrations?error=webhook_subscription_failed',
+      'http://dashboard.test/dashboard/integrations/oauth/complete?provider=instagram&status=failed&error=webhook_subscription_failed&mode=redirect&returnTo=%2Fdashboard%2Fsettings',
     );
     expect(await instagramIntegrationCount(org!.id)).toBe(0);
     expect(mockFetch).toHaveBeenCalledTimes(4);
@@ -206,7 +208,7 @@ describe('POST /api/integrations/instagram/callback', () => {
     const response = await postCallback();
 
     expect(response.headers.get('location')).toBe(
-      'http://dashboard.test/dashboard/integrations?error=webhook_subscription_failed',
+      'http://dashboard.test/dashboard/integrations/oauth/complete?provider=instagram&status=failed&error=webhook_subscription_failed&mode=redirect&returnTo=%2Fdashboard%2Fsettings',
     );
     expect(await instagramIntegrationCount(org!.id)).toBe(0);
     expect(mockFetch).toHaveBeenCalledTimes(6);
@@ -220,7 +222,7 @@ describe('POST /api/integrations/instagram/callback', () => {
     const response = await postCallback();
 
     expect(response.headers.get('location')).toBe(
-      'http://dashboard.test/dashboard/integrations?error=server_error',
+      'http://dashboard.test/dashboard/integrations/oauth/complete?provider=instagram&status=failed&error=server_error&mode=redirect&returnTo=%2Fdashboard%2Fsettings',
     );
     expect(await instagramIntegrationCount(org!.id)).toBe(0);
     expect(mockFetch).toHaveBeenCalledTimes(6);
@@ -240,7 +242,7 @@ describe('POST /api/integrations/instagram/callback', () => {
     const response = await postCallback();
 
     expect(response.headers.get('location')).toBe(
-      'http://dashboard.test/dashboard/integrations?error=instagram_account_in_use',
+      'http://dashboard.test/dashboard/integrations/oauth/complete?provider=instagram&status=failed&error=instagram_account_in_use&mode=redirect&returnTo=%2Fdashboard%2Fsettings',
     );
     expect(await instagramIntegrationCount(org!.id)).toBe(0);
     expect(mockFetch).toHaveBeenCalledTimes(3);
@@ -314,7 +316,7 @@ describe('POST /api/integrations/instagram/callback', () => {
 
 function postCallback() {
   return POST(new Request(
-    'http://localhost/api/integrations/instagram/callback?code=oauth_code&state=state_123',
+    'http://localhost/api/integrations/instagram/callback?code=oauth_code&state=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   ));
 }
 
@@ -372,9 +374,17 @@ async function instagramIntegrationCount(organizationId: string) {
 }
 
 function mockSavedCookies(values: Record<string, string>) {
+  const prefix = 'ig';
+  const state = values[`${prefix}_oauth_state`];
+  const attempt = Buffer.from(JSON.stringify({
+    userId: values[`${prefix}_oauth_user`],
+    orgId: values[`${prefix}_oauth_org`],
+    returnTo: values[`${prefix}_oauth_return`] ?? null,
+    mode: 'redirect',
+    extra: {},
+  })).toString('base64url');
   mockCookieGet.mockImplementation((name: string) => {
-    const value = values[name];
-    return value ? { value } : undefined;
+    return name === `instagram_oauth_attempt_${state}` ? { value: attempt } : undefined;
   });
 }
 

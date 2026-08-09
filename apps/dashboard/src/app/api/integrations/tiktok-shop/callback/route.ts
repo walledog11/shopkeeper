@@ -9,7 +9,6 @@ import {
 } from "@/lib/server/product-analytics";
 import {
   getTikTokShopOAuthCallbackConfig,
-  TIKTOK_SHOP_OAUTH_COOKIE_PREFIX,
 } from "@/lib/tiktok-shop/config";
 import {
   exchangeTikTokShopOAuthCode,
@@ -19,8 +18,7 @@ import {
 import { validateOAuthCallbackSession } from "@/app/api/integrations/_lib/oauth-session";
 import { upsertRaceSafeIntegration } from "@/app/api/integrations/_lib/integration-upsert";
 import {
-  integrationsResponse,
-  oauthDestinationResponse,
+  oauthCompleteResponse,
   resolveOAuthOrganization,
 } from "@/app/api/integrations/_lib/oauth-callback";
 
@@ -31,6 +29,11 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const oauthConfig = getTikTokShopOAuthCallbackConfig();
   if (!oauthConfig) {
+    if (process.env.APP_URL) {
+      return oauthCompleteResponse(process.env.APP_URL, {
+        outcome: { status: "failed", provider: "tiktok-shop", error: "provider_unavailable" },
+      });
+    }
     return NextResponse.json({ error: "OAuth callback is not configured" }, { status: 500 });
   }
 
@@ -42,17 +45,21 @@ export async function POST(request: Request) {
 
   if (error && !state) {
     logger.warn({ error }, "[TikTok Shop OAuth] User denied access");
-    return integrationsResponse(appUrl, { error: "access_denied" });
+    return oauthCompleteResponse(appUrl, {
+      outcome: { status: "failed", provider: "tiktok-shop", error: "access_denied" },
+    });
   }
 
   if ((!code && !error) || !state) {
-    return integrationsResponse(appUrl, { error: "tiktok_shop_invalid_callback" });
+    return oauthCompleteResponse(appUrl, {
+      outcome: { status: "failed", provider: "tiktok-shop", error: "tiktok_shop_invalid_callback" },
+    });
   }
 
   const callbackSession = await validateOAuthCallbackSession({
     appUrl,
     logPrefix: "TikTok Shop OAuth",
-    prefix: TIKTOK_SHOP_OAUTH_COOKIE_PREFIX,
+    provider: "tiktok-shop",
     state,
     stateMismatchError: "tiktok_shop_state_mismatch",
   });
@@ -65,9 +72,13 @@ export async function POST(request: Request) {
     return callbackSession.response;
   }
 
-  const { attemptId, clerkOrgId, returnTo } = callbackSession.session;
+  const { attemptId, clerkOrgId, mode, returnTo } = callbackSession.session;
   const orgResult = await resolveOAuthOrganization(clerkOrgId, "TikTok Shop OAuth");
-  if (!orgResult.ok) return integrationsResponse(appUrl, { error: orgResult.error });
+  if (!orgResult.ok) return oauthCompleteResponse(appUrl, {
+    outcome: { status: "failed", provider: "tiktok-shop", error: orgResult.error },
+    mode,
+    returnTo,
+  });
   const organizationId = orgResult.org.id;
 
   if (error) {
@@ -78,7 +89,11 @@ export async function POST(request: Request) {
       organizationId,
       platform: "tiktok",
     });
-    return integrationsResponse(appUrl, { error: "access_denied" });
+    return oauthCompleteResponse(appUrl, {
+      outcome: { status: "failed", provider: "tiktok-shop", error: "access_denied" },
+      mode,
+      returnTo,
+    });
   }
 
   if (!code) {
@@ -88,7 +103,11 @@ export async function POST(request: Request) {
       organizationId,
       platform: "tiktok",
     });
-    return integrationsResponse(appUrl, { error: "tiktok_shop_invalid_callback" });
+    return oauthCompleteResponse(appUrl, {
+      outcome: { status: "failed", provider: "tiktok-shop", error: "tiktok_shop_invalid_callback" },
+      mode,
+      returnTo,
+    });
   }
 
   try {
@@ -102,7 +121,11 @@ export async function POST(request: Request) {
         organizationId,
         platform: "tiktok",
       });
-      return integrationsResponse(appUrl, { error: "tiktok_shop_missing_shop" });
+      return oauthCompleteResponse(appUrl, {
+        outcome: { status: "failed", provider: "tiktok-shop", error: "tiktok_shop_missing_shop" },
+        mode,
+        returnTo,
+      });
     }
 
     const integration = await upsertRaceSafeIntegration({
@@ -133,7 +156,11 @@ export async function POST(request: Request) {
     });
 
     logger.info({ externalAccountId, orgId: organizationId }, "[TikTok Shop OAuth] Integration saved");
-    return oauthDestinationResponse(appUrl, returnTo, "tiktok-shop");
+    return oauthCompleteResponse(appUrl, {
+      outcome: { status: "connected", provider: "tiktok-shop" },
+      mode,
+      returnTo,
+    });
   } catch (err) {
     logger.error({ err }, "[TikTok Shop OAuth] Unexpected error");
     await captureIntegrationConnectionFailed({
@@ -146,7 +173,11 @@ export async function POST(request: Request) {
       organizationId,
       platform: "tiktok",
     });
-    return integrationsResponse(appUrl, { error: "tiktok_shop_token_failed" });
+    return oauthCompleteResponse(appUrl, {
+      outcome: { status: "failed", provider: "tiktok-shop", error: "tiktok_shop_token_failed" },
+      mode,
+      returnTo,
+    });
   }
 }
 

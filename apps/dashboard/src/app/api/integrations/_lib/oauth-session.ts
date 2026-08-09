@@ -2,15 +2,14 @@ import crypto from 'node:crypto';
 import { auth } from '@clerk/nextjs/server';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import {
-  oauthCompleteResponse,
-} from './oauth-callback';
+import { oauthCompleteResponse } from './oauth-callback';
+import type { OAuthErrorCode, OAuthFlowMode, OAuthProvider } from '@/lib/integrations/oauth-contract';
+import { isOAuthFlowMode } from '@/lib/integrations/oauth-contract';
 import { ADMIN_REQUIRED_MESSAGE, isOrgAdmin } from '@/lib/api/permissions';
 import logger from '@/lib/server/logger';
 import { safeReturnTo } from '@/lib/security/safe-return-to';
-import { timingSafeIncludes } from '@/lib/security/timing-safe';
 
-const BASE_OAUTH_COOKIE_KEYS = ['state', 'org', 'user', 'return'] as const;
+const OAUTH_STATE_PATTERN = /^[a-f0-9]{32}$/;
 
 export const OAUTH_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -21,7 +20,7 @@ export const OAUTH_COOKIE_OPTIONS = {
 };
 
 export interface OAuthSessionConfig {
-  prefix: string;
+  provider: OAuthProvider;
 }
 
 export interface AuthenticatedOAuthSession {
@@ -33,9 +32,16 @@ export type OAuthSessionResult =
   | { ok: true; session: AuthenticatedOAuthSession }
   | { ok: false; response: NextResponse };
 
-// The single chokepoint for starting any provider connect flow (Shopify, Gmail,
-// Instagram, TikTok Shop). Connecting binds provider credentials to the
-// workspace, so it is admin-only.
+interface StoredOAuthAttempt {
+  userId: string;
+  orgId: string;
+  returnTo: string | null;
+  mode: OAuthFlowMode;
+  extra: Record<string, string>;
+}
+
+// The single chokepoint for starting any provider connect flow. Connecting
+// binds provider credentials to the workspace, so it is admin-only.
 export async function requireAuthenticatedOAuthSession(): Promise<OAuthSessionResult> {
   const { userId, orgId } = await auth();
   if (!userId || !orgId) {
@@ -54,30 +60,31 @@ export async function createOAuthSessionCookies(
   request: Request,
   config: OAuthSessionConfig,
   session: AuthenticatedOAuthSession,
-  extraCookies: Record<string, string | null | undefined> = {},
-): Promise<{ state: string; returnTo: string | null }> {
+  extra: Record<string, string | null | undefined> = {},
+): Promise<{ state: string; returnTo: string | null; mode: OAuthFlowMode }> {
   const { searchParams } = new URL(request.url);
   const returnTo = safeReturnTo(searchParams.get('returnTo'));
+  const mode = isOAuthFlowMode(searchParams.get('mode')) ? searchParams.get('mode') as OAuthFlowMode : 'redirect';
   const state = crypto.randomBytes(16).toString('hex');
+  const attempt: StoredOAuthAttempt = {
+    userId: session.userId,
+    orgId: session.orgId,
+    returnTo,
+    mode,
+    extra: Object.fromEntries(
+      Object.entries(extra).filter((entry): entry is [string, string] => Boolean(entry[1])),
+    ),
+  };
   const cookieStore = await cookies();
-
-  cookieStore.set(oauthCookieName(config.prefix, 'state'), state, OAUTH_COOKIE_OPTIONS);
-  cookieStore.set(oauthCookieName(config.prefix, 'org'), session.orgId, OAUTH_COOKIE_OPTIONS);
-  cookieStore.set(oauthCookieName(config.prefix, 'user'), session.userId, OAUTH_COOKIE_OPTIONS);
-  if (returnTo) {
-    cookieStore.set(oauthCookieName(config.prefix, 'return'), returnTo, OAUTH_COOKIE_OPTIONS);
-  }
-  for (const [key, value] of Object.entries(extraCookies)) {
-    if (value) cookieStore.set(oauthCookieName(config.prefix, key), value, OAUTH_COOKIE_OPTIONS);
-  }
-
-  return { state, returnTo };
+  cookieStore.set(oauthAttemptCookieName(config.provider, state), encodeAttempt(attempt), OAUTH_COOKIE_OPTIONS);
+  return { state, returnTo, mode };
 }
 
 export interface OAuthCallbackSession {
   attemptId: string;
   clerkOrgId?: string;
   returnTo: string | null;
+  mode: OAuthFlowMode;
   extra: Record<string, string | undefined>;
 }
 
@@ -96,69 +103,95 @@ export async function validateOAuthCallbackSession(options: {
   appUrl: string;
   extraCookieKeys?: readonly string[];
   logPrefix: string;
-  prefix: string;
+  provider: OAuthProvider;
   state: string | null;
-  stateMismatchError?: string;
+  stateMismatchError?: OAuthErrorCode;
 }): Promise<OAuthCallbackSessionResult> {
+  const validState = options.state && OAUTH_STATE_PATTERN.test(options.state)
+    ? options.state
+    : null;
   const cookieStore = await cookies();
-  const savedState = cookieStore.get(oauthCookieName(options.prefix, 'state'))?.value;
-  const clerkOrgId = cookieStore.get(oauthCookieName(options.prefix, 'org'))?.value;
-  const savedUserId = cookieStore.get(oauthCookieName(options.prefix, 'user'))?.value;
-  const returnTo = safeReturnTo(cookieStore.get(oauthCookieName(options.prefix, 'return'))?.value);
-  const extra: Record<string, string | undefined> = {};
-
-  for (const key of options.extraCookieKeys ?? []) {
-    extra[key] = cookieStore.get(oauthCookieName(options.prefix, key))?.value;
-  }
-
-  for (const key of [...BASE_OAUTH_COOKIE_KEYS, ...(options.extraCookieKeys ?? [])]) {
-    cookieStore.delete(oauthCookieName(options.prefix, key));
-  }
+  const cookieName = validState ? oauthAttemptCookieName(options.provider, validState) : null;
+  const attempt = cookieName ? decodeAttempt(cookieStore.get(cookieName)?.value) : null;
+  if (cookieName) cookieStore.delete(cookieName);
 
   const mismatchError = options.stateMismatchError ?? 'state_mismatch';
-  if (!savedState || !options.state || !timingSafeIncludes([savedState], options.state)) {
+  if (!validState || !attempt) {
     logger.error(`[${options.logPrefix}] State mismatch — possible CSRF attempt`);
     return {
       ok: false,
-      // The completion page, not the integrations page: it is the only surface
-      // that closes the popup and shows the error. A bare page redirect from
-      // inside the popup renders a second app shell there instead, and for an
-      // un-onboarded org the onboarding guard turns that into a silent bounce.
-      response: oauthCompleteResponse(options.appUrl, { error: mismatchError, returnTo }),
-      analyticsContext: {
-        attemptId: savedState,
-        clerkOrganizationId: clerkOrgId,
-      },
+      response: oauthCompleteResponse(options.appUrl, {
+        outcome: { status: 'failed', provider: options.provider, error: mismatchError },
+      }),
+      analyticsContext: { attemptId: validState ?? undefined },
     };
   }
 
   const { userId: currentUserId } = await auth();
-  if (!currentUserId || currentUserId !== savedUserId) {
+  if (!currentUserId || currentUserId !== attempt.userId) {
     logger.error(
-      { savedUserId, currentUserId },
+      { savedUserId: attempt.userId, currentUserId },
       `[${options.logPrefix}] User session mismatch — possible CSRF attempt`,
     );
     return {
       ok: false,
-      response: oauthCompleteResponse(options.appUrl, { error: mismatchError, returnTo }),
+      response: oauthCompleteResponse(options.appUrl, {
+        outcome: { status: 'failed', provider: options.provider, error: mismatchError },
+        mode: attempt.mode,
+        returnTo: attempt.returnTo,
+      }),
       analyticsContext: {
-        attemptId: savedState,
-        clerkOrganizationId: clerkOrgId,
+        attemptId: validState,
+        clerkOrganizationId: attempt.orgId,
       },
     };
   }
 
+  const extra: Record<string, string | undefined> = {};
+  for (const key of options.extraCookieKeys ?? []) extra[key] = attempt.extra[key];
+
   return {
     ok: true,
     session: {
-      attemptId: savedState,
-      clerkOrgId,
-      returnTo,
+      attemptId: validState,
+      clerkOrgId: attempt.orgId,
+      returnTo: attempt.returnTo,
+      mode: attempt.mode,
       extra,
     },
   };
 }
 
-function oauthCookieName(prefix: string, key: string): string {
-  return `${prefix}_oauth_${key}`;
+function oauthAttemptCookieName(provider: OAuthProvider, state: string): string {
+  return `${provider}_oauth_attempt_${state}`;
+}
+
+function encodeAttempt(attempt: StoredOAuthAttempt): string {
+  return Buffer.from(JSON.stringify(attempt), 'utf8').toString('base64url');
+}
+
+function decodeAttempt(value: string | undefined): StoredOAuthAttempt | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as Partial<StoredOAuthAttempt>;
+    if (
+      typeof parsed.userId !== 'string'
+      || typeof parsed.orgId !== 'string'
+      || (parsed.returnTo !== null && typeof parsed.returnTo !== 'string')
+      || !parsed.extra
+      || typeof parsed.extra !== 'object'
+      || Array.isArray(parsed.extra)
+    ) return null;
+    return {
+      userId: parsed.userId,
+      orgId: parsed.orgId,
+      returnTo: safeReturnTo(parsed.returnTo),
+      mode: isOAuthFlowMode(parsed.mode) ? parsed.mode : 'redirect',
+      extra: Object.fromEntries(
+        Object.entries(parsed.extra).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+      ),
+    };
+  } catch {
+    return null;
+  }
 }

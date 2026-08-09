@@ -1,38 +1,100 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  finishOAuthPopup,
   isOAuthDoneMessage,
   isOAuthPopupWindow,
+  openOAuthPopup,
   OAUTH_DONE_MESSAGE_TYPE,
   OAUTH_POPUP_NAME,
   OAUTH_POPUP_SESSION_KEY,
+  resolveOAuthCompletionMode,
 } from './oauth-flow';
 
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  window.sessionStorage.clear();
+});
+
+function mockDesktop(matches: boolean) {
+  vi.stubGlobal('matchMedia', vi.fn(() => ({ matches })));
+}
+
 describe('oauth-flow', () => {
-  it('recognizes oauth done messages', () => {
+  it('accepts only fully typed OAuth done messages', () => {
     expect(isOAuthDoneMessage({
       type: OAUTH_DONE_MESSAGE_TYPE,
-      connected: 'shopify',
-      error: null,
+      outcome: { status: 'connected', provider: 'shopify' },
     })).toBe(true);
+    expect(isOAuthDoneMessage({
+      type: OAUTH_DONE_MESSAGE_TYPE,
+      outcome: { status: 'failed', provider: 'gmail', error: 'made_up' },
+    })).toBe(false);
     expect(isOAuthDoneMessage({ type: 'other' })).toBe(false);
   });
 
-  it('detects oauth popup windows by name or session marker', () => {
-    const originalName = window.name;
-    const storage = window.sessionStorage;
+  it('opens a blank named desktop popup, marks it, then navigates with popup mode', () => {
+    mockDesktop(true);
+    const popupStorage = { setItem: vi.fn() };
+    const popup = {
+      closed: false,
+      focus: vi.fn(),
+      location: { href: '' },
+      sessionStorage: popupStorage,
+    } as unknown as Window;
+    const open = vi.spyOn(window, 'open').mockReturnValue(popup);
 
-    window.name = OAUTH_POPUP_NAME;
-    storage.removeItem(OAUTH_POPUP_SESSION_KEY);
+    const result = openOAuthPopup('/api/integrations/gmail/auth?returnTo=%2Fonboarding');
+
+    expect(result).toEqual({ mode: 'popup', popup });
+    expect(open).toHaveBeenCalledWith('', OAUTH_POPUP_NAME, expect.any(String));
+    expect(popupStorage.setItem).toHaveBeenCalledWith(OAUTH_POPUP_SESSION_KEY, '1');
+    expect(popup.location.href).toBe(
+      '/api/integrations/gmail/auth?returnTo=%2Fonboarding&mode=popup',
+    );
+    expect(popup.focus).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { label: 'mobile', desktop: false, popup: undefined },
+    { label: 'popup-blocked', desktop: true, popup: null },
+  ])('uses redirect mode for $label launches', ({ desktop, popup }) => {
+    mockDesktop(desktop);
+    const open = vi.spyOn(window, 'open').mockReturnValue(popup ?? null);
+
+    expect(openOAuthPopup('/api/integrations/shopify/auth?shop=fixture')).toEqual({
+      mode: 'redirect',
+    });
+    if (desktop) expect(open).toHaveBeenCalledWith('', OAUTH_POPUP_NAME, expect.any(String));
+    else expect(open).not.toHaveBeenCalled();
+  });
+
+  it('uses the session marker only when completion mode is unavailable', () => {
+    window.sessionStorage.setItem(OAUTH_POPUP_SESSION_KEY, '1');
     expect(isOAuthPopupWindow()).toBe(true);
+    expect(resolveOAuthCompletionMode(null)).toBe('popup');
+    expect(resolveOAuthCompletionMode('redirect')).toBe('redirect');
+  });
 
-    window.name = '';
-    storage.setItem(OAUTH_POPUP_SESSION_KEY, '1');
-    expect(isOAuthPopupWindow()).toBe(true);
+  it('publishes one popup result and attempts to close', () => {
+    const postMessage = vi.fn();
+    const close = vi.spyOn(window, 'close').mockImplementation(() => {});
+    Object.defineProperty(window, 'opener', {
+      configurable: true,
+      value: { postMessage },
+    });
+    const payload = {
+      type: OAUTH_DONE_MESSAGE_TYPE,
+      outcome: { status: 'connected', provider: 'instagram' },
+    } as const;
 
-    window.name = originalName;
-    storage.removeItem(OAUTH_POPUP_SESSION_KEY);
+    finishOAuthPopup(payload);
+
+    expect(postMessage).toHaveBeenCalledOnce();
+    expect(postMessage).toHaveBeenCalledWith(payload, window.location.origin);
+    expect(close).toHaveBeenCalledOnce();
   });
 });

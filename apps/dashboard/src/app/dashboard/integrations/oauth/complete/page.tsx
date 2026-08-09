@@ -1,92 +1,80 @@
-"use client";
+'use client';
 
-import { Suspense, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import { OAuthPopupShell } from "@/components/integrations/OAuthPopupShell";
-import { OAUTH_ERROR_MESSAGES } from "@/lib/integrations/catalog";
-import { safeReturnTo } from "@/lib/security/safe-return-to";
+import { Suspense, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { OAuthPopupShell } from '@/components/integrations/OAuthPopupShell';
+import {
+  OAUTH_ERROR_MESSAGES,
+  parseOAuthOutcome,
+  type OAuthProvider,
+} from '@/lib/integrations/oauth-contract';
+import { safeReturnTo } from '@/lib/security/safe-return-to';
 import {
   finishOAuthPopup,
-  isOAuthPopupWindow,
-  markOAuthPopupSession,
   OAUTH_DONE_MESSAGE_TYPE,
-} from "@/lib/integrations/oauth-flow";
+  resolveOAuthCompletionMode,
+} from '@/lib/integrations/oauth-flow';
 
-const CONNECTED_VALUES = new Set(["instagram", "shopify", "gmail", "tiktok-shop"]);
-
-const CONNECTED_LABELS: Record<string, string> = {
-  shopify: "Shopify",
-  instagram: "Instagram",
-  gmail: "Gmail",
-  "tiktok-shop": "TikTok Shop",
+const PROVIDER_LABELS: Record<OAuthProvider, string> = {
+  gmail: 'Gmail',
+  instagram: 'Instagram',
+  shopify: 'Shopify',
+  'tiktok-shop': 'TikTok Shop',
 };
 
-const OAUTH_COMPLETE_CLOSE_DELAY_MS = 250;
-
-function safeConnected(value: string | null): string | null {
-  return value && CONNECTED_VALUES.has(value) ? value : null;
-}
-
-function safeError(value: string | null): string | null {
-  return value && Object.prototype.hasOwnProperty.call(OAUTH_ERROR_MESSAGES, value) ? value : null;
-}
+const OAUTH_COMPLETE_DELAY_MS = 250;
 
 function OAuthCompleteContent() {
   const searchParams = useSearchParams();
-  const connected = safeConnected(searchParams.get("connected"));
-  const error = safeError(searchParams.get("error"));
-  const returnTo = safeReturnTo(searchParams.get("returnTo"));
+  const serializedParams = searchParams.toString();
+  const outcome = useMemo(
+    () => parseOAuthOutcome(new URLSearchParams(serializedParams)),
+    [serializedParams],
+  );
+  const mode = resolveOAuthCompletionMode(searchParams.get('mode'));
+  const returnTo = safeReturnTo(searchParams.get('returnTo'));
   const [closeBlocked, setCloseBlocked] = useState(false);
 
   useEffect(() => {
-    if (isOAuthPopupWindow()) {
-      markOAuthPopupSession();
-    }
-  }, []);
-
-  useEffect(() => {
-    const payload = {
-      type: OAUTH_DONE_MESSAGE_TYPE as typeof OAUTH_DONE_MESSAGE_TYPE,
-      connected,
-      error,
-    };
-
     const timer = window.setTimeout(() => {
-      if (isOAuthPopupWindow()) {
-        finishOAuthPopup(payload);
+      if (outcome && mode === 'popup') {
+        finishOAuthPopup({ type: OAUTH_DONE_MESSAGE_TYPE, outcome });
         window.setTimeout(() => {
           if (!window.closed) setCloseBlocked(true);
         }, 300);
         return;
       }
 
-      const nextUrl = new URL(returnTo ?? "/dashboard/integrations", window.location.origin);
-      if (connected) nextUrl.searchParams.set("connected", connected);
-      if (error) nextUrl.searchParams.set("error", error);
-      window.location.replace(`${nextUrl.pathname}${nextUrl.search}`);
-    }, OAUTH_COMPLETE_CLOSE_DELAY_MS);
+      const nextUrl = new URL(returnTo ?? '/dashboard/integrations', window.location.origin);
+      if (outcome) {
+        nextUrl.searchParams.set('provider', outcome.provider);
+        nextUrl.searchParams.set('status', outcome.status);
+        if (outcome.status === 'failed') nextUrl.searchParams.set('error', outcome.error);
+      }
+      window.location.replace(`${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
+    }, OAUTH_COMPLETE_DELAY_MS);
 
     return () => window.clearTimeout(timer);
-  }, [connected, error, returnTo]);
+  }, [mode, outcome, returnTo]);
 
-  const success = Boolean(connected) && !error;
-  const integrationLabel = connected ? CONNECTED_LABELS[connected] ?? "Integration" : null;
+  const success = outcome?.status === 'connected';
+  const error = outcome?.status === 'failed' ? outcome.error : null;
   const title = success
-    ? `${integrationLabel} connected`
+    ? `${PROVIDER_LABELS[outcome.provider]} connected`
     : error
-      ? "Connection failed"
-      : "Finishing up";
+      ? 'Connection failed'
+      : 'Finishing up';
   const message = success
     ? "You're all set. Returning you to Shopkeeper."
     : error
-      ? OAUTH_ERROR_MESSAGES[error] ?? "Something went wrong. Returning you to Shopkeeper."
-      : "Completing your connection.";
+      ? OAUTH_ERROR_MESSAGES[error]
+      : 'Completing your connection.';
   const footer = closeBlocked
-    ? "You can close this window and return to Shopkeeper."
+    ? 'You can close this window and return to Shopkeeper.'
     : success || error
-      ? "Closing this window…"
-      : "Just a moment…";
-  const state = success ? "success" : error ? "error" : "loading";
+      ? mode === 'popup' ? 'Closing this window…' : 'Returning to Shopkeeper…'
+      : 'Just a moment…';
+  const state = success ? 'success' : error ? 'error' : 'loading';
 
   return <OAuthPopupShell title={title} message={message} footer={footer} state={state} />;
 }

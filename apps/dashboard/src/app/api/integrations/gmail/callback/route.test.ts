@@ -73,19 +73,19 @@ afterEach(async () => {
 describe('POST /api/integrations/gmail/callback', () => {
   it('classifies a token-exchange deadline as provider unavailable', async () => {
     mockSavedCookies({
-      gmail_oauth_state: 'state_123',
+      gmail_oauth_state: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       gmail_oauth_org: org!.clerkOrgId,
       gmail_oauth_user: 'usr_oauth',
     });
     mockFetch.mockRejectedValueOnce(new DOMException('timed out', 'TimeoutError'));
 
     const res = await POST(new Request(
-      'http://localhost/api/integrations/gmail/callback?code=oauth_code&state=state_123',
+      'http://localhost/api/integrations/gmail/callback?code=oauth_code&state=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     ));
 
     expect(res.status).toBe(303);
     expect(res.headers.get('location')).toBe(
-      'http://dashboard.test/dashboard/integrations/oauth/complete?error=provider_unavailable&integration=gmail',
+      'http://dashboard.test/dashboard/integrations/oauth/complete?provider=gmail&status=failed&error=provider_unavailable&mode=redirect',
     );
     expect(analyticsSink.events).toEqual([
       expect.objectContaining({
@@ -101,41 +101,33 @@ describe('POST /api/integrations/gmail/callback', () => {
 
   it('rejects state mismatch before token exchange', async () => {
     mockSavedCookies({
-      gmail_oauth_state: 'state_123',
+      gmail_oauth_state: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       gmail_oauth_org: org!.clerkOrgId,
       gmail_oauth_user: 'usr_oauth',
     });
 
-    const res = await POST(new Request('http://localhost/api/integrations/gmail/callback?code=abc&state=other_state'));
+    const res = await POST(new Request('http://localhost/api/integrations/gmail/callback?code=abc&state=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'));
 
     expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations/oauth/complete?error=state_mismatch');
+    expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations/oauth/complete?provider=gmail&status=failed&error=state_mismatch');
     expect(mockFetch).not.toHaveBeenCalled();
     expect(mockLogger.error).toHaveBeenCalledWith('[Gmail OAuth] State mismatch — possible CSRF attempt');
-    expect(analyticsSink.events).toEqual([
-      expect.objectContaining({
-        event: 'integration_connection_failed',
-        distinctId: org!.id,
-        properties: expect.objectContaining({
-          platform: 'email',
-          failure_category: 'state_mismatch',
-          '$insert_id': 'integration_connection_failed:state_123',
-        }),
-      }),
-    ]);
+    // An unmatched attempt cannot be attributed without reading another
+    // concurrent attempt's cookie.
+    expect(analyticsSink.events).toEqual([]);
   });
 
   it('rejects user session mismatch', async () => {
     mockSavedCookies({
-      gmail_oauth_state: 'state_123',
+      gmail_oauth_state: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       gmail_oauth_org: org!.clerkOrgId,
       gmail_oauth_user: 'someone_else',
     });
 
-    const res = await POST(new Request('http://localhost/api/integrations/gmail/callback?code=abc&state=state_123'));
+    const res = await POST(new Request('http://localhost/api/integrations/gmail/callback?code=abc&state=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'));
 
     expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations/oauth/complete?error=state_mismatch');
+    expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations/oauth/complete?provider=gmail&status=failed&error=state_mismatch&mode=redirect');
     expect(mockFetch).not.toHaveBeenCalled();
     expect(mockLogger.error).toHaveBeenCalledWith(
       { savedUserId: 'someone_else', currentUserId: 'usr_oauth' },
@@ -180,7 +172,7 @@ describe('POST /api/integrations/gmail/callback', () => {
     });
 
     mockSavedCookies({
-      gmail_oauth_state: 'state_123',
+      gmail_oauth_state: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       gmail_oauth_org: org!.clerkOrgId,
       gmail_oauth_user: 'usr_oauth',
       gmail_oauth_return: '/dashboard/settings',
@@ -198,11 +190,11 @@ describe('POST /api/integrations/gmail/callback', () => {
         expiration: '1783382400000',
       }));
 
-    const res = await POST(new Request('http://localhost/api/integrations/gmail/callback?code=oauth_code&state=state_123'));
+    const res = await POST(new Request('http://localhost/api/integrations/gmail/callback?code=oauth_code&state=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'));
 
     expect(res.status).toBe(303);
     expect(new URL(res.headers.get('location')!)).toEqual(new URL(
-      'http://dashboard.test/dashboard/integrations/oauth/complete?connected=gmail&integration=gmail&returnTo=%2Fdashboard%2Fsettings',
+      'http://dashboard.test/dashboard/integrations/oauth/complete?provider=gmail&status=connected&mode=redirect&returnTo=%2Fdashboard%2Fsettings',
     ));
 
     await vi.waitFor(() => {
@@ -270,7 +262,7 @@ describe('POST /api/integrations/gmail/callback', () => {
 
   it('keeps outbound connected and marks inbound degraded when watch setup fails', async () => {
     mockSavedCookies({
-      gmail_oauth_state: 'state_123',
+      gmail_oauth_state: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       gmail_oauth_org: org!.clerkOrgId,
       gmail_oauth_user: 'usr_oauth',
     });
@@ -288,12 +280,12 @@ describe('POST /api/integrations/gmail/callback', () => {
       ));
 
     const res = await POST(new Request(
-      'http://localhost/api/integrations/gmail/callback?code=oauth_code&state=state_123',
+      'http://localhost/api/integrations/gmail/callback?code=oauth_code&state=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     ));
 
     expect(res.status).toBe(303);
     expect(res.headers.get('location')).toBe(
-      'http://dashboard.test/dashboard/integrations/oauth/complete?connected=gmail&integration=gmail',
+      'http://dashboard.test/dashboard/integrations/oauth/complete?provider=gmail&status=connected&mode=redirect',
     );
 
     await vi.waitFor(() => {
@@ -324,7 +316,7 @@ describe('POST /api/integrations/gmail/callback', () => {
   it('keeps Gmail outbound connected without registering a watch when rollout is disabled', async () => {
     vi.stubEnv('GMAIL_NATIVE_INBOUND', 'false');
     mockSavedCookies({
-      gmail_oauth_state: 'state_123',
+      gmail_oauth_state: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       gmail_oauth_org: org!.clerkOrgId,
       gmail_oauth_user: 'usr_oauth',
     });
@@ -338,7 +330,7 @@ describe('POST /api/integrations/gmail/callback', () => {
       .mockResolvedValueOnce(jsonResponse({ email: 'merchant@gmail.com' }));
 
     const res = await POST(new Request(
-      'http://localhost/api/integrations/gmail/callback?code=oauth_code&state=state_123',
+      'http://localhost/api/integrations/gmail/callback?code=oauth_code&state=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     ));
 
     expect(res.status).toBe(303);
@@ -364,7 +356,7 @@ describe('POST /api/integrations/gmail/callback', () => {
 
   it('records the read scope after a successful watch when Google omits scope', async () => {
     mockSavedCookies({
-      gmail_oauth_state: 'state_123',
+      gmail_oauth_state: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       gmail_oauth_org: org!.clerkOrgId,
       gmail_oauth_user: 'usr_oauth',
     });
@@ -381,7 +373,7 @@ describe('POST /api/integrations/gmail/callback', () => {
       }));
 
     const res = await POST(new Request(
-      'http://localhost/api/integrations/gmail/callback?code=oauth_code&state=state_123',
+      'http://localhost/api/integrations/gmail/callback?code=oauth_code&state=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     ));
 
     expect(res.status).toBe(303);
@@ -402,11 +394,35 @@ describe('POST /api/integrations/gmail/callback', () => {
     });
   });
 
+  it('returns typed no_email feedback when Google omits the account email', async () => {
+    mockSavedCookies({
+      gmail_oauth_state: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      gmail_oauth_org: org!.clerkOrgId,
+      gmail_oauth_user: 'usr_oauth',
+    });
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse({
+        access_token: 'gmail_access_token',
+        refresh_token: 'gmail_refresh_token',
+        expires_in: 3600,
+      }))
+      .mockResolvedValueOnce(jsonResponse({}));
+
+    const res = await POST(new Request(
+      'http://localhost/api/integrations/gmail/callback?code=oauth_code&state=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    ));
+
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe(
+      'http://dashboard.test/dashboard/integrations/oauth/complete?provider=gmail&status=failed&error=no_email&mode=redirect',
+    );
+  });
+
   it('redirects to access_denied when user cancels', async () => {
     const res = await POST(new Request('http://localhost/api/integrations/gmail/callback?error=access_denied'));
     expect(res.status).toBe(303);
     expect(res.headers.get('location')).toBe(
-      'http://dashboard.test/dashboard/integrations/oauth/complete?error=access_denied&integration=gmail',
+      'http://dashboard.test/dashboard/integrations/oauth/complete?provider=gmail&status=failed&error=access_denied',
     );
     expect(mockFetch).not.toHaveBeenCalled();
     expect(mockLogger.warn).toHaveBeenCalledWith(
@@ -417,10 +433,24 @@ describe('POST /api/integrations/gmail/callback', () => {
 });
 
 function mockSavedCookies(values: Record<string, string>) {
+  const stateKey = Object.keys(values).find((key) => key.endsWith('_oauth_state'));
+  const prefix = stateKey?.slice(0, -'_oauth_state'.length);
+  const state = stateKey ? values[stateKey] : undefined;
+  const attempt = prefix && state ? encodeTestAttempt(values, prefix) : null;
   mockCookieGet.mockImplementation((name: string) => {
-    const value = values[name];
-    return value ? { value } : undefined;
+    return name === `${prefix}_oauth_attempt_${state}` && attempt ? { value: attempt } : undefined;
   });
+}
+
+function encodeTestAttempt(values: Record<string, string>, prefix: string): string {
+  const base = `${prefix}_oauth_`;
+  return Buffer.from(JSON.stringify({
+    userId: values[`${base}user`],
+    orgId: values[`${base}org`],
+    returnTo: values[`${base}return`] ?? null,
+    mode: 'redirect',
+    extra: {},
+  })).toString('base64url');
 }
 
 function jsonResponse(body: unknown, init: ResponseInit = {}) {

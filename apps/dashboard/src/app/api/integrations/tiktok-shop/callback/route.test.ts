@@ -65,19 +65,19 @@ afterEach(async () => {
 describe('POST /api/integrations/tiktok-shop/callback', () => {
   it('classifies a token-exchange deadline as provider unavailable', async () => {
     mockSavedCookies({
-      tiktok_shop_oauth_state: 'state_123',
+      tiktok_shop_oauth_state: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       tiktok_shop_oauth_org: org!.clerkOrgId,
       tiktok_shop_oauth_user: 'usr_oauth',
     });
     mockFetch.mockRejectedValueOnce(new DOMException('timed out', 'TimeoutError'));
 
     const res = await POST(new Request(
-      'http://localhost/api/integrations/tiktok-shop/callback?code=oauth_code&state=state_123',
+      'http://localhost/api/integrations/tiktok-shop/callback?code=oauth_code&state=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     ));
 
     expect(res.status).toBe(303);
     expect(res.headers.get('location')).toBe(
-      'http://dashboard.test/dashboard/integrations?error=tiktok_shop_token_failed',
+      'http://dashboard.test/dashboard/integrations/oauth/complete?provider=tiktok-shop&status=failed&error=tiktok_shop_token_failed&mode=redirect',
     );
     expect(mockLogger.error).toHaveBeenCalledWith(
       {
@@ -92,7 +92,7 @@ describe('POST /api/integrations/tiktok-shop/callback', () => {
 
   it('exchanges the code and saves a TikTok Shop seller integration', async () => {
     mockSavedCookies({
-      tiktok_shop_oauth_state: 'state_123',
+      tiktok_shop_oauth_state: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       tiktok_shop_oauth_org: org!.clerkOrgId,
       tiktok_shop_oauth_user: 'usr_oauth',
       tiktok_shop_oauth_return: '/dashboard/integrations',
@@ -110,10 +110,12 @@ describe('POST /api/integrations/tiktok-shop/callback', () => {
       },
     }));
 
-    const res = await POST(new Request('http://localhost/api/integrations/tiktok-shop/callback?code=oauth_code&state=state_123'));
+    const res = await POST(new Request('http://localhost/api/integrations/tiktok-shop/callback?code=oauth_code&state=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'));
 
     expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations');
+    expect(res.headers.get('location')).toBe(
+      'http://dashboard.test/dashboard/integrations/oauth/complete?provider=tiktok-shop&status=connected&mode=redirect&returnTo=%2Fdashboard%2Fintegrations',
+    );
 
     const integration = await db.integration.findFirstOrThrow({
       where: { organizationId: org!.id, platform: ChannelType.tiktok },
@@ -139,9 +141,17 @@ describe('POST /api/integrations/tiktok-shop/callback', () => {
 });
 
 function mockSavedCookies(values: Record<string, string>) {
+  const prefix = 'tiktok_shop';
+  const state = values[`${prefix}_oauth_state`];
+  const attempt = Buffer.from(JSON.stringify({
+    userId: values[`${prefix}_oauth_user`],
+    orgId: values[`${prefix}_oauth_org`],
+    returnTo: values[`${prefix}_oauth_return`] ?? null,
+    mode: 'redirect',
+    extra: {},
+  })).toString('base64url');
   mockCookieGet.mockImplementation((name: string) => {
-    const value = values[name];
-    return value ? { value } : undefined;
+    return name === `tiktok-shop_oauth_attempt_${state}` ? { value: attempt } : undefined;
   });
 }
 

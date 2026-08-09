@@ -9,9 +9,10 @@ import {
 } from '@/lib/server/product-analytics';
 import { upsertEmailIntegration } from './email-integration';
 import type { EmailOAuthProviderConfig } from './email-oauth-providers';
+import type { OAuthErrorCode, OAuthFlowMode } from '@/lib/integrations/oauth-contract';
 import {
   oauthCompleteResponse,
-  oauthPageRedirect,
+  oauthProviderRedirect,
   resolveOAuthOrganization,
 } from './oauth-callback';
 import {
@@ -49,15 +50,21 @@ function logPrefix(config: EmailOAuthProviderConfig): string {
 function emailOAuthCompleteResponse(
   appUrl: string,
   config: EmailOAuthProviderConfig,
-  params: {
-    connected?: string;
-    error?: string;
+  params: ({
+    status: 'connected';
+  } | {
+    status: 'failed';
+    error: OAuthErrorCode;
+  }) & {
+    mode?: OAuthFlowMode;
     returnTo?: string | null;
   },
 ): Response {
+  const { mode, returnTo, ...outcome } = params;
   return oauthCompleteResponse(appUrl, {
-    ...params,
-    integration: config.provider,
+    outcome: { ...outcome, provider: config.provider },
+    mode,
+    returnTo,
   });
 }
 
@@ -92,7 +99,11 @@ export async function createEmailOAuthAuthorizationResponse(
     );
   }
 
-  const { state } = await createOAuthSessionCookies(request, { prefix: config.provider }, session);
+  const { state } = await createOAuthSessionCookies(
+    request,
+    { provider: config.provider },
+    session,
+  );
   const authorizationUrl = new URL(config.authorizationUrl);
   authorizationUrl.searchParams.set('client_id', clientId);
   authorizationUrl.searchParams.set('redirect_uri', `${appUrl}${callbackPath(config)}`);
@@ -105,7 +116,7 @@ export async function createEmailOAuthAuthorizationResponse(
     authorizationUrl.searchParams.set(key, value);
   }
 
-  return oauthPageRedirect(authorizationUrl.toString());
+  return oauthProviderRedirect(authorizationUrl);
 }
 
 export async function completeEmailOAuth(
@@ -117,8 +128,14 @@ export async function completeEmailOAuth(
   const clientSecret = readEnv(config.clientSecretEnv);
   const prefix = logPrefix(config);
 
-  if (!appUrl || !clientId || !clientSecret) {
+  if (!appUrl) {
     return NextResponse.json({ error: 'OAuth callback is not configured' }, { status: 500 });
+  }
+  if (!clientId || !clientSecret) {
+    return emailOAuthCompleteResponse(appUrl, config, {
+      status: 'failed',
+      error: 'provider_unavailable',
+    });
   }
 
   const { searchParams } = new URL(request.url);
@@ -128,16 +145,16 @@ export async function completeEmailOAuth(
 
   if (oauthError && !state) {
     logger.warn({ error: oauthError }, `[${prefix}] User denied access`);
-    return emailOAuthCompleteResponse(appUrl, config, { error: 'access_denied' });
+    return emailOAuthCompleteResponse(appUrl, config, { status: 'failed', error: 'access_denied' });
   }
   if ((!code && !oauthError) || !state) {
-    return emailOAuthCompleteResponse(appUrl, config, { error: 'invalid_callback' });
+    return emailOAuthCompleteResponse(appUrl, config, { status: 'failed', error: 'invalid_callback' });
   }
 
   const callbackSession = await validateOAuthCallbackSession({
     appUrl,
     logPrefix: prefix,
-    prefix: config.provider,
+    provider: config.provider,
     state,
   });
   if (!callbackSession.ok) {
@@ -148,10 +165,10 @@ export async function completeEmailOAuth(
     });
     return callbackSession.response;
   }
-  const { attemptId, clerkOrgId, returnTo } = callbackSession.session;
+  const { attemptId, clerkOrgId, mode, returnTo } = callbackSession.session;
 
   const orgResult = await resolveOAuthOrganization(clerkOrgId, prefix);
-  if (!orgResult.ok) return emailOAuthCompleteResponse(appUrl, config, { error: orgResult.error, returnTo });
+  if (!orgResult.ok) return emailOAuthCompleteResponse(appUrl, config, { status: 'failed', error: orgResult.error, mode, returnTo });
   const organizationId = orgResult.org.id;
 
   if (oauthError) {
@@ -162,7 +179,7 @@ export async function completeEmailOAuth(
       organizationId,
       platform: 'email',
     });
-    return emailOAuthCompleteResponse(appUrl, config, { error: 'access_denied', returnTo });
+    return emailOAuthCompleteResponse(appUrl, config, { status: 'failed', error: 'access_denied', mode, returnTo });
   }
   if (!code) {
     await captureIntegrationConnectionFailed({
@@ -171,7 +188,7 @@ export async function completeEmailOAuth(
       organizationId,
       platform: 'email',
     });
-    return emailOAuthCompleteResponse(appUrl, config, { error: 'invalid_callback', returnTo });
+    return emailOAuthCompleteResponse(appUrl, config, { status: 'failed', error: 'invalid_callback', mode, returnTo });
   }
 
   try {
@@ -206,7 +223,7 @@ export async function completeEmailOAuth(
         organizationId,
         platform: 'email',
       });
-      return emailOAuthCompleteResponse(appUrl, config, { error: 'token_exchange_failed', returnTo });
+      return emailOAuthCompleteResponse(appUrl, config, { status: 'failed', error: 'token_exchange_failed', mode, returnTo });
     }
 
     const userinfoResponse = await fetchProviderWithDeadline(config.userinfoUrl, {
@@ -226,7 +243,7 @@ export async function completeEmailOAuth(
         organizationId,
         platform: 'email',
       });
-      return emailOAuthCompleteResponse(appUrl, config, { error: 'no_email', returnTo });
+      return emailOAuthCompleteResponse(appUrl, config, { status: 'failed', error: 'no_email', mode, returnTo });
     }
 
     const hostedDomain = config.provider === 'gmail'
@@ -261,7 +278,7 @@ export async function completeEmailOAuth(
     }
 
     logger.info({ userEmail, orgId: organizationId }, `[${prefix}] Integration saved`);
-    return emailOAuthCompleteResponse(appUrl, config, { connected: config.provider, returnTo });
+    return emailOAuthCompleteResponse(appUrl, config, { status: 'connected', mode, returnTo });
   } catch (error) {
     const timedOut = isProviderRequestTimeoutError(error);
     logger.error({ err: error }, `[${prefix}] Unexpected error`);
@@ -272,7 +289,9 @@ export async function completeEmailOAuth(
       platform: 'email',
     });
     return emailOAuthCompleteResponse(appUrl, config, {
+      status: 'failed',
       error: timedOut ? 'provider_unavailable' : 'server_error',
+      mode,
       returnTo,
     });
   }

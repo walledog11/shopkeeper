@@ -37,6 +37,11 @@ export async function POST(request: Request) {
   const oauthConfig = getShopifyOAuthCallbackConfig();
 
   if (!oauthConfig) {
+    if (process.env.APP_URL) {
+      return oauthCompleteResponse(process.env.APP_URL, {
+        outcome: { status: 'failed', provider: 'shopify', error: 'shopify_server_error' },
+      });
+    }
     return NextResponse.json({ error: 'OAuth callback is not configured' }, { status: 500 });
   }
   const { appUrl, clientId, clientSecret } = oauthConfig;
@@ -51,7 +56,7 @@ export async function POST(request: Request) {
     appUrl,
     extraCookieKeys: ['shop'],
     logPrefix: 'Shopify OAuth',
-    prefix: 'shopify',
+    provider: 'shopify',
     state,
     stateMismatchError: 'shopify_state_mismatch',
   });
@@ -66,11 +71,16 @@ export async function POST(request: Request) {
   const {
     attemptId,
     clerkOrgId,
+    mode,
     returnTo,
     extra: { shop: savedShop },
   } = callbackSession.session;
   const orgResult = await resolveOAuthOrganization(clerkOrgId, 'Shopify OAuth');
-  if (!orgResult.ok) return oauthCompleteResponse(appUrl, { error: 'shopify_server_error', returnTo });
+  if (!orgResult.ok) return oauthCompleteResponse(appUrl, {
+    outcome: { status: 'failed', provider: 'shopify', error: 'shopify_server_error' },
+    mode,
+    returnTo,
+  });
   const org = orgResult.org;
 
   if (!code || !shop || !hmac) {
@@ -80,7 +90,11 @@ export async function POST(request: Request) {
       organizationId: org.id,
       platform: 'shopify',
     });
-    return oauthCompleteResponse(appUrl, { error: 'shopify_invalid_callback', returnTo });
+    return oauthCompleteResponse(appUrl, {
+      outcome: { status: 'failed', provider: 'shopify', error: 'shopify_invalid_callback' },
+      mode,
+      returnTo,
+    });
   }
 
   const shopDomain = normalizeShopifyShopDomain(shop);
@@ -91,7 +105,11 @@ export async function POST(request: Request) {
       organizationId: org.id,
       platform: 'shopify',
     });
-    return oauthCompleteResponse(appUrl, { error: 'shopify_invalid_callback', returnTo });
+    return oauthCompleteResponse(appUrl, {
+      outcome: { status: 'failed', provider: 'shopify', error: 'shopify_invalid_callback' },
+      mode,
+      returnTo,
+    });
   }
 
   if (!isValidShopifyHmac(searchParams, clientSecret, hmac)) {
@@ -102,7 +120,11 @@ export async function POST(request: Request) {
       organizationId: org.id,
       platform: 'shopify',
     });
-    return oauthCompleteResponse(appUrl, { error: 'shopify_hmac_invalid', returnTo });
+    return oauthCompleteResponse(appUrl, {
+      outcome: { status: 'failed', provider: 'shopify', error: 'shopify_hmac_invalid' },
+      mode,
+      returnTo,
+    });
   }
 
   try {
@@ -119,7 +141,11 @@ export async function POST(request: Request) {
         organizationId: org.id,
         platform: 'shopify',
       });
-      return oauthCompleteResponse(appUrl, { error: 'shopify_token_failed', returnTo });
+      return oauthCompleteResponse(appUrl, {
+        outcome: { status: 'failed', provider: 'shopify', error: 'shopify_token_failed' },
+        mode,
+        returnTo,
+      });
     }
     const { accessToken, oauthScopes } = tokenResult;
 
@@ -137,7 +163,11 @@ export async function POST(request: Request) {
         organizationId: org.id,
         platform: 'shopify',
       });
-      return oauthCompleteResponse(appUrl, { error: shopIdentityResult.error, returnTo });
+      return oauthCompleteResponse(appUrl, {
+        outcome: { status: 'failed', provider: 'shopify', error: shopIdentityResult.error },
+        mode,
+        returnTo,
+      });
     }
 
     const canonicalShopDomain = shopIdentityResult.shop.myshopifyDomain;
@@ -162,7 +192,11 @@ export async function POST(request: Request) {
         organizationId: org.id,
         platform: 'shopify',
       });
-      return oauthCompleteResponse(appUrl, { error: 'shopify_store_in_use', returnTo });
+      return oauthCompleteResponse(appUrl, {
+        outcome: { status: 'failed', provider: 'shopify', error: 'shopify_store_in_use' },
+        mode,
+        returnTo,
+      });
     }
     const existingIntegration = storeIntegrations.find((row) => row.organizationId === org.id);
     const metadata = mergeShopifyOAuthScopes(existingIntegration?.metadata, oauthScopes);
@@ -194,7 +228,11 @@ export async function POST(request: Request) {
       shop: canonicalShopDomain,
     });
 
-    return oauthCompleteResponse(appUrl, { connected: 'shopify', returnTo });
+    return oauthCompleteResponse(appUrl, {
+      outcome: { status: 'connected', provider: 'shopify' },
+      mode,
+      returnTo,
+    });
 
   } catch (err) {
     logger.error({ err }, '[Shopify OAuth] Unexpected error');
@@ -204,7 +242,11 @@ export async function POST(request: Request) {
       organizationId: org.id,
       platform: 'shopify',
     });
-    return oauthCompleteResponse(appUrl, { error: 'shopify_server_error', returnTo });
+    return oauthCompleteResponse(appUrl, {
+      outcome: { status: 'failed', provider: 'shopify', error: 'shopify_server_error' },
+      mode,
+      returnTo,
+    });
   }
 }
 
