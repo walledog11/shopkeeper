@@ -10,7 +10,6 @@ import {
   capitalize,
   countWord,
   formatHandledSection,
-  formatOtherOpenSection,
   resolveOtherOpenSection,
   formatWaitingAsk,
   formatWaitingList,
