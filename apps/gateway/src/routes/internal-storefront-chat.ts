@@ -6,6 +6,10 @@ import { getGatewayBullMqQueue } from '../clients/gateway-queues.js';
 import { internalJsonParser } from './body-parsers.js';
 import { authorizeInternalRequest } from './internal-auth.js';
 import { processInboundMessage } from '../message-handlers/inbound-persistence.js';
+import {
+  claimStorefrontChatBudget,
+  storefrontChatDenialMessage,
+} from '../storefront-chat-budget.js';
 
 // Storefront shopper messages enter here rather than being persisted by the
 // dashboard directly, so they run the same inbound pipeline as every other
@@ -16,7 +20,7 @@ export function registerInternalStorefrontChatRoutes(router: Router): void {
   router.post('/storefront-chat/message', internalJsonParser(), async (req: Request, res: Response) => {
     if (!authorizeInternalRequest(req, res, 'InternalStorefrontChat')) return;
 
-    const { organizationId, sessionId, integrationId, text, clientMessageId } = (req.body ?? {}) as Record<string, string>;
+    const { organizationId, sessionId, integrationId, text, clientMessageId, shopperIp } = (req.body ?? {}) as Record<string, string>;
 
     if (!organizationId || !sessionId || typeof text !== 'string' || !text.trim()) {
       return res.status(400).json({ error: 'organizationId, sessionId and text are required' });
@@ -24,10 +28,31 @@ export function registerInternalStorefrontChatRoutes(router: Router): void {
 
     const session = await db.storefrontChatSession.findFirst({
       where: { id: sessionId, organizationId, revokedAt: null },
-      select: { id: true, customerId: true, threadId: true },
+      select: { id: true, customerId: true, threadId: true, integrationId: true, messageCount: true },
     });
     if (!session) {
       return res.status(404).json({ error: 'session not found' });
+    }
+
+    // Budget first: this is the last point before an anonymous message starts
+    // costing the merchant money, since everything past here — classification,
+    // summary, plan precompute — calls the model.
+    const verdict = await claimStorefrontChatBudget({
+      organizationId,
+      integrationId: session.integrationId,
+      sessionId: session.id,
+      sessionMessageCount: session.messageCount,
+      shopperIp: typeof shopperIp === 'string' && shopperIp ? shopperIp : null,
+    });
+    if (!verdict.allowed && verdict.denial) {
+      if (verdict.retryAt) {
+        res.set('Retry-After', String(Math.max(0, verdict.retryAt - Math.floor(Date.now() / 1000))));
+      }
+      return res.status(429).json({
+        error: 'storefront chat budget exhausted',
+        denial: verdict.denial,
+        shopperMessage: storefrontChatDenialMessage(verdict.denial),
+      });
     }
 
     try {

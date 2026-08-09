@@ -15,6 +15,22 @@ interface AuthorizedSession {
   threadId: string | null;
 }
 
+// Best effort, and only ever a secondary control. Two proxies sit between the
+// shopper and this route — Shopify's app proxy and Vercel — and each rewrites
+// the forwarded-for chain, so the leading entry is the shopper's address only if
+// both behave as documented. That is not verified here.
+//
+// The per-IP limit is keyed on (integration, address) precisely so that being
+// wrong is survivable: if every request on a shop collapses to one Shopify
+// egress address, the limit degrades into a second per-shop rate limit rather
+// than leaking across merchants or locking out the internet. The per-session
+// burst limit and the daily budgets do not depend on this value at all.
+function shopperAddress(request: Request): string | null {
+  const forwarded = request.headers.get("x-forwarded-for");
+  const first = forwarded?.split(",")[0]?.trim();
+  return first || request.headers.get("x-real-ip") || null;
+}
+
 // Both checks are required and neither is redundant: the proxy signature proves
 // the request came through Shopify for this shop, the bearer token proves it is
 // this session. Without the token any shopper on the storefront could read
@@ -110,10 +126,30 @@ export async function POST(request: Request) {
       integrationId: session.integrationId,
       text,
       clientMessageId: typeof body.clientMessageId === "string" ? body.clientMessageId : null,
+      // The gateway enforces the per-IP burst limit but never sees the shopper:
+      // Shopify proxies to us, and we call the gateway. This is the only hop
+      // that knows the address.
+      shopperIp: shopperAddress(request),
     }),
   }).catch(() => null);
 
-  if (!response || !response.ok) {
+  if (!response) {
+    return NextResponse.json({ error: "could not deliver message" }, { status: 502 });
+  }
+
+  // The budget refusal is the gateway's to make — it owns the counters — but the
+  // shopper-facing copy has to survive the hop, or the widget shows a generic
+  // failure for something that is not a failure.
+  if (response.status === 429) {
+    const denial = await response.json().catch(() => ({}));
+    const retryAfter = response.headers.get("retry-after");
+    return NextResponse.json(
+      { error: "rate limited", shopperMessage: denial.shopperMessage ?? null },
+      { status: 429, ...(retryAfter ? { headers: { "Retry-After": retryAfter } } : {}) },
+    );
+  }
+
+  if (!response.ok) {
     return NextResponse.json({ error: "could not deliver message" }, { status: 502 });
   }
 

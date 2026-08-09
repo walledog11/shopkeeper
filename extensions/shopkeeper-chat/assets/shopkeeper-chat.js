@@ -198,6 +198,15 @@
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.token },
       body: JSON.stringify({ text: text, clientMessageId: clientMessageId })
     }).then(function (r) {
+      // A budget refusal is not a delivery failure, and saying "check your
+      // connection" for one sends the shopper to fix something that is not
+      // broken. The server supplies the wording; it knows which limit was hit.
+      if (r.status === 429) {
+        return r.json().catch(function () { return {}; }).then(function (body) {
+          pending.style.opacity = "0.5";
+          append(body.shopperMessage || "Too many messages just now. Try again in a moment.", "note");
+        });
+      }
       if (!r.ok) throw new Error("send " + r.status);
       setTimeout(poll, 1200);
     }).catch(function () {

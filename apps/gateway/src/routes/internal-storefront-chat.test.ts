@@ -30,6 +30,22 @@ vi.mock('../clients/gateway-queues.js', () => ({
   }),
 }));
 
+// In-memory stand-in for the burst counter. Redis is not available in the test
+// run and the limiter fails open without it, which would leave the burst layer
+// asserted by nothing.
+const burstCounters = new Map<string, number>();
+
+vi.mock('../clients/redis-client.js', () => ({
+  getGatewayRedis: () => ({
+    incr: (key: string) => {
+      const next = (burstCounters.get(key) ?? 0) + 1;
+      burstCounters.set(key, next);
+      return Promise.resolve(next);
+    },
+    expire: () => Promise.resolve(1),
+  }),
+}));
+
 vi.mock('../config/env.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../config/env.js')>();
   return {
@@ -80,6 +96,7 @@ function postMessage(body: Record<string, unknown>) {
 }
 
 beforeEach(async () => {
+  burstCounters.clear();
   queueAddSpy.mockClear();
   vi.mocked(processInboundMessage).mockClear();
   org = await createTestOrg();
@@ -92,6 +109,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await cleanupTestData(org?.id);
 });
 
@@ -260,6 +278,137 @@ describe('POST /internal/storefront-chat/message', () => {
 
     const after = await db.storefrontChatSession.findUniqueOrThrow({ where: { id: session.id } });
     expect(after.lastSeenAt.getTime()).toBe(before.lastSeenAt.getTime());
+  });
+
+  describe('storefront budget', () => {
+    it('refuses the message past the per-session budget, before any model work', async () => {
+      vi.stubEnv('STOREFRONT_CHAT_MAX_MESSAGES_PER_SESSION', '2');
+
+      for (let i = 0; i < 2; i++) {
+        const allowed = await postMessage({
+          organizationId: org.id,
+          sessionId: session.id,
+          text: `question ${i}`,
+          clientMessageId: `budget-${i}`,
+        });
+        expect(allowed.status).toBe(202);
+      }
+
+      vi.mocked(processInboundMessage).mockClear();
+      queueAddSpy.mockClear();
+
+      const refused = await postMessage({
+        organizationId: org.id,
+        sessionId: session.id,
+        text: 'one too many',
+        clientMessageId: 'budget-over',
+      });
+
+      expect(refused.status).toBe(429);
+      expect(refused.body.denial).toBe('session_budget');
+      expect(refused.body.shopperMessage).toEqual(expect.any(String));
+      // The whole point of gating here: nothing downstream ran, so the refusal
+      // cost the merchant nothing.
+      expect(processInboundMessage).not.toHaveBeenCalled();
+      expect(queueAddSpy).not.toHaveBeenCalled();
+    });
+
+    it('refuses past the per-shop daily budget and leaves the org LLM cap untouched', async () => {
+      vi.stubEnv('STOREFRONT_CHAT_MAX_MESSAGES_PER_SHOP_DAY', '1');
+
+      const first = await postMessage({
+        organizationId: org.id,
+        sessionId: session.id,
+        text: 'first of the day',
+        clientMessageId: 'shop-1',
+      });
+      expect(first.status).toBe(202);
+
+      // A different browser on the same shop: the per-session budget is fresh,
+      // the shop's daily one is not.
+      const other = await createSession();
+      const refused = await postMessage({
+        organizationId: org.id,
+        sessionId: other.id,
+        text: 'second of the day',
+        clientMessageId: 'shop-2',
+      });
+
+      expect(refused.status).toBe(429);
+      expect(refused.body.denial).toBe('shop_budget');
+
+      // Isolation is the property that matters: exhausting the storefront must
+      // not consume the cap the merchant's email and Instagram agents share.
+      const orgSpend = await db.llmDailySpend.findMany({ where: { organizationId: org.id } });
+      expect(orgSpend).toEqual([]);
+    });
+
+    it('counts only admitted messages against the session budget', async () => {
+      vi.stubEnv('STOREFRONT_CHAT_MAX_MESSAGES_PER_SHOP_DAY', '1');
+
+      await postMessage({
+        organizationId: org.id,
+        sessionId: session.id,
+        text: 'admitted',
+        clientMessageId: 'counted-1',
+      });
+      // Refused on the shop budget, so it must not also consume this session's
+      // allowance — a refused message that spent budget would push a retrying
+      // shopper's own reset further away.
+      await postMessage({
+        organizationId: org.id,
+        sessionId: session.id,
+        text: 'refused',
+        clientMessageId: 'counted-2',
+      });
+
+      const after = await db.storefrontChatSession.findUniqueOrThrow({ where: { id: session.id } });
+      expect(after.messageCount).toBe(1);
+    });
+
+    it('refuses a burst on one session and reports when to retry', async () => {
+      vi.stubEnv('STOREFRONT_CHAT_BURST_PER_SESSION', '1');
+
+      const first = await postMessage({
+        organizationId: org.id,
+        sessionId: session.id,
+        text: 'first',
+        clientMessageId: 'burst-1',
+      });
+      expect(first.status).toBe(202);
+
+      const refused = await postMessage({
+        organizationId: org.id,
+        sessionId: session.id,
+        text: 'immediately after',
+        clientMessageId: 'burst-2',
+      });
+
+      expect(refused.status).toBe(429);
+      expect(refused.body.denial).toBe('session_burst');
+      expect(refused.headers['retry-after']).toEqual(expect.any(String));
+
+      // Burst is the cheapest layer and must refuse before the daily counters
+      // move, or a flood would still eat the shop's day.
+      const after = await db.storefrontChatSession.findUniqueOrThrow({ where: { id: session.id } });
+      expect(after.messageCount).toBe(1);
+    });
+
+    it('accounts the shop day under the integration that owns the session', async () => {
+      await postMessage({
+        organizationId: org.id,
+        sessionId: session.id,
+        text: 'accounted',
+        clientMessageId: 'usage-1',
+      });
+
+      const usage = await db.storefrontChatDailyUsage.findMany({
+        where: { organizationId: org.id },
+      });
+      expect(usage).toHaveLength(1);
+      expect(usage[0].integrationId).toBe(integration.id);
+      expect(usage[0].messageCount).toBe(1);
+    });
   });
 
   it('returns 500 when persistence fails', async () => {

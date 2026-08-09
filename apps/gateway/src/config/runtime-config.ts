@@ -214,6 +214,42 @@ export function isGmailNativeInboundEnabled(): boolean {
   return parseBooleanEnv('GMAIL_NATIVE_INBOUND', false);
 }
 
+export interface StorefrontChatMessageBudgets {
+  perSession: number;
+  perShopPerDay: number;
+}
+
+// Storefront chat's own containment, counted in shopper messages because the
+// gate runs before the model and the spend of the message being admitted is not
+// yet known. The defaults are sized for a real conversation and against a bot:
+// 30 messages is a long support exchange and a short scrape, and 200 per shop
+// per day is more storefront chat than a solo merchant's store will see while
+// still bounding a bad day to a known multiple of one message's LLM cost.
+export function getStorefrontChatMessageBudgets(): StorefrontChatMessageBudgets {
+  return {
+    perSession: parsePositiveIntEnv('STOREFRONT_CHAT_MAX_MESSAGES_PER_SESSION', 30),
+    perShopPerDay: parsePositiveIntEnv('STOREFRONT_CHAT_MAX_MESSAGES_PER_SHOP_DAY', 200),
+  };
+}
+
+export interface StorefrontChatBurstLimits {
+  perSession: number;
+  perIp: number;
+  windowSecs: number;
+}
+
+// The burst layer, above the daily budgets. A person types a handful of messages
+// a minute; the per-IP allowance is higher than the per-session one so that a
+// shared address — an office, a campus, mobile carrier NAT — does not lock out
+// real shoppers who happen to arrive together.
+export function getStorefrontChatBurstLimits(): StorefrontChatBurstLimits {
+  return {
+    perSession: parsePositiveIntEnv('STOREFRONT_CHAT_BURST_PER_SESSION', 5),
+    perIp: parsePositiveIntEnv('STOREFRONT_CHAT_BURST_PER_IP', 20),
+    windowSecs: parsePositiveIntEnv('STOREFRONT_CHAT_BURST_WINDOW_SECS', 60),
+  };
+}
+
 function readOptionalTrimmedEnv(name: string): string | null {
   const rawValue = process.env[name];
   if (typeof rawValue !== 'string') {

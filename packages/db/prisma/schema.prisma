@@ -162,6 +162,7 @@ model Organization {
   stripeWebhookEvents     StripeWebhookEvent[]
   messages                Message[]
   storefrontChatSessions  StorefrontChatSession[]
+  storefrontChatDailyUsage StorefrontChatDailyUsage[]
 
   @@index([clerkOrgId])
   @@map("organizations")
@@ -296,6 +297,7 @@ model Integration {
   replyThreads            Thread[]                @relation("ThreadReplyIntegration")
   messages                Message[]
   storefrontChatSessions  StorefrontChatSession[]
+  storefrontChatDailyUsage StorefrontChatDailyUsage[]
 
   @@unique([organizationId, emailProvider])
   // Supporting identity for database-level tenant-consistency foreign keys.
@@ -825,6 +827,11 @@ model StorefrontChatSession {
   threadId         String?   @map("thread_id") @db.Uuid
   storefrontHost   String    @map("storefront_host") @db.VarChar(255)
   resumeSecretHash String    @map("resume_secret_hash") @db.VarChar(64)
+  // Shopper messages accepted on this session, for the per-session budget. A
+  // lifetime count rather than a daily one: the session itself expires, and a
+  // shopper who clears it to reset the count lands on the per-shop daily budget
+  // and the per-IP burst limit instead.
+  messageCount     Int       @default(0) @map("message_count")
   lastSeenAt       DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz
   expiresAt        DateTime  @map("expires_at") @db.Timestamptz
   revokedAt        DateTime? @map("revoked_at") @db.Timestamptz
@@ -843,4 +850,33 @@ model StorefrontChatSession {
   @@index([organizationId, lastSeenAt(sort: Desc)])
   @@index([expiresAt])
   @@map("storefront_chat_sessions")
+}
+
+// Per-shop-per-day shopper message counter — the storefront's own budget, and
+// the only thing standing between an anonymous stranger and the org's daily LLM
+// cap. Deliberately counted in messages, not dollars: the gate has to run
+// *before* the model to be worth anything, and at that point the spend of the
+// message being admitted is not yet known. One accepted message costs at most
+// one classification, one summary and one plan, so a message ceiling is a spend
+// ceiling with a known multiplier.
+//
+// Separate from `llm_daily_spend` on purpose. Exhausting this must degrade the
+// widget alone and leave the merchant's email and Instagram agents running,
+// which a shared counter cannot express.
+model StorefrontChatDailyUsage {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  integrationId  String   @map("integration_id") @db.Uuid
+  // UTC day, `YYYY-MM-DD`, matching the llm_daily_spend convention.
+  day            String   @db.VarChar(10)
+  messageCount   Int      @default(0) @map("message_count")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  integration  Integration  @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationId, day])
+  @@index([organizationId, day])
+  @@map("storefront_chat_daily_usage")
 }
