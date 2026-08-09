@@ -6,7 +6,7 @@ import { buildSystemPromptParts, buildComposerAskPrompt } from "./prompt.js";
 import { isOperatorChannel } from "./intent.js";
 import { buildMessageHistory } from "./message-history.js";
 import { runAgentLoop } from "./agent-loop.js";
-import { GUEST_TOOL_NAMES, isGuestAllowedTool, isGuestContext } from "./guest-policy.js";
+import { GUEST_TOOL_NAMES, isGuestAllowedTool, isGuestContext, isGuestOnlyTool } from "./guest-policy.js";
 import type { ActionEntry, BaseAgentContext, AgentResult } from "./agent-context.js";
 import type { PersistedAgentAction } from "./agent-actions.js";
 import { createModelUsageMetrics, hashInstructionForLog } from "./usage.js";
@@ -190,9 +190,10 @@ export async function runAgent(
   const selectedCoreTools = readOnly
     ? selectAgentTools(settings, guestMode
         ? READ_TOOL_NAMES.filter((name) => isGuestAllowedTool(name))
-        : READ_TOOL_NAMES)
+        : READ_TOOL_NAMES).filter((tool) => guestMode || !isGuestOnlyTool(tool.name))
     : selectAgentTools(settings, guestMode ? GUEST_TOOL_NAMES : null).filter((tool) => (
-        !gatewayOperatorMode || !OPERATOR_HIDDEN_TOOL_NAMES.has(tool.name)
+        (guestMode || !isGuestOnlyTool(tool.name))
+        && (!gatewayOperatorMode || !OPERATOR_HIDDEN_TOOL_NAMES.has(tool.name))
       ));
   const tools = readOnly
     ? selectedCoreTools

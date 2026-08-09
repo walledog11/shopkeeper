@@ -11,6 +11,7 @@ export {
   editShopifyOrder,
   fulfillOrder,
   getOrderByName,
+  getOrderFulfillmentStatus,
   getOrderTracking,
   getShopifyCustomer,
   getShopifyOrders,

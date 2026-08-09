@@ -16,6 +16,7 @@ export {
 } from "./customers.js";
 export {
   getOrderByName,
+  getOrderFulfillmentStatus,
   getShopifyOrders,
   listRecentUnfulfilledOrderIds,
   listRecentShippedOrderShipments,

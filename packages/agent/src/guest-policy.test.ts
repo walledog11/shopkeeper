@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AgentContext } from "./agent-context.js";
-import { GUEST_TOOL_NAMES, isGuestAllowedTool, isGuestContext } from "./guest-policy.js";
+import { GUEST_TOOL_NAMES, isGuestAllowedTool, isGuestContext, isGuestOnlyTool } from "./guest-policy.js";
 import { appendInitialPlanningWarnings } from "./planner-read-tools.js";
 import { resolveAgentSettings, type AutonomyTier } from "./settings.js";
 import { TOOL_DEFINITIONS, selectAgentTools } from "./tools/registry/index.js";
@@ -104,10 +104,11 @@ describe("guest allowlist", () => {
     expect(unclassified).toEqual([]);
   });
 
-  it("allows only knowledge, public product info, replying, escalation and internal housekeeping", () => {
+  it("allows knowledge, public product info, shipping status, replying, escalation and internal housekeeping", () => {
     expect([...GUEST_TOOL_NAMES]).toEqual([
       "search_kb",
       "search_shopify_products",
+      "get_order_fulfillment_status",
       "send_reply",
       "escalate_to_human",
       "ask_operator",
@@ -115,6 +116,16 @@ describe("guest allowlist", () => {
       "update_thread_status",
       "update_thread_tag",
     ]);
+  });
+
+  it("keeps the guest-only tool out of every non-guest tool list", () => {
+    // The support planner's tool set must be unchanged by anything added for
+    // storefront chat, or the eval gate is owed for a surface that did not
+    // actually change. Asserted rather than reasoned about.
+    const nonGuest = selectAgentTools(undefined).filter((tool) => !isGuestOnlyTool(tool.name));
+    expect(nonGuest.map((tool) => tool.name)).not.toContain("get_order_fulfillment_status");
+    expect(isGuestOnlyTool("get_order_fulfillment_status")).toBe(true);
+    expect(isGuestAllowedTool("get_order_fulfillment_status")).toBe(true);
   });
 
   it.each(FORBIDDEN_FOR_GUESTS)("refuses %s", (name) => {

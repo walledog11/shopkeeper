@@ -2,7 +2,7 @@ import { buildSplitCachedSystemPrompt } from "./ai/anthropic.js";
 import { pickModel } from "./ai/index.js";
 import type { AgentContext } from "./agent-context.js";
 import { runAgentLoop } from "./agent-loop.js";
-import { GUEST_TOOL_NAMES, isGuestContext } from "./guest-policy.js";
+import { GUEST_TOOL_NAMES, isGuestContext, isGuestOnlyTool } from "./guest-policy.js";
 import { isOperatorChannel } from "./intent.js";
 import { isMerchantAnswerPlanningInstruction } from "./kb-learned.js";
 import logger from "./logger.js";
@@ -65,7 +65,7 @@ export async function planAgent(
   // happen.
   let tools = isGuestContext(ctx)
     ? selectAgentTools(settings, GUEST_TOOL_NAMES)
-    : selectAgentTools(settings);
+    : selectAgentTools(settings).filter((tool) => !isGuestOnlyTool(tool.name));
   if (merchantAnswerReplan) {
     tools = tools.filter(tool => tool.name !== "ask_operator");
   }

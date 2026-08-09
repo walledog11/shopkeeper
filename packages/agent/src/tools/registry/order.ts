@@ -12,6 +12,7 @@ import type {
   EditShopifyOrderInput,
   FulfillOrderInput,
   GetOrderByNameInput,
+  GetOrderFulfillmentStatusInput,
   GetOrderTrackingInput,
   GetShopifyOrdersInput,
   UpdateShopifyOrderAddressInput,
@@ -74,6 +75,24 @@ export const ORDER_TOOL_DEFINITIONS = [
     execute: async (input: GetOrderByNameInput, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
       return shopify ? deps.getOrderByName(input, shopify) : noShopify;
+    },
+  }),
+  defineTool({
+    name: "get_order_fulfillment_status",
+    description:
+      "Check whether an order has shipped, using the order number and/or the email used at checkout. Returns only the shipping state (not_shipped_yet, partially_shipped, shipped, delivered, cancelled), the date it was placed, and the date it shipped. Returns no name, address, contact details, items or amounts — use the fuller order tools when you have those available and need that detail.",
+    fields: {
+      order_number: stringArg("The order number as shown to the customer, e.g. '#1234' or '1234'."),
+      email: stringArg("The email address used at checkout, if they gave one. Supplying both narrows the match."),
+    },
+    category: "read",
+    group: "order",
+    capabilities: ["shopify"],
+    label: "Checked shipping status",
+    planStepLabel: "Check shipping status",
+    execute: async (input: GetOrderFulfillmentStatusInput, ctx, _settings, deps) => {
+      const shopify = requireShopify(ctx);
+      return shopify ? deps.getOrderFulfillmentStatus(input, shopify) : noShopify;
     },
   }),
   defineTool({

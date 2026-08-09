@@ -34,6 +34,7 @@ const VALID_TOOL_INPUTS: Record<ToolName, unknown> = {
   },
   add_shopify_customer_note: { customer_id: "1001", note: "VIP customer" },
   get_order_by_name: { order_name: "#1234" },
+  get_order_fulfillment_status: { order_number: "#1234", email: "jane@test.com" },
   get_order_tracking: { order_id: "2001" },
   create_refund: { order_id: "2001", amount: "19.99", reason: "Damaged item" },
   cancel_order: { order_id: "2001", reason: "customer", restock: true },
@@ -75,6 +76,7 @@ const SHOPIFY_TOOL_ROUTES = [
   ["update_shopify_order_address", "updateShopifyOrderAddress"],
   ["add_shopify_customer_note", "addShopifyCustomerNote"],
   ["get_order_by_name", "getOrderByName"],
+  ["get_order_fulfillment_status", "getOrderFulfillmentStatus"],
   ["get_order_tracking", "getOrderTracking"],
   ["create_refund", "createRefund"],
   ["cancel_order", "cancelOrder"],
@@ -147,6 +149,7 @@ function makeDeps(): ToolExecutionDeps {
     updateShopifyOrderAddress: vi.fn().mockResolvedValue(toolOk("updateShopifyOrderAddress")),
     addShopifyCustomerNote: vi.fn().mockResolvedValue(toolOk("addShopifyCustomerNote")),
     getOrderByName: vi.fn().mockResolvedValue(toolOk("getOrderByName")),
+    getOrderFulfillmentStatus: vi.fn().mockResolvedValue(toolOk("getOrderFulfillmentStatus")),
     getOrderTracking: vi.fn().mockResolvedValue(toolOk("getOrderTracking")),
     createRefund: vi.fn().mockResolvedValue({ ...toolOk("createRefund"), refundedCents: 1234 }),
     cancelOrder: vi.fn().mockResolvedValue(toolOk("cancelOrder")),
@@ -220,9 +223,19 @@ describe("agent tool registry", () => {
     },
   );
 
+  // Tools that accept alternative identifiers rather than one mandatory field.
+  // They enforce "at least one of" inside execute instead, so there is no single
+  // key whose absence should throw. Kept as an explicit set so the invariant
+  // still holds for every other tool.
+  const ALTERNATIVE_IDENTIFIER_TOOLS = new Set(["get_order_fulfillment_status"]);
+
   it.each(TOOL_DEFINITIONS.map((definition) => [definition.name, definition] as const))(
     "rejects missing required input for %s",
     (name, definition) => {
+      if (ALTERNATIVE_IDENTIFIER_TOOLS.has(name)) {
+        expect(definition.inputSchema.required ?? []).toEqual([]);
+        return;
+      }
       const [requiredKey] = definition.inputSchema.required ?? [];
       expect(requiredKey).toBeTruthy();
 

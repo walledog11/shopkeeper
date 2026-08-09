@@ -18,6 +18,10 @@ export const GUEST_TOOL_NAMES = [
   // Answer from what is public: policy, FAQ, product information.
   "search_kb",
   "search_shopify_products",
+  // Shipping state for an order they can name. Safe here only because it is
+  // built to return no identifying detail — see getOrderFulfillmentStatus. The
+  // fuller order reads stay out; those need a verified session.
+  "get_order_fulfillment_status",
   // Talk back, and get a human when that is the honest answer.
   "send_reply",
   "escalate_to_human",
@@ -29,6 +33,18 @@ export const GUEST_TOOL_NAMES = [
   "update_thread_status",
   "update_thread_tag",
 ] as const;
+
+// Reachable only from a guest context. `get_order_fulfillment_status` exists
+// because a storefront visitor cannot be identified; on every other channel the
+// thread is already tied to a customer and the fuller order reads answer the same
+// question better. Keeping it out of the support tool list is not tidiness — it
+// means adding this tool leaves the support planner's tool set byte-identical,
+// so the eval gate has nothing new to measure.
+const GUEST_ONLY_TOOL_NAMES: ReadonlySet<string> = new Set(["get_order_fulfillment_status"]);
+
+export function isGuestOnlyTool(name: string): boolean {
+  return GUEST_ONLY_TOOL_NAMES.has(name);
+}
 
 const GUEST_TOOL_SET: ReadonlySet<string> = new Set(GUEST_TOOL_NAMES);
 

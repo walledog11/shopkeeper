@@ -51,6 +51,11 @@ export interface GetOrderByNameInput {
   order_name: string;
 }
 
+export interface GetOrderFulfillmentStatusInput {
+  order_number?: string;
+  email?: string;
+}
+
 export interface CreateRefundInput {
   order_id: string;
   amount: string;
@@ -235,6 +240,7 @@ export interface ToolExecutionDeps {
   updateShopifyOrderAddress(input: UpdateShopifyOrderAddressInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   addShopifyCustomerNote(input: AddShopifyCustomerNoteInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   getOrderByName(input: GetOrderByNameInput, ctx: ShopifyToolContext): Promise<ToolResult>;
+  getOrderFulfillmentStatus(input: GetOrderFulfillmentStatusInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   getOrderTracking(input: GetOrderTrackingInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   createRefund(input: CreateRefundInput, ctx: ShopifyToolContext): Promise<RefundToolResult>;
   cancelOrder(input: CancelOrderInput, ctx: ShopifyToolContext): Promise<ToolResult>;

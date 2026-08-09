@@ -30,6 +30,7 @@ export type {
   EscalateToHumanInput,
   FulfillOrderInput,
   GetOrderByNameInput,
+  GetOrderFulfillmentStatusInput,
   GetOrderTrackingInput,
   GetShopifyCustomerInput,
   GetShopifyOrdersInput,
