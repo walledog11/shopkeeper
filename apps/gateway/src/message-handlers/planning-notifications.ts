@@ -142,6 +142,7 @@ function channelNoun(channelType: DbChannelType): string {
   if (channelType === CHANNEL.IG_DM) return 'Instagram DM';
   if (channelType === CHANNEL.EMAIL) return 'email';
   if (channelType === CHANNEL.TIKTOK) return 'TikTok message';
+  if (channelType === CHANNEL.SHOPIFY_CHAT) return 'storefront chat message';
   return `${formatChannelLabel(channelType)} message`;
 }
 
@@ -149,6 +150,7 @@ function channelRepliedPhrase(channelType: DbChannelType): string {
   if (channelType === CHANNEL.IG_DM) return 'on Instagram';
   if (channelType === CHANNEL.EMAIL) return 'by email';
   if (channelType === CHANNEL.TIKTOK) return 'on TikTok';
+  if (channelType === CHANNEL.SHOPIFY_CHAT) return 'in your storefront chat';
   return `on ${formatChannelLabel(channelType)}`;
 }
 
@@ -169,6 +171,14 @@ function endSentence(text: string): string {
 // Two lines, not one joined by an em-dash. The summary is model-written prose
 // that routinely carries its own commas, colons and quotes, so splicing it after
 // a dash produces a sentence with three kinds of punctuation fighting.
+// An anonymous storefront visitor is not "the customer". Nobody has identified
+// them, they may have bought nothing, and on this channel they can type any name
+// they like — calling them a customer asserts a relationship the merchant does
+// not have and that the agent has no way to check.
+function anonymousNoun(channelType: DbChannelType): string {
+  return channelType === CHANNEL.SHOPIFY_CHAT ? 'Someone on your storefront' : 'The customer';
+}
+
 function formatHeaderLines(
   customerName: string | null,
   channelType: DbChannelType,
@@ -178,7 +188,7 @@ function formatHeaderLines(
   const firstName = customerFirstName(customerName);
   let lead: string;
   if (stage.isFollowUp) {
-    const who = firstName ?? 'The customer';
+    const who = firstName ?? anonymousNoun(channelType);
     lead = stage.newMessages > 1
       ? `${who} sent ${stage.newMessages} more messages ${channelRepliedPhrase(channelType)}`
       : `${who} replied ${channelRepliedPhrase(channelType)}`;
@@ -187,11 +197,37 @@ function formatHeaderLines(
     const burst = stage.newMessages > 1 ? ` (${stage.newMessages} messages)` : '';
     lead = `New ${channelNoun(channelType)}${from}${burst}`;
   }
-  return [`${lead}.`, endSentence(summary)];
+  // `summary` is the thread's aiSummary — the whole conversation, not the new
+  // messages. Pairing "sent 3 more messages" with it read as a description of
+  // what just arrived, so each follow-up restated the entire thread as if it
+  // were news and the merchant could not tell what had changed. Label it for
+  // what it is instead of implying a delta this function cannot compute; a true
+  // delta needs a summary scoped to the new messages, which the summariser does
+  // not produce yet.
+  return stage.isFollowUp
+    ? [`${lead}.`, `Where it stands: ${endSentence(summary)}`]
+    : [`${lead}.`, endSentence(summary)];
 }
 
 function isSendStep(step: PlanStep): boolean {
   return step.tool === 'send_reply' || step.tool === 'send_email';
+}
+
+// Why the plan escalated, so the card can say what the agent concluded instead
+// of only that it gave up. The reason is already on the tool call — either
+// model-authored or templated from the routing signals — and it is the most
+// useful sentence in the whole notification.
+function escalationReason(
+  rawToolCalls: readonly { name: string; input?: unknown }[],
+): string | null {
+  for (const toolCall of rawToolCalls) {
+    if (toolCall.name !== 'escalate_to_human') continue;
+    const input = toolCall.input;
+    if (!input || typeof input !== 'object') continue;
+    const reason = (input as Record<string, unknown>).reason;
+    if (typeof reason === 'string' && reason.trim()) return reason.trim();
+  }
+  return null;
 }
 
 // A phrase that completes "I won't …", parked alongside the plan so a fast-path
@@ -241,7 +277,19 @@ export function formatOperatorPlanMessage(
 
   const lines: string[] = formatHeaderLines(customerName, channelType, summary, stage);
 
-  if (actionableSteps.length === 1 && isSendStep(actionableSteps[0]!) && draftBody) {
+  // Escalation is the one plan whose whole content is "this is yours now". The
+  // generic single-step rendering turned that into "I'd escalate to merchant." —
+  // addressed to the merchant, which reads as asking their permission to tell
+  // them something they are being told. Say what it is and why instead.
+  const escalateOnly =
+    actionableSteps.length === 1 && actionableSteps[0]!.tool === 'escalate_to_human';
+
+  if (escalateOnly) {
+    const reason = options?.rawToolCalls ? escalationReason(options.rawToolCalls) : null;
+    lines.push('', reason
+      ? `This one needs you: ${endSentence(reason)}`
+      : "This one needs you — I can't answer it myself.");
+  } else if (actionableSteps.length === 1 && isSendStep(actionableSteps[0]!) && draftBody) {
     lines.push('', "I'd reply:", `"${draftBody}"`);
   } else if (actionableSteps.length === 1) {
     // One step is not a list. Numbering a single item is the tell that a machine
@@ -282,8 +330,15 @@ export function formatOperatorPlanMessage(
     }
   }
 
-  const replyOnly = actionableSteps.length > 0 && actionableSteps.every(isSendStep);
-  lines.push('', replyOnly ? 'Good to send?' : 'Sound good?');
+  if (escalateOnly) {
+    // No question, because there is nothing to answer: approving an escalation
+    // approves handing the merchant a thread they are already holding. Tell them
+    // where it sits instead of asking them to authorise it.
+    lines.push('', "Nothing's gone out — it's waiting on you.");
+  } else {
+    const replyOnly = actionableSteps.length > 0 && actionableSteps.every(isSendStep);
+    lines.push('', replyOnly ? 'Good to send?' : 'Sound good?');
+  }
 
   return lines.join('\n');
 }

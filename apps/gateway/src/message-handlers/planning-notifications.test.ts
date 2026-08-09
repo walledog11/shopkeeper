@@ -206,6 +206,46 @@ describe('formatOperatorPlanMessage', () => {
     expect(message).not.toContain('Plan (');
   });
 
+  it('states an escalation instead of asking the merchant to approve one', () => {
+    const message = formatOperatorPlanMessage(
+      null,
+      ChannelType.shopify_chat,
+      'Visitor asked for tracking on four orders under two different names.',
+      [{ category: 'write', tool: 'escalate_to_human', description: 'Escalate to merchant', label: 'Escalate to merchant', enabled: true }],
+      {
+        rawToolCalls: [{
+          name: 'escalate_to_human',
+          input: { reason: 'They want order details I cannot look up from the storefront' },
+        }],
+      },
+    );
+
+    // Escalation hands the thread to the merchant, so "Sound good?" asks their
+    // permission to tell them something this message is already telling them.
+    expect(message).not.toContain('Sound good?');
+    expect(message).not.toContain("I'd escalate");
+    expect(message).toContain('This one needs you: They want order details I cannot look up from the storefront.');
+    expect(message).toContain("Nothing's gone out — it's waiting on you.");
+  });
+
+  it('does not call an unidentified storefront visitor a customer', () => {
+    const message = formatOperatorPlanMessage(
+      null,
+      ChannelType.shopify_chat,
+      'Asked about return policy.',
+      [{ category: 'write', tool: 'send_reply', description: 'Reply to customer', label: 'Reply', enabled: true }],
+      {
+        rawToolCalls: [{ name: 'send_reply', input: { text: '30 days!' } }],
+        stage: { isFollowUp: true, newMessages: 2 },
+      },
+    );
+
+    expect(message).toContain('Someone on your storefront sent 2 more messages in your storefront chat.');
+    expect(message).not.toContain('The customer');
+    // The enum member is a database value, not somewhere a shopper stood.
+    expect(message).not.toContain('Shopify_chat');
+  });
+
   it('labels send_reply steps by the thread channel in multi-step plans', () => {
     const message = formatOperatorPlanMessage(
       'Sarah Lee',
@@ -237,7 +277,7 @@ describe('formatOperatorPlanMessage', () => {
       },
     );
 
-    expect(message).toContain('Sarah replied on Instagram.\nCustomer is asking when the snowboard restocks.');
+    expect(message).toContain('Sarah replied on Instagram.\nWhere it stands: Customer is asking when the snowboard restocks.');
     expect(message).not.toContain('New Instagram DM');
   });
 
@@ -249,7 +289,9 @@ describe('formatOperatorPlanMessage', () => {
       plan.steps,
       { stage: { isFollowUp: true, newMessages: 3 } },
     );
-    expect(followUp).toContain('Sarah sent 3 more messages on Instagram.\nCustomer sent more details.');
+    // The summary is the whole thread, not the three new messages, so the
+    // follow-up header labels it rather than implying a delta.
+    expect(followUp).toContain('Sarah sent 3 more messages on Instagram.\nWhere it stands: Customer sent more details.');
 
     const fresh = formatOperatorPlanMessage(
       null,
