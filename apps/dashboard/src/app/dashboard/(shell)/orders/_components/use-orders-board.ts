@@ -3,60 +3,40 @@
 import { useCallback, useMemo, useState } from "react"
 import useSWR from "swr"
 import { errorMessageFromUnknown } from "@/lib/api/fetcher"
-import type { OrderColumnState, OrdersBoardState } from "./OrdersBoard"
 import {
-  classifyOrder,
   type BoardColumnId,
-  type OrderRow,
+  type OrderColumnState,
+  type OrdersBoardState,
 } from "./orders-board-model"
 import {
   fetchOrdersBoard,
-  fetchOrdersPage,
+  fetchOrdersColumnPage,
   ORDERS_BOARD_SWR_KEY,
   type OrdersBoardResponse,
 } from "./order-requests"
+import {
+  appendOrderColumnPage,
+  beginLoadingOrderColumn,
+  createOrdersPaginationState,
+  failLoadingOrderColumn,
+  mergeInitialBoardResponse,
+  ordersInColumn,
+} from "./orders-board-state"
 
 const BOARD_COLUMN_IDS: BoardColumnId[] = ["needs_fulfillment", "unpaid", "fulfilled"]
-
-function emptyPagesByColumn(): Record<BoardColumnId, OrderRow[][]> {
-  return {
-    needs_fulfillment: [],
-    unpaid: [],
-    fulfilled: [],
-  }
-}
-
-function emptyNextPageInfoByColumn(): Record<BoardColumnId, string | null> {
-  return {
-    needs_fulfillment: null,
-    unpaid: null,
-    fulfilled: null,
-  }
-}
 
 export function useOrdersBoard(
   enabled: boolean,
   onShopLoaded: (shop: string) => void,
 ) {
-  const [pagesByColumn, setPagesByColumn] = useState(emptyPagesByColumn)
-  const [nextPageInfoByColumn, setNextPageInfoByColumn] = useState(emptyNextPageInfoByColumn)
-  const [loadingMoreColumn, setLoadingMoreColumn] = useState<BoardColumnId | null>(null)
+  const [pagination, setPagination] = useState(createOrdersPaginationState)
 
   const applyBoardResponse = useCallback((response: OrdersBoardResponse) => {
-    setPagesByColumn({
-      needs_fulfillment: [response.columns.needs_fulfillment.orders],
-      unpaid: [response.columns.unpaid.orders],
-      fulfilled: [response.columns.fulfilled.orders],
-    })
-    setNextPageInfoByColumn({
-      needs_fulfillment: response.columns.needs_fulfillment.nextPageInfo,
-      unpaid: response.columns.unpaid.nextPageInfo,
-      fulfilled: response.columns.fulfilled.nextPageInfo,
-    })
+    setPagination(current => mergeInitialBoardResponse(current, response))
     if (response.shop) onShopLoaded(response.shop)
   }, [onShopLoaded])
 
-  const { error, isLoading, isValidating, mutate } = useSWR(
+  const { error, isLoading, mutate } = useSWR(
     enabled ? ORDERS_BOARD_SWR_KEY : null,
     fetchOrdersBoard,
     {
@@ -66,40 +46,32 @@ export function useOrdersBoard(
   )
 
   const loadMore = useCallback(async (columnId: BoardColumnId) => {
-    const nextPageInfo = nextPageInfoByColumn[columnId]
-    if (!nextPageInfo || loadingMoreColumn) return
+    const column = pagination[columnId]
+    const nextPageInfo = column.nextPageInfo
+    if (!nextPageInfo || column.isLoadingMore) return
 
-    setLoadingMoreColumn(columnId)
+    setPagination(current => beginLoadingOrderColumn(current, columnId))
     try {
-      const page = await fetchOrdersPage(nextPageInfo)
-      setPagesByColumn(prev => ({
-        ...prev,
-        [columnId]: [...prev[columnId], page.orders],
-      }))
-      setNextPageInfoByColumn(prev => ({
-        ...prev,
-        [columnId]: page.nextPageInfo,
-      }))
+      const page = await fetchOrdersColumnPage(columnId, nextPageInfo)
+      setPagination(current => appendOrderColumnPage(current, columnId, page))
     } catch (loadError) {
-      errorMessageFromUnknown(loadError, "Unable to load more orders.")
-    } finally {
-      setLoadingMoreColumn(null)
+      const message = errorMessageFromUnknown(loadError, "Unable to load more orders.")
+      setPagination(current => failLoadingOrderColumn(current, columnId, message))
     }
-  }, [loadingMoreColumn, nextPageInfoByColumn])
+  }, [pagination])
 
   const columns: OrdersBoardState = useMemo(() => {
     const buildColumn = (columnId: BoardColumnId): OrderColumnState => {
-      const entries = pagesByColumn[columnId]
-        .flat()
-        .filter(order => classifyOrder(order) === columnId)
+      const column = pagination[columnId]
+      const entries = ordersInColumn(pagination, columnId)
 
       return {
         entries,
-        error,
-        hasMore: Boolean(nextPageInfoByColumn[columnId]),
-        isLoading: enabled && isLoading && pagesByColumn[columnId].length === 0,
-        isValidating,
-        isLoadingMore: loadingMoreColumn === columnId,
+        error: entries.length === 0 ? error : null,
+        hasMore: Boolean(column.nextPageInfo),
+        isLoading: enabled && isLoading && column.pages.length === 0,
+        isLoadingMore: column.isLoadingMore,
+        loadMoreError: column.loadMoreError,
         onLoadMore: () => { void loadMore(columnId) },
         onRetry: () => { void mutate() },
       }
@@ -114,17 +86,14 @@ export function useOrdersBoard(
     enabled,
     error,
     isLoading,
-    isValidating,
     loadMore,
-    loadingMoreColumn,
     mutate,
-    nextPageInfoByColumn,
-    pagesByColumn,
+    pagination,
   ])
 
   const isInitialLoading = enabled
     && isLoading
-    && BOARD_COLUMN_IDS.every(columnId => pagesByColumn[columnId].length === 0)
+    && BOARD_COLUMN_IDS.every(columnId => pagination[columnId].pages.length === 0)
 
   return {
     columns,

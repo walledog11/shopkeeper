@@ -6,9 +6,16 @@ import {
   isShopifyIntegrationOperational,
   shopifyRouteErrorResponse,
 } from "@/lib/server/shopify-integration"
+import { normalizeCurrencyCode } from "@/lib/format/currency"
+import {
+  classifyOrder,
+  type OrderBoardColumnId,
+  type OrderRow,
+  type OrdersPageResponse,
+} from "@/lib/orders/order-contract"
 
 export const ORDER_FIELDS =
-  "id,name,created_at,financial_status,fulfillment_status,total_price,current_total_price,customer,line_items"
+  "id,name,created_at,financial_status,fulfillment_status,total_price,current_total_price,currency,customer,line_items"
 
 export interface ShopifyOrderRaw {
   id: number
@@ -18,30 +25,19 @@ export interface ShopifyOrderRaw {
   fulfillment_status: string | null
   total_price: string
   current_total_price: string
-  customer: { id: number; first_name: string; last_name: string; email: string } | null
+  currency: string | null
+  customer: {
+    id: number
+    first_name: string | null
+    last_name: string | null
+    email: string | null
+  } | null
   line_items: {
     title: string
     quantity: number
     current_quantity: number
     variant_title: string | null
   }[]
-}
-
-export interface NormalizedOrder {
-  id: number
-  name: string
-  created_at: string
-  financial_status: string
-  fulfillment_status: string | null
-  total_price: string
-  customer: { id: number; name: string; email: string } | null
-  line_items: { title: string; quantity: number; variant_title: string | null }[]
-}
-
-export interface OrdersPageResult {
-  orders: NormalizedOrder[]
-  nextPageInfo: string | null
-  shop: string
 }
 
 export interface ShopifyOrdersQuery {
@@ -52,7 +48,10 @@ export interface ShopifyOrdersQuery {
   limit?: number
 }
 
-export function normalizeOrder(order: ShopifyOrderRaw): NormalizedOrder {
+export function normalizeOrder(order: ShopifyOrderRaw): OrderRow {
+  const customerName = order.customer
+    ? [order.customer.first_name, order.customer.last_name].filter(Boolean).join(" ") || null
+    : null
   return {
     id: order.id,
     name: order.name,
@@ -60,11 +59,12 @@ export function normalizeOrder(order: ShopifyOrderRaw): NormalizedOrder {
     financial_status: order.financial_status,
     fulfillment_status: order.fulfillment_status,
     total_price: order.current_total_price ?? order.total_price,
+    currency: normalizeCurrencyCode(order.currency),
     customer: order.customer
       ? {
           id: order.customer.id,
-          name: [order.customer.first_name, order.customer.last_name].filter(Boolean).join(" "),
-          email: order.customer.email,
+          name: customerName,
+          email: order.customer.email || null,
         }
       : null,
     line_items: order.line_items.flatMap(lineItem => lineItem.current_quantity > 0
@@ -129,7 +129,7 @@ function buildShopifyOrdersQuery(query: ShopifyOrdersQuery): Record<string, stri
 export async function listShopifyOrders(
   integration: ShopifyIntegration,
   query: ShopifyOrdersQuery,
-): Promise<OrdersPageResult> {
+): Promise<OrdersPageResponse> {
   const shop = integration.externalAccountId
   const ctx = { shop, accessToken: integration.accessToken }
   const shopifyQuery = buildShopifyOrdersQuery(query)
@@ -148,10 +148,48 @@ export async function listShopifyOrders(
   }
 }
 
+const BOARD_PROVIDER_QUERY: Record<OrderBoardColumnId, ShopifyOrdersQuery> = {
+  needs_fulfillment: { fulfillmentStatus: "unfulfilled" },
+  unpaid: { financialStatus: "unpaid" },
+  fulfilled: { fulfillmentStatus: "shipped" },
+}
+
+const MAX_BOARD_PROVIDER_PAGES = 5
+
+/**
+ * Shopify's status filters overlap, so skip provider pages until a page has
+ * rows belonging to the requested canonical column. A bounded empty page may
+ * still carry a cursor; callers must expose that cursor rather than treating
+ * the column as exhausted.
+ */
+export async function listCanonicalOrderColumnPage(
+  integration: ShopifyIntegration,
+  columnId: OrderBoardColumnId,
+  options: { pageInfo?: string | null; limit?: number } = {},
+): Promise<OrdersPageResponse> {
+  let pageInfo = options.pageInfo ?? null
+  let latestPage: OrdersPageResponse | null = null
+
+  for (let scanned = 0; scanned < MAX_BOARD_PROVIDER_PAGES; scanned += 1) {
+    const page = await listShopifyOrders(integration, {
+      ...(pageInfo ? { pageInfo } : BOARD_PROVIDER_QUERY[columnId]),
+      limit: options.limit,
+    })
+    latestPage = page
+    const orders = page.orders.filter(order => classifyOrder(order) === columnId)
+    if (orders.length > 0 || !page.nextPageInfo) return { ...page, orders }
+    pageInfo = page.nextPageInfo
+  }
+
+  return latestPage
+    ? { ...latestPage, orders: [] }
+    : { orders: [], nextPageInfo: null, shop: integration.externalAccountId }
+}
+
 export async function listShopifyOrdersForOrg(
   organizationId: string,
   query: ShopifyOrdersQuery,
-): Promise<OrdersPageResult> {
+): Promise<OrdersPageResponse> {
   const integration = await getOperationalShopifyIntegration(organizationId)
   return listShopifyOrders(integration, query)
 }

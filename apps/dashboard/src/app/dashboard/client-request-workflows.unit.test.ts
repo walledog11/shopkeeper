@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { fetchCustomersPage } from "./(shell)/orders/_components/customers/customer-requests"
 import {
+  fetchOrdersColumnPage,
   fetchOrdersPage,
   startOrderSupportThread,
 } from "./(shell)/orders/_components/order-requests"
@@ -33,6 +34,7 @@ describe("pagination requests", () => {
     stubApiError("Next page failed")
 
     await expect(fetchOrdersPage("orders_cursor")).rejects.toThrow("Next page failed")
+    await expect(fetchOrdersColumnPage("unpaid", "orders_cursor")).rejects.toThrow("Next page failed")
     await expect(fetchCustomersPage("customers_cursor")).rejects.toThrow("Next page failed")
   })
 
@@ -40,6 +42,7 @@ describe("pagination requests", () => {
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({ error: "not a page" })))
 
     await expect(fetchOrdersPage("orders_cursor")).rejects.toThrow("Unable to load more orders.")
+    await expect(fetchOrdersColumnPage("fulfilled", "orders_cursor")).rejects.toThrow("Unable to load more orders.")
     await expect(fetchCustomersPage("customers_cursor")).rejects.toThrow("Unable to load more customers.")
   })
 })

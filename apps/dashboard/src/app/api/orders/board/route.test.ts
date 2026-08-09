@@ -47,6 +47,7 @@ function sampleOrder(id: number, name: string) {
     fulfillment_status: null,
     total_price: "10.00",
     current_total_price: "10.00",
+    currency: "CAD",
     customer: null,
     line_items: [],
   }
@@ -64,13 +65,19 @@ describe("GET /api/orders/board", () => {
       .mockResolvedValueOnce(jsonResponse({ orders: [sampleOrder(1, "#1001")] }, {
         headers: { Link: "<https://example.com?page_info=unfulfilled>; rel=\"next\"" },
       }))
-      .mockResolvedValueOnce(jsonResponse({ orders: [sampleOrder(2, "#1002")] }))
-      .mockResolvedValueOnce(jsonResponse({ orders: [sampleOrder(3, "#1003")] }))
+      .mockResolvedValueOnce(jsonResponse({ orders: [{
+        ...sampleOrder(2, "#1002"),
+        financial_status: "authorized",
+      }] }))
+      .mockResolvedValueOnce(jsonResponse({ orders: [{
+        ...sampleOrder(3, "#1003"),
+        fulfillment_status: "fulfilled",
+      }] }))
 
     const res = await GET()
     const body = await res.json() as {
       shop: string
-      columns: Record<string, { orders: Array<{ id: number }>; nextPageInfo: string | null }>
+      columns: Record<string, { orders: Array<{ id: number; currency: string }>; nextPageInfo: string | null }>
     }
 
     expect(res.status).toBe(200)
@@ -78,6 +85,8 @@ describe("GET /api/orders/board", () => {
     expect(body.columns.needs_fulfillment.orders).toHaveLength(1)
     expect(body.columns.unpaid.orders).toHaveLength(1)
     expect(body.columns.fulfilled.orders).toHaveLength(1)
+    expect(body.columns.needs_fulfillment.orders[0].currency).toBe("CAD")
     expect(mockFetch).toHaveBeenCalledTimes(3)
+    expect(String(mockFetch.mock.calls[0][0])).toContain("currency")
   })
 })

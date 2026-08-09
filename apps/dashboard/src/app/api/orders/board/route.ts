@@ -2,20 +2,16 @@ import { NextResponse } from "next/server"
 import { withOrgRoute } from "@/lib/api/route"
 import {
   getOperationalShopifyIntegration,
-  listShopifyOrders,
+  listCanonicalOrderColumnPage,
   shopifyOrdersErrorResponse,
-  type OrdersPageResult,
 } from "@/app/api/orders/_lib/orders-service"
+import {
+  ORDER_BOARD_COLUMN_IDS,
+  type OrderBoardColumnId,
+  type OrdersBoardColumnResponse,
+} from "@/lib/orders/order-contract"
 
 export const dynamic = "force-dynamic"
-
-const BOARD_COLUMNS = [
-  { id: "needs_fulfillment", fulfillmentStatus: "unfulfilled" },
-  { id: "unpaid", financialStatus: "unpaid" },
-  { id: "fulfilled", fulfillmentStatus: "shipped" },
-] as const
-
-type BoardColumnId = typeof BOARD_COLUMNS[number]["id"]
 
 export const GET = withOrgRoute(
   {
@@ -28,12 +24,9 @@ export const GET = withOrgRoute(
 
     try {
       const columnResults = await Promise.all(
-        BOARD_COLUMNS.map(async (column) => {
-          const page = await listShopifyOrders(integration, {
-            ...( "fulfillmentStatus" in column ? { fulfillmentStatus: column.fulfillmentStatus } : {}),
-            ...( "financialStatus" in column ? { financialStatus: column.financialStatus } : {}),
-          })
-          return { columnId: column.id, page }
+        ORDER_BOARD_COLUMN_IDS.map(async (columnId) => {
+          const page = await listCanonicalOrderColumnPage(integration, columnId)
+          return { columnId, page }
         }),
       )
 
@@ -42,7 +35,7 @@ export const GET = withOrgRoute(
           columnId,
           { orders: page.orders, nextPageInfo: page.nextPageInfo },
         ]),
-      ) as Record<BoardColumnId, Pick<OrdersPageResult, "orders" | "nextPageInfo">>
+      ) as Record<OrderBoardColumnId, OrdersBoardColumnResponse>
 
       const shop = columnResults[0]?.page.shop ?? integration.externalAccountId
 

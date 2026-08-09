@@ -12,6 +12,7 @@ interface UseCursorListStateOptions<TItem, TResponse> {
   debounceMs?: number
   enabled?: boolean
   fetchPage: (pageInfo: string) => Promise<CursorListPage<TItem>>
+  fetchInitial?: (url: string) => Promise<TResponse>
   loadMoreErrorMessage: string
   onInitialLoad?: (response: TResponse) => void
   searchMinLength?: number
@@ -23,6 +24,7 @@ export function useCursorListState<TItem, TResponse>({
   debounceMs = 250,
   enabled = true,
   fetchPage,
+  fetchInitial,
   loadMoreErrorMessage,
   onInitialLoad,
   searchMinLength = 0,
@@ -60,7 +62,7 @@ export function useCursorListState<TItem, TResponse>({
   const swrKey = enabled ? buildUrl(debouncedQuery) : null
   const { data, error, isLoading, isValidating, mutate } = useSWR<TResponse>(
     swrKey,
-    fetcher,
+    fetchInitial ?? fetcher,
     {
       onSuccess: (response) => {
         const page = selectInitialPage(response)

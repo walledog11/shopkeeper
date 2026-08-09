@@ -13,6 +13,7 @@ export interface DashboardStackColumnState<T> {
   hasMore: boolean
   isLoading: boolean
   isLoadingMore: boolean
+  loadMoreError?: string | null
   onLoadMore: () => void
   onRetry: () => void
 }
@@ -234,11 +235,18 @@ export function DashboardStackColumn<T>({
 }: DashboardStackColumnProps<T>) {
   const canExpand = variant === "deck" && state.entries.length > 1
   const loadMore = state.hasMore ? (
-    <BoardLoadMoreButton
-      isLoadingMore={state.isLoadingMore}
-      loadingLabel={loadingLabel}
-      onLoadMore={state.onLoadMore}
-    />
+    <div>
+      {state.loadMoreError ? (
+        <p className="mb-2 text-center text-xs text-red-500" aria-live="polite">
+          {state.loadMoreError}
+        </p>
+      ) : null}
+      <BoardLoadMoreButton
+        isLoadingMore={state.isLoadingMore}
+        loadingLabel={loadingLabel}
+        onLoadMore={state.onLoadMore}
+      />
+    </div>
   ) : null
 
   const list = (

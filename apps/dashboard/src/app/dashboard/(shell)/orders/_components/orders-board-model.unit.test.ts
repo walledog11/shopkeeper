@@ -16,6 +16,7 @@ function order(overrides: Partial<OrderRow> = {}): OrderRow {
     financial_status: 'paid',
     fulfillment_status: null,
     total_price: '50.00',
+    currency: 'USD',
     customer: { id: 1, name: 'Alex', email: 'alex@example.com' },
     line_items: [{ title: 'Hat', quantity: 2, variant_title: 'Blue' }],
     ...overrides,
@@ -24,7 +25,8 @@ function order(overrides: Partial<OrderRow> = {}): OrderRow {
 
 describe('orders board model', () => {
   it.each([
-    [{ financial_status: 'refunded' }, 'refunded'],
+    [{ financial_status: 'refunded' }, 'excluded'],
+    [{ financial_status: 'voided' }, 'excluded'],
     [{ financial_status: 'authorized' }, 'unpaid'],
     [{ financial_status: 'paid', fulfillment_status: 'partial' }, 'needs_fulfillment'],
     [{ financial_status: 'paid', fulfillment_status: 'fulfilled' }, 'fulfilled'],

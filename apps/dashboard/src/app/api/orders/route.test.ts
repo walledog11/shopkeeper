@@ -57,7 +57,7 @@ describe('GET /api/orders', () => {
     });
     mockFetch.mockResolvedValueOnce(jsonResponse({ errors: 'upstream unavailable' }, { status: 503 }));
 
-    const res = await GET(new Request('http://localhost/api/orders?fulfillment_status=unfulfilled'));
+    const res = await GET(new Request('http://localhost/api/orders?q=1001'));
     const body = await res.json() as { error: string; details: unknown };
 
     expect(res.status).toBe(503);
@@ -85,6 +85,83 @@ describe('GET /api/orders', () => {
       nextPageInfo: null,
       shop: 'empty-orders.myshopify.com',
     });
+  });
+
+  it.each([
+    ['1001', 'name=%231001'],
+    ['customer%40example.com', 'email=customer%40example.com'],
+  ])('supports order-number and customer-email search', async (query, expectedQuery) => {
+    await createTestIntegration(org.id, {
+      platform: ChannelType.shopify,
+      externalAccountId: 'search-orders.myshopify.com',
+      accessToken: 'search-orders-token',
+    });
+    mockFetch.mockResolvedValueOnce(jsonResponse({ orders: [{
+      id: 1,
+      name: '#1001',
+      created_at: '2026-01-01T00:00:00Z',
+      financial_status: 'paid',
+      fulfillment_status: null,
+      total_price: '19.00',
+      current_total_price: '18.00',
+      currency: 'eur',
+      customer: { id: 2, first_name: null, last_name: null, email: 'customer@example.com' },
+      line_items: [],
+    }] }));
+
+    const res = await GET(new Request(`http://localhost/api/orders?q=${query}`));
+    const body = await res.json() as { orders: Array<{ currency: string; total_price: string; customer: { name: null } }> };
+
+    expect(res.status).toBe(200);
+    expect(String(mockFetch.mock.calls[0][0])).toContain(expectedQuery);
+    expect(body.orders[0]).toMatchObject({ currency: 'EUR', total_price: '18.00', customer: { name: null } });
+  });
+
+  it.each([
+    'q=customer+name',
+    'q=not-an-email',
+    'limit=2.5',
+    'limit=0',
+    'limit=51',
+    'page_info=',
+    'fulfillment_status=unfulfilled',
+  ])('returns 400 for malformed search parameters: %s', async query => {
+    await createTestIntegration(org.id, {
+      platform: ChannelType.shopify,
+      externalAccountId: 'invalid-orders.myshopify.com',
+      accessToken: 'invalid-orders-token',
+    });
+
+    const res = await GET(new Request(`http://localhost/api/orders?${query}`));
+    expect(res.status).toBe(400);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('excludes refunded and voided search results while preserving the provider cursor', async () => {
+    await createTestIntegration(org.id, {
+      platform: ChannelType.shopify,
+      externalAccountId: 'closed-orders.myshopify.com',
+      accessToken: 'closed-orders-token',
+    });
+    const closed = (id: number, financialStatus: string) => ({
+      id,
+      name: `#${id}`,
+      created_at: '2026-01-01T00:00:00Z',
+      financial_status: financialStatus,
+      fulfillment_status: null,
+      total_price: '10.00',
+      current_total_price: '10.00',
+      currency: 'USD',
+      customer: null,
+      line_items: [],
+    });
+    mockFetch.mockResolvedValueOnce(jsonResponse({ orders: [closed(1, 'refunded'), closed(2, 'voided')] }, {
+      headers: { Link: '<https://example.com?page_info=still-more>; rel="next"' },
+    }));
+
+    const res = await GET(new Request('http://localhost/api/orders?q=1001'));
+    const body = await res.json() as { orders: unknown[]; nextPageInfo: string | null };
+    expect(body).toEqual({ orders: [], nextPageInfo: 'still-more', shop: 'closed-orders.myshopify.com' });
   });
 });
 

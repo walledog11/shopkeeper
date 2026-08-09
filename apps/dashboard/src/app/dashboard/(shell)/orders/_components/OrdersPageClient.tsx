@@ -11,9 +11,10 @@ import { INTEGRATIONS_SWR_KEY, useIntegrations } from "@/hooks/useIntegrations"
 import { useCursorListState } from "@/lib/api/use-cursor-list-state"
 import CustomersPanel from "./customers/CustomersPanel"
 import NeedsYouSection from "./NeedsYouSection"
-import { OrdersBoard, OrdersSearchResults } from "./OrdersBoard"
-import { ORDER_BOARD_COLUMNS, type OrderRow } from "./orders-board-model"
-import { fetchOrdersPage, type OrdersResponse } from "./order-requests"
+import { OrdersBoard } from "./OrdersBoard"
+import { OrdersSearchResults } from "./OrdersSearchResults"
+import { dedupeOrders, ORDER_BOARD_COLUMNS, type OrderRow } from "./orders-board-model"
+import { fetchOrdersPage, fetchOrdersSearch, type OrdersResponse } from "./order-requests"
 import { useOrdersBoard } from "./use-orders-board"
 
 const GLASS_SHELL_CLASS =
@@ -65,11 +66,13 @@ export default function OrdersPageClient() {
   const search = useCursorListState<OrderRow, OrdersResponse>({
     enabled: ordersEnabled && searchActive,
     buildUrl: () => `/api/orders?q=${encodeURIComponent(debouncedSearch)}`,
+    fetchInitial: fetchOrdersSearch,
     fetchPage: fetchColumnPage,
     loadMoreErrorMessage: "Unable to load more orders.",
     onInitialLoad: (response) => onShopLoaded(response.shop),
     selectInitialPage: (response) => ({ items: response.orders, nextPageInfo: response.nextPageInfo }),
   })
+  const searchOrders = dedupeOrders(search.allItems)
 
   const hasActiveShopify = integrations.some(
     integration => integration.platform === "shopify" && isShopifyIntegrationActive(integration),
@@ -127,7 +130,7 @@ export default function OrdersPageClient() {
               <Search className="size-3.5 shrink-0 text-faint" />
               <input
                 aria-label={shopTab === "customers" ? "Search customers" : "Search orders"}
-                placeholder={shopTab === "customers" ? "Search customers by name or email…" : "Search orders…"}
+                placeholder={shopTab === "customers" ? "Search customers by name or email…" : "Search by order number or customer email…"}
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 className="min-w-0 flex-1 bg-transparent text-sm text-strong outline-none placeholder:text-faint"
@@ -172,17 +175,18 @@ export default function OrdersPageClient() {
           ) : searchActive ? (
             <>
               <p className="text-xs font-medium text-faint">
-                {search.isLoading ? "Searching…" : `${search.allItems.length} result${search.allItems.length !== 1 ? "s" : ""}`}
+                {search.isLoading ? "Searching…" : `${searchOrders.length} result${searchOrders.length !== 1 ? "s" : ""}`}
               </p>
               <OrdersSearchResults
-                orders={search.allItems}
+                orders={searchOrders}
                 shop={shop}
                 hasMore={Boolean(search.nextPageInfo)}
+                isLoading={search.isLoading}
                 isLoadingMore={search.isLoadingMore}
+                error={search.error}
                 loadMoreError={search.loadMoreError}
                 onLoadMore={search.loadMore}
-                emptyTitle={search.isLoading ? "Searching…" : "No matching orders"}
-                emptyDescription="Try a different name, email, or order number."
+                onRetry={() => { void search.mutate() }}
               />
             </>
           ) : boardInitialLoading ? (

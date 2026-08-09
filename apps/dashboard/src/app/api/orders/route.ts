@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server"
 import { withOrgRoute } from "@/lib/api/route"
+import { BadRequestError } from "@/lib/api/errors"
+import {
+  classifyOrder,
+  OrderContractValidationError,
+  parseOrdersRequestParams,
+} from "@/lib/orders/order-contract"
 import {
   getOperationalShopifyIntegration,
   listShopifyOrders,
@@ -15,18 +21,26 @@ export const GET = withOrgRoute(
     rateLimit: { key: "orders:get", limit: 30, windowSecs: 60 },
   },
   async ({ org, request }) => {
-    const integration = await getOperationalShopifyIntegration(org.id)
     const { searchParams } = new URL(request.url)
+    let params
+    try {
+      params = parseOrdersRequestParams(searchParams)
+    } catch (error) {
+      if (error instanceof OrderContractValidationError) throw new BadRequestError(error.message)
+      throw error
+    }
+    const integration = await getOperationalShopifyIntegration(org.id)
 
     try {
       const result = await listShopifyOrders(integration, {
-        fulfillmentStatus: searchParams.get("fulfillment_status") ?? "any",
-        financialStatus: searchParams.get("financial_status") ?? "any",
-        q: searchParams.get("q") ?? "",
-        pageInfo: searchParams.get("page_info") ?? "",
-        limit: parseInt(searchParams.get("limit") ?? "25", 10),
+        q: params.query ?? undefined,
+        pageInfo: params.pageInfo ?? undefined,
+        limit: params.limit,
       })
-      return NextResponse.json(result)
+      return NextResponse.json({
+        ...result,
+        orders: result.orders.filter(order => classifyOrder(order) !== "excluded"),
+      })
     } catch (err) {
       const response = await shopifyOrdersErrorResponse(err, integration)
       if (response) return response

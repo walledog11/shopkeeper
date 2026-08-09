@@ -1,21 +1,13 @@
 import { requestJson } from "@/lib/api/fetcher"
-import type { BoardColumnId, OrderRow } from "./orders-board-model"
+import {
+  isOrdersBoardResponse,
+  isOrdersPageResponse,
+  type OrderBoardColumnId,
+  type OrdersBoardResponse,
+  type OrdersPageResponse,
+} from "@/lib/orders/order-contract"
 
-export interface OrdersResponse {
-  orders: OrderRow[]
-  nextPageInfo: string | null
-  shop: string
-}
-
-export interface OrdersBoardColumnResponse {
-  orders: OrderRow[]
-  nextPageInfo: string | null
-}
-
-export interface OrdersBoardResponse {
-  shop: string
-  columns: Record<BoardColumnId, OrdersBoardColumnResponse>
-}
+export type { OrdersBoardResponse, OrdersPageResponse as OrdersResponse }
 
 export const ORDERS_BOARD_SWR_KEY = "/api/orders/board"
 
@@ -46,48 +38,47 @@ export interface OrderAttentionResponse {
   returns: OrderAttentionReturn[]
 }
 
-function isNullableString(value: unknown): value is string | null {
-  return value === null || typeof value === "string"
-}
-
 export async function fetchOrdersBoard(): Promise<OrdersBoardResponse> {
   const fallback = "Unable to load orders."
-  const payload = await requestJson<Partial<OrdersBoardResponse>>(
+  const payload = await requestJson<unknown>(
     ORDERS_BOARD_SWR_KEY,
     {},
     fallback,
   )
-  if (
-    typeof payload.shop !== "string"
-    || !payload.columns
-    || typeof payload.columns !== "object"
-  ) {
-    throw new Error(fallback)
-  }
-  for (const columnId of ["needs_fulfillment", "unpaid", "fulfilled"] as const) {
-    const column = payload.columns[columnId]
-    if (!column || !Array.isArray(column.orders) || !isNullableString(column.nextPageInfo)) {
-      throw new Error(fallback)
-    }
-  }
-  return payload as OrdersBoardResponse
+  if (!isOrdersBoardResponse(payload)) throw new Error(fallback)
+  return payload
 }
 
-export async function fetchOrdersPage(pageInfo: string): Promise<OrdersResponse> {
+export async function fetchOrdersPage(pageInfo: string): Promise<OrdersPageResponse> {
   const fallback = "Unable to load more orders."
-  const payload = await requestJson<Partial<OrdersResponse>>(
+  const payload = await requestJson<unknown>(
     `/api/orders?page_info=${encodeURIComponent(pageInfo)}`,
     {},
     fallback,
   )
-  if (!Array.isArray(payload.orders) || !isNullableString(payload.nextPageInfo)) {
-    throw new Error(fallback)
-  }
-  return {
-    orders: payload.orders,
-    nextPageInfo: payload.nextPageInfo,
-    shop: typeof payload.shop === "string" ? payload.shop : "",
-  }
+  if (!isOrdersPageResponse(payload)) throw new Error(fallback)
+  return payload
+}
+
+export async function fetchOrdersSearch(url: string): Promise<OrdersPageResponse> {
+  const fallback = "Unable to search orders."
+  const payload = await requestJson<unknown>(url, {}, fallback)
+  if (!isOrdersPageResponse(payload)) throw new Error(fallback)
+  return payload
+}
+
+export async function fetchOrdersColumnPage(
+  columnId: OrderBoardColumnId,
+  pageInfo: string,
+): Promise<OrdersPageResponse> {
+  const fallback = "Unable to load more orders."
+  const payload = await requestJson<unknown>(
+    `/api/orders/board/${columnId}?page_info=${encodeURIComponent(pageInfo)}`,
+    {},
+    fallback,
+  )
+  if (!isOrdersPageResponse(payload)) throw new Error(fallback)
+  return payload
 }
 
 export async function startOrderSupportThread(input: StartOrderThreadInput): Promise<string> {

@@ -1,31 +1,28 @@
-export interface OrderRow {
-  id: number
-  name: string
-  created_at: string
-  financial_status: string
-  fulfillment_status: string | null
-  total_price: string
-  customer: { id: number; name: string; email: string } | null
-  line_items: { title: string; quantity: number; variant_title: string | null }[]
+import type { OrderBoardColumnId, OrderRow } from "@/lib/orders/order-contract"
+
+export { classifyOrder } from "@/lib/orders/order-contract"
+export type { OrderRow } from "@/lib/orders/order-contract"
+export type BoardColumnId = OrderBoardColumnId
+export type OrderColumnId = OrderBoardColumnId
+
+export interface OrderColumnState {
+  entries: OrderRow[]
+  error: unknown
+  hasMore: boolean
+  isLoading: boolean
+  isLoadingMore: boolean
+  loadMoreError: string | null
+  onLoadMore: () => void
+  onRetry: () => void
 }
 
-export type OrderColumnId = "needs_fulfillment" | "unpaid" | "fulfilled" | "refunded"
-
-/**
- * Columns actually rendered on the board. `refunded` stays in OrderColumnId as a
- * classify-only bucket (it keeps refunded/voided orders out of the other
- * columns) but is no longer a rendered column — return requests are surfaced
- * from support threads, not the refunds query.
- */
-export type BoardColumnId = Exclude<OrderColumnId, "refunded">
+export type OrdersBoardState = Record<BoardColumnId, OrderColumnState>
 
 export interface OrderColumnConfig {
   id: BoardColumnId
   label: string
   emptyTitle: string
   emptyBody: string
-  /** Query string appended to /api/orders for this column's initial fetch. */
-  query: string
 }
 
 export const ORDER_BOARD_COLUMNS: OrderColumnConfig[] = [
@@ -34,39 +31,20 @@ export const ORDER_BOARD_COLUMNS: OrderColumnConfig[] = [
     label: "Unfulfilled",
     emptyTitle: "All shipped",
     emptyBody: "Paid orders that still need fulfillment will land here.",
-    query: "fulfillment_status=unfulfilled",
   },
   {
     id: "unpaid",
     label: "Unpaid",
     emptyTitle: "Nothing unpaid",
     emptyBody: "Orders awaiting payment capture will appear here.",
-    query: "financial_status=unpaid",
   },
   {
     id: "fulfilled",
     label: "Fulfilled",
     emptyTitle: "Nothing shipped yet",
     emptyBody: "Fulfilled orders will appear here for reference.",
-    query: "fulfillment_status=shipped",
   },
 ]
-
-const UNPAID_FINANCIAL = new Set(["pending", "authorized", "partially_paid"])
-const CLOSED_FINANCIAL = new Set(["refunded", "voided"])
-const OPEN_FULFILLMENT = new Set([null, "", "unfulfilled", "partial", "partially_fulfilled"])
-
-/**
- * Assigns each order to exactly one board column. Column fetches overlap (an
- * unpaid order is also unfulfilled), so each column keeps only the orders whose
- * canonical classification matches it.
- */
-export function classifyOrder(order: OrderRow): OrderColumnId {
-  if (CLOSED_FINANCIAL.has(order.financial_status)) return "refunded"
-  if (UNPAID_FINANCIAL.has(order.financial_status)) return "unpaid"
-  if (OPEN_FULFILLMENT.has(order.fulfillment_status)) return "needs_fulfillment"
-  return "fulfilled"
-}
 
 // ── Status pills ────────────────────────────────────────────────────────────────
 
@@ -117,4 +95,13 @@ export function lineItemsSummary(items: OrderRow["line_items"]): string | null {
 
 export function orderItemCount(order: OrderRow): number {
   return order.line_items.reduce((sum, li) => sum + li.quantity, 0)
+}
+
+export function dedupeOrders(orders: readonly OrderRow[]): OrderRow[] {
+  const seen = new Set<number>()
+  return orders.filter((order) => {
+    if (seen.has(order.id)) return false
+    seen.add(order.id)
+    return true
+  })
 }
