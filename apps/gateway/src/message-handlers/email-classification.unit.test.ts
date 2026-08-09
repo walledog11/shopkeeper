@@ -5,6 +5,7 @@ import {
   emptyIntents,
   CLASSIFIER_SYSTEM_PROMPT,
   CLASSIFIER_VERSION,
+  classifierSystemPrompt,
 } from './email-classification.js';
 
 function fullResponse(overrides: Record<string, unknown> = {}): string {
@@ -120,5 +121,20 @@ describe('CLASSIFIER_SYSTEM_PROMPT attachment safety', () => {
   it('forbids text-only summaries from inventing image details', () => {
     expect(CLASSIFIER_SYSTEM_PROMPT).toContain('[Instagram image attachment]');
     expect(CLASSIFIER_SYSTEM_PROMPT).toMatch(/never infer or describe visual details/i);
+  });
+});
+
+describe('classifierSystemPrompt', () => {
+  it('tells the summariser a storefront visitor is not a known customer', () => {
+    const prompt = classifierSystemPrompt('shopify_chat');
+    expect(prompt.startsWith(CLASSIFIER_SYSTEM_PROMPT)).toBe(true);
+    expect(prompt).toMatch(/never "the customer"/i);
+    expect(prompt).toContain('the visitor');
+  });
+
+  it('leaves every other channel byte-identical', () => {
+    for (const channel of ['email', 'ig_dm', 'shopify', 'imessage', 'tiktok']) {
+      expect(classifierSystemPrompt(channel)).toBe(CLASSIFIER_SYSTEM_PROMPT);
+    }
   });
 });

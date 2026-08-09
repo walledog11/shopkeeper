@@ -11,8 +11,8 @@ import {
   resolveContextBudgetMode,
 } from '@shopkeeper/agent/context-budget';
 import {
-  CLASSIFIER_SYSTEM_PROMPT,
   classifierSignals,
+  classifierSystemPrompt,
   parseClassifierJson,
 } from './email-classification.js';
 
@@ -76,7 +76,7 @@ export async function generateThreadIntelligence(
     const aiResponse = await anthropic.messages.create({
       model: MODEL.CLAUDE,
       max_tokens: 400,
-      system: CLASSIFIER_SYSTEM_PROMPT,
+      system: classifierSystemPrompt(fullThread.channelType),
       messages: [{ role: 'user', content: conversationText }],
     });
     const usage = readModelUsage(aiResponse);
