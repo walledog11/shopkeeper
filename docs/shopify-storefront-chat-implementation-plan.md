@@ -17,21 +17,35 @@ running nowhere. Both are fixed and verified live; the budget is now accounting
 in production for the first time.
 
 What is still missing is the merchant-facing half — a toggle, session
-revocation, exhaustion alerting — the eval gate, and above all **M1.5**, without
-which the channel cannot answer "where is my order" at all.
+revocation, exhaustion alerting — the eval gate, and the wiring half of
+**M1.5**.
 
-**That regression is fixed as of 2026-08-08, and not yet verified live.**
-`applyEscalationRouting` now preserves `send_reply` for guest
-contexts, so a guest order question replies *and* escalates instead of going
-silent. Unit-tested on both sides — guests keep the reply, every other channel is
-byte-identical — and the escalation-routed slice of the eval gate passes. What
-has not happened is a message sent from the dev storefront, which is how the last
-three defects on this feature were actually caught. See the M1.5 interim section.
+**The escalation regression is fixed as of 2026-08-08.** `applyEscalationRouting`
+preserves `send_reply` for guest contexts, so a guest order question replies
+*and* escalates instead of going silent. Every other channel is byte-identical,
+asserted rather than reasoned about. A live card on 2026-08-09 showed a reply and
+a handoff together — but through a *model-elected* escalation, which was the path
+that already worked. The router-materialized escalation, which is the one that
+was deleting the reply, has still never fired in a live test.
+
+**"Where is my order" is answered in-channel as of 2026-08-09**, which was the
+gap this file called the reason the channel was not worth installing. It did not
+take verification: `get_order_fulfillment_status` answers shipping state from an
+order number and/or checkout email, returning nothing that identifies a person.
+Verification is now reserved for what does — addresses, contact details, order
+contents — and its data model and challenge logic are built, tested, and not yet
+wired to tools.
+
+**The prompt stopped being the product.** The guest section went from 13 bullets
+and 649 words of situation-by-situation patching to 5 bullets and 269 words of
+principle, because the capability that had been missing arrived. Read that
+section before adding a bullet here: five consecutive commits tuned wording, and
+none of them worked.
 
 This is the only new **customer-origin** channel on the table. Nothing else
 proposed adds a way for a customer to reach the merchant.
 
-Last reviewed: 2026-08-08.
+Last reviewed: 2026-08-09.
 
 ## Scope decision
 
@@ -60,9 +74,14 @@ forcing every already-connected merchant to re-authorize.
   approve → reply loop is proven on the dev store including the order-disclosure
   refusal. Still missing: merchant-facing setup UI, session revocation,
   exhaustion alerting, the eval gate.
-- **M1.5** — Emailed-code order verification. 📋 **Specified 2026-08-08, not
-  started.** The milestone that lets the channel answer its most common
-  question. Needs no new Shopify scopes, which is why it comes before M2.
+- **M1.5** — Emailed-code order verification. 🚧 **Started 2026-08-09, tools not
+  wired.** Needs no new Shopify scopes, which is why it comes before M2. Its
+  shape changed on contact: the most common question turned out not to need
+  identity at all, so `get_order_fulfillment_status` answers "has it shipped"
+  from an order number and/or checkout email today, and verification is reserved
+  for what actually exposes a person — addresses, contact details, order
+  contents. The data model and challenge logic are built and tested; the tools
+  are not, and two open findings say why.
 - **M2** — Customer Account OAuth. Deferred and largely superseded by M1.5.
 
 M0 was split in two on 2026-08-07, once it was confirmed that declaring an app
@@ -972,6 +991,88 @@ whether the order exists.
 - Familiar to shoppers: Shopify's own new customer accounts log in by emailed
   code, so this is not a novel ritual.
 
+### A tier below verification, built 2026-08-09
+
+Decision 2026-08-09, and it changes M1.5's shape rather than deferring it: not
+every order question needs identity. "Has it shipped" does not, so it no longer
+waits on a code.
+
+`get_order_fulfillment_status` takes an order number and/or the checkout email
+and returns the shipping state plus two dates. It is built from the opposite
+direction to every other order read — an explicit allowlist of non-identifying
+fields rather than `serializeOrder`, which carries the shipping address, line
+items and totals. No name, address, contact details, items or amounts, and no
+tracking number, because carrier sites resolve those to a delivery address. An
+order number and email that do not match return the same response as an order
+that does not exist, so a mismatch never confirms an order to someone guessing.
+
+Kept out of every non-guest tool list, with a test. On other channels the thread
+is already tied to a customer and the fuller reads answer better — and excluding
+it means the support planner's tool set is unchanged, so this added a tool
+without owing an eval-gate run for a surface that did not move.
+
+**Accepted disclosure, stated so it can be revisited:** anyone supplying a valid
+order number learns that order's shipping state, which makes order numbers
+enumerable for shipping status. Bounded to shipping state and nothing else.
+Requiring the email alongside the number is a one-line change if that trade stops
+being worth it.
+
+### The guest prompt collapse, 2026-08-09
+
+The guest section had reached **13 bullets and 649 words**, every one added after
+watching a specific bad output, and each covering only the phrasing that produced
+it. Five commits tuned it — `5864a0e1`, `a5ed6482`, `4fb4f2cc`, `5776f7bd`,
+`27e71d9e` — and the fifth still shipped a shopper "I'm not able to pull up order
+details directly from this chat" on turn one.
+
+The prompt was doing the work a capability should do. Rules like "if they gave an
+email, never ask for the email" are instructions no employee would need, which is
+the tell. Email works because the sender address resolves to a Shopify customer
+(`context.ts:180`) and the order tools unlock; storefront chat had them stripped,
+so every bullet existed to choreograph a refusal.
+
+Now **5 bullets, 269 words**, none describing a situation: it cannot take anyone's
+word for who they are, it never narrates its own limits, it keeps people in this
+chat, it replies in the same turn it hands over, and what it cannot finish goes to
+the shop. Verified by probing the model rather than by shipping and waiting —
+which caught a defect the rewrite introduced, where a complete example reply in
+the prompt was pasted verbatim and answered "any update on order #1026?" with
+"what's the order number?".
+
+### Verification foundation, built 2026-08-09 — tools not wired
+
+`storefront_chat_verifications` (one row per session/order, unique on
+`(session_id, order_name)` so a re-request replaces the outstanding challenge)
+plus `storefront_chat_sessions.verification_sends` for the tighter send budget.
+Migration `20260809120000_add_storefront_chat_verification`, purely additive.
+
+`packages/agent/src/storefront-verification.ts` is deliberately pure — code
+generation, hashing, constant-time comparison, order-name normalization, and
+`evaluateVerificationAttempt`, which decides an attempt from the stored row
+alone. No I/O, so every branch is testable without a database and no caller can
+skip the attempt ceiling. 14 tests, including that a locked pair reports *locked*
+rather than *expired*: reporting expiry would invite a fresh code request and
+reset the lock.
+
+**Two findings that decide how the wiring must work, and are the reason it was
+left whole rather than half-landed.**
+
+- **Verification cannot run through the approval loop.** Every storefront card
+  ends in "Good to send?", so under `guarded`/`off` the shopper waits for the
+  merchant to approve sending a code and then approve the reply asking for it.
+  The tools must execute inline at plan time, and the tier only makes sense on a
+  storefront set to auto-execute replies. That is a real change in posture for
+  the channel and is an open decision, not an implementation detail.
+- **Delivery has to be injected.** `packages/agent` has no email dependency by
+  design; both hosts do. Reaching Postmark from inside a tool would pull
+  `node:crypto` and a mail client toward the dashboard's client bundle, which
+  already breaks on `@shopkeeper/db` imports from the registry.
+
+Still owed: the deps contract, both host overrides, context loading of verified
+orders, the two tools, and scoping the fuller order reads to the verified order.
+A `verify_code` tool that appears to verify without verifying is worse than not
+having one, which is why none shipped.
+
 ### Interim, attempted 2026-08-08 — ⚠️ shipped broken, one blocker outstanding
 
 The intent was: stop deflecting out of channel, say you can't see order details,
@@ -1194,8 +1295,13 @@ listing, and public distribution.
   my order". **This stopped being an accepted cost on 2026-08-08** and became
   M1.5. Watching the refusal land live is what changed the assessment: it is not
   a limitation a merchant tolerates, it is the channel declining its main job.
-  Until M1.5 ships the handoff keeps the shopper in the chat rather than sending
-  them to email, which is the least-bad version of the gap and not a fix for it.
+  **Closed 2026-08-09**, and not the way this file expected. The cost was written
+  as though answering required identity, so it could only be paid by shipping
+  verification. It did not: "has it shipped" needs an order reference, not proof
+  of who is asking, and separating those let the common question be answered
+  today while verification stays reserved for what genuinely exposes a person.
+  The residual cost is narrower and is recorded with the tier that created it —
+  a valid order number now reveals that order's shipping state.
 
 ## When to pick this up
 
