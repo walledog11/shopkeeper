@@ -4,16 +4,22 @@ A text-only "Shopkeeper Chat" theme app extension on the existing Shopify app,
 so shoppers can ask a question on the storefront and have it land in the
 merchant's existing ticket, planning, approval, and Shopify-action pipelines.
 
-**In progress, and further along than the milestone list below implies.** M0a and
-M0b both shipped on 2026-08-07, in one `shopify.app.toml` released as
-`shopkeeper-production-9`. M1's transport shipped the same evening, the migration
-was applied on 2026-08-08, and **later that day the whole loop ran on the dev
-store** — a real shopper message became a session, ticket, classification,
-summary, cached plan and operator notification, and an approval delivered the
-reply back into the widget. The guest tool policy and the spend containment both
-exist as of that evening. What is still missing is the merchant-facing half —
-a toggle, session revocation, exhaustion alerting — and the eval gate. Read the
-M1 status block before anything else in this file.
+**M1's bar is met; the milestone that makes the channel worth installing is
+M1.5.** M0a and M0b both shipped on 2026-08-07 as `shopkeeper-production-9`.
+M1's transport shipped the same evening, and on 2026-08-08 the whole loop ran on
+the dev store, including the guest refusal under a real impersonation attempt.
+
+Getting there took fixing production twice, and both are the useful part of the
+record: the budget migration had never been applied (every bootstrap 500'd), and
+the gateway had not deployed in six hours because of a type error in a test file
+— which is why the guest planning-warning fix and the entire spend budget were
+running nowhere. Both are fixed and verified live; the budget is now accounting
+in production for the first time.
+
+What is still missing is the merchant-facing half — a toggle, session
+revocation, exhaustion alerting — the eval gate, and above all **M1.5**, without
+which the channel answers "where is my order" by escalating rather than
+answering. Read the M1 status block before anything else in this file.
 
 This is the only new **customer-origin** channel on the table. Nothing else
 proposed adds a way for a customer to reach the merchant.
@@ -41,12 +47,16 @@ forcing every already-connected merchant to re-authorize.
 - **M0b** — App proxy and `write_app_proxy`. The scope change, isolated in
   reasoning but not, in the end, as a separate deploy.
   ✅ **Shipped 2026-08-07**, in the same file and version as M0a.
-- **M1** — Guest-only storefront chat. The shippable milestone. 🚧 **Partially
-  built** — transport, guest policy, kill switches and the spend budget all
-  shipped, and the full ask → ticket → plan → approve → reply loop is proven live
-  on the dev store; no merchant-facing setup UI, no session revocation, no
-  exhaustion alerting, and the refusal path never exercised live.
-- **M2** — Verified sessions. Deferred; sketched, not specified.
+- **M1** — Guest-only storefront chat. The shippable milestone. 🚧 **Bar met,
+  not finished** — transport, guest policy, kill switches and the spend budget
+  all shipped and are live in production, and the full ask → ticket → plan →
+  approve → reply loop is proven on the dev store including the order-disclosure
+  refusal. Still missing: merchant-facing setup UI, session revocation,
+  exhaustion alerting, the eval gate.
+- **M1.5** — Emailed-code order verification. 📋 **Specified 2026-08-08, not
+  started.** The milestone that lets the channel answer its most common
+  question. Needs no new Shopify scopes, which is why it comes before M2.
+- **M2** — Customer Account OAuth. Deferred and largely superseded by M1.5.
 
 M0 was split in two on 2026-08-07, once it was confirmed that declaring an app
 proxy requires the `write_app_proxy` access scope. The original M0 promised both
@@ -517,10 +527,16 @@ switches are on for exactly one store: `palette-dev-3peukw16.myshopify.com`, a
 dev store the author controls.
 
 With the guest policy landed, what a shopper can *reach* is bounded — no order or
-customer data, no Shopify mutation, at any autonomy tier. With the budget landed,
-what a shopper can *spend* is bounded too: 30 messages per session and 200 per
-shop per day, refused before the model runs, so exhaustion degrades the widget
-and leaves the org cap and the merchant's other channels alone.
+customer data, no Shopify mutation, at any autonomy tier. With the budget landed
+**and, since 2026-08-08, actually deployed**, what a shopper can *spend* is
+bounded too: 30 messages per session and 200 per shop per day, refused before the
+model runs, so exhaustion degrades the widget and leaves the org cap and the
+merchant's other channels alone.
+
+For most of the period this section described the budget as bounding spend, it
+was bounding nothing — the code was merged and the gateway was serving a build
+that predated it. "Shipped" and "deployed" are different claims, and this file
+should keep making that distinction rather than collapsing it.
 
 What remains is not spend but **operational blindness**: nothing tells the
 merchant their storefront hit its ceiling, nothing revokes sessions on uninstall,
@@ -856,14 +872,106 @@ Against that bar, as of 2026-08-08:
   real email, because there is no tool that could have checked it either way —
   the refusal is structural, not a judgment call the model got right.
 - ✅ Storefront budget isolated from the org cap — built and asserted in tests
-  (a refused message leaves `llm_daily_spend` empty), **not yet observed in
-  production**.
+  (a refused message leaves `llm_daily_spend` empty), and **live in production
+  as of 2026-08-08**: after the gateway deploy was unblocked, a storefront
+  message moved `StorefrontChatSession.messageCount` to 1 and wrote the first
+  `storefront_chat_daily_usage` row against the Palette integration. The counter
+  read 1 rather than 2 on a session that had taken two messages, which is the
+  accounting behaving correctly — the earlier message predated the deploy.
 
 Five of five, as of 2026-08-08. The bar is met. Everything else outstanding on
 M1 (merchant toggle, session revocation, merchant alerting, the eval gate) sits
 outside this bar and is listed under "Not built".
 
-## M2 — Verified sessions (deferred)
+## M1.5 — Emailed-code order verification
+
+**The milestone that makes the channel worth having.** Decision 2026-08-08,
+after watching a live refusal: M1 answers the most common storefront question —
+"where is my order" — by sending the shopper somewhere else. That is a redirect
+with extra steps, and it is not a channel a merchant would choose to install.
+
+### Why M2 is the wrong instrument for this
+
+M1 conflated *we don't know who this is* with *we can't answer*. It removed the
+order tools rather than gating them on identity, so deflection is the only move
+the agent has left. The plan then deferred the fix to Customer Account OAuth,
+which is the heaviest possible way to buy it:
+
+- Two new scopes, so **every already-connected merchant is forced to
+  re-authorize** — the exact cost M1 was designed to avoid.
+- The Customer Account API requires the shop to be on **new customer accounts**.
+  Merchants on classic accounts could never use the verified path, so the work
+  buys a permanently two-tier experience.
+
+### The reframe
+
+The shopper does hold a credential: the email on the order. M1 is right to
+refuse it as an *assertion* — anyone can type an address. Use it as a
+**challenge target** instead of a claim, and it flips from something they say
+(worthless) into something they must prove control of (strong).
+
+**This needs no new Shopify scopes.** The app already holds `read_orders` and
+`read_customers` (`shopify.app.toml`), which is the whole reason this can ship
+without touching what any merchant has granted.
+
+### Flow
+
+1. Shopper asks about an order; the agent asks for the email on it.
+2. The server looks the order up and compares the supplied email to the order's.
+3. **The reply is identical either way** — "if that's the email on the order,
+   I've sent a 6-digit code to it." Never confirm that the order exists or that
+   the email matched; that answer is itself a disclosure.
+4. The code goes to the address **on the order**, never the address typed.
+5. A correct code upgrades the session to `authState: "verified"`, scoped to
+   that one order.
+6. Tracking, status and delivery date are answered inline, in the widget.
+
+**The invariant, in one line: disclosure only ever flows to the address already
+on the order.** Someone who types a stranger's order number with their own email
+gets a code delivered to the real owner's inbox and learns nothing — not even
+whether the order exists.
+
+### Constraints
+
+- 6 digits, 10-minute expiry, single use, 5 attempts before the (session, order)
+  pair locks.
+- A **separate and tighter counter for verification sends** than the message
+  budget. Without it the widget becomes a way to mail-bomb a customer, which is
+  a new abuse surface the existing budget does not cover.
+- Scope verification to the **order**, not the customer account. The narrowest
+  thing that answers the question asked.
+- **Reads only.** Cancel, edit, refund, address change stay out of guest and
+  verified alike and continue to escalate. Verification unlocks *seeing your own
+  order*; it never unlocks mutating one. Whether a verified shopper should be
+  able to *initiate* a mutation that then goes to merchant approval is a real
+  question, deliberately left open — start read-only and let real traffic answer
+  it.
+- Familiar to shoppers: Shopify's own new customer accounts log in by emailed
+  code, so this is not a novel ritual.
+
+### Interim, shipped 2026-08-08
+
+Until the above exists, the agent no longer deflects out of channel. It says it
+can't see order details, calls `escalate_to_human`, and tells the shopper the
+shop will reply in this chat — which the merchant does from the dashboard, where
+the order tools do exist, over the reply→widget path already proven working.
+
+Its weakness is worth stating plainly: there is no push, so the shopper has to
+come back to the tab. The session survives in `localStorage`, so returning
+works. That is why this is interim and not the answer.
+
+It also makes `CIRCULAR_CHANNEL_DEFLECTION_WARNING` correct by construction
+rather than by exemption — nothing points at a managed channel anymore, so
+guest order refusals stop being downgraded to `needs_review` on every turn.
+
+## M2 — Verified sessions (deferred, and largely superseded)
+
+M1.5 subsumes most of what this milestone was for, at a fraction of the cost and
+without forcing a re-authorization on anyone. Keep M2 only for genuine account
+binding — order history across orders, saved addresses — and only if a merchant
+actually asks for it.
+
+
 
 Sketch only. Do not build against this section without specifying it properly.
 
@@ -901,8 +1009,11 @@ listing, and public distribution.
 - **The merchant must disable Shopify Inbox** to avoid duplicate launchers.
   There is no coexistence story.
 - **Guest chat cannot answer the most common storefront question** — "where is
-  my order" — until M2. Onboarding copy must set that expectation, and the
-  handoff quality carries the milestone.
+  my order". **This stopped being an accepted cost on 2026-08-08** and became
+  M1.5. Watching the refusal land live is what changed the assessment: it is not
+  a limitation a merchant tolerates, it is the channel declining its main job.
+  Until M1.5 ships the handoff keeps the shopper in the chat rather than sending
+  them to email, which is the least-bad version of the gap and not a fix for it.
 
 ## When to pick this up
 
