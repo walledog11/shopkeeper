@@ -163,6 +163,7 @@ model Organization {
   messages                Message[]
   storefrontChatSessions  StorefrontChatSession[]
   storefrontChatDailyUsage StorefrontChatDailyUsage[]
+  storefrontChatVerifications StorefrontChatVerification[]
 
   @@index([clerkOrgId])
   @@map("organizations")
@@ -832,6 +833,10 @@ model StorefrontChatSession {
   // shopper who clears it to reset the count lands on the per-shop daily budget
   // and the per-IP burst limit instead.
   messageCount     Int       @default(0) @map("message_count")
+  // Verification emails sent from this session. Budgeted separately and far
+  // tighter than messages: without its own ceiling the widget becomes a way to
+  // mail-bomb whoever's address is on an order.
+  verificationSends Int      @default(0) @map("verification_sends")
   lastSeenAt       DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz
   expiresAt        DateTime  @map("expires_at") @db.Timestamptz
   revokedAt        DateTime? @map("revoked_at") @db.Timestamptz
@@ -841,6 +846,8 @@ model StorefrontChatSession {
   integration  Integration  @relation(fields: [integrationId], references: [id], onDelete: Cascade)
   customer     Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
   thread       Thread?      @relation(fields: [threadId], references: [id], onDelete: SetNull)
+
+  verifications StorefrontChatVerification[]
 
   // Supporting identity for database-level tenant-consistency foreign keys,
   // matching the convention on integrations/customers/threads.
@@ -863,6 +870,38 @@ model StorefrontChatSession {
 // Separate from `llm_daily_spend` on purpose. Exhausting this must degrade the
 // widget alone and leave the merchant's email and Instagram agents running,
 // which a shared counter cannot express.
+// One row per (session, order) identity challenge. The row is the whole state
+// machine: issued while `verifiedAt` is null, verified once it is set, and dead
+// once `attempts` passes the ceiling. Codes are stored as a hash and never in
+// the chat transcript — the code travels only to the address already on the
+// order, which is the invariant the whole flow rests on.
+model StorefrontChatVerification {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  sessionId      String    @map("session_id") @db.Uuid
+  // The order as the shopper names it (`#1026`), normalized with the leading #.
+  orderName      String    @map("order_name") @db.VarChar(64)
+  // Shopify's numeric order id, resolved at send time so a verified session
+  // never has to re-resolve the name against a moving catalogue.
+  orderId        String    @map("order_id") @db.VarChar(64)
+  codeHash       String    @map("code_hash") @db.VarChar(64)
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz
+  attempts       Int       @default(0)
+  verifiedAt     DateTime? @map("verified_at") @db.Timestamptz
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  session      StorefrontChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  // Re-requesting a code for the same order replaces the outstanding one rather
+  // than leaving several valid at once.
+  @@unique([sessionId, orderName])
+  @@index([organizationId, createdAt])
+  @@index([expiresAt])
+  @@map("storefront_chat_verifications")
+}
+
 model StorefrontChatDailyUsage {
   id             String   @id @default(uuid()) @db.Uuid
   organizationId String   @map("organization_id") @db.Uuid
