@@ -7,10 +7,11 @@ merchant's existing ticket, planning, approval, and Shopify-action pipelines.
 **In progress, and further along than the milestone list below implies.** M0a and
 M0b both shipped on 2026-08-07, in one `shopify.app.toml` released as
 `shopkeeper-production-9`. M1's transport shipped the same evening, the migration
-was applied on 2026-08-08, and **later that day a real shopper message travelled
-the whole inbound pipeline on the dev store** — session, ticket, classification,
-summary, cached plan, operator notify. The guest tool policy exists; the spend
-containment does not. Read the M1 status block before anything else in this file.
+was applied on 2026-08-08, and **later that day the whole loop ran on the dev
+store** — a real shopper message became a session, ticket, classification,
+summary, cached plan and operator notification, and an approval delivered the
+reply back into the widget. The guest tool policy exists; the spend containment
+does not. Read the M1 status block before anything else in this file.
 
 This is the only new **customer-origin** channel on the table. Nothing else
 proposed adds a way for a customer to reach the merchant.
@@ -39,8 +40,9 @@ forcing every already-connected merchant to re-authorize.
   reasoning but not, in the end, as a separate deploy.
   ✅ **Shipped 2026-08-07**, in the same file and version as M0a.
 - **M1** — Guest-only storefront chat. The shippable milestone. 🚧 **Partially
-  built** — transport, guest policy and kill switches all shipped and the inbound
-  half is proven live on the dev store; no budget, no merchant-facing setup UI.
+  built** — transport, guest policy and kill switches all shipped, and the full
+  ask → ticket → plan → approve → reply loop is proven live on the dev store; no
+  budget, no merchant-facing setup UI, and the refusal path never exercised live.
 - **M2** — Verified sessions. Deferred; sketched, not specified.
 
 M0 was split in two on 2026-08-07, once it was confirmed that declaring an app
@@ -312,10 +314,17 @@ link worked on the first attempt, with no code change required:
 | Operator notify | A pending plan for this thread landed on operator context `member:ae24ef3b…` nine seconds after the thread was created. |
 | Autonomy held | Org settings are `autonomyTier: guarded`, `autoExecuteMode: off`, so the plan parked for approval and did **not** auto-execute despite the planner's `auto_execute` routing preference. Correct precedence. |
 
-**Not yet proven, and it is the other half of the loop.** Nothing has exercised
-approve → dispatch → `storefrontChatSession` lookup → persist → widget poll. The
-run above stopped at a parked plan. Until an approval delivers a reply into the
-widget, the milestone's "done when" is unmet.
+**The loop closed the same day.** A second message was sent from the dev
+storefront, the plan was approved, and the reply appeared in the widget — so
+approve → dispatch → `storefrontChatSession` lookup → persist → widget poll all
+work, on the code already shipped and with no change required. That was the
+milestone's last unexercised inbound-to-outbound link, and it is the first time a
+shopper-visible answer has come back out of this channel.
+
+Recorded as the author's live observation from the storefront, not as a
+reconstruction from the database: what is certain is that the reply arrived in
+the widget after approval. Nobody has since gone back to check *which* approval
+surface sent it, the persisted `senderType`, or the delivery latency.
 
 **The guest policy is also still untested live.** "Testing" produced a plain
 greeting on `send_reply`, which is on the allowlist, so nothing tried to reach an
@@ -323,14 +332,22 @@ order. The refusal path is covered by 50 unit tests and by zero real messages.
 The message that would prove it asks for an order by number and supplies an email
 — the case the policy exists for.
 
-**A warning fires on every storefront plan and should not.** The cached plan
-carried *"Couldn't find a Shopify customer — verify the correct account is linked
-before approving."* For a guest shopper there is no Shopify customer by
-construction, so this appears on every plan and asks the merchant to do something
-impossible. It is the same shape as the July `search_kb` benign-warning bug that
-wrongly blocked `auto_execute` and `quick_reply` — a warning that is always
-present is a warning nobody reads, and this one may also be suppressing
-`quick_reply` classification. Exempt it for `shopify_chat` threads.
+**A warning fired on every storefront plan. ✅ Fixed 2026-08-08.** The cached
+plan carried *"Couldn't find a Shopify customer — verify the correct account is
+linked before approving."* For a guest shopper there is no Shopify customer by
+construction, so it appeared on every plan and asked the merchant to do something
+impossible. `appendInitialPlanningWarnings` in
+`packages/agent/src/planner-read-tools.ts` now exempts guest contexts, with two
+tests — silent for a guest, unchanged on email.
+
+**It was cosmetic, not a classifier bug** — the suspected second half of this,
+that it also suppressed `quick_reply` the way the July `search_kb` warning did,
+is **false**, checked rather than assumed. `warningBlocksQuickReply` in
+`plan-preview.ts:96` blocks on this warning only when the plan actually uses a
+customer or order read tool, and the guest allowlist forbids all of those, so it
+was already non-blocking. The live run agrees: that plan routed `auto_execute`
+while carrying the warning. What the fix buys is merchant trust in the warning
+line, not classification.
 
 **Built** (`c3733e33`, `de2ee92f`, `97232cc0`, `a0cad69c`):
 
@@ -394,10 +411,6 @@ shoppers:
   optimistically but nothing acknowledges that a reply is coming while a plan
   waits for the merchant, and the acknowledgement must not be persisted as a
   `Message` or it invalidates the pending plan.
-- **Abuse and spend containment.** Neither proxy route touches `rate-limit.ts`;
-  there is no per-session, per-IP, or per-shop budget. Anonymous traffic bills
-  against the org's daily LLM cap and can exhaust the merchant's email and
-  Instagram agents with it.
 - **Merchant setup** — no integration-card toggle, theme-editor deep link, or
   Inbox-bubble warning. The switches exist; the UI to flip the merchant one does
   not, so enabling a store means writing `Integration.metadata` directly — which
@@ -411,24 +424,25 @@ shoppers:
 - **Most of the test plan**, and the eval gate — which becomes owed the moment
   guest state touches the planner.
 
-**Standing risk — changed 2026-08-08, both switches are now on.** They are on for
-exactly one store: `palette-dev-3peukw16.myshopify.com`, a dev store the author
-controls, which is the controlled test store this plan always contemplated. That
-is the intended shape, not a breach of the gate — but the gate is now the *only*
-thing standing between an anonymous stranger and the org's LLM budget, so it is
-worth stating plainly what it rests on.
+**Standing risk — reduced 2026-08-08, and no longer the same risk.** Both
+switches are on for exactly one store: `palette-dev-3peukw16.myshopify.com`, a
+dev store the author controls.
 
-With the guest policy landed, what a shopper can reach is bounded — no order or
-customer data, no Shopify mutation, at any autonomy tier. What is still unbounded
-is **spend**: an anonymous stranger's messages bill the org's daily LLM cap, and
-exhausting it takes the merchant's email and Instagram agents down with it. There
-is no per-session, per-IP, or per-shop limit anywhere in the path.
+With the guest policy landed, what a shopper can *reach* is bounded — no order or
+customer data, no Shopify mutation, at any autonomy tier. With the budget landed,
+what a shopper can *spend* is bounded too: 30 messages per session and 200 per
+shop per day, refused before the model runs, so exhaustion degrades the widget
+and leaves the org cap and the merchant's other channels alone.
 
-The exposure today is a dev store with no traffic and no inbound links, so the
-realistic risk is low. It stops being low the moment this is enabled on a store
-with a public URL. **Do not enable `storefrontChat` on any store that is not a
-controlled test store until the storefront budget exists.** The platform switch
-being on means that is now a one-field DB write away, with nothing to catch it.
+What remains is not spend but **operational blindness**: nothing tells the
+merchant their storefront hit its ceiling, nothing revokes sessions on uninstall,
+and no content check stands between a bot and 200 admitted messages a day. Those
+are the reasons to still stage this carefully, rather than the runaway-cap reason
+that stood here before.
+
+The exposure today is a dev store with no traffic and no inbound links. Enabling
+a store is still a raw `Integration.metadata` write, which is the real gate on
+going further — see the rollout section.
 
 ### Data model
 
@@ -528,20 +542,54 @@ called out in the status block above.
   orders here yet and hand off (escalate or point to email). Do not ship a
   sign-in affordance that leads nowhere.
 
-### Abuse and spend containment — 🚧 none of this is built
+### Abuse and spend containment — ✅ built 2026-08-08
 
 This is the first surface where an anonymous stranger can trigger LLM spend with
-no account, and it needs its own budget. `packages/db/spend-store.ts` keys spend
+no account, and it needed its own budget. `packages/db/spend-store.ts` keys spend
 on `(organization, day, model)` only — with no isolation, a scraped or
-bot-spammed storefront burns the org's entire daily cap and takes the merchant's
+bot-spammed storefront burned the org's entire daily cap and took the merchant's
 email and Instagram agent down with it.
 
-- Add a per-session and per-shop-per-day storefront budget, enforced separately
-  from and beneath the org daily cap. Exhausting the storefront budget must
-  degrade the widget, never the merchant's other channels.
-- Gate before the model, not after: per-session and per-IP rate limits, and a
-  cheap non-LLM check on the first message of a session.
-- Alert the merchant on sustained budget exhaustion rather than failing silently.
+- ✅ A per-session and per-shop-per-day storefront budget, enforced separately
+  from and beneath the org daily cap. `StorefrontChatSession.messageCount` and
+  the new `storefront_chat_daily_usage` table, claimed in
+  `apps/gateway/src/storefront-chat-budget.ts` from the internal route **before**
+  `processInboundMessage` — so a refusal costs nothing and leaves the org cap
+  untouched. Asserted directly: the shop-budget test checks `llm_daily_spend` is
+  still empty after a refusal.
+- ✅ Gate before the model: per-session and per-IP fixed-window burst limits on
+  gateway Redis, failing closed in production, ahead of the daily counters.
+- ❌ A cheap non-LLM check on the first message of a session — not built. The
+  burst and budget layers bound the volume; nothing yet inspects the *content* of
+  a first message for spam.
+- ❌ Alert the merchant on sustained exhaustion. Exhaustion logs `opsAlert`-shaped
+  warnings and the daily counter deliberately keeps climbing past the ceiling so
+  sustained abuse is distinguishable from a shop that merely reached its limit —
+  but nothing reaches the merchant yet.
+
+**Denominated in messages, not dollars, and that is a deliberate trade.** The
+gate has to run before the model to be worth anything, and at that point the
+spend of the message being admitted is not yet known. One admitted message costs
+at most one classification, one summary and one plan, so a message ceiling is a
+spend ceiling with a known multiplier. True per-session dollar attribution would
+mean threading a spend scope through `recordSpend` at every LLM call site
+including the planner — a shared-surface change that pulls in the eval gate — and
+is deferred until a real merchant's traffic makes the accuracy worth it.
+
+Defaults, all env-tunable in the gateway: 30 messages per session, 200 per shop
+per UTC day, 5 per session and 20 per IP per minute
+(`STOREFRONT_CHAT_MAX_MESSAGES_PER_SESSION`,
+`STOREFRONT_CHAT_MAX_MESSAGES_PER_SHOP_DAY`, `STOREFRONT_CHAT_BURST_PER_SESSION`,
+`STOREFRONT_CHAT_BURST_PER_IP`, `STOREFRONT_CHAT_BURST_WINDOW_SECS`).
+
+**One weakness worth naming: the per-IP limit rests on an unverified header.**
+Two proxies sit between the shopper and the route — Shopify's app proxy and
+Vercel — and the code takes the leading `x-forwarded-for` entry without having
+confirmed that is the shopper's address. It is keyed on (integration, address)
+so that being wrong degrades into a second per-shop rate limit rather than
+leaking across merchants or locking out the internet, and neither the
+per-session burst limit nor either daily budget depends on it. Worth measuring
+against a real storefront request the next time someone is in there.
 
 ### Widget
 
@@ -643,9 +691,10 @@ email and Instagram agent down with it.
 - Enable on the controlled dev store, then one merchant workspace in approval
   mode, before any live-autonomy store. ✅ **Dev store done 2026-08-08** —
   `palette-dev-3peukw16.myshopify.com`, in `guarded`/`off`, which is approval
-  mode. The next step in this sequence is blocked twice over: on the storefront
-  budget, and on a merchant-flippable toggle, since a real merchant workspace
-  cannot be enabled with a DB write.
+  mode. The budget half of that blocker cleared the same day; the next step now
+  waits on **one** thing — a merchant-flippable toggle, since a real merchant
+  workspace cannot be enabled with a DB write. The migration must reach
+  production before the gateway build that reads the new columns.
 - Add `shopify_chat` to ticket filters, channel labels, analytics unions,
   operational alerts, provider-send metrics, integration health, and production
   audit scripts.
@@ -667,9 +716,18 @@ Against that bar, as of 2026-08-08:
 - ✅ A shopper on the dev store can ask a question.
 - ✅ The merchant sees a ticket with a plan, and is notified on a bound operator
   channel.
-- ❌ Approving it delivers the reply into the widget — **never exercised**.
+- ✅ Approving it delivers the reply into the widget — **exercised live**, dev
+  store, 2026-08-08.
 - ❌ Order disclosure gets an honest handoff — unit-tested, never exercised live.
-- ❌ Storefront budget isolated from the org cap — does not exist.
+- ✅ Storefront budget isolated from the org cap — built and asserted in tests
+  (a refused message leaves `llm_daily_spend` empty), **not yet observed in
+  production**.
+
+Four of five. The whole product loop runs end to end on one store and the spend
+is bounded. What is left on this bar is the refusal proven live — one message
+that asks for an order by number and supplies an email. Everything else
+outstanding on M1 (merchant toggle, session revocation, merchant alerting, the
+eval gate) sits outside this bar and is listed under "Not built".
 
 ## M2 — Verified sessions (deferred)
 
