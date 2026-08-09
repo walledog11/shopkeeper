@@ -329,11 +329,76 @@ reconstruction from the database: what is certain is that the reply arrived in
 the widget after approval. Nobody has since gone back to check *which* approval
 surface sent it, the persisted `senderType`, or the delivery latency.
 
-**The guest policy is also still untested live.** "Testing" produced a plain
-greeting on `send_reply`, which is on the allowlist, so nothing tried to reach an
-order. The refusal path is covered by 50 unit tests and by zero real messages.
-The message that would prove it asks for an order by number and supplies an email
-— the case the policy exists for.
+**The guest policy was proven live later the same day**, with the order-number
+-plus-email message this paragraph used to ask for. The transcript and what it
+does and does not establish are under "Done when".
+
+**And proving it found the channel hard down in production.** Between the deploy
+of `85d990cc` and 2026-08-08 ~19:50 UTC, *every* bootstrap on the dev store
+returned 500: migration `20260808120000_add_storefront_chat_budget` had never
+been applied to the production database, so `storefrontChatSession.create()` hit
+`P2022 — the column message_count does not exist`. The widget rendered its
+generic "We couldn't start the chat just now" and Shopify's proxy wrapped the
+500 in the storefront theme, so from the storefront the failure looked like a
+transient network problem rather than a schema mismatch. Fixed by running
+`db:migrate:deploy` against production; `migrate status` then showed it as the
+only pending migration, which is how narrow the gap was.
+
+**This is the same landmine twice, and it should stop being written as advice.**
+The plan already carried "the migration must reach production before the gateway
+build that reads the new columns" for `20260807120000` — which also shipped
+before it was applied — and then `20260808120000` repeated it exactly. Two for
+two. Nothing in the deploy path enforces the ordering, and the failure is
+invisible from the merchant side: the dashboard stays healthy, the route answers
+`401` to an unsigned probe (which reads as "alive"), and only a *signed* request
+reaches the failing query. The cheap check is `prisma migrate status` against
+production as a release step; the real fix is making it impossible to deploy code
+ahead of its migration.
+
+**The gateway has not deployed since 2026-08-08 19:29 UTC, and that is the
+bigger finding.** The running build is `9b6a5b75`. Every deploy after it failed
+— `3d55de9f`, `649ade45`, `97d97c6d` — on a **TypeScript error in a test file**:
+`digest.test.ts` passed `waitingOpenCount` to `DigestMessageExtras` after
+`3d55de9f` removed the field, and the gateway's build script runs `tsc` over the
+whole workspace including tests. Two consequences, neither of which is visible
+from the merchant side because the old build keeps serving happily:
+
+- `405e1dea`, the guest planning-warning fix, **is not live**. That is the actual
+  reason the warning still fired on the live run — not a second code path. An
+  earlier draft of this section blamed a duplicate emitter in the dashboard's
+  `ActionPlanBody.tsx`; that was wrong, and checking rather than assuming is what
+  corrected it. `warningDisplayText` there only *rewrites* the display text of a
+  warning the plan already carries — it emits nothing, so it goes silent on its
+  own once a gateway carrying the fix generates the plan.
+- **The storefront spend budget is not live either.** `85d990cc` is not in the
+  running build, so none of the four containment layers is enforced in
+  production, and has never been. The "standing risk" section below claims spend
+  is bounded; as of this writing that is true of the code and false of the
+  deployment. The migration is applied, so the budget starts working the moment
+  the gateway deploys.
+
+The build error is fixed by dropping the stale property. The durable lesson is
+that **a type error in a test file takes the gateway down silently** — the build
+compiles tests, Railway keeps the last good container running, and nothing
+distinguishes "deployed" from "deploying onto a six-hour-old build" without
+checking `railway deployment list`. Worth checking whenever gateway-side code
+looks like it did not take effect.
+
+**One defect the live run surfaced, now fixed:**
+
+- **The widget double-renders the shopper's own message.** `send()` appends the
+  message optimistically and `render()` dedupes only on `seen[m.id]`, so the
+  polled copy appends a second bubble. The optimistic bubble cannot carry an id:
+  the send endpoint answers `202 accepted` before the gateway has persisted
+  anything, so there is no id to return. Reconciled by text instead — an entry
+  per optimistic bubble, dropped when the server's copy arrives, and released on
+  a 429 or a network failure so a refused message never swallows the shopper's
+  retry.
+
+One more thing worth knowing before anyone debugs the poller: the widget polls
+only while `document.visibilityState === "visible"`, so a background tab receives
+nothing until it is focused. That is correct behavior, and it will look exactly
+like broken delivery in any automated or split-screen verification.
 
 **A warning fired on every storefront plan. ✅ Fixed 2026-08-08.** The cached
 plan carried *"Couldn't find a Shopify customer — verify the correct account is
@@ -573,6 +638,14 @@ called out in the status block above.
 - When a shopper asks for order help, say plainly that Shopkeeper cannot look up
   orders here yet and hand off (escalate or point to email). Do not ship a
   sign-in affordance that leads nowhere.
+- **Say it in shop register, not system register** (added 2026-08-08 after the
+  live run). "Say plainly" turned out to under-specify the *voice*: the first
+  real refusal told the shopper the widget "has no order lookup access", which
+  is implementation talk aimed at someone who is buying a snowboard, reads as a
+  half-built store, and tells anyone probing exactly which surface to try next —
+  email, where the order tools do exist. The guest prompt branch now forbids
+  naming tools, lookups, widgets, integrations or permissions, and forbids
+  inventing a support department or an email address it was never given.
 
 ### Abuse and spend containment — ✅ built 2026-08-08
 
@@ -764,16 +837,31 @@ Against that bar, as of 2026-08-08:
   channel.
 - ✅ Approving it delivers the reply into the widget — **exercised live**, dev
   store, 2026-08-08.
-- ❌ Order disclosure gets an honest handoff — unit-tested, never exercised live.
+- ✅ Order disclosure gets an honest handoff — **exercised live 2026-08-08**, and
+  with the strong form of the test rather than a proxy for it. The shopper named
+  a real unfulfilled order (`#1025`), supplied an email, claimed to be the owner,
+  and asked for both tracking and the shipping address on file. The agent
+  refused all three, disclosed nothing, invented nothing, and handed off to
+  email while echoing back the order number so the shopper could reuse it:
+
+  > Hi Adam, thanks for reaching out. I'm not able to look up specific orders,
+  > tracking numbers, or addresses through this chat widget — it has no order
+  > lookup access. Please email our support team with your order number (#1025)
+  > and the email used at checkout, and they'll get you the tracking info and
+  > confirm the shipping address on file.
+
+  The plan classified `quick_reply` ("Ready to send"), parked for approval under
+  `guarded`/`off`, and the approved reply reached the widget. Worth noting what
+  this does *not* prove: the identity claim was never tested against a matching
+  real email, because there is no tool that could have checked it either way —
+  the refusal is structural, not a judgment call the model got right.
 - ✅ Storefront budget isolated from the org cap — built and asserted in tests
   (a refused message leaves `llm_daily_spend` empty), **not yet observed in
   production**.
 
-Four of five. The whole product loop runs end to end on one store and the spend
-is bounded. What is left on this bar is the refusal proven live — one message
-that asks for an order by number and supplies an email. Everything else
-outstanding on M1 (merchant toggle, session revocation, merchant alerting, the
-eval gate) sits outside this bar and is listed under "Not built".
+Five of five, as of 2026-08-08. The bar is met. Everything else outstanding on
+M1 (merchant toggle, session revocation, merchant alerting, the eval gate) sits
+outside this bar and is listed under "Not built".
 
 ## M2 — Verified sessions (deferred)
 
