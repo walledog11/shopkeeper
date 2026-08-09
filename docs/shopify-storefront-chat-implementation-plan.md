@@ -18,8 +18,14 @@ in production for the first time.
 
 What is still missing is the merchant-facing half — a toggle, session
 revocation, exhaustion alerting — the eval gate, and above all **M1.5**, without
-which the channel answers "where is my order" by escalating rather than
-answering. Read the M1 status block before anything else in this file.
+which the channel cannot answer "where is my order" at all.
+
+**One live regression is outstanding as of 2026-08-08:** guest order questions
+escalate with no shopper-visible reply, so the person on the storefront gets
+silence. The cause is `applyEscalationRouting` deleting the reply, the fix is
+about ten lines on the shared planner surface, and it is waiting on a decision
+about the eval gate — see the M1.5 interim section. Read that and the M1 status
+block before anything else in this file.
 
 This is the only new **customer-origin** channel on the table. Nothing else
 proposed adds a way for a customer to reach the merchant.
@@ -871,6 +877,14 @@ Against that bar, as of 2026-08-08:
   this does *not* prove: the identity claim was never tested against a matching
   real email, because there is no tool that could have checked it either way —
   the refusal is structural, not a judgment call the model got right.
+
+  **The refusal half of this still holds; the handoff half is currently broken.**
+  Nothing is disclosed and no order tool is reachable — that is enforced by the
+  guest allowlist and has not changed. But the reply quoted above was produced by
+  the deflect-to-email copy, and since `5864a0e1` guest order questions escalate
+  instead, which the router materializes with no reply at all. So the shopper
+  gets an honest *non-disclosure* and no *handoff*. See the M1.5 interim section
+  for the cause and the pending decision.
 - ✅ Storefront budget isolated from the org cap — built and asserted in tests
   (a refused message leaves `llm_daily_spend` empty), and **live in production
   as of 2026-08-08**: after the gateway deploy was unblocked, a storefront
@@ -879,9 +893,17 @@ Against that bar, as of 2026-08-08:
   read 1 rather than 2 on a session that had taken two messages, which is the
   accounting behaving correctly — the earlier message predated the deploy.
 
-Five of five, as of 2026-08-08. The bar is met. Everything else outstanding on
-M1 (merchant toggle, session revocation, merchant alerting, the eval gate) sits
-outside this bar and is listed under "Not built".
+Five of five when the bar was struck on 2026-08-08, and **four and a half by the
+end of that day** — the handoff regressed after the fact, as recorded above.
+Everything else outstanding on M1 (merchant toggle, session revocation, merchant
+alerting, the eval gate) sits outside this bar and is listed under "Not built".
+
+Worth keeping the sequence rather than tidying it away: the bar was met, then a
+change intended to *improve* the same behaviour broke it, and that was caught by
+sending one more message rather than by any test. Three separate things looked
+correct in code and behaved differently in production on this feature in a single
+day — an unapplied migration, a six-hour-stale gateway build, and a router
+silently deleting a tool call. Live probes caught all three.
 
 ## M1.5 — Emailed-code order verification
 
@@ -949,20 +971,79 @@ whether the order exists.
 - Familiar to shoppers: Shopify's own new customer accounts log in by emailed
   code, so this is not a novel ritual.
 
-### Interim, shipped 2026-08-08
+### Interim, attempted 2026-08-08 — ⚠️ shipped broken, one blocker outstanding
 
-Until the above exists, the agent no longer deflects out of channel. It says it
-can't see order details, calls `escalate_to_human`, and tells the shopper the
-shop will reply in this chat — which the merchant does from the dashboard, where
-the order tools do exist, over the reply→widget path already proven working.
+The intent was: stop deflecting out of channel, say you can't see order details,
+escalate, and tell the shopper the shop will reply right here — which the
+merchant does from the dashboard, where the order tools exist, over the
+reply→widget path already proven working.
 
-Its weakness is worth stating plainly: there is no push, so the shopper has to
-come back to the tab. The session survives in `localStorage`, so returning
-works. That is why this is interim and not the answer.
+**What actually happens today is that the shopper gets nothing.** Guest order
+questions now produce an escalation-only plan with no reply at all, which is
+worse than the deflection it replaced — that at least answered. This is a live
+regression, introduced by `5864a0e1` while trying to improve the experience.
 
-It also makes `CIRCULAR_CHANNEL_DEFLECTION_WARNING` correct by construction
-rather than by exemption — nothing points at a managed channel anymore, so
-guest order refusals stop being downgraded to `needs_review` on every turn.
+**The cause is structural, not prompt wording**, and the diagnosis took one
+wrong turn worth recording. The first fix (`a5ed6482`) rewrote the guest prompt
+to demand `send_reply` first and escalation second; it changed nothing, because
+`applyEscalationRouting` in `packages/agent/src/planner-routing.ts` materializes
+an `escalate` decision by design — *keep the read tools, drop every other tool
+call, terminate with a single `escalate_to_human`*. The model's reply is deleted
+by the router after the fact. `a5ed6482` is therefore inert: correct in intent,
+with no effect until routing changes. No prompt can fix this.
+
+That routing behaviour is *right* for support — escalating a refund dispute
+should not also fire off a reply that pre-empts the human. It is wrong only for
+guest storefront, where escalation is the normal terminal state for the most
+common question, so "drop the reply" means silence.
+
+**The fix and why it is not done.** `applyEscalationRouting` needs to preserve
+`send_reply` for guest contexts; it currently receives only `(rawToolCalls,
+reason)`, so the guest flag has to be threaded in. Roughly ten lines — but
+`planner-routing.ts` is the shared support-planner surface that every channel's
+planner runs through, not a `guestMode` ternary in a prompt string. The standing
+invariant in `.claude/CLAUDE.md` applies with full force, and this is the first
+storefront change where it does rather than being a technicality. **Pending a
+decision: fix forward with the eval gate (recommended — the gate is owed
+anyway, and M1.5 will touch this same path), fix forward without it, or revert
+`5864a0e1` and `a5ed6482` to restore the old deflecting reply.**
+
+Even once fixed, the interim's weakness stands: there is no push, so the shopper
+has to come back to the tab. The session survives in `localStorage`, so
+returning works. That is why this is interim and not the answer.
+
+One thing it did buy immediately: `CIRCULAR_CHANNEL_DEFLECTION_WARNING` is now
+correct by construction rather than by exemption, because nothing points at a
+managed channel anymore.
+
+### The operator card, fixed 2026-08-08 (`07051933`)
+
+Escalation-only plans exposed four defects in the merchant's notification, found
+by reading a real card as a merchant mid-task rather than by testing it. All four
+are gateway-side operator copy, so they ship without the eval gate and are
+verified by live phone round-trip.
+
+- **The ask was circular.** Escalation *is* handing the thread over, but the
+  generic single-step renderer turned it into "I'd escalate to merchant. Sound
+  good?" — sent to the merchant, asking permission to tell them something the
+  message was already telling them, and offering an approval that changes nothing
+  the shopper sees. Escalation-only plans now state what happened and close with
+  "Nothing's gone out — it's waiting on you."
+- **The judgment was buried.** The card listed order numbers and drew no
+  conclusion. The `escalate_to_human` reason was already on the tool call and
+  unused; it is now the headline.
+- **Every follow-up restated the whole thread as news** — "sent N more messages"
+  (a delta) pasted next to `aiSummary` (the entire conversation), so each card
+  re-listed everything and the merchant could not tell what changed. **This is
+  the digest's stock-vs-flow trap, caught a second time in a different surface.**
+  Only half-fixed: the header no longer *implies* a delta (`Where it stands:`),
+  because a true delta needs a summary scoped to the new messages and the
+  summariser does not produce one. That remains owed.
+- **Wrong nouns.** `formatChannelLabel` title-cased the enum member and showed
+  merchants "Shopify_chat", a database value rather than a place; and an
+  unidentified visitor was called "the customer", asserting a relationship
+  nobody has verified on the one channel where the person can type any name they
+  like. Now "storefront chat" and "Someone on your storefront".
 
 ## M2 — Verified sessions (deferred, and largely superseded)
 
