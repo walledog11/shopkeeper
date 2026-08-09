@@ -332,7 +332,6 @@ describe('formatDigestMessage', () => {
     const msg = formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE), null, {
       waitingSection: "One thing's still waiting on your OK:\n- $12 refund for Sarah",
       waitingAsk: 'Want me to go ahead with it?',
-      waitingOpenCount: 0,
     });
     expect(msg).not.toContain("I'll shout if anything comes in.");
   });
