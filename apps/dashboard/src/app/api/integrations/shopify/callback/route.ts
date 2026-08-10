@@ -1,33 +1,18 @@
 import { NextResponse } from 'next/server';
-import crypto from 'crypto';
 import logger from '@/lib/server/logger';
 import { getShopifyOAuthCallbackConfig } from '@/lib/env';
-import { getGatewayBaseUrl } from '@/lib/server/gateway-url';
-import { recordProviderSendFailure } from '@/lib/server/provider-send-alerts';
-import { getRedis } from '@/lib/server/redis';
 import {
   captureIntegrationConnectionCompleted,
   captureIntegrationConnectionFailed,
   captureOAuthIntegrationConnectionFailed,
 } from '@/lib/server/product-analytics';
-import { timingSafeIncludes } from '@/lib/security/timing-safe';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
-import { normalizeShopifyShopDomain, parseShopifyShopIdentity, isSameShopifyStore } from '@/lib/shopify/oauth';
-import { shopifyRestJson, ShopifyRequestError } from '@shopkeeper/agent/shopify';
-import { db } from '@shopkeeper/db';
-import type { Prisma } from '@prisma/client';
 import { validateOAuthCallbackSession } from '@/app/api/integrations/_lib/oauth-session';
-import { upsertRaceSafeIntegration } from '@/app/api/integrations/_lib/integration-upsert';
 import {
   oauthCompleteResponse,
   resolveOAuthOrganization,
 } from '@/app/api/integrations/_lib/oauth-callback';
-import {
-  fetchProviderWithDeadline,
-  isProviderRequestTimeoutError,
-} from '@/lib/server/provider-fetch';
-
-const SHOPIFY_WEBHOOK_TOPICS = ['orders/create', 'orders/fulfilled', 'orders/updated', 'orders/cancelled', 'app/uninstalled'];
+import { completeShopifyOAuth } from './complete-shopify-oauth';
 
 export async function GET(request: Request) {
   return createPostRedirectResponse(request, 'Finish Shopify connection');
@@ -45,12 +30,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'OAuth callback is not configured' }, { status: 500 });
   }
   const { appUrl, clientId, clientSecret } = oauthConfig;
-
   const { searchParams } = new URL(request.url);
-  const code = searchParams.get('code');
-  const shop = searchParams.get('shop');
   const state = searchParams.get('state');
-  const hmac = searchParams.get('hmac');
 
   const callbackSession = await validateOAuthCallbackSession({
     appUrl,
@@ -68,6 +49,7 @@ export async function POST(request: Request) {
     });
     return callbackSession.response;
   }
+
   const {
     attemptId,
     clerkOrgId,
@@ -75,389 +57,58 @@ export async function POST(request: Request) {
     returnTo,
     extra: { shop: savedShop },
   } = callbackSession.session;
+
+  const fail = async (
+    error: 'shopify_hmac_invalid'
+      | 'shopify_invalid_callback'
+      | 'shopify_server_error'
+      | 'shopify_shop_mismatch'
+      | 'shopify_store_in_use'
+      | 'shopify_token_failed',
+    failureCategory: Parameters<typeof captureIntegrationConnectionFailed>[0]['failureCategory'],
+    organizationId?: string,
+  ) => {
+    if (organizationId) {
+      await captureIntegrationConnectionFailed({
+        attemptId,
+        failureCategory,
+        organizationId,
+        platform: 'shopify',
+      });
+    }
+    return oauthCompleteResponse(appUrl, {
+      outcome: { status: 'failed', provider: 'shopify', error },
+      mode,
+      returnTo,
+    });
+  };
+
   const orgResult = await resolveOAuthOrganization(clerkOrgId, 'Shopify OAuth');
-  if (!orgResult.ok) return oauthCompleteResponse(appUrl, {
-    outcome: { status: 'failed', provider: 'shopify', error: 'shopify_server_error' },
-    mode,
-    returnTo,
-  });
-  const org = orgResult.org;
-
-  if (!code || !shop || !hmac) {
-    await captureIntegrationConnectionFailed({
-      attemptId,
-      failureCategory: 'invalid_callback',
-      organizationId: org.id,
-      platform: 'shopify',
-    });
-    return oauthCompleteResponse(appUrl, {
-      outcome: { status: 'failed', provider: 'shopify', error: 'shopify_invalid_callback' },
-      mode,
-      returnTo,
-    });
-  }
-
-  const shopDomain = normalizeShopifyShopDomain(shop);
-  if (!shopDomain || !savedShop) {
-    await captureIntegrationConnectionFailed({
-      attemptId,
-      failureCategory: 'invalid_callback',
-      organizationId: org.id,
-      platform: 'shopify',
-    });
-    return oauthCompleteResponse(appUrl, {
-      outcome: { status: 'failed', provider: 'shopify', error: 'shopify_invalid_callback' },
-      mode,
-      returnTo,
-    });
-  }
-
-  if (!isValidShopifyHmac(searchParams, clientSecret, hmac)) {
-    logger.error('[Shopify OAuth] HMAC verification failed');
-    await captureIntegrationConnectionFailed({
-      attemptId,
-      failureCategory: 'invalid_callback',
-      organizationId: org.id,
-      platform: 'shopify',
-    });
-    return oauthCompleteResponse(appUrl, {
-      outcome: { status: 'failed', provider: 'shopify', error: 'shopify_hmac_invalid' },
-      mode,
-      returnTo,
-    });
-  }
+  if (!orgResult.ok) return fail('shopify_server_error', 'unknown');
+  const organizationId = orgResult.org.id;
 
   try {
-    const tokenResult = await exchangeShopifyAccessToken({
+    const result = await completeShopifyOAuth({
       clientId,
       clientSecret,
-      code,
-      shopDomain,
-    });
-    if (!tokenResult) {
-      await captureIntegrationConnectionFailed({
-        attemptId,
-        failureCategory: 'invalid_credentials',
-        organizationId: org.id,
-        platform: 'shopify',
-      });
-      return oauthCompleteResponse(appUrl, {
-        outcome: { status: 'failed', provider: 'shopify', error: 'shopify_token_failed' },
-        mode,
-        returnTo,
-      });
-    }
-    const { accessToken, oauthScopes } = tokenResult;
-
-    const shopIdentityResult = await resolveShopifyAuthorizedShop({
-      accessToken,
+      organizationId,
       savedShop,
-      shopDomain,
+      searchParams,
     });
-    if (!shopIdentityResult.ok) {
-      await captureIntegrationConnectionFailed({
-        attemptId,
-        failureCategory: shopIdentityResult.error === 'shopify_shop_mismatch'
-          ? 'validation_failed'
-          : 'provider_unavailable',
-        organizationId: org.id,
-        platform: 'shopify',
-      });
-      return oauthCompleteResponse(appUrl, {
-        outcome: { status: 'failed', provider: 'shopify', error: shopIdentityResult.error },
-        mode,
-        returnTo,
-      });
-    }
+    if (!result.ok) return fail(result.error, result.failureCategory, organizationId);
 
-    const canonicalShopDomain = shopIdentityResult.shop.myshopifyDomain;
-    const shopName = shopIdentityResult.shop.name;
-    // A store belongs to one workspace. Without this, a second workspace that
-    // completes OAuth for an already-connected store takes over its webhook
-    // stream — resolveOrganizationId routes to the newest integration — and the
-    // store's buyer records start landing in the wrong inbox while the original
-    // workspace goes quiet. Mirrors the Instagram guard.
-    const storeIntegrations = await db.integration.findMany({
-      where: { platform: 'shopify', externalAccountId: canonicalShopDomain },
-      select: { organizationId: true, metadata: true },
-    });
-    if (storeIntegrations.some((row) => row.organizationId !== org.id)) {
-      logger.warn(
-        { shop: canonicalShopDomain, orgId: org.id },
-        '[Shopify OAuth] Store already connected to another workspace — rejecting',
-      );
-      await captureIntegrationConnectionFailed({
-        attemptId,
-        failureCategory: 'validation_failed',
-        organizationId: org.id,
-        platform: 'shopify',
-      });
-      return oauthCompleteResponse(appUrl, {
-        outcome: { status: 'failed', provider: 'shopify', error: 'shopify_store_in_use' },
-        mode,
-        returnTo,
-      });
-    }
-    const existingIntegration = storeIntegrations.find((row) => row.organizationId === org.id);
-    const metadata = mergeShopifyOAuthScopes(existingIntegration?.metadata, oauthScopes);
-
-    const shopifyIntegration = await upsertRaceSafeIntegration({
-      organizationId: org.id,
-      platform: 'shopify',
-      externalAccountId: canonicalShopDomain,
-      data: {
-        accessToken,
-        fromEmail: shopName,
-        tokenExpiresAt: null,
-        ...(metadata && { metadata }),
-      },
-    });
-    const shopifyIntegrationId = shopifyIntegration.id;
     await captureIntegrationConnectionCompleted({
-      integrationId: shopifyIntegrationId,
-      organizationId: org.id,
+      integrationId: result.integrationId,
+      organizationId: result.organizationId,
       platform: 'shopify',
     });
-
-    logger.info({ shopName, shop: canonicalShopDomain, orgId: org.id }, '[Shopify OAuth] Integration saved');
-
-    await registerShopifyWebhooks({
-      accessToken,
-      integrationId: shopifyIntegrationId,
-      orgId: org.id,
-      shop: canonicalShopDomain,
-    });
-
     return oauthCompleteResponse(appUrl, {
       outcome: { status: 'connected', provider: 'shopify' },
       mode,
       returnTo,
     });
-
-  } catch (err) {
-    logger.error({ err }, '[Shopify OAuth] Unexpected error');
-    await captureIntegrationConnectionFailed({
-      attemptId,
-      failureCategory: isProviderRequestTimeoutError(err) ? 'provider_unavailable' : 'unknown',
-      organizationId: org.id,
-      platform: 'shopify',
-    });
-    return oauthCompleteResponse(appUrl, {
-      outcome: { status: 'failed', provider: 'shopify', error: 'shopify_server_error' },
-      mode,
-      returnTo,
-    });
-  }
-}
-
-function isValidShopifyHmac(
-  searchParams: URLSearchParams,
-  clientSecret: string,
-  hmac: string,
-): boolean {
-  const params: Record<string, string> = {};
-  searchParams.forEach((value, key) => {
-    if (key !== 'hmac') params[key] = value;
-  });
-  const message = Object.keys(params)
-    .sort()
-    .map((key) => `${key}=${params[key]}`)
-    .join('&');
-  const digest = crypto.createHmac('sha256', clientSecret).update(message).digest('hex');
-  return timingSafeIncludes([digest], hmac);
-}
-
-async function exchangeShopifyAccessToken({
-  clientId,
-  clientSecret,
-  code,
-  shopDomain,
-}: {
-  clientId: string;
-  clientSecret: string;
-  code: string;
-  shopDomain: string;
-}): Promise<{ accessToken: string; oauthScopes?: string[] } | null> {
-  const tokenRes = await fetchProviderWithDeadline(
-    `https://${shopDomain}/admin/oauth/access_token`,
-    {
-      cache: 'no-store',
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code }),
-    },
-    { provider: 'shopify', operation: 'OAuth token exchange' },
-  );
-  const tokenData = await tokenRes.json() as {
-    access_token?: string;
-    error?: unknown;
-    scope?: unknown;
-  };
-
-  if (!tokenData.access_token) {
-    logger.error(
-      { status: tokenRes.status, error: tokenData.error },
-      '[Shopify OAuth] Token exchange failed',
-    );
-    return null;
-  }
-
-  return {
-    accessToken: tokenData.access_token,
-    oauthScopes: normalizeShopifyOAuthScopes(tokenData.scope),
-  };
-}
-
-function normalizeShopifyOAuthScopes(value: unknown): string[] | undefined {
-  if (typeof value !== 'string') return undefined;
-  return [...new Set(
-    value
-      .split(',')
-      .map((scope) => scope.trim().toLowerCase())
-      .filter(Boolean),
-  )].sort();
-}
-
-function mergeShopifyOAuthScopes(
-  existingMetadata: unknown,
-  oauthScopes: readonly string[] | undefined,
-): Prisma.InputJsonObject | undefined {
-  if (oauthScopes === undefined) {
-    return isJsonObject(existingMetadata)
-      ? existingMetadata as Prisma.InputJsonObject
-      : undefined;
-  }
-  const existing = isJsonObject(existingMetadata) ? existingMetadata : {};
-  return {
-    ...existing,
-    oauthScopes: [...oauthScopes],
-  } as Prisma.InputJsonObject;
-}
-
-function isJsonObject(value: unknown): value is Record<string, Prisma.InputJsonValue> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-async function resolveShopifyAuthorizedShop({
-  accessToken,
-  savedShop,
-  shopDomain,
-}: {
-  accessToken: string;
-  savedShop: string;
-  shopDomain: string;
-}): Promise<
-  | { ok: true; shop: Awaited<ReturnType<typeof fetchShopifyShopIdentity>> }
-  | { ok: false; error: 'shopify_server_error' | 'shopify_shop_mismatch' }
-> {
-  let authorizedShop: Awaited<ReturnType<typeof fetchShopifyShopIdentity>>;
-  try {
-    authorizedShop = await fetchShopifyShopIdentity(shopDomain, accessToken);
-  } catch (err) {
-    logger.error({ err, shop: shopDomain }, '[Shopify OAuth] Failed to fetch authorized shop identity');
-    return { ok: false, error: 'shopify_server_error' };
-  }
-
-  if (savedShop === shopDomain) return { ok: true, shop: authorizedShop };
-
-  try {
-    const requestedShop = await fetchShopifyShopIdentity(savedShop, accessToken);
-    if (!isSameShopifyStore(authorizedShop, requestedShop)) {
-      logger.error(
-        { shop: shopDomain, savedShop, authorizedShopId: authorizedShop.id, requestedShopId: requestedShop.id },
-        '[Shopify OAuth] Shop domain mismatch — possible CSRF attempt',
-      );
-      return { ok: false, error: 'shopify_shop_mismatch' };
-    }
-    logger.info(
-      { shop: shopDomain, savedShop, canonicalShop: authorizedShop.myshopifyDomain },
-      '[Shopify OAuth] Accepted myshopify domain alias',
-    );
-  } catch (err) {
-    logger.error(
-      { err, shop: shopDomain, savedShop },
-      '[Shopify OAuth] Shop domain mismatch — possible CSRF attempt',
-    );
-    return { ok: false, error: 'shopify_shop_mismatch' };
-  }
-
-  return { ok: true, shop: authorizedShop };
-}
-
-// Every reconnect replays all five topics, and Shopify 422s the ones that are
-// already subscribed to this address. That is the expected outcome, not a
-// provider failure — alerting on it fired four false alarms per reconnect and
-// buried the 422s that do matter, like a topic name Shopify rejects outright.
-function isDuplicateWebhookError(err: unknown): boolean {
-  if (!(err instanceof ShopifyRequestError) || err.status !== 422) return false;
-  const address = (err.payload as { errors?: { address?: unknown } } | undefined)?.errors?.address;
-  const messages = Array.isArray(address) ? address : [address];
-  return messages.some((m) => typeof m === 'string' && m.includes('has already been taken'));
-}
-
-async function registerShopifyWebhooks({
-  accessToken,
-  integrationId,
-  orgId,
-  shop,
-}: {
-  accessToken: string;
-  integrationId: string;
-  orgId: string;
-  shop: string;
-}): Promise<void> {
-  let gatewayUrl: string | null = null;
-  try {
-    gatewayUrl = getGatewayBaseUrl();
   } catch (error) {
-    logger.warn({ err: error, shop }, '[Shopify OAuth] Gateway URL invalid — skipping webhook registration');
+    logger.error({ err: error }, '[Shopify OAuth] Unexpected error');
+    return fail('shopify_server_error', 'unknown', organizationId);
   }
-
-  if (!gatewayUrl) {
-    logger.warn({ shop }, '[Shopify OAuth] Gateway URL not set — skipping webhook registration');
-    return;
-  }
-
-  await Promise.allSettled(
-    SHOPIFY_WEBHOOK_TOPICS.map(async (topic) => {
-      try {
-        await shopifyRestJson(
-          { shop, accessToken },
-          'webhooks.json',
-          {
-            method: 'POST',
-            maxRetries: 0,
-            body: { webhook: { topic, address: `${gatewayUrl}/webhooks/shopify`, format: 'json' } },
-          }
-        );
-        logger.info({ topic, shop }, '[Shopify OAuth] Webhook registered');
-      } catch (err) {
-        if (isDuplicateWebhookError(err)) {
-          logger.info({ topic, shop }, '[Shopify OAuth] Webhook already registered');
-          return;
-        }
-        const detail = err instanceof ShopifyRequestError ? err.payload ?? {} : err;
-        logger.warn({ topic, shop, err: detail }, '[Shopify OAuth] Webhook registration failed');
-        void recordProviderSendFailure('shopify', 'webhook_registration', orgId, {
-          counterClient: getRedis(),
-          integrationId,
-          detail: `Shopify webhook registration failed for ${topic}`,
-          extra: { topic, shop },
-        });
-      }
-    })
-  );
-}
-
-async function fetchShopifyShopIdentity(shop: string, accessToken: string) {
-  const shopData = await shopifyRestJson<{ shop?: { id?: number | string; name?: string; myshopify_domain?: string } }>(
-    { shop, accessToken },
-    'shop.json',
-    { maxRetries: 0 },
-  );
-  const identity = parseShopifyShopIdentity(shopData, shop);
-  if (!identity) {
-    throw new Error(`Shopify shop identity missing for ${shop}`);
-  }
-  return identity;
 }

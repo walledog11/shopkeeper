@@ -47,6 +47,7 @@
     "audit:operator-events": "node ./scripts/audit-operator-events.mjs",
     "audit:outbound-email": "node ./scripts/audit-outbound-email-rollout.mjs",
     "audit:stripe-webhooks": "node ./scripts/audit-stripe-webhook-events.mjs",
+    "audit:shopify-webhooks": "tsx ./apps/gateway/src/scripts/inspect-shopify-webhooks.ts",
     "audit:refund-spend-reservations": "node ./scripts/audit-refund-spend-reservations.mjs",
     "audit:unknown-outcomes": "node ./scripts/audit-unknown-outcomes.mjs",
     "recover:gmail-history": "tsx ./scripts/recover-gmail-history.ts",

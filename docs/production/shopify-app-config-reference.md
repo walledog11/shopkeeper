@@ -1,5 +1,12 @@
 # Shopify app configuration — rollback reference
 
+> **Current webhook configuration (2026-08-09):** the historical notes below
+> describe the pre-migration state. The five order/uninstall subscriptions now
+> live in the root `shopify.app.toml`, and OAuth no longer creates per-shop
+> subscriptions. Use
+> [shopify-webhook-migration.md](shopify-webhook-migration.md) to audit, remove,
+> or restore the legacy subscriptions without touching unrelated webhooks.
+
 Rollback reference for **M0a** and **M0b** of
 [shopify-storefront-chat-implementation-plan.md](../shopify-storefront-chat-implementation-plan.md),
 the migration from Dev-Dashboard-configured app settings to a CLI-authoritative
