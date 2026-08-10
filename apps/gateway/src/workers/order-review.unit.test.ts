@@ -278,11 +278,19 @@ describe('formatOrderFlagNotification', () => {
     expect(body).toContain("I haven't touched it");
   });
 
-  it('flattens multi-line reasons to a single line', () => {
+  it('separates the heads-up, reason, and status with blank lines', () => {
+    const body = formatOrderFlagNotification('#1001', 'billing and shipping countries differ');
+
+    expect(body).toBe(
+      "Heads up — order #1001 looks worth a second look:\n\nbilling and shipping countries differ.\n\nI haven't touched it; nothing is on hold.",
+    );
+  });
+
+  it('flattens multi-line model reasons into one detail paragraph', () => {
     const body = formatOrderFlagNotification('#1001', 'first line\n\n  second   line ');
 
-    expect(body).toContain('first line second line');
-    expect(body).not.toContain('\n');
+    expect(body).toContain('first line second line.');
+    expect(body).toMatch(/second look:\n\nfirst line second line/);
   });
 
   it('caps a long reason so one order cannot fill the merchant screen', () => {
@@ -290,7 +298,7 @@ describe('formatOrderFlagNotification', () => {
 
     expect(body).toContain('…');
     expect(body.length).toBeLessThan(380);
-    expect(body).toMatch(/… I haven't touched it/);
+    expect(body).toMatch(/…\n\nI haven't touched it/);
   });
 
   it('keeps typical multi-signal flag reasons intact without mid-word truncation', () => {
@@ -300,7 +308,7 @@ describe('formatOrderFlagNotification', () => {
 
     expect(body).toContain('before capturing payment');
     expect(body).not.toContain('captur…');
-    expect(body).toContain('before capturing payment. I haven');
+    expect(body).toContain('before capturing payment.\n\nI haven');
   });
 
   it('truncates at a word boundary when a reason is extremely long', () => {
@@ -308,8 +316,8 @@ describe('formatOrderFlagNotification', () => {
     const body = formatOrderFlagNotification('#1001', reason);
 
     expect(body).toContain('…');
-    expect(body).toMatch(/… I haven't touched it/);
-    expect(body).not.toContain('…. I haven');
+    expect(body).toMatch(/…\n\nI haven't touched it/);
+    expect(body).not.toContain('….\n\nI haven');
   });
 
   // The body is mirrored onto the operator thread, so a buyer who plants

@@ -32,8 +32,8 @@ const MAX_MIRROR_REASON_CHARS = 600;
 // name, email, address lines, order notes — and notifyOperator mirrors the body
 // onto the operator thread, where a later operator turn reads it back as history
 // (operator mode runs with segregateUntrusted off, and a mirrored push is an
-// `agent` row, so nothing downstream will wrap it). Flatten it to one line,
-// cap the length, and defang forged boundary tags here. Full-blown wrapUntrusted is
+// `agent` row, so nothing downstream will wrap it). Flatten model prose to one
+// line, cap the length, and defang forged boundary tags here. Full-blown wrapUntrusted is
 // deliberately not used: every existing call site wraps a MODEL-facing string,
 // and this string is what the merchant reads on their phone.
 function defangFlagReason(reason: string): string {
@@ -56,10 +56,9 @@ export function formatOrderFlagNotification(
   const detail = truncated ? truncateBriefingText(flat, maxReasonChars) : flat;
   const headsUp = `Heads up — order ${orderName} looks worth a second look`;
   const suffix = "I haven't touched it; nothing is on hold.";
-  if (!detail) return `${headsUp}. ${suffix}`;
-  // No period after a truncated detail — the ellipsis already signals continuation.
-  if (truncated) return `${headsUp}: ${detail} ${suffix}`;
-  return `${headsUp}: ${detail}. ${suffix}`;
+  if (!detail) return `${headsUp}.\n\n${suffix}`;
+  const reasonBlock = truncated ? detail : `${detail}.`;
+  return `${headsUp}:\n\n${reasonBlock}\n\n${suffix}`;
 }
 
 // Decision 4 (2026-08-04): order-ops is notify-only. The flag reaches every bound
