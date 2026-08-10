@@ -15,6 +15,7 @@ vi.mock('next/headers', () => ({
 }));
 
 import { auth } from '@clerk/nextjs/server';
+import { unsealOAuthAttempt } from '@/app/api/integrations/_lib/oauth-attempt';
 import { POST } from './route';
 
 beforeEach(() => {
@@ -66,7 +67,10 @@ describe('POST /api/integrations/shopify/auth', () => {
       expect.any(String),
       expect.objectContaining({ httpOnly: true, maxAge: 600 }),
     );
-    const attempt = JSON.parse(Buffer.from(mockCookieSet.mock.calls[0][1], 'base64url').toString());
+    const attempt = unsealOAuthAttempt(mockCookieSet.mock.calls[0][1], {
+      provider: 'shopify',
+      state: redirectUrl.searchParams.get('state')!,
+    });
     expect(attempt).toMatchObject({
       userId: 'usr_oauth',
       orgId: 'org_oauth',

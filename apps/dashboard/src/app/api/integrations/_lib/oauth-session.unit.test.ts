@@ -33,6 +33,7 @@ beforeEach(() => {
   vi.mocked(auth).mockResolvedValue({
     userId: 'user_1',
     orgId: 'org_1',
+    orgRole: 'org:admin',
   } as ReturnType<typeof auth> extends Promise<infer T> ? T : never);
 });
 
@@ -104,5 +105,28 @@ describe('OAuth attempt sessions', () => {
     expect(result.ok).toBe(false);
     expect(mockGet).not.toHaveBeenCalled();
     expect(mockDelete).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['another organization', { userId: 'user_1', orgId: 'org_2', orgRole: 'org:admin' }],
+    ['a non-admin role', { userId: 'user_1', orgId: 'org_1', orgRole: 'org:member' }],
+  ])('rejects a valid attempt completed from %s', async (_label, identity) => {
+    const attempt = await createOAuthSessionCookies(
+      new Request('https://dashboard.test/auth'),
+      { provider: 'gmail' },
+      { userId: 'user_1', orgId: 'org_1' },
+    );
+    vi.mocked(auth).mockResolvedValue(
+      identity as ReturnType<typeof auth> extends Promise<infer T> ? T : never,
+    );
+
+    const result = await validateOAuthCallbackSession({
+      appUrl: 'https://dashboard.test',
+      logPrefix: 'test',
+      provider: 'gmail',
+      state: attempt.state,
+    });
+
+    expect(result.ok).toBe(false);
   });
 });

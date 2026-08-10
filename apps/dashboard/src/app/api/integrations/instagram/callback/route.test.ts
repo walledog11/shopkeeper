@@ -43,6 +43,7 @@ vi.mock('@/lib/server/logger', () => ({
 vi.stubGlobal('fetch', mockFetch);
 
 import { auth } from '@clerk/nextjs/server';
+import { sealOAuthAttempt } from '@/app/api/integrations/_lib/oauth-attempt';
 import { POST } from './route';
 
 let org: Awaited<ReturnType<typeof createTestOrg>> | null;
@@ -56,6 +57,7 @@ beforeEach(async () => {
   vi.mocked(auth).mockResolvedValue({
     userId: 'usr_oauth',
     orgId: org.clerkOrgId,
+    orgRole: 'org:admin',
   } as ReturnType<typeof auth> extends Promise<infer T> ? T : never);
   mockSavedCookies({
     ig_oauth_state: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -376,13 +378,15 @@ async function instagramIntegrationCount(organizationId: string) {
 function mockSavedCookies(values: Record<string, string>) {
   const prefix = 'ig';
   const state = values[`${prefix}_oauth_state`];
-  const attempt = Buffer.from(JSON.stringify({
+  const attempt = sealOAuthAttempt({
+    provider: 'instagram',
+    state,
     userId: values[`${prefix}_oauth_user`],
     orgId: values[`${prefix}_oauth_org`],
     returnTo: values[`${prefix}_oauth_return`] ?? null,
     mode: 'redirect',
     extra: {},
-  })).toString('base64url');
+  });
   mockCookieGet.mockImplementation((name: string) => {
     return name === `instagram_oauth_attempt_${state}` ? { value: attempt } : undefined;
   });

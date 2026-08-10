@@ -168,11 +168,15 @@ export function validateDashboardEnv(): void {
     'CLERK_SECRET_KEY',
     'ANTHROPIC_API_KEY',
     'INTERNAL_API_SECRET',
+    'OAUTH_ATTEMPT_SECRET',
   ] as const;
 
   const missing = required.filter((name) => !hasEnv(name));
   if (missing.length > 0) {
     throw new Error(`[Dashboard] Missing required environment variables: ${missing.join(', ')}`);
+  }
+  if ((process.env.OAUTH_ATTEMPT_SECRET?.trim().length ?? 0) < 32) {
+    throw new Error('[Dashboard] OAUTH_ATTEMPT_SECRET must contain at least 32 characters');
   }
 
   if (process.env.NODE_ENV === 'production') {

@@ -49,6 +49,7 @@ export function getTestEnv(baseEnv = process.env) {
     INTERNAL_API_SECRET: baseEnv.INTERNAL_API_SECRET || 'test-internal-secret',
     INTERNAL_API_SECRET_PREV: baseEnv.INTERNAL_API_SECRET_PREV || 'test-internal-secret-prev',
     TOKEN_ENCRYPTION_KEY: baseEnv.TOKEN_ENCRYPTION_KEY || '0'.repeat(64),
+    OAUTH_ATTEMPT_SECRET: baseEnv.OAUTH_ATTEMPT_SECRET || 'test-oauth-attempt-secret-at-least-32-characters',
     BLOB_READ_WRITE_TOKEN: baseEnv.BLOB_READ_WRITE_TOKEN || 'test-blob-token',
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || env.CLERK_PUBLISHABLE_KEY || 'pk_test_Y2xlcmsuZXhhbXBsZS5jb20k', // gitleaks:allow
     E2E_AUTH_BYPASS: env.E2E_AUTH_BYPASS || 'false',

@@ -8,6 +8,7 @@ import { isOAuthFlowMode } from '@/lib/integrations/oauth-contract';
 import { ADMIN_REQUIRED_MESSAGE, isOrgAdmin } from '@/lib/api/permissions';
 import logger from '@/lib/server/logger';
 import { safeReturnTo } from '@/lib/security/safe-return-to';
+import { sealOAuthAttempt, unsealOAuthAttempt } from './oauth-attempt';
 
 const OAUTH_STATE_PATTERN = /^[a-f0-9]{32}$/;
 
@@ -31,14 +32,6 @@ export interface AuthenticatedOAuthSession {
 export type OAuthSessionResult =
   | { ok: true; session: AuthenticatedOAuthSession }
   | { ok: false; response: NextResponse };
-
-interface StoredOAuthAttempt {
-  userId: string;
-  orgId: string;
-  returnTo: string | null;
-  mode: OAuthFlowMode;
-  extra: Record<string, string>;
-}
 
 // The single chokepoint for starting any provider connect flow. Connecting
 // binds provider credentials to the workspace, so it is admin-only.
@@ -66,7 +59,9 @@ export async function createOAuthSessionCookies(
   const returnTo = safeReturnTo(searchParams.get('returnTo'));
   const mode = isOAuthFlowMode(searchParams.get('mode')) ? searchParams.get('mode') as OAuthFlowMode : 'redirect';
   const state = crypto.randomBytes(16).toString('hex');
-  const attempt: StoredOAuthAttempt = {
+  const attempt = {
+    provider: config.provider,
+    state,
     userId: session.userId,
     orgId: session.orgId,
     returnTo,
@@ -76,7 +71,11 @@ export async function createOAuthSessionCookies(
     ),
   };
   const cookieStore = await cookies();
-  cookieStore.set(oauthAttemptCookieName(config.provider, state), encodeAttempt(attempt), OAUTH_COOKIE_OPTIONS);
+  cookieStore.set(
+    oauthAttemptCookieName(config.provider, state),
+    sealOAuthAttempt(attempt),
+    OAUTH_COOKIE_OPTIONS,
+  );
   return { state, returnTo, mode };
 }
 
@@ -112,7 +111,12 @@ export async function validateOAuthCallbackSession(options: {
     : null;
   const cookieStore = await cookies();
   const cookieName = validState ? oauthAttemptCookieName(options.provider, validState) : null;
-  const attempt = cookieName ? decodeAttempt(cookieStore.get(cookieName)?.value) : null;
+  const attempt = cookieName && validState
+    ? unsealOAuthAttempt(cookieStore.get(cookieName)?.value, {
+        provider: options.provider,
+        state: validState,
+      })
+    : null;
   if (cookieName) cookieStore.delete(cookieName);
 
   const mismatchError = options.stateMismatchError ?? 'state_mismatch';
@@ -127,11 +131,23 @@ export async function validateOAuthCallbackSession(options: {
     };
   }
 
-  const { userId: currentUserId } = await auth();
-  if (!currentUserId || currentUserId !== attempt.userId) {
+  const { userId: currentUserId, orgId: currentOrgId } = await auth();
+  const admin = await isOrgAdmin();
+  if (
+    !currentUserId
+    || currentUserId !== attempt.userId
+    || currentOrgId !== attempt.orgId
+    || !admin
+  ) {
     logger.error(
-      { savedUserId: attempt.userId, currentUserId },
-      `[${options.logPrefix}] User session mismatch — possible CSRF attempt`,
+      {
+        admin,
+        currentOrgId,
+        currentUserId,
+        savedOrgId: attempt.orgId,
+        savedUserId: attempt.userId,
+      },
+      `[${options.logPrefix}] Session authorization mismatch during OAuth callback`,
     );
     return {
       ok: false,
@@ -164,34 +180,4 @@ export async function validateOAuthCallbackSession(options: {
 
 function oauthAttemptCookieName(provider: OAuthProvider, state: string): string {
   return `${provider}_oauth_attempt_${state}`;
-}
-
-function encodeAttempt(attempt: StoredOAuthAttempt): string {
-  return Buffer.from(JSON.stringify(attempt), 'utf8').toString('base64url');
-}
-
-function decodeAttempt(value: string | undefined): StoredOAuthAttempt | null {
-  if (!value) return null;
-  try {
-    const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as Partial<StoredOAuthAttempt>;
-    if (
-      typeof parsed.userId !== 'string'
-      || typeof parsed.orgId !== 'string'
-      || (parsed.returnTo !== null && typeof parsed.returnTo !== 'string')
-      || !parsed.extra
-      || typeof parsed.extra !== 'object'
-      || Array.isArray(parsed.extra)
-    ) return null;
-    return {
-      userId: parsed.userId,
-      orgId: parsed.orgId,
-      returnTo: safeReturnTo(parsed.returnTo),
-      mode: isOAuthFlowMode(parsed.mode) ? parsed.mode : 'redirect',
-      extra: Object.fromEntries(
-        Object.entries(parsed.extra).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
-      ),
-    };
-  } catch {
-    return null;
-  }
 }

@@ -39,6 +39,7 @@ vi.mock('@/lib/server/product-analytics', () => ({
 vi.stubGlobal('fetch', mockFetch);
 
 import { auth } from '@clerk/nextjs/server';
+import { sealOAuthAttempt } from '@/app/api/integrations/_lib/oauth-attempt';
 import { completeShopifyOAuth } from './complete-shopify-oauth';
 import { POST } from './route';
 
@@ -55,6 +56,7 @@ beforeEach(async () => {
   vi.mocked(auth).mockResolvedValue({
     userId: 'usr_oauth',
     orgId: org.clerkOrgId,
+    orgRole: 'org:admin',
   } as ReturnType<typeof auth> extends Promise<infer T> ? T : never);
   mockFetch.mockReset();
   mockSavedCookies({ shop: SHOP });
@@ -306,13 +308,15 @@ describe('POST /api/integrations/shopify/callback', () => {
 });
 
 function mockSavedCookies({ shop, returnTo }: { shop: string; returnTo?: string }) {
-  const attempt = Buffer.from(JSON.stringify({
+  const attempt = sealOAuthAttempt({
+    provider: 'shopify',
+    state: STATE,
     userId: 'usr_oauth',
     orgId: org!.clerkOrgId,
     returnTo: returnTo ?? null,
     mode: 'redirect',
     extra: { shop },
-  })).toString('base64url');
+  });
   mockCookieGet.mockImplementation((name: string) => (
     name === `shopify_oauth_attempt_${STATE}` ? { value: attempt } : undefined
   ));

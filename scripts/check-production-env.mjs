@@ -17,6 +17,7 @@ const CONTRACTS = {
       'INTERNAL_API_SECRET',
       'APP_URL',
       'TOKEN_ENCRYPTION_KEY',
+      'OAUTH_ATTEMPT_SECRET',
       'UPSTASH_REDIS_REST_URL',
       'UPSTASH_REDIS_REST_TOKEN',
       'PRODUCT_ANALYTICS_ENABLED',
@@ -213,6 +214,13 @@ export function validateProductionEnv(target, options = {}) {
     const rightUrl = normalizedUrls[right];
     if (leftUrl && rightUrl && leftUrl !== rightUrl) {
       errors.push(`${left} and ${right} must match`);
+    }
+  }
+
+  if (target === 'dashboard') {
+    const oauthAttemptSecret = readEnv(env, 'OAUTH_ATTEMPT_SECRET');
+    if (oauthAttemptSecret && oauthAttemptSecret.length < 32) {
+      errors.push('OAUTH_ATTEMPT_SECRET must contain at least 32 characters');
     }
   }
 

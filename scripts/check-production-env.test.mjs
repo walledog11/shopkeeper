@@ -16,6 +16,7 @@ function createDashboardLaunchEnv(overrides = {}) {
     APP_URL: 'https://app.example.com',
     NEXT_PUBLIC_APP_URL: 'https://app.example.com',
     TOKEN_ENCRYPTION_KEY: '0'.repeat(64),
+    OAUTH_ATTEMPT_SECRET: 'production-oauth-attempt-secret-value',
     UPSTASH_REDIS_REST_URL: 'https://redis.example.com',
     UPSTASH_REDIS_REST_TOKEN: 'redis-token',
     GATEWAY_INTERNAL_URL: 'https://gateway.example.com',
@@ -217,6 +218,34 @@ test('dashboard launch contract requires token encryption key', () => {
 
   assert.equal(
     result.errors.includes('Missing required environment variable: TOKEN_ENCRYPTION_KEY'),
+    true
+  );
+});
+
+test('dashboard launch contract requires OAuth attempt signing secret', () => {
+  const result = validateProductionEnv('dashboard', {
+    scope: 'launch',
+    env: createDashboardLaunchEnv({
+      OAUTH_ATTEMPT_SECRET: '',
+    }),
+  });
+
+  assert.equal(
+    result.errors.includes('Missing required environment variable: OAUTH_ATTEMPT_SECRET'),
+    true
+  );
+});
+
+test('dashboard launch contract rejects a short OAuth attempt signing secret', () => {
+  const result = validateProductionEnv('dashboard', {
+    scope: 'launch',
+    env: createDashboardLaunchEnv({
+      OAUTH_ATTEMPT_SECRET: 'too-short',
+    }),
+  });
+
+  assert.equal(
+    result.errors.includes('OAUTH_ATTEMPT_SECRET must contain at least 32 characters'),
     true
   );
 });

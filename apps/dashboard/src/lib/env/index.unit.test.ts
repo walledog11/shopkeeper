@@ -16,6 +16,7 @@ function stubBaseDashboardEnv() {
   vi.stubEnv('CLERK_SECRET_KEY', 'sk_test_clerk');
   vi.stubEnv('ANTHROPIC_API_KEY', 'test-anthropic-key');
   vi.stubEnv('INTERNAL_API_SECRET', 'test-internal-secret');
+  vi.stubEnv('OAUTH_ATTEMPT_SECRET', 'test-oauth-attempt-secret-at-least-32-characters');
   vi.stubEnv('TOKEN_ENCRYPTION_KEY', '0'.repeat(64));
 }
 
@@ -48,6 +49,13 @@ describe('validateDashboardEnv', () => {
     vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', '');
 
     expect(() => validateDashboardEnv()).toThrow(/UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN/);
+  });
+
+  it('rejects a short OAuth attempt signing secret', () => {
+    stubBaseDashboardEnv();
+    vi.stubEnv('OAUTH_ATTEMPT_SECRET', 'too-short');
+
+    expect(() => validateDashboardEnv()).toThrow(/at least 32 characters/);
   });
 
   it('requires APP_URL, direct database URL, blob token, and the Clerk publishable key in production', () => {

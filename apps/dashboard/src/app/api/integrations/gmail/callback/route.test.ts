@@ -42,6 +42,7 @@ vi.mock('@/lib/server/logger', () => ({
 vi.stubGlobal('fetch', mockFetch);
 
 import { auth } from '@clerk/nextjs/server';
+import { sealOAuthAttempt } from '@/app/api/integrations/_lib/oauth-attempt';
 import { POST } from './route';
 
 let org: Awaited<ReturnType<typeof createTestOrg>> | null;
@@ -59,6 +60,7 @@ beforeEach(async () => {
   vi.mocked(auth).mockResolvedValue({
     userId: 'usr_oauth',
     orgId: org.clerkOrgId,
+    orgRole: 'org:admin',
   } as ReturnType<typeof auth> extends Promise<infer T> ? T : never);
 });
 
@@ -130,8 +132,14 @@ describe('POST /api/integrations/gmail/callback', () => {
     expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations/oauth/complete?provider=gmail&status=failed&error=state_mismatch&mode=redirect');
     expect(mockFetch).not.toHaveBeenCalled();
     expect(mockLogger.error).toHaveBeenCalledWith(
-      { savedUserId: 'someone_else', currentUserId: 'usr_oauth' },
-      '[Gmail OAuth] User session mismatch — possible CSRF attempt',
+      {
+        admin: true,
+        currentOrgId: org!.clerkOrgId,
+        currentUserId: 'usr_oauth',
+        savedOrgId: org!.clerkOrgId,
+        savedUserId: 'someone_else',
+      },
+      '[Gmail OAuth] Session authorization mismatch during OAuth callback',
     );
   });
 
@@ -444,13 +452,15 @@ function mockSavedCookies(values: Record<string, string>) {
 
 function encodeTestAttempt(values: Record<string, string>, prefix: string): string {
   const base = `${prefix}_oauth_`;
-  return Buffer.from(JSON.stringify({
+  return sealOAuthAttempt({
+    provider: 'gmail',
+    state: values[`${base}state`],
     userId: values[`${base}user`],
     orgId: values[`${base}org`],
     returnTo: values[`${base}return`] ?? null,
     mode: 'redirect',
     extra: {},
-  })).toString('base64url');
+  });
 }
 
 function jsonResponse(body: unknown, init: ResponseInit = {}) {
