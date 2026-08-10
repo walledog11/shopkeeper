@@ -9,6 +9,12 @@ import type { IntegrationHealth } from "./integration-card-helpers"
 
 export type GmailConfigureScene = "ready" | "needs_forwarding" | "needs_reconnect"
 
+export interface GmailPresentation {
+  scene: GmailConfigureScene
+  statusLine: string | null
+  receiving: { title: string; description: string; status: string }
+}
+
 const GMAIL_FORWARDING_GUIDE = [
   "Open Gmail → Settings (gear) → See all settings → Forwarding and POP/IMAP.",
   "Click \"Add a forwarding address\" and paste the Shopkeeper address below.",
@@ -55,7 +61,7 @@ export function deriveGmailConfigureScene(
   gmailNativeInboundEnabled: boolean,
   health: IntegrationHealth,
 ): GmailConfigureScene {
-  if (health.canFix) return "needs_reconnect"
+  if (health.recoveryAction) return "needs_reconnect"
 
   if (needsGmailForwardingSetup(integration, lastActivity, gmailNativeInboundEnabled)) {
     return "needs_forwarding"
@@ -132,6 +138,25 @@ export function gmailConfigureStatusLine(
   }
 
   return null
+}
+
+export function deriveGmailPresentation(
+  integration: Integration,
+  lastActivity: string | null,
+  gmailNativeInboundEnabled: boolean,
+  health: IntegrationHealth,
+): GmailPresentation {
+  const scene = deriveGmailConfigureScene(
+    integration,
+    lastActivity,
+    gmailNativeInboundEnabled,
+    health,
+  )
+  return {
+    scene,
+    statusLine: gmailConfigureStatusLine(scene, integration, lastActivity, health),
+    receiving: gmailReceivingSummary(integration, lastActivity, gmailNativeInboundEnabled),
+  }
 }
 
 export { GMAIL_FORWARDING_GUIDE }

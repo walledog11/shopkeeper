@@ -4,7 +4,7 @@ import { useReducer, useRef } from "react"
 import useSWR from "swr"
 import { cn } from "@/lib/ui/cn"
 import { fetcher } from "@/lib/api/fetcher"
-import type { PlatformConfig } from "@/lib/integrations/catalog"
+import type { PersonalDeviceIntegrationDefinition } from "@/lib/integrations/catalog"
 import type { TelegramMemberStatus } from "@/lib/integrations/telegram-status"
 import {
   CARD_ACTIONS,
@@ -16,7 +16,7 @@ import {
 } from "./integration-card-styles"
 import { IntegrationCardHeader } from "./IntegrationCardParts"
 import { IntegrationConfigureDialog } from "./IntegrationConfigureDialog"
-import { TelegramConnectBody } from "./connect-bodies"
+import { TelegramConnectBody } from "./connect-bodies/TelegramConnectBody"
 import {
   TelegramActionsSection,
   TelegramDevicesSection,
@@ -50,7 +50,7 @@ export default function TelegramCard({
   botUsername: configuredBotUsername,
   initialStatus,
 }: {
-  config: PlatformConfig
+  config: PersonalDeviceIntegrationDefinition
   botUsername: string | null
   initialStatus?: TelegramMemberStatus | null
 }) {

@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest"
 import { GMAIL_READONLY_SCOPE } from "@shopkeeper/email/providers"
 import type { Integration } from "@/types"
+import { getIntegrationDefinition, type WorkspaceIntegrationDefinition } from "@/lib/integrations/catalog"
 import {
   deriveIntegrationHealth,
-  getEmailReceivingDisplay,
   getInstagramConnectionDisplay,
 } from "./integration-card-helpers"
+import { deriveGmailPresentation } from "./gmail-configure-state"
+
+const SHOPIFY = getIntegrationDefinition("shopify") as WorkspaceIntegrationDefinition
+const INSTAGRAM = getIntegrationDefinition("instagram") as WorkspaceIntegrationDefinition
+const GMAIL = getIntegrationDefinition("gmail") as WorkspaceIntegrationDefinition
 
 function gmailIntegration(metadata: Record<string, unknown>): Integration {
   return {
@@ -61,10 +66,10 @@ describe("Shopify integration health", () => {
   it("asks for a reconnect when the recorded grant is short of a capability", () => {
     const integration = shopifyIntegration(["read_returns", "write_returns"])
 
-    expect(deriveIntegrationHealth("shopify", [integration], null)).toEqual({
+    expect(deriveIntegrationHealth(SHOPIFY, integration, null)).toEqual({
       state: "needs-attention",
       note: "This store was connected before some newer Shopify actions existed — reconnect to enable them. Until then those actions fail when tried.",
-      canFix: true,
+      recoveryAction: { kind: "oauth", label: "Fix" },
     })
   })
 
@@ -72,10 +77,10 @@ describe("Shopify integration health", () => {
   // that as a shortfall would send every such merchant through a pointless
   // reconnect.
   it("says nothing when the grant was never recorded", () => {
-    expect(deriveIntegrationHealth("shopify", [shopifyIntegration()], null)).toEqual({
+    expect(deriveIntegrationHealth(SHOPIFY, shopifyIntegration(), null)).toEqual({
       state: "working",
       note: null,
-      canFix: false,
+      recoveryAction: null,
     })
   })
 
@@ -83,7 +88,7 @@ describe("Shopify integration health", () => {
     const integration = shopifyIntegration(["read_returns"])
     integration.connectionState = "invalid"
 
-    expect(deriveIntegrationHealth("shopify", [integration], null)).toMatchObject({
+    expect(deriveIntegrationHealth(SHOPIFY, integration, null)).toMatchObject({
       note: "Your Shopify connection expired — order lookups and syncing have stopped.",
     })
   })
@@ -96,10 +101,10 @@ describe("Instagram integration health", () => {
       code: 2,
     })
 
-    expect(deriveIntegrationHealth("ig", [integration], null)).toEqual({
+    expect(deriveIntegrationHealth(INSTAGRAM, integration, null)).toEqual({
       state: "needs-attention",
       note: "Instagram health could not be confirmed — Shopkeeper will retry automatically.",
-      canFix: false,
+      recoveryAction: null,
     })
   })
 
@@ -109,20 +114,20 @@ describe("Instagram integration health", () => {
       code: "messages_subscription_missing",
     })
 
-    expect(deriveIntegrationHealth("ig", [integration], null)).toEqual({
+    expect(deriveIntegrationHealth(INSTAGRAM, integration, null)).toEqual({
       state: "needs-attention",
       note: "Instagram is no longer subscribed to DMs — reconnect Instagram.",
-      canFix: true,
+      recoveryAction: { kind: "oauth", label: "Fix" },
     })
   })
 
   it("keeps a confirmed healthy connection working", () => {
     const integration = instagramIntegration("healthy")
 
-    expect(deriveIntegrationHealth("ig", [integration], null)).toEqual({
+    expect(deriveIntegrationHealth(INSTAGRAM, integration, null)).toEqual({
       state: "working",
       note: null,
-      canFix: false,
+      recoveryAction: null,
     })
   })
 
@@ -170,29 +175,36 @@ describe("Gmail integration health", () => {
       oauthScopes: ["openid", "https://www.googleapis.com/auth/gmail.send"],
     })
 
-    expect(deriveIntegrationHealth("email", [integration], null, true)).toEqual({
+    expect(deriveIntegrationHealth(GMAIL, integration, null, true)).toEqual({
       state: "needs-attention",
       note: "Reconnect Gmail to grant inbox access for native receiving.",
-      canFix: true,
+      recoveryAction: { kind: "oauth", label: "Fix" },
     })
-    expect(getEmailReceivingDisplay(integration, "org-id@inbound.example.test", true)).toEqual({
-      action: "Reconnect required",
-      description: "Reconnect Gmail to grant inbox access for native receiving",
+    expect(deriveGmailPresentation(
+      integration,
+      null,
+      true,
+      deriveIntegrationHealth(GMAIL, integration, null, true),
+    )).toMatchObject({
+      scene: "needs_reconnect",
+      receiving: { status: "Needs attention" },
     })
   })
 
   it("asks existing Gmail connections to reconnect before native enrollment", () => {
     const integration = gmailIntegration({ oauthScopes: [GMAIL_READONLY_SCOPE] })
 
-    expect(deriveIntegrationHealth("email", [integration], null, true)).toEqual({
+    expect(deriveIntegrationHealth(GMAIL, integration, null, true)).toEqual({
       state: "waiting",
       note: "Reconnect Gmail to activate native receiving.",
-      canFix: true,
+      recoveryAction: { kind: "oauth", label: "Fix" },
     })
-    expect(getEmailReceivingDisplay(integration, null, true)).toEqual({
-      action: "Setup pending",
-      description: "Reconnect Gmail to activate native receiving",
-    })
+    expect(deriveGmailPresentation(
+      integration,
+      null,
+      true,
+      deriveIntegrationHealth(GMAIL, integration, null, true),
+    ).scene).toBe("needs_reconnect")
   })
 
   it("shows enrolled native receiving as pending before watch setup", () => {
@@ -201,15 +213,17 @@ describe("Gmail integration health", () => {
       oauthScopes: [GMAIL_READONLY_SCOPE],
     })
 
-    expect(deriveIntegrationHealth("email", [integration], null, true)).toEqual({
+    expect(deriveIntegrationHealth(GMAIL, integration, null, true)).toEqual({
       state: "waiting",
       note: "Sending is connected. Native Gmail receiving is pending.",
-      canFix: false,
+      recoveryAction: null,
     })
-    expect(getEmailReceivingDisplay(integration, null, true)).toEqual({
-      action: "Setup pending",
-      description: "Native Gmail receiving is pending",
-    })
+    expect(deriveGmailPresentation(
+      integration,
+      null,
+      true,
+      deriveIntegrationHealth(GMAIL, integration, null, true),
+    ).receiving.status).toBe("Setup needed")
   })
 
   it("shows active native receiving as healthy", () => {
@@ -218,18 +232,24 @@ describe("Gmail integration health", () => {
       gmail: { inboundStatus: "active" },
     })
 
-    expect(deriveIntegrationHealth("email", [integration], null, true)).toEqual({
+    expect(deriveIntegrationHealth(GMAIL, integration, null, true)).toEqual({
       state: "working",
       note: null,
-      canFix: false,
+      recoveryAction: null,
     })
-    expect(getEmailReceivingDisplay(integration, null, true)).toEqual({
-      action: "Native inbound active",
-      description: "Native Gmail inbox sync is active · Last successful sync: not yet",
+    expect(deriveGmailPresentation(
+      integration,
+      null,
+      true,
+      deriveIntegrationHealth(GMAIL, integration, null, true),
+    ).receiving).toEqual({
+      title: "Receiving messages",
+      description: "Customer emails sent to your Gmail inbox appear here automatically.",
+      status: "Active",
     })
   })
 
-  it("shows the last successful Gmail sync", () => {
+  it("keeps native receiving active when sync metadata is present", () => {
     const integration = gmailIntegration({
       oauthScopes: [GMAIL_READONLY_SCOPE],
       gmail: {
@@ -238,10 +258,12 @@ describe("Gmail integration health", () => {
       },
     })
 
-    expect(getEmailReceivingDisplay(integration, null, true)).toEqual({
-      action: "Native inbound active",
-      description: "Native Gmail inbox sync is active · Last successful sync: just now",
-    })
+    expect(deriveGmailPresentation(
+      integration,
+      null,
+      true,
+      deriveIntegrationHealth(GMAIL, integration, null, true),
+    ).receiving.status).toBe("Active")
   })
 
   it("surfaces a degraded Gmail watch without claiming the OAuth grant expired", () => {
@@ -250,10 +272,10 @@ describe("Gmail integration health", () => {
       gmail: { inboundStatus: "degraded" },
     })
 
-    expect(deriveIntegrationHealth("email", [integration], null, true)).toEqual({
+    expect(deriveIntegrationHealth(GMAIL, integration, null, true)).toEqual({
       state: "needs-attention",
       note: "Gmail inbox sync needs attention. Sending still works.",
-      canFix: false,
+      recoveryAction: null,
     })
   })
 
@@ -263,15 +285,17 @@ describe("Gmail integration health", () => {
       gmail: { inboundStatus: "degraded", watchFailureCount: 3 },
     })
 
-    expect(deriveIntegrationHealth("email", [integration], null, true)).toEqual({
+    expect(deriveIntegrationHealth(GMAIL, integration, null, true)).toEqual({
       state: "needs-attention",
       note: "Gmail watch renewal has failed 3 times. Sending still works.",
-      canFix: false,
+      recoveryAction: null,
     })
-    expect(getEmailReceivingDisplay(integration, null, true)).toEqual({
-      action: "Sync degraded",
-      description: "Gmail watch renewal has failed 3 times · Last successful sync: not yet",
-    })
+    expect(deriveGmailPresentation(
+      integration,
+      null,
+      true,
+      deriveIntegrationHealth(GMAIL, integration, null, true),
+    ).receiving.status).toBe("Needs attention")
   })
 
   it("keeps the disabled native-inbound state scoped to Gmail", () => {
@@ -280,18 +304,16 @@ describe("Gmail integration health", () => {
       gmail: { inboundStatus: "active" },
     })
 
-    expect(getEmailReceivingDisplay(
+    expect(deriveGmailPresentation(
       integration,
-      "org-id@inbound.example.test",
+      null,
       false,
-    )).toEqual({
-      action: "Native inbound unavailable",
-      description: "Native Gmail receiving is disabled during controlled rollout",
-    })
-    expect(deriveIntegrationHealth("email", [integration], null, false)).toEqual({
+      deriveIntegrationHealth(GMAIL, integration, null, false),
+    ).scene).toBe("needs_forwarding")
+    expect(deriveIntegrationHealth(GMAIL, integration, null, false)).toEqual({
       state: "working",
       note: null,
-      canFix: false,
+      recoveryAction: null,
     })
   })
 })

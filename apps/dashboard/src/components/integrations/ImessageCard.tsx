@@ -4,7 +4,7 @@ import { useState } from "react"
 import useSWR from "swr"
 import { cn } from "@/lib/ui/cn"
 import { fetcher } from "@/lib/api/fetcher"
-import type { PlatformConfig } from "@/lib/integrations/catalog"
+import type { PersonalDeviceIntegrationDefinition } from "@/lib/integrations/catalog"
 import {
   CARD_ACTIONS,
   CARD_BUTTON_DISABLED,
@@ -15,7 +15,7 @@ import {
 } from "./integration-card-styles"
 import { IntegrationCardHeader } from "./IntegrationCardParts"
 import { IntegrationConfigureDialog } from "./IntegrationConfigureDialog"
-import { ImessageBindingSection } from "./connect-bodies"
+import { ImessageBindingSection } from "./connect-bodies/ImessageBindingSection"
 
 interface ImessageBindStatus {
   lineConnected: boolean
@@ -32,7 +32,7 @@ export default function ImessageCard({
   config,
   handle,
 }: {
-  config: PlatformConfig
+  config: PersonalDeviceIntegrationDefinition
   handle: string | null
 }) {
   const { data } = useSWR<ImessageBindStatus>('/api/integrations/imessage/bind', fetcher)

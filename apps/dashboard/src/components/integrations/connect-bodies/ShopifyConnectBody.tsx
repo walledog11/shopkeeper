@@ -10,12 +10,14 @@ export function ShopifyConnectBody({
   setShop,
   loading,
   onConnect,
+  disabled = false,
 }: {
   isConnected: boolean
   shop: string
   setShop: (v: string) => void
   loading: boolean
   onConnect: () => void
+  disabled?: boolean
 }) {
   return (
     <div className="space-y-3">
@@ -37,13 +39,14 @@ export function ShopifyConnectBody({
             type="text"
             placeholder="mystore.myshopify.com"
             value={shop}
+            disabled={disabled}
             onChange={(e) => setShop(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") onConnect() }}
             className="h-9 text-sm"
           />
           <Button
             size="sm"
-            disabled={!shop.trim() || loading}
+            disabled={disabled || !shop.trim() || loading}
             onClick={onConnect}
             className="shrink-0 h-9 px-4 font-medium"
           >

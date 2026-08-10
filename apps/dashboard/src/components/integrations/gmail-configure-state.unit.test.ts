@@ -33,7 +33,7 @@ describe("deriveGmailConfigureScene", () => {
     expect(deriveGmailConfigureScene(integration, null, true, {
       state: "needs-attention",
       note: "Reconnect Gmail to grant inbox access for native receiving.",
-      canFix: true,
+      recoveryAction: { kind: "oauth", label: "Fix" },
     })).toBe("needs_reconnect")
   })
 
@@ -45,7 +45,7 @@ describe("deriveGmailConfigureScene", () => {
     expect(deriveGmailConfigureScene(integration, null, false, {
       state: "working",
       note: null,
-      canFix: false,
+      recoveryAction: null,
     })).toBe("needs_forwarding")
     expect(needsGmailForwardingSetup(integration, null, false)).toBe(true)
   })
@@ -61,7 +61,7 @@ describe("deriveGmailConfigureScene", () => {
     expect(deriveGmailConfigureScene(integration, null, true, {
       state: "working",
       note: null,
-      canFix: false,
+      recoveryAction: null,
     })).toBe("ready")
   })
 
@@ -73,7 +73,7 @@ describe("deriveGmailConfigureScene", () => {
     expect(deriveGmailConfigureScene(integration, new Date().toISOString(), false, {
       state: "working",
       note: null,
-      canFix: false,
+      recoveryAction: null,
     })).toBe("ready")
   })
 })
@@ -99,7 +99,7 @@ describe("gmailConfigureStatusLine", () => {
     expect(gmailConfigureStatusLine("needs_forwarding", integration, null, {
       state: "working",
       note: null,
-      canFix: false,
+      recoveryAction: null,
     })).toBe("Forward mail sent to merchant@gmail.test to finish setup.")
   })
 })

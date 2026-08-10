@@ -10,14 +10,12 @@ import { ConnectedAccountRow } from "./ConnectedAccountRow"
 import { CopyButton } from "./CopyButton"
 import { GmailSupportAddressPanel } from "./GmailSupportAddressPanel"
 import {
-  deriveGmailConfigureScene,
   GMAIL_FORWARDING_GUIDE,
+  type GmailPresentation,
   gmailCustomerAddress,
-  gmailReceivingSummary,
   gmailReplyAddress,
   isGmailWorkspaceAccount,
 } from "./gmail-configure-state"
-import type { IntegrationHealth } from "./integration-card-helpers"
 import { PermissionActionLink, PermissionRow } from "./PermissionRow"
 
 const DISCONNECT_NOTE =
@@ -67,18 +65,14 @@ function GmailForwardingSection({
 
 function GmailEmailSection({
   integration,
-  lastActivity,
-  gmailNativeInboundEnabled,
-  scene,
+  presentation,
   isWorkspace,
 }: {
   integration: Integration
-  lastActivity: string | null
-  gmailNativeInboundEnabled: boolean
-  scene: ReturnType<typeof deriveGmailConfigureScene>
+  presentation: GmailPresentation
   isWorkspace: boolean
 }) {
-  const receiving = gmailReceivingSummary(integration, lastActivity, gmailNativeInboundEnabled)
+  const { receiving, scene } = presentation
   const replyDescription = isWorkspace
     ? `Replies send from ${gmailReplyAddress(integration)}`
     : "Replies send from your Gmail address"
@@ -128,28 +122,31 @@ function GmailActionsSection({
   onRequestDelete,
   isDefaultEmail,
   onSetDefaultEmail,
+  canManageWorkspace,
 }: {
-  scene: ReturnType<typeof deriveGmailConfigureScene>
+  scene: GmailPresentation["scene"]
   confirmingDelete: boolean
   onReauthorize: () => void
   onConfirmDelete: () => void
   onRequestDelete: () => void
   isDefaultEmail: boolean
   onSetDefaultEmail?: () => void
+  canManageWorkspace: boolean
 }) {
   return (
     <ConfigureSection title="Actions">
       {!isDefaultEmail && onSetDefaultEmail ? (
-        <ActionRow icon={Mail} label="Use for new emails" onClick={onSetDefaultEmail} />
+        <ActionRow icon={Mail} label="Use for new emails" onClick={onSetDefaultEmail} disabled={!canManageWorkspace} />
       ) : null}
       {scene !== "needs_reconnect" ? (
-        <ActionRow icon={RefreshCw} label="Reconnect account" onClick={onReauthorize} />
+        <ActionRow icon={RefreshCw} label="Reconnect account" onClick={onReauthorize} disabled={!canManageWorkspace} />
       ) : null}
       <ActionRow
         icon={Trash2}
         label="Delete connection"
         destructive
         onClick={onRequestDelete}
+        disabled={!canManageWorkspace}
       />
       {confirmingDelete ? (
         <div className="flex items-center justify-between gap-3 bg-foreground/[0.02] px-4 py-3.5">
@@ -169,9 +166,7 @@ function GmailActionsSection({
 
 export function GmailConnectedConfigureBody({
   integration,
-  lastActivity,
-  gmailNativeInboundEnabled,
-  health,
+  presentation,
   email,
   setEmail,
   emailLoading,
@@ -179,11 +174,10 @@ export function GmailConnectedConfigureBody({
   onReauthorize,
   onDisconnect,
   onSetDefaultEmail,
+  canManageWorkspace,
 }: {
   integration: Integration
-  lastActivity: string | null
-  gmailNativeInboundEnabled: boolean
-  health: IntegrationHealth
+  presentation: GmailPresentation
   email: string
   setEmail: (value: string) => void
   emailLoading: boolean
@@ -191,13 +185,9 @@ export function GmailConnectedConfigureBody({
   onReauthorize: () => void
   onDisconnect: (integrationId: string) => void
   onSetDefaultEmail?: (integrationId: string) => void
+  canManageWorkspace: boolean
 }) {
-  const scene = deriveGmailConfigureScene(
-    integration,
-    lastActivity,
-    gmailNativeInboundEnabled,
-    health,
-  )
+  const { scene } = presentation
   const isWorkspace = isGmailWorkspaceAccount(integration)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const needsForwardingData = scene === "needs_forwarding" || (isWorkspace && scene !== "needs_reconnect")
@@ -215,11 +205,12 @@ export function GmailConnectedConfigureBody({
         <ConfigureSection title="Connection">
           <div className="space-y-3 px-4 py-4 sm:px-5">
             <p className="text-xs leading-relaxed text-foreground/55">
-              {health.note ?? "Reconnect Gmail to restore access."}
+              {presentation.statusLine ?? "Reconnect Gmail to restore access."}
             </p>
             <button
               type="button"
               onClick={onReauthorize}
+              disabled={!canManageWorkspace}
               className="inline-flex h-9 items-center rounded-md border border-foreground/[0.15] bg-foreground/[0.08] px-4 text-sm font-semibold text-foreground transition-colors hover:bg-foreground/[0.14]"
             >
               Reconnect Gmail
@@ -236,6 +227,7 @@ export function GmailConnectedConfigureBody({
             setEmail={setEmail}
             loading={emailLoading}
             onSave={onEmailSave}
+            disabled={!canManageWorkspace}
           />
         </ConfigureSection>
       ) : null}
@@ -250,9 +242,7 @@ export function GmailConnectedConfigureBody({
       {scene !== "needs_reconnect" ? (
         <GmailEmailSection
           integration={integration}
-          lastActivity={lastActivity}
-          gmailNativeInboundEnabled={gmailNativeInboundEnabled}
-          scene={scene}
+          presentation={presentation}
           isWorkspace={isWorkspace}
         />
       ) : null}
@@ -270,6 +260,7 @@ export function GmailConnectedConfigureBody({
           setConfirmingDelete(false)
           onDisconnect(integration.id)
         }}
+        canManageWorkspace={canManageWorkspace}
       />
 
       {scene === "ready" ? <GmailReadyNote isWorkspace={isWorkspace} /> : null}

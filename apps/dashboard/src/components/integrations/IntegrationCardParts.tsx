@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import { Mail } from "lucide-react"
-import type { PlatformConfig } from "@/lib/integrations/catalog"
+import type { IntegrationDefinition } from "@/lib/integrations/catalog"
 import { cn } from "@/lib/ui/cn"
 import { CARD_TITLE, LOGO_IMAGE, LOGO_INLINE } from "./integration-card-styles"
 
@@ -12,7 +12,7 @@ const FALLBACK_ICONS: Record<string, typeof Mail> = {
   email: Mail,
 }
 
-export function CardLogo({ config }: { config: PlatformConfig }) {
+export function CardLogo({ config }: { config: IntegrationDefinition }) {
   const Icon = FALLBACK_ICONS[config.id]
 
   if (!config.logo) {
@@ -38,7 +38,7 @@ export function CardLogo({ config }: { config: PlatformConfig }) {
   )
 }
 
-export function IntegrationCardHeader({ config }: { config: PlatformConfig }) {
+export function IntegrationCardHeader({ config }: { config: IntegrationDefinition }) {
   return (
     <div className="flex items-center gap-3 min-w-0">
       <CardLogo config={config} />

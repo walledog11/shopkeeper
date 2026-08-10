@@ -1,5 +1,6 @@
 import { AlertTriangle } from "lucide-react"
-import type { PillState } from "./integration-card-types"
+
+export type PillState = "working" | "needs-attention" | "waiting" | "not-connected"
 
 export function StatusPill({ state }: { state: PillState }) {
   switch (state) {

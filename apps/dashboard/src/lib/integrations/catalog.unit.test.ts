@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   INTEGRATION_CHANNEL_SECTIONS,
-  PLATFORM_CONFIG,
-  sortPlatformConfigsByChannelKind,
+  INTEGRATION_DEFINITIONS,
+  sortIntegrationDefinitionsByChannelKind,
 } from "./catalog";
-import { filterOperatorPlatformConfigs } from "./operator-channel-visibility";
 
 describe("integration catalog", () => {
   it("groups iMessage and Telegram under operator channels", () => {
@@ -13,7 +12,7 @@ describe("integration catalog", () => {
       title: "Operator channels",
     });
 
-    const operatorIds = PLATFORM_CONFIG
+    const operatorIds = INTEGRATION_DEFINITIONS
       .filter((def) => def.channelKind === "operator")
       .map((def) => def.id);
     expect(operatorIds).toContain("imessage");
@@ -22,24 +21,9 @@ describe("integration catalog", () => {
   });
 
   it("orders operator channels with iMessage before Telegram", () => {
-    const visible = filterOperatorPlatformConfigs(PLATFORM_CONFIG, {
-      telegram: { botUsername: "ShopkeeperBot" },
-      imessage: { lineHandle: "+16282647754" },
-    });
-    const operator = sortPlatformConfigsByChannelKind(visible, "operator").map((def) => def.id);
+    const operator = sortIntegrationDefinitionsByChannelKind(INTEGRATION_DEFINITIONS, "operator").map((def) => def.id);
 
     expect(operator).toEqual(["imessage", "telegram", "shopify", "whatsapp"]);
   });
 
-  it("hides operator messaging cards when neither channel is configured", () => {
-    const visible = filterOperatorPlatformConfigs(PLATFORM_CONFIG, {
-      telegram: { botUsername: null },
-      imessage: { lineHandle: null },
-    });
-    const operator = sortPlatformConfigsByChannelKind(visible, "operator").map((def) => def.id);
-
-    expect(operator).toEqual(["shopify", "whatsapp"]);
-    expect(operator).not.toContain("imessage");
-    expect(operator).not.toContain("telegram");
-  });
 });

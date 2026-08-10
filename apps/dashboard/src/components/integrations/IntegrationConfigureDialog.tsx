@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react"
 import { cn } from "@/lib/ui/cn"
-import type { PlatformConfig } from "@/lib/integrations/catalog"
+import type { IntegrationDefinition } from "@/lib/integrations/catalog"
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog"
 import { CardLogo } from "./IntegrationCardParts"
 import { StatusPill } from "./StatusPill"
-import type { PillState } from "./integration-card-types"
+import type { PillState } from "./StatusPill"
 import { INTEGRATION_CONFIGURE_DIALOG_CLASS } from "./integration-card-styles"
 
 export function IntegrationConfigureDialog({
@@ -27,7 +27,7 @@ export function IntegrationConfigureDialog({
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  config: PlatformConfig
+  config: IntegrationDefinition
   statusState?: PillState
   statusLine?: string | null
   statusNote?: boolean

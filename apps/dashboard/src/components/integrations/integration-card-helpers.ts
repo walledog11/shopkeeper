@@ -1,23 +1,17 @@
 import {
   getEmailAuthReauthorizationReason,
   getGmailInboundStatus,
-  getGmailLastSyncedAt,
   getGmailWatchFailureCount,
-  getEmailProvider,
   isEmailAuthReauthorizationRequired,
   isGmailNativeInboundEnrolled,
 } from "@shopkeeper/email/providers"
-import type { ConnectType } from "@/lib/integrations/catalog"
-import { isEmailIntegrationConfigured } from "@/lib/integrations/onboarding-setup"
+import type { WorkspaceIntegrationDefinition } from "@/lib/integrations/catalog"
 import {
   isShopifyIntegrationLinked,
   resolveShopifyConnectionState,
 } from "@/lib/integrations/shopify-connection"
 import type { Integration } from "@/types"
-import { formatRelativeTimestamp } from "@/lib/format/date"
-import type { PillState } from "./integration-card-types"
-
-export { isEmailIntegrationConfigured }
+import type { PillState } from "./StatusPill"
 
 export function isTokenExpired(integration: Integration) {
   if (!integration.tokenExpiresAt) return false
@@ -127,101 +121,6 @@ export function getInstagramConnectionDisplay(
   return { subscription, token }
 }
 
-export function hasIntegrationTokenAlert(integration: Integration) {
-  if (integration.platform === "shopify") {
-    return resolveShopifyConnectionState(integration) === "invalid"
-  }
-  if (integration.platform === "ig_dm") {
-    const health = getInstagramHealth(integration)
-    if (health.status === "degraded" || health.status === "reconnect_required") return true
-  }
-  return isTokenExpired(integration) || isTokenExpiringSoon(integration)
-}
-
-export function isPostmarkEmail(integration: Integration): boolean {
-  if (integration.platform !== "email") return false
-  return getEmailProvider(integration) === "postmark"
-}
-
-export interface EmailReceivingDisplay {
-  action: string
-  description: string
-}
-
-function withLastSuccessfulSync(description: string, integration: Integration): string {
-  const lastSyncedAt = getGmailLastSyncedAt(integration)
-  return lastSyncedAt
-    ? `${description} · Last successful sync: ${formatRelativeTimestamp(lastSyncedAt)}`
-    : `${description} · Last successful sync: not yet`
-}
-
-export function getEmailReceivingDisplay(
-  integration: Integration,
-  inboundAddress: string | null,
-  gmailNativeInboundEnabled = false,
-): EmailReceivingDisplay {
-  const provider = getEmailProvider(integration)
-  if (provider !== "gmail") {
-    return {
-      action: inboundAddress ? "Forwarding" : "Setup needed",
-      description: inboundAddress
-        ? `Forward mail to ${inboundAddress}`
-        : "Forward your support inbox to receive tickets",
-    }
-  }
-
-  const authIssue = getEmailAuthReauthorizationReason(integration)
-  if (authIssue) {
-    return {
-      action: "Reconnect required",
-      description: authIssue === "missing_gmail_read_scope"
-        ? "Reconnect Gmail to grant inbox access for native receiving"
-        : "Reconnect Gmail to restore inbox access",
-    }
-  }
-
-  if (!gmailNativeInboundEnabled) {
-    return {
-      action: "Native inbound unavailable",
-      description: "Native Gmail receiving is disabled during controlled rollout",
-    }
-  }
-
-  if (!isGmailNativeInboundEnrolled(integration)) {
-    return {
-      action: "Setup pending",
-      description: "Reconnect Gmail to activate native receiving",
-    }
-  }
-
-  const inboundStatus = getGmailInboundStatus(integration)
-  if (inboundStatus === "active") {
-    return {
-      action: "Native inbound active",
-      description: withLastSuccessfulSync("Native Gmail inbox sync is active", integration),
-    }
-  }
-  if (inboundStatus === "degraded") {
-    const failureCount = getGmailWatchFailureCount(integration)
-    return {
-      action: "Sync degraded",
-      description: withLastSuccessfulSync(failureCount > 1
-        ? `Gmail watch renewal has failed ${failureCount} times`
-        : "Gmail inbox sync needs attention", integration),
-    }
-  }
-  if (inboundStatus === "reauthorization_required") {
-    return {
-      action: "Reconnect required",
-      description: "Reconnect Gmail to restore native inbox sync",
-    }
-  }
-  return {
-    action: "Setup pending",
-    description: "Native Gmail receiving is pending",
-  }
-}
-
 const QUIET_CHANNEL_DAYS = 5
 const SHOPIFY_EXPIRED_NOTE =
   "Your Shopify connection expired — order lookups and syncing have stopped."
@@ -234,19 +133,21 @@ const SHOPIFY_SHORT_GRANT_NOTE =
 export interface IntegrationHealth {
   state: PillState
   note: string | null
-  canFix: boolean
+  recoveryAction: { kind: "oauth"; label: "Fix" } | null
 }
 
 export function deriveIntegrationHealth(
-  connectType: ConnectType,
-  connected: Integration[],
+  definition: WorkspaceIntegrationDefinition,
+  integration: Integration | null,
   lastActivity: string | null,
   gmailNativeInboundEnabled = false,
 ): IntegrationHealth {
-  if (!connected.length) return { state: "not-connected", note: null, canFix: false }
+  if (!integration) return { state: "not-connected", note: null, recoveryAction: null }
+
+  const connectType = definition.connectType
 
   if (connectType === "ig") {
-    const instagramHealth = getInstagramHealth(connected[0])
+    const instagramHealth = getInstagramHealth(integration)
     if (instagramHealth.status === "reconnect_required") {
       const note = instagramHealth.errorCode === "messages_subscription_missing"
         ? "Instagram is no longer subscribed to DMs — reconnect Instagram."
@@ -255,33 +156,33 @@ export function deriveIntegrationHealth(
           : instagramHealth.errorCategory === "permission"
             ? "Instagram permissions changed — reconnect Instagram to restore DMs."
             : "Your Instagram connection needs to be renewed — reconnect Instagram."
-      return { state: "needs-attention", note, canFix: true }
+      return { state: "needs-attention", note, recoveryAction: { kind: "oauth", label: "Fix" } }
     }
     if (instagramHealth.status === "degraded") {
       return {
         state: "needs-attention",
         note: "Instagram health could not be confirmed — Shopkeeper will retry automatically.",
-        canFix: false,
+        recoveryAction: null,
       }
     }
   }
 
   if (connectType === "shopify") {
-    const shopifyState = resolveShopifyConnectionState(connected[0])
+    const shopifyState = resolveShopifyConnectionState(integration)
     if (shopifyState === "invalid") {
-      return { state: "needs-attention", note: SHOPIFY_EXPIRED_NOTE, canFix: true }
+      return { state: "needs-attention", note: SHOPIFY_EXPIRED_NOTE, recoveryAction: { kind: "oauth", label: "Fix" } }
     }
-    if (!isShopifyIntegrationLinked(connected[0])) {
-      return { state: "not-connected", note: null, canFix: false }
+    if (!isShopifyIntegrationLinked(integration)) {
+      return { state: "not-connected", note: null, recoveryAction: null }
     }
-    if (connected[0].missingScopes?.length) {
-      return { state: "needs-attention", note: SHOPIFY_SHORT_GRANT_NOTE, canFix: true }
+    if (integration.missingScopes?.length) {
+      return { state: "needs-attention", note: SHOPIFY_SHORT_GRANT_NOTE, recoveryAction: { kind: "oauth", label: "Fix" } }
     }
   }
 
-  if (connected.some(isTokenExpired)) {
+  if (isTokenExpired(integration)) {
     const emailAuthIssue = connectType === "email"
-      ? connected.map(getEmailAuthReauthorizationReason).find(Boolean)
+      ? getEmailAuthReauthorizationReason(integration)
       : null
     const note = connectType === "ig"
       ? "Your Instagram sign-in expired — new DMs aren't coming in."
@@ -290,25 +191,25 @@ export function deriveIntegrationHealth(
         : emailAuthIssue === "missing_gmail_read_scope"
           ? "Reconnect Gmail to grant inbox access for native receiving."
           : "Your email sign-in expired — new customer emails aren't coming in."
-    return { state: "needs-attention", note, canFix: true }
+    return { state: "needs-attention", note, recoveryAction: { kind: "oauth", label: "Fix" } }
   }
 
-  if (connected.some(isTokenExpiringSoon)) {
+  if (isTokenExpiringSoon(integration)) {
     return {
       state: "needs-attention",
       note: "Your sign-in expires soon — renew it now to avoid an interruption.",
-      canFix: true,
+      recoveryAction: { kind: "oauth", label: "Fix" },
     }
   }
 
   if (connectType === "email") {
-    const gmailIntegration = connected.find(integration => getEmailProvider(integration) === "gmail")
+    const gmailIntegration = definition.id === "gmail" ? integration : null
     if (gmailIntegration && gmailNativeInboundEnabled) {
       if (!isGmailNativeInboundEnrolled(gmailIntegration)) {
         return {
           state: "waiting",
           note: "Reconnect Gmail to activate native receiving.",
-          canFix: true,
+          recoveryAction: { kind: "oauth", label: "Fix" },
         }
       }
       const inboundStatus = getGmailInboundStatus(gmailIntegration)
@@ -319,26 +220,26 @@ export function deriveIntegrationHealth(
           note: failureCount > 1
             ? `Gmail watch renewal has failed ${failureCount} times. Sending still works.`
             : "Gmail inbox sync needs attention. Sending still works.",
-          canFix: false,
+          recoveryAction: null,
         }
       }
       if (inboundStatus === "reauthorization_required") {
         return {
           state: "needs-attention",
           note: "Reconnect Gmail to restore native inbox sync.",
-          canFix: true,
+          recoveryAction: { kind: "oauth", label: "Fix" },
         }
       }
       if (inboundStatus !== "active") {
         return {
           state: "waiting",
           note: "Sending is connected. Native Gmail receiving is pending.",
-          canFix: false,
+          recoveryAction: null,
         }
       }
     }
-    if (!lastActivity && connected.every(isPostmarkEmail)) {
-      return { state: "waiting", note: null, canFix: false }
+    if (!lastActivity && definition.kind === "forwarding-email") {
+      return { state: "waiting", note: null, recoveryAction: null }
     }
     if (lastActivity) {
       const daysQuiet = Math.floor((Date.now() - new Date(lastActivity).getTime()) / 86_400_000)
@@ -346,11 +247,11 @@ export function deriveIntegrationHealth(
         return {
           state: "needs-attention",
           note: `No new messages in ${daysQuiet} days — check that your support email is still routing to Shopkeeper.`,
-          canFix: false,
+          recoveryAction: null,
         }
       }
     }
   }
 
-  return { state: "working", note: null, canFix: false }
+  return { state: "working", note: null, recoveryAction: null }
 }

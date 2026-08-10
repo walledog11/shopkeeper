@@ -9,12 +9,14 @@ export function GmailSupportAddressPanel({
   loading,
   onSave,
   setEmail,
+  disabled = false,
   variant = "workspace",
 }: {
   email: string
   loading: boolean
   onSave: () => void
   setEmail: (value: string) => void
+  disabled?: boolean
   variant?: "workspace"
 }) {
   return (
@@ -35,6 +37,7 @@ export function GmailSupportAddressPanel({
           type="email"
           placeholder="support@yourstore.com"
           value={email}
+          disabled={disabled}
           onChange={(event) => setEmail(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter") onSave()
@@ -43,7 +46,7 @@ export function GmailSupportAddressPanel({
         />
         <div className="flex shrink-0 items-center gap-1.5">
           {loading && <Loader2 className="size-3.5 animate-spin text-foreground/50" />}
-          <PermissionActionLink onClick={onSave} disabled={!email.trim() || loading}>
+          <PermissionActionLink onClick={onSave} disabled={disabled || !email.trim() || loading}>
             Save address
           </PermissionActionLink>
         </div>

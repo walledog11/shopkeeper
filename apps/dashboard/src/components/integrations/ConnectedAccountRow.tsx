@@ -1,4 +1,4 @@
-import type { ConnectType } from "@/lib/integrations/catalog"
+import type { WorkspaceConnectType } from "@/lib/integrations/catalog"
 import type { Integration } from "@/types"
 import { AtSign, MessageSquare, ShoppingBag, Store } from "lucide-react"
 import { ConfigureAccountRow } from "./ConfigureAccountRow"
@@ -16,7 +16,7 @@ export function ConnectedAccountRow({
   connectType,
   integration,
 }: {
-  connectType: ConnectType
+  connectType: WorkspaceConnectType
   integration: Integration
 }) {
   return (

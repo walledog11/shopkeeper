@@ -11,9 +11,11 @@ import {
   OAUTH_POPUP_NAME,
   OAUTH_POPUP_SESSION_KEY,
   resolveOAuthCompletionMode,
+  watchOAuthPopup,
 } from './oauth-flow';
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   window.sessionStorage.clear();
@@ -96,5 +98,35 @@ describe('oauth-flow', () => {
     expect(postMessage).toHaveBeenCalledOnce();
     expect(postMessage).toHaveBeenCalledWith(payload, window.location.origin);
     expect(close).toHaveBeenCalledOnce();
+  });
+
+  it('fires a popup closure callback once and disposes its watcher', () => {
+    vi.useFakeTimers();
+    const popup = { closed: false } as Window;
+    const onClosed = vi.fn();
+    const dispose = watchOAuthPopup(popup, onClosed);
+
+    vi.advanceTimersByTime(800);
+    expect(onClosed).not.toHaveBeenCalled();
+    Object.defineProperty(popup, 'closed', { configurable: true, value: true });
+    vi.advanceTimersByTime(400);
+    expect(onClosed).toHaveBeenCalledOnce();
+    vi.advanceTimersByTime(1200);
+    expect(onClosed).toHaveBeenCalledOnce();
+
+    dispose();
+    vi.useRealTimers();
+  });
+
+  it('cancels a retained popup watcher before closure', () => {
+    vi.useFakeTimers();
+    const popup = { closed: false } as Window;
+    const onClosed = vi.fn();
+    const dispose = watchOAuthPopup(popup, onClosed);
+    dispose();
+    Object.defineProperty(popup, 'closed', { configurable: true, value: true });
+    vi.advanceTimersByTime(800);
+    expect(onClosed).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 });

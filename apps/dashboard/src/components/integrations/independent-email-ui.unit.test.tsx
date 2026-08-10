@@ -1,9 +1,10 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { PLATFORM_CONFIG } from '@/lib/integrations/catalog';
+import { getIntegrationDefinition, type WorkspaceIntegrationDefinition } from '@/lib/integrations/catalog';
 import type { Integration } from '@/types';
 import { ConnectedAccountRow } from './ConnectedAccountRow';
-import { IntegrationActionsSection } from './IntegrationConfigureSections';
+import { ForwardingEmailDetails, type IntegrationCardCallbacks } from './IntegrationCardDetails';
+import { deriveIntegrationCardModels } from './integration-presentation';
 import { deriveIntegrationHealth } from './integration-card-helpers';
 
 vi.mock('@/hooks/useOrg', () => ({
@@ -12,7 +13,33 @@ vi.mock('@/hooks/useOrg', () => ({
   }),
 }));
 
-const EMAIL_CONFIG = PLATFORM_CONFIG.find((config) => config.id === 'email')!;
+const EMAIL_CONFIG = getIntegrationDefinition('email') as WorkspaceIntegrationDefinition;
+const GMAIL_CONFIG = getIntegrationDefinition('gmail') as WorkspaceIntegrationDefinition;
+const FLAGS = {
+  gmailNativeInboundEnabled: true,
+  instagramIntegrationEnabled: true,
+  tiktokShopConfigured: true,
+  telegramBotUsername: null,
+  imessageHandle: null,
+};
+
+function forwardingModel(integrations: Integration[]) {
+  return deriveIntegrationCardModels({
+    integrations,
+    flags: FLAGS,
+    isAdmin: true,
+    definitions: [EMAIL_CONFIG],
+  })[0];
+}
+
+const callbacks: IntegrationCardCallbacks = {
+  connectForwardingEmail: vi.fn(async () => true),
+  updateEmailAddress: vi.fn(async () => true),
+  disconnect: vi.fn(async () => undefined),
+  setDefaultEmail: vi.fn(async () => undefined),
+  launchOAuth: vi.fn(),
+  syncShopifyKnowledgeBase: vi.fn(async () => ({ syncedPolicies: 0, syncedPages: 0 })),
+};
 
 describe('independent email integration UI', () => {
   it('shows both connected addresses and marks only the selected default', () => {
@@ -52,20 +79,10 @@ describe('independent email integration UI', () => {
     const onSetDefaultEmail = vi.fn();
 
     const html = renderToStaticMarkup(
-      <IntegrationActionsSection
-        config={EMAIL_CONFIG}
-        connected={[forwarding]}
-        kbSyncing={false}
-        kbSyncResult={null}
-        onReauthorize={() => undefined}
-        onKbSync={() => undefined}
-        onDisconnect={() => undefined}
-        onSetDefaultEmail={onSetDefaultEmail}
-        email="support@example.test"
-        setEmail={() => undefined}
-        emailLoading={false}
-        onEmailSave={() => undefined}
-      />,
+      <ForwardingEmailDetails model={forwardingModel([forwarding])} callbacks={{
+        ...callbacks,
+        setDefaultEmail: onSetDefaultEmail,
+      }} />,
     );
 
     expect(html).toContain('Use for new emails');
@@ -74,19 +91,7 @@ describe('independent email integration UI', () => {
 
   it('does not label disconnected forwarding as connected', () => {
     const html = renderToStaticMarkup(
-      <IntegrationActionsSection
-        config={EMAIL_CONFIG}
-        connected={[]}
-        kbSyncing={false}
-        kbSyncResult={null}
-        onReauthorize={() => undefined}
-        onKbSync={() => undefined}
-        onDisconnect={() => undefined}
-        email=""
-        setEmail={() => undefined}
-        emailLoading={false}
-        onEmailSave={() => undefined}
-      />,
+      <ForwardingEmailDetails model={forwardingModel([])} callbacks={callbacks} />,
     );
 
     expect(html).toContain('Forwarding address');
@@ -104,11 +109,11 @@ describe('independent email integration UI', () => {
     });
     const forwarding = integration({ emailProvider: 'postmark' });
 
-    expect(deriveIntegrationHealth('email', [gmail], null, true).state).toBe('needs-attention');
-    expect(deriveIntegrationHealth('email', [forwarding], null, true)).toEqual({
+    expect(deriveIntegrationHealth(GMAIL_CONFIG, gmail, null, true).state).toBe('needs-attention');
+    expect(deriveIntegrationHealth(EMAIL_CONFIG, forwarding, null, true)).toEqual({
       state: 'waiting',
       note: null,
-      canFix: false,
+      recoveryAction: null,
     });
   });
 });
