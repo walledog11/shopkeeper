@@ -13,6 +13,7 @@ import {
   UNTRUSTED_OPEN_TAG,
 } from '@shopkeeper/agent/message-history';
 import { isOrderRiskMonitorEnabled } from '../config/runtime-config.js';
+import { truncateBriefingText } from '../maintenance/digest-briefing.js';
 import logger from '../logger.js';
 import { listOperatorBindings, notifyOperator } from '../operator-notify.js';
 import type { OrderReviewJobData } from '../types.js';
@@ -23,32 +24,42 @@ export interface OrderReviewWorkerRegistrationOptions {
   workerOptions: SharedGatewayWorkerOptions;
 }
 
-const MAX_REASON_CHARS = 200;
+// Push alerts stay short; mirror text can carry the full model reason for thread history.
+const MAX_PUSH_REASON_CHARS = 280;
+const MAX_MIRROR_REASON_CHARS = 600;
 
 // The reason is model-authored prose over order fields the buyer controls —
 // name, email, address lines, order notes — and notifyOperator mirrors the body
 // onto the operator thread, where a later operator turn reads it back as history
 // (operator mode runs with segregateUntrusted off, and a mirrored push is an
-// `agent` row, so nothing downstream will wrap it). Flatten it to one line, cap
-// the length, and defang forged boundary tags here. Full-blown wrapUntrusted is
+// `agent` row, so nothing downstream will wrap it). Flatten it to one line,
+// cap the length, and defang forged boundary tags here. Full-blown wrapUntrusted is
 // deliberately not used: every existing call site wraps a MODEL-facing string,
 // and this string is what the merchant reads on their phone.
-function sanitizeFlagReason(reason: string): string {
-  const flat = reason
+function defangFlagReason(reason: string): string {
+  return reason
     .replace(/\s+/g, ' ')
     .trim()
     .split(UNTRUSTED_OPEN_TAG)
     .join('<customer_message >')
     .split(UNTRUSTED_CLOSE_TAG)
     .join('</customer_message >');
-  return flat.length > MAX_REASON_CHARS
-    ? `${flat.slice(0, MAX_REASON_CHARS - 1).trimEnd()}…`
-    : flat;
 }
 
-export function formatOrderFlagNotification(orderName: string, reason: string): string {
-  const detail = sanitizeFlagReason(reason);
-  return `Heads up — order ${orderName} looks worth a second look${detail ? `: ${detail}` : ''}. I haven't touched it; nothing is on hold.`;
+export function formatOrderFlagNotification(
+  orderName: string,
+  reason: string,
+  maxReasonChars = MAX_PUSH_REASON_CHARS,
+): string {
+  const flat = defangFlagReason(reason);
+  const truncated = flat.length > maxReasonChars;
+  const detail = truncated ? truncateBriefingText(flat, maxReasonChars) : flat;
+  const headsUp = `Heads up — order ${orderName} looks worth a second look`;
+  const suffix = "I haven't touched it; nothing is on hold.";
+  if (!detail) return `${headsUp}. ${suffix}`;
+  // No period after a truncated detail — the ellipsis already signals continuation.
+  if (truncated) return `${headsUp}: ${detail} ${suffix}`;
+  return `${headsUp}: ${detail}. ${suffix}`;
 }
 
 // Decision 4 (2026-08-04): order-ops is notify-only. The flag reaches every bound
@@ -74,10 +85,14 @@ async function notifyFlaggedOrder(
   }
 
   const body = formatOrderFlagNotification(orderName, reason);
+  const mirrorBody = formatOrderFlagNotification(orderName, reason, MAX_MIRROR_REASON_CHARS);
   const idempotencyKey = `order-risk:${organizationId}:${orderId}`;
   let notified = 0;
   for (const member of bindings) {
-    const result = await notifyOperator(organizationId, member, body, {}, { idempotencyKey });
+    const result = await notifyOperator(organizationId, member, body, {}, {
+      idempotencyKey,
+      mirrorBody,
+    });
     if (result) notified += 1;
   }
   logger.info(

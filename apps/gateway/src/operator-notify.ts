@@ -51,6 +51,8 @@ export interface OperatorNotifyOptions {
   threadId?: string | null;
   /** Stable per notification; skips re-send on BullMQ retry when already delivered to this channel. */
   idempotencyKey?: string | null;
+  /** When set, mirrored to the operator thread instead of `body` (e.g. fuller text than the push). */
+  mirrorBody?: string | null;
   /**
    * Park this plan on the operator's queue (upsert by threadId, trimmed to
    * `maxDepth`) in the same persist-before-send slot as `contextPatch`. Used for
@@ -208,7 +210,7 @@ export async function notifyOperator(
     // The push is part of the merchant's conversation — mirror it onto their
     // operator thread so the agent can see what a later reply refers to. The
     // duplicate-delivery branch above already mirrored on the original send.
-    await mirrorOperatorMessage(organizationId, memberKey, 'agent', body);
+    await mirrorOperatorMessage(organizationId, memberKey, 'agent', options.mirrorBody ?? body);
 
     return { channel: member.channel, chatId: deliveryKey };
   } catch (error) {

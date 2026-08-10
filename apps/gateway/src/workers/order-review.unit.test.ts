@@ -138,7 +138,10 @@ describe('order-review worker', () => {
       expect(call[2]).toContain('billing and shipping countries differ');
       // Notify-only: nothing is parked for approval.
       expect(call[3]).toEqual({});
-      expect(call[4]).toEqual({ idempotencyKey: 'order-risk:org-1:100' });
+      expect(call[4]).toEqual({
+        idempotencyKey: 'order-risk:org-1:100',
+        mirrorBody: expect.stringContaining('billing and shipping countries differ'),
+      });
     }
   });
 
@@ -283,10 +286,30 @@ describe('formatOrderFlagNotification', () => {
   });
 
   it('caps a long reason so one order cannot fill the merchant screen', () => {
-    const body = formatOrderFlagNotification('#1001', 'x'.repeat(500));
+    const body = formatOrderFlagNotification('#1001', 'word '.repeat(200));
 
     expect(body).toContain('…');
-    expect(body.length).toBeLessThan(300);
+    expect(body.length).toBeLessThan(380);
+    expect(body).toMatch(/… I haven't touched it/);
+  });
+
+  it('keeps typical multi-signal flag reasons intact without mid-word truncation', () => {
+    const reason =
+      'First-time customer, $300 order, payment not yet captured, and billing (US) vs shipping (Canada) country mismatch — combination suggests possible stolen card use; recommend human review before capturing payment';
+    const body = formatOrderFlagNotification('#1027', reason);
+
+    expect(body).toContain('before capturing payment');
+    expect(body).not.toContain('captur…');
+    expect(body).toContain('before capturing payment. I haven');
+  });
+
+  it('truncates at a word boundary when a reason is extremely long', () => {
+    const reason = `risk ${'signal '.repeat(80)}end`;
+    const body = formatOrderFlagNotification('#1001', reason);
+
+    expect(body).toContain('…');
+    expect(body).toMatch(/… I haven't touched it/);
+    expect(body).not.toContain('…. I haven');
   });
 
   // The body is mirrored onto the operator thread, so a buyer who plants
