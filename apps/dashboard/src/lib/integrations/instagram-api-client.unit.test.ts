@@ -157,6 +157,41 @@ describe('Instagram dashboard API client', () => {
     });
   });
 
+  it.each([
+    [400, { error: { code: 190, message: 'Invalid authorization code' } }, 'authentication'],
+    [429, { error: { code: 4, message: 'Rate limited' } }, 'rate_limit'],
+    [503, { error: { code: 2, message: 'Provider unavailable' } }, 'transient_provider_failure'],
+  ] as const)('classifies OAuth token HTTP %s', async (status, body, category) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(jsonResponse(body, status)));
+
+    await expect(exchangeInstagramAuthorizationCode({
+      appId: 'app',
+      appSecret: 'secret',
+      code: 'code',
+      redirectUri: 'https://dashboard.test/callback',
+    })).resolves.toEqual({
+      ok: false,
+      error: expect.objectContaining({ category, httpStatus: status }),
+    });
+  });
+
+  it.each([
+    ['a timeout', () => Promise.reject(new DOMException('timed out', 'TimeoutError')), 'transient_provider_failure'],
+    ['malformed JSON', () => Promise.resolve(new Response('not-json')), 'validation'],
+  ])('returns a typed OAuth failure for %s', async (_label, fetchResult, category) => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementationOnce(fetchResult));
+
+    await expect(exchangeInstagramAuthorizationCode({
+      appId: 'app',
+      appSecret: 'secret',
+      code: 'code',
+      redirectUri: 'https://dashboard.test/callback',
+    })).resolves.toEqual({
+      ok: false,
+      error: expect.objectContaining({ category }),
+    });
+  });
+
   it('uses the centralized Graph version and bearer auth for account and subscription calls', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({

@@ -83,12 +83,10 @@ describe('POST /api/integrations/tiktok-shop/callback', () => {
     );
     expect(mockLogger.error).toHaveBeenCalledWith(
       {
-        err: expect.objectContaining({
-          category: 'provider_unavailable',
-          name: 'TikTokShopProviderError',
-        }),
+        category: 'provider_unavailable',
+        providerStatus: undefined,
       },
-      '[TikTok Shop OAuth] Unexpected error',
+      '[TikTok Shop OAuth] Token exchange failed',
     );
   });
 

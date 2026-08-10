@@ -1,7 +1,6 @@
 import { db, EmailProvider, Prisma } from '@shopkeeper/db';
 import { getEmailProvider } from '@shopkeeper/email/providers';
 import type { Prisma as PrismaTypes } from '@prisma/client';
-import { captureIntegrationConnectionCompleted } from '@/lib/server/product-analytics';
 
 export type EmailIntegrationProvider = 'gmail' | 'postmark';
 
@@ -129,11 +128,6 @@ export async function upsertEmailIntegration(
     data: { defaultEmailIntegrationId: saved.id },
   });
 
-  await captureIntegrationConnectionCompleted({
-    integrationId: saved.id,
-    organizationId: args.organizationId,
-    platform: 'email',
-  });
   return saved.id;
 }
 

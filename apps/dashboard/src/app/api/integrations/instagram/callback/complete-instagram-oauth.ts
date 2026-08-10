@@ -1,5 +1,6 @@
 import type { IntegrationFailureCategory } from '@shopkeeper/analytics';
 import logger from '@/lib/server/logger';
+import type { OAuthCallbackCompletionResult } from '@/app/api/integrations/_lib/oauth-callback-runner';
 import {
   InstagramAccountInUseError,
   inspectInstagramConnection,
@@ -28,18 +29,7 @@ export type InstagramOAuthError =
   | 'token_exchange_failed'
   | 'webhook_subscription_failed';
 
-export type CompleteInstagramOAuthResult =
-  | {
-      ok: true;
-      accountId: string;
-      integrationId: string;
-      username: string;
-    }
-  | {
-      ok: false;
-      error: InstagramOAuthError;
-      failureCategory: IntegrationFailureCategory;
-    };
+export type CompleteInstagramOAuthResult = OAuthCallbackCompletionResult<InstagramOAuthError>;
 
 interface CompleteInstagramOAuthInput {
   appId: string;
@@ -61,6 +51,15 @@ function providerFailureCategory(error: InstagramProviderError): IntegrationFail
   if (error.category === 'transient_provider_failure') return 'provider_unavailable';
   if (error.category === 'authentication') return 'invalid_credentials';
   return 'validation_failed';
+}
+
+function tokenProviderFailureCategory(
+  error: InstagramProviderError,
+): IntegrationFailureCategory {
+  if (error.category === 'rate_limit') return 'rate_limited';
+  if (error.category === 'transient_provider_failure') return 'provider_unavailable';
+  if (error.httpStatus >= 400 && error.httpStatus < 500) return 'invalid_credentials';
+  return providerFailureCategory(error);
 }
 
 function logProviderError(step: string, error: InstagramProviderError): void {
@@ -115,7 +114,7 @@ export async function completeInstagramOAuth(
   });
   if (!shortTokenResult.ok) {
     logProviderError('Authorization-code exchange', shortTokenResult.error);
-    return failure('token_exchange_failed', providerFailureCategory(shortTokenResult.error));
+    return failure('token_exchange_failed', tokenProviderFailureCategory(shortTokenResult.error));
   }
 
   const grantedScopes = shortTokenResult.data.permissions;
@@ -133,7 +132,7 @@ export async function completeInstagramOAuth(
   });
   if (!longTokenResult.ok) {
     logProviderError('Long-lived token exchange', longTokenResult.error);
-    return failure('long_lived_token_failed', providerFailureCategory(longTokenResult.error));
+    return failure('long_lived_token_failed', tokenProviderFailureCategory(longTokenResult.error));
   }
   const accessToken = longTokenResult.data.accessToken;
 
@@ -246,10 +245,18 @@ export async function completeInstagramOAuth(
     });
   }
 
+  logger.info(
+    {
+      accountId: account.userId,
+      integrationId: persisted.integration.id,
+      organizationId: input.organizationId,
+      username: account.username,
+    },
+    '[IG OAuth] Instagram Login integration is ready',
+  );
+
   return {
     ok: true,
-    accountId: account.userId,
     integrationId: persisted.integration.id,
-    username: account.username,
   };
 }

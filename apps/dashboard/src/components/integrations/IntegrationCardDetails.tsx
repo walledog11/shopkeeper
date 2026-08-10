@@ -13,6 +13,7 @@ import { GmailConnectedConfigureBody } from "./GmailConnectedConfigureBody"
 import type { IntegrationCardModel } from "./integration-presentation"
 import { IntegrationPermissionsSection } from "./IntegrationPermissionsSection"
 import { ShopifyConnectBody } from "./connect-bodies/ShopifyConnectBody"
+import { ShopifyStorefrontChatSection } from "./ShopifyStorefrontChatSection"
 import { cn } from "@/lib/ui/cn"
 
 export interface IntegrationCardCallbacks {
@@ -27,6 +28,7 @@ export interface IntegrationCardCallbacks {
     reauthorize?: Integration,
   ) => void
   syncShopifyKnowledgeBase: () => Promise<{ syncedPolicies: number; syncedPages: number }>
+  updateShopifyStorefrontChat: (enabled: boolean) => Promise<boolean>
 }
 
 const DISCONNECT_NOTES: Record<"email" | "instagram" | "shopify" | "tiktok-shop", string> = {
@@ -194,7 +196,17 @@ export function ForwardingEmailDetails({ model, callbacks }: { model: Integratio
   )
 }
 
-function ShopifyDetails({ model, callbacks }: { model: IntegrationCardModel; callbacks: IntegrationCardCallbacks }) {
+function ShopifyDetails({
+  model,
+  callbacks,
+  shopifyClientId,
+  storefrontChatGloballyEnabled,
+}: {
+  model: IntegrationCardModel
+  callbacks: IntegrationCardCallbacks
+  shopifyClientId: string | null
+  storefrontChatGloballyEnabled: boolean
+}) {
   const definition = model.definition
   const integration = model.selectedConnection
   const [shop, setShop] = useState("")
@@ -265,6 +277,13 @@ function ShopifyDetails({ model, callbacks }: { model: IntegrationCardModel; cal
     <div className="space-y-5">
       <ConnectedAccountRow connectType="shopify" integration={integration} />
       <IntegrationPermissionsSection definition={definition} integration={integration} />
+      <ShopifyStorefrontChatSection
+        integration={integration}
+        shopifyClientId={shopifyClientId}
+        storefrontChatGloballyEnabled={storefrontChatGloballyEnabled}
+        canManageWorkspace={model.canManageWorkspace}
+        onUpdateEnabled={callbacks.updateShopifyStorefrontChat}
+      />
       <ConfigureSection title="Actions">
         <ActionRow icon={RefreshCw} label="Reconnect account" onClick={reauthorize} disabled={!model.canManageWorkspace} />
         <ActionRow
@@ -321,9 +340,13 @@ function DeclarativeOAuthDetails({ model, callbacks }: { model: IntegrationCardM
 export function IntegrationCardDetails({
   model,
   callbacks,
+  shopifyClientId,
+  storefrontChatGloballyEnabled,
 }: {
   model: IntegrationCardModel
   callbacks: IntegrationCardCallbacks
+  shopifyClientId: string | null
+  storefrontChatGloballyEnabled: boolean
 }) {
   switch (model.definition.details) {
     case "gmail":
@@ -331,7 +354,14 @@ export function IntegrationCardDetails({
     case "forwarding-email":
       return <ForwardingEmailDetails model={model} callbacks={callbacks} />
     case "shopify":
-      return <ShopifyDetails model={model} callbacks={callbacks} />
+      return (
+        <ShopifyDetails
+          model={model}
+          callbacks={callbacks}
+          shopifyClientId={shopifyClientId}
+          storefrontChatGloballyEnabled={storefrontChatGloballyEnabled}
+        />
+      )
     case "oauth":
       return <DeclarativeOAuthDetails model={model} callbacks={callbacks} />
     case "device-binding":

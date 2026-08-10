@@ -43,6 +43,7 @@ function callbacks(): IntegrationCardCallbacks {
     setDefaultEmail: vi.fn(async () => undefined),
     launchOAuth: vi.fn(),
     syncShopifyKnowledgeBase: vi.fn(async () => ({ syncedPolicies: 0, syncedPages: 0 })),
+    updateShopifyStorefrontChat: vi.fn(async () => true),
   }
 }
 
@@ -78,6 +79,8 @@ describe("IntegrationCard workspace permissions", () => {
         callbacks={adminCallbacks}
         open={false}
         onOpenChange={() => undefined}
+        shopifyClientId={null}
+        storefrontChatGloballyEnabled={false}
       />,
     ))
     const adminConnect = container.querySelector("button") as HTMLButtonElement
@@ -91,6 +94,8 @@ describe("IntegrationCard workspace permissions", () => {
         callbacks={memberCallbacks}
         open={false}
         onOpenChange={() => undefined}
+        shopifyClientId={null}
+        storefrontChatGloballyEnabled={false}
       />,
     ))
     const memberConnect = container.querySelector("button") as HTMLButtonElement
@@ -103,7 +108,12 @@ describe("IntegrationCard workspace permissions", () => {
     const integration = emailIntegration()
     const memberCallbacks = callbacks()
     await act(async () => root.render(
-      <ForwardingEmailDetails model={model("email", false, [integration])} callbacks={memberCallbacks} />,
+      <ForwardingEmailDetails
+        model={model("email", false, [integration])}
+        callbacks={memberCallbacks}
+        shopifyClientId={null}
+        storefrontChatGloballyEnabled={false}
+      />,
     ))
 
     const input = container.querySelector("input") as HTMLInputElement

@@ -37,6 +37,9 @@ const DEV_DEFAULTS = {
   NEXT_PUBLIC_CLERK_SIGN_IN_URL: '/login',
   NEXT_PUBLIC_CLERK_SIGN_UP_URL: '/signup',
   GATEWAY_INTERNAL_URL: 'http://localhost:8080',
+  // Local-only fallback when .env.local predates OAUTH_ATTEMPT_SECRET. Production
+  // must set a real secret; validateDashboardEnv enforces that at boot.
+  OAUTH_ATTEMPT_SECRET: 'local-dev-oauth-attempt-secret-at-least-32-chars',
 };
 
 export function getDevEnv(baseEnv = process.env, options = {}) {

@@ -20,6 +20,7 @@ import {
   setDefaultEmailIntegration,
   syncShopifyKnowledgeBase,
   updateIntegrationEmail,
+  updateShopifyStorefrontChat,
 } from "@/lib/integrations/requests"
 import IntegrationCard from "@/components/integrations/IntegrationCard"
 import type { IntegrationCardCallbacks } from "@/components/integrations/IntegrationCardDetails"
@@ -82,6 +83,8 @@ interface IntegrationsPageProps {
   instagramIntegrationEnabled: boolean
   tiktokShopConfigured: boolean
   initialIntegrations?: Integration[]
+  shopifyClientId: string | null
+  storefrontChatGloballyEnabled: boolean
 }
 
 export default function IntegrationsPageClient(props: IntegrationsPageProps) {
@@ -100,6 +103,8 @@ function IntegrationsPageContent({
   instagramIntegrationEnabled,
   tiktokShopConfigured,
   initialIntegrations,
+  shopifyClientId,
+  storefrontChatGloballyEnabled,
 }: IntegrationsPageProps) {
   const searchParams = useSearchParams()
   const { membership } = useOrganization()
@@ -243,6 +248,18 @@ function IntegrationsPageContent({
       if (!requireAdmin()) throw new Error("Only workspace admins can manage integrations.")
       return syncShopifyKnowledgeBase()
     },
+    async updateShopifyStorefrontChat(enabled) {
+      if (!requireAdmin()) return false
+      try {
+        await updateShopifyStorefrontChat(enabled)
+        await mutate()
+        showToast("success", enabled ? "Storefront chat enabled." : "Storefront chat disabled.")
+        return true
+      } catch (error) {
+        showToast("error", errorMessageFromUnknown(error, "Failed to update storefront chat. Please try again."))
+        return false
+      }
+    },
     async updateEmailAddress(integrationId, email) {
       if (!requireAdmin()) return false
       try {
@@ -279,6 +296,8 @@ function IntegrationsPageContent({
         callbacks={callbacks}
         open={openId === definition.id}
         onOpenChange={(open) => setOpenId(open ? definition.id : null)}
+        shopifyClientId={shopifyClientId}
+        storefrontChatGloballyEnabled={storefrontChatGloballyEnabled}
       />
     )
   }

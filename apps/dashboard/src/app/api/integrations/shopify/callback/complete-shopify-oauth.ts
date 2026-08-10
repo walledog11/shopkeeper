@@ -14,6 +14,7 @@ import {
   fetchProviderWithDeadline,
   isProviderRequestTimeoutError,
 } from '@/lib/server/provider-fetch';
+import type { OAuthCallbackCompletionResult } from '@/app/api/integrations/_lib/oauth-callback-runner';
 
 type ShopifyOAuthError =
   | 'shopify_hmac_invalid'
@@ -23,18 +24,7 @@ type ShopifyOAuthError =
   | 'shopify_store_in_use'
   | 'shopify_token_failed';
 
-type CompleteShopifyOAuthResult =
-  | {
-    ok: true;
-    integrationId: string;
-    organizationId: string;
-  }
-  | {
-    ok: false;
-    error: ShopifyOAuthError;
-    failureCategory: IntegrationFailureCategory;
-    organizationId: string;
-  };
+type CompleteShopifyOAuthResult = OAuthCallbackCompletionResult<ShopifyOAuthError>;
 
 type TokenExchangeResult =
   | { ok: true; accessToken: string; oauthScopes?: string[] }
@@ -72,12 +62,12 @@ export async function completeShopifyOAuth({
   const shopDomain = normalizeShopifyShopDomain(shop);
 
   if (!code || !shopDomain || !savedShop || !hmac) {
-    return failure(organizationId, 'shopify_invalid_callback', 'invalid_callback');
+    return failure('shopify_invalid_callback', 'invalid_callback');
   }
 
   if (!isValidShopifyHmac(searchParams, clientSecret, hmac)) {
     logger.error('[Shopify OAuth] HMAC verification failed');
-    return failure(organizationId, 'shopify_hmac_invalid', 'invalid_callback');
+    return failure('shopify_hmac_invalid', 'invalid_callback');
   }
 
   const tokenResult = await exchangeShopifyAccessToken({
@@ -87,7 +77,7 @@ export async function completeShopifyOAuth({
     shopDomain,
   });
   if (!tokenResult.ok) {
-    return failure(organizationId, tokenResult.error, tokenResult.failureCategory);
+    return failure(tokenResult.error, tokenResult.failureCategory);
   }
 
   const shopIdentityResult = await resolveShopifyAuthorizedShop({
@@ -97,7 +87,6 @@ export async function completeShopifyOAuth({
   });
   if (!shopIdentityResult.ok) {
     return failure(
-      organizationId,
       shopIdentityResult.error,
       shopIdentityResult.failureCategory,
     );
@@ -118,25 +107,24 @@ export async function completeShopifyOAuth({
       { shopName, shop: canonicalShopDomain, orgId: organizationId },
       '[Shopify OAuth] Integration saved',
     );
-    return { ok: true, integrationId: integration.id, organizationId };
+    return { ok: true, integrationId: integration.id };
   } catch (error) {
     if (error instanceof ShopifyStoreInUseError) {
       logger.warn(
         { shop: canonicalShopDomain, orgId: organizationId },
         '[Shopify OAuth] Store already connected to another workspace — rejecting',
       );
-      return failure(organizationId, 'shopify_store_in_use', 'validation_failed');
+      return failure('shopify_store_in_use', 'validation_failed');
     }
     throw error;
   }
 }
 
 function failure(
-  organizationId: string,
   error: ShopifyOAuthError,
   failureCategory: IntegrationFailureCategory,
 ): CompleteShopifyOAuthResult {
-  return { ok: false, error, failureCategory, organizationId };
+  return { ok: false, error, failureCategory };
 }
 
 export function isValidShopifyHmac(

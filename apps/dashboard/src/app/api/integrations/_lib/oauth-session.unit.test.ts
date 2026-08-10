@@ -56,7 +56,6 @@ describe('OAuth attempt sessions', () => {
     expect(cookieValues.size).toBe(2);
 
     const completedSecond = await validateOAuthCallbackSession({
-      appUrl: 'https://dashboard.test',
       extraCookieKeys: ['shop'],
       logPrefix: 'test',
       provider: 'shopify',
@@ -75,7 +74,6 @@ describe('OAuth attempt sessions', () => {
     expect(cookieValues.size).toBe(1);
 
     const completedFirst = await validateOAuthCallbackSession({
-      appUrl: 'https://dashboard.test',
       extraCookieKeys: ['shop'],
       logPrefix: 'test',
       provider: 'shopify',
@@ -96,7 +94,6 @@ describe('OAuth attempt sessions', () => {
 
   it('rejects malformed state without using it as a cookie name', async () => {
     const result = await validateOAuthCallbackSession({
-      appUrl: 'https://dashboard.test',
       logPrefix: 'test',
       provider: 'gmail',
       state: '../cookie',
@@ -121,7 +118,6 @@ describe('OAuth attempt sessions', () => {
     );
 
     const result = await validateOAuthCallbackSession({
-      appUrl: 'https://dashboard.test',
       logPrefix: 'test',
       provider: 'gmail',
       state: attempt.state,

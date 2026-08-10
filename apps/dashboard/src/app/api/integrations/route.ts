@@ -7,6 +7,7 @@ import { withOrgRoute } from '@/lib/api/route';
 import { parseCreateIntegrationBody } from '@/app/api/integrations/_lib/validation';
 import { CHANNEL_TYPE } from '@shopkeeper/agent/thread-constants';
 import { getIntegrationsForOrg, serializeIntegrationRecord } from '@/lib/server/integrations-list';
+import logger from '@/lib/server/logger';
 import {
   captureIntegrationConnectionCompleted,
   captureIntegrationConnectionFailed,
@@ -75,6 +76,18 @@ export const POST = withOrgRoute(
           platform: 'email',
         });
         throw error;
+      }
+      try {
+        await captureIntegrationConnectionCompleted({
+          integrationId: integration.id,
+          organizationId: org.id,
+          platform: 'email',
+        });
+      } catch (error) {
+        logger.warn(
+          { errorClass: error instanceof Error ? error.name : 'UnknownError' },
+          '[Integrations POST] Analytics capture failed after forwarding email was saved',
+        );
       }
 
       const defaultState = await db.organization.findUniqueOrThrow({

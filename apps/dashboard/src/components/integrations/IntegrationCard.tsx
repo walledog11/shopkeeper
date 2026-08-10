@@ -20,11 +20,15 @@ export default function IntegrationCard({
   model,
   onOpenChange,
   open,
+  shopifyClientId,
+  storefrontChatGloballyEnabled,
 }: {
   callbacks: IntegrationCardCallbacks
   model: IntegrationCardModel
   onOpenChange: (open: boolean) => void
   open: boolean
+  shopifyClientId: string | null
+  storefrontChatGloballyEnabled: boolean
 }) {
   const { availability, definition } = model
 
@@ -100,7 +104,12 @@ export default function IntegrationCard({
           statusNote={Boolean(model.note)}
           preventInitialFocus={model.preventInitialFocus}
         >
-          <IntegrationCardDetails model={model} callbacks={callbacks} />
+          <IntegrationCardDetails
+            model={model}
+            callbacks={callbacks}
+            shopifyClientId={shopifyClientId}
+            storefrontChatGloballyEnabled={storefrontChatGloballyEnabled}
+          />
         </IntegrationConfigureDialog>
       ) : null}
     </>

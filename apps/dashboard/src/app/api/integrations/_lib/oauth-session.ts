@@ -2,8 +2,7 @@ import crypto from 'node:crypto';
 import { auth } from '@clerk/nextjs/server';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { oauthCompleteResponse } from './oauth-callback';
-import type { OAuthErrorCode, OAuthFlowMode, OAuthProvider } from '@/lib/integrations/oauth-contract';
+import type { OAuthFlowMode, OAuthProvider } from '@/lib/integrations/oauth-contract';
 import { isOAuthFlowMode } from '@/lib/integrations/oauth-contract';
 import { ADMIN_REQUIRED_MESSAGE, isOrgAdmin } from '@/lib/api/permissions';
 import logger from '@/lib/server/logger';
@@ -91,20 +90,21 @@ export type OAuthCallbackSessionResult =
   | { ok: true; session: OAuthCallbackSession }
   | {
       ok: false;
-      response: NextResponse;
       analyticsContext: {
         attemptId?: string;
         clerkOrganizationId?: string;
       };
+      navigation?: {
+        mode: OAuthFlowMode;
+        returnTo: string | null;
+      };
     };
 
 export async function validateOAuthCallbackSession(options: {
-  appUrl: string;
   extraCookieKeys?: readonly string[];
   logPrefix: string;
   provider: OAuthProvider;
   state: string | null;
-  stateMismatchError?: OAuthErrorCode;
 }): Promise<OAuthCallbackSessionResult> {
   const validState = options.state && OAUTH_STATE_PATTERN.test(options.state)
     ? options.state
@@ -119,14 +119,10 @@ export async function validateOAuthCallbackSession(options: {
     : null;
   if (cookieName) cookieStore.delete(cookieName);
 
-  const mismatchError = options.stateMismatchError ?? 'state_mismatch';
   if (!validState || !attempt) {
     logger.error(`[${options.logPrefix}] State mismatch — possible CSRF attempt`);
     return {
       ok: false,
-      response: oauthCompleteResponse(options.appUrl, {
-        outcome: { status: 'failed', provider: options.provider, error: mismatchError },
-      }),
       analyticsContext: { attemptId: validState ?? undefined },
     };
   }
@@ -151,14 +147,13 @@ export async function validateOAuthCallbackSession(options: {
     );
     return {
       ok: false,
-      response: oauthCompleteResponse(options.appUrl, {
-        outcome: { status: 'failed', provider: options.provider, error: mismatchError },
-        mode: attempt.mode,
-        returnTo: attempt.returnTo,
-      }),
       analyticsContext: {
         attemptId: validState,
         clerkOrganizationId: attempt.orgId,
+      },
+      navigation: {
+        mode: attempt.mode,
+        returnTo: attempt.returnTo,
       },
     };
   }

@@ -1,17 +1,8 @@
 import { NextResponse } from 'next/server';
-import logger from '@/lib/server/logger';
 import { getShopifyOAuthCallbackConfig } from '@/lib/env';
-import {
-  captureIntegrationConnectionCompleted,
-  captureIntegrationConnectionFailed,
-  captureOAuthIntegrationConnectionFailed,
-} from '@/lib/server/product-analytics';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
-import { validateOAuthCallbackSession } from '@/app/api/integrations/_lib/oauth-session';
-import {
-  oauthCompleteResponse,
-  resolveOAuthOrganization,
-} from '@/app/api/integrations/_lib/oauth-callback';
+import { oauthCompleteResponse } from '@/app/api/integrations/_lib/oauth-callback';
+import { runOAuthCallback } from '@/app/api/integrations/_lib/oauth-callback-runner';
 import { completeShopifyOAuth } from './complete-shopify-oauth';
 
 export async function GET(request: Request) {
@@ -30,85 +21,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'OAuth callback is not configured' }, { status: 500 });
   }
   const { appUrl, clientId, clientSecret } = oauthConfig;
-  const { searchParams } = new URL(request.url);
-  const state = searchParams.get('state');
-
-  const callbackSession = await validateOAuthCallbackSession({
-    appUrl,
-    extraCookieKeys: ['shop'],
-    logPrefix: 'Shopify OAuth',
-    provider: 'shopify',
-    state,
-    stateMismatchError: 'shopify_state_mismatch',
-  });
-  if (!callbackSession.ok) {
-    await captureOAuthIntegrationConnectionFailed({
-      ...callbackSession.analyticsContext,
-      failureCategory: 'state_mismatch',
-      platform: 'shopify',
-    });
-    return callbackSession.response;
-  }
-
-  const {
-    attemptId,
-    clerkOrgId,
-    mode,
-    returnTo,
-    extra: { shop: savedShop },
-  } = callbackSession.session;
-
-  const fail = async (
-    error: 'shopify_hmac_invalid'
-      | 'shopify_invalid_callback'
-      | 'shopify_server_error'
-      | 'shopify_shop_mismatch'
-      | 'shopify_store_in_use'
-      | 'shopify_token_failed',
-    failureCategory: Parameters<typeof captureIntegrationConnectionFailed>[0]['failureCategory'],
-    organizationId?: string,
-  ) => {
-    if (organizationId) {
-      await captureIntegrationConnectionFailed({
-        attemptId,
-        failureCategory,
-        organizationId,
-        platform: 'shopify',
-      });
-    }
-    return oauthCompleteResponse(appUrl, {
-      outcome: { status: 'failed', provider: 'shopify', error },
-      mode,
-      returnTo,
-    });
-  };
-
-  const orgResult = await resolveOAuthOrganization(clerkOrgId, 'Shopify OAuth');
-  if (!orgResult.ok) return fail('shopify_server_error', 'unknown');
-  const organizationId = orgResult.org.id;
-
-  try {
-    const result = await completeShopifyOAuth({
+  return runOAuthCallback({
+    request,
+    descriptor: {
+      analyticsPlatform: 'shopify',
+      appUrl,
+      extraSessionFields: ['shop'],
+      invalidCallbackError: 'shopify_invalid_callback',
+      logPrefix: 'Shopify OAuth',
+      provider: 'shopify',
+      serverError: 'shopify_server_error',
+      stateMismatchError: 'shopify_state_mismatch',
+    },
+    complete: ({ organizationId, searchParams, session }) => completeShopifyOAuth({
       clientId,
       clientSecret,
       organizationId,
-      savedShop,
+      savedShop: session.extra.shop,
       searchParams,
-    });
-    if (!result.ok) return fail(result.error, result.failureCategory, organizationId);
-
-    await captureIntegrationConnectionCompleted({
-      integrationId: result.integrationId,
-      organizationId: result.organizationId,
-      platform: 'shopify',
-    });
-    return oauthCompleteResponse(appUrl, {
-      outcome: { status: 'connected', provider: 'shopify' },
-      mode,
-      returnTo,
-    });
-  } catch (error) {
-    logger.error({ err: error }, '[Shopify OAuth] Unexpected error');
-    return fail('shopify_server_error', 'unknown', organizationId);
-  }
+    }),
+  });
 }

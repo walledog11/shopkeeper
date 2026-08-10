@@ -16,6 +16,7 @@ export type TikTokShopProviderErrorCategory =
   | "policy_window"
   | "rate_limited"
   | "provider_unavailable"
+  | "malformed_response"
   | "provider_rejected";
 
 export class TikTokShopProviderError extends Error {
@@ -211,7 +212,7 @@ function parseTokenResult(body: unknown): TikTokShopTokenResult {
   const accessToken = readString(data, "access_token", "accessToken");
   if (!accessToken) {
     throw new TikTokShopProviderError("TikTok Shop token response did not include an access token", {
-      category: "provider_rejected",
+      category: "malformed_response",
       providerBody: body,
     });
   }

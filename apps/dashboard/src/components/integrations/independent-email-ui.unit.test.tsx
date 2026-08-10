@@ -39,7 +39,13 @@ const callbacks: IntegrationCardCallbacks = {
   setDefaultEmail: vi.fn(async () => undefined),
   launchOAuth: vi.fn(),
   syncShopifyKnowledgeBase: vi.fn(async () => ({ syncedPolicies: 0, syncedPages: 0 })),
+  updateShopifyStorefrontChat: vi.fn(async () => true),
 };
+
+const detailProps = {
+  shopifyClientId: null,
+  storefrontChatGloballyEnabled: false,
+} as const;
 
 describe('independent email integration UI', () => {
   it('shows both connected addresses and marks only the selected default', () => {
@@ -79,10 +85,14 @@ describe('independent email integration UI', () => {
     const onSetDefaultEmail = vi.fn();
 
     const html = renderToStaticMarkup(
-      <ForwardingEmailDetails model={forwardingModel([forwarding])} callbacks={{
-        ...callbacks,
-        setDefaultEmail: onSetDefaultEmail,
-      }} />,
+      <ForwardingEmailDetails
+        model={forwardingModel([forwarding])}
+        callbacks={{
+          ...callbacks,
+          setDefaultEmail: onSetDefaultEmail,
+        }}
+        {...detailProps}
+      />,
     );
 
     expect(html).toContain('Use for new emails');
@@ -91,7 +101,11 @@ describe('independent email integration UI', () => {
 
   it('does not label disconnected forwarding as connected', () => {
     const html = renderToStaticMarkup(
-      <ForwardingEmailDetails model={forwardingModel([])} callbacks={callbacks} />,
+      <ForwardingEmailDetails
+        model={forwardingModel([])}
+        callbacks={callbacks}
+        {...detailProps}
+      />,
     );
 
     expect(html).toContain('Forwarding address');

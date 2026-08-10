@@ -49,3 +49,11 @@ export function syncShopifyKnowledgeBase(): Promise<{ syncedPolicies: number; sy
     "Sync failed, please try again.",
   )
 }
+
+export function updateShopifyStorefrontChat(enabled: boolean): Promise<{ enabled: boolean }> {
+  return requestJson(
+    "/api/integrations/shopify/storefront-chat",
+    jsonRequest("PATCH", { enabled }),
+    "Failed to update storefront chat. Please try again.",
+  )
+}
