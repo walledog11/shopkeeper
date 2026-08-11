@@ -35,13 +35,18 @@ describe('operator notify idempotency keys', () => {
     expect(escalationNotificationIdempotencyKey('org_1', 'thread_1', 'Other reason')).not.toBe(first);
   });
 
-  it('digest keys incorporate the digest sentAt stamp', () => {
-    const sentAt = '2026-07-08T12:00:00.000Z';
-    expect(digestNotificationIdempotencyKey('org_1', sentAt)).toBe(
-      digestNotificationIdempotencyKey('org_1', sentAt),
+  // Window, not send timestamp: a per-invocation stamp made every retry look
+  // like a new briefing, which is exactly what this key has to catch.
+  it('digest keys are stable across attempts in one send window', () => {
+    const window = '2026-07-08T08';
+    expect(digestNotificationIdempotencyKey('org_1', window)).toBe(
+      digestNotificationIdempotencyKey('org_1', window),
     );
-    expect(digestNotificationIdempotencyKey('org_1', '2026-07-08T13:00:00.000Z')).not.toBe(
-      digestNotificationIdempotencyKey('org_1', sentAt),
+    expect(digestNotificationIdempotencyKey('org_1', '2026-07-08T17')).not.toBe(
+      digestNotificationIdempotencyKey('org_1', window),
+    );
+    expect(digestNotificationIdempotencyKey('org_2', window)).not.toBe(
+      digestNotificationIdempotencyKey('org_1', window),
     );
   });
 

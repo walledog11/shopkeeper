@@ -242,19 +242,60 @@ export function briefingTopic(
 // Who the item is about. The order number earns its place in the subject only
 // when the topic doesn't already carry it — cutting it out of the topic to
 // avoid the repeat is what stranded the punctuation.
+//
+// `leadsWithAction` means the line already spends a segment on what the agent
+// wants to do, so a named customer is subject enough; three segments before the
+// topic is more punctuation than information on a phone.
 function briefingSubject(
   customerName: string | null,
   channelType: string | null,
   orderRef: string | null,
   topic: string | null,
+  leadsWithAction = false,
 ): string {
   const name = briefingSubjectName(customerName)
     ?? (channelType === CHANNEL.SHOPIFY_CHAT ? VISITOR_SUBJECT : null);
   const alreadyInTopic = orderRef != null
     && (topic ?? '').includes(orderRef.replace('#', ''));
-  const ref = orderRef && !alreadyInTopic ? orderRef : null;
+  const ref = orderRef && !alreadyInTopic && !(name && leadsWithAction) ? orderRef : null;
   if (name && ref) return `${name} · ${ref}`;
   return ref ?? name ?? 'Someone';
+}
+
+/**
+ * What "yes" actually does.
+ *
+ * A waiting line built from the subject and the topic alone tells the merchant
+ * which ticket this is but not what they are approving, and the closing ask
+ * ("Want me to go ahead with it?") gives them nothing else to go on — so the
+ * only way to find out what a one-word approval sends is to open the dashboard,
+ * which is the opposite of the point. The refund branch below has always led
+ * with its action because money is worth reading first; every other action earns
+ * the same slot, in the same `action · subject: topic` grammar.
+ *
+ * `send_reply` and `send_email` are named by hand for the same reason
+ * `parkedActionLabel` names them: their registry plan-step labels ("Notify
+ * customer", "Send email to customer") re-state a subject the line already has.
+ */
+function approvalActionHead(
+  rawToolCalls: Array<{ id: string; name: string; input?: unknown }>,
+): string | null {
+  const actionable = rawToolCalls.filter((toolCall) => (
+    !toolCall.name.startsWith('get_') && !toolCall.name.startsWith('search_')
+  ));
+  const primary = actionable.find((toolCall) => toolCall.name !== 'add_internal_note')
+    ?? actionable[0];
+  if (!primary) return null;
+
+  // The head opens the line, so it is capitalized even when the fallback had to
+  // build it out of a tool name.
+  const label = primary.name === 'send_reply'
+    ? 'Reply'
+    : primary.name === 'send_email'
+      ? 'Email'
+      : capitalize(PLAN_STEP_LABELS[primary.name] ?? primary.name.replace(/_/g, ' '));
+  const rest = actionable.length - 1;
+  return rest > 0 ? `${label} + ${countWord(rest)} more` : label;
 }
 
 // How long the merchant has left this sitting. The header already frames the
@@ -344,12 +385,21 @@ export function formatWaitingItemLine(params: {
     return topic ? `${head}: ${topic}${agePart}` : `${head}${agePart}`;
   }
 
-  // The subject slot is for a person or an order, never a tool label: a line
-  // reading "Escalate to merchant: about tracking numbers" has spent its most
-  // scannable position on a word the section header already said.
+  // The subject slot is still for a person or an order, never a tool label: a
+  // line reading "Escalate to merchant: about tracking numbers" has spent its
+  // most scannable position on a word the section header already said. The
+  // action gets its own leading segment instead, ahead of the subject.
   if (topic) {
-    const subject = briefingSubject(customerName, channelType ?? null, orderRef, topic);
-    return `${subject}: ${topic}${agePart}`;
+    const action = approvalActionHead(rawToolCalls);
+    const subject = briefingSubject(
+      customerName,
+      channelType ?? null,
+      orderRef,
+      topic,
+      action != null,
+    );
+    const head = action ? `${action} · ${subject}` : subject;
+    return `${head}: ${topic}${agePart}`;
   }
 
   // Nothing describes the ticket, so the parked action is the only information

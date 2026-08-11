@@ -288,13 +288,58 @@ describe('formatWaitingItemLine', () => {
       now: NOW,
       since: new Date(NOW.getTime() - 26 * 3_600_000),
     });
-    expect(line).toBe('Adam · #1025: Order Update With No Detail (waiting 1 day)');
+    // Named customer plus a leading action, so the order number gives up its
+    // segment: three of them before the topic is punctuation, not information.
+    expect(line).toBe('Reply · Adam: Order Update With No Detail (waiting 1 day)');
+    expect(line).not.toContain('provides no details');
+  });
+
+  // What a one-word approval actually does. Before this the line named the
+  // ticket and nothing else, so "Want me to go ahead with it?" could only be
+  // answered by opening the dashboard.
+  it('leads with the action being approved', () => {
+    const line = formatWaitingItemLine({
+      customerName: null,
+      channelType: 'shopify_chat',
+      aiTitle: 'Order Status Inquiry',
+      aiSummary: 'Visitor asks for the status of their order',
+      tag: null,
+      rawToolCalls: [
+        { id: 'tc1', name: 'get_order', input: { orderNumber: '1042' } },
+        { id: 'tc2', name: 'send_reply', input: { text: 'Hi' } },
+      ],
+      instruction: 'Answer the visitor',
+      actionLabel: 'run those 2 steps',
+      now: NOW,
+      since: new Date(NOW.getTime() - 48 * 3_600_000),
+    });
+    // Lookups are not what the merchant is approving, so the read step does not
+    // count toward the step tally.
+    expect(line).toBe('Reply · Storefront visitor: Order Status Inquiry (waiting 2 days)');
+  });
+
+  it('counts the extra steps a single approval would run', () => {
+    const line = formatWaitingItemLine({
+      customerName: 'Dana Ruiz',
+      aiTitle: 'Wrong Size Shipped',
+      aiSummary: 'Customer received the wrong size',
+      tag: null,
+      rawToolCalls: [
+        { id: 'tc1', name: 'create_return', input: {} },
+        { id: 'tc2', name: 'send_reply', input: { text: 'Hi' } },
+      ],
+      instruction: 'Sort out the return',
+      now: NOW,
+      since: new Date(NOW.getTime() - 2 * 3_600_000),
+    });
+    expect(line).toBe('Open return + one more · Dana: Wrong Size Shipped (waiting 2 hours)');
   });
 
   // The old line read "Escalate to merchant: about tracking numbers and
   // shipping addresses for four different orders (,…" — a tool label in the
   // most scannable position, and punctuation stranded by lifting out an order
-  // number the line then truncated anyway.
+  // number the line then truncated anyway. The action leads now, but the
+  // subject slot after it is still a person or an order, never the tool.
   it('never spends the subject slot on a tool label', () => {
     const line = formatWaitingItemLine({
       customerName: null,
@@ -308,9 +353,9 @@ describe('formatWaitingItemLine', () => {
       since: new Date(NOW.getTime() - 11 * 3_600_000),
     });
     // With no name to print, the order number is a better subject than
-    // "Someone" — and a far better one than the name of the tool.
-    expect(line).toBe('#1019: Tracking And Address Changes (waiting 11 hours)');
-    expect(line).not.toContain('Escalate to merchant');
+    // "Someone" — so it keeps its slot even with the action ahead of it.
+    expect(line).toBe('Escalate to merchant · #1019: Tracking And Address Changes (waiting 11 hours)');
+    expect(line.split(' · ')[1]).toBe('#1019: Tracking And Address Changes (waiting 11 hours)');
   });
 
   it('never leaves stranded punctuation or a live address in the line', () => {
@@ -400,8 +445,8 @@ describe('loadWaitingOnYouItems', () => {
     const section = formatWaitingSection(items)!;
     expect(section).toContain('Two things are still waiting on your OK:');
     // Every line differs by subject, so the list is worth reading.
-    expect(section).toContain('1. Canary: Asking where order 1042 is (waiting 5 hours)');
-    expect(section).toContain('2. Canary: Wants to change the shipping address (waiting 5 hours)');
+    expect(section).toContain('1. Reply · Canary: Asking where order 1042 is (waiting 5 hours)');
+    expect(section).toContain('2. Reply · Canary: Wants to change the shipping address (waiting 5 hours)');
     // Wrapped items run together without air between them.
     expect(section).toContain('(waiting 5 hours)\n\n2.');
     // A bare "yes" here would approve only the most recent plan.
@@ -449,7 +494,7 @@ describe('loadWaitingOnYouItems', () => {
     // "Customer" is a placeholder, not a name. With nothing to print, the
     // subject falls back to a generic word and the topic carries the line.
     expect(items[0]?.line).not.toContain('Customer');
-    expect(items[0]?.line).toBe('Someone: Damaged Sweater Return');
+    expect(items[0]?.line).toBe('Reply · Someone: Damaged Sweater Return');
   });
 
   it('ignores stale plans on threads outside the support inbox', async () => {

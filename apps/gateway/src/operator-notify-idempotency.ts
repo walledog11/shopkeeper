@@ -51,11 +51,16 @@ export function escalationNotificationIdempotencyKey(
   return hashOperatorNotifyContent([organizationId, 'escalation', threadId, reason]);
 }
 
+/**
+ * Keyed by send *window* (`digestWindowKey`), never by the send timestamp: a
+ * per-invocation stamp mints a new key on every retry, which is the one case
+ * this dedupe exists to cover.
+ */
 export function digestNotificationIdempotencyKey(
   organizationId: string,
-  sentAt: string,
+  digestWindow: string,
 ): string {
-  return hashOperatorNotifyContent([organizationId, 'digest', sentAt]);
+  return hashOperatorNotifyContent([organizationId, 'digest', digestWindow]);
 }
 
 export function autoExecutionNotificationIdempotencyKey(

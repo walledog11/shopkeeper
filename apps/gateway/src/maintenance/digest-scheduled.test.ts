@@ -124,3 +124,87 @@ describe('sendScheduledDigests — first-night briefing', () => {
     expect((await readSettings(org.id)).firstBriefingPending).toBe(false);
   });
 });
+
+// The duplicate briefing this guards against was two processes on the same
+// database inside one hour — a BullMQ retry, a second replica, or a dev worker
+// pointed at production. Each carries its own `now`, so the window is claimed in
+// Postgres and the second caller finds it taken.
+describe('sendScheduledDigests — one send per window', () => {
+  let org!: Awaited<ReturnType<typeof createTestOrg>>;
+  let chatId!: string;
+
+  beforeEach(async () => {
+    sendMessageSpy.mockClear();
+    org = await createTestOrg();
+    chatId = `chat-${org.id}`;
+    await bindTelegram(org.id, chatId);
+  });
+
+  afterEach(async () => {
+    await cleanupTestData(org?.id);
+  });
+
+  function myMessages(): string[] {
+    return sendMessageSpy.mock.calls.filter((c) => c[0] === chatId).map((c) => c[1] as string);
+  }
+
+  it('sends once when the same window is swept twice', async () => {
+    const customer = await createTestCustomer(org.id, `cust-${org.id}@example.com`, { name: 'Jane' });
+    await createTestThread(org.id, customer.id, ChannelType.email);
+    await db.organization.update({
+      where: { id: org.id },
+      data: { settings: armedSettings() },
+    });
+
+    await sendScheduledDigests();
+    await sendScheduledDigests();
+
+    expect(myMessages()).toHaveLength(1);
+    expect((await readSettings(org.id)).lastDigestWindow).toEqual(expect.any(String));
+  });
+
+  it('sends again in the next window', async () => {
+    const customer = await createTestCustomer(org.id, `cust-${org.id}@example.com`, { name: 'Jane' });
+    await createTestThread(org.id, customer.id, ChannelType.email);
+    await db.organization.update({
+      where: { id: org.id },
+      data: { settings: armedSettings() },
+    });
+
+    await sendScheduledDigests();
+
+    // Same local hour, next day: a new window, so yesterday's claim does not
+    // hold it. (Also a new dedupe key, which is the point of keying on the
+    // window rather than the day.)
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      vi.setSystemTime(new Date(Date.now() + 24 * 60 * 60 * 1000));
+      await sendScheduledDigests();
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(myMessages()).toHaveLength(2);
+  });
+
+  it('leaves the window unclaimed when nothing was delivered', async () => {
+    sendMessageSpy.mockResolvedValueOnce(false);
+    const customer = await createTestCustomer(org.id, `cust-${org.id}@example.com`, { name: 'Jane' });
+    await createTestThread(org.id, customer.id, ChannelType.email);
+    await db.organization.update({
+      where: { id: org.id },
+      data: { settings: armedSettings() },
+    });
+
+    // The send was attempted and refused by the transport, so the window is
+    // still unspent.
+    await sendScheduledDigests();
+    expect(myMessages()).toHaveLength(1);
+    expect((await readSettings(org.id)).lastDigestWindow).toBeUndefined();
+
+    // A missing briefing is worse than a duplicate one, so the retry still sends.
+    await sendScheduledDigests();
+    expect(myMessages()).toHaveLength(2);
+    expect((await readSettings(org.id)).lastDigestWindow).toEqual(expect.any(String));
+  });
+});

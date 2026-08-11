@@ -2,7 +2,7 @@ import { afterEach, describe, it, expect } from 'vitest';
 import { db, ThreadFilterStatus } from '@shopkeeper/db';
 import { cleanupTestData, createTestCustomer, createTestOrg, createTestThread } from '@shopkeeper/db/test-helpers';
 import type { SupportStatsSummary } from '@shopkeeper/agent/support-stats';
-import { bucketDigestThreads, buildOrgDigest, formatDigestMessage, formatWeeklySummaryLine } from './digest.js';
+import { bucketDigestThreads, buildOrgDigest, digestWindowKey, formatDigestMessage, formatWeeklySummaryLine } from './digest.js';
 
 const NOW = new Date('2026-04-29T12:00:00Z');
 const HOUR = 3_600_000;
@@ -490,5 +490,28 @@ describe('formatWeeklySummaryLine', () => {
 
     // So is volume the open count does not account for.
     expect(formatWeeklySummaryLine(stalled, 2)).toContain('five tickets in');
+  });
+});
+
+describe('digestWindowKey', () => {
+  // The claim key has to name the merchant's local hour, not the server's: two
+  // callers in different regions must agree on which window they are in.
+  it('is the merchant local date and hour', () => {
+    const settings = { digestTimezone: 'America/Los_Angeles' };
+    expect(digestWindowKey(settings, new Date('2026-08-11T15:00:00.008Z'))).toBe('2026-08-11T08');
+    // Seven seconds later is the same window — the duplicate this guards.
+    expect(digestWindowKey(settings, new Date('2026-08-11T15:00:07.154Z'))).toBe('2026-08-11T08');
+    // The next day's send is not.
+    expect(digestWindowKey(settings, new Date('2026-08-12T15:00:00.000Z'))).toBe('2026-08-12T08');
+  });
+
+  it('does not render local midnight as hour 24', () => {
+    expect(digestWindowKey({ digestTimezone: 'UTC' }, new Date('2026-08-11T00:30:00.000Z')))
+      .toBe('2026-08-11T00');
+  });
+
+  it('falls back to UTC on an unusable timezone', () => {
+    expect(digestWindowKey({ digestTimezone: 'Not/AZone' }, new Date('2026-08-11T15:00:00.000Z')))
+      .toBe('2026-08-11T15');
   });
 });

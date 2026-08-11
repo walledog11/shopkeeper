@@ -456,44 +456,73 @@ export async function sendScheduledDigests(): Promise<void> {
 
   for (const org of eligibleOrgs) {
     const orgSettings = (org.settings as Record<string, unknown> | null) ?? {};
-    const firstBriefingPending = orgSettings.firstBriefingPending === true;
-    const agentName = resolveAgentSettings(org.settings).agentName;
-    const digest = await buildOrgDigest(org.id, now, orgSettings, {
-      opener: buildDigestOpener(agentName, orgSettings, now, firstBriefingPending),
-      includeEmptyInbox: false,
-    });
+    const windowKey = digestWindowKey(orgSettings, now);
 
-    // A brand-new merchant with an empty inbox would otherwise never get a
-    // first digest. Send a welcome briefing once so they see the morning ritual.
-    if (!digest && !firstBriefingPending) continue;
-
-    let message: string;
-    let pendingDigest: OrgDigest['pendingDigest'];
-    let flaggedCount = 0;
-    if (digest) {
-      message = digest.message;
-      pendingDigest = digest.pendingDigest;
-      flaggedCount = digest.flaggedCount;
-    } else {
-      message = await buildFirstNightMessage(org.id, org.name, agentName);
-      pendingDigest = { threadIds: [], sentAt: now.toISOString() };
+    // One briefing per send window, claimed in Postgres before anything goes
+    // out. The hourly job is not the only thing that reaches here inside a
+    // window: a BullMQ retry, a stalled-job re-delivery, a second replica, or a
+    // dev worker pointed at the same database all arrive with their own `now`,
+    // so no timestamp derived from this invocation can tell them apart. The
+    // claim is one conditional statement, so exactly one caller wins it and the
+    // rest skip instead of texting the merchant a second copy.
+    if (!(await claimDigestWindow(org.id, windowKey))) {
+      logger.info(
+        { organizationId: org.id, digestWindow: windowKey },
+        '[Digest] Window already claimed — skipping duplicate send',
+      );
+      continue;
     }
 
-    const bindings = await listOperatorBindings(org.id);
-    const idempotencyKey = digestNotificationIdempotencyKey(org.id, pendingDigest.sentAt);
-    for (const member of bindings) {
-      const result = digest
-        ? await deliverOrgDigest(org.id, member, digest, idempotencyKey)
-        : await notifyOperator(org.id, member, message, { pendingDigest }, { idempotencyKey });
-      if (result) {
-        logger.info(
-          { organizationId: org.id, chatId: result.chatId, flagged: flaggedCount, firstBriefing: firstBriefingPending },
-          '[Digest] Sent digest',
-        );
+    let delivered = false;
+    try {
+      const firstBriefingPending = orgSettings.firstBriefingPending === true;
+      const agentName = resolveAgentSettings(org.settings).agentName;
+      const digest = await buildOrgDigest(org.id, now, orgSettings, {
+        opener: buildDigestOpener(agentName, orgSettings, now, firstBriefingPending),
+        includeEmptyInbox: false,
+      });
+
+      // A brand-new merchant with an empty inbox would otherwise never get a
+      // first digest. Send a welcome briefing once so they see the morning ritual.
+      if (!digest && !firstBriefingPending) continue;
+
+      let message: string;
+      let pendingDigest: OrgDigest['pendingDigest'];
+      let flaggedCount = 0;
+      if (digest) {
+        message = digest.message;
+        pendingDigest = digest.pendingDigest;
+        flaggedCount = digest.flaggedCount;
+      } else {
+        message = await buildFirstNightMessage(org.id, org.name, agentName);
+        pendingDigest = { threadIds: [], sentAt: now.toISOString() };
       }
-    }
 
-    await finalizeDigestSend(org.id, now, firstBriefingPending);
+      const bindings = await listOperatorBindings(org.id);
+      // Keyed by window, not by `pendingDigest.sentAt`: a millisecond stamp is
+      // fresh on every attempt, so the Redis dedupe this key exists for could
+      // never fire on the retry it was written to cover.
+      const idempotencyKey = digestNotificationIdempotencyKey(org.id, windowKey);
+      for (const member of bindings) {
+        const result = digest
+          ? await deliverOrgDigest(org.id, member, digest, idempotencyKey)
+          : await notifyOperator(org.id, member, message, { pendingDigest }, { idempotencyKey });
+        if (result) {
+          delivered = true;
+          logger.info(
+            { organizationId: org.id, chatId: result.chatId, flagged: flaggedCount, firstBriefing: firstBriefingPending },
+            '[Digest] Sent digest',
+          );
+        }
+      }
+
+      await finalizeDigestSend(org.id, now, firstBriefingPending);
+    } finally {
+      // Nothing reached the merchant, so the window was not spent. Release it
+      // rather than trading a duplicate briefing for a missing one — a retry
+      // inside the same hour is then free to try again.
+      if (!delivered) await releaseDigestWindow(org.id, windowKey);
+    }
   }
 }
 
@@ -532,6 +561,60 @@ function resolveTz(settings: Record<string, unknown>): string {
 }
 
 const WEEKDAY_INDEX: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+
+export const DIGEST_WINDOW_SETTING = 'lastDigestWindow';
+
+/**
+ * The send window a moment belongs to, in the merchant's own timezone — local
+ * date plus local hour, because `shouldSendDigest` fires on a local hour and
+ * every supported frequency puts its sends in distinct hours.
+ */
+export function digestWindowKey(settings: Record<string, unknown>, now: Date): string {
+  const timeZone = resolveTz(settings);
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      hour12: false,
+    }).formatToParts(now);
+    const part = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+    // Some ICU builds render midnight as hour 24 under hour12: false.
+    const hour = ((parseInt(part('hour'), 10) % 24) + 24) % 24;
+    return `${part('year')}-${part('month')}-${part('day')}T${String(hour).padStart(2, '0')}`;
+  } catch {
+    // Invalid timeZone — fall back to UTC, as localHourAndDay does.
+    return now.toISOString().slice(0, 13);
+  }
+}
+
+/**
+ * Claim this org's send window. Returns false when another caller already holds
+ * it, which is the whole point: the guard has to be a single conditional write
+ * that separate processes contend for, since they share only Postgres.
+ *
+ * A jsonb merge rather than a read-modify-write of `settings` so a concurrent
+ * settings update keeps its keys.
+ */
+async function claimDigestWindow(organizationId: string, windowKey: string): Promise<boolean> {
+  const claimed = await db.$executeRaw`
+    UPDATE organizations
+    SET settings = COALESCE(settings, '{}'::jsonb)
+          || jsonb_build_object(${DIGEST_WINDOW_SETTING}::text, ${windowKey}::text)
+    WHERE id = ${organizationId}::uuid
+      AND COALESCE(settings, '{}'::jsonb)->>${DIGEST_WINDOW_SETTING}::text IS DISTINCT FROM ${windowKey}::text`;
+  return claimed > 0;
+}
+
+async function releaseDigestWindow(organizationId: string, windowKey: string): Promise<void> {
+  await db.$executeRaw`
+    UPDATE organizations
+    SET settings = COALESCE(settings, '{}'::jsonb) - ${DIGEST_WINDOW_SETTING}::text
+    WHERE id = ${organizationId}::uuid
+      AND COALESCE(settings, '{}'::jsonb)->>${DIGEST_WINDOW_SETTING}::text = ${windowKey}::text`;
+}
 
 function localHourAndDay(timeZone: string, now: Date): { hour: number; day: number } {
   try {
