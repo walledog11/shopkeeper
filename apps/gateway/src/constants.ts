@@ -29,6 +29,8 @@ export const QUEUE = {
   OUTBOUND_EMAIL: 'outbound-email',
   GMAIL_SYNC: 'gmail-sync',
   GMAIL_WATCH: 'gmail-watch-maintenance',
+  INTEGRATION_DISCONNECT: 'integration-disconnect',
+  INTEGRATION_DISCONNECT_SWEEP: 'integration-disconnect-sweep',
   // Channel-agnostic sweep for stale `pending` async outbound (email + iMessage).
   // String value stays email-legacy so the live BullMQ repeatable job isn't orphaned.
   OUTBOUND_SEND_SWEEP: 'outbound-email-sweep',
@@ -76,6 +78,9 @@ export const JOB = {
   GMAIL_SYNC: 'sync-gmail-mailbox',
   GMAIL_WATCH_MAINTENANCE: 'maintain-gmail-watches',
   GMAIL_WATCH_MAINTENANCE_ID: 'gmail-watch-maintenance-12h',
+  INTEGRATION_DISCONNECT: 'process-integration-disconnect',
+  INTEGRATION_DISCONNECT_SWEEP: 'sweep-integration-disconnects',
+  INTEGRATION_DISCONNECT_SWEEP_ID: 'integration-disconnect-sweep-1min',
   OUTBOUND_SEND_SWEEP: 'sweep-outbound-email',
   OUTBOUND_SEND_SWEEP_ID: 'outbound-email-sweep-5min',
   OPERATOR_EVENT: 'process-operator-event',
@@ -92,6 +97,14 @@ export const PROCESSING_QUEUE_DEFAULTS = {
   backoff: { type: 'exponential', delay: 5000 },
   removeOnComplete: { age: 60 * 60 * 24, count: 1000 },
   removeOnFail: { age: 60 * 60 * 24 * 7, count: 5000 },
+} as const;
+
+// Disconnect cleanup is durable and idempotent, so provider outages can be
+// retried safely for about an hour before requiring operator intervention.
+export const INTEGRATION_DISCONNECT_QUEUE_DEFAULTS = {
+  ...PROCESSING_QUEUE_DEFAULTS,
+  attempts: 8,
+  backoff: { type: 'exponential', delay: 30_000 },
 } as const;
 
 // Gmail history reads are idempotent and checkpointed only after durable

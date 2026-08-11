@@ -59,7 +59,7 @@ export async function getIntegrationsForOrg(org: {
   const weekAgo = new Date(Date.now() - 7 * 86_400_000);
   const [integrations, activityRows, weeklyRows, emailActivityRows, emailWeeklyThreads] = await Promise.all([
     db.integration.findMany({
-      where: { organizationId: org.id },
+      where: { organizationId: org.id, lifecycleStatus: 'active' },
       orderBy: { createdAt: 'asc' },
     }),
     db.thread.groupBy({

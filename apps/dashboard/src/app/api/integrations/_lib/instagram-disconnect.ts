@@ -14,6 +14,14 @@ interface InstagramDisconnectIntegration {
   platform: string;
 }
 
+export type InstagramCleanupResult =
+  | { ok: true }
+  | {
+      ok: false;
+      error: InstagramProviderError | null;
+      reason: 'missing_access_token' | 'provider_unsubscribe_failed' | 'unexpected_failure';
+    };
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -69,11 +77,11 @@ function recordCleanupWarning(
 
 export async function unsubscribeInstagramBeforeDisconnect(
   integration: InstagramDisconnectIntegration,
-): Promise<void> {
-  if (!isInstagramLoginIntegration(integration)) return;
+): Promise<InstagramCleanupResult> {
+  if (!isInstagramLoginIntegration(integration)) return { ok: true };
   if (!integration.accessToken) {
     recordCleanupWarning(integration, null, 'missing_access_token');
-    return;
+    return { ok: false, error: null, reason: 'missing_access_token' };
   }
 
   try {
@@ -83,8 +91,15 @@ export async function unsubscribeInstagramBeforeDisconnect(
     });
     if (!result.ok) {
       recordCleanupWarning(integration, result.error, 'provider_unsubscribe_failed');
+      return {
+        ok: false,
+        error: result.error,
+        reason: 'provider_unsubscribe_failed',
+      };
     }
+    return { ok: true };
   } catch {
     recordCleanupWarning(integration, null, 'unexpected_failure');
+    return { ok: false, error: null, reason: 'unexpected_failure' };
   }
 }

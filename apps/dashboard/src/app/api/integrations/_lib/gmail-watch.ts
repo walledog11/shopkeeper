@@ -27,6 +27,10 @@ export type GmailWatchRegistrationResult =
   | { ok: true; expiration: string; historyId: string }
   | { ok: false; category: GmailWatchErrorCategory };
 
+export type GmailWatchCleanupResult =
+  | { ok: true }
+  | { ok: false; category: GmailWatchErrorCategory };
+
 const EPOCH_SENTINEL = new Date(0);
 
 async function updateWatchSuccess(
@@ -109,18 +113,21 @@ export async function registerGmailWatch(
 
 export async function stopGmailWatchIfUnused(
   integration: GmailIntegrationSnapshot,
-): Promise<void> {
-  if (!hasNativeGmailWatch(integration.metadata)) return;
+): Promise<GmailWatchCleanupResult> {
+  if (!hasNativeGmailWatch(integration.metadata)) return { ok: true };
 
   const sameMailbox = await db.integration.findMany({
     where: {
       id: { not: integration.id },
       platform: 'email',
+      lifecycleStatus: 'active',
       externalAccountId: { equals: integration.externalAccountId, mode: 'insensitive' },
     },
     select: { metadata: true },
   });
-  if (sameMailbox.some((candidate) => hasNativeGmailWatch(candidate.metadata))) return;
+  if (sameMailbox.some((candidate) => hasNativeGmailWatch(candidate.metadata))) {
+    return { ok: true };
+  }
 
   try {
     await new GmailApiClient(integration, {
@@ -129,13 +136,16 @@ export async function stopGmailWatchIfUnused(
       persistToken: async () => undefined,
     }).stop();
     logger.info({ integrationId: integration.id }, '[Gmail Watch] Watch stopped');
+    return { ok: true };
   } catch (error) {
+    const category = classifyWatchError(error);
     logger.warn(
       {
         integrationId: integration.id,
-        errorCategory: classifyWatchError(error),
+        errorCategory: category,
       },
       '[Gmail Watch] Failed to stop watch during disconnect',
     );
+    return { ok: false, category };
   }
 }

@@ -27,7 +27,7 @@ export async function resolveOrganizationId(platform: DbChannelType, externalAcc
   // Webhooks must land on the newest integration so routing matches the live
   // merchant workspace, not an arbitrary findFirst row.
   const integration = await db.integration.findFirst({
-    where: { platform, externalAccountId },
+    where: { platform, externalAccountId, lifecycleStatus: 'active' },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     select: { organizationId: true },
   });

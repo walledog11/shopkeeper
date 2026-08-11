@@ -1,12 +1,18 @@
 import { Queue, type ConnectionOptions, type Worker } from 'bullmq';
 import { PROCESSING_QUEUE_DEFAULTS, QUEUE } from '../constants.js';
-import type { AiSummaryJobData, GmailSyncJobData, InboundJobData } from '../types.js';
+import type {
+  AiSummaryJobData,
+  GmailSyncJobData,
+  InboundJobData,
+  IntegrationDisconnectJobData,
+} from '../types.js';
 import { createAiSummaryWorker } from './ai-summary.js';
 import {
   createGmailSyncWorker,
   type GmailSyncWorkerRegistrationOptions,
 } from './gmail-sync.js';
 import { createInboundWorker } from './inbound.js';
+import { createIntegrationDisconnectWorker } from './integration-disconnect.js';
 import { createOperatorEventWorker } from './operator-event.js';
 import { createOrderReviewWorker } from './order-review.js';
 import { createOutboundEmailWorker } from './outbound-email.js';
@@ -21,6 +27,7 @@ export interface CoreWorkerResources extends GatewayWorkerResources {
   outboundEmailWorker: Worker<OutboundEmailJobData>;
   gmailSyncWorker: Worker<GmailSyncJobData>;
   operatorEventWorker: Worker<OperatorEventJobData>;
+  integrationDisconnectWorker: Worker<IntegrationDisconnectJobData>;
   inboundQueue: Queue<InboundJobData>;
 }
 
@@ -46,6 +53,7 @@ export function createCoreWorkerResources(
     workerOptions,
   });
   const operatorEventWorker = createOperatorEventWorker({ workerOptions });
+  const integrationDisconnectWorker = createIntegrationDisconnectWorker({ workerOptions });
 
   return {
     messageWorker,
@@ -55,6 +63,7 @@ export function createCoreWorkerResources(
     outboundEmailWorker,
     gmailSyncWorker,
     operatorEventWorker,
+    integrationDisconnectWorker,
     inboundQueue,
     workers: [
       messageWorker,
@@ -63,6 +72,7 @@ export function createCoreWorkerResources(
       outboundEmailWorker,
       gmailSyncWorker,
       operatorEventWorker,
+      integrationDisconnectWorker,
     ],
     queues: [aiSummaryQueue, inboundQueue],
     heartbeats: [],

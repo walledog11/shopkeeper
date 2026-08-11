@@ -39,7 +39,7 @@ function callbacks(): IntegrationCardCallbacks {
   return {
     connectForwardingEmail: vi.fn(async () => true),
     updateEmailAddress: vi.fn(async () => true),
-    disconnect: vi.fn(async () => undefined),
+    disconnect: vi.fn(async () => true),
     setDefaultEmail: vi.fn(async () => undefined),
     launchOAuth: vi.fn(),
     syncShopifyKnowledgeBase: vi.fn(async () => ({ syncedPolicies: 0, syncedPages: 0 })),
@@ -111,8 +111,6 @@ describe("IntegrationCard workspace permissions", () => {
       <ForwardingEmailDetails
         model={model("email", false, [integration])}
         callbacks={memberCallbacks}
-        shopifyClientId={null}
-        storefrontChatGloballyEnabled={false}
       />,
     ))
 

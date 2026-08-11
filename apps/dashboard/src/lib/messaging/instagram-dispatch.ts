@@ -134,6 +134,7 @@ export async function dispatchInstagramDirect(
       id: threadRoute.replyIntegrationId,
       organizationId: org.id,
       platform: CHANNEL_TYPE.IG_DM,
+      lifecycleStatus: 'active',
     },
     select: {
       accessToken: true,

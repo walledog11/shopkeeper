@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
-import { db } from '@shopkeeper/db';
+import { beginIntegrationDisconnect, db } from '@shopkeeper/db';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
-import { stopGmailWatchIfUnused } from '@/app/api/integrations/_lib/gmail-watch';
-import { unsubscribeInstagramBeforeDisconnect } from '@/app/api/integrations/_lib/instagram-disconnect';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import { BadRequestError } from '@/lib/api/errors';
+import { enqueueIntegrationDisconnect } from '@/lib/integrations/enqueue-integration-disconnect';
 
 const EMAIL_ADDRESS_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -68,41 +67,26 @@ export const DELETE = withOrgRoute<{ id: string }>(
     requireAdmin: true,
   },
   async ({ org, params }) => {
-    const { id } = params;
-
-    const integration = await db.integration.findUnique({
-      where: { id },
+    const started = await beginIntegrationDisconnect({
+      integrationId: params.id,
+      organizationId: org.id,
     });
-    assertEntityInOrg(integration, org.id, 'Integration not found');
+    if (!started) {
+      return NextResponse.json({ error: 'Integration not found' }, { status: 404 });
+    }
 
-    await stopGmailWatchIfUnused(integration);
-    await unsubscribeInstagramBeforeDisconnect(integration);
-    await db.$transaction(async (tx) => {
-      const organization = await tx.organization.findUniqueOrThrow({
-        where: { id: org.id },
-        select: { defaultEmailIntegrationId: true },
-      });
-      const remainingEmail = integration.platform === 'email'
-        ? await tx.integration.findFirst({
-            where: {
-              organizationId: org.id,
-              platform: 'email',
-              id: { not: integration.id },
-            },
-            orderBy: { createdAt: 'asc' },
-            select: { id: true },
-          })
-        : null;
-
-      await tx.integration.delete({ where: { id } });
-      if (organization.defaultEmailIntegrationId === integration.id) {
-        await tx.organization.update({
-          where: { id: org.id },
-          data: { defaultEmailIntegrationId: remainingEmail?.id ?? null },
+    const queueAdmission = started.operation.status === 'completed'
+      ? 'not_needed'
+      : await enqueueIntegrationDisconnect({
+          operationId: started.operation.id,
+          organizationId: started.operation.organizationId,
         });
-      }
-    });
 
-    return new NextResponse(null, { status: 204 });
+    return NextResponse.json({
+      operationId: started.operation.id,
+      status: started.operation.status,
+      queueAdmission,
+      deduplicated: started.deduplicated,
+    }, { status: 202 });
   },
 );

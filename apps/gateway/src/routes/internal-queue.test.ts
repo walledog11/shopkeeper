@@ -10,11 +10,15 @@ const queueAdd = vi.fn();
 const queueGetJob = vi.fn();
 const findMessage = vi.fn();
 const findIntegration = vi.fn();
+const findIntegrationDisconnect = vi.fn();
 
 vi.mock('@shopkeeper/db', () => ({
   db: {
     message: { findFirst: (...args: unknown[]) => findMessage(...args) },
     integration: { findFirst: (...args: unknown[]) => findIntegration(...args) },
+    integrationDisconnect: {
+      findFirst: (...args: unknown[]) => findIntegrationDisconnect(...args),
+    },
   },
 }));
 
@@ -217,7 +221,12 @@ describe('POST /internal/queue/outbound-email', () => {
       },
     });
     expect(findIntegration).toHaveBeenCalledWith({
-      where: { id: 'int_1', organizationId: 'org_1', platform: 'email' },
+      where: {
+        id: 'int_1',
+        organizationId: 'org_1',
+        platform: 'email',
+        lifecycleStatus: 'active',
+      },
       select: { id: true, organizationId: true },
     });
   });
@@ -262,6 +271,71 @@ describe('POST /internal/queue/outbound-email', () => {
       expect.any(Object),
       { jobId: 'msg_1' },
     );
+  });
+});
+
+describe('POST /internal/queue/integration-disconnect', () => {
+  beforeEach(() => {
+    queueAdd.mockReset();
+    queueGetJob.mockReset().mockResolvedValue(null);
+    findIntegrationDisconnect.mockReset().mockResolvedValue({
+      id: 'disconnect_1',
+      organizationId: 'org_1',
+      status: 'pending',
+    });
+  });
+
+  it('validates the durable operation before enqueueing it by operation id', async () => {
+    queueAdd.mockResolvedValue({ id: 'disconnect_1' });
+
+    const response = await request(createApp())
+      .post('/internal/queue/integration-disconnect')
+      .set('x-internal-secret', 'test-internal-secret')
+      .send({ operationId: 'disconnect_1', organizationId: 'org_1' });
+
+    expect(response.status).toBe(202);
+    expect(findIntegrationDisconnect).toHaveBeenCalledWith({
+      where: { id: 'disconnect_1', organizationId: 'org_1' },
+      select: { id: true, organizationId: true, status: true },
+    });
+    expect(queueAdd).toHaveBeenCalledWith(
+      'process-integration-disconnect',
+      { operationId: 'disconnect_1', organizationId: 'org_1' },
+      { jobId: 'disconnect_1' },
+    );
+  });
+
+  it('rejects an operation owned by another workspace', async () => {
+    findIntegrationDisconnect.mockResolvedValueOnce(null);
+
+    const response = await request(createApp())
+      .post('/internal/queue/integration-disconnect')
+      .set('x-internal-secret', 'test-internal-secret')
+      .send({ operationId: 'disconnect_1', organizationId: 'other_org' });
+
+    expect(response.status).toBe(404);
+    expect(queueAdd).not.toHaveBeenCalled();
+  });
+
+  it('deduplicates an operation that already has an active job', async () => {
+    queueGetJob.mockResolvedValueOnce({
+      id: 'disconnect_1',
+      getState: vi.fn().mockResolvedValue('active'),
+      remove: vi.fn(),
+    });
+
+    const response = await request(createApp())
+      .post('/internal/queue/integration-disconnect')
+      .set('x-internal-secret', 'test-internal-secret')
+      .send({ operationId: 'disconnect_1', organizationId: 'org_1' });
+
+    expect(response.status).toBe(202);
+    expect(response.body).toMatchObject({
+      enqueued: true,
+      jobId: 'disconnect_1',
+      deduplicated: true,
+    });
+    expect(queueAdd).not.toHaveBeenCalled();
   });
 });
 

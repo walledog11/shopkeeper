@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   GMAIL_SYNC_QUEUE_DEFAULTS,
+  INTEGRATION_DISCONNECT_QUEUE_DEFAULTS,
   JOB,
   PROCESSING_QUEUE_DEFAULTS,
   QUEUE,
@@ -80,6 +81,7 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
+const ONE_MINUTE_MS = 60 * 1000;
 
 beforeEach(() => {
   queueInstances.length = 0;
@@ -95,14 +97,16 @@ describe('createMaintenanceWorkers', () => {
 
     const resources = await createMaintenanceWorkers(workerConn, producerConn, workerOptions);
 
-    expect(maintenanceJobRegistrations).toHaveLength(14);
-    expect(resources.workers).toHaveLength(15);
-    expect(resources.queues).toHaveLength(23);
+    expect(maintenanceJobRegistrations).toHaveLength(15);
+    expect(resources.workers).toHaveLength(16);
+    expect(resources.queues).toHaveLength(26);
     expect(queueInstances.map((queue) => queue.name)).toEqual([
       QUEUE.TOKEN_HEALTH,
       QUEUE.EMAIL_TOKEN_HEALTH,
       QUEUE.GMAIL_WATCH,
       QUEUE.GMAIL_SYNC,
+      QUEUE.INTEGRATION_DISCONNECT_SWEEP,
+      QUEUE.INTEGRATION_DISCONNECT,
       QUEUE.ARCHIVAL,
       QUEUE.PURGE,
       QUEUE.DIGEST,
@@ -122,11 +126,13 @@ describe('createMaintenanceWorkers', () => {
       QUEUE.GMAIL_SYNC,
       QUEUE.ORDER_REVIEW,
       QUEUE.OPERATOR_EVENT,
+      QUEUE.INTEGRATION_DISCONNECT,
     ]);
     expect(workerInstances.map((worker) => worker.name)).toEqual([
       QUEUE.TOKEN_HEALTH,
       QUEUE.EMAIL_TOKEN_HEALTH,
       QUEUE.GMAIL_WATCH,
+      QUEUE.INTEGRATION_DISCONNECT_SWEEP,
       QUEUE.ARCHIVAL,
       QUEUE.PURGE,
       QUEUE.DIGEST,
@@ -171,12 +177,23 @@ describe('createMaintenanceWorkers', () => {
       jobId: JOB.GMAIL_WATCH_MAINTENANCE_ID,
       every: 12 * ONE_HOUR_MS,
     });
+    expect(readRepeatJob(QUEUE.INTEGRATION_DISCONNECT_SWEEP)).toEqual({
+      name: JOB.INTEGRATION_DISCONNECT_SWEEP,
+      jobId: JOB.INTEGRATION_DISCONNECT_SWEEP_ID,
+      every: ONE_MINUTE_MS,
+    });
     const gmailSyncQueue = queueInstances.find(
       (queue) => queue.name === QUEUE.GMAIL_SYNC
         && readOptions(queue).defaultJobOptions !== undefined,
     );
     expect(readOptions(gmailSyncQueue!).defaultJobOptions).toEqual(
       GMAIL_SYNC_QUEUE_DEFAULTS,
+    );
+    const integrationDisconnectQueue = queueInstances.find(
+      (queue) => queue.name === QUEUE.INTEGRATION_DISCONNECT,
+    );
+    expect(readOptions(integrationDisconnectQueue!).defaultJobOptions).toEqual(
+      INTEGRATION_DISCONNECT_QUEUE_DEFAULTS,
     );
     expect(readRepeatJob(QUEUE.ARCHIVAL)).toEqual({
       name: JOB.ARCHIVE_THREADS,
@@ -250,7 +267,7 @@ describe('createMaintenanceWorkers', () => {
     );
 
     const repeatableAdds = queueInstances.flatMap((queue) => queue.add.mock.calls);
-    expect(repeatableAdds).toHaveLength(15);
+    expect(repeatableAdds).toHaveLength(16);
 
     for (const addCall of repeatableAdds) {
       expect(addCall[2]).toEqual(expect.objectContaining(PROCESSING_QUEUE_DEFAULTS));

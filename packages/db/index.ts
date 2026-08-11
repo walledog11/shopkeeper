@@ -292,3 +292,32 @@ export {
   type FollowUpWatchStatus,
   type RecordFollowUpWatchParams,
 } from './follow-up-watch.js';
+export {
+  beginIntegrationDisconnect,
+  claimIntegrationDisconnect,
+  completeIntegrationDisconnect,
+  failIntegrationDisconnect,
+  listRecoverableIntegrationDisconnects,
+  markIntegrationProviderCleaned,
+  releaseIntegrationDisconnect,
+} from './integration-disconnect.js';
+export type {
+  BeginIntegrationDisconnectParams,
+  BeginIntegrationDisconnectResult,
+  IntegrationDisconnectClaim,
+} from './integration-disconnect.js';
+export {
+  beginWorkspaceDeletion,
+  claimWorkspaceDeletion,
+  completeWorkspaceDeletion,
+  failWorkspaceDeletion,
+  listRecoverableWorkspaceDeletions,
+  markWorkspaceClerkDeleted,
+  markWorkspaceIntegrationsCleaned,
+  markWorkspaceStripeCanceled,
+  releaseWorkspaceDeletion,
+} from './workspace-deletion.js';
+export type {
+  BeginWorkspaceDeletionResult,
+  WorkspaceDeletionClaim,
+} from './workspace-deletion.js';

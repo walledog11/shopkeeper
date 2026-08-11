@@ -118,12 +118,11 @@ export function registerEmailWebhookRoutes(router: Router): void {
         return res.status(200).send('OK');
       }
 
-      const integration = await db.integration.findUnique({
+      const integration = await db.integration.findFirst({
         where: {
-          organizationId_emailProvider: {
-            organizationId: localPart,
-            emailProvider: EmailProvider.postmark,
-          },
+          organizationId: localPart,
+          emailProvider: EmailProvider.postmark,
+          lifecycleStatus: 'active',
         },
         select: { id: true, organizationId: true },
       });

@@ -75,6 +75,7 @@ export async function handleOutboundEmailJob(
         id: integrationId,
         organizationId,
         platform: ChannelType.email,
+        lifecycleStatus: 'active',
       },
     }),
   ]);

@@ -6,6 +6,7 @@ import { removeFailedQueueJob } from '../queue-maintenance.js';
 import { getGatewayBullMqQueue } from '../clients/gateway-queues.js';
 import { JOB, QUEUE } from '../constants.js';
 import type {
+  IntegrationDisconnectJobData,
   OutboundEmailJobData,
   OutboundEmailSource,
 } from '../types.js';
@@ -66,7 +67,12 @@ export function registerInternalQueueRoutes(router: Router): void {
         },
       }),
       db.integration.findFirst({
-        where: { id: integrationId, organizationId, platform: 'email' },
+        where: {
+          id: integrationId,
+          organizationId,
+          platform: 'email',
+          lifecycleStatus: 'active',
+        },
         select: { id: true, organizationId: true },
       }),
     ]);
@@ -106,6 +112,72 @@ export function registerInternalQueueRoutes(router: Router): void {
       logger.error(
         { err: (err as Error).message, messageId, source },
         '[InternalQueue] outbound-email enqueue error',
+      );
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  });
+
+  router.post('/queue/integration-disconnect', internalJsonParser(), async (req: Request, res: Response) => {
+    if (!authorizeInternalRequest(req, res, 'InternalQueue')) return;
+
+    const body = req.body as Record<string, unknown>;
+    const operationId = typeof body.operationId === 'string' ? body.operationId.trim() : '';
+    const organizationId = typeof body.organizationId === 'string' ? body.organizationId.trim() : '';
+    if (!operationId || !organizationId) {
+      return res.status(400).json({ error: 'operationId and organizationId are required' });
+    }
+
+    const operation = await db.integrationDisconnect.findFirst({
+      where: { id: operationId, organizationId },
+      select: { id: true, organizationId: true, status: true },
+    });
+    if (!operation) {
+      return res.status(404).json({ error: 'Integration disconnect not found' });
+    }
+    if (operation.status === 'completed') {
+      return res.status(202).json({
+        enqueued: false,
+        jobId: operation.id,
+        deduplicated: true,
+        completed: true,
+      });
+    }
+    if (operation.status === 'failed') {
+      return res.status(409).json({ error: 'Integration disconnect requires an explicit retry' });
+    }
+
+    const jobData: IntegrationDisconnectJobData = {
+      operationId: operation.id,
+      organizationId: operation.organizationId,
+    };
+    try {
+      const queue = getGatewayBullMqQueue(QUEUE.INTEGRATION_DISCONNECT);
+      const existingJob = await queue.getJob(operation.id);
+      if (existingJob) {
+        const state = await existingJob.getState();
+        if (operation.status === 'pending' && (state === 'failed' || state === 'completed')) {
+          await existingJob.remove();
+        } else {
+          return res.status(202).json({
+            enqueued: true,
+            jobId: existingJob.id,
+            deduplicated: true,
+          });
+        }
+      }
+
+      const job = await queue.add(JOB.INTEGRATION_DISCONNECT, jobData, {
+        jobId: operation.id,
+      });
+      logger.info(
+        { operationId, organizationId, jobId: job.id },
+        '[InternalQueue] Enqueued integration disconnect',
+      );
+      return res.status(202).json({ enqueued: true, jobId: job.id });
+    } catch (err) {
+      logger.error(
+        { err: (err as Error).message, operationId, organizationId },
+        '[InternalQueue] integration-disconnect enqueue error',
       );
       return res.status(500).json({ error: 'Internal Server Error' });
     }

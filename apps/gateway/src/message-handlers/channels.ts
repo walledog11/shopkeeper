@@ -29,7 +29,7 @@ import { processInboundMessage } from './inbound-persistence.js';
 
 async function lookupShopifyCustomerName(organizationId: string, email: string): Promise<string | null> {
   const integration = await db.integration.findFirst({
-    where: { organizationId, platform: 'shopify' },
+    where: { organizationId, platform: 'shopify', lifecycleStatus: 'active' },
     select: { accessToken: true, externalAccountId: true },
   });
   if (!integration?.accessToken || !integration.externalAccountId) return null;
@@ -245,6 +245,7 @@ export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Q
           id: job.data.integrationId,
           organizationId,
           platform: CHANNEL.EMAIL,
+          lifecycleStatus: 'active',
         },
         select: { id: true },
       });

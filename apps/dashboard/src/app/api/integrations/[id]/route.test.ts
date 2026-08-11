@@ -1,15 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChannelType, EmailProvider, db } from '@shopkeeper/db';
+import {
+  ChannelType,
+  EmailProvider,
+  claimIntegrationDisconnect,
+  completeIntegrationDisconnect,
+  db,
+  markIntegrationProviderCleaned,
+} from '@shopkeeper/db';
 import {
   cleanupTestData,
-  createTestCustomer,
   createTestIntegration,
   createTestOrg,
-  createTestThread,
 } from '@shopkeeper/db/test-helpers';
 
-const { mockEmitOpsAlert, mockFetch } = vi.hoisted(() => ({
+const { mockEmitOpsAlert, mockEnqueueDisconnect, mockFetch } = vi.hoisted(() => ({
   mockEmitOpsAlert: vi.fn(),
+  mockEnqueueDisconnect: vi.fn(),
   mockFetch: vi.fn(),
 }));
 
@@ -18,6 +24,9 @@ vi.mock('@clerk/nextjs/server', () => ({
 }));
 vi.mock('@/lib/server/ops-alerts', () => ({
   emitOpsAlert: mockEmitOpsAlert,
+}));
+vi.mock('@/lib/integrations/enqueue-integration-disconnect', () => ({
+  enqueueIntegrationDisconnect: mockEnqueueDisconnect,
 }));
 
 vi.stubGlobal('fetch', mockFetch);
@@ -36,6 +45,7 @@ beforeEach(async () => {
     orgId: org.clerkOrgId,
     orgRole: 'org:admin',
   } as ReturnType<typeof auth> extends Promise<infer T> ? T : never);
+  mockEnqueueDisconnect.mockResolvedValue('enqueued');
 });
 
 afterEach(async () => {
@@ -45,9 +55,8 @@ afterEach(async () => {
 });
 
 describe('DELETE /api/integrations/[id]', () => {
-  it('stops an active Gmail watch before deleting the last mailbox integration', async () => {
+  it('durably starts a disconnect without performing provider cleanup in the request', async () => {
     const integration = await createActiveGmailIntegration(org.id);
-    mockFetch.mockResolvedValueOnce(new Response(null, { status: 204 }));
 
     const response = await DELETE(
       new Request(`http://localhost/api/integrations/${integration.id}`, {
@@ -56,36 +65,27 @@ describe('DELETE /api/integrations/[id]', () => {
       { params: Promise.resolve({ id: integration.id }) },
     );
 
-    expect(response.status).toBe(204);
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    expect(String(mockFetch.mock.calls[0][0])).toBe(
-      'https://gmail.googleapis.com/gmail/v1/users/me/stop',
-    );
-    await expect(
-      db.integration.findUnique({ where: { id: integration.id } }),
-    ).resolves.toBeNull();
-  });
-
-  it('keeps the mailbox watch when another native integration uses it', async () => {
-    const integration = await createActiveGmailIntegration(org.id);
-    otherOrg = await createTestOrg();
-    const retained = await createActiveGmailIntegration(otherOrg.id);
-
-    const response = await DELETE(
-      new Request(`http://localhost/api/integrations/${integration.id}`, {
-        method: 'DELETE',
-      }),
-      { params: Promise.resolve({ id: integration.id }) },
-    );
-
-    expect(response.status).toBe(204);
+    expect(response.status).toBe(202);
+    const body = await response.json();
+    expect(body).toMatchObject({
+      deduplicated: false,
+      queueAdmission: 'enqueued',
+      status: 'pending',
+    });
+    expect(body.operationId).toEqual(expect.any(String));
+    expect(mockEnqueueDisconnect).toHaveBeenCalledWith({
+      operationId: body.operationId,
+      organizationId: org.id,
+    });
     expect(mockFetch).not.toHaveBeenCalled();
     await expect(
-      db.integration.findUnique({ where: { id: retained.id } }),
-    ).resolves.not.toBeNull();
+      db.integration.findUnique({ where: { id: integration.id } }),
+    ).resolves.toMatchObject({ lifecycleStatus: 'disconnecting' });
+    await expect(db.integrationDisconnect.findUnique({ where: { id: body.operationId } }))
+      .resolves.toMatchObject({ integrationId: integration.id, status: 'pending' });
   });
 
-  it('moves the default to the remaining provider when the default is deleted', async () => {
+  it('moves the default immediately so new mail never selects a disconnecting provider', async () => {
     const gmail = await createActiveGmailIntegration(org.id);
     const forwarding = await createTestIntegration(org.id, {
       platform: ChannelType.email,
@@ -102,13 +102,13 @@ describe('DELETE /api/integrations/[id]', () => {
       { params: Promise.resolve({ id: forwarding.id }) },
     );
 
-    expect(response.status).toBe(204);
+    expect(response.status).toBe(202);
     await expect(db.organization.findUniqueOrThrow({ where: { id: org.id } }))
       .resolves.toMatchObject({ defaultEmailIntegrationId: gmail.id });
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it('preserves the default when the non-default provider is deleted', async () => {
+  it('preserves the default when a non-default provider starts disconnecting', async () => {
     const gmail = await createActiveGmailIntegration(org.id);
     const forwarding = await createTestIntegration(org.id, {
       platform: ChannelType.email,
@@ -125,83 +125,60 @@ describe('DELETE /api/integrations/[id]', () => {
       { params: Promise.resolve({ id: forwarding.id }) },
     );
 
-    expect(response.status).toBe(204);
+    expect(response.status).toBe(202);
     await expect(db.organization.findUniqueOrThrow({ where: { id: org.id } }))
       .resolves.toMatchObject({ defaultEmailIntegrationId: gmail.id });
   });
 
-  it('unsubscribes an Instagram Login account before deleting it locally', async () => {
+  it('deduplicates repeated requests onto the same durable operation', async () => {
     const integration = await createInstagramLoginIntegration(org.id);
-    const customer = await createTestCustomer(org.id, 'instagram-disconnect-customer');
-    const thread = await createTestThread(org.id, customer.id, ChannelType.ig_dm);
-    await db.thread.update({
-      where: { id: thread.id },
-      data: { replyIntegrationId: integration.id },
-    });
-    mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), {
-      headers: { 'Content-Type': 'application/json' },
-      status: 200,
-    }));
-
-    const response = await DELETE(
+    const first = await DELETE(
+      new Request(`http://localhost/api/integrations/${integration.id}`, { method: 'DELETE' }),
+      { params: Promise.resolve({ id: integration.id }) },
+    );
+    const second = await DELETE(
       new Request(`http://localhost/api/integrations/${integration.id}`, { method: 'DELETE' }),
       { params: Promise.resolve({ id: integration.id }) },
     );
 
-    expect(response.status).toBe(204);
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe(`https://graph.instagram.com/v25.0/${integration.externalAccountId}/subscribed_apps`);
-    expect(init).toMatchObject({
-      method: 'DELETE',
-      headers: expect.objectContaining({ Authorization: 'Bearer instagram-access-token' }),
+    expect(first.status).toBe(202);
+    expect(second.status).toBe(202);
+    const firstBody = await first.json();
+    const secondBody = await second.json();
+    expect(secondBody).toMatchObject({
+      operationId: firstBody.operationId,
+      deduplicated: true,
+      status: 'pending',
     });
-    expect(String(init.body)).toBe('subscribed_fields=messages');
-    expect(new URL(url).searchParams.has('access_token')).toBe(false);
-    await expect(db.integration.findUnique({ where: { id: integration.id } })).resolves.toBeNull();
-    await expect(db.thread.findUniqueOrThrow({ where: { id: thread.id } }))
-      .resolves.toMatchObject({ replyIntegrationId: null });
-    expect(mockEmitOpsAlert).not.toHaveBeenCalled();
+    await expect(db.integrationDisconnect.count({
+      where: { integrationId: integration.id },
+    })).resolves.toBe(1);
   });
 
-  it('deletes local Instagram access and emits a cleanup warning when unsubscribe fails', async () => {
-    const integration = await createInstagramLoginIntegration(org.id);
-    mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({
-      error: {
-        code: 2,
-        error_subcode: 99,
-        fbtrace_id: 'trace-cleanup',
-        message: 'Meta temporarily unavailable',
-      },
-    }), {
-      headers: { 'Content-Type': 'application/json' },
-      status: 503,
-    }));
+  it('keeps a completed disconnect idempotent after the integration row is gone', async () => {
+    const integration = await createTestIntegration(org.id);
+    const first = await DELETE(
+      new Request(`http://localhost/api/integrations/${integration.id}`, { method: 'DELETE' }),
+      { params: Promise.resolve({ id: integration.id }) },
+    );
+    const firstBody = await first.json();
+    const claim = await claimIntegrationDisconnect(firstBody.operationId);
+    await markIntegrationProviderCleaned(firstBody.operationId, claim!.claimToken);
+    await completeIntegrationDisconnect(firstBody.operationId, claim!.claimToken);
 
-    const response = await DELETE(
+    const repeated = await DELETE(
       new Request(`http://localhost/api/integrations/${integration.id}`, { method: 'DELETE' }),
       { params: Promise.resolve({ id: integration.id }) },
     );
 
-    expect(response.status).toBe(204);
-    await expect(db.integration.findUnique({ where: { id: integration.id } })).resolves.toBeNull();
-    expect(mockEmitOpsAlert).toHaveBeenCalledWith(expect.objectContaining({
-      category: 'provider_cleanup',
-      level: 'warning',
-      tags: { channel: 'ig_dm', provider: 'meta' },
-      extra: expect.objectContaining({
-        accountId: integration.externalAccountId,
-        category: 'transient_provider_failure',
-        code: 2,
-        httpStatus: 503,
-        integrationId: integration.id,
-        manualCleanupRequired: true,
-        organizationId: org.id,
-        reason: 'provider_unsubscribe_failed',
-        requestId: 'trace-cleanup',
-        subcode: 99,
-      }),
-    }));
+    expect(repeated.status).toBe(202);
+    await expect(repeated.json()).resolves.toMatchObject({
+      operationId: firstBody.operationId,
+      status: 'completed',
+      queueAdmission: 'not_needed',
+      deduplicated: true,
+    });
+    expect(mockEnqueueDisconnect).toHaveBeenCalledTimes(1);
   });
 
   it('does not expose another organization Instagram token during disconnect', async () => {
@@ -219,21 +196,24 @@ describe('DELETE /api/integrations/[id]', () => {
       .resolves.not.toBeNull();
   });
 
-  it('deletes legacy Page-token rows without sending them to the Instagram Login API', async () => {
+  it('accepts queue admission failure because the database recovery sweep is authoritative', async () => {
     const integration = await createTestIntegration(org.id, {
       platform: ChannelType.ig_dm,
       externalAccountId: `legacy-ig-${org.id.slice(0, 8)}`,
       accessToken: 'legacy-page-token',
     });
+    mockEnqueueDisconnect.mockResolvedValueOnce('unknown');
 
     const response = await DELETE(
       new Request(`http://localhost/api/integrations/${integration.id}`, { method: 'DELETE' }),
       { params: Promise.resolve({ id: integration.id }) },
     );
 
-    expect(response.status).toBe(204);
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toMatchObject({ queueAdmission: 'unknown' });
     expect(mockFetch).not.toHaveBeenCalled();
-    await expect(db.integration.findUnique({ where: { id: integration.id } })).resolves.toBeNull();
+    await expect(db.integration.findUnique({ where: { id: integration.id } }))
+      .resolves.toMatchObject({ lifecycleStatus: 'disconnecting' });
   });
 });
 

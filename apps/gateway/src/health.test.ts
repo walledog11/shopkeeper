@@ -242,6 +242,7 @@ describe('health routes', () => {
         'gmailWatchMaintenance',
         'orderReview',
         'operatorEvent',
+        'integrationDisconnect',
       ]);
       expect(response.body.queues.aiSummary.failedJobs[0]).toMatchObject({
         sourceMessageId: 'source_message_secret',
@@ -254,6 +255,7 @@ describe('health routes', () => {
         'gmail-watch-maintenance',
         'order-review',
         'operator-event',
+        'integration-disconnect',
       ]));
     });
   });

@@ -26,6 +26,7 @@ export async function dispatchTikTokShopMessage(
     where: {
       organizationId: org.id,
       platform: CHANNEL_TYPE.TIKTOK,
+      lifecycleStatus: 'active',
       ...(parsedIdentity?.externalAccountId && { externalAccountId: parsedIdentity.externalAccountId }),
     },
   })

@@ -19,7 +19,7 @@ import { cn } from "@/lib/ui/cn"
 export interface IntegrationCardCallbacks {
   connectForwardingEmail: (email: string) => Promise<boolean>
   updateEmailAddress: (integrationId: string, email: string) => Promise<boolean>
-  disconnect: (integrationId: string) => Promise<void>
+  disconnect: (integrationId: string) => Promise<boolean>
   setDefaultEmail: (integrationId: string) => Promise<void>
   launchOAuth: (
     definition: OAuthIntegrationDefinition,
@@ -47,16 +47,17 @@ function DeleteConnectionAction({
   canManageWorkspace: boolean
   integration: Integration
   note: string
-  onDisconnect: (integrationId: string) => Promise<void>
+  onDisconnect: (integrationId: string) => Promise<boolean>
 }) {
   const [confirming, setConfirming] = useState(false)
+  const [disconnecting, setDisconnecting] = useState(false)
   return (
     <>
       <ActionRow
         icon={Trash2}
         label="Delete connection"
         destructive
-        disabled={!canManageWorkspace}
+        disabled={!canManageWorkspace || disconnecting}
         onClick={() => setConfirming(true)}
       />
       {confirming ? (
@@ -64,13 +65,16 @@ function DeleteConnectionAction({
           <p className="text-xs leading-relaxed text-foreground/55">{note}</p>
           <button
             type="button"
-            onClick={() => {
+            disabled={disconnecting}
+            onClick={async () => {
+              setDisconnecting(true)
+              const accepted = await onDisconnect(integration.id)
+              if (!accepted) setDisconnecting(false)
               setConfirming(false)
-              void onDisconnect(integration.id)
             }}
-            className="shrink-0 whitespace-nowrap text-xs font-semibold text-red-600 transition-colors hover:text-red-700"
+            className="shrink-0 whitespace-nowrap text-xs font-semibold text-red-600 transition-colors hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Confirm
+            {disconnecting ? "Disconnecting…" : "Confirm"}
           </button>
         </div>
       ) : null}

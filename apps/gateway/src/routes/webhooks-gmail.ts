@@ -159,6 +159,7 @@ export function registerGmailWebhookRoutes(router: Router): void {
       const candidates = await db.integration.findMany({
         where: {
           platform: 'email',
+          lifecycleStatus: 'active',
           externalAccountId: {
             equals: notification.emailAddress,
             mode: 'insensitive',

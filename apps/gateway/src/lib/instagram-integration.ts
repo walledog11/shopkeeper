@@ -53,7 +53,11 @@ export async function resolveActiveInstagramIntegration(
   instagramAccountId: string,
 ): Promise<ActiveInstagramIntegration | null> {
   const integrations = await db.integration.findMany({
-    where: { platform: 'ig_dm', externalAccountId: instagramAccountId },
+    where: {
+      platform: 'ig_dm',
+      externalAccountId: instagramAccountId,
+      lifecycleStatus: 'active',
+    },
     select: activeInstagramSelect,
     take: 2,
   });
@@ -76,6 +80,7 @@ export async function loadActiveInstagramIntegration(input: {
       organizationId: input.organizationId,
       platform: 'ig_dm',
       externalAccountId: input.instagramAccountId,
+      lifecycleStatus: 'active',
     },
     select: activeInstagramSelect,
   });

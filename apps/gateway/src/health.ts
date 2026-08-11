@@ -51,6 +51,7 @@ const DIAGNOSTIC_QUEUES = [
   { label: 'gmailWatchMaintenance', queueName: QUEUE.GMAIL_WATCH },
   { label: 'orderReview', queueName: QUEUE.ORDER_REVIEW },
   { label: 'operatorEvent', queueName: QUEUE.OPERATOR_EVENT },
+  { label: 'integrationDisconnect', queueName: QUEUE.INTEGRATION_DISCONNECT },
 ] as const;
 
 export function clearQueueDiagnosticsCache(): void {

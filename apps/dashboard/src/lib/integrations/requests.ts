@@ -18,8 +18,15 @@ export function connectForwardingEmail(platform: "email", externalAccountId: str
   )
 }
 
-export function disconnectIntegration(integrationId: string): Promise<void> {
-  return requestOk(
+export interface IntegrationDisconnectAccepted {
+  operationId: string
+  status: "pending" | "processing" | "completed" | "failed"
+  queueAdmission: "enqueued" | "failed" | "unknown" | "not_needed"
+  deduplicated: boolean
+}
+
+export function disconnectIntegration(integrationId: string): Promise<IntegrationDisconnectAccepted> {
+  return requestJson(
     `/api/integrations/${integrationId}`,
     { method: "DELETE" },
     "Failed to disconnect. Please try again.",

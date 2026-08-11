@@ -56,7 +56,11 @@ export async function resolveEmailIntegration(
       select: { defaultEmailIntegrationId: true },
     }),
     db.integration.findMany({
-      where: { organizationId: input.organizationId, platform: 'email' },
+      where: {
+        organizationId: input.organizationId,
+        platform: 'email',
+        lifecycleStatus: 'active',
+      },
       orderBy: { createdAt: 'asc' },
     }),
     input.threadId

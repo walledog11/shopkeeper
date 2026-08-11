@@ -220,14 +220,19 @@ function IntegrationsPageContent({
       }
     },
     async disconnect(integrationId) {
-      if (!requireAdmin()) return
+      if (!requireAdmin()) return false
       try {
         await disconnectIntegration(integrationId)
-        await mutate()
+        void mutate(
+          current => current?.filter(integration => integration.id !== integrationId),
+          { revalidate: true },
+        ).catch(() => undefined)
         setOpenId(null)
-        showToast("success", "Disconnected.")
+        showToast("success", "Disconnect started.")
+        return true
       } catch (error) {
         showToast("error", errorMessageFromUnknown(error, "Failed to disconnect. Please try again."))
+        return false
       }
     },
     launchOAuth(definition, params, onClosed, reauthorize) {

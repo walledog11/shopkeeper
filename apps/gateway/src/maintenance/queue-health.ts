@@ -23,7 +23,8 @@ type QueueHealthQueueLabel =
   | 'outboundEmail'
   | 'gmailSync'
   | 'orderReview'
-  | 'operatorEvent';
+  | 'operatorEvent'
+  | 'integrationDisconnect';
 type QueueHealthMetric = 'failed' | 'waiting' | 'active_stuck';
 
 // Per-queue SLO overrides. Any omitted metric falls back to the global
@@ -195,6 +196,10 @@ export async function checkGatewayQueueHealth(
 // and `failed` stays global everywhere (it's cumulative over the 7-day window).
 const OUTBOUND_EMAIL_THRESHOLDS: QueueHealthThresholds = { waiting: 20, activeStuckMs: 300_000 };
 const OPERATOR_EVENT_THRESHOLDS: QueueHealthThresholds = { waiting: 20 };
+const INTEGRATION_DISCONNECT_THRESHOLDS: QueueHealthThresholds = {
+  waiting: 20,
+  activeStuckMs: 5 * 60 * 1000,
+};
 
 export const registerQueueHealthMaintenanceJob: MaintenanceJobRegistration = async (context) => {
   const queueHealthQueue = createMaintenanceQueue(context, QUEUE.QUEUE_HEALTH);
@@ -204,6 +209,10 @@ export const registerQueueHealthMaintenanceJob: MaintenanceJobRegistration = asy
   const gmailSyncQueue = createMaintenanceQueue(context, QUEUE.GMAIL_SYNC);
   const orderReviewQueue = createMaintenanceQueue(context, QUEUE.ORDER_REVIEW);
   const operatorEventQueue = createMaintenanceQueue(context, QUEUE.OPERATOR_EVENT);
+  const integrationDisconnectQueue = createMaintenanceQueue(
+    context,
+    QUEUE.INTEGRATION_DISCONNECT,
+  );
 
   await scheduleRepeatableJob(queueHealthQueue, JOB.QUEUE_HEALTH_CHECK, JOB.QUEUE_HEALTH_ID, FIVE_MINUTES_MS);
 
@@ -225,6 +234,12 @@ export const registerQueueHealthMaintenanceJob: MaintenanceJobRegistration = asy
         queue: operatorEventQueue,
         thresholds: OPERATOR_EVENT_THRESHOLDS,
       },
+      {
+        label: 'integrationDisconnect',
+        queueName: QUEUE.INTEGRATION_DISCONNECT,
+        queue: integrationDisconnectQueue,
+        thresholds: INTEGRATION_DISCONNECT_THRESHOLDS,
+      },
     ], {
       counterClient: context.producerConn,
     });
@@ -243,6 +258,7 @@ export const registerQueueHealthMaintenanceJob: MaintenanceJobRegistration = asy
       gmailSyncQueue,
       orderReviewQueue,
       operatorEventQueue,
+      integrationDisconnectQueue,
     ],
   };
 };
@@ -432,4 +448,3 @@ function formatTimestamp(value: unknown): string | null {
   const timestampMs = readTimestampMs(value);
   return timestampMs === null ? null : new Date(timestampMs).toISOString();
 }
-

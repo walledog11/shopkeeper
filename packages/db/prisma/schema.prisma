@@ -114,6 +114,25 @@ enum StripeWebhookEventStatus {
   failed
 }
 
+enum LifecycleOperationStatus {
+  pending
+  processing
+  completed
+  failed
+}
+
+enum OrganizationLifecycleStatus {
+  active
+  deleting
+  deletion_failed
+}
+
+enum IntegrationLifecycleStatus {
+  active
+  disconnecting
+  cleanup_failed
+}
+
 // --- MODELS ---
 
 // One Organization = one Shopify business using the app.
@@ -129,6 +148,7 @@ model Organization {
   voiceProposal             Json?    @map("voice_proposal") @db.JsonB
   createdAt                 DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt                 DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  lifecycleStatus           OrganizationLifecycleStatus @default(active) @map("lifecycle_status")
 
   stripeCustomerId          String?   @unique @map("stripe_customer_id") @db.VarChar(255)
   stripeSubscriptionId      String?   @unique @map("stripe_subscription_id") @db.VarChar(255)
@@ -166,7 +186,33 @@ model Organization {
   storefrontChatVerifications StorefrontChatVerification[]
 
   @@index([clerkOrgId])
+  @@index([lifecycleStatus])
   @@map("organizations")
+}
+
+// Durable, idempotent record for destructive work that spans PostgreSQL,
+// Stripe, Clerk, and provider cleanup. It intentionally has no Organization
+// relation so the audit/retry record survives the final organization delete.
+model WorkspaceDeletion {
+  id                    String                   @id @default(uuid()) @db.Uuid
+  organizationId        String                   @unique @map("organization_id") @db.Uuid
+  clerkOrgId            String                   @map("clerk_org_id") @db.VarChar(255)
+  stripeSubscriptionId  String?                  @map("stripe_subscription_id") @db.VarChar(255)
+  status                LifecycleOperationStatus @default(pending)
+  claimToken            String?                  @map("claim_token") @db.Uuid
+  claimedAt             DateTime?                @map("claimed_at") @db.Timestamptz
+  attempts              Int                      @default(0)
+  integrationsCleanedAt DateTime?                @map("integrations_cleaned_at") @db.Timestamptz
+  stripeCanceledAt      DateTime?                @map("stripe_canceled_at") @db.Timestamptz
+  clerkDeletedAt        DateTime?                @map("clerk_deleted_at") @db.Timestamptz
+  localDataDeletedAt    DateTime?                @map("local_data_deleted_at") @db.Timestamptz
+  lastError             String?                  @map("last_error") @db.Text
+  completedAt           DateTime?                @map("completed_at") @db.Timestamptz
+  createdAt             DateTime                 @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime                 @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([status, claimedAt])
+  @@map("workspace_deletions")
 }
 
 // Durable processing record for Stripe webhooks. The signed event body is not
@@ -292,6 +338,7 @@ model Integration {
   tokenExpiresAt    DateTime?      @map("token_expires_at") @db.Timestamptz
   metadata          Json?          @default("{}") @db.JsonB
   createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  lifecycleStatus   IntegrationLifecycleStatus @default(active) @map("lifecycle_status")
 
   organization            Organization            @relation("OrganizationIntegrations", fields: [organizationId], references: [id], onDelete: Cascade)
   defaultForOrganizations Organization[]          @relation("DefaultEmailIntegration")
@@ -313,7 +360,34 @@ model Integration {
   // integrations_shopify_account_unique, both on (external_account_id) filtered
   // by platform. They are the race-safe backstop for the connect-time guards.
   @@index([organizationId])
+  @@index([organizationId, lifecycleStatus])
   @@map("integrations")
+}
+
+// Durable provider-cleanup record. It deliberately keeps scalar identifiers
+// rather than a foreign key so completion/failure remains inspectable after
+// the Integration row is removed. Provider credentials remain only on the
+// encrypted Integration row while it is in `disconnecting` state.
+model IntegrationDisconnect {
+  id                 String                   @id @default(uuid()) @db.Uuid
+  integrationId      String                   @unique @map("integration_id") @db.Uuid
+  organizationId     String                   @map("organization_id") @db.Uuid
+  platform           ChannelType
+  externalAccountId  String                   @map("external_account_id") @db.VarChar(255)
+  status             LifecycleOperationStatus @default(pending)
+  claimToken         String?                  @map("claim_token") @db.Uuid
+  claimedAt          DateTime?                @map("claimed_at") @db.Timestamptz
+  attempts           Int                      @default(0)
+  providerCleanedAt  DateTime?                @map("provider_cleaned_at") @db.Timestamptz
+  localDataDeletedAt DateTime?                @map("local_data_deleted_at") @db.Timestamptz
+  lastError          String?                  @map("last_error") @db.Text
+  completedAt        DateTime?                @map("completed_at") @db.Timestamptz
+  createdAt          DateTime                 @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime                 @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([organizationId, createdAt])
+  @@index([status, claimedAt])
+  @@map("integration_disconnects")
 }
 
 model Customer {
