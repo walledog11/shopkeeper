@@ -7,6 +7,7 @@ import {
 } from "@/lib/integrations/onboarding-setup";
 import { OnboardingExperience } from "./_components/OnboardingExperience";
 import { STEPS } from "./_components/model";
+import { parseOAuthOutcome } from "@/lib/integrations/oauth-contract";
 
 function parseResumeStep(value: string | string[] | undefined): OnboardingResumeStep | null {
   if (value === "shopify" || value === "email" || value === "plan") return value;
@@ -19,9 +20,15 @@ function parseResumeStep(value: string | string[] | undefined): OnboardingResume
 export default async function OnboardingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ step?: string | string[] }>;
+  searchParams: Promise<{
+    step?: string | string[];
+    provider?: string | string[];
+    status?: string | string[];
+    error?: string | string[];
+  }>;
 }) {
-  const { step } = await searchParams;
+  const params = await searchParams;
+  const { step } = params;
   const resumeStep = parseResumeStep(step);
   const pinnedStepIndex = resumeStep
     ? resolveOnboardingStepIndex(resumeStep, 0, STEPS.map(s => s.id))
@@ -30,6 +37,12 @@ export default async function OnboardingPage({
   const telegramBotUsername = normalizeTelegramBotUsername(process.env.TELEGRAM_BOT_USERNAME);
   const imessageHandle = normalizeImessageLineHandle(process.env.IMESSAGE_LINE_HANDLE);
   const shopifySimulatorEnabled = isShopifySimulatorEnabled();
+  const oauthParams = new URLSearchParams();
+  for (const key of ["provider", "status", "error"] as const) {
+    const value = params[key];
+    if (typeof value === "string") oauthParams.set(key, value);
+  }
+  const oauthOutcome = parseOAuthOutcome(oauthParams);
 
   return (
     <OnboardingExperience
@@ -37,6 +50,7 @@ export default async function OnboardingPage({
       imessageHandle={imessageHandle}
       shopifySimulatorEnabled={shopifySimulatorEnabled}
       pinnedStepIndex={pinnedStepIndex}
+      oauthOutcome={oauthOutcome}
     />
   );
 }

@@ -1,4 +1,4 @@
-import { Check, ChevronLeft, ChevronRight, Mail, ShieldCheck, Smartphone } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Loader2, Mail, ShieldCheck, Smartphone } from "lucide-react";
 import { PRODUCT_NAME } from "@/lib/brand";
 import { Button } from "@/components/ui/button";
 import { Accent, Headline } from "./primitives";
@@ -11,6 +11,7 @@ export function StepPlan({
   hasShopify,
   onStart,
   onBack,
+  saving,
 }: {
   data: OnboardingData;
   hasEmail: boolean;
@@ -18,6 +19,7 @@ export function StepPlan({
   hasShopify: boolean;
   onStart: () => void;
   onBack: () => void;
+  saving: boolean;
 }) {
   const storeName = data.storeName || "your store";
   const firstName = data.founderName.trim();
@@ -62,12 +64,14 @@ export function StepPlan({
       <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-center">
         <Button
           onClick={onStart}
-          disabled={!hasShopify}
+          disabled={!hasShopify || saving}
           className="h-11 gap-2 rounded-full bg-foreground px-6 text-[14px] font-semibold text-background hover:bg-foreground/85"
         >
-          {hasEmail ? "Start working" : "Finish setup"} <ChevronRight className="size-4" />
+          {saving
+            ? <Loader2 className="size-4 animate-spin" />
+            : <>{hasEmail ? "Start working" : "Finish setup"} <ChevronRight className="size-4" /></>}
         </Button>
-        <Button variant="ghost" size="sm" onClick={onBack} className="text-foreground/55 hover:bg-foreground/[0.05] hover:text-foreground">
+        <Button variant="ghost" size="sm" onClick={onBack} disabled={saving} className="text-foreground/55 hover:bg-foreground/[0.05] hover:text-foreground">
           <ChevronLeft className="mr-1 size-4" /> Change something
         </Button>
       </div>

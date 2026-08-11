@@ -1,16 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 import useSWR from "swr";
 import { useIntegrations } from "@/hooks/useIntegrations";
 import { fetcher } from "@/lib/api/fetcher";
 import { isShopifyIntegrationActive } from "@/lib/integrations/shopify-connection";
-import type {
-  ImessageStatus,
-  KbSyncState,
-  TelegramStatus,
-} from "../_components/model";
+import type { ImessageStatus, TelegramStatus } from "../_components/model";
 import { selectOnboardingIntegrations } from "../_lib/onboarding-integrations";
+import { useShopifyKnowledgeSync } from "./useShopifyKnowledgeSync";
 
 export function useOnboardingIntegrationState(enabled: boolean) {
   const { data, mutate: refresh } = useIntegrations({
@@ -31,35 +28,7 @@ export function useOnboardingIntegrationState(enabled: boolean) {
   );
 
   const hasShopify = isShopifyIntegrationActive(selected.shopify);
-  const [kbSync, setKbSync] = useState<KbSyncState>({
-    status: "idle",
-    policies: 0,
-    pages: 0,
-  });
-  const kbSyncStarted = useRef(false);
-
-  useEffect(() => {
-    if (!hasShopify || kbSyncStarted.current) return;
-    kbSyncStarted.current = true;
-    setKbSync((previous) => ({ ...previous, status: "syncing" }));
-    void (async () => {
-      try {
-        const response = await fetch("/api/integrations/shopify/kb-sync", { method: "POST" });
-        const body = await response.json() as {
-          syncedPages?: number;
-          syncedPolicies?: number;
-        };
-        if (!response.ok) throw new Error("sync failed");
-        setKbSync({
-          status: "done",
-          pages: body.syncedPages ?? 0,
-          policies: body.syncedPolicies ?? 0,
-        });
-      } catch {
-        setKbSync({ status: "error", policies: 0, pages: 0 });
-      }
-    })();
-  }, [hasShopify]);
+  const kbSync = useShopifyKnowledgeSync(hasShopify ? selected.shopify?.id : undefined);
 
   return {
     ...selected,

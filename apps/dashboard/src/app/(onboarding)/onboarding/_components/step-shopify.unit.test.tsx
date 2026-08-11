@@ -8,10 +8,11 @@ const baseProps = {
   data: DEFAULT_DATA,
   connected: false,
   shopifyRow: undefined,
-  kbSync: { status: "idle" as const, policies: 0, pages: 0 },
+  kbSync: { status: "idle" as const, retry: vi.fn() },
   onOAuth: vi.fn(),
   onSimulate: vi.fn(async () => true),
   simulating: false,
+  oauthPending: false,
 };
 
 describe("StepShopify", () => {
@@ -49,5 +50,24 @@ describe("StepShopify", () => {
 
     expect(html).toContain("Connected");
     expect(html).toContain("Demo");
+  });
+
+  it("shows an explicit knowledge-sync retry after failure", () => {
+    const html = renderToStaticMarkup(createElement(StepShopify, {
+      ...baseProps,
+      connected: true,
+      simulatorEnabled: false,
+      kbSync: {
+        status: "failed",
+        integrationId: "shopify-integration",
+        error: new Error("temporary"),
+        message: "Couldn't read your Shopify store. Try again.",
+        canRetry: true,
+        retry: vi.fn(),
+      },
+    }));
+
+    expect(html).toContain("Couldn&#x27;t read your store");
+    expect(html).toContain("Try again");
   });
 });

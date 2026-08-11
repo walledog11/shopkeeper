@@ -1,17 +1,11 @@
 "use client"
 
-import { useCallback, useEffect, useEffectEvent, useRef } from "react"
+import { useCallback } from "react"
 import type { KeyedMutator } from "swr"
 import type { Integration } from "@/types"
 import { OAUTH_ERROR_MESSAGES, type OAuthOutcome } from "@/lib/integrations/oauth-contract"
-import {
-  buildOAuthAuthUrl,
-  openOAuthPopup,
-  subscribeOAuthDone,
-  watchOAuthPopup,
-} from "@/lib/integrations/oauth-flow"
 import type { OAuthIntegrationDefinition } from "@/lib/integrations/catalog"
-import { captureClientProductEvent } from "@/lib/product-events"
+import { useOAuthLauncher } from "@/hooks/useOAuthLauncher"
 import { oauthDefinitionForProvider } from "./integration-presentation"
 
 export function useIntegrationsOAuth({
@@ -27,11 +21,7 @@ export function useIntegrationsOAuth({
   outcome: OAuthOutcome | null
   showToast: (tone: "success" | "error", message: string) => void
 }) {
-  const mountedRef = useRef(true)
-  const popupWatcherDisposers = useRef(new Set<() => void>())
-
-  const handleOutcome = useEffectEvent((nextOutcome: OAuthOutcome, refresh: boolean) => {
-    if (!mountedRef.current) return
+  const handleOutcome = useCallback((nextOutcome: OAuthOutcome, refresh: boolean) => {
     if (refresh) void mutate()
     if (nextOutcome.status === "failed") {
       showToast("error", OAUTH_ERROR_MESSAGES[nextOutcome.error])
@@ -44,23 +34,12 @@ export function useIntegrationsOAuth({
     if (definition.id === "gmail" && !gmailNativeInboundEnabled) {
       onGmailForwardingSetup()
     }
+  }, [gmailNativeInboundEnabled, mutate, onGmailForwardingSetup, showToast])
+
+  const { launch } = useOAuthLauncher({
+    outcome,
+    onOutcome: (nextOutcome, context) => handleOutcome(nextOutcome, context.refresh),
   })
-
-  useEffect(() => {
-    mountedRef.current = true
-    const disposers = popupWatcherDisposers.current
-    return () => {
-      mountedRef.current = false
-      for (const dispose of disposers) dispose()
-      disposers.clear()
-    }
-  }, [])
-
-  useEffect(() => subscribeOAuthDone((payload) => handleOutcome(payload.outcome, true)), [])
-
-  useEffect(() => {
-    if (outcome) handleOutcome(outcome, false)
-  }, [outcome])
 
   return useCallback((
     definition: OAuthIntegrationDefinition,
@@ -71,28 +50,15 @@ export function useIntegrationsOAuth({
     const authPath = reauthorize && definition.oauth.reauthorizePath
       ? definition.oauth.reauthorizePath(reauthorize) ?? definition.oauth.authPath
       : definition.oauth.authPath
-    const url = buildOAuthAuthUrl(authPath, {
+    void launch({
+      authPath,
+      definition,
+      params,
       returnTo: "/dashboard/integrations",
-      ...params,
+      onClosed: () => {
+        void mutate()
+        onClosed?.()
+      },
     })
-    void captureClientProductEvent({
-      event: "integration_connection_started",
-      platform: definition.oauth.analyticsPlatform,
-    })
-
-    const launch = openOAuthPopup(url)
-    if (launch.mode === "redirect") {
-      onClosed?.()
-      return
-    }
-
-    let dispose = () => {}
-    dispose = watchOAuthPopup(launch.popup, () => {
-      popupWatcherDisposers.current.delete(dispose)
-      if (!mountedRef.current) return
-      void mutate()
-      onClosed?.()
-    })
-    popupWatcherDisposers.current.add(dispose)
-  }, [mutate])
+  }, [launch, mutate])
 }

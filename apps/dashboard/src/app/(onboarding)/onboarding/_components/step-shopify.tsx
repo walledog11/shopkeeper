@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/ui/cn";
 import type { Integration } from "@/types";
 import { Accent, Headline, Lede } from "./primitives";
-import { RETURN_TO, type KbSyncState, type OnboardingData } from "./model";
+import type { KbSyncViewModel, OnboardingData } from "./model";
+import type { LaunchOnboardingOAuth } from "../_hooks/useOnboardingOAuth";
 
 export function StepShopify({
   data,
@@ -16,15 +17,17 @@ export function StepShopify({
   onSimulate,
   simulatorEnabled,
   simulating,
+  oauthPending,
 }: {
   data: OnboardingData;
   connected: boolean;
   shopifyRow: Integration | undefined;
-  kbSync: KbSyncState;
-  onOAuth: (url: string) => void;
+  kbSync: KbSyncViewModel;
+  onOAuth: LaunchOnboardingOAuth;
   onSimulate: () => Promise<boolean>;
   simulatorEnabled: boolean;
   simulating: boolean;
+  oauthPending: boolean;
 }) {
   const [shop, setShop] = useState("");
   const [simulatorError, setSimulatorError] = useState(false);
@@ -34,7 +37,7 @@ export function StepShopify({
   function launch() {
     const trimmed = shop.trim();
     if (!trimmed) return;
-    onOAuth(`/api/integrations/shopify/auth?shop=${encodeURIComponent(trimmed)}&returnTo=${encodeURIComponent(RETURN_TO)}`);
+    onOAuth("shopify", { shop: trimmed });
   }
 
   async function simulate() {
@@ -96,10 +99,10 @@ export function StepShopify({
               />
               <Button
                 onClick={launch}
-                disabled={!shop.trim()}
+                disabled={!shop.trim() || oauthPending}
                 className="h-11 shrink-0 gap-1 rounded-full bg-foreground px-5 text-[14px] font-semibold text-background hover:bg-foreground/85"
               >
-                Connect <ChevronRight className="size-4" />
+                {oauthPending ? <Loader2 className="size-4 animate-spin" /> : <>Connect <ChevronRight className="size-4" /></>}
               </Button>
             </div>
             <p className="mt-1.5 text-[12.5px] text-foreground/45">
@@ -112,7 +115,7 @@ export function StepShopify({
                     type="button"
                     variant="outline"
                     onClick={() => { void simulate(); }}
-                    disabled={simulating}
+                    disabled={simulating || oauthPending}
                     className="h-10 gap-2 rounded-full border-foreground/15 bg-transparent px-3.5 text-[13px] font-semibold text-foreground hover:bg-foreground/[0.05]"
                   >
                     {simulating ? <Loader2 className="size-4 animate-spin" /> : <FlaskConical className="size-4" />}
@@ -143,18 +146,30 @@ export function StepShopify({
         </details>
       </div>
 
-      {connected && kbSync.status !== "idle" && kbSync.status !== "error" && (
+      {connected && kbSync.status !== "idle" && (
         <div className="mt-4 flex w-full max-w-[520px] items-start gap-3 rounded-xl border border-foreground/10 bg-foreground/[0.03] px-4 py-3.5 text-left">
           <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-foreground/[0.06] text-foreground">
-            {kbSync.status === "syncing" ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+            {kbSync.status === "pending" ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
           </span>
           <div className="min-w-0 flex-1">
-            {kbSync.status === "syncing" ? (
+            {kbSync.status === "pending" ? (
               <>
                 <div className="text-[13px] font-semibold text-foreground">Reading your store…</div>
                 <div className="mt-0.5 text-[12px] leading-snug text-foreground/55">
                   Pulling your policies and pages into memory so I can answer accurately.
                 </div>
+              </>
+            ) : kbSync.status === "failed" ? (
+              <>
+                <div className="text-[13px] font-semibold text-foreground">Couldn&apos;t read your store</div>
+                <div className="mt-0.5 text-[12px] leading-snug text-foreground/55">
+                  Your store is still connected. {kbSync.canRetry ? "Try reading its policies and pages again." : "You can sync it later from Knowledge."}
+                </div>
+                {kbSync.canRetry && (
+                  <Button type="button" variant="outline" size="sm" onClick={kbSync.retry} className="mt-2 h-8 rounded-full px-3 text-[12px]">
+                    Try again
+                  </Button>
+                )}
               </>
             ) : (
               <>
@@ -180,7 +195,7 @@ function isSimulated(metadata: unknown): boolean {
   );
 }
 
-function learnedSummary(kbSync: KbSyncState): string {
+function learnedSummary(kbSync: Extract<KbSyncViewModel, { status: "succeeded" }>): string {
   const parts: string[] = [];
   if (kbSync.policies > 0) parts.push(`${kbSync.policies} ${kbSync.policies === 1 ? "policy" : "policies"}`);
   if (kbSync.pages > 0) parts.push(`${kbSync.pages} ${kbSync.pages === 1 ? "page" : "pages"}`);

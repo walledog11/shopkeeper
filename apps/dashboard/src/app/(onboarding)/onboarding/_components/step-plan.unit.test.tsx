@@ -14,6 +14,7 @@ describe("StepPlan", () => {
       hasShopify: true,
       onStart: vi.fn(),
       onBack: vi.fn(),
+      saving: false,
     }));
 
     expect(html).toContain("Finish setup");
@@ -34,11 +35,27 @@ describe("StepPlan", () => {
       hasShopify: true,
       onStart: vi.fn(),
       onBack: vi.fn(),
+      saving: false,
     }));
 
     expect(html).toContain("Start working");
     expect(html).toContain("Your first briefing");
     expect(html).toContain("support@example.com");
+  });
+
+  it("disables finish and back while completion is pending", () => {
+    const html = renderToStaticMarkup(createElement(StepPlan, {
+      data: DEFAULT_DATA,
+      hasEmail: false,
+      hasMessaging: false,
+      hasShopify: true,
+      onStart: vi.fn(),
+      onBack: vi.fn(),
+      saving: true,
+    }));
+
+    expect(html.match(/disabled=""/g)).toHaveLength(2);
+    expect(html).toContain("animate-spin");
   });
 });
 

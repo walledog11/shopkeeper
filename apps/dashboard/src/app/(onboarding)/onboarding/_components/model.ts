@@ -20,11 +20,24 @@ export interface OnboardingData {
   primaryEmail: string;
 }
 
-export type KbSyncState = {
-  status: "idle" | "syncing" | "done" | "error";
-  policies: number;
-  pages: number;
-};
+export type KbSyncState =
+  | { status: "idle" }
+  | { status: "pending"; integrationId: string }
+  | {
+      status: "failed";
+      integrationId: string;
+      error: unknown;
+      message: string;
+      canRetry: boolean;
+    }
+  | {
+      status: "succeeded";
+      integrationId: string;
+      policies: number;
+      pages: number;
+    };
+
+export type KbSyncViewModel = KbSyncState & { retry: () => void };
 
 export const DEFAULT_DATA: OnboardingData = {
   forwardingEmail: "",

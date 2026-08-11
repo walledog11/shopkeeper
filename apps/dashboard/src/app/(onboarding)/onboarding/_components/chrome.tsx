@@ -25,14 +25,15 @@ export function Footer({ idx, stepId, canContinue, hasEmail, hasMessaging, savin
             type="button"
             aria-label={exitLabel}
             onClick={() => { void onExit(); }}
-            className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-foreground/45 transition-colors hover:text-foreground/75"
+            disabled={saving}
+            className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-foreground/45 transition-colors hover:text-foreground/75 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <LogOut className="size-3.5" />
             <span className="hidden sm:inline">{exitLabel}</span>
           </button>
         )}
         {idx > 0 && (
-          <Button variant="ghost" size="sm" onClick={onBack} className="text-foreground/55 hover:bg-foreground/[0.05] hover:text-foreground">
+          <Button variant="ghost" size="sm" onClick={onBack} disabled={saving} className="text-foreground/55 hover:bg-foreground/[0.05] hover:text-foreground">
             <ChevronLeft className="mr-1 size-4" /> Back
           </Button>
         )}

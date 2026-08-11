@@ -6,7 +6,8 @@ import { EmailForwardingSetupPanel } from "@/components/integrations/EmailForwar
 import { GmailSupportAddressPanel } from "@/components/integrations/GmailSupportAddressPanel";
 import { Accent, Headline, Lede } from "./primitives";
 import type { Integration } from "@/types";
-import { RETURN_TO, type OnboardingData } from "./model";
+import type { OnboardingData } from "./model";
+import type { LaunchOnboardingOAuth } from "../_hooks/useOnboardingOAuth";
 
 export function StepEmail({
   data,
@@ -19,6 +20,7 @@ export function StepEmail({
   orgError,
   onRetryOrg,
   emailSaving,
+  oauthPending,
   onSaveForwarding,
   onSaveGmail,
   onOAuth,
@@ -33,12 +35,12 @@ export function StepEmail({
   orgError: boolean;
   onRetryOrg: () => void;
   emailSaving: boolean;
+  oauthPending: boolean;
   onSaveForwarding: (email: string) => void;
   onSaveGmail: (email: string) => void;
-  onOAuth: (url: string) => void;
+  onOAuth: LaunchOnboardingOAuth;
 }) {
   const [forwardingOpen, setForwardingOpen] = useState(false);
-  const returnTo = encodeURIComponent(RETURN_TO);
   const connectedEmail = data.primaryEmail
     || gmailIntegration?.fromEmail
     || gmailIntegration?.externalAccountId
@@ -94,7 +96,8 @@ export function StepEmail({
           description="Connect Gmail or Google Workspace and reply from your existing address."
           connected={Boolean(gmailIntegration)}
           actionLabel="Connect Gmail"
-          onConnect={() => onOAuth(`/api/integrations/gmail/auth?returnTo=${returnTo}`)}
+          onConnect={() => onOAuth("gmail", {})}
+          pending={oauthPending}
         />
       </div>
 
@@ -176,6 +179,7 @@ function ChannelCard({
   connected,
   actionLabel,
   onConnect,
+  pending,
 }: {
   name: string;
   logo: string;
@@ -183,6 +187,7 @@ function ChannelCard({
   connected: boolean;
   actionLabel: string;
   onConnect: () => void;
+  pending: boolean;
 }) {
   return (
     <div className={cn(
@@ -200,9 +205,10 @@ function ChannelCard({
       <button
         type="button"
         onClick={onConnect}
-        className="mt-4 inline-flex h-9 items-center justify-center rounded-full bg-foreground px-4 text-[13px] font-semibold text-background transition-colors hover:bg-foreground/85"
+        disabled={pending}
+        className="mt-4 inline-flex h-9 items-center justify-center gap-2 rounded-full bg-foreground px-4 text-[13px] font-semibold text-background transition-colors hover:bg-foreground/85 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {connected ? `Reconnect ${name}` : actionLabel}
+        {pending ? <Loader2 className="size-4 animate-spin" /> : connected ? `Reconnect ${name}` : actionLabel}
       </button>
     </div>
   );

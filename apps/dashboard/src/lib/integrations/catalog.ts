@@ -248,4 +248,12 @@ export function getIntegrationDefinition(id: IntegrationId): IntegrationDefiniti
   return definition
 }
 
+export function getOAuthIntegrationDefinition(
+  id: OAuthIntegrationDefinition["id"],
+): OAuthIntegrationDefinition {
+  const definition = getIntegrationDefinition(id)
+  if (definition.kind !== "oauth") throw new Error(`Integration is not OAuth: ${id}`)
+  return definition
+}
+
 export { OAUTH_ERROR_MESSAGES } from "./oauth-contract"

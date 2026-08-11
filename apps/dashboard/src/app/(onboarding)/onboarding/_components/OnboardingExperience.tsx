@@ -11,6 +11,7 @@ import {
   useOnboardingFlow,
   type OnboardingFlow,
 } from "../_hooks/useOnboardingFlow";
+import type { OAuthOutcome } from "@/lib/integrations/oauth-contract";
 
 export interface OnboardingChannelConfig {
   telegramBotUsername: string | null;
@@ -20,9 +21,13 @@ export interface OnboardingChannelConfig {
 
 export function OnboardingExperience({
   pinnedStepIndex,
+  oauthOutcome,
   ...channels
-}: OnboardingChannelConfig & { pinnedStepIndex: number | null }) {
-  const flow = useOnboardingFlow(pinnedStepIndex);
+}: OnboardingChannelConfig & {
+  pinnedStepIndex: number | null;
+  oauthOutcome: OAuthOutcome | null;
+}) {
+  const flow = useOnboardingFlow(pinnedStepIndex, oauthOutcome);
   return <OnboardingExperienceView flow={flow} channels={channels} />;
 }
 
@@ -93,6 +98,7 @@ function OnboardingExperienceView({
               onSimulate={handlers.simulateShopify}
               simulatorEnabled={channels.shopifySimulatorEnabled}
               simulating={status.shopifySimulating}
+              oauthPending={status.oauthPendingProvider === "shopify"}
             />
           )}
           {stepId === "connect" && (
@@ -117,6 +123,7 @@ function OnboardingExperienceView({
               orgError={status.orgEnsureFailed}
               onRetryOrg={() => { void handlers.ensureOrganization(); }}
               emailSaving={status.emailSaving}
+              oauthPending={status.oauthPendingProvider === "gmail"}
               onSaveForwarding={(email) => {
                 void handlers.saveEmailIntegration(email, "postmark");
               }}
@@ -134,6 +141,7 @@ function OnboardingExperienceView({
               hasShopify={status.hasShopify}
               onStart={handlers.finish}
               onBack={handlers.back}
+              saving={status.saving}
             />
           )}
         </div>
@@ -146,7 +154,7 @@ function OnboardingExperienceView({
             canContinue={status.canContinue}
             hasEmail={status.hasEmailReady}
             hasMessaging={status.hasMessaging}
-            saving={status.saving}
+            saving={status.controlsPending}
             onNext={handlers.next}
             onBack={handlers.back}
             exitLabel={exit.label}
