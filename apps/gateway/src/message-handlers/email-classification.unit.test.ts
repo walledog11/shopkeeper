@@ -137,4 +137,30 @@ describe('classifierSystemPrompt', () => {
       expect(classifierSystemPrompt(channel)).toBe(CLASSIFIER_SYSTEM_PROMPT);
     }
   });
+
+  it('stops asserting anonymity once the shopper has verified an order', () => {
+    const prompt = classifierSystemPrompt('shopify_chat', ['#1024']);
+    expect(prompt.startsWith(CLASSIFIER_SYSTEM_PROMPT)).toBe(true);
+    expect(prompt).toContain('verified owner of #1024');
+    // The guest suffix instructs the model to call the person "the visitor" and
+    // shows it an example ending "without giving an order number" — the exact
+    // sentence that landed on a card quoting the shopper's street address.
+    expect(prompt).not.toMatch(/never "the customer"/i);
+    expect(prompt).not.toContain('without giving an order number');
+    expect(prompt).toMatch(/never say they gave no order number/i);
+  });
+
+  it('scopes the verified claim to the orders actually proved', () => {
+    const prompt = classifierSystemPrompt('shopify_chat', ['#1024', '#1031']);
+    expect(prompt).toContain('#1024, #1031');
+    expect(prompt).toMatch(/any other order they mention as unverified/i);
+  });
+
+  it('keeps the guest wording when no order is verified', () => {
+    expect(classifierSystemPrompt('shopify_chat', [])).toBe(classifierSystemPrompt('shopify_chat'));
+  });
+
+  it('ignores verified orders on every other channel', () => {
+    expect(classifierSystemPrompt('email', ['#1024'])).toBe(CLASSIFIER_SYSTEM_PROMPT);
+  });
 });

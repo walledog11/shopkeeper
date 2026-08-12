@@ -23,6 +23,7 @@ import { firstDraftExcerpt, type OperatorSurface } from './operator-ledger.js';
 import { getContext, resolvePendingPlanContexts, removePendingPlanForThread, type PendingPlan } from '../operator-context.js';
 import { memberOperatorKey } from '@shopkeeper/agent/internal-thread';
 import { getOperatorPlanQueueMax } from '../config/runtime-config.js';
+import { listVerifiedOrderNames } from '../storefront-chat-verified-orders.js';
 
 export interface OperatorNotificationExclude {
   channel: OperatorBinding['channel'];
@@ -266,6 +267,10 @@ export function formatOperatorPlanMessage(
     // `evicts` (cap>1: the queue is full so the oldest waiting plan is trimmed),
     // or `stacked` (cap>1: it joins the queue, nothing dropped).
     queueNotice?: QueueNotice;
+    // Orders this storefront shopper proved control of. Without it the card
+    // describes an anonymous visitor above a draft that quotes their address,
+    // and the merchant has no way to tell a correct disclosure from a leak.
+    verifiedOrders?: readonly string[];
   },
 ): string {
   const stage = options?.stage ?? FRESH_STAGE;
@@ -280,6 +285,18 @@ export function formatOperatorPlanMessage(
   const draftBody = options?.rawToolCalls ? firstDraftExcerpt(options.rawToolCalls) : null;
 
   const lines: string[] = formatHeaderLines(customerName, channelType, summary, stage);
+
+  // Directly under the header, because it qualifies the header: everything above
+  // describes an anonymous storefront visitor, and this is the one fact that
+  // makes disclosing order details to them correct rather than a leak. Naming
+  // the mechanism rather than asserting "verified" lets the merchant judge how
+  // much it is worth.
+  const verifiedOrders = options?.verifiedOrders ?? [];
+  if (verifiedOrders.length > 0) {
+    lines.push(
+      `Verified: entered a code emailed to the address on ${verifiedOrders.join(', ')}.`,
+    );
+  }
 
   // Escalation is never something the merchant approves — it is the statement
   // that the thread is theirs now. Alone it is the whole card. Alongside a reply
@@ -566,6 +583,7 @@ export async function sendOperatorPlanNotification(
 
   const summary = aiSummary || instruction;
   const stage = await getConversationStage(threadId);
+  const verifiedOrders = await listVerifiedOrderNames(organizationId, threadId, channelType);
   const dashboardUrl = getGatewayDashboardUrl();
   const idempotencyKey = planNotificationIdempotencyKey(
     organizationId,
@@ -620,6 +638,7 @@ export async function sendOperatorPlanNotification(
           dashboardUrl,
           rawToolCalls: plan.rawToolCalls,
           stage,
+          ...(verifiedOrders.length > 0 ? { verifiedOrders } : {}),
           ...(queueNotice ? { queueNotice } : {}),
         }),
         contextPatch: {},

@@ -372,6 +372,47 @@ describe('formatOperatorPlanMessage', () => {
 
     expect(message).not.toContain('This replaces');
   });
+
+  // A verified storefront shopper is the one case where the card asks the
+  // merchant to approve disclosing order details to someone the rest of the card
+  // calls anonymous. Without this line the safe-looking move is to reject a
+  // correct plan.
+  it('states how a storefront shopper was verified, directly under the header', () => {
+    const message = formatOperatorPlanMessage(
+      null,
+      ChannelType.shopify_chat,
+      'Shopper asked where order #1024 is.',
+      plan.steps,
+      { verifiedOrders: ['#1024'] },
+    );
+
+    expect(message).toContain('Verified: entered a code emailed to the address on #1024.');
+    expect(message.indexOf('Verified:')).toBeLessThan(message.indexOf("I'd "));
+  });
+
+  it('names every verified order', () => {
+    const message = formatOperatorPlanMessage(
+      null,
+      ChannelType.shopify_chat,
+      'Shopper asked about two orders.',
+      plan.steps,
+      { verifiedOrders: ['#1024', '#1031'] },
+    );
+
+    expect(message).toContain('the address on #1024, #1031.');
+  });
+
+  it('says nothing about verification for an unverified storefront visitor', () => {
+    const message = formatOperatorPlanMessage(
+      null,
+      ChannelType.shopify_chat,
+      'Visitor asked about shipping.',
+      plan.steps,
+      {},
+    );
+
+    expect(message).not.toContain('Verified:');
+  });
 });
 
 describe('getConversationStage', () => {

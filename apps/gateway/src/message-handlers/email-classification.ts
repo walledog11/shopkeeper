@@ -85,10 +85,29 @@ const STOREFRONT_VISITOR_NOUN = `
 
 This thread is storefront chat. The person is an unidentified visitor on the shop's website, not a known customer — call them "the visitor" or "someone on the storefront" in "title" and "summary", never "the customer". Example summary: 'Visitor asked for the status of their order without giving an order number.'`;
 
-export function classifierSystemPrompt(channelType: string): string {
-  return channelType === CHANNEL.SHOPIFY_CHAT
-    ? `${CLASSIFIER_SYSTEM_PROMPT}${STOREFRONT_VISITOR_NOUN}`
-    : CLASSIFIER_SYSTEM_PROMPT;
+// Storefront chat stopped having one state when M1.5 landed: a shopper can now
+// prove control of the email on an order and be promoted out of guest. The
+// suffix above then becomes an active lie — it instructs the model to assert
+// nobody has identified themselves, and its example models the exact sentence
+// ("without giving an order number") that appeared on a card whose draft quoted
+// the shopper's street address. A merchant reading that is asked to approve a
+// disclosure to someone the card calls anonymous, so the safe-looking move is to
+// reject a correct plan, and the corrosive one is to stop reading the line.
+function storefrontVerifiedNoun(orderNames: readonly string[]): string {
+  const orders = orderNames.join(', ');
+  return `
+
+This thread is storefront chat, and the person has verified ownership of ${orders} by entering a code emailed to the address on that order. They are the verified owner of ${orders}, not an unidentified visitor — call them "the shopper" in "title" and "summary". Never say they gave no order number, no email, or no account information: ${orders} is established. Ownership extends to ${orders} only; treat any other order they mention as unverified.`;
+}
+
+export function classifierSystemPrompt(
+  channelType: string,
+  verifiedOrderNames: readonly string[] = [],
+): string {
+  if (channelType !== CHANNEL.SHOPIFY_CHAT) return CLASSIFIER_SYSTEM_PROMPT;
+  return verifiedOrderNames.length > 0
+    ? `${CLASSIFIER_SYSTEM_PROMPT}${storefrontVerifiedNoun(verifiedOrderNames)}`
+    : `${CLASSIFIER_SYSTEM_PROMPT}${STOREFRONT_VISITOR_NOUN}`;
 }
 
 const JSON_FENCE_OPEN = /^```json\s*/i;

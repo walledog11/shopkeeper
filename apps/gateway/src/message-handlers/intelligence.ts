@@ -15,6 +15,7 @@ import {
   classifierSystemPrompt,
   parseClassifierJson,
 } from './email-classification.js';
+import { listVerifiedOrderNames } from '../storefront-chat-verified-orders.js';
 
 export async function generateThreadIntelligence(
   threadId: string,
@@ -73,10 +74,16 @@ export async function generateThreadIntelligence(
 
     await enforceSpendCap(fullThread.organizationId, null);
 
+    const verifiedOrderNames = await listVerifiedOrderNames(
+      fullThread.organizationId,
+      fullThread.id,
+      fullThread.channelType,
+    );
+
     const aiResponse = await anthropic.messages.create({
       model: MODEL.CLAUDE,
       max_tokens: 400,
-      system: classifierSystemPrompt(fullThread.channelType),
+      system: classifierSystemPrompt(fullThread.channelType, verifiedOrderNames),
       messages: [{ role: 'user', content: conversationText }],
     });
     const usage = readModelUsage(aiResponse);
