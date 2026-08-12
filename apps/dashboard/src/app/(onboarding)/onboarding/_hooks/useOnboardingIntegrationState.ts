@@ -19,12 +19,10 @@ export function useOnboardingIntegrationState(enabled: boolean) {
   const { data: telegramStatus, mutate: refreshTelegram } = useSWR<TelegramStatus>(
     enabled ? "/api/integrations/telegram" : null,
     fetcher,
-    { refreshInterval: (latest) => (latest?.connected ? 0 : 3000) },
   );
   const { data: imessageStatus, mutate: refreshImessage } = useSWR<ImessageStatus>(
     enabled ? "/api/integrations/imessage/bind" : null,
     fetcher,
-    { refreshInterval: (latest) => (latest?.connected ? 0 : 3000) },
   );
 
   const hasShopify = isShopifyIntegrationActive(selected.shopify);

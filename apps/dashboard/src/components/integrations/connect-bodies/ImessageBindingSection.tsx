@@ -1,13 +1,19 @@
 "use client"
 
-import { useEffect, useReducer, useRef } from "react"
+import { useEffect, useReducer, useRef, useState } from "react"
 import useSWR from "swr"
 import { Bell, Check, Copy, Loader2, Plus, Smartphone, Trash2 } from "lucide-react"
 import { QRCodeSVG } from "qrcode.react"
 import { Button } from "@/components/ui/button"
+import {
+  channelBindingError,
+  channelBindingValue,
+  useChannelBindingAttempt,
+} from "@/hooks/useChannelBindingAttempt"
 import { fetcher } from "@/lib/api/fetcher"
 import { formatDate } from "@/lib/format/date"
 import { buildSmsDeepLink, formatHandleLabel } from "@/lib/imessage-connect"
+import { startImessageBinding } from "@/lib/integrations/channel-binding-client"
 import { captureClientProductEvent } from "@/lib/product-events"
 import { ConfigureSection } from "../ConfigureSection"
 import { ConfigureAccountRow } from "../ConfigureAccountRow"
@@ -29,19 +35,13 @@ const DELETE_ALL_NOTE = "Linked iPhones will stop being recognized when they tex
 
 interface ImessageBindingState {
   confirmingDeleteAll: boolean
-  copied: boolean
   error: string | null
-  minting: boolean
-  token: string | null
   unlinking: string | "all" | null
 }
 
 const INITIAL_STATE: ImessageBindingState = {
   confirmingDeleteAll: false,
-  copied: false,
   error: null,
-  minting: false,
-  token: null,
   unlinking: null,
 }
 
@@ -57,53 +57,44 @@ function mergeState(
 // `handle` is the fixed line to text, surfaced so the merchant knows where to send it.
 export function ImessageBindingSection({ handle }: { handle: string | null }) {
   const { data, mutate } = useSWR<ImessageBindStatus>('/api/integrations/imessage/bind', fetcher)
-  const [{ confirmingDeleteAll, copied, error, minting, token, unlinking }, updateState] =
+  const [{ confirmingDeleteAll, error: actionError, unlinking }, updateState] =
     useReducer(mergeState, INITIAL_STATE)
-  const handleCountAtMintRef = useRef(0)
+  const [copied, setCopied] = useState(false)
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handles = data?.handles ?? []
   const isConnected = handles.length > 0
-  const deepLink = token && handle ? buildSmsDeepLink(handle, token) : null
-
-  // While a connect code is showing, poll so a freshly linked handle appears, and
-  // clear the code once the merchant has texted it in (handle count grows).
-  useEffect(() => {
-    if (!token) return
-    const id = setInterval(() => { void mutate() }, 4000)
-    return () => clearInterval(id)
-  }, [token, mutate])
-
-  // When the texted code lands, the handle list grows — dismiss the QR/code UI.
-  useEffect(() => {
-    if (!token || handles.length <= handleCountAtMintRef.current) return
-    updateState({ token: null })
-  }, [token, handles.length])
-
-  async function mint() {
-    updateState({ minting: true, error: null })
-    try {
+  const binding = useChannelBindingAttempt({
+    connectionCount: handles.length,
+    requestBinding: (signal) => {
       void captureClientProductEvent({
         event: "integration_connection_started",
         platform: "imessage",
       })
-      const res = await fetch('/api/integrations/imessage/bind', { method: 'POST' })
-      const body = await res.json() as { token?: string; error?: string }
-      if (!res.ok || !body.token) throw new Error(body.error || 'Failed to create a connect code')
-      handleCountAtMintRef.current = handles.length
-      updateState({ token: body.token })
-    } catch (e) {
-      updateState({ error: e instanceof Error ? e.message : 'Failed to create a connect code' })
-    } finally {
-      updateState({ minting: false })
+      return startImessageBinding({ signal })
+    },
+    refreshStatus: mutate,
+    requestFailureMessage: "Couldn't create a connect code.",
+    refreshFailureMessage: "Couldn't verify the iMessage connection. Try again.",
+  })
+  const token = channelBindingValue(binding.state)
+  const minting = binding.state.status === "requesting"
+  const error = actionError ?? channelBindingError(binding.state)
+  const deepLink = token && handle ? buildSmsDeepLink(handle, token) : null
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current !== null) clearTimeout(copiedTimerRef.current)
     }
-  }
+  }, [])
 
   async function copyToken() {
     if (!token) return
     try {
       await navigator.clipboard.writeText(token)
-      updateState({ copied: true })
-      setTimeout(() => updateState({ copied: false }), 2000)
+      setCopied(true)
+      if (copiedTimerRef.current !== null) clearTimeout(copiedTimerRef.current)
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 2_000)
     } catch {
       // Clipboard can be unavailable (insecure context) — the code is still shown.
     }
@@ -117,6 +108,7 @@ export function ImessageBindingSection({ handle }: { handle: string | null }) {
       const res = await fetch(`/api/integrations/imessage/bind${qs}`, { method: 'DELETE' })
       if (!res.ok) throw new Error()
       await mutate()
+      binding.reset()
     } catch {
       updateState({ error: 'Failed to unlink. Please try again.' })
     } finally {
@@ -219,7 +211,7 @@ export function ImessageBindingSection({ handle }: { handle: string | null }) {
             <ActionRow
               icon={Plus}
               label={minting ? "Creating code…" : "Link another iPhone"}
-              onClick={mint}
+              onClick={() => { void binding.start() }}
               disabled={minting || token !== null}
             />
             <ActionRow
@@ -264,7 +256,7 @@ export function ImessageBindingSection({ handle }: { handle: string | null }) {
             <Button
               size="sm"
               disabled={minting}
-              onClick={mint}
+              onClick={() => { void binding.start() }}
               className="h-9 px-4 font-medium"
             >
               {minting ? <Loader2 className="size-3.5 animate-spin" /> : "Link your iPhone"}

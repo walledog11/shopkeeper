@@ -1,10 +1,17 @@
 "use client"
 
-import { useReducer, useRef } from "react"
+import { useReducer } from "react"
 import useSWR from "swr"
+import {
+  channelBindingError,
+  channelBindingValue,
+  useChannelBindingAttempt,
+} from "@/hooks/useChannelBindingAttempt"
 import { cn } from "@/lib/ui/cn"
 import { fetcher } from "@/lib/api/fetcher"
 import type { PersonalDeviceIntegrationDefinition } from "@/lib/integrations/catalog"
+import { startTelegramBinding } from "@/lib/integrations/channel-binding-client"
+import { openChannelBindingWindow } from "@/lib/integrations/open-channel-binding-window"
 import type { TelegramMemberStatus } from "@/lib/integrations/telegram-status"
 import {
   CARD_ACTIONS,
@@ -26,16 +33,12 @@ import {
 const MAX_TELEGRAM_DEVICES = 3
 
 interface TelegramCardState {
-  connectUrl: string | null
-  connecting: boolean
   disconnecting: string | "all" | null
   error: string | null
   open: boolean
 }
 
 const INITIAL_STATE: TelegramCardState = {
-  connectUrl: null,
-  connecting: false,
   disconnecting: null,
   error: null,
   open: false,
@@ -60,37 +63,28 @@ export default function TelegramCard({
     initialStatus ? { fallbackData: initialStatus } : undefined,
   )
 
-  const [{ connectUrl, connecting, disconnecting, error, open }, updateState] =
+  const [{ disconnecting, error: actionError, open }, updateState] =
     useReducer(mergeState, INITIAL_STATE)
-  const connectIssuedChatCountRef = useRef<number | null>(null)
 
   const chats = status?.chats ?? []
   const isConnected = chats.length > 0
   const botUsername = configuredBotUsername ?? status?.botUsername ?? null
   const isAvailable = Boolean(botUsername)
   const atDeviceLimit = chats.length >= MAX_TELEGRAM_DEVICES
+  const binding = useChannelBindingAttempt({
+    connectionCount: chats.length,
+    requestBinding: (signal) => startTelegramBinding({ signal }),
+    refreshStatus: mutate,
+    requestFailureMessage: "Couldn't start Telegram connect.",
+    refreshFailureMessage: "Couldn't verify the Telegram connection. Try again.",
+  })
+  const connectUrl = channelBindingValue(binding.state)
+  const connecting = binding.state.status === "requesting"
+  const error = actionError ?? channelBindingError(binding.state)
 
-  const visibleConnectUrl = connectIssuedChatCountRef.current !== null
-    && chats.length > connectIssuedChatCountRef.current
-    ? null
-    : connectUrl
-
-  async function connect() {
-    updateState({ connecting: true, error: null })
-    try {
-      const res = await fetch('/api/integrations/telegram', { method: 'POST' })
-      const data = await res.json() as { url?: string; error?: string }
-      if (!res.ok) throw new Error(data.error || 'Failed to start Telegram connect')
-      if (!data.url) throw new Error('Failed to start Telegram connect')
-      updateState({ connectUrl: data.url })
-      connectIssuedChatCountRef.current = chats.length
-      window.open(data.url, '_blank', 'noopener,noreferrer')
-      setTimeout(() => mutate(), 5000)
-    } catch (e) {
-      updateState({ error: e instanceof Error ? e.message : 'Failed to start Telegram connect' })
-    } finally {
-      updateState({ connecting: false })
-    }
+  function connect() {
+    updateState({ error: null })
+    void openChannelBindingWindow(binding.start)
   }
 
   async function disconnect(chatId?: string) {
@@ -102,9 +96,8 @@ export default function TelegramCard({
         : '/api/integrations/telegram'
       const res = await fetch(url, { method: 'DELETE' })
       if (!res.ok) throw new Error('Failed')
-      updateState({ connectUrl: null })
-      connectIssuedChatCountRef.current = null
       await mutate()
+      binding.reset()
     } catch (e) {
       updateState({ error: e instanceof Error ? e.message : 'Failed to disconnect Telegram' })
     } finally {
@@ -146,7 +139,10 @@ export default function TelegramCard({
 
       <IntegrationConfigureDialog
         open={open}
-        onOpenChange={open => updateState({ open, error: open ? null : error })}
+        onOpenChange={(nextOpen) => {
+          updateState({ open: nextOpen, error: nextOpen ? null : actionError })
+          if (nextOpen && channelBindingError(binding.state)) binding.reset()
+        }}
         config={config}
         statusLine={dialogStatusLine}
       >
@@ -173,7 +169,7 @@ export default function TelegramCard({
           <TelegramConnectBody
             botUsername={botUsername}
             connecting={connecting}
-            connectUrl={visibleConnectUrl}
+            connectUrl={connectUrl}
             disabled={!isAvailable}
             onConnect={connect}
           />

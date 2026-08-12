@@ -1,7 +1,17 @@
-import { useEffect, useReducer, useRef, type ComponentType } from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
 import { Check, Copy, ExternalLink, Loader2, Send, Smartphone } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
+import {
+  channelBindingError,
+  channelBindingValue,
+  useChannelBindingAttempt,
+} from "@/hooks/useChannelBindingAttempt";
 import { buildSmsDeepLink, formatHandleLabel } from "@/lib/imessage-connect";
+import {
+  startImessageBinding,
+  startTelegramBinding,
+} from "@/lib/integrations/channel-binding-client";
+import { openChannelBindingWindow } from "@/lib/integrations/open-channel-binding-window";
 import { captureClientProductEvent } from "@/lib/product-events";
 import { cn } from "@/lib/ui/cn";
 import type {
@@ -49,14 +59,14 @@ export function StepConnect({
         </div>
       ) : (
         <div className="mt-6 grid w-full max-w-[560px] grid-cols-1 gap-4 text-left md:grid-cols-2">
-          {imessageAvailable && (
+          {imessageHandle && (
             <ImessageConnector
-              handle={imessageHandle as string}
+              handle={imessageHandle}
               onRefresh={onRefreshImessage}
               status={imessageStatus}
             />
           )}
-          {telegramAvailable && (
+          {telegramBotUsername && (
             <TelegramConnector onRefresh={onRefreshTelegram} status={telegramStatus} />
           )}
         </div>
@@ -76,24 +86,6 @@ export function StepConnect({
       </div>
     </div>
   );
-}
-
-interface ConnectorState {
-  connectValue: string | null; // iMessage token or Telegram deep-link URL
-  minting: boolean;
-  copied: boolean;
-  error: string | null;
-}
-
-const INITIAL_CONNECTOR_STATE: ConnectorState = {
-  connectValue: null,
-  minting: false,
-  copied: false,
-  error: null,
-};
-
-function mergeState(state: ConnectorState, patch: Partial<ConnectorState>): ConnectorState {
-  return { ...state, ...patch };
 }
 
 function ChannelShell({ icon: Icon, name, tagline, connected, children }: {
@@ -166,48 +158,38 @@ function ImessageConnector({ handle, onRefresh, status }: {
   onRefresh: RefreshStatus;
   status: ImessageStatus | undefined;
 }) {
-  const [{ connectValue: token, minting, copied, error }, update] = useReducer(mergeState, INITIAL_CONNECTOR_STATE);
-  const handleCountAtMint = useRef(0);
-
   const handles = status?.handles ?? [];
   const connected = handles.length > 0;
+  const binding = useChannelBindingAttempt({
+    connectionCount: handles.length,
+    requestBinding: (signal) => {
+      void captureClientProductEvent({ event: "integration_connection_started", platform: "imessage" });
+      return startImessageBinding({ signal });
+    },
+    refreshStatus: onRefresh,
+    requestFailureMessage: "Couldn't create a connect code.",
+    refreshFailureMessage: "Couldn't verify the iMessage connection. Try again.",
+  });
+  const token = channelBindingValue(binding.state);
+  const minting = binding.state.status === "requesting";
+  const error = channelBindingError(binding.state);
+  const [copied, setCopied] = useState(false);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const deepLink = token ? buildSmsDeepLink(handle, token) : null;
 
-  // Poll while a code is showing so the freshly linked handle appears.
   useEffect(() => {
-    if (!token) return;
-    const id = setInterval(() => { void onRefresh(); }, 3500);
-    return () => clearInterval(id);
-  }, [token, onRefresh]);
-
-  // Once the texted code lands, the handle list grows — clear the code.
-  useEffect(() => {
-    if (!token || handles.length <= handleCountAtMint.current) return;
-    update({ connectValue: null });
-  }, [token, handles.length]);
-
-  async function mint() {
-    update({ minting: true, error: null });
-    try {
-      void captureClientProductEvent({ event: "integration_connection_started", platform: "imessage" });
-      const res = await fetch("/api/integrations/imessage/bind", { method: "POST" });
-      const body = await res.json() as { token?: string; error?: string };
-      if (!res.ok || !body.token) throw new Error(body.error || "Couldn't create a connect code");
-      handleCountAtMint.current = handles.length;
-      update({ connectValue: body.token });
-    } catch (e) {
-      update({ error: e instanceof Error ? e.message : "Couldn't create a connect code" });
-    } finally {
-      update({ minting: false });
-    }
-  }
+    return () => {
+      if (copiedTimerRef.current !== null) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
 
   async function copyToken() {
     if (!token) return;
     try {
       await navigator.clipboard.writeText(token);
-      update({ copied: true });
-      setTimeout(() => update({ copied: false }), 2000);
+      setCopied(true);
+      if (copiedTimerRef.current !== null) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 2_000);
     } catch {
       // Clipboard may be unavailable — the code is still shown.
     }
@@ -261,7 +243,11 @@ function ImessageConnector({ handle, onRefresh, status }: {
             <li>Open Messages or scan the code from another device</li>
             <li>Send the prefilled message</li>
           </ol>
-          <MintButton label="Link my iPhone" onClick={mint} minting={minting} />
+          <MintButton
+            label="Link my iPhone"
+            onClick={() => { void binding.start(); }}
+            minting={minting}
+          />
         </div>
       )}
     </ChannelShell>
@@ -272,37 +258,21 @@ function TelegramConnector({ onRefresh, status }: {
   onRefresh: RefreshStatus;
   status: TelegramStatus | undefined;
 }) {
-  const [{ connectValue: url, minting, error }, update] = useReducer(mergeState, INITIAL_CONNECTOR_STATE);
-  const chatCountAtMint = useRef(0);
-
   const chats = status?.chats ?? [];
   const connected = chats.length > 0;
+  const binding = useChannelBindingAttempt({
+    connectionCount: chats.length,
+    requestBinding: (signal) => startTelegramBinding({ signal }),
+    refreshStatus: onRefresh,
+    requestFailureMessage: "Couldn't start Telegram connect.",
+    refreshFailureMessage: "Couldn't verify the Telegram connection. Try again.",
+  });
+  const url = channelBindingValue(binding.state);
+  const minting = binding.state.status === "requesting";
+  const error = channelBindingError(binding.state);
 
-  useEffect(() => {
-    if (!url) return;
-    const id = setInterval(() => { void onRefresh(); }, 3500);
-    return () => clearInterval(id);
-  }, [onRefresh, url]);
-
-  useEffect(() => {
-    if (!url || chats.length <= chatCountAtMint.current) return;
-    update({ connectValue: null });
-  }, [url, chats.length]);
-
-  async function mint() {
-    update({ minting: true, error: null });
-    try {
-      const res = await fetch("/api/integrations/telegram", { method: "POST" });
-      const body = await res.json() as { url?: string; error?: string };
-      if (!res.ok || !body.url) throw new Error(body.error || "Couldn't start Telegram connect");
-      chatCountAtMint.current = chats.length;
-      update({ connectValue: body.url });
-      window.open(body.url, "_blank", "noopener,noreferrer");
-    } catch (e) {
-      update({ error: e instanceof Error ? e.message : "Couldn't start Telegram connect" });
-    } finally {
-      update({ minting: false });
-    }
+  function mint() {
+    void openChannelBindingWindow(binding.start);
   }
 
   return (
