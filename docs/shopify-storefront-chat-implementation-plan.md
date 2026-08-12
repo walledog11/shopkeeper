@@ -20,13 +20,22 @@ What is still missing is session revocation beyond the merchant toggle,
 exhaustion alerting, and the eval gate. The merchant-facing toggle shipped
 2026-08-10 (`fd5616db`).
 
-**M1.5 is wired as of 2026-08-11, and the posture question that blocked it was
-answered by removing it.** Verification is not an agent capability: the host runs
-the challenge on its own route, and the agent only ever observes a session that
-already is or is not verified. That keeps the whole ritual out of the
-plan/approve loop without giving an anonymous channel auto-execute or teaching
-the planner to perform side effects — and it dissolved the injected-delivery
-finding rather than paying it. Built and tested; **not yet exercised live**.
+**M1.5 is wired as of 2026-08-11 and verified live on 2026-08-12**, and the
+posture question that blocked it was answered by removing it. Verification is not
+an agent capability: the host runs the challenge on its own route, and the agent
+only ever observes a session that already is or is not verified. That keeps the
+whole ritual out of the plan/approve loop without giving an anonymous channel
+auto-execute or teaching the planner to perform side effects — and it dissolved
+the injected-delivery finding rather than paying it.
+
+**The mechanism works and the experience does not.** Every security property held
+on the dev store, including the strong form of the disclosure test. What the run
+produced for the merchant was a nine-line approval card asking permission to say
+"not shipped yet" — and that is now recorded as a design error rather than a copy
+problem. **Read "The card was the wrong artifact" before adding anything
+merchant-facing to this plan**; it sets the rule that notification shape follows
+the decision the merchant actually has to make, and most storefront messages
+contain none.
 
 **The escalation regression is fixed as of 2026-08-08.** `applyEscalationRouting`
 preserves `send_reply` for guest contexts, so a guest order question replies
@@ -53,7 +62,7 @@ none of them worked.
 This is the only new **customer-origin** channel on the table. Nothing else
 proposed adds a way for a customer to reach the merchant.
 
-Last reviewed: 2026-08-11.
+Last reviewed: 2026-08-12.
 
 ## Scope decision
 
@@ -1024,8 +1033,14 @@ without touching what any merchant has granted.
 
 **The invariant, in one line: disclosure only ever flows to the address already
 on the order.** Someone who types a stranger's order number with their own email
-gets a code delivered to the real owner's inbox and learns nothing — not even
-whether the order exists.
+learns nothing — not even whether the order exists.
+
+**Corrected 2026-08-12 against the built code.** This section used to add that
+such a person "gets a code delivered to the real owner's inbox". They do not:
+`verification.ts:135` returns before a code is generated unless the supplied
+address matches the order's, so a mismatch mails nobody. That is stricter than
+described — the widget cannot deliver even one unsolicited email to an owner — and
+it is what the live `#1025` probe confirmed.
 
 ### Constraints
 
@@ -1227,29 +1242,55 @@ imports the crypto-free normalizer from `order-reference.ts` instead; both sides
 of the comparison go through the same function, so consistency is what matters
 rather than which. Confirmed by `next build`, not by reasoning about it.
 
-**Not verified live.** Nothing above has been run against the dev store: no code
-has actually landed in an inbox, and the widget card has not been opened in a
-real theme. The three things that looked correct in code and behaved differently
-in production on this feature — an unapplied migration, a stale gateway build, a
-router deleting a tool call — were all caught by live probes rather than tests,
-and this is the same class of change.
+### Verified live 2026-08-12 — the mechanism works, the experience does not
 
-**Two of those three are cleared for this change, checked 2026-08-11 rather than
-assumed.** `prisma migrate status` against the production Neon database reports
-70 migrations and nothing pending, so `20260809120000_add_storefront_chat_verification`
-is applied — the landmine this file records twice did not recur a third time.
-And both hosts are serving `HEAD`: the Railway gateway deployed SUCCESS at
-17:03 and the Vercel production deployment was created at 17:03, both after
-`bc22f1be` at 17:01. So the verify route is live against a schema that has its
-columns.
+**Every security property held on the dev store.** Order `#1024` (checkout email
+`walledog11@gmail.com`) verified end to end: challenge row written with a
+ten-minute expiry, code delivered to the address **on the order**, correct code
+promoted the session, and `get_order_by_name("#1024")` then answered a question
+whose message never contained an order number — the agent took it from the
+verified session. Asked about `#1026` in the same breath, it refused and offered
+to verify that one instead. Scoping works.
 
-That narrows what a live run is testing rather than substituting for it. It buys
-nothing about the third failure mode, which was behavioural, and nothing about
-the parts no test could reach: that a code lands in a real inbox at the address
-**on the order**, that a mismatch is indistinguishable from a match to the
-shopper, that the widget card renders and works in a real theme, and that the
-verified read refuses the neighbouring order number. If the live run fails, the
-two usual suspects are already ruled out.
+The disclosure invariant was tested with the strong form, which this dev store
+makes possible because the author owns one address and not the other: `#1025`
+belongs to a yahoo address, and requesting a code for it with
+`walledog11@gmail.com` returned copy **byte-identical** to the match case, wrote
+no row, and mailed nothing. `#9999` returned the same again. `verificationSends`
+moved 1 → 4 across match, re-request, mismatch and nonexistent alike, so probing
+is invisible in the response *and* in the counter.
+
+**One divergence from this file's own prose, in the safer direction.** "Flow"
+below says a stranger's order number plus your own email gets a code delivered
+to the real owner. It does not: `verification.ts:135` returns before generating
+anything unless the supplied address matches. Nothing is mailed at all, which
+means the widget cannot be used to mail-bomb an owner even once. The invariant
+holds — the mechanism described does not exist.
+
+**Three of the three historical failure modes were ruled out first**, checked
+rather than assumed: production migrations applied (`prisma migrate status`
+reports nothing pending), and both hosts on `HEAD`. **And a fourth appeared that
+this file had never named: the theme extension is a third deploy surface.**
+Vercel and Railway were current; the widget was two days stale, because the
+asset ships inside the Shopify app version and reaches no storefront until
+`shopify app deploy`. The verification card simply did not exist on the store
+while the routes behind it were live. Fixed by releasing `-13`. Any future claim
+that "the storefront is on HEAD" has to name three hosts.
+
+**Defects the live run found, none of which any test could have.** Fixed in
+`-14`: a one-hour session token with no refresh, so a chat left open longer than
+that answered 401 to every send and rendered it as *"Something went wrong. Try
+again in a moment."* — a permanent death described as transient, recoverable
+only by a reload the shopper has no reason to attempt; the verification card's
+submit button rendering below the log's fold because `cardShell` scrolled before
+the fields existed; and "Check an order" stretching to a full-width underlined
+fragment. Still open: a **dead email integration fails completely silently** —
+the org's default sender was a Gmail connection whose token Google rejects, so
+the first real request told the shopper a code was sent, mailed nothing, and left
+one Vercel log line as the only evidence. Resolution happens before the order
+lookup so a *missing* integration fails identically for every order number, but
+credentials are only exercised at send time, after the response is already
+decided.
 
 **The eval-gate debt grew, and this was the moment the plan said to stop
 deferring it.** The change touches shared planner files again — `context.ts`,
@@ -1393,12 +1434,76 @@ the merchant sees the ticket and answers, and hours of delay is ordinary there.
 That asymmetry is exactly why guest storefront needed the opposite answer, and it
 is the reason `keepReply` is a guest flag rather than an escalation-wide one.
 
+### The card was the wrong artifact — decision 2026-08-12
+
+Everything above this line treats the approval card as *the* merchant-facing
+shape and asks how to make it accurate. That framing is wrong, and the first
+live M1.5 card is the proof. A verified shopper asked where their order was. The
+agent looked it up. The answer was "not shipped yet." The merchant received nine
+lines on their phone ending in **"Good to send?"**
+
+There is no decision in that card. Nothing risky, nothing irreversible, nothing
+requiring judgment — and the planner had already routed it `auto_execute`. What
+the merchant got was a form to sign for the exact task they installed the app to
+stop doing. Twenty a day and they approve blind, which is a worse failure than
+never asking, because it launders unreviewed actions through a ritual that looks
+like review.
+
+**The test to apply before shipping any merchant-facing surface:** read it as a
+24-year-old selling artisan products, no e-commerce experience, who bought
+something that promised a seamless setup and an employee rather than a bot. If it
+reads as paperwork, the fix is upstream of the copy.
+
+**Notification shape is chosen by the decision it contains, not by what the agent
+did.**
+
+- **Routine, safe, identity established → act, then report in one line.** No
+  draft, no thread link by default, no question. "Someone asked where #1024 was.
+  Not shipped yet — I told them, and confirmed the delivery address. ✅"
+- **Genuine uncertainty → ask one question about the uncertain thing.** Not a
+  restatement of the conversation. "A shopper proved they own #1024 but is asking
+  about #1026 too. Want me to check it?"
+- **Risky or irreversible → the full card below.** Refunds, cancellations,
+  address changes. `07051933`'s work is right for these and "Good to send?"
+  belongs here, only here.
+
+Two things follow that this file should stop treating as separate concerns.
+
+**The `Verified:` line added the same day is at the wrong level, and keeping the
+mistake visible is the point.** It replaced a summary that called a verified
+shopper anonymous — a real defect, correctly fixed — with a line reading
+*"Verified: entered a code emailed to the address on #1024."* That is written for
+the builder. It asks a merchant to audit an authentication mechanism before
+letting their own agent answer a shipping question, and it exists only because
+the card asks for approval at all. If verification is trusted enough to unlock the
+read, it is trusted enough not to be re-adjudicated by a human. **Before improving
+an artifact, ask whether it should exist for that class of event.**
+
+**Self-narration came back, and it will keep coming back.** The same card had the
+agent telling a shopper *"I can only pull up details on #1024 in this chat since
+that's the order you verified... please verify that order (e.g. confirm the email
+on it)."* The guest prompt was collapsed from 13 bullets to 5 specifically to kill
+this, and M1.5 reintroduced it by creating a new boundary to narrate. Every future
+capability with an edge will try to explain that edge out loud. The employee
+sentence is "happy to check #1026 too — what's the email on that one?"
+
+**What this changes in the remaining work.** The rollout step that puts a merchant
+workspace in approval mode stands as a *rollout* posture; it is not the shipped
+product. A verified shopper asking a read-only question about their own order is
+the canonical auto-execute case — identity proved, no mutation reachable at any
+tier — and shipping it behind "Good to send?" contradicts the user-pulled-autonomy
+position the product rests on. Sequencing that, and the same pass over the morning
+briefing, is owed before this channel goes to a real merchant.
+
 ### The operator card, fixed 2026-08-08 (`07051933`)
 
 Escalation-only plans exposed four defects in the merchant's notification, found
 by reading a real card as a merchant mid-task rather than by testing it. All four
 are gateway-side operator copy, so they ship without the eval gate and are
 verified by live phone round-trip.
+
+Read this section as the *risky-action* card's design record — it is the third
+bullet above, not the shape every storefront message should take.
 
 - **The ask was circular.** Escalation *is* handing the thread over, but the
   generic single-step renderer turned it into "I'd escalate to merchant. Sound
@@ -1507,12 +1612,20 @@ kill switches exist. **All three now exist** (2026-08-08), and the feature is
 enabled on exactly the controlled test store that condition permits. That
 condition is therefore met — it is no longer what holds this at one dev store.
 
-What holds a second store now is operability, not the toggle: nothing tells a
-merchant their storefront hit its ceiling, expired sessions are not swept, and
-the toggle has not yet been exercised on a merchant workspace outside the dev
-store. M1.5 is wired as of 2026-08-11, so the thing that makes the channel worth
-installing exists in code — but it has never been run against a real storefront,
-and on this feature that gap has been where the defects live.
+**What holds a second store now is the merchant's experience, not the shopper's.**
+Updated 2026-08-12, after M1.5 ran live: the shopper side works, and the security
+properties held under the strong form of the disclosure test. What a merchant
+would receive is the problem. Every storefront message — including "where is my
+order", answered from a verified session with a read-only tool — arrives as an
+approval card ending in "Good to send?". Putting that in front of a real merchant
+teaches them that their agent needs supervision to state a fulfillment status,
+which is the opposite of what this product is selling. See "The card was the wrong
+artifact"; that work now sits ahead of a second store.
+
+Operability is still owed underneath it: nothing tells a merchant their storefront
+hit its ceiling, expired sessions are not swept, a dead email integration fails
+silently, and the merchant toggle has never been exercised on a workspace outside
+the dev store.
 
 **Do not answer "not yet" with "do WhatsApp instead"** (decision 2026-08-07).
 WhatsApp is a merchant-control channel, not a customer-origin one — see
