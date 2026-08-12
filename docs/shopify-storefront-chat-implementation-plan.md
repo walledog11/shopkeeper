@@ -252,6 +252,33 @@ and reviewing in the Dev Dashboard before releasing.
   subscriptions at all. So the TOML must **not** declare them — doing so would
   double-deliver every order event.
 
+  **That bullet is now inverted, and the inversion is deliberate** (2026-08-09,
+  `e7d881c9`). The TOML declares all five topics at app level against the gateway
+  address, and callback-time per-shop provisioning was deleted — the OAuth
+  callback was also split out to `complete-shopify-oauth.ts`, so the line
+  reference above no longer resolves. Read the bullet as the M0a-era record, not
+  as current configuration.
+
+  The double-delivery hazard it names did not disappear; it moved into a
+  sequenced migration in `docs/production/shopify-webhook-migration.md`, which
+  only holds if step 4 actually ran. **It did, confirmed 2026-08-11 by running
+  the audit rather than by trusting the runbook.**
+  `npm run audit:shopify-webhooks` against production found one Shopify
+  integration — `palette-dev-3peukw16.myshopify.com`, org Palette — carrying
+  `total=0` shop-specific subscriptions, so there is nothing left to duplicate
+  the app-level declaration. And the active app version is
+  `shopkeeper-production-12`, released 2026-08-10 02:55 UTC, three minutes after
+  `e7d881c9` at 02:52 — so the released config is the one that declares the five
+  topics.
+
+  **The risk that remains points the other way.** With zero per-shop
+  subscriptions, app config is now the *only* delivery path: if that declaration
+  were wrong, the shop would receive nothing rather than everything twice, and
+  the failure would be silent in exactly the way the topic-name bug already was
+  once. Step 5 — one controlled order event reaching the gateway exactly once —
+  is still unperformed, and nothing persists a Shopify webhook receipt, so an
+  order event on the dev store is the only thing that can close it.
+
 ### Done when — and what was actually verified
 
 Original bar: production app is CLI-configured, a fresh install on a dev store
@@ -1206,6 +1233,23 @@ real theme. The three things that looked correct in code and behaved differently
 in production on this feature — an unapplied migration, a stale gateway build, a
 router deleting a tool call — were all caught by live probes rather than tests,
 and this is the same class of change.
+
+**Two of those three are cleared for this change, checked 2026-08-11 rather than
+assumed.** `prisma migrate status` against the production Neon database reports
+70 migrations and nothing pending, so `20260809120000_add_storefront_chat_verification`
+is applied — the landmine this file records twice did not recur a third time.
+And both hosts are serving `HEAD`: the Railway gateway deployed SUCCESS at
+17:03 and the Vercel production deployment was created at 17:03, both after
+`bc22f1be` at 17:01. So the verify route is live against a schema that has its
+columns.
+
+That narrows what a live run is testing rather than substituting for it. It buys
+nothing about the third failure mode, which was behavioural, and nothing about
+the parts no test could reach: that a code lands in a real inbox at the address
+**on the order**, that a mismatch is indistinguishable from a match to the
+shopper, that the widget card renders and works in a real theme, and that the
+verified read refuses the neighbouring order number. If the live run fails, the
+two usual suspects are already ruled out.
 
 **The eval-gate debt grew, and this was the moment the plan said to stop
 deferring it.** The change touches shared planner files again — `context.ts`,
