@@ -205,7 +205,25 @@ export async function buildContext(
   // The single place a conversation becomes a guest. Storefront chat is the only
   // channel whose sender is anonymous by construction: every other channel
   // carries an identity the merchant's provider already established.
-  const isGuest = thread.channelType === CHANNEL_TYPE.SHOPIFY_CHAT;
+  const isStorefront = thread.channelType === CHANNEL_TYPE.SHOPIFY_CHAT;
+
+  // A storefront session is promoted out of guest only by rows this process did
+  // not write: the challenge is issued and answered by the host's verification
+  // route, outside the agent entirely. Reading the result here — rather than
+  // letting a tool establish it — is what keeps identity off the model's list of
+  // things it can decide, and keeps the ritual out of the approval loop.
+  const verifiedOrders = isStorefront
+    ? (await db.storefrontChatVerification.findMany({
+        where: {
+          organizationId: orgId,
+          verifiedAt: { not: null },
+          session: { threadId: thread.id, revokedAt: null },
+        },
+        select: { orderName: true, orderId: true },
+      }))
+    : [];
+  const isGuest = isStorefront && verifiedOrders.length === 0;
+  const isVerified = isStorefront && verifiedOrders.length > 0;
 
   // Cross-ticket memory: the customer's most recent resolved tickets. Skipped in
   // operator channels, where the thread's "customer" is the operator/concierge
@@ -376,6 +394,7 @@ export async function buildContext(
   return {
     ...base,
     ...(isGuest ? { authState: "guest" as const } : {}),
+    ...(isVerified ? { authState: "verified" as const, verifiedOrders } : {}),
     thread: {
       id: thread.id,
       status: thread.status,

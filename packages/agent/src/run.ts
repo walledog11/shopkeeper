@@ -6,7 +6,7 @@ import { buildSystemPromptParts, buildComposerAskPrompt } from "./prompt.js";
 import { isOperatorChannel } from "./intent.js";
 import { buildMessageHistory } from "./message-history.js";
 import { runAgentLoop } from "./agent-loop.js";
-import { GUEST_TOOL_NAMES, isGuestAllowedTool, isGuestContext, isGuestOnlyTool } from "./guest-policy.js";
+import { isGuestOnlyTool, isStorefrontAllowedTool, storefrontToolNames } from "./guest-policy.js";
 import type { ActionEntry, BaseAgentContext, AgentResult } from "./agent-context.js";
 import type { PersistedAgentAction } from "./agent-actions.js";
 import { createModelUsageMetrics, hashInstructionForLog } from "./usage.js";
@@ -183,16 +183,17 @@ export async function runAgent(
   if (!isSupportContext(ctx)) {
     return finish({ summary: "This agent run requires a support context.", actionsPerformed }, "unsupported_context");
   }
-  // Guest narrowing composes with read-only rather than replacing it: a
+  // Storefront narrowing composes with read-only rather than replacing it: a
   // composer-ask on a storefront thread gets the intersection, which is the
   // stricter of the two in every case.
-  const guestMode = isGuestContext(ctx);
+  const storefrontTools = storefrontToolNames(ctx);
+  const storefrontMode = storefrontTools !== null;
   const selectedCoreTools = readOnly
-    ? selectAgentTools(settings, guestMode
-        ? READ_TOOL_NAMES.filter((name) => isGuestAllowedTool(name))
-        : READ_TOOL_NAMES).filter((tool) => guestMode || !isGuestOnlyTool(tool.name))
-    : selectAgentTools(settings, guestMode ? GUEST_TOOL_NAMES : null).filter((tool) => (
-        (guestMode || !isGuestOnlyTool(tool.name))
+    ? selectAgentTools(settings, storefrontMode
+        ? READ_TOOL_NAMES.filter((name) => isStorefrontAllowedTool(ctx, name))
+        : READ_TOOL_NAMES).filter((tool) => storefrontMode || !isGuestOnlyTool(tool.name))
+    : selectAgentTools(settings, storefrontTools).filter((tool) => (
+        (storefrontMode || !isGuestOnlyTool(tool.name))
         && (!gatewayOperatorMode || !OPERATOR_HIDDEN_TOOL_NAMES.has(tool.name))
       ));
   const tools = readOnly

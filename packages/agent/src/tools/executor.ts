@@ -89,7 +89,10 @@ async function enforceToolPolicy(
   settings?: OrgSettings,
 ): Promise<string | null> {
   const s = resolveAgentSettings(settings);
-  const staticResult = checkParsedStaticToolPolicy(definition, input, s, { authState: ctx.authState });
+  const staticResult = checkParsedStaticToolPolicy(definition, input, s, {
+    authState: ctx.authState,
+    verifiedOrders: ctx.verifiedOrders,
+  });
   if (staticResult.blocked) return formatPolicyError(staticResult.reason);
 
   return null;

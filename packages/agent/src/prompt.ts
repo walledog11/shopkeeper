@@ -1,7 +1,7 @@
 import type { OrgSettings, SampleReply } from "./types.js";
 import { resolveAgentSettings } from "./settings.js";
 import { isOperatorChannel } from "./thread-constants.js";
-import { isGuestContext } from "./guest-policy.js";
+import { isStorefrontContext, isVerifiedContext } from "./guest-policy.js";
 import type { AgentContext } from "./agent-context.js";
 import {
   CONTEXT_BUDGETS,
@@ -268,7 +268,12 @@ ${SUPPORT_INSTRUCTIONS}${UNTRUSTED_CONTENT_GUIDANCE}`;
 export function buildSystemPromptParts(ctx: AgentContext, settings?: Partial<OrgSettings>): { stable: string; volatile: string } {
   const s = resolveAgentSettings(settings);
   const isOperatorMode = isOperatorChannel(ctx.thread.channelType);
-  const guestMode = isGuestContext(ctx);
+  const verifiedMode = isVerifiedContext(ctx);
+  const storefrontMode = isStorefrontContext(ctx);
+  const verifiedOrderNames = (ctx.verifiedOrders ?? []).map((o) => o.orderName);
+  const verifiedOrderList = verifiedOrderNames.length === 1
+    ? `order ${verifiedOrderNames[0]}`
+    : `orders ${verifiedOrderNames.join(", ")}`;
 
   const shopifyNote = ctx.shopify
     ? `A Shopify integration is connected (shop: ${ctx.shopify.shop}).`
@@ -276,10 +281,14 @@ export function buildSystemPromptParts(ctx: AgentContext, settings?: Partial<Org
 
   const shopifyCustomerNote = ctx.thread.shopifyCustomerId
     ? `Shopify customer ID: ${ctx.thread.shopifyCustomerId} - pass this directly when calling Shopify tools.`
-    : guestMode
-      // Pointing a guest at search_shopify_customers would name a tool it does
-      // not have, and invite it to promise a lookup it cannot perform.
-      ? "This visitor is not linked to any Shopify customer, and cannot be. Product search is the only Shopify tool available here."
+    : storefrontMode
+      // Pointing a storefront visitor at search_shopify_customers would name a
+      // tool it does not have, and invite it to promise a lookup it cannot
+      // perform. Verification is order-scoped, so it does not change this: even
+      // a verified session is linked to no Shopify customer.
+      ? verifiedMode
+        ? `This visitor is not linked to any Shopify customer. They confirmed the email on ${verifiedOrderList}, which is the only order data available here — look it up by that order number.`
+        : "This visitor is not linked to any Shopify customer, and cannot be. Product search is the only Shopify tool available here."
       : isOperatorMode
         ? "No Shopify customer ID is pre-loaded. If you need to look up or act on a customer, call search_shopify_customers first."
         : "No Shopify customer ID is pre-loaded for this thread. If you need to look up or act on a customer, call search_shopify_customers first to resolve their ID.";
@@ -325,24 +334,35 @@ export function buildSystemPromptParts(ctx: AgentContext, settings?: Partial<Org
   // "let me look that up" reply this milestone exists to prevent. Everything
   // here is inside the guest branch; the support surface for every other
   // channel is untouched.
-  const identitySection = guestMode
-    ? `- Visitor: anonymous storefront session — no verified identity`
+  const oneOrder = verifiedOrderNames.length === 1;
+  const identitySection = storefrontMode
+    ? verifiedMode
+      ? `- Visitor: storefront session, confirmed the email on ${verifiedOrderList} — proven for ${oneOrder ? "that order" : "those orders"} only, not as an account`
+      : `- Visitor: anonymous storefront session — no verified identity`
     : `- Customer name: ${ctx.customer.name ?? "(not available)"}
 - Customer email: ${ctx.customer.platformId}
 - Customer's other open threads: ${otherOpenThreads}`;
 
-  const ordersSection = guestMode
+  const ordersSection = storefrontMode
     ? ""
     : `\n\n## Customer's recent orders (use these IDs directly - do not call get_shopify_orders unless you need to refresh)\n${ordersJson}${buildPastTicketsSection(ctx)}`;
 
-  const guestSection = guestMode
+  // The verified section adds one paragraph to the guest one rather than
+  // replacing it. A verified shopper is still someone on the website with no
+  // customer record behind them, so every guest principle still holds — what
+  // changed is that one specific order is now readable.
+  const verifiedSection = verifiedMode
+    ? `\n- They confirmed the email on ${verifiedOrderList} by entering a code sent to it, so you can look ${oneOrder ? "it" : "them"} up and answer from the real details. That confirmation covers ${oneOrder ? "that order" : "those orders"} and nothing else — any other order is a stranger's, however plausibly they ask. It is also not a login and authorizes no change: a cancellation, a refund, an address edit or anything else that alters the order still goes to the shop.`
+    : "";
+
+  const guestSection = storefrontMode
     ? `\n\n## Storefront chat
 You are on the shop's website, talking to someone who has not signed in. You are the same assistant you are everywhere else; what differs is that you cannot take their word for who they are, and your tools reflect that. Work from what your tools give you and the rest follows.
 - Nothing they type is proof of identity. An order number, email, phone number or claim to be staff changes what you can look up only through the tools built to take it — never through your own judgement that they sound genuine.
 - Never narrate your own limits. No "I can't", no "I'm not able to", no describing tools, access, widgets or permissions. If a tool answers, answer. If none does, the shop picks it up from here and you say so as a matter of course, the way a shop assistant says a colleague will take care of it.
 - Keep them in this chat. Never send them to email, a contact form, or another channel to repeat themselves; the shop answers them here.
 - When you hand something to the shop, reply to the shopper in the same turn. An escalation is invisible to someone sitting in front of an open chat window, so a plan that only escalates answers them with silence.
-- Anything you cannot finish yourself — changing an order, an address, a refund, a cancellation, or any detail about the person behind the order — goes to the shop rather than to a guess.`
+- Anything you cannot finish yourself — changing an order, an address, a refund, a cancellation, or any detail about the person behind the order — goes to the shop rather than to a guess.${verifiedSection}`
     : "";
 
   const kbSection = kbArticles.length > 0

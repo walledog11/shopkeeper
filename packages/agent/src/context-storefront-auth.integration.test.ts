@@ -1,0 +1,138 @@
+import { randomUUID } from "node:crypto";
+import { afterEach, describe, expect, it } from "vitest";
+import { ChannelType, db } from "@shopkeeper/db";
+import {
+  cleanupTestData,
+  createTestCustomer,
+  createTestIntegration,
+  createTestMessage,
+  createTestOrg,
+  createTestThread,
+} from "@shopkeeper/db/test-helpers";
+import { buildContext, type ThreadSink } from "./context.js";
+import { hashVerificationCode } from "./storefront-verification.js";
+
+const orgIds: string[] = [];
+
+const sink: ThreadSink = {
+  escalateToHuman: async () => ({ status: "ok", message: "ok" }),
+  askOperator: async () => ({ status: "ok", message: "ok" }),
+  addInternalNote: async () => ({ status: "ok", message: "ok" }),
+  sendReply: async () => ({ status: "ok", message: "ok" }),
+  sendEmail: async () => ({ status: "ok", message: "ok" }),
+  updateThreadStatus: async () => ({ status: "ok", message: "ok" }),
+  updateThreadTag: async () => ({ status: "ok", message: "ok" }),
+};
+
+afterEach(async () => {
+  await Promise.all(orgIds.splice(0).map((orgId) => cleanupTestData(orgId)));
+});
+
+async function storefrontThread(channelType: ChannelType = ChannelType.shopify_chat) {
+  const org = await createTestOrg();
+  orgIds.push(org.id);
+  const integration = await createTestIntegration(org.id, {
+    platform: ChannelType.shopify,
+    externalAccountId: `ctx-${randomUUID()}.myshopify.com`,
+    accessToken: "shpat_test",
+  });
+  const customer = await createTestCustomer(org.id, `shopify_chat:${randomUUID()}`);
+  const thread = await createTestThread(org.id, customer.id, channelType);
+  await createTestMessage(thread.id, "hi");
+  const session = await db.storefrontChatSession.create({
+    data: {
+      organizationId: org.id,
+      integrationId: integration.id,
+      customerId: customer.id,
+      threadId: thread.id,
+      storefrontHost: integration.externalAccountId,
+      resumeSecretHash: "x".repeat(64),
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    },
+  });
+  return { org, integration, thread, session };
+}
+
+async function addVerification(
+  orgId: string,
+  sessionId: string,
+  orderName: string,
+  orderId: string,
+  verified: boolean,
+) {
+  await db.storefrontChatVerification.create({
+    data: {
+      organizationId: orgId,
+      sessionId,
+      orderName,
+      orderId,
+      codeHash: hashVerificationCode("123456"),
+      expiresAt: new Date(Date.now() + 60_000),
+      ...(verified ? { verifiedAt: new Date() } : {}),
+    },
+  });
+}
+
+describe("storefront auth state in buildContext", () => {
+  it("is guest while no challenge has been answered", async () => {
+    const { org, thread } = await storefrontThread();
+
+    const ctx = await buildContext(thread.id, org.id, sink);
+
+    expect(ctx!.authState).toBe("guest");
+    expect(ctx!.verifiedOrders).toBeUndefined();
+  });
+
+  // An outstanding challenge is not a verified one. If this ever flipped, asking
+  // for a code would be enough to read the order.
+  it("stays guest while a challenge is outstanding but unanswered", async () => {
+    const { org, thread, session } = await storefrontThread();
+    await addVerification(org.id, session.id, "#1025", "5678901234", false);
+
+    const ctx = await buildContext(thread.id, org.id, sink);
+
+    expect(ctx!.authState).toBe("guest");
+  });
+
+  it("promotes to verified once a code has been accepted, carrying that order", async () => {
+    const { org, thread, session } = await storefrontThread();
+    await addVerification(org.id, session.id, "#1025", "5678901234", true);
+
+    const ctx = await buildContext(thread.id, org.id, sink);
+
+    expect(ctx!.authState).toBe("verified");
+    expect(ctx!.verifiedOrders).toEqual([{ orderName: "#1025", orderId: "5678901234" }]);
+  });
+
+  it("carries only the verified orders when a session holds both kinds", async () => {
+    const { org, thread, session } = await storefrontThread();
+    await addVerification(org.id, session.id, "#1025", "5678901234", true);
+    await addVerification(org.id, session.id, "#1026", "9999999999", false);
+
+    const ctx = await buildContext(thread.id, org.id, sink);
+
+    expect(ctx!.verifiedOrders).toEqual([{ orderName: "#1025", orderId: "5678901234" }]);
+  });
+
+  it("drops back to guest when the session is revoked", async () => {
+    const { org, thread, session } = await storefrontThread();
+    await addVerification(org.id, session.id, "#1025", "5678901234", true);
+    await db.storefrontChatSession.update({
+      where: { id: session.id },
+      data: { revokedAt: new Date() },
+    });
+
+    const ctx = await buildContext(thread.id, org.id, sink);
+
+    expect(ctx!.authState).toBe("guest");
+  });
+
+  it("leaves every other channel with no auth state at all", async () => {
+    const { org, thread } = await storefrontThread(ChannelType.email);
+
+    const ctx = await buildContext(thread.id, org.id, sink);
+
+    expect(ctx!.authState).toBeUndefined();
+    expect(ctx!.verifiedOrders).toBeUndefined();
+  });
+});

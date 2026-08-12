@@ -76,8 +76,24 @@ export interface AgentRecentMessage {
 // one. It lives on the base context because enforcement happens in the shared
 // executor, which is module-agnostic. Absent means the channel carries its own
 // identity (email address, IG sender, operator binding) as it always has.
-// M2 adds "verified" here when Customer Account OAuth binds a real customer.
-export type AgentAuthState = "guest";
+//
+// `verified` is that same anonymous shopper after they proved control of the
+// address on a specific order, by entering a code mailed to it. The proving
+// happens entirely outside the agent — the host runs the challenge and the
+// model only ever observes the result — so nothing the shopper says to the
+// agent can produce this state either. It is scoped to the orders in
+// `verifiedOrders` and never to a person: verification says "you can see this
+// order", not "you are this customer".
+export type AgentAuthState = "guest" | "verified";
+
+// An order this session has proven control of. Both forms are carried because
+// the tools take different keys — `get_order_by_name` a name, `get_order_tracking`
+// a numeric id — and re-resolving one from the other at policy time would mean a
+// Shopify round trip inside a permission check.
+export interface VerifiedOrderRef {
+  orderName: string;
+  orderId: string;
+}
 
 // Module-agnostic agent context: the org identity and the conversation any
 // module's agent loop operates on. Future modules compose their own context on
@@ -86,6 +102,10 @@ export interface BaseAgentContext {
   orgId: string;
   orgName: string;
   authState?: AgentAuthState;
+  // Empty unless `authState` is "verified". Order-scoped rather than
+  // customer-scoped, so verifying one order never widens to the rest of that
+  // customer's history.
+  verifiedOrders?: VerifiedOrderRef[];
   recentMessages: AgentRecentMessage[];
   shopify: {
     shop: string;

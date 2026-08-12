@@ -16,9 +16,17 @@ the gateway had not deployed in six hours because of a type error in a test file
 running nowhere. Both are fixed and verified live; the budget is now accounting
 in production for the first time.
 
-What is still missing is the merchant-facing half — a toggle, session
-revocation, exhaustion alerting — the eval gate, and the wiring half of
-**M1.5**.
+What is still missing is session revocation beyond the merchant toggle,
+exhaustion alerting, and the eval gate. The merchant-facing toggle shipped
+2026-08-10 (`fd5616db`).
+
+**M1.5 is wired as of 2026-08-11, and the posture question that blocked it was
+answered by removing it.** Verification is not an agent capability: the host runs
+the challenge on its own route, and the agent only ever observes a session that
+already is or is not verified. That keeps the whole ritual out of the
+plan/approve loop without giving an anonymous channel auto-execute or teaching
+the planner to perform side effects — and it dissolved the injected-delivery
+finding rather than paying it. Built and tested; **not yet exercised live**.
 
 **The escalation regression is fixed as of 2026-08-08.** `applyEscalationRouting`
 preserves `send_reply` for guest contexts, so a guest order question replies
@@ -45,7 +53,7 @@ none of them worked.
 This is the only new **customer-origin** channel on the table. Nothing else
 proposed adds a way for a customer to reach the merchant.
 
-Last reviewed: 2026-08-09.
+Last reviewed: 2026-08-11.
 
 ## Scope decision
 
@@ -72,16 +80,19 @@ forcing every already-connected merchant to re-authorize.
   not finished** — transport, guest policy, kill switches and the spend budget
   all shipped and are live in production, and the full ask → ticket → plan →
   approve → reply loop is proven on the dev store including the order-disclosure
-  refusal. Still missing: merchant-facing setup UI, session revocation,
-  exhaustion alerting, the eval gate.
-- **M1.5** — Emailed-code order verification. 🚧 **Started 2026-08-09, tools not
-  wired.** Needs no new Shopify scopes, which is why it comes before M2. Its
-  shape changed on contact: the most common question turned out not to need
-  identity at all, so `get_order_fulfillment_status` answers "has it shipped"
-  from an order number and/or checkout email today, and verification is reserved
-  for what actually exposes a person — addresses, contact details, order
-  contents. The data model and challenge logic are built and tested; the tools
-  are not, and two open findings say why.
+  refusal. Still missing: session revocation sweep and retention, exhaustion
+  alerting, the eval gate. Merchant setup UI shipped 2026-08-10.
+- **M1.5** — Emailed-code order verification. 🚧 **Wired 2026-08-11, not yet
+  verified live.** Needs no new Shopify scopes, which is why it comes before M2.
+  Its shape changed twice on contact. First: the most common question turned out
+  not to need identity at all, so `get_order_fulfillment_status` answers "has it
+  shipped" from an order number and/or checkout email, and verification is
+  reserved for what actually exposes a person — addresses, contact details,
+  order contents. Second: verification turned out not to belong to the agent at
+  all. The challenge runs deterministically on a host route and the agent only
+  reads the result, which is what let it ship without auto-executing the channel
+  or making the planner side-effecting. Both findings that blocked it are
+  resolved — one answered, one dissolved.
 - **M2** — Customer Account OAuth. Deferred and largely superseded by M1.5.
 
 M0 was split in two on 2026-08-07, once it was confirmed that declaring an app
@@ -485,10 +496,11 @@ line, not classification.
   Enforced in bootstrap and re-read on every `/messages` call rather than
   trusted from the session token, so disabling takes effect immediately instead
   of at the end of the token's hour. The widget removes itself on a 403 rather
-  than showing an error. Setting the merchant flag is a `metadata` write for
-  now — the integration-card toggle is still unbuilt. **Both switches are now on
-  for the Palette dev store** (see the table above); they remain off everywhere
-  else, and off is still the default for any new install.
+  than showing an error. The merchant flag is writable from the Shopify
+  integration card (2026-08-10, `fd5616db`) or by direct `metadata` merge.
+  **Both switches are now on for the Palette dev store** (see the table above);
+  they remain off everywhere else, and off is still the default for any new
+  install.
 - **The guest tool policy** (2026-08-08). `authState: "guest"` on the agent
   context, set in `buildContext` for `shopify_chat` threads and nowhere else.
   Enforced in three places: the planner and the run loop select from
@@ -520,26 +532,35 @@ line, not classification.
   admitted-only accounting, per-integration attribution) and three on the
   dashboard hop (429 passthrough, address forwarding, genuine failure still
   502). Two guest tests on the planning warning.
+- **Merchant setup UI** (2026-08-10, `fd5616db`). `ShopifyStorefrontChatSection`
+  on the Shopify integration card: an admin-only **Enable storefront chat**
+  toggle backed by `PATCH /api/integrations/shopify/storefront-chat`, which merges
+  `metadata.storefrontChat.enabled` without touching unrelated metadata (e.g.
+  `oauthScopes`). Enabling is rejected when `STOREFRONT_CHAT_ENABLED` is not
+  `"true"`; disabling sets `revokedAt` on every active session for that
+  integration so in-flight tokens stop working immediately. When enabled, the
+  card shows setup steps, a theme-editor deep link
+  (`buildShopifyThemeEditorAppEmbedUrl` → `activateAppId={client_id}/chat`), and
+  a warning to disable Shopify Inbox's storefront bubble to avoid duplicate
+  launchers. Unit tests on metadata merge and the theme-editor URL; an
+  integration test on the PATCH route (metadata preservation, global gate,
+  revocation on disable).
 
-**Not built** — everything that makes the surface safe to point at real
-shoppers:
+**Not built** — everything that still blocks pointing at real shoppers without
+ops babysitting:
 
 - **The local acknowledgement in approval mode** — the one bullet of the guest
   section still outstanding. The widget shows the shopper's own message
   optimistically but nothing acknowledges that a reply is coming while a plan
   waits for the merchant, and the acknowledgement must not be persisted as a
   `Message` or it invalidates the pending plan.
-- **Merchant setup** — no integration-card toggle, theme-editor deep link, or
-  Inbox-bubble warning. The switches exist; the UI to flip the merchant one does
-  not, so enabling a store means writing `Integration.metadata` directly — which
-  is exactly how the dev store was enabled on 2026-08-08. Tolerable for a store
-  the author controls, and the blocker for the "one merchant workspace in
-  approval mode" rollout step, which cannot ask a merchant to run a script.
-- **Session revocation and retention.** The `(integration_id, revoked_at)` index
-  exists for the sweep; the sweep does not. Nothing revokes on uninstall,
-  disconnect, or workspace deletion, and `retention.ts` / `purge.ts` do not know
-  about sessions. `storefront_chat_daily_usage` is likewise unswept — it grows
-  one row per shop per day forever.
+- **Session revocation and retention — partial.** Disabling storefront chat from
+  the integration card revokes every active session for that integration
+  (`fd5616db`). Shopify disconnect and `app/uninstalled` still remove sessions by
+  cascading integration delete. What is still missing: a scheduled sweep for
+  expired sessions, revocation on workspace deletion without integration delete,
+  and any `retention.ts` / `purge.ts` coverage. `storefront_chat_daily_usage` is
+  likewise unswept — it grows one row per shop per day forever.
 - **Budget exhaustion alerting and content filtering.** Exhaustion logs a warning
   and the daily counter deliberately climbs past its ceiling so sustained abuse
   stays distinguishable from a shop that merely reached its limit — but nothing
@@ -565,14 +586,15 @@ that predated it. "Shipped" and "deployed" are different claims, and this file
 should keep making that distinction rather than collapsing it.
 
 What remains is not spend but **operational blindness**: nothing tells the
-merchant their storefront hit its ceiling, nothing revokes sessions on uninstall,
+merchant their storefront hit its ceiling, no sweep retires expired sessions,
 and no content check stands between a bot and 200 admitted messages a day. Those
-are the reasons to still stage this carefully, rather than the runaway-cap reason
-that stood here before.
+are the reasons to still stage the second store carefully, rather than the
+runaway-cap reason that stood here before.
 
 The exposure today is a dev store with no traffic and no inbound links. Enabling
-a store is still a raw `Integration.metadata` write, which is the real gate on
-going further — see the rollout section.
+a second store no longer requires a raw `metadata` write — the integration card
+toggle is live as of 2026-08-10 — but nothing has exercised it on a merchant
+workspace yet.
 
 ### Data model
 
@@ -754,13 +776,16 @@ against a real storefront request the next time someone is in there.
 
 ### Merchant setup
 
-- Add a `body`-targeted theme app embed containing the isolated chat
-  bubble/dialog.
-- Add "Enable storefront chat" to the existing Shopify integration card: a
-  per-integration enabled flag, a deep link to the theme editor's app-embed
-  activation screen, an explanation that Shopify Inbox's storefront bubble must
-  be disabled to avoid duplicate launchers, a global server kill switch, and a
-  merchant-level disable action.
+- ✅ Add a `body`-targeted theme app embed containing the isolated chat
+  bubble/dialog. Shipped with the theme extension (`de2ee92f`).
+- ✅ Add "Enable storefront chat" to the existing Shopify integration card
+  (**2026-08-10**, `fd5616db`): per-integration enabled flag
+  (`PATCH /api/integrations/shopify/storefront-chat`), deep link to the theme
+  editor's app-embed activation screen (`activateAppId={client_id}/chat`), and an
+  explanation that Shopify Inbox's storefront bubble must be disabled to avoid
+  duplicate launchers. The platform kill switch remains
+  `STOREFRONT_CHAT_ENABLED`; the merchant-level disable action revokes active
+  sessions when toggled off.
 - No checkout or thank-you page targets.
 
 ### Test plan
@@ -852,10 +877,11 @@ against a real storefront request the next time someone is in there.
 - Enable on the controlled dev store, then one merchant workspace in approval
   mode, before any live-autonomy store. ✅ **Dev store done 2026-08-08** —
   `palette-dev-3peukw16.myshopify.com`, in `guarded`/`off`, which is approval
-  mode. The budget half of that blocker cleared the same day; the next step now
-  waits on **one** thing — a merchant-flippable toggle, since a real merchant
-  workspace cannot be enabled with a DB write. The migration must reach
-  production before the gateway build that reads the new columns.
+  mode. ✅ **Merchant toggle done 2026-08-10** (`fd5616db`) — the rollout
+  blocker that required a DB write is gone. **Next:** enable one real merchant
+  workspace in approval mode through the integration card (toggle on, theme
+  embed activated, Inbox bubble off), and verify the full loop without ops
+  touching metadata.
 - Add `shopify_chat` to ticket filters, channel labels, analytics unions,
   operational alerts, provider-send metrics, integration health, and production
   audit scripts.
@@ -915,8 +941,9 @@ Against that bar, as of 2026-08-08:
 
 Five of five when the bar was struck on 2026-08-08, and **four and a half by the
 end of that day** — the handoff regressed after the fact, as recorded above.
-Everything else outstanding on M1 (merchant toggle, session revocation, merchant
-alerting, the eval gate) sits outside this bar and is listed under "Not built".
+Everything else outstanding on M1 (session sweep and retention, merchant
+alerting, the eval gate, approval-mode local acknowledgement) sits outside this
+bar and is listed under "Not built".
 
 Worth keeping the sequence rather than tidying it away: the bar was met, then a
 change intended to *improve* the same behaviour broke it, and that was caught by
@@ -1072,6 +1099,125 @@ Still owed: the deps contract, both host overrides, context loading of verified
 orders, the two tools, and scoping the fuller order reads to the verified order.
 A `verify_code` tool that appears to verify without verifying is worse than not
 having one, which is why none shipped.
+
+### The posture call, decided 2026-08-11 — verification leaves the agent entirely
+
+The first finding above framed the choice as *where the verification tools
+execute*. That framing was too narrow, and re-reading the mechanism is what
+showed it. `planner.ts:35` states the contract every option had to survive:
+*"reads execute for real, mutative + terminal tools are recorded instead of
+executed. No side effects."* So a tool is either plan-time or approval-gated,
+and both candidate answers cost something structural:
+
+- Making the two tools plan-time puts an **email send inside a function whose
+  contract is that it has none** — and `planner.ts:116` discards plans on exactly
+  that reasoning, so a discarded plan becomes a duplicate code email. Worse, it
+  does not even finish the job: the "I've sent a code" reply is still a
+  `send_reply`, still terminal, still parked. The code goes out and the shopper
+  is told nothing.
+- Auto-executing the channel buys the immediacy but hands unreviewed
+  shopper-facing replies to the one channel where the person is anonymous, and
+  contradicts the rollout step that puts a merchant workspace in approval mode
+  first.
+
+**Decision: neither. Verification is not an agent capability at all.** The host
+runs the challenge deterministically on its own route; the agent only ever
+observes a session that already is or is not verified. Nothing about the ritual
+enters the plan/approve loop, so nothing about it waits on the merchant — and
+the planner's no-side-effects contract is untouched on every channel.
+
+Two things fell out of that choice rather than being argued for:
+
+- **The deps contract and both host overrides are not needed.** Postmark lives
+  in the dashboard already and the app-proxy signature is already a dashboard
+  route, so with no tool in `packages/agent` the verification route imports the
+  mail client directly. The second finding above dissolves rather than being
+  paid.
+- **The "appears to verify without verifying" hazard cannot occur**, because
+  there is no tool that could appear to.
+
+What the decision does **not** buy, stated plainly so nobody reads more into it:
+the *answer* using the newly-unlocked order reads is still a `send_reply`, so
+under `guarded`/`off` it still parks for merchant approval like every other
+storefront reply. Verification is instant; the answer is not, unless the org
+auto-executes. That is a partial immediacy win, and it is the honest ceiling of
+any option that keeps approval mode.
+
+### Wired 2026-08-11 — built and tested, not yet exercised live
+
+- **`POST /api/storefront-chat/proxy/verify`** with `action: "request" | "code"`,
+  behind the same app-proxy signature, session bearer token and both kill
+  switches as the message routes — extracted to
+  `lib/storefront-chat/authorize.ts` so the two paths cannot drift on what they
+  check. Verification is the higher-stakes of the two, so it gets the same gate,
+  not a lighter one.
+- **`lib/storefront-chat/verification.ts`.** `requestVerification` claims the
+  send budget *before* any lookup and conditionally, resolves both Shopify and
+  the email integration ahead of the order lookup so a misconfigured store fails
+  identically for every order number, compares the supplied address, and on a
+  match mails the code **to the address on the order**. It returns `sent`
+  whether or not the order exists, whether or not the email matched, and whether
+  or not anything was mailed. A Shopify lookup error also returns `sent` —
+  surfacing it would make Shopify's availability observable per order number.
+- **The send budget charges every request, not every send.** Charging only the
+  matches would let order-number probing run free against a counter that never
+  moves; charging both bounds probing and mail-bombing with one ceiling.
+- **A locked pair survives a re-request.** The pure module reports `locked`
+  rather than `expired` precisely so a fresh code is not the obvious way out of
+  the attempt ceiling, and the route now honors that instead of handing it back
+  through the upsert.
+- **`authState: "verified"` plus `verifiedOrders`,** set in `buildContext` from
+  rows this process did not write. Verified unlocks `get_order_by_name` and
+  `get_order_tracking` **scoped to the verified order** — enforced in static
+  policy on parsed arguments, so verifying `#1025` cannot read `#1026`. No
+  customer-wide read, and no mutation at any autonomy tier: verification unlocks
+  seeing your own order, never changing it.
+- **The widget's "Check an order" card** — order number + email, then code entry,
+  then a verified note. Widget-local messages only; nothing here becomes a
+  `Message` row, so no pending plan is invalidated. A bare 6-digit code typed
+  into the composer is intercepted and answered inline rather than reaching the
+  agent; that interception is the single piece of text inspection in the design,
+  and it decides nothing except which handler runs.
+
+**Tests: 35 new, all passing** — 13 on the verify route against a real database
+(identical response for match / mismatch / nonexistent, code mailed only to the
+order's address, nothing sent and no row written on a mismatch, attempt ceiling
+and lock, lock surviving a re-request, challenge replacement, expiry, both send
+budgets, cross-session refusal, merchant kill switch), 12 on the verified tool
+policy (every registry tool classified allowed-or-forbidden, refusal per
+forbidden tool across all five autonomy tiers, order scoping in both directions,
+other channels unchanged), 6 on `buildContext` promotion (an *outstanding*
+challenge is not a verified one; revocation drops back to guest), 4 on the
+bare-code detector. Existing suites unchanged: 747 agent unit, 27 agent
+integration, 1317 dashboard.
+
+**A client-bundle break was introduced and caught before it shipped.**
+`static-policy.ts` reaches the client bundle through `plan-preview` →
+`ConversationComposerArea`, so importing `normalizeOrderName` from
+`storefront-verification.ts` pulled `node:crypto` in behind it — the same shape
+as the `@shopkeeper/db`-from-the-registry break this file already records. It now
+imports the crypto-free normalizer from `order-reference.ts` instead; both sides
+of the comparison go through the same function, so consistency is what matters
+rather than which. Confirmed by `next build`, not by reasoning about it.
+
+**Not verified live.** Nothing above has been run against the dev store: no code
+has actually landed in an inbox, and the widget card has not been opened in a
+real theme. The three things that looked correct in code and behaved differently
+in production on this feature — an unapplied migration, a stale gateway build, a
+router deleting a tool call — were all caught by live probes rather than tests,
+and this is the same class of change.
+
+**The eval-gate debt grew, and this was the moment the plan said to stop
+deferring it.** The change touches shared planner files again — `context.ts`,
+`prompt.ts`, `static-policy.ts`, `planner.ts`, `run.ts`. Every new branch is
+gated on `authState`, which `buildContext` sets only for `shopify_chat`, and the
+full existing suites pass unchanged. But the argument for deferral was always
+that unchanged surfaces re-measure nothing, and the counter-argument this file
+already records still stands: the gate is a regression net for effects nobody
+predicted. It is also still **red** — 13 fixtures failing or flaky from
+2026-08-08, seven at 0/3, with the stale 2026-07-30 baseline deliberately kept
+because red is the accurate reading. Fix the thirteen, add the `shopify_chat`
+guest fixture the validator now accepts, then capture.
 
 ### Interim, attempted 2026-08-08 — ⚠️ shipped broken, one blocker outstanding
 
@@ -1317,10 +1463,12 @@ kill switches exist. **All three now exist** (2026-08-08), and the feature is
 enabled on exactly the controlled test store that condition permits. That
 condition is therefore met — it is no longer what holds this at one dev store.
 
-What holds it there now is narrower and merchant-facing: there is no toggle a
-merchant can flip, nothing revokes sessions on uninstall, and nothing tells a
-merchant their storefront hit its ceiling. A second store is a UI problem and an
-operability problem, not a safety one.
+What holds a second store now is operability, not the toggle: nothing tells a
+merchant their storefront hit its ceiling, expired sessions are not swept, and
+the toggle has not yet been exercised on a merchant workspace outside the dev
+store. M1.5 is wired as of 2026-08-11, so the thing that makes the channel worth
+installing exists in code — but it has never been run against a real storefront,
+and on this feature that gap has been where the defects live.
 
 **Do not answer "not yet" with "do WhatsApp instead"** (decision 2026-08-07).
 WhatsApp is a merchant-control channel, not a customer-origin one — see

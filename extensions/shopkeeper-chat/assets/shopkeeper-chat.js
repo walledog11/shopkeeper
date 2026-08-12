@@ -53,6 +53,24 @@
     ".composer input:focus { outline: 2px solid " + accent + "; outline-offset: 1px; }",
     ".composer button { border: none; background: " + accent + "; color: #fff; border-radius: 999px; padding: 0 16px; cursor: pointer; font: inherit; }",
     ".composer button:disabled { opacity: .45; cursor: default; }",
+    ".verify-open {",
+    "  border: none; background: none; color: #6b6b6b; cursor: pointer; font: inherit; font-size: 13px;",
+    "  padding: 0 12px 10px; text-align: " + (side === "left" ? "left" : "right") + "; text-decoration: underline;",
+    "}",
+    ".card {",
+    "  align-self: stretch; border: 1px solid #e0ddd8; border-radius: 12px; padding: 12px; background: #fbfaf8;",
+    "  display: flex; flex-direction: column; gap: 8px;",
+    "}",
+    ".card h3 { margin: 0; font-size: 14px; font-weight: 600; }",
+    ".card p { margin: 0; font-size: 13px; color: #6b6b6b; }",
+    ".card label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: #6b6b6b; }",
+    ".card input { padding: 8px 10px; border: 1px solid #d8d5d0; border-radius: 8px; font: inherit; font-size: 14px; min-width: 0; }",
+    ".card input:focus { outline: 2px solid " + accent + "; outline-offset: 1px; }",
+    ".card .actions { display: flex; gap: 8px; }",
+    ".card button { border: none; background: " + accent + "; color: #fff; border-radius: 8px; padding: 8px 14px; cursor: pointer; font: inherit; font-size: 14px; }",
+    ".card button.ghost { background: none; color: #6b6b6b; }",
+    ".card button:disabled { opacity: .45; cursor: default; }",
+    ".card .err { color: #a33; font-size: 12px; }",
     "@media (prefers-reduced-motion: no-preference) { .launcher { transition: transform .15s ease; } .launcher:hover { transform: translateY(-1px); } }",
     "</style>",
     "<button class='launcher' part='launcher' aria-haspopup='dialog' aria-expanded='false'>",
@@ -61,6 +79,7 @@
     "<div class='panel' role='dialog' aria-modal='false' aria-label='Chat with us' data-open='0'>",
     "  <div class='header'><h2>Chat with us</h2><button class='close' aria-label='Close chat'>&times;</button></div>",
     "  <div class='log' role='log' aria-live='polite'></div>",
+    "  <button class='verify-open' type='button'>&#128274; Check an order</button>",
     "  <form class='composer'>",
     "    <input type='text' name='message' autocomplete='off' placeholder='Type a message&hellip;' aria-label='Message' maxlength='4000' />",
     "    <button type='submit'>Send</button>",
@@ -199,6 +218,165 @@
     if (e.key === "Escape") { e.stopPropagation(); close(); }
   });
 
+  // Order verification. The whole exchange runs against /verify and never
+  // touches the message pipeline: no Message row, no ticket, no plan, and
+  // nothing here waits on the merchant approving anything. The agent learns the
+  // result only by finding a verified session next time it builds context.
+  var verifyBtn = shadow.querySelector(".verify-open");
+  var card = null;
+
+  function closeCard() {
+    if (card) { card.remove(); card = null; }
+    verifyBtn.disabled = false;
+  }
+
+  function openCard() {
+    if (card) { card.querySelector("input").focus(); return; }
+    verifyBtn.disabled = true;
+    card = document.createElement("div");
+    card.className = "card";
+    log.appendChild(card);
+    renderAskStep();
+  }
+
+  function cardShell(title, hint) {
+    card.textContent = "";
+    var h = document.createElement("h3");
+    h.textContent = title;
+    var p = document.createElement("p");
+    p.textContent = hint;
+    card.appendChild(h);
+    card.appendChild(p);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function addField(labelText, type, placeholder) {
+    var label = document.createElement("label");
+    label.textContent = labelText;
+    var field = document.createElement("input");
+    field.type = type;
+    field.placeholder = placeholder;
+    field.autocomplete = "off";
+    label.appendChild(field);
+    card.appendChild(label);
+    return field;
+  }
+
+  function addActions(primaryLabel, onPrimary) {
+    var actions = document.createElement("div");
+    actions.className = "actions";
+    var primary = document.createElement("button");
+    primary.type = "button";
+    primary.textContent = primaryLabel;
+    var cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "ghost";
+    cancel.textContent = "Cancel";
+    cancel.addEventListener("click", closeCard);
+    actions.appendChild(primary);
+    actions.appendChild(cancel);
+    card.appendChild(actions);
+
+    var err = document.createElement("div");
+    err.className = "err";
+    card.appendChild(err);
+
+    primary.addEventListener("click", function () {
+      err.textContent = "";
+      primary.disabled = true;
+      onPrimary(function (message) {
+        err.textContent = message || "";
+        primary.disabled = false;
+      });
+    });
+    return primary;
+  }
+
+  function postVerify(body) {
+    return fetch(proxy + "/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.token },
+      body: JSON.stringify(body)
+    }).then(function (r) {
+      if (!r.ok && r.status !== 400) throw new Error("verify " + r.status);
+      return r.json();
+    });
+  }
+
+  function renderAskStep() {
+    cardShell("Check an order", "Enter the order number and the email used at checkout.");
+    var orderField = addField("Order number", "text", "#1025");
+    var emailField = addField("Email", "email", "you@example.com");
+    addActions("Send code", function (fail) {
+      var orderName = orderField.value.trim();
+      var email = emailField.value.trim();
+      if (!orderName || !email) return fail("Both fields are needed.");
+
+      postVerify({ action: "request", orderName: orderName, email: email }).then(function (data) {
+        if (data.status === "send_limit") {
+          return fail("You've asked for a few codes already. Try again a bit later.");
+        }
+        if (data.status !== "sent") {
+          return fail("We can't check orders right now.");
+        }
+        renderCodeStep(orderName);
+      }).catch(function () {
+        fail("Something went wrong. Try again in a moment.");
+      });
+    });
+    orderField.focus();
+  }
+
+  function renderCodeStep(orderName) {
+    // Deliberately says "if" — the reply is identical whether or not the order
+    // exists and whether or not the email matched. Confirming either would tell
+    // someone guessing that they guessed right.
+    cardShell(
+      "Enter your code",
+      "If that's the email on the order, we've sent a 6-digit code to it. It expires in 10 minutes."
+    );
+    var codeField = addField("6-digit code", "text", "123456");
+    codeField.setAttribute("inputmode", "numeric");
+    codeField.maxLength = 6;
+    addActions("Confirm", function (fail) {
+      var code = codeField.value.trim();
+      if (!code) return fail("Enter the code from your email.");
+
+      postVerify({ action: "code", orderName: orderName, code: code }).then(function (data) {
+        var message = verificationNote(data, orderName);
+        if (data.status === "verified" || data.status === "already_verified") {
+          closeCard();
+          append(message, "note");
+          return;
+        }
+        fail(message);
+      }).catch(function () {
+        fail("Something went wrong. Try again in a moment.");
+      });
+    });
+    codeField.focus();
+  }
+
+  function verificationNote(outcome, orderName) {
+    switch (outcome.status) {
+      case "verified":
+      case "already_verified":
+        return "Confirmed — ask me anything about " + orderName + ".";
+      case "wrong_code":
+        return outcome.attemptsRemaining > 0
+          ? "That code doesn't match. " + outcome.attemptsRemaining + " tries left."
+          : "That code doesn't match.";
+      case "expired":
+        return "That code has expired. Ask for a new one to try again.";
+      case "locked":
+        return "That's too many tries on this order — the shop will need to help with this one.";
+      default:
+        return "There's no code waiting on this chat right now.";
+    }
+  }
+
+  verifyBtn.addEventListener("click", openCard);
+
   form.addEventListener("submit", function (e) {
     e.preventDefault();
     var text = input.value.trim();
@@ -228,7 +406,18 @@
         });
       }
       if (!r.ok) throw new Error("send " + r.status);
-      setTimeout(poll, 1200);
+      return r.json().catch(function () { return {}; }).then(function (body) {
+        // A code typed into the composer rather than the card. The server
+        // handled it as a verification attempt, so it was never persisted and
+        // no echo is coming — release the optimistic bubble's reservation and
+        // answer inline instead of waiting on a poll that will never match.
+        if (body.verification) {
+          dropEcho(text);
+          append(verificationNote(body.verification, "that order"), "note");
+          return;
+        }
+        setTimeout(poll, 1200);
+      });
     }).catch(function () {
       dropEcho(text);
       pending.style.opacity = "0.5";

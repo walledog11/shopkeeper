@@ -49,3 +49,7 @@ test-results/
 
 # Shopify CLI local state
 .shopify/
+.env*
+# ...but the committed templates are how the env list is documented.
+!.env.example
+!**/.env.example

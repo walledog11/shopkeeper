@@ -1,10 +1,24 @@
-import type { AgentAuthState } from "../agent-context.js";
-import { guestToolBlockReason, isGuestAllowedTool } from "../guest-policy.js";
+import type { AgentAuthState, VerifiedOrderRef } from "../agent-context.js";
+import {
+  guestToolBlockReason,
+  isGuestAllowedTool,
+  isOrderScopedTool,
+  isVerifiedAllowedTool,
+  orderScopeBlockReason,
+  verifiedToolBlockReason,
+} from "../guest-policy.js";
+// Deliberately order-reference's normalizer, not storefront-verification's:
+// this module reaches the client bundle through plan-preview, and
+// storefront-verification imports node:crypto. Both sides of the comparison go
+// through this one function, so consistency is what matters, not which.
+import { normalizeOrderName } from "../order-reference.js";
 import type { OrgSettings } from "../types.js";
 import type {
   AgentToolDefinition,
   CreateRefundInput,
   CreateShopifyOrderInput,
+  GetOrderByNameInput,
+  GetOrderTrackingInput,
 } from "./registry/index.js";
 import { formatToolInputValidationError, getToolDefinition } from "./registry/index.js";
 
@@ -14,6 +28,58 @@ export type StaticPolicyResult =
 
 export interface StaticPolicyOptions {
   authState?: AgentAuthState;
+  verifiedOrders?: VerifiedOrderRef[];
+}
+
+// The allowlist half of storefront enforcement: which tools this auth state may
+// name at all. Independent of arguments, so it runs both before and after
+// parsing — a shopper must not learn that a tool exists from a validation error.
+function checkStorefrontToolAllowed(
+  name: string,
+  options: StaticPolicyOptions | undefined,
+): StaticPolicyResult | null {
+  if (options?.authState === "guest" && !isGuestAllowedTool(name)) {
+    return { blocked: true, reason: guestToolBlockReason(name) };
+  }
+  if (options?.authState === "verified" && !isVerifiedAllowedTool(name)) {
+    return { blocked: true, reason: verifiedToolBlockReason(name) };
+  }
+  return null;
+}
+
+// The scope half, which needs parsed arguments: a verified session may read the
+// orders it proved control of and no others. Without this, verifying #1025
+// would hand over every order in the shop by number — a strictly worse
+// disclosure than the guest policy it replaces.
+function checkVerifiedOrderScope(
+  definition: AgentToolDefinition,
+  input: unknown,
+  options: StaticPolicyOptions | undefined,
+): StaticPolicyResult | null {
+  if (options?.authState !== "verified") return null;
+  if (!isOrderScopedTool(definition.name)) return null;
+
+  const verified = options.verifiedOrders ?? [];
+  if (verified.length === 0) {
+    return { blocked: true, reason: orderScopeBlockReason(definition.name) };
+  }
+
+  if (definition.name === "get_order_by_name") {
+    const requested = normalizeOrderName((input as GetOrderByNameInput).order_name ?? "");
+    const allowed = verified.some((o) => normalizeOrderName(o.orderName) === requested);
+    return allowed ? null : { blocked: true, reason: orderScopeBlockReason(definition.name) };
+  }
+
+  if (definition.name === "get_order_tracking") {
+    const requested = String((input as GetOrderTrackingInput).order_id ?? "").trim();
+    const allowed = verified.some((o) => o.orderId === requested);
+    return allowed ? null : { blocked: true, reason: orderScopeBlockReason(definition.name) };
+  }
+
+  // An order-scoped tool with no scope rule written for it is refused rather
+  // than allowed: adding one to VERIFIED_ORDER_TOOL_NAMES must not silently
+  // grant unscoped access.
+  return { blocked: true, reason: orderScopeBlockReason(definition.name) };
 }
 
 export function checkParsedStaticToolPolicy(
@@ -23,11 +89,13 @@ export function checkParsedStaticToolPolicy(
   options?: StaticPolicyOptions,
 ): StaticPolicyResult {
   // First, and independent of settings: no workspace configuration can widen
-  // what an anonymous visitor reaches. Tool selection already omits these, so
-  // arriving here means a plan named a tool the guest set never offered.
-  if (options?.authState === "guest" && !isGuestAllowedTool(definition.name)) {
-    return { blocked: true, reason: guestToolBlockReason(definition.name) };
-  }
+  // what a storefront visitor reaches. Tool selection already omits these, so
+  // arriving here means a plan named a tool the storefront set never offered.
+  const storefrontBlock = checkStorefrontToolAllowed(definition.name, options);
+  if (storefrontBlock) return storefrontBlock;
+
+  const scopeBlock = checkVerifiedOrderScope(definition, input, options);
+  if (scopeBlock) return scopeBlock;
 
   if (definition.availability === "retired") {
     return {
@@ -87,13 +155,12 @@ export function checkStaticToolPolicy(
   const definition = getToolDefinition(name);
   if (!definition) return { blocked: false };
 
-  // Ahead of parsing: whether a guest may call a tool at all does not depend on
-  // whether the arguments are well-formed, and reporting a validation error for
-  // a tool they can never call would be a misleading answer to the real
-  // question.
-  if (options?.authState === "guest" && !isGuestAllowedTool(definition.name)) {
-    return { blocked: true, reason: guestToolBlockReason(definition.name) };
-  }
+  // Ahead of parsing: whether a storefront visitor may call a tool at all does
+  // not depend on whether the arguments are well-formed, and reporting a
+  // validation error for a tool they can never call would be a misleading
+  // answer to the real question.
+  const storefrontBlock = checkStorefrontToolAllowed(definition.name, options);
+  if (storefrontBlock) return storefrontBlock;
 
   let input: unknown;
   try {

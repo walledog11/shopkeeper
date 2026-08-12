@@ -106,6 +106,10 @@
       "types": "./dist/shopify/index.d.ts",
       "default": "./dist/shopify/index.js"
     },
+    "./storefront-verification": {
+      "types": "./dist/storefront-verification.d.ts",
+      "default": "./dist/storefront-verification.js"
+    },
     "./shopify/integration-health": {
       "types": "./dist/shopify/integration-health.d.ts",
       "default": "./dist/shopify/integration-health.js"
