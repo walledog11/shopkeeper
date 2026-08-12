@@ -53,10 +53,20 @@
     ".composer input:focus { outline: 2px solid " + accent + "; outline-offset: 1px; }",
     ".composer button { border: none; background: " + accent + "; color: #fff; border-radius: 999px; padding: 0 16px; cursor: pointer; font: inherit; }",
     ".composer button:disabled { opacity: .45; cursor: default; }",
+    // A row wrapper so the button sizes to its own text. As a bare flex child of
+    // the panel it stretched the full width, which left an underlined fragment
+    // pinned to one edge above the composer — it read as a stray link rather
+    // than the way into order lookup, the one thing on this surface a shopper
+    // with an order actually wants.
+    ".verify-row { display: flex; padding: 0 12px 10px; }",
     ".verify-open {",
-    "  border: none; background: none; color: #6b6b6b; cursor: pointer; font: inherit; font-size: 13px;",
-    "  padding: 0 12px 10px; text-align: " + (side === "left" ? "left" : "right") + "; text-decoration: underline;",
+    "  display: inline-flex; align-items: center; gap: 6px;",
+    "  border: 1px solid #d8d5d0; background: #fff; color: #3a3a3a; cursor: pointer;",
+    "  font: inherit; font-size: 13px; padding: 7px 13px; border-radius: 999px;",
     "}",
+    ".verify-open:hover { background: #f6f5f3; }",
+    ".verify-open:focus-visible { outline: 2px solid " + accent + "; outline-offset: 1px; }",
+    ".verify-open:disabled { opacity: .45; cursor: default; }",
     ".card {",
     "  align-self: stretch; border: 1px solid #e0ddd8; border-radius: 12px; padding: 12px; background: #fbfaf8;",
     "  display: flex; flex-direction: column; gap: 8px;",
@@ -79,7 +89,7 @@
     "<div class='panel' role='dialog' aria-modal='false' aria-label='Chat with us' data-open='0'>",
     "  <div class='header'><h2>Chat with us</h2><button class='close' aria-label='Close chat'>&times;</button></div>",
     "  <div class='log' role='log' aria-live='polite'></div>",
-    "  <button class='verify-open' type='button'>&#128274; Check an order</button>",
+    "  <div class='verify-row'><button class='verify-open' type='button'>&#128274; Check an order</button></div>",
     "  <form class='composer'>",
     "    <input type='text' name='message' autocomplete='off' placeholder='Type a message&hellip;' aria-label='Message' maxlength='4000' />",
     "    <button type='submit'>Send</button>",
@@ -142,7 +152,9 @@
     });
   }
 
-  function bootstrap() {
+  // Mints a session and its token without touching the transcript, so it can be
+  // called again mid-conversation to replace an expired token.
+  function requestSession() {
     var prior = stored() || {};
     return fetch(proxy + "/bootstrap", {
       method: "POST",
@@ -161,22 +173,50 @@
       if (!r.ok) throw new Error("bootstrap " + r.status);
       return r.json();
     }).then(function (data) {
-      if (!data) return;
+      if (!data) return null;
       session = data;
       if (data.sessionId) {
         store({ sessionId: data.sessionId, resumeToken: data.resumeToken || prior.resumeToken });
       }
+      return data;
+    });
+  }
+
+  function bootstrap() {
+    return requestSession().then(function (data) {
+      if (!data) return;
       if (greeting && !(data.messages || []).length) append(greeting, "note");
       render(data.messages);
       startPolling();
     });
   }
 
+  // Session tokens last an hour and the widget only bootstrapped when the panel
+  // was opened, so a chat left open longer than that answered 401 to every send,
+  // poll and verification while telling the shopper to try again in a moment.
+  // Retrying could never work; only a reload could. The resume secret is in
+  // localStorage, so the widget can mint itself a fresh token instead — once per
+  // call, so a genuinely rejected session still surfaces rather than looping.
+  function authedFetch(path, init, retried) {
+    if (!session || !session.token) return Promise.reject(new Error("no session"));
+    var options = Object.assign({}, init);
+    options.headers = Object.assign({}, init && init.headers, {
+      Authorization: "Bearer " + session.token
+    });
+    return fetch(proxy + path, options).then(function (r) {
+      if (r.status !== 401 || retried) return r;
+      return requestSession().then(function (data) {
+        // 403 during the refresh means the widget removed itself; hand back the
+        // original response rather than retrying into a detached shadow root.
+        if (!data) return r;
+        return authedFetch(path, init, true);
+      });
+    });
+  }
+
   function poll() {
     if (!session || !session.token) return;
-    fetch(proxy + "/messages", {
-      headers: { Authorization: "Bearer " + session.token }
-    }).then(function (r) {
+    authedFetch("/messages", {}).then(function (r) {
       return r.ok ? r.json() : null;
     }).then(function (data) {
       if (data) render(data.messages);
@@ -247,7 +287,6 @@
     p.textContent = hint;
     card.appendChild(h);
     card.appendChild(p);
-    log.scrollTop = log.scrollHeight;
   }
 
   function addField(labelText, type, placeholder) {
@@ -287,15 +326,26 @@
       onPrimary(function (message) {
         err.textContent = message || "";
         primary.disabled = false;
+        // An error adds a line below the buttons, so the card grows again.
+        scrollLogToEnd();
       });
     });
     return primary;
   }
 
+  // Called once the card is fully built. cardShell used to scroll here instead,
+  // which was before the fields and the actions row existed — so the log
+  // scrolled to the bottom of a heading and then grew the submit button off
+  // screen, leaving a form with no visible way to submit it and shifting the
+  // layout under anyone mid-tap.
+  function scrollLogToEnd() {
+    log.scrollTop = log.scrollHeight;
+  }
+
   function postVerify(body) {
-    return fetch(proxy + "/verify", {
+    return authedFetch("/verify", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.token },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
     }).then(function (r) {
       if (!r.ok && r.status !== 400) throw new Error("verify " + r.status);
@@ -325,6 +375,7 @@
       });
     });
     orderField.focus();
+    scrollLogToEnd();
   }
 
   function renderCodeStep(orderName) {
@@ -355,6 +406,7 @@
       });
     });
     codeField.focus();
+    scrollLogToEnd();
   }
 
   function verificationNote(outcome, orderName) {
@@ -388,9 +440,9 @@
     awaitingEcho.push(text);
     var clientMessageId = String(Date.now()) + "-" + Math.random().toString(36).slice(2, 10);
 
-    fetch(proxy + "/messages", {
+    authedFetch("/messages", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.token },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text: text, clientMessageId: clientMessageId })
     }).then(function (r) {
       // A budget refusal is not a delivery failure, and saying "check your
