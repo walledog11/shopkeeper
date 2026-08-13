@@ -133,6 +133,48 @@ describe('PATCH /api/threads/[id]', () => {
     expect(updated?.filterFeedback).toBe('confirmed_genuine');
   });
 
+  // Recovery is one of the two ordinary merchant actions that leave a thread
+  // genuine, open, holding a pending customer message, with no plan and nothing
+  // that will ever make one — reopening a closed thread is the other, and it
+  // clears cachedPlan on the way through. Plan generation only ever runs off an
+  // inbound message (ai-summary-flow → generateThreadPlan), and the classifier
+  // will not revisit its verdict because filterDecidedAt is a one-shot lock.
+  //
+  // That combination is the `blocked_no_plan` state. The product answer is to
+  // name it in the briefing as a handoff, not to re-plan on a dashboard write,
+  // so this pins the state the PATCH leaves behind rather than asserting a plan
+  // appears.
+  it('leaves a recovered thread blocked with no plan for the message it is holding', async () => {
+    const customer = await createTestCustomer(org.id, 'recover_replan@test.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    const pending = await createTestMessage(thread.id, 'Where is my order? It has been two weeks.');
+    await db.thread.update({
+      where: { id: thread.id },
+      data: { filterStatus: 'questionable', filterDecidedAt: new Date() },
+    });
+
+    const res = await callPatch(thread.id, { filterStatus: 'genuine', filterFeedback: 'confirmed_genuine' });
+    expect(res.status).toBe(200);
+
+    const updated = await db.thread.findUnique({
+      where: { id: thread.id },
+      include: {
+        messages: {
+          where: { deletedAt: null, senderType: { not: 'note' } },
+          orderBy: [{ sentAt: 'desc' }, { id: 'desc' }],
+          take: 1,
+        },
+      },
+    });
+    expect(updated?.filterStatus).toBe('genuine');
+    expect(updated?.status).toBe('open');
+    // The three facts that derive `blocked_no_plan`: open, a customer with the
+    // last word, and no cached plan for that message.
+    expect(updated?.messages[0]?.id).toBe(pending.id);
+    expect(updated?.messages[0]?.senderType).toBe('customer');
+    expect(updated?.cachedPlan).toBeNull();
+  });
+
   it('writes confirmed_genuine when closing a questionable thread (implicit feedback)', async () => {
     const customer = await createTestCustomer(org.id, 'close_questionable@test.com');
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);
