@@ -36,8 +36,15 @@ loadGatewayEnv();
 // E2E_AI_MODE must not be `deterministic` (the with-test-env default) or the
 // model is stubbed and the turn never reaches a tool.
 //
-// Env knobs: ORG_ID (reuse an org instead of the fixture one), TELEGRAM_CHAT_ID
-// (required until a binding exists), CLERK_USER_ID, ORG_NAME.
+// Env knobs: ORG_ID (reuse an org instead of the fixture one), CLERK_USER_ID,
+// ORG_NAME, and one operator binding — TELEGRAM_CHAT_ID, or IMESSAGE_SENDER_ID
+// plus IMESSAGE_SPACE_ID. Without one nothing is pushed and the briefing is only
+// printed.
+//
+// The fixtures live in the local test DB, so nothing here touches a real inbox;
+// only the outbound text is real. A reply to it will not work: it reaches
+// whichever gateway owns that handle in production, which has no pendingDigest
+// for these thread ids. This is a one-way check of what the briefing looks like.
 // Cleanup: the three fixture customers are in cleanup-livetest-data.ts's
 // default email list, so `ORG_ID=… CONFIRM=1 tsx …/cleanup-livetest-data.ts`
 // removes them (threads + messages cascade).
@@ -276,7 +283,14 @@ async function main() {
   });
 
   const chatId = process.env.TELEGRAM_CHAT_ID?.trim();
-  if (chatId) {
+  // iMessage is the other operator channel and the one most merchants are
+  // actually bound on, so the harness has to be able to reach it too. Copy the
+  // handle and space from wherever the real binding lives:
+  //   IMESSAGE_SENDER_ID=<handle> IMESSAGE_SPACE_ID=<space> node scripts/…
+  const imessageSenderId = process.env.IMESSAGE_SENDER_ID?.trim();
+  const imessageSpaceId = process.env.IMESSAGE_SPACE_ID?.trim();
+
+  if (chatId || (imessageSenderId && imessageSpaceId)) {
     const member = await db.orgMember.upsert({
       where: {
         organizationId_clerkUserId: {
@@ -291,11 +305,25 @@ async function main() {
       },
       select: { id: true },
     });
-    await db.orgMemberTelegramChat.upsert({
-      where: { chatId },
-      update: { orgMemberId: member.id },
-      create: { orgMemberId: member.id, chatId, displayName: 'A2 live test' },
-    });
+    if (chatId) {
+      await db.orgMemberTelegramChat.upsert({
+        where: { chatId },
+        update: { orgMemberId: member.id },
+        create: { orgMemberId: member.id, chatId, displayName: 'A2 live test' },
+      });
+    }
+    if (imessageSenderId && imessageSpaceId) {
+      await db.orgMemberImessageBinding.upsert({
+        where: { senderId: imessageSenderId },
+        update: { orgMemberId: member.id, spaceId: imessageSpaceId },
+        create: {
+          orgMemberId: member.id,
+          senderId: imessageSenderId,
+          spaceId: imessageSpaceId,
+          displayName: 'A2 live test',
+        },
+      });
+    }
   }
 
   // Drop any earlier run's fixtures first: an org can hold only one open thread
