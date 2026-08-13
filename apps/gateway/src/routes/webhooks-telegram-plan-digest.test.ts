@@ -228,7 +228,11 @@ describe('POST /webhooks/telegram — digest commands', () => {
       },
     });
     await updateContext(org.id, `member:${member.id}`, {
-      pendingDigest: { threadIds: [thread.id], sentAt: new Date().toISOString() },
+      pendingDigest: {
+        items: [{ threadId: thread.id, kind: 'flagged' as const }],
+        threadIds: [thread.id],
+        sentAt: new Date().toISOString(),
+      },
     });
     return { chatId, threadId: thread.id };
   }
@@ -302,7 +306,7 @@ describe('POST /webhooks/telegram — digest commands', () => {
 
     await processPendingOperatorEvents(org.id);
     await waitForReplies(1);
-    expect(lastReplyText()).toMatch(/No flagged ticket 5/);
+    expect(lastReplyText()).toMatch(/There's no 5 on that list/);
   });
 });
 

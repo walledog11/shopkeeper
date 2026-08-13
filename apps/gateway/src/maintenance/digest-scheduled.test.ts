@@ -3,6 +3,7 @@ import { ChannelType, db } from '@shopkeeper/db';
 import {
   cleanupTestData,
   createTestCustomer,
+  createTestMessage,
   createTestOrg,
   createTestThread,
 } from '@shopkeeper/db/test-helpers';
@@ -108,7 +109,11 @@ describe('sendScheduledDigests — first-night briefing', () => {
   it('prepends the first-rundown preamble when the inbox has tickets', async () => {
     await bindTelegram(org.id, chatId);
     const customer = await createTestCustomer(org.id, `cust-${org.id}@example.com`, { name: 'Jane' });
-    await createTestThread(org.id, customer.id, ChannelType.email);
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    // A message, not a bare thread: a thread with no conversation is an
+    // `empty_thread` and is deliberately never named, so a bare one would prove
+    // only that the preamble renders.
+    await createTestMessage(thread.id, 'Is the mug set back in stock?');
     await db.organization.update({
       where: { id: org.id },
       data: { settings: armedSettings() },
@@ -119,7 +124,8 @@ describe('sendScheduledDigests — first-night briefing', () => {
     const messages = myMessages();
     expect(messages).toHaveLength(1);
     expect(messages[0]).toContain('first rundown');
-    expect(messages[0]).toContain("You've got one open ticket");
+    expect(messages[0]).toContain('One thing needs you.');
+    expect(messages[0]).toContain('Jane');
 
     expect((await readSettings(org.id)).firstBriefingPending).toBe(false);
   });

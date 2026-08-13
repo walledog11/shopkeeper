@@ -3,7 +3,7 @@ import { wrapUntrusted } from '@shopkeeper/agent/message-history';
 import { postDashboardInternal, type DashboardApiResult } from '../clients/dashboard-internal.js';
 import { relativeAge } from '../routes/telegram/format.js';
 import { customerFirstName } from './planning-notifications.js';
-import type { PendingDigest } from '../operator-context.js';
+import { briefingOrdinal, type PendingDigest } from '../operator-context.js';
 
 export const DIGEST_SUMMARY_TRUNC = 90;
 
@@ -23,9 +23,15 @@ export function formatDigestThreadBlurb(thread: Pick<DigestThreadRow, 'aiSummary
   return truncateDigestSummary(thread.aiSummary ?? thread.filterReason ?? '');
 }
 
+/**
+ * `index` is the number printed in the briefing, not the position in this array.
+ * The flagged tickets are a subset of one list, so counting them from 1 again
+ * would name a different ticket than the merchant is looking at.
+ */
 export async function loadDigestThreads(
   organizationId: string,
   threadIds: readonly string[],
+  ordinalFor: (threadId: string, position: number) => number = (_id, position) => position + 1,
 ): Promise<Array<{ index: number; id: string; thread: DigestThreadRow | null }>> {
   if (threadIds.length === 0) return [];
 
@@ -39,8 +45,8 @@ export async function loadDigestThreads(
     },
   });
   const byId = new Map(rows.map((row) => [row.id, row]));
-  return threadIds.map((id, index) => ({
-    index: index + 1,
+  return threadIds.map((id, position) => ({
+    index: ordinalFor(id, position),
     id,
     thread: byId.get(id) ?? null,
   }));
@@ -62,7 +68,11 @@ export async function buildDigestLedgerSection(
   const age = relativeAge(Date.now() - new Date(pendingDigest.sentAt).getTime());
   const count = pendingDigest.threadIds.length;
   const header = `A support digest was sent${age ? ` ${age}` : ''} with ${count} flagged ticket${count === 1 ? '' : 's'} awaiting triage.`;
-  const entries = await loadDigestThreads(organizationId, pendingDigest.threadIds);
+  const entries = await loadDigestThreads(
+    organizationId,
+    pendingDigest.threadIds,
+    (threadId, position) => briefingOrdinal(pendingDigest, threadId) ?? position + 1,
+  );
   const lines = entries.map(formatDigestThreadLine).filter((line): line is string => line !== null);
 
   if (lines.length === 0) {
@@ -102,8 +112,10 @@ export async function markDigestThreadSpam(
   | { ok: true; customerName: string | null; index: number }
   | { ok: false; reason: 'not_in_digest' | 'not_found' }
 > {
-  const index = pendingDigest.threadIds.indexOf(threadId);
-  if (index < 0) return { ok: false, reason: 'not_in_digest' };
+  const ordinal = briefingOrdinal(pendingDigest, threadId);
+  if (ordinal === null || !pendingDigest.threadIds.includes(threadId)) {
+    return { ok: false, reason: 'not_in_digest' };
+  }
 
   const thread = await findDigestThread(organizationId, pendingDigest, threadId);
   if (!thread) return { ok: false, reason: 'not_found' };
@@ -117,7 +129,7 @@ export async function markDigestThreadSpam(
     },
   });
 
-  return { ok: true, customerName: thread.customer.name, index: index + 1 };
+  return { ok: true, customerName: thread.customer.name, index: ordinal };
 }
 
 export function formatDigestSpamConfirmation(

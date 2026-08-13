@@ -86,8 +86,10 @@ describe('POST /webhooks/telegram — help & summary', () => {
     // On-demand SUMMARY answers straight out — the greeting is the scheduled
     // send's job, not a reply to a merchant who just asked.
     expect(text).toMatch(/Since your last briefing I didn't send any replies or refunds\./);
-    expect(text).toContain("Nothing's waiting on a reply.");
-    expect(text).toContain("There's one I wasn't sure about, from Dana.\nWholesale pricing question.");
+    // A flagged ticket is work: it is in the one numbered list with everything
+    // else, not in a block of its own with its own question.
+    expect(text).toContain('One thing needs you.');
+    expect(text).toContain('1. Dana: Wholesale pricing question. Real customer?');
 
     const ctx = await getContext(org.id, memberKey);
     expect(ctx.pendingDigest?.threadIds).toEqual([flagged.id]);
@@ -105,7 +107,7 @@ describe('POST /webhooks/telegram — help & summary', () => {
     await processPendingOperatorEvents(org.id);
     await waitForReplies(1);
     expect(lastReplyText()).toMatch(/Since your last briefing I didn't send any replies or refunds\./);
-    expect(lastReplyText()).toContain("Nothing's waiting on a reply.");
+    expect(lastReplyText()).not.toContain('need you');
     expect(lastReplyText()).toContain("I'll shout if anything comes in.");
   });
 });

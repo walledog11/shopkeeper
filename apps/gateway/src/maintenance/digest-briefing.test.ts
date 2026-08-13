@@ -12,13 +12,11 @@ import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import {
   DIGEST_CURSOR_KEY,
   deriveThreadLifecycleState,
-  formatAwaitingCustomerSection,
-  formatBlockedSection,
+  formatBlockedTicketLine,
   formatBriefingTicketLine,
   formatHandledSection,
-  formatOtherOpenSection,
-  formatWaitingItemLine,
-  formatWaitingSection,
+  formatNeedsYouAsk,
+  formatNeedsYouList,
   loadHandledRollup,
   loadWaitingOnYouItems,
   resolveHandledWindowStart,
@@ -246,17 +244,15 @@ describe('loadHandledRollup', () => {
   });
 });
 
-describe('formatBlockedSection', () => {
-  it('hands one thread back in the agent\'s own voice', () => {
-    const section = formatBlockedSection([{
+describe('formatBlockedTicketLine', () => {
+  it('names the person and quotes them, never the classifier title', () => {
+    expect(formatBlockedTicketLine({
       customer: { name: 'Walle Walson' },
       aiTitle: 'Unclear One Word Message',
       aiSummary: null,
       tag: null,
       pendingMessage: 'Test',
-    }]);
-    expect(section).toContain("One I couldn't work out a next step on, so it's yours:");
-    expect(section).toContain('Walle');
+    })).toBe('Walle wrote: "Test"');
   });
 
   // A merchant asked to take a ticket over cannot answer it from the
@@ -264,13 +260,13 @@ describe('formatBlockedSection', () => {
   // gave up; it does not say what the customer wrote, which is the only thing
   // that decides whether this is a real request or a stray "yo".
   it('quotes the customer instead of the classifier title', () => {
-    const section = formatBlockedSection([{
+    const section = formatBlockedTicketLine(({
       customer: { name: 'Priya Nadar' },
       aiTitle: 'Olive Linen Napkins',
       aiSummary: 'Customer asks whether the linen napkins come in a darker olive shade.',
       tag: 'Product Inquiry',
       pendingMessage: 'Do the linen napkins come in a darker olive?',
-    }]);
+    }));
     expect(section).toContain('Priya asked: "Do the linen napkins come in a darker olive?"');
     expect(section).not.toContain('Olive Linen Napkins');
   });
@@ -280,28 +276,28 @@ describe('formatBlockedSection', () => {
   // the summary, which is a whole statement of the request rather than a
   // fragment of one, so nothing has to be asked for a second time.
   it('summarizes a long message rather than cutting it off', () => {
-    const section = formatBlockedSection([{
+    const section = formatBlockedTicketLine(({
       customer: { name: 'Dana Ruiz' },
       aiTitle: 'Address Change Before Friday',
       aiSummary: 'Customer asks to move order #1043 to a new flat and whether it will still arrive before Friday.',
       tag: 'Shipping',
       pendingMessage: 'Hi! So sorry to be a pain about this, but I have just moved and I gave you the old address by mistake when I checked out last week. Could you send order 1043 to flat 4 instead? And will it still get here before Friday, or should I have it sent to my office?',
-    }])!;
+    }));
     // The person is the subject of the sentence, past tense, and the classifier's
     // "Customer" noun is gone — it only repeated the name the line already has.
-    expect(section).toContain('- Dana asked to move order #1043 to a new flat and whether it will still arrive before Friday.');
+    expect(section).toContain('Dana asked to move order #1043 to a new flat and whether it will still arrive before Friday.');
     expect(section).not.toContain('Customer asks');
     expect(section).not.toContain('…');
   });
 
   it('quotes a short message whole, never elided', () => {
     const long = `${'a'.repeat(118)}?`;
-    const section = formatBlockedSection([{
+    const section = formatBlockedTicketLine(({
       customer: { name: 'Ada' },
       aiSummary: 'Customer says something at length.',
       tag: null,
       pendingMessage: long,
-    }])!;
+    }));
     expect(section).toContain(`Ada asked: "${long}"`);
     expect(section).not.toContain('…');
   });
@@ -309,34 +305,34 @@ describe('formatBlockedSection', () => {
   // "wrote" for a statement, "asked" for a question. Guessing "asked" at a
   // complaint would put words in the customer's mouth on the merchant's phone.
   it('says wrote rather than asked when the message is not a question', () => {
-    const section = formatBlockedSection([{
+    const section = formatBlockedTicketLine(({
       customer: { name: 'Bo Nkemelu' },
       aiSummary: null,
       tag: null,
       pendingMessage: 'The sweater arrived ripped along the seam.',
-    }])!;
+    }));
     expect(section).toContain('Bo wrote: "The sweater arrived ripped along the seam."');
   });
 
   // Real messages ask and then keep talking. Testing only the final character
   // called this one "wrote", which reads as though nobody looked at it.
   it('says asked when the question is not the last sentence', () => {
-    const section = formatBlockedSection([{
+    const section = formatBlockedTicketLine(({
       customer: { name: 'Priya Nadar' },
       aiSummary: null,
       tag: null,
       pendingMessage: 'Do these come in a darker olive? The photos look lighter than the swatch.',
-    }])!;
+    }));
     expect(section).toContain('Priya asked: "Do these come in a darker olive? The photos look lighter than the swatch."');
   });
 
   it('redacts contact details out of the quote', () => {
-    const section = formatBlockedSection([{
+    const section = formatBlockedTicketLine(({
       customer: { name: 'Ada' },
       aiSummary: null,
       tag: null,
       pendingMessage: 'Reach me at ada@example.com about the mug',
-    }])!;
+    }));
     expect(section).toContain('their email');
     expect(section).not.toContain('ada@example.com');
   });
@@ -345,116 +341,25 @@ describe('formatBlockedSection', () => {
   // ever written. It cuts at the summary budget rather than the quote budget so
   // the most possible survives.
   it('falls back to a capped quote when there is no summary', () => {
-    const section = formatBlockedSection([{
+    const section = formatBlockedTicketLine(({
       customer: { name: 'Ada' },
       aiSummary: null,
       tag: null,
       pendingMessage: `About my order, ${'the very long story '.repeat(20)}`,
-    }])!;
+    }));
     expect(section).toContain('About my order');
     expect(section).toContain('…"');
   });
 
   // Older threads and any path that does not load message text still render.
   it('falls back to the classifier line with no message to quote', () => {
-    const section = formatBlockedSection([{
+    const section = formatBlockedTicketLine(({
       customer: { name: 'Bo' },
       aiTitle: 'Damaged Sweater Return',
       aiSummary: null,
       tag: null,
-    }]);
+    }));
     expect(section).toContain('Bo: Damaged Sweater Return');
-  });
-
-  it('counts and pluralizes without asking for a decision it cannot act on', () => {
-    const section = formatBlockedSection([
-      { customer: { name: 'Ada' }, aiSummary: 'One', tag: null },
-      { customer: { name: 'Bo' }, aiSummary: 'Two', tag: null },
-    ]);
-    expect(section).toContain("Two I couldn't work out a next step on, so they're yours:");
-    expect(section).not.toContain('?');
-  });
-
-  it('renders nothing when no thread is blocked', () => {
-    expect(formatBlockedSection([])).toBeNull();
-  });
-
-  // The roll-ups cap at two and say "…and one more", which is fine for sections
-  // that owe the merchant nothing. This one hands over work: a ticket replaced
-  // by a count is a ticket they cannot do, so a saved line costs the whole item.
-  it('lists every blocked thread rather than capping like the roll-ups', () => {
-    const section = formatBlockedSection(
-      ['Ada', 'Bo', 'Cass', 'Dev', 'Elle'].map((name) => ({
-        customer: { name },
-        aiSummary: null,
-        tag: null,
-        pendingMessage: `${name} needs something.`,
-      })),
-    )!;
-    for (const name of ['Ada', 'Bo', 'Cass', 'Dev', 'Elle']) {
-      expect(section).toContain(`${name} wrote:`);
-    }
-    expect(section).not.toContain('more');
-  });
-});
-
-describe('formatAwaitingCustomerSection', () => {
-  // Reported, never asked: the merchant has no decision to make on a thread the
-  // agent already answered, so this section must not end in a question.
-  it('reports an answered thread without asking anything', () => {
-    const section = formatAwaitingCustomerSection([{
-      customer: { name: null },
-      channelType: 'shopify_chat',
-      aiTitle: 'Unclear One Word Message',
-      aiSummary: null,
-      tag: null,
-    }]);
-    expect(section).toContain("I answered this one and haven't heard back:");
-    expect(section).not.toContain('?');
-  });
-
-  it('counts several answered threads', () => {
-    const section = formatAwaitingCustomerSection([
-      { customer: { name: 'Ada' }, aiSummary: 'One', tag: null },
-      { customer: { name: 'Bo' }, aiSummary: 'Two', tag: null },
-    ]);
-    expect(section).toContain("I answered two of these and haven't heard back:");
-  });
-
-  it('renders nothing when nothing is waiting on a customer', () => {
-    expect(formatAwaitingCustomerSection([])).toBeNull();
-  });
-});
-
-describe('formatOtherOpenSection', () => {
-  it('summarizes hidden open tickets with order-first labels', () => {
-    const section = formatOtherOpenSection([
-      {
-        customer: { name: 'Bob Lee' },
-        aiTitle: 'Cancelled Order',
-        aiSummary: 'Customer reports that order #1043 was cancelled',
-        tag: 'Order Status',
-      },
-      {
-        customer: { name: 'Jane Doe' },
-        aiSummary: 'Asking about shipping times',
-        tag: null,
-      },
-    ]);
-    expect(section).toContain('Also open:');
-    expect(section).toContain('Bob · #1043: Cancelled Order');
-    expect(section).toContain('Jane: Asking about shipping times');
-  });
-
-  it('caps the roll-up and shows a more line', () => {
-    const section = formatOtherOpenSection([
-      { customer: { name: 'A' }, aiSummary: 'One', tag: null },
-      { customer: { name: 'B' }, aiSummary: 'Two', tag: null },
-      { customer: { name: 'C' }, aiSummary: 'Three', tag: null },
-      { customer: { name: 'D' }, aiSummary: 'Four', tag: null },
-    ]);
-    expect(section).toContain('…and two more');
-    expect(section).not.toContain('- D:');
   });
 });
 
@@ -511,106 +416,6 @@ describe('formatBriefingTicketLine', () => {
   });
 });
 
-describe('formatWaitingItemLine', () => {
-  it('uses the classifier title instead of truncating the summary', () => {
-    const line = formatWaitingItemLine({
-      customerName: 'Adam Jones',
-      aiTitle: 'Order Update With No Detail',
-      aiSummary: 'Customer states that order #1025 has been updated, but provides no details about what changed',
-      tag: null,
-      rawToolCalls: [{ id: 'tc1', name: 'send_reply', input: { text: 'Hi' } }],
-      instruction: 'Answer the customer',
-      actionLabel: 'reply to Adam',
-      now: NOW,
-      since: new Date(NOW.getTime() - 26 * 3_600_000),
-    });
-    // Named customer plus a leading action, so the order number gives up its
-    // segment: three of them before the topic is punctuation, not information.
-    expect(line).toBe('Reply · Adam: Order Update With No Detail (waiting 1 day)');
-    expect(line).not.toContain('provides no details');
-  });
-
-  // What a one-word approval actually does. Before this the line named the
-  // ticket and nothing else, so "Want me to go ahead with it?" could only be
-  // answered by opening the dashboard.
-  it('leads with the action being approved', () => {
-    const line = formatWaitingItemLine({
-      customerName: null,
-      channelType: 'shopify_chat',
-      aiTitle: 'Order Status Inquiry',
-      aiSummary: 'Visitor asks for the status of their order',
-      tag: null,
-      rawToolCalls: [
-        { id: 'tc1', name: 'get_order', input: { orderNumber: '1042' } },
-        { id: 'tc2', name: 'send_reply', input: { text: 'Hi' } },
-      ],
-      instruction: 'Answer the visitor',
-      actionLabel: 'run those 2 steps',
-      now: NOW,
-      since: new Date(NOW.getTime() - 48 * 3_600_000),
-    });
-    // Lookups are not what the merchant is approving, so the read step does not
-    // count toward the step tally.
-    expect(line).toBe('Reply · Storefront visitor: Order Status Inquiry (waiting 2 days)');
-  });
-
-  it('counts the extra steps a single approval would run', () => {
-    const line = formatWaitingItemLine({
-      customerName: 'Dana Ruiz',
-      aiTitle: 'Wrong Size Shipped',
-      aiSummary: 'Customer received the wrong size',
-      tag: null,
-      rawToolCalls: [
-        { id: 'tc1', name: 'create_return', input: {} },
-        { id: 'tc2', name: 'send_reply', input: { text: 'Hi' } },
-      ],
-      instruction: 'Sort out the return',
-      now: NOW,
-      since: new Date(NOW.getTime() - 2 * 3_600_000),
-    });
-    expect(line).toBe('Open return + one more · Dana: Wrong Size Shipped (waiting 2 hours)');
-  });
-
-  // The old line read "Escalate to merchant: about tracking numbers and
-  // shipping addresses for four different orders (,…" — a tool label in the
-  // most scannable position, and punctuation stranded by lifting out an order
-  // number the line then truncated anyway. The action leads now, but the
-  // subject slot after it is still a person or an order, never the tool.
-  it('never spends the subject slot on a tool label', () => {
-    const line = formatWaitingItemLine({
-      customerName: null,
-      channelType: 'email',
-      aiTitle: 'Tracking And Address Changes',
-      aiSummary: 'Customer is asking about tracking numbers and shipping addresses for four different orders (#1019, #1020, #1021, #1022)',
-      tag: null,
-      rawToolCalls: [{ id: 'tc1', name: 'escalate_to_human', input: { reason: 'four orders' } }],
-      instruction: 'Ask the merchant',
-      now: NOW,
-      since: new Date(NOW.getTime() - 11 * 3_600_000),
-    });
-    // With no name to print, the order number is a better subject than
-    // "Someone" — so it keeps its slot even with the action ahead of it.
-    expect(line).toBe('Escalate to merchant · #1019: Tracking And Address Changes (waiting 11 hours)');
-    expect(line.split(' · ')[1]).toBe('#1019: Tracking And Address Changes (waiting 11 hours)');
-  });
-
-  it('never leaves stranded punctuation or a live address in the line', () => {
-    const line = formatWaitingItemLine({
-      customerName: null,
-      aiTitle: null,
-      aiSummary: 'Customer provided an email address (adoaiere983403984@yahoo.com) in response to a request for order details',
-      tag: null,
-      rawToolCalls: [{ id: 'tc1', name: 'send_reply', input: { text: 'Hi' } }],
-      instruction: 'Answer the customer',
-      now: NOW,
-      since: new Date(NOW.getTime() - 9 * 3_600_000),
-    });
-    expect(line).not.toContain('@');
-    expect(line).not.toMatch(/[(,;:\s]…/);
-    expect(line).toContain('their email');
-  });
-});
-
 describe('loadWaitingOnYouItems', () => {
   it('dedupes operator pending plans by stable plan id', async () => {
     const customer = await createTestCustomer(org.id, 'sarah@example.com', { name: 'Sarah Jones' });
@@ -640,19 +445,11 @@ describe('loadWaitingOnYouItems', () => {
     expect(items).toHaveLength(1);
     // Action, then what it's about, then how long it has sat: without the last
     // two, four pending replies to one customer render as four identical lines.
-    expect(items[0]?.line).toBe(
-      '$12 refund · Sarah: Order arrived damaged, wants money back (waiting 1 day)',
-    );
-    // The "still waiting on your OK" framing belongs to the header, and the ask
-    // names it back rather than saying "it" — the ask lands under whatever
-    // blocked, answered and flagged sections the briefing also has, so a bare
-    // pronoun asks about all of them.
-    expect(formatWaitingSection(items)).toBe(
-      "One thing's still waiting on your OK:\n"
-      + '- $12 refund · Sarah: Order arrived damaged, wants money back (waiting 1 day)\n'
-      + '\n'
-      + 'Want me to go ahead with the one waiting on your OK?',
-    );
+    // Person first, then what a yes does, then what it is about. The action used
+    // to lead, which put a tool label in the most scannable position of a line
+    // the merchant reads seven of.
+    expect(items[0]?.line).toBe('Sarah — $12 refund · Order arrived damaged, wants money back');
+
   });
 
   it('numbers several waiting items and never invites a bare yes across them', async () => {
@@ -681,17 +478,18 @@ describe('loadWaitingOnYouItems', () => {
 
     const items = await loadWaitingOnYouItems(org.id, NOW);
     expect(items).toHaveLength(2);
-    const section = formatWaitingSection(items)!;
-    expect(section).toContain('Two things are still waiting on your OK:');
+    const section = formatNeedsYouList(items.map((entry) => ({
+      threadId: entry.threadId, kind: 'approval' as const, line: entry.line,
+    })))!;
+    expect(section).toContain('Ready to send, just say yes:');
     // Every line differs by subject, so the list is worth reading.
-    expect(section).toContain('1. Reply · Canary: Asking where order 1042 is (waiting 5 hours)');
-    expect(section).toContain('2. Reply · Canary: Wants to change the shipping address (waiting 5 hours)');
-    // Wrapped items run together without air between them.
-    expect(section).toContain('(waiting 5 hours)\n\n2.');
+    expect(section).toContain('1. Canary — reply · Asking where order 1042 is');
+    expect(section).toContain('2. Canary — reply · Wants to change the shipping address');
     // A bare "yes" here would approve only the most recent plan. The count ties
     // the ask to this list rather than to everything else the briefing names.
-    expect(section.trimEnd().endsWith('Tell me which of the two waiting on your OK to go ahead with.')).toBe(true);
-    expect(section).not.toMatch(/Want me to send (any of )?those\?/);
+    expect(formatNeedsYouAsk(items.map((entry) => ({
+      threadId: entry.threadId, kind: 'approval' as const, line: entry.line,
+    })))).toBe('Say yes to send them all, or give me a number.');
   });
 
   it('includes stale dashboard plans that still need review', async () => {
@@ -711,7 +509,7 @@ describe('loadWaitingOnYouItems', () => {
     const items = await loadWaitingOnYouItems(org.id, NOW);
     expect(items).toHaveLength(1);
     expect(items[0]?.line).toContain('Bob');
-    expect(formatWaitingSection(items)).toContain("still waiting on your OK");
+    expect(items[0]?.line).toBe('Bob — ask the merchant · Support');
   });
 
   it('re-surfaces a quick reply the operator queue evicted', async () => {
@@ -789,7 +587,7 @@ describe('loadWaitingOnYouItems', () => {
     // "Customer" is a placeholder, not a name. With nothing to print, the
     // subject falls back to a generic word and the topic carries the line.
     expect(items[0]?.line).not.toContain('Customer');
-    expect(items[0]?.line).toBe('Reply · Someone: Damaged Sweater Return');
+    expect(items[0]?.line).toBe('Someone — reply · Damaged Sweater Return');
   });
 
   it('ignores stale plans on threads outside the support inbox', async () => {

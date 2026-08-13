@@ -110,6 +110,7 @@ describe('renderOperatorLedger', () => {
     const ledger = await renderOperatorLedger(org.id, {
       ...EMPTY,
       pendingDigest: {
+        items: [{ threadId: thread.id, kind: 'flagged' as const }],
         threadIds: [thread.id],
         sentAt: new Date(Date.now() - 2 * 3_600_000).toISOString(),
       },

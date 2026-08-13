@@ -428,7 +428,7 @@ async function main() {
   // which otherwise needs a bound phone.
   console.log(`\n${'─'.repeat(52)}\n${digest.message}\n${'─'.repeat(52)}\n`);
 
-  const flaggedOrder = digest.pendingDigest.threadIds.map((id, index) => {
+  const flaggedOrder = digest.pendingDigest.threadIds.map((id: string, index: number) => {
     const match = staged.find((s) => s.threadId === id);
     return `  ${index + 1}. ${match?.fixture.name ?? 'unknown'}  ${id}`;
   });

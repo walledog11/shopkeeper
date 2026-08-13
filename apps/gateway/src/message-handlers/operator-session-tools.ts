@@ -71,7 +71,7 @@ export function buildOperatorSessionTools(
     planStepLabel: 'Approve pending plan',
     policy: { categoryPermission: false },
     execute: async (input: PlanRefInput, ctx) => {
-      const selected = selectPendingPlan(context.pendingPlans, input.plan_ref);
+      const selected = selectPendingPlan(context.pendingPlans, input.plan_ref, context.pendingDigest);
       if ('error' in selected) return toolError(selected.error);
       const pendingPlan = selected.plan;
 
@@ -120,7 +120,7 @@ export function buildOperatorSessionTools(
     planStepLabel: 'Dismiss pending plan',
     policy: { categoryPermission: false },
     execute: async (input: PlanRefInput) => {
-      const selected = selectPendingPlan(context.pendingPlans, input.plan_ref);
+      const selected = selectPendingPlan(context.pendingPlans, input.plan_ref, context.pendingDigest);
       if ('error' in selected) return toolError(selected.error);
       await clearPendingPlan(organizationId, memberKey, selected.plan);
       return toolOk('Plan dismissed.');
@@ -145,7 +145,7 @@ export function buildOperatorSessionTools(
     planStepLabel: 'Revise pending plan',
     policy: { categoryPermission: false },
     execute: async (input: ReviseGuidanceInput) => {
-      const selected = selectPendingPlan(context.pendingPlans, input.plan_ref);
+      const selected = selectPendingPlan(context.pendingPlans, input.plan_ref, context.pendingDigest);
       if ('error' in selected) return toolError(selected.error);
       const pendingPlan = selected.plan;
       const message = await applyOperatorAnswerReplan({

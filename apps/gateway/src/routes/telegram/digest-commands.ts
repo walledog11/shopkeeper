@@ -22,7 +22,11 @@ export async function handleDigestCommand(
   const { reply, presence } = message;
   if (!context.pendingDigest) return false;
 
-  const { threadIds } = context.pendingDigest;
+  // Ordinals index the briefing the merchant is looking at, not the flagged
+  // subset. They used to be separate lists that both started at 1, so "spam 2"
+  // and "2 yes" pointed at different tickets and the merchant had no way to know.
+  const { items } = context.pendingDigest;
+  const threadIds = items.filter((item) => item.kind === 'flagged').map((item) => item.threadId);
   if (command.type === 'digest-review') {
     if (threadIds.length === 0) {
       await reply('No flagged tickets in your last digest.');
@@ -40,12 +44,20 @@ export async function handleDigestCommand(
     return true;
   }
 
-  const targetIndex = command.index - 1;
-  if (targetIndex < 0 || targetIndex >= threadIds.length) {
-    await reply(`No flagged ticket ${command.index}. Reply REVIEW to see the list.`);
+  const target = items[command.index - 1];
+  if (!target) {
+    await reply(`There's no ${command.index} on that list.`);
     return true;
   }
-  const targetId = threadIds[targetIndex];
+  // Fail closed and say which item they hit: silently acting on the neighbouring
+  // ticket is how a real customer gets binned by an off-by-one.
+  if (target.kind !== 'flagged') {
+    await reply(target.kind === 'approval'
+      ? `Number ${command.index} is a reply I've already drafted, not a flagged ticket. Say "${command.index} yes" to send it.`
+      : `Number ${command.index} isn't one I flagged, so tell me what to do with it instead.`);
+    return true;
+  }
+  const targetId = target.threadId;
 
   if (command.type === 'digest-open') {
     const thread = await db.thread.findFirst({

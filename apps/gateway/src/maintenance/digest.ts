@@ -9,18 +9,18 @@ import { db, ThreadFilterStatus, type DbThreadFilterStatus } from '@shopkeeper/d
 import { JOB, QUEUE } from '../constants.js';
 import logger from '../logger.js';
 import { listOperatorBindings, notifyOperator, type OperatorBinding, type OperatorNotifyResult } from '../operator-notify.js';
+import type { PendingDigest } from '../operator-context.js';
 import { digestNotificationIdempotencyKey } from '../operator-notify-idempotency.js';
 import {
   capitalize,
   countWord,
   deriveThreadLifecycleState,
-  formatAwaitingCustomerSection,
-  formatBlockedSection,
+  formatBlockedTicketLine,
   formatHandledSection,
-  formatOtherOpenSection,
-  formatWaitingAsk,
+  formatNeedsYouAsk,
+  formatNeedsYouList,
   humanizeReportedSummary,
-  formatWaitingList,
+  type BriefingItem,
   loadHandledRollup,
   loadWaitingOnYouItems,
   finalizeDigestSend,
@@ -185,17 +185,12 @@ export function formatWeeklySummaryLine(
 export interface DigestMessageExtras {
   /** Greeting in the agent's own voice; the scheduled worker supplies it. */
   opener?: string | null;
+  /** Everything that needs the merchant, in the order it is numbered. */
+  needsYou?: BriefingItem[];
+  /** What the agent did without them, as a sentence for the closing tail. */
   handledSection?: string | null;
-  /** Numbered approval list without the closing ask. */
-  waitingSection?: string | null;
-  /** Closing ask for the approval list; lands after everything else. */
-  waitingAsk?: string | null;
-  /** Threads the agent could not plan, handed back to the merchant. */
-  blockedSection?: string | null;
-  /** Threads the agent answered, reported rather than asked about. */
-  awaitingCustomerSection?: string | null;
-  /** Compact roll-up of open tickets not named in any section above. */
-  otherOpenSection?: string | null;
+  /** Threads sitting quietly, as a sentence. Never a section: nothing is owed. */
+  quietSentence?: string | null;
   garnishLines?: string[];
 }
 
@@ -217,17 +212,6 @@ function hasNoRequest(thread: DigestThreadRow): boolean {
   return parseClassifierSignals(thread.classifierSignals)?.intents.no_request === true;
 }
 
-function simpleInboxSentence(genuineCount: number, urgent: number): string {
-  if (genuineCount === 0) return "Nothing's waiting on a reply.";
-
-  let line = `You've got ${countWord(genuineCount)} open ticket${genuineCount === 1 ? '' : 's'}.`;
-  if (urgent === genuineCount) {
-    line += ` ${genuineCount === 1 ? "It's" : "They've all"} been sitting over a day.`;
-  } else if (urgent > 0) {
-    line += ` ${capitalize(countWord(urgent))} ${urgent === 1 ? 'has' : 'have'} been sitting over a day.`;
-  }
-  return line;
-}
 
 // Slicing at a character count lands mid-word, and a raw address here becomes a
 // tappable mailto in the middle of the merchant's morning text.
@@ -253,98 +237,66 @@ function spamSentence(filteredCount: number): string {
     : `I filed ${countWord(filteredCount)} as spam.`;
 }
 
+/**
+ * One message, one list, one ask.
+ *
+ * This used to print up to four separately-headed sections, each named after an
+ * internal lifecycle state, two of them numbered from 1, and three different
+ * closing questions. A merchant with seven things to do could not tell which
+ * number belonged to which list or which question they were answering. The
+ * sections were organised around what the agent knew about a thread; the
+ * merchant only ever has one job, which is to clear the things that need them.
+ *
+ * So: everything needing the merchant is one numbered list, grouped only into
+ * "a yes clears this" and "this needs a sentence". Everything needing nothing
+ * collapses into the closing tail — it is news, not work, and it goes last.
+ */
 export function formatDigestMessage(
   buckets: DigestBuckets,
   weeklyLine?: string | null,
   extras?: DigestMessageExtras,
 ): string {
-  const { genuine, questionable, filteredCount, urgent } = buckets;
+  const { filteredCount } = buckets;
+  const items = extras?.needsYou ?? [];
+  const list = formatNeedsYouList(items);
+  const ask = formatNeedsYouAsk(items);
   const lines: string[] = [];
-  const hasWaiting = Boolean(extras?.waitingSection);
-  // The open count exists for a briefing that never names the tickets. Once a
-  // section has, it describes the same set a second time — "One I couldn't work
-  // out a next step on, so it's yours: Priya" followed by "You've got one open
-  // ticket" reads as two numbers to reconcile, and the neutral count undercuts
-  // the handoff. The approval list has always suppressed it; every section that
-  // names tickets now does.
-  const namedOpenTickets = hasWaiting || Boolean(
-    extras?.blockedSection || extras?.awaitingCustomerSection || extras?.otherOpenSection,
-  );
 
-  if (extras?.opener) {
-    lines.push(extras.opener, '');
-  }
-  if (extras?.handledSection) {
-    lines.push(extras.handledSection, '');
-  }
-  // Decisions the merchant owes come first, then what is only being reported.
-  // The blocked section sits under the approval list because both are work
-  // waiting on them; the last two are status.
-  //
-  // Exactly one blank line between sections. The two blocks above end with their
-  // own, so the separator is only added when it is missing — pushing one
-  // unconditionally left a double gap on every briefing with no approvals.
-  for (const section of [
-    extras?.waitingSection,
-    extras?.blockedSection,
-    extras?.awaitingCustomerSection,
-    extras?.otherOpenSection,
-  ]) {
-    if (!section) continue;
-    if (lines.length > 0 && lines[lines.length - 1] !== '') lines.push('');
-    lines.push(section);
+  // The opener and the count are one sentence: "Morning, Ada here. Seven things
+  // need you." Two lines for a greeting and a number is a paragraph of throat
+  // clearing above the only thing worth reading.
+  const opener = extras?.opener?.trim();
+  const headline = items.length > 0
+    ? `${capitalize(countWord(items.length))} ${items.length === 1 ? 'thing needs' : 'things need'} you.`
+    : null;
+  if (opener || headline) {
+    lines.push([opener, headline].filter(Boolean).join(' '));
   }
 
-  if (!namedOpenTickets) {
-    const status: string[] = [simpleInboxSentence(genuine.length, urgent)];
-    if (filteredCount > 0) status.push(spamSentence(filteredCount));
+  if (list) lines.push('', list);
+  if (ask) lines.push('', ask);
+
+  // The tail: what happened without them, and what is sitting quietly. Each is a
+  // sentence in one paragraph rather than a section, because none of it is a
+  // decision and a heading implies one.
+  const tail: string[] = [];
+  if (extras?.handledSection) tail.push(extras.handledSection);
+  if (filteredCount > 0) tail.push(spamSentence(filteredCount));
+  if (extras?.quietSentence) tail.push(extras.quietSentence);
+  if (tail.length > 0) {
     if (lines.length > 0) lines.push('');
-    lines.push(status.join(' '));
-  } else if (filteredCount > 0) {
-    lines.push('', spamSentence(filteredCount));
-  }
-
-  if (questionable.length > 0) {
-    lines.push('');
-    if (questionable.length === 1) {
-      const only = questionable[0]!;
-      const blurb = flaggedBlurb(only);
-      lines.push(`There's one I wasn't sure about, from ${only.customer.name ?? 'someone new'}.`);
-      // The line above already named them, so this one says "They asked …"
-      // rather than repeating the name or falling back to "Customer asks".
-      if (blurb) lines.push(endSentence(humanizeReportedSummary('They', blurb) ?? blurb));
-    } else {
-      lines.push(`There are ${countWord(questionable.length)} I wasn't sure about:`);
-      const shown = questionable.slice(0, DIGEST_QUESTIONABLE_LIMIT);
-      shown.forEach((t, i) => {
-        const name = t.customer.name ?? 'Unknown';
-        const blurb = flaggedBlurb(t);
-        const humanized = blurb ? humanizeReportedSummary(name, blurb) : null;
-        lines.push(`${i + 1}. ${humanized ?? `${name}${blurb ? `: ${blurb}` : ''}`}`);
-      });
-      if (questionable.length > shown.length) {
-        lines.push(`  …and ${questionable.length - shown.length} more`);
-      }
-    }
-    lines.push('', questionable.length === 1
-      ? 'Want me to do anything with it?'
-      : 'Want me to do anything with those?');
+    lines.push(tail.join(' '));
   }
 
   for (const line of extras?.garnishLines ?? []) {
     lines.push('', line);
   }
-
-  if (!hasWaiting && weeklyLine) {
+  if (items.length === 0 && weeklyLine) {
     lines.push('', weeklyLine);
   }
-
-  if (extras?.waitingAsk) {
-    lines.push('', extras.waitingAsk);
-  }
-
-  if (questionable.length === 0 && genuine.length === 0 && !extras?.waitingAsk && !extras?.waitingSection) {
-    lines.push('', `I'll shout if anything comes in.`);
+  if (items.length === 0) {
+    if (lines.length > 0) lines.push('');
+    lines.push(`I'll shout if anything comes in.`);
   }
 
   return lines.join('\n');
@@ -368,7 +320,7 @@ export async function deliverOrgDigest(
 
 export interface OrgDigest {
   message: string;
-  pendingDigest: { threadIds: string[]; sentAt: string };
+  pendingDigest: PendingDigest;
   flaggedCount: number;
   /**
    * One lifecycle state per open non-filtered thread. Carried, not yet rendered
@@ -431,11 +383,9 @@ export async function buildOrgDigest(
   ]);
 
   const handledSection = formatHandledSection(handledRollup);
-  const waitingSection = formatWaitingList(waitingItems);
-  const waitingAsk = formatWaitingAsk(waitingItems);
   const includeEmptyInbox = options.includeEmptyInbox ?? true;
 
-  if (openThreads.length === 0 && !waitingSection && !includeEmptyInbox) return null;
+  if (openThreads.length === 0 && waitingItems.length === 0 && !includeEmptyInbox) return null;
 
   const buckets = bucketDigestThreads(openThreads, now, since);
   const waitingThreadIds = new Set(waitingItems.map((item) => item.threadId));
@@ -474,16 +424,51 @@ export async function buildOrgDigest(
   const threadsInState = (state: ThreadLifecycleState) => (
     unlisted.filter((thread) => stateByThreadId.get(thread.id) === state)
   );
-  const blockedSection = formatBlockedSection(
-    threadsInState('blocked_no_plan').map((thread) => ({
-      ...thread,
-      pendingMessage: thread.messages[0]?.contentText ?? null,
+  // The one list, in the order it is numbered. Approvals first because a yes
+  // clears them; then the threads with no plan; then the classifier's maybes,
+  // which are the same shape of work — someone has to look and decide.
+  const flagged = buckets.questionable.slice(0, DIGEST_QUESTIONABLE_LIMIT);
+  const needsYou: BriefingItem[] = [
+    ...waitingItems.map((item): BriefingItem => ({
+      threadId: item.threadId,
+      kind: 'approval',
+      ...(item.planId ? { planId: item.planId } : {}),
+      line: item.line,
     })),
-  );
-  const awaitingCustomerSection = formatAwaitingCustomerSection(threadsInState('awaiting_customer'));
-  const otherOpenSection = formatOtherOpenSection(threadsInState('awaiting_approval'));
+    ...threadsInState('blocked_no_plan').map((thread): BriefingItem => ({
+      threadId: thread.id,
+      kind: 'decision',
+      line: formatBlockedTicketLine({
+        ...thread,
+        pendingMessage: thread.messages[0]?.contentText ?? null,
+      }),
+    })),
+    ...flagged.map((thread): BriefingItem => {
+      const name = thread.customer.name ?? 'Someone new';
+      const blurb = flaggedBlurb(thread);
+      return {
+        threadId: thread.id,
+        kind: 'flagged',
+        // Non-directional: naming the destructive option invites a one-word yes
+        // that bins a real customer, which is the failure this whole block is
+        // here to avoid.
+        line: blurb
+          ? `${endSentence(humanizeReportedSummary(name, blurb) ?? `${name}: ${blurb}`)} Real customer?`
+          : `${name} — real customer?`,
+      };
+    }),
+  ];
 
-  const weeklyLine = waitingSection
+  // Sitting quietly: answered and gone silent, or planned so recently the
+  // merchant already has the card. Neither is a decision, so neither gets a line
+  // of its own — they are one clause in the tail or nothing at all.
+  const quietCount = threadsInState('awaiting_customer').length
+    + threadsInState('awaiting_approval').length;
+  const quietSentence = quietCount > 0
+    ? `${capitalize(countWord(quietCount))} ${quietCount === 1 ? 'other is' : 'others are'} ticking along without me.`
+    : null;
+
+  const weeklyLine = needsYou.length > 0
     ? null
     : weeklyStats
       ? formatWeeklySummaryLine(weeklyStats, buckets.genuine.length)
@@ -495,17 +480,17 @@ export async function buildOrgDigest(
       weeklyLine,
       {
         opener: options.opener ?? null,
+        needsYou,
         handledSection,
-        waitingSection,
-        waitingAsk,
-        blockedSection,
-        awaitingCustomerSection,
-        otherOpenSection,
+        quietSentence,
         garnishLines,
       },
     ),
     pendingDigest: {
-      threadIds: buckets.questionable.slice(0, DIGEST_QUESTIONABLE_LIMIT).map((t) => t.id),
+      items: needsYou.map(({ threadId, kind, planId }) => ({ threadId, kind, ...(planId ? { planId } : {}) })),
+      // The flagged subset stays in briefing order so anything still reading
+      // `threadIds` sees the same tickets, just not the same ordinals.
+      threadIds: flagged.map((thread) => thread.id),
       sentAt: now.toISOString(),
     },
     flaggedCount: buckets.questionable.length,
@@ -624,7 +609,7 @@ export async function sendScheduledDigests(): Promise<void> {
         flaggedCount = digest.flaggedCount;
       } else {
         message = await buildFirstNightMessage(org.id, org.name, agentName);
-        pendingDigest = { threadIds: [], sentAt: now.toISOString() };
+        pendingDigest = { items: [], threadIds: [], sentAt: now.toISOString() };
       }
 
       const bindings = await listOperatorBindings(org.id);

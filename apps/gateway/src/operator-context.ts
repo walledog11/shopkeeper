@@ -38,9 +38,65 @@ export interface PendingPlan {
   actionLabel?: string;
 }
 
+/**
+ * One numbered entry in the briefing the merchant is looking at.
+ *
+ * The briefing used to print two independent lists — parked approvals numbered
+ * from 1, flagged tickets numbered from 1 again — so a reply of "1 yes" named
+ * two different tickets and neither side could tell which. Everything that needs
+ * the merchant is now one list in one order, and this is that order.
+ *
+ * `kind` is what a number means when it is used, not how the line reads:
+ * - `approval` has a drafted plan; a bare yes executes it.
+ * - `decision` is a thread the agent could not plan; there is nothing to
+ *   approve, so a number here needs an instruction with it.
+ * - `flagged` is a classifier maybe; SPAM and REPLY act on these.
+ */
+export interface PendingDigestItem {
+  threadId: string;
+  kind: 'approval' | 'decision' | 'flagged';
+  /** Set for `approval`, linking the ordinal to its entry in `pendingPlans`. */
+  planId?: string;
+}
+
 export interface PendingDigest {
-  threadIds: string[];
+  items: PendingDigestItem[];
   sentAt: string;
+  /**
+   * The flagged subset, in briefing order. Retained because it is the shape
+   * already persisted in every OperatorContext row in production, and a merchant
+   * mid-conversation with yesterday's briefing must not have their ordinals
+   * silently repoint.
+   */
+  threadIds: string[];
+}
+
+const DIGEST_ITEM_KINDS = new Set(['approval', 'decision', 'flagged']);
+
+/**
+ * The number the merchant saw next to this thread. Every ordinal the operator
+ * side prints or accepts has to come from here, so that "2" means the same
+ * ticket in the briefing, in a confirmation, and in the ledger the model reads.
+ */
+export function briefingOrdinal(digest: PendingDigest | null, threadId: string): number | null {
+  const index = digest?.items.findIndex((item) => item.threadId === threadId) ?? -1;
+  return index < 0 ? null : index + 1;
+}
+
+function readPendingDigestItems(value: unknown, threadIds: string[]): PendingDigestItem[] {
+  if (!Array.isArray(value)) {
+    // Pre-merge row: the only numbered list it ever had was the flagged one.
+    return threadIds.map((threadId) => ({ threadId, kind: 'flagged' as const }));
+  }
+  return value.flatMap((entry) => {
+    if (!isRecord(entry) || typeof entry.threadId !== 'string') return [];
+    if (typeof entry.kind !== 'string' || !DIGEST_ITEM_KINDS.has(entry.kind)) return [];
+    return [{
+      threadId: entry.threadId,
+      kind: entry.kind as PendingDigestItem['kind'],
+      ...(typeof entry.planId === 'string' ? { planId: entry.planId } : {}),
+    }];
+  });
 }
 
 export interface PendingQuestion {
@@ -139,8 +195,10 @@ function readPendingDigest(value: unknown): PendingDigest | null {
     return null;
   }
 
+  const threadIds = value.threadIds.filter((threadId): threadId is string => typeof threadId === 'string');
   return {
-    threadIds: value.threadIds.filter((threadId): threadId is string => typeof threadId === 'string'),
+    threadIds,
+    items: readPendingDigestItems(value.items, threadIds),
     sentAt: value.sentAt,
   };
 }
@@ -340,7 +398,11 @@ function pendingPlanOptions(plans: PendingPlan[]): string {
 // optional `plan_ref` (an ordinal from the ledger list, a planId, or a customer
 // name). With one plan pending the ref is ignored; with several and no/ambiguous
 // ref the model is told to ask which one rather than guess.
-export function selectPendingPlan(plans: PendingPlan[], ref?: string): SelectPendingPlanResult {
+export function selectPendingPlan(
+  plans: PendingPlan[],
+  ref?: string,
+  digest?: PendingDigest | null,
+): SelectPendingPlanResult {
   if (plans.length === 0) {
     return { error: 'Error: no plan is awaiting the merchant\'s approval.' };
   }
@@ -355,7 +417,30 @@ export function selectPendingPlan(plans: PendingPlan[], ref?: string): SelectPen
   }
 
   if (/^\d+$/.test(trimmed)) {
-    const index = Number.parseInt(trimmed, 10) - 1;
+    const ordinal = Number.parseInt(trimmed, 10);
+
+    // A number the merchant types is a number they read in the briefing, so the
+    // briefing's list wins over this queue's own order whenever one was sent.
+    // The two agreed only by accident — the queue is newest-last and the briefing
+    // lists approvals first — and disagreed the moment anything else was on the
+    // list above them.
+    const item = digest?.items[ordinal - 1];
+    if (item) {
+      if (item.kind !== 'approval') {
+        return {
+          error: `Number ${ordinal} in the briefing is not a drafted plan, so there is nothing to approve. Tell the merchant what it is and ask what they want done.`,
+        };
+      }
+      const byOrdinal = plans.find((plan) => plan.planId && plan.planId === item.planId)
+        ?? plans.find((plan) => plan.threadId === item.threadId);
+      if (byOrdinal) return { plan: byOrdinal };
+      return { error: `The plan for number ${ordinal} is no longer pending — it may already have run.` };
+    }
+    if (digest && digest.items.length > 0) {
+      return { error: `There is no number ${ordinal} on that briefing. ${ambiguous}` };
+    }
+
+    const index = ordinal - 1;
     if (index >= 0 && index < plans.length) return { plan: plans[index]! };
     return { error: ambiguous };
   }

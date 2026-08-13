@@ -5,6 +5,7 @@ import type { SupportStatsSummary } from '@shopkeeper/agent/support-stats';
 import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { bucketDigestThreads, buildOrgDigest, digestWindowKey, formatDigestMessage, formatWeeklySummaryLine } from './digest.js';
+import type { BriefingItem } from './digest-briefing.js';
 
 const NOW = new Date('2026-04-29T12:00:00Z');
 const HOUR = 3_600_000;
@@ -157,342 +158,122 @@ describe('bucketDigestThreads', () => {
 });
 
 describe('formatDigestMessage', () => {
-  it('keeps the briefing in one message when approvals are pending', () => {
-    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW, FILED_SINCE);
-    const msg = formatDigestMessage(buckets, null, {
+  const item = (over: Partial<BriefingItem> = {}): BriefingItem => ({
+    threadId: `t-${Math.random().toString(16).slice(2)}`,
+    kind: 'approval',
+    line: 'Sarah — $12 refund · Damaged mug',
+    ...over,
+  });
+
+  // The shape this replaced printed up to four separately-headed sections, two
+  // of them numbered from 1, closed by three different questions. Everything the
+  // merchant has to do is one list now, so the numbering is the contract.
+  it('numbers straight through both groups without restarting', () => {
+    const msg = formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE), null, {
+      needsYou: [
+        item({ line: 'Sarah — $12 refund · Damaged mug' }),
+        item({ line: 'Aisha — reply · Where is order 1051' }),
+        item({ kind: 'decision', line: 'Dana asked to move order #1043.' }),
+        item({ kind: 'flagged', line: 'Marcus Reed asked when their order ships. Real customer?' }),
+      ],
+    });
+    expect(msg).toContain('Ready to send, just say yes:\n1. Sarah');
+    expect(msg).toContain('2. Aisha');
+    expect(msg).toContain('Need your call:\n3. Dana');
+    expect(msg).toContain('4. Marcus Reed');
+    // The second group must not start over at 1.
+    expect(msg).not.toMatch(/Need your call:\n1\./);
+  });
+
+  it('counts the work in one sentence with the greeting', () => {
+    const msg = formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE), null, {
       opener: 'Morning, Ada here.',
-      handledSection: 'Since your last briefing I replied to Sarah.',
-      waitingSection: "One thing's still waiting on your OK:\n- refund",
-      waitingAsk: 'Want me to go ahead with it?',
+      needsYou: [item(), item()],
     });
-    expect(msg).toContain('Morning, Ada here.');
-    expect(msg).toContain('replied to Sarah');
-    expect(msg).toContain('still waiting on your OK');
-    expect(msg).not.toContain("You've got one open ticket");
-    expect(msg.trimEnd().endsWith('Want me to go ahead with it?')).toBe(true);
+    expect(msg.split('\n')[0]).toBe('Morning, Ada here. Two things need you.');
   });
 
-  it('lists open tickets not already shown in the waiting block', () => {
-    const buckets = bucketDigestThreads(
-      [
-        makeThread({ filterStatus: 'genuine', customerName: 'Jane', aiSummary: 'Asking where order 1042 is' }),
-        makeThread({ filterStatus: 'genuine', customerName: 'Bob', aiSummary: 'Wants a refund on order 1043' }),
-      ],
-      NOW,
-      FILED_SINCE,
-    );
+  it('asks once, at the end, and never three times', () => {
+    const msg = formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE), null, {
+      needsYou: [item(), item({ kind: 'decision', line: 'Dana asked something.' })],
+    });
+    const frame = msg.split('\n').filter((line) => !/^\d+\. /.test(line));
+    expect(frame.filter((line) => line.includes('?'))).toHaveLength(0);
+    expect(msg.trimEnd().endsWith('tells me what to do with the rest.')).toBe(true);
+  });
+
+  it('drops the group headings when everything is the same kind', () => {
+    const msg = formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE), null, {
+      needsYou: [item(), item()],
+    });
+    expect(msg).toContain('Ready to send, just say yes:');
+    expect(msg).not.toContain('Need your call:');
+    expect(msg.trimEnd().endsWith('Say yes to send them all, or give me a number.')).toBe(true);
+  });
+
+  it('folds everything needing nothing into one closing paragraph', () => {
+    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'filtered' })], NOW, FILED_SINCE);
     const msg = formatDigestMessage(buckets, null, {
-      waitingSection: 'x',
-      otherOpenSection: 'Also open:\n- Bob · #1043: Wants a refund',
+      needsYou: [item()],
+      handledSection: 'Since your last briefing I replied to Bob.',
+      quietSentence: 'Two others are ticking along without me.',
     });
-    expect(msg).toContain('Also open:');
-    expect(msg).toContain('Bob · #1043');
-    expect(msg).not.toContain("You've got two open tickets");
+    const tail = msg.trim().split('\n').pop();
+    expect(tail).toBe(
+      'Since your last briefing I replied to Bob. I filed one as spam. Two others are ticking along without me.',
+    );
   });
 
-  // Caught by reading a staged briefing: the handoff was immediately followed by
-  // "You've got one open ticket", which counts the same ticket a second time in
-  // a neutral voice, right under the sentence that gave it to the merchant.
-  it('does not count tickets a section has already named', () => {
-    const buckets = bucketDigestThreads(
-      [makeThread({ filterStatus: 'genuine', customerName: 'Priya' })],
-      NOW,
-      FILED_SINCE,
-    );
-    const msg = formatDigestMessage(buckets, null, {
-      blockedSection: "One I couldn't work out a next step on, so it's yours:\n- Priya: Linen napkins",
+  it('signs off rather than trailing away when nothing needs them', () => {
+    const msg = formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE), null, {
+      handledSection: 'Since your last briefing I replied to Bob.',
     });
-    expect(msg).toContain("so it's yours:");
-    expect(msg).not.toContain("You've got one open ticket");
+    expect(msg).toContain("I'll shout if anything comes in.");
+    expect(msg).not.toContain('need you');
   });
 
-  it('still discloses spam filing when the open count is suppressed', () => {
-    const buckets = bucketDigestThreads(
-      [
-        makeThread({ filterStatus: 'genuine', customerName: 'Priya' }),
-        makeThread({ filterStatus: 'filtered' }),
-      ],
-      NOW,
-      FILED_SINCE,
-    );
-    const msg = formatDigestMessage(buckets, null, {
-      awaitingCustomerSection: "I answered this one and haven't heard back:\n- Priya: Linen napkins",
-    });
-    expect(msg).not.toContain("You've got one open ticket");
-    expect(msg).toContain('I filed one as spam.');
-  });
-
-  it('omits weekly stats while approvals are still pending', () => {
-    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW, FILED_SINCE);
-    const msg = formatDigestMessage(buckets, 'Last 7 days: 5 tickets in.', {
-      waitingSection: 'Two things are still waiting on your OK:\n1. a\n2. b',
-      waitingAsk: 'Tell me which ones to go ahead with.',
-    });
-    expect(msg).not.toContain('Last 7 days');
-  });
-
-  it('states the open count as a sentence and surfaces only the over-a-day split', () => {
-    const buckets = bucketDigestThreads(
-      [
-        makeThread({ filterStatus: 'genuine', ageHours: 30 }),
-        makeThread({ filterStatus: 'genuine', ageHours: 10 }),
-        makeThread({ filterStatus: 'genuine', ageHours: 1 }),
-      ],
-      NOW,
-      FILED_SINCE,
-    );
-    const msg = formatDigestMessage(buckets);
-    expect(msg).toContain("You've got three open tickets.");
-    expect(msg).toContain('One has been sitting over a day');
-    expect(msg).not.toMatch(/Open tickets:|4-24h|<4h/);
-  });
-
-  it('says the inbox is clear rather than reporting a zero', () => {
-    const msg = formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE));
-    expect(msg).toContain("Nothing's waiting on a reply.");
-    expect(msg).not.toContain('Open tickets');
-  });
-
-  it('greets with the supplied opener ahead of everything else', () => {
-    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW, FILED_SINCE);
-    const msg = formatDigestMessage(buckets, null, { opener: 'Morning, Ada here.' });
-    expect(msg.startsWith('Morning, Ada here.\n')).toBe(true);
-  });
-
-  it('writes no em-dashes of its own', () => {
-    // The em-dash is the tell that a machine wrote the sentence. Summaries here
-    // are dash-free on purpose: customer-derived `aiSummary` text may contain
-    // one and this asserts only the copy the formatter itself authors.
-    const msg = formatDigestMessage(
-      bucketDigestThreads(
-        [
-          makeThread({ filterStatus: 'genuine', ageHours: 30 }),
-          makeThread({ filterStatus: 'genuine', ageHours: 1 }),
-          makeThread({ filterStatus: 'questionable', customerName: 'Alice', aiSummary: 'Wholesale pricing' }),
-          makeThread({ filterStatus: 'filtered' }),
-        ],
-        NOW,
-        FILED_SINCE,
-      ),
-      'Last 7 days: 38 tickets in, 29 resolved.',
-      { opener: 'Morning, Ada here.', handledSection: 'Handled two things.', waitingSection: 'One waiting.' },
-    );
-    expect(msg).not.toContain('—');
-  });
-
-  it('lists questionable threads with customer + summary, numbered from 1', () => {
-    const buckets = bucketDigestThreads(
-      [
-        makeThread({ filterStatus: 'questionable', customerName: 'Alice', aiSummary: 'Asking about wholesale pricing' }),
-        makeThread({ filterStatus: 'questionable', customerName: 'Bob', aiSummary: 'Refund request without order #' }),
-      ],
-      NOW,
-      FILED_SINCE,
-    );
-    const msg = formatDigestMessage(buckets);
-    expect(msg).toContain("There are two I wasn't sure about:");
-    expect(msg).toContain('1. Alice: Asking about wholesale pricing');
-    expect(msg).toContain('2. Bob: Refund request without order #');
-  });
-
-  it('never teaches command syntax — it closes with a question', () => {
-    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'questionable' })], NOW, FILED_SINCE);
-    const msg = formatDigestMessage(buckets);
-    expect(msg.trimEnd().endsWith('Want me to do anything with it?')).toBe(true);
-    expect(msg).not.toMatch(/<n>|<text>|OPEN|SPAM|REPLY|Shortcuts|"open 1"|"spam 1"/);
-  });
-
-  it('asks non-directionally about flagged tickets, never "want me to bin it"', () => {
-    // Flagged means the agent is unsure. Proposing the destructive option
-    // invites a one-word yes that bins a real customer.
-    const msg = formatDigestMessage(
-      bucketDigestThreads(
-        [makeThread({ filterStatus: 'questionable' }), makeThread({ filterStatus: 'questionable' })],
-        NOW,
-        FILED_SINCE,
-      ),
-    );
-    expect(msg).toContain('Want me to do anything with those?');
-    expect(msg).not.toMatch(/bin it|bin them|mark.*spam\?/i);
-  });
-
-  it('falls back to filterReason when aiSummary is missing', () => {
-    const buckets = bucketDigestThreads(
-      [makeThread({ filterStatus: 'questionable', customerName: 'Carl', aiSummary: null, filterReason: 'No order context, generic body' })],
-      NOW,
-      FILED_SINCE,
-    );
-    const msg = formatDigestMessage(buckets);
-    expect(msg).toContain("There's one I wasn't sure about, from Carl.\nNo order context, generic body.");
-  });
-
-  it('names a lone flagged ticket instead of listing one item, summary on its own line', () => {
-    const buckets = bucketDigestThreads(
-      [makeThread({ filterStatus: 'questionable', customerName: 'Alice', aiSummary: 'Asking about wholesale pricing' })],
-      NOW,
-      FILED_SINCE,
-    );
-    const msg = formatDigestMessage(buckets);
-    expect(msg).toContain("There's one I wasn't sure about, from Alice.\nAsking about wholesale pricing.");
-    expect(msg).not.toContain('1. Alice');
-  });
-
-  it('groups the no-action-needed facts together and keeps the ask with its subject', () => {
-    const buckets = bucketDigestThreads(
-      [
-        makeThread({ filterStatus: 'questionable', customerName: 'Alice', aiSummary: 'Wholesale pricing' }),
-        makeThread({ filterStatus: 'filtered' }),
-        makeThread({ filterStatus: 'filtered' }),
-      ],
-      NOW,
-      FILED_SINCE,
-    );
-    const blocks = formatDigestMessage(buckets).split('\n\n');
-    // Status the merchant need not act on, in one breath.
-    expect(blocks[0]).toBe(
-      "Nothing's waiting on a reply. I filed two as spam.",
-    );
-    // The thing that needs them.
-    expect(blocks[1]).toBe("There's one I wasn't sure about, from Alice.\nWholesale pricing.");
-    // A concluding sentence always gets its own block.
-    expect(blocks[2]).toBe('Want me to do anything with it?');
-  });
-
-  // Same bot-tell as the handoff line, two sections down: "Marcus Reed: Customer
-  // asks when their order will ship" repeats the noun the name already supplied
-  // and narrates in the present something that happened hours ago.
-  it('reports a flagged ticket as a person, not as a record about one', () => {
-    const buckets = bucketDigestThreads(
-      [
-        makeThread({
-          filterStatus: 'questionable',
-          customerName: 'Marcus Reed',
-          aiSummary: 'Customer asks when their ceramic mug set order will ship.',
-        }),
-        makeThread({
-          filterStatus: 'questionable',
-          customerName: 'Sarah Whitcombe',
-          aiSummary: 'Compliments the ceramics line and floats a newsletter tie-up.',
-        }),
-      ],
-      NOW,
-      FILED_SINCE,
-    );
-    const msg = formatDigestMessage(buckets);
-    expect(msg).toContain('1. Marcus Reed asked when their ceramic mug set order will ship.');
-    expect(msg).not.toContain('Customer asks');
-    // Prose that never opened in reported speech keeps the `Name: blurb` shape
-    // rather than having a sentence invented around it.
-    expect(msg).toContain('2. Sarah Whitcombe: Compliments the ceramics line');
-  });
-
-  it('says "they" rather than the name again when only one is flagged', () => {
-    const buckets = bucketDigestThreads(
-      [makeThread({
-        filterStatus: 'questionable',
-        customerName: 'Marcus Reed',
-        aiSummary: 'Customer asks when their ceramic mug set order will ship.',
-      })],
-      NOW,
-      FILED_SINCE,
-    );
-    const msg = formatDigestMessage(buckets);
-    expect(msg).toContain("There's one I wasn't sure about, from Marcus Reed.");
-    expect(msg).toContain('They asked when their ceramic mug set order will ship.');
-  });
-
-  it('caps the questionable list at 10 and shows a "more" line', () => {
-    const many = Array.from({ length: 13 }, (_, i) =>
-      makeThread({ filterStatus: 'questionable', customerName: `User${i}` }),
-    );
-    const buckets = bucketDigestThreads(many, NOW, FILED_SINCE);
-    const msg = formatDigestMessage(buckets);
-    expect(msg).toContain("There are 13 I wasn't sure about:");
-    expect(msg).toContain('1. User0');
-    expect(msg).toContain('10. User9');
-    expect(msg).not.toContain('11. User10');
-    expect(msg).toContain('…and 3 more');
+  it('shows the weekly line only when there is nothing to act on', () => {
+    const stats = 'Last 7 days: five tickets in.';
+    expect(formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE), stats, {}))
+      .toContain('Last 7 days');
+    expect(formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE), stats, { needsYou: [item()] }))
+      .not.toContain('Last 7 days');
   });
 
   it('mentions spam filing only when something was filed', () => {
-    const withFiltered = bucketDigestThreads([makeThread({ filterStatus: 'filtered' })], NOW, FILED_SINCE);
-    expect(formatDigestMessage(withFiltered)).toContain('I filed one as spam.');
-
-    const without = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW, FILED_SINCE);
-    expect(formatDigestMessage(without)).not.toContain('as spam');
+    const filed = bucketDigestThreads([makeThread({ filterStatus: 'filtered' })], NOW, FILED_SINCE);
+    expect(formatDigestMessage(filed, null, { needsYou: [item()] })).toContain('I filed one as spam.');
+    expect(formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE), null, { needsYou: [item()] }))
+      .not.toContain('spam');
   });
 
-  it('just ends when there are open tickets and nothing flagged', () => {
-    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW, FILED_SINCE);
-    expect(formatDigestMessage(buckets).trimEnd()).toBe("You've got one open ticket.");
-  });
-
-  it('signs off rather than trailing away when everything is clear', () => {
-    const msg = formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE));
-    expect(msg.trimEnd().endsWith("I'll shout if anything comes in.")).toBe(true);
-  });
-
-  it('includes handled and waiting sections when provided', () => {
-    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW, FILED_SINCE);
-    const msg = formatDigestMessage(buckets, null, {
-      handledSection: 'Since your last briefing I refunded Sarah $12.',
-      waitingSection: "One thing's still waiting on your OK:\n- $12 refund for Sarah",
-      waitingAsk: 'Want me to go ahead with it?',
-    });
-    expect(msg).toContain('Since your last briefing I refunded Sarah $12.');
-    expect(msg).toContain("still waiting on your OK");
-    expect(msg).not.toContain("You've got one open ticket");
-    expect(msg).toContain('Want me to go ahead with it?');
-  });
-
-  it('does not narrate what the agent is working on when approvals are queued', () => {
-    const buckets = bucketDigestThreads(
-      Array.from({ length: 5 }, () => makeThread({ filterStatus: 'genuine', ageHours: 1 })),
-      NOW,
-      FILED_SINCE,
-    );
-    const msg = formatDigestMessage(buckets, null, {
-      waitingSection: 'Four things are still waiting on your OK:\n1. a\n2. b\n3. c\n4. d',
-      waitingAsk: 'Tell me which ones to go ahead with.',
-    });
-    expect(msg).not.toContain("I'm working on");
-    expect(msg).not.toContain("You've got five open tickets");
-    expect(msg.trimEnd().endsWith('Tell me which ones to go ahead with.')).toBe(true);
-  });
-
-  it('drops the sign-off when something is already waiting on the merchant', () => {
+  it('inserts Shopify garnish lines without breaking the list', () => {
     const msg = formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE), null, {
-      waitingSection: "One thing's still waiting on your OK:\n- $12 refund for Sarah",
-      waitingAsk: 'Want me to go ahead with it?',
+      needsYou: [item()],
+      garnishLines: ['Two orders came in overnight.'],
     });
-    expect(msg).not.toContain("I'll shout if anything comes in.");
+    expect(msg).toContain('Two orders came in overnight.');
+    expect(msg.indexOf('1. Sarah')).toBeLessThan(msg.indexOf('Two orders came in overnight.'));
   });
 
-  it('includes the weekly summary line when provided and omits it otherwise', () => {
-    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW, FILED_SINCE);
-    expect(formatDigestMessage(buckets, 'Last 7 days: 5 tickets in.')).toContain('Last 7 days: 5 tickets in.');
-    expect(formatDigestMessage(buckets)).not.toContain('Last 7 days');
+  // Standing invariants, carried over from the shape this replaced.
+  it('writes no em-dashes of its own and teaches no command syntax', () => {
+    const msg = formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE), null, {
+      opener: 'Morning, Ada here.',
+      needsYou: [item(), item({ kind: 'flagged', line: 'Marcus Reed: unclear. Real customer?' })],
+      handledSection: 'Since your last briefing I replied to Bob.',
+    });
+    expect(msg).not.toMatch(/<n>|<text>|OPEN|SPAM|REPLY|Shortcuts|"open 1"|"spam 1"/);
+    // The lines themselves may carry an em-dash; the frame around them may not.
+    const frame = msg.split('\n').filter((line) => !/^\d+\. /.test(line)).join('\n');
+    expect(frame).not.toContain('—');
   });
 
-  it('inserts Shopify garnish lines before the weekly summary', () => {
-    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine', tag: 'Shipping' })], NOW, FILED_SINCE);
-    const msg = formatDigestMessage(
-      buckets,
-      'Last 7 days: 5 tickets in.',
-      {
-        garnishLines: [
-          '3 orders since your last briefing, $120.',
-          'Running low:\n- Hat (Blue) — 1 left',
-        ],
-      },
-    );
-
-    const salesIndex = msg.indexOf('3 orders since your last briefing');
-    const lowStockIndex = msg.indexOf('Running low:');
-    const weeklyIndex = msg.indexOf('Last 7 days');
-    expect(salesIndex).toBeGreaterThan(-1);
-    expect(lowStockIndex).toBeGreaterThan(salesIndex);
-    expect(weeklyIndex).toBeGreaterThan(lowStockIndex);
+  it('never proposes binning a flagged ticket', () => {
+    const msg = formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE), null, {
+      needsYou: [item({ kind: 'flagged', line: 'Marcus Reed: unclear. Real customer?' })],
+    });
+    expect(msg).not.toMatch(/bin it|spam\?|delete/i);
   });
 });
 
@@ -511,14 +292,18 @@ describe('buildOrgDigest — inbox scope', () => {
     const jane = await createTestCustomer(org.id, 'jane@example.com', { name: 'Jane' });
     const operator = await createTestCustomer(org.id, 'op@example.com', { name: 'Operator' });
     const archivedCustomer = await createTestCustomer(org.id, 'old@example.com', { name: 'Old' });
-    await createTestThread(org.id, jane.id, 'email');
+    const janeThread = await createTestThread(org.id, jane.id, 'email');
+    await createTestMessage(janeThread.id, 'Is the mug set back in stock?');
     await createTestThread(org.id, operator.id, 'sms_agent');
     await createTestThread(org.id, operator.id, 'dashboard_agent');
     const archived = await createTestThread(org.id, archivedCustomer.id, 'email');
     await db.thread.update({ where: { id: archived.id }, data: { archivedAt: new Date() } });
 
     const digest = await buildOrgDigest(org.id, NOW);
-    expect(digest?.message).toContain("You've got one open ticket");
+    expect(digest?.message).toContain('One thing needs you.');
+    expect(digest?.message).toContain('Jane');
+    expect(digest?.message).not.toContain('Operator');
+    expect(digest?.message).not.toContain('Old');
   });
 
   it('counts filtered threads for the filtered line only inside the briefing window', async () => {
@@ -526,7 +311,8 @@ describe('buildOrgDigest — inbox scope', () => {
     const genuine = await createTestCustomer(org.id, 'real@example.com', { name: 'Real' });
     const spammer = await createTestCustomer(org.id, 'spam@example.com', { name: 'Spammer' });
     const oldSpammer = await createTestCustomer(org.id, 'old-spam@example.com', { name: 'Old Spammer' });
-    await createTestThread(org.id, genuine.id, 'email');
+    const genuineThread = await createTestThread(org.id, genuine.id, 'email');
+    await createTestMessage(genuineThread.id, 'Where is my order?');
     const filtered = await createTestThread(org.id, spammer.id, 'email');
     const oldFiltered = await createTestThread(org.id, oldSpammer.id, 'email');
     await db.thread.update({
@@ -547,7 +333,7 @@ describe('buildOrgDigest — inbox scope', () => {
     });
 
     const digest = await buildOrgDigest(org.id, NOW);
-    expect(digest?.message).toContain("You've got one open ticket");
+    expect(digest?.message).toContain('One thing needs you.');
     expect(digest?.message).toContain('I filed one as spam.');
   });
 
@@ -626,7 +412,7 @@ describe('buildOrgDigest — inbox scope', () => {
     });
 
     const message = (await buildOrgDigest(org.id, NOW))!.message;
-    expect(message).toContain("couldn't work out a next step");
+    expect(message).toContain('Need your call:');
     expect(message).toContain('Dana');
   });
 
@@ -635,7 +421,7 @@ describe('buildOrgDigest — inbox scope', () => {
   // it?" appeared to cover. Each state now gets a section that says what the
   // merchant is actually looking at, and the two message-less Shopify threads
   // say nothing at all.
-  it('gives each lifecycle state its own section and scopes the ask to the approval', async () => {
+  it('puts everything that needs the merchant in one numbered list under one ask', async () => {
     org = await createTestOrg();
     const [waiting, canary, ayumu, visitor, walle, stuck, fresh] = await Promise.all([
       createTestCustomer(org.id, 'waiting@example.com', { name: 'Sarah Chen' }),
@@ -721,34 +507,38 @@ describe('buildOrgDigest — inbox scope', () => {
 
     const message = (await buildOrgDigest(org.id, NOW))!.message;
 
-    // Three sections, each saying something different about what it lists.
-    expect(message).toContain("One thing's still waiting on your OK:");
-    expect(message).toContain("One I couldn't work out a next step on, so it's yours:");
-    expect(message).toContain('Also open:');
-
-    // Each thread under the heading that describes it, and nowhere else.
-    expect(sectionFor(message, 'Sarah')).toContain('waiting on your OK');
-    expect(sectionFor(message, 'Priya')).toContain("couldn't work out a next step");
-    expect(sectionFor(message, 'Ravi')).toContain('Also open:');
+    // Two things need the merchant, numbered once, under one ask. The shape this
+    // replaced printed the same two under separate headings with separate
+    // numbering and separate closing questions.
+    expect(message).toContain('Two things need you.');
+    expect(sectionFor(message, 'Sarah')).toContain('Ready to send, just say yes:');
+    expect(sectionFor(message, 'Priya')).toContain('Need your call:');
+    expect(message).toContain('1. Sarah');
+    expect(message).toContain('2. Priya');
 
     // The handoff carries the customer's words, not the classifier's paraphrase,
     // because the merchant has to answer the question to take the ticket.
     expect(message).toContain('Priya asked: "Do the linen napkins come in a darker olive?"');
     expect(message).not.toContain('Olive Linen Napkins');
 
-    // The two message-less threads are not in any of them.
-    expect(message).not.toContain('Canary');
-    expect(message).not.toContain('Ayumu');
+    // Message-less threads, and anything the customer has not actually asked
+    // for yet, appear nowhere.
+    for (const absent of ['Canary', 'Ayumu', 'Walle', 'Storefront visitor']) {
+      expect(message).not.toContain(absent);
+    }
 
-    // Neither is anything the customer has not actually asked for yet: a
-    // one-word hello is the agent's to follow up, not the merchant's to answer.
-    expect(message).not.toContain('Walle');
-    expect(message).not.toContain('Storefront visitor');
-    expect(message).not.toContain("haven't heard back");
+    // Ravi's plan is too fresh to be parked, so he is not work yet — he is one
+    // sentence at the end rather than a heading of his own.
+    expect(message).not.toContain('Ravi');
+    expect(message).toContain('ticking along without me');
 
-    // The ask names its own list instead of the "it" that covered all five.
-    expect(message.trimEnd().endsWith('Want me to go ahead with the one waiting on your OK?')).toBe(true);
-    expect(message).not.toContain('Want me to go ahead with it?');
+    // One ask, and it is the last thing before the tail. The old shape closed
+    // with three, in three different places.
+    const asks = message.split('\n').filter((line) => line.startsWith('Reply with a number'));
+    expect(asks).toHaveLength(1);
+    // The tail is news, so it lands after the ask rather than between the list
+    // and the question the list is asking.
+    expect(message.trimEnd().endsWith('ticking along without me.')).toBe(true);
   });
 });
 

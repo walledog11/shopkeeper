@@ -86,7 +86,11 @@ describe('updateContext + getContext round-trip', () => {
 
   it('persists pendingDigest', async () => {
     const digest: PendingDigest = {
-      threadIds: ['t1', 't2'],
+      items: [
+        { threadId: 't1', kind: 'approval', planId: 'p1' },
+        { threadId: 't2', kind: 'flagged' },
+      ],
+      threadIds: ['t2'],
       sentAt: new Date().toISOString(),
     };
     await updateContext(org.id, '999', { pendingDigest: digest });
@@ -143,8 +147,12 @@ describe('updateContext + getContext round-trip', () => {
       instruction: 'check status',
       rawToolCalls: [{ id: 'tc_1', name: 'get_order' }],
     });
+    // No `items` key on the stored row: it predates the merged list, so every
+    // ordinal it ever showed was a flagged one and it has to keep resolving that
+    // way rather than reading as an empty briefing.
     expect(ctx.pendingDigest).toEqual({
       threadIds: ['thread_1'],
+      items: [{ threadId: 'thread_1', kind: 'flagged' }],
       sentAt: '2026-06-03T00:00:00.000Z',
     });
   });
@@ -247,7 +255,11 @@ describe('updateContext slot isolation', () => {
   // (each call SETs only its own column), so this passes regardless of interleave
   // rather than depending on a specific one.
   it('does not clobber when two different slots are updated concurrently', async () => {
-    const digest: PendingDigest = { threadIds: ['t1'], sentAt: '2026-07-20T00:00:00.000Z' };
+    const digest: PendingDigest = {
+      items: [{ threadId: 't1', kind: 'flagged' }],
+      threadIds: ['t1'],
+      sentAt: '2026-07-20T00:00:00.000Z',
+    };
     await db.operatorContext.create({
       data: { organizationId: org.id, memberKey: 'concurrent', pendingDigest: digest },
     });

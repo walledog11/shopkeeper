@@ -27,6 +27,8 @@ export interface WaitingItem {
   dedupeKey: string;
   threadId: string;
   line: string;
+  /** Links the briefing ordinal back to its entry in the operator plan queue. */
+  planId?: string;
 }
 
 /**
@@ -455,71 +457,6 @@ function waitingPhrase(
   return firstName ? `${firstName}: ${summary}` : summary;
 }
 
-export function formatWaitingItemLine(params: {
-  customerName: string | null;
-  channelType?: string | null;
-  aiTitle?: string | null;
-  aiSummary: string | null;
-  tag: string | null;
-  rawToolCalls: Array<{ id: string; name: string; input?: unknown }>;
-  instruction: string;
-  actionLabel?: string;
-  now: Date;
-  since: Date | null;
-}): string {
-  const {
-    customerName,
-    channelType,
-    aiTitle,
-    aiSummary,
-    tag,
-    rawToolCalls,
-    instruction,
-    actionLabel,
-    now,
-    since,
-  } = params;
-  const age = formatWaitingAge(now, since);
-  const agePart = age ? ` (${age})` : '';
-  const topic = briefingTopic(aiTitle ?? null, aiSummary, tag, WAITING_TOPIC_MAX);
-  const orderRef = extractOrderRef(`${aiTitle ?? ''} ${aiSummary ?? ''}`);
-
-  // Money leads: an amount is the one thing worth reading before the name.
-  const refundAmount = extractRefundAmount(
-    rawToolCalls.find((toolCall) => toolCall.name === 'create_refund')?.input,
-  );
-  if (refundAmount) {
-    const subjectName = briefingSubjectName(customerName);
-    const head = subjectName ? `${refundAmount} refund · ${subjectName}` : `${refundAmount} refund`;
-    return topic ? `${head}: ${topic}${agePart}` : `${head}${agePart}`;
-  }
-
-  // The subject slot is still for a person or an order, never a tool label: a
-  // line reading "Escalate to merchant: about tracking numbers" has spent its
-  // most scannable position on a word the section header already said. The
-  // action gets its own leading segment instead, ahead of the subject.
-  if (topic) {
-    const action = approvalActionHead(rawToolCalls);
-    const subject = briefingSubject(
-      customerName,
-      channelType ?? null,
-      orderRef,
-      topic,
-      action != null,
-    );
-    const head = action ? `${action} · ${subject}` : subject;
-    return `${head}: ${topic}${agePart}`;
-  }
-
-  // Nothing describes the ticket, so the parked action is the only information
-  // there is.
-  return waitingLine(
-    waitingPhrase(customerName, rawToolCalls, instruction, actionLabel),
-    null,
-    age,
-  );
-}
-
 // Compact one-line label for open tickets the merchant hasn't already seen above.
 export function formatBriefingTicketLine(
   customerName: string | null,
@@ -571,7 +508,7 @@ function cleanBriefingText(text: string | null | undefined): string {
   return redactBriefingContacts((text ?? '').replace(/\s+/g, ' ').trim());
 }
 
-function formatBlockedTicketLine(thread: BriefingTicketRow): string {
+export function formatBlockedTicketLine(thread: BriefingTicketRow): string {
   // Subject only: pass no title, summary or tag so what follows the name is the
   // request itself rather than a label for it as well.
   const named = formatBriefingTicketLine(
@@ -643,46 +580,10 @@ function formatTicketRollup(
   return lines.join('\n');
 }
 
-/**
- * `blocked_no_plan`: a customer is waiting, the agent has no plan, and nothing
- * in the product will make one. Said as a handoff naming what the agent could
- * not do, because the alternative — listing it under "Also open" beneath an
- * approval ask — reads as something already in hand.
- *
- * This is the section the model-elected `escalate_to_human` path cannot cover:
- * escalation happens during a run, and these threads never got one.
- */
-export function formatBlockedSection(threads: BriefingTicketRow[]): string | null {
-  return formatTicketRollup(
-    threads.length === 1
-      ? "One I couldn't work out a next step on, so it's yours:"
-      : `${capitalize(countWord(threads.length))} I couldn't work out a next step on, so they're yours:`,
-    threads,
-    // Uncapped, like the approval list and unlike the two roll-ups below. This
-    // section hands over work; the merchant cannot do a ticket that was replaced
-    // by "…and one more", so a saved line costs them the whole item. The two
-    // reporting sections are the opposite trade: nothing is owed on those, so
-    // length matters more than completeness.
-    { lineFor: formatBlockedTicketLine },
-  );
-}
 
-/** `awaiting_customer`: reported, never asked. The merchant has no decision here. */
-export function formatAwaitingCustomerSection(threads: BriefingTicketRow[]): string | null {
-  return formatTicketRollup(
-    threads.length === 1
-      ? "I answered this one and haven't heard back:"
-      : `I answered ${countWord(threads.length)} of these and haven't heard back:`,
-    threads,
-    { limit: DIGEST_OTHER_OPEN_LIMIT },
-  );
-}
 
-export function formatOtherOpenSection(
-  threads: BriefingTicketRow[],
-): string | null {
-  return formatTicketRollup('Also open:', threads, { limit: DIGEST_OTHER_OPEN_LIMIT });
-}
+
+
 
 async function isPlanExecutionResolved(
   organizationId: string,
@@ -903,7 +804,8 @@ async function loadOperatorWaitingItems(organizationId: string, now: Date): Prom
       items.push({
         dedupeKey,
         threadId: pendingPlan.threadId,
-        line: formatWaitingItemLine({
+        ...(pendingPlan.planId ? { planId: pendingPlan.planId } : {}),
+        line: formatApprovalItemLine({
           customerName: thread?.customer?.name ?? pendingPlan.customerName ?? null,
           channelType: thread?.channelType ?? null,
           aiTitle: thread?.aiTitle ?? null,
@@ -912,8 +814,6 @@ async function loadOperatorWaitingItems(organizationId: string, now: Date): Prom
           rawToolCalls: pendingPlan.rawToolCalls,
           instruction: pendingPlan.instruction,
           actionLabel: pendingPlan.actionLabel,
-          now,
-          since: waitingSince(thread),
         }),
       });
     }
@@ -975,7 +875,8 @@ async function loadStaleThreadWaitingItems(
     items.push({
       dedupeKey,
       threadId: thread.id,
-      line: formatWaitingItemLine({
+      ...(cached.planId ? { planId: cached.planId } : {}),
+      line: formatApprovalItemLine({
         customerName: thread.customer?.name ?? null,
         channelType: thread.channelType,
         aiTitle: thread.aiTitle,
@@ -983,8 +884,6 @@ async function loadStaleThreadWaitingItems(
         tag: thread.tag,
         rawToolCalls: plan.rawToolCalls,
         instruction: cached.instruction,
-        now,
-        since: waitingSince(thread),
       }),
     });
   }
@@ -1021,43 +920,116 @@ export async function loadWaitingOnYouItems(
   return merged;
 }
 
-export function formatWaitingList(items: WaitingItem[]): string | null {
+/**
+ * One entry in the single numbered list the briefing prints.
+ *
+ * The four sections this replaced were named after the agent's own bookkeeping —
+ * has a plan / has no plan / plan not stale yet / classifier was unsure — and
+ * each got its own heading, its own numbering and its own closing question. A
+ * merchant with seven things to do read four lists, two of them starting at "1.",
+ * and three different asks. "1 yes" named two different tickets.
+ *
+ * They are one list now, in one order, because the merchant has one job: get
+ * through the things that need them. `kind` survives only to say what a number
+ * *does* when it is used, and to group the ones a bare yes can clear.
+ */
+export interface BriefingItem {
+  threadId: string;
+  kind: 'approval' | 'decision' | 'flagged';
+  planId?: string;
+  /** Rendered without its number; the list owns the numbering. */
+  line: string;
+}
+
+
+function lowerFirst(text: string): string {
+  return text.charAt(0).toLowerCase() + text.slice(1);
+}
+
+/** `Tomás — $34 refund · Cracked mugs`: who, what it does, what it is about. */
+export function formatApprovalItemLine(params: {
+  customerName: string | null;
+  channelType?: string | null;
+  aiTitle?: string | null;
+  aiSummary: string | null;
+  tag: string | null;
+  rawToolCalls: Array<{ id: string; name: string; input?: unknown }>;
+  instruction: string;
+  actionLabel?: string;
+}): string {
+  const subject = briefingSubjectName(params.customerName)
+    ?? (params.channelType === CHANNEL.SHOPIFY_CHAT ? VISITOR_SUBJECT : 'Someone');
+  const refundAmount = extractRefundAmount(
+    params.rawToolCalls.find((toolCall) => toolCall.name === 'create_refund')?.input,
+  );
+  const action = refundAmount
+    ? `${refundAmount} refund`
+    : lowerFirst(approvalActionHead(params.rawToolCalls) ?? params.actionLabel ?? 'reply');
+  // `·` rather than a comma: the classifier writes titles in Title Case, so
+  // "$34 refund, Two Cracked Mugs" reads as a broken sentence while lowercasing
+  // the whole title would mangle "Ireland" and every other proper noun.
+  const topic = briefingTopic(params.aiTitle ?? null, params.aiSummary, params.tag);
+  return topic ? `${subject} — ${action} · ${topic}` : `${subject} — ${action}`;
+}
+
+const READY_HEADER = 'Ready to send, just say yes:';
+const DECISION_HEADER = 'Need your call:';
+
+/**
+ * The whole list, numbered straight through both groups. The grouping is the one
+ * distinction worth keeping — some of these clear with a word and some need a
+ * sentence — but the numbers never restart, so a number means exactly one thing.
+ */
+export function formatNeedsYouList(items: BriefingItem[]): string | null {
   if (items.length === 0) return null;
 
-  if (items.length === 1) {
-    return [
-      "One thing's still waiting on your OK:",
-      `- ${items[0]!.line}`,
-    ].join('\n');
-  }
+  const ready = items.filter((item) => item.kind === 'approval');
+  const calls = items.filter((item) => item.kind !== 'approval');
+  const lines: string[] = [];
+  let ordinal = 0;
 
-  // Blank lines between the items, not just around the block. Each of these
-  // wraps to two or three lines on a phone, so consecutive lines run the end of
-  // one approval into the start of the next and the list reads as a paragraph.
-  return [
-    `${capitalize(countWord(items.length))} things are still waiting on your OK:`,
-    '',
-    items.map((item, index) => `${index + 1}. ${item.line}`).join('\n\n'),
-  ].join('\n');
+  for (const [header, group] of [[READY_HEADER, ready], [DECISION_HEADER, calls]] as const) {
+    if (group.length === 0) continue;
+    if (lines.length > 0) lines.push('');
+    lines.push(header);
+    for (const item of group) {
+      ordinal += 1;
+      lines.push(`${ordinal}. ${item.line}`);
+    }
+  }
+  return lines.join('\n');
 }
 
 /**
- * The ask lands last, after the blocked, awaiting-customer, also-open, flagged
- * and stat sections, so it cannot use a bare pronoun: "Want me to go ahead with
- * it?" under a message listing five tickets asked about all five while covering
- * only the approval list. It names its own section instead, matching the header
- * `formatWaitingList` writes, so the scope is readable from the ask alone.
+ * One ask, at the end, for the whole list. Examples are built from the actual
+ * numbers in front of the merchant rather than describing a syntax: the previous
+ * version asked three separate questions in three places and none of them said
+ * how to answer, which is the thing a numbered list has to explain exactly once.
  */
-export function formatWaitingAsk(items: WaitingItem[]): string | null {
+export function formatNeedsYouAsk(items: BriefingItem[]): string | null {
   if (items.length === 0) return null;
-  return items.length === 1
-    ? 'Want me to go ahead with the one waiting on your OK?'
-    : `Tell me which of the ${countWord(items.length)} waiting on your OK to go ahead with.`;
+
+  const readyCount = items.filter((item) => item.kind === 'approval').length;
+  const hasCalls = readyCount < items.length;
+
+  if (!hasCalls) {
+    return readyCount === 1
+      ? 'Want me to go ahead?'
+      : 'Say yes to send them all, or give me a number.';
+  }
+  if (readyCount === 0) {
+    return items.length === 1
+      ? 'What do you want me to do?'
+      : 'Reply with a number and what to do, like "2 refund it".';
+  }
+  // One worked example of each kind, built from the numbers actually on screen.
+  // Only ever one number per example: the ordinal resolvers take a single ref,
+  // and teaching "1 2 yes" would be teaching a syntax that quietly does one of
+  // them.
+  const firstCall = readyCount + 1;
+  return `Reply with a number: "1 yes" sends that one, "${firstCall} …" tells me what to do with the rest.`;
 }
 
-export function formatWaitingSection(items: WaitingItem[]): string | null {
-  const list = formatWaitingList(items);
-  const ask = formatWaitingAsk(items);
-  if (!list || !ask) return null;
-  return `${list}\n\n${ask}`;
-}
+
+
+

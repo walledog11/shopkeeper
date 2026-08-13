@@ -42,7 +42,11 @@ const digestContext: OperatorContext = {
 function withDigest(threadIds: string[]): OperatorContext {
   return {
     ...digestContext,
-    pendingDigest: { threadIds, sentAt: new Date().toISOString() },
+    pendingDigest: {
+      items: threadIds.map((threadId) => ({ threadId, kind: 'flagged' as const })),
+      threadIds,
+      sentAt: new Date().toISOString(),
+    },
   };
 }
 
