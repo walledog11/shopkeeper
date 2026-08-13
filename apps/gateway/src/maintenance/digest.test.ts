@@ -23,6 +23,7 @@ function makeThread(overrides: Partial<{
   aiTitle: string | null;
   aiSummary: string | null;
   filterReason: string | null;
+  noRequest: boolean;
 }> = {}) {
   const ageHours = overrides.ageHours ?? 1;
   return {
@@ -41,7 +42,25 @@ function makeThread(overrides: Partial<{
     cachedPlan: null,
     cachedPlanMessageId: null,
     messages: [],
+    classifierSignals: overrides.noRequest
+      ? { version: 3, language: 'en', intents: { no_request: true } }
+      : null,
   };
+}
+
+// What the classifier persists for "hello" / "yo" / "Test": a real person who
+// has not said what they want yet.
+const NO_REQUEST_SIGNALS = { version: 3, language: 'en', intents: { no_request: true } };
+
+// createTestMessage stamps sentAt from the clock, so two messages written in the
+// same millisecond fall back to the `id desc` tiebreak — a random UUID order,
+// which decides whether a thread reads as answered or as blocked. Any fixture
+// with more than one message has to pin the order it means.
+async function sentAtMinutesAgo(messageId: string, minutes: number) {
+  await db.message.update({
+    where: { id: messageId },
+    data: { sentAt: new Date(NOW.getTime() - minutes * 60_000) },
+  });
 }
 
 function replyPlanCache(instruction: string, lastCustomerMessageId: string) {
@@ -506,8 +525,14 @@ describe('buildOrgDigest — inbox scope', () => {
     await createTestMessage(emptyThread.id, 'New order #1026 was placed.', 'note');
 
     const answeredThread = await createTestThread(org.id, answered.id, 'email');
-    await createTestMessage(answeredThread.id, 'Do you ship to Ireland?');
-    await createTestMessage(answeredThread.id, 'We do, three to five days.', 'agent');
+    await sentAtMinutesAgo(
+      (await createTestMessage(answeredThread.id, 'Do you ship to Ireland?')).id,
+      20,
+    );
+    await sentAtMinutesAgo(
+      (await createTestMessage(answeredThread.id, 'We do, three to five days.', 'agent')).id,
+      10,
+    );
 
     const blockedThread = await createTestThread(org.id, blocked.id, 'email');
     await createTestMessage(blockedThread.id, 'Where is my order?');
@@ -537,6 +562,31 @@ describe('buildOrgDigest — inbox scope', () => {
     expect(digest?.message).not.toContain('blocked');
   });
 
+  // Every thread classified before `no_request` existed parses with it false,
+  // which has to mean "assume they did ask for something". The opposite default
+  // would empty the briefing on deploy day and hide real customers.
+  it('keeps reporting threads classified before the no_request signal existed', async () => {
+    org = await createTestOrg();
+    const customer = await createTestCustomer(org.id, 'legacy@example.com', { name: 'Dana Ruiz' });
+    const thread = await createTestThread(org.id, customer.id, 'email');
+    await createTestMessage(thread.id, 'My order arrived with a cracked mug.');
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        aiTitle: 'Cracked Mug On Arrival',
+        classifierSignals: {
+          version: 2,
+          language: 'en',
+          intents: { mutative_request: false, policy_question: false, order_status: false },
+        },
+      },
+    });
+
+    const message = (await buildOrgDigest(org.id, NOW))!.message;
+    expect(message).toContain("couldn't work out a next step");
+    expect(message).toContain('Dana');
+  });
+
   // The diagnosed 8:00am briefing, rebuilt: five items under one pronoun, four
   // of them in an "Also open" roll-up that the closing "Want me to go ahead with
   // it?" appeared to cover. Each state now gets a section that says what the
@@ -544,12 +594,13 @@ describe('buildOrgDigest — inbox scope', () => {
   // say nothing at all.
   it('gives each lifecycle state its own section and scopes the ask to the approval', async () => {
     org = await createTestOrg();
-    const [waiting, canary, ayumu, visitor, walle, fresh] = await Promise.all([
+    const [waiting, canary, ayumu, visitor, walle, stuck, fresh] = await Promise.all([
       createTestCustomer(org.id, 'waiting@example.com', { name: 'Sarah Chen' }),
       createTestCustomer(org.id, 'canary@example.com', { name: 'Canary Shopkeeper' }),
       createTestCustomer(org.id, 'ayumu@example.com', { name: 'Ayumu Hirano' }),
       createTestCustomer(org.id, 'shopify_chat:sess-1'),
       createTestCustomer(org.id, 'walle@example.com', { name: 'Walle Walson' }),
+      createTestCustomer(org.id, 'stuck@example.com', { name: 'Priya Nadar' }),
       createTestCustomer(org.id, 'fresh@example.com', { name: 'Ravi Patel' }),
     ]);
 
@@ -581,21 +632,35 @@ describe('buildOrgDigest — inbox scope', () => {
       data: { aiTitle: 'Order Status', tag: 'Order Status' },
     });
 
-    // Answered by an auto-executed reply; the visitor never came back.
+    // A one-word hello the agent answered by asking what they were after. The
+    // visitor never came back, and a thousand of these a week is what storefront
+    // chat looks like — none of it is the merchant's to answer.
     const visitorThread = await createTestThread(org.id, visitor.id, 'shopify_chat');
-    await createTestMessage(visitorThread.id, 'hello');
-    await createTestMessage(visitorThread.id, 'Hi! What can I help you find?', 'agent');
+    await sentAtMinutesAgo((await createTestMessage(visitorThread.id, 'hello')).id, 20);
+    await sentAtMinutesAgo(
+      (await createTestMessage(visitorThread.id, 'Hi! What can I help you find?', 'agent')).id,
+      10,
+    );
     await db.thread.update({
       where: { id: visitorThread.id },
-      data: { aiTitle: 'Unclear One Word Message' },
+      data: { aiTitle: 'Unclear One Word Message', classifierSignals: NO_REQUEST_SIGNALS },
     });
 
-    // Pending customer message, no plan, and nothing that will make one.
+    // Pending customer message, no plan, and nothing that will make one — but
+    // the message is "Test", so there is nothing for a merchant to answer either.
     const walleThread = await createTestThread(org.id, walle.id, 'email');
     await createTestMessage(walleThread.id, 'Test');
     await db.thread.update({
       where: { id: walleThread.id },
-      data: { aiTitle: 'Unclear One Word Message' },
+      data: { aiTitle: 'Unclear One Word Message', classifierSignals: NO_REQUEST_SIGNALS },
+    });
+
+    // The handoff that is real: a substantive question, no plan for it.
+    const stuckThread = await createTestThread(org.id, stuck.id, 'email');
+    await createTestMessage(stuckThread.id, 'Do the linen napkins come in a darker olive?');
+    await db.thread.update({
+      where: { id: stuckThread.id },
+      data: { aiTitle: 'Olive Linen Napkins' },
     });
 
     // Not in the Palette state: a plan too fresh for the stale scan, which is
@@ -613,21 +678,30 @@ describe('buildOrgDigest — inbox scope', () => {
 
     const message = (await buildOrgDigest(org.id, NOW))!.message;
 
-    // Four sections, each saying something different about what it lists.
+    // Three sections, each saying something different about what it lists.
     expect(message).toContain("One thing's still waiting on your OK:");
     expect(message).toContain("One I couldn't work out a next step on, so it's yours:");
-    expect(message).toContain("I answered this one and haven't heard back:");
     expect(message).toContain('Also open:');
 
     // Each thread under the heading that describes it, and nowhere else.
-    expect(sectionFor(message, 'Sarah')).toContain("waiting on your OK");
-    expect(sectionFor(message, 'Walle')).toContain("couldn't work out a next step");
-    expect(sectionFor(message, 'Storefront visitor')).toContain("haven't heard back");
+    expect(sectionFor(message, 'Sarah')).toContain('waiting on your OK');
+    expect(sectionFor(message, 'Priya')).toContain("couldn't work out a next step");
     expect(sectionFor(message, 'Ravi')).toContain('Also open:');
+
+    // The handoff carries the customer's words, not the classifier's paraphrase,
+    // because the merchant has to answer the question to take the ticket.
+    expect(message).toContain('Priya: "Do the linen napkins come in a darker olive?"');
+    expect(message).not.toContain('Olive Linen Napkins');
 
     // The two message-less threads are not in any of them.
     expect(message).not.toContain('Canary');
     expect(message).not.toContain('Ayumu');
+
+    // Neither is anything the customer has not actually asked for yet: a
+    // one-word hello is the agent's to follow up, not the merchant's to answer.
+    expect(message).not.toContain('Walle');
+    expect(message).not.toContain('Storefront visitor');
+    expect(message).not.toContain("haven't heard back");
 
     // The ask names its own list instead of the "it" that covered all five.
     expect(message.trimEnd().endsWith('Want me to go ahead with the one waiting on your OK?')).toBe(true);

@@ -481,24 +481,60 @@ export interface BriefingTicketRow {
   tag: string | null;
   channelType?: string | null;
   customer: { name: string | null };
+  /** Text of the newest customer message, for the sections that quote it. */
+  pendingMessage?: string | null;
+}
+
+// A handoff line has to carry the words the merchant is being asked to answer.
+// The classifier's title is a paraphrase written for scanning ("Unclear One Word
+// Message"), and a merchant reading only that cannot tell whether the ticket is a
+// real customer or a stray "yo" — so the one section that hands work back quotes
+// the customer instead of describing them.
+const BLOCKED_QUOTE_MAX = 80;
+
+function quotePendingMessage(text: string | null | undefined): string | null {
+  const collapsed = redactBriefingContacts((text ?? '').replace(/\s+/g, ' ').trim());
+  if (!collapsed) return null;
+  return `"${truncateBriefingText(collapsed, BLOCKED_QUOTE_MAX)}"`;
+}
+
+function formatBlockedTicketLine(thread: BriefingTicketRow): string {
+  const quoted = quotePendingMessage(thread.pendingMessage);
+  if (!quoted) return formatTicketLine(thread);
+
+  // Subject only: pass no title, summary or tag so the topic slot is free for
+  // the quote rather than carrying the paraphrase as well.
+  const subject = formatBriefingTicketLine(
+    thread.customer?.name ?? null,
+    null,
+    null,
+    null,
+    thread.channelType ?? null,
+  );
+  return `${subject === 'Open ticket' ? 'Someone' : subject}: ${quoted}`;
+}
+
+function formatTicketLine(thread: BriefingTicketRow): string {
+  return formatBriefingTicketLine(
+    thread.customer?.name ?? null,
+    thread.aiTitle ?? null,
+    thread.aiSummary,
+    thread.tag,
+    thread.channelType ?? null,
+  );
 }
 
 function formatTicketRollup(
   header: string,
   threads: BriefingTicketRow[],
+  lineFor: (thread: BriefingTicketRow) => string = formatTicketLine,
 ): string | null {
   if (threads.length === 0) return null;
 
   const lines = [header];
   const shown = threads.slice(0, DIGEST_OTHER_OPEN_LIMIT);
   for (const thread of shown) {
-    lines.push(`- ${formatBriefingTicketLine(
-      thread.customer?.name ?? null,
-      thread.aiTitle ?? null,
-      thread.aiSummary,
-      thread.tag,
-      thread.channelType ?? null,
-    )}`);
+    lines.push(`- ${lineFor(thread)}`);
   }
   const remaining = threads.length - shown.length;
   if (remaining > 0) {
@@ -522,6 +558,7 @@ export function formatBlockedSection(threads: BriefingTicketRow[]): string | nul
       ? "One I couldn't work out a next step on, so it's yours:"
       : `${capitalize(countWord(threads.length))} I couldn't work out a next step on, so they're yours:`,
     threads,
+    formatBlockedTicketLine,
   );
 }
 

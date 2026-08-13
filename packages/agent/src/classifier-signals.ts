@@ -13,6 +13,13 @@ export interface ClassifierIntents {
   contradiction: boolean; // mutually exclusive asks in one message
   out_of_scope_commercial: boolean; // wholesale/bulk/B2B
   forwarded_injection: boolean; // forwarded "owner authorized refund" pattern
+  // Greeting or fragment with nothing asked yet ("hello", "yo", "Test"). Not the
+  // same as the others: they say what the customer wants, this says the customer
+  // has not said. Routing ignores it — it exists so the briefing can tell a
+  // stalled conversation from work the merchant owes an answer on, and no
+  // length rule can, since "sweater ripped" is as short as "yo" and is a real
+  // complaint.
+  no_request: boolean;
 }
 
 export const CLASSIFIER_TAGS = [
@@ -51,8 +58,12 @@ export const INTENT_KEYS: readonly (keyof ClassifierIntents)[] = [
   "contradiction",
   "out_of_scope_commercial",
   "forwarded_injection",
+  "no_request",
 ];
 
+// Every intent defaults false, which for `no_request` means "assume the customer
+// did ask for something". Threads classified before this key existed therefore
+// keep being reported rather than silently disappearing from the briefing.
 export function emptyIntents(): ClassifierIntents {
   return {
     mutative_request: false,
@@ -62,6 +73,7 @@ export function emptyIntents(): ClassifierIntents {
     contradiction: false,
     out_of_scope_commercial: false,
     forwarded_injection: false,
+    no_request: false,
   };
 }
 

@@ -1,5 +1,6 @@
 import { getSupportStats, type SupportStatsSummary } from '@shopkeeper/agent/support-stats';
 import { canonicalInboxThreadWhere } from '@shopkeeper/agent/inbox-filter';
+import { parseClassifierSignals } from '@shopkeeper/agent/classifier-signals';
 import { classifyHomePlan } from '@shopkeeper/agent/plan-preview';
 import { getCurrentPlanForThread } from '@shopkeeper/agent/plan-cache-shape';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
@@ -66,7 +67,12 @@ export interface DigestThreadRow {
   // sender itself, so the two must agree on what "last message" means.
   cachedPlan: unknown;
   cachedPlanMessageId: string | null;
-  messages: Array<{ id: string; senderType: string; sentAt: Date }>;
+  // `contentText` is here for the handoff section, which quotes the customer
+  // rather than the classifier's paraphrase. Reading it off this row is only
+  // sound because `blocked_no_plan` is defined by the customer holding the last
+  // word, so for those threads this message is theirs.
+  messages: Array<{ id: string; senderType: string; sentAt: Date; contentText: string | null }>;
+  classifierSignals: unknown;
 }
 
 export interface DigestBuckets {
@@ -185,6 +191,24 @@ export interface DigestMessageExtras {
   /** Compact roll-up of open tickets not named in any section above. */
   otherOpenSection?: string | null;
   garnishLines?: string[];
+}
+
+/**
+ * The customer has not asked for anything yet — a bare "hello" or "yo" on the
+ * storefront, a stray "Test" by email. Getting them to say what they need is the
+ * agent's job, not a decision the merchant owes, so these threads are reported in
+ * no section: not as a handoff, not as answered-and-quiet, not in the roll-up.
+ *
+ * Deliberately the classifier's judgment rather than a rule over the text. Length
+ * cannot separate "sweater ripped" from "yo", and hiding a two-word complaint is
+ * the one failure here that costs a real customer.
+ *
+ * Only the reporting sections honor it. A parked plan stays in the approval list
+ * whatever prompted it, because "yes" still approves it from the operator ledger
+ * and a briefing that hides what "yes" would do is worse than a noisy one.
+ */
+function hasNoRequest(thread: DigestThreadRow): boolean {
+  return parseClassifierSignals(thread.classifierSignals)?.intents.no_request === true;
 }
 
 function simpleInboxSentence(genuineCount: number, urgent: number): string {
@@ -381,11 +405,12 @@ export async function buildOrgDigest(
         customer: { select: { name: true } },
         cachedPlan: true,
         cachedPlanMessageId: true,
+        classifierSignals: true,
         messages: {
           where: { deletedAt: null, senderType: { not: SENDER_TYPE.NOTE } },
           orderBy: [{ sentAt: 'desc' }, { id: 'desc' }],
           take: 1,
-          select: { id: true, senderType: true, sentAt: true },
+          select: { id: true, senderType: true, sentAt: true, contentText: true },
         },
       },
       orderBy: { updatedAt: 'desc' },
@@ -434,11 +459,18 @@ export async function buildOrgDigest(
   // only rows are Shopify webhook notes has nothing to tell the merchant, and
   // P4 stops creating them.
   const stateByThreadId = new Map(lifecycleStates.map((entry) => [entry.threadId, entry.state]));
-  const unlisted = buckets.genuine.filter((thread) => !waitingThreadIds.has(thread.id));
+  const unlisted = buckets.genuine.filter((thread) => (
+    !waitingThreadIds.has(thread.id) && !hasNoRequest(thread)
+  ));
   const threadsInState = (state: ThreadLifecycleState) => (
     unlisted.filter((thread) => stateByThreadId.get(thread.id) === state)
   );
-  const blockedSection = formatBlockedSection(threadsInState('blocked_no_plan'));
+  const blockedSection = formatBlockedSection(
+    threadsInState('blocked_no_plan').map((thread) => ({
+      ...thread,
+      pendingMessage: thread.messages[0]?.contentText ?? null,
+    })),
+  );
   const awaitingCustomerSection = formatAwaitingCustomerSection(threadsInState('awaiting_customer'));
   const otherOpenSection = formatOtherOpenSection(threadsInState('awaiting_approval'));
 

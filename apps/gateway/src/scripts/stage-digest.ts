@@ -48,6 +48,8 @@ interface Fixture {
   tag: string;
   /** Minutes back from now; controls the digest's flagged ordering. */
   ageMinutes: number;
+  /** Classifier verdict: a real person who has not asked for anything yet. */
+  noRequest?: boolean;
 }
 
 // updatedAt desc drives both the digest list order and the pendingDigest
@@ -82,6 +84,20 @@ const FIXTURES: Fixture[] = [
     tag: 'Product',
     filterStatus: 'genuine',
     ageMinutes: 30,
+  },
+  {
+    email: 'livetest4@example.com',
+    name: 'Dee Okafor',
+    body: 'yo',
+    aiSummary: 'Visitor wrote a single word: "yo".',
+    filterReason: null,
+    tag: 'General',
+    filterStatus: 'genuine',
+    ageMinutes: 45,
+    // A real person who has not said what they want yet. The briefing must not
+    // name this one anywhere — getting them to say more is the agent's job, and
+    // a storefront produces a thousand of these a week.
+    noRequest: true,
   },
 ];
 
@@ -172,6 +188,11 @@ async function main() {
         tag: fixture.tag,
         filterStatus: fixture.filterStatus,
         filterReason: fixture.filterReason,
+        classifierSignals: {
+          version: 3,
+          language: 'en',
+          intents: { no_request: fixture.noRequest === true },
+        },
         lastMessageAt: sentAt,
         lastMessageSenderType: 'customer',
       },

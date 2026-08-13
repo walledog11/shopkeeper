@@ -86,6 +86,30 @@ planning, explicit obligations, and relevant prior memory are governed by
 `needs_merchant_input` alike — the current split between them is exactly the bug
 in P1.
 
+### The substance gate, which is not a state
+
+A state says what a thread is waiting on. It does not say whether the thread is
+worth the merchant's attention, and those are different questions: a bare
+"hello" on the storefront is `blocked_no_plan` by every condition above and is
+still nothing anyone should be asked about. A store gets a thousand of those a
+week.
+
+So one signal sits across the whole table: `classifierSignals.intents.no_request`
+— the customer has not said what they want yet. A thread carrying it is reported
+in **no** section, on any channel. Getting the customer to say more is the
+agent's own work, and it only becomes the merchant's when there is a real
+question the agent cannot answer.
+
+It is the classifier's judgment rather than a rule over the message text, and
+that is deliberate: no length or shape test separates "sweater ripped" from "yo",
+and wrongly hiding a two-word complaint is the one failure here that costs a real
+customer. The signal defaults false everywhere it is missing, so threads
+classified before it existed keep reporting.
+
+The **approval list is exempt**. A parked plan stays listed whatever prompted it,
+because "yes" still approves it out of the operator ledger, and a briefing that
+hides what "yes" would do is worse than a noisy one.
+
 ---
 
 ## P0 — Explain the 186-hour thread
@@ -263,6 +287,26 @@ bullets above did not:
 check bails, since composition can only be judged by reading it and that
 otherwise needed a bound phone.
 
+**Reopened once and closed again**, on two objections to the first render that
+the phase as written would not have caught:
+
+- **A handoff has to carry the words it is handing over.** The first version
+  rendered `Walle: Unclear One Word Message` — the classifier's paraphrase. A
+  merchant cannot answer a question they cannot read, and cannot tell a real
+  ticket from a stray "yo". `formatBlockedSection` now quotes the customer's
+  own message, redacted and capped at 80 characters, falling back to the
+  classifier line when there is no text to quote. Reading `Walle: "Test"` is
+  also what made the second objection obvious.
+- **An unclear message is not escalate-worthy at all.** The briefing was naming
+  both a one-word "Test" and a storefront "hello" the agent had already answered.
+  Neither is a decision the merchant owes. The substance gate above now drops
+  them, and the closing test asserts that Walle and the storefront visitor appear
+  nowhere while a substantive unplanned question still lands in the handoff.
+
+The behavior half of that second objection — the agent should reply asking what
+the customer needs, and escalate only once there is a real question it cannot
+answer — is **P7**, because it edits `prompt.ts`.
+
 ---
 
 ## P4 — Close what is finished; stop creating what cannot start
@@ -322,6 +366,15 @@ can act on it; a `filtered` one is binned with no un-filter path on the operator
 channel. Getting this wrong on storefront chat means silently binning a real
 shopper.
 
+**This is spam scope, not noise scope — do not conflate them.** A one-word
+"hello" from a real shopper is not spam, and P3's `no_request` gate already keeps
+it out of every briefing section. What P5 decides is whether an *unsolicited
+pitch* arriving over storefront chat gets filtered the way the same pitch would
+by email. Check the interaction while doing it: a thread that is both
+`questionable` and `no_request` still renders in the flagged block, which asks
+"want me to do anything with those?" — decide deliberately whether the substance
+gate should reach that block too, rather than discovering it on a phone.
+
 **Closes when:** tests cover a one-word storefront message landing
 `questionable`, and a substantive storefront question still landing `genuine`.
 
@@ -364,11 +417,53 @@ This phase changes the support-planner surface, so it owes the eval gate
 no tune-then-rerun loop. Justify it in the commit as: classification routing
 changed for the most common plan shape in the product.
 
+**Land P7 first and share the run.** Both phases edit the same eval-gated
+surface, and one gate run covering both costs half of two.
+
 **Closes when:** the eval gate is green, shadow decisions on seeded fixtures show
 the intended classification for information replies and no change for mutative
 plans, and `guarded` (the onboarding default) still auto-executes nothing. If the
 second resolution is chosen, it closes on the prompt diff plus a test asserting
 no tier string promises auto-reply.
+
+---
+
+## P7 — The agent asks the customer to clarify instead of escalating
+
+- [ ] **A message with no identifiable request is not an escalation.** The agent
+  replies asking what the customer needs. Escalation is for a *real* question it
+  cannot answer.
+
+`SUPPORT_INSTRUCTIONS` has no rule for this, and its escalation guidance points
+the wrong way: "When you are uncertain about the right action ... call
+escalate_to_human instead of guessing" (`packages/agent/src/prompt.ts`). A bare
+"yo" is maximal uncertainty about the right action, so the rule as written argues
+for escalating it. The one send-the-customer-a-question rule that does exist is
+scoped to a single case — an order-status question from someone the agent cannot
+identify — and does not generalize.
+
+P3's `no_request` gate stops these reaching the merchant through the *briefing*.
+It does nothing about the agent escalating one mid-run, which puts it on the
+merchant by a different road, and nothing about the drafted plan an unclear
+message produces.
+
+The rule to add, near the existing `ask_operator` / `escalate_to_human` /
+`send_reply` triage block:
+
+> A message with no identifiable request — a bare greeting or a stray fragment —
+> is not an escalation and not a question for the merchant. Reply asking what
+> they need. Escalate only once there is a real request you cannot answer.
+
+Note the ordering constraint: the agent decides this from the message in front of
+it, not from `no_request`, which is written by the classifier *after* the same
+message and is not in the planner's context. Do not plumb the signal into the
+prompt to make the two agree — one is a rendering gate, the other is behavior,
+and coupling them makes the classifier's verdict load-bearing for what the agent
+says to a customer.
+
+**Closes when:** the eval gate is green and a fixture covering a contentless
+message plans `send_reply`, not `escalate_to_human`. Shares its gate run with P6
+(land this first) — both edit the same surface, and one run covers both.
 
 ---
 

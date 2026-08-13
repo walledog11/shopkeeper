@@ -253,9 +253,49 @@ describe('formatBlockedSection', () => {
       aiTitle: 'Unclear One Word Message',
       aiSummary: null,
       tag: null,
+      pendingMessage: 'Test',
     }]);
     expect(section).toContain("One I couldn't work out a next step on, so it's yours:");
     expect(section).toContain('Walle');
+  });
+
+  // A merchant asked to take a ticket over cannot answer it from the
+  // classifier's paraphrase. "Walle: Unclear One Word Message" says the agent
+  // gave up; it does not say what the customer wrote, which is the only thing
+  // that decides whether this is a real request or a stray "yo".
+  it('quotes the customer instead of the classifier title', () => {
+    const section = formatBlockedSection([{
+      customer: { name: 'Priya Nadar' },
+      aiTitle: 'Olive Linen Napkins',
+      aiSummary: 'Customer asks whether the linen napkins come in a darker olive shade.',
+      tag: 'Product Inquiry',
+      pendingMessage: 'Do the linen napkins come in a darker olive?',
+    }]);
+    expect(section).toContain('Priya: "Do the linen napkins come in a darker olive?"');
+    expect(section).not.toContain('Olive Linen Napkins');
+  });
+
+  it('redacts and truncates the quote', () => {
+    const section = formatBlockedSection([{
+      customer: { name: 'Ada' },
+      aiSummary: null,
+      tag: null,
+      pendingMessage: `Reach me at ada@example.com about ${'the very long story '.repeat(8)}`,
+    }])!;
+    expect(section).toContain('their email');
+    expect(section).not.toContain('ada@example.com');
+    expect(section).toContain('…"');
+  });
+
+  // Older threads and any path that does not load message text still render.
+  it('falls back to the classifier line with no message to quote', () => {
+    const section = formatBlockedSection([{
+      customer: { name: 'Bo' },
+      aiTitle: 'Damaged Sweater Return',
+      aiSummary: null,
+      tag: null,
+    }]);
+    expect(section).toContain('Bo: Damaged Sweater Return');
   });
 
   it('counts and pluralizes without asking for a decision it cannot act on', () => {
