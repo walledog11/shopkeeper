@@ -18,7 +18,7 @@ import {
   formatBlockedTicketLine,
   formatHandledSection,
   formatNeedsYouAsk,
-  formatNeedsYouList,
+  formatNeedsYouProse,
   humanizeReportedSummary,
   type BriefingItem,
   loadHandledRollup,
@@ -258,22 +258,22 @@ export function formatDigestMessage(
 ): string {
   const { filteredCount } = buckets;
   const items = extras?.needsYou ?? [];
-  const list = formatNeedsYouList(items);
+  const list = formatNeedsYouProse(items);
   const ask = formatNeedsYouAsk(items);
   const lines: string[] = [];
 
   // The opener and the count are one sentence: "Morning, Ada here. Seven things
   // need you." Two lines for a greeting and a number is a paragraph of throat
   // clearing above the only thing worth reading.
+  // The group leads carry the counts now ("Two are ready to go the moment you
+  // say"), so a separate "Seven things need you" above them counts the same work
+  // twice before the merchant has read any of it.
   const opener = extras?.opener?.trim();
-  const headline = items.length > 0
-    ? `${capitalize(countWord(items.length))} ${items.length === 1 ? 'thing needs' : 'things need'} you.`
-    : null;
-  if (opener || headline) {
-    lines.push([opener, headline].filter(Boolean).join(' '));
+  if (opener) lines.push(opener);
+  if (list) {
+    if (lines.length > 0) lines.push('');
+    lines.push(list);
   }
-
-  if (list) lines.push('', list);
   if (ask) lines.push('', ask);
 
   // The tail: what happened without them, and what is sitting quietly. Each is a
@@ -449,12 +449,12 @@ export async function buildOrgDigest(
       return {
         threadId: thread.id,
         kind: 'flagged',
-        // Non-directional: naming the destructive option invites a one-word yes
-        // that bins a real customer, which is the failure this whole block is
-        // here to avoid.
+        // No per-item "Real customer?": the group lead already says these are
+        // the ones the agent is unsure about, and repeating the question on
+        // every line is the tell that a template wrote it.
         line: blurb
-          ? `${endSentence(humanizeReportedSummary(name, blurb) ?? `${name}: ${blurb}`)} Real customer?`
-          : `${name} — real customer?`,
+          ? endSentence(humanizeReportedSummary(name, blurb) ?? `${name} wrote in. ${blurb}`)
+          : `${name} wrote in, and I can't tell whether they're a customer.`,
       };
     }),
   ];

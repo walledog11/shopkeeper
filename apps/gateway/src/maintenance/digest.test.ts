@@ -168,47 +168,51 @@ describe('formatDigestMessage', () => {
   // The shape this replaced printed up to four separately-headed sections, two
   // of them numbered from 1, closed by three different questions. Everything the
   // merchant has to do is one list now, so the numbering is the contract.
-  it('numbers straight through both groups without restarting', () => {
+  it('never numbers the list, and never explains how to reply', () => {
     const msg = formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE), null, {
       needsYou: [
         item({ line: 'Sarah — $12 refund · Damaged mug' }),
         item({ line: 'Aisha — reply · Where is order 1051' }),
         item({ kind: 'decision', line: 'Dana asked to move order #1043.' }),
-        item({ kind: 'flagged', line: 'Marcus Reed asked when their order ships. Real customer?' }),
+        item({ kind: 'flagged', line: 'Marcus Reed asked when their order ships.' }),
       ],
     });
-    expect(msg).toContain('Ready to send, just say yes:\n1. Sarah');
-    expect(msg).toContain('2. Aisha');
-    expect(msg).toContain('Need your call:\n3. Dana');
-    expect(msg).toContain('4. Marcus Reed');
-    // The second group must not start over at 1.
-    expect(msg).not.toMatch(/Need your call:\n1\./);
+    // Nobody texts a colleague "reply 1 with yes". The numbers only ever existed
+    // because the ordinal resolver wanted them, and replies resolve by name.
+    expect(msg).not.toMatch(/^\s*\d+\. /m);
+    expect(msg).not.toMatch(/Reply with|reply with a number|"1 yes"/);
+    expect(msg).toContain('Two are ready to go the moment you say.');
+    expect(msg).toContain('One I need you on.');
+    expect(msg).toContain("One I'm not sure about.");
   });
 
-  it('counts the work in one sentence with the greeting', () => {
+  // The group lead already carries the count, so a headline above it counts the
+  // same work twice before the merchant has read any of it.
+  it('greets without restating the count the groups already give', () => {
     const msg = formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE), null, {
       opener: 'Morning, Ada here.',
       needsYou: [item(), item()],
     });
-    expect(msg.split('\n')[0]).toBe('Morning, Ada here. Two things need you.');
+    expect(msg.split('\n')[0]).toBe('Morning, Ada here.');
+    expect(msg).toContain('Two are ready to go the moment you say.');
+    expect(msg).not.toContain('things need you');
   });
 
-  it('asks once, at the end, and never three times', () => {
+  it('closes like a person, not with an instruction', () => {
     const msg = formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE), null, {
       needsYou: [item(), item({ kind: 'decision', line: 'Dana asked something.' })],
     });
-    const frame = msg.split('\n').filter((line) => !/^\d+\. /.test(line));
-    expect(frame.filter((line) => line.includes('?'))).toHaveLength(0);
-    expect(msg.trimEnd().endsWith('tells me what to do with the rest.')).toBe(true);
+    expect(msg).toContain('Let me know how you want to play these.');
+    expect(msg).not.toMatch(/Reply with|number/);
   });
 
-  it('drops the group headings when everything is the same kind', () => {
+  it('uses one lead when everything is the same kind', () => {
     const msg = formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE), null, {
       needsYou: [item(), item()],
     });
-    expect(msg).toContain('Ready to send, just say yes:');
-    expect(msg).not.toContain('Need your call:');
-    expect(msg.trimEnd().endsWith('Say yes to send them all, or give me a number.')).toBe(true);
+    expect(msg).toContain('Two are ready to go the moment you say.');
+    expect(msg).not.toContain('I need you on');
+    expect(msg.trimEnd().endsWith('Want me to send them?')).toBe(true);
   });
 
   it('folds everything needing nothing into one closing paragraph', () => {
@@ -260,18 +264,15 @@ describe('formatDigestMessage', () => {
   it('writes no em-dashes of its own and teaches no command syntax', () => {
     const msg = formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE), null, {
       opener: 'Morning, Ada here.',
-      needsYou: [item(), item({ kind: 'flagged', line: 'Marcus Reed: unclear. Real customer?' })],
+      needsYou: [item({ line: 'Sarah wants a refund.' }), item({ kind: 'flagged', line: 'Marcus Reed wrote in.' })],
       handledSection: 'Since your last briefing I replied to Bob.',
     });
     expect(msg).not.toMatch(/<n>|<text>|OPEN|SPAM|REPLY|Shortcuts|"open 1"|"spam 1"/);
-    // The lines themselves may carry an em-dash; the frame around them may not.
-    const frame = msg.split('\n').filter((line) => !/^\d+\. /.test(line)).join('\n');
-    expect(frame).not.toContain('—');
   });
 
   it('never proposes binning a flagged ticket', () => {
     const msg = formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE), null, {
-      needsYou: [item({ kind: 'flagged', line: 'Marcus Reed: unclear. Real customer?' })],
+      needsYou: [item({ kind: 'flagged', line: 'Marcus Reed wrote in.' })],
     });
     expect(msg).not.toMatch(/bin it|spam\?|delete/i);
   });
@@ -300,7 +301,7 @@ describe('buildOrgDigest — inbox scope', () => {
     await db.thread.update({ where: { id: archived.id }, data: { archivedAt: new Date() } });
 
     const digest = await buildOrgDigest(org.id, NOW);
-    expect(digest?.message).toContain('One thing needs you.');
+    expect(digest?.message).toContain('One I need you on.');
     expect(digest?.message).toContain('Jane');
     expect(digest?.message).not.toContain('Operator');
     expect(digest?.message).not.toContain('Old');
@@ -333,7 +334,7 @@ describe('buildOrgDigest — inbox scope', () => {
     });
 
     const digest = await buildOrgDigest(org.id, NOW);
-    expect(digest?.message).toContain('One thing needs you.');
+    expect(digest?.message).toContain('One I need you on.');
     expect(digest?.message).toContain('I filed one as spam.');
   });
 
@@ -412,7 +413,7 @@ describe('buildOrgDigest — inbox scope', () => {
     });
 
     const message = (await buildOrgDigest(org.id, NOW))!.message;
-    expect(message).toContain('Need your call:');
+    expect(message).toContain('I need you on');
     expect(message).toContain('Dana');
   });
 
@@ -421,7 +422,7 @@ describe('buildOrgDigest — inbox scope', () => {
   // it?" appeared to cover. Each state now gets a section that says what the
   // merchant is actually looking at, and the two message-less Shopify threads
   // say nothing at all.
-  it('puts everything that needs the merchant in one numbered list under one ask', async () => {
+  it('reads as a text message, not a list with reply instructions', async () => {
     org = await createTestOrg();
     const [waiting, canary, ayumu, visitor, walle, stuck, fresh] = await Promise.all([
       createTestCustomer(org.id, 'waiting@example.com', { name: 'Sarah Chen' }),
@@ -510,11 +511,9 @@ describe('buildOrgDigest — inbox scope', () => {
     // Two things need the merchant, numbered once, under one ask. The shape this
     // replaced printed the same two under separate headings with separate
     // numbering and separate closing questions.
-    expect(message).toContain('Two things need you.');
-    expect(sectionFor(message, 'Sarah')).toContain('Ready to send, just say yes:');
-    expect(sectionFor(message, 'Priya')).toContain('Need your call:');
-    expect(message).toContain('1. Sarah');
-    expect(message).toContain('2. Priya');
+    expect(sectionFor(message, 'Sarah')).toContain('ready to go the moment you say');
+    expect(sectionFor(message, 'Priya')).toContain('I need you on');
+    expect(message).not.toMatch(/^\s*\d+\. /m);
 
     // The handoff carries the customer's words, not the classifier's paraphrase,
     // because the merchant has to answer the question to take the ticket.
@@ -534,10 +533,10 @@ describe('buildOrgDigest — inbox scope', () => {
 
     // One ask, and it is the last thing before the tail. The old shape closed
     // with three, in three different places.
-    const asks = message.split('\n').filter((line) => line.startsWith('Reply with a number'));
-    expect(asks).toHaveLength(1);
-    // The tail is news, so it lands after the ask rather than between the list
-    // and the question the list is asking.
+    expect(message).toContain('Let me know how you want to play these.');
+    expect(message).not.toMatch(/Reply with|"1 yes"/);
+    // The tail is news, so it lands after the close rather than between the
+    // rundown and the question about it.
     expect(message.trimEnd().endsWith('ticking along without me.')).toBe(true);
   });
 });

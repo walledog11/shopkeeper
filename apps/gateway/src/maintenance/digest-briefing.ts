@@ -310,7 +310,17 @@ export function humanizeReportedSummary(subject: string, summary: string): strin
   const rest = summary.trim().slice(match[0].length).trim();
   if (!verb || !rest) return null;
 
-  return `${subject} ${verb} ${match[2]?.toLowerCase() ?? ''}${rest}`;
+  // A summary often runs two verbs off one subject ("reports … and asks …").
+  // Backshifting only the first leaves "Tomás reported … and asks …", which is
+  // the kind of seam that makes a sentence read as generated.
+  const tail = rest.replace(
+    /\b(and|then|but)\s+(states?|reports?|writes?|says?|is\s+asking|asks?|requests?|wants?|mentions?|notes?|claims?|provides?)\b/gi,
+    (_whole, conjunction: string, following: string) => {
+      const past = REPORTED_VERB_PAST[following.toLowerCase().replace(/\s+/g, ' ')];
+      return past ? `${conjunction} ${past}` : `${conjunction} ${following}`;
+    },
+  );
+  return `${subject} ${verb} ${match[2]?.toLowerCase() ?? ''}${tail}`;
 }
 
 function topicFromSummary(summary: string): string {
@@ -946,7 +956,19 @@ function lowerFirst(text: string): string {
   return text.charAt(0).toLowerCase() + text.slice(1);
 }
 
-/** `Tomás — $34 refund · Cracked mugs`: who, what it does, what it is about. */
+function endClause(text: string): string {
+  return /[.!?…"']$/.test(text) ? text : `${text}.`;
+}
+
+/**
+ * A sentence, not a data row. `Tomás — $34 refund · Two Cracked Mugs` is a table
+ * cell with a name in it; the merchant is reading a text message, and every
+ * other line in it is written like one.
+ *
+ * The summary carries what the customer wanted, so the clause is that plus what
+ * a yes would do. Falls back to the compact form only when no summary was
+ * written, which is the one case where there is nothing to make a sentence from.
+ */
 export function formatApprovalItemLine(params: {
   customerName: string | null;
   channelType?: string | null;
@@ -965,69 +987,91 @@ export function formatApprovalItemLine(params: {
   const action = refundAmount
     ? `${refundAmount} refund`
     : lowerFirst(approvalActionHead(params.rawToolCalls) ?? params.actionLabel ?? 'reply');
-  // `·` rather than a comma: the classifier writes titles in Title Case, so
-  // "$34 refund, Two Cracked Mugs" reads as a broken sentence while lowercasing
-  // the whole title would mangle "Ireland" and every other proper noun.
+  const ready = refundAmount ? `I've got ${refundAmount} ready.` : `${capitalize(action)}'s drafted.`;
+
+  const summary = params.aiSummary?.trim();
+  const humanized = summary ? humanizeReportedSummary(subject, summary) : null;
+  if (humanized) return `${endClause(humanized)} ${ready}`;
+
   const topic = briefingTopic(params.aiTitle ?? null, params.aiSummary, params.tag);
   return topic ? `${subject} — ${action} · ${topic}` : `${subject} — ${action}`;
 }
 
-const READY_HEADER = 'Ready to send, just say yes:';
-const DECISION_HEADER = 'Need your call:';
+/**
+ * How many items still read as a rundown rather than a wall. Past this the
+ * briefing stops listing and starts a conversation, the way a person says
+ * "there's a fair bit today, want me to take you through it?" instead of
+ * reciting fifteen things at someone who has just woken up.
+ */
+const BRIEFING_RECITE_MAX = 8;
 
 /**
- * The whole list, numbered straight through both groups. The grouping is the one
- * distinction worth keeping — some of these clear with a word and some need a
- * sentence — but the numbers never restart, so a number means exactly one thing.
+ * The briefing is a text message from someone who works for you, so it is
+ * written the way a person writes one: sentences, names, and no numbering.
+ *
+ * It used to number every item and close by explaining the reply syntax
+ * ("Reply with a number: \"1 yes\" sends that one"). Nobody texts a colleague
+ * that. The numbers were never for the merchant either — they existed because
+ * the ordinal resolver wanted them, which is the machine's problem leaking into
+ * the merchant's morning. Replies resolve by name already (`selectPendingPlan`
+ * matches a customer name, and the operator turn reads the ledger), so the
+ * merchant can just say "refund Tomás" like they would to a person.
  */
-export function formatNeedsYouList(items: BriefingItem[]): string | null {
+function groupLead(kind: BriefingItem['kind'], count: number): string {
+  if (kind === 'approval') {
+    return count === 1
+      ? "One's ready to go the moment you say."
+      : `${capitalize(countWord(count))} are ready to go the moment you say.`;
+  }
+  if (kind === 'decision') {
+    return count === 1 ? 'One I need you on.' : `${capitalize(countWord(count))} I need you on.`;
+  }
+  return count === 1 ? "One I'm not sure about." : `${capitalize(countWord(count))} I'm not sure about.`;
+}
+
+const KIND_ORDER: BriefingItem['kind'][] = ['approval', 'decision', 'flagged'];
+
+export function formatNeedsYouProse(items: BriefingItem[]): string | null {
   if (items.length === 0) return null;
 
-  const ready = items.filter((item) => item.kind === 'approval');
-  const calls = items.filter((item) => item.kind !== 'approval');
-  const lines: string[] = [];
-  let ordinal = 0;
-
-  for (const [header, group] of [[READY_HEADER, ready], [DECISION_HEADER, calls]] as const) {
-    if (group.length === 0) continue;
-    if (lines.length > 0) lines.push('');
-    lines.push(header);
-    for (const item of group) {
-      ordinal += 1;
-      lines.push(`${ordinal}. ${item.line}`);
-    }
+  // Too many to recite. Lead with the two that matter and offer the rest, rather
+  // than making them scroll through fifteen before they can act on one.
+  if (items.length > BRIEFING_RECITE_MAX) {
+    const top = items.slice(0, 2).map((item) => item.line);
+    return [
+      `Busy one. ${capitalize(countWord(items.length))} things need you today.`,
+      '',
+      top.length === 1 ? 'The one worth doing first:' : 'The two worth doing first:',
+      ...top,
+      '',
+      'Want me to take you through the rest?',
+    ].join('\n');
   }
-  return lines.join('\n');
+
+  const blocks: string[] = [];
+  for (const kind of KIND_ORDER) {
+    const group = items.filter((item) => item.kind === kind);
+    if (group.length === 0) continue;
+    if (blocks.length > 0) blocks.push('');
+    blocks.push(groupLead(kind, group.length));
+    // One per line, no bullet and no number: a person texting a list of names
+    // just puts each on its own line.
+    blocks.push(...group.map((item) => item.line));
+  }
+  return blocks.join('\n');
 }
 
 /**
- * One ask, at the end, for the whole list. Examples are built from the actual
- * numbers in front of the merchant rather than describing a syntax: the previous
- * version asked three separate questions in three places and none of them said
- * how to answer, which is the thing a numbered list has to explain exactly once.
+ * A close, not an instruction. The merchant answers a text the way they answer
+ * any text; the agent's job is to understand it, not to teach a grammar for it.
  */
 export function formatNeedsYouAsk(items: BriefingItem[]): string | null {
-  if (items.length === 0) return null;
-
-  const readyCount = items.filter((item) => item.kind === 'approval').length;
-  const hasCalls = readyCount < items.length;
-
-  if (!hasCalls) {
-    return readyCount === 1
-      ? 'Want me to go ahead?'
-      : 'Say yes to send them all, or give me a number.';
+  if (items.length === 0 || items.length > BRIEFING_RECITE_MAX) return null;
+  const readyOnly = items.every((item) => item.kind === 'approval');
+  if (readyOnly) {
+    return items.length === 1 ? 'Want me to send it?' : 'Want me to send them?';
   }
-  if (readyCount === 0) {
-    return items.length === 1
-      ? 'What do you want me to do?'
-      : 'Reply with a number and what to do, like "2 refund it".';
-  }
-  // One worked example of each kind, built from the numbers actually on screen.
-  // Only ever one number per example: the ordinal resolvers take a single ref,
-  // and teaching "1 2 yes" would be teaching a syntax that quietly does one of
-  // them.
-  const firstCall = readyCount + 1;
-  return `Reply with a number: "1 yes" sends that one, "${firstCall} …" tells me what to do with the rest.`;
+  return items.length === 1 ? 'What do you want to do?' : 'Let me know how you want to play these.';
 }
 
 

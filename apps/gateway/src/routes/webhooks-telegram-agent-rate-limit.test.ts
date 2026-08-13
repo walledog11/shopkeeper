@@ -88,8 +88,8 @@ describe('POST /webhooks/telegram — help & summary', () => {
     expect(text).toMatch(/Since your last briefing I didn't send any replies or refunds\./);
     // A flagged ticket is work: it is in the one numbered list with everything
     // else, not in a block of its own with its own question.
-    expect(text).toContain('One thing needs you.');
-    expect(text).toContain('1. Dana: Wholesale pricing question. Real customer?');
+    expect(text).toContain("One I'm not sure about.");
+    expect(text).toContain('Dana wrote in. Wholesale pricing question.');
 
     const ctx = await getContext(org.id, memberKey);
     expect(ctx.pendingDigest?.threadIds).toEqual([flagged.id]);

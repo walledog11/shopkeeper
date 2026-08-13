@@ -16,7 +16,7 @@ import {
   formatBriefingTicketLine,
   formatHandledSection,
   formatNeedsYouAsk,
-  formatNeedsYouList,
+  formatNeedsYouProse,
   loadHandledRollup,
   loadWaitingOnYouItems,
   resolveHandledWindowStart,
@@ -452,7 +452,7 @@ describe('loadWaitingOnYouItems', () => {
 
   });
 
-  it('numbers several waiting items and never invites a bare yes across them', async () => {
+  it('lists several waiting items without numbering them', async () => {
     // Two pending plans for the *same* customer: the case the old copy rendered
     // as two identical "Reply to Canary" bullets.
     for (const [index, summary] of [
@@ -478,18 +478,19 @@ describe('loadWaitingOnYouItems', () => {
 
     const items = await loadWaitingOnYouItems(org.id, NOW);
     expect(items).toHaveLength(2);
-    const section = formatNeedsYouList(items.map((entry) => ({
+    const section = formatNeedsYouProse(items.map((entry) => ({
       threadId: entry.threadId, kind: 'approval' as const, line: entry.line,
     })))!;
-    expect(section).toContain('Ready to send, just say yes:');
+    expect(section).toContain('Two are ready to go the moment you say.');
     // Every line differs by subject, so the list is worth reading.
-    expect(section).toContain('1. Canary — reply · Asking where order 1042 is');
-    expect(section).toContain('2. Canary — reply · Wants to change the shipping address');
+    expect(section).toContain('Canary — reply · Asking where order 1042 is');
+    expect(section).toContain('Canary — reply · Wants to change the shipping address');
+    expect(section).not.toMatch(/^\s*\d+\. /m);
     // A bare "yes" here would approve only the most recent plan. The count ties
     // the ask to this list rather than to everything else the briefing names.
     expect(formatNeedsYouAsk(items.map((entry) => ({
       threadId: entry.threadId, kind: 'approval' as const, line: entry.line,
-    })))).toBe('Say yes to send them all, or give me a number.');
+    })))).toBe('Want me to send them?');
   });
 
   it('includes stale dashboard plans that still need review', async () => {
