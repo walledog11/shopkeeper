@@ -956,6 +956,34 @@ function lowerFirst(text: string): string {
   return text.charAt(0).toLowerCase() + text.slice(1);
 }
 
+/**
+ * One sentence per line. On a phone, two sentences sharing a line wrap into a
+ * paragraph and the eye has to find where one item ends and the next begins.
+ *
+ * Never inside a quotation: `Priya asked: "Do these come in olive? The photos
+ * look lighter."` is one thing the merchant is being told, and breaking it at
+ * the customer's own full stop would read as two separate items. Existing line
+ * breaks are left alone — this only ever adds them.
+ */
+export function oneSentencePerLine(text: string): string {
+  let out = '';
+  let quoted = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i]!;
+    out += char;
+    if (char === '"') quoted = !quoted;
+    if (quoted || !'.!?'.includes(char)) continue;
+    // Only break on whitespace that is not already a newline, and never on a
+    // decimal point or an initial ("$34.50", "J. Doe").
+    const rest = text.slice(i + 1);
+    const gap = rest.match(/^[ \t]+/);
+    if (!gap || !/^[A-Z"]/.test(rest.slice(gap[0].length))) continue;
+    out += '\n';
+    i += gap[0].length;
+  }
+  return out;
+}
+
 function endClause(text: string): string {
   return /[.!?…"']$/.test(text) ? text : `${text}.`;
 }
@@ -1042,7 +1070,7 @@ export function formatNeedsYouProse(items: BriefingItem[]): string | null {
       `Busy one. ${capitalize(countWord(items.length))} things need you today.`,
       '',
       top.length === 1 ? 'The one worth doing first:' : 'The two worth doing first:',
-      ...top,
+      ...top.map(oneSentencePerLine),
       '',
       'Want me to take you through the rest?',
     ].join('\n');
@@ -1056,7 +1084,7 @@ export function formatNeedsYouProse(items: BriefingItem[]): string | null {
     blocks.push(groupLead(kind, group.length));
     // One per line, no bullet and no number: a person texting a list of names
     // just puts each on its own line.
-    blocks.push(...group.map((item) => item.line));
+    blocks.push(...group.map((item) => oneSentencePerLine(item.line)));
   }
   return blocks.join('\n');
 }

@@ -222,10 +222,12 @@ describe('formatDigestMessage', () => {
       handledSection: 'Since your last briefing I replied to Bob.',
       quietSentence: 'Two others are ticking along without me.',
     });
-    const tail = msg.trim().split('\n').pop();
-    expect(tail).toBe(
-      'Since your last briefing I replied to Bob. I filed one as spam. Two others are ticking along without me.',
-    );
+    // One sentence per line, so the tail is the last three lines rather than one.
+    expect(msg.trim().split('\n').slice(-3)).toEqual([
+      'Since your last briefing I replied to Bob.',
+      'I filed one as spam.',
+      'Two others are ticking along without me.',
+    ]);
   });
 
   it('signs off rather than trailing away when nothing needs them', () => {

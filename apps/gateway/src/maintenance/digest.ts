@@ -20,6 +20,7 @@ import {
   formatNeedsYouAsk,
   formatNeedsYouProse,
   humanizeReportedSummary,
+  oneSentencePerLine,
   type BriefingItem,
   loadHandledRollup,
   loadWaitingOnYouItems,
@@ -285,7 +286,7 @@ export function formatDigestMessage(
   if (extras?.quietSentence) tail.push(extras.quietSentence);
   if (tail.length > 0) {
     if (lines.length > 0) lines.push('');
-    lines.push(tail.join(' '));
+    lines.push(oneSentencePerLine(tail.join(' ')));
   }
 
   for (const line of extras?.garnishLines ?? []) {
