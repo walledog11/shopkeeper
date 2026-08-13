@@ -11,6 +11,7 @@ import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import {
   DIGEST_CURSOR_KEY,
+  deriveThreadLifecycleState,
   formatBriefingTicketLine,
   formatHandledSection,
   formatOtherOpenSection,
@@ -77,6 +78,58 @@ beforeEach(async () => {
 afterEach(async () => {
   await db.operatorContext.deleteMany({ where: { organizationId: org.id } }).catch(() => undefined);
   await cleanupTestData(org?.id);
+});
+
+describe('deriveThreadLifecycleState', () => {
+  const base = {
+    status: 'open',
+    planKind: null,
+    parkedPlan: false,
+    lastConversationalSender: 'customer',
+  } as const;
+
+  it('reads a closed thread as handled', () => {
+    expect(deriveThreadLifecycleState({ ...base, status: 'closed' })).toBe('handled');
+  });
+
+  it('reads a cached plan as awaiting approval', () => {
+    expect(deriveThreadLifecycleState({ ...base, planKind: 'needs_review' })).toBe('awaiting_approval');
+  });
+
+  it('reads a plan parked on the operator channel as awaiting approval', () => {
+    expect(deriveThreadLifecycleState({ ...base, parkedPlan: true })).toBe('awaiting_approval');
+  });
+
+  it('reads a thread with no conversational messages as empty', () => {
+    expect(deriveThreadLifecycleState({ ...base, lastConversationalSender: null })).toBe('empty_thread');
+  });
+
+  it('reads an answered thread as awaiting the customer', () => {
+    expect(deriveThreadLifecycleState({ ...base, lastConversationalSender: 'agent' })).toBe('awaiting_customer');
+    expect(deriveThreadLifecycleState({ ...base, lastConversationalSender: 'ai' })).toBe('awaiting_customer');
+  });
+
+  it('reads a pending customer message with no plan as blocked', () => {
+    expect(deriveThreadLifecycleState(base)).toBe('blocked_no_plan');
+  });
+
+  // Both Order Status threads in the diagnosed org hold two note rows from the
+  // Shopify order webhook and nothing else. Counting a note as the agent having
+  // answered would file them as awaiting_customer and let P4's silence sweep
+  // close threads that were never actually worked.
+  it('never treats a note row as the agent answering', () => {
+    // The caller passes the newest *non-note* message, so a note-only thread
+    // arrives here as null rather than as a note sender.
+    expect(deriveThreadLifecycleState({ ...base, lastConversationalSender: null })).not.toBe('awaiting_customer');
+  });
+
+  // A quick_reply is the shape the operator queue evicts and the stale scan used
+  // to refuse to re-surface. It is waiting on the merchant like any other.
+  it('collapses every plan kind to awaiting approval', () => {
+    for (const kind of ['quick_reply', 'needs_review', 'needs_merchant_input', 'auto_execute'] as const) {
+      expect(deriveThreadLifecycleState({ ...base, planKind: kind })).toBe('awaiting_approval');
+    }
+  });
 });
 
 describe('resolveHandledWindowStart', () => {

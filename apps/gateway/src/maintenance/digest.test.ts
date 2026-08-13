@@ -1,7 +1,9 @@
 import { afterEach, describe, it, expect } from 'vitest';
 import { db, ThreadFilterStatus } from '@shopkeeper/db';
-import { cleanupTestData, createTestCustomer, createTestOrg, createTestThread } from '@shopkeeper/db/test-helpers';
+import { cleanupTestData, createTestCustomer, createTestMessage, createTestOrg, createTestThread } from '@shopkeeper/db/test-helpers';
 import type { SupportStatsSummary } from '@shopkeeper/agent/support-stats';
+import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
+import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { bucketDigestThreads, buildOrgDigest, digestWindowKey, formatDigestMessage, formatWeeklySummaryLine } from './digest.js';
 
 const NOW = new Date('2026-04-29T12:00:00Z');
@@ -36,6 +38,9 @@ function makeThread(overrides: Partial<{
     aiSummary: overrides.aiSummary ?? null,
     filterReason: overrides.filterReason ?? null,
     customer: { name: overrides.customerName === undefined ? 'Jane' : overrides.customerName },
+    cachedPlan: null,
+    cachedPlanMessageId: null,
+    messages: [],
   };
 }
 
@@ -421,6 +426,71 @@ describe('buildOrgDigest — inbox scope', () => {
     const digest = await buildOrgDigest(org.id, NOW);
     expect(digest?.message).toContain("You've got one open ticket");
     expect(digest?.message).toContain('I filed one as spam.');
+  });
+
+  // The four open threads from the diagnosed briefing, which the digest could
+  // only describe as one undifferentiated bucket. The states are carried here;
+  // nothing reads them yet, so the message must be byte-identical.
+  it('carries a lifecycle state per open thread without changing the message', async () => {
+    org = await createTestOrg();
+    // One open thread per (customer, channel), per the partial unique index.
+    const [empty, answered, blocked, planned] = await Promise.all([
+      createTestCustomer(org.id, 'empty@example.com', { name: 'Empty' }),
+      createTestCustomer(org.id, 'answered@example.com', { name: 'Answered' }),
+      createTestCustomer(org.id, 'blocked@example.com', { name: 'Blocked' }),
+      createTestCustomer(org.id, 'planned@example.com', { name: 'Planned' }),
+    ]);
+
+    // Only note rows, exactly like the Shopify order webhook's threads.
+    const emptyThread = await createTestThread(org.id, empty.id, 'shopify');
+    await createTestMessage(emptyThread.id, 'New order #1026 was placed.', 'note');
+
+    const answeredThread = await createTestThread(org.id, answered.id, 'email');
+    await createTestMessage(answeredThread.id, 'Do you ship to Ireland?');
+    await createTestMessage(answeredThread.id, 'We do, three to five days.', 'agent');
+
+    const blockedThread = await createTestThread(org.id, blocked.id, 'email');
+    await createTestMessage(blockedThread.id, 'Where is my order?');
+
+    const plannedThread = await createTestThread(org.id, planned.id, 'email');
+    const plannedMessage = await createTestMessage(plannedThread.id, 'Can I get a refund?');
+    await db.thread.update({
+      where: { id: plannedThread.id },
+      data: {
+        cachedPlan: buildAgentPlanCacheRecord({
+          instruction: 'Refund request',
+          plan: {
+            instruction: 'Refund request',
+            steps: [{
+              id: 'step-1',
+              tool: 'send_reply',
+              label: 'Send reply',
+              description: 'Send reply',
+              category: 'communication',
+              enabled: true,
+            }],
+            rawToolCalls: [{ id: 'step-1', name: 'send_reply', input: { text: 'On its way.' } }],
+          },
+          lastCustomerMessageId: plannedMessage.id,
+          settings: resolveAgentSettings(null),
+        }),
+        cachedPlanMessageId: plannedMessage.id,
+      },
+    });
+
+    const digest = await buildOrgDigest(org.id, NOW);
+    const byThread = new Map(digest!.lifecycleStates.map((row) => [row.threadId, row.state]));
+
+    expect(byThread.get(emptyThread.id)).toBe('empty_thread');
+    expect(byThread.get(answeredThread.id)).toBe('awaiting_customer');
+    expect(byThread.get(blockedThread.id)).toBe('blocked_no_plan');
+    // Fresh, so the three-hour stale scan has not parked it — this asserts the
+    // cached-plan path, not the operator ledger.
+    expect(byThread.get(plannedThread.id)).toBe('awaiting_approval');
+
+    expect(digest?.message).toContain("You've got four open tickets");
+    expect(digest?.message).not.toContain('awaiting');
+    expect(digest?.message).not.toContain('blocked');
   });
 });
 

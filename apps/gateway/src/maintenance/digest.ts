@@ -1,6 +1,9 @@
 import { getSupportStats, type SupportStatsSummary } from '@shopkeeper/agent/support-stats';
 import { canonicalInboxThreadWhere } from '@shopkeeper/agent/inbox-filter';
+import { classifyHomePlan } from '@shopkeeper/agent/plan-preview';
+import { getCurrentPlanForThread } from '@shopkeeper/agent/plan-cache-shape';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
+import { SENDER_TYPE } from '@shopkeeper/agent/thread-constants';
 import { db, ThreadFilterStatus, type DbThreadFilterStatus } from '@shopkeeper/db';
 import { JOB, QUEUE } from '../constants.js';
 import logger from '../logger.js';
@@ -9,6 +12,7 @@ import { digestNotificationIdempotencyKey } from '../operator-notify-idempotency
 import {
   capitalize,
   countWord,
+  deriveThreadLifecycleState,
   formatHandledSection,
   resolveOtherOpenSection,
   formatWaitingAsk,
@@ -19,6 +23,7 @@ import {
   redactBriefingContacts,
   resolveHandledWindowStart,
   truncateBriefingText,
+  type ThreadLifecycleState,
 } from './digest-briefing.js';
 import { loadDigestShopifyGarnish } from './digest-shopify-garnish.js';
 import {
@@ -53,6 +58,13 @@ export interface DigestThreadRow {
   aiSummary: string | null;
   filterReason: string | null;
   customer: { name: string | null };
+  // Lifecycle-state inputs. `messages` is the newest non-note message only, in
+  // the same descending shape `loadStaleThreadWaitingItems` passes to
+  // `getCurrentPlanForThread` — that helper reads the last conversational
+  // sender itself, so the two must agree on what "last message" means.
+  cachedPlan: unknown;
+  cachedPlanMessageId: string | null;
+  messages: Array<{ id: string; senderType: string; sentAt: Date }>;
 }
 
 export interface DigestBuckets {
@@ -299,6 +311,11 @@ export interface OrgDigest {
   message: string;
   pendingDigest: { threadIds: string[]; sentAt: string };
   flaggedCount: number;
+  /**
+   * One lifecycle state per open non-filtered thread. Carried, not yet rendered
+   * — the message is unchanged until the sections that read these land.
+   */
+  lifecycleStates: Array<{ threadId: string; state: ThreadLifecycleState }>;
 }
 
 /**
@@ -336,6 +353,14 @@ export async function buildOrgDigest(
         aiSummary: true,
         filterReason: true,
         customer: { select: { name: true } },
+        cachedPlan: true,
+        cachedPlanMessageId: true,
+        messages: {
+          where: { deletedAt: null, senderType: { not: SENDER_TYPE.NOTE } },
+          orderBy: [{ sentAt: 'desc' }, { id: 'desc' }],
+          take: 1,
+          select: { id: true, senderType: true, sentAt: true },
+        },
       },
       orderBy: { updatedAt: 'desc' },
     }),
@@ -355,6 +380,26 @@ export async function buildOrgDigest(
   const buckets = bucketDigestThreads(openThreads, now, since);
   const waitingThreadIds = new Set(waitingItems.map((item) => item.threadId));
   const otherOpenThreads = buckets.genuine.filter((thread) => !waitingThreadIds.has(thread.id));
+
+  // Filtered threads are reported as a count and never named, so they get no
+  // state. `waitingItems` is the parked-plan set: it already merges the operator
+  // ledger with the stale-plan scan, which is the only place a parked plan is
+  // visible from here.
+  const resolvedSettings = resolveAgentSettings(settings);
+  const lifecycleStates = [...buckets.genuine, ...buckets.questionable].map((thread) => {
+    const plan = getCurrentPlanForThread(thread, thread.messages);
+    return {
+      threadId: thread.id,
+      state: deriveThreadLifecycleState({
+        status: 'open',
+        planKind: plan
+          ? classifyHomePlan(plan, resolvedSettings, { filterStatus: thread.filterStatus }).kind
+          : null,
+        parkedPlan: waitingThreadIds.has(thread.id),
+        lastConversationalSender: thread.messages[0]?.senderType ?? null,
+      }),
+    };
+  });
   const otherOpenSection = resolveOtherOpenSection(waitingItems.length, otherOpenThreads);
 
   const weeklyLine = waitingSection
@@ -381,6 +426,7 @@ export async function buildOrgDigest(
       sentAt: now.toISOString(),
     },
     flaggedCount: buckets.questionable.length,
+    lifecycleStates,
   };
 }
 

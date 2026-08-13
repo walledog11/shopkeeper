@@ -1,8 +1,9 @@
 import { getPlanExecution } from '@shopkeeper/agent/execution-ledger';
+import type { HomePlanKind } from '@shopkeeper/agent/plan-preview';
 import { getCurrentPlanForThread, readAgentPlanCacheRecordShape } from '@shopkeeper/agent/plan-cache-shape';
 import { canonicalInboxThreadWhere } from '@shopkeeper/agent/inbox-filter';
 import { PLAN_STEP_LABELS } from '@shopkeeper/agent/tools';
-import { SENDER_TYPE } from '@shopkeeper/agent/thread-constants';
+import { SENDER_TYPE, THREAD_STATUS } from '@shopkeeper/agent/thread-constants';
 import { db } from '@shopkeeper/db';
 import { Prisma } from '@prisma/client';
 import { CHANNEL } from '../constants.js';
@@ -28,6 +29,57 @@ export interface WaitingItem {
   dedupeKey: string;
   threadId: string;
   line: string;
+}
+
+/**
+ * What an open thread is actually waiting on. The briefing could report two
+ * states — plan ready and nothing to report — while a thread sits in one of
+ * these five, which is why threads with no plan ended up in an "Also open"
+ * roll-up under a "want me to go ahead?" that did not cover them.
+ *
+ * Every state is derived from rows that already exist. Nothing is stored.
+ */
+export type ThreadLifecycleState =
+  | 'awaiting_approval'
+  | 'awaiting_customer'
+  | 'blocked_no_plan'
+  | 'empty_thread'
+  | 'handled';
+
+export function deriveThreadLifecycleState(thread: {
+  status: string;
+  /**
+   * `classifyHomePlan(getCurrentPlanForThread(...)).kind`, or null when there is
+   * no current plan. Every kind collapses to `awaiting_approval` — a plan the
+   * executor did not run is waiting on the merchant whatever shape it is. That
+   * includes `auto_execute`, which stays cached and unexecuted under
+   * `autoExecuteMode` off and shadow. Same reasoning as the stale-scan filter.
+   */
+  planKind: HomePlanKind | null;
+  /** A plan parked for this thread in the operator's approval ledger. */
+  parkedPlan: boolean;
+  /**
+   * `senderType` of the newest non-`note` message, or null when the thread has
+   * none. Notes are not conversational — the two Order Status threads that read
+   * as empty each hold two of them, written by the Shopify order webhook — so a
+   * note must never count as the agent having answered.
+   */
+  lastConversationalSender: string | null;
+}): ThreadLifecycleState {
+  if (thread.status === THREAD_STATUS.CLOSED) return 'handled';
+
+  // Ahead of the transcript checks: a parked plan is a decision the merchant
+  // owes regardless of what the messages look like.
+  if (thread.planKind !== null || thread.parkedPlan) return 'awaiting_approval';
+
+  if (thread.lastConversationalSender === null) return 'empty_thread';
+
+  // Negative rather than an `agent`/`ai` allow-list: only a customer having the
+  // last word means the thread is blocked on us, so an unrecognized sender type
+  // reads as answered rather than as a handoff the merchant has to pick up.
+  if (thread.lastConversationalSender !== SENDER_TYPE.CUSTOMER) return 'awaiting_customer';
+
+  return 'blocked_no_plan';
 }
 
 const COUNT_WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
