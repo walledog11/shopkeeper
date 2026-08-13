@@ -41,7 +41,12 @@ const FOUR_HOURS_MS = 4 * ONE_HOUR_MS;
 const TWENTY_FOUR_HOURS_MS = 24 * ONE_HOUR_MS;
 
 export const DIGEST_QUESTIONABLE_LIMIT = 10;
-const DIGEST_SUMMARY_TRUNC = 90;
+// Wide enough for the classifier's one-sentence summary to land whole. At 90 a
+// normal summary lost its last clause ("…floats a newsletter tie-up, while also
+// mentioning…"), and a merchant who cannot tell from the line has to ask, which
+// is the round trip the briefing exists to save. Still capped, because this block
+// takes up to DIGEST_QUESTIONABLE_LIMIT items where a handoff takes two.
+const DIGEST_SUMMARY_TRUNC = 140;
 const WEEKLY_SUMMARY_MIN_TICKETS = 3;
 const DIGEST_INTERVALS: Record<string, number> = {
   every_4h: 4,

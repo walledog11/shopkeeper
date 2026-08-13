@@ -290,13 +290,25 @@ otherwise needed a bound phone.
 **Reopened once and closed again**, on two objections to the first render that
 the phase as written would not have caught:
 
-- **A handoff has to carry the words it is handing over.** The first version
-  rendered `Walle: Unclear One Word Message` — the classifier's paraphrase. A
-  merchant cannot answer a question they cannot read, and cannot tell a real
-  ticket from a stray "yo". `formatBlockedSection` now quotes the customer's
-  own message, redacted and capped at 80 characters, falling back to the
-  classifier line when there is no text to quote. Reading `Walle: "Test"` is
-  also what made the second objection obvious.
+- **A handoff has to carry everything needed to answer it.** The first version
+  rendered `Walle: Unclear One Word Message` — the classifier's `title`, which is
+  a topic label and never states the request. The second quoted the customer but
+  cut at 80 characters, which is the same dead end from the other side: the
+  merchant learns a sentence existed. Either way they have to ask what the
+  message said, the agent explains, and only then can they act — one round trip
+  the briefing exists to remove.
+
+  `formatBlockedSection` now quotes the message whole whenever it fits in 120
+  characters, because exact words beat any paraphrase and that is the case where
+  nothing is lost. Past that it uses `aiSummary`, a complete one-sentence
+  statement of the request. Only one branch can still elide: a long message with
+  no summary ever written, and it cuts at the summary budget rather than the
+  quote budget. `DIGEST_SUMMARY_TRUNC` went 90 to 140 for the same reason, since
+  a normal summary was losing its last clause in the flagged block.
+
+  The short-message branch is also what passes a bare "yo" through verbatim if
+  one ever reaches a handoff, rather than as someone's description of it.
+  Reading `Walle: "Test"` is what made the second objection below obvious.
 - **An unclear message is not escalate-worthy at all.** The briefing was naming
   both a one-word "Test" and a storefront "hello" the agent had already answered.
   Neither is a decision the merchant owes. The substance gate above now drops

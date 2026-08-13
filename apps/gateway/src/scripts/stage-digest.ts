@@ -111,6 +111,18 @@ const FIXTURES: Fixture[] = [
     noRequest: true,
   },
   {
+    // Rambles well past the width a quote can carry, so the handoff prints the
+    // summary instead. The merchant must be able to act on this line alone.
+    email: 'livetest6@example.com',
+    name: 'Dana Ruiz',
+    body: 'Hi! So sorry to be a pain about this, but I have just moved and I think I gave you the old address by mistake when I checked out last week. Could you send order 1043 to flat 4 instead? And will it still get here before Friday, or should I have it sent to my office?',
+    aiSummary: 'Customer asks to move order #1043 to a new flat and whether it will still arrive before Friday.',
+    filterReason: null,
+    tag: 'Shipping',
+    filterStatus: 'genuine',
+    ageMinutes: 20,
+  },
+  {
     // The unmistakable one. It must never be named in the briefing — the whole
     // disclosure it earns is "I filed one as spam", because naming it asks the
     // merchant to re-read a decision the agent was right to make alone.

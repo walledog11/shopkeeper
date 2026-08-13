@@ -485,25 +485,54 @@ export interface BriefingTicketRow {
   pendingMessage?: string | null;
 }
 
-// A handoff line has to carry the words the merchant is being asked to answer.
-// The classifier's title is a paraphrase written for scanning ("Unclear One Word
-// Message"), and a merchant reading only that cannot tell whether the ticket is a
-// real customer or a stray "yo" — so the one section that hands work back quotes
-// the customer instead of describing them.
-const BLOCKED_QUOTE_MAX = 80;
+/**
+ * A handoff line has to carry everything the merchant needs to answer, because
+ * anything missing costs a round trip: they ask what the message said, the agent
+ * explains, and only then can they act. Two failures to avoid, and they pull in
+ * opposite directions.
+ *
+ * The classifier's `title` is a topic label written for scanning ("Olive Linen
+ * Napkins", "Unclear One Word Message"). It never states the request, so it is
+ * not used here at all.
+ *
+ * A verbatim quote states the request exactly, but only while it fits. Cut at a
+ * fixed width it becomes the same dead end from the other side: "…the photos look
+ * lighter than the" tells the merchant a sentence existed.
+ *
+ * So: quote the customer whenever the whole message fits, since exact words beat
+ * any paraphrase and a short message is the case where nothing is lost. Past that
+ * width, use `aiSummary`, which is a complete one-sentence statement of the
+ * request rather than a fragment of one. Nothing is elided in either branch.
+ */
+const HANDOFF_VERBATIM_MAX = 120;
+const HANDOFF_SUMMARY_MAX = 240;
 
-function quotePendingMessage(text: string | null | undefined): string | null {
-  const collapsed = redactBriefingContacts((text ?? '').replace(/\s+/g, ' ').trim());
-  if (!collapsed) return null;
-  return `"${truncateBriefingText(collapsed, BLOCKED_QUOTE_MAX)}"`;
+function cleanBriefingText(text: string | null | undefined): string {
+  return redactBriefingContacts((text ?? '').replace(/\s+/g, ' ').trim());
+}
+
+function handoffBody(thread: BriefingTicketRow): string | null {
+  const message = cleanBriefingText(thread.pendingMessage);
+
+  // Short enough to print whole. Covers the one-word case the merchant is meant
+  // to judge for themselves: if a bare "yo" ever reaches a handoff, it arrives as
+  // "yo" rather than as someone's description of it.
+  if (message && message.length <= HANDOFF_VERBATIM_MAX) return `"${message}"`;
+
+  const summary = cleanBriefingText(thread.aiSummary);
+  if (summary) return truncateBriefingText(summary, HANDOFF_SUMMARY_MAX);
+
+  // Long message, no summary — the one branch that can still elide. Cut at the
+  // summary budget rather than the quote budget so the most possible survives.
+  return message ? `"${truncateBriefingText(message, HANDOFF_SUMMARY_MAX)}"` : null;
 }
 
 function formatBlockedTicketLine(thread: BriefingTicketRow): string {
-  const quoted = quotePendingMessage(thread.pendingMessage);
-  if (!quoted) return formatTicketLine(thread);
+  const body = handoffBody(thread);
+  if (!body) return formatTicketLine(thread);
 
-  // Subject only: pass no title, summary or tag so the topic slot is free for
-  // the quote rather than carrying the paraphrase as well.
+  // Subject only: pass no title, summary or tag so the slot after the colon
+  // carries the request itself rather than a label for it as well.
   const subject = formatBriefingTicketLine(
     thread.customer?.name ?? null,
     null,
@@ -511,7 +540,7 @@ function formatBlockedTicketLine(thread: BriefingTicketRow): string {
     null,
     thread.channelType ?? null,
   );
-  return `${subject === 'Open ticket' ? 'Someone' : subject}: ${quoted}`;
+  return `${subject === 'Open ticket' ? 'Someone' : subject}: ${body}`;
 }
 
 function formatTicketLine(thread: BriefingTicketRow): string {

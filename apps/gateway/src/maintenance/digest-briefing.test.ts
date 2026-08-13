@@ -275,15 +275,56 @@ describe('formatBlockedSection', () => {
     expect(section).not.toContain('Olive Linen Napkins');
   });
 
-  it('redacts and truncates the quote', () => {
+  // A cut-off quote is the same dead end as the title, from the other side: the
+  // merchant learns a sentence existed. Past the verbatim width the line carries
+  // the summary, which is a whole statement of the request rather than a
+  // fragment of one, so nothing has to be asked for a second time.
+  it('summarizes a long message rather than cutting it off', () => {
+    const section = formatBlockedSection([{
+      customer: { name: 'Dana Ruiz' },
+      aiTitle: 'Address Change Before Friday',
+      aiSummary: 'Customer asks to move order #1043 to a new flat and whether it will still arrive before Friday.',
+      tag: 'Shipping',
+      pendingMessage: 'Hi! So sorry to be a pain about this, but I have just moved and I gave you the old address by mistake when I checked out last week. Could you send order 1043 to flat 4 instead? And will it still get here before Friday, or should I have it sent to my office?',
+    }])!;
+    expect(section).toContain('Customer asks to move order #1043 to a new flat and whether it will still arrive before Friday.');
+    expect(section).not.toContain('…');
+  });
+
+  it('quotes a short message whole, never elided', () => {
+    const long = 'a'.repeat(119);
+    const section = formatBlockedSection([{
+      customer: { name: 'Ada' },
+      aiSummary: 'Customer says something at length.',
+      tag: null,
+      pendingMessage: long,
+    }])!;
+    expect(section).toContain(`"${long}"`);
+    expect(section).not.toContain('…');
+  });
+
+  it('redacts contact details out of the quote', () => {
     const section = formatBlockedSection([{
       customer: { name: 'Ada' },
       aiSummary: null,
       tag: null,
-      pendingMessage: `Reach me at ada@example.com about ${'the very long story '.repeat(8)}`,
+      pendingMessage: 'Reach me at ada@example.com about the mug',
     }])!;
     expect(section).toContain('their email');
     expect(section).not.toContain('ada@example.com');
+  });
+
+  // The only branch left that can elide: too long to quote, and no summary was
+  // ever written. It cuts at the summary budget rather than the quote budget so
+  // the most possible survives.
+  it('falls back to a capped quote when there is no summary', () => {
+    const section = formatBlockedSection([{
+      customer: { name: 'Ada' },
+      aiSummary: null,
+      tag: null,
+      pendingMessage: `About my order, ${'the very long story '.repeat(20)}`,
+    }])!;
+    expect(section).toContain('About my order');
     expect(section).toContain('…"');
   });
 
