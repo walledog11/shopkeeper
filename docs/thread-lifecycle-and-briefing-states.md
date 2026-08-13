@@ -212,29 +212,56 @@ once rather than queried a second way. Two notes for P3:
 
 ## P3 — The briefing says which state each thread is in
 
-- [ ] **Render `awaiting_customer` and `blocked_no_plan` as their own sections**,
+- [x] **Render `awaiting_customer` and `blocked_no_plan` as their own sections**,
   distinct from the approval list. `blocked_no_plan` reads as a handoff, in the
   agent's voice, naming what it could not do — this is the honesty principle the
   screenshot is missing.
-- [ ] **Scope the closing ask.** `formatWaitingAsk`
-  (`digest-briefing.ts:823-828`) returns "Want me to go ahead with it?" whenever
-  exactly one plan is waiting, regardless of how many other items the message
-  lists. The ask must name what it covers or not appear.
-- [ ] **Delete the `WAITING_HIDE_OTHER_OPEN_AT` suppression**
-  (`digest-briefing.ts:18`). Today the roll-up disappears once three approvals
-  are queued, so the briefing shows *less* of the inbox as the backlog grows.
-  With the sections separated there is no reason to hide it.
-- [ ] **`empty_thread` never appears** in any section.
+- [x] **Scope the closing ask.** `formatWaitingAsk` returned "Want me to go ahead
+  with it?" whenever exactly one plan was waiting, regardless of how many other
+  items the message listed. The ask must name what it covers or not appear.
+- [x] **Delete the `WAITING_HIDE_OTHER_OPEN_AT` suppression.** The roll-up
+  disappeared once three approvals were queued, so the briefing showed *less* of
+  the inbox as the backlog grew. With the sections separated there is no reason
+  to hide it.
+- [x] **`empty_thread` never appears** in any section.
 
 Keep the existing composition discipline: no em-dashes, counts under ten spelled
 out, blank lines between items that wrap on a phone. The `filedSince` scoping in
 `bucketDigestThreads` is correct and stays — do not turn any new section into a
 running total (see the digest stock-vs-flow note in agent memory).
 
-**Closes when:** a test renders a briefing from the exact `Palette` state in the
-table above and asserts four distinguishable sections plus an ask that scopes to
-one item. Run `apps/gateway/src/scripts/stage-digest.ts` against a seeded local
-org and read the output as the merchant would.
+**Closed.** Four section builders in `digest-briefing.ts` over one
+`formatTicketRollup`: the approval list, `formatBlockedSection`,
+`formatAwaitingCustomerSection`, and `formatOtherOpenSection`. `buildOrgDigest`
+partitions the genuine threads that are not already in the waiting list by their
+lifecycle state, so what is left in "Also open" is `awaiting_approval` threads
+whose plan is not yet stale enough to be parked, and `empty_thread` matches
+nothing and is rendered nowhere. The ask names its own list back
+("…the one waiting on your OK?"), which is the header `formatWaitingList` writes.
+
+`digest.test.ts` — "gives each lifecycle state its own section and scopes the ask
+to the approval" rebuilds the `Palette` state plus one fresh-plan thread for the
+residual case, and asserts each thread sits under the heading that describes it
+rather than merely appearing somewhere. Verified red against the unfixed source,
+which put Walle and Ravi in one "Also open" roll-up reading "…and three more" —
+the three being the two message-less Shopify threads and the answered visitor.
+
+Two things the staged read (`stage-digest.ts`, seeded local org) caught that the
+bullets above did not:
+
+- The open count restated the section above it. "One I couldn't work out a next
+  step on, so it's yours: Priya" was followed by "You've got one open ticket",
+  which counts the same ticket again in a neutral voice directly under the
+  sentence handing it over. The approval list had always suppressed that line;
+  every section that names tickets now does. The spam disclosure is not a
+  restatement and still lands.
+- Sections were separated by a double blank line whenever the briefing had no
+  approvals, because the roll-up pushed a separator that the handled block had
+  already written.
+
+`stage-digest.ts` now prints the message it builds before the operator-binding
+check bails, since composition can only be judged by reading it and that
+otherwise needed a bound phone.
 
 ---
 

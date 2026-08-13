@@ -13,8 +13,10 @@ import {
   capitalize,
   countWord,
   deriveThreadLifecycleState,
+  formatAwaitingCustomerSection,
+  formatBlockedSection,
   formatHandledSection,
-  resolveOtherOpenSection,
+  formatOtherOpenSection,
   formatWaitingAsk,
   formatWaitingList,
   loadHandledRollup,
@@ -176,7 +178,11 @@ export interface DigestMessageExtras {
   waitingSection?: string | null;
   /** Closing ask for the approval list; lands after everything else. */
   waitingAsk?: string | null;
-  /** Compact roll-up of open tickets not named in the waiting list. */
+  /** Threads the agent could not plan, handed back to the merchant. */
+  blockedSection?: string | null;
+  /** Threads the agent answered, reported rather than asked about. */
+  awaitingCustomerSection?: string | null;
+  /** Compact roll-up of open tickets not named in any section above. */
   otherOpenSection?: string | null;
   garnishLines?: string[];
 }
@@ -225,6 +231,15 @@ export function formatDigestMessage(
   const { genuine, questionable, filteredCount, urgent } = buckets;
   const lines: string[] = [];
   const hasWaiting = Boolean(extras?.waitingSection);
+  // The open count exists for a briefing that never names the tickets. Once a
+  // section has, it describes the same set a second time — "One I couldn't work
+  // out a next step on, so it's yours: Priya" followed by "You've got one open
+  // ticket" reads as two numbers to reconcile, and the neutral count undercuts
+  // the handoff. The approval list has always suppressed it; every section that
+  // names tickets now does.
+  const namedOpenTickets = hasWaiting || Boolean(
+    extras?.blockedSection || extras?.awaitingCustomerSection || extras?.otherOpenSection,
+  );
 
   if (extras?.opener) {
     lines.push(extras.opener, '');
@@ -232,14 +247,25 @@ export function formatDigestMessage(
   if (extras?.handledSection) {
     lines.push(extras.handledSection, '');
   }
-  if (extras?.waitingSection) {
-    lines.push(extras.waitingSection);
-  }
-  if (extras?.otherOpenSection) {
-    lines.push('', extras.otherOpenSection);
+  // Decisions the merchant owes come first, then what is only being reported.
+  // The blocked section sits under the approval list because both are work
+  // waiting on them; the last two are status.
+  //
+  // Exactly one blank line between sections. The two blocks above end with their
+  // own, so the separator is only added when it is missing — pushing one
+  // unconditionally left a double gap on every briefing with no approvals.
+  for (const section of [
+    extras?.waitingSection,
+    extras?.blockedSection,
+    extras?.awaitingCustomerSection,
+    extras?.otherOpenSection,
+  ]) {
+    if (!section) continue;
+    if (lines.length > 0 && lines[lines.length - 1] !== '') lines.push('');
+    lines.push(section);
   }
 
-  if (!hasWaiting) {
+  if (!namedOpenTickets) {
     const status: string[] = [simpleInboxSentence(genuine.length, urgent)];
     if (filteredCount > 0) status.push(spamSentence(filteredCount));
     if (lines.length > 0) lines.push('');
@@ -379,7 +405,6 @@ export async function buildOrgDigest(
 
   const buckets = bucketDigestThreads(openThreads, now, since);
   const waitingThreadIds = new Set(waitingItems.map((item) => item.threadId));
-  const otherOpenThreads = buckets.genuine.filter((thread) => !waitingThreadIds.has(thread.id));
 
   // Filtered threads are reported as a count and never named, so they get no
   // state. `waitingItems` is the parked-plan set: it already merges the operator
@@ -400,7 +425,22 @@ export async function buildOrgDigest(
       }),
     };
   });
-  const otherOpenSection = resolveOtherOpenSection(waitingItems.length, otherOpenThreads);
+
+  // Questionable threads are named in the flagged block and nowhere else, so
+  // only the genuine ones are sorted into sections here. What is left in
+  // "Also open" after the split is `awaiting_approval` threads whose plan is not
+  // yet stale enough for the waiting list — the merchant already got a card for
+  // those. `empty_thread` matches nothing and is never rendered: a thread whose
+  // only rows are Shopify webhook notes has nothing to tell the merchant, and
+  // P4 stops creating them.
+  const stateByThreadId = new Map(lifecycleStates.map((entry) => [entry.threadId, entry.state]));
+  const unlisted = buckets.genuine.filter((thread) => !waitingThreadIds.has(thread.id));
+  const threadsInState = (state: ThreadLifecycleState) => (
+    unlisted.filter((thread) => stateByThreadId.get(thread.id) === state)
+  );
+  const blockedSection = formatBlockedSection(threadsInState('blocked_no_plan'));
+  const awaitingCustomerSection = formatAwaitingCustomerSection(threadsInState('awaiting_customer'));
+  const otherOpenSection = formatOtherOpenSection(threadsInState('awaiting_approval'));
 
   const weeklyLine = waitingSection
     ? null
@@ -417,6 +457,8 @@ export async function buildOrgDigest(
         handledSection,
         waitingSection,
         waitingAsk,
+        blockedSection,
+        awaitingCustomerSection,
         otherOpenSection,
         garnishLines,
       },

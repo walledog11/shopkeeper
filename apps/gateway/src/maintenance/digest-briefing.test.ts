@@ -12,10 +12,11 @@ import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import {
   DIGEST_CURSOR_KEY,
   deriveThreadLifecycleState,
+  formatAwaitingCustomerSection,
+  formatBlockedSection,
   formatBriefingTicketLine,
   formatHandledSection,
   formatOtherOpenSection,
-  resolveOtherOpenSection,
   formatWaitingItemLine,
   formatWaitingSection,
   loadHandledRollup,
@@ -245,23 +246,57 @@ describe('loadHandledRollup', () => {
   });
 });
 
-describe('resolveOtherOpenSection', () => {
-  it('skips the roll-up when enough approvals are already queued', () => {
-    expect(resolveOtherOpenSection(3, [{
-      customer: { name: 'Bob' },
-      aiSummary: 'Refund',
-      tag: null,
-    }])).toBeNull();
-  });
-
-  it('still lists hidden tickets when only one or two need approval', () => {
-    const section = resolveOtherOpenSection(2, [{
-      customer: { name: 'Bob' },
-      aiSummary: 'Wants a refund on order 1043',
+describe('formatBlockedSection', () => {
+  it('hands one thread back in the agent\'s own voice', () => {
+    const section = formatBlockedSection([{
+      customer: { name: 'Walle Walson' },
+      aiTitle: 'Unclear One Word Message',
+      aiSummary: null,
       tag: null,
     }]);
-    expect(section).toContain('Also open:');
-    expect(section).toContain('Bob');
+    expect(section).toContain("One I couldn't work out a next step on, so it's yours:");
+    expect(section).toContain('Walle');
+  });
+
+  it('counts and pluralizes without asking for a decision it cannot act on', () => {
+    const section = formatBlockedSection([
+      { customer: { name: 'Ada' }, aiSummary: 'One', tag: null },
+      { customer: { name: 'Bo' }, aiSummary: 'Two', tag: null },
+    ]);
+    expect(section).toContain("Two I couldn't work out a next step on, so they're yours:");
+    expect(section).not.toContain('?');
+  });
+
+  it('renders nothing when no thread is blocked', () => {
+    expect(formatBlockedSection([])).toBeNull();
+  });
+});
+
+describe('formatAwaitingCustomerSection', () => {
+  // Reported, never asked: the merchant has no decision to make on a thread the
+  // agent already answered, so this section must not end in a question.
+  it('reports an answered thread without asking anything', () => {
+    const section = formatAwaitingCustomerSection([{
+      customer: { name: null },
+      channelType: 'shopify_chat',
+      aiTitle: 'Unclear One Word Message',
+      aiSummary: null,
+      tag: null,
+    }]);
+    expect(section).toContain("I answered this one and haven't heard back:");
+    expect(section).not.toContain('?');
+  });
+
+  it('counts several answered threads', () => {
+    const section = formatAwaitingCustomerSection([
+      { customer: { name: 'Ada' }, aiSummary: 'One', tag: null },
+      { customer: { name: 'Bo' }, aiSummary: 'Two', tag: null },
+    ]);
+    expect(section).toContain("I answered two of these and haven't heard back:");
+  });
+
+  it('renders nothing when nothing is waiting on a customer', () => {
+    expect(formatAwaitingCustomerSection([])).toBeNull();
   });
 });
 
@@ -482,12 +517,15 @@ describe('loadWaitingOnYouItems', () => {
     expect(items[0]?.line).toBe(
       '$12 refund · Sarah: Order arrived damaged, wants money back (waiting 1 day)',
     );
-    // The "still waiting on your OK" framing belongs to the header, once.
+    // The "still waiting on your OK" framing belongs to the header, and the ask
+    // names it back rather than saying "it" — the ask lands under whatever
+    // blocked, answered and flagged sections the briefing also has, so a bare
+    // pronoun asks about all of them.
     expect(formatWaitingSection(items)).toBe(
       "One thing's still waiting on your OK:\n"
       + '- $12 refund · Sarah: Order arrived damaged, wants money back (waiting 1 day)\n'
       + '\n'
-      + 'Want me to go ahead with it?',
+      + 'Want me to go ahead with the one waiting on your OK?',
     );
   });
 
@@ -524,8 +562,9 @@ describe('loadWaitingOnYouItems', () => {
     expect(section).toContain('2. Reply · Canary: Wants to change the shipping address (waiting 5 hours)');
     // Wrapped items run together without air between them.
     expect(section).toContain('(waiting 5 hours)\n\n2.');
-    // A bare "yes" here would approve only the most recent plan.
-    expect(section.trimEnd().endsWith('Tell me which ones to go ahead with.')).toBe(true);
+    // A bare "yes" here would approve only the most recent plan. The count ties
+    // the ask to this list rather than to everything else the briefing names.
+    expect(section.trimEnd().endsWith('Tell me which of the two waiting on your OK to go ahead with.')).toBe(true);
     expect(section).not.toMatch(/Want me to send (any of )?those\?/);
   });
 

@@ -44,6 +44,35 @@ function makeThread(overrides: Partial<{
   };
 }
 
+function replyPlanCache(instruction: string, lastCustomerMessageId: string) {
+  return buildAgentPlanCacheRecord({
+    instruction,
+    plan: {
+      instruction,
+      steps: [{
+        id: 'step-1',
+        tool: 'send_reply',
+        label: 'Send reply',
+        description: 'Send reply',
+        category: 'communication',
+        enabled: true,
+      }],
+      rawToolCalls: [{ id: 'step-1', name: 'send_reply', input: { text: 'On its way.' } }],
+    },
+    lastCustomerMessageId,
+    settings: resolveAgentSettings(null),
+  });
+}
+
+// The blank-line-separated block of the briefing that names this thread. Which
+// heading a ticket sits under is the whole point of the sections, so asserting
+// the message merely contains both strings would pass on the bug.
+function sectionFor(message: string, needle: string): string {
+  const block = message.split('\n\n').find((part) => part.includes(needle));
+  if (!block) throw new Error(`Briefing never mentions "${needle}":\n${message}`);
+  return block;
+}
+
 describe('bucketDigestThreads', () => {
   it('splits threads into genuine / questionable / filtered buckets', () => {
     const threads = [
@@ -140,6 +169,38 @@ describe('formatDigestMessage', () => {
     expect(msg).toContain('Also open:');
     expect(msg).toContain('Bob · #1043');
     expect(msg).not.toContain("You've got two open tickets");
+  });
+
+  // Caught by reading a staged briefing: the handoff was immediately followed by
+  // "You've got one open ticket", which counts the same ticket a second time in
+  // a neutral voice, right under the sentence that gave it to the merchant.
+  it('does not count tickets a section has already named', () => {
+    const buckets = bucketDigestThreads(
+      [makeThread({ filterStatus: 'genuine', customerName: 'Priya' })],
+      NOW,
+      FILED_SINCE,
+    );
+    const msg = formatDigestMessage(buckets, null, {
+      blockedSection: "One I couldn't work out a next step on, so it's yours:\n- Priya: Linen napkins",
+    });
+    expect(msg).toContain("so it's yours:");
+    expect(msg).not.toContain("You've got one open ticket");
+  });
+
+  it('still discloses spam filing when the open count is suppressed', () => {
+    const buckets = bucketDigestThreads(
+      [
+        makeThread({ filterStatus: 'genuine', customerName: 'Priya' }),
+        makeThread({ filterStatus: 'filtered' }),
+      ],
+      NOW,
+      FILED_SINCE,
+    );
+    const msg = formatDigestMessage(buckets, null, {
+      awaitingCustomerSection: "I answered this one and haven't heard back:\n- Priya: Linen napkins",
+    });
+    expect(msg).not.toContain("You've got one open ticket");
+    expect(msg).toContain('I filed one as spam.');
   });
 
   it('omits weekly stats while approvals are still pending', () => {
@@ -429,9 +490,8 @@ describe('buildOrgDigest — inbox scope', () => {
   });
 
   // The four open threads from the diagnosed briefing, which the digest could
-  // only describe as one undifferentiated bucket. The states are carried here;
-  // nothing reads them yet, so the message must be byte-identical.
-  it('carries a lifecycle state per open thread without changing the message', async () => {
+  // only describe as one undifferentiated bucket.
+  it('carries a lifecycle state per open thread', async () => {
     org = await createTestOrg();
     // One open thread per (customer, channel), per the partial unique index.
     const [empty, answered, blocked, planned] = await Promise.all([
@@ -457,23 +517,7 @@ describe('buildOrgDigest — inbox scope', () => {
     await db.thread.update({
       where: { id: plannedThread.id },
       data: {
-        cachedPlan: buildAgentPlanCacheRecord({
-          instruction: 'Refund request',
-          plan: {
-            instruction: 'Refund request',
-            steps: [{
-              id: 'step-1',
-              tool: 'send_reply',
-              label: 'Send reply',
-              description: 'Send reply',
-              category: 'communication',
-              enabled: true,
-            }],
-            rawToolCalls: [{ id: 'step-1', name: 'send_reply', input: { text: 'On its way.' } }],
-          },
-          lastCustomerMessageId: plannedMessage.id,
-          settings: resolveAgentSettings(null),
-        }),
+        cachedPlan: replyPlanCache('Refund request', plannedMessage.id),
         cachedPlanMessageId: plannedMessage.id,
       },
     });
@@ -488,9 +532,106 @@ describe('buildOrgDigest — inbox scope', () => {
     // cached-plan path, not the operator ledger.
     expect(byThread.get(plannedThread.id)).toBe('awaiting_approval');
 
-    expect(digest?.message).toContain("You've got four open tickets");
+    // State names are a vocabulary for the code, never words the merchant reads.
     expect(digest?.message).not.toContain('awaiting');
     expect(digest?.message).not.toContain('blocked');
+  });
+
+  // The diagnosed 8:00am briefing, rebuilt: five items under one pronoun, four
+  // of them in an "Also open" roll-up that the closing "Want me to go ahead with
+  // it?" appeared to cover. Each state now gets a section that says what the
+  // merchant is actually looking at, and the two message-less Shopify threads
+  // say nothing at all.
+  it('gives each lifecycle state its own section and scopes the ask to the approval', async () => {
+    org = await createTestOrg();
+    const [waiting, canary, ayumu, visitor, walle, fresh] = await Promise.all([
+      createTestCustomer(org.id, 'waiting@example.com', { name: 'Sarah Chen' }),
+      createTestCustomer(org.id, 'canary@example.com', { name: 'Canary Shopkeeper' }),
+      createTestCustomer(org.id, 'ayumu@example.com', { name: 'Ayumu Hirano' }),
+      createTestCustomer(org.id, 'shopify_chat:sess-1'),
+      createTestCustomer(org.id, 'walle@example.com', { name: 'Walle Walson' }),
+      createTestCustomer(org.id, 'fresh@example.com', { name: 'Ravi Patel' }),
+    ]);
+
+    // The one real approval: a plan cached long enough for the stale scan.
+    const waitingThread = await createTestThread(org.id, waiting.id, 'email');
+    const waitingMessage = await createTestMessage(waitingThread.id, 'Can you resend my receipt?');
+    await db.thread.update({
+      where: { id: waitingThread.id },
+      data: {
+        aiTitle: 'Receipt Resend',
+        cachedPlan: replyPlanCache('Resend the receipt', waitingMessage.id),
+        cachedPlanMessageId: waitingMessage.id,
+        updatedAt: new Date(NOW.getTime() - 4 * HOUR),
+      },
+    });
+
+    // Both Order Status threads: two webhook note rows each, no conversation.
+    const canaryThread = await createTestThread(org.id, canary.id, 'shopify');
+    await createTestMessage(canaryThread.id, 'New order #1026 was placed.', 'note');
+    await createTestMessage(canaryThread.id, 'Order #1026 has been updated.', 'note');
+    await db.thread.update({
+      where: { id: canaryThread.id },
+      data: { aiTitle: "Where's My Order?", tag: 'Order Status' },
+    });
+    const ayumuThread = await createTestThread(org.id, ayumu.id, 'shopify');
+    await createTestMessage(ayumuThread.id, 'New order #1027 was placed.', 'note');
+    await db.thread.update({
+      where: { id: ayumuThread.id },
+      data: { aiTitle: 'Order Status', tag: 'Order Status' },
+    });
+
+    // Answered by an auto-executed reply; the visitor never came back.
+    const visitorThread = await createTestThread(org.id, visitor.id, 'shopify_chat');
+    await createTestMessage(visitorThread.id, 'hello');
+    await createTestMessage(visitorThread.id, 'Hi! What can I help you find?', 'agent');
+    await db.thread.update({
+      where: { id: visitorThread.id },
+      data: { aiTitle: 'Unclear One Word Message' },
+    });
+
+    // Pending customer message, no plan, and nothing that will make one.
+    const walleThread = await createTestThread(org.id, walle.id, 'email');
+    await createTestMessage(walleThread.id, 'Test');
+    await db.thread.update({
+      where: { id: walleThread.id },
+      data: { aiTitle: 'Unclear One Word Message' },
+    });
+
+    // Not in the Palette state: a plan too fresh for the stale scan, which is
+    // what is left in "Also open" once the other states are pulled out of it.
+    const freshThread = await createTestThread(org.id, fresh.id, 'email');
+    const freshMessage = await createTestMessage(freshThread.id, 'Do you ship to Ireland?');
+    await db.thread.update({
+      where: { id: freshThread.id },
+      data: {
+        aiTitle: 'Shipping To Ireland',
+        cachedPlan: replyPlanCache('Answer the shipping question', freshMessage.id),
+        cachedPlanMessageId: freshMessage.id,
+      },
+    });
+
+    const message = (await buildOrgDigest(org.id, NOW))!.message;
+
+    // Four sections, each saying something different about what it lists.
+    expect(message).toContain("One thing's still waiting on your OK:");
+    expect(message).toContain("One I couldn't work out a next step on, so it's yours:");
+    expect(message).toContain("I answered this one and haven't heard back:");
+    expect(message).toContain('Also open:');
+
+    // Each thread under the heading that describes it, and nowhere else.
+    expect(sectionFor(message, 'Sarah')).toContain("waiting on your OK");
+    expect(sectionFor(message, 'Walle')).toContain("couldn't work out a next step");
+    expect(sectionFor(message, 'Storefront visitor')).toContain("haven't heard back");
+    expect(sectionFor(message, 'Ravi')).toContain('Also open:');
+
+    // The two message-less threads are not in any of them.
+    expect(message).not.toContain('Canary');
+    expect(message).not.toContain('Ayumu');
+
+    // The ask names its own list instead of the "it" that covered all five.
+    expect(message.trimEnd().endsWith('Want me to go ahead with the one waiting on your OK?')).toBe(true);
+    expect(message).not.toContain('Want me to go ahead with it?');
   });
 });
 

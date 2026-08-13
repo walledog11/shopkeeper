@@ -207,6 +207,11 @@ async function main() {
     process.exit(1);
   }
 
+  // Print the text itself, before the binding check bails. Composition is the
+  // thing most likely to be wrong here and it can only be judged by reading it,
+  // which otherwise needs a bound phone.
+  console.log(`\n${'─'.repeat(52)}\n${digest.message}\n${'─'.repeat(52)}\n`);
+
   const flaggedOrder = digest.pendingDigest.threadIds.map((id, index) => {
     const match = staged.find((s) => s.threadId === id);
     return `  ${index + 1}. ${match?.fixture.name ?? 'unknown'}  ${id}`;

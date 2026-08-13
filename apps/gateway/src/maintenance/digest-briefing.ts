@@ -14,8 +14,6 @@ export const WAITING_PLAN_MIN_AGE_MS = 3 * 3_600_000;
 export const DEFAULT_HANDLED_LOOKBACK_MS = 24 * 3_600_000;
 const NOTABLE_HANDLED_LIMIT = 5;
 const DIGEST_OTHER_OPEN_LIMIT = 2;
-/** When this many approvals are queued, skip the also-open roll-up. */
-export const WAITING_HIDE_OTHER_OPEN_AT = 3;
 
 export interface HandledRollup {
   approvedCount: number;
@@ -485,20 +483,13 @@ export interface BriefingTicketRow {
   customer: { name: string | null };
 }
 
-export function resolveOtherOpenSection(
-  waitingCount: number,
-  threads: BriefingTicketRow[],
-): string | null {
-  if (waitingCount >= WAITING_HIDE_OTHER_OPEN_AT) return null;
-  return formatOtherOpenSection(threads);
-}
-
-export function formatOtherOpenSection(
+function formatTicketRollup(
+  header: string,
   threads: BriefingTicketRow[],
 ): string | null {
   if (threads.length === 0) return null;
 
-  const lines = ['Also open:'];
+  const lines = [header];
   const shown = threads.slice(0, DIGEST_OTHER_OPEN_LIMIT);
   for (const thread of shown) {
     lines.push(`- ${formatBriefingTicketLine(
@@ -514,6 +505,40 @@ export function formatOtherOpenSection(
     lines.push(`…and ${countWord(remaining)} more`);
   }
   return lines.join('\n');
+}
+
+/**
+ * `blocked_no_plan`: a customer is waiting, the agent has no plan, and nothing
+ * in the product will make one. Said as a handoff naming what the agent could
+ * not do, because the alternative — listing it under "Also open" beneath an
+ * approval ask — reads as something already in hand.
+ *
+ * This is the section the model-elected `escalate_to_human` path cannot cover:
+ * escalation happens during a run, and these threads never got one.
+ */
+export function formatBlockedSection(threads: BriefingTicketRow[]): string | null {
+  return formatTicketRollup(
+    threads.length === 1
+      ? "One I couldn't work out a next step on, so it's yours:"
+      : `${capitalize(countWord(threads.length))} I couldn't work out a next step on, so they're yours:`,
+    threads,
+  );
+}
+
+/** `awaiting_customer`: reported, never asked. The merchant has no decision here. */
+export function formatAwaitingCustomerSection(threads: BriefingTicketRow[]): string | null {
+  return formatTicketRollup(
+    threads.length === 1
+      ? "I answered this one and haven't heard back:"
+      : `I answered ${countWord(threads.length)} of these and haven't heard back:`,
+    threads,
+  );
+}
+
+export function formatOtherOpenSection(
+  threads: BriefingTicketRow[],
+): string | null {
+  return formatTicketRollup('Also open:', threads);
 }
 
 async function isPlanExecutionResolved(
@@ -873,11 +898,18 @@ export function formatWaitingList(items: WaitingItem[]): string | null {
   ].join('\n');
 }
 
+/**
+ * The ask lands last, after the blocked, awaiting-customer, also-open, flagged
+ * and stat sections, so it cannot use a bare pronoun: "Want me to go ahead with
+ * it?" under a message listing five tickets asked about all five while covering
+ * only the approval list. It names its own section instead, matching the header
+ * `formatWaitingList` writes, so the scope is readable from the ask alone.
+ */
 export function formatWaitingAsk(items: WaitingItem[]): string | null {
   if (items.length === 0) return null;
   return items.length === 1
-    ? 'Want me to go ahead with it?'
-    : 'Tell me which ones to go ahead with.';
+    ? 'Want me to go ahead with the one waiting on your OK?'
+    : `Tell me which of the ${countWord(items.length)} waiting on your OK to go ahead with.`;
 }
 
 export function formatWaitingSection(items: WaitingItem[]): string | null {
