@@ -49,6 +49,9 @@ interface Fixture {
   email: string;
   name: string;
   body: string;
+  /** The classifier writes one for every thread; fixtures without one exercise a
+   *  summary-derived fallback that production almost never reaches. */
+  aiTitle: string;
   aiSummary: string;
   filterStatus: 'questionable' | 'genuine' | 'filtered';
   filterReason: string | null;
@@ -57,6 +60,16 @@ interface Fixture {
   ageMinutes: number;
   /** Classifier verdict: a real person who has not asked for anything yet. */
   noRequest?: boolean;
+  /**
+   * Cache a plan on the thread. Without one every fixture is a thread the agent
+   * never worked, which is not what a morning looks like and leaves the approval
+   * list — the section that matters most — out of the staged read entirely.
+   *
+   * Older than WAITING_PLAN_MIN_AGE_MS (3h) it lands in "waiting on your OK";
+   * fresher than that it is a plan the merchant already got a card for, and it
+   * falls to "Also open".
+   */
+  plan?: { tool: 'send_reply' | 'create_refund'; instruction: string; input: unknown };
 }
 
 // updatedAt desc drives both the digest list order and the pendingDigest
@@ -68,6 +81,7 @@ const FIXTURES: Fixture[] = [
     // the honest thing is to ask. An unmistakable backlink blast belongs in the
     // filtered fixture below, where it is counted and never named.
     email: 'livetest1@example.com',
+    aiTitle: 'Newsletter Tie-Up Or Customer',
     name: 'Sarah Whitcombe',
     body: "Hey! Love what you're doing with the ceramics line — the glazes are gorgeous. I write a small home-goods newsletter and thought there might be a fit here. Happy to send details, or I might just buy the mug set myself. Either way, nice work!",
     aiSummary: 'Compliments the ceramics line and floats a newsletter tie-up, while also mentioning buying the mug set.',
@@ -78,6 +92,7 @@ const FIXTURES: Fixture[] = [
   },
   {
     email: 'livetest2@example.com',
+    aiTitle: 'Mug Set Not Shipped Yet',
     name: 'Marcus Reed',
     body: "hey — ordered the ceramic mug set last week and still no shipping email. when does it actually go out? starting to wonder if the order went through",
     aiSummary: 'Customer asks when their ceramic mug set order will ship — no tracking yet.',
@@ -88,6 +103,7 @@ const FIXTURES: Fixture[] = [
   },
   {
     email: 'livetest3@example.com',
+    aiTitle: 'Darker Olive Linen Napkins',
     name: 'Priya Nadar',
     body: 'Do the linen napkins come in a darker olive? The photos look lighter than the swatch I saw at the market.',
     aiSummary: 'Customer asks whether the linen napkins come in a darker olive shade.',
@@ -98,6 +114,7 @@ const FIXTURES: Fixture[] = [
   },
   {
     email: 'livetest4@example.com',
+    aiTitle: 'Single Word Opener',
     name: 'Dee Okafor',
     body: 'yo',
     aiSummary: 'Visitor wrote a single word: "yo".',
@@ -114,6 +131,7 @@ const FIXTURES: Fixture[] = [
     // Rambles well past the width a quote can carry, so the handoff prints the
     // summary instead. The merchant must be able to act on this line alone.
     email: 'livetest6@example.com',
+    aiTitle: 'Address Change Before Friday',
     name: 'Dana Ruiz',
     body: 'Hi! So sorry to be a pain about this, but I have just moved and I think I gave you the old address by mistake when I checked out last week. Could you send order 1043 to flat 4 instead? And will it still get here before Friday, or should I have it sent to my office?',
     aiSummary: 'Customer asks to move order #1043 to a new flat and whether it will still arrive before Friday.',
@@ -127,6 +145,7 @@ const FIXTURES: Fixture[] = [
     // disclosure it earns is "I filed one as spam", because naming it asks the
     // merchant to re-read a decision the agent was right to make alone.
     email: 'livetest5@example.com',
+    aiTitle: 'SEO Backlink Package Pitch',
     name: 'Growth Partners',
     body: "Hi there! I'm reaching out because I noticed your store could rank much higher on Google. We offer guaranteed first-page placement and 500 premium backlinks for a flat monthly fee. Reply INFO and I'll send our package deck.",
     aiSummary: 'Unsolicited SEO/backlink marketing pitch — no order or customer history.',
@@ -135,10 +154,89 @@ const FIXTURES: Fixture[] = [
     filterStatus: 'filtered',
     ageMinutes: 60,
   },
+  {
+    // Second filtered one, so the spam line has to count rather than say "one".
+    email: 'livetest7@example.com',
+    aiTitle: 'Home Styling Newsletter',
+    name: 'Nordic Home Weekly',
+    body: 'NORDIC HOME WEEKLY — Issue 214. Inside: five ways to style open shelving, our editor picks for spring, and 20% off at our partner stores. View in browser. Unsubscribe.',
+    aiSummary: 'Marketing newsletter with styling tips and partner discounts.',
+    filterReason: 'Newsletter broadcast, unsubscribe footer',
+    tag: 'Other',
+    filterStatus: 'filtered',
+    ageMinutes: 200,
+  },
+  {
+    // Money, drafted and parked. Leads the approval list because an amount is
+    // the one thing worth reading before a name.
+    email: 'livetest8@example.com',
+    aiTitle: 'Two Cracked Mugs, Refund Asked',
+    name: 'Tomás Herrera',
+    body: 'Two of the four mugs turned up cracked — looks like they shifted in transit, the box was fine. I do not need replacements, I would just like the two refunded if that is alright.',
+    aiSummary: 'Customer reports two of four mugs arrived cracked and asks for a refund on those two rather than replacements.',
+    filterReason: null,
+    tag: 'Returns',
+    filterStatus: 'genuine',
+    ageMinutes: 300,
+    plan: {
+      tool: 'create_refund',
+      instruction: 'Refund the two cracked mugs',
+      input: { order_id: 'gid://shopify/Order/1049', amount: 34, currency: 'USD' },
+    },
+  },
+  {
+    email: 'livetest9@example.com',
+    aiTitle: 'No Delivery Update Since Tuesday',
+    name: 'Aisha Bello',
+    body: 'Morning! Any update on order 1051? It said out for delivery on Tuesday and nothing since.',
+    aiSummary: 'Customer asks for an update on order #1051, which showed out for delivery on Tuesday.',
+    filterReason: null,
+    tag: 'Order Status',
+    filterStatus: 'genuine',
+    ageMinutes: 260,
+    plan: {
+      tool: 'send_reply',
+      instruction: 'Answer the delivery question for order 1051',
+      input: { text: 'It is with the courier and due tomorrow.' },
+    },
+  },
+  {
+    // Fresh plan: the merchant already got a card, so this is not re-asked. It
+    // is the only thing left in "Also open" now the other states are split out.
+    email: 'livetest10@example.com',
+    aiTitle: 'Ireland Shipping And Customs',
+    name: 'Ravi Patel',
+    body: 'Do you ship to Ireland, and is there a customs charge on top?',
+    aiSummary: 'Customer asks whether the store ships to Ireland and whether customs charges apply.',
+    filterReason: null,
+    tag: 'Shipping',
+    filterStatus: 'genuine',
+    ageMinutes: 25,
+    plan: {
+      tool: 'send_reply',
+      instruction: 'Answer the Ireland shipping question',
+      input: { text: 'We do ship to Ireland, three to five days.' },
+    },
+  },
+  {
+    // A complaint, not a question: the handoff must say "wrote", not "asked".
+    email: 'livetest11@example.com',
+    aiTitle: 'Second Late Order In A Row',
+    name: 'Greta Lindqvist',
+    body: 'This is the second order in a row that has turned up late. I am starting to lose patience with it, to be honest.',
+    aiSummary: 'Customer complains that a second consecutive order arrived late and is losing patience.',
+    filterReason: null,
+    tag: 'Shipping',
+    filterStatus: 'genuine',
+    ageMinutes: 150,
+  },
 ];
 
 async function main() {
   const { db } = await import('@shopkeeper/db');
+  const { buildAgentPlanCacheRecord } = await import('@shopkeeper/agent/plan-cache');
+  const { resolveAgentSettings } = await import('@shopkeeper/agent/settings');
+  const { PLAN_STEP_LABELS } = await import('@shopkeeper/agent/tools');
   const { buildOrgDigest, deliverOrgDigest } = await import('../maintenance/digest.js');
   const { listOperatorBindings } = await import('../operator-notify.js');
   const { digestNotificationIdempotencyKey } = await import('../operator-notify-idempotency.js');
@@ -220,6 +318,7 @@ async function main() {
         channelType: 'email',
         status: 'open',
         subject: fixture.tag === 'Other' ? 'Partnership opportunity' : `Re: ${fixture.tag}`,
+        aiTitle: fixture.aiTitle,
         aiSummary: fixture.aiSummary,
         tag: fixture.tag,
         filterStatus: fixture.filterStatus,
@@ -237,7 +336,7 @@ async function main() {
       },
       select: { id: true },
     });
-    await db.message.create({
+    const message = await db.message.create({
       data: {
         threadId: thread.id,
         organizationId: orgId,
@@ -245,7 +344,36 @@ async function main() {
         contentText: fixture.body,
         sentAt,
       },
+      select: { id: true },
     });
+
+    if (fixture.plan) {
+      // cachedPlanMessageId must be the newest customer message or the plan is
+      // stale by definition and getCurrentPlanForThread drops it.
+      await db.thread.update({
+        where: { id: thread.id },
+        data: {
+          cachedPlan: buildAgentPlanCacheRecord({
+            instruction: fixture.plan.instruction,
+            plan: {
+              instruction: fixture.plan.instruction,
+              steps: [{
+                id: 'step-1',
+                tool: fixture.plan.tool,
+                label: PLAN_STEP_LABELS[fixture.plan.tool] ?? fixture.plan.tool,
+                description: fixture.plan.instruction,
+                category: fixture.plan.tool === 'create_refund' ? 'action' : 'communication',
+                enabled: true,
+              }],
+              rawToolCalls: [{ id: 'step-1', name: fixture.plan.tool, input: fixture.plan.input }],
+            },
+            lastCustomerMessageId: message.id,
+            settings: resolveAgentSettings(null),
+          }) as never,
+          cachedPlanMessageId: message.id,
+        },
+      });
+    }
     staged.push({ fixture, threadId: thread.id });
   }
 

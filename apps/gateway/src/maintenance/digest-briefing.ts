@@ -182,6 +182,13 @@ function parkedActionLabel(
 // words, so this cap is a backstop for the summary fallback, not the usual path.
 const BRIEFING_TOPIC_MAX = 60;
 
+// The approval list gets a wider one. It is the section the merchant is being
+// asked to say yes to, and 60 characters cut the reason mid-phrase whenever the
+// fallback ran: "Two of four mugs arrived cracked and asks for a refund on…" is
+// not something to approve $34 against. Each of these is a numbered item with
+// air around it rather than a bullet in a roll-up, so it can afford the room.
+const WAITING_TOPIC_MAX = 140;
+
 const BRIEFING_TAG_LABELS: Record<string, string> = {
   'Order Status': "where's my order?",
   Shipping: 'shipping question',
@@ -328,12 +335,13 @@ export function briefingTopic(
   aiTitle: string | null,
   aiSummary: string | null,
   tag: string | null,
+  maxLen: number = BRIEFING_TOPIC_MAX,
 ): string | null {
   const title = aiTitle?.trim();
   const summary = aiSummary?.trim();
   const base = title || (summary ? topicFromSummary(summary) : '');
   const cleaned = tidyPunctuation(redactBriefingContacts(base));
-  if (cleaned) return truncateBriefingText(capitalize(cleaned), BRIEFING_TOPIC_MAX);
+  if (cleaned) return truncateBriefingText(capitalize(cleaned), maxLen);
 
   const trimmedTag = tag?.trim();
   if (!trimmedTag || trimmedTag === 'General') return null;
@@ -473,7 +481,7 @@ export function formatWaitingItemLine(params: {
   } = params;
   const age = formatWaitingAge(now, since);
   const agePart = age ? ` (${age})` : '';
-  const topic = briefingTopic(aiTitle ?? null, aiSummary, tag);
+  const topic = briefingTopic(aiTitle ?? null, aiSummary, tag, WAITING_TOPIC_MAX);
   const orderRef = extractOrderRef(`${aiTitle ?? ''} ${aiSummary ?? ''}`);
 
   // Money leads: an amount is the one thing worth reading before the name.
@@ -614,12 +622,17 @@ function formatTicketLine(thread: BriefingTicketRow): string {
 function formatTicketRollup(
   header: string,
   threads: BriefingTicketRow[],
-  lineFor: (thread: BriefingTicketRow) => string = formatTicketLine,
+  options: {
+    lineFor?: (thread: BriefingTicketRow) => string;
+    /** Omit to list every thread. */
+    limit?: number;
+  } = {},
 ): string | null {
   if (threads.length === 0) return null;
+  const lineFor = options.lineFor ?? formatTicketLine;
 
   const lines = [header];
-  const shown = threads.slice(0, DIGEST_OTHER_OPEN_LIMIT);
+  const shown = options.limit == null ? threads : threads.slice(0, options.limit);
   for (const thread of shown) {
     lines.push(`- ${lineFor(thread)}`);
   }
@@ -645,7 +658,12 @@ export function formatBlockedSection(threads: BriefingTicketRow[]): string | nul
       ? "One I couldn't work out a next step on, so it's yours:"
       : `${capitalize(countWord(threads.length))} I couldn't work out a next step on, so they're yours:`,
     threads,
-    formatBlockedTicketLine,
+    // Uncapped, like the approval list and unlike the two roll-ups below. This
+    // section hands over work; the merchant cannot do a ticket that was replaced
+    // by "…and one more", so a saved line costs them the whole item. The two
+    // reporting sections are the opposite trade: nothing is owed on those, so
+    // length matters more than completeness.
+    { lineFor: formatBlockedTicketLine },
   );
 }
 
@@ -656,13 +674,14 @@ export function formatAwaitingCustomerSection(threads: BriefingTicketRow[]): str
       ? "I answered this one and haven't heard back:"
       : `I answered ${countWord(threads.length)} of these and haven't heard back:`,
     threads,
+    { limit: DIGEST_OTHER_OPEN_LIMIT },
   );
 }
 
 export function formatOtherOpenSection(
   threads: BriefingTicketRow[],
 ): string | null {
-  return formatTicketRollup('Also open:', threads);
+  return formatTicketRollup('Also open:', threads, { limit: DIGEST_OTHER_OPEN_LIMIT });
 }
 
 async function isPlanExecutionResolved(

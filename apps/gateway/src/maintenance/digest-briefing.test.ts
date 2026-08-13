@@ -378,6 +378,24 @@ describe('formatBlockedSection', () => {
   it('renders nothing when no thread is blocked', () => {
     expect(formatBlockedSection([])).toBeNull();
   });
+
+  // The roll-ups cap at two and say "…and one more", which is fine for sections
+  // that owe the merchant nothing. This one hands over work: a ticket replaced
+  // by a count is a ticket they cannot do, so a saved line costs the whole item.
+  it('lists every blocked thread rather than capping like the roll-ups', () => {
+    const section = formatBlockedSection(
+      ['Ada', 'Bo', 'Cass', 'Dev', 'Elle'].map((name) => ({
+        customer: { name },
+        aiSummary: null,
+        tag: null,
+        pendingMessage: `${name} needs something.`,
+      })),
+    )!;
+    for (const name of ['Ada', 'Bo', 'Cass', 'Dev', 'Elle']) {
+      expect(section).toContain(`${name} wrote:`);
+    }
+    expect(section).not.toContain('more');
+  });
 });
 
 describe('formatAwaitingCustomerSection', () => {
