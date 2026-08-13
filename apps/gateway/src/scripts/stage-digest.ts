@@ -10,12 +10,19 @@ loadGatewayEnv();
 // `SPAM <n>` / `REPLY <n> <text>` fast paths) without waiting for the scheduled
 // digest or for real flagged traffic.
 //
-// It seeds three open tickets — two `questionable` (1: "Sarah", a marketing
-// blast; 2: a shipping question) plus one `genuine` that is deliberately NOT in
-// pendingDigest.threadIds, so you can confirm mark_ticket_spam refuses to reach
-// a healthy inbox ticket — then builds and pushes the digest through the
-// production path (buildOrgDigest + notifyOperator), so OperatorContext
+// It seeds one open ticket per briefing outcome — two `questionable` (1: "Sarah",
+// outreach that might be a customer; 2: a shipping question), one `genuine` that
+// is deliberately NOT in pendingDigest.threadIds so you can confirm
+// mark_ticket_spam refuses to reach a healthy inbox ticket, one `no_request`
+// opener, and one `filtered` pitch — then builds and pushes the digest through
+// the production path (buildOrgDigest + notifyOperator), so OperatorContext
 // .pendingDigest carries exactly the threadIds the merchant just read.
+//
+// Keep every fixture's verdict one the classifier would plausibly reach for that
+// body. This script is also how the briefing gets read before shipping copy, and
+// a mislabelled fixture reads as a product bug: an obvious spam filed
+// `questionable` prints under "I wasn't sure about", which is the briefing
+// faithfully rendering a verdict no classifier would have returned.
 //
 // Local test DB + throwaway BotFather bot (the A2 harness; see the gateway
 // server command in the printed next steps):
@@ -43,7 +50,7 @@ interface Fixture {
   name: string;
   body: string;
   aiSummary: string;
-  filterStatus: 'questionable' | 'genuine';
+  filterStatus: 'questionable' | 'genuine' | 'filtered';
   filterReason: string | null;
   tag: string;
   /** Minutes back from now; controls the digest's flagged ordering. */
@@ -56,11 +63,15 @@ interface Fixture {
 // threadIds order, so Sarah must be the freshest to land on index 1.
 const FIXTURES: Fixture[] = [
   {
+    // Genuinely ambiguous, which is the only thing `questionable` should mean:
+    // this could be a shopper who likes the ceramics or a newsletter pitch, and
+    // the honest thing is to ask. An unmistakable backlink blast belongs in the
+    // filtered fixture below, where it is counted and never named.
     email: 'livetest1@example.com',
     name: 'Sarah Whitcombe',
-    body: "Hi there! I'm reaching out because I noticed your store could rank much higher on Google. We offer guaranteed first-page placement and 500 premium backlinks for a flat monthly fee. Reply INFO and I'll send our package deck. Best, Sarah",
-    aiSummary: 'Unsolicited SEO/backlink marketing pitch — no order or customer history.',
-    filterReason: 'Bulk marketing pitch, no order reference',
+    body: "Hey! Love what you're doing with the ceramics line — the glazes are gorgeous. I write a small home-goods newsletter and thought there might be a fit here. Happy to send details, or I might just buy the mug set myself. Either way, nice work!",
+    aiSummary: 'Compliments the ceramics line and floats a newsletter tie-up, while also mentioning buying the mug set.',
+    filterReason: 'Unclear whether outreach or a customer; no order history',
     tag: 'Other',
     filterStatus: 'questionable',
     ageMinutes: 10,
@@ -98,6 +109,19 @@ const FIXTURES: Fixture[] = [
     // name this one anywhere — getting them to say more is the agent's job, and
     // a storefront produces a thousand of these a week.
     noRequest: true,
+  },
+  {
+    // The unmistakable one. It must never be named in the briefing — the whole
+    // disclosure it earns is "I filed one as spam", because naming it asks the
+    // merchant to re-read a decision the agent was right to make alone.
+    email: 'livetest5@example.com',
+    name: 'Growth Partners',
+    body: "Hi there! I'm reaching out because I noticed your store could rank much higher on Google. We offer guaranteed first-page placement and 500 premium backlinks for a flat monthly fee. Reply INFO and I'll send our package deck.",
+    aiSummary: 'Unsolicited SEO/backlink marketing pitch — no order or customer history.',
+    filterReason: 'Bulk marketing pitch, no order reference',
+    tag: 'Other',
+    filterStatus: 'filtered',
+    ageMinutes: 60,
   },
 ];
 
@@ -188,6 +212,9 @@ async function main() {
         tag: fixture.tag,
         filterStatus: fixture.filterStatus,
         filterReason: fixture.filterReason,
+        // The spam count reports what was filed since the last briefing, so a
+        // filtered thread with no decision timestamp is not counted at all.
+        filterDecidedAt: fixture.filterStatus === 'genuine' ? null : sentAt,
         classifierSignals: {
           version: 3,
           language: 'en',
