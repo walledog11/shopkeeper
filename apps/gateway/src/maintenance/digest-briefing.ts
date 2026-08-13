@@ -1070,7 +1070,8 @@ export function formatNeedsYouProse(items: BriefingItem[]): string | null {
       `Busy one. ${capitalize(countWord(items.length))} things need you today.`,
       '',
       top.length === 1 ? 'The one worth doing first:' : 'The two worth doing first:',
-      ...top.map(oneSentencePerLine),
+      '',
+      top.map(oneSentencePerLine).join('\n\n'),
       '',
       'Want me to take you through the rest?',
     ].join('\n');
@@ -1081,10 +1082,12 @@ export function formatNeedsYouProse(items: BriefingItem[]): string | null {
     const group = items.filter((item) => item.kind === kind);
     if (group.length === 0) continue;
     if (blocks.length > 0) blocks.push('');
-    blocks.push(groupLead(kind, group.length));
-    // One per line, no bullet and no number: a person texting a list of names
-    // just puts each on its own line.
-    blocks.push(...group.map((item) => oneSentencePerLine(item.line)));
+    blocks.push(groupLead(kind, group.length), '');
+    // A blank line between items, none inside one. Sentences belonging to the
+    // same ticket stay together and the gap is what says "next person" — without
+    // it, "I've got $34 ready." and the next customer's name are consecutive
+    // lines with nothing to separate them.
+    blocks.push(group.map((item) => oneSentencePerLine(item.line)).join('\n\n'));
   }
   return blocks.join('\n');
 }

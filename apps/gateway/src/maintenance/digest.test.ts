@@ -84,14 +84,6 @@ function replyPlanCache(instruction: string, lastCustomerMessageId: string) {
   });
 }
 
-// The blank-line-separated block of the briefing that names this thread. Which
-// heading a ticket sits under is the whole point of the sections, so asserting
-// the message merely contains both strings would pass on the bug.
-function sectionFor(message: string, needle: string): string {
-  const block = message.split('\n\n').find((part) => part.includes(needle));
-  if (!block) throw new Error(`Briefing never mentions "${needle}":\n${message}`);
-  return block;
-}
 
 describe('bucketDigestThreads', () => {
   it('splits threads into genuine / questionable / filtered buckets', () => {
@@ -513,8 +505,14 @@ describe('buildOrgDigest — inbox scope', () => {
     // Two things need the merchant, numbered once, under one ask. The shape this
     // replaced printed the same two under separate headings with separate
     // numbering and separate closing questions.
-    expect(sectionFor(message, 'Sarah')).toContain('ready to go the moment you say');
-    expect(sectionFor(message, 'Priya')).toContain('I need you on');
+    // Each item is its own block now, so grouping is pinned by position: the
+    // drafted one falls under the ready lead, the unplanned one under the other.
+    const readyAt = message.indexOf('ready to go the moment you say');
+    const callsAt = message.indexOf('I need you on');
+    expect(readyAt).toBeGreaterThanOrEqual(0);
+    expect(readyAt).toBeLessThan(message.indexOf('Sarah'));
+    expect(message.indexOf('Sarah')).toBeLessThan(callsAt);
+    expect(callsAt).toBeLessThan(message.indexOf('Priya'));
     expect(message).not.toMatch(/^\s*\d+\. /m);
 
     // The handoff carries the customer's words, not the classifier's paraphrase,
