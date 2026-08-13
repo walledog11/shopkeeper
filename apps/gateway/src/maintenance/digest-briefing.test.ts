@@ -271,7 +271,7 @@ describe('formatBlockedSection', () => {
       tag: 'Product Inquiry',
       pendingMessage: 'Do the linen napkins come in a darker olive?',
     }]);
-    expect(section).toContain('Priya: "Do the linen napkins come in a darker olive?"');
+    expect(section).toContain('Priya asked: "Do the linen napkins come in a darker olive?"');
     expect(section).not.toContain('Olive Linen Napkins');
   });
 
@@ -287,20 +287,47 @@ describe('formatBlockedSection', () => {
       tag: 'Shipping',
       pendingMessage: 'Hi! So sorry to be a pain about this, but I have just moved and I gave you the old address by mistake when I checked out last week. Could you send order 1043 to flat 4 instead? And will it still get here before Friday, or should I have it sent to my office?',
     }])!;
-    expect(section).toContain('Customer asks to move order #1043 to a new flat and whether it will still arrive before Friday.');
+    // The person is the subject of the sentence, past tense, and the classifier's
+    // "Customer" noun is gone — it only repeated the name the line already has.
+    expect(section).toContain('- Dana asked to move order #1043 to a new flat and whether it will still arrive before Friday.');
+    expect(section).not.toContain('Customer asks');
     expect(section).not.toContain('…');
   });
 
   it('quotes a short message whole, never elided', () => {
-    const long = 'a'.repeat(119);
+    const long = `${'a'.repeat(118)}?`;
     const section = formatBlockedSection([{
       customer: { name: 'Ada' },
       aiSummary: 'Customer says something at length.',
       tag: null,
       pendingMessage: long,
     }])!;
-    expect(section).toContain(`"${long}"`);
+    expect(section).toContain(`Ada asked: "${long}"`);
     expect(section).not.toContain('…');
+  });
+
+  // "wrote" for a statement, "asked" for a question. Guessing "asked" at a
+  // complaint would put words in the customer's mouth on the merchant's phone.
+  it('says wrote rather than asked when the message is not a question', () => {
+    const section = formatBlockedSection([{
+      customer: { name: 'Bo Nkemelu' },
+      aiSummary: null,
+      tag: null,
+      pendingMessage: 'The sweater arrived ripped along the seam.',
+    }])!;
+    expect(section).toContain('Bo wrote: "The sweater arrived ripped along the seam."');
+  });
+
+  // Real messages ask and then keep talking. Testing only the final character
+  // called this one "wrote", which reads as though nobody looked at it.
+  it('says asked when the question is not the last sentence', () => {
+    const section = formatBlockedSection([{
+      customer: { name: 'Priya Nadar' },
+      aiSummary: null,
+      tag: null,
+      pendingMessage: 'Do these come in a darker olive? The photos look lighter than the swatch.',
+    }])!;
+    expect(section).toContain('Priya asked: "Do these come in a darker olive? The photos look lighter than the swatch."');
   });
 
   it('redacts contact details out of the quote', () => {

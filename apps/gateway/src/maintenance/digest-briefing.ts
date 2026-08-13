@@ -252,6 +252,58 @@ const SUMMARY_PREAMBLE =
 // The classifier's own tic for a fragmentary message, straight from its prompt.
 const SINGLE_WORD_PREAMBLE = /^a\s+single\s+word:\s*/i;
 
+/**
+ * The same opener as SUMMARY_PREAMBLE, but capturing, so a full sentence can be
+ * rebuilt around the person instead of the opener being deleted.
+ *
+ * `aiSummary` is written third-person present for a dashboard field — "Customer
+ * asks to move order #1043 to a new flat". Printed under a name on a phone it
+ * reads like a system record of a person rather than a colleague telling you
+ * what happened: the noun repeats what the line already said, and the present
+ * tense narrates something that happened hours ago as though it were happening
+ * now.
+ */
+const REPORTED_SPEECH =
+  /^(?:the\s+)?(?:customer|visitor|shopper|sender|someone)\s+(states?|reports?|writes?|wrote|sent|says?|said|is\s+asking|asks?|asked|requests?|requested|wants?|mentions?|notes?|claims?|provides?|provided)\s+(that\s+|for\s+|about\s+|whether\s+|if\s+)?/i;
+
+// Closed set, because it is exactly the verbs the classifier prompt offers. A
+// general past-tense rule would be guessing at words that never arrive.
+const REPORTED_VERB_PAST: Record<string, string> = {
+  state: 'said', states: 'said',
+  report: 'reported', reports: 'reported',
+  write: 'wrote', writes: 'wrote', wrote: 'wrote',
+  sent: 'sent',
+  say: 'said', says: 'said', said: 'said',
+  'is asking': 'asked', ask: 'asked', asks: 'asked', asked: 'asked',
+  request: 'asked', requests: 'asked', requested: 'asked',
+  want: 'wanted', wants: 'wanted',
+  mention: 'mentioned', mentions: 'mentioned',
+  note: 'noted', notes: 'noted',
+  claim: 'claimed', claims: 'claimed',
+  provide: 'gave', provides: 'gave', provided: 'gave',
+};
+
+/**
+ * "Customer asks to move order #1043 to a new flat" plus "Dana" becomes "Dana
+ * asked to move order #1043 to a new flat". Null when the summary does not open
+ * in reported speech, which leaves the caller on its own `Name: blurb` shape
+ * rather than inventing a sentence around prose that was not one.
+ *
+ * Only the opener is rewritten. Rewording the body is the classifier's job, and
+ * per-phrase fixes here have already been tried and deleted once: each was
+ * fitted to one morning's summaries and left the next morning's raw.
+ */
+export function humanizeReportedSummary(subject: string, summary: string): string | null {
+  const match = summary.trim().match(REPORTED_SPEECH);
+  if (!match) return null;
+
+  const verb = REPORTED_VERB_PAST[match[1]!.toLowerCase().replace(/\s+/g, ' ')];
+  const rest = summary.trim().slice(match[0].length).trim();
+  if (!verb || !rest) return null;
+
+  return `${subject} ${verb} ${match[2]?.toLowerCase() ?? ''}${rest}`;
+}
+
 function topicFromSummary(summary: string): string {
   const withoutPreamble = summary
     .trim()
@@ -511,36 +563,42 @@ function cleanBriefingText(text: string | null | undefined): string {
   return redactBriefingContacts((text ?? '').replace(/\s+/g, ' ').trim());
 }
 
-function handoffBody(thread: BriefingTicketRow): string | null {
-  const message = cleanBriefingText(thread.pendingMessage);
-
-  // Short enough to print whole. Covers the one-word case the merchant is meant
-  // to judge for themselves: if a bare "yo" ever reaches a handoff, it arrives as
-  // "yo" rather than as someone's description of it.
-  if (message && message.length <= HANDOFF_VERBATIM_MAX) return `"${message}"`;
-
-  const summary = cleanBriefingText(thread.aiSummary);
-  if (summary) return truncateBriefingText(summary, HANDOFF_SUMMARY_MAX);
-
-  // Long message, no summary — the one branch that can still elide. Cut at the
-  // summary budget rather than the quote budget so the most possible survives.
-  return message ? `"${truncateBriefingText(message, HANDOFF_SUMMARY_MAX)}"` : null;
-}
-
 function formatBlockedTicketLine(thread: BriefingTicketRow): string {
-  const body = handoffBody(thread);
-  if (!body) return formatTicketLine(thread);
-
-  // Subject only: pass no title, summary or tag so the slot after the colon
-  // carries the request itself rather than a label for it as well.
-  const subject = formatBriefingTicketLine(
+  // Subject only: pass no title, summary or tag so what follows the name is the
+  // request itself rather than a label for it as well.
+  const named = formatBriefingTicketLine(
     thread.customer?.name ?? null,
     null,
     null,
     null,
     thread.channelType ?? null,
   );
-  return `${subject === 'Open ticket' ? 'Someone' : subject}: ${body}`;
+  const subject = named === 'Open ticket' ? 'Someone' : named;
+  const message = cleanBriefingText(thread.pendingMessage);
+
+  // Short enough to print whole. Covers the one-word case the merchant is meant
+  // to judge for themselves: if a bare "yo" ever reaches a handoff, it arrives as
+  // "yo" rather than as someone's description of it.
+  if (message && message.length <= HANDOFF_VERBATIM_MAX) {
+    // Anywhere in the message, not just at the end: "Do these come in olive? The
+    // photos look lighter." is a question the merchant has to answer, and it
+    // closes on a statement. Saying "wrote" of it is the tell that no one read
+    // it. "wrote" is still the fallback, because calling a complaint a question
+    // puts words in the customer's mouth.
+    return `${subject} ${message.includes('?') ? 'asked' : 'wrote'}: "${message}"`;
+  }
+
+  const summary = cleanBriefingText(thread.aiSummary);
+  if (summary) {
+    const humanized = humanizeReportedSummary(subject, summary);
+    if (humanized) return truncateBriefingText(humanized, HANDOFF_SUMMARY_MAX);
+    return `${subject}: ${truncateBriefingText(summary, HANDOFF_SUMMARY_MAX)}`;
+  }
+
+  // Long message, no summary — the one branch that can still elide. Cut at the
+  // summary budget rather than the quote budget so the most possible survives.
+  if (message) return `${subject} wrote: "${truncateBriefingText(message, HANDOFF_SUMMARY_MAX)}"`;
+  return formatTicketLine(thread);
 }
 
 function formatTicketLine(thread: BriefingTicketRow): string {

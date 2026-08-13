@@ -19,6 +19,7 @@ import {
   formatHandledSection,
   formatOtherOpenSection,
   formatWaitingAsk,
+  humanizeReportedSummary,
   formatWaitingList,
   loadHandledRollup,
   loadWaitingOnYouItems,
@@ -309,14 +310,17 @@ export function formatDigestMessage(
       const only = questionable[0]!;
       const blurb = flaggedBlurb(only);
       lines.push(`There's one I wasn't sure about, from ${only.customer.name ?? 'someone new'}.`);
-      if (blurb) lines.push(endSentence(blurb));
+      // The line above already named them, so this one says "They asked …"
+      // rather than repeating the name or falling back to "Customer asks".
+      if (blurb) lines.push(endSentence(humanizeReportedSummary('They', blurb) ?? blurb));
     } else {
       lines.push(`There are ${countWord(questionable.length)} I wasn't sure about:`);
       const shown = questionable.slice(0, DIGEST_QUESTIONABLE_LIMIT);
       shown.forEach((t, i) => {
         const name = t.customer.name ?? 'Unknown';
         const blurb = flaggedBlurb(t);
-        lines.push(`${i + 1}. ${name}${blurb ? `: ${blurb}` : ''}`);
+        const humanized = blurb ? humanizeReportedSummary(name, blurb) : null;
+        lines.push(`${i + 1}. ${humanized ?? `${name}${blurb ? `: ${blurb}` : ''}`}`);
       });
       if (questionable.length > shown.length) {
         lines.push(`  …and ${questionable.length - shown.length} more`);

@@ -309,6 +309,19 @@ the phase as written would not have caught:
   The short-message branch is also what passes a bare "yo" through verbatim if
   one ever reaches a handoff, rather than as someone's description of it.
   Reading `Walle: "Test"` is what made the second objection below obvious.
+
+  **And it has to sound like a person wrote it.** `aiSummary` is third-person
+  present for a dashboard field, so under a name it read `Dana: Customer asks to
+  move order #1043…` — the noun repeats what the line just said, and the present
+  tense narrates something hours old as though it were happening now.
+  `humanizeReportedSummary` makes the person the subject and the verb past:
+  `Dana asked to move order #1043…`. It rewrites the opener only, over the closed
+  verb set the classifier prompt offers, and returns null on prose that never
+  opened in reported speech so nothing is invented around it. Rewording the body
+  stays the classifier's job — per-phrase fixes here have been tried and deleted
+  once already. The quote branch matches: `Priya asked: "…"` on any message
+  containing a question, `wrote` otherwise. The flagged block got the same
+  treatment, since it carried the identical tell two sections down.
 - **An unclear message is not escalate-worthy at all.** The briefing was naming
   both a one-word "Test" and a storefront "hello" the agent had already answered.
   Neither is a decision the merchant owes. The substance gate above now drops

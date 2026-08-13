@@ -358,6 +358,49 @@ describe('formatDigestMessage', () => {
     expect(blocks[2]).toBe('Want me to do anything with it?');
   });
 
+  // Same bot-tell as the handoff line, two sections down: "Marcus Reed: Customer
+  // asks when their order will ship" repeats the noun the name already supplied
+  // and narrates in the present something that happened hours ago.
+  it('reports a flagged ticket as a person, not as a record about one', () => {
+    const buckets = bucketDigestThreads(
+      [
+        makeThread({
+          filterStatus: 'questionable',
+          customerName: 'Marcus Reed',
+          aiSummary: 'Customer asks when their ceramic mug set order will ship.',
+        }),
+        makeThread({
+          filterStatus: 'questionable',
+          customerName: 'Sarah Whitcombe',
+          aiSummary: 'Compliments the ceramics line and floats a newsletter tie-up.',
+        }),
+      ],
+      NOW,
+      FILED_SINCE,
+    );
+    const msg = formatDigestMessage(buckets);
+    expect(msg).toContain('1. Marcus Reed asked when their ceramic mug set order will ship.');
+    expect(msg).not.toContain('Customer asks');
+    // Prose that never opened in reported speech keeps the `Name: blurb` shape
+    // rather than having a sentence invented around it.
+    expect(msg).toContain('2. Sarah Whitcombe: Compliments the ceramics line');
+  });
+
+  it('says "they" rather than the name again when only one is flagged', () => {
+    const buckets = bucketDigestThreads(
+      [makeThread({
+        filterStatus: 'questionable',
+        customerName: 'Marcus Reed',
+        aiSummary: 'Customer asks when their ceramic mug set order will ship.',
+      })],
+      NOW,
+      FILED_SINCE,
+    );
+    const msg = formatDigestMessage(buckets);
+    expect(msg).toContain("There's one I wasn't sure about, from Marcus Reed.");
+    expect(msg).toContain('They asked when their ceramic mug set order will ship.');
+  });
+
   it('caps the questionable list at 10 and shows a "more" line', () => {
     const many = Array.from({ length: 13 }, (_, i) =>
       makeThread({ filterStatus: 'questionable', customerName: `User${i}` }),
@@ -690,7 +733,7 @@ describe('buildOrgDigest — inbox scope', () => {
 
     // The handoff carries the customer's words, not the classifier's paraphrase,
     // because the merchant has to answer the question to take the ticket.
-    expect(message).toContain('Priya: "Do the linen napkins come in a darker olive?"');
+    expect(message).toContain('Priya asked: "Do the linen napkins come in a darker olive?"');
     expect(message).not.toContain('Olive Linen Napkins');
 
     // The two message-less threads are not in any of them.
