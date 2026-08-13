@@ -234,105 +234,67 @@ once rather than queried a second way. Two notes for P3:
 
 ---
 
-## P3 — The briefing says which state each thread is in
+## P3 — The briefing reads like a text message from a person
 
-- [x] **Render `awaiting_customer` and `blocked_no_plan` as their own sections**,
-  distinct from the approval list. `blocked_no_plan` reads as a handoff, in the
-  agent's voice, naming what it could not do — this is the honesty principle the
-  screenshot is missing.
-- [x] **Scope the closing ask.** `formatWaitingAsk` returned "Want me to go ahead
-  with it?" whenever exactly one plan was waiting, regardless of how many other
-  items the message listed. The ask must name what it covers or not appear.
-- [x] **Delete the `WAITING_HIDE_OTHER_OPEN_AT` suppression.** The roll-up
-  disappeared once three approvals were queued, so the briefing showed *less* of
-  the inbox as the backlog grew. With the sections separated there is no reason
-  to hide it.
-- [x] **`empty_thread` never appears** in any section.
+- [x] **Every open thread's state is visible**, distinct from the approval list.
+- [x] **One ask, scoped to what it covers**, instead of three in three places.
+- [x] **No suppression that hides the inbox as the backlog grows.**
+- [x] **`empty_thread` never appears.**
+- [x] **No numbering and no reply syntax.**
 
-Keep the existing composition discipline: no em-dashes, counts under ten spelled
-out, blank lines between items that wrap on a phone. The `filedSince` scoping in
-`bucketDigestThreads` is correct and stays — do not turn any new section into a
+Keep the composition discipline: no em-dashes of the briefing's own, counts under
+ten spelled out, one sentence per line, a blank line between people. The
+`filedSince` scoping in `bucketDigestThreads` stays — no section becomes a
 running total (see the digest stock-vs-flow note in agent memory).
 
-**Closed.** Four section builders in `digest-briefing.ts` over one
-`formatTicketRollup`: the approval list, `formatBlockedSection`,
-`formatAwaitingCustomerSection`, and `formatOtherOpenSection`. `buildOrgDigest`
-partitions the genuine threads that are not already in the waiting list by their
-lifecycle state, so what is left in "Also open" is `awaiting_approval` threads
-whose plan is not yet stale enough to be parked, and `empty_thread` matches
-nothing and is rendered nowhere. The ask names its own list back
-("…the one waiting on your OK?"), which is the header `formatWaitingList` writes.
+**Closed, after four wrong shapes.** Worth recording all four, because the same
+mistake produced three of them.
 
-`digest.test.ts` — "gives each lifecycle state its own section and scopes the ask
-to the approval" rebuilds the `Palette` state plus one fresh-plan thread for the
-residual case, and asserts each thread sits under the heading that describes it
-rather than merely appearing somewhere. Verified red against the unfixed source,
-which put Walle and Ravi in one "Also open" roll-up reading "…and three more" —
-the three being the two message-less Shopify threads and the answered visitor.
+1. **Four sections named after lifecycle states.** `awaiting_approval`,
+   `blocked_no_plan` and the rest each got a heading. The state vocabulary is a
+   good internal abstraction and a terrible outline: it groups by what the agent
+   knows about a thread, and the merchant only ever has one job.
+2. **A handoff that could not be acted on.** It rendered `aiTitle`, a topic
+   label, so the merchant could not read the question they were being handed.
+3. **A quote cut at 80 characters,** which is the same dead end from the other
+   side.
+4. **One merged list, numbered, closing with "Reply with a number: \"1 yes\"
+   sends that one".** Merging was right. The numbering was not: it existed
+   because the ordinal resolver wanted it, and nobody texts a colleague reply
+   syntax. Replies already resolve by customer name.
 
-Two things the staged read (`stage-digest.ts`, seeded local org) caught that the
-bullets above did not:
+What shipped: `formatNeedsYouProse` writes sentences. Group leads carry their own
+counts ("Two are ready to go the moment you say"), one item per line with a blank
+between people, and `formatNeedsYouAsk` closes rather than instructs. Approval
+lines are sentences too — what the customer wanted plus what a yes would do.
+Past `BRIEFING_RECITE_MAX` items it stops reciting, leads with the two worth
+doing first and offers to walk through the rest. Everything needing nothing is
+one closing paragraph.
 
-- The open count restated the section above it. "One I couldn't work out a next
-  step on, so it's yours: Priya" was followed by "You've got one open ticket",
-  which counts the same ticket again in a neutral voice directly under the
-  sentence handing it over. The approval list had always suppressed that line;
-  every section that names tickets now does. The spam disclosure is not a
-  restatement and still lands.
-- Sections were separated by a double blank line whenever the briefing had no
-  approvals, because the roll-up pushed a separator that the handled block had
-  already written.
+Under it, `PendingDigest` carries the briefing's ordered items with a kind, and
+every ordinal the operator side accepts resolves through that one list. Rows
+written before it parse as all-flagged so a merchant mid-conversation with an
+older briefing keeps the ordinals they were given. The list is not shown to the
+merchant; it is what lets a name resolve to a thread.
 
-`stage-digest.ts` now prints the message it builds before the operator-binding
-check bails, since composition can only be judged by reading it and that
-otherwise needed a bound phone.
+`digest.test.ts` — "reads as a text message, not a list with reply instructions"
+rebuilds the `Palette` state and asserts no numbering, no reply syntax, grouping
+by position, and one close. `oneSentencePerLine` never splits inside a
+quotation, because a customer's own full stop is not a ticket boundary.
 
-**Reopened once and closed again**, on two objections to the first render that
-the phase as written would not have caught:
+**The standing rule this cost four passes to learn:** the register is the
+requirement. Start from what a person would send and work back to the data, never
+the reverse. A shape derived from the schema will be wrong in a way that no
+amount of copy editing fixes, and every pass spent polishing it is wasted.
 
-- **A handoff has to carry everything needed to answer it.** The first version
-  rendered `Walle: Unclear One Word Message` — the classifier's `title`, which is
-  a topic label and never states the request. The second quoted the customer but
-  cut at 80 characters, which is the same dead end from the other side: the
-  merchant learns a sentence existed. Either way they have to ask what the
-  message said, the agent explains, and only then can they act — one round trip
-  the briefing exists to remove.
+**Still owed here:** `aiSummary` is a dashboard field — third person, up to 1,000
+characters — so the sentences are longer than a person would text even after the
+opener is reshaped. "Tomás wants $34 back, two of four mugs arrived cracked" is
+the same fact at a third the length. That needs a short briefing clause from the
+classifier alongside the summary it already writes, which is a contract change
+like `no_request` and is not done. It is the difference between this reading
+like a person and reading like a person who writes very long sentences.
 
-  `formatBlockedSection` now quotes the message whole whenever it fits in 120
-  characters, because exact words beat any paraphrase and that is the case where
-  nothing is lost. Past that it uses `aiSummary`, a complete one-sentence
-  statement of the request. Only one branch can still elide: a long message with
-  no summary ever written, and it cuts at the summary budget rather than the
-  quote budget. `DIGEST_SUMMARY_TRUNC` went 90 to 140 for the same reason, since
-  a normal summary was losing its last clause in the flagged block.
-
-  The short-message branch is also what passes a bare "yo" through verbatim if
-  one ever reaches a handoff, rather than as someone's description of it.
-  Reading `Walle: "Test"` is what made the second objection below obvious.
-
-  **And it has to sound like a person wrote it.** `aiSummary` is third-person
-  present for a dashboard field, so under a name it read `Dana: Customer asks to
-  move order #1043…` — the noun repeats what the line just said, and the present
-  tense narrates something hours old as though it were happening now.
-  `humanizeReportedSummary` makes the person the subject and the verb past:
-  `Dana asked to move order #1043…`. It rewrites the opener only, over the closed
-  verb set the classifier prompt offers, and returns null on prose that never
-  opened in reported speech so nothing is invented around it. Rewording the body
-  stays the classifier's job — per-phrase fixes here have been tried and deleted
-  once already. The quote branch matches: `Priya asked: "…"` on any message
-  containing a question, `wrote` otherwise. The flagged block got the same
-  treatment, since it carried the identical tell two sections down.
-- **An unclear message is not escalate-worthy at all.** The briefing was naming
-  both a one-word "Test" and a storefront "hello" the agent had already answered.
-  Neither is a decision the merchant owes. The substance gate above now drops
-  them, and the closing test asserts that Walle and the storefront visitor appear
-  nowhere while a substantive unplanned question still lands in the handoff.
-
-The behavior half of that second objection — the agent should reply asking what
-the customer needs, and escalate only once there is a real question it cannot
-answer — is **P7**, because it edits `prompt.ts`.
-
----
 
 ## P4 — Close what is finished; stop creating what cannot start
 
