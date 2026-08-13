@@ -1,4 +1,3 @@
-import { classifyHomePlan } from '@shopkeeper/agent/plan-preview';
 import { getPlanExecution } from '@shopkeeper/agent/execution-ledger';
 import { getCurrentPlanForThread, readAgentPlanCacheRecordShape } from '@shopkeeper/agent/plan-cache-shape';
 import { canonicalInboxThreadWhere } from '@shopkeeper/agent/inbox-filter';
@@ -742,10 +741,12 @@ async function loadStaleThreadWaitingItems(
     const plan = getCurrentPlanForThread(thread, thread.messages);
     if (!plan || !cached) continue;
 
-    const classification = classifyHomePlan(plan);
-    if (classification.kind !== 'needs_review' && classification.kind !== 'needs_merchant_input') {
-      continue;
-    }
+    // No classification filter. A plan still cached this long after its thread
+    // last moved was not executed, whatever shape it is, so it is waiting on the
+    // merchant by definition. Filtering to needs_review/needs_merchant_input
+    // stranded exactly the plans the operator queue drops: `appendPendingPlan`
+    // keeps only the newest, so a second ticket evicts a `quick_reply` from the
+    // phone's approval slot and this scan then refused to bring it back.
     if (cached.planId && await isPlanExecutionResolved(organizationId, cached.planId)) {
       continue;
     }

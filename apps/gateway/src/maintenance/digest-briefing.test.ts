@@ -21,7 +21,7 @@ import {
   loadWaitingOnYouItems,
   resolveHandledWindowStart,
 } from './digest-briefing.js';
-import { updateContext } from '../operator-context.js';
+import { appendPendingPlan, updateContext } from '../operator-context.js';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 const NOW = new Date('2026-04-29T12:00:00Z');
@@ -42,6 +42,28 @@ function staleReviewPlanCache(lastCustomerMessageId: string) {
         enabled: true,
       }],
       rawToolCalls: [{ id: 'step-1', name: 'ask_operator', input: { question: 'Can we refund?' } }],
+    },
+    lastCustomerMessageId,
+    settings: resolveAgentSettings(null),
+  });
+}
+
+// A cached plan whose only move is a customer-facing reply, so it classifies as
+// `quick_reply` — the shape the stale scan used to drop on the floor.
+function staleQuickReplyPlanCache(lastCustomerMessageId: string) {
+  return buildAgentPlanCacheRecord({
+    instruction: 'Answer the shipping question',
+    plan: {
+      instruction: 'Answer the shipping question',
+      steps: [{
+        id: 'step-1',
+        tool: 'send_reply',
+        label: 'Send reply',
+        description: 'Send reply',
+        category: 'communication',
+        enabled: true,
+      }],
+      rawToolCalls: [{ id: 'step-1', name: 'send_reply', input: { text: 'We ship worldwide.' } }],
     },
     lastCustomerMessageId,
     settings: resolveAgentSettings(null),
@@ -472,6 +494,61 @@ describe('loadWaitingOnYouItems', () => {
     expect(items).toHaveLength(1);
     expect(items[0]?.line).toContain('Bob');
     expect(formatWaitingSection(items)).toContain("still waiting on your OK");
+  });
+
+  it('re-surfaces a quick reply the operator queue evicted', async () => {
+    // The queue holds one plan, so parking the second drops the first from the
+    // phone's approval slot. The evicted plan is a quick_reply — the drafted
+    // reply is still sitting in cachedPlan, unsent, and the stale scan is the
+    // only thing that can mention it again.
+    const evicted = await createTestCustomer(org.id, 'first@example.com', { name: 'Ada First' });
+    const evictedThread = await createTestThread(org.id, evicted.id, 'email');
+    const evictedMessage = await createTestMessage(evictedThread.id, 'Do you ship to Ireland?');
+
+    const kept = await createTestCustomer(org.id, 'second@example.com', { name: 'Bo Second' });
+    const keptThread = await createTestThread(org.id, kept.id, 'email');
+    const keptMessage = await createTestMessage(keptThread.id, 'Can I get a refund?');
+
+    await db.thread.update({
+      where: { id: evictedThread.id },
+      data: {
+        aiSummary: 'Asking whether we ship to Ireland.',
+        cachedPlan: staleQuickReplyPlanCache(evictedMessage.id),
+        cachedPlanMessageId: evictedMessage.id,
+        updatedAt: new Date(NOW.getTime() - 4 * 3_600_000),
+      },
+    });
+    await db.thread.update({
+      where: { id: keptThread.id },
+      data: {
+        aiSummary: 'Wants a refund on a damaged order.',
+        cachedPlan: staleReviewPlanCache(keptMessage.id),
+        cachedPlanMessageId: keptMessage.id,
+        updatedAt: new Date(NOW.getTime() - 4 * 3_600_000),
+      },
+    });
+
+    for (const [threadId, planId, actionLabel] of [
+      [evictedThread.id, 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', 'reply to Ada'],
+      [keptThread.id, 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', 'ask about the refund'],
+    ] as const) {
+      await appendPendingPlan(
+        org.id,
+        'member:1',
+        {
+          threadId,
+          instruction: 'Handle the customer',
+          planId,
+          actionLabel,
+          rawToolCalls: [{ id: 'tc1', name: 'send_reply', input: { text: 'Hi' } }],
+        },
+        1,
+      );
+    }
+
+    const items = await loadWaitingOnYouItems(org.id, NOW);
+    expect(items.map((item) => item.threadId)).toEqual([keptThread.id, evictedThread.id]);
+    expect(items[1]?.line).toContain('Ada');
   });
 
   it('never names a customer it does not have', async () => {
