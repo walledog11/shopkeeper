@@ -3,7 +3,8 @@
 **Status:** P0 and P1 complete (one open item: the email provider-conversation
 key). Migration 1 applied. P2 is next.  
 **Decision date:** 2026-08-12. **Revised:** 2026-08-12 after a source audit;
-2026-08-14 to correct the migration hazard and record P0 as written.  
+2026-08-14 to correct the migration hazard, then again to record P0 and P1 as
+built.  
 **Delete this file when every phase is complete and the durable operating rules
 have moved into the code, tests, product truth, and runbook.**
 
@@ -15,6 +16,13 @@ turning every past transcript into instructions for the current agent turn.
 The concrete failure this plan closes is: a storefront visitor returns after
 days, sends a new message, and the agent uses the old thread summary/transcript to
 generate a confusing merchant action plan.
+
+**Where that failure stands after P1:** the old transcript and the old summary
+are gone from the returning visitor's context — the greeting opens its own
+episode and the planner sees only the greeting. What remains is that a greeting
+can still *produce* a merchant plan at all, and that planning still takes its
+instruction from a whole-conversation summary rather than the current request.
+Those are P2 and P3.
 
 ## Product rules
 
@@ -67,12 +75,22 @@ matching rules that are wrong in a way no test catches. They are specified in P9
 and deliberately not built with the rest.
 
 The bug in the objective does not need the retrieval engine at all. It is closed
-by P1 through P3, plus deleting fifteen lines in P6.
+by P1 through P3, plus deleting fifteen lines in P6. P1 is done; the write-path
+state it needed (`closedReason`, the episode table, and the inert `request_*`
+columns) shipped with it.
 
 ## Boundaries and defaults
 
 The first implementation uses fixed, code-owned defaults. Do not add merchant
 settings until observed traffic shows a real need.
+
+**Implemented in P1** as `CHANNEL_EPISODE_POLICY` in
+`apps/gateway/src/message-handlers/resolve-inbound-episode.ts`. Channels absent
+from that map never roll: operator channels (`sms_agent`, `dashboard_agent`,
+`imessage`) are one durable thread per binding and a boundary would fragment the
+merchant's own conversation, `shopify` is merchant-side order/email-fallback
+traffic, and `sms` is retired. Only the four customer-origin channels below have
+a policy — inventing one for the rest would be policy nobody asked for.
 
 | Channel | Continue current episode | Start a new episode |
 | --- | --- | --- |
@@ -142,10 +160,34 @@ the one that gets forgotten.
     'integrations_shopify_account_unique', 'integrations_non_email_account_unique');
   ```
 
+These four stay unchecked on purpose: they are standing rules for *every*
+migration in this plan, not one-time tasks. Migration 2 still owes them.
+
+**Migration 1 (`20260814120000_add_conversation_episodes`, 2026-08-14):
+compliant.** Hand-written, no `DROP INDEX` in the file, applied with
+`migrate deploy`, and all six indexes verified surviving afterwards.
+
+One trap worth carrying into migration 2, learned the hard way: **run prisma from
+the repo root, never from inside `packages/db`.** That directory's `.env` points
+at the production Neon instance and *overrides* an inline `DATABASE_URL`, so
+`cd packages/db && DATABASE_URL=…local… npx prisma migrate deploy` silently
+targets production. It did — migration 1 landed in prod before its code. Additive
+and inert, so nothing broke, and schema-ahead-of-code is the safe direction, but
+it was not the intent. The only tell is the `Datasource "db": … neon.tech` line
+in the output; read it before trusting where a migration went. The local test DB
+is `127.0.0.1:55432/clerk_test` and needs both `DATABASE_URL` and
+`DIRECT_DATABASE_URL` passed inline.
+
 ## Data model decisions
 
 `Thread` remains the episode record; do not add a second generic episode table.
-Add only the state that cannot be derived safely:
+Add only the state that cannot be derived safely.
+
+**Everything in this first group shipped in migration 1 (2026-08-14.)** The
+`request_*` columns are inert — P1 writes none of them; P2 is their first writer.
+That is the point of the build order: they record facts at the moment they occur
+and cannot be reconstructed later, so they ship before anything reads them.
+`closedReason` and `StorefrontChatSessionEpisode` are live now.
 
 - `Thread.requestSummary` — summary of the latest unanswered customer burst.
 - `Thread.requestSourceMessageId` — newest customer message covered by that
@@ -157,7 +199,12 @@ Add only the state that cannot be derived safely:
   authority.
 - `StorefrontChatSessionEpisode(sessionId, threadId, startedAt, endedAt)` — owns
   the widget's episode history and, per P1, is the join that resolves storefront
-  verification independently of the session's current thread pointer.
+  verification independently of the session's current thread pointer. Shipped
+  with `organizationId`, a unique `(sessionId, threadId)` so re-binding is
+  idempotent, tenant-consistency FKs to both parents, and a backfill of one
+  episode per session already pointing at a thread — without that backfill every
+  live session would have read as unverified the moment verification started
+  resolving through this table.
 
 `episode_rollover` and `inactivity` are deliberately distinct. P1 writes
 `episode_rollover` when a conversation boundary elapses and a new episode starts.
@@ -197,8 +244,12 @@ and specified in P9.
 
 Ship this as two additive migrations:
 
-1. Episode/request fields, `closedReason`, and storefront session/episode history.
-2. Person, identity, audit, obligations, and stable facts.
+1. ~~Episode/request fields, `closedReason`, and storefront session/episode
+   history.~~ **Shipped 2026-08-14** as
+   `20260814120000_add_conversation_episodes`, with `ThreadClosedReason` and
+   `ThreadRequestDisposition` as Postgres enums.
+2. Person, identity, audit, obligations, and stable facts. — **not started**;
+   belongs to P5.
 
 Backfill one `Person` per existing `Customer`; this deliberately performs no
 cross-channel merges. Keep the existing `threads_one_open_per_customer` index —
@@ -232,24 +283,25 @@ queue/Redis/secret stubs. Full gateway integration suite passes (722).
   flipping the two `toContain` assertions to `not.toContain` fails today with
   `expected [ …(3) ] to not include 'I want a refund for order #1024…'`, so the
   greeting's context really does carry both old turns plus "Hi".
-- [ ] Add the desired acceptance assertions: a new thread is created, old raw
+- [x] Add the desired acceptance assertions: a new thread is created, old raw
   messages and old `aiSummary` are absent from `buildContext`, no merchant plan
   is published for the greeting, and the old episode is still retrievable by the
-  widget as collapsed history. **This is the inversion, and it belongs to the P1
-  commit** — it cannot be written green before `resolveInboundEpisode` exists.
-  Each assertion that flips is commented `P1 inverts` in the test. The mechanics:
-  - `isNewThread` `false` → `true`, and `threadId` `toBe(thread.id)` →
-    `not.toBe(thread.id)`.
-  - the two message `toContain` → `not.toContain`, and
-    `ctx.thread.aiSummary` `toContain('#1024')` → `toBeNull()`.
-  - context is deliberately built from `response.body.threadId` rather than a
-    captured id, so the setup needs no edit — only the expectations move.
-  - "no merchant plan is published" is **not** in the file yet: the route only
-    enqueues, so proving it needs the plan worker and belongs with P3's
-    disposition gate. Do not fake it with a queue-call assertion.
-  - "still retrievable as collapsed history" is P4. What P0 pins today is the
-    durable half that must survive rollover either way: the old thread is not
-    soft-deleted and keeps its messages.
+  widget as collapsed history. — **inverted in the P1 commit**, which is where it
+  belonged: it could not be green before `resolveInboundEpisode` existed. The
+  characterization tests failed in exactly the predicted direction the moment P1
+  landed (`isNewThread` became `true`, context became `['Hi']`), then the
+  expectations were flipped and the setup left untouched. Two halves were
+  deliberately not written here and are still owed:
+  - **"no merchant plan is published" is P3.** The route only enqueues, so
+    proving it needs the plan worker and the disposition gate. Not faked with a
+    queue-call assertion.
+  - **"retrievable as collapsed history" is P4.** What P1 pins instead is the
+    durable half either phase depends on: the expired thread is closed with
+    `closedReason = episode_rollover`, not soft-deleted, and keeps its messages.
+
+  P1 also added coverage P0 had not asked for, because the implementation created
+  the risk: cached-plan expiry, the retried-greeting dedupe path, the two-episode
+  session history, and the concurrent-message race.
 - [x] Add a control proving a ten-minute follow-up remains in the same episode.
   — passes identically before and after P1, which is what makes it a control
   rather than a second copy of the bug test.
@@ -373,10 +425,14 @@ already computes the trailing unanswered customer burst and already scopes to on
 - [ ] Commit intelligence with compare-and-set semantics: thread must still be
   open and `requestSourceMessageId` must still describe the newest unanswered
   customer message. Discard a superseded result.
-- [ ] Remove every planning fallback from `thread.aiSummary`. Three exist:
-  `generate-thread-plan.ts:81`, `operator-answer-replan.ts:120`, and
+- [ ] Remove every planning fallback from `thread.aiSummary`. Three exist
+  (line numbers re-checked after P1):
+  `generate-thread-plan.ts:83`, `operator-answer-replan.ts:120`, and
   `apps/dashboard/src/app/api/agent/answer/route.ts:78`. All must use the stored
-  current request summary or the current burst.
+  current request summary or the current burst. P1 narrowed what `aiSummary`
+  *contains* — it is now per-episode — but left all three fallbacks standing, so
+  the planning instruction is still a whole-conversation summary within an
+  episode. This is the substance of P2.
 - [ ] Preserve the existing plan-ID/source-message freshness checks and add the
   episode ID/thread-status check from P1.
 
@@ -599,24 +655,42 @@ npm run test:evals -w apps/dashboard
 The eval command needs a real configured model key and should be run once at the
 explicit P8 gate, not after every mechanical phase.
 
+**P1 result (2026-08-14):** everything above except the evals. Typecheck and lint
+clean; agent 759 unit + 32 integration; gateway 334 unit + 725 integration;
+dashboard 734 unit + 590 integration.
+
+Two things to know before reading a red dashboard integration run as your fault:
+
+- **That suite has a pre-existing order-dependent flake**, confined to
+  `/api/integrations/*` route tests. Across sampling it failed on five different
+  unrelated tests, on `master` as well as on the P1 branch (master 7/8 passing,
+  P1 7/11). Nothing about episodes, threads, or dispatch was ever the failure. Do
+  not chase it as a regression, and do not conclude it is yours from a single
+  clean-master sample — that is exactly the mistake made here.
+- **Residue accumulates in the shared local test DB.** 126 orphaned
+  `integration_disconnects` rows had built up; `cleanupTestData` deletes by org,
+  and these outlive their org. Tests that query a table globally with a window
+  get crowded out by it. Clearing that table is a fair reset before judging a
+  flaky run.
+
 ## Audit-conflict coverage
 
-| Existing conflict | Closed by |
-| --- | --- |
-| Session and conversation conflated | P1, P4 |
-| Rollover only after manual close | P1 |
-| Whole-thread raw history | P1, P7 |
-| Prior summary carried through token bounding | P2, P7 |
-| Whole-thread summary used as planning instruction | P2 |
-| Every unanswered customer message treated as plan-worthy | P2, P3 |
-| Merchant notifications restate whole conversation | P3 |
-| Three recent tickets injected without relevance | P6 |
-| Verified-order scope moves silently with the thread pointer | P1 |
-| No cross-channel person identity | P5 |
-| No structured request, obligation, or memory state | Migrations, P2, P5 |
-| Flat widget transcript with no episode boundary | P4 |
-| Late outbound can reopen an expired thread | P1 outbound race |
-| No relevance ranking for prior episodes | P9 (deferred) |
+| Existing conflict | Closed by | Status |
+| --- | --- | --- |
+| Session and conversation conflated | P1, P4 | P1 done; widget half open |
+| Rollover only after manual close | P1 | **closed** |
+| Whole-thread raw history | P1, P7 | P1 done — a new episode starts empty; P7 open |
+| Prior summary carried through token bounding | P2, P7 | open |
+| Whole-thread summary used as planning instruction | P2 | open — the three `aiSummary` fallbacks still stand |
+| Every unanswered customer message treated as plan-worthy | P2, P3 | open |
+| Merchant notifications restate whole conversation | P3 | open |
+| Three recent tickets injected without relevance | P6 | open |
+| Verified-order scope moves silently with the thread pointer | P1 | **closed** — both readers |
+| No cross-channel person identity | P5 | open |
+| No structured request, obligation, or memory state | Migrations, P2, P5 | columns shipped inert; writers open |
+| Flat widget transcript with no episode boundary | P4 | open |
+| Late outbound can reopen an expired thread | P1 outbound race | **closed** — both call sites |
+| No relevance ranking for prior episodes | P9 (deferred) | deferred |
 
 ## Out of scope
 
