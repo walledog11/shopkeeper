@@ -1102,6 +1102,15 @@ After each category, record the log entry timestamp, alert recipient, tags/extra
 prior-summary, KB, store-profile, sample-reply, order, operator-ledger, and
 instruction context. Keep the dashboard, public gateway, and worker aligned.
 
+**Context correction, 2026-08-12:** token bounding is not a conversation
+boundary. The current `enforce` path still combines a whole-thread prior summary
+with recent messages and must not be presented as the fix for stale context.
+Rollout of this flag as a context-quality improvement is paused until the episode,
+request-summary, and relevance-gated memory phases in
+[`conversation-context-and-cross-channel-memory-plan.md`](../conversation-context-and-cross-channel-memory-plan.md)
+land. The flag may still be used as a cost-control canary, but its output must be
+judged as legacy continuous-thread context.
+
 1. Run the long-thread quality/cost comparison with a real Anthropic test key:
 
    ```bash
@@ -1115,12 +1124,17 @@ instruction context. Keep the dashboard, public gateway, and worker aligned.
 2. Deploy all three hosts with `AGENT_CONTEXT_BUDGET_MODE=shadow`. Review
    `[agent:context] budget` and `[Worker] AI input budget` telemetry by purpose;
    logs contain counts/character totals only, never prompt text.
-3. Canary one long thread in `enforce`. Confirm thread intelligence includes the
-   prior summary plus newest messages, the newest customer request produces the
-   same plan, and `[Worker] AI model usage` shows the expected input-token drop.
+3. After the context plan lands, canary one long-lived visitor with two separate
+   episodes in `enforce`. Confirm the second episode contains only its raw
+   messages, its request summary is sourced from the newest unanswered customer
+   burst, irrelevant prior episodes are absent, and an explicitly related prior
+   episode or open obligation is included with provenance. Then confirm
+   `[Worker] AI model usage` shows the expected input-token drop.
 4. Keep `enforce` through the normal observation window before removing the
-   legacy `off` behavior. Roll back by setting all hosts to `off`; no stored data
-   or cached-plan schema changes are involved.
+   legacy unbounded branch. Rolling `AGENT_CONTEXT_BUDGET_MODE` back to `off`
+   changes token bounding only; it must not rejoin conversation episodes or
+   restore whole-thread planning. Episode behavior has its own rollout control in
+   the context plan, and additive identity/request data remains stored either way.
 
 ### CSP report-only observation and enforcement (P8-03)
 

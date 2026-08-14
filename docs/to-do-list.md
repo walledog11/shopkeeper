@@ -3,7 +3,7 @@
 Open work only. Completed work is deleted, not archived — git history is the
 record. Do not add "recently completed" sections to this file.
 
-Last reviewed: 2026-08-08.
+Last reviewed: 2026-08-13.
 
 Single source of truth for **actionable** open work. Evidence checklists, console
 residue, failure-drill procedures, and standing policies live in the linked docs
@@ -31,22 +31,39 @@ channel to build. See [product-truth.md](product-truth.md) §2.
 
 Code work that is started and not finished.
 
-- [ ] **Storefront chat M1 — the safety half.** Transport shipped 2026-08-07;
-  the migration, both kill switches (`STOREFRONT_CHAT_ENABLED` and
-  `Integration.metadata.storefrontChat.enabled`, default off) and the guest tool
-  policy landed 2026-08-08. A guest now reaches knowledge base, product search,
-  replies and escalation only — no order read, no customer read, no Shopify
-  mutation at any autonomy tier, refused in static policy and not merely absent
-  from the tool list. Still missing: **the storefront spend budget and rate
-  limits** — anonymous traffic bills the org's daily LLM cap and can take email
-  and Instagram down with it, which is now the only thing standing between here
-  and a controlled canary. Then the integration-card toggle, the session
-  revocation sweep, the approval-mode local acknowledgement, and the rest of the
-  test plan. **The eval gate is owed** — argument for deferring it is recorded
-  in the plan; run it before enabling anywhere, batched with the budget change.
-  **Do not set `STOREFRONT_CHAT_ENABLED` outside a controlled test store until
-  the budget lands.** Full status and spec:
+- [ ] **Storefront chat — the merchant half.** The safety half is done and live in
+  production on one controlled dev store (`palette-dev-3peukw16.myshopify.com`,
+  `guarded`/`off`): transport, guest tool policy, both kill switches, the spend
+  budget, the integration-card toggle, and M1.5 emailed-code order verification.
+  The full loop is proven live, including the strong form of the disclosure test.
+  **What blocks a second store is now the merchant's experience, not the
+  shopper's.** Every storefront message arrives as an approval card ending in
+  "Good to send?" — including a verified shopper's read-only "where is my order",
+  which teaches a merchant their agent needs supervision to state a fulfillment
+  status. Fix notification shape first: routine and safe → act, then report in one
+  line; genuine uncertainty → one question about the uncertain thing; risky or
+  irreversible → the card. Then the silent dead-email-integration failure, merchant
+  alerting on budget exhaustion, the session and `storefront_chat_daily_usage`
+  sweeps, the approval-mode local acknowledgement, and the rest of the test plan.
+  **The eval gate is red** — 13 fixtures failing or flaky since 2026-08-08, seven
+  at 0/3, all pre-existing rather than storefront damage; the stale 2026-07-30
+  baseline is deliberately kept because red is the accurate reading. Fix the
+  thirteen, add the `shopify_chat` guest fixture, then capture. **Do not enable a
+  real merchant workspace until notification shape and the operability items
+  land**; the original budget-and-kill-switch condition is met. Full status and
+  spec:
   [shopify-storefront-chat-implementation-plan.md](shopify-storefront-chat-implementation-plan.md).
+  Evidence and incident history:
+  [storefront-chat-verification-2026-08.md](production/storefront-chat-verification-2026-08.md).
+- [ ] **Bounded conversation context and cross-channel memory.** Keep persistent
+  shopper identity separate from short conversation episodes; plan from the
+  newest request and retrieve only verified, relevant history or open
+  obligations. Full implementation sequence:
+  [conversation-context-and-cross-channel-memory-plan.md](conversation-context-and-cross-channel-memory-plan.md).
+- [ ] **Conversation-to-sale attribution.** Connect meaningful storefront-chat
+  interactions and product recommendations to later Shopify orders so merchants
+  can distinguish direct, product-assisted, and chat-assisted revenue. Report it
+  as attribution rather than proof that the conversation caused the purchase.
 
 ---
 
@@ -66,6 +83,22 @@ provider. **None of these is a code task.**
   are complete. Launch gated on Meta App Review and a non-role merchant account
   completing the full DM loop (connect → inbound → approve reply →
   disconnect/reconnect). Ops in [runbook.md](production/runbook.md).
+- [ ] **One Shopify order event, delivered exactly once.** Step 5 of
+  [shopify-webhook-migration.md](production/shopify-webhook-migration.md), still
+  unperformed. Per-shop subscriptions were deleted in favour of app-level
+  declaration (`e7d881c9`), and the audit confirms the connected store now carries
+  `total=0` shop-specific subscriptions — so app config is the **only** delivery
+  path, and a wrong declaration means the shop receives nothing rather than
+  everything twice. That failure is silent in exactly the way the topic-name bug
+  already was once, and nothing persists a Shopify webhook receipt, so a real order
+  event on the dev store is the only thing that can close it.
+- [ ] **Guest escalation that keeps its reply, exercised live.** The regression
+  where guest order questions escalated with no reply at all was fixed by passing
+  `keepReply` into `applyEscalationRouting` — but **the router-materialized path
+  has still never fired in a live test**. The one live card that showed a reply and
+  a handoff together came through a *model-elected* escalation, which was the path
+  that already worked. Storefront chat, dev store. Background:
+  [storefront-chat-verification-2026-08.md](production/storefront-chat-verification-2026-08.md).
 - [x] **Realtime inbox (SSE + Redis pub/sub).** Decision 2026-08-06: finish and
   enable, not delete. Both gates are set and the canary passed **2026-08-07**:
   Railway `GATEWAY_REALTIME_ENABLED=true`, Vercel

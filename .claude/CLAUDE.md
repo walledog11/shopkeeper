@@ -98,36 +98,11 @@ Standing rules for any change to agent behavior (promoted from the 2026-07 behav
 - Read-only and flag-only modules may ship behind a feature flag. External writes require reviewable shadow evidence and an explicit rollout gate **distinct from** the monitor flag.
 - **Order-ops** stays flag-and-notify-only: `runOrderOps` selects read tools plus `flag_order` only. It sits outside autonomy tiers (`flag_order` sets `policy.categoryPermission: false`). Before any mutating order action: shadow period, P1 execution-claim rollout verified, per-module cap enforcement proven, and a separate rollout gate from `ORDER_RISK_MONITOR_ENABLED`.
 
-## Key API routes (`apps/dashboard/src/app/api/`)
-- `agent/route.ts` — execute run on a ticket
-- `agent/plan/route.ts` — generate plan, no side effects
-- `agent/internal/route.ts` — gateway-only agent run (e.g. `sms_agent` from Telegram), requires `INTERNAL_API_SECRET`
-- `agent/io-send-internal/route.ts` — gateway-only provider send hop (send_reply/send_email delivery), requires `INTERNAL_API_SECRET`
-- `agent/chat/route.ts` — Concierge sessions
-- `agent/sessions/[id]/route.ts` — Concierge session transcript (restores the in-progress session on reload)
-- `agent/ask/route.ts` — composer read-only Q&A (`runAgent` with `readOnly: true`)
-- `agent/quick-approve/route.ts` — one-tap approval of a cached plan
-- `agent/actions/route.ts` — agent action audit log feed
-- `messages/route.ts` — outbound dispatch
-- `threads/route.ts`, `threads/shopify/route.ts` (create thread from Shopify customer)
-- `integrations/shopify/{auth,callback}/route.ts`
-- `billing/route.ts`, `billing/webhook/route.ts`
-
 ## Other entry points
-- `apps/gateway/src/start.ts` — gateway process bootstrap (role-aware: `server`, `worker`, or both)
-- `apps/gateway/src/worker.ts` — BullMQ worker entrypoint
-- `apps/gateway/src/maintenance/workers.ts` — daily IG token health + refresh, 90-day archive + purge, queue health monitor
 - `apps/gateway/src/health.ts` — `/health` (liveness only, touches no dependency — point uptime monitors here; a recurring DB check keeps the Neon compute from scaling to zero), plus `/health/deep` and `/health/queues` diagnostic endpoints
-- `apps/dashboard/src/lib/server/redis.ts` — Upstash REST client + rate limiting
-- `apps/dashboard/src/instrumentation.ts` — env validation on server boot
 
-## Dashboard routes
-`/dashboard/{tickets, agent, kb, orders, customers, review, team, integrations, settings}`
-
-## Env (names only — values in Vercel/Railway; see each app's `.env.example` for the full list)
-**Dashboard:** `DATABASE_URL`, `DIRECT_DATABASE_URL`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SECRET`, `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`, `POSTMARK_API_KEY`, `META_APP_ID`, `META_APP_SECRET`, `META_CONFIG_ID`, `APP_URL`, `NEXT_PUBLIC_APP_URL`, `INBOUND_EMAIL_DOMAIN`, `GATEWAY_INTERNAL_URL`, `SHOPIFY_APP_SECRET`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `PRICE_ID`, `PRICE_ID_STARTER`, `PRICE_ID_PRO`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `TELEGRAM_BOT_USERNAME`, `IMESSAGE_LINE_HANDLE` (fixed iMessage handle merchants text; presence makes iMessage available), `TOKEN_ENCRYPTION_KEY`, `BLOB_READ_WRITE_TOKEN`, `GOOGLE_CLIENT_ID`/`SECRET` (Gmail OAuth), `USPS_CLIENT_ID`/`SECRET` (tracking)
-
-**Gateway:** `DATABASE_URL`, `DIRECT_DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`, `META_APP_ID`, `META_APP_SECRET`, `META_VERIFY_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `SPECTRUM_PROJECT_ID`/`SPECTRUM_PROJECT_SECRET`/`SPECTRUM_WEBHOOK_SECRET` (platform iMessage line), `SHOPIFY_APP_SECRET`, `DASHBOARD_URL`, `DASHBOARD_INTERNAL_URL`, `BLOB_READ_WRITE_TOKEN`, `TOKEN_ENCRYPTION_KEY`, `POSTMARK_INBOUND_USERNAME`/`PASSWORD`, `GATEWAY_RUNTIME_ROLE`, plus tuning vars (`LOG_LEVEL`, `LOG_PRETTY`, `PORT`, `GATEWAY_*`, `ORDER_RISK_MONITOR_ENABLED`, `RETURN_LIFECYCLE_MONITOR_ENABLED`, `DELIVERY_EXCEPTION_MONITOR_ENABLED`, `POST_RESOLUTION_FOLLOWUP_MONITOR_ENABLED`, `OPERATOR_PLAN_QUEUE_MAX` (max pending plans per operator context; default 1 = single-slot overwrite, raise 1–5 to enable the queue), `STOREFRONT_CHAT_MAX_MESSAGES_PER_SESSION`/`STOREFRONT_CHAT_MAX_MESSAGES_PER_SHOP_DAY`/`STOREFRONT_CHAT_BURST_PER_SESSION`/`STOREFRONT_CHAT_BURST_PER_IP`/`STOREFRONT_CHAT_BURST_WINDOW_SECS` (storefront-chat containment, counted in shopper messages and enforced before the model so a refusal never touches the org LLM cap))
+## Env
+Names live in each app's `.env.example`; values in Vercel/Railway.
 
 Both `DATABASE_URL`s append `?pgbouncer=true&connection_limit=1`. `TOKEN_ENCRYPTION_KEY` (AES-256-GCM, 32 raw bytes — hex64, base64, or 32 ASCII chars) encrypts `Integration.accessToken`/`refreshToken` at rest, applied transparently via Prisma `$extends`; same value in both apps; required in production.
 
