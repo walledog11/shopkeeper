@@ -111,6 +111,49 @@ export function classifierSystemPrompt(
     : `${CLASSIFIER_SYSTEM_PROMPT}${STOREFRONT_VISITOR_NOUN}`;
 }
 
+// Which channels the spam filter decides, and how far its verdict may go.
+//
+// Email is the only channel allowed to reach `filtered`. It is the only one that
+// genuinely receives newsletters and delivery notifications, and the only one
+// with an un-filter path — the dashboard can recover a filtered email thread,
+// while the operator channel's REVIEW relists *flagged* tickets and never
+// filtered ones.
+//
+// The other customer-origin channels are classified but capped at
+// `questionable`: a cold pitch typed into the storefront widget surfaces in the
+// briefing's flagged block where the merchant can act on it, and a shopper the
+// classifier misreads is never binned with no way back. Storefront chat is the
+// channel most exposed to anonymous traffic and had no filter at all.
+//
+// A channel in neither set gets no decision, so `filterDecidedAt` stays null and
+// the thread keeps the `genuine` default. `shopify` is why this scope existed:
+// those threads carry order-webhook notes that read as "automated system alerts"
+// and would be purged wholesale. `imessage`, `sms_agent` and `dashboard_agent`
+// are the merchant's own channels, not customers writing in.
+const CHANNELS_FILTERED_AS_SPAM: ReadonlySet<string> = new Set<string>([CHANNEL.EMAIL]);
+const CHANNELS_CAPPED_AT_QUESTIONABLE: ReadonlySet<string> = new Set<string>([
+  CHANNEL.SHOPIFY_CHAT,
+  CHANNEL.IG_DM,
+  CHANNEL.TIKTOK,
+]);
+
+/**
+ * The filter verdict to persist for a channel, or null when this channel is not
+ * filtered at all and the thread should stay genuine and undecided.
+ *
+ * Deliberately a rule over the channel rather than guidance in the classifier
+ * prompt: "never bin a shopper" is a guarantee, and a guarantee that depends on
+ * the model reaching for one word over another is not one.
+ */
+export function resolveFilterDecision(
+  channelType: string,
+  verdict: DbThreadFilterStatus,
+): DbThreadFilterStatus | null {
+  if (CHANNELS_FILTERED_AS_SPAM.has(channelType)) return verdict;
+  if (!CHANNELS_CAPPED_AT_QUESTIONABLE.has(channelType)) return null;
+  return verdict === ThreadFilterStatus.filtered ? ThreadFilterStatus.questionable : verdict;
+}
+
 const JSON_FENCE_OPEN = /^```json\s*/i;
 const JSON_FENCE_CLOSE = /```\s*$/;
 const VALID_FILTER_STATUSES: ReadonlySet<string> = new Set(Object.values(ThreadFilterStatus));

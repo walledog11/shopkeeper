@@ -1,7 +1,7 @@
 import { db, isSpendCapError, SenderType } from '@shopkeeper/db';
 import logger from '../logger.js';
 import { publishThreadEvent } from '../realtime/publish.js';
-import { CHANNEL, MODEL } from '../constants.js';
+import { MODEL } from '../constants.js';
 import { enforceSpendCap, recordSpend } from '@shopkeeper/agent/spend';
 import { readModelUsage } from '@shopkeeper/agent/usage';
 import { anthropic } from '@shopkeeper/agent/ai';
@@ -14,6 +14,7 @@ import {
   classifierSignals,
   classifierSystemPrompt,
   parseClassifierJson,
+  resolveFilterDecision,
 } from './email-classification.js';
 import { listVerifiedOrderNames } from '../storefront-chat-verified-orders.js';
 
@@ -104,11 +105,13 @@ export async function generateThreadIntelligence(
     const aiData = parseClassifierJson(block.text);
 
     // filterDecidedAt is the lock: once any path commits a decision, subsequent
-    // summaries refresh aiSummary/tag but don't reclassify.
-    // Spam filter scope is email only — IG/Shopify/SMS threads stay genuine
-    // regardless of what the classifier says (Shopify order events read like
-    // "automated system alerts" and would be wrongly purged otherwise).
-    const shouldSetFilter = fullThread.filterDecidedAt === null && fullThread.channelType === CHANNEL.EMAIL;
+    // summaries refresh aiSummary/tag but don't reclassify. Which channels are
+    // filtered at all, and how far the verdict may go on each, is
+    // `resolveFilterDecision` — null means this channel is not filtered and the
+    // thread keeps the genuine default.
+    const filterDecision = fullThread.filterDecidedAt === null
+      ? resolveFilterDecision(fullThread.channelType, aiData.filterStatus)
+      : null;
 
     const updated = await db.thread.update({
       where: { id: threadId },
@@ -117,8 +120,8 @@ export async function generateThreadIntelligence(
         aiSummary: aiData.summary,
         tag: aiData.tag,
         classifierSignals: classifierSignals(aiData),
-        ...(shouldSetFilter && {
-          filterStatus: aiData.filterStatus,
+        ...(filterDecision && {
+          filterStatus: filterDecision,
           filterReason: aiData.filterReason,
           filterDecidedAt: new Date(),
         }),
