@@ -1,7 +1,8 @@
 # Conversation Episodes, Cross-Channel Identity, and Relevant Memory
 
-**Status:** planned, not started.  
-**Decision date:** 2026-08-12. **Revised:** 2026-08-12 after a source audit.  
+**Status:** P0 complete; P1 is next. No schema or behavior change has shipped.  
+**Decision date:** 2026-08-12. **Revised:** 2026-08-12 after a source audit;
+2026-08-14 to correct the migration hazard and record P0 as written.  
 **Delete this file when every phase is complete and the durable operating rules
 have moved into the code, tests, product truth, and runbook.**
 
@@ -92,24 +93,53 @@ the widget must not create a thread or mutate the inbox.
 
 ## Migration hazard — read before writing any migration
 
-`threads_one_open_per_customer` is created as raw SQL in
-`packages/db/prisma/migrations/20260405000000_add_idempotency_and_thread_uniqueness/migration.sql:4`
-and **is not declared in `schema.prisma`**. `prisma migrate dev` builds its
-shadow database from the migration history (index present) and diffs it against
-`schema.prisma` (index absent), so it will emit a `DROP INDEX` for it inside
-whatever migration you are authoring.
+Production carries **six partial unique indexes that `schema.prisma` cannot
+declare**, created by raw SQL across six migrations:
 
-That index is the database-level backstop for exactly the close-and-create race
-P1 exists to fix. Dropping it while implementing P1 removes the protection P1
-depends on, in the same commit, silently.
+| Index | Table and predicate | Protects |
+| --- | --- | --- |
+| `threads_one_open_per_customer` | `threads (organization_id, customer_id, channel_type) WHERE status = 'open'` | the close-and-create race P1 exists to fix |
+| `messages_org_external_id_unique` | `messages (organization_id, external_message_id) WHERE external_message_id IS NOT NULL` | inbound dedupe |
+| `integrations_instagram_organization_unique` | `integrations (organization_id) WHERE platform = 'ig_dm'` | one IG account per org |
+| `integrations_instagram_account_unique` | `integrations (external_account_id) WHERE platform = 'ig_dm'` | one org per IG account |
+| `integrations_shopify_account_unique` | `integrations (external_account_id) WHERE platform = 'shopify'` | one org per Shopify store |
+| `integrations_non_email_account_unique` | `integrations (organization_id, platform, external_account_id) WHERE platform <> 'email'` | non-email account uniqueness |
 
-- [ ] Before the first migration in this plan, add the index to `schema.prisma`
-  as a partial `@@unique` on `(organizationId, customerId, channelType)` and
-  confirm `prisma migrate diff` then produces no change against production.
-- [ ] If that cannot be expressed, hand-write every migration in this plan and
-  never run `migrate dev` against this schema.
-- [ ] Verify each generated migration contains no `DROP INDEX` before applying it
+`prisma migrate dev` builds its shadow database from the migration history (all
+six present) and diffs it against `schema.prisma` (all six absent), so it emits a
+`DROP INDEX` for each inside whatever migration you are authoring. One
+`migrate dev` run while implementing P1 silently removes the race protection P1
+depends on, inbound dedupe, and every cross-tenant integration constraint at
+once — in the same commit as the change that needs them most.
+
+**None of them can be moved into `schema.prisma`.** Prisma has no `where` clause
+on `@@unique` or `@@index` — verified against the pinned 6.19.3. There is no
+version of this where `migrate dev` becomes safe on this schema, so hand-writing
+is not the fallback, it is the only path.
+
+`schema.prisma` already documents four of the six in comments beside the models
+they constrain (`integrations` at lines 356-360, `messages` at line 486).
+`threads_one_open_per_customer` has no such comment, which is exactly why it is
+the one that gets forgotten.
+
+- [ ] Before the first migration, add a comment on the `Thread` model naming
+  `threads_one_open_per_customer`, its predicate, and its owning migration —
+  matching the convention the other four already follow.
+- [ ] Hand-write every migration in this plan: create the migration directory and
+  its `migration.sql` yourself, then apply with `prisma migrate deploy`. Never run
+  `prisma migrate dev` against this schema.
+- [ ] If you use `prisma migrate diff` to draft that SQL, expect a `DROP INDEX`
+  for every one of the six in its output and delete them all before saving. The
+  generator has no way to know the indexes are intentional.
+- [ ] Verify each saved `migration.sql` contains no `DROP INDEX` before applying it
   anywhere.
+- [ ] After each migration lands, confirm all six survived — this must return 6:
+  ```sql
+  SELECT count(*) FROM pg_indexes WHERE indexname IN (
+    'threads_one_open_per_customer', 'messages_org_external_id_unique',
+    'integrations_instagram_organization_unique', 'integrations_instagram_account_unique',
+    'integrations_shopify_account_unique', 'integrations_non_email_account_unique');
+  ```
 
 ## Data model decisions
 
@@ -183,20 +213,45 @@ there proves nothing about episodes. **Write this against
 `apps/gateway/src/routes/internal-storefront-chat.ts` with a real database**, not
 "the real proxy path."
 
-- [ ] Add a gateway integration fixture with an open storefront thread containing
+**Done 2026-08-14** — `describe('conversation episodes')` in
+`apps/gateway/src/routes/internal-storefront-chat.test.ts`. Three tests, green
+against today's behavior, nested inside the existing suite so they reuse its
+queue/Redis/secret stubs. Full gateway integration suite passes (722).
+
+- [x] Add a gateway integration fixture with an open storefront thread containing
   an old refund conversation and `aiSummary`, last conversational activity three
-  days ago, plus a valid resumable browser session.
-- [ ] Post "Hi" to the internal storefront-chat route and assert the current
+  days ago, plus a valid resumable browser session. — `idleRefundEpisode(idleMs)`;
+  idle time is the only knob, since it is what P1's 24-hour boundary reads.
+- [x] Post "Hi" to the internal storefront-chat route and assert the current
   broken behavior: the message lands on the old thread and planning can see the
   old refund context. Run it, watch it fail against the fixed behavior you are
   about to build, then invert it — do not leave a knowingly red assertion in the
   suite. The sibling lifecycle plan's own P0 records what happens when a test is
-  left red against behavior no phase builds.
+  left red against behavior no phase builds. — pinned, and verified load-bearing:
+  flipping the two `toContain` assertions to `not.toContain` fails today with
+  `expected [ …(3) ] to not include 'I want a refund for order #1024…'`, so the
+  greeting's context really does carry both old turns plus "Hi".
 - [ ] Add the desired acceptance assertions: a new thread is created, old raw
   messages and old `aiSummary` are absent from `buildContext`, no merchant plan
   is published for the greeting, and the old episode is still retrievable by the
-  widget as collapsed history.
-- [ ] Add a control proving a ten-minute follow-up remains in the same episode.
+  widget as collapsed history. **This is the inversion, and it belongs to the P1
+  commit** — it cannot be written green before `resolveInboundEpisode` exists.
+  Each assertion that flips is commented `P1 inverts` in the test. The mechanics:
+  - `isNewThread` `false` → `true`, and `threadId` `toBe(thread.id)` →
+    `not.toBe(thread.id)`.
+  - the two message `toContain` → `not.toContain`, and
+    `ctx.thread.aiSummary` `toContain('#1024')` → `toBeNull()`.
+  - context is deliberately built from `response.body.threadId` rather than a
+    captured id, so the setup needs no edit — only the expectations move.
+  - "no merchant plan is published" is **not** in the file yet: the route only
+    enqueues, so proving it needs the plan worker and belongs with P3's
+    disposition gate. Do not fake it with a queue-call assertion.
+  - "still retrievable as collapsed history" is P4. What P0 pins today is the
+    durable half that must survive rollover either way: the old thread is not
+    soft-deleted and keeps its messages.
+- [x] Add a control proving a ten-minute follow-up remains in the same episode.
+  — passes identically before and after P1, which is what makes it a control
+  rather than a second copy of the bug test.
 
 ## P1 — Make inbound persistence episode-aware and race-safe
 

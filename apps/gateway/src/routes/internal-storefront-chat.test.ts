@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import request from 'supertest';
-import { ChannelType, db } from '@shopkeeper/db';
+import { ChannelType, db, SenderType } from '@shopkeeper/db';
 import {
   cleanupTestData,
   createTestCustomer,
@@ -9,6 +9,7 @@ import {
   createTestOrg,
   createTestThread,
 } from '@shopkeeper/db/test-helpers';
+import { buildContext, type ThreadSink } from '@shopkeeper/agent/build-context';
 import { CHANNEL } from '../constants.js';
 import { registerInternalStorefrontChatRoutes } from './internal-storefront-chat.js';
 import internalStorefrontChatRouter from './internal-storefront-chat.js';
@@ -456,6 +457,138 @@ describe('POST /internal/storefront-chat/message', () => {
       expect(usage).toHaveLength(1);
       expect(usage[0].integrationId).toBe(integration.id);
       expect(usage[0].messageCount).toBe(1);
+    });
+  });
+
+  // P0 of docs/conversation-context-and-cross-channel-memory-plan.md. These pin
+  // TODAY's behavior, which is the bug: a returning shopper's greeting lands on
+  // an idle open thread and the planner reads the whole old conversation. Every
+  // assertion marked "P1 inverts" flips when resolveInboundEpisode lands; the
+  // plan forbids leaving them red in the meantime.
+  describe('conversation episodes', () => {
+    const REFUND_ASK = 'I want a refund for order #1024, the mug arrived cracked.';
+    const REFUND_ANSWER = 'Sorry about that — I have refunded order #1024 in full.';
+    const REFUND_SUMMARY =
+      'Customer requested and received a full refund on order #1024 for a cracked mug.';
+
+    const sink: ThreadSink = {
+      escalateToHuman: async () => ({ status: 'ok', message: 'ok' }),
+      askOperator: async () => ({ status: 'ok', message: 'ok' }),
+      addInternalNote: async () => ({ status: 'ok', message: 'ok' }),
+      sendReply: async () => ({ status: 'ok', message: 'ok' }),
+      sendEmail: async () => ({ status: 'ok', message: 'ok' }),
+      updateThreadStatus: async () => ({ status: 'ok', message: 'ok' }),
+      updateThreadTag: async () => ({ status: 'ok', message: 'ok' }),
+    };
+
+    // A resolved refund conversation on an open thread, gone quiet `idleMs` ago,
+    // with the browser session still resumable. `idleMs` is the only knob: it is
+    // what P1's 24-hour storefront boundary will read.
+    async function idleRefundEpisode(idleMs: number) {
+      const customer = await createTestCustomer(org.id, `${CHANNEL.SHOPIFY_CHAT}:${session.id}`);
+      const thread = await createTestThread(org.id, customer.id, ChannelType.shopify_chat);
+      const lastActivity = new Date(Date.now() - idleMs);
+
+      await db.message.createMany({
+        data: [
+          {
+            threadId: thread.id,
+            organizationId: org.id,
+            senderType: SenderType.customer,
+            contentText: REFUND_ASK,
+            sentAt: new Date(lastActivity.getTime() - 60_000),
+          },
+          {
+            threadId: thread.id,
+            organizationId: org.id,
+            senderType: SenderType.agent,
+            contentText: REFUND_ANSWER,
+            sentAt: lastActivity,
+          },
+        ],
+      });
+      await db.thread.update({
+        where: { id: thread.id },
+        data: { aiSummary: REFUND_SUMMARY, lastMessageAt: lastActivity },
+      });
+      await db.storefrontChatSession.update({
+        where: { id: session.id },
+        data: { threadId: thread.id, customerId: customer.id },
+      });
+
+      return { customer, thread };
+    }
+
+    function greet(clientMessageId: string, text = 'Hi') {
+      return postMessage({
+        organizationId: org.id,
+        sessionId: session.id,
+        integrationId: integration.id,
+        text,
+        clientMessageId,
+      });
+    }
+
+    it('lands a three-day-later greeting on the idle refund episode', async () => {
+      const { thread } = await idleRefundEpisode(3 * 24 * 60 * 60 * 1000);
+
+      const response = await greet('episode-greeting');
+
+      expect(response.status).toBe(202);
+      // P1 inverts: isNewThread true, and threadId is a thread other than this one.
+      expect(response.body.isNewThread).toBe(false);
+      expect(response.body.threadId).toBe(thread.id);
+
+      // Stable across P1: rollover closes the old episode, it never deletes it.
+      // P4 renders it as collapsed "Previous conversation" history, which needs
+      // the row and its messages to still be here.
+      const old = await db.thread.findUniqueOrThrow({ where: { id: thread.id } });
+      expect(old.deletedAt).toBeNull();
+      expect(await db.message.count({ where: { threadId: thread.id, deletedAt: null } }))
+        .toBeGreaterThanOrEqual(2);
+    });
+
+    it('carries the stale refund conversation into the greeting\'s planner context', async () => {
+      await idleRefundEpisode(3 * 24 * 60 * 60 * 1000);
+
+      const response = await greet('episode-context');
+
+      // Deliberately the thread the greeting actually landed on rather than a
+      // captured id, so P1 changes only the expectations below, not the setup.
+      const ctx = await buildContext(response.body.threadId, org.id, sink);
+      const texts = ctx.recentMessages.map((message) => message.contentText);
+
+      expect(texts).toContain('Hi');
+      // P1 inverts both to not.toContain: a new episode carries no old raw messages.
+      expect(texts).toContain(REFUND_ASK);
+      expect(texts).toContain(REFUND_ANSWER);
+
+      // generate-thread-plan.ts:83 uses thread.aiSummary verbatim as the planning
+      // instruction when no explicit one is passed, so "Hi" is planned as if the
+      // shopper had re-opened the refund. P1 stops the summary reaching a new
+      // episode; P2 removes the fallback itself.
+      // P1 inverts: toBeNull().
+      expect(ctx.thread.aiSummary).toContain('#1024');
+    });
+
+    // The control. A short gap is a follow-up, not a new conversation, so this
+    // one must pass identically before and after P1 — it is what proves the
+    // boundary is a boundary and not just "always start a new thread".
+    it('keeps a ten-minute follow-up in the same episode', async () => {
+      const { thread } = await idleRefundEpisode(10 * 60 * 1000);
+
+      const response = await greet('episode-followup', 'Any update on that refund?');
+
+      expect(response.status).toBe(202);
+      expect(response.body.isNewThread).toBe(false);
+      expect(response.body.threadId).toBe(thread.id);
+
+      const ctx = await buildContext(response.body.threadId, org.id, sink);
+      const texts = ctx.recentMessages.map((message) => message.contentText);
+
+      expect(texts).toContain('Any update on that refund?');
+      expect(texts).toContain(REFUND_ASK);
+      expect(ctx.thread.aiSummary).toContain('#1024');
     });
   });
 
