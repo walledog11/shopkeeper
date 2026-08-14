@@ -1,17 +1,19 @@
 # Storefront chat — verification and incident record, August 2026
 
-The evidence and correction log for
-[shopify-storefront-chat-implementation-plan.md](../shopify-storefront-chat-implementation-plan.md).
-Chronology is the axis here; the plan states current truth and links back to this
-file for how it was established.
+The surviving record for storefront chat. Chronology is the axis: what was
+believed, what turned out to be true, and what it cost to find out.
 
-Split out of the plan on 2026-08-13, when the plan had reached 1,661 lines and
-two thirds of it was this. Nothing was deleted in the split — prose was moved,
-and superseded claims that used to sit beside their corrections are now filed
-under the date they were corrected.
+Split out of the implementation plan on 2026-08-13, when the plan had reached
+1,661 lines and two thirds of it was this. The plan itself was closed and deleted
+later the same day, once the merchant half landed — its remaining open work moved
+to [to-do-list.md](../to-do-list.md), and the constraints that outlive it are in
+"Standing constraints" below. Nothing was deleted in either move; prose was
+relocated, and superseded claims that used to sit beside their corrections are
+filed under the date they were corrected.
 
 Read the durable findings first. They are the part that applies to work that has
-nothing to do with this channel.
+nothing to do with this channel. Read the standing constraints before changing
+anything on this channel.
 
 ---
 
@@ -46,8 +48,14 @@ Extracted from the runs below. Each one cost a live failure to learn.
   earlier `@shopkeeper/db`-from-the-registry break. Confirm with `next build`, not
   by reasoning about it.
 - **Notification shape follows the decision the merchant has to make, not what
-  the agent did.** See "The card was the wrong artifact" in the plan — this is a
-  live design rule, kept there rather than here.
+  the agent did.** Routine, safe, identity established → act, then report in one
+  line. Genuine uncertainty → one question about the uncertain thing, not a
+  restatement of the conversation. Risky or irreversible → the full card, and
+  "Good to send?" belongs there and only there. The test before shipping any
+  merchant-facing surface: read it as a 24-year-old selling artisan products, no
+  e-commerce experience, who bought something that promised an employee rather
+  than a bot. If it reads as paperwork, the fix is upstream of the copy. See "The
+  card was the wrong artifact" below.
 - **A prompt growing situation-by-situation means a capability is missing.**
   The guest section reached 13 bullets and 649 words, each added after a specific
   bad output; five commits tuned it and the fifth still shipped a bad turn. The
@@ -58,6 +66,118 @@ Extracted from the runs below. Each one cost a live failure to learn.
   Caught in the digest first, then in the operator card.
 - **The gate is only red once somebody runs it.** A fixture edit that could never
   pass sat on master for three days unnoticed.
+
+---
+
+## Standing constraints
+
+The invariants the implementation plan carried, kept here because they outlived
+it. Read these before changing anything on this channel; the reasoning behind
+each is in the runs below.
+
+**Identity and disclosure**
+
+- **Nothing a shopper types is proof of identity.** An order number, email, phone
+  number, Liquid customer value, browser-supplied Shopify ID, or claim to be staff
+  changes what can be looked up only through a tool built to take it — never
+  through the model's judgement that they sound genuine.
+- **Disclosure only ever flows to the address already on the order.** The reply to
+  a verification request is identical whether the order exists, whether the email
+  matched, and whether anything was mailed. A Shopify lookup error returns `sent`
+  too — surfacing it would make Shopify's availability observable per order number.
+- **Verification is scoped to the order, not the customer.** Verifying `#1025`
+  cannot read `#1026`. Enforced in static policy on parsed arguments, not in the
+  prompt.
+- **Verification unlocks reads and never mutations.** Cancel, edit, refund and
+  address change stay out of guest and verified alike at every autonomy tier, and
+  continue to escalate. Whether a verified shopper should be able to *initiate* a
+  mutation that then goes to merchant approval is deliberately still open.
+- **Blocking happens in static tool policy, not the prompt.** Every order read,
+  customer read and mutative Shopify action is refused ahead of argument parsing,
+  so a plan naming a forbidden tool is blocked at execution rather than merely
+  absent from the tool list.
+- **The host runs the challenge, not the agent.** The model never decides whether
+  someone is verified; it only ever sees a session that already is or is not. That
+  keeps the ritual out of the plan/approve loop and leaves the planner's
+  no-side-effects contract untouched on every channel.
+
+**Speech**
+
+- **Shop register, not system register.** Never name tools, lookups, widgets,
+  integrations or permissions to a shopper, and never invent a support department
+  or an email address that was never given.
+- **A prompt growing case by case means a capability is missing.** The guest
+  section is principle, not situation-patching. Read the 2026-08-09 collapse below
+  before adding a bullet.
+- **Every capability with an edge will try to narrate that edge.** State the
+  boundary *and* the move that replaces talking about it, or the model will fill
+  the gap by explaining itself.
+
+**Containment**
+
+- **The storefront budget is denominated in messages, not dollars**, and sits
+  beneath the org daily cap rather than inside it. Exhausting the storefront must
+  degrade the widget alone and leave the merchant's email and Instagram agents
+  running, which a shared counter cannot express.
+- **The gate runs before the model**, so a refusal costs nothing. Counters move
+  only on an admitted message.
+- **The per-IP limit rests on an unverified header** and is keyed on
+  (integration, address) so that being wrong degrades into a second per-shop rate
+  limit rather than leaking across merchants or locking out the internet. Neither
+  daily budget nor the per-session burst limit depends on it.
+
+**Accepted costs, recorded so they can be revisited**
+
+- **A valid order number reveals that order's shipping state.** The residual cost
+  of `get_order_fulfillment_status`, which deliberately needs no identity because
+  "has it shipped" does not. Bounded to shipping state; no name, address, contact
+  details, items, amounts, or tracking number. Requiring the email alongside the
+  number is a one-line change if the trade stops being worth it.
+- **No cross-channel customer identity.** A shopper who chats on the storefront
+  and later emails is two customers with two threads, and agent memory will not
+  join them. Superseded as an accepted model by
+  [conversation-context-and-cross-channel-memory-plan.md](../conversation-context-and-cross-channel-memory-plan.md);
+  until that ships, channels stay separate rather than joined by a weak name or
+  address guess.
+- **The merchant must disable Shopify Inbox** to avoid duplicate launchers. There
+  is no coexistence story.
+
+---
+
+## The card was the wrong artifact
+
+**Decision 2026-08-12, amended 2026-08-13.**
+
+A verified shopper asked where their order was. The agent looked it up. The answer
+was "not shipped yet." The merchant received nine lines on their phone ending in
+**"Good to send?"** — a form to sign for the exact task they installed the app to
+stop doing. Twenty a day and they approve blind, which is worse than never asking,
+because it launders unreviewed actions through a ritual that looks like review.
+
+The rule that came out of it is in the durable findings above: shape follows the
+decision the merchant has to make, not what the agent did.
+
+**Resolved 2026-08-13.** A structurally clean quick reply — one customer-facing
+send, optional reads, no mutation, no merchant question, no blocking warning — now
+executes on every tier except Draft only, independently of `autoExecuteMode`, and
+raises no operator card unless the send fails. A verified shopper's read-only
+question about their own order takes exactly that path.
+
+**The `Verified:` line was kept, reversing the original decision.** The argument
+for deleting it was that it existed only because the card asked for approval at
+all. That premise expired when routine verified reads stopped producing a card:
+what remains are the judgment cards — escalations, questionable senders, a
+mutation requested on the verified order — and in those, "entered a code emailed
+to the address on #1024" is the fact that makes the decision possible. Deleting it
+would have stripped information from the only cards still being shown.
+
+**Self-narration came back and will come back again.** The same card had the agent
+telling a shopper *"I can only pull up details on #1024 in this chat since that's
+the order you verified…"* The guest prompt had been collapsed from 13 bullets to 5
+specifically to kill this, and M1.5 reintroduced it by creating a new boundary to
+narrate. Fixed 2026-08-13 by giving the boundary a move: offer to check the other
+order and ask for the email on it. The employee sentence is "happy to check #1026
+too — what's the email on that one?"
 
 ---
 
@@ -676,3 +796,45 @@ asserting the email path is byte-identical.
 **M1.5 grew it again** — `context.ts`, `prompt.ts`, `static-policy.ts`, `planner.ts`,
 `run.ts`. Every new branch is gated on `authState` and the full existing suites pass
 unchanged, but the counter-argument stands.
+
+---
+
+## M2 — Customer Account OAuth, deferred and largely superseded
+
+Kept as a sketch. **Do not build against this section without specifying it
+properly.**
+
+M1.5 subsumed most of what this milestone was for, at a fraction of the cost and
+without forcing a re-authorization on anyone. What it does *not* cover is genuine
+account binding — order history across orders, saved addresses — which is the only
+reason left to build it, and only if a merchant actually asks.
+
+Customer Account OAuth provides a high-assurance channel identity that links the
+storefront visitor to a canonical person. It does not turn the session into a
+conversation or authorize replaying every prior transcript; it restores the normal
+autonomy and tool policy for that shopper only at the assurance scope the login
+establishes.
+
+It needs: a `StorefrontChatAuthAttempt` table for single-use state and the PKCE
+verifier; the `customer_read_customers` and `customer_read_orders` scopes;
+encrypted access/refresh token storage through the existing token-encryption
+utilities; refresh and revalidation on later bootstraps with identity cleared on
+refresh failure; session revocation when a token refresh fails; and a persistent
+sign-in control in the widget.
+
+Two things must be settled before it is scheduled, both recorded in the
+[to-do-list.md](../to-do-list.md) entry:
+
+- **Those scopes force re-authorization for every already-connected merchant** —
+  a migration with merchant-facing consequences, needing its own plan. Avoiding
+  exactly this is why M1 shipped without them.
+- **The Customer Account API requires the shop to be on new customer accounts.**
+  Merchants on classic accounts could never use the verified path and would stay
+  guest-only. Confirm the eligibility rule and decide whether a permanently
+  two-tier experience is acceptable before committing.
+
+## Deferred beyond M2
+
+Checkout and thank-you chat extensions, attachments, offline verified email,
+Storefront MCP commerce cards, rich commerce UI, cross-device history, App Store
+listing, and public distribution.

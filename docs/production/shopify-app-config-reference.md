@@ -7,10 +7,10 @@
 > [shopify-webhook-migration.md](shopify-webhook-migration.md) to audit, remove,
 > or restore the legacy subscriptions without touching unrelated webhooks.
 
-Rollback reference for **M0a** and **M0b** of
-[shopify-storefront-chat-implementation-plan.md](../shopify-storefront-chat-implementation-plan.md),
-the migration from Dev-Dashboard-configured app settings to a CLI-authoritative
-`shopify.app.toml`.
+Rollback reference for **M0a** and **M0b** of the storefront chat rollout — the
+migration from Dev-Dashboard-configured app settings to a CLI-authoritative
+`shopify.app.toml`. Record:
+[storefront-chat-verification-2026-08.md](storefront-chat-verification-2026-08.md).
 
 **Both shipped 2026-08-07** as `shopkeeper-production-9`, in one file rather than
 two deploys. This file stays useful as the rollback path: `-8` is the

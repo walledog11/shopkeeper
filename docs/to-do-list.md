@@ -31,30 +31,34 @@ channel to build. See [product-truth.md](product-truth.md) §2.
 
 Code work that is started and not finished.
 
-- [ ] **Storefront chat — the merchant half.** The safety half is done and live in
-  production on one controlled dev store (`palette-dev-3peukw16.myshopify.com`,
-  `guarded`/`off`): transport, guest tool policy, both kill switches, the spend
-  budget, the integration-card toggle, and M1.5 emailed-code order verification.
-  The full loop is proven live, including the strong form of the disclosure test.
-  **What blocks a second store is now the merchant's experience, not the
-  shopper's.** Every storefront message arrives as an approval card ending in
-  "Good to send?" — including a verified shopper's read-only "where is my order",
-  which teaches a merchant their agent needs supervision to state a fulfillment
-  status. Fix notification shape first: routine and safe → act, then report in one
-  line; genuine uncertainty → one question about the uncertain thing; risky or
-  irreversible → the card. Then the silent dead-email-integration failure, merchant
-  alerting on budget exhaustion, the session and `storefront_chat_daily_usage`
-  sweeps, the approval-mode local acknowledgement, and the rest of the test plan.
-  **The eval gate is red** — 13 fixtures failing or flaky since 2026-08-08, seven
-  at 0/3, all pre-existing rather than storefront damage; the stale 2026-07-30
-  baseline is deliberately kept because red is the accurate reading. Fix the
-  thirteen, add the `shopify_chat` guest fixture, then capture. **Do not enable a
-  real merchant workspace until notification shape and the operability items
-  land**; the original budget-and-kill-switch condition is met. Full status and
-  spec:
-  [shopify-storefront-chat-implementation-plan.md](shopify-storefront-chat-implementation-plan.md).
-  Evidence and incident history:
+- [ ] **Storefront chat — the remaining test plan.** The merchant half landed
+  2026-08-13 and the implementation plan is closed. Routine and verified read-only
+  replies send themselves and raise no card; the session and
+  `storefront_chat_daily_usage` sweeps run on the daily purge worker; budget
+  exhaustion tells the merchant once per shop per day; a dead email sender raises
+  an ops alert instead of failing silently; and the widget says something when the
+  shop is the one answering. **What is left is coverage, not behaviour**:
+  session-first-message races asserted against real
+  `threads_one_open_per_customer` behaviour, closed- and idle-thread rollover,
+  4,000-character truncation, uninstall revocation, and dispatch persistence for
+  merchant replies, approvals and auto-execution. The dev-store browser matrix
+  (Online Store 2.0 and a vintage theme, desktop and mobile, embed on and off,
+  Inbox bubble present and removed) has never been run. Evidence, incident history
+  and the full milestone record:
   [storefront-chat-verification-2026-08.md](production/storefront-chat-verification-2026-08.md).
+- [ ] **The agent eval gate is red.** 13 fixtures failing or flaky since
+  2026-08-08, seven at 0/3, split between over- and under-escalation. All of it
+  pre-existing rather than damage from any one change, and the stale 2026-07-30
+  baseline is deliberately kept because red is the accurate reading. Fix the
+  thirteen, then capture (`npm run test:evals:baseline -w apps/dashboard`). Two
+  debts belong in that same run: a `shopify_chat` guest fixture, which is the only
+  way the gate will ever cover storefront behaviour and which
+  `fixture-validator.ts` would have rejected on sight before 2026-08-12; and
+  safe-reply auto-execution, which changed planner-visible routing. Still true
+  whenever it runs — fixtures carry no `classifierSignals`, so the gate has never
+  exercised production's `computeClassifierRouting` path. Runs are expensive:
+  justify before running, single-fixture probes for diagnosis, no tune-then-rerun
+  loop.
 - [ ] **Bounded conversation context and cross-channel memory.** Keep persistent
   shopper identity separate from short conversation episodes; plan from the
   newest request and retrieve only verified, relevant history or open
@@ -92,6 +96,17 @@ provider. **None of these is a code task.**
   everything twice. That failure is silent in exactly the way the topic-name bug
   already was once, and nothing persists a Shopify webhook receipt, so a real order
   event on the dev store is the only thing that can close it.
+- [ ] **One real merchant workspace on storefront chat, in approval mode.** Toggle
+  on through the integration card, theme embed activated, Shopify Inbox bubble
+  removed, then the full loop verified with no ops touching metadata. Never
+  exercised outside the dev store the author controls. The condition that held
+  this — notification shape plus the operability items — was met 2026-08-13, so
+  what remains is the rollout itself.
+- [ ] **What version 9 of the Shopify app actually grants.** No fresh install has
+  confirmed the scope set, and no connected production merchant has been checked
+  for the re-authorization prompt `write_app_proxy` raises. The merchant-facing
+  explanation for that prompt was never written either; connected merchants are
+  few enough to tell directly.
 - [ ] **Guest escalation that keeps its reply, exercised live.** The regression
   where guest order questions escalated with no reply at all was fixed by passing
   `keepReply` into `applyEscalationRouting` — but **the router-materialized path
@@ -115,9 +130,8 @@ provider. **None of these is a code task.**
   `RealtimeProvider` retries silently forever while polling has already slowed
   to 60s/120s — the inbox gets slower with nothing surfaced, so check the logs
   before walking away. Standing cost traps: never hold SSE on Vercel functions;
-  never use Postgres `LISTEN/NOTIFY` (pins a Neon connection). **No longer
-  gates M1 of**
-  [shopify-storefront-chat-implementation-plan.md](shopify-storefront-chat-implementation-plan.md).
+  never use Postgres `LISTEN/NOTIFY` (pins a Neon connection). **Cleared as the
+  gate on storefront chat**, which shipped on polling rather than SSE.
 
   Re-running the smoke needs prod Redis over the `REDIS_PUBLIC_URL` TCP proxy —
   the gateway's own `REDIS_URL` is `redis.railway.internal` and never resolves
@@ -184,6 +198,22 @@ resume. Gated-off integrations cost nothing to keep dark.
   Confirm Customer Service API availability for US merchants and third-party
   SaaS in Partner Center. Keep TikTok Shop buyer messages separate from generic
   TikTok DMs (no generic-DM adapter exists).
+
+- [ ] **Shopify mandatory compliance webhooks.** The app declares none of
+  `customers/data_request`, `customers/redact` or `shop/redact` and has no handlers
+  for them. Inherited, not caused by any recent work, and blocking only App Store
+  distribution — which is itself deferred. Closing it means writing the handlers
+  first and then declaring the topics; pointing them at `/webhooks/shopify` puts
+  them straight into a topic allowlist that rejects them into silent failure.
+- [ ] **Storefront chat M2 — Customer Account OAuth.** Largely superseded by
+  emailed-code verification, which bought the same disclosure at a fraction of the
+  cost and forced no re-authorization. Keep only for genuine account binding —
+  order history across orders, saved addresses — and only if a merchant asks. Two
+  blockers first: the two `customer_read_*` scopes force re-authorization on every
+  already-connected merchant, and the Customer Account API requires the shop to be
+  on new customer accounts, so merchants on classic accounts would be permanently
+  guest-only. Sketch and open questions in
+  [storefront-chat-verification-2026-08.md](production/storefront-chat-verification-2026-08.md).
 
 **Resume when triggered** (not open checkboxes):
 
