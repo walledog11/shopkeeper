@@ -6,6 +6,7 @@ import {
   getStorefrontChatBurstLimits,
   getStorefrontChatMessageBudgets,
 } from './config/runtime-config.js';
+import { alertStorefrontChatExhaustion } from './storefront-chat-exhaustion-alert.js';
 
 // The storefront's own containment, enforced entirely before the model runs.
 //
@@ -127,11 +128,23 @@ export async function claimStorefrontChatBudget(input: {
   if (usage.messageCount > budgets.perShopPerDay) {
     // Over budget. The counter deliberately keeps climbing past the ceiling —
     // it is how sustained exhaustion is distinguished from just touching the
-    // limit, which is what the merchant alert will need.
+    // limit when reading the logs afterwards.
     logger.warn(
-      { organizationId, integrationId, day, messageCount: usage.messageCount, limit: budgets.perShopPerDay },
+      { opsAlert: true, organizationId, integrationId, day, messageCount: usage.messageCount, limit: budgets.perShopPerDay },
       '[StorefrontChat] Shop daily message budget exhausted',
     );
+    // Only the message that crosses the ceiling tells the merchant. Every
+    // refusal after it is the same fact, and a shop under sustained load would
+    // otherwise turn one closed widget into hundreds of notifications. The
+    // idempotency key covers the races this integer test cannot.
+    if (usage.messageCount === budgets.perShopPerDay + 1) {
+      await alertStorefrontChatExhaustion({
+        organizationId,
+        integrationId,
+        day,
+        limit: budgets.perShopPerDay,
+      });
+    }
     return { allowed: false, denial: 'shop_budget' };
   }
 

@@ -30,6 +30,14 @@ vi.mock('../clients/gateway-queues.js', () => ({
   }),
 }));
 
+// Stubbed at the module edge rather than at the operator transport, so the test
+// asserts how often the merchant is told and not how Telegram is called.
+const exhaustionAlertSpy = vi.fn().mockResolvedValue(1);
+
+vi.mock('../storefront-chat-exhaustion-alert.js', () => ({
+  alertStorefrontChatExhaustion: (...args: unknown[]) => exhaustionAlertSpy(...args),
+}));
+
 // In-memory stand-in for the burst counter. Redis is not available in the test
 // run and the limiter fails open without it, which would leave the burst layer
 // asserted by nothing.
@@ -98,6 +106,7 @@ function postMessage(body: Record<string, unknown>) {
 beforeEach(async () => {
   burstCounters.clear();
   queueAddSpy.mockClear();
+  exhaustionAlertSpy.mockClear();
   vi.mocked(processInboundMessage).mockClear();
   org = await createTestOrg();
   integration = await createTestIntegration(org.id, {
@@ -341,6 +350,45 @@ describe('POST /internal/storefront-chat/message', () => {
       // not consume the cap the merchant's email and Instagram agents share.
       const orgSpend = await db.llmDailySpend.findMany({ where: { organizationId: org.id } });
       expect(orgSpend).toEqual([]);
+    });
+
+    it('tells the merchant once when the ceiling is crossed, not once per refusal', async () => {
+      vi.stubEnv('STOREFRONT_CHAT_MAX_MESSAGES_PER_SHOP_DAY', '1');
+
+      await postMessage({
+        organizationId: org.id,
+        sessionId: session.id,
+        text: 'the one admitted message',
+        clientMessageId: 'alert-1',
+      });
+      expect(exhaustionAlertSpy).not.toHaveBeenCalled();
+
+      const crossing = await postMessage({
+        organizationId: org.id,
+        sessionId: (await createSession()).id,
+        text: 'the one that closes the widget',
+        clientMessageId: 'alert-2',
+      });
+      expect(crossing.status).toBe(429);
+      expect(exhaustionAlertSpy).toHaveBeenCalledTimes(1);
+      expect(exhaustionAlertSpy.mock.calls[0][0]).toMatchObject({
+        organizationId: org.id,
+        integrationId: integration.id,
+        limit: 1,
+      });
+
+      // A shop under sustained load would otherwise turn one closed widget into
+      // hundreds of notifications.
+      for (const [index, id] of ['alert-3', 'alert-4', 'alert-5'].entries()) {
+        const again = await postMessage({
+          organizationId: org.id,
+          sessionId: (await createSession()).id,
+          text: `refusal ${index}`,
+          clientMessageId: id,
+        });
+        expect(again.status).toBe(429);
+      }
+      expect(exhaustionAlertSpy).toHaveBeenCalledTimes(1);
     });
 
     it('counts only admitted messages against the session budget', async () => {
