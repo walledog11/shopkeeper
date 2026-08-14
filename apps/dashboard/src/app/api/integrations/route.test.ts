@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChannelType, EmailProvider, db } from '@shopkeeper/db';
 import {
@@ -22,6 +23,12 @@ import { GET, POST } from './route';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 let analyticsSink: RecordingAnalyticsSink;
+
+// `externalAccountId` is unique across every organization, so a hardcoded shop
+// domain collides with any row an earlier run left behind — cleanupTestData
+// swallows its own failures, so one contended teardown poisons every run after
+// it.
+const shopDomain = () => `fixture-${randomUUID()}.myshopify.com`;
 
 beforeEach(async () => {
   org = await createTestOrg();
@@ -70,7 +77,7 @@ describe('/api/integrations', () => {
       data: {
         organizationId: org.id,
         platform: ChannelType.shopify,
-        externalAccountId: 'fixture-shop.myshopify.com',
+        externalAccountId: shopDomain(),
         accessToken: 'shpat_fixture',
         metadata: { oauthScopes: ['read_orders', 'write_orders', 'read_customers'] },
       },
@@ -89,7 +96,7 @@ describe('/api/integrations', () => {
       data: {
         organizationId: org.id,
         platform: ChannelType.shopify,
-        externalAccountId: 'fixture-shop.myshopify.com',
+        externalAccountId: shopDomain(),
         accessToken: 'shpat_fixture',
       },
     });
@@ -241,12 +248,13 @@ describe('/api/integrations', () => {
   });
 
   it('handles concurrent saves for the same integration key', async () => {
+    const externalAccountId = shopDomain();
     const requests = Array.from({ length: 8 }, (_, index) => POST(new Request('http://localhost/api/integrations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         platform: 'shopify',
-        externalAccountId: 'fixture-shop.myshopify.com',
+        externalAccountId,
         fromEmail: `Fixture Shop ${index}`,
       }),
     })));
@@ -258,7 +266,7 @@ describe('/api/integrations', () => {
       where: {
         organizationId: org.id,
         platform: ChannelType.shopify,
-        externalAccountId: 'fixture-shop.myshopify.com',
+        externalAccountId,
       },
     });
     expect(rows).toHaveLength(1);

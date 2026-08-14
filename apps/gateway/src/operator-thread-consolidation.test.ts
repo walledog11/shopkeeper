@@ -1,6 +1,12 @@
+import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@shopkeeper/db';
 import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers';
+
+// `senderId` is unique across every org, and test files run in parallel forks
+// against one database — a hardcoded number collides with whichever other file
+// claims it first.
+const SENDER_ID = `+1555${randomUUID().replace(/\D/g, '').padEnd(7, '0').slice(0, 7)}`;
 
 // One durable operator thread per *person* (Phase 2), with notifications and the
 // merchant's texts mirrored onto it. The core turn, billing gate, lock deps, and
@@ -82,14 +88,14 @@ describe('operator thread consolidation', () => {
     const member = await createMember('usr_multi');
     await db.orgMemberTelegramChat.create({ data: { orgMemberId: member.id, chatId: '900900' } });
     await db.orgMemberImessageBinding.create({
-      data: { orgMemberId: member.id, senderId: '+15550001111', spaceId: 'space_1' },
+      data: { orgMemberId: member.id, senderId: SENDER_ID, spaceId: 'space_1' },
     });
 
     const fromPhone = await executeOperatorAgentTurn({
       orgId: org.id,
       instruction: 'x',
       operatorKey: await resolveOperatorMemberKey(org.id, 'usr_multi'),
-      senderPhone: 'imessage:+15550001111',
+      senderPhone: `imessage:${SENDER_ID}`,
       clerkUserId: 'usr_multi',
     });
     const fromDesk = await executeOperatorAgentTurn({
