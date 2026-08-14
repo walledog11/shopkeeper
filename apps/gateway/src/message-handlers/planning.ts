@@ -32,6 +32,7 @@ export async function precomputeThreadPlan(
       identity,
       merchantQuestion,
       autoExecuted,
+      autoExecutionKind,
       autoExecutionStatus,
       autoExecutionSummary,
       autoExecutionActions,
@@ -52,6 +53,7 @@ export async function precomputeThreadPlan(
       merchantQuestion,
       ...(autoExecuted ? {
         autoExecuted: true,
+        autoExecutionKind,
         autoExecutionStatus,
         autoExecutionSummary,
         autoExecutionActions,

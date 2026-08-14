@@ -52,9 +52,14 @@ vi.mock('@shopkeeper/agent/plan-execution', () => ({
 
 vi.mock('@shopkeeper/agent/settings', () => ({
   resolveAgentSettings: vi.fn(() => ({
-    autonomyMode: 'live',
-    businessHours: { enabled: false },
+    autonomyTier: 'guarded',
+    autoExecuteMode: 'off',
+    toolsEnabled: { action: true, communication: true, internal: true, read: true },
   })),
+}));
+
+vi.mock('../operator-context.js', () => ({
+  removePendingPlanForThread: vi.fn(async () => {}),
 }));
 
 vi.mock('@shopkeeper/db', async (importOriginal) => {
@@ -103,16 +108,17 @@ beforeEach(() => {
   mockThreadUpdate.mockResolvedValue({});
   mockCommitThreadPlanCacheIfCurrent.mockResolvedValue(true);
   mockIsAgentPlanCacheHit.mockReturnValue(true);
-  mockMaybeAutoExecute.mockResolvedValue({
-    result: { summary: 'Done', actionsPerformed: [] },
-  });
+  mockMaybeAutoExecute.mockResolvedValue(null);
 });
 
 describe('generateThreadPlan auto-execute path', () => {
-  it('skips auto-execute when allowAutoExecute is false', async () => {
+  it('still checks the safe-reply lane when mutative auto-execute is disabled', async () => {
     const result = await generateThreadPlan('org_1', 'thread_1', false);
 
-    expect(mockMaybeAutoExecute).not.toHaveBeenCalled();
+    expect(mockMaybeAutoExecute).toHaveBeenCalledWith(
+      expect.objectContaining({ allowMutativeAutoExecute: false }),
+      expect.anything(),
+    );
     expect(mockBuildContext).not.toHaveBeenCalled();
     expect(mockPlanAgent).not.toHaveBeenCalled();
     expect(result.autoExecuted).toBeUndefined();
@@ -120,6 +126,10 @@ describe('generateThreadPlan auto-execute path', () => {
   });
 
   it('auto-executes a warm cache hit when allowAutoExecute is true', async () => {
+    mockMaybeAutoExecute.mockResolvedValueOnce({
+      classification: { kind: 'auto_execute' },
+      result: { summary: 'Done', actionsPerformed: [] },
+    });
     const result = await generateThreadPlan('org_1', 'thread_1', true);
 
     expect(mockMaybeAutoExecute).toHaveBeenCalledOnce();
@@ -127,8 +137,24 @@ describe('generateThreadPlan auto-execute path', () => {
     expect(mockPlanAgent).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       autoExecuted: true,
+      autoExecutionKind: 'action',
       autoExecutionStatus: 'success',
       autoExecutionSummary: 'Done',
+    });
+  });
+
+  it('auto-executes a safe reply even when mutative auto-execute is disabled', async () => {
+    mockMaybeAutoExecute.mockResolvedValueOnce({
+      classification: { kind: 'quick_reply' },
+      result: { summary: 'Asked for the order number', actionsPerformed: [] },
+    });
+
+    const result = await generateThreadPlan('org_1', 'thread_1', false);
+
+    expect(result).toMatchObject({
+      autoExecuted: true,
+      autoExecutionKind: 'safe_reply',
+      autoExecutionStatus: 'success',
     });
   });
 

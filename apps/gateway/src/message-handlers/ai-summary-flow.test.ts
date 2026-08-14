@@ -22,11 +22,16 @@ describe('canParallelizeThreadPlanning', () => {
     })).toBe(true);
   });
 
-  it('parallelizes non-email channels even when filterDecidedAt is unset', () => {
+  it('waits for sender trust on other filterable customer channels', () => {
     expect(canParallelizeThreadPlanning({
       channelType: ChannelType.ig_dm,
       filterDecidedAt: null,
-    })).toBe(true);
+    })).toBe(false);
+
+    expect(canParallelizeThreadPlanning({
+      channelType: ChannelType.shopify_chat,
+      filterDecidedAt: null,
+    })).toBe(false);
 
     expect(canParallelizeThreadPlanning({
       channelType: ChannelType.shopify,

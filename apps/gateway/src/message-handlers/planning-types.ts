@@ -20,6 +20,7 @@ export interface PrecomputedPlanResult {
   // needs_merchant_input): the clarifying question to push to the operator.
   merchantQuestion?: string | null;
   autoExecuted?: boolean;
+  autoExecutionKind?: 'safe_reply' | 'action';
   autoExecutionStatus?: 'success' | 'error';
   autoExecutionSummary?: string;
   autoExecutionActions?: AgentActionResult[];

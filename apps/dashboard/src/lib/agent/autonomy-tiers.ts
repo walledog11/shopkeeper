@@ -22,7 +22,7 @@ export const AUTONOMY_TIERS: AutonomyTierOption[] = [
     id: "guarded",
     label: "Ask first",
     cap: 50,
-    blurb: "Default. I plan each reply and action, then wait for your OK.",
+    blurb: "Default. I handle routine replies and ask before changes, money, or exceptions.",
     recommended: true,
     merchantFacing: true,
   },

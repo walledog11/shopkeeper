@@ -27,6 +27,7 @@ import type { AgentActionResult, PlanIdentity } from './planning-types.js';
 import { publishThreadEvent } from '../realtime/publish.js';
 import { captureAgentPlanGenerated } from '../product-analytics.js';
 import logger from '../logger.js';
+import { removePendingPlanForThread } from '../operator-context.js';
 
 const FAILURE_ROUTE = 'gateway:auto-plan';
 
@@ -45,6 +46,7 @@ export interface GeneratedThreadPlan {
   identity?: PlanIdentity;
   merchantQuestion?: string | null;
   autoExecuted?: boolean;
+  autoExecutionKind?: 'safe_reply' | 'action';
   autoExecutionStatus?: 'success' | 'error';
   autoExecutionSummary?: string;
   autoExecutionActions?: AgentActionResult[];
@@ -123,7 +125,7 @@ export async function generateThreadPlan(
   // P5-04: an escalated ticket is flagged for a human. Keep planning and
   // notifying the merchant, but never autonomously execute on it until the
   // escalation flag is cleared — bias to escalation over confident wrong action.
-  const autoExecuteAllowed = allowAutoExecute && !thread.escalatedAt;
+  const autonomousWorkAllowed = !thread.escalatedAt;
 
   const cached = readAgentPlanCache(thread.cachedPlan);
   if (isAgentPlanCacheHit({
@@ -142,8 +144,8 @@ export async function generateThreadPlan(
         stepCount: cached.plan.steps.length,
       });
     }
-    const autoExecution = autoExecuteAllowed
-      ? await buildAutoExecutionResult(organizationId, threadId, settings)
+    const autoExecution = autonomousWorkAllowed
+      ? await buildAutoExecutionResult(organizationId, threadId, settings, allowAutoExecute)
       : {};
     return {
       plan: toGatewayAgentPlan(cached?.plan ?? null),
@@ -196,8 +198,8 @@ export async function generateThreadPlan(
     });
   }
 
-  const autoExecution = allowAutoExecute
-    ? await buildAutoExecutionResult(organizationId, threadId, settings)
+  const autoExecution = autonomousWorkAllowed
+    ? await buildAutoExecutionResult(organizationId, threadId, settings, allowAutoExecute)
     : {};
 
   return {
@@ -218,18 +220,31 @@ async function buildAutoExecutionResult(
   organizationId: string,
   threadId: string,
   settings: OrgSettings,
+  allowMutativeAutoExecute: boolean,
 ): Promise<Partial<GeneratedThreadPlan>> {
   const executed = await maybeAutoExecuteCurrentCachedHomePlan(
-    { orgId: organizationId, threadId, settings, failureRoute: FAILURE_ROUTE },
+    {
+      orgId: organizationId,
+      threadId,
+      settings,
+      failureRoute: FAILURE_ROUTE,
+      allowMutativeAutoExecute,
+    },
     buildGatewayPlanExecutionDeps(),
   );
   if (!executed) {
     return {};
   }
 
+  // A previously parked card may still exist when recovery executes an older
+  // safe reply. Remove it across operator channels so a later "yes" cannot act
+  // on work the agent already completed (or attempted and reported as failed).
+  await removePendingPlanForThread(organizationId, threadId);
+
   const failed = findFailedToolResult(executed.result);
   return {
     autoExecuted: true,
+    autoExecutionKind: executed.classification.kind === 'quick_reply' ? 'safe_reply' : 'action',
     autoExecutionStatus: failed ? 'error' : 'success',
     autoExecutionSummary: executed.result.summary,
     autoExecutionActions: executed.result.actionsPerformed,

@@ -26,9 +26,14 @@ export function canParallelizeThreadPlanning(thread: {
   channelType: string;
   filterDecidedAt: Date | null;
 }): boolean {
-  // Email first messages wait for the spam filter; follow-ups and non-email
-  // channels can plan while intelligence refreshes summary/tag.
-  return thread.channelType !== CHANNEL.EMAIL || thread.filterDecidedAt !== null;
+  // Any customer-origin channel whose filter can change must decide sender
+  // trust before a safe reply is eligible to execute. Shopify order-event notes
+  // and internal channels are never filtered and can still plan in parallel.
+  const filterable = thread.channelType === CHANNEL.EMAIL
+    || thread.channelType === CHANNEL.SHOPIFY_CHAT
+    || thread.channelType === CHANNEL.IG_DM
+    || thread.channelType === CHANNEL.TIKTOK;
+  return !filterable || thread.filterDecidedAt !== null;
 }
 
 export function resolveParallelPlanInstruction(latestCustomerMessageText: string | null): string {
@@ -157,16 +162,30 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
   }
 
   if (!withinBusinessHours) {
+    const planResult = parallelPlan
+      ? await planPromise
+      : await precomputeThreadPlan(organizationId, threadId, settings, {
+          allowAutoExecute: false,
+          sourceMessageId,
+        });
+    if (planResult?.autoExecuted) {
+      // Routine answers and clarification questions are useful immediately and
+      // replace the generic acknowledgement. A failed send is different: the
+      // merchant needs to know delivery did not happen.
+      if (planResult.autoExecutionStatus !== 'success') {
+        await sendOperatorAutoExecutionNotification(
+          organizationId,
+          threadId,
+          customerName,
+          channelType,
+          updatedThread?.aiSummary ?? null,
+          planResult,
+        );
+      }
+      return;
+    }
     logger.info({ threadId, organizationId }, '[AISummary] Outside business hours — sending auto-ack');
-    await Promise.all([
-      parallelPlan
-        ? planPromise!
-        : precomputeThreadPlan(organizationId, threadId, settings, {
-            allowAutoExecute: false,
-            sourceMessageId,
-          }),
-      sendAutoAck(organizationId, threadId),
-    ]);
+    await sendAutoAck(organizationId, threadId);
     return;
   }
 
@@ -183,14 +202,16 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
   }
 
   if (planResult.autoExecuted) {
-    await sendOperatorAutoExecutionNotification(
-      organizationId,
-      threadId,
-      customerName,
-      channelType,
-      updatedThread?.aiSummary ?? null,
-      planResult,
-    );
+    if (planResult.autoExecutionKind !== 'safe_reply' || planResult.autoExecutionStatus !== 'success') {
+      await sendOperatorAutoExecutionNotification(
+        organizationId,
+        threadId,
+        customerName,
+        channelType,
+        updatedThread?.aiSummary ?? null,
+        planResult,
+      );
+    }
     return;
   }
 
