@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChannelType, db } from '@shopkeeper/db';
 import { cleanupTestData, createTestIntegration, createTestOrg } from '@shopkeeper/db/test-helpers';
 import { hashVerificationCode } from '@shopkeeper/agent/storefront-verification';
+import type { OutboundEmail } from '@shopkeeper/email/types';
 import { appProxyCanonicalString } from '@/lib/shopify/app-proxy';
 import { createResumeSecret, mintSessionToken } from '@/lib/storefront-chat/session-token';
 
@@ -21,7 +22,7 @@ const shopifyRestJson = vi.fn(async (_ctx: unknown, _path: string, options: { qu
   return { orders: order ? [order] : [] };
 });
 
-const send = vi.fn(async () => ({ providerMessageId: 'stub' }));
+const send = vi.fn(async (_email: OutboundEmail) => ({ providerMessageId: 'stub' }));
 
 vi.mock('@shopkeeper/agent/shopify', () => ({
   shopifyRestJson: (...args: unknown[]) => shopifyRestJson(...(args as [unknown, string, { query?: { name?: string } }])),
@@ -142,7 +143,7 @@ describe('storefront chat order verification', () => {
 
   it('verifies with the right code and records it against that order', async () => {
     await requestCode('#1025', OWNER_EMAIL);
-    const code = (send.mock.calls[0][0] as { text: string }).text.match(/\d{6}/)![0];
+    const code = send.mock.calls[0][0].text.match(/\d{6}/)![0];
 
     const response = await submitCode('#1025', code);
 
@@ -184,9 +185,9 @@ describe('storefront chat order verification', () => {
 
   it('replaces an outstanding challenge rather than leaving two codes valid', async () => {
     await requestCode('#1025', OWNER_EMAIL);
-    const first = (send.mock.calls[0][0] as { text: string }).text.match(/\d{6}/)![0];
+    const first = send.mock.calls[0][0].text.match(/\d{6}/)![0];
     await requestCode('#1025', OWNER_EMAIL);
-    const second = (send.mock.calls[1][0] as { text: string }).text.match(/\d{6}/)![0];
+    const second = send.mock.calls[1][0].text.match(/\d{6}/)![0];
 
     const rows = await db.storefrontChatVerification.count({ where: { sessionId: session.id } });
     expect(rows).toBe(1);
@@ -203,7 +204,7 @@ describe('storefront chat order verification', () => {
 
   it('refuses an expired code', async () => {
     await requestCode('#1025', OWNER_EMAIL);
-    const code = (send.mock.calls[0][0] as { text: string }).text.match(/\d{6}/)![0];
+    const code = send.mock.calls[0][0].text.match(/\d{6}/)![0];
     await db.storefrontChatVerification.updateMany({
       where: { sessionId: session.id },
       data: { expiresAt: new Date(Date.now() - 1000) },
