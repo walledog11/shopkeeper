@@ -1,9 +1,10 @@
 import { getPlanExecution } from '@shopkeeper/agent/execution-ledger';
-import type { HomePlanKind } from '@shopkeeper/agent/plan-preview';
+import { classifyHomePlan } from '@shopkeeper/agent/plan-preview';
 import { getCurrentPlanForThread, readAgentPlanCacheRecordShape } from '@shopkeeper/agent/plan-cache-shape';
+import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { canonicalInboxThreadWhere } from '@shopkeeper/agent/inbox-filter';
 import { PLAN_STEP_LABELS } from '@shopkeeper/agent/tools';
-import { SENDER_TYPE, THREAD_STATUS } from '@shopkeeper/agent/thread-constants';
+import { SENDER_TYPE } from '@shopkeeper/agent/thread-constants';
 import { db } from '@shopkeeper/db';
 import { Prisma } from '@prisma/client';
 import { CHANNEL } from '../constants.js';
@@ -31,67 +32,8 @@ export interface WaitingItem {
   planId?: string;
 }
 
-/**
- * What an open thread is actually waiting on. The briefing could report two
- * states — plan ready and nothing to report — while a thread sits in one of
- * these five, which is why threads with no plan ended up in an "Also open"
- * roll-up under a "want me to go ahead?" that did not cover them.
- *
- * Every state is derived from rows that already exist. Nothing is stored.
- */
-export type ThreadLifecycleState =
-  | 'awaiting_approval'
-  | 'awaiting_customer'
-  | 'blocked_no_plan'
-  | 'empty_thread'
-  | 'handled';
-
-export function deriveThreadLifecycleState(thread: {
-  status: string;
-  /**
-   * `classifyHomePlan(getCurrentPlanForThread(...)).kind`, or null when there is
-   * no current plan. Every kind collapses to `awaiting_approval` — a plan the
-   * executor did not run is waiting on the merchant whatever shape it is. That
-   * includes `auto_execute`, which stays cached and unexecuted under
-   * `autoExecuteMode` off and shadow. Same reasoning as the stale-scan filter.
-   */
-  planKind: HomePlanKind | null;
-  /** A plan parked for this thread in the operator's approval ledger. */
-  parkedPlan: boolean;
-  /**
-   * `senderType` of the newest non-`note` message, or null when the thread has
-   * none. Notes are not conversational — the two Order Status threads that read
-   * as empty each hold two of them, written by the Shopify order webhook — so a
-   * note must never count as the agent having answered.
-   */
-  lastConversationalSender: string | null;
-}): ThreadLifecycleState {
-  if (thread.status === THREAD_STATUS.CLOSED) return 'handled';
-
-  // Ahead of the transcript checks: a parked plan is a decision the merchant
-  // owes regardless of what the messages look like.
-  if (thread.planKind !== null || thread.parkedPlan) return 'awaiting_approval';
-
-  if (thread.lastConversationalSender === null) return 'empty_thread';
-
-  // Negative rather than an `agent`/`ai` allow-list: only a customer having the
-  // last word means the thread is blocked on us, so an unrecognized sender type
-  // reads as answered rather than as a handoff the merchant has to pick up.
-  if (thread.lastConversationalSender !== SENDER_TYPE.CUSTOMER) return 'awaiting_customer';
-
-  return 'blocked_no_plan';
-}
-
 const COUNT_WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
 
-/**
- * Spell out small counts of *tickets and queued work* — "three open tickets"
- * reads like a person, "3 open tickets" like a dashboard. The rule is per noun,
- * not per section: the weekly stat line says "five tickets in" too, because the
- * same noun rendered two ways four lines apart is what reads as inconsistent.
- * Money, durations, order counts and window lengths stay in digits; those are
- * numbers the merchant is meant to compare, not sentences.
- */
 export function countWord(count: number): string {
   return COUNT_WORDS[count] ?? String(count);
 }
@@ -556,6 +498,25 @@ export function formatBlockedTicketLine(thread: BriefingTicketRow): string {
   return formatTicketLine(thread);
 }
 
+/** Explicit human escalation the agent parked for merchant judgment. */
+export function formatEscalatedTicketLine(thread: BriefingTicketRow): string {
+  const named = formatBriefingTicketLine(
+    thread.customer?.name ?? null,
+    null,
+    null,
+    null,
+    thread.channelType ?? null,
+  );
+  const subject = named === 'Open ticket' ? 'Someone' : named;
+  const summary = cleanBriefingText(thread.aiSummary);
+  if (summary) {
+    const humanized = humanizeReportedSummary(subject, summary);
+    if (humanized) return `${endClause(humanized)} I flagged it for you.`;
+    return `${subject}: ${truncateBriefingText(summary, HANDOFF_SUMMARY_MAX)}. I flagged it for you.`;
+  }
+  return `${subject} asked for a human. I flagged it for you.`;
+}
+
 function formatTicketLine(thread: BriefingTicketRow): string {
   return formatBriefingTicketLine(
     thread.customer?.name ?? null,
@@ -713,10 +674,10 @@ export async function loadHandledRollup(
   return { approvedCount, autoCount, replyCount, refundCount, notableLines };
 }
 
-export function formatHandledSection(rollup: HandledRollup): string {
+export function formatHandledSection(rollup: HandledRollup): string | null {
   const total = rollup.approvedCount + rollup.autoCount;
   if (total === 0) {
-    return 'Since your last briefing I didn\'t send any replies or refunds.';
+    return null;
   }
 
   // One thing does not need a count, a breakdown, and a bullet: "I handled one
@@ -772,7 +733,10 @@ function waitingSince(thread: {
   return thread.messages[0]?.sentAt ?? thread.updatedAt;
 }
 
-async function loadOperatorWaitingItems(organizationId: string, now: Date): Promise<WaitingItem[]> {
+async function loadOperatorWaitingItems(
+  organizationId: string,
+  settings: ReturnType<typeof resolveAgentSettings>,
+): Promise<WaitingItem[]> {
   const contexts = await db.operatorContext.findMany({
     where: {
       organizationId,
@@ -800,15 +764,27 @@ async function loadOperatorWaitingItems(organizationId: string, now: Date): Prom
           aiSummary: true,
           tag: true,
           channelType: true,
+          filterStatus: true,
+          cachedPlan: true,
+          cachedPlanMessageId: true,
           customer: { select: { name: true } },
           messages: {
             where: { deletedAt: null, senderType: { not: SENDER_TYPE.NOTE } },
             orderBy: [{ sentAt: 'desc' }, { id: 'desc' }],
             take: 1,
-            select: { sentAt: true },
+            select: { id: true, senderType: true, sentAt: true },
           },
         },
       });
+      if (thread) {
+        const currentPlan = getCurrentPlanForThread(thread, thread.messages);
+        if (
+          currentPlan
+          && classifyHomePlan(currentPlan, settings, { filterStatus: thread.filterStatus }).kind === 'quick_reply'
+        ) {
+          continue;
+        }
+      }
       const dedupeKey = pendingPlan.planId
         ?? `${pendingPlan.threadId}:${pendingPlan.planHash ?? ''}:${pendingPlan.instructionHash ?? ''}`;
       items.push({
@@ -835,6 +811,7 @@ async function loadStaleThreadWaitingItems(
   organizationId: string,
   now: Date,
   coveredThreadIds: Set<string>,
+  settings: ReturnType<typeof resolveAgentSettings>,
 ): Promise<WaitingItem[]> {
   const cutoff = new Date(now.getTime() - WAITING_PLAN_MIN_AGE_MS);
   const threads = await db.thread.findMany({
@@ -853,6 +830,7 @@ async function loadStaleThreadWaitingItems(
       aiSummary: true,
       tag: true,
       channelType: true,
+      filterStatus: true,
       customer: { select: { name: true } },
       messages: {
         where: { deletedAt: null, senderType: { not: SENDER_TYPE.NOTE } },
@@ -871,12 +849,11 @@ async function loadStaleThreadWaitingItems(
     const plan = getCurrentPlanForThread(thread, thread.messages);
     if (!plan || !cached) continue;
 
-    // No classification filter. A plan still cached this long after its thread
-    // last moved was not executed, whatever shape it is, so it is waiting on the
-    // merchant by definition. Filtering to needs_review/needs_merchant_input
-    // stranded exactly the plans the operator queue drops: `appendPendingPlan`
-    // keeps only the newest, so a second ticket evicts a `quick_reply` from the
-    // phone's approval slot and this scan then refused to bring it back.
+    // Safe replies belong to the autonomous recovery lane, not the merchant's
+    // morning. Every other current plan remains an explicit approval or question.
+    if (classifyHomePlan(plan, settings, { filterStatus: thread.filterStatus }).kind === 'quick_reply') {
+      continue;
+    }
     if (cached.planId && await isPlanExecutionResolved(organizationId, cached.planId)) {
       continue;
     }
@@ -904,7 +881,12 @@ export async function loadWaitingOnYouItems(
   organizationId: string,
   now: Date,
 ): Promise<WaitingItem[]> {
-  const operatorItems = await loadOperatorWaitingItems(organizationId, now);
+  const organization = await db.organization.findUnique({
+    where: { id: organizationId },
+    select: { settings: true },
+  });
+  const settings = resolveAgentSettings(organization?.settings);
+  const operatorItems = await loadOperatorWaitingItems(organizationId, settings);
   const seen = new Set<string>();
   const merged: WaitingItem[] = [];
 
@@ -915,7 +897,7 @@ export async function loadWaitingOnYouItems(
   }
 
   const coveredThreads = new Set(operatorItems.map((item) => item.threadId));
-  const staleItems = await loadStaleThreadWaitingItems(organizationId, now, coveredThreads);
+  const staleItems = await loadStaleThreadWaitingItems(organizationId, now, coveredThreads, settings);
   for (const item of staleItems) {
     if (seen.has(item.dedupeKey)) continue;
     seen.add(item.dedupeKey);
@@ -1048,13 +1030,13 @@ const BRIEFING_RECITE_MAX = 8;
 function groupLead(kind: BriefingItem['kind'], count: number): string {
   if (kind === 'approval') {
     return count === 1
-      ? "One's ready to go the moment you say."
-      : `${capitalize(countWord(count))} are ready to go the moment you say.`;
+      ? 'One action is waiting for your approval.'
+      : `${capitalize(countWord(count))} actions are waiting for your approval.`;
   }
   if (kind === 'decision') {
-    return count === 1 ? 'One I need you on.' : `${capitalize(countWord(count))} I need you on.`;
+    return count === 1 ? 'One needs your decision.' : `${capitalize(countWord(count))} need your decision.`;
   }
-  return count === 1 ? "One I'm not sure about." : `${capitalize(countWord(count))} I'm not sure about.`;
+  return count === 1 ? 'One sender looks questionable.' : `${capitalize(countWord(count))} senders look questionable.`;
 }
 
 const KIND_ORDER: BriefingItem['kind'][] = ['approval', 'decision', 'flagged'];
@@ -1100,11 +1082,7 @@ export function formatNeedsYouAsk(items: BriefingItem[]): string | null {
   if (items.length === 0 || items.length > BRIEFING_RECITE_MAX) return null;
   const readyOnly = items.every((item) => item.kind === 'approval');
   if (readyOnly) {
-    return items.length === 1 ? 'Want me to send it?' : 'Want me to send them?';
+    return 'Should I go ahead?';
   }
-  return items.length === 1 ? 'What do you want to do?' : 'Let me know how you want to play these.';
+  return items.length === 1 ? 'What do you want to do?' : 'Tell me what you want to do with these.';
 }
-
-
-
-

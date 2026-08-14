@@ -124,8 +124,8 @@ describe('sendScheduledDigests — first-night briefing', () => {
     const messages = myMessages();
     expect(messages).toHaveLength(1);
     expect(messages[0]).toContain('first rundown');
-    expect(messages[0]).toContain('One I need you on.');
-    expect(messages[0]).toContain('Jane');
+    expect(messages[0]).toContain('Nothing needs you right now.');
+    expect(messages[0]).not.toContain('Jane');
 
     expect((await readSettings(org.id)).firstBriefingPending).toBe(false);
   });

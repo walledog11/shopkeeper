@@ -24,6 +24,7 @@ function makeThread(overrides: Partial<{
   aiTitle: string | null;
   aiSummary: string | null;
   filterReason: string | null;
+  escalatedAt: Date | null;
   noRequest: boolean;
 }> = {}) {
   const ageHours = overrides.ageHours ?? 1;
@@ -39,6 +40,7 @@ function makeThread(overrides: Partial<{
       : overrides.filterDecidedAt,
     aiSummary: overrides.aiSummary ?? null,
     filterReason: overrides.filterReason ?? null,
+    escalatedAt: overrides.escalatedAt ?? null,
     customer: { name: overrides.customerName === undefined ? 'Jane' : overrides.customerName },
     cachedPlan: null,
     cachedPlanMessageId: null,
@@ -78,6 +80,25 @@ function replyPlanCache(instruction: string, lastCustomerMessageId: string) {
         enabled: true,
       }],
       rawToolCalls: [{ id: 'step-1', name: 'send_reply', input: { text: 'On its way.' } }],
+    },
+    lastCustomerMessageId,
+    settings: resolveAgentSettings(null),
+  });
+}
+
+function refundPlanCache(instruction: string, lastCustomerMessageId: string) {
+  return buildAgentPlanCacheRecord({
+    instruction,
+    plan: {
+      instruction,
+      steps: [
+        { id: 'refund-1', tool: 'create_refund', label: 'Refund', description: 'Issue refund', category: 'action', enabled: true },
+        { id: 'send-1', tool: 'send_reply', label: 'Send reply', description: 'Confirm refund', category: 'communication', enabled: true },
+      ],
+      rawToolCalls: [
+        { id: 'refund-1', name: 'create_refund', input: { order_id: '1001', amount: 12, currency: 'USD' } },
+        { id: 'send-1', name: 'send_reply', input: { text: 'I issued your refund.' } },
+      ],
     },
     lastCustomerMessageId,
     settings: resolveAgentSettings(null),
@@ -173,9 +194,9 @@ describe('formatDigestMessage', () => {
     // because the ordinal resolver wanted them, and replies resolve by name.
     expect(msg).not.toMatch(/^\s*\d+\. /m);
     expect(msg).not.toMatch(/Reply with|reply with a number|"1 yes"/);
-    expect(msg).toContain('Two are ready to go the moment you say.');
-    expect(msg).toContain('One I need you on.');
-    expect(msg).toContain("One I'm not sure about.");
+    expect(msg).toContain('Two actions are waiting for your approval.');
+    expect(msg).toContain('One needs your decision.');
+    expect(msg).toContain('One sender looks questionable.');
   });
 
   // The group lead already carries the count, so a headline above it counts the
@@ -186,7 +207,7 @@ describe('formatDigestMessage', () => {
       needsYou: [item(), item()],
     });
     expect(msg.split('\n')[0]).toBe('Morning, Ada here.');
-    expect(msg).toContain('Two are ready to go the moment you say.');
+    expect(msg).toContain('Two actions are waiting for your approval.');
     expect(msg).not.toContain('things need you');
   });
 
@@ -194,7 +215,7 @@ describe('formatDigestMessage', () => {
     const msg = formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE), null, {
       needsYou: [item(), item({ kind: 'decision', line: 'Dana asked something.' })],
     });
-    expect(msg).toContain('Let me know how you want to play these.');
+    expect(msg).toContain('Tell me what you want to do with these.');
     expect(msg).not.toMatch(/Reply with|number/);
   });
 
@@ -202,32 +223,29 @@ describe('formatDigestMessage', () => {
     const msg = formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE), null, {
       needsYou: [item(), item()],
     });
-    expect(msg).toContain('Two are ready to go the moment you say.');
-    expect(msg).not.toContain('I need you on');
-    expect(msg.trimEnd().endsWith('Want me to send them?')).toBe(true);
+    expect(msg).toContain('Two actions are waiting for your approval.');
+    expect(msg).not.toContain('needs your decision');
+    expect(msg.trimEnd().endsWith('Should I go ahead?')).toBe(true);
   });
 
-  it('folds everything needing nothing into one closing paragraph', () => {
+  it('reports completed work without narrating quiet threads', () => {
     const buckets = bucketDigestThreads([makeThread({ filterStatus: 'filtered' })], NOW, FILED_SINCE);
     const msg = formatDigestMessage(buckets, null, {
       needsYou: [item()],
       handledSection: 'Since your last briefing I replied to Bob.',
-      quietSentence: 'Two others are ticking along without me.',
     });
-    // One sentence per line, so the tail is the last three lines rather than one.
-    expect(msg.trim().split('\n').slice(-3)).toEqual([
+    expect(msg.trim().split('\n').slice(-2)).toEqual([
       'Since your last briefing I replied to Bob.',
       'I filed one as spam.',
-      'Two others are ticking along without me.',
     ]);
+    expect(msg).not.toContain('ticking along');
   });
 
   it('signs off rather than trailing away when nothing needs them', () => {
     const msg = formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE), null, {
       handledSection: 'Since your last briefing I replied to Bob.',
     });
-    expect(msg).toContain("I'll shout if anything comes in.");
-    expect(msg).not.toContain('need you');
+    expect(msg).toContain('Nothing needs you right now.');
   });
 
   it('shows the weekly line only when there is nothing to act on', () => {
@@ -295,8 +313,8 @@ describe('buildOrgDigest — inbox scope', () => {
     await db.thread.update({ where: { id: archived.id }, data: { archivedAt: new Date() } });
 
     const digest = await buildOrgDigest(org.id, NOW);
-    expect(digest?.message).toContain('One I need you on.');
-    expect(digest?.message).toContain('Jane');
+    expect(digest?.message).toContain('Nothing needs you right now.');
+    expect(digest?.message).not.toContain('Jane');
     expect(digest?.message).not.toContain('Operator');
     expect(digest?.message).not.toContain('Old');
   });
@@ -328,23 +346,18 @@ describe('buildOrgDigest — inbox scope', () => {
     });
 
     const digest = await buildOrgDigest(org.id, NOW);
-    expect(digest?.message).toContain('One I need you on.');
+    expect(digest?.message).toContain('Nothing needs you right now.');
     expect(digest?.message).toContain('I filed one as spam.');
   });
 
-  // The four open threads from the diagnosed briefing, which the digest could
-  // only describe as one undifferentiated bucket.
-  it('carries a lifecycle state per open thread', async () => {
+  // Note-only and answered threads are inbox hygiene, not merchant decisions.
+  it('does not name note-only or awaiting-customer threads in the briefing', async () => {
     org = await createTestOrg();
-    // One open thread per (customer, channel), per the partial unique index.
-    const [empty, answered, blocked, planned] = await Promise.all([
+    const [empty, answered] = await Promise.all([
       createTestCustomer(org.id, 'empty@example.com', { name: 'Empty' }),
       createTestCustomer(org.id, 'answered@example.com', { name: 'Answered' }),
-      createTestCustomer(org.id, 'blocked@example.com', { name: 'Blocked' }),
-      createTestCustomer(org.id, 'planned@example.com', { name: 'Planned' }),
     ]);
 
-    // Only note rows, exactly like the Shopify order webhook's threads.
     const emptyThread = await createTestThread(org.id, empty.id, 'shopify');
     await createTestMessage(emptyThread.id, 'New order #1026 was placed.', 'note');
 
@@ -358,38 +371,37 @@ describe('buildOrgDigest — inbox scope', () => {
       10,
     );
 
-    const blockedThread = await createTestThread(org.id, blocked.id, 'email');
-    await createTestMessage(blockedThread.id, 'Where is my order?');
+    const message = (await buildOrgDigest(org.id, NOW))!.message;
+    expect(message).toContain('Nothing needs you right now.');
+    expect(message).not.toContain('Empty');
+    expect(message).not.toContain('Answered');
+    expect(message).not.toContain('awaiting');
+    expect(message).not.toContain('blocked');
+  });
 
-    const plannedThread = await createTestThread(org.id, planned.id, 'email');
-    const plannedMessage = await createTestMessage(plannedThread.id, 'Can I get a refund?');
+  it('surfaces an explicit escalation once as merchant work', async () => {
+    org = await createTestOrg();
+    const customer = await createTestCustomer(org.id, 'maya@example.com', { name: 'Maya' });
+    const thread = await createTestThread(org.id, customer.id, 'email');
+    await createTestMessage(thread.id, 'I need to speak to a person.');
     await db.thread.update({
-      where: { id: plannedThread.id },
+      where: { id: thread.id },
       data: {
-        cachedPlan: replyPlanCache('Refund request', plannedMessage.id),
-        cachedPlanMessageId: plannedMessage.id,
+        escalatedAt: NOW,
+        aiSummary: 'Customer asks to speak to a person about a delayed order.',
       },
     });
 
-    const digest = await buildOrgDigest(org.id, NOW);
-    const byThread = new Map(digest!.lifecycleStates.map((row) => [row.threadId, row.state]));
-
-    expect(byThread.get(emptyThread.id)).toBe('empty_thread');
-    expect(byThread.get(answeredThread.id)).toBe('awaiting_customer');
-    expect(byThread.get(blockedThread.id)).toBe('blocked_no_plan');
-    // Fresh, so the three-hour stale scan has not parked it — this asserts the
-    // cached-plan path, not the operator ledger.
-    expect(byThread.get(plannedThread.id)).toBe('awaiting_approval');
-
-    // State names are a vocabulary for the code, never words the merchant reads.
-    expect(digest?.message).not.toContain('awaiting');
-    expect(digest?.message).not.toContain('blocked');
+    const digest = (await buildOrgDigest(org.id, NOW))!;
+    expect(digest.message).toContain('Maya');
+    expect(digest.message).toContain('flagged it for you');
+    expect(digest.pendingDigest.items.filter((item) => item.threadId === thread.id)).toHaveLength(1);
+    expect(digest.pendingDigest.items.find((item) => item.threadId === thread.id)?.kind).toBe('decision');
   });
 
-  // Every thread classified before `no_request` existed parses with it false,
-  // which has to mean "assume they did ask for something". The opposite default
-  // would empty the briefing on deploy day and hide real customers.
-  it('keeps reporting threads classified before the no_request signal existed', async () => {
+  // Legacy rows still enter recovery, but a missing plan never becomes inferred
+  // merchant work merely because classifier signals are incomplete.
+  it('does not turn a legacy thread with no plan into a merchant decision', async () => {
     org = await createTestOrg();
     const customer = await createTestCustomer(org.id, 'legacy@example.com', { name: 'Dana Ruiz' });
     const thread = await createTestThread(org.id, customer.id, 'email');
@@ -407,15 +419,54 @@ describe('buildOrgDigest — inbox scope', () => {
     });
 
     const message = (await buildOrgDigest(org.id, NOW))!.message;
-    expect(message).toContain('I need you on');
-    expect(message).toContain('Dana');
+    expect(message).toContain('Nothing needs you right now.');
+    expect(message).not.toContain('Dana');
   });
 
-  // The diagnosed 8:00am briefing, rebuilt: five items under one pronoun, four
-  // of them in an "Also open" roll-up that the closing "Want me to go ahead with
-  // it?" appeared to cover. Each state now gets a section that says what the
-  // merchant is actually looking at, and the two message-less Shopify threads
-  // say nothing at all.
+  // Once the spam filter reaches storefront chat, "yo" from an anonymous
+  // visitor is a plausible `questionable` — so an ungated flagged block would
+  // put the one-word storefront visitor back on the merchant's phone under a
+  // different heading. The pitch beside it is what the flagged block is for.
+  it('flags a questionable thread that asked for something and hides one that did not', async () => {
+    org = await createTestOrg();
+    const [pitcher, visitor] = await Promise.all([
+      createTestCustomer(org.id, 'growth@seo-agency.example', { name: 'Marcus Webb' }),
+      createTestCustomer(org.id, 'visitor-session-88', { name: 'Wren Ashby' }),
+    ]);
+
+    const pitchThread = await createTestThread(org.id, pitcher.id, 'email');
+    await createTestMessage(pitchThread.id, 'We can 10x your store traffic — interested?');
+    await db.thread.update({
+      where: { id: pitchThread.id },
+      data: {
+        filterStatus: ThreadFilterStatus.questionable,
+        filterDecidedAt: NOW,
+        aiSummary: 'Someone pitched an SEO service and asked whether the store is interested.',
+      },
+    });
+
+    const greetingThread = await createTestThread(org.id, visitor.id, 'shopify_chat');
+    await createTestMessage(greetingThread.id, 'yo');
+    await db.thread.update({
+      where: { id: greetingThread.id },
+      data: {
+        filterStatus: ThreadFilterStatus.questionable,
+        filterDecidedAt: NOW,
+        aiSummary: 'Visitor wrote a single word: "yo".',
+        classifierSignals: NO_REQUEST_SIGNALS,
+      },
+    });
+
+    const digest = (await buildOrgDigest(org.id, NOW))!;
+
+    expect(digest.message).toContain('Marcus');
+    expect(digest.message).not.toContain('Wren');
+    // The count describes the message that was sent, not the bucket behind it.
+    expect(digest.flaggedCount).toBe(1);
+    expect(digest.pendingDigest.threadIds).toEqual([pitchThread.id]);
+  });
+
+  // The diagnosed 8:00am briefing, rebuilt around explicit merchant work.
   it('reads as a text message, not a list with reply instructions', async () => {
     org = await createTestOrg();
     const [waiting, canary, ayumu, visitor, walle, stuck, fresh] = await Promise.all([
@@ -430,12 +481,12 @@ describe('buildOrgDigest — inbox scope', () => {
 
     // The one real approval: a plan cached long enough for the stale scan.
     const waitingThread = await createTestThread(org.id, waiting.id, 'email');
-    const waitingMessage = await createTestMessage(waitingThread.id, 'Can you resend my receipt?');
+    const waitingMessage = await createTestMessage(waitingThread.id, 'Please refund the damaged mug.');
     await db.thread.update({
       where: { id: waitingThread.id },
       data: {
-        aiTitle: 'Receipt Resend',
-        cachedPlan: replyPlanCache('Resend the receipt', waitingMessage.id),
+        aiTitle: 'Damaged Mug Refund',
+        cachedPlan: refundPlanCache('Refund the damaged mug', waitingMessage.id),
         cachedPlanMessageId: waitingMessage.id,
         updatedAt: new Date(NOW.getTime() - 4 * HOUR),
       },
@@ -502,23 +553,13 @@ describe('buildOrgDigest — inbox scope', () => {
 
     const message = (await buildOrgDigest(org.id, NOW))!.message;
 
-    // Two things need the merchant, numbered once, under one ask. The shape this
-    // replaced printed the same two under separate headings with separate
-    // numbering and separate closing questions.
-    // Each item is its own block now, so grouping is pinned by position: the
-    // drafted one falls under the ready lead, the unplanned one under the other.
-    const readyAt = message.indexOf('ready to go the moment you say');
-    const callsAt = message.indexOf('I need you on');
+    // Only the explicit approval needs the merchant. A missing plan is recovered
+    // by the planning sweep and never promoted to a decision by the renderer.
+    const readyAt = message.indexOf('waiting for your approval');
     expect(readyAt).toBeGreaterThanOrEqual(0);
     expect(readyAt).toBeLessThan(message.indexOf('Sarah'));
-    expect(message.indexOf('Sarah')).toBeLessThan(callsAt);
-    expect(callsAt).toBeLessThan(message.indexOf('Priya'));
     expect(message).not.toMatch(/^\s*\d+\. /m);
-
-    // The handoff carries the customer's words, not the classifier's paraphrase,
-    // because the merchant has to answer the question to take the ticket.
-    expect(message).toContain('Priya asked: "Do the linen napkins come in a darker olive?"');
-    expect(message).not.toContain('Olive Linen Napkins');
+    expect(message).not.toContain('Priya');
 
     // Message-less threads, and anything the customer has not actually asked
     // for yet, appear nowhere.
@@ -526,18 +567,16 @@ describe('buildOrgDigest — inbox scope', () => {
       expect(message).not.toContain(absent);
     }
 
-    // Ravi's plan is too fresh to be parked, so he is not work yet — he is one
-    // sentence at the end rather than a heading of his own.
+    // Ravi's plan is too fresh to be parked, and quiet state is not briefing
+    // content at all.
     expect(message).not.toContain('Ravi');
-    expect(message).toContain('ticking along without me');
+    expect(message).not.toContain('ticking along without me');
 
     // One ask, and it is the last thing before the tail. The old shape closed
     // with three, in three different places.
-    expect(message).toContain('Let me know how you want to play these.');
+    expect(message).toContain('Should I go ahead?');
     expect(message).not.toMatch(/Reply with|"1 yes"/);
-    // The tail is news, so it lands after the close rather than between the
-    // rundown and the question about it.
-    expect(message.trimEnd().endsWith('ticking along without me.')).toBe(true);
+    expect(message.trimEnd().endsWith('Should I go ahead?')).toBe(true);
   });
 });
 

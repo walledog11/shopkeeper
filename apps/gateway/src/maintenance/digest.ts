@@ -1,8 +1,6 @@
 import { getSupportStats, type SupportStatsSummary } from '@shopkeeper/agent/support-stats';
 import { canonicalInboxThreadWhere } from '@shopkeeper/agent/inbox-filter';
 import { parseClassifierSignals } from '@shopkeeper/agent/classifier-signals';
-import { classifyHomePlan } from '@shopkeeper/agent/plan-preview';
-import { getCurrentPlanForThread } from '@shopkeeper/agent/plan-cache-shape';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { SENDER_TYPE } from '@shopkeeper/agent/thread-constants';
 import { db, ThreadFilterStatus, type DbThreadFilterStatus } from '@shopkeeper/db';
@@ -12,10 +10,8 @@ import { listOperatorBindings, notifyOperator, type OperatorBinding, type Operat
 import type { PendingDigest } from '../operator-context.js';
 import { digestNotificationIdempotencyKey } from '../operator-notify-idempotency.js';
 import {
-  capitalize,
   countWord,
-  deriveThreadLifecycleState,
-  formatBlockedTicketLine,
+  formatEscalatedTicketLine,
   formatHandledSection,
   formatNeedsYouAsk,
   formatNeedsYouProse,
@@ -28,7 +24,6 @@ import {
   redactBriefingContacts,
   resolveHandledWindowStart,
   truncateBriefingText,
-  type ThreadLifecycleState,
 } from './digest-briefing.js';
 import { loadDigestShopifyGarnish } from './digest-shopify-garnish.js';
 import {
@@ -67,11 +62,12 @@ export interface DigestThreadRow {
   aiTitle: string | null;
   aiSummary: string | null;
   filterReason: string | null;
+  escalatedAt: Date | null;
   customer: { name: string | null };
   // Lifecycle-state inputs. `messages` is the newest non-note message only, in
   // the same descending shape `loadStaleThreadWaitingItems` passes to
-  // `getCurrentPlanForThread` — that helper reads the last conversational
-  // sender itself, so the two must agree on what "last message" means.
+  // plan-cache helpers — those read the last conversational sender from the
+  // same ordering contract.
   cachedPlan: unknown;
   cachedPlanMessageId: string | null;
   // `contentText` is here for the handoff section, which quotes the customer
@@ -190,8 +186,6 @@ export interface DigestMessageExtras {
   needsYou?: BriefingItem[];
   /** What the agent did without them, as a sentence for the closing tail. */
   handledSection?: string | null;
-  /** Threads sitting quietly, as a sentence. Never a section: nothing is owed. */
-  quietSentence?: string | null;
   garnishLines?: string[];
 }
 
@@ -205,9 +199,17 @@ export interface DigestMessageExtras {
  * cannot separate "sweater ripped" from "yo", and hiding a two-word complaint is
  * the one failure here that costs a real customer.
  *
- * Only the reporting sections honor it. A parked plan stays in the approval list
- * whatever prompted it, because "yes" still approves it from the operator ledger
- * and a briefing that hides what "yes" would do is worse than a noisy one.
+ * Every reporting section honors it, the flagged block included. Once the spam
+ * filter reaches storefront chat, a bare "yo" from an anonymous visitor is a
+ * plausible `questionable` — so leaving the flagged block ungated would put the
+ * one-word storefront visitor straight back on the merchant's phone under a
+ * different heading, which is the exact line this briefing was rebuilt to
+ * remove. "I can't tell whether they're a customer" is also not answerable about
+ * someone who has said nothing; there is no decision behind it.
+ *
+ * The approval list is the one exemption. A parked plan stays listed whatever
+ * prompted it, because "yes" still approves it from the operator ledger and a
+ * briefing that hides what "yes" would do is worse than a noisy one.
  */
 function hasNoRequest(thread: DigestThreadRow): boolean {
   return parseClassifierSignals(thread.classifierSignals)?.intents.no_request === true;
@@ -277,13 +279,12 @@ export function formatDigestMessage(
   }
   if (ask) lines.push('', ask);
 
-  // The tail: what happened without them, and what is sitting quietly. Each is a
-  // sentence in one paragraph rather than a section, because none of it is a
-  // decision and a heading implies one.
+  // The tail reports completed work only. Threads waiting on customers are
+  // normal operational state, not news for the merchant, and are intentionally
+  // absent rather than summarized as a vague "ticking along" count.
   const tail: string[] = [];
   if (extras?.handledSection) tail.push(extras.handledSection);
   if (filteredCount > 0) tail.push(spamSentence(filteredCount));
-  if (extras?.quietSentence) tail.push(extras.quietSentence);
   if (tail.length > 0) {
     if (lines.length > 0) lines.push('');
     lines.push(oneSentencePerLine(tail.join(' ')));
@@ -297,7 +298,7 @@ export function formatDigestMessage(
   }
   if (items.length === 0) {
     if (lines.length > 0) lines.push('');
-    lines.push(`I'll shout if anything comes in.`);
+    lines.push('Nothing needs you right now.');
   }
 
   return lines.join('\n');
@@ -323,11 +324,6 @@ export interface OrgDigest {
   message: string;
   pendingDigest: PendingDigest;
   flaggedCount: number;
-  /**
-   * One lifecycle state per open non-filtered thread. Carried, not yet rendered
-   * — the message is unchanged until the sections that read these land.
-   */
-  lifecycleStates: Array<{ threadId: string; state: ThreadLifecycleState }>;
 }
 
 /**
@@ -364,6 +360,7 @@ export async function buildOrgDigest(
         aiTitle: true,
         aiSummary: true,
         filterReason: true,
+        escalatedAt: true,
         customer: { select: { name: true } },
         cachedPlan: true,
         cachedPlanMessageId: true,
@@ -391,44 +388,8 @@ export async function buildOrgDigest(
   const buckets = bucketDigestThreads(openThreads, now, since);
   const waitingThreadIds = new Set(waitingItems.map((item) => item.threadId));
 
-  // Filtered threads are reported as a count and never named, so they get no
-  // state. `waitingItems` is the parked-plan set: it already merges the operator
-  // ledger with the stale-plan scan, which is the only place a parked plan is
-  // visible from here.
-  const resolvedSettings = resolveAgentSettings(settings);
-  const lifecycleStates = [...buckets.genuine, ...buckets.questionable].map((thread) => {
-    const plan = getCurrentPlanForThread(thread, thread.messages);
-    return {
-      threadId: thread.id,
-      state: deriveThreadLifecycleState({
-        status: 'open',
-        planKind: plan
-          ? classifyHomePlan(plan, resolvedSettings, { filterStatus: thread.filterStatus }).kind
-          : null,
-        parkedPlan: waitingThreadIds.has(thread.id),
-        lastConversationalSender: thread.messages[0]?.senderType ?? null,
-      }),
-    };
-  });
-
-  // Questionable threads are named in the flagged block and nowhere else, so
-  // only the genuine ones are sorted into sections here. What is left in
-  // "Also open" after the split is `awaiting_approval` threads whose plan is not
-  // yet stale enough for the waiting list — the merchant already got a card for
-  // those. `empty_thread` matches nothing and is never rendered: a thread whose
-  // only rows are Shopify webhook notes has nothing to tell the merchant, and
-  // P4 stops creating them.
-  const stateByThreadId = new Map(lifecycleStates.map((entry) => [entry.threadId, entry.state]));
-  const unlisted = buckets.genuine.filter((thread) => (
-    !waitingThreadIds.has(thread.id) && !hasNoRequest(thread)
-  ));
-  const threadsInState = (state: ThreadLifecycleState) => (
-    unlisted.filter((thread) => stateByThreadId.get(thread.id) === state)
-  );
-  // The one list, in the order it is numbered. Approvals first because a yes
-  // clears them; then the threads with no plan; then the classifier's maybes,
-  // which are the same shape of work — someone has to look and decide.
-  const flagged = buckets.questionable.slice(0, DIGEST_QUESTIONABLE_LIMIT);
+  const flaggedCandidates = buckets.questionable.filter((thread) => !hasNoRequest(thread));
+  const flagged = flaggedCandidates.slice(0, DIGEST_QUESTIONABLE_LIMIT);
   const needsYou: BriefingItem[] = [
     ...waitingItems.map((item): BriefingItem => ({
       threadId: item.threadId,
@@ -436,14 +397,13 @@ export async function buildOrgDigest(
       ...(item.planId ? { planId: item.planId } : {}),
       line: item.line,
     })),
-    ...threadsInState('blocked_no_plan').map((thread): BriefingItem => ({
-      threadId: thread.id,
-      kind: 'decision',
-      line: formatBlockedTicketLine({
-        ...thread,
-        pendingMessage: thread.messages[0]?.contentText ?? null,
-      }),
-    })),
+    ...buckets.genuine
+      .filter((thread) => thread.escalatedAt && !waitingThreadIds.has(thread.id) && !hasNoRequest(thread))
+      .map((thread): BriefingItem => ({
+        threadId: thread.id,
+        kind: 'decision',
+        line: formatEscalatedTicketLine(thread),
+      })),
     ...flagged.map((thread): BriefingItem => {
       const name = thread.customer.name ?? 'Someone new';
       const blurb = flaggedBlurb(thread);
@@ -460,15 +420,6 @@ export async function buildOrgDigest(
     }),
   ];
 
-  // Sitting quietly: answered and gone silent, or planned so recently the
-  // merchant already has the card. Neither is a decision, so neither gets a line
-  // of its own — they are one clause in the tail or nothing at all.
-  const quietCount = threadsInState('awaiting_customer').length
-    + threadsInState('awaiting_approval').length;
-  const quietSentence = quietCount > 0
-    ? `${capitalize(countWord(quietCount))} ${quietCount === 1 ? 'other is' : 'others are'} ticking along without me.`
-    : null;
-
   const weeklyLine = needsYou.length > 0
     ? null
     : weeklyStats
@@ -483,7 +434,6 @@ export async function buildOrgDigest(
         opener: options.opener ?? null,
         needsYou,
         handledSection,
-        quietSentence,
         garnishLines,
       },
     ),
@@ -494,8 +444,10 @@ export async function buildOrgDigest(
       threadIds: flagged.map((thread) => thread.id),
       sentAt: now.toISOString(),
     },
-    flaggedCount: buckets.questionable.length,
-    lifecycleStates,
+    // What the briefing actually flagged, before the recite limit — a count that
+    // included the threads the substance gate hid would describe a message the
+    // merchant never got.
+    flaggedCount: flaggedCandidates.length,
   };
 }
 
