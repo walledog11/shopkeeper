@@ -1,6 +1,7 @@
 import { db } from '@shopkeeper/db';
 import { JOB, QUEUE } from '../constants.js';
 import logger from '../logger.js';
+import { closeInactiveOpenThreads } from './inactive-thread-sweep.js';
 import {
   createMaintenanceQueue,
   createMaintenanceWorker,
@@ -48,11 +49,16 @@ export async function purgeDeletedRecords(): Promise<void> {
   );
 }
 
+export async function runDailyThreadRetention(): Promise<void> {
+  await archiveOldClosedThreads();
+  await closeInactiveOpenThreads();
+}
+
 export const registerRetentionMaintenanceJobs: MaintenanceJobRegistration = async (context) => {
   const archivalQueue = createMaintenanceQueue(context, QUEUE.ARCHIVAL);
   await scheduleRepeatableJob(archivalQueue, JOB.ARCHIVE_THREADS, JOB.ARCHIVE_THREADS_ID, ONE_DAY_MS);
 
-  const archivalWorker = createMaintenanceWorker(context, QUEUE.ARCHIVAL, archiveOldClosedThreads, {
+  const archivalWorker = createMaintenanceWorker(context, QUEUE.ARCHIVAL, runDailyThreadRetention, {
     label: 'Archival',
     failureQueue: 'thread-archival',
   });
