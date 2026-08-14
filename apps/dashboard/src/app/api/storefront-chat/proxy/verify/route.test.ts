@@ -32,6 +32,12 @@ vi.mock('@shopkeeper/email/senders', () => ({
   getEmailSender: () => ({ send }),
 }));
 
+const emitOpsAlert = vi.fn();
+
+vi.mock('@/lib/server/ops-alerts', () => ({
+  emitOpsAlert: (...args: unknown[]) => emitOpsAlert(...args),
+}));
+
 const { POST } = await import('./route');
 
 let org: Awaited<ReturnType<typeof createTestOrg>>;
@@ -131,6 +137,44 @@ describe('storefront chat order verification', () => {
 
     expect(send).toHaveBeenCalledTimes(1);
     expect(send.mock.calls[0][0]).toMatchObject({ to: OWNER_EMAIL });
+  });
+
+  // The silent-failure case from the first live run: a Gmail connection whose
+  // token Google had revoked accepted the send and mailed nothing. The shopper
+  // cannot be told — identical copy is the disclosure invariant — so the only
+  // acceptable outcome is that it leaves loudly by another door.
+  describe('when the email integration is dead', () => {
+    it('still answers the shopper identically', async () => {
+      send.mockRejectedValueOnce(new Error('invalid_grant'));
+
+      const failed = await requestCode('#1025', OWNER_EMAIL);
+
+      expect(failed.status).toBe(200);
+      await expect(failed.json()).resolves.toEqual({ status: 'sent' });
+    });
+
+    it('raises an ops alert naming the provider and the integration', async () => {
+      send.mockRejectedValueOnce(new Error('invalid_grant'));
+
+      await requestCode('#1025', OWNER_EMAIL);
+
+      expect(emitOpsAlert).toHaveBeenCalledTimes(1);
+      expect(emitOpsAlert.mock.calls[0][0]).toMatchObject({
+        category: 'provider_send',
+        level: 'error',
+        message: 'Storefront verification code could not be mailed',
+      });
+      expect(emitOpsAlert.mock.calls[0][0].extra).toMatchObject({
+        orgId: org.id,
+        err: 'invalid_grant',
+      });
+    });
+
+    it('raises nothing when the send succeeds', async () => {
+      await requestCode('#1025', OWNER_EMAIL);
+
+      expect(emitOpsAlert).not.toHaveBeenCalled();
+    });
   });
 
   it('sends nothing at all when the supplied email is not the one on the order', async () => {

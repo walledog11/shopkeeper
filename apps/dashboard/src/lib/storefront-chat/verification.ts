@@ -18,6 +18,7 @@ import { resolveEmailIntegration } from "@shopkeeper/email/integration-resolutio
 import { getEmailSender } from "@shopkeeper/email/senders";
 import { EmailNotConfiguredError } from "@shopkeeper/email/types";
 import logger from "@/lib/server/logger";
+import { emitOpsAlert } from "@/lib/server/ops-alerts";
 
 // Deterministic identity verification for storefront chat. Deliberately not an
 // agent tool: the model never decides whether someone is verified, it only ever
@@ -176,10 +177,47 @@ export async function requestVerification(
       text: body.text,
     });
   } catch (err) {
-    logger.error(
-      { err: err instanceof Error ? err.message : String(err), orgId: input.orgId },
-      "[storefront-verification] code send failed",
-    );
+    // The shopper has already been told a code is on its way, and the response
+    // below cannot change — saying anything else here would make a dead sender
+    // observable per order number and break the disclosure invariant. So the
+    // failure has to leave by a different door entirely.
+    //
+    // This is the silent-failure case from the first live run: a Gmail
+    // connection whose token Google had revoked accepted the send and mailed
+    // nothing, and a single log line was the only trace. Nobody reads a log line.
+    const diagnostics = {
+      err: err instanceof Error ? err.message : String(err),
+      orgId: input.orgId,
+      integrationId: input.integrationId,
+      emailIntegrationId: emailIntegration.id,
+      provider: emailIntegration.emailProvider,
+      notConfigured: err instanceof EmailNotConfiguredError,
+    };
+    logger.error(diagnostics, "[storefront-verification] code send failed");
+    try {
+      emitOpsAlert({
+        category: "provider_send",
+        message: "Storefront verification code could not be mailed",
+        level: "error",
+        tags: { channel: "shopify_chat", provider: emailIntegration.emailProvider },
+        extra: diagnostics,
+        // Grouped per email integration, not per failure: one dead sender is one
+        // problem however many shoppers hit it.
+        fingerprint: [
+          "ops-alert",
+          "provider_send",
+          "dashboard",
+          "storefront_verification_send",
+          emailIntegration.id,
+        ],
+        error: err,
+      });
+    } catch (alertError) {
+      logger.warn(
+        { err: alertError instanceof Error ? alertError.message : String(alertError) },
+        "[storefront-verification] ops alert failed",
+      );
+    }
   }
 
   return { status: "sent" };
