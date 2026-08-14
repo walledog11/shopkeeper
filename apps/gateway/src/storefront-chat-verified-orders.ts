@@ -7,6 +7,10 @@ import { CHANNEL } from './constants.js';
 // card both run outside buildContext — which is why they went on describing a
 // shopper who had just proved control of an order's email as an unidentified
 // visitor, on the one channel where that distinction decides what may be said.
+//
+// Matched through the session's episode history, not its current `threadId`.
+// Both readers must agree across an episode boundary, or the operator card and
+// the agent would disagree about whether the same shopper is verified.
 export async function listVerifiedOrderNames(
   organizationId: string,
   threadId: string,
@@ -17,7 +21,7 @@ export async function listVerifiedOrderNames(
     where: {
       organizationId,
       verifiedAt: { not: null },
-      session: { threadId, revokedAt: null },
+      session: { revokedAt: null, episodes: { some: { threadId } } },
     },
     select: { orderName: true },
   });

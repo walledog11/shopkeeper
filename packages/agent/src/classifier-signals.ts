@@ -5,7 +5,11 @@
 // intent vocabulary — the gateway imports the type from here rather than
 // redeclaring it.
 
-export interface ClassifierIntents {
+// A type alias rather than an interface on purpose: every field is a boolean, so
+// this is genuinely JSON, but an interface has no implicit index signature and so
+// is not assignable to Prisma's InputJsonObject. Declaring it as a type keeps it
+// storable in a Json column without a cast at every write site.
+export type ClassifierIntents = {
   mutative_request: boolean; // asks to cancel/refund/return/exchange/edit
   policy_question: boolean; // shipping coverage, returns policy, discounts
   order_status: boolean;
@@ -20,7 +24,7 @@ export interface ClassifierIntents {
   // length rule can, since "sweater ripped" is as short as "yo" and is a real
   // complaint.
   no_request: boolean;
-}
+};
 
 export const CLASSIFIER_TAGS = [
   "Shipping",

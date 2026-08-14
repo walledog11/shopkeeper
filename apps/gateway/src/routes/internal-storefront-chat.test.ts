@@ -251,7 +251,7 @@ describe('POST /internal/storefront-chat/message', () => {
     });
 
     const newThread = await createTestThread(org.id, customer.id, ChannelType.shopify_chat);
-    vi.mocked(processInboundMessage).mockResolvedValueOnce({ thread: newThread, isNew: true });
+    vi.mocked(processInboundMessage).mockResolvedValueOnce({ thread: newThread, isNew: true, rolledOverFromThreadId: null });
 
     const response = await postMessage({
       organizationId: org.id,
@@ -275,7 +275,7 @@ describe('POST /internal/storefront-chat/message', () => {
     });
     const before = await db.storefrontChatSession.findUniqueOrThrow({ where: { id: session.id } });
 
-    vi.mocked(processInboundMessage).mockResolvedValueOnce({ thread, isNew: false });
+    vi.mocked(processInboundMessage).mockResolvedValueOnce({ thread, isNew: false, rolledOverFromThreadId: null });
 
     const response = await postMessage({
       organizationId: org.id,
@@ -460,11 +460,10 @@ describe('POST /internal/storefront-chat/message', () => {
     });
   });
 
-  // P0 of docs/conversation-context-and-cross-channel-memory-plan.md. These pin
-  // TODAY's behavior, which is the bug: a returning shopper's greeting lands on
-  // an idle open thread and the planner reads the whole old conversation. Every
-  // assertion marked "P1 inverts" flips when resolveInboundEpisode lands; the
-  // plan forbids leaving them red in the meantime.
+  // The bug these were written against: a returning shopper's greeting landed on
+  // an idle open thread and the planner read the whole old conversation. Written
+  // red-then-pinned at P0, inverted here now that resolveInboundEpisode decides
+  // the boundary.
   describe('conversation episodes', () => {
     const REFUND_ASK = 'I want a refund for order #1024, the mug arrived cracked.';
     const REFUND_ANSWER = 'Sorry about that — I have refunded order #1024 in full.';
@@ -515,8 +514,18 @@ describe('POST /internal/storefront-chat/message', () => {
         where: { id: session.id },
         data: { threadId: thread.id, customerId: customer.id },
       });
+      // Every storefront thread reaches a session through inbound, which writes
+      // this row in the same transaction. Omitting it here would model a session
+      // state production cannot produce.
+      await db.storefrontChatSessionEpisode.create({
+        data: { organizationId: org.id, sessionId: session.id, threadId: thread.id },
+      });
 
-      return { customer, thread };
+      const messages = await db.message.findMany({
+        where: { threadId: thread.id },
+        orderBy: { sentAt: 'asc' },
+      });
+      return { customer, thread, messages };
     }
 
     function greet(clientMessageId: string, text = 'Hi') {
@@ -529,46 +538,131 @@ describe('POST /internal/storefront-chat/message', () => {
       });
     }
 
-    it('lands a three-day-later greeting on the idle refund episode', async () => {
+    it('opens a new episode for a three-day-later greeting', async () => {
       const { thread } = await idleRefundEpisode(3 * 24 * 60 * 60 * 1000);
 
       const response = await greet('episode-greeting');
 
       expect(response.status).toBe(202);
-      // P1 inverts: isNewThread true, and threadId is a thread other than this one.
-      expect(response.body.isNewThread).toBe(false);
-      expect(response.body.threadId).toBe(thread.id);
+      expect(response.body.isNewThread).toBe(true);
+      expect(response.body.threadId).not.toBe(thread.id);
 
-      // Stable across P1: rollover closes the old episode, it never deletes it.
-      // P4 renders it as collapsed "Previous conversation" history, which needs
-      // the row and its messages to still be here.
+      // Closed, not deleted. P4 renders the expired episode as collapsed
+      // "Previous conversation" history, which needs the row and its messages.
       const old = await db.thread.findUniqueOrThrow({ where: { id: thread.id } });
+      expect(old.status).toBe('closed');
+      expect(old.closedReason).toBe('episode_rollover');
       expect(old.deletedAt).toBeNull();
-      expect(await db.message.count({ where: { threadId: thread.id, deletedAt: null } }))
-        .toBeGreaterThanOrEqual(2);
+      expect(await db.message.count({ where: { threadId: thread.id, deletedAt: null } })).toBe(2);
+
+      // The session follows the shopper to the current episode, and its history
+      // holds both — the join that keeps verified-order scope stable across the
+      // boundary.
+      const bound = await db.storefrontChatSession.findUniqueOrThrow({ where: { id: session.id } });
+      expect(bound.threadId).toBe(response.body.threadId);
+      const episodes = await db.storefrontChatSessionEpisode.findMany({
+        where: { sessionId: session.id },
+        orderBy: { startedAt: 'asc' },
+      });
+      expect(episodes.map((e) => e.threadId)).toEqual([thread.id, response.body.threadId]);
+      expect(episodes[0].endedAt).toBeInstanceOf(Date);
+      expect(episodes[1].endedAt).toBeNull();
     });
 
-    it('carries the stale refund conversation into the greeting\'s planner context', async () => {
+    it('leaves the stale refund conversation out of the greeting\'s planner context', async () => {
       await idleRefundEpisode(3 * 24 * 60 * 60 * 1000);
 
       const response = await greet('episode-context');
 
       // Deliberately the thread the greeting actually landed on rather than a
-      // captured id, so P1 changes only the expectations below, not the setup.
+      // captured id: this is the planner's real input either way.
       const ctx = await buildContext(response.body.threadId, org.id, sink);
       const texts = ctx.recentMessages.map((message) => message.contentText);
 
-      expect(texts).toContain('Hi');
-      // P1 inverts both to not.toContain: a new episode carries no old raw messages.
-      expect(texts).toContain(REFUND_ASK);
-      expect(texts).toContain(REFUND_ANSWER);
+      expect(texts).toEqual(['Hi']);
+      expect(texts).not.toContain(REFUND_ASK);
+      expect(texts).not.toContain(REFUND_ANSWER);
 
-      // generate-thread-plan.ts:83 uses thread.aiSummary verbatim as the planning
-      // instruction when no explicit one is passed, so "Hi" is planned as if the
-      // shopper had re-opened the refund. P1 stops the summary reaching a new
-      // episode; P2 removes the fallback itself.
-      // P1 inverts: toBeNull().
-      expect(ctx.thread.aiSummary).toContain('#1024');
+      // generate-thread-plan.ts uses thread.aiSummary verbatim as the planning
+      // instruction when no explicit one is passed. A fresh episode has none, so
+      // "Hi" can no longer be planned as if the shopper had re-opened the refund.
+      // P2 removes that fallback outright.
+      expect(ctx.thread.aiSummary).toBeNull();
+    });
+
+    it('expires the old episode\'s cached plan instead of carrying it forward', async () => {
+      const { thread, messages } = await idleRefundEpisode(3 * 24 * 60 * 60 * 1000);
+      await db.thread.update({
+        where: { id: thread.id },
+        data: {
+          cachedPlan: { steps: [{ tool: 'refund_order' }] },
+          cachedPlanMessageId: messages[0].id,
+        },
+      });
+
+      const response = await greet('episode-cached-plan');
+
+      // A plan written from a conversation that has since ended must not be
+      // approvable, and must never be copied into its successor. Genuinely
+      // unresolved work survives as a CustomerObligation (P5) instead.
+      const old = await db.thread.findUniqueOrThrow({ where: { id: thread.id } });
+      expect(old.cachedPlan).toBeNull();
+      expect(old.cachedPlanMessageId).toBeNull();
+
+      const fresh = await db.thread.findUniqueOrThrow({ where: { id: response.body.threadId } });
+      expect(fresh.cachedPlan).toBeNull();
+      expect(fresh.cachedPlanMessageId).toBeNull();
+    });
+
+    // The reason episode resolution holds a row lock on the customer. Without
+    // it both requests see no current episode, both close the expired one, and
+    // threads_one_open_per_customer rejects the loser only after it has already
+    // done so — leaving the shopper with no open thread at all.
+    it('creates exactly one episode for two concurrent messages after expiry', async () => {
+      const { thread } = await idleRefundEpisode(3 * 24 * 60 * 60 * 1000);
+
+      const [first, second] = await Promise.all([
+        greet('episode-race-a', 'Hi'),
+        greet('episode-race-b', 'Are you there?'),
+      ]);
+
+      expect(first.status).toBe(202);
+      expect(second.status).toBe(202);
+      expect(first.body.threadId).toBe(second.body.threadId);
+      expect(first.body.threadId).not.toBe(thread.id);
+
+      const open = await db.thread.findMany({
+        where: { organizationId: org.id, channelType: ChannelType.shopify_chat, status: 'open' },
+      });
+      expect(open).toHaveLength(1);
+
+      // Both messages survive; neither request is silently dropped to win the race.
+      const texts = await db.message.findMany({
+        where: { threadId: open[0].id, senderType: SenderType.customer },
+        select: { contentText: true },
+      });
+      expect(texts.map((t) => t.contentText).sort()).toEqual(['Are you there?', 'Hi']);
+    });
+
+    it('keeps a retried greeting in one episode', async () => {
+      const { thread } = await idleRefundEpisode(3 * 24 * 60 * 60 * 1000);
+
+      const first = await greet('episode-retry');
+      const second = await greet('episode-retry');
+
+      expect(first.status).toBe(202);
+      // Dedupe rolls the whole transaction back, so the retry cannot manufacture
+      // a second episode out of the same client message id.
+      expect(second.status).toBe(200);
+      expect(second.body).toEqual({ deduped: true });
+
+      const threads = await db.thread.findMany({
+        where: { organizationId: org.id, channelType: ChannelType.shopify_chat },
+      });
+      expect(threads).toHaveLength(2);
+      expect(threads.filter((t) => t.status === 'open')).toHaveLength(1);
+      expect(await db.storefrontChatSessionEpisode.count({ where: { sessionId: session.id } })).toBe(2);
+      expect(thread.id).not.toBe(first.body.threadId);
     });
 
     // The control. A short gap is a follow-up, not a new conversation, so this

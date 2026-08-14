@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -586,6 +587,76 @@ describe('dispatchMessage', () => {
         text: 'Recorded Instagram DM.',
       },
     ]);
+  });
+
+  // A draft or approval can outlive the conversation it was written for. When it
+  // does, the send is refused rather than delivered late or quietly rerouted:
+  // the text was composed from context the customer has already moved past.
+  describe('a superseded episode', () => {
+    async function rolledOverEmailThread() {
+      const emailAddress = `support_${org.id.slice(0, 8)}@example.com`;
+      await createTestIntegration(org.id, {
+        platform: ChannelType.email,
+        externalAccountId: emailAddress,
+        fromEmail: emailAddress,
+      });
+      const customer = await createTestCustomer(org.id, `stale_${randomUUID()}@example.com`);
+      const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+      await db.thread.update({
+        where: { id: thread.id },
+        data: { status: 'closed', closedReason: 'episode_rollover' },
+      });
+      return { thread, customer };
+    }
+
+    it('refuses the send with a typed conflict and never reaches the provider', async () => {
+      const { thread, customer } = await rolledOverEmailThread();
+      mockPostmarkSend.mockClear();
+
+      const result = await dispatchMessage({ ...thread, customer }, org, 'About that refund…');
+
+      expect(result).toMatchObject({ ok: false, code: 'episode_superseded' });
+      expect(mockPostmarkSend).not.toHaveBeenCalled();
+      expect(await db.message.count({
+        where: { threadId: thread.id, senderType: SenderType.agent },
+      })).toBe(0);
+    });
+
+    it('leaves the expired thread closed rather than reopening it', async () => {
+      const { thread, customer } = await rolledOverEmailThread();
+
+      await dispatchMessage({ ...thread, customer }, org, 'About that refund…');
+
+      // The reopen used to be unconditional. Resurrecting this thread would put
+      // two open threads on one customer/channel — what
+      // threads_one_open_per_customer exists to forbid.
+      const after = await db.thread.findUniqueOrThrow({ where: { id: thread.id } });
+      expect(after.status).toBe('closed');
+      expect(after.closedReason).toBe('episode_rollover');
+    });
+
+    it('still reopens a thread the merchant closed themselves', async () => {
+      const emailAddress = `support_${org.id.slice(0, 8)}@example.com`;
+      await createTestIntegration(org.id, {
+        platform: ChannelType.email,
+        externalAccountId: emailAddress,
+        fromEmail: emailAddress,
+      });
+      const customer = await createTestCustomer(org.id, `resolved_${randomUUID()}@example.com`);
+      const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+      await db.thread.update({
+        where: { id: thread.id },
+        data: { status: 'closed', closedReason: 'resolved' },
+      });
+
+      const result = await dispatchMessage({ ...thread, customer }, org, 'One more thing.');
+
+      // Only an episode boundary blocks the reopen. Answering a ticket the
+      // merchant resolved is ordinary and must keep working.
+      expect(result).toMatchObject({ ok: true });
+      const after = await db.thread.findUniqueOrThrow({ where: { id: thread.id } });
+      expect(after.status).toBe('open');
+    });
   });
 });
 

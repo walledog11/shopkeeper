@@ -37,6 +37,30 @@ enum ThreadStatus {
   closed
 }
 
+// Why a thread closed. `status` stays the lifecycle authority; this only records
+// the reason. episode_rollover (a conversation boundary elapsed and a new episode
+// opened) and inactivity (a quiet thread left the inbox for good) are distinct on
+// purpose — collapsing them loses the difference between "they moved on to a new
+// question" and "nobody ever came back".
+enum ThreadClosedReason {
+  merchant
+  resolved
+  episode_rollover
+  inactivity
+  superseded
+}
+
+// Disposition of the newest unanswered customer burst. Written by P2; only
+// merchant_action and genuinely unresolved unclear may park work for the
+// merchant.
+enum ThreadRequestDisposition {
+  none
+  acknowledgement
+  informational
+  merchant_action
+  unclear
+}
+
 enum SenderType {
   customer
   agent
@@ -184,6 +208,7 @@ model Organization {
   storefrontChatSessions  StorefrontChatSession[]
   storefrontChatDailyUsage StorefrontChatDailyUsage[]
   storefrontChatVerifications StorefrontChatVerification[]
+  storefrontChatSessionEpisodes StorefrontChatSessionEpisode[]
 
   @@index([clerkOrgId])
   @@index([lifecycleStatus])
@@ -417,12 +442,22 @@ model Thread {
   customerId                String               @map("customer_id") @db.Uuid
   channelType               ChannelType          @map("channel_type")
   status                    ThreadStatus         @default(open)
+  // Nullable by design: threads closed before conversation episodes shipped have
+  // no recorded reason, and guessing one is worse than admitting it is unknown.
+  closedReason              ThreadClosedReason?  @map("closed_reason")
   createdAt                 DateTime             @default(now()) @map("created_at") @db.Timestamptz
   updatedAt                 DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
   lastMessageAt             DateTime             @default(now()) @map("last_message_at") @db.Timestamptz
   lastMessageSenderType     SenderType?          @map("last_message_sender_type")
+  // Episode summary: background for this conversation only. It is never the
+  // planning instruction or the notification delta — that is requestSummary.
   aiSummary                 String?              @map("ai_summary")
   aiTitle                   String?              @map("ai_title")
+  // The newest unanswered customer burst, separate from the episode summary.
+  // Written by P2; inert until then.
+  requestSummary            String?                   @map("request_summary")
+  requestSourceMessageId    String?                   @map("request_source_message_id") @db.Uuid
+  requestDisposition        ThreadRequestDisposition? @map("request_disposition")
   subject                   String?
   tag                       String?              @default("Support")
   shopifyCustomerId         String?              @map("shopify_customer_id") @db.VarChar(255)
@@ -457,6 +492,7 @@ model Thread {
   followUpWatches  FollowUpWatch[]
 
   storefrontChatSessions StorefrontChatSession[]
+  storefrontChatEpisodes StorefrontChatSessionEpisode[]
 
   @@unique([organizationId, operatorKey])
   @@unique([organizationId, id], map: "threads_organization_id_id_key")
@@ -930,6 +966,7 @@ model StorefrontChatSession {
   thread       Thread?      @relation(fields: [threadId], references: [id], onDelete: SetNull)
 
   verifications StorefrontChatVerification[]
+  episodes      StorefrontChatSessionEpisode[]
 
   // Supporting identity for database-level tenant-consistency foreign keys,
   // matching the convention on integrations/customers/threads.
@@ -957,6 +994,32 @@ model StorefrontChatSession {
 // once `attempts` passes the ceiling. Codes are stored as a hash and never in
 // the chat transcript — the code travels only to the address already on the
 // order, which is the invariant the whole flow rests on.
+// Which threads a browser session has held, in order. Two jobs: the widget's
+// collapsed "Previous conversation" history, and the join that resolves
+// storefront verification independently of the session's current thread pointer
+// — so an episode rollover neither silently grants verified-order scope to the
+// new episode nor silently revokes it from the expired one.
+model StorefrontChatSessionEpisode {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  sessionId      String    @map("session_id") @db.Uuid
+  threadId       String    @map("thread_id") @db.Uuid
+  startedAt      DateTime  @default(now()) @map("started_at") @db.Timestamptz
+  endedAt        DateTime? @map("ended_at") @db.Timestamptz
+
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  session      StorefrontChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  thread       Thread                @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  // Binding a session to a thread it already holds must be idempotent, or a
+  // retried inbound appends a duplicate episode and the widget renders the same
+  // conversation twice.
+  @@unique([sessionId, threadId], map: "storefront_chat_session_episodes_session_id_thread_id_key")
+  @@index([threadId], map: "storefront_chat_session_episodes_thread_id_idx")
+  @@index([sessionId, startedAt(sort: Desc)], map: "storefront_chat_session_episodes_session_id_started_at_idx")
+  @@map("storefront_chat_session_episodes")
+}
+
 model StorefrontChatVerification {
   id             String    @id @default(uuid()) @db.Uuid
   organizationId String    @map("organization_id") @db.Uuid

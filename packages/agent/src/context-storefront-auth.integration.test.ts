@@ -50,7 +50,39 @@ async function storefrontThread(channelType: ChannelType = ChannelType.shopify_c
       expiresAt: new Date(Date.now() + 60 * 60 * 1000),
     },
   });
-  return { org, integration, thread, session };
+  // Inbound writes this row in the same transaction that opens the episode, and
+  // verification resolves through it rather than through session.threadId.
+  await db.storefrontChatSessionEpisode.create({
+    data: { organizationId: org.id, sessionId: session.id, threadId: thread.id },
+  });
+  return { org, integration, customer, thread, session };
+}
+
+// A second episode on the same browser session, as an inbound rollover would
+// leave it: the session pointer moves, both episodes stay in its history.
+async function rollToNewEpisode(
+  orgId: string,
+  sessionId: string,
+  customerId: string,
+  expiredThreadId: string,
+) {
+  await db.thread.update({
+    where: { id: expiredThreadId },
+    data: { status: "closed", closedReason: "episode_rollover" },
+  });
+  const next = await createTestThread(orgId, customerId, ChannelType.shopify_chat);
+  await db.storefrontChatSessionEpisode.updateMany({
+    where: { sessionId, threadId: expiredThreadId },
+    data: { endedAt: new Date() },
+  });
+  await db.storefrontChatSessionEpisode.create({
+    data: { organizationId: orgId, sessionId, threadId: next.id },
+  });
+  await db.storefrontChatSession.update({
+    where: { id: sessionId },
+    data: { threadId: next.id },
+  });
+  return next;
 }
 
 async function addVerification(
@@ -125,6 +157,62 @@ describe("storefront auth state in buildContext", () => {
     const ctx = await buildContext(thread.id, org.id, sink);
 
     expect(ctx!.authState).toBe("guest");
+  });
+
+  // Verification scope must not move with the session's thread pointer. Both
+  // directions matter, and they fail differently: inheriting silently would hand
+  // a new conversation someone else's proof, while losing it silently would make
+  // a late merchant reply on the expired thread run under guest policy.
+  describe("across an episode boundary", () => {
+    it("keeps the new episode verified on a verified session", async () => {
+      const { org, customer, thread, session } = await storefrontThread();
+      await addVerification(org.id, session.id, "#1025", "5678901234", true);
+
+      const next = await rollToNewEpisode(org.id, session.id, customer.id, thread.id);
+      const ctx = await buildContext(next.id, org.id, sink);
+
+      expect(ctx.authState).toBe("verified");
+      expect(ctx.verifiedOrders).toEqual([{ orderName: "#1025", orderId: "5678901234" }]);
+    });
+
+    it("keeps the expired episode verified too", async () => {
+      const { org, customer, thread, session } = await storefrontThread();
+      await addVerification(org.id, session.id, "#1025", "5678901234", true);
+
+      await rollToNewEpisode(org.id, session.id, customer.id, thread.id);
+      const ctx = await buildContext(thread.id, org.id, sink);
+
+      expect(ctx.authState).toBe("verified");
+    });
+
+    it("still drops both episodes to guest when the session is revoked", async () => {
+      const { org, customer, thread, session } = await storefrontThread();
+      await addVerification(org.id, session.id, "#1025", "5678901234", true);
+      const next = await rollToNewEpisode(org.id, session.id, customer.id, thread.id);
+      await db.storefrontChatSession.update({
+        where: { id: session.id },
+        data: { revokedAt: new Date() },
+      });
+
+      expect((await buildContext(next.id, org.id, sink)).authState).toBe("guest");
+      expect((await buildContext(thread.id, org.id, sink)).authState).toBe("guest");
+    });
+
+    it("gives another visitor's episode nothing", async () => {
+      const { org, session } = await storefrontThread();
+      await addVerification(org.id, session.id, "#1025", "5678901234", true);
+
+      // Same org, a different browser. One shopper proving control of an order
+      // must not verify anyone else's conversation. (A second *open* thread for
+      // the same customer is impossible by construction —
+      // threads_one_open_per_customer — so a different visitor is also the only
+      // shape this can take.)
+      const other = await createTestCustomer(org.id, `shopify_chat:${randomUUID()}`);
+      const stranger = await createTestThread(org.id, other.id, ChannelType.shopify_chat);
+      const ctx = await buildContext(stranger.id, org.id, sink);
+
+      expect(ctx.authState).toBe("guest");
+    });
   });
 
   it("leaves every other channel with no auth state at all", async () => {

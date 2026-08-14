@@ -28,7 +28,19 @@ export interface DispatchMessageOptions {
 
 export type Message = Awaited<ReturnType<typeof createMessage>>
 
-export type DispatchFailure = { ok: false; error: string; detail?: string; providerStatus?: number }
+// `code` distinguishes refusals a caller can act on from generic provider
+// errors. `episode_superseded` means the text was drafted against a conversation
+// that has since ended: the send is refused rather than rerouted, because the
+// draft was written from context the customer has already moved past.
+export type DispatchFailureCode = "episode_superseded"
+
+export type DispatchFailure = {
+  ok: false
+  error: string
+  detail?: string
+  providerStatus?: number
+  code?: DispatchFailureCode
+}
 
 export type DispatchMessageResult =
   | { ok: true; message: Message }

@@ -2,7 +2,23 @@ import { createMessage, db, SenderType } from "@shopkeeper/db"
 import { THREAD_STATUS } from "@shopkeeper/agent/thread-constants"
 import type { DispatchThread } from "./dispatch-message-types"
 
-export function createSentAgentMessage(
+// Sending on a thread normally brings it back into the inbox — a merchant
+// answering a resolved ticket wants it open again. The one exception is a thread
+// a conversation boundary ended: its successor is already open, and reopening it
+// would put two open threads on one customer/channel, which is exactly what
+// threads_one_open_per_customer forbids. So the reopen is conditional now rather
+// than unconditional.
+async function reopenPatchFor(threadId: string) {
+  const current = await db.thread.findUnique({
+    where: { id: threadId },
+    select: { status: true, closedReason: true },
+  })
+  const supersededByRollover =
+    current?.status === THREAD_STATUS.CLOSED && current.closedReason === "episode_rollover"
+  return supersededByRollover ? {} : { status: THREAD_STATUS.OPEN }
+}
+
+export async function createSentAgentMessage(
   thread: DispatchThread,
   text: string,
   integrationId?: string,
@@ -16,11 +32,11 @@ export function createSentAgentMessage(
       ...(integrationId && { integrationId }),
       ...(providerMessageId && { providerMessageId }),
     },
-    { status: THREAD_STATUS.OPEN },
+    await reopenPatchFor(thread.id),
   )
 }
 
-export function createPendingAgentMessage(
+export async function createPendingAgentMessage(
   thread: DispatchThread,
   text: string,
   integrationId: string,
@@ -33,7 +49,7 @@ export function createPendingAgentMessage(
       integrationId,
       sendStatus: "pending",
     },
-    { status: THREAD_STATUS.OPEN },
+    await reopenPatchFor(thread.id),
   )
 }
 

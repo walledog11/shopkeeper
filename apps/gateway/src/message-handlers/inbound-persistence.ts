@@ -7,10 +7,15 @@ import {
   type DbChannelType,
 } from '@shopkeeper/db';
 import logger from '../logger.js';
-import { JOB, STATUS } from '../constants.js';
+import { JOB } from '../constants.js';
 import { captureInboundMessageProcessed } from '../product-analytics.js';
 import { publishThreadEvent } from '../realtime/publish.js';
+import { removePendingPlanForThread } from '../operator-context.js';
 import { classifierSignals, type ClassificationResult } from './email-classification.js';
+import {
+  resolveInboundEpisode,
+  type ResolveInboundEpisodeResult,
+} from './resolve-inbound-episode.js';
 import type { AiSummaryJobData } from '../types.js';
 
 const MAX_INPUT_LENGTH = 4000;
@@ -58,6 +63,10 @@ export interface ProcessMessageOptions {
   externalSpaceId?: string | null;
   traceId?: string | null;
   attachments?: string[];
+  // Storefront chat only. Passed so the session's episode history is written in
+  // the same transaction that opens the episode — a session bound after the
+  // fact would read as unverified for the window in between.
+  storefrontSessionId?: string | null;
   // Email path classifies pre-persistence so we can write filter columns inline
   // and skip the LLM round-trip in the SUMMARIZE_THREAD job. The job still runs
   // (with skipSummary=true) so plan precompute + operator notify still fire.
@@ -99,12 +108,17 @@ export async function processInboundMessage(
     externalSpaceId = null,
     traceId = null,
     attachments = [],
+    storefrontSessionId = null,
     precomputed = null,
     lockAsGenuine = false,
     isRealCustomerMessage = false,
     synthetic = false,
   }: ProcessMessageOptions = {},
-): Promise<{ thread: Awaited<ReturnType<typeof db.thread.create>>; isNew: boolean } | null> {
+): Promise<{
+  thread: ResolveInboundEpisodeResult['thread'];
+  isNew: boolean;
+  rolledOverFromThreadId: string | null;
+} | null> {
   messageText = sanitizeUserInput(messageText);
 
   const providerMessageId = normalizeExternalMessageId(externalMessageId);
@@ -139,19 +153,32 @@ export async function processInboundMessage(
     },
   });
 
-  let thread = await db.thread.findFirst({
-    where: { organizationId, customerId: customer.id, status: STATUS.OPEN, channelType },
-  });
+  const routeReceivedAt = integrationId && providerSentAt ? providerSentAt : null;
 
-  let isNew = false;
-  if (!thread) {
-    try {
-      thread = await db.thread.create({
-        data: {
-          organizationId,
-          customerId: customer.id,
-          channelType,
-          status: STATUS.OPEN,
+  // One transaction spans the episode decision and the message that caused it.
+  // Splitting them is what made the old `findFirst → create → catch P2002`
+  // sequence unsafe: a rollover could close the previous episode and then lose
+  // the race to open its successor, leaving the customer with no open thread.
+  // A duplicate provider message rolls the whole thing back, so a retry can
+  // never manufacture a second episode.
+  let outcome: {
+    thread: ResolveInboundEpisodeResult['thread'];
+    isNew: boolean;
+    rolledOverFromThreadId: string | null;
+    rolloverReason: string | null;
+    message: Awaited<ReturnType<typeof createMessage>>;
+  };
+  try {
+    outcome = await db.$transaction(async (tx) => {
+      const episode = await resolveInboundEpisode(tx, {
+        organizationId,
+        customerId: customer.id,
+        channelType,
+        synthetic,
+        providerConversationId: externalSpaceId ?? null,
+        storefrontSessionId,
+        now: providerSentAt ?? new Date(),
+        newThreadData: {
           ...(subject && { subject }),
           ...(externalSpaceId && { externalSpaceId }),
           ...(initialTag && { tag: initialTag }),
@@ -171,32 +198,17 @@ export async function processInboundMessage(
           }),
         },
       });
-      isNew = true;
-    } catch (e) {
-      if ((e as { code?: string }).code === 'P2002') {
-        thread = await db.thread.findFirst({
-          where: { organizationId, customerId: customer.id, status: STATUS.OPEN, channelType },
+
+      if (externalSpaceId && !episode.thread.externalSpaceId) {
+        await tx.thread.update({
+          where: { id: episode.thread.id },
+          data: { externalSpaceId },
         });
-      } else {
-        throw e;
       }
-    }
-  }
 
-  if (thread && externalSpaceId && !thread.externalSpaceId) {
-    thread = await db.thread.update({
-      where: { id: thread.id },
-      data: { externalSpaceId },
-    });
-  }
-
-  const routeReceivedAt = integrationId && providerSentAt ? providerSentAt : null;
-  let message: Awaited<ReturnType<typeof createMessage>>;
-  try {
-    message = await db.$transaction(async (tx) => {
       const created = await tx.message.create({
         data: {
-          threadId: thread!.id,
+          threadId: episode.thread.id,
           organizationId,
           senderType: synthetic ? SenderType.note : SenderType.customer,
           contentText: messageText,
@@ -210,7 +222,7 @@ export async function processInboundMessage(
       // plan nor advances the thread's last-message cursor.
       if (!synthetic) {
         await tx.thread.update({
-          where: { id: thread!.id },
+          where: { id: episode.thread.id },
           data: {
             cachedPlanMessageId: null,
             cachedPlan: Prisma.DbNull,
@@ -218,7 +230,7 @@ export async function processInboundMessage(
         });
         await tx.thread.updateMany({
           where: {
-            id: thread!.id,
+            id: episode.thread.id,
             organizationId,
             lastMessageAt: { lte: created.sentAt },
           },
@@ -231,7 +243,7 @@ export async function processInboundMessage(
       if (routeReceivedAt) {
         await tx.thread.updateMany({
           where: {
-            id: thread!.id,
+            id: episode.thread.id,
             organizationId,
             OR: [
               { replyIntegrationUpdatedAt: null },
@@ -244,7 +256,7 @@ export async function processInboundMessage(
           },
         });
       }
-      return created;
+      return { ...episode, message: created };
     });
   } catch (error) {
     if (providerMessageId && (error as { code?: string }).code === 'P2002') {
@@ -257,6 +269,26 @@ export async function processInboundMessage(
     throw error;
   }
 
+  const { message, isNew } = outcome;
+  const thread = outcome.thread;
+
+  if (outcome.rolledOverFromThreadId) {
+    logger.info(
+      {
+        organizationId,
+        channelType,
+        expiredThreadId: outcome.rolledOverFromThreadId,
+        threadId: thread.id,
+        reason: outcome.rolloverReason,
+      },
+      '[Worker] Conversation episode rolled over',
+    );
+    // Only the expired thread's parked work. A card the merchant has not
+    // answered describes a conversation that has since ended, so approving it
+    // later would run a plan built from context the customer has moved past.
+    await removePendingPlanForThread(organizationId, outcome.rolledOverFromThreadId);
+  }
+
   if (isRealCustomerMessage) {
     void captureInboundMessageProcessed({
       channel: channelType,
@@ -267,7 +299,7 @@ export async function processInboundMessage(
 
   if (!synthetic) {
     await enqueueAiSummaryJob(aiSummaryQueue, {
-      threadId: thread!.id,
+      threadId: thread.id,
       organizationId,
       sourceMessageId: message.id,
       customerName: customer.name ?? null,
@@ -278,7 +310,10 @@ export async function processInboundMessage(
   }
 
   // Live inbox: tell connected dashboards a thread changed so they revalidate.
-  await publishThreadEvent(organizationId, thread!.id);
+  await publishThreadEvent(organizationId, thread.id);
+  if (outcome.rolledOverFromThreadId) {
+    await publishThreadEvent(organizationId, outcome.rolledOverFromThreadId);
+  }
 
-  return { thread: thread!, isNew };
+  return { thread, isNew, rolledOverFromThreadId: outcome.rolledOverFromThreadId };
 }

@@ -1,6 +1,7 @@
 # Conversation Episodes, Cross-Channel Identity, and Relevant Memory
 
-**Status:** P0 complete; P1 is next. No schema or behavior change has shipped.  
+**Status:** P0 and P1 complete (one open item: the email provider-conversation
+key). Migration 1 applied. P2 is next.  
 **Decision date:** 2026-08-12. **Revised:** 2026-08-12 after a source audit;
 2026-08-14 to correct the migration hazard and record P0 as written.  
 **Delete this file when every phase is complete and the durable operating rules
@@ -255,25 +256,43 @@ queue/Redis/secret stubs. Full gateway integration suite passes (722).
 
 ## P1 — Make inbound persistence episode-aware and race-safe
 
-- [ ] Extract thread selection from `processInboundMessage` into a shared
+**Done 2026-08-14**, except the email provider-conversation key (below).
+Migration `20260814120000_add_conversation_episodes` is hand-written and applied;
+all six partial indexes verified surviving.
+
+- [x] Extract thread selection from `processInboundMessage` into a shared
   `resolveInboundEpisode` service with channel policy as explicit input.
-- [ ] After customer upsert, begin a database transaction and lock the stable
+  — `apps/gateway/src/message-handlers/resolve-inbound-episode.ts`. Channels
+  absent from `CHANNEL_EPISODE_POLICY` never roll, and that is a decision, not an
+  omission: operator channels are one durable thread per binding, `shopify` is
+  merchant-side, `sms` is retired. Only the four customer-origin channels the
+  boundary table names have a policy.
+- [x] After customer upsert, begin a database transaction and lock the stable
   customer row with `SELECT ... FOR UPDATE`. Inside that transaction, re-read the
   open thread, decide rollover, close the expired thread, create/reuse the new
   thread, and persist the message. The current `findFirst → create → catch P2002`
   sequence at `inbound-persistence.ts:142-184` is not sufficient for
-  close-and-create races.
-- [ ] On rollover, atomically clear `cachedPlan` and `cachedPlanMessageId`, stamp
+  close-and-create races. — the P2002 catch is gone; the lock replaces it. The
+  concurrent-messages test is verified load-bearing: removing the lock fails it
+  3/3.
+- [x] On rollover, atomically clear `cachedPlan` and `cachedPlanMessageId`, stamp
   `closedReason = episode_rollover`, and bind the new storefront episode to its
   session. After commit, remove only the old thread's operator pending-plan/question
   state.
-- [ ] Preserve genuine unresolved work only through `CustomerObligation`; never
-  copy an old cached plan into the new thread.
+- [x] Preserve genuine unresolved work only through `CustomerObligation`; never
+  copy an old cached plan into the new thread. — the negative half is enforced and
+  tested. Nothing is carried forward at all today, because `CustomerObligation`
+  arrives with P5; that is the expected state, not a gap.
 - [ ] Make provider conversation identifiers part of the decision where they
   exist. Extend normalized email ingestion with a stable provider conversation
-  key before enforcing email rollover.
-- [ ] Keep dedupe keyed to the provider/client message identity so a retry cannot
-  create a second episode.
+  key before enforcing email rollover. — **half done.** TikTok compares
+  `Thread.externalSpaceId` and rolls on a changed provider conversation. Email
+  records no such key, so it uses the 7-day idle fallback the boundary table
+  already sanctions; `providerConversationScoped: true` is set for email so
+  adding the key is the only change needed. This is the one P1 item still open.
+- [x] Keep dedupe keyed to the provider/client message identity so a retry cannot
+  create a second episode. — the duplicate check now rolls the whole transaction
+  back, so a retry cannot roll an episode and then discard its own message.
 
 ### Verified-order scope must not move with the thread pointer
 
@@ -293,14 +312,18 @@ was a browser proving control of one order, so carrying it within that browser
 session is defensible, but it must be deliberate rather than a side effect of a
 pointer update.
 
-- [ ] Resolve verification through `StorefrontChatSessionEpisode` (episode →
+- [x] Resolve verification through `StorefrontChatSessionEpisode` (episode →
   session → verifications) rather than the session's current `threadId`, so every
   episode of a session resolves the same verified orders regardless of which one
-  is current. This is the second reason that table exists.
-- [ ] Record the decision on carry-forward explicitly in the commit, including
+  is current. This is the second reason that table exists. — changed in **both**
+  readers: `packages/agent/src/context.ts` and
+  `apps/gateway/src/storefront-chat-verified-orders.ts`. They must agree, or the
+  operator card and the agent would describe the same shopper differently.
+- [x] Record the decision on carry-forward explicitly in the commit, including
   that it expires with the session and stays scoped to the verified order.
-- [ ] Test both directions: a rolled-over episode on a verified session is not a
-  guest, and the expired episode does not become one.
+- [x] Test both directions: a rolled-over episode on a verified session is not a
+  guest, and the expired episode does not become one. — plus revocation still
+  demoting both, and another visitor's episode getting nothing.
 
 ### Outbound race that must be fixed in the same phase
 
@@ -309,15 +332,28 @@ pointer update.
 rollover, a late merchant send could reopen the expired thread and collide with
 the new open episode against `threads_one_open_per_customer`.
 
-- [ ] Stop outbound persistence from unconditionally reopening a thread.
-- [ ] Before provider delivery or storefront persistence, verify the target is
+Both call sites needed it, not just the cited one: `createPendingAgentMessage`
+(line 36) passed the same unconditional patch.
+
+- [x] Stop outbound persistence from unconditionally reopening a thread. — the
+  reopen is now conditional on the thread *not* having been closed by an episode
+  boundary. Answering a merchant-closed or resolved ticket still reopens it, which
+  is ordinary behavior and has its own test.
+- [x] Before provider delivery or storefront persistence, verify the target is
   still the current open episode and, for storefront chat, still the session's
-  current `threadId`.
-- [ ] Return a typed `episode_superseded` conflict for a late draft/approval.
+  current `threadId`. — `assertCurrentEpisode` runs before any provider branch;
+  storefront delivery distinguishes "session moved to a later episode" from
+  "session revoked", which are different things to tell the merchant.
+- [x] Return a typed `episode_superseded` conflict for a late draft/approval.
   Do not silently reroute model-authored text onto the new episode because it was
-  written from different context.
-- [ ] Re-check current episode identity when executing cached plans and operator
-  approvals, in addition to the existing source-message and plan-ID checks.
+  written from different context. — `DispatchFailureCode` on `DispatchFailure`.
+- [x] Re-check current episode identity when executing cached plans and operator
+  approvals, in addition to the existing source-message and plan-ID checks. —
+  covered by construction rather than by a new check: rollover clears the expired
+  thread's `cachedPlan`/`cachedPlanMessageId` in the same transaction and removes
+  its operator pending plan after commit, so there is nothing left to approve. The
+  dispatch guard is the backstop for an approval already in flight, since every
+  send passes through it.
 
 ## P2 — Separate the current request from the episode summary
 
@@ -517,27 +553,31 @@ lookalikes share nothing.
 
 ## Acceptance scenarios
 
-- [ ] A visitor returns after three days and says "Hi": fresh episode, no old raw
+- [~] A visitor returns after three days and says "Hi": fresh episode, no old raw
   messages or old summary in context, no merchant plan, old chat collapsed in UI.
-- [ ] The same visitor follows up after ten minutes about the active issue: same
+  — episode + context halves pass. "No merchant plan" is P3; "collapsed in UI" is
+  P4.
+- [x] The same visitor follows up after ten minutes about the active issue: same
   episode and coherent context.
 - [ ] A visitor returns after three days and says "What happened with that refund
   for #1024?": fresh episode plus only the matching open obligation, with
   provenance; no old raw transcript. (Prior-episode memory beyond obligations
   arrives with P9.)
-- [ ] An old cached plan exists when rollover occurs: it is expired and removed
+- [x] An old cached plan exists when rollover occurs: it is expired and removed
   from operator queues; a structured unresolved obligation remains if applicable.
-- [ ] A merchant attempts to send an approval drafted for the expired episode:
+  — expiry and queue removal done; the obligation half waits on P5.
+- [x] A merchant attempts to send an approval drafted for the expired episode:
   typed superseded conflict, no provider send, no old-thread reopen.
-- [ ] A verified storefront session rolls to a new episode: still verified, and
+- [x] A verified storefront session rolls to a new episode: still verified, and
   the expired episode is still verified too.
 - [ ] A verified email customer later uses an authenticated storefront account:
   the identities link, and relevant cross-channel memory can be selected once P9
   ships.
 - [ ] A same-name or self-asserted-email storefront visitor receives no email or
   Instagram history.
-- [ ] Two concurrent first messages after expiry create one new open episode and
-  persist both messages exactly once.
+- [x] Two concurrent first messages after expiry create one new open episode and
+  persist both messages exactly once. — verified load-bearing: removing the
+  customer row lock fails this test 3/3.
 - [ ] Expanding prior history in the widget has no effect on agent context.
 
 ## Verification commands

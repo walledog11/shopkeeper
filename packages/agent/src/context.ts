@@ -212,12 +212,20 @@ export async function buildContext(
   // route, outside the agent entirely. Reading the result here — rather than
   // letting a tool establish it — is what keeps identity off the model's list of
   // things it can decide, and keeps the ritual out of the approval loop.
+  //
+  // Resolved through the session's episode history rather than its current
+  // `threadId`. That pointer moves on episode rollover, so keying off it made
+  // verification a side effect of a pointer update in both directions: the new
+  // episode silently inherited it, and the expired episode silently lost it —
+  // so a late merchant reply or an operator replan on the old thread would run
+  // under guest policy. Scope now follows the proof: the browser session that
+  // answered the challenge, for as long as that session lives.
   const verifiedOrders = isStorefront
     ? (await db.storefrontChatVerification.findMany({
         where: {
           organizationId: orgId,
           verifiedAt: { not: null },
-          session: { threadId: thread.id, revokedAt: null },
+          session: { revokedAt: null, episodes: { some: { threadId: thread.id } } },
         },
         select: { orderName: true, orderId: true },
       }))

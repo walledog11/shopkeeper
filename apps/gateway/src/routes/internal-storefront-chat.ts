@@ -70,6 +70,10 @@ export function registerInternalStorefrontChatRoutes(router: Router): void {
             ? `${CHANNEL.SHOPIFY_CHAT}:${session.id}:${clientMessageId}`
             : null,
           isRealCustomerMessage: true,
+          // Lets the episode row be written inside the same transaction that
+          // opens the episode. Verification resolves through that row, so a
+          // session bound afterwards would read as guest in between.
+          storefrontSessionId: session.id,
         },
       );
 
