@@ -13,6 +13,12 @@ import {
   FILTERED_PURGE_AFTER_DAYS,
   purgeFilteredThreads,
 } from './purge.js';
+import {
+  DAILY_USAGE_RETAIN_DAYS,
+  purgeExpiredStorefrontChatSessions,
+  purgeStorefrontChatDailyUsage,
+  SESSION_PURGE_AFTER_DAYS,
+} from './storefront-chat-sweep.js';
 
 const ARCHIVE_AFTER_DAYS = 90;
 const PURGE_AFTER_DAYS = 90;
@@ -46,6 +52,19 @@ export async function purgeDeletedRecords(): Promise<void> {
   logger.info(
     { count: filteredPurged, cutoffDays: FILTERED_PURGE_AFTER_DAYS },
     '[Purge] Hard-deleted aged filtered threads',
+  );
+
+  const now = new Date();
+  const sessionsPurged = await purgeExpiredStorefrontChatSessions(now);
+  const usagePurged = await purgeStorefrontChatDailyUsage(now);
+  logger.info(
+    {
+      sessions: sessionsPurged,
+      dailyUsageRows: usagePurged,
+      sessionCutoffDays: SESSION_PURGE_AFTER_DAYS,
+      usageCutoffDays: DAILY_USAGE_RETAIN_DAYS,
+    },
+    '[Purge] Hard-deleted dead storefront chat sessions and stale daily counters',
   );
 }
 
