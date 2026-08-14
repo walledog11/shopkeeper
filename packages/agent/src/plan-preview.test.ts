@@ -540,3 +540,80 @@ describe("buildPlanPreview — merchant-facing copy", () => {
     expect(preview.proposal).toBe("Do we ship to Canada, and at what rate?")
   })
 })
+
+// The case the storefront plan is written about: a shopper proves they own an
+// order, asks where it is, and the answer is "not shipped yet". There is no
+// decision in that for a merchant to make — identity is proved and no mutation is
+// reachable — so it must classify as a quick reply, which is the lane that sends
+// itself and raises no card. Shipping that behind "Good to send?" is what stopped
+// this channel reaching a second store.
+describe("classifyHomePlan — a verified shopper's own order", () => {
+  const orderReadCall: RawToolCall = {
+    id: "read_1",
+    name: "get_order_by_name",
+    input: { order_name: "#1024" },
+  }
+
+  function verifiedOrderQuestion(overrides: Partial<AgentPlan> = {}): AgentPlan {
+    return plan({
+      instruction: "Answer where the order is",
+      rawToolCalls: [orderReadCall, sendReplyCall],
+      ...overrides,
+    })
+  }
+
+  it("is a quick reply on the default tier with auto-execute off", () => {
+    const result = classifyHomePlan(
+      verifiedOrderQuestion(),
+      settings({ autonomyTier: "guarded", autoExecuteMode: "off" }),
+    )
+
+    expect(result.kind).toBe("quick_reply")
+  })
+
+  it("stays a quick reply when tracking is read alongside the order", () => {
+    const result = classifyHomePlan(
+      verifiedOrderQuestion({
+        rawToolCalls: [
+          orderReadCall,
+          { id: "read_2", name: "get_order_tracking", input: { order_id: "1024" } },
+          sendReplyCall,
+        ],
+      }),
+      settings({ autonomyTier: "guarded" }),
+    )
+
+    expect(result.kind).toBe("quick_reply")
+  })
+
+  it("still holds it for review when the sender looks questionable", () => {
+    const result = classifyHomePlan(
+      verifiedOrderQuestion(),
+      settings({ autonomyTier: "guarded" }),
+      { filterStatus: "questionable" },
+    )
+
+    expect(result.kind).toBe("needs_review")
+  })
+
+  it("still holds it for review on the draft-only tier", () => {
+    const result = classifyHomePlan(
+      verifiedOrderQuestion(),
+      settings({ autonomyTier: "watch" }),
+    )
+
+    expect(result.kind).toBe("needs_review")
+  })
+
+  it("does not extend to a mutation the shopper asks for on the same order", () => {
+    const result = classifyHomePlan(
+      verifiedOrderQuestion({
+        steps: [refundStep, sendReplyStep],
+        rawToolCalls: [orderReadCall, refundCall, sendReplyCall],
+      }),
+      settings({ autonomyTier: "guarded", autoExecuteMode: "off" }),
+    )
+
+    expect(result.kind).not.toBe("quick_reply")
+  })
+})

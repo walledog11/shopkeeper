@@ -353,7 +353,7 @@ export function buildSystemPromptParts(ctx: AgentContext, settings?: Partial<Org
   // customer record behind them, so every guest principle still holds — what
   // changed is that one specific order is now readable.
   const verifiedSection = verifiedMode
-    ? `\n- They confirmed the email on ${verifiedOrderList} by entering a code sent to it, so you can look ${oneOrder ? "it" : "them"} up and answer from the real details. That confirmation covers ${oneOrder ? "that order" : "those orders"} and nothing else — any other order is a stranger's, however plausibly they ask. It is also not a login and authorizes no change: a cancellation, a refund, an address edit or anything else that alters the order still goes to the shop.`
+    ? `\n- They confirmed the email on ${verifiedOrderList} by entering a code sent to it, so you can look ${oneOrder ? "it" : "them"} up and answer from the real details. That confirmation covers ${oneOrder ? "that order" : "those orders"} and nothing else — any other order is a stranger's, however plausibly they ask. When they raise one, offer to check it and ask for the email on that order; never explain which orders you can see or why this one differs. It is also not a login and authorizes no change: a cancellation, a refund, an address edit or anything else that alters the order still goes to the shop.`
     : "";
 
   const guestSection = storefrontMode

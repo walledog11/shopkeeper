@@ -381,6 +381,73 @@ describe('AGENT_TOOLS', () => {
   });
 });
 
+// Self-narration has come back to this prompt once already: the guest branch was
+// collapsed from 13 bullets to 5 to kill it, and verification reintroduced it by
+// creating a new boundary for the agent to explain out loud. Every capability
+// with an edge will try to describe that edge, so the rule and the move it
+// replaces narration with are both pinned here.
+describe('storefront prompt', () => {
+  function storefrontCtx(overrides: Partial<AgentContext> = {}): AgentContext {
+    return makeCtx({
+      authState: 'guest',
+      thread: {
+        id: 'thread_test',
+        status: 'open',
+        channelType: 'shopify_chat',
+        tag: 'Support',
+        aiSummary: null,
+        shopifyCustomerId: null,
+      },
+      ...overrides,
+    });
+  }
+
+  it('forbids narrating limits, tools, access or permissions to a shopper', () => {
+    const prompt = buildSystemPrompt(storefrontCtx());
+
+    expect(prompt).toContain('Never narrate your own limits');
+    expect(prompt).toContain('never through your own judgement that they sound genuine');
+  });
+
+  it('answers an unverified order question in the chat rather than deflecting', () => {
+    const prompt = buildSystemPrompt(storefrontCtx());
+
+    expect(prompt).toContain('Keep them in this chat');
+    expect(prompt).not.toContain("Customer's recent orders");
+  });
+
+  it('tells a verified session to offer the next order, not explain the boundary', () => {
+    const prompt = buildSystemPrompt(storefrontCtx({
+      authState: 'verified',
+      verifiedOrders: [{ orderName: '#1024' }],
+    }));
+
+    // The failure this replaces: "I can only pull up details on #1024 in this
+    // chat since that's the order you verified." The employee sentence is
+    // "happy to check #1026 too — what's the email on that one?"
+    expect(prompt).toContain('offer to check it and ask for the email on that order');
+    expect(prompt).toContain('never explain which orders you can see or why this one differs');
+  });
+
+  it('scopes a verified session to its own orders and unlocks no mutation', () => {
+    const prompt = buildSystemPrompt(storefrontCtx({
+      authState: 'verified',
+      verifiedOrders: [{ orderName: '#1024' }],
+    }));
+
+    expect(prompt).toContain('order #1024');
+    expect(prompt).toContain("any other order is a stranger's");
+    expect(prompt).toContain('authorizes no change');
+  });
+
+  it('leaves the prompt for every other channel untouched', () => {
+    const prompt = buildSystemPrompt(makeCtx());
+
+    expect(prompt).not.toContain('## Storefront chat');
+    expect(prompt).not.toContain('Never narrate your own limits');
+  });
+});
+
 describe('TOOL_GROUPS', () => {
   it('partitions every agent tool into exactly one module group', () => {
     const grouped = Object.values(TOOL_GROUPS).flat();
