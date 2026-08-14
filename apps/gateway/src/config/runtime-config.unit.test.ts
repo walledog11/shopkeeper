@@ -54,6 +54,7 @@ describe('getGatewayRuntimeRole', () => {
 describe('getGatewayWorkerRedisConfig', () => {
   it('uses lower-chatter defaults in production', () => {
     vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('GATEWAY_ENABLE_MAINTENANCE_WORKERS', '');
 
     expect(getGatewayWorkerRedisConfig()).toMatchObject({
       drainDelaySeconds: 60,

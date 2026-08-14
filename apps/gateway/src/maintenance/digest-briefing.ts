@@ -14,7 +14,6 @@ export const DIGEST_CURSOR_KEY = 'lastSuccessfulDigestAt';
 export const WAITING_PLAN_MIN_AGE_MS = 3 * 3_600_000;
 export const DEFAULT_HANDLED_LOOKBACK_MS = 24 * 3_600_000;
 const NOTABLE_HANDLED_LIMIT = 5;
-const DIGEST_OTHER_OPEN_LIMIT = 2;
 
 export interface HandledRollup {
   approvedCount: number;
@@ -95,43 +94,9 @@ function customerFirstName(customerName: string | null | undefined): string | nu
   return trimmed.split(/\s+/)[0] ?? null;
 }
 
-function rawToolCallsToSteps(
-  rawToolCalls: Array<{ id: string; name: string; input?: unknown }>,
-): Array<{ tool?: string; category: string; label: string }> {
-  return rawToolCalls.map((toolCall) => ({
-    tool: toolCall.name,
-    label: PLAN_STEP_LABELS[toolCall.name] ?? toolCall.name,
-    category: toolCall.name.startsWith('get_') || toolCall.name.startsWith('search_') ? 'read' : 'action',
-  }));
-}
-
-function parkedActionLabel(
-  steps: Array<{ tool?: string; category: string; label: string }>,
-  customerName: string | null,
-): string | undefined {
-  const actionableSteps = steps.filter((step) => step.category !== 'read');
-  if (actionableSteps.length === 0) return undefined;
-  const firstName = customerFirstName(customerName);
-  const forCustomer = firstName ? ` for ${firstName}` : '';
-  if (actionableSteps.length > 1) {
-    return `run those ${actionableSteps.length} steps${forCustomer}`;
-  }
-  const step = actionableSteps[0]!;
-  if (step.tool === 'send_reply') return `reply to ${firstName ?? 'the customer'}`;
-  if (step.tool === 'send_email') return `email ${firstName ?? 'the customer'}`;
-  return `${step.label.toLowerCase()}${forCustomer}`;
-}
-
 // One iMessage line of context. The classifier already writes `aiTitle` at 3-to-6
 // words, so this cap is a backstop for the summary fallback, not the usual path.
 const BRIEFING_TOPIC_MAX = 60;
-
-// The approval list gets a wider one. It is the section the merchant is being
-// asked to say yes to, and 60 characters cut the reason mid-phrase whenever the
-// fallback ran: "Two of four mugs arrived cracked and asks for a refund on…" is
-// not something to approve $34 against. Each of these is a numbered item with
-// air around it rather than a bullet in a roll-up, so it can afford the room.
-const WAITING_TOPIC_MAX = 140;
 
 const BRIEFING_TAG_LABELS: Record<string, string> = {
   'Order Status': "where's my order?",
@@ -336,9 +301,9 @@ function briefingSubject(
  * with its action because money is worth reading first; every other action earns
  * the same slot, in the same `action · subject: topic` grammar.
  *
- * `send_reply` and `send_email` are named by hand for the same reason
- * `parkedActionLabel` names them: their registry plan-step labels ("Notify
- * customer", "Send email to customer") re-state a subject the line already has.
+ * `send_reply` and `send_email` are named by hand because their registry
+ * plan-step labels ("Notify customer", "Send email to customer") re-state a
+ * subject the line already has.
  */
 function approvalActionHead(
   rawToolCalls: Array<{ id: string; name: string; input?: unknown }>,
@@ -373,40 +338,6 @@ export function formatWaitingAge(now: Date, since: Date | null): string | null {
   if (hours < 24) return `waiting ${hours} hour${hours === 1 ? '' : 's'}`;
   const days = Math.floor(hours / 24);
   return `waiting ${days} day${days === 1 ? '' : 's'}`;
-}
-
-// Colon between action and subject, matching the flagged block's `1. Alice:
-// summary`. No em-dash anywhere: that is the tell that a machine wrote it.
-function waitingLine(action: string, topic: string | null, age: string | null): string {
-  const withTopic = topic ? `${action}: ${topic}` : action;
-  return age ? `${withTopic} (${age})` : withTopic;
-}
-
-// A bare noun phrase for one bullet. The "still waiting on your OK" framing
-// lives in the section header, so repeating it per item just pads the text; and
-// the action labels already name the customer ("reply to Sarah"), so a
-// possessive subject on top of them reads as "Sarah's reply to Sarah".
-function waitingPhrase(
-  customerName: string | null,
-  rawToolCalls: Array<{ id: string; name: string; input?: unknown }>,
-  instruction: string,
-  actionLabel?: string,
-): string {
-  const firstName = customerFirstName(customerName);
-  const forCustomer = firstName ? ` for ${firstName}` : '';
-
-  const refundAmount = extractRefundAmount(
-    rawToolCalls.find((toolCall) => toolCall.name === 'create_refund')?.input,
-  );
-  if (refundAmount) return `${refundAmount} refund${forCustomer}`;
-
-  const label = actionLabel ?? parkedActionLabel(rawToolCallsToSteps(rawToolCalls), customerName);
-  if (label) return label.charAt(0).toUpperCase() + label.slice(1);
-
-  const trimmed = instruction.trim();
-  const summary = truncateBriefingText(trimmed, BRIEFING_TOPIC_MAX);
-  if (!summary) return firstName ? `A ticket${forCustomer}` : 'A ticket';
-  return firstName ? `${firstName}: ${summary}` : summary;
 }
 
 // Compact one-line label for open tickets the merchant hasn't already seen above.
@@ -526,35 +457,6 @@ function formatTicketLine(thread: BriefingTicketRow): string {
     thread.channelType ?? null,
   );
 }
-
-function formatTicketRollup(
-  header: string,
-  threads: BriefingTicketRow[],
-  options: {
-    lineFor?: (thread: BriefingTicketRow) => string;
-    /** Omit to list every thread. */
-    limit?: number;
-  } = {},
-): string | null {
-  if (threads.length === 0) return null;
-  const lineFor = options.lineFor ?? formatTicketLine;
-
-  const lines = [header];
-  const shown = options.limit == null ? threads : threads.slice(0, options.limit);
-  for (const thread of shown) {
-    lines.push(`- ${lineFor(thread)}`);
-  }
-  const remaining = threads.length - shown.length;
-  if (remaining > 0) {
-    lines.push(`…and ${countWord(remaining)} more`);
-  }
-  return lines.join('\n');
-}
-
-
-
-
-
 
 async function isPlanExecutionResolved(
   organizationId: string,
@@ -720,17 +622,6 @@ export function formatHandledSection(rollup: HandledRollup): string | null {
       : `${capitalize(countWord(rollup.autoCount))} of those ran without needing you.`);
   }
   return lines.join('\n');
-}
-
-// When the customer last wrote in, which is what "waiting 2 days" means to the
-// merchant. Falls back to the thread's own clock when a thread carries no
-// inbound message rows.
-function waitingSince(thread: {
-  updatedAt: Date;
-  messages: Array<{ sentAt: Date }>;
-} | null): Date | null {
-  if (!thread) return null;
-  return thread.messages[0]?.sentAt ?? thread.updatedAt;
 }
 
 async function loadOperatorWaitingItems(
