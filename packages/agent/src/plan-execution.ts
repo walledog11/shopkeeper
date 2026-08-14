@@ -222,6 +222,8 @@ export async function executeCurrentCachedHomePlan(params: {
   approver?: ApproverIdentity;
   approvedToolCalls?: RawToolCall[];
   expectedIdentity?: ExpectedPlanIdentity;
+  /** Set only by the autonomous executor, never by an approval route. */
+  automatic?: boolean;
 }, deps: PlanExecutionDeps): Promise<ExecutedCachedPlan> {
   const thread = await requireOrgThread(params.threadId, params.orgId);
   if (shouldBlockTrustedSendActions(thread.filterStatus)) {
@@ -243,7 +245,7 @@ export async function executeCurrentCachedHomePlan(params: {
     throw new BadRequestError("The current plan has no executable tool calls");
   }
 
-  const auditMode = current.classification.kind === "auto_execute" && params.approvedToolCalls === undefined
+  const auditMode = params.automatic === true
     ? "auto_executed"
     : "human_approved";
   const approval: AgentActionApproval | undefined = auditMode === "human_approved" && params.approver
@@ -368,19 +370,40 @@ export async function maybeAutoExecuteCurrentCachedHomePlan(params: {
   threadId: string;
   settings: OrgSettings;
   failureRoute: string;
+  /** Business-hours and rollout gate for plans that mutate store state. */
+  allowMutativeAutoExecute?: boolean;
 }, deps: PlanExecutionDeps): Promise<ExecutedCachedPlan | null> {
-  const mode = resolveAutoExecuteMode(params.settings);
-  if (mode === "off") {
-    return null;
-  }
-
   const thread = await requireOrgThread(params.threadId, params.orgId);
   if (shouldSkipAutoPlan(thread.filterStatus)) {
     return null;
   }
 
   const current = await loadCurrentCachedHomePlan(params);
-  if (!current.plan || current.classification.kind !== "auto_execute") {
+  if (!current.plan) {
+    return null;
+  }
+
+  // A structurally clean quick reply is the low-risk conversational lane: one
+  // customer-facing send, optional reads, no mutation, no merchant question and
+  // no blocking warning. It is ordinary support work, so every tier except the
+  // explicit Draft only tier (which classifies it as needs_review) sends it
+  // without consuming merchant attention. The mutative rollout switch below is
+  // deliberately irrelevant here; turning on clarifying questions must not turn
+  // on refunds or order changes.
+  if (current.classification.kind === "quick_reply") {
+    return executeCurrentCachedHomePlan({
+      ...params,
+      allowedKinds: ["quick_reply"],
+      automatic: true,
+    }, deps);
+  }
+
+  if (current.classification.kind !== "auto_execute" || params.allowMutativeAutoExecute === false) {
+    return null;
+  }
+
+  const mode = resolveAutoExecuteMode(params.settings);
+  if (mode === "off") {
     return null;
   }
 
@@ -398,6 +421,7 @@ export async function maybeAutoExecuteCurrentCachedHomePlan(params: {
   return executeCurrentCachedHomePlan({
     ...params,
     allowedKinds: ["auto_execute"],
+    automatic: true,
   }, deps);
 }
 

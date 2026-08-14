@@ -1,6 +1,6 @@
 {
   "id": "order-status-unresolved-customer",
-  "description": "Support thread with no Shopify customer linked and no orders in context. The agent should not fabricate an answer or take a mutative action - it should reply asking for more info or escalate.",
+  "description": "Support thread with no Shopify customer linked and no orders in context. The agent must ask the customer for identifying order details directly; missing customer-provided data is not a merchant escalation.",
   "setup": {
     "classifierIntents": {
       "order_status": true
@@ -28,12 +28,15 @@
       "send_reply"
     ],
     "mustNotCallTools": [
+      "escalate_to_human",
+      "ask_operator",
       "create_refund",
       "cancel_order",
       "update_shopify_order_address",
       "create_shopify_order",
       "edit_shopify_order"
-    ]
+    ],
+    "mustClassifyAs": "quick_reply"
   },
   "suite": "core"
 }

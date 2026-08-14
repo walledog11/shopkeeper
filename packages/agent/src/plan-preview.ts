@@ -242,7 +242,10 @@ export function classifyHomePlan(
   }
 
   const quickReply = detectQuickReply(plan)
-  if (quickReply.kind === "quick_reply" && tier === "watch") {
+  if (
+    quickReply.kind === "quick_reply"
+    && (tier === "watch" || resolved.toolsEnabled.communication === false)
+  ) {
     return applyQuestionableSenderPolicy(NEEDS_REVIEW, options?.filterStatus)
   }
   return applyQuestionableSenderPolicy(quickReply, options?.filterStatus)

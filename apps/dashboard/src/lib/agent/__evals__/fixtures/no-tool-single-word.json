@@ -33,7 +33,8 @@
       "create_shopify_order",
       "update_shopify_order_address",
       "update_shopify_customer_info"
-    ]
+    ],
+    "mustClassifyAs": "quick_reply"
   },
   "suite": "extended"
 }

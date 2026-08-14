@@ -11,7 +11,11 @@ import {
 import { BadRequestError, ConflictError } from "./errors.js";
 import { buildAgentPlanCacheRecord } from "./plan-cache.js";
 import { hashInstruction, hashPlan } from "./agent-actions.js";
-import { executeCurrentCachedHomePlan, type PlanExecutionDeps } from "./plan-execution.js";
+import {
+  executeCurrentCachedHomePlan,
+  maybeAutoExecuteCurrentCachedHomePlan,
+  type PlanExecutionDeps,
+} from "./plan-execution.js";
 import { resolveAgentSettings } from "./settings.js";
 import type { AgentContext } from "./agent-context.js";
 import type { AgentPlan } from "./types.js";
@@ -48,6 +52,73 @@ afterEach(async () => {
 });
 
 describe("plan execution ledger", () => {
+  it("executes a clean quick reply even while mutative auto-execution is off", async () => {
+    const org = await createTestOrg();
+    orgIds.push(org.id);
+    const customer = await createTestCustomer(org.id, `${randomUUID()}@test.com`);
+    const thread = await createTestThread(org.id, customer.id, "email");
+    const message = await createTestMessage(thread.id, "Where is my order?");
+    const settings = resolveAgentSettings({ autonomyTier: "guarded", autoExecuteMode: "off" });
+    const plan: AgentPlan = {
+      instruction: "Ask for the order number",
+      steps: [{
+        id: "send_1",
+        tool: "send_reply",
+        label: "Reply",
+        description: "Ask for the order number",
+        category: "communication",
+        enabled: true,
+      }],
+      rawToolCalls: [{
+        id: "send_1",
+        name: "send_reply",
+        input: { text: "Could you send your order number or checkout email?" },
+      }],
+    };
+    const cache = buildAgentPlanCacheRecord({
+      instruction: "Ask for the order number",
+      lastCustomerMessageId: message.id,
+      settings,
+      plan,
+    });
+    await db.thread.update({
+      where: { id: thread.id },
+      data: { cachedPlanMessageId: message.id, cachedPlan: cache as object },
+    });
+
+    let sends = 0;
+    const deps: PlanExecutionDeps = {
+      lock: { acquire: async () => ({ release: async () => {} }) },
+      buildContext: async () => ({}) as AgentContext,
+      runAgent: async () => {
+        sends += 1;
+        return {
+          summary: "Asked for order details",
+          actionsPerformed: [{ tool: "send_reply", result: "Sent", status: "success" }],
+        };
+      },
+      shadow: {
+        recordShadowDecision: async () => {},
+        resolveShadowDecisionOnApproval: async () => {},
+      },
+    };
+
+    const executed = await maybeAutoExecuteCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings,
+      failureRoute: "test",
+      allowMutativeAutoExecute: false,
+    }, deps);
+
+    expect(sends).toBe(1);
+    expect(executed?.classification.kind).toBe("quick_reply");
+    const execution = await db.planExecution.findUniqueOrThrow({
+      where: { organizationId_planId: { organizationId: org.id, planId: cache.planId! } },
+    });
+    expect(execution.mode).toBe("auto_executed");
+  });
+
   it("records repeated shadow observations without claiming the plan", async () => {
     const identity = await seedIdentity();
 

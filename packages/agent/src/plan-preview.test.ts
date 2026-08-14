@@ -266,6 +266,13 @@ describe("classifyHomePlan — tier × action matrix", () => {
       expect(classifyHomePlan(plan(), settings({ autonomyTier: "guarded" })).kind).toBe("quick_reply")
     })
 
+    it("holds a reply when communication is explicitly disabled", () => {
+      expect(classifyHomePlan(plan(), settings({
+        autonomyTier: "guarded",
+        toolsEnabled: { action: true, communication: false, internal: true, read: true },
+      })).kind).toBe("needs_review")
+    })
+
     it("classifies a reply-only refund plan as needs_review, not quick_reply", () => {
       const result = classifyHomePlan(
         hollowRefundReplyPlan(),
