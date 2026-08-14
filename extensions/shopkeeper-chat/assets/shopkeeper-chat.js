@@ -142,12 +142,49 @@
     return i !== -1;
   }
 
+  // Most questions are answered in a few seconds. The ones that are not have
+  // been handed to the merchant and wait on a person, and a shopper sitting in
+  // front of an open chat window has no way to tell that from a broken widget.
+  //
+  // Purely local, and deliberately so. Nothing here is persisted as a message —
+  // a stored agent reply would invalidate the pending plan the merchant is about
+  // to approve — and the widget is never told that a plan parked, because that
+  // is merchant-side state and this is an anonymous surface. Silence past the
+  // deadline is the only signal used, which is also the one that is true when
+  // the reply is merely slow.
+  var WAITING_NOTICE_MS = 20000;
+  var waitingTimer = null;
+  var waitingNoticeShown = false;
+
+  function clearWaitingNotice() {
+    if (waitingTimer) {
+      clearTimeout(waitingTimer);
+      waitingTimer = null;
+    }
+  }
+
+  function armWaitingNotice() {
+    clearWaitingNotice();
+    waitingTimer = setTimeout(function () {
+      waitingTimer = null;
+      if (waitingNoticeShown) return;
+      waitingNoticeShown = true;
+      append("Someone from the shop is looking at this — the reply will appear right here.", "note");
+    }, WAITING_NOTICE_MS);
+  }
+
   function render(messages) {
     (messages || []).forEach(function (m) {
       if (seen[m.id]) return;
       seen[m.id] = true;
       // Already on screen from the optimistic append — adopt the id and move on.
       if (m.from === "customer" && dropEcho(m.text)) return;
+      // A reply arrived, so the shopper is no longer waiting on anyone. Reset the
+      // notice too: the next question they ask deserves its own.
+      if (m.from !== "customer") {
+        clearWaitingNotice();
+        waitingNoticeShown = false;
+      }
       append(m.text, m.from === "customer" ? "me" : "them");
     });
   }
@@ -438,6 +475,7 @@
     sendBtn.disabled = true;
     var pending = append(text, "me");
     awaitingEcho.push(text);
+    armWaitingNotice();
     var clientMessageId = String(Date.now()) + "-" + Math.random().toString(36).slice(2, 10);
 
     authedFetch("/messages", {
@@ -453,6 +491,7 @@
           // Nothing was accepted, so nothing will echo back. Releasing the entry
           // stops it from swallowing an identical message the shopper retries.
           dropEcho(text);
+          clearWaitingNotice();
           pending.style.opacity = "0.5";
           append(body.shopperMessage || "Too many messages just now. Try again in a moment.", "note");
         });
@@ -465,6 +504,7 @@
         // answer inline instead of waiting on a poll that will never match.
         if (body.verification) {
           dropEcho(text);
+          clearWaitingNotice();
           append(verificationNote(body.verification, "that order"), "note");
           return;
         }
@@ -472,6 +512,7 @@
       });
     }).catch(function () {
       dropEcho(text);
+      clearWaitingNotice();
       pending.style.opacity = "0.5";
       append("Not delivered. Check your connection and try again.", "note");
     }).finally(function () {
