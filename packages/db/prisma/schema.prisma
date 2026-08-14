@@ -460,6 +460,14 @@ model Thread {
 
   @@unique([organizationId, operatorKey])
   @@unique([organizationId, id], map: "threads_organization_id_id_key")
+  // One open thread per customer per channel is enforced by the partial raw-SQL
+  // index threads_one_open_per_customer, created in migration
+  // 20260405000000_add_idempotency_and_thread_uniqueness on
+  // (organization_id, customer_id, channel_type) where status = 'open'. It is
+  // the database-level backstop for the race in the worker's findFirst → create
+  // thread selection. Prisma cannot express the predicate, so `prisma migrate
+  // dev` diffs it as absent and emits a DROP INDEX for it — hand-write every
+  // migration against this schema.
   @@index([organizationId, status])
   @@index([organizationId, updatedAt])
   @@index([organizationId, status, lastMessageAt(sort: Desc)])

@@ -122,9 +122,9 @@ they constrain (`integrations` at lines 356-360, `messages` at line 486).
 `threads_one_open_per_customer` has no such comment, which is exactly why it is
 the one that gets forgotten.
 
-- [ ] Before the first migration, add a comment on the `Thread` model naming
+- [x] Before the first migration, add a comment on the `Thread` model naming
   `threads_one_open_per_customer`, its predicate, and its owning migration —
-  matching the convention the other four already follow.
+  matching the convention the other four already follow. **Done 2026-08-14.**
 - [ ] Hand-write every migration in this plan: create the migration directory and
   its `migration.sql` yourself, then apply with `prisma migrate deploy`. Never run
   `prisma migrate dev` against this schema.
