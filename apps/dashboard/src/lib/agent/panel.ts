@@ -31,6 +31,10 @@ export function buildAgentPanelHref(options?: {
   return `${pathname}?${params.toString()}`;
 }
 
+export function isDashboardHome(pathname: string): boolean {
+  return pathname === "/dashboard" || pathname === "/dashboard/";
+}
+
 export function inferAgentPanelSource(pathname: string, searchParams: URLSearchParams): AgentPanelOpenSource {
   if (pathname.startsWith("/dashboard/tickets")) return "tickets";
   if (searchParams.get("session")) return "review";

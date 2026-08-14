@@ -163,7 +163,7 @@ export function AgentChatView({
               <div key={messageKey(msg, index)} className="flex justify-end items-end gap-2.5">
                 <div className="flex flex-col items-end gap-1 max-w-[70%]">
                   <span className="text-xs text-muted-foreground">{formatClockTime(msg.timestamp)}</span>
-                  <div className="bg-card border border-border text-foreground text-sm rounded-2xl rounded-tr-sm px-4 py-2.5 shadow-sm">
+                  <div className="bg-card border border-border text-foreground text-sm rounded-2xl rounded-tr-sm px-4 py-2.5 shadow-sm break-words">
                     {msg.text}
                   </div>
                 </div>

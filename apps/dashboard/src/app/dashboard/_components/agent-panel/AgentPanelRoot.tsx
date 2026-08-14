@@ -10,7 +10,7 @@ interface Props {
 }
 
 export default function AgentPanelRoot({ agentName }: Props) {
-  const { isOpen, openContext, close } = useAgentPanel()
+  const { isOpen, openContext, close, chatState } = useAgentPanel()
   const isLargeScreen = React.useSyncExternalStore(
     (onStoreChange) => {
       if (typeof window === "undefined") return () => {}
@@ -43,7 +43,7 @@ export default function AgentPanelRoot({ agentName }: Props) {
                 agentName={agentName}
                 compact
                 openContext={openContext}
-                restoreHistory={!openContext?.walkthrough}
+                state={chatState}
                 onClose={close}
               />
             </m.div>
@@ -61,7 +61,7 @@ export default function AgentPanelRoot({ agentName }: Props) {
                   agentName={agentName}
                   compact
                   openContext={openContext}
-                  restoreHistory={!openContext?.walkthrough}
+                  state={chatState}
                   onClose={close}
                 />
               </div>

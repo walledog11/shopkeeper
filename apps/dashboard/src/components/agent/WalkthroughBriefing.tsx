@@ -18,7 +18,7 @@ export function WalkthroughNote({ agentName, text }: { agentName: string; text: 
       <AgentAvatar agentName={agentName} size="md" className="mt-0.5" />
       <div className="min-w-0 max-w-[75%] flex-1">
         <span className="mb-2 block text-xs font-medium text-foreground">{agentName}</span>
-        <div className="rounded-2xl rounded-tl-sm border border-border bg-green-600/20 px-4 py-2.5 text-sm text-foreground shadow-sm">
+        <div className="rounded-2xl rounded-tl-sm border border-border bg-green-600/20 px-4 py-2.5 text-sm text-foreground shadow-sm break-words">
           <AgentMessageMarkdown text={text} />
         </div>
       </div>

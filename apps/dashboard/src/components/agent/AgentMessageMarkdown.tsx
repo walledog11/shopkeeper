@@ -11,7 +11,7 @@ const COMPONENTS: Components = {
 }
 
 const WRAPPER_CLASS =
-  "text-sm text-foreground leading-relaxed " +
+  "text-sm text-foreground leading-relaxed break-words " +
   "[&_p]:mt-0 [&_p+p]:mt-2 " +
   "[&_strong]:font-medium [&_strong]:text-foreground/90 " +
   "[&_a]:text-violet-600 [&_a]:underline [&_a]:underline-offset-2 hover:[&_a]:text-violet-700 " +
