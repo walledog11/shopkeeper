@@ -22,6 +22,7 @@ import {
 } from './registration.js';
 import { registerTokenHealthMaintenanceJob } from './token-health.js';
 import { registerVoiceSynthesisMaintenanceJob } from './voice-synthesis.js';
+import { registerPlanRecoveryMaintenanceJob } from './plan-recovery.js';
 
 export const maintenanceJobRegistrations: MaintenanceJobRegistration[] = [
   registerTokenHealthMaintenanceJob,
@@ -29,6 +30,7 @@ export const maintenanceJobRegistrations: MaintenanceJobRegistration[] = [
   registerGmailWatchMaintenanceJob,
   registerIntegrationDisconnectSweepMaintenanceJob,
   registerRetentionMaintenanceJobs,
+  registerPlanRecoveryMaintenanceJob,
   registerDigestMaintenanceJob,
   registerVoiceSynthesisMaintenanceJob,
   registerOrderRiskMaintenanceJob,

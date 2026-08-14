@@ -43,6 +43,7 @@ export const QUEUE = {
   // confirmations. Backstop, not the primary path.
   OPERATOR_EVENT_SWEEP: 'operator-event-sweep',
   UNKNOWN_OUTCOME_SWEEP: 'unknown-outcome-sweep',
+  PLAN_RECOVERY: 'plan-recovery',
 } as const;
 export const JOB = {
   IG_DM: 'process-ig-dm',
@@ -88,6 +89,8 @@ export const JOB = {
   OPERATOR_EVENT_SWEEP_ID: 'operator-event-sweep-15min',
   UNKNOWN_OUTCOME_SWEEP: 'sweep-unknown-outcomes',
   UNKNOWN_OUTCOME_SWEEP_ID: 'unknown-outcome-sweep-15min',
+  PLAN_RECOVERY: 'recover-missing-plans',
+  PLAN_RECOVERY_ID: 'plan-recovery-hourly',
 } as const;
 export const CONTROLLED_QUEUE_RECOVERY_FAILURE =
   'Controlled queue recovery canary: first attempt must fail';

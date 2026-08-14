@@ -97,9 +97,9 @@ describe('createMaintenanceWorkers', () => {
 
     const resources = await createMaintenanceWorkers(workerConn, producerConn, workerOptions);
 
-    expect(maintenanceJobRegistrations).toHaveLength(15);
-    expect(resources.workers).toHaveLength(16);
-    expect(resources.queues).toHaveLength(26);
+    expect(maintenanceJobRegistrations).toHaveLength(16);
+    expect(resources.workers).toHaveLength(17);
+    expect(resources.queues).toHaveLength(28);
     expect(queueInstances.map((queue) => queue.name)).toEqual([
       QUEUE.TOKEN_HEALTH,
       QUEUE.EMAIL_TOKEN_HEALTH,
@@ -109,6 +109,8 @@ describe('createMaintenanceWorkers', () => {
       QUEUE.INTEGRATION_DISCONNECT,
       QUEUE.ARCHIVAL,
       QUEUE.PURGE,
+      QUEUE.PLAN_RECOVERY,
+      QUEUE.AI_SUMMARY,
       QUEUE.DIGEST,
       QUEUE.VOICE_SYNTHESIS,
       QUEUE.ORDER_RISK,
@@ -135,6 +137,7 @@ describe('createMaintenanceWorkers', () => {
       QUEUE.INTEGRATION_DISCONNECT_SWEEP,
       QUEUE.ARCHIVAL,
       QUEUE.PURGE,
+      QUEUE.PLAN_RECOVERY,
       QUEUE.DIGEST,
       QUEUE.VOICE_SYNTHESIS,
       QUEUE.ORDER_RISK,
@@ -205,6 +208,11 @@ describe('createMaintenanceWorkers', () => {
       jobId: JOB.PURGE_DELETED_ID,
       every: ONE_DAY_MS,
     });
+    expect(readRepeatJob(QUEUE.PLAN_RECOVERY)).toEqual({
+      name: JOB.PLAN_RECOVERY,
+      jobId: JOB.PLAN_RECOVERY_ID,
+      every: ONE_HOUR_MS,
+    });
     expect(readRepeatJob(QUEUE.DIGEST)).toEqual({
       name: JOB.DIGEST,
       jobId: JOB.DIGEST_ID,
@@ -267,7 +275,7 @@ describe('createMaintenanceWorkers', () => {
     );
 
     const repeatableAdds = queueInstances.flatMap((queue) => queue.add.mock.calls);
-    expect(repeatableAdds).toHaveLength(16);
+    expect(repeatableAdds).toHaveLength(17);
 
     for (const addCall of repeatableAdds) {
       expect(addCall[2]).toEqual(expect.objectContaining(PROCESSING_QUEUE_DEFAULTS));
