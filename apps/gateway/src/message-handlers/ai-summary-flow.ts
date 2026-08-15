@@ -5,10 +5,12 @@ import {
   requireOrgThread,
 } from '@shopkeeper/agent/thread-auth';
 import { readAgentPlanCache } from '@shopkeeper/agent/plan-cache';
+import { consumeThreadCachedPlan } from '@shopkeeper/agent/plan-execution';
 import { resolveAgentSettings, isWithinBusinessHours } from '@shopkeeper/agent/settings';
 import { CHANNEL } from '../constants.js';
 import logger from '../logger.js';
 import { generateThreadIntelligence } from './intelligence.js';
+import { mayParkMerchantWork } from './planning-types.js';
 import {
   precomputeThreadPlan,
   sendAutoAck,
@@ -49,21 +51,46 @@ export function resolveAiSummarySourceMessageId(
     : queuedSourceMessageId;
 }
 
-async function isPlanStillCurrent(
+type PublishDecision =
+  | { publish: true; requestSummary: string | null }
+  | { publish: false; reason: 'superseded' | 'parks_no_work' };
+
+// The one gate in front of every merchant-facing park, run against a fresh read
+// immediately before publishing rather than the snapshot the plan was built
+// from. Between planning and here the customer can send again and the classifier
+// can land its verdict — the classifier runs *in parallel* with planning on most
+// channels, so a disposition read any earlier is routinely the previous burst's
+// or absent entirely.
+async function resolvePublishDecision(
   organizationId: string,
   threadId: string,
   identity: { planId: string; sourceMessageId: string } | undefined,
-): Promise<boolean> {
-  if (!identity) return true;
+): Promise<PublishDecision> {
+  if (!identity) return { publish: true, requestSummary: null };
   const [thread, latest] = await Promise.all([
     requireOrgThread(threadId, organizationId),
     getLatestConversationMessage(threadId, organizationId),
   ]);
   const cached = readAgentPlanCache(thread.cachedPlan);
-  return latest?.senderType === 'customer'
+  const isCurrent = latest?.senderType === 'customer'
     && latest.id === identity.sourceMessageId
     && thread.cachedPlanMessageId === identity.sourceMessageId
     && cached?.planId === identity.planId;
+  if (!isCurrent) return { publish: false, reason: 'superseded' };
+
+  // Only a verdict written against this exact request may speak for it. The
+  // classifier compare-and-sets the request fields, so a burst that moved
+  // underneath it leaves the *previous* request's disposition and summary in
+  // place — and suppressing a refund because the message before it was "thanks"
+  // is the one failure this gate must never produce.
+  const verdictIsForThisRequest = thread.requestSourceMessageId === identity.sourceMessageId;
+  if (verdictIsForThisRequest && !mayParkMerchantWork(thread.requestDisposition)) {
+    return { publish: false, reason: 'parks_no_work' };
+  }
+  return {
+    publish: true,
+    requestSummary: verdictIsForThisRequest ? thread.requestSummary : null,
+  };
 }
 
 export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void> {
@@ -178,7 +205,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
           threadId,
           customerName,
           channelType,
-          updatedThread?.aiSummary ?? null,
+          updatedThread?.requestSummary ?? null,
           planResult,
         );
       }
@@ -208,15 +235,30 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
         threadId,
         customerName,
         channelType,
-        updatedThread?.aiSummary ?? null,
+        updatedThread?.requestSummary ?? null,
         planResult,
       );
     }
     return;
   }
 
-  if (!await isPlanStillCurrent(organizationId, threadId, planResult.identity)) {
-    logger.info({ organizationId, threadId, sourceMessageId }, '[AISummary] Plan was superseded before notification');
+  const decision = await resolvePublishDecision(organizationId, threadId, planResult.identity);
+  if (!decision.publish) {
+    if (decision.reason === 'parks_no_work') {
+      // Nobody asked for anything, so nothing should be waiting on any surface.
+      // Dropping the cached plan is what keeps the dashboard home from raising a
+      // card for the same greeting the phone was just told not to mention —
+      // conditioned on the source message, so a plan for a newer burst survives.
+      await consumeThreadCachedPlan({
+        orgId: organizationId,
+        threadId,
+        lastCustomerMessageId: planResult.identity?.sourceMessageId ?? null,
+      });
+    }
+    logger.info(
+      { organizationId, threadId, sourceMessageId, reason: decision.reason },
+      '[AISummary] Plan withheld from the merchant',
+    );
     return;
   }
 
@@ -226,7 +268,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
       threadId,
       customerName,
       channelType,
-      updatedThread?.aiSummary ?? null,
+      decision.requestSummary,
       planResult.merchantQuestion,
       planResult.instruction,
     );
@@ -238,7 +280,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
     threadId,
     customerName,
     channelType,
-    updatedThread?.aiSummary ?? null,
+    decision.requestSummary,
     planResult.plan,
     planResult.instruction,
     planResult.identity ? { identity: planResult.identity } : undefined,

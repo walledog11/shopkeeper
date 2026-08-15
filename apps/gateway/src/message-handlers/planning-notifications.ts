@@ -190,16 +190,13 @@ function formatHeaderLines(
     const burst = stage.newMessages > 1 ? ` (${stage.newMessages} messages)` : '';
     lead = `New ${channelNoun(channelType)}${from}${burst}`;
   }
-  // `summary` is the thread's aiSummary — the whole conversation, not the new
-  // messages. Pairing "sent 3 more messages" with it read as a description of
-  // what just arrived, so each follow-up restated the entire thread as if it
-  // were news and the merchant could not tell what had changed. Label it for
-  // what it is instead of implying a delta this function cannot compute; a true
-  // delta needs a summary scoped to the new messages, which the summariser does
-  // not produce yet.
-  return stage.isFollowUp
-    ? [`${lead}.`, `Where it stands: ${endSentence(summary)}`]
-    : [`${lead}.`, endSentence(summary)];
+  // `summary` is the thread's requestSummary — the newest unanswered burst, the
+  // same messages `lead` just counted. It was the episode summary once, which
+  // described the whole conversation and so restated everything as if it were
+  // news; the `Where it stands:` label existed to stop that from reading as a
+  // delta. The summariser scopes it to the burst now, so it *is* the delta and
+  // the label would understate it.
+  return [`${lead}.`, endSentence(summary)];
 }
 
 function isSendStep(step: PlanStep): boolean {
@@ -432,7 +429,7 @@ export async function sendOperatorAutoExecutionNotification(
   threadId: string,
   customerName: string | null,
   channelType: DbChannelType,
-  aiSummary: string | null,
+  requestSummary: string | null,
   result: PrecomputedPlanResult,
 ): Promise<void> {
   try {
@@ -443,7 +440,7 @@ export async function sendOperatorAutoExecutionNotification(
       return;
     }
 
-    const summary = aiSummary || result.instruction;
+    const summary = requestSummary || result.instruction;
     const message = formatAutoExecutionMessage(customerName, channelType, summary, result.plan, result);
 
     const idempotencyKey = autoExecutionNotificationIdempotencyKey(
@@ -521,7 +518,7 @@ export async function sendOperatorQuestionNotification(
   threadId: string,
   customerName: string | null,
   channelType: DbChannelType,
-  aiSummary: string | null,
+  requestSummary: string | null,
   question: string,
   instruction: string,
 ): Promise<void> {
@@ -532,7 +529,7 @@ export async function sendOperatorQuestionNotification(
     return;
   }
 
-  const summary = aiSummary || instruction;
+  const summary = requestSummary || instruction;
   const stage = await getConversationStage(threadId);
   const message = formatQuestionMessage(customerName, channelType, summary, question, stage);
   const idempotencyKey = questionNotificationIdempotencyKey(organizationId, threadId, question);
@@ -561,7 +558,7 @@ export async function sendOperatorPlanNotification(
   threadId: string,
   customerName: string | null,
   channelType: DbChannelType,
-  aiSummary: string | null,
+  requestSummary: string | null,
   plan: AgentPlan,
   instruction: string,
   options?: { exclude?: OperatorNotificationExclude; identity?: PlanIdentity },
@@ -573,7 +570,7 @@ export async function sendOperatorPlanNotification(
     return;
   }
 
-  const summary = aiSummary || instruction;
+  const summary = requestSummary || instruction;
   const stage = await getConversationStage(threadId);
   const verifiedOrders = await listVerifiedOrderNames(organizationId, threadId, channelType);
   const dashboardUrl = getGatewayDashboardUrl();

@@ -1,6 +1,6 @@
 # Conversation Episodes for Storefront Chat
 
-**Status:** P0, P1, and items A and C shipped. B, D, E, and F remain.
+**Status:** P0, P1, and items A, B and C shipped. D, E, and F remain.
 **Decision date:** 2026-08-12. **Revised:** 2026-08-14 — cut to what shipping and
 testing the storefront chat widget actually requires; identity, obligations, and
 prior-episode retrieval are deferred with reasons below.
@@ -178,22 +178,51 @@ skips the classifier entirely. Only `merchant_action` and `unclear` may park wor
 for the merchant, so the default has to leave a request visible rather than let a
 malformed field swallow a refund request.
 
-### B. Don't manufacture merchant work from a greeting
+### B. Don't manufacture merchant work from a greeting — **done**
 
-- [ ] `none` and `acknowledgement` requests never create a merchant action plan.
-  A greeting or "thanks" gets the product's safe acknowledgement behavior without
-  appearing as work for the merchant.
-- [ ] Routine informational reads/replies follow the existing decision: perform
-  the safe read/reply when policy permits and report the outcome; do not present
-  an approval card whose only value is asking permission to answer.
-- [ ] Only `merchant_action` and genuinely unresolved `unclear` requests park a
-  plan or question.
-- [ ] Replace notification `aiSummary` inputs with `requestSummary`.
-- [ ] Immediately before publishing a notification, assert current thread, current
-  request source, current plan ID, and eligible disposition.
+- [x] `none` and `acknowledgement` requests never park a plan or a question.
+  `mayParkMerchantWork` (`planning-types.ts`) is the predicate; the greeting is
+  still planned, because the friendly reply the shopper gets *is* the plan and
+  the existing safe-reply lane executes it. What the gate removes is the
+  leftover.
+- [x] Routine informational reads/replies were already correct: the `quick_reply`
+  lane in `plan-execution.ts` sends them without consuming merchant attention on
+  every tier except Draft only. No change, covered by a test.
+- [x] `informational` deliberately stays **eligible** to park, which is a
+  deviation from this file's original third bullet. That bullet assumed the
+  safe-reply lane is exhaustive for routine questions. It isn't: a plan only
+  reaches the parking decision if that lane *declined* it — policy block,
+  blocking warning, or a needed merchant fact — so suppressing it would answer
+  nobody and tell nobody. Bullet 2's "when policy permits" is the case that
+  already auto-sends; this is the remainder.
+- [x] Notification `aiSummary` inputs replaced with `requestSummary`, at all four
+  `ai-summary-flow.ts` call sites plus the operator answer re-plan. The two
+  proactive monitors still pass `aiSummary` on purpose and say why inline — the
+  agent opens those conversations, so there is no customer request to summarise.
+- [x] `formatHeaderLines` dropped the `Where it stands:` label. It existed to
+  stop an episode summary from reading as a delta; the summary is the burst now,
+  so the label understates it.
+- [x] One gate, `resolvePublishDecision`, runs immediately before both parking
+  publishes and asserts current thread, current request source, current plan ID,
+  and eligible disposition off a **fresh read**. Reading any earlier does not
+  work: the classifier runs in parallel with planning on most channels, so the
+  disposition at plan time is routinely the previous burst's or absent.
+- [x] A suppressed plan is also dropped from `Thread.cachedPlan` (compare-and-set
+  on the source message). The dashboard home reads that cache, so notification-only
+  suppression would have left the card standing on the surface the phone was just
+  told to stay quiet about.
 
-This overlaps the safe-reply auto-execution in `packages/agent/src/plan-execution.ts`:
-routing and the auto-execute decision are one change, evaluated together.
+Two guards verified load-bearing by forcing each true and watching one named test
+fail: the disposition check, and the `requestSourceMessageId` equality that stops
+a stale verdict from suppressing. The second is the one that matters — the
+classifier compare-and-sets, so a burst that moved leaves the *previous*
+request's disposition behind, and trusting it would drop a refund because the
+message before it was "thanks".
+
+Auto-execution notifications are deliberately **not** behind the gate. They report
+work that already happened; withholding a failed send because a newer message
+arrived, or because the disposition was `acknowledgement`, would hide a real
+delivery failure from the merchant.
 
 ### C. Delete the past-ticket dump — **done**
 
@@ -242,6 +271,11 @@ Bootstrap reads messages from `session.threadId`, which rollover repoints, so th
 expired episode leaves the widget on its own after the next message. Only the
 seam is visible, and only within one page load.
 
+- [ ] Forward `isNewThread` through the dashboard proxy first. The gateway returns
+  it (`internal-storefront-chat.ts:97`) but
+  `apps/dashboard/src/app/api/storefront-chat/proxy/messages/route.ts` answers a
+  flat `{ accepted: true }`, so the widget cannot branch on a field it never
+  receives. This item is three edits, not two.
 - [ ] When a message response returns `isNewThread: true` and messages are already
   on screen, render a "New conversation" divider.
 - [ ] Reset the optimistic-echo and `seen` bookkeeping
@@ -287,10 +321,9 @@ Cut from this plan, with the reason each can wait:
 
 ## Acceptance
 
-- [~] A visitor returns after three days and says "Hi": fresh episode, no old raw
-  messages or old summary in context, no merchant plan. — episode and raw-message
-  halves pass; the old summary still arrives via past tickets (item C) and a
-  greeting can still produce a plan (item B).
+- [x] A visitor returns after three days and says "Hi": fresh episode, no old raw
+  messages or old summary in context, no merchant plan. — all three halves now
+  hold in code and tests (P1, C, B). Item F still owes the live dev-store run.
 - [x] The same visitor follows up after ten minutes: same episode, coherent
   context.
 - [x] An old cached plan exists when rollover occurs: expired and removed from

@@ -211,6 +211,9 @@ export async function pushDeliveryExceptionApprovalPlan(
     watch.threadId,
     thread.customer?.name ?? watch.customerName,
     thread.channelType,
+    // The agent is opening this conversation, so there is no customer request to
+    // summarise and `requestSummary` is null by construction. `aiSummary` is this
+    // monitor's own label, not an episode summary of customer prose.
     thread.aiSummary,
     plan,
     instruction,

@@ -303,7 +303,7 @@ describe('formatOperatorPlanMessage', () => {
       },
     );
 
-    expect(message).toContain('Sarah replied on Instagram.\nWhere it stands: Customer is asking when the snowboard restocks.');
+    expect(message).toContain('Sarah replied on Instagram.\nCustomer is asking when the snowboard restocks.');
     expect(message).not.toContain('New Instagram DM');
   });
 
@@ -315,9 +315,10 @@ describe('formatOperatorPlanMessage', () => {
       plan.steps,
       { stage: { isFollowUp: true, newMessages: 3 } },
     );
-    // The summary is the whole thread, not the three new messages, so the
-    // follow-up header labels it rather than implying a delta.
-    expect(followUp).toContain('Sarah sent 3 more messages on Instagram.\nWhere it stands: Customer sent more details.');
+    // The summary is scoped to the three new messages the header just counted,
+    // so it states the delta directly instead of being labelled as background.
+    expect(followUp).toContain('Sarah sent 3 more messages on Instagram.\nCustomer sent more details.');
+    expect(followUp).not.toContain('Where it stands');
 
     const fresh = formatOperatorPlanMessage(
       null,

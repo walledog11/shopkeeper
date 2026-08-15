@@ -202,7 +202,7 @@ export async function applyOperatorAnswerReplan(
       threadId,
       meta?.customer?.name ?? null,
       meta?.channelType ?? thread.channelType,
-      meta?.aiSummary ?? null,
+      thread.requestSummary,
       notifyPlan,
       baseInstruction,
       {
