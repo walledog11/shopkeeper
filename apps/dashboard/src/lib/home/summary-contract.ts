@@ -11,6 +11,7 @@ export interface HomeNeedsAttentionItem {
   customerMessage: string
   channelName: string
   timeAgo: string
+  lastMessageAt: string
   headline: string
   contextLine: string
   proposalSummary: string

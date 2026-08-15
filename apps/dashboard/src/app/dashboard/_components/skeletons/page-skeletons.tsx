@@ -39,18 +39,17 @@ export function HomePageSkeleton() {
           <section className="mt-5 sm:mt-10 flex flex-col gap-2.5" aria-busy="true" aria-label="Loading action plan cards">
             <Card className={needsYouCardShellClassName("front")}>
               <div className="rounded-t-3xl border-b border-border/60 bg-card px-5 pb-4 pt-5 sm:px-6">
-                <div className="flex items-center justify-between gap-3">
-                  <Skeleton className="h-5 w-20 rounded-full bg-foreground/[0.08]" />
-                  <Skeleton className="h-4 w-24 rounded-full bg-foreground/[0.06]" />
-                </div>
-                <div className="mt-2 space-y-2">
-                  <Skeleton className="h-7 w-[86%] rounded-full bg-foreground/[0.08]" />
-                  <Skeleton className="h-7 w-[58%] rounded-full bg-foreground/[0.08]" />
+                <div className="flex flex-col items-center gap-3">
+                  <Skeleton className="h-11 w-full rounded-xl bg-foreground/[0.06]" />
+                  <div className="w-full space-y-2">
+                    <Skeleton className="mx-auto h-7 w-[72%] rounded-full bg-foreground/[0.08]" />
+                    <Skeleton className="mx-auto h-7 w-[48%] rounded-full bg-foreground/[0.08]" />
+                  </div>
                 </div>
               </div>
               <div className="bg-card px-5 py-4 sm:px-6 space-y-4">
-                <Skeleton className="h-20 w-full rounded-2xl bg-foreground/[0.06]" />
-                <Skeleton className="h-24 w-full rounded-2xl bg-foreground/[0.05]" />
+                <Skeleton className="h-20 w-[85%] rounded-[18px_18px_18px_0] bg-foreground/[0.06]" />
+                <Skeleton className="ml-auto h-24 w-[85%] rounded-[18px_18px_0_18px] bg-foreground/[0.05]" />
               </div>
               <div className="rounded-b-3xl border-t border-border/50 bg-muted/30 px-5 py-4 sm:px-6 space-y-2">
                 <Skeleton className="h-12 w-full rounded-2xl bg-foreground/[0.08]" />

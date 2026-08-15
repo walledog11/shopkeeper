@@ -10,6 +10,7 @@ function item(overrides: Partial<HomeNeedsAttentionItem> = {}): HomeNeedsAttenti
     customerMessage: "hi",
     channelName: "Email",
     timeAgo: "5m ago",
+    lastMessageAt: "2026-06-14T11:55:00.000Z",
     headline: "headline",
     contextLine: "context",
     proposalSummary: "proposal",

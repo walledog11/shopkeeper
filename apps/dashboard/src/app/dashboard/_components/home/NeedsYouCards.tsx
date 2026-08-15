@@ -4,7 +4,6 @@ import { useState } from "react"
 import Link from "next/link"
 import { AlertCircle, Loader2 } from "lucide-react"
 import MerchantAnswerForm from "@/components/agent/MerchantAnswerForm"
-import { customerInitials } from "@/lib/messaging/customer-display"
 import type { HomeNeedsAttentionItem } from "@/lib/home/summary-contract"
 import {
   NeedsYouBubble,
@@ -15,7 +14,8 @@ import {
   NeedsYouCardShell,
   NeedsYouPrimaryButton,
 } from "./needs-you-card-ui"
-import type { BubbleTone } from "./needs-you-card-styles"
+import { needsYouSecondaryButtonClassName, type BubbleTone } from "./needs-you-card-styles"
+import { isSampleNeedsYouItem } from "./sample-needs-you-items"
 
 export function NeedsYouCard({
   item,
@@ -32,11 +32,6 @@ export function NeedsYouCard({
   const [approvalError, setApprovalError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
 
-  const customerName = item.customerName?.trim()
-  const customerLabel = customerName || "Customer"
-  const customerInitial = customerName ? customerInitials(customerName) : undefined
-  const agentInitial = agentName.trim()[0]?.toUpperCase()
-
   if (item.kind === "needs_merchant_input") {
     return (
       <NeedsYouCardShell>
@@ -46,7 +41,7 @@ export function NeedsYouCard({
 
         <NeedsYouCardBody>
           {item.customerMessage && (
-            <NeedsYouBubble label={customerLabel} tone="customer" initial={customerInitial}>
+            <NeedsYouBubble tone="customer">
               {item.customerMessage}
             </NeedsYouBubble>
           )}
@@ -64,7 +59,7 @@ export function NeedsYouCard({
         <NeedsYouCardFooter>
           <Link
             href={`/dashboard/tickets?thread=${item.threadId}`}
-            className="inline-flex w-full items-center justify-center rounded-2xl border border-border bg-transparent py-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-foreground/[0.04]"
+            className={needsYouSecondaryButtonClassName}
           >
             View Ticket
           </Link>
@@ -75,11 +70,10 @@ export function NeedsYouCard({
 
   const isConsequential = item.kind === "needs_review"
 
-  const bubbles: { key: string; label: string; text: string; tone: BubbleTone }[] = []
+  const bubbles: { key: string; text: string; tone: BubbleTone }[] = []
   if (item.actionText) {
     bubbles.push({
       key: "action",
-      label: `${agentName} updates Shopify`,
       text: item.actionText,
       tone: "action",
     })
@@ -87,7 +81,6 @@ export function NeedsYouCard({
   if (item.replyText) {
     bubbles.push({
       key: "reply",
-      label: `${agentName} responds via ${item.channelName}`,
       text: item.replyText,
       tone: "reply",
     })
@@ -97,9 +90,6 @@ export function NeedsYouCard({
     if (text) {
       bubbles.push({
         key: "flag",
-        // "Flagged this" is an alarm. Only ring it when the plan is actually
-        // consequential — a read-only lookup gets the neutral treatment.
-        label: isConsequential ? `${agentName} flagged this` : `${agentName} looked into this`,
         text,
         tone: isConsequential ? "flag" : "reply",
       })
@@ -110,6 +100,13 @@ export function NeedsYouCard({
     if (isApproving) return
     setIsApproving(true)
     setApprovalError(null)
+
+    if (isSampleNeedsYouItem(item.threadId)) {
+      onSent()
+      setIsApproving(false)
+      setConfirming(false)
+      return
+    }
 
     try {
       const response = await fetch("/api/agent/quick-approve", {
@@ -149,20 +146,14 @@ export function NeedsYouCard({
 
       <NeedsYouCardBody>
         {item.customerMessage && (
-          <NeedsYouBubble label={customerLabel} tone="customer" initial={customerInitial}>
+          <NeedsYouBubble tone="customer">
             {item.customerMessage}
           </NeedsYouBubble>
         )}
 
-        <div className="mt-4 flex flex-col gap-3">
+        <div className="flex flex-col gap-3">
           {bubbles.map(bubble => (
-            <NeedsYouBubble
-              key={bubble.key}
-              label={bubble.label}
-              tone={bubble.tone}
-              initial={agentInitial}
-              flush
-            >
+            <NeedsYouBubble key={bubble.key} tone={bubble.tone} flush>
               {bubble.text}
             </NeedsYouBubble>
           ))}
@@ -192,14 +183,14 @@ export function NeedsYouCard({
               type="button"
               onClick={() => setConfirming(false)}
               disabled={isApproving}
-              className="inline-flex w-full items-center justify-center rounded-2xl border border-border bg-transparent py-3.5 text-base font-semibold text-muted-foreground transition-colors hover:bg-foreground/[0.04] disabled:opacity-40"
+              className={needsYouSecondaryButtonClassName}
             >
               Cancel
             </button>
           ) : (
             <Link
-              href={`/dashboard/tickets?thread=${item.threadId}`}
-              className="inline-flex w-full items-center justify-center rounded-2xl border border-border bg-transparent py-3.5 text-base font-semibold text-muted-foreground transition-colors hover:bg-foreground/[0.04]"
+              href={isSampleNeedsYouItem(item.threadId) ? "/dashboard/tickets" : `/dashboard/tickets?thread=${item.threadId}`}
+              className={needsYouSecondaryButtonClassName}
             >
               View Ticket
             </Link>

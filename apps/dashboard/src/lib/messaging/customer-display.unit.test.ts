@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { customerDisplayLabel, realCustomerName, timeAgoShort } from "./customer-display"
+import { customerDisplayLabel, realCustomerName, timeAgoCard, timeAgoShort } from "./customer-display"
 
 describe("customer display helpers", () => {
   it("returns a real customer name when one exists", () => {
@@ -17,5 +17,13 @@ describe("customer display helpers", () => {
     expect(timeAgoShort(new Date("2026-06-14T11:59:30.000Z"), now)).toBe("just now")
     expect(timeAgoShort(new Date("2026-06-14T11:30:00.000Z"), now)).toBe("30m ago")
     expect(timeAgoShort(new Date("2026-06-13T12:00:00.000Z"), now)).toBe("1d ago")
+  })
+
+  it("formats card-friendly relative times and dates", () => {
+    const now = new Date("2026-06-14T12:00:00.000Z")
+    expect(timeAgoCard(new Date("2026-06-14T11:59:30.000Z"), now)).toBe("Just now")
+    expect(timeAgoCard(new Date("2026-06-14T11:30:00.000Z"), now)).toBe("30 min ago")
+    expect(timeAgoCard(new Date("2026-06-13T12:00:00.000Z"), now)).toBe("Yesterday")
+    expect(timeAgoCard(new Date("2026-05-14T12:00:00.000Z"), now)).toBe("May 14")
   })
 })

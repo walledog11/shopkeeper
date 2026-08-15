@@ -1,5 +1,6 @@
 "use client"
 
+import { useMemo } from "react"
 import WorkflowSetupBanner from "./WorkflowSetupBanner"
 import HomeChannelNudge from "./HomeChannelNudge"
 import ConciergeBriefing from "./ConciergeBriefing"
@@ -8,6 +9,7 @@ import ClearedOvernight from "./ClearedOvernight"
 import { HomePageSkeleton } from "@/app/dashboard/_components/skeletons"
 import type { HomeChannelState, HomeSummary } from "@/lib/home/summary-contract"
 import { useHomeData } from "./useHomeData"
+import { SAMPLE_NEEDS_YOU_ITEMS } from "./sample-needs-you-items"
 
 interface Props {
   userName: string
@@ -31,6 +33,11 @@ export default function DashboardHomeClient({
   instagramAvailable,
 }: Props) {
   const data = useHomeData(initialHomeSummary, agentName, initialChannelState)
+  const needsYouItems = useMemo(() => {
+    if (data.needsYouItems.length > 0) return data.needsYouItems
+    if (process.env.NODE_ENV === "development") return SAMPLE_NEEDS_YOU_ITEMS
+    return data.needsYouItems
+  }, [data.needsYouItems])
 
   if (data.isSummaryPending) {
     return <HomePageSkeleton />
@@ -61,7 +68,7 @@ export default function DashboardHomeClient({
               agentName={data.agentName}
               walkthroughItems={data.walkthroughItems}
               walkthroughCount={data.walkthroughCount}
-              needsYouCount={data.needsYouCount}
+              needsYouCount={needsYouItems.length}
               overnightClearedCount={data.overnightClearedCount}
               briefingChannels={data.briefingChannels}
               refundsPending={data.refundsPending}
@@ -70,7 +77,7 @@ export default function DashboardHomeClient({
             />
 
             <NeedsYou
-              items={data.needsYouItems}
+              items={needsYouItems}
               agentName={data.agentName}
               onApproved={data.refreshHomeSummary}
             />

@@ -4,33 +4,49 @@ export type BubbleTone = "action" | "reply" | "flag" | "customer"
 
 export type NeedsYouCardVariant = "front" | "peek" | "shell"
 
-export const BUBBLE_TONE: Record<
-  BubbleTone,
-  { label: string; bubble: string }
-> = {
+const brutalBubble = "border-2 border-[#1a1a1a] shadow-[-2px_2px_0_#c4a574]"
+
+export const needsYouMetaPillClassName =
+  "overflow-hidden rounded-xl bg-white shadow-[0_1px_2px_rgba(0,0,0,0.05),0_6px_18px_rgba(0,0,0,0.08)]"
+
+export const BUBBLE_TONE: Record<BubbleTone, { bubble: string; text: string }> = {
   customer: {
-    label: "text-foreground/35",
-    bubble: "bg-muted/50 border border-border rounded-2xl rounded-tl-md",
-  },
-  action: {
-    label: "text-amber-700/70",
-    bubble: "bg-amber-600/[0.14] border border-amber-600/25 rounded-2xl rounded-tr-md",
+    bubble: cn(
+      brutalBubble,
+      "rounded-[18px_18px_18px_0] bg-white text-[#1a1a1a]",
+    ),
+    text: "text-[15px] leading-[1.4] text-[#1a1a1a]",
   },
   reply: {
-    // Heavier than ChatTimeline's 0.14: here there is one agent bubble and it is
-    // what Approve acts on, so it should read as kin to that button.
-    label: "text-foreground/35",
-    bubble: "bg-foreground/[0.18] rounded-2xl rounded-tr-md",
+    bubble: cn(
+      brutalBubble,
+      "rounded-[18px_18px_0_18px] bg-[#1a1a1a] text-white",
+    ),
+    text: "text-[15px] leading-[1.4] font-medium text-white",
+  },
+  action: {
+    bubble: cn(
+      brutalBubble,
+      "rounded-[18px_18px_0_18px] bg-[#d4b896] text-[#1a1a1a]",
+    ),
+    text: "text-[15px] leading-[1.4] font-medium text-[#1a1a1a]",
   },
   flag: {
-    label: "text-amber-700/70",
-    bubble: "bg-amber-600/[0.14] border border-amber-600/25 rounded-2xl rounded-tr-md",
+    bubble: cn(
+      brutalBubble,
+      "rounded-[18px_18px_0_18px] bg-[#fff4e5] text-[#1a1a1a]",
+    ),
+    text: "text-[15px] leading-[1.4] font-medium text-[#1a1a1a]",
   },
 }
 
-/** Inbound sits left; everything the agent produces sits right, as in ChatTimeline. */
+/** Inbound sits left; everything the agent produces sits right. */
 export function isInboundTone(tone: BubbleTone): boolean {
   return tone === "customer"
+}
+
+export function needsYouConversationSurfaceClassName() {
+  return "bg-card"
 }
 
 export function needsYouCardShellClassName(variant: NeedsYouCardVariant = "front") {
@@ -41,3 +57,6 @@ export function needsYouCardShellClassName(variant: NeedsYouCardVariant = "front
     variant === "shell" && "brightness-[0.98] saturate-[0.96]",
   )
 }
+
+export const needsYouSecondaryButtonClassName =
+  "inline-flex w-full items-center justify-center rounded-2xl border border-border bg-transparent py-3.5 text-base font-semibold text-muted-foreground transition-colors hover:bg-foreground/[0.04] disabled:opacity-40"

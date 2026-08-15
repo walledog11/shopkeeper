@@ -38,3 +38,22 @@ export function timeAgoShort(date: Date, now: Date): string {
   if (hours < 24) return `${hours}h ago`
   return `${Math.floor(hours / 24)}d ago`
 }
+
+/** Warmer copy for action-plan cards — spells out units and falls back to a date. */
+export function timeAgoCard(date: Date, now: Date): string {
+  const minutes = Math.floor((now.getTime() - date.getTime()) / 60_000)
+  if (minutes < 1) return "Just now"
+  if (minutes < 60) return `${minutes} min ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return hours === 1 ? "1 hr ago" : `${hours} hr ago`
+  const days = Math.floor(hours / 24)
+  if (days === 1) return "Yesterday"
+  if (days < 7) return `${days} days ago`
+
+  const sameYear = date.getFullYear() === now.getFullYear()
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    ...(sameYear ? {} : { year: "numeric" }),
+  })
+}
