@@ -136,10 +136,14 @@ export function classifierResponse(
     reason?: string;
     language?: string;
     intents?: Partial<Record<string, boolean>>;
+    requestSummary?: string;
+    requestDisposition?: string;
   } = {},
 ) {
   const payload = {
     summary: opts.summary ?? 'Customer asked about their order.',
+    requestSummary: opts.requestSummary ?? 'Customer asked about their order.',
+    requestDisposition: opts.requestDisposition ?? 'informational',
     tag: opts.tag ?? 'Order Status',
     classification,
     reason: opts.reason ?? `Looks ${classification}.`,

@@ -300,9 +300,14 @@ export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Q
             tag: 'General',
             filterStatus: 'genuine',
             filterReason: 'Existing customer with prior genuine thread',
-            // Classifier is skipped on this fast path — no intent signals to record.
+            // Classifier is skipped on this fast path — no intent signals to
+            // record, and no read on what is being asked. `unclear` keeps the
+            // request visible to the merchant rather than letting a fast path
+            // decide nothing needs doing.
             intents: emptyIntents(),
             language: '',
+            requestSummary: '',
+            requestDisposition: 'unclear',
           }
         : await classifyAndSummarizeNewEmail(organizationId, subject!, body!);
     }

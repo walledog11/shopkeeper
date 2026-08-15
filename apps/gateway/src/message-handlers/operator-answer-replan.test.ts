@@ -137,7 +137,7 @@ describe('applyOperatorAnswerReplan', () => {
     });
     await db.thread.update({
       where: { id: thread.id },
-      data: { cachedPlan: cacheRecord as object, cachedPlanMessageId: custMsg.id, aiSummary: 'Shipping to Canada' },
+      data: { cachedPlan: cacheRecord as object, cachedPlanMessageId: custMsg.id, aiSummary: 'Shipping to Canada', requestSummary: 'Shipping to Canada' },
     });
 
     const replannedPlan = {
@@ -201,7 +201,7 @@ describe('applyOperatorAnswerReplan', () => {
     const custMsg = await createTestMessage(thread.id, 'Do you ship to Canada?', SenderType.customer);
     await db.thread.update({
       where: { id: thread.id },
-      data: { cachedPlanMessageId: custMsg.id, aiSummary: 'Shipping to Canada' },
+      data: { cachedPlanMessageId: custMsg.id, aiSummary: 'Shipping to Canada', requestSummary: 'Shipping to Canada' },
     });
     await updateContext(org.id, MEMBER_KEY, { pendingQuestion: { threadId: thread.id, question: 'Ship to Canada?' } });
 

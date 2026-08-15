@@ -1,6 +1,6 @@
 # Conversation Episodes for Storefront Chat
 
-**Status:** P0 and P1 shipped. Five items remain before the widget ships.
+**Status:** P0, P1, and items A and C shipped. B, D, E, and F remain.
 **Decision date:** 2026-08-12. **Revised:** 2026-08-14 — cut to what shipping and
 testing the storefront chat widget actually requires; identity, obligations, and
 prior-episode retrieval are deferred with reasons below.
@@ -144,27 +144,39 @@ three days manufactures three closed threads and fills their own past-ticket slo
 
 ## Remaining work
 
-### A. Plan from the current request, not the episode summary
+### A. Plan from the current request, not the episode summary — **done**
 
-`getConversationStage` (`apps/gateway/src/message-handlers/planning-notifications.ts:124-139`)
-already computes the trailing unanswered customer burst and already scopes to one
-`threadId`. **Reuse it; do not write a second burst calculator.** It becomes
-episode-local for free now that a thread is an episode.
+- [x] Promoted the trailing-run logic into `conversation-burst.ts`, returning the
+  burst's messages rather than only its count. `getConversationStage` now derives
+  its count from it, so the notification and the request summary can never
+  describe different bursts. Episode-local for free, since a thread is an episode.
+- [x] The classifier produces `requestSummary` and `requestDisposition` alongside
+  the episode summary, over a `--- CURRENT REQUEST ---` block that names the burst
+  explicitly rather than leaving it to be inferred from the transcript's tail.
+  One model call, `CLASSIFIER_VERSION` bumped to 4. The `request_*` columns
+  shipped inert in migration 1; this is their first writer.
+- [x] Compare-and-set: the burst is re-read after the model call, and a request
+  whose newest message changed underneath is dropped while the episode summary
+  still lands. Verified load-bearing — forcing the guard true fails the test with
+  `expected 'Customer asks whether the shop ships …' to be null`.
+- [x] All three `thread.aiSummary` planning fallbacks now read `requestSummary`
+  (`generate-thread-plan.ts`, `operator-answer-replan.ts`,
+  `apps/dashboard/src/app/api/agent/answer/route.ts`). Where no request has been
+  summarised the generic instruction stands — the planner still reads the
+  messages themselves, so nothing is lost by refusing to hand it the episode.
+- [x] The email path writes the request fields at persistence
+  (`inbound-persistence.ts`), because it classifies pre-persistence and then runs
+  the summary job with `skipSummary` — without that, email threads would carry a
+  null disposition forever and item B's gate would have to treat unknown as
+  allowed. The classifier sees one message there, so a second unanswered email
+  narrows the summary to the newest; `requestSourceMessageId` still points at the
+  newest customer message, so the narrowing costs detail and never correctness.
 
-- [ ] Promote its trailing-run logic into a shared helper that returns the burst's
-  messages, not only its count.
-- [ ] Produce a request result alongside the episode summary: `requestSummary`,
-  `requestDisposition`, source message ID. The columns shipped inert in migration
-  1; this is their first writer.
-- [ ] Build it from that burst only. The prior episode summary is not an input.
-- [ ] Commit with compare-and-set: the thread must still be open and
-  `requestSourceMessageId` must still describe the newest unanswered customer
-  message. Discard a superseded result.
-- [ ] Remove all three planning fallbacks to `thread.aiSummary` —
-  `generate-thread-plan.ts:83`, `operator-answer-replan.ts:120`, and
-  `apps/dashboard/src/app/api/agent/answer/route.ts:78`. P1 narrowed what
-  `aiSummary` *contains*; it left the planning instruction a whole-conversation
-  summary within an episode.
+`requestDisposition` falls back to `unclear`, never `none`, on an unreadable or
+absent verdict — including the existing-customer fast path in `channels.ts` that
+skips the classifier entirely. Only `merchant_action` and `unclear` may park work
+for the merchant, so the default has to leave a request visible rather than let a
+malformed field swallow a refund request.
 
 ### B. Don't manufacture merchant work from a greeting
 

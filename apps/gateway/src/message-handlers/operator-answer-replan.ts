@@ -117,7 +117,10 @@ export async function applyOperatorAnswerReplan(
     select: { settings: true },
   });
   const settings = resolveAgentSettings(org?.settings as Partial<OrgSettings> | null);
-  const baseInstruction = thread.aiSummary || "Handle this customer's latest request";
+  // The merchant is answering the question the agent asked about the current
+  // request, so the replan is instructed with that request — not with a summary
+  // of everything the conversation has ever covered.
+  const baseInstruction = thread.requestSummary || "Handle this customer's latest request";
   const planningInstruction = buildMerchantAnswerPlanningInstruction({
     baseInstruction,
     question,

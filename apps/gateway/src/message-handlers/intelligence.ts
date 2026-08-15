@@ -17,6 +17,7 @@ import {
   resolveFilterDecision,
 } from './email-classification.js';
 import { listVerifiedOrderNames } from '../storefront-chat-verified-orders.js';
+import { getConversationBurst } from './conversation-burst.js';
 
 export async function generateThreadIntelligence(
   threadId: string,
@@ -57,11 +58,22 @@ export async function generateThreadIntelligence(
       chronologicalMessages,
       fullThread.aiSummary,
     );
-    const conversationText = contextBudgetMode === 'enforce'
+    const episodeText = contextBudgetMode === 'enforce'
       ? boundedConversation.text
       : chronologicalMessages
       .map((m) => `${m.senderType.toUpperCase()}: ${m.contentText}`)
       .join('\n');
+
+    // The burst is named for the model rather than left to be inferred from the
+    // transcript's tail: "what are they asking now" and "what has this
+    // conversation been about" are different questions, and the whole point of
+    // requestSummary is that the second one stops answering the first.
+    const burst = await getConversationBurst(threadId);
+    const conversationText = `${episodeText}\n\n--- CURRENT REQUEST ---\n${
+      burst.messages.length > 0
+        ? burst.messages.map((m) => `CUSTOMER: ${m.contentText ?? ''}`).join('\n')
+        : '(no unanswered customer message)'
+    }`;
 
     if (contextBudgetMode !== 'off') {
       logger.info({
@@ -113,6 +125,22 @@ export async function generateThreadIntelligence(
       ? resolveFilterDecision(fullThread.channelType, aiData.filterStatus)
       : null;
 
+    // Compare-and-set on the request half only. The episode summary describes
+    // everything said so far and stays true however the conversation moved on,
+    // but a request summary written against a burst the customer has already
+    // added to would instruct the planner with a stale ask. Re-read the burst
+    // after the model call; if it moved, keep the episode fields and drop the
+    // request ones rather than persisting a request nobody made.
+    const settledBurst = await getConversationBurst(threadId);
+    const sourceMessageId = burst.messages.at(-1)?.id ?? null;
+    const requestIsCurrent = (settledBurst.messages.at(-1)?.id ?? null) === sourceMessageId;
+    if (!requestIsCurrent) {
+      logger.info(
+        { threadId, organizationId: fullThread.organizationId, sourceMessageId },
+        '[Worker] Discarding superseded request summary',
+      );
+    }
+
     const updated = await db.thread.update({
       where: { id: threadId },
       data: {
@@ -120,6 +148,11 @@ export async function generateThreadIntelligence(
         aiSummary: aiData.summary,
         tag: aiData.tag,
         classifierSignals: classifierSignals(aiData),
+        ...(requestIsCurrent && {
+          requestSummary: aiData.requestSummary || null,
+          requestDisposition: aiData.requestDisposition,
+          requestSourceMessageId: sourceMessageId,
+        }),
         ...(filterDecision && {
           filterStatus: filterDecision,
           filterReason: aiData.filterReason,

@@ -272,7 +272,7 @@ describe('revise_pending_plan', () => {
     });
     await db.thread.update({
       where: { id: thread.id },
-      data: { cachedPlan: cacheRecord as object, cachedPlanMessageId: custMsg.id, aiSummary: 'Discount request' },
+      data: { cachedPlan: cacheRecord as object, cachedPlanMessageId: custMsg.id, aiSummary: 'Discount request', requestSummary: 'Discount request' },
     });
 
     await updateContext(org.id, memberKey, {
@@ -346,7 +346,7 @@ describe('answer_operator_question', () => {
     });
     await db.thread.update({
       where: { id: thread.id },
-      data: { cachedPlan: cacheRecord as object, cachedPlanMessageId: custMsg.id, aiSummary: 'Shipping question' },
+      data: { cachedPlan: cacheRecord as object, cachedPlanMessageId: custMsg.id, aiSummary: 'Shipping question', requestSummary: 'Shipping question' },
     });
 
     await updateContext(org.id, memberKey, {

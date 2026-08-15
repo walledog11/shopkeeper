@@ -17,6 +17,8 @@ export async function requireOrgThread(threadId: string, orgId: string) {
       channelType: true,
       customerId: true,
       aiSummary: true,
+      requestSummary: true,
+      requestDisposition: true,
       filterStatus: true,
       escalatedAt: true,
       cachedPlanMessageId: true,

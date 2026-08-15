@@ -50,7 +50,7 @@ describe('AI Summary worker — filter gating', () => {
     const updated = await db.thread.findUnique({ where: { id: thread.id } });
     expect(updated?.filterStatus).toBe('questionable');
     expect(updated?.classifierSignals).toEqual({
-      version: 3,
+      version: 4,
       language: 'es',
       intents: {
         mutative_request: false,
@@ -181,5 +181,137 @@ describe('AI Summary worker — filter scope past email', () => {
 
     expect(updated?.filterStatus).toBe('genuine');
     expect(updated?.filterDecidedAt).toBeNull();
+  });
+});
+
+describe('AI Summary worker — current request', () => {
+  async function threadWithAnsweredHistory() {
+    const customer = await db.customer.create({
+      data: { organizationId: org.id, platformId: `request-${Date.now()}@example.com` },
+    });
+    const thread = await db.thread.create({
+      data: { organizationId: org.id, customerId: customer.id, channelType: ChannelType.email, status: 'open' },
+    });
+    // An exchange the shop already closed out, then the burst that is actually
+    // outstanding. The two must not be summarised as one request.
+    await db.message.create({
+      data: {
+        threadId: thread.id,
+        organizationId: org.id,
+        senderType: 'customer',
+        contentText: 'I want a refund for order #1024',
+        sentAt: new Date('2026-08-11T10:00:00Z'),
+      },
+    });
+    await db.message.create({
+      data: {
+        threadId: thread.id,
+        organizationId: org.id,
+        senderType: 'agent',
+        contentText: 'Refunded that for you.',
+        sentAt: new Date('2026-08-11T10:05:00Z'),
+      },
+    });
+    const current = await db.message.create({
+      data: {
+        threadId: thread.id,
+        organizationId: org.id,
+        senderType: 'customer',
+        contentText: 'Do you ship to Canada?',
+        sentAt: new Date('2026-08-14T09:00:00Z'),
+      },
+    });
+    return { thread, current };
+  }
+
+  function runSummaryJob(threadId: string) {
+    return getCapturedHandlers().get('ai-summary')!({
+      id: 'ai-job',
+      data: {
+        threadId,
+        organizationId: org.id,
+        customerName: 'R',
+        channelType: ChannelType.email,
+        traceId: 'trace-request',
+      },
+    });
+  }
+
+  it('stores the request separately from the episode summary and names the burst to the model', async () => {
+    // Not `Once`: a genuine verdict falls through to plan precompute, which runs
+    // the planner in-process against this same client.
+    getMockAnthropicCreate().mockResolvedValue(
+      classifierResponse('genuine', {
+        summary: 'Customer was refunded for #1024 and now asks about Canada shipping.',
+        requestSummary: 'Customer asks whether the shop ships to Canada.',
+        requestDisposition: 'informational',
+      }),
+    );
+    getMockFetch().mockImplementation(() => Promise.resolve({
+      ok: true,
+      json: vi.fn().mockResolvedValue({}),
+      text: vi.fn().mockResolvedValue(''),
+    }));
+    const { thread, current } = await threadWithAnsweredHistory();
+
+    await runSummaryJob(thread.id);
+
+    const updated = await db.thread.findUnique({ where: { id: thread.id } });
+    expect(updated?.aiSummary).toBe('Customer was refunded for #1024 and now asks about Canada shipping.');
+    expect(updated?.requestSummary).toBe('Customer asks whether the shop ships to Canada.');
+    expect(updated?.requestDisposition).toBe('informational');
+    // Points at the newest customer message, which is what compare-and-set reads.
+    expect(updated?.requestSourceMessageId).toBe(current.id);
+
+    // The burst is marked in the input rather than left to be inferred: the
+    // model is told which messages are the current ask, and the answered refund
+    // is not among them.
+    // calls[0] is the classifier; the mock is reset per test, and anything after
+    // it belongs to plan precompute.
+    const sentInput = getMockAnthropicCreate().mock.calls[0][0].messages[0].content as string;
+    const currentRequestBlock = sentInput.slice(sentInput.indexOf('--- CURRENT REQUEST ---'));
+    expect(currentRequestBlock).toContain('Do you ship to Canada?');
+    expect(currentRequestBlock).not.toContain('I want a refund for order #1024');
+  });
+
+  it('discards a request summary the customer has already superseded', async () => {
+    const { thread, current } = await threadWithAnsweredHistory();
+
+    // A newer message lands while the model call is in flight, so the summary
+    // coming back describes an ask that is no longer the newest one.
+    getMockAnthropicCreate().mockImplementationOnce(async () => {
+      await db.message.create({
+        data: {
+          threadId: thread.id,
+          organizationId: org.id,
+          senderType: 'customer',
+          contentText: 'actually never mind, cancel the whole order',
+          sentAt: new Date('2026-08-14T09:01:00Z'),
+        },
+      });
+      return classifierResponse('genuine', {
+        requestSummary: 'Customer asks whether the shop ships to Canada.',
+        requestDisposition: 'informational',
+      });
+    });
+    // Plan precompute runs after a genuine verdict and shares this client.
+    getMockAnthropicCreate().mockResolvedValue(classifierResponse('genuine'));
+    getMockFetch().mockImplementation(() => Promise.resolve({
+      ok: true,
+      json: vi.fn().mockResolvedValue({}),
+      text: vi.fn().mockResolvedValue(''),
+    }));
+
+    await runSummaryJob(thread.id);
+
+    const updated = await db.thread.findUnique({ where: { id: thread.id } });
+    // The episode summary still lands — it stays true however the conversation
+    // moved on. The request half is dropped rather than instructing the planner
+    // to answer a shipping question when the shopper just asked to cancel.
+    expect(updated?.aiSummary).toBe('Customer asked about their order.');
+    expect(updated?.requestSummary).toBeNull();
+    expect(updated?.requestDisposition).toBeNull();
+    expect(updated?.requestSourceMessageId).not.toBe(current.id);
+    expect(updated?.requestSourceMessageId).toBeNull();
   });
 });

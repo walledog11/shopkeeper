@@ -79,8 +79,13 @@ export async function generateThreadPlan(
 ): Promise<GeneratedThreadPlan> {
   const generationStartedAt = Date.now();
   const thread = await requireOrgThread(threadId, organizationId);
+  // requestSummary, never aiSummary. The episode summary describes everything
+  // said in this conversation; handing it to the planner as an instruction is
+  // how a shopper who wrote "Hi" got a plan about the refund they asked for
+  // three days earlier. When no request has been summarised yet the generic
+  // instruction is correct — the planner still reads the messages themselves.
   const instruction = options.instruction?.trim()
-    || thread.aiSummary
+    || thread.requestSummary
     || "Handle this customer's latest request";
 
   if (shouldSkipAutoPlan(thread.filterStatus)) {

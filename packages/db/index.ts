@@ -13,6 +13,7 @@ const {
   ThreadFilterStatus: ThreadFilterStatusRuntime,
   ThreadFilterFeedback: ThreadFilterFeedbackRuntime,
   EmailProvider: EmailProviderRuntime,
+  ThreadRequestDisposition: ThreadRequestDispositionRuntime,
 } = prismaClient;
 
 type DbChannelType = (typeof ChannelTypeRuntime)[keyof typeof ChannelTypeRuntime];
@@ -21,6 +22,8 @@ type DbSenderType = (typeof SenderTypeRuntime)[keyof typeof SenderTypeRuntime];
 type DbThreadFilterStatus = (typeof ThreadFilterStatusRuntime)[keyof typeof ThreadFilterStatusRuntime];
 type DbThreadFilterFeedback = (typeof ThreadFilterFeedbackRuntime)[keyof typeof ThreadFilterFeedbackRuntime];
 type DbEmailProvider = (typeof EmailProviderRuntime)[keyof typeof EmailProviderRuntime];
+type DbThreadRequestDisposition =
+  (typeof ThreadRequestDispositionRuntime)[keyof typeof ThreadRequestDispositionRuntime];
 
 type ClerkDb = ReturnType<typeof createClient>;
 
@@ -235,6 +238,7 @@ export {
   ThreadFilterStatusRuntime as ThreadFilterStatus,
   ThreadFilterFeedbackRuntime as ThreadFilterFeedback,
   EmailProviderRuntime as EmailProvider,
+  ThreadRequestDispositionRuntime as ThreadRequestDisposition,
 };
 export type {
   PrismaClientType as PrismaClient,
@@ -244,6 +248,7 @@ export type {
   DbThreadFilterStatus,
   DbThreadFilterFeedback,
   DbEmailProvider,
+  DbThreadRequestDisposition,
 };
 export type ChannelType = DbChannelType;
 export type ThreadStatus = DbThreadStatus;

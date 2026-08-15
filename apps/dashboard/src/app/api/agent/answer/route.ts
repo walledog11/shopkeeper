@@ -75,7 +75,10 @@ export const POST = withOrgRoute(
       return NextResponse.json({ kind: "needs_review", question: null, replyText: null });
     }
 
-    const baseInstruction = thread.aiSummary || "Handle this customer's latest request";
+    // Current request, not the episode summary — same reason as the gateway's
+    // replan path: the merchant answered a question about what is being asked
+    // now.
+    const baseInstruction = thread.requestSummary || "Handle this customer's latest request";
     const planningInstruction = buildMerchantAnswerPlanningInstruction({
       baseInstruction,
       question,

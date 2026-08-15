@@ -1,4 +1,4 @@
-import { db, type DbChannelType } from '@shopkeeper/db';
+import type { DbChannelType } from '@shopkeeper/db';
 import { PLAN_STEP_LABELS } from '@shopkeeper/agent/tools';
 import { CHANNEL } from '../constants.js';
 import logger from '../logger.js';
@@ -24,6 +24,7 @@ import { getContext, resolvePendingPlanContexts, removePendingPlanForThread, typ
 import { memberOperatorKey } from '@shopkeeper/agent/internal-thread';
 import { getOperatorPlanQueueMax } from '../config/runtime-config.js';
 import { listVerifiedOrderNames } from '../storefront-chat-verified-orders.js';
+import { getConversationBurst } from './conversation-burst.js';
 
 export interface OperatorNotificationExclude {
   channel: OperatorBinding['channel'];
@@ -118,23 +119,14 @@ export interface ConversationStage {
 
 const FRESH_STAGE: ConversationStage = { isFollowUp: false, newMessages: 1 };
 
-// Fresh conversation vs. ongoing chain, from the thread's real history: any
-// message before the trailing run of customer texts means the merchant has seen
-// this conversation before; the trailing run itself is the unanswered burst.
+// Fresh conversation vs. ongoing chain, counted off the same burst the request
+// summariser reads. The count floors at 1: when the shop had the last word the
+// burst is empty, but the notification still describes one arriving message.
 export async function getConversationStage(threadId: string): Promise<ConversationStage> {
-  const messages = await db.message.findMany({
-    where: { threadId, deletedAt: null, senderType: { in: ['customer', 'agent', 'ai'] } },
-    orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],
-    select: { senderType: true },
-  });
-  let trailing = 0;
-  for (const message of messages) {
-    if (message.senderType === 'customer') trailing += 1;
-    else trailing = 0;
-  }
+  const burst = await getConversationBurst(threadId);
   return {
-    isFollowUp: messages.length > trailing,
-    newMessages: Math.max(trailing, 1),
+    isFollowUp: burst.isFollowUp,
+    newMessages: Math.max(burst.messages.length, 1),
   };
 }
 
