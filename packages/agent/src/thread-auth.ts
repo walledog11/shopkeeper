@@ -37,10 +37,14 @@ export async function requireOrgThread(threadId: string, orgId: string) {
   return thread;
 }
 
-export async function getLatestConversationMessage(threadId: string): Promise<PlanThreadMessage | null> {
+export async function getLatestConversationMessage(
+  threadId: string,
+  organizationId: string,
+): Promise<PlanThreadMessage | null> {
   return db.message.findFirst({
     where: {
       threadId,
+      organizationId,
       deletedAt: null,
       senderType: { not: SENDER_TYPE.NOTE },
     },
@@ -49,10 +53,14 @@ export async function getLatestConversationMessage(threadId: string): Promise<Pl
   });
 }
 
-export async function getLatestCustomerMessageText(threadId: string): Promise<string | null> {
+export async function getLatestCustomerMessageText(
+  threadId: string,
+  organizationId: string,
+): Promise<string | null> {
   const message = await db.message.findFirst({
     where: {
       threadId,
+      organizationId,
       deletedAt: null,
       senderType: SENDER_TYPE.CUSTOMER,
     },

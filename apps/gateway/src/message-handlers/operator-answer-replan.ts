@@ -68,7 +68,7 @@ export async function applyOperatorAnswerReplan(
 
   const [thread, latestConversation, meta] = await Promise.all([
     requireOrgThread(threadId, organizationId),
-    getLatestConversationMessage(threadId),
+    getLatestConversationMessage(threadId, organizationId),
     db.thread.findFirst({
       where: { id: threadId, organizationId },
       select: {

@@ -694,12 +694,14 @@ model KnowledgeBase {
   organizationId String   @map("organization_id") @db.Uuid
   name           String   @db.VarChar(255)
   source         String   @default("user") @db.VarChar(50)
+  singletonKey   String?  @map("singleton_key") @db.VarChar(50)
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   articles     KbArticle[]
 
   @@unique([organizationId, id], map: "knowledge_bases_organization_id_id_key")
+  @@unique([organizationId, singletonKey], map: "knowledge_bases_organization_id_singleton_key_key")
   @@index([organizationId])
   @@map("knowledge_bases")
 }

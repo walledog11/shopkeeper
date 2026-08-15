@@ -1,6 +1,9 @@
 import logger from '../logger.js';
 import { parseProductAnalyticsConfig } from '@shopkeeper/analytics';
-import { isGmailNativeInboundEnabled } from './runtime-config.js';
+import {
+  parseGatewayProductionConfig,
+  type EmailInboundMode,
+} from '../../../../scripts/lib/production-config-schema.mjs';
 
 const REQUIRED_ENV = [
   'DATABASE_URL',
@@ -14,12 +17,10 @@ function hasEnv(name: string): boolean {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
-export type EmailInboundMode = 'hybrid' | 'postmark' | 'gmail-only';
+export type { EmailInboundMode } from '../../../../scripts/lib/production-config-schema.mjs';
 
 export function getEmailInboundMode(): EmailInboundMode {
-  const value = process.env.EMAIL_INBOUND_MODE?.trim().toLowerCase();
-  if (value === 'postmark' || value === 'gmail-only') return value;
-  return 'hybrid';
+  return parseGatewayProductionConfig(process.env).emailInboundMode;
 }
 
 function requireEnv(name: string): string {
@@ -30,34 +31,21 @@ function requireEnv(name: string): string {
   return value.trim();
 }
 
-function normalizeAbsoluteUrl(name: string, value: string): string {
-  let parsed: URL;
-  try {
-    parsed = new URL(value);
-  } catch {
-    throw new Error(`[Gateway] ${name} must be a valid absolute URL`);
-  }
-
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new Error(`[Gateway] ${name} must use http or https`);
-  }
-
-  return value.replace(/\/+$/, '');
-}
-
 export function getInternalApiSecret(): string {
   return requireEnv('INTERNAL_API_SECRET');
 }
 
 export function getGatewayDashboardUrl(): string {
-  const url = process.env.DASHBOARD_URL?.trim() || process.env.DASHBOARD_INTERNAL_URL?.trim();
+  const config = parseGatewayProductionConfig(process.env);
+  const url = config.dashboardUrl || config.dashboardInternalUrl;
   if (!url) {
     throw new Error('[Gateway] Missing required environment variable: DASHBOARD_URL');
   }
-  return normalizeAbsoluteUrl(process.env.DASHBOARD_URL?.trim() ? 'DASHBOARD_URL' : 'DASHBOARD_INTERNAL_URL', url);
+  return url;
 }
 
 export function validateGatewayEnv(): void {
+  const productionConfig = parseGatewayProductionConfig(process.env);
   const missing = REQUIRED_ENV.filter((name) => !hasEnv(name));
   if (missing.length > 0) {
     throw new Error(`[Gateway] Missing required environment variables: ${missing.join(', ')}`);
@@ -77,8 +65,15 @@ export function validateGatewayEnv(): void {
     throw new Error('[Gateway] Missing required environment variable: DIRECT_DATABASE_URL');
   }
 
+  if (process.env.NODE_ENV === 'production' && !hasEnv('PLAN_EXECUTION_LEDGER_MODE')) {
+    throw new Error('[Gateway] Missing required environment variable: PLAN_EXECUTION_LEDGER_MODE');
+  }
+
+  if (process.env.NODE_ENV === 'production' && !hasEnv('AGENT_CONTEXT_BUDGET_MODE')) {
+    throw new Error('[Gateway] Missing required environment variable: AGENT_CONTEXT_BUDGET_MODE');
+  }
+
   parseProductAnalyticsConfig();
-  isGmailNativeInboundEnabled();
 
   const redisUrl = requireEnv('REDIS_URL');
   try {
@@ -110,7 +105,7 @@ export function validateGatewayEnv(): void {
 
   // Postmark inbound auth is required whenever the forwarding rail is active
   // (hybrid/postmark). gmail-only boots without it for dev / future native-only.
-  if (process.env.NODE_ENV === 'production' && getEmailInboundMode() !== 'gmail-only') {
+  if (process.env.NODE_ENV === 'production' && productionConfig.emailInboundMode !== 'gmail-only') {
     if (!hasEnv('POSTMARK_INBOUND_USERNAME')) {
       throw new Error('[Gateway] Missing required environment variable: POSTMARK_INBOUND_USERNAME');
     }

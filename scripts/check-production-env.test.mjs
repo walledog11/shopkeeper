@@ -308,6 +308,46 @@ test('gateway launch contract requires Postmark inbound basic auth credentials',
   );
 });
 
+test('gateway launch contract uses the shared inbound-mode enum', () => {
+  const typo = validateProductionEnv('gateway', {
+    scope: 'launch',
+    env: createGatewayLaunchEnv({ EMAIL_INBOUND_MODE: 'gmail_only' }),
+  });
+  assert.equal(
+    typo.errors.includes(
+      'EMAIL_INBOUND_MODE must be one of: hybrid, postmark, gmail-only',
+    ),
+    true,
+  );
+
+  const gmailOnly = validateProductionEnv('gateway', {
+    scope: 'launch',
+    env: createGatewayLaunchEnv({
+      EMAIL_INBOUND_MODE: 'gmail-only',
+      POSTMARK_INBOUND_USERNAME: '',
+      POSTMARK_INBOUND_PASSWORD: '',
+    }),
+  });
+  assert.equal(
+    gmailOnly.errors.some((error) => error.includes('POSTMARK_INBOUND_')),
+    false,
+  );
+});
+
+test('gateway launch contract validates worker numbers through the shared schema', () => {
+  const result = validateProductionEnv('gateway', {
+    scope: 'launch',
+    env: createGatewayLaunchEnv({ GATEWAY_BULLMQ_DRAIN_DELAY_SECONDS: '12ms' }),
+  });
+
+  assert.equal(
+    result.errors.includes(
+      'GATEWAY_BULLMQ_DRAIN_DELAY_SECONDS must be a positive integer',
+    ),
+    true,
+  );
+});
+
 test('Gmail Pub/Sub production settings use deployable identifiers', () => {
   const dashboard = validateProductionEnv('dashboard', {
     scope: 'launch',

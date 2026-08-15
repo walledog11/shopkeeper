@@ -57,7 +57,7 @@ async function isPlanStillCurrent(
   if (!identity) return true;
   const [thread, latest] = await Promise.all([
     requireOrgThread(threadId, organizationId),
-    getLatestConversationMessage(threadId),
+    getLatestConversationMessage(threadId, organizationId),
   ]);
   const cached = readAgentPlanCache(thread.cachedPlan);
   return latest?.senderType === 'customer'
@@ -83,7 +83,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
       where: { id: threadId },
       select: { channelType: true, filterDecidedAt: true, filterStatus: true },
     }),
-    getLatestConversationMessage(threadId),
+    getLatestConversationMessage(threadId, organizationId),
   ]);
   if (!threadSnapshot) {
     logger.warn({ threadId, organizationId }, '[AISummary] Thread not found — skipping');
@@ -131,7 +131,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
 
   let parallelInstruction: string | undefined;
   if (parallelPlan) {
-    const latestCustomerMessageText = await getLatestCustomerMessageText(threadId);
+    const latestCustomerMessageText = await getLatestCustomerMessageText(threadId, organizationId);
     parallelInstruction = resolveParallelPlanInstruction(latestCustomerMessageText);
     logger.info(
       { threadId, organizationId, channelType: threadSnapshot.channelType, planningPath: 'parallel' },

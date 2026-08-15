@@ -3,7 +3,7 @@
 Open work only. Completed work is deleted, not archived — git history is the
 record. Do not add "recently completed" sections to this file.
 
-Last reviewed: 2026-08-13.
+Last reviewed: 2026-08-14.
 
 Single source of truth for **actionable** open work. Evidence checklists, console
 residue, failure-drill procedures, and standing policies live in the linked docs
@@ -68,6 +68,28 @@ Code work that is started and not finished.
   interactions and product recommendations to later Shopify orders so merchants
   can distinguish direct, product-assisted, and chat-assisted revenue. Report it
   as attribution rather than proof that the conversation caused the purchase.
+- [ ] **Make local and CI verification one contract.** `verify:pr` omits the root
+  Knip pass and explicit typecheck even though CI runs them; Knip itself currently
+  checks only unused files because exports, types, dependencies, unlisted imports,
+  binaries, and duplicates are disabled. Create one canonical verification command
+  used by CI, enable the useful Knip rules gradually with a reviewed baseline, and
+  keep escape hatches narrow and documented.
+- [ ] **Expand confidence outside the curated coverage islands.** The audit found
+  20 of 76 dashboard API routes without a colocated route test, low coverage in
+  several recovery/reconciliation paths, only eight groups in the critical
+  coverage ratchet, and PR browser smoke running with authentication bypass. Map
+  equivalent indirect tests before adding duplicates, then prioritize tenant
+  boundaries, health/realtime tokens, webhook routes, unknown-outcome recovery,
+  plan execution, and a targeted real-Clerk contract on auth-sensitive changes.
+  Ratchet thresholds from a clean, reproducible coverage run rather than chasing
+  a repository-wide percentage.
+- [ ] **Split the highest-risk multi-purpose modules along operational seams.**
+  Start with `digest-briefing.ts`, `digest.ts`, `reconciliation-probes.ts`,
+  `gmail-sync.ts`, `planning-notifications.ts`, and the database package barrel.
+  Separate pure selection/rendering/policy code from persistence, provider calls,
+  scheduling, and worker/HTTP wiring; use a registry for reconciliation probes.
+  Do this after the correctness blockers above, in behavior-preserving slices with
+  characterization tests, rather than as one repository-wide rewrite.
 
 ---
 

@@ -47,8 +47,8 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
-      - name: Run critical severity audit
-        run: npm audit --audit-level=critical
+      - name: Audit production dependencies (high and critical)
+        run: npm run audit:production-dependencies
       - name: Run lint
         run: npm run lint
       - name: Run type checks

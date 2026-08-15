@@ -1,6 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import {
+  parseGatewayProductionConfig,
+  validateGatewayProductionConfig,
+} from './lib/production-config-schema.mjs';
 
 const VALID_TARGETS = ['dashboard', 'gateway', 'all'];
 const VALID_SCOPES = ['boot', 'launch'];
@@ -166,11 +170,18 @@ function normalizeAbsoluteUrl(name, value) {
   return value.replace(/\/+$/, '');
 }
 
-function getRequiredNames(target, scope) {
+function getRequiredNames(target, scope, gatewayConfig) {
   const contract = CONTRACTS[target];
-  return scope === 'boot'
+  const requiredNames = scope === 'boot'
     ? [...contract.bootRequired]
     : [...contract.bootRequired, ...contract.launchRequired];
+
+  if (target === 'gateway' && gatewayConfig?.emailInboundMode === 'gmail-only') {
+    return requiredNames.filter(
+      (name) => name !== 'POSTMARK_INBOUND_USERNAME' && name !== 'POSTMARK_INBOUND_PASSWORD',
+    );
+  }
+  return requiredNames;
 }
 
 export function validateProductionEnv(target, options = {}) {
@@ -188,7 +199,15 @@ export function validateProductionEnv(target, options = {}) {
   const errors = [];
   const warnings = [];
   const normalizedUrls = {};
-  const requiredNames = getRequiredNames(target, scope);
+  let gatewayConfig = null;
+  if (target === 'gateway') {
+    const schemaErrors = validateGatewayProductionConfig(env);
+    errors.push(...schemaErrors);
+    if (schemaErrors.length === 0) {
+      gatewayConfig = parseGatewayProductionConfig(env);
+    }
+  }
+  const requiredNames = getRequiredNames(target, scope, gatewayConfig);
 
   for (const name of requiredNames) {
     if (!readEnv(env, name)) {
@@ -197,6 +216,14 @@ export function validateProductionEnv(target, options = {}) {
   }
 
   for (const name of contract.absoluteUrlVars) {
+    if (target === 'gateway' && name === 'DASHBOARD_URL' && gatewayConfig?.dashboardUrl) {
+      normalizedUrls[name] = gatewayConfig.dashboardUrl;
+      continue;
+    }
+    if (target === 'gateway' && name === 'POSTHOG_HOST' && gatewayConfig?.posthogHost) {
+      normalizedUrls[name] = gatewayConfig.posthogHost;
+      continue;
+    }
     const value = readEnv(env, name);
     if (!value) {
       continue;
@@ -236,42 +263,43 @@ export function validateProductionEnv(target, options = {}) {
     }
   }
 
-  const productAnalyticsEnabled = readEnv(env, 'PRODUCT_ANALYTICS_ENABLED');
-  if (
-    productAnalyticsEnabled
-    && productAnalyticsEnabled !== 'true'
-    && productAnalyticsEnabled !== 'false'
-  ) {
-    errors.push('PRODUCT_ANALYTICS_ENABLED must be either true or false');
+  const productAnalyticsEnabled = target === 'gateway' && gatewayConfig
+    ? gatewayConfig.productAnalyticsEnabled
+    : readEnv(env, 'PRODUCT_ANALYTICS_ENABLED');
+  if (target !== 'gateway' && productAnalyticsEnabled) {
+    if (productAnalyticsEnabled !== 'true' && productAnalyticsEnabled !== 'false') {
+      errors.push('PRODUCT_ANALYTICS_ENABLED must be either true or false');
+    }
   }
-  if (productAnalyticsEnabled === 'true' && !readEnv(env, 'POSTHOG_PROJECT_TOKEN')) {
+  const isProductAnalyticsEnabled = productAnalyticsEnabled === true
+    || productAnalyticsEnabled === 'true';
+  if (isProductAnalyticsEnabled && !readEnv(env, 'POSTHOG_PROJECT_TOKEN')) {
     errors.push(
       'POSTHOG_PROJECT_TOKEN is required when PRODUCT_ANALYTICS_ENABLED=true',
     );
   }
 
-  const planExecutionLedgerMode = readEnv(env, 'PLAN_EXECUTION_LEDGER_MODE');
-  if (
-    planExecutionLedgerMode
-    && !['off', 'shadow', 'enforce'].includes(planExecutionLedgerMode)
-  ) {
+  const planExecutionLedgerMode = target === 'gateway' && gatewayConfig
+    ? gatewayConfig.planExecutionLedgerMode
+    : readEnv(env, 'PLAN_EXECUTION_LEDGER_MODE');
+  if (target !== 'gateway' && planExecutionLedgerMode
+    && !['off', 'shadow', 'enforce'].includes(planExecutionLedgerMode)) {
     errors.push('PLAN_EXECUTION_LEDGER_MODE must be one of: off, shadow, enforce');
   }
 
-  const agentContextBudgetMode = readEnv(env, 'AGENT_CONTEXT_BUDGET_MODE');
-  if (
-    agentContextBudgetMode
-    && !['off', 'shadow', 'enforce'].includes(agentContextBudgetMode)
-  ) {
+  const agentContextBudgetMode = target === 'gateway' && gatewayConfig
+    ? gatewayConfig.agentContextBudgetMode
+    : readEnv(env, 'AGENT_CONTEXT_BUDGET_MODE');
+  if (target !== 'gateway' && agentContextBudgetMode
+    && !['off', 'shadow', 'enforce'].includes(agentContextBudgetMode)) {
     errors.push('AGENT_CONTEXT_BUDGET_MODE must be one of: off, shadow, enforce');
   }
 
-  const gmailNativeInbound = readEnv(env, 'GMAIL_NATIVE_INBOUND');
-  if (
-    gmailNativeInbound
-    && gmailNativeInbound !== 'true'
-    && gmailNativeInbound !== 'false'
-  ) {
+  const gmailNativeInbound = target === 'gateway' && gatewayConfig
+    ? gatewayConfig.gmailNativeInbound
+    : readEnv(env, 'GMAIL_NATIVE_INBOUND');
+  if (target !== 'gateway' && gmailNativeInbound
+    && gmailNativeInbound !== 'true' && gmailNativeInbound !== 'false') {
     errors.push('GMAIL_NATIVE_INBOUND must be either true or false');
   }
   const instagramIntegrationEnabled = readEnv(env, 'INSTAGRAM_INTEGRATION_ENABLED');
@@ -290,7 +318,7 @@ export function validateProductionEnv(target, options = {}) {
     }
   }
   const posthogHost = normalizedUrls.POSTHOG_HOST;
-  if (productAnalyticsEnabled === 'true' && posthogHost) {
+  if (isProductAnalyticsEnabled && posthogHost) {
     if (new URL(posthogHost).protocol !== 'https:') {
       errors.push('POSTHOG_HOST must use https when product analytics is enabled');
     }
@@ -348,7 +376,7 @@ export function validateProductionEnv(target, options = {}) {
     target,
     scope,
     requiredNames,
-    errors,
+    errors: [...new Set(errors)],
     warnings,
   };
 }

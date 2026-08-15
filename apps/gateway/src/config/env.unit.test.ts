@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 // Deterministic configuration unit coverage.
-import { getGatewayDashboardUrl, getInternalApiSecret, validateGatewayEnv } from './env.js';
+import {
+  getEmailInboundMode,
+  getGatewayDashboardUrl,
+  getInternalApiSecret,
+  validateGatewayEnv,
+} from './env.js';
 
 function stubBaseGatewayEnv() {
   vi.stubEnv('DATABASE_URL', 'postgresql://postgres:postgres@127.0.0.1:5432/shopkeeper?pgbouncer=true&connection_limit=1');
@@ -18,6 +23,8 @@ function stubProductionGatewayEnv() {
   vi.stubEnv('POSTMARK_INBOUND_USERNAME', 'postmark-inbound-user');
   vi.stubEnv('POSTMARK_INBOUND_PASSWORD', 'postmark-inbound-pass');
   vi.stubEnv('PRODUCT_ANALYTICS_ENABLED', 'false');
+  vi.stubEnv('PLAN_EXECUTION_LEDGER_MODE', 'shadow');
+  vi.stubEnv('AGENT_CONTEXT_BUDGET_MODE', 'shadow');
 }
 
 afterEach(() => {
@@ -45,6 +52,33 @@ describe('getGatewayDashboardUrl', () => {
     vi.stubEnv('DASHBOARD_INTERNAL_URL', 'http://localhost:3000');
 
     expect(getGatewayDashboardUrl()).toBe('http://localhost:3000');
+  });
+
+  it('rejects non-HTTP absolute URLs', () => {
+    stubBaseGatewayEnv();
+    vi.stubEnv('DASHBOARD_URL', 'file:///tmp/dashboard');
+
+    expect(() => getGatewayDashboardUrl()).toThrow(/DASHBOARD_URL must use http or https/);
+  });
+});
+
+describe('getEmailInboundMode', () => {
+  it('defaults to hybrid and accepts each declared mode', () => {
+    expect(getEmailInboundMode()).toBe('hybrid');
+
+    vi.stubEnv('EMAIL_INBOUND_MODE', 'POSTMARK');
+    expect(getEmailInboundMode()).toBe('postmark');
+
+    vi.stubEnv('EMAIL_INBOUND_MODE', 'gmail-only');
+    expect(getEmailInboundMode()).toBe('gmail-only');
+  });
+
+  it('rejects typos instead of silently selecting hybrid', () => {
+    vi.stubEnv('EMAIL_INBOUND_MODE', 'gmail_only');
+
+    expect(() => getEmailInboundMode()).toThrow(
+      /EMAIL_INBOUND_MODE must be one of: hybrid, postmark, gmail-only/,
+    );
   });
 });
 

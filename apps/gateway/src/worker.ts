@@ -68,7 +68,7 @@ export async function startWorkerRuntime() {
       {
         label: 'database',
         close: async () => {
-          await db.$disconnect().catch(() => {});
+          await db.$disconnect();
         },
       },
     ],

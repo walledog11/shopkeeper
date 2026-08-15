@@ -18,6 +18,10 @@ import {
   createProductAnalyticsShutdownResource,
   initializeGatewayProductAnalytics,
 } from './product-analytics.js';
+import {
+  createGatewayServerShutdown,
+  registerGatewayServerShutdownSignals,
+} from './server-shutdown.js';
 
 export function createGatewayApp() {
   const app = express();
@@ -78,32 +82,14 @@ export async function startGatewayServer() {
     logger.info({ port: PORT }, '[Shopkeeper Gateway] Server listening');
   });
 
-  const shutdown = () => {
-    const forceExit = setTimeout(() => {
-      logger.warn('[Shopkeeper Gateway] Graceful shutdown timed out — forcing exit');
-      process.exit(1);
-    }, 25_000);
-    forceExit.unref();
-
-    logger.info('[Shopkeeper Gateway] Shutting down gracefully');
-    server.closeAllConnections?.();
-    server.close(async () => {
-      logger.info('[Shopkeeper Gateway] HTTP server closed');
-      await db.$disconnect().catch(() => {});
-      Promise.all([
-        stopAllSpectrumApps(),
-        closeGatewayBullMqQueues(),
-        closeGatewayRedisConnections(),
-        createProductAnalyticsShutdownResource().close(),
-      ]).finally(() => {
-        clearTimeout(forceExit);
-        process.exit(0);
-      });
-    });
-  };
-
-  process.on('SIGTERM', shutdown);
-  process.on('SIGINT', shutdown);
+  const shutdown = createGatewayServerShutdown(server, [
+    { label: 'database', close: () => db.$disconnect() },
+    { label: 'spectrum-apps', close: stopAllSpectrumApps },
+    { label: 'bullmq-queues', close: closeGatewayBullMqQueues },
+    { label: 'redis-connections', close: closeGatewayRedisConnections },
+    createProductAnalyticsShutdownResource(),
+  ]);
+  registerGatewayServerShutdownSignals(shutdown);
 
   return { app, server, shutdown };
 }

@@ -259,7 +259,13 @@ export async function completeIntegrationDisconnect(
 }
 
 export async function listRecoverableIntegrationDisconnects(
-  options: { limit?: number; now?: Date; staleClaimMs?: number } = {},
+  options: {
+    after?: { createdAt: Date; id: string };
+    createdBefore?: Date;
+    limit?: number;
+    now?: Date;
+    staleClaimMs?: number;
+  } = {},
 ): Promise<IntegrationDisconnect[]> {
   const now = options.now ?? new Date();
   const staleBefore = new Date(
@@ -267,12 +273,27 @@ export async function listRecoverableIntegrationDisconnects(
   );
   return db.integrationDisconnect.findMany({
     where: {
-      OR: [
-        { status: 'pending' },
-        { status: 'processing', claimedAt: { lt: staleBefore } },
+      AND: [
+        {
+          OR: [
+            { status: 'pending' },
+            { status: 'processing', claimedAt: { lt: staleBefore } },
+          ],
+        },
+        ...(options.createdBefore
+          ? [{ createdAt: { lte: options.createdBefore } }]
+          : []),
+        ...(options.after
+          ? [{
+              OR: [
+                { createdAt: { gt: options.after.createdAt } },
+                { createdAt: options.after.createdAt, id: { gt: options.after.id } },
+              ],
+            }]
+          : []),
       ],
     },
-    orderBy: { createdAt: 'asc' },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     take: options.limit ?? 100,
   });
 }

@@ -18,6 +18,9 @@ function spawnProcess(name: string, entryFile: string): ChildProcess {
     children.delete(name);
 
     if (shuttingDown) {
+      if (code !== 0) {
+        process.exitCode = code ?? 1;
+      }
       return;
     }
 

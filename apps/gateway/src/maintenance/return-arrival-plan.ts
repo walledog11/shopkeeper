@@ -61,7 +61,7 @@ export async function pushReturnArrivalApprovalPlan(
     return 'notify_only';
   }
 
-  const latestConversation = await getLatestConversationMessage(watch.threadId);
+  const latestConversation = await getLatestConversationMessage(watch.threadId, organizationId);
   const sourceMessageId = latestConversation
     ? getPendingCustomerMessageId([latestConversation])
     : null;

@@ -253,6 +253,76 @@ describe('core worker shutdown resources', () => {
     expect(closeRedis).toHaveBeenCalledTimes(1);
     expect(exitProcess).not.toHaveBeenCalled();
   });
+
+  it('coalesces repeated signal shutdowns while active jobs drain', async () => {
+    const coreResources = createCoreWorkerResources({ name: 'producer-conn' }, {
+      connection: { name: 'worker-conn' },
+      drainDelay: 7,
+      stalledInterval: 8,
+    });
+    let finishActiveJob!: () => void;
+    const activeJob = new Promise<void>((resolve) => {
+      finishActiveJob = resolve;
+    });
+    workerInstances[0]?.close.mockImplementationOnce(() => activeJob);
+    const stopHeartbeat = vi.fn();
+    const exitProcess = vi.fn();
+    const resources = mergeGatewayWorkerResources(coreResources, {
+      workers: [],
+      queues: [],
+      heartbeats: [{ stop: stopHeartbeat }],
+      shutdownResources: [],
+    });
+    const shutdown = createGatewayWorkerShutdown(resources, { exitProcess });
+
+    const firstSignal = shutdown(true);
+    const secondSignal = shutdown(true);
+    await Promise.resolve();
+
+    expect(secondSignal).toBe(firstSignal);
+    expect(stopHeartbeat).toHaveBeenCalledOnce();
+    expect(workerInstances.every((worker) => worker.close.mock.calls.length === 1)).toBe(true);
+    expect(queueInstances.every((queue) => queue.close.mock.calls.length === 0)).toBe(true);
+
+    finishActiveJob();
+    await firstSignal;
+
+    expect(queueInstances.every((queue) => queue.close.mock.calls.length === 1)).toBe(true);
+    expect(exitProcess).toHaveBeenCalledOnce();
+    expect(exitProcess).toHaveBeenCalledWith(0);
+  });
+
+  it('attempts every cleanup resource and exits nonzero when one rejects', async () => {
+    const coreResources = createCoreWorkerResources({ name: 'producer-conn' }, {
+      connection: { name: 'worker-conn' },
+      drainDelay: 7,
+      stalledInterval: 8,
+    });
+    const cleanupError = new Error('redis close failed');
+    const rejectedCleanup = vi.fn().mockRejectedValue(cleanupError);
+    const successfulCleanup = vi.fn().mockResolvedValue(undefined);
+    const exitProcess = vi.fn();
+    const resources = mergeGatewayWorkerResources(coreResources, {
+      workers: [],
+      queues: [],
+      heartbeats: [],
+      shutdownResources: [
+        { label: 'redis', close: rejectedCleanup },
+        { label: 'database', close: successfulCleanup },
+      ],
+    });
+
+    await createGatewayWorkerShutdown(resources, { exitProcess })(true);
+
+    expect(rejectedCleanup).toHaveBeenCalledOnce();
+    expect(successfulCleanup).toHaveBeenCalledOnce();
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      { err: cleanupError, resource: 'redis' },
+      '[Worker] Shutdown resource failed',
+    );
+    expect(exitProcess).toHaveBeenCalledOnce();
+    expect(exitProcess).toHaveBeenCalledWith(1);
+  });
 });
 
 type FailedHandler<DataType> = (

@@ -85,6 +85,16 @@ describe('getGatewayWorkerRedisConfig', () => {
       maintenanceWorkersEnabled: false,
     });
   });
+
+  it('accepts one and rejects zero, fractional, suffixed, and unsafe integers', () => {
+    vi.stubEnv('GATEWAY_BULLMQ_DRAIN_DELAY_SECONDS', '1');
+    expect(getGatewayWorkerRedisConfig().drainDelaySeconds).toBe(1);
+
+    for (const invalid of ['0', '1.5', '12ms', '9007199254740992']) {
+      vi.stubEnv('GATEWAY_BULLMQ_DRAIN_DELAY_SECONDS', invalid);
+      expect(() => getGatewayWorkerRedisConfig()).toThrow(/must be a positive/);
+    }
+  });
 });
 
 describe('getGatewayOpsAlertConfig', () => {
@@ -228,7 +238,7 @@ describe('isGmailNativeInboundEnabled', () => {
   it('is disabled by default and supports an explicit rollout', () => {
     expect(isGmailNativeInboundEnabled()).toBe(false);
 
-    vi.stubEnv('GMAIL_NATIVE_INBOUND', 'on');
+    vi.stubEnv('GMAIL_NATIVE_INBOUND', 'true');
     expect(isGmailNativeInboundEnabled()).toBe(true);
   });
 

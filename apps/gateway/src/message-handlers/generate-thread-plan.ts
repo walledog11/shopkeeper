@@ -94,7 +94,7 @@ export async function generateThreadPlan(
     return { plan: null, instruction };
   }
 
-  const latestConversation = await getLatestConversationMessage(threadId);
+  const latestConversation = await getLatestConversationMessage(threadId, organizationId);
   const pendingCustomerMessageId = latestConversation
     ? getPendingCustomerMessageId([latestConversation])
     : null;

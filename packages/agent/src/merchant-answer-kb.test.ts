@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AGENT_LEARNED_KB_TAG } from "./kb-learned.js";
 
 const {
+  mockGetOrCreateNotesKnowledgeBase,
   mockFindFirst,
   mockCreateKb,
   mockFindMany,
@@ -9,6 +10,7 @@ const {
   mockCreateArticle,
   mockCreateCitation,
 } = vi.hoisted(() => ({
+  mockGetOrCreateNotesKnowledgeBase: vi.fn(),
   mockFindFirst: vi.fn(),
   mockCreateKb: vi.fn(),
   mockFindMany: vi.fn(),
@@ -18,6 +20,7 @@ const {
 }));
 
 vi.mock("@shopkeeper/db", () => ({
+  getOrCreateNotesKnowledgeBase: mockGetOrCreateNotesKnowledgeBase,
   db: {
     knowledgeBase: {
       findFirst: mockFindFirst,
@@ -47,6 +50,7 @@ import {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockGetOrCreateNotesKnowledgeBase.mockResolvedValue({ id: "kb-notes" });
   mockFindFirst.mockResolvedValue(null);
   mockCreateKb.mockResolvedValue({ id: "kb-shipping" });
   mockFindMany.mockResolvedValue([]);

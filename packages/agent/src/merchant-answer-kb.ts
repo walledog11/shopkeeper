@@ -1,4 +1,4 @@
-import { db } from "@shopkeeper/db";
+import { db, getOrCreateNotesKnowledgeBase } from "@shopkeeper/db";
 import { AGENT_LEARNED_KB_TAG, buildMerchantAnswerKbTags } from "./kb-learned.js";
 import { NOTES_KB_FOLDER, resolveTopicFolderName } from "./kb-memory.js";
 import { DISCOUNT_POLICY_QUESTION_RES, SHIPPING_COVERAGE_QUESTION_RES } from "./intent.js";
@@ -168,6 +168,11 @@ export async function resolveKnowledgeBaseIdByName(
   organizationId: string,
   name: string,
 ): Promise<string> {
+  if (name.trim().toLowerCase() === NOTES_KB_FOLDER.toLowerCase()) {
+    const notes = await getOrCreateNotesKnowledgeBase(organizationId);
+    return notes.id;
+  }
+
   const existing = await db.knowledgeBase.findFirst({
     where: {
       organizationId,

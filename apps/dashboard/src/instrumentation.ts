@@ -6,9 +6,6 @@ export async function register() {
     await import('./sentry.server.config');
 
     validateDashboardEnv();
-
-    const dns = await import('dns');
-    dns.setServers(['8.8.8.8', '1.1.1.1']);
   }
 
   if (process.env.NEXT_RUNTIME === 'edge') {

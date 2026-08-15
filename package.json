@@ -50,6 +50,7 @@
     "audit:shopify-webhooks": "tsx ./apps/gateway/src/scripts/inspect-shopify-webhooks.ts",
     "audit:refund-spend-reservations": "node ./scripts/audit-refund-spend-reservations.mjs",
     "audit:unknown-outcomes": "node ./scripts/audit-unknown-outcomes.mjs",
+    "audit:production-dependencies": "npm audit --omit=dev --audit-level=high",
     "recover:gmail-history": "tsx ./scripts/recover-gmail-history.ts",
     "canary:agent-rollout": "tsx ./apps/gateway/src/scripts/canary-agent-rollout.ts",
     "canary:context-budget": "tsx ./apps/gateway/src/scripts/canary-context-budget.ts",
@@ -97,6 +98,11 @@
     "js-yaml": "^4.3.0",
     "nodemailer": "9.0.1",
     "sharp": "^0.35.0",
+    "fast-uri": "3.1.5",
+    "nanoid": "3.3.18",
+    "minimatch@10.2.6": {
+      "brace-expansion": "5.0.9"
+    },
     "concurrently": {
       "shell-quote": "1.10.0"
     },

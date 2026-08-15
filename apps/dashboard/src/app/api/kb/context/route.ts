@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { db } from "@shopkeeper/db"
+import { db, getOrCreateNotesKnowledgeBase } from "@shopkeeper/db"
 import { readRequiredJsonObject } from "@/lib/api/body"
 import { withOrgRoute } from "@/lib/api/route"
 import {
@@ -39,13 +39,7 @@ export const POST = withOrgRoute(
       }
     }
 
-    let notes = await db.knowledgeBase.findFirst({
-      where: { organizationId: org.id, source: "user", name: { equals: "Notes", mode: "insensitive" } },
-      orderBy: { createdAt: "asc" },
-    })
-    notes ??= await db.knowledgeBase.create({
-      data: { organizationId: org.id, name: "Notes", source: "user" },
-    })
+    const notes = await getOrCreateNotesKnowledgeBase(org.id)
 
     const topic = category === "auto" ? inferContextCategory(content) : category
     const tags: string[] = [topic]

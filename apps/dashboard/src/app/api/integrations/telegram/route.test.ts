@@ -95,7 +95,9 @@ describe('/api/integrations/telegram', () => {
 
     expect(res.status).toBe(503);
     await expect(db.orgMember.count({ where: { organizationId: org!.id } })).resolves.toBe(0);
-    await expect(db.orgMemberBindToken.count()).resolves.toBe(0);
+    await expect(
+      db.orgMemberBindToken.count({ where: { organizationId: org!.id } }),
+    ).resolves.toBe(0);
   });
 
   it('creates a scoped single-use bind token for the current user', async () => {
@@ -164,6 +166,8 @@ describe('/api/integrations/telegram', () => {
     const res = await POST();
 
     expect(res.status).toBe(409);
-    await expect(db.orgMemberBindToken.count()).resolves.toBe(0);
+    await expect(
+      db.orgMemberBindToken.count({ where: { organizationId: org!.id } }),
+    ).resolves.toBe(0);
   });
 });

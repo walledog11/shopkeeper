@@ -152,7 +152,7 @@ async function loadCurrentCachedHomePlan(params: {
 }): Promise<CurrentCachedPlan> {
   const thread = await requireOrgThread(params.threadId, params.orgId);
   const cachedPlan = readAgentPlanCache(thread.cachedPlan);
-  const latestConversation = await getLatestConversationMessage(params.threadId);
+  const latestConversation = await getLatestConversationMessage(params.threadId, params.orgId);
   const pendingCustomerMessageId = latestConversation
     ? getPendingCustomerMessageId([latestConversation])
     : null;

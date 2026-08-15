@@ -64,4 +64,31 @@ describe('enqueueRecoverableIntegrationDisconnects', () => {
     expect(remove).toHaveBeenCalledOnce();
     expect(add).toHaveBeenCalledOnce();
   });
+
+  it('visits every operation when the recoverable backlog exceeds one page', async () => {
+    const createdAt = new Date('2026-08-14T00:00:00.000Z');
+    const operations = Array.from({ length: 125 }, (_, index) => ({
+      id: `disconnect_${String(index).padStart(3, '0')}`,
+      organizationId: `organization_${index}`,
+      createdAt,
+    }));
+    listRecoverableIntegrationDisconnects
+      .mockResolvedValueOnce(operations.slice(0, 100))
+      .mockResolvedValueOnce(operations.slice(100));
+    getJob.mockResolvedValue(null);
+
+    await expect(enqueueRecoverableIntegrationDisconnects(queue)).resolves.toBe(125);
+    expect(add).toHaveBeenCalledTimes(125);
+    expect(listRecoverableIntegrationDisconnects).toHaveBeenCalledTimes(2);
+    expect(listRecoverableIntegrationDisconnects).toHaveBeenNthCalledWith(1, {
+      after: undefined,
+      createdBefore: expect.any(Date),
+      limit: 100,
+    });
+    expect(listRecoverableIntegrationDisconnects).toHaveBeenNthCalledWith(2, {
+      after: { createdAt, id: 'disconnect_099' },
+      createdBefore: expect.any(Date),
+      limit: 100,
+    });
+  });
 });

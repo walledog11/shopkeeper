@@ -46,7 +46,7 @@ export const POST = withOrgRoute(
 
     const [thread, latestConversation] = await Promise.all([
       requireOrgThread(threadId, org.id),
-      getLatestConversationMessage(threadId),
+      getLatestConversationMessage(threadId, org.id),
     ]);
     const pendingCustomerMessageId = latestConversation
       ? getPendingCustomerMessageId([latestConversation])

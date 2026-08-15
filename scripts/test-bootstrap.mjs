@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { runCommand, waitForAllTestServices } from './test-infra.mjs';
+import { resetTestData, runCommand, waitForAllTestServices } from './test-infra.mjs';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -20,6 +20,10 @@ async function main() {
   await runCommand('npx', ['prisma', 'migrate', 'deploy', '--schema=packages/db/prisma/schema.prisma'], {
     cwd: REPO_ROOT,
   });
+  // Local Docker volumes and CI service volumes are intentionally reusable.
+  // Start each root integration/coverage suite from an empty test database so
+  // durable audit tables without parent foreign keys cannot leak across runs.
+  await resetTestData(process.env);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
