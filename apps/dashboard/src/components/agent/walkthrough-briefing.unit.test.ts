@@ -16,6 +16,7 @@ function item(overrides: Partial<WalkthroughItem> = {}): WalkthroughItem {
     customerMessage: "Can I return this?",
     channelName: "Email",
     timeAgo: "12m ago",
+    lastMessageAt: "2026-06-14T11:55:00.000Z",
     headline: "Return request",
     proposalSummary: "Approve the return and send the label.",
     actionText: null,
