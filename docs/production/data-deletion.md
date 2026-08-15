@@ -102,12 +102,50 @@ Do not hard-delete customer rows manually unless a legal requirement requires it
 
 Deletion in Shopkeeper does not delete the merchant's source records in Shopify, Postmark, Stripe, Meta, Twilio, or any other connected provider. Tell the merchant which provider-side actions remain their responsibility and record that handoff in the request log.
 
-## Shopify App Store GDPR Webhooks
+## Shopify App Store Privacy Webhooks
 
-The mandatory Shopify App Store privacy webhooks are deferred for the v1 direct-merchant launch because the current launch path is not submitting the app to the Shopify App Store. Before any App Store submission, implement and test:
+All three mandatory topics are declared in `shopify.app.toml` and delivered to
+`POST /webhooks/shopify`, where the normal Shopify HMAC check runs before any
+compliance action:
 
-- `customers/data_request`
-- `customers/redact`
-- `shop/redact`
+- `customers/data_request` creates an idempotent, durable pending row in
+  `shopify_privacy_requests` and emits an `opsAlert` containing only its local
+  request ID and fulfillment path. An authenticated member of the matching
+  workspace opens
+  `/api/org/gdpr-export?privacyRequestId=<local-request-uuid>` to download the
+  matching export; that successful download marks the request `exported`, not
+  `completed`, because an internal download does not prove delivery. Deliver the
+  file directly to the store owner within 30 days, then mark the row completed
+  only after delivery is confirmed.
+- `customers/redact` hard-deletes the matched local customer, conversations,
+  messages, private attachment blobs, and related agent records. Unlike the
+  normal manual path, this is deliberately a hard deletion because Shopify has
+  already applied its required retention delay before delivering the topic.
+- `shop/redact` removes Shopify-linked customers and conversations, Shopify
+  operational watches, the integration, and its uninstall tombstone. Data from
+  independently connected channels is retained when it is not linked to a
+  Shopify customer.
 
-Until then, Shopify-related deletion requests are handled through the manual customer export/deletion and workspace deletion paths above.
+`app/uninstalled` removes credentials immediately but preserves a non-secret
+integration-disconnect tombstone. Shopify sends `shop/redact` later, so that
+tombstone is required to resolve the delivery to the correct workspace without
+retaining an access token.
+
+Operational check for requests that have not yet been fulfilled:
+
+```sql
+select id, organization_id, shop_domain, shopify_request_id, received_at
+from shopify_privacy_requests
+where status <> 'completed'
+order by received_at asc;
+```
+
+After confirmed delivery, record completion without retaining another copy of
+the export:
+
+```sql
+update shopify_privacy_requests
+set status = 'completed', completed_at = now()
+where id = '<local-request-uuid>'
+  and status = 'exported';
+```

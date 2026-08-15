@@ -265,6 +265,44 @@ describe('POST /api/messages', () => {
     expect(agentMessageCount).toBe(0);
   });
 
+  it('persists a merchant reply for the active storefront session without a provider call', async () => {
+    const shopDomain = `storefront-${org.id.slice(0, 8)}.myshopify.com`;
+    const integration = await createTestIntegration(org.id, {
+      platform: ChannelType.shopify,
+      externalAccountId: shopDomain,
+      metadata: { storefrontChat: { enabled: true } },
+    });
+    const customer = await createTestCustomer(org.id, `shopify_chat:merchant-reply-${org.id}`);
+    const thread = await createTestThread(org.id, customer.id, ChannelType.shopify_chat);
+    await db.storefrontChatSession.create({
+      data: {
+        organizationId: org.id,
+        integrationId: integration.id,
+        customerId: customer.id,
+        threadId: thread.id,
+        storefrontHost: shopDomain,
+        resumeSecretHash: 'a'.repeat(64),
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      },
+    });
+
+    const req = new Request('http://localhost:3000/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId: thread.id, text: 'The blue mug is back in stock.' }),
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(200);
+    expect(mockFetch).not.toHaveBeenCalled();
+    const savedMessage = await db.message.findFirstOrThrow({
+      where: { threadId: thread.id, senderType: SenderType.agent },
+    });
+    expect(savedMessage.contentText).toBe('The blue mug is back in stock.');
+    expect(savedMessage.integrationId).toBe(integration.id);
+  });
+
   it('dispatches via Postmark for email threads and saves the message', async () => {
     const emailAddress = `support_${org.id.slice(0, 8)}@acme.com`;
     await createTestIntegration(org.id, {

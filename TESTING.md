@@ -6,15 +6,21 @@ Use the root PR verification path before sending changes that touch app behavior
 npm run verify:pr
 ```
 
-That runs structure checks, repo and app lint, fast unit tests, node script tests,
-auth-bypass smoke E2E, comprehensive coverage, and the production build in the
-same order CI expects. The coverage run owns the integration gate, so
+That is the canonical local and CI contract. It runs structure checks, repo and
+app lint, root Knip, an explicit workspace typecheck, fast unit tests, node
+script tests, auth-bypass smoke E2E, comprehensive coverage, and the production
+build. The coverage run owns the integration gate, so
 `verify:pr` does not run integration once normally and then repeat it under
-coverage. For a narrower loop, run the smallest script that covers your change:
+coverage. CI calls the same command with `--stage=static`, `unit`, `coverage`,
+`build`, or `e2e` so independent work remains parallel without duplicating the
+contract in workflow YAML. For a narrower loop, run the smallest script that
+covers your change:
 
 ```sh
 npm run lint:structure
 npm run lint
+npm run lint:knip
+npm run typecheck
 npm run test:unit
 npm run test:node
 npm run test:integration
@@ -22,6 +28,28 @@ npm run test:e2e:smoke
 npm run test:e2e:send-reply-hop
 npm run test:coverage
 ```
+
+Knip's reviewed baseline is zero findings for unused files, dependencies, dev
+dependencies, unlisted imports, binaries, and duplicate exports; those rules are
+blocking. Export and exported-type analysis is enabled at warning severity with
+the reviewed 2026-08-14 baseline of 151 exports and 121 types. This includes
+exports referenced only inside their declaring file; Knip's broad
+`ignoreExportsUsedInFile` escape hatch is deliberately not used. Reduce those
+counts in focused cleanup slices, then promote each rule to blocking at zero. The
+`lint:knip` wrapper rejects growth above either count, so warning severity is a
+ratchet rather than permission to add new debt.
+
+The two ignored `.d.mts` files declare types for sibling runtime modules. The two
+ignored binaries (`docker-compose` and `ngrok`) are host tools spawned by local
+infrastructure scripts. Dependency exceptions are scoped to the workspace that
+loads them indirectly: CSS/tool configuration in the dashboard, Pino's string
+transport in the gateway, the Neon adapter's pinned transitive driver in the DB
+package, and the manually invoked Shopify CLI at the root. Root automation/E2E
+files and application operations scripts are explicit entry points because
+humans or package scripts invoke them. Do not add a directory-wide ignore to
+land a change: add the real entry point or dependency, remove the dead code, or
+document the smallest exception next to its Knip configuration with the
+invocation that requires it.
 
 ## Test Ownership
 

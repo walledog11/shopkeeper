@@ -1,6 +1,5 @@
 import type { Request, Response, Router } from 'express';
 import { createHmac, timingSafeEqual, randomUUID } from 'crypto';
-import { db } from '@shopkeeper/db';
 import { isOrderRiskMonitorEnabled } from '../config/runtime-config.js';
 import logger from '../logger.js';
 import { CHANNEL, JOB } from '../constants.js';
@@ -11,6 +10,11 @@ import {
   buildWebhookSignatureRequestMetadata,
   recordWebhookSignatureFailure,
 } from './webhooks-signature-alerts.js';
+import {
+  handleShopifyComplianceWebhook,
+  preserveShopifyUninstallTombstone,
+  SHOPIFY_COMPLIANCE_TOPICS,
+} from './shopify-compliance.js';
 
 const SHOPIFY_SUPPORTED_TOPICS = new Set(['orders/create', 'orders/fulfilled', 'orders/updated', 'orders/cancelled']);
 
@@ -64,11 +68,9 @@ export function registerShopifyWebhookRoutes(router: Router): void {
         return res.sendStatus(400);
       }
       try {
-        const result = await db.integration.deleteMany({
-          where: { platform: CHANNEL.SHOPIFY, externalAccountId: shopDomain },
-        });
+        const deleted = await preserveShopifyUninstallTombstone(shopDomain);
         logger.info(
-          { shopDomain, deleted: result.count },
+          { shopDomain, deleted },
           '[Webhook] Shopify app uninstalled — integration removed',
         );
         return res.status(200).send('OK');
@@ -77,6 +79,25 @@ export function registerShopifyWebhookRoutes(router: Router): void {
           { err: error, shopDomain },
           '[Webhook] Failed to remove Shopify integration on uninstall',
         );
+        return res.sendStatus(500);
+      }
+    }
+
+    if (topic && SHOPIFY_COMPLIANCE_TOPICS.has(topic)) {
+      if (!shopDomain) {
+        logger.warn('[Webhook] Shopify compliance request missing shop domain header — dropping.');
+        return res.sendStatus(400);
+      }
+      try {
+        await handleShopifyComplianceWebhook(
+          topic as 'customers/data_request' | 'customers/redact' | 'shop/redact',
+          shopDomain,
+          (req.body ?? {}) as Record<string, unknown>,
+          webhookId ?? null,
+        );
+        return res.status(200).send('OK');
+      } catch (error) {
+        logger.error({ err: error, topic, shopDomain }, '[Webhook] Shopify compliance request failed');
         return res.sendStatus(500);
       }
     }

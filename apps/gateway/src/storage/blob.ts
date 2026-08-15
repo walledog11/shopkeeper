@@ -1,4 +1,4 @@
-import { put } from '@vercel/blob';
+import { del, put } from '@vercel/blob';
 import { randomUUID } from 'crypto';
 import { getInboundAttachmentLimits } from '../config/runtime-config.js';
 import logger from '../logger.js';
@@ -126,4 +126,15 @@ export async function uploadInboundAttachment(
     logger.error({ err, organizationId, filename: safeName }, '[Blob] Upload failed');
     return null;
   }
+}
+
+export async function deleteInboundAttachments(references: readonly string[]): Promise<void> {
+  const pathnames = [...new Set(
+    references
+      .filter(reference => reference.startsWith(BLOB_ATTACHMENT_PREFIX))
+      .map(reference => reference.slice(BLOB_ATTACHMENT_PREFIX.length))
+      .filter(Boolean),
+  )];
+  if (pathnames.length === 0) return;
+  await del(pathnames);
 }

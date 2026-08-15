@@ -8,7 +8,7 @@ import {
   createOAuthSessionCookies,
   requireAuthenticatedOAuthSession,
 } from "@/app/api/integrations/_lib/oauth-session";
-import { oauthProviderRedirect } from "@/app/api/integrations/_lib/oauth-callback";
+import { oauthPageRedirect } from "@/app/api/integrations/_lib/oauth-callback";
 
 export async function GET(request: Request) {
   return createPostRedirectResponse(request, "Connect TikTok Shop");
@@ -33,5 +33,5 @@ export async function POST(request: Request) {
     session,
   );
 
-  return oauthProviderRedirect(buildTikTokShopAuthorizeUrl(oauthConfig, state));
+  return oauthPageRedirect(buildTikTokShopAuthorizeUrl(oauthConfig, state));
 }

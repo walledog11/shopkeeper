@@ -365,8 +365,8 @@ Console and CLI steps that cannot be done from the repo.
   root devDependency, so the version is pinned in the lockfile and every machine
   runs the same one. Invoke as `npx shopify`. Adds 14 packages and no new audit
   findings; the 8 that `npm audit` reports are pre-existing and none of them are
-  in the added tree. `knip.json` sets `devDependencies: "off"`, so nothing
-  importing it does not fail `lint:knip`.
+  in the added tree. Humans invoke it as the documented `npx shopify` tool, so
+  its root-scoped Knip dependency exception records that non-script entry point.
 - [x] **Capture the verbatim export.** Done 2026-08-07 against
   `shopkeeper-production` (org `40511769`). Confirmed read-only: the CLI's own
   verbose trace shows only `appByKey` / `specifications` **queries** and a local

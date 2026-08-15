@@ -17,9 +17,6 @@ export function oauthPageRedirect(url: string | URL): NextResponse {
   return NextResponse.redirect(url, 303);
 }
 
-/** Converts the authorization shell's POST into a provider-facing GET. */
-export const oauthProviderRedirect = oauthPageRedirect;
-
 export function oauthCompleteResponse(appUrl: string, params: OAuthCompleteParams): NextResponse {
   return oauthPageRedirect(buildOAuthCompleteUrl(appUrl, params));
 }

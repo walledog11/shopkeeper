@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { readEnv } from '@/lib/env/helpers';
 import type { EmailOAuthProviderConfig } from './email-oauth-providers';
-import { oauthProviderRedirect } from './oauth-callback';
+import { oauthPageRedirect } from './oauth-callback';
 import {
   createOAuthSessionCookies,
   requireAuthenticatedOAuthSession,
@@ -45,5 +45,5 @@ export async function createEmailOAuthAuthorizationResponse(
     authorizationUrl.searchParams.set(key, value);
   }
 
-  return oauthProviderRedirect(authorizationUrl);
+  return oauthPageRedirect(authorizationUrl);
 }

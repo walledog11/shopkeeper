@@ -1,42 +1,47 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignoreExportsUsedInFile": true,
-  "ignoreFiles": ["**/coverage/**"],
+  "ignoreFiles": [
+    "scripts/lib/production-config-schema.d.mts",
+    "scripts/with-test-env.d.mts"
+  ],
+  "ignoreBinaries": ["docker-compose", "ngrok"],
+  "ignoreDependencies": ["@shopify/cli"],
   "rules": {
     "files": "error",
-    "exports": "off",
-    "types": "off",
-    "dependencies": "off",
-    "devDependencies": "off",
-    "unlisted": "off",
-    "binaries": "off",
-    "duplicates": "off"
+    "exports": "warn",
+    "types": "warn",
+    "dependencies": "error",
+    "devDependencies": "error",
+    "unlisted": "error",
+    "binaries": "error",
+    "duplicates": "error"
   },
   "workspaces": {
     ".": {
-      "entry": ["scripts/**/*.{mjs,ts}"],
-      "project": ["scripts/**/*.{mjs,ts,d.mts}", "e2e/**/*.{ts,cts}"],
-      "ignoreFiles": ["scripts/**", "e2e/**"]
+      "entry": ["scripts/**/*.{mjs,ts}", "e2e/**/*.{ts,cts}"],
+      "project": ["scripts/**/*.{mjs,ts,d.mts}", "e2e/**/*.{ts,cts}"]
     },
     "apps/dashboard": {
       "entry": [
         "src/app/**/*.{ts,tsx}",
+        "src/scripts/**/*.ts",
         "next.config.js",
         "postcss.config.mjs"
       ],
       "project": ["src/**/*.{ts,tsx}"],
-      "ignoreFiles": ["src/scripts/**"]
+      "ignoreDependencies": ["shadcn", "tailwindcss", "tw-animate-css"]
     },
     "apps/gateway": {
-      "entry": ["src/{start,index,worker}.ts"],
+      "entry": ["src/{start,index,worker}.ts", "src/scripts/**/*.ts"],
       "project": ["src/**/*.ts"],
-      "ignoreFiles": ["src/scripts/**"]
+      "ignoreDependencies": ["pino-pretty"]
     },
     "packages/agent": {
       "project": ["src/**/*.ts"]
     },
     "packages/db": {
-      "project": ["*.ts"]
+      "project": ["*.ts"],
+      "ignoreDependencies": ["@neondatabase/serverless"]
     },
     "packages/email": {
       "project": ["src/**/*.ts"]

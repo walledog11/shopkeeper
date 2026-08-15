@@ -365,6 +365,15 @@ describe('POST /webhooks/shopify', () => {
       platform: ChannelType.shopify,
       externalAccountId: shopDomain,
     });
+    const session = await db.storefrontChatSession.create({
+      data: {
+        organizationId: org.id,
+        integrationId: integration.id,
+        storefrontHost: shopDomain,
+        resumeSecretHash: 'a'.repeat(64),
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      },
+    });
 
     const body = JSON.stringify({ id: 12345, name: 'My Shop', domain: shopDomain });
     const sig = hmacSha256Base64(SHOPIFY_SECRET, body);
@@ -382,6 +391,10 @@ describe('POST /webhooks/shopify', () => {
     expect(queueAddSpy).not.toHaveBeenCalled();
     const after = await db.integration.findUnique({ where: { id: integration.id } });
     expect(after).toBeNull();
+    // Session credentials become unusable with the uninstall in the same
+    // database operation: the integration FK cascades its storefront sessions.
+    await expect(db.storefrontChatSession.findUnique({ where: { id: session.id } }))
+      .resolves.toBeNull();
   });
 
   it('returns 200 (no-op) on app/uninstalled when no integration matches', async () => {

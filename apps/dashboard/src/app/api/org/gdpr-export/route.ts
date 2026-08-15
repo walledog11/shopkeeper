@@ -14,22 +14,45 @@ export const GET = withOrgRoute(
   },
   async ({ org, request }) => {
     const { searchParams } = new URL(request.url)
-    const email = searchParams.get('email')?.trim().toLowerCase()
+    const privacyRequestId = searchParams.get('privacyRequestId')?.trim()
+    const privacyRequest = privacyRequestId
+      ? await db.shopifyPrivacyRequest.findFirst({
+          where: {
+            id: privacyRequestId,
+            organizationId: org.id,
+            topic: 'customers/data_request',
+            status: { in: ['pending', 'exported'] },
+          },
+        })
+      : null
+    const email = (privacyRequest?.customerEmail ?? searchParams.get('email'))?.trim().toLowerCase()
+    const shopifyCustomerId = privacyRequest?.shopifyCustomerId?.trim() || null
 
-    if (!email) {
+    if (!email && !shopifyCustomerId) {
+      if (privacyRequestId) {
+        throw new NotFoundError('Open Shopify privacy request not found')
+      }
       throw new BadRequestError('email is required')
     }
 
-    if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (email && (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
       throw new BadRequestError('Invalid email address')
     }
 
     const customer = await db.customer.findFirst({
-      where: { organizationId: org.id, platformId: { equals: email, mode: 'insensitive' } },
+      where: {
+        organizationId: org.id,
+        OR: [
+          ...(email ? [{ platformId: { equals: email, mode: 'insensitive' as const } }] : []),
+          ...(shopifyCustomerId
+            ? [{ threads: { some: { organizationId: org.id, shopifyCustomerId } } }]
+            : []),
+        ],
+      },
     })
 
     if (!customer) {
-      throw new NotFoundError('No customer found with that email')
+      throw new NotFoundError('No customer found for that privacy request')
     }
 
     const threads = await db.thread.findMany({
@@ -49,10 +72,18 @@ export const GET = withOrgRoute(
 
     const exportData = {
       exportedAt: new Date().toISOString(),
+      ...(privacyRequest && {
+        shopifyPrivacyRequest: {
+          id: privacyRequest.id,
+          shopifyRequestId: privacyRequest.shopifyRequestId,
+          shopDomain: privacyRequest.shopDomain,
+        },
+      }),
       organization: org.name,
       customer: {
         name: customer.name,
         platformId: customer.platformId,
+        ...(shopifyCustomerId && { shopifyCustomerId }),
         createdAt: customer.createdAt,
       },
       threads: threads.map(t => ({
@@ -70,11 +101,22 @@ export const GET = withOrgRoute(
       })),
     }
 
+    if (privacyRequest) {
+      await db.shopifyPrivacyRequest.updateMany({
+        where: {
+          id: privacyRequest.id,
+          organizationId: org.id,
+          status: { in: ['pending', 'exported'] },
+        },
+        data: { status: 'exported', exportedAt: new Date() },
+      })
+    }
+
     return new NextResponse(JSON.stringify(exportData, null, 2), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Content-Disposition': `attachment; filename="customer-data-${email.replace(/[^a-z0-9]/g, '-')}.json"`,
+        'Content-Disposition': `attachment; filename="customer-data-${(email ?? `shopify-${shopifyCustomerId}`).replace(/[^a-z0-9]/g, '-')}.json"`,
       },
     })
   },

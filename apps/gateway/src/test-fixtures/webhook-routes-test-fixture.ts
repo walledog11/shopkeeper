@@ -26,6 +26,7 @@ const {
   queueGetJobSpy,
   getPlatformSpectrumAppSpy,
   spectrumWebhookSpy,
+  deleteInboundAttachmentsSpy,
   uploadInboundAttachmentSpy,
   SpectrumConfigError,
 } = vi.hoisted(() => ({
@@ -42,6 +43,7 @@ const {
   queueGetJobSpy: vi.fn().mockResolvedValue(null),
   getPlatformSpectrumAppSpy: vi.fn(),
   spectrumWebhookSpy: vi.fn(),
+  deleteInboundAttachmentsSpy: vi.fn(),
   uploadInboundAttachmentSpy: vi.fn(),
   SpectrumConfigError: class SpectrumIntegrationConfigError extends Error {},
 }));
@@ -96,6 +98,7 @@ vi.mock('../clients/spectrum.js', () => ({
 }));
 
 vi.mock('../storage/blob.js', () => ({
+  deleteInboundAttachments: deleteInboundAttachmentsSpy,
   uploadInboundAttachment: uploadInboundAttachmentSpy,
 }));
 
@@ -122,6 +125,7 @@ export const webhookFixture = {
   queueAddSpy,
   queueGetJobSpy,
   spectrumWebhookSpy,
+  deleteInboundAttachmentsSpy,
   uploadInboundAttachmentSpy,
   get org() {
     return org;
@@ -139,6 +143,7 @@ beforeEach(async () => {
   getPlatformSpectrumAppSpy.mockReset();
   googleTokenVerifySpy.mockReset();
   spectrumWebhookSpy.mockReset();
+  deleteInboundAttachmentsSpy.mockReset().mockResolvedValue(undefined);
   uploadInboundAttachmentSpy.mockReset();
   getPlatformSpectrumAppSpy.mockResolvedValue({ webhook: spectrumWebhookSpy });
   googleTokenVerifySpy.mockResolvedValue({

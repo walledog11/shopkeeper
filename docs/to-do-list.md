@@ -31,21 +31,6 @@ channel to build. See [product-truth.md](product-truth.md) §2.
 
 Code work that is started and not finished.
 
-- [ ] **Storefront chat — the remaining test plan.** The merchant half landed
-  2026-08-13 and the implementation plan is closed. Routine and verified read-only
-  replies send themselves and raise no card; the session and
-  `storefront_chat_daily_usage` sweeps run on the daily purge worker; budget
-  exhaustion tells the merchant once per shop per day; a dead email sender raises
-  an ops alert instead of failing silently; and the widget says something when the
-  shop is the one answering. **What is left is coverage, not behaviour**:
-  session-first-message races asserted against real
-  `threads_one_open_per_customer` behaviour, closed- and idle-thread rollover,
-  4,000-character truncation, uninstall revocation, and dispatch persistence for
-  merchant replies, approvals and auto-execution. The dev-store browser matrix
-  (Online Store 2.0 and a vintage theme, desktop and mobile, embed on and off,
-  Inbox bubble present and removed) has never been run. Evidence, incident history
-  and the full milestone record:
-  [storefront-chat-verification-2026-08.md](production/storefront-chat-verification-2026-08.md).
 - [ ] **The agent eval gate is red.** 13 fixtures failing or flaky since
   2026-08-08, seven at 0/3, split between over- and under-escalation. All of it
   pre-existing rather than damage from any one change, and the stale 2026-07-30
@@ -68,12 +53,6 @@ Code work that is started and not finished.
   interactions and product recommendations to later Shopify orders so merchants
   can distinguish direct, product-assisted, and chat-assisted revenue. Report it
   as attribution rather than proof that the conversation caused the purchase.
-- [ ] **Make local and CI verification one contract.** `verify:pr` omits the root
-  Knip pass and explicit typecheck even though CI runs them; Knip itself currently
-  checks only unused files because exports, types, dependencies, unlisted imports,
-  binaries, and duplicates are disabled. Create one canonical verification command
-  used by CI, enable the useful Knip rules gradually with a reviewed baseline, and
-  keep escape hatches narrow and documented.
 - [ ] **Expand confidence outside the curated coverage islands.** The audit found
   20 of 76 dashboard API routes without a colocated route test, low coverage in
   several recovery/reconciliation paths, only eight groups in the critical
@@ -99,6 +78,13 @@ Code work that is started and not finished.
 Shipped code that needs a production canary, observation window, or configured
 provider. **None of these is a code task.**
 
+- [ ] **Storefront chat dev-store browser matrix.** Run Online Store 2.0 and a
+  vintage theme on desktop and mobile, with the embed on and off and the Shopify
+  Inbox bubble present and removed. The automated remainder is covered: real
+  first-message races and thread rollover, 4,000-character truncation, uninstall
+  revocation, and reply/approval/auto-execution dispatch persistence. Evidence
+  and the full matrix:
+  [storefront-chat-verification-2026-08.md](production/storefront-chat-verification-2026-08.md).
 - [ ] **Postmark outbound canary.** Send and bounce attribution under real
   traffic. Inbound is proven end to end as of 2026-08-02 (server
   `Shopkeeper-production`, ID 20167846). Account approval, sender setup, and
@@ -136,44 +122,6 @@ provider. **None of these is a code task.**
   a handoff together came through a *model-elected* escalation, which was the path
   that already worked. Storefront chat, dev store. Background:
   [storefront-chat-verification-2026-08.md](production/storefront-chat-verification-2026-08.md).
-- [x] **Realtime inbox (SSE + Redis pub/sub).** Decision 2026-08-06: finish and
-  enable, not delete. Both gates are set and the canary passed **2026-08-07**:
-  Railway `GATEWAY_REALTIME_ENABLED=true`, Vercel
-  `NEXT_PUBLIC_GATEWAY_EVENTS_URL=https://clerk-production-e37f.up.railway.app`
-  inlined into the serving build (`NEXT_PUBLIC_*` is build-time, not a runtime
-  flip). Evidence: `realtime:smoke` PASS against prod (delivery *and* cross-org
-  non-delivery); `[Realtime] Subscribed channel:"realtime:thread"` in the
-  `shopkeeper` service logs; live `connect-src` on `app.useshopkeeper.com`
-  includes the gateway origin; and a signed-in browser on `/dashboard/tickets`
-  refetched `/api/threads` within a second of a publish, against a 20s control
-  window with zero requests — so the merchant-facing `RealtimeProvider` stream
-  is live, not just the transport. Rollback: unset the Vercel var and redeploy;
-  polling returns to 15s. **Failure mode to watch:** if SSE cannot connect,
-  `RealtimeProvider` retries silently forever while polling has already slowed
-  to 60s/120s — the inbox gets slower with nothing surfaced, so check the logs
-  before walking away. Standing cost traps: never hold SSE on Vercel functions;
-  never use Postgres `LISTEN/NOTIFY` (pins a Neon connection). **Cleared as the
-  gate on storefront chat**, which shipped on polling rather than SSE.
-
-  Re-running the smoke needs prod Redis over the `REDIS_PUBLIC_URL` TCP proxy —
-  the gateway's own `REDIS_URL` is `redis.railway.internal` and never resolves
-  from a laptop — plus `NODE_ENV=production` so `loadGatewayEnv` does not
-  override it with the local `.env`:
-
-  ```
-  cd apps/gateway
-  REDIS_PUB=$(railway variables --service Redis --json | node -e '…REDIS_PUBLIC_URL…')
-  NODE_ENV=production railway run --service shopkeeper -- sh -c \
-    "NODE_ENV=production REDIS_URL='$REDIS_PUB' npx tsx src/scripts/realtime-smoke.ts \
-     --org-id=<prod org> --url=https://clerk-production-e37f.up.railway.app"
-  ```
-- [x] **Dashboard ops alert → Sentry.** Production round-trip verified
-  2026-08-07 via deployed `agent_failure` trigger (`POST /api/agent`, no
-  approved plan). Evidence in
-  [alerting-evidence.md](production/alerting-evidence.md). Spot-check the
-  Sentry issue in the UI if you want a second pair of eyes — local CLI tokens
-  are `org:ci` only.
-
 ---
 
 
@@ -197,13 +145,13 @@ empty string, indistinguishable from unset.
   was supposed to be written *before* deploying. `-8` remains re-releasable;
   reference in
   [production/shopify-app-config-reference.md](production/shopify-app-config-reference.md).
-- [ ] **Shopify compliance webhooks are declared nowhere.**
-  `customers/data_request`, `customers/redact`, `shop/redact` have no handlers
-  in the repo, no app-level declaration, and no per-shop registration —
-  confirmed against the 2026-08-07 config export. Pre-existing, inherited by M0a
-  rather than caused by it, and **blocking for App Store distribution**. Fix is
-  handlers first, then declare the topics; pointing them at `/webhooks/shopify`
-  would fail silently against its topic allowlist.
+- [ ] **Deploy and prove Shopify compliance webhooks.** The HMAC-gated handlers,
+  durable data-request workflow, redaction paths and app-level declarations for
+  `customers/data_request`, `customers/redact` and `shop/redact` are implemented.
+  Deploy the database and application changes, run `shopify app deploy`, then
+  exercise Shopify's compliance checks or signed production deliveries. Operator
+  fulfillment and completion steps live in
+  [production/data-deletion.md](production/data-deletion.md).
 
 ---
 
@@ -221,12 +169,6 @@ resume. Gated-off integrations cost nothing to keep dark.
   SaaS in Partner Center. Keep TikTok Shop buyer messages separate from generic
   TikTok DMs (no generic-DM adapter exists).
 
-- [ ] **Shopify mandatory compliance webhooks.** The app declares none of
-  `customers/data_request`, `customers/redact` or `shop/redact` and has no handlers
-  for them. Inherited, not caused by any recent work, and blocking only App Store
-  distribution — which is itself deferred. Closing it means writing the handlers
-  first and then declaring the topics; pointing them at `/webhooks/shopify` puts
-  them straight into a topic allowlist that rejects them into silent failure.
 - [ ] **Storefront chat M2 — Customer Account OAuth.** Largely superseded by
   emailed-code verification, which bought the same disclosure at a fraction of the
   cost and forced no re-authorization. Keep only for genuine account binding —

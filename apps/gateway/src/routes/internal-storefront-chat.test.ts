@@ -219,6 +219,73 @@ describe('POST /internal/storefront-chat/message', () => {
     expect(queueAddSpy).toHaveBeenCalled();
   });
 
+  it('normalizes and truncates shopper messages to 4,000 characters', async () => {
+    const response = await postMessage({
+      organizationId: org.id,
+      sessionId: session.id,
+      integrationId: integration.id,
+      text: `${'Ａ'.repeat(4_001)} ignored`,
+      clientMessageId: 'widget-msg-truncated',
+    });
+
+    expect(response.status).toBe(202);
+
+    const message = await db.message.findFirstOrThrow({
+      where: {
+        organizationId: org.id,
+        externalMessageId: `${CHANNEL.SHOPIFY_CHAT}:${session.id}:widget-msg-truncated`,
+      },
+    });
+    expect(message.contentText).toBe('A'.repeat(4_000));
+    expect(message.contentText).toHaveLength(4_000);
+  });
+
+  it('binds two concurrent first messages to the one open thread allowed by the real index', async () => {
+    const [first, second] = await Promise.all([
+      postMessage({
+        organizationId: org.id,
+        sessionId: session.id,
+        integrationId: integration.id,
+        text: 'First simultaneous message',
+        clientMessageId: 'widget-first-race-a',
+      }),
+      postMessage({
+        organizationId: org.id,
+        sessionId: session.id,
+        integrationId: integration.id,
+        text: 'Second simultaneous message',
+        clientMessageId: 'widget-first-race-b',
+      }),
+    ]);
+
+    expect(first.status).toBe(202);
+    expect(second.status).toBe(202);
+    expect(first.body.threadId).toBe(second.body.threadId);
+
+    const bound = await db.storefrontChatSession.findUniqueOrThrow({ where: { id: session.id } });
+    expect(bound.threadId).toBe(first.body.threadId);
+    expect(bound.customerId).toEqual(expect.any(String));
+
+    const open = await db.thread.findMany({
+      where: {
+        organizationId: org.id,
+        customerId: bound.customerId!,
+        channelType: ChannelType.shopify_chat,
+        status: 'open',
+      },
+    });
+    expect(open).toHaveLength(1);
+
+    const texts = await db.message.findMany({
+      where: { threadId: open[0].id, senderType: SenderType.customer },
+      select: { contentText: true },
+    });
+    expect(texts.map(({ contentText }) => contentText).sort()).toEqual([
+      'First simultaneous message',
+      'Second simultaneous message',
+    ]);
+  });
+
   it('dedupes a retry with the same clientMessageId', async () => {
     const body = {
       organizationId: org.id,
@@ -568,6 +635,30 @@ describe('POST /internal/storefront-chat/message', () => {
       expect(episodes.map((e) => e.threadId)).toEqual([thread.id, response.body.threadId]);
       expect(episodes[0].endedAt).toBeInstanceOf(Date);
       expect(episodes[1].endedAt).toBeNull();
+    });
+
+    it('opens a new episode immediately when the merchant closed the current thread', async () => {
+      const { thread } = await idleRefundEpisode(10 * 60 * 1000);
+      await db.thread.update({
+        where: { id: thread.id },
+        data: { status: 'closed', closedReason: 'resolved' },
+      });
+
+      const response = await greet('episode-after-close', 'I have another question');
+
+      expect(response.status).toBe(202);
+      expect(response.body.isNewThread).toBe(true);
+      expect(response.body.threadId).not.toBe(thread.id);
+
+      const old = await db.thread.findUniqueOrThrow({ where: { id: thread.id } });
+      expect(old.status).toBe('closed');
+      expect(old.closedReason).toBe('resolved');
+
+      const bound = await db.storefrontChatSession.findUniqueOrThrow({ where: { id: session.id } });
+      expect(bound.threadId).toBe(response.body.threadId);
+      expect(await db.storefrontChatSessionEpisode.count({
+        where: { sessionId: session.id },
+      })).toBe(2);
     });
 
     it('leaves the stale refund conversation out of the greeting\'s planner context', async () => {

@@ -125,11 +125,22 @@ for (const workspace of ['apps/dashboard', 'apps/gateway', 'packages/agent', 'pa
     failures.push(`Root test:coverage does not include ${workspace}.`);
   }
 }
-if (rootPackage.scripts?.['verify:pr']?.includes('test:integration')) {
+const verifyPrSource = readFileSync(join(REPO_ROOT, 'scripts/verify-pr.mjs'), 'utf8');
+if (verifyPrSource.includes("'test:integration'")) {
   failures.push('verify:pr must not run integration separately from the comprehensive coverage gate.');
+}
+for (const requiredScript of ['lint:knip', 'typecheck']) {
+  if (!verifyPrSource.includes(`'${requiredScript}'`)) {
+    failures.push(`verify:pr must explicitly run ${requiredScript}.`);
+  }
 }
 
 const ciSource = readFileSync(join(REPO_ROOT, '.github/workflows/ci.yml'), 'utf8');
+for (const stage of ['static', 'unit', 'coverage', 'build', 'e2e']) {
+  if (!ciSource.includes(`run: npm run verify:pr -- --stage=${stage}`)) {
+    failures.push(`CI must invoke the canonical verify:pr ${stage} stage.`);
+  }
+}
 for (const workspace of ['apps/dashboard', 'apps/gateway', 'packages/agent', 'packages/email']) {
   if (!ciSource.includes(`${workspace}/coverage/`)) {
     failures.push(`CI coverage artifact does not include ${workspace}.`);

@@ -139,19 +139,34 @@ export async function processInboundMessage(
     }
   }
 
-  const customer = await db.customer.upsert({
-    where: { organizationId_platformId: { organizationId, platformId } },
-    update: {
-      ...(customerName && { name: customerName }),
-      ...(profilePicUrl && { profilePicUrl }),
-    },
-    create: {
-      organizationId,
-      platformId,
-      ...(customerName && { name: customerName }),
-      ...(profilePicUrl && { profilePicUrl }),
-    },
-  });
+  const customerKey = { organizationId, platformId };
+  const customer = await (async () => {
+    try {
+      return await db.customer.upsert({
+        where: { organizationId_platformId: customerKey },
+        update: {
+          ...(customerName && { name: customerName }),
+          ...(profilePicUrl && { profilePicUrl }),
+        },
+        create: {
+          ...customerKey,
+          ...(customerName && { name: customerName }),
+          ...(profilePicUrl && { profilePicUrl }),
+        },
+      });
+    } catch (error) {
+      // PostgreSQL can still make two concurrent Prisma upserts both attempt the
+      // INSERT. The unique customer identity is the desired winner, so recover
+      // the losing request onto it and let the transaction below serialize the
+      // thread/episode decision against threads_one_open_per_customer.
+      if ((error as { code?: string }).code !== 'P2002') throw error;
+      const winner = await db.customer.findUnique({
+        where: { organizationId_platformId: customerKey },
+      });
+      if (!winner) throw error;
+      return winner;
+    }
+  })();
 
   const routeReceivedAt = integrationId && providerSentAt ? providerSentAt : null;
 

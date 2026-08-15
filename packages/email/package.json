@@ -69,7 +69,8 @@
   },
   "devDependencies": {
     "@types/mailparser": "^3.4.5",
-    "typescript": "latest"
+    "typescript": "latest",
+    "vitest": "^4.1.3"
   },
   "dependencies": {
     "@shopkeeper/db": "*",

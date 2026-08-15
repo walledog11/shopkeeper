@@ -147,6 +147,47 @@ describe('tenant data surfaces', () => {
     expect(bodyText).not.toContain('Foreign Shared');
   });
 
+  it('fulfills only the active organization Shopify privacy request', async () => {
+    const customer = await createTestCustomer(callerOrg.id, 'privacy@example.com', { name: 'Privacy Customer' });
+    const thread = await createTestThread(callerOrg.id, customer.id, ChannelType.email, {
+      shopifyCustomerId: '191167',
+    });
+    await createTestMessage(thread.id, 'privacy export message');
+    const requestRecord = await db.shopifyPrivacyRequest.create({
+      data: {
+        organizationId: callerOrg.id,
+        shopDomain: 'caller.myshopify.com',
+        topic: 'customers/data_request',
+        shopifyRequestId: 'request-1',
+        shopifyCustomerId: '191167',
+      },
+    });
+    const foreignRequest = await db.shopifyPrivacyRequest.create({
+      data: {
+        organizationId: otherOrg.id,
+        shopDomain: 'foreign.myshopify.com',
+        topic: 'customers/data_request',
+        shopifyRequestId: 'request-1',
+        customerEmail: 'foreign@example.com',
+      },
+    });
+
+    const response = await getGdprReport(new Request(
+      `http://localhost/api/org/gdpr-export?privacyRequestId=${requestRecord.id}`,
+    ));
+    const bodyText = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(bodyText).toContain('privacy export message');
+    expect(bodyText).toContain('request-1');
+    expect(await db.shopifyPrivacyRequest.findUniqueOrThrow({
+      where: { id: requestRecord.id },
+    })).toMatchObject({ status: 'exported', exportedAt: expect.any(Date), completedAt: null });
+    expect(await db.shopifyPrivacyRequest.findUniqueOrThrow({
+      where: { id: foreignRequest.id },
+    })).toMatchObject({ status: 'pending', completedAt: null });
+  });
+
   it('archives only the active organization tickets on org data delete actions', async () => {
     const callerCustomer = await createTestCustomer(callerOrg.id, 'caller-delete@example.com');
     const callerThread = await createTestThread(callerOrg.id, callerCustomer.id, ChannelType.email);

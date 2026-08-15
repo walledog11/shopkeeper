@@ -11,7 +11,7 @@ import {
   createOAuthSessionCookies,
   requireAuthenticatedOAuthSession,
 } from '@/app/api/integrations/_lib/oauth-session';
-import { oauthProviderRedirect } from '@/app/api/integrations/_lib/oauth-callback';
+import { oauthPageRedirect } from '@/app/api/integrations/_lib/oauth-callback';
 
 function fingerprint(value: string): string {
   return createHash('sha256').update(value).digest('hex').slice(0, 12);
@@ -62,5 +62,5 @@ export async function POST(request: Request) {
   // This route is submitted by the popup shell as POST. A 303 is required so
   // the browser follows the provider redirect with GET instead of preserving
   // POST (the behavior of NextResponse.redirect's default 307).
-  return oauthProviderRedirect(authUrl);
+  return oauthPageRedirect(authUrl);
 }

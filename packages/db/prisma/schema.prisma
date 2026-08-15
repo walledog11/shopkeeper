@@ -185,6 +185,7 @@ model Organization {
   customers               Customer[]
   threads                 Thread[]
   integrations            Integration[]            @relation("OrganizationIntegrations")
+  shopifyPrivacyRequests  ShopifyPrivacyRequest[]
   defaultEmailIntegration Integration?             @relation("DefaultEmailIntegration", fields: [defaultEmailIntegrationId], references: [id], onDelete: SetNull)
   members                 OrgMember[]
   operatorContexts        OperatorContext[]
@@ -413,6 +414,33 @@ model IntegrationDisconnect {
   @@index([organizationId, createdAt])
   @@index([status, claimedAt])
   @@map("integration_disconnects")
+}
+
+// Durable intake ledger for Shopify's mandatory customers/data_request topic.
+// The webhook cannot deliver the export in its HTTP response: Shopify requires
+// the app to provide it directly to the store owner within 30 days. Pending
+// rows drive that operator workflow. The authenticated export route marks them
+// exported; completion remains a separate confirmation after direct delivery.
+model ShopifyPrivacyRequest {
+  id                  String    @id @default(uuid()) @db.Uuid
+  organizationId      String    @map("organization_id") @db.Uuid
+  shopDomain          String    @map("shop_domain") @db.VarChar(255)
+  topic               String    @db.VarChar(64)
+  shopifyRequestId    String    @map("shopify_request_id") @db.VarChar(255)
+  shopifyCustomerId   String?   @map("shopify_customer_id") @db.VarChar(255)
+  customerEmail       String?   @map("customer_email") @db.VarChar(320)
+  orderIds            String[]  @default([]) @map("order_ids")
+  status              String    @default("pending") @db.VarChar(32)
+  receivedAt          DateTime  @default(now()) @map("received_at") @db.Timestamptz
+  exportedAt          DateTime? @map("exported_at") @db.Timestamptz
+  completedAt         DateTime? @map("completed_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([shopDomain, topic, shopifyRequestId])
+  @@index([organizationId, status, receivedAt])
+  @@index([status, receivedAt])
+  @@map("shopify_privacy_requests")
 }
 
 model Customer {
