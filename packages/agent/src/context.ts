@@ -233,25 +233,6 @@ export async function buildContext(
   const isGuest = isStorefront && verifiedOrders.length === 0;
   const isVerified = isStorefront && verifiedOrders.length > 0;
 
-  // Cross-ticket memory: the customer's most recent resolved tickets. Skipped in
-  // operator channels, where the thread's "customer" is the operator/concierge
-  // session, not a real customer with support history.
-  const pastTicketsPromise = isOperator
-    ? Promise.resolve<{ aiSummary: string | null; tag: string | null }[]>([])
-    : db.thread.findMany({
-        where: {
-          organizationId: orgId,
-          customerId: thread.customerId,
-          status: "closed",
-          deletedAt: null,
-          id: { not: thread.id },
-          aiSummary: { not: null },
-        },
-        orderBy: { lastMessageAt: "desc" },
-        take: 3,
-        select: { aiSummary: true, tag: true },
-      });
-
   let recentOrders: ShopifyOrderSummary[] = [];
   if (shopifyCustomerId && shopifyIntegration?.accessToken) {
     const ctx: ShopifyContext = { shop: shopifyIntegration.externalAccountId, accessToken: shopifyIntegration.accessToken };
@@ -316,7 +297,7 @@ export async function buildContext(
     }
   }
 
-  const [openThreadCount, loadedPastTickets] = await Promise.all([openThreadCountPromise, pastTicketsPromise]);
+  const openThreadCount = await openThreadCountPromise;
 
   const threadTag = thread.tag?.toLowerCase();
   const matchingKbArticles = threadTag
@@ -354,15 +335,6 @@ export async function buildContext(
   const recentMessages = thread.channelType === "ig_dm"
     ? await hydrateAgentMessageImages(orgId, contextMessages)
     : contextMessages.map(({ senderType, contentText }) => ({ senderType, contentText }));
-  const pastTickets = contextBudgetMode === "enforce"
-    ? loadedPastTickets.map((ticket) => ({
-        ...ticket,
-        aiSummary: ticket.aiSummary
-          ? truncateContextText(ticket.aiSummary, CONTEXT_BUDGETS.pastTicketSummaryChars)
-          : null,
-      }))
-    : loadedPastTickets;
-
   if (contextBudgetMode !== "off") {
     logger.info({
       orgId,
@@ -419,7 +391,6 @@ export async function buildContext(
       platformId: thread.customer.platformId,
     },
     openThreadCount,
-    pastTickets,
     recentOrders,
     linkedShopifyCustomerName: isOperator ? shopifyCustomerName : null,
     kbArticles: kbArticles.map(a => ({ title: a.title, body: a.body })),

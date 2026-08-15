@@ -5,7 +5,6 @@ export const CONTEXT_BUDGETS = {
   recentMessageChars: 24_000,
   perMessageChars: 6_000,
   priorSummaryChars: 1_000,
-  pastTicketSummaryChars: 1_000,
   kbArticleCount: 3,
   kbTitleChars: 200,
   kbArticleBodyChars: 6_000,

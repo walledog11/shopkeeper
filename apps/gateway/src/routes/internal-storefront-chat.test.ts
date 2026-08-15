@@ -10,6 +10,7 @@ import {
   createTestThread,
 } from '@shopkeeper/db/test-helpers';
 import { buildContext, type ThreadSink } from '@shopkeeper/agent/build-context';
+import { buildSystemPrompt } from '@shopkeeper/agent/prompt';
 import { CHANNEL } from '../constants.js';
 import { registerInternalStorefrontChatRoutes } from './internal-storefront-chat.js';
 import internalStorefrontChatRouter from './internal-storefront-chat.js';
@@ -586,8 +587,17 @@ describe('POST /internal/storefront-chat/message', () => {
       // generate-thread-plan.ts uses thread.aiSummary verbatim as the planning
       // instruction when no explicit one is passed. A fresh episode has none, so
       // "Hi" can no longer be planned as if the shopper had re-opened the refund.
-      // P2 removes that fallback outright.
+      // Item A removes that fallback outright.
       expect(ctx.thread.aiSummary).toBeNull();
+
+      // Nothing else the closed episode owns reaches the model either. Rollover
+      // leaves aiSummary on the closed thread, and buildContext used to reload it
+      // through a "three most recent closed threads" query; the storefront prompt
+      // happened to drop that section, so it never rendered here, but the query
+      // ran on every turn and did reach the email and Instagram prompts. The
+      // context field is gone entirely now, which the type system enforces —
+      // this asserts the shopper-visible half of it.
+      expect(buildSystemPrompt(ctx)).not.toContain(REFUND_SUMMARY);
     });
 
     it('expires the old episode\'s cached plan instead of carrying it forward', async () => {

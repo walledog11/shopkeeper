@@ -16,7 +16,6 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
     customer: { id: 'customer_test', name: 'Jane Test', platformId: 'jane@test.com' },
     recentMessages: [{ senderType: 'customer', contentText: 'What is the status of my order?' }],
     openThreadCount: 1,
-    pastTickets: [],
     shopify: { shop: 'test-store.myshopify.com', accessToken: 'shpat_test' },
     recentOrders: [],
     linkedShopifyCustomerName: null,
@@ -41,39 +40,14 @@ describe('buildSystemPrompt', () => {
     expect(prompt).not.toContain('## What you know about this customer');
   });
 
-  it('injects the customer\'s recent resolved tickets as cross-ticket memory', () => {
-    const prompt = buildSystemPrompt(makeCtx({
-      pastTickets: [
-        { aiSummary: 'Refunded a damaged mug.', tag: 'Returns' },
-        { aiSummary: 'Asked about international shipping.', tag: 'Shipping' },
-      ],
-    }));
-
-    expect(prompt).toContain('## Past tickets from this customer');
-    expect(prompt).toContain('[Returns] Refunded a damaged mug.');
-    expect(prompt).toContain('[Shipping] Asked about international shipping.');
-  });
-
-  it('omits the past-tickets section when there are none', () => {
-    const prompt = buildSystemPrompt(makeCtx({ pastTickets: [] }));
-
-    expect(prompt).not.toContain('## Past tickets from this customer');
-  });
-
-  it('does not surface past tickets in operator mode', () => {
-    const prompt = buildSystemPrompt(makeCtx({
-      pastTickets: [{ aiSummary: 'Refunded a damaged mug.', tag: 'Returns' }],
-      thread: {
-        id: 'thread_test',
-        status: 'open',
-        channelType: 'dashboard_agent',
-        tag: 'Support',
-        aiSummary: null,
-        shopifyCustomerId: null,
-      },
-    }));
-
-    expect(prompt).not.toContain('## Past tickets from this customer');
+  // Prior episodes reach the agent through nothing at all. The dump they used to
+  // arrive in selected by recency rather than relevance, so a conversation the
+  // customer had moved on from kept turning up as "background for continuity" —
+  // including the episode a rollover had just closed. Selection, not prompt
+  // wording, is the correctness mechanism; the greeting case is pinned end to end
+  // in the gateway's conversation-episode suite.
+  it('never carries a past-tickets section', () => {
+    expect(buildSystemPrompt(makeCtx())).not.toContain('Past tickets');
   });
 
   it('tells operator mode to answer unfulfilled order status questions without tracking lookups', () => {
@@ -200,13 +174,8 @@ describe('buildComposerAskPrompt', () => {
     expect(prompt).not.toContain('## What you know about this customer');
   });
 
-  it('injects past tickets as cross-ticket memory', () => {
-    const prompt = buildComposerAskPrompt(makeCtx({
-      pastTickets: [{ aiSummary: 'Refunded a damaged mug.', tag: 'Returns' }],
-    }));
-
-    expect(prompt).toContain('## Past tickets from this customer');
-    expect(prompt).toContain('[Returns] Refunded a damaged mug.');
+  it('never carries a past-tickets section', () => {
+    expect(buildComposerAskPrompt(makeCtx())).not.toContain('Past tickets');
   });
 });
 

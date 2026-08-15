@@ -28,7 +28,6 @@ export interface ThreadSetup {
   messages: FixtureMessage[];
   kbArticles?: FixtureKbArticle[];
   recentOrders?: ShopifyOrderSummary[];
-  pastTickets?: { aiSummary: string | null; tag: string | null }[];
   linkedShopifyCustomerName?: string | null;
   shopify?: { shop: string; accessToken: string } | null;
   shopifyCustomerId?: string | null;

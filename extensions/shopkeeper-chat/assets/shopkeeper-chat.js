@@ -4,121 +4,621 @@
   root.dataset.mounted = "1";
 
   var proxy = root.dataset.proxy;
-  var accent = root.dataset.accent || "#1f1b16";
   var side = root.dataset.position === "left" ? "left" : "right";
   var greeting = root.dataset.greeting || "";
   var launcherLabel = root.dataset.launcherLabel || "Chat with us";
+  var panelTitle = root.dataset.panelTitle || launcherLabel;
+  var statusLine = root.dataset.statusLine || "";
+  var logoUrl = root.dataset.logoUrl || "";
+  var accent = root.dataset.accent || "#1a1a1a";
 
-  // Inline, because a theme rule like `div:empty { display: none }` out-specifies
-  // anything we can write in :host. Belt and braces with the light-DOM child in
-  // chat.liquid: that stops :empty matching, this survives any other theme rule
-  // that targets the host by id or class.
+  var colorBlack = "#1a1a1a";
+  var colorWhite = "#ffffff";
+  var colorTan = "#d4b896";
+  var colorTanBg = "#f5ebe0";
+  var colorTanShadow = "#c4a574";
+  var colorTanDot = "#d9cfc0";
+  var colorMuted = "#6b5d4f";
+  var colorAccent = accent;
+
+  var brutalBorder = "2px solid " + colorBlack;
+  var brutalShadow = "-2px 2px 0 " + colorTanShadow;
+  var brutalShadowSm = "-2px 2px 0 " + colorTanShadow;
+  var brutalShadowFocus = "-3px 3px 0 " + colorTanShadow;
+  var panelRadius = side === "right" ? "18px 18px 0 18px" : "18px 18px 18px 0";
+  var launcherRadius = side === "right" ? "22px 22px 0 22px" : "22px 22px 22px 0";
+  var sideInset = side + ": max(20px, env(safe-area-inset-" + side + "));";
+
+  function parsePrompts(raw) {
+    if (!raw) return [];
+    return raw.split(/\r?\n/).map(function (line) {
+      return line.trim();
+    }).filter(Boolean).slice(0, 6);
+  }
+
+  var quickPrompts = parsePrompts(root.dataset.prompts || "");
+
   root.style.display = "block";
 
   var shadow = root.attachShadow({ mode: "open" });
   shadow.innerHTML = [
     "<style>",
-    ":host { all: initial; display: block; }",
+    ":host { all: initial; display: block; overflow: hidden; }",
     "*, *::before, *::after { box-sizing: border-box; }",
     ".launcher {",
-    "  position: fixed; bottom: 20px; " + side + ": 20px; z-index: 2147483000;",
-    "  display: flex; align-items: center; gap: 8px;",
-    "  padding: 12px 18px; border: none; border-radius: 999px; cursor: pointer;",
-    "  background: " + accent + "; color: #fff;",
-    "  font: 500 15px/1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;",
-    "  box-shadow: 0 4px 16px rgba(0,0,0,.18);",
+    "  position: fixed; bottom: max(20px, env(safe-area-inset-bottom)); " + sideInset + " z-index: 2147483000;",
+    "  display: flex; align-items: center; gap: 10px;",
+    "  padding: 12px 20px; cursor: pointer;",
+    "  border: " + brutalBorder + "; border-radius: " + launcherRadius + ";",
+    "  background: " + colorAccent + "; color: " + colorWhite + ";",
+    "  font: 600 15px/1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;",
+    "  box-shadow: " + brutalShadow + ";",
     "}",
+    ".launcher[data-open='1'] { box-shadow: none; }",
+    ".launcher-badge {",
+    "  position: absolute; top: -6px; " + (side === "right" ? "right" : "left") + ": -4px;",
+    "  min-width: 18px; height: 18px; padding: 0 5px;",
+    "  border: " + brutalBorder + "; border-radius: 999px;",
+    "  background: #c44; color: " + colorWhite + ";",
+    "  font: 700 11px/14px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;",
+    "  text-align: center;",
+    "  display: none;",
+    "}",
+    ".launcher-badge[data-visible='1'] { display: block; }",
+    ".launcher-icon {",
+    "  display: flex; align-items: center; justify-content: center;",
+    "  width: 28px; height: 28px; flex-shrink: 0;",
+    "  border: 2px solid " + colorBlack + "; border-radius: 50%;",
+    "  background: " + colorTan + "; box-shadow: " + brutalShadowSm + ";",
+    "}",
+    ".launcher[data-open='1'] .launcher-icon { box-shadow: none; }",
+    ".launcher-icon svg { display: block; width: 22px; height: 22px; }",
+    ".launcher[data-open='1'] { padding: 12px; gap: 0; }",
+    ".launcher[data-open='1'] .launcher-label { display: none; }",
     ".panel {",
-    "  position: fixed; bottom: 84px; " + side + ": 20px; z-index: 2147483000;",
+    "  position: fixed; bottom: 84px; " + sideInset + " z-index: 2147483000;",
     "  width: min(380px, calc(100vw - 40px)); height: min(520px, calc(100vh - 120px));",
-    "  display: none; flex-direction: column; overflow: hidden;",
-    "  background: #fff; border-radius: 14px; box-shadow: 0 8px 40px rgba(0,0,0,.22);",
+    "  display: none; flex-direction: column; overflow: hidden; min-height: 0; max-width: 100%;",
+    "  background: " + colorWhite + "; border: none; border-radius: " + panelRadius + ";",
+    "  box-shadow: none;",
     "  font: 400 15px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;",
-    "  color: #1a1a1a;",
+    "  color: " + colorBlack + ";",
     "}",
     ".panel[data-open='1'] { display: flex; }",
     ".header {",
-    "  padding: 14px 16px; background: " + accent + "; color: #fff;",
-    "  display: flex; justify-content: space-between; align-items: center;",
+    "  padding: 14px 16px; background: " + colorAccent + "; color: " + colorWhite + ";",
+    "  display: flex; justify-content: space-between; align-items: center; gap: 12px;",
+    "  border-bottom: " + brutalBorder + "; flex-shrink: 0;",
     "}",
-    ".header h2 { margin: 0; font-size: 15px; font-weight: 600; }",
-    ".close { background: none; border: none; color: #fff; font-size: 20px; cursor: pointer; line-height: 1; padding: 0 4px; }",
-    ".log { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }",
-    ".msg { max-width: 85%; padding: 9px 13px; border-radius: 14px; white-space: pre-wrap; word-wrap: break-word; }",
-    ".msg.them { align-self: flex-start; background: #f0efec; }",
-    ".msg.me { align-self: flex-end; background: " + accent + "; color: #fff; }",
-    ".msg.note { align-self: center; background: none; color: #8a8a8a; font-size: 13px; text-align: center; }",
-    ".composer { display: flex; gap: 8px; padding: 12px; border-top: 1px solid #e8e6e2; }",
-    ".composer input { flex: 1; padding: 10px 12px; border: 1px solid #d8d5d0; border-radius: 999px; font: inherit; min-width: 0; }",
-    ".composer input:focus { outline: 2px solid " + accent + "; outline-offset: 1px; }",
-    ".composer button { border: none; background: " + accent + "; color: #fff; border-radius: 999px; padding: 0 16px; cursor: pointer; font: inherit; }",
+    ".header-brand { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }",
+    ".header-logo {",
+    "  width: 36px; height: 36px; flex-shrink: 0;",
+    "  border: 2px solid " + colorWhite + "; border-radius: 50%; object-fit: cover;",
+    "}",
+    ".header-text { display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; }",
+    ".header h2 { margin: 0; font-size: 15px; font-weight: 700; white-space: nowrap; flex-shrink: 0; }",
+    ".header-status { margin: 0; font-size: 12px; font-weight: 400; opacity: .88; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }",
+    ".header-status::before { content: '\\00b7'; margin-right: 8px; opacity: .75; }",
+    ".header-close {",
+    "  display: none; flex-shrink: 0; align-items: center; justify-content: center;",
+    "  width: 34px; height: 34px; padding: 0; cursor: pointer;",
+    "  border: 2px solid " + colorWhite + "; border-radius: 50%;",
+    "  background: " + colorTan + "; color: " + colorBlack + ";",
+    "}",
+    ".header-close svg { display: block; width: 16px; height: 16px; }",
+    ".header-close:focus-visible { outline: 2px solid " + colorWhite + "; outline-offset: 2px; }",
+    ".log { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 14px;",
+    "  background-color: " + colorTanBg + ";",
+    "  background-image: radial-gradient(circle, " + colorTanDot + " 1px, transparent 1px);",
+    "  background-size: 14px 14px; -webkit-overflow-scrolling: touch; }",
+    ".msg { display: flex; align-items: flex-end; gap: 8px; max-width: 92%; }",
+    ".msg.them { align-self: flex-start; }",
+    ".msg.me { align-self: flex-end; }",
+    ".msg .bubble-wrap { display: flex; flex-direction: column; gap: 4px; min-width: 0; }",
+    ".msg.me .bubble-wrap { align-items: flex-end; }",
+    ".msg .bubble {",
+    "  padding: 10px 14px; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere;",
+    "  border: " + brutalBorder + "; font-size: 15px; line-height: 1.4;",
+    "  box-shadow: " + brutalShadow + ";",
+    "}",
+    ".msg.them .bubble { background: " + colorWhite + "; color: " + colorBlack + "; border-radius: 18px 18px 18px 0; }",
+    ".msg.me .bubble { background: " + colorAccent + "; color: " + colorWhite + "; border-radius: 18px 18px 0 18px; }",
+    ".msg-time { font-size: 11px; color: " + colorMuted + "; line-height: 1; }",
+    ".msg .avatar { flex-shrink: 0; width: 34px; height: 34px; }",
+    ".msg .avatar svg { display: block; width: 34px; height: 34px; }",
+    ".msg.note { align-self: center; background: none; color: " + colorMuted + "; font-size: 13px; text-align: center; max-width: 100%; }",
+    ".msg.typing .bubble { display: flex; align-items: center; gap: 4px; min-width: 52px; min-height: 40px; padding: 12px 14px; }",
+    ".typing-dot { width: 7px; height: 7px; border-radius: 50%; background: " + colorMuted + "; animation: typing-bounce 1.2s ease-in-out infinite; }",
+    ".typing-dot:nth-child(2) { animation-delay: .15s; }",
+    ".typing-dot:nth-child(3) { animation-delay: .3s; }",
+    "@keyframes typing-bounce { 0%, 60%, 100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-4px); opacity: 1; } }",
+    ".quick-actions { flex-shrink: 0; padding: 14px 12px 12px; background: " + colorWhite + "; overflow: hidden; }",
+    ".quick-actions[data-hidden='1'] { display: none; }",
+    ".quick-actions-track {",
+    "  display: flex; flex-wrap: nowrap; align-items: center; gap: 8px;",
+    "  overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch;",
+    "  overscroll-behavior-x: contain; scrollbar-width: none;",
+    "}",
+    ".quick-actions-track::-webkit-scrollbar { display: none; }",
+    ".prompt-chip, .verify-open { flex: 0 0 auto; white-space: nowrap; }",
+    ".prompt-chip {",
+    "  border: " + brutalBorder + "; background: " + colorWhite + "; color: " + colorBlack + ";",
+    "  border-radius: 999px; padding: 8px 12px; cursor: pointer;",
+    "  font: inherit; font-size: 13px; font-weight: 600; line-height: 1.2; text-align: left;",
+    "}",
+    ".prompt-chip:hover { background: " + colorTanBg + "; }",
+    ".prompt-chip:focus-visible { outline: 2px solid " + colorTan + "; outline-offset: 2px; }",
+    ".composer { display: flex; align-items: flex-end; gap: 8px; padding: 12px; background: " + colorWhite + "; border-top: " + brutalBorder + "; flex-shrink: 0; min-width: 0; max-width: 100%; }",
+    ".composer textarea {",
+    "  flex: 1; padding: 10px 14px; min-width: 0; width: 100%; min-height: 42px; max-height: 120px; resize: none;",
+    "  font: inherit; font-size: 16px; line-height: 1.35; overflow-y: auto; overflow-x: hidden;",
+    "  border: " + brutalBorder + "; border-radius: 16px;",
+    "  background: " + colorWhite + ";",
+    "}",
+    ".composer textarea:focus { outline: none; border-color: " + colorTan + "; }",
+    ".composer button {",
+    "  border: " + brutalBorder + "; background: " + colorAccent + "; color: " + colorWhite + ";",
+    "  border-radius: 16px; padding: 10px 16px; line-height: 1.2; flex-shrink: 0;",
+    "  cursor: pointer; font: inherit; font-weight: 600;",
+    "}",
     ".composer button:disabled { opacity: .45; cursor: default; }",
-    // A row wrapper so the button sizes to its own text. As a bare flex child of
-    // the panel it stretched the full width, which left an underlined fragment
-    // pinned to one edge above the composer — it read as a stray link rather
-    // than the way into order lookup, the one thing on this surface a shopper
-    // with an order actually wants.
-    ".verify-row { display: flex; padding: 0 12px 10px; }",
     ".verify-open {",
-    "  display: inline-flex; align-items: center; gap: 6px;",
-    "  border: 1px solid #d8d5d0; background: #fff; color: #3a3a3a; cursor: pointer;",
-    "  font: inherit; font-size: 13px; padding: 7px 13px; border-radius: 999px;",
+    "  display: inline-flex; align-items: center; justify-content: center; gap: 8px;",
+    "  border: " + brutalBorder + "; background: " + colorWhite + "; color: " + colorBlack + "; cursor: pointer;",
+    "  font: inherit; font-size: 13px; font-weight: 600; line-height: 1.2;",
+    "  padding: 10px 16px; border-radius: 999px; box-shadow: none;",
     "}",
-    ".verify-open:hover { background: #f6f5f3; }",
-    ".verify-open:focus-visible { outline: 2px solid " + accent + "; outline-offset: 1px; }",
+    ".verify-open:hover { background: " + colorTanBg + "; }",
+    ".verify-open:focus-visible { outline: 2px solid " + colorTan + "; outline-offset: 2px; }",
     ".verify-open:disabled { opacity: .45; cursor: default; }",
     ".card {",
-    "  align-self: stretch; border: 1px solid #e0ddd8; border-radius: 12px; padding: 12px; background: #fbfaf8;",
+    "  align-self: stretch; border: " + brutalBorder + "; border-radius: 18px 18px 18px 0;",
+    "  padding: 12px; background: " + colorWhite + "; box-shadow: " + brutalShadow + ";",
     "  display: flex; flex-direction: column; gap: 8px;",
     "}",
-    ".card h3 { margin: 0; font-size: 14px; font-weight: 600; }",
-    ".card p { margin: 0; font-size: 13px; color: #6b6b6b; }",
-    ".card label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: #6b6b6b; }",
-    ".card input { padding: 8px 10px; border: 1px solid #d8d5d0; border-radius: 8px; font: inherit; font-size: 14px; min-width: 0; }",
-    ".card input:focus { outline: 2px solid " + accent + "; outline-offset: 1px; }",
+    ".card h3 { margin: 0; font-size: 14px; font-weight: 700; }",
+    ".card p { margin: 0; font-size: 13px; color: " + colorMuted + "; }",
+    ".card label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: " + colorMuted + "; font-weight: 600; }",
+    ".card input {",
+    "  padding: 8px 10px; border: " + brutalBorder + "; border-radius: 10px 10px 10px 0;",
+    "  font: inherit; font-size: 14px; min-width: 0; box-shadow: " + brutalShadowSm + ";",
+    "}",
+    ".card input:focus { outline: none; box-shadow: " + brutalShadowFocus + "; }",
     ".card .actions { display: flex; gap: 8px; }",
-    ".card button { border: none; background: " + accent + "; color: #fff; border-radius: 8px; padding: 8px 14px; cursor: pointer; font: inherit; font-size: 14px; }",
-    ".card button.ghost { background: none; color: #6b6b6b; }",
+    ".card button {",
+    "  border: " + brutalBorder + "; background: " + colorAccent + "; color: " + colorWhite + ";",
+    "  border-radius: 12px 12px 0 12px; padding: 8px 14px; cursor: pointer;",
+    "  font: inherit; font-size: 14px; font-weight: 600; box-shadow: " + brutalShadowSm + ";",
+    "}",
+    ".card button.ghost { background: " + colorWhite + "; color: " + colorBlack + "; border-radius: 12px 12px 12px 0; }",
     ".card button:disabled { opacity: .45; cursor: default; }",
-    ".card .err { color: #a33; font-size: 12px; }",
-    "@media (prefers-reduced-motion: no-preference) { .launcher { transition: transform .15s ease; } .launcher:hover { transform: translateY(-1px); } }",
+    ".card .err { color: #a33; font-size: 12px; font-weight: 600; }",
+    "@media (max-width: 480px) {",
+    "  .panel {",
+    "    top: 0; left: 0; right: auto; bottom: auto; width: 100%; max-width: 100%;",
+    "    height: var(--sk-viewport-height, 100dvh); max-height: var(--sk-viewport-height, 100dvh);",
+    "    border-radius: 0; touch-action: manipulation; -webkit-backface-visibility: hidden;",
+    "  }",
+    "  .quick-actions {",
+    "    max-height: 72px; opacity: 1;",
+    "    transition: max-height .22s cubic-bezier(.32,.72,0,1), opacity .18s ease, padding .22s cubic-bezier(.32,.72,0,1);",
+    "  }",
+    "  .panel[data-keyboard='1'] .quick-actions {",
+    "    max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0; pointer-events: none;",
+    "  }",
+    "  .header { padding-top: max(14px, env(safe-area-inset-top)); }",
+    "  .header-close { display: inline-flex; }",
+    "  .launcher[data-open='1'] { display: none; }",
+    "  .composer { padding-bottom: 12px; }",
+    "  .card input { font-size: 16px; }",
+    "}",
+    "@media (prefers-reduced-motion: no-preference) {",
+    "  .launcher, .verify-open, .card button, .composer button { transition: transform .12s ease, box-shadow .12s ease, background .12s ease; }",
+    "  .launcher:not([data-open='1']):hover {",
+    "    transform: translate(1px, -1px); box-shadow: " + brutalShadowFocus + ";",
+    "  }",
+    "  .launcher[data-open='1']:hover { filter: brightness(1.08); }",
+    "  .card button:hover {",
+    "    transform: translate(1px, -1px); box-shadow: " + brutalShadowFocus + ";",
+    "  }",
+    "  .composer button:hover { transform: none; box-shadow: none; filter: brightness(1.08); }",
+    "}",
+    "@media (prefers-reduced-motion: reduce) {",
+    "  .typing-dot { animation: none; opacity: .7; }",
+    "}",
     "</style>",
     "<button class='launcher' part='launcher' aria-haspopup='dialog' aria-expanded='false'>",
-    "  <span aria-hidden='true'>&#128172;</span><span class='launcher-label'></span>",
+    "  <span class='launcher-badge' aria-hidden='true'></span>",
+    "  <span class='launcher-icon' aria-hidden='true'>",
+    "    <svg viewBox='0 0 22 22'><circle cx='11' cy='8' r='4.5' fill='" + colorTan + "' stroke='" + colorBlack + "' stroke-width='1.75'/>",
+    "    <path d='M3 20c0-4.5 3.5-7.5 8-7.5s8 3 8 7.5' fill='" + colorTan + "' stroke='" + colorBlack + "' stroke-width='1.75' stroke-linejoin='round'/>",
+    "    <path d='M8 9 Q11 11.5 14 9' fill='none' stroke='" + colorBlack + "' stroke-width='1.5' stroke-linecap='round'/></svg>",
+    "  </span><span class='launcher-label'></span>",
     "</button>",
-    "<div class='panel' role='dialog' aria-modal='false' aria-label='Chat with us' data-open='0'>",
-    "  <div class='header'><h2>Chat with us</h2><button class='close' aria-label='Close chat'>&times;</button></div>",
+    "<div class='panel' role='dialog' aria-modal='false' data-open='0'>",
+    "  <div class='header'>",
+    "    <div class='header-brand'>",
+    "      <img class='header-logo' alt='' hidden />",
+    "      <div class='header-text'>",
+    "        <h2></h2>",
+    "        <p class='header-status' hidden></p>",
+    "      </div>",
+    "    </div>",
+    "    <button type='button' class='header-close' aria-label='Close chat'>",
+    "      <svg viewBox='0 0 16 16' aria-hidden='true'>",
+    "        <path d='M4 4 L12 12 M12 4 L4 12' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round'/>",
+    "      </svg>",
+    "    </button>",
+    "  </div>",
     "  <div class='log' role='log' aria-live='polite'></div>",
-    "  <div class='verify-row'><button class='verify-open' type='button'>&#128274; Check an order</button></div>",
+    "  <div class='quick-actions'>",
+    "    <div class='quick-actions-track'>",
+    "      <button class='verify-open' type='button'>&#128274; Check an order</button>",
+    "    </div>",
+    "  </div>",
     "  <form class='composer'>",
-    "    <input type='text' name='message' autocomplete='off' placeholder='Type a message&hellip;' aria-label='Message' maxlength='4000' />",
+    "    <textarea name='message' autocomplete='off' placeholder='Type a message&hellip;' aria-label='Message' maxlength='4000' rows='1'></textarea>",
     "    <button type='submit'>Send</button>",
     "  </form>",
     "</div>"
   ].join("");
 
   var launcher = shadow.querySelector(".launcher");
+  var launcherBadge = shadow.querySelector(".launcher-badge");
+  var launcherIcon = shadow.querySelector(".launcher-icon");
+  var launcherLabelEl = shadow.querySelector(".launcher-label");
   var panel = shadow.querySelector(".panel");
+  var headerTitle = shadow.querySelector(".header h2");
+  var headerStatus = shadow.querySelector(".header-status");
+  var headerLogo = shadow.querySelector(".header-logo");
+  var headerClose = shadow.querySelector(".header-close");
   var log = shadow.querySelector(".log");
+  var quickActions = shadow.querySelector(".quick-actions");
+  var quickActionsTrack = shadow.querySelector(".quick-actions-track");
+  var verifyBtn = shadow.querySelector(".verify-open");
   var form = shadow.querySelector(".composer");
-  var input = shadow.querySelector(".composer input");
+  var input = shadow.querySelector(".composer textarea");
   var sendBtn = shadow.querySelector(".composer button");
+  var card = null;
 
-  shadow.querySelector(".launcher-label").textContent = launcherLabel;
+  headerTitle.textContent = panelTitle;
+  panel.setAttribute("aria-label", panelTitle);
+  if (statusLine) {
+    headerStatus.textContent = statusLine;
+    headerStatus.hidden = false;
+  }
+  if (logoUrl) {
+    headerLogo.src = logoUrl;
+    headerLogo.alt = panelTitle;
+    headerLogo.hidden = false;
+  }
+
+  var launcherIconChat = [
+    "<svg viewBox='0 0 22 22'><circle cx='11' cy='8' r='4.5' fill='" + colorTan + "' stroke='" + colorBlack + "' stroke-width='1.75'/>",
+    "<path d='M3 20c0-4.5 3.5-7.5 8-7.5s8 3 8 7.5' fill='" + colorTan + "' stroke='" + colorBlack + "' stroke-width='1.75' stroke-linejoin='round'/>",
+    "<path d='M8 9 Q11 11.5 14 9' fill='none' stroke='" + colorBlack + "' stroke-width='1.5' stroke-linecap='round'/></svg>"
+  ].join("");
+  var launcherIconClose = [
+    "<svg viewBox='0 0 22 22' aria-hidden='true'>",
+    "<path d='M6 6 L16 16 M16 6 L6 16' fill='none' stroke='" + colorBlack + "' stroke-width='2' stroke-linecap='round'/>",
+    "</svg>"
+  ].join("");
+
+  launcherLabelEl.textContent = launcherLabel;
+  launcherIcon.innerHTML = launcherIconChat;
+
+  function setLauncherOpen(isOpen) {
+    launcher.dataset.open = isOpen ? "1" : "0";
+    if (!isOpen) launcherLabelEl.textContent = launcherLabel;
+    launcherIcon.innerHTML = isOpen ? launcherIconClose : launcherIconChat;
+    launcher.setAttribute("aria-label", isOpen ? "Close chat" : launcherLabel);
+    panel.setAttribute("aria-modal", isOpen ? "true" : "false");
+  }
+  setLauncherOpen(false);
 
   var storageKey = "shopkeeper-chat:" + root.dataset.shop;
   var session = null;
   var seen = Object.create(null);
   var poller = null;
+  var unreadCount = 0;
+  var hasSentMessage = false;
+  var typingEl = null;
+  var lastFocusedBeforeOpen = null;
+  var mobileQuery = window.matchMedia("(max-width: 480px)");
+  var viewportRaf = 0;
+  var scrollEndTimer = null;
+  var savedScrollY = 0;
 
-  function append(text, kind) {
+  function isMobileLayout() {
+    return mobileQuery.matches;
+  }
+
+  function clearMobilePanelLayout() {
+    panel.style.top = "";
+    panel.style.left = "";
+    panel.style.right = "";
+    panel.style.bottom = "";
+    panel.style.width = "";
+    panel.style.maxWidth = "";
+    panel.style.height = "";
+    panel.style.transform = "";
+    panel.style.webkitTransform = "";
+    panel.style.removeProperty("--sk-viewport-height");
+    panel.dataset.keyboard = "0";
+    unlockPageScroll();
+  }
+
+  function lockPageScroll() {
+    if (!isMobileLayout() || document.body.dataset.skScrollLocked === "1") return;
+    savedScrollY = window.scrollY;
+    document.body.dataset.skScrollLocked = "1";
+    document.body.style.position = "fixed";
+    document.body.style.top = "-" + savedScrollY + "px";
+    document.body.style.left = "0";
+    document.body.style.right = "0";
+    document.body.style.width = "100%";
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+  }
+
+  function unlockPageScroll() {
+    if (document.body.dataset.skScrollLocked !== "1") return;
+    document.body.dataset.skScrollLocked = "0";
+    document.body.style.position = "";
+    document.body.style.top = "";
+    document.body.style.left = "";
+    document.body.style.right = "";
+    document.body.style.width = "";
+    document.documentElement.style.overflow = "";
+    document.body.style.overflow = "";
+    window.scrollTo(0, savedScrollY);
+  }
+
+  function syncMobilePanelLayout() {
+    if (!isMobileLayout() || panel.dataset.open !== "1") {
+      clearMobilePanelLayout();
+      return;
+    }
+    lockPageScroll();
+    var vv = window.visualViewport;
+    if (!vv) {
+      panel.style.top = "0";
+      panel.style.left = "0";
+      panel.style.right = "auto";
+      panel.style.bottom = "auto";
+      panel.style.width = "100%";
+      panel.style.maxWidth = "100%";
+      panel.style.height = "100dvh";
+      panel.style.transform = "none";
+      panel.style.webkitTransform = "none";
+      panel.style.setProperty("--sk-viewport-height", "100dvh");
+      return;
+    }
+    var top = Math.max(0, vv.offsetTop);
+    var left = Math.max(0, vv.offsetLeft);
+    var width = Math.max(0, vv.width);
+    var height = Math.max(0, vv.height);
+    panel.style.top = "0";
+    panel.style.left = left + "px";
+    panel.style.right = "auto";
+    panel.style.bottom = "auto";
+    panel.style.width = width + "px";
+    panel.style.maxWidth = width + "px";
+    panel.style.height = height + "px";
+    panel.style.transform = "translate3d(0," + top + "px,0)";
+    panel.style.webkitTransform = "translate3d(0," + top + "px,0)";
+    panel.style.setProperty("--sk-viewport-height", height + "px");
+  }
+
+  function scheduleMobileLayout() {
+    if (viewportRaf) return;
+    viewportRaf = requestAnimationFrame(function () {
+      viewportRaf = 0;
+      syncMobilePanelLayout();
+    });
+  }
+
+  function scheduleScrollEnd(smooth) {
+    if (scrollEndTimer) clearTimeout(scrollEndTimer);
+    if (!smooth) {
+      scrollLogToEnd(false);
+      return;
+    }
+    scrollEndTimer = setTimeout(function () {
+      scrollEndTimer = null;
+      scrollLogToEnd(true);
+    }, 320);
+  }
+
+  function setKeyboardOpen(isOpen) {
+    panel.dataset.keyboard = isOpen ? "1" : "0";
+    scheduleMobileLayout();
+    scheduleScrollEnd(isOpen);
+  }
+
+  function bindMobileViewport() {
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", scheduleMobileLayout, { passive: true });
+      window.visualViewport.addEventListener("scroll", scheduleMobileLayout, { passive: true });
+    }
+    window.addEventListener("resize", scheduleMobileLayout, { passive: true });
+    if (typeof mobileQuery.addEventListener === "function") {
+      mobileQuery.addEventListener("change", scheduleMobileLayout);
+    } else if (typeof mobileQuery.addListener === "function") {
+      mobileQuery.addListener(scheduleMobileLayout);
+    }
+  }
+
+  bindMobileViewport();
+
+  function formatTime(iso) {
+    if (!iso) return "";
+    try {
+      return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function resizeComposer() {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 120) + "px";
+  }
+
+  input.addEventListener("input", resizeComposer);
+  input.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      form.requestSubmit();
+    }
+  });
+  input.addEventListener("focus", function () {
+    if (isMobileLayout()) setKeyboardOpen(true);
+    else syncMobilePanelLayout();
+  });
+  input.addEventListener("blur", function () {
+    if (isMobileLayout()) setKeyboardOpen(false);
+    else syncMobilePanelLayout();
+  });
+
+  panel.addEventListener("focusin", function (e) {
+    if (!isMobileLayout()) return;
+    if (e.target === input) return;
+    if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) {
+      setKeyboardOpen(true);
+    }
+  });
+  panel.addEventListener("focusout", function (e) {
+    if (!isMobileLayout()) return;
+    if (panel.contains(e.relatedTarget)) return;
+    setKeyboardOpen(false);
+  });
+
+  function avatarSvg(fill) {
+    return [
+      "<svg viewBox='0 0 34 34' aria-hidden='true'>",
+      "<circle cx='17' cy='12' r='6.5' fill='" + fill + "' stroke='#000' stroke-width='2'/>",
+      "<path d='M5 30c0-7 5.5-11.5 12-11.5s12 4.5 12 11.5' fill='" + fill + "' stroke='#000' stroke-width='2' stroke-linejoin='round'/>",
+      "<path d='M12.5 13.5 Q17 17.5 21.5 13.5' fill='none' stroke='#000' stroke-width='1.75' stroke-linecap='round'/>",
+      "</svg>"
+    ].join("");
+  }
+
+  function append(text, kind, at) {
     var el = document.createElement("div");
     el.className = "msg " + kind;
-    el.textContent = text;
+    if (kind === "me" || kind === "them") {
+      var avatar = document.createElement("div");
+      avatar.className = "avatar";
+      avatar.innerHTML = kind === "me" ? avatarSvg(colorTan) : avatarSvg(colorWhite);
+      var wrap = document.createElement("div");
+      wrap.className = "bubble-wrap";
+      var bubble = document.createElement("div");
+      bubble.className = "bubble";
+      bubble.textContent = text;
+      wrap.appendChild(bubble);
+      var stamp = formatTime(at || new Date().toISOString());
+      if (stamp) {
+        var time = document.createElement("time");
+        time.className = "msg-time";
+        time.dateTime = at || "";
+        time.textContent = stamp;
+        wrap.appendChild(time);
+      }
+      if (kind === "me") {
+        el.appendChild(wrap);
+        el.appendChild(avatar);
+      } else {
+        el.appendChild(avatar);
+        el.appendChild(wrap);
+      }
+    } else {
+      el.textContent = text;
+    }
     log.appendChild(el);
-    log.scrollTop = log.scrollHeight;
+    scrollLogToEnd();
     return el;
   }
+
+  function showTyping() {
+    if (typingEl) return;
+    typingEl = document.createElement("div");
+    typingEl.className = "msg them typing";
+    typingEl.setAttribute("aria-hidden", "true");
+    var avatar = document.createElement("div");
+    avatar.className = "avatar";
+    avatar.innerHTML = avatarSvg(colorWhite);
+    var wrap = document.createElement("div");
+    wrap.className = "bubble-wrap";
+    var bubble = document.createElement("div");
+    bubble.className = "bubble";
+    for (var i = 0; i < 3; i++) {
+      var dot = document.createElement("span");
+      dot.className = "typing-dot";
+      bubble.appendChild(dot);
+    }
+    wrap.appendChild(bubble);
+    typingEl.appendChild(avatar);
+    typingEl.appendChild(wrap);
+    log.appendChild(typingEl);
+    scrollLogToEnd();
+  }
+
+  function hideTyping() {
+    if (typingEl) {
+      typingEl.remove();
+      typingEl = null;
+    }
+  }
+
+  function updateUnreadBadge() {
+    if (unreadCount > 0) {
+      launcherBadge.textContent = unreadCount > 9 ? "9+" : String(unreadCount);
+      launcherBadge.dataset.visible = "1";
+      launcherBadge.setAttribute("aria-label", unreadCount + " unread messages");
+    } else {
+      launcherBadge.dataset.visible = "0";
+      launcherBadge.textContent = "";
+      launcherBadge.removeAttribute("aria-label");
+    }
+  }
+
+  function clearUnread() {
+    unreadCount = 0;
+    updateUnreadBadge();
+  }
+
+  function bumpUnread() {
+    if (panel.dataset.open === "1") return;
+    unreadCount += 1;
+    updateUnreadBadge();
+  }
+
+  function syncQuickActions() {
+    quickActions.dataset.hidden = card ? "1" : "0";
+  }
+
+  function renderPrompts() {
+    quickActionsTrack.querySelectorAll(".prompt-chip").forEach(function (el) {
+      el.remove();
+    });
+    if (quickPrompts.length && !hasSentMessage) {
+      quickPrompts.forEach(function (label) {
+        var chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "prompt-chip";
+        chip.textContent = label;
+        chip.addEventListener("click", function () {
+          input.value = label;
+          resizeComposer();
+          input.focus();
+        });
+        quickActionsTrack.insertBefore(chip, verifyBtn);
+      });
+    }
+  }
+
+  renderPrompts();
 
   function stored() {
     try { return JSON.parse(localStorage.getItem(storageKey) || "null"); } catch (e) { return null; }
@@ -128,12 +628,6 @@
     try { localStorage.setItem(storageKey, JSON.stringify(value)); } catch (e) { /* private mode */ }
   }
 
-  // Text of messages already on screen as optimistic bubbles, waiting for the
-  // server's own copy to come back on a poll. The optimistic bubble carries no
-  // id — the send endpoint answers 202 before the message is persisted, so there
-  // is no id to carry — which means the polled copy looks brand new and the
-  // shopper watches their own message appear twice. Matching on text is enough:
-  // the only thing being reconciled is a message this browser just sent.
   var awaitingEcho = [];
 
   function dropEcho(text) {
@@ -142,16 +636,6 @@
     return i !== -1;
   }
 
-  // Most questions are answered in a few seconds. The ones that are not have
-  // been handed to the merchant and wait on a person, and a shopper sitting in
-  // front of an open chat window has no way to tell that from a broken widget.
-  //
-  // Purely local, and deliberately so. Nothing here is persisted as a message —
-  // a stored agent reply would invalidate the pending plan the merchant is about
-  // to approve — and the widget is never told that a plan parked, because that
-  // is merchant-side state and this is an anonymous surface. Silence past the
-  // deadline is the only signal used, which is also the one that is true when
-  // the reply is merely slow.
   var WAITING_NOTICE_MS = 20000;
   var waitingTimer = null;
   var waitingNoticeShown = false;
@@ -169,6 +653,7 @@
       waitingTimer = null;
       if (waitingNoticeShown) return;
       waitingNoticeShown = true;
+      hideTyping();
       append("Someone from the shop is looking at this — the reply will appear right here.", "note");
     }, WAITING_NOTICE_MS);
   }
@@ -177,20 +662,19 @@
     (messages || []).forEach(function (m) {
       if (seen[m.id]) return;
       seen[m.id] = true;
-      // Already on screen from the optimistic append — adopt the id and move on.
+      if (m.from === "customer") hasSentMessage = true;
       if (m.from === "customer" && dropEcho(m.text)) return;
-      // A reply arrived, so the shopper is no longer waiting on anyone. Reset the
-      // notice too: the next question they ask deserves its own.
       if (m.from !== "customer") {
         clearWaitingNotice();
         waitingNoticeShown = false;
+        hideTyping();
+        if (panel.dataset.open !== "1") bumpUnread();
       }
-      append(m.text, m.from === "customer" ? "me" : "them");
+      append(m.text, m.from === "customer" ? "me" : "them", m.at);
     });
+    renderPrompts();
   }
 
-  // Mints a session and its token without touching the transcript, so it can be
-  // called again mid-conversation to replace an expired token.
   function requestSession() {
     var prior = stored() || {};
     return fetch(proxy + "/bootstrap", {
@@ -203,9 +687,6 @@
         locale: document.documentElement.lang || null
       })
     }).then(function (r) {
-      // Disabled is not an error the shopper should read about: the widget
-      // simply is not there. Either switch — platform or merchant — lands here,
-      // and removing the host takes the shadow root and the poller with it.
       if (r.status === 403) { root.remove(); return null; }
       if (!r.ok) throw new Error("bootstrap " + r.status);
       return r.json();
@@ -228,12 +709,6 @@
     });
   }
 
-  // Session tokens last an hour and the widget only bootstrapped when the panel
-  // was opened, so a chat left open longer than that answered 401 to every send,
-  // poll and verification while telling the shopper to try again in a moment.
-  // Retrying could never work; only a reload could. The resume secret is in
-  // localStorage, so the widget can mint itself a fresh token instead — once per
-  // call, so a genuinely rejected session still surfaces rather than looping.
   function authedFetch(path, init, retried) {
     if (!session || !session.token) return Promise.reject(new Error("no session"));
     var options = Object.assign({}, init);
@@ -243,8 +718,6 @@
     return fetch(proxy + path, options).then(function (r) {
       if (r.status !== 401 || retried) return r;
       return requestSession().then(function (data) {
-        // 403 during the refresh means the widget removed itself; hand back the
-        // original response rather than retrying into a detached shadow root.
         if (!data) return r;
         return authedFetch(path, init, true);
       });
@@ -263,15 +736,42 @@
   function startPolling() {
     if (poller) return;
     poller = setInterval(function () {
-      if (panel.dataset.open === "1" && document.visibilityState === "visible") poll();
+      if (document.visibilityState === "visible") poll();
     }, 8000);
+  }
+
+  function focusablesInPanel() {
+    return Array.prototype.slice.call(
+      panel.querySelectorAll("button, textarea, input, [href], [tabindex]:not([tabindex='-1'])")
+    ).filter(function (el) {
+      return !el.disabled && el.offsetParent !== null;
+    });
+  }
+
+  function trapPanelFocus(e) {
+    if (panel.dataset.open !== "1" || e.key !== "Tab") return;
+    var nodes = focusablesInPanel();
+    if (!nodes.length) return;
+    var first = nodes[0];
+    var last = nodes[nodes.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
   }
 
   var opening = null;
   function open() {
+    lastFocusedBeforeOpen = document.activeElement;
     panel.dataset.open = "1";
     launcher.setAttribute("aria-expanded", "true");
-    input.focus();
+    setLauncherOpen(true);
+    clearUnread();
+    syncMobilePanelLayout();
+    if (!isMobileLayout()) input.focus();
     if (!opening) {
       opening = bootstrap().catch(function () {
         append("We couldn't start the chat just now. Please try again shortly.", "note");
@@ -283,33 +783,35 @@
   function close() {
     panel.dataset.open = "0";
     launcher.setAttribute("aria-expanded", "false");
+    setLauncherOpen(false);
+    clearMobilePanelLayout();
     launcher.focus();
+    if (lastFocusedBeforeOpen && typeof lastFocusedBeforeOpen.focus === "function") {
+      try { lastFocusedBeforeOpen.focus(); } catch (e) { /* stale node */ }
+    }
   }
 
   launcher.addEventListener("click", function () {
     panel.dataset.open === "1" ? close() : open();
   });
-  shadow.querySelector(".close").addEventListener("click", close);
+
+  headerClose.addEventListener("click", close);
 
   panel.addEventListener("keydown", function (e) {
     if (e.key === "Escape") { e.stopPropagation(); close(); }
+    trapPanelFocus(e);
   });
-
-  // Order verification. The whole exchange runs against /verify and never
-  // touches the message pipeline: no Message row, no ticket, no plan, and
-  // nothing here waits on the merchant approving anything. The agent learns the
-  // result only by finding a verified session next time it builds context.
-  var verifyBtn = shadow.querySelector(".verify-open");
-  var card = null;
 
   function closeCard() {
     if (card) { card.remove(); card = null; }
     verifyBtn.disabled = false;
+    syncQuickActions();
   }
 
   function openCard() {
     if (card) { card.querySelector("input").focus(); return; }
     verifyBtn.disabled = true;
+    syncQuickActions();
     card = document.createElement("div");
     card.className = "card";
     log.appendChild(card);
@@ -363,19 +865,17 @@
       onPrimary(function (message) {
         err.textContent = message || "";
         primary.disabled = false;
-        // An error adds a line below the buttons, so the card grows again.
         scrollLogToEnd();
       });
     });
     return primary;
   }
 
-  // Called once the card is fully built. cardShell used to scroll here instead,
-  // which was before the fields and the actions row existed — so the log
-  // scrolled to the bottom of a heading and then grew the submit button off
-  // screen, leaving a form with no visible way to submit it and shifting the
-  // layout under anyone mid-tap.
-  function scrollLogToEnd() {
+  function scrollLogToEnd(smooth) {
+    if (smooth && isMobileLayout() && typeof log.scrollTo === "function") {
+      log.scrollTo({ top: log.scrollHeight, behavior: "smooth" });
+      return;
+    }
     log.scrollTop = log.scrollHeight;
   }
 
@@ -416,9 +916,6 @@
   }
 
   function renderCodeStep(orderName) {
-    // Deliberately says "if" — the reply is identical whether or not the order
-    // exists and whether or not the email matched. Confirming either would tell
-    // someone guessing that they guessed right.
     cardShell(
       "Enter your code",
       "If that's the email on the order, we've sent a 6-digit code to it. It expires in 10 minutes."
@@ -466,15 +963,15 @@
 
   verifyBtn.addEventListener("click", openCard);
 
-  form.addEventListener("submit", function (e) {
-    e.preventDefault();
-    var text = input.value.trim();
+  function sendMessage(text) {
     if (!text || !session || !session.token) return;
 
-    input.value = "";
+    hasSentMessage = true;
+    renderPrompts();
     sendBtn.disabled = true;
     var pending = append(text, "me");
     awaitingEcho.push(text);
+    showTyping();
     armWaitingNotice();
     var clientMessageId = String(Date.now()) + "-" + Math.random().toString(36).slice(2, 10);
 
@@ -483,28 +980,23 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text: text, clientMessageId: clientMessageId })
     }).then(function (r) {
-      // A budget refusal is not a delivery failure, and saying "check your
-      // connection" for one sends the shopper to fix something that is not
-      // broken. The server supplies the wording; it knows which limit was hit.
       if (r.status === 429) {
         return r.json().catch(function () { return {}; }).then(function (body) {
-          // Nothing was accepted, so nothing will echo back. Releasing the entry
-          // stops it from swallowing an identical message the shopper retries.
           dropEcho(text);
           clearWaitingNotice();
-          pending.style.opacity = "0.5";
+          hideTyping();
+          var pendingBubble = pending.querySelector(".bubble");
+          if (pendingBubble) pendingBubble.style.opacity = "0.5";
+          else pending.style.opacity = "0.5";
           append(body.shopperMessage || "Too many messages just now. Try again in a moment.", "note");
         });
       }
       if (!r.ok) throw new Error("send " + r.status);
       return r.json().catch(function () { return {}; }).then(function (body) {
-        // A code typed into the composer rather than the card. The server
-        // handled it as a verification attempt, so it was never persisted and
-        // no echo is coming — release the optimistic bubble's reservation and
-        // answer inline instead of waiting on a poll that will never match.
         if (body.verification) {
           dropEcho(text);
           clearWaitingNotice();
+          hideTyping();
           append(verificationNote(body.verification, "that order"), "note");
           return;
         }
@@ -513,11 +1005,23 @@
     }).catch(function () {
       dropEcho(text);
       clearWaitingNotice();
-      pending.style.opacity = "0.5";
+      hideTyping();
+      var pendingBubble = pending.querySelector(".bubble");
+      if (pendingBubble) pendingBubble.style.opacity = "0.5";
+      else pending.style.opacity = "0.5";
       append("Not delivered. Check your connection and try again.", "note");
     }).finally(function () {
       sendBtn.disabled = false;
       input.focus();
     });
+  }
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var text = input.value.trim();
+    if (!text) return;
+    input.value = "";
+    resizeComposer();
+    sendMessage(text);
   });
 })();

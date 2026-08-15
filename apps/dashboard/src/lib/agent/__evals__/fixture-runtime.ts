@@ -91,14 +91,6 @@ function buildContext(
       ? budgetRecentMessages(recentMessages).messages
       : recentMessages,
     openThreadCount: setup.openThreadCount ?? 1,
-    pastTickets: contextBudgetMode === "enforce"
-      ? (setup.pastTickets ?? []).map(ticket => ({
-          ...ticket,
-          aiSummary: ticket.aiSummary
-            ? truncateContextText(ticket.aiSummary, CONTEXT_BUDGETS.pastTicketSummaryChars)
-            : null,
-        }))
-      : setup.pastTickets ?? [],
     shopify: setup.shopify ?? null,
     recentOrders: setup.recentOrders ?? [],
     linkedShopifyCustomerName: setup.linkedShopifyCustomerName ?? null,

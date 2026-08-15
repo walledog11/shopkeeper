@@ -56,7 +56,6 @@ describe("planning warnings", () => {
       customer: { id: "customer_test", name: null, platformId: "shopify_chat:session_test" },
       recentMessages: [{ senderType: "customer", contentText: "Do you ship to Canada?" }],
       openThreadCount: 1,
-      pastTickets: [],
       shopify: { shop: "test-store.myshopify.com", accessToken: "shpat_test" },
       recentOrders: [],
       linkedShopifyCustomerName: null,

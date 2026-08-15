@@ -119,7 +119,6 @@ async function main() {
           platformId: `operator-${marker}@example.com`,
         },
         openThreadCount: 2,
-        pastTickets: [],
         recentOrders: [],
         linkedShopifyCustomerName: null,
         kbArticles: [],

@@ -2,12 +2,15 @@
   "shopkeeper_chat": {
     "launcher_label": "Chat with us",
     "panel_title": "Chat with us",
+    "status_line": "Typically replies in a few minutes",
     "close": "Close chat",
     "message_label": "Message",
     "message_placeholder": "Type a message…",
     "send": "Send",
     "greeting": "Hi! Ask us anything about our products or policies.",
     "error_start": "We couldn't start the chat just now. Please try again shortly.",
-    "error_send": "Not delivered. Check your connection and try again."
+    "error_send": "Not delivered. Check your connection and try again.",
+    "waiting_notice": "Someone from the shop is looking at this — the reply will appear right here.",
+    "verify_order": "Check an order"
   }
 }

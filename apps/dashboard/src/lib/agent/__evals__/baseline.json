@@ -287,16 +287,6 @@
       "passes": 3,
       "passRate": 1
     },
-    "memory-past-ticket-continuity": {
-      "repeats": 3,
-      "passes": 3,
-      "passRate": 1
-    },
-    "memory-past-tickets-no-derail": {
-      "repeats": 3,
-      "passes": 3,
-      "passRate": 1
-    },
     "multi-step-address-change-and-reply": {
       "repeats": 3,
       "passes": 3,

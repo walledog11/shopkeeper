@@ -13,12 +13,31 @@
   sets an inline display, because `div:empty` out-specifies `:host`.
 {% endcomment %}
 
+{% liquid
+  assign panel_title = block.settings.panel_title | strip
+  if panel_title == blank or panel_title == 'Use shop name'
+    assign panel_title = shop.name
+  endif
+
+  assign logo_url = block.settings.logo | image_url: width: 64
+  if block.settings.logo == blank and shop.brand.logo
+    assign logo_url = shop.brand.logo | image_url: width: 64
+  endif
+  if block.settings.logo == blank and shop.brand.logo == blank
+    assign logo_url = ''
+  endif
+%}
+
 <div
   id="shopkeeper-chat-root"
   data-shop="{{ shop.permanent_domain }}"
   data-proxy="/apps/{{ block.settings.proxy_subpath | default: 'shopkeeper-chat' }}"
   data-greeting="{{ block.settings.greeting | escape }}"
   data-launcher-label="{{ block.settings.launcher_label | escape }}"
+  data-panel-title="{{ panel_title | escape }}"
+  data-status-line="{{ block.settings.status_line | escape }}"
+  data-logo-url="{{ logo_url }}"
+  data-prompts="{{ block.settings.quick_prompts | escape }}"
   data-accent="{{ block.settings.accent_color }}"
   data-position="{{ block.settings.position }}"
   data-page-url="{{ canonical_url }}"
@@ -39,6 +58,32 @@
     },
     {
       "type": "text",
+      "id": "panel_title",
+      "label": "Header title",
+      "info": "Leave as “Use shop name” to show your shop name.",
+      "default": "Use shop name"
+    },
+    {
+      "type": "text",
+      "id": "status_line",
+      "label": "Status line",
+      "default": "Typically replies in a few minutes"
+    },
+    {
+      "type": "image_picker",
+      "id": "logo",
+      "label": "Header logo",
+      "info": "Optional. Falls back to your shop brand logo when set in Shopify admin."
+    },
+    {
+      "type": "textarea",
+      "id": "quick_prompts",
+      "label": "Quick prompts",
+      "info": "One per line. Shown before the shopper sends their first message.",
+      "default": "What's your return policy?\nDo you ship internationally?"
+    },
+    {
+      "type": "text",
       "id": "greeting",
       "label": "Greeting",
       "default": "Hi! Ask us anything about our products or policies."
@@ -47,7 +92,7 @@
       "type": "color",
       "id": "accent_color",
       "label": "Accent color",
-      "default": "#1f1b16"
+      "default": "#1a1a1a"
     },
     {
       "type": "select",
