@@ -5,7 +5,6 @@ import type { AgentPlan, PlanExecutionOutcome, RawToolCall } from "@/types"
 import ActionPlanCard from "./ActionPlanCard"
 
 export function PlanReviewSurface({
-  agentName,
   customerName,
   isExecuting,
   isRegenerating,
@@ -21,7 +20,6 @@ export function PlanReviewSurface({
   question,
   threadId,
 }: {
-  agentName: string
   customerName: string
   isExecuting: boolean
   isRegenerating: boolean
@@ -43,7 +41,6 @@ export function PlanReviewSurface({
         <MerchantAnswerForm
           threadId={threadId}
           question={question}
-          agentName={agentName}
           onAnswered={onAnswered}
         />
       </div>
@@ -54,7 +51,6 @@ export function PlanReviewSurface({
     <ActionPlanCard
       key={pendingPlan.planId ?? `${pendingPlan.instruction}:${pendingPlan.rawToolCalls.map(toolCall => toolCall.id).join(",")}`}
       plan={pendingPlan}
-      agentName={agentName}
       customerName={customerName}
       isExecuting={isExecuting}
       executionOutcome={executionOutcome}

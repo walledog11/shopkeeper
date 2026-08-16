@@ -10,7 +10,6 @@ import type { TicketListView } from "../_components/thread-list/constants"
 import type { OrgSettings, Thread, Ticket } from "@/types"
 
 export function useVisibleTicketList(input: {
-  agentName: string
   effectiveActiveView: TicketListView
   hasShopify: boolean
   isSearchMode: boolean
@@ -21,7 +20,6 @@ export function useVisibleTicketList(input: {
   liveTickets: Ticket[]
 } {
   const {
-    agentName,
     effectiveActiveView,
     hasShopify,
     isSearchMode,
@@ -30,8 +28,8 @@ export function useVisibleTicketList(input: {
   } = input
 
   const liveTickets: Ticket[] = useMemo(
-    () => listThreads.map(t => threadToTicket(t, agentName)),
-    [listThreads, agentName],
+    () => listThreads.map(t => threadToTicket(t)),
+    [listThreads],
   )
 
   const filteredTickets = useMemo(() => {

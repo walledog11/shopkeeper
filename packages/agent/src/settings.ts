@@ -39,11 +39,14 @@ export const AUTONOMY_OVERRIDE_PATHS = [
 
 export type AutonomyOverridePath = typeof AUTONOMY_OVERRIDE_PATHS[number];
 
+/** Fixed product name for the support agent — not merchant-configurable. */
+export const AGENT_DISPLAY_NAME = "Shopkeeper";
+
 export const AGENT_SETTINGS_DEFAULTS: OrgSettings = {
   aiContext: "",
   brandVoice: "",
   sampleReplies: [],
-  agentName: "Shopkeeper",
+  agentName: AGENT_DISPLAY_NAME,
   autoPlanOnOpen: true,
   defaultInstruction: "",
   toolsEnabled: {
@@ -138,6 +141,7 @@ export function resolveAgentSettings(settings: unknown): OrgSettings {
       ...(tierDefaults.toolsEnabled ?? {}),
       ...(base.toolsEnabled ?? {}),
     },
+    agentName: AGENT_DISPLAY_NAME,
   };
 }
 

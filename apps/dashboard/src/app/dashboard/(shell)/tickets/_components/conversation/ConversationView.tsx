@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useRef, useState, type ComponentProps, type CSSProperties, type RefObject } from "react"
+import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { useFillerPhrase } from "@/hooks/useFillerPhrase"
 import { useIsMobile } from "@/hooks/useMobile"
 import { requestShopifyLinkFocus } from "@/lib/messaging/shopify-link-focus"
@@ -21,7 +22,6 @@ import type { Ticket, AgentTurn, AgentPlan, FailedMessage, OrgSettings, PlanExec
 interface Props {
   ticket: Ticket
   activeTab: 'open' | 'closed'
-  agentName: string
   hasShopify?: boolean
   orgSettings?: Partial<OrgSettings> | null
   threadContext?: Pick<Thread, "cachedPlan" | "cachedPlanMessageId"> | null
@@ -62,7 +62,6 @@ type ConversationComposerAreaProps = ComponentProps<typeof ConversationComposerA
 export default function ConversationView({
   ticket,
   activeTab,
-  agentName,
   hasShopify = false,
   orgSettings = null,
   threadContext = null,
@@ -144,7 +143,6 @@ export default function ConversationView({
     ticket,
     viewTab,
     replyText,
-    agentName,
     initialPlan,
     onReplyChange,
     onSend,
@@ -267,7 +265,6 @@ export default function ConversationView({
       )}
 
       <ConversationTimelinePanel
-        agentName={agentName}
         agentTurns={agentTurns}
         failedMessages={failedMessages}
         messages={displayMessages}
@@ -293,7 +290,6 @@ export default function ConversationView({
         onAnswered={handleMerchantAnswered}
         agent={{
           agentInstruction,
-          agentName,
           isAgentMode,
           isPlanExecuting,
           isPlanLoading,
@@ -342,7 +338,6 @@ interface ConversationOpenComposerProps {
   onAnswered: (result?: { saveToKb: boolean }) => void
   agent: {
     agentInstruction: string
-    agentName: string
     isAgentMode: boolean
     isPlanExecuting: boolean
     isPlanLoading: boolean
@@ -406,14 +401,13 @@ function ConversationOpenComposer({
       planCardRef={planCardRef}
       threadId={threadId}
       onAnswered={onAnswered}
-      agentName={agent.agentName}
       agentInstruction={agent.agentInstruction}
       isAgentMode={agent.isAgentMode}
       isPlanExecuting={agent.isPlanExecuting}
       isRegenerating={agent.isRegenerating}
       noteCount={noteCount}
       onChange={text => handlers.onReplyChange(
-        agent.isAgentMode ? `@${agent.agentName.toLowerCase()} ` + text : text,
+        agent.isAgentMode ? `@${AGENT_DISPLAY_NAME.toLowerCase()} ` + text : text,
       )}
       onClearAgentMode={() => handlers.onReplyChange('')}
       onPlanApprove={handlers.handlePlanApprove}
@@ -444,7 +438,6 @@ function ConversationOpenComposer({
 }
 
 interface ConversationTimelinePanelProps {
-  agentName: string
   agentTurns: AgentTurn[]
   failedMessages: FailedMessage[]
   messages: ConversationDisplayMessages
@@ -465,7 +458,6 @@ interface ConversationTimelinePanelProps {
 }
 
 function ConversationTimelinePanel({
-  agentName,
   agentTurns,
   failedMessages,
   messages,
@@ -492,7 +484,6 @@ function ConversationTimelinePanel({
         <TimelineSkeleton />
       ) : status.viewTab === 'notes' ? (
         <NotesTimeline
-          agentName={agentName}
           agentTurns={agentTurns}
           isAgentRunning={status.isAgentRunning}
           isPlanLoading={status.isPlanLoading}

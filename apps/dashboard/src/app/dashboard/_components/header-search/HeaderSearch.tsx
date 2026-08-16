@@ -7,6 +7,7 @@ import { AnimatePresence, LazyMotion, domAnimation, m } from "motion/react"
 import AgentChatClient from "@/components/agent/AgentChatClient"
 import { cn } from "@/lib/ui/cn"
 import { matchConciergeNavigationIntent } from "@/lib/agent/concierge-navigation"
+import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { useAgentPanel } from "../agent-panel/AgentPanelContext"
 import {
   desktopTopBarUtilityPillClass,
@@ -22,11 +23,10 @@ const headerSearchExpandedShellClass = cn(
 )
 
 interface HeaderSearchProps {
-  agentName: string
   variant?: "topBar" | "mobile"
 }
 
-export function HeaderSearch({ agentName, variant = "topBar" }: HeaderSearchProps) {
+export function HeaderSearch({ variant = "topBar" }: HeaderSearchProps) {
   const {
     isExpanded,
     openContext,
@@ -92,7 +92,7 @@ export function HeaderSearch({ agentName, variant = "topBar" }: HeaderSearchProp
                 className="fixed inset-0 z-50 flex flex-col bg-sidebar md:hidden"
               >
                 <div className="flex shrink-0 items-center justify-between border-b border-border/60 px-4 h-14">
-                  <span className="text-sm font-semibold text-sidebar-foreground">{agentName}</span>
+                  <span className="text-sm font-semibold text-sidebar-foreground">{AGENT_DISPLAY_NAME}</span>
                   <button
                     type="button"
                     onClick={close}
@@ -104,7 +104,6 @@ export function HeaderSearch({ agentName, variant = "topBar" }: HeaderSearchProp
                 </div>
                 <div className="min-h-0 flex-1">
                   <AgentChatClient
-                    agentName={agentName}
                     compact
                     embedded
                     headerSearchMode
@@ -142,9 +141,9 @@ export function HeaderSearch({ agentName, variant = "topBar" }: HeaderSearchProp
           data-dashboard-header-search
           className={cn(
             isExpanded ? headerSearchExpandedShellClass : desktopTopBarUtilityPillClass,
-            "z-50 flex flex-col overflow-hidden",
+            "z-50 overflow-hidden",
             isExpanded
-              ? "absolute inset-x-0 top-0 h-[420px] max-h-[75vh]"
+              ? "absolute inset-x-0 top-0 flex flex-col items-stretch h-[420px] max-h-[75vh]"
               : "relative w-full h-12",
           )}
         >
@@ -153,7 +152,7 @@ export function HeaderSearch({ agentName, variant = "topBar" }: HeaderSearchProp
               <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-4 h-12">
                 <Search className="size-4 shrink-0 text-sidebar-foreground/50" />
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold text-sidebar-foreground">
-                  {agentName}
+                  {AGENT_DISPLAY_NAME}
                 </span>
                 <button
                   type="button"
@@ -167,7 +166,6 @@ export function HeaderSearch({ agentName, variant = "topBar" }: HeaderSearchProp
 
               <div className="flex min-h-0 flex-1 flex-col">
                 <AgentChatClient
-                  agentName={agentName}
                   compact
                   embedded
                   headerSearchMode
@@ -177,7 +175,7 @@ export function HeaderSearch({ agentName, variant = "topBar" }: HeaderSearchProp
               </div>
             </>
           ) : (
-            <div className="flex h-12 items-center gap-2 px-4">
+            <div className="flex h-12 w-full min-w-0 items-center gap-2 px-4">
               <Search className="size-4 shrink-0 text-sidebar-foreground/50" />
               <input
                 ref={searchInputRef}
@@ -185,9 +183,9 @@ export function HeaderSearch({ agentName, variant = "topBar" }: HeaderSearchProp
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleCollapsedKeyDown}
-                placeholder={`Search or ask ${agentName}…`}
+                placeholder={`Search or ask ${AGENT_DISPLAY_NAME}…`}
                 aria-label="Search or ask"
-                className="min-w-0 flex-1 bg-transparent text-sm text-sidebar-foreground placeholder:text-sidebar-foreground/45 outline-none"
+                className="min-w-0 flex-1 border-0 bg-transparent py-0 text-sm leading-5 text-sidebar-foreground placeholder:text-sidebar-foreground/45 outline-none"
               />
               <kbd className="hidden xl:inline-flex shrink-0 items-center rounded border border-border/80 bg-muted/50 px-1.5 py-0.5 text-[10px] font-medium text-sidebar-foreground/45">
                 ⌘K

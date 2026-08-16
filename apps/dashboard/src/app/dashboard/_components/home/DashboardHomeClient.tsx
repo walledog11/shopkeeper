@@ -15,7 +15,6 @@ import { SAMPLE_NEEDS_YOU_ITEMS } from "./sample-needs-you-items"
 
 interface Props {
   userName: string
-  agentName: string
   greeting: string
   initialHomeSummary: HomeSummary
   initialChannelState: HomeChannelState
@@ -26,7 +25,6 @@ interface Props {
 
 export default function DashboardHomeClient({
   userName,
-  agentName,
   greeting,
   initialHomeSummary,
   initialChannelState,
@@ -34,7 +32,7 @@ export default function DashboardHomeClient({
   workflowBannerExpanded,
   instagramAvailable,
 }: Props) {
-  const data = useHomeData(initialHomeSummary, agentName, initialChannelState)
+  const data = useHomeData(initialHomeSummary, initialChannelState)
   const needsYouItems = useMemo(() => {
     if (data.needsYouItems.length > 0) return data.needsYouItems
     if (process.env.NODE_ENV === "development") return SAMPLE_NEEDS_YOU_ITEMS
@@ -70,7 +68,6 @@ export default function DashboardHomeClient({
             <ConciergeBriefing
               greeting={greeting}
               userName={userName}
-              agentName={data.agentName}
               walkthroughItems={data.walkthroughItems}
               walkthroughCount={data.walkthroughCount}
               needsYouCount={needsYouItems.length}
@@ -83,12 +80,10 @@ export default function DashboardHomeClient({
 
             <NeedsYou
               items={needsYouItems}
-              agentName={data.agentName}
               onApproved={data.refreshHomeSummary}
             />
 
             <ClearedOvernight
-              agentName={data.agentName}
               totalCount={data.overnightClearedCount}
               topics={data.clearedTopics}
             />

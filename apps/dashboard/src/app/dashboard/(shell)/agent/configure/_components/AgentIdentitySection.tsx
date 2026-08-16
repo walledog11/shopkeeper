@@ -13,19 +13,11 @@ export function AgentIdentitySection({ controller }: { controller: AgentTabContr
       <div className="space-y-5">
         <LabeledTextInput
           label="Business name"
-          hint={`shown in support emails and the replies ${settingsState.agentName} writes`}
+          hint="shown in support emails and the replies Shopkeeper writes"
           aria-label="Business name"
           value={businessName}
           onChange={e => setBusinessName(e.target.value)}
           placeholder="My Store"
-        />
-        <LabeledTextInput
-          label="Agent name"
-          hint="shown in the notes panel and used as the @mention trigger"
-          aria-label="Agent name"
-          value={settingsState.agentName}
-          onChange={e => dispatch({ type: "set", patch: { agentName: e.target.value } })}
-          placeholder="Shopkeeper"
         />
         <CharacterCountTextarea
           label="About your store"

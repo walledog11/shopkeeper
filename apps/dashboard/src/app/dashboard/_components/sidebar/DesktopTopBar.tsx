@@ -96,12 +96,10 @@ function NavDropdown({
 }
 
 export function DesktopTopBar({
-  agentName,
   openCount,
   onSwitching,
   navAuth,
 }: {
-  agentName: string;
   openCount: number;
   onSwitching: (v: boolean) => void;
   navAuth: NavAuth;
@@ -184,7 +182,7 @@ export function DesktopTopBar({
         </header>
 
         <div className="min-w-0 flex-1">
-          <HeaderSearch agentName={agentName} />
+          <HeaderSearch />
         </div>
 
         <div className="flex shrink-0 items-center gap-3">

@@ -9,15 +9,14 @@ import { STACKED_BELOW_PEEK } from "./needs-you-motion"
 
 interface Props {
   items: HomeNeedsAttentionItem[]
-  agentName: string
   onApproved: () => void
 }
 
-export function NeedsYouDeck({ items, agentName, onApproved }: Props) {
+export function NeedsYouDeck({ items, onApproved }: Props) {
   const [dismissed, setDismissed] = useState<Set<string>>(() => new Set())
   const [currentId, setCurrentId] = useState<string | null>(null)
   const deck = items.filter(item => !dismissed.has(item.threadId))
-  const empty = useMemo(() => <NeedsYouAllClear agentName={agentName} />, [agentName])
+  const empty = useMemo(() => <NeedsYouAllClear />, [])
 
   const dismiss = (
     threadId: string,
@@ -52,7 +51,6 @@ export function NeedsYouDeck({ items, agentName, onApproved }: Props) {
         renderCard={(item, context) => (
           <NeedsYouCard
             item={item}
-            agentName={agentName}
             onSent={() => dismiss(item.threadId, context.activeIndex, context.flyOff)}
             onAnswered={onApproved}
           />
@@ -60,7 +58,6 @@ export function NeedsYouDeck({ items, agentName, onApproved }: Props) {
         renderPeekCard={(item) => (
           <NeedsYouCard
             item={item}
-            agentName={agentName}
             onSent={() => undefined}
             onAnswered={() => undefined}
           />

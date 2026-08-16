@@ -18,7 +18,6 @@ import { useAgentWalkthrough } from "./useAgentWalkthrough"
 import { messageKey, type AgentChatState } from "./useAgentChatState"
 
 export interface AgentChatClientProps {
-  agentName: string
   compact?: boolean
   embedded?: boolean
   headerSearchMode?: boolean
@@ -28,7 +27,6 @@ export interface AgentChatClientProps {
 }
 
 export function AgentChatView({
-  agentName,
   compact,
   embedded,
   headerSearchMode,
@@ -128,7 +126,7 @@ export function AgentChatView({
       {messages.length === 0 && !compact && !embedded && (
         <div className="max-w-xl mx-auto">
           <div className="bg-card border border-border rounded-xl p-5">
-            <AgentAvatar agentName={agentName} size="lg" className="mb-3" />
+            <AgentAvatar size="lg" className="mb-3" />
             <h2 className="text-base font-semibold text-foreground mb-1">
               {greeting}{firstName ? `, ${firstName}` : ""}.
             </h2>
@@ -191,7 +189,7 @@ export function AgentChatView({
 
           return (
             <div key={messageKey(msg, index)} className="flex items-start gap-3">
-              <AgentAvatar agentName={agentName} size="md" className="mt-0.5" />
+              <AgentAvatar size="md" className="mt-0.5" />
               <div className="flex items-center gap-2 text-sm text-muted-foreground pt-1">
                 <Loader2 className="size-3.5 animate-spin text-green-500" />
                 {fillerPhrase}
@@ -203,7 +201,6 @@ export function AgentChatView({
         return (
           <AgentChatMessage
             key={messageKey(msg, index)}
-            agentName={agentName}
             message={msg}
             isRunning={isRunning}
             hideAvatar={headerSearchMode}
@@ -215,15 +212,14 @@ export function AgentChatView({
 
       {walkthrough && (
         <div className="space-y-6">
-          {walkthroughOpening && <WalkthroughNote agentName={agentName} text={walkthroughOpening} />}
+          {walkthroughOpening && <WalkthroughNote text={walkthroughOpening} />}
           {decisionNotes.map((note, index) => (
-            <WalkthroughNote key={`${index}-${note}`} agentName={agentName} text={note} />
+            <WalkthroughNote key={`${index}-${note}`} text={note} />
           ))}
           {currentWalkthroughItem && (
             <WalkthroughCard
               key={currentWalkthroughItem.threadId}
               item={currentWalkthroughItem}
-              agentName={agentName}
               position={walkthroughIndex + 1}
               total={walkthroughItems.length}
               disabled={isRunning}
@@ -231,7 +227,7 @@ export function AgentChatView({
               onSkip={() => handleWalkthroughDecision(currentWalkthroughItem, "skipped")}
             />
           )}
-          {walkthroughClosing && <WalkthroughNote agentName={agentName} text={walkthroughClosing} />}
+          {walkthroughClosing && <WalkthroughNote text={walkthroughClosing} />}
         </div>
       )}
 
@@ -267,7 +263,6 @@ export function AgentChatView({
 
       {compact && !headerSearchMode && (
         <AgentPanelTelegramNudge
-          agentName={agentName}
           enabled
           showConnectBanner={messages.length === 0 && !walkthrough}
         />

@@ -13,8 +13,6 @@ export interface NavItem {
 
 export interface NavSection {
   heading: string;
-  /** When true, the section heading is replaced with the agent name at render time */
-  useAgentName?: boolean;
   items: NavItem[];
 }
 
@@ -99,8 +97,7 @@ export const mobileNavSections: NavSection[] = [
   { heading: "Today", items: [homeNavItem, inboxNavItem] },
   { heading: "Shop", items: [shopNavItem] },
   {
-    heading: "Agent",
-    useAgentName: true,
+    heading: "Shopkeeper",
     items: [
       topBarAgentItems[2],
       topBarAgentItems[1],

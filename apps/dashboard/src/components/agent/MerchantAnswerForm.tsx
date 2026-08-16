@@ -2,6 +2,7 @@
 
 import { useReducer } from "react"
 import { AlertCircle, Loader2 } from "lucide-react"
+import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import FloatingToast from "@/components/ui/FloatingToast"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
@@ -13,7 +14,6 @@ export interface MerchantAnswerResult {
 interface Props {
   threadId: string
   question: string | null
-  agentName: string
   onAnswered: (result: MerchantAnswerResult) => void
 }
 
@@ -42,7 +42,7 @@ function mergeState(state: MerchantAnswerState, patch: Partial<MerchantAnswerSta
 // Shared affordance for answering an `ask_operator` question. The merchant supplies the
 // missing fact; the route records it, optionally saves it to the KB, and re-plans the ticket
 // so a normal reply rides the usual approval flow. Used by the home deck and the ticket view.
-export default function MerchantAnswerForm({ threadId, question, agentName, onAnswered }: Props) {
+export default function MerchantAnswerForm({ threadId, question, onAnswered }: Props) {
   const [{ answer, error, isSubmitting, saveToKb, succeeded, toastMessage }, updateState] =
     useReducer(mergeState, INITIAL_STATE)
 
@@ -67,7 +67,7 @@ export default function MerchantAnswerForm({ threadId, question, agentName, onAn
       updateState({
         succeeded: true,
         toastMessage: saveToKb
-          ? `Saved to knowledge base — ${agentName} won't ask this again.`
+          ? `Saved to knowledge base — ${AGENT_DISPLAY_NAME} won't ask this again.`
           : null,
       })
       onAnswered({ saveToKb })
@@ -84,7 +84,7 @@ export default function MerchantAnswerForm({ threadId, question, agentName, onAn
         {question && (
           <div className="flex flex-col gap-1">
             <span className="self-start text-[11px] font-semibold text-amber-700/70">
-              {agentName} needs your input
+              {AGENT_DISPLAY_NAME} needs your input
             </span>
             <div className="rounded-2xl border border-amber-600/20 bg-amber-600/[0.09] px-4 py-3">
               <p className="text-sm font-medium text-foreground/85 leading-relaxed">{question}</p>
@@ -95,7 +95,7 @@ export default function MerchantAnswerForm({ threadId, question, agentName, onAn
         <Textarea
           value={answer}
           onChange={event => updateState({ answer: event.target.value })}
-          placeholder={`Answer ${agentName}…`}
+          placeholder={`Answer ${AGENT_DISPLAY_NAME}…`}
           rows={3}
           disabled={isSubmitting || succeeded}
           className="rounded-2xl bg-foreground/[0.03] min-h-[88px]"
@@ -111,7 +111,7 @@ export default function MerchantAnswerForm({ threadId, question, agentName, onAn
           <div className="flex flex-col">
             <span className="text-sm font-medium text-foreground/75">Save for next time</span>
             <span className="text-xs text-foreground/40 leading-relaxed">
-              {agentName} remembers this so it won&apos;t ask again.
+              {AGENT_DISPLAY_NAME} remembers this so it won&apos;t ask again.
             </span>
           </div>
           <Switch

@@ -2,7 +2,6 @@ import { Suspense } from "react"
 import { ChannelType, db } from "@shopkeeper/db"
 import { TicketsPageSkeleton } from "@/app/dashboard/_components/skeletons"
 import { getOrCreateOrg } from "@/lib/server/org"
-import { resolveAgentSettings } from "@shopkeeper/agent/settings"
 import TicketsPageClient from "./_components/TicketsPageClient"
 import type { OrgSettings } from "@/types"
 
@@ -24,13 +23,11 @@ export default async function TicketsPage() {
     integrations.some(integration => integration.platform === channel),
   )
   const hasShopify = integrations.some(i => i.platform === "shopify")
-  const settings = resolveAgentSettings(org.settings as Partial<OrgSettings> | null)
 
   return (
     <Suspense fallback={<TicketsPageSkeleton />}>
       <TicketsPageClient
         hasShopify={hasShopify}
-        agentName={settings.agentName}
         connectedChannels={connectedChannels}
         orgSettings={org.settings as Partial<OrgSettings> | null}
       />

@@ -26,10 +26,8 @@ function resolveRouteTitle(pathname: string): string | null {
 }
 
 export function MobileHubHeader({
-  agentName,
   onOpenNav,
 }: {
-  agentName: string;
   onOpenNav: () => void;
 }) {
   const pathname = usePathname();
@@ -49,7 +47,7 @@ export function MobileHubHeader({
       ) : null}
 
       <div className="flex items-center gap-1">
-        <HeaderSearch agentName={agentName} variant="mobile" />
+        <HeaderSearch variant="mobile" />
 
         <button
           type="button"

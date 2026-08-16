@@ -209,7 +209,6 @@ function baseProps(overrides: LayoutPropsOverrides = {}): LayoutProps {
       activeThread: list.activeTicketId ? selectedThread : undefined,
       activeThreadError: null,
       activeThreadPreview: undefined,
-      agentName: "Coco",
       cachedPlan: null,
       conversationTicket: list.activeTicketId ? selectedTicket : undefined,
       failedMessages: [],

@@ -1,12 +1,12 @@
 "use client"
 
 import { ArrowUp, Bot, Loader2, StickyNote } from "lucide-react"
+import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { useComposerState } from "./composer-state"
 import type { ComposerProps } from "./composer-types"
 
 export default function Composer(props: ComposerProps) {
   const {
-    agentName = "Shopkeeper",
     error,
     isAgentMode = false,
     isSending,
@@ -49,7 +49,7 @@ export default function Composer(props: ComposerProps) {
         {isAgentMode ? (
           <span className="mb-1 inline-flex shrink-0 items-center gap-1 self-center rounded-full bg-foreground/[0.07] px-2.5 py-[5px] text-xs font-semibold text-strong">
             <Bot className="size-3" />
-            @{agentName.toLowerCase()}
+            @{AGENT_DISPLAY_NAME.toLowerCase()}
           </span>
         ) : (
           <button
@@ -103,7 +103,7 @@ export default function Composer(props: ComposerProps) {
           data-testid="reply-composer-send"
           disabled={sendDisabled}
           onClick={() => onSend(isNoteTab)}
-          aria-label={isAgentMode ? `Ask ${agentName}` : isNoteTab ? "Save note" : "Send reply"}
+          aria-label={isAgentMode ? `Ask ${AGENT_DISPLAY_NAME}` : isNoteTab ? "Save note" : "Send reply"}
           className={`flex size-9 shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${sendTone}`}
         >
           {isSending ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
@@ -117,7 +117,7 @@ export default function Composer(props: ComposerProps) {
           ) : isNoteTab ? (
             "Private to your team"
           ) : isAgentMode ? (
-            `${agentName} replies here — only you see this`
+            `${AGENT_DISPLAY_NAME} replies here — only you see this`
           ) : isEmailLike && senderEmail ? (
             <>Replies as <span className="font-semibold text-muted-foreground">{senderEmail}</span></>
           ) : null}

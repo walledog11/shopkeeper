@@ -31,7 +31,6 @@ const SETTINGS_KEYS = [
   "aiContext",
   "brandVoice",
   "sampleReplies",
-  "agentName",
   "autoPlanOnOpen",
   "autoExecuteMode",
   "defaultInstruction",
@@ -69,7 +68,7 @@ const SETTINGS_KEYS = [
   "postResolutionFollowUpDays",
 ] as const satisfies readonly (keyof OrgSettings)[];
 
-const OBSOLETE_STORED_SETTINGS_KEYS = ["maxDiscountPercent"] as const;
+const OBSOLETE_STORED_SETTINGS_KEYS = ["maxDiscountPercent", "agentName"] as const;
 
 const BOOLEAN_FIELDS = [
   "autoPlanOnOpen",
@@ -87,7 +86,6 @@ const BOOLEAN_FIELDS = [
 const STRING_FIELDS = [
   ["aiContext", 2000],
   ["brandVoice", 200],
-  ["agentName", 100],
   ["defaultInstruction", 2000],
   ["replyLanguage", 100],
   ["autoAckMessage", 500],

@@ -24,7 +24,7 @@ export interface OrgSettings {
   brandVoice: string;  // tone brief appended to AI system prompt
   sampleReplies?: SampleReply[]; // merchant-supplied example replies the agent should imitate
 
-  // Agent identity
+  // Fixed product identity — always resolved to AGENT_DISPLAY_NAME; not merchant-configurable.
   agentName: string;
 
   // Default behavior

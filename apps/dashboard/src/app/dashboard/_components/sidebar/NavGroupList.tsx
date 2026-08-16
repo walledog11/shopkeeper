@@ -18,14 +18,12 @@ function itemBadgeCount(item: NavItem, needsYouCount: number, openCount: number)
 
 export function NavGroupList({
   sections,
-  agentName,
   pathname,
   needsYouCount,
   openCount = 0,
   onNavigate,
 }: {
   sections: NavSection[];
-  agentName: string;
   pathname: string;
   needsYouCount: number;
   openCount?: number;
@@ -36,7 +34,7 @@ export function NavGroupList({
   return (
     <div className="flex flex-col gap-5">
       {sections.map((section) => {
-        const heading = section.useAgentName ? agentName : section.heading;
+        const heading = section.heading;
 
         return (
           <div key={heading} className="flex flex-col gap-2">

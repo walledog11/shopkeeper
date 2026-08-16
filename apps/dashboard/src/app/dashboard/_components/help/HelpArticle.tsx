@@ -1,9 +1,10 @@
 "use client"
 
+import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { withAgentName, type Article } from "./content/index"
 
-export default function HelpArticle({ article, agentName }: { article: Article; agentName: string }) {
-  const named = (text: string) => withAgentName(text, agentName)
+export default function HelpArticle({ article }: { article: Article }) {
+  const named = (text: string) => withAgentName(text, AGENT_DISPLAY_NAME)
 
   return (
     <div className="p-5 space-y-5">

@@ -5,6 +5,7 @@ import { useState } from "react"
 import { AlertCircle, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import AgentAvatar from "@/components/agent/AgentAvatar"
+import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { AgentMessageMarkdown } from "@/components/agent/AgentMessageMarkdown"
 import type { WalkthroughItem } from "@/lib/agent/panel"
 import { buildWalkthroughBriefing } from "./walkthrough-briefing-logic"
@@ -12,12 +13,12 @@ import { buildWalkthroughBriefing } from "./walkthrough-briefing-logic"
 // Opening, per-item outcome, and closing lines. Rendered inside the walkthrough
 // region rather than pushed into the message stream: they are the state of a
 // list, not turns in a conversation, and they must not survive it.
-export function WalkthroughNote({ agentName, text }: { agentName: string; text: string }) {
+export function WalkthroughNote({ text }: { text: string }) {
   return (
     <div className="flex items-start gap-3">
-      <AgentAvatar agentName={agentName} size="md" className="mt-0.5" />
+      <AgentAvatar size="md" className="mt-0.5" />
       <div className="min-w-0 max-w-[75%] flex-1">
-        <span className="mb-2 block text-xs font-medium text-foreground">{agentName}</span>
+        <span className="mb-2 block text-xs font-medium text-foreground">{AGENT_DISPLAY_NAME}</span>
         <div className="rounded-2xl rounded-tl-sm border border-border bg-green-600/20 px-4 py-2.5 text-sm text-foreground shadow-sm break-words">
           <AgentMessageMarkdown text={text} />
         </div>
@@ -28,7 +29,6 @@ export function WalkthroughNote({ agentName, text }: { agentName: string; text: 
 
 export function WalkthroughCard({
   item,
-  agentName,
   position,
   total,
   disabled,
@@ -36,7 +36,6 @@ export function WalkthroughCard({
   onSkip,
 }: {
   item: WalkthroughItem
-  agentName: string
   position: number
   total: number
   disabled: boolean
@@ -82,10 +81,10 @@ export function WalkthroughCard({
 
   return (
     <div className="flex items-start gap-3">
-      <AgentAvatar agentName={agentName} size="md" className="mt-0.5" />
+      <AgentAvatar size="md" className="mt-0.5" />
       <div className="flex-1 min-w-0 max-w-[75%]">
         <div className="flex items-center gap-2 mb-2">
-          <span className="text-xs font-medium text-foreground">{agentName}</span>
+          <span className="text-xs font-medium text-foreground">{AGENT_DISPLAY_NAME}</span>
           <span className="text-xs text-muted-foreground tabular-nums">{position} of {total}</span>
           {item.isVip && (
             <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-700/70">VIP</span>

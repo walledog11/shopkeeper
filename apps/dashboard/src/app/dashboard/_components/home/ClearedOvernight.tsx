@@ -1,8 +1,8 @@
 import Link from "next/link"
+import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import type { HomeClearedTopic } from "@/lib/home/summary-contract"
 
 interface Props {
-  agentName: string
   totalCount: number
   topics: HomeClearedTopic[]
 }
@@ -30,7 +30,7 @@ function breakdownOf(totalCount: number, topics: HomeClearedTopic[]): string {
   return parts.map(part => `${part.count} ${part.phrase}`).join(", ")
 }
 
-export default function ClearedOvernight({ agentName, totalCount, topics }: Props) {
+export default function ClearedOvernight({ totalCount, topics }: Props) {
   if (totalCount === 0) return null
 
   const breakdown = breakdownOf(totalCount, topics)
@@ -38,7 +38,7 @@ export default function ClearedOvernight({ agentName, totalCount, topics }: Prop
   return (
     <section className="flex items-baseline gap-3 flex-wrap">
       <h2 className="text-sm font-bold text-strong">
-        {agentName} cleared {totalCount} overnight{breakdown ? ` — ${breakdown}` : ""}
+        {AGENT_DISPLAY_NAME} cleared {totalCount} overnight{breakdown ? ` — ${breakdown}` : ""}
       </h2>
       <Link
         href="/dashboard/review"

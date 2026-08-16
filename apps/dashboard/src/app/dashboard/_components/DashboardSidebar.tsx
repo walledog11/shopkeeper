@@ -24,13 +24,11 @@ function useDashboardOpenCount(initialInboxCount: number) {
 function DashboardSidebarContent({
   children,
   initialAutonomyTier,
-  agentName,
   initialInboxCount,
   rightRail,
 }: {
   children: React.ReactNode;
   initialAutonomyTier: AutonomyTier;
-  agentName: string;
   initialInboxCount: number;
   rightRail: React.ReactNode;
 }) {
@@ -64,7 +62,6 @@ function DashboardSidebarContent({
 
       <div className="flex flex-1 min-h-0 w-full overflow-x-hidden flex-col bg-background">
         <DesktopTopBar
-          agentName={agentName}
           openCount={openCount}
           onSwitching={setIsSwitching}
           navAuth={navAuth}
@@ -72,10 +69,7 @@ function DashboardSidebarContent({
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-row">
           <div className="flex min-w-0 flex-1 flex-col">
-            <MobileHubHeader
-              agentName={agentName}
-              onOpenNav={openMobileNav}
-            />
+            <MobileHubHeader onOpenNav={openMobileNav} />
 
             <div className="dashboard-content relative z-0 flex-1 min-h-0 overflow-hidden flex flex-col">
               {children}
@@ -90,7 +84,6 @@ function DashboardSidebarContent({
       <MobileNavSheet
         open={mobileNavOpen}
         onClose={() => setMobileNavOpen(false)}
-        agentName={agentName}
         openCount={openCount}
         onSwitching={setIsSwitching}
         navAuth={navAuth}
@@ -102,13 +95,11 @@ function DashboardSidebarContent({
 export default function DashboardSidebar({
   children,
   initialAutonomyTier,
-  agentName,
   initialInboxCount,
   rightRail,
 }: {
   children: React.ReactNode;
   initialAutonomyTier: AutonomyTier;
-  agentName: string;
   initialInboxCount: number;
   rightRail: React.ReactNode;
 }) {
@@ -116,7 +107,6 @@ export default function DashboardSidebar({
     <OpenThreadCountProvider>
       <DashboardSidebarContent
         initialAutonomyTier={initialAutonomyTier}
-        agentName={agentName}
         initialInboxCount={initialInboxCount}
         rightRail={rightRail}
       >

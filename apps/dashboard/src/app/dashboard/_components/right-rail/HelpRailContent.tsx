@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ChevronLeft } from "lucide-react";
+import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings";
 import { ALL_CATEGORIES, withAgentName, type Article, type Category } from "../help/content/index";
 import HelpArticle from "../help/HelpArticle";
 import HelpCategory from "../help/HelpCategory";
@@ -13,10 +14,8 @@ type View =
   | { type: "article"; category: Category; article: Article };
 
 export function HelpRailContent({
-  agentName,
   active,
 }: {
-  agentName: string;
   active: boolean;
 }) {
   const [view, setView] = useState<View>({ type: "home" });
@@ -34,8 +33,8 @@ export function HelpRailContent({
     view.type === "home"
       ? "Browse topics"
       : view.type === "category"
-        ? withAgentName(view.category.title, agentName)
-        : withAgentName(view.article.title, agentName);
+        ? withAgentName(view.category.title, AGENT_DISPLAY_NAME)
+        : withAgentName(view.article.title, AGENT_DISPLAY_NAME);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -57,21 +56,19 @@ export function HelpRailContent({
         {view.type === "home" && (
           <HelpHome
             categories={ALL_CATEGORIES}
-            agentName={agentName}
             onSelectCategory={(cat) => setView({ type: "category", category: cat })}
           />
         )}
         {view.type === "category" && (
           <HelpCategory
             category={view.category}
-            agentName={agentName}
             onSelectArticle={(article) =>
               setView({ type: "article", category: view.category, article })
             }
           />
         )}
         {view.type === "article" && (
-          <HelpArticle article={view.article} agentName={agentName} />
+          <HelpArticle article={view.article} />
         )}
       </div>
     </div>

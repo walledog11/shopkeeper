@@ -4,6 +4,7 @@ import Link from "next/link"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/ui/cn"
 import { useAgentPanel } from "@/app/dashboard/_components/agent-panel/AgentPanelContext"
+import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import type { WalkthroughItem } from "@/lib/agent/panel"
 import { BriefingNarrativeInline } from "@/app/dashboard/_components/agent-panel/AgentPanelBriefing"
 import {
@@ -21,7 +22,6 @@ import { needsYouSecondaryButtonClassName } from "./needs-you-card-styles"
 interface Props {
   greeting: string
   userName: string
-  agentName: string
   walkthroughItems: WalkthroughItem[]
   walkthroughCount: number
   needsYouCount: number
@@ -56,7 +56,6 @@ function OpsNoteLink({ note }: { note: BriefingOpsNote }) {
 export default function ConciergeBriefing({
   greeting,
   userName,
-  agentName,
   walkthroughItems,
   walkthroughCount,
   needsYouCount,
@@ -127,7 +126,7 @@ export default function ConciergeBriefing({
                     </span>
                   </>
                 ) : (
-                  `Ask ${agentName}`
+                  `Ask ${AGENT_DISPLAY_NAME}`
                 )}
               </NeedsYouPrimaryButton>
               <Link

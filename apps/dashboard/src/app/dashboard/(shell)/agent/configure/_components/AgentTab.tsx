@@ -1,6 +1,7 @@
 "use client"
 
 import { useOrganization } from "@clerk/nextjs"
+import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import type { OrgSettings, OrgSettingsPatch, VoiceProposal } from "@/types"
 import type { GatewayRuntimeFlags } from "@/lib/server/gateway-runtime-flags"
 import {
@@ -27,8 +28,6 @@ interface Props {
 
 export default function AgentTab(props: Props) {
   const controller = useAgentTabState(props)
-  const { settingsState } = controller
-  const agentName = settingsState.agentName
   // These settings decide how much the agent may do on its own and how much it
   // may refund, so saving them is admin-only server-side. Members can read the
   // page; the save bar tells them why they can't apply a change.
@@ -41,7 +40,7 @@ export default function AgentTab(props: Props) {
       <div>
         <h1 className="text-xl font-semibold tracking-tight text-foreground">Agent settings</h1>
         <p className="mt-0.5 text-sm text-faint">
-          How {agentName} represents your store, how much it can do alone, and when it is on duty.
+          How {AGENT_DISPLAY_NAME} represents your store, how much it can do alone, and when it is on duty.
         </p>
       </div>
 

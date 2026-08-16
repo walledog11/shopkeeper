@@ -16,14 +16,12 @@ import type { NavAuth } from "./useNavAuth";
 export function MobileNavSheet({
   open,
   onClose,
-  agentName,
   openCount,
   onSwitching,
   navAuth,
 }: {
   open: boolean;
   onClose: () => void;
-  agentName: string;
   openCount: number;
   onSwitching: (v: boolean) => void;
   navAuth: NavAuth;
@@ -80,7 +78,6 @@ export function MobileNavSheet({
         <div className="flex-1 overflow-y-auto px-4 py-4">
           <NavGroupList
             sections={mobileNavSections}
-            agentName={agentName}
             pathname={pathname}
             needsYouCount={needsYouCount}
             openCount={openCount}

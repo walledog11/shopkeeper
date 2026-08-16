@@ -4,10 +4,11 @@ import { getCustomerName } from "@/lib/messaging/customer-name";
 import { formatTime, formatTicketAge } from "@/lib/format/date";
 import { isAgentTurnContent } from "@shopkeeper/agent/tools";
 import { getCurrentPlanForThread } from "@shopkeeper/agent/plan-cache-shape";
+import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings";
 import { isAgentNoteContent, stripAgentNotePrefix, SENDER_TYPE } from "@shopkeeper/agent/thread-constants";
 import type { Thread, Ticket } from "@/types";
 
-export function threadToTicket(thread: Thread, agentName?: string): Ticket {
+export function threadToTicket(thread: Thread): Ticket {
   const channel = getChannelInfo(thread.channelType);
   const lastMsg = thread.messages.filter((message) => message.senderType !== SENDER_TYPE.NOTE).at(-1);
   const lastCustomerMsg = thread.messages.filter((message) => message.senderType === SENDER_TYPE.CUSTOMER).at(-1);
@@ -30,7 +31,7 @@ export function threadToTicket(thread: Thread, agentName?: string): Ticket {
     tag: thread.tag || "Support",
     tagColor: "text-slate-500 bg-slate-100 border-slate-200",
     escalatedAt: thread.escalatedAt ?? null,
-    aiSummary: thread.aiSummary || `${agentName ?? "Shopkeeper"} is reading this ticket…`,
+    aiSummary: thread.aiSummary || `${AGENT_DISPLAY_NAME} is reading this ticket…`,
     aiTitle: thread.aiTitle ?? null,
     status: thread.status,
     lastCustomerMessageAt: lastCustomerMsg?.sentAt ?? null,
@@ -54,7 +55,7 @@ export function threadToTicket(thread: Thread, agentName?: string): Ticket {
           author:
             message.senderType === SENDER_TYPE.NOTE
               ? isAgentNote
-                ? (agentName ?? "Agent")
+                ? AGENT_DISPLAY_NAME
                 : "You"
               : undefined,
           isAgentNote,

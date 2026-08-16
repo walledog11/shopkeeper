@@ -1,6 +1,7 @@
 "use client"
 
 import { useReducer, useRef } from "react"
+import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { planReplyText, planWarningTiers } from "@shopkeeper/agent/plan-preview"
 import { TOOL_CATEGORIES } from "@shopkeeper/agent/tools"
 import type { AgentPlan, PlanExecutionOutcome, RawToolCall } from "@/types"
@@ -67,14 +68,12 @@ function reducer(
 }
 
 export function useActionPlanReviewState({
-  agentName,
   customerName,
   executionOutcome,
   isExecuting,
   onApprove,
   plan,
 }: {
-  agentName: string
   customerName?: string | null
   executionOutcome: PlanExecutionOutcome | null
   isExecuting: boolean
@@ -111,8 +110,8 @@ export function useActionPlanReviewState({
   const isRunning = !executionOutcome && (isExecuting || state.submitting)
 
   const headerLabel = showReplyHero
-    ? `${agentName} drafted a reply${recipient.headerTo ? ` to ${recipient.headerTo}` : ""}`
-    : `${agentName} proposes`
+    ? `${AGENT_DISPLAY_NAME} drafted a reply${recipient.headerTo ? ` to ${recipient.headerTo}` : ""}`
+    : `${AGENT_DISPLAY_NAME} proposes`
   const primaryLabel = isRunning || executionOutcome
     ? null
     : state.confirming

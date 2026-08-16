@@ -142,9 +142,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <NavProgressBar />
         <DashboardSidebar
           initialAutonomyTier={settings.autonomyTier ?? "guarded"}
-          agentName={settings.agentName}
           initialInboxCount={inboxBadgeCount}
-          rightRail={<DashboardRightRail agentName={settings.agentName} />}
+          rightRail={<DashboardRightRail />}
         >
           {children}
         </DashboardSidebar>

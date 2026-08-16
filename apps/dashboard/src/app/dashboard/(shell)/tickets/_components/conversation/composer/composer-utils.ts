@@ -1,3 +1,5 @@
+import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
+
 export function isInstagramReplyWindowExpired({
   channelType,
   isAgentMode,
@@ -18,12 +20,10 @@ export function isInstagramReplyWindowExpired({
 }
 
 export function buildComposerPlaceholder({
-  agentName,
   customerName,
   isMobile,
   isNoteTab,
 }: {
-  agentName: string
   customerName: string
   isMobile: boolean
   isNoteTab: boolean
@@ -32,7 +32,7 @@ export function buildComposerPlaceholder({
     ? ["Add a private note for your team", ...(isMobile ? [] : ["⌘↵ to send"])]
     : [
         `Reply to ${customerName}…`,
-        `type @${agentName.toLowerCase()} to invoke ${agentName}`,
+        `type @${AGENT_DISPLAY_NAME.toLowerCase()} to invoke ${AGENT_DISPLAY_NAME}`,
         ...(isMobile ? [] : ["⌘↵ to send"]),
       ]
   return placeholderParts.join("  ·  ")

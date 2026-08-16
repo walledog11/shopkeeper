@@ -1,6 +1,7 @@
 "use client"
 
 import { useRef, type ComponentProps, type ReactNode } from "react"
+import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { AlertCircle, CheckCircle2, ChevronRight, X } from "lucide-react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import type { ChannelType, Thread, Ticket } from "@/types"
@@ -35,7 +36,6 @@ interface TicketsPageLayoutConversationState {
   activeThread: Thread | undefined
   activeThreadError: unknown
   activeThreadPreview: Thread | undefined
-  agentName: string
   cachedPlan: ConversationViewProps["initialPlan"]
   conversationTicket: Ticket | undefined
   failedMessages: ConversationViewProps["failedMessages"]
@@ -107,15 +107,13 @@ interface TicketsPageLayoutProps {
 }
 
 function CorrectReplyBanner({
-  agentName,
   onDismiss,
 }: {
-  agentName: string
   onDismiss: () => void
 }) {
   return (
     <div className="flex items-center justify-between gap-3 border-b border-amber-600/20 bg-amber-600/[0.08] px-4 py-2 text-xs text-amber-700 shrink-0">
-      <span>Send the reply you&apos;d prefer — {agentName} will learn from the difference.</span>
+      <span>Send the reply you&apos;d prefer — {AGENT_DISPLAY_NAME} will learn from the difference.</span>
       <button
         type="button"
         onClick={onDismiss}
@@ -167,7 +165,6 @@ function TicketConversation({
     <ConversationView
       key={conversationTicket.id}
       ticket={conversationTicket}
-      agentName={conversation.agentName}
       hasShopify={flags.hasShopify}
       orgSettings={conversation.orgSettings}
       threadContext={activeThread ? {
@@ -218,7 +215,6 @@ export function TicketsPageLayout({
     activeThread,
     activeThreadError,
     activeThreadPreview,
-    agentName,
     conversationTicket,
     orgSettings,
     toast,
@@ -268,7 +264,7 @@ export function TicketsPageLayout({
   const showConversation = Boolean(activeTicketId)
 
   const correctReplyBanner = flags.correctReplyVisible
-    ? <CorrectReplyBanner agentName={agentName} onDismiss={onCorrectReplyDismiss} />
+    ? <CorrectReplyBanner onDismiss={onCorrectReplyDismiss} />
     : null
 
   const inlineConversationBody = activeTicketId ? (
@@ -332,7 +328,6 @@ export function TicketsPageLayout({
             <TicketQueue
               tickets={filteredTickets}
               activeView={effectiveActiveView}
-              agentName={agentName}
               hasShopify={flags.hasShopify}
               orgSettings={orgSettings}
               activeTicketId={activeTicketId}

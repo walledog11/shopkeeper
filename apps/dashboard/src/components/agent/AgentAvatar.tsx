@@ -1,4 +1,5 @@
 import Image from "next/image"
+import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { cn } from "@/lib/ui/cn"
 
 const SIZE_CLASSES = {
@@ -9,14 +10,13 @@ const SIZE_CLASSES = {
 } as const
 
 interface Props {
-  agentName: string
   size?: keyof typeof SIZE_CLASSES
   className?: string
   imageSrc?: string
 }
 
-export default function AgentAvatar({ agentName, size = "md", className, imageSrc }: Props) {
-  const initial = agentName.charAt(0).toUpperCase()
+export default function AgentAvatar({ size = "md", className, imageSrc }: Props) {
+  const initial = AGENT_DISPLAY_NAME.charAt(0).toUpperCase()
 
   return (
     <div

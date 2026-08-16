@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { CheckCircle2, ChevronDown, ChevronRight } from "lucide-react"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import {
@@ -17,7 +18,6 @@ const SECTION_PREVIEW_LIMIT = 4
 interface TicketQueueProps {
   tickets: Ticket[]
   activeView: TicketListView
-  agentName: string
   hasShopify: boolean
   orgSettings?: Partial<OrgSettings> | null
   activeTicketId: string | null
@@ -30,7 +30,6 @@ interface TicketQueueProps {
 export function TicketQueue({
   tickets,
   activeView,
-  agentName,
   hasShopify,
   orgSettings = null,
   activeTicketId,
@@ -65,7 +64,7 @@ export function TicketQueue({
   }
 
   if (groups.length === 0) {
-    return <CaughtUp agentName={agentName} />
+    return <CaughtUp />
   }
 
   return (
@@ -96,7 +95,7 @@ export function TicketQueue({
   )
 }
 
-interface SectionProps extends Omit<TicketQueueProps, "tickets" | "agentName"> {
+interface SectionProps extends Omit<TicketQueueProps, "tickets"> {
   group: TicketTriageTierGroup
 }
 
@@ -209,7 +208,7 @@ function QuietTierRow({
   )
 }
 
-function CaughtUp({ agentName }: { agentName: string }) {
+function CaughtUp() {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
       <span className="flex size-11 items-center justify-center rounded-full border border-border bg-foreground/[0.04]">
@@ -218,7 +217,7 @@ function CaughtUp({ agentName }: { agentName: string }) {
       <div className="flex flex-col gap-1">
         <h2 className="text-lg font-semibold text-foreground">You&apos;re all caught up</h2>
         <p className="max-w-[230px] text-sm text-muted-foreground">
-          {agentName} will flag anything that needs your eye.
+          {AGENT_DISPLAY_NAME} will flag anything that needs your eye.
         </p>
       </div>
     </div>

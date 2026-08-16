@@ -1,14 +1,14 @@
 "use client"
 
+import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { withAgentName, type Category } from "./content/index"
 
 interface Props {
   categories: Category[]
-  agentName: string
   onSelectCategory: (category: Category) => void
 }
 
-export default function HelpHome({ categories, agentName, onSelectCategory }: Props) {
+export default function HelpHome({ categories, onSelectCategory }: Props) {
   return (
     <div className="p-5 space-y-3">
       <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Topics</p>
@@ -22,9 +22,9 @@ export default function HelpHome({ categories, agentName, onSelectCategory }: Pr
             <span className="text-lg shrink-0">{cat.icon}</span>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-foreground group-hover:text-foreground transition-colors">
-                {withAgentName(cat.title, agentName)}
+                {withAgentName(cat.title, AGENT_DISPLAY_NAME)}
               </p>
-              <p className="text-xs text-muted-foreground truncate mt-0.5">{withAgentName(cat.description, agentName)}</p>
+              <p className="text-xs text-muted-foreground truncate mt-0.5">{withAgentName(cat.description, AGENT_DISPLAY_NAME)}</p>
             </div>
             <span className="text-xs font-semibold text-muted-foreground/60 shrink-0">
               {cat.articles.length}

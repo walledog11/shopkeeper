@@ -6,7 +6,6 @@ export interface IntegrationRow {
 
 export interface ComposerProps {
   customerName: string
-  agentName?: string
   channelType?: string
   shopifyCustomerId?: string | null
   customerPlatformId?: string

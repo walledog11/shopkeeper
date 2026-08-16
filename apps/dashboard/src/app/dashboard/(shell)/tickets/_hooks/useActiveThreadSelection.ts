@@ -14,7 +14,6 @@ interface UseActiveThreadSelectionProps {
   closedThreads: Thread[]
   spamThreads: Thread[]
   searchThreads: Thread[]
-  agentName: string
 }
 
 function createLoadingTicket(threadId: string): Ticket {
@@ -53,7 +52,6 @@ export function useActiveThreadSelection({
   closedThreads,
   spamThreads,
   searchThreads,
-  agentName,
 }: UseActiveThreadSelectionProps) {
   const [selectedActiveTicketId, setSelectedActiveTicketId] = useState<string | null>(null)
   const [dismissedQueryThreadId, setDismissedQueryThreadId] = useState<string | null>(null)
@@ -91,7 +89,7 @@ export function useActiveThreadSelection({
     return activeView
   }, [activeView, activeThread, allOpenThreads, closedThreads, forMeThreads, queryActiveTicketId, spamThreads])
 
-  const activeTicket = activeThread ? threadToTicket(activeThread, agentName) : undefined
+  const activeTicket = activeThread ? threadToTicket(activeThread) : undefined
   const activeThreadPreview = useMemo(
     () => {
       if (!activeTicketId) return undefined
@@ -104,8 +102,8 @@ export function useActiveThreadSelection({
     [activeTicketId, allOpenThreads, closedThreads, forMeThreads, searchThreads, spamThreads],
   )
   const activeTicketPreview = useMemo(
-    () => activeThreadPreview ? threadToTicket(activeThreadPreview, agentName) : undefined,
-    [activeThreadPreview, agentName],
+    () => activeThreadPreview ? threadToTicket(activeThreadPreview) : undefined,
+    [activeThreadPreview],
   )
   const isConversationLoading = Boolean(activeTicketId && !activeThread && !activeThreadError)
   const conversationTicket = useMemo(

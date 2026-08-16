@@ -1,4 +1,5 @@
 import {
+  AGENT_DISPLAY_NAME,
   AGENT_SETTINGS_DEFAULTS,
   AUTONOMY_OVERRIDE_PATHS,
   resolveAgentSettings,
@@ -32,8 +33,8 @@ export interface AgentSettingsPatch {
 type SettingsLike = Partial<OrgSettings> | OrgSettingsPatch
 
 export function agentSettingsReducer(state: OrgSettings, action: AgentSettingsAction): OrgSettings {
-  if (action.type === "reset") return action.payload
-  return { ...state, ...action.patch }
+  if (action.type === "reset") return { ...action.payload, agentName: AGENT_DISPLAY_NAME }
+  return { ...state, ...action.patch, agentName: AGENT_DISPLAY_NAME }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -139,6 +140,8 @@ export function buildAgentSettingsPatch(
     deleteSettingsPath(serialized, path)
     settingsUnset.push(path)
   }
+
+  delete serialized.agentName
 
   return {
     settings: serialized as OrgSettingsPatch,
@@ -309,7 +312,7 @@ export function buildSettingsPayload(state: OrgSettings, raw: RawInputs): OrgSet
 
   return {
     ...state,
-    agentName: state.agentName.trim() || AGENT_SETTINGS_DEFAULTS.agentName,
+    agentName: AGENT_DISPLAY_NAME,
     maxRefundAmount: parsedMax === null || isNaN(parsedMax) ? null : parsedMax,
     dailyRefundCap: parsedDaily === null || isNaN(parsedDaily) ? null : parsedDaily,
     dailyLLMSpendCapUsd: parsedLLM === null || isNaN(parsedLLM) ? null : parsedLLM,

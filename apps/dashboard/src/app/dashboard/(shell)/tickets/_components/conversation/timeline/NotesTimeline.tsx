@@ -1,11 +1,11 @@
 "use client"
 
 import { AlertCircle, Bot, Check, RefreshCw, Smartphone, Users } from "lucide-react"
+import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import type { AgentTurn, Ticket } from "@/types"
 import { TOOL_LABELS } from "@shopkeeper/agent/tools"
 
 interface Props {
-  agentName: string
   agentTurns: AgentTurn[]
   isAgentRunning: boolean
   isPlanLoading: boolean
@@ -16,7 +16,6 @@ interface Props {
 }
 
 export default function NotesTimeline({
-  agentName,
   agentTurns,
   isAgentRunning,
   isPlanLoading,
@@ -34,7 +33,7 @@ export default function NotesTimeline({
         <div>
           <p className="text-sm font-semibold text-muted-foreground">No internal activity yet</p>
           <p className="text-xs text-faint mt-1">
-            Type <span className="font-mono font-semibold text-violet-600">@{agentName.toLowerCase()}</span> to ask {agentName}, or add a note for your team.
+            Type <span className="font-mono font-semibold text-violet-600">@{AGENT_DISPLAY_NAME.toLowerCase()}</span> to ask {AGENT_DISPLAY_NAME}, or add a note for your team.
           </p>
         </div>
       </div>
@@ -84,14 +83,14 @@ export default function NotesTimeline({
               </div>
             )}
             <div className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-foreground/[0.08] text-strong rounded-md rounded-tr-sm">
-              <span className="text-violet-600 font-semibold">@{agentName.toLowerCase()}</span>{" "}
+              <span className="text-violet-600 font-semibold">@{AGENT_DISPLAY_NAME.toLowerCase()}</span>{" "}
               {turn.instruction}
             </div>
           </div>
           <div className="flex flex-col gap-1 items-start">
             <div className="flex items-center gap-1.5 mb-0.5 ml-1">
               <Bot className="size-3 text-violet-600" />
-              <span className="text-xs font-semibold text-violet-600">{agentName}</span>
+              <span className="text-xs font-semibold text-violet-600">{AGENT_DISPLAY_NAME}</span>
             </div>
             <div className="px-4 py-3 max-w-[80%] bg-violet-500/10 border border-violet-500/20 rounded-md rounded-tl-sm space-y-2">
               {turn.error ? (
@@ -133,7 +132,7 @@ export default function NotesTimeline({
           {pendingInstruction && (
             <div className="flex flex-col gap-1 items-end">
               <div className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-foreground/[0.08] text-strong rounded-md rounded-tr-sm">
-                <span className="text-violet-600 font-semibold">@{agentName.toLowerCase()}</span>{" "}
+                <span className="text-violet-600 font-semibold">@{AGENT_DISPLAY_NAME.toLowerCase()}</span>{" "}
                 {pendingInstruction}
               </div>
             </div>
@@ -141,7 +140,7 @@ export default function NotesTimeline({
           <div className="flex flex-col gap-1 items-start">
             <div className="flex items-center gap-1.5 mb-0.5 ml-1">
               <Bot className="size-3 text-violet-600" />
-              <span className="text-xs font-semibold text-violet-600">{agentName}</span>
+              <span className="text-xs font-semibold text-violet-600">{AGENT_DISPLAY_NAME}</span>
             </div>
             <div className="px-4 py-3 bg-violet-500/10 border border-violet-500/20 rounded-md rounded-tl-sm">
               <div className="flex items-center gap-1.5 text-xs text-violet-600">

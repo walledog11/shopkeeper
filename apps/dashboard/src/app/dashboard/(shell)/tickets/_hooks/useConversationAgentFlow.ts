@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useReducer, useRef, useState } from "react"
+import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { planReplyText } from "@shopkeeper/agent/plan-preview"
 import type { AgentPlan, AgentTurn, PlanExecutionOutcome, RawToolCall, Ticket } from "@/types"
 import {
@@ -16,7 +17,6 @@ interface UseConversationAgentFlowProps {
   ticket: Ticket
   viewTab: "chat" | "notes"
   replyText: string
-  agentName: string
   initialPlan?: AgentPlan | null
   onReplyChange: (text: string) => void
   onSend: (isNote: boolean) => void
@@ -37,10 +37,9 @@ function createAgentTurn(turn: Omit<AgentTurn, "id">): AgentTurn {
 
 export function getAgentCommandState(
   replyText: string,
-  agentName: string,
   viewTab: "chat" | "notes",
 ) {
-  const triggerPrefix = `@${agentName.toLowerCase()}`
+  const triggerPrefix = `@${AGENT_DISPLAY_NAME.toLowerCase()}`
   const trimmedReply = replyText.trimStart()
   const isSupportedComposerTab = viewTab === "chat" || viewTab === "notes"
   const isAgentMode = isSupportedComposerTab && trimmedReply.toLowerCase().startsWith(triggerPrefix)
@@ -104,7 +103,6 @@ export function useConversationAgentFlow({
   ticket,
   viewTab,
   replyText,
-  agentName,
   initialPlan,
   onReplyChange,
   onSend,
@@ -127,7 +125,7 @@ export function useConversationAgentFlow({
   const [planExecutionState, setPlanExecutionState] = useState<PlanExecutionState | null>(null)
   const successDismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const { agentInstruction, isAgentMode } = getAgentCommandState(replyText, agentName, viewTab)
+  const { agentInstruction, isAgentMode } = getAgentCommandState(replyText, viewTab)
   const pendingPlan = pendingPlanState.ticketId === ticket.id && pendingPlanState.hasOverride
     ? pendingPlanState.plan
     : initialPlan ?? null

@@ -108,7 +108,7 @@ describe("resolveAgentSettings", () => {
       maxIterations: 5,
       brandVoice: "warm",
     });
-    expect(resolved.agentName).toBe("Ada");
+    expect(resolved.agentName).toBe(AGENT_SETTINGS_DEFAULTS.agentName);
     expect(resolved.maxIterations).toBe(5);
     expect(resolved.brandVoice).toBe("warm");
   });

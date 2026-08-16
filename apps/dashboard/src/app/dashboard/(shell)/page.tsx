@@ -36,7 +36,6 @@ export default async function DashboardPage() {
   return (
     <DashboardHomeClient
       userName={userName}
-      agentName={settings.agentName}
       greeting={greeting}
       initialHomeSummary={initialHomeSummary}
       initialChannelState={initialChannelState}

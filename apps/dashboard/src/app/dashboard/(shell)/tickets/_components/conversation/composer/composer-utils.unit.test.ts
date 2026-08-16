@@ -28,13 +28,11 @@ describe("isInstagramReplyWindowExpired", () => {
 describe("buildComposerPlaceholder", () => {
   it("keeps desktop shortcut hints out of mobile placeholders", () => {
     expect(buildComposerPlaceholder({
-      agentName: "Shopkeeper",
       customerName: "Maya",
       isMobile: false,
       isNoteTab: false,
     })).toContain("⌘↵ to send")
     expect(buildComposerPlaceholder({
-      agentName: "Shopkeeper",
       customerName: "Maya",
       isMobile: true,
       isNoteTab: false,

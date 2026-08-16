@@ -1,5 +1,6 @@
 "use client"
 
+import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { SectionCard, ToggleRow } from "@/components/settings-form/shared"
 import type { GatewayRuntimeFlags } from "@/lib/server/gateway-runtime-flags"
 import type { AgentTabController } from "./useAgentTabState"
@@ -12,7 +13,6 @@ export function ProactiveMonitoringSection({
   runtimeFlags: GatewayRuntimeFlags["monitors"] | null
 }) {
   const { settingsState, dispatch } = controller
-  const agentName = settingsState.agentName
 
   const deliveryExceptionAvailable = runtimeFlags?.deliveryException ?? true
   const postResolutionFollowUpAvailable = runtimeFlags?.postResolutionFollowUp ?? true
@@ -26,7 +26,7 @@ export function ProactiveMonitoringSection({
       {deliveryExceptionAvailable && (
         <SectionCard
           title="Proactive shipping alerts"
-          description={`Hourly USPS tracking checks for stalled shipments and delivery exceptions. When something looks off, ${agentName} drafts a proactive customer heads-up for your approval — nothing sends automatically.`}
+          description={`Hourly USPS tracking checks for stalled shipments and delivery exceptions. When something looks off, ${AGENT_DISPLAY_NAME} drafts a proactive customer heads-up for your approval — nothing sends automatically.`}
           variant="board"
         >
           <ToggleRow
@@ -45,7 +45,7 @@ export function ProactiveMonitoringSection({
       {postResolutionFollowUpAvailable && (
         <SectionCard
           title="Post-resolution check-ins"
-          description={`A few days after a refund or exchange ticket closes, ${agentName} nudges you to check back in with the customer. Nothing sends automatically — you reply and it drafts the note.`}
+          description={`A few days after a refund or exchange ticket closes, ${AGENT_DISPLAY_NAME} nudges you to check back in with the customer. Nothing sends automatically — you reply and it drafts the note.`}
           variant="board"
         >
           <ToggleRow

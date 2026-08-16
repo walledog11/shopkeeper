@@ -8,10 +8,6 @@ import { RIGHT_RAIL_SPRING, RIGHT_RAIL_WIDTH } from "./constants";
 import { HelpRailContent } from "./HelpRailContent";
 import { useRightRail } from "./RightRailContext";
 
-interface Props {
-  agentName: string;
-}
-
 function RailHeader({ title, onClose }: { title: string; onClose: () => void }) {
   return (
     <div className="flex shrink-0 items-center justify-between border-b border-border/60 px-4 py-3">
@@ -28,7 +24,7 @@ function RailHeader({ title, onClose }: { title: string; onClose: () => void }) 
   );
 }
 
-export default function DashboardRightRail({ agentName }: Props) {
+export default function DashboardRightRail() {
   const { isOpen, close } = useRightRail();
   const isLargeScreen = React.useSyncExternalStore(
     (onStoreChange) => {
@@ -46,7 +42,7 @@ export default function DashboardRightRail({ agentName }: Props) {
     <>
       <RailHeader title="Help" onClose={close} />
       <div className="min-h-0 flex-1 overflow-hidden">
-        <HelpRailContent agentName={agentName} active={isOpen} />
+        <HelpRailContent active={isOpen} />
       </div>
     </>
   );

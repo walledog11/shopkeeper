@@ -9,7 +9,6 @@ import { buildComposerPlaceholder, isInstagramReplyWindowExpired } from "./compo
 
 export function useComposerState({
   customerName,
-  agentName = "Shopkeeper",
   channelType,
   lastCustomerMessageAt,
   value,
@@ -69,7 +68,6 @@ export function useComposerState({
 
   const isMobile = useMediaQuery("(max-width: 767px)") === true
   const placeholder = buildComposerPlaceholder({
-    agentName,
     customerName,
     isMobile,
     isNoteTab,

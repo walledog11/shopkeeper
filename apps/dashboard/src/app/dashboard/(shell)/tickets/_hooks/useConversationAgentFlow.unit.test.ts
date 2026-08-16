@@ -38,13 +38,13 @@ afterEach(() => {
 
 describe("getAgentCommandState", () => {
   it("detects agent mode in chat and notes", () => {
-    expect(getAgentCommandState("@shopkeeper refund this order", "Shopkeeper", "notes")).toEqual({
+    expect(getAgentCommandState("@shopkeeper refund this order", "notes")).toEqual({
       agentInstruction: "refund this order",
       isAgentMode: true,
       triggerPrefix: "@shopkeeper",
     })
 
-    expect(getAgentCommandState("@shopkeeper refund this order", "Shopkeeper", "chat")).toEqual({
+    expect(getAgentCommandState("@shopkeeper refund this order", "chat")).toEqual({
       agentInstruction: "refund this order",
       isAgentMode: true,
       triggerPrefix: "@shopkeeper",
@@ -191,7 +191,6 @@ describe("useConversationAgentFlow execution state", () => {
         initialPlan,
         viewTab: "chat",
         replyText: "",
-        agentName: "Shopkeeper",
         ...callbacks,
       })
       React.useEffect(() => onValue(value), [onValue, value])

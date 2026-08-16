@@ -80,6 +80,7 @@ describe("organization settings contract", () => {
 
     const resolved = resolveAgentSettings(normalized);
     expect(resolved.agentName).toBe(AGENT_SETTINGS_DEFAULTS.agentName);
+    expect(resolveAgentSettings({ agentName: "Ada" }).agentName).toBe(AGENT_SETTINGS_DEFAULTS.agentName);
     expect(resolved.businessHoursDays).toEqual(AGENT_SETTINGS_DEFAULTS.businessHoursDays);
     expect(resolved.businessHoursStart).toBe(AGENT_SETTINGS_DEFAULTS.businessHoursStart);
     expect(resolved.businessHoursEnd).toBe(AGENT_SETTINGS_DEFAULTS.businessHoursEnd);

@@ -24,14 +24,12 @@ import type { ChannelType, OrgSettings, Thread } from "@/types"
 
 export interface TicketsPageClientProps {
   hasShopify: boolean
-  agentName: string
   connectedChannels: ChannelType[]
   orgSettings?: Partial<OrgSettings> | null
 }
 
 export function useTicketsPageView({
   hasShopify,
-  agentName,
   connectedChannels,
   orgSettings = null,
 }: TicketsPageClientProps) {
@@ -87,7 +85,6 @@ export function useTicketsPageView({
     closedThreads: threadSources.closed.threads,
     spamThreads: threadSources.spam.threads,
     searchThreads,
-    agentName,
   })
 
   useMobileChromeOverride(
@@ -101,7 +98,6 @@ export function useTicketsPageView({
   const listThreads = isSearchMode ? searchThreads : dbThreads
 
   const { filteredTickets, liveTickets } = useVisibleTicketList({
-    agentName,
     effectiveActiveView,
     hasShopify,
     isSearchMode,
@@ -244,7 +240,6 @@ export function useTicketsPageView({
         activeThread,
         activeThreadError,
         activeThreadPreview,
-        agentName,
         cachedPlan,
         conversationTicket,
         failedMessages: failedMessages.filter(m => m.threadId === activeTicketId),

@@ -1,5 +1,6 @@
 "use client"
 
+import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { BusinessHoursSection } from "./BusinessHoursSection"
 import { SpamFilterSection } from "./SpamFilterSection"
 import { SectionCard } from "@/components/settings-form/shared"
@@ -14,7 +15,7 @@ export function WhenOnDutySection({
 }) {
   return (
     <SectionCard
-      title={`When ${controller.settingsState.agentName} is on duty`}
+      title={`When ${AGENT_DISPLAY_NAME} is on duty`}
       description="Working hours and how inbound mail is handled when you're away."
       variant="board"
     >

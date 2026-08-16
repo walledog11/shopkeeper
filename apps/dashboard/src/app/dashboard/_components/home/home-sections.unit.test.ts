@@ -8,7 +8,6 @@ describe("home summary sections", () => {
   it("shows an all-clear state when nothing needs attention", () => {
     const needsYou = renderToStaticMarkup(createElement(NeedsYou, {
       items: [],
-      agentName: "Shopkeeper",
       onApproved: vi.fn(),
     }))
 
@@ -19,7 +18,6 @@ describe("home summary sections", () => {
   it("shows a skeleton while needs-you cards are loading", () => {
     const needsYou = renderToStaticMarkup(createElement(NeedsYou, {
       items: [],
-      agentName: "Shopkeeper",
       isLoading: true,
       onApproved: vi.fn(),
     }))
@@ -31,7 +29,6 @@ describe("home summary sections", () => {
 
   it("does not render cleared overnight when there is nothing to show", () => {
     expect(renderToStaticMarkup(createElement(ClearedOvernight, {
-      agentName: "Shopkeeper",
       totalCount: 0,
       topics: [],
     }))).toBe("")
@@ -39,7 +36,6 @@ describe("home summary sections", () => {
 
   it("names every cleared ticket in the overnight line", () => {
     const markup = renderToStaticMarkup(createElement(ClearedOvernight, {
-      agentName: "Shopkeeper",
       totalCount: 9,
       topics: [
         { tag: "Shipping", count: 3 },

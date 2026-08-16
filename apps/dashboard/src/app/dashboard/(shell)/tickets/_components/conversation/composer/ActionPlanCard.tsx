@@ -1,6 +1,7 @@
 "use client"
 
 import { AlertTriangle, Check, ChevronUp, CircleX, Loader2, RefreshCw } from "lucide-react"
+import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import type { AgentPlan, PlanExecutionOutcome, RawToolCall } from "@/types"
 import { ActionPlanBody } from "./ActionPlanBody"
 import { useActionPlanReviewState } from "./useActionPlanReviewState"
@@ -10,7 +11,6 @@ const PLAN_CARD_CLASS =
 
 interface Props {
   plan: AgentPlan
-  agentName?: string
   customerName?: string | null
   executionOutcome: PlanExecutionOutcome | null
   isExecuting: boolean
@@ -24,7 +24,6 @@ interface Props {
 }
 
 interface ActionPlanCardHeaderProps {
-  agentName: string
   collapsedPreview: string | null
   headerLabel: string
   isMobileSticky: boolean
@@ -39,7 +38,6 @@ interface ActionPlanCardHeaderProps {
 }
 
 function ActionPlanCardHeader({
-  agentName,
   collapsedPreview,
   headerLabel,
   isMobileSticky,
@@ -59,7 +57,7 @@ function ActionPlanCardHeader({
           <span className="size-5 rounded-full bg-foreground/[0.06] flex items-center justify-center shrink-0">
             <ChevronUp className="size-3 text-muted-foreground" />
           </span>
-          <span className="text-xs font-semibold text-muted-foreground shrink-0">{agentName}&apos;s draft</span>
+          <span className="text-xs font-semibold text-muted-foreground shrink-0">{AGENT_DISPLAY_NAME}&apos;s draft</span>
           {collapsedPreview && (
             <span className="text-xs text-muted-foreground truncate ml-auto">
               {collapsedPreview}
@@ -234,7 +232,6 @@ function ActionPlanControls({
 
 export default function ActionPlanCard({
   plan,
-  agentName = "Shopkeeper",
   customerName,
   executionOutcome,
   isExecuting,
@@ -248,7 +245,6 @@ export default function ActionPlanCard({
 }: Props) {
   const isMobileSticky = layout === "mobile-sticky"
   const review = useActionPlanReviewState({
-    agentName,
     customerName,
     executionOutcome,
     isExecuting,
@@ -289,7 +285,6 @@ export default function ActionPlanCard({
       className={PLAN_CARD_CLASS}
     >
       <ActionPlanCardHeader
-        agentName={agentName}
         collapsedPreview={collapsedPreview}
         headerLabel={headerLabel}
         isMobileSticky={isMobileSticky}

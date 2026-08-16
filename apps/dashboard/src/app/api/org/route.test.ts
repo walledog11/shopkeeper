@@ -272,19 +272,24 @@ describe('/api/org PATCH settings', () => {
       },
     });
 
-    const res = await PATCH(patchReq({ settings: { agentName: 'Ada' } }));
+    const res = await PATCH(patchReq({ settings: { brandVoice: 'warmer' } }));
 
     expect(res.status).toBe(200);
     const body = await res.json() as { settings: Record<string, unknown> };
     expect(body.settings).toEqual({
-      agentName: 'Ada',
-      brandVoice: 'warm',
+      brandVoice: 'warmer',
       businessHoursEnabled: true,
       toolsEnabled: { action: false },
     });
 
     const saved = await db.organization.findUniqueOrThrow({ where: { id: org.id } });
     expect(saved.settings).toEqual(body.settings);
+  });
+
+  it('rejects agent name patches', async () => {
+    const res = await PATCH(patchReq({ settings: { agentName: 'Ada' } }));
+
+    expect(res.status).toBe(400);
   });
 });
 

@@ -1,16 +1,15 @@
 "use client"
 
 import { useOperatorChannels } from "@/hooks/useOperatorChannels"
+import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import ChannelConnectBanner from "@/app/dashboard/_components/ChannelConnectBanner"
 
 interface Props {
-  agentName: string
   enabled: boolean
   showConnectBanner?: boolean
 }
 
 export default function AgentPanelTelegramNudge({
-  agentName,
   enabled,
   showConnectBanner = true,
 }: Props) {
@@ -21,7 +20,7 @@ export default function AgentPanelTelegramNudge({
   if (!anyBound && showConnectBanner) {
     return (
       <ChannelConnectBanner className="shrink-0 mx-5 md:mx-6">
-        Message {agentName} from your phone —
+        Message {AGENT_DISPLAY_NAME} from your phone —
       </ChannelConnectBanner>
     )
   }

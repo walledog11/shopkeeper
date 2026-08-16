@@ -72,7 +72,6 @@ export interface BuildTicketListPresentationInput {
     messages: Array<Pick<Thread["messages"][number], "id" | "senderType" | "contentText" | "sentAt">>
   }
   orgSettings?: Partial<OrgSettings> | null
-  agentName?: string
   agentBusy?: boolean
   activeTab?: "open" | "closed"
   listView?: "for_me" | "all_open" | "closed" | "spam"

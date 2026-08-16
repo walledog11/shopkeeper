@@ -9,17 +9,16 @@ import { needsYouCardShellClassName } from "./needs-you-card-styles"
 
 interface Props {
   items: HomeNeedsAttentionItem[]
-  agentName: string
   isLoading?: boolean
   onApproved: () => void
 }
 
-export default function NeedsYou({ items, agentName, isLoading = false, onApproved }: Props) {
+export default function NeedsYou({ items, isLoading = false, onApproved }: Props) {
   if (isLoading && items.length === 0) return <NeedsYouLoadingSkeleton />
 
-  if (items.length === 0) return <NeedsYouAllClear agentName={agentName} />
+  if (items.length === 0) return <NeedsYouAllClear />
 
-  return <NeedsYouDeck items={items} agentName={agentName} onApproved={onApproved} />
+  return <NeedsYouDeck items={items} onApproved={onApproved} />
 }
 
 function NeedsYouLoadingSkeleton() {

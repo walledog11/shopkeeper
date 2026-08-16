@@ -10,7 +10,6 @@ import { PlanReviewSurface } from "./PlanReviewSurface"
 import type { AgentPlan, PlanExecutionOutcome, RawToolCall, Ticket } from "@/types"
 
 interface Props {
-  agentName: string
   containerRef?: Ref<HTMLDivElement>
   planCardRef?: Ref<HTMLDivElement>
   agentInstruction: string
@@ -51,7 +50,6 @@ interface MobileManualEditState {
 }
 
 export default function ConversationComposerArea({
-  agentName,
   containerRef,
   planCardRef,
   agentInstruction,
@@ -113,7 +111,6 @@ export default function ConversationComposerArea({
 
   const sharedComposerProps = {
     customerName: composer.customerName,
-    agentName,
     channelType: composer.channelType,
     shopifyCustomerId: composer.shopifyCustomerId,
     customerPlatformId: composer.customerPlatformId,
@@ -155,7 +152,6 @@ export default function ConversationComposerArea({
               />
             ) : pendingPlan ? (
               <PlanReviewSurface
-                agentName={agentName}
                 customerName={composer.customerName}
                 isExecuting={isPlanExecuting}
                 isRegenerating={isRegenerating}
@@ -186,7 +182,6 @@ export default function ConversationComposerArea({
             className="pointer-events-auto px-5 pb-2 pt-1"
           >
             <PlanReviewSurface
-              agentName={agentName}
               customerName={composer.customerName}
               isExecuting={isPlanExecuting}
               isRegenerating={isRegenerating}

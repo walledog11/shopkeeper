@@ -21,12 +21,10 @@ import { isSampleNeedsYouItem } from "./sample-needs-you-items"
 
 export function NeedsYouCard({
   item,
-  agentName,
   onSent,
   onAnswered,
 }: {
   item: HomeNeedsAttentionItem
-  agentName: string
   onSent: () => void
   onAnswered: (result?: { saveToKb: boolean }) => void
 }) {
@@ -52,7 +50,6 @@ export function NeedsYouCard({
             <MerchantAnswerForm
               threadId={item.threadId}
               question={item.question}
-              agentName={agentName}
               onAnswered={onAnswered}
             />
           </div>

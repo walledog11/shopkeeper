@@ -103,9 +103,9 @@ describe("agent tab helpers", () => {
     const changed = agentSettingsReducer(base, { type: "set", patch: { agentName: "Ada" } });
     const reset = agentSettingsReducer(changed, { type: "reset", payload: base });
 
-    expect(changed.agentName).toBe("Ada");
+    expect(changed.agentName).toBe("Shopkeeper");
     expect(base.agentName).toBe("Shopkeeper");
-    expect(reset).toBe(base);
+    expect(reset).toEqual(base);
   });
 
   it("collects explicit autonomy override paths from raw settings", () => {

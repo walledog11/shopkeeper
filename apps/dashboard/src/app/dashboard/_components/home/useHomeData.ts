@@ -1,6 +1,5 @@
 import { useCallback, useMemo } from "react"
 import useSWR from "swr"
-import { AGENT_SETTINGS_DEFAULTS } from "@shopkeeper/agent/settings"
 import { fetcher } from "@/lib/api/fetcher"
 import {
   HOME_SUMMARY_REFRESH_INTERVAL_MS,
@@ -18,7 +17,6 @@ import { isShopifyIntegrationActive } from "@/lib/integrations/shopify-connectio
 
 export function useHomeData(
   initialHomeSummary?: HomeSummary,
-  agentName?: string,
   initialChannelState?: HomeChannelState,
 ) {
   const {
@@ -93,7 +91,6 @@ export function useHomeData(
     home.hasSentReply,
   ])
 
-  const resolvedAgentName = agentName ?? AGENT_SETTINGS_DEFAULTS.agentName
   const refreshHomeSummary = useCallback(() => {
     void mutateSummary()
   }, [mutateSummary])
@@ -108,7 +105,6 @@ export function useHomeData(
     hasInstagram,
     hasPhoneBound,
     workflowSteps,
-    agentName: resolvedAgentName,
     isSummaryPending: isInitialSummaryLoading,
     refreshHomeSummary,
   }

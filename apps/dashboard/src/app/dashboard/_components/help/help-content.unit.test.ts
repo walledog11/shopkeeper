@@ -61,7 +61,7 @@ describe("help content", () => {
     }
   })
 
-  it("substitutes the merchant's agent name into rendered copy", () => {
+  it("substitutes the agent display name into rendered copy", () => {
     const article: Article = {
       id: "t",
       title: "Working with {agent}",
@@ -73,12 +73,12 @@ describe("help content", () => {
     container = document.createElement("div")
     document.body.appendChild(container)
     root = createRoot(container)
-    act(() => root?.render(React.createElement(HelpArticle, { article, agentName: "Wren" })))
+    act(() => root?.render(React.createElement(HelpArticle, { article })))
 
-    expect(container.textContent).toContain("Working with Wren")
-    expect(container.textContent).toContain("Wren drafts a reply.")
-    expect(container.textContent).toContain("Ask Wren.")
-    expect(container.textContent).toContain("Wren waits for you.")
+    expect(container.textContent).toContain("Working with Shopkeeper")
+    expect(container.textContent).toContain("Shopkeeper drafts a reply.")
+    expect(container.textContent).toContain("Ask Shopkeeper.")
+    expect(container.textContent).toContain("Shopkeeper waits for you.")
     expect(container.textContent).not.toContain("{agent}")
   })
 

@@ -1,6 +1,7 @@
 "use client"
 
 import { AlertCircle, CheckCircle2, Inbox, Loader2 } from "lucide-react"
+import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 
 export function TicketsErrorState() {
   return (
@@ -40,10 +41,8 @@ export function ConversationLoadState({ error, compact = false }: {
 }
 
 export function NoConversationSelectedState({
-  agentName,
   allCaughtUp,
 }: {
-  agentName: string
   allCaughtUp: boolean
 }) {
   return (
@@ -60,7 +59,7 @@ export function NoConversationSelectedState({
         </h2>
         <p className="max-w-[230px] text-sm text-muted-foreground">
           {allCaughtUp
-            ? `${agentName} will flag anything that needs your eye.`
+            ? `${AGENT_DISPLAY_NAME} will flag anything that needs your eye.`
             : "Choose one from the list to jump in."}
         </p>
       </div>

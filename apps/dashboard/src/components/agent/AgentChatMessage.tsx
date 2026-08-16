@@ -2,6 +2,7 @@ import { AlertCircle, Check, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import AgentAvatar from "@/components/agent/AgentAvatar"
 import { formatClockTime } from "@/lib/format/date"
+import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { AgentMessageMarkdown } from "@/components/agent/AgentMessageMarkdown"
 import {
   getToolChipLabel,
@@ -25,14 +26,12 @@ function getToolResultHint(tool: string, result: string): string | null {
 }
 
 export function AgentChatMessage({
-  agentName,
   message,
   onApprove,
   onDismiss,
   isRunning,
   hideAvatar,
 }: {
-  agentName: string
   message: Extract<ChatMessage, { role: "agent" }>
   onApprove: () => void
   onDismiss: () => void
@@ -48,11 +47,11 @@ export function AgentChatMessage({
 
   return (
     <div className={hideAvatar ? "" : "flex items-start gap-3"}>
-      {!hideAvatar && <AgentAvatar agentName={agentName} size="md" className="mt-0.5" />}
+      {!hideAvatar && <AgentAvatar size="md" className="mt-0.5" />}
       <div className={hideAvatar ? "min-w-0 max-w-full" : "flex-1 min-w-0 max-w-[75%]"}>
         {!hideAvatar && (
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs font-medium text-foreground">{agentName}</span>
+            <span className="text-xs font-medium text-foreground">{AGENT_DISPLAY_NAME}</span>
             <span className="text-xs text-muted-foreground">{formatClockTime(message.timestamp)}</span>
           </div>
         )}

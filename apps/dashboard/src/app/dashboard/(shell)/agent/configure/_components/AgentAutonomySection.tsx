@@ -1,5 +1,6 @@
 "use client"
 
+import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { effectiveRefundCap, visibleAutonomyTiers } from "@/lib/agent/autonomy-tiers"
 import { SectionCard } from "@/components/settings-form/shared"
 import { tierDefaultForPath } from "./agent-tab-helpers"
@@ -20,7 +21,7 @@ export function AgentAutonomySection({ controller }: { controller: AgentTabContr
     <div id="autonomy" className="scroll-mt-4">
       <SectionCard
         title="Trust level"
-        description={`How much ${settingsState.agentName} can do before asking you. Most stores stay on Ask first.`}
+        description={`How much ${AGENT_DISPLAY_NAME} can do before asking you. Most stores stay on Ask first.`}
         variant="board"
       >
         <div
