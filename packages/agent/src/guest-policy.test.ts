@@ -90,6 +90,18 @@ describe("planning warnings", () => {
       "Couldn't find a Shopify customer - verify the correct account is linked before approving.",
     ]);
   });
+
+  it("warns when the recent-orders pre-fetch failed", () => {
+    const warnings: string[] = [];
+    appendInitialPlanningWarnings({
+      ctx: makeCtx({ recentOrdersFetchFailed: true }),
+      operatorMode: false,
+      warnings,
+    });
+    expect(warnings).toContain(
+      "Shopify recent-orders pre-fetch failed - verify order details before approving.",
+    );
+  });
 });
 
 describe("guest allowlist", () => {

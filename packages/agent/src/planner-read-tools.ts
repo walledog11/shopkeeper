@@ -58,6 +58,9 @@ export function appendInitialPlanningWarnings(input: {
   warnings: string[];
 }): void {
   const { ctx, operatorMode, warnings } = input;
+  if (ctx.recentOrdersFetchFailed) {
+    warnings.push("Shopify recent-orders pre-fetch failed - verify order details before approving.");
+  }
   // A guest shopper has no Shopify customer by construction, so this would fire
   // on every storefront plan and ask the merchant to verify a link that cannot
   // exist. A warning present on every plan is a warning nobody reads.

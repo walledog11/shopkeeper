@@ -168,6 +168,7 @@ describe("classifyHomePlan — info-only plans (existing behavior, default tier)
     for (const warning of [
       "No matching order found - confirm the order number with the customer before proceeding.",
       "No tracking information found - the order may not have been fulfilled yet.",
+      "Shopify recent-orders pre-fetch failed - verify order details before approving.",
     ]) {
       expect(classifyHomePlan(plan({ warnings: [warning] })).kind).toBe("needs_review")
     }
