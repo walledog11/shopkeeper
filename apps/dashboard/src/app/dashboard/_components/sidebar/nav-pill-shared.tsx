@@ -12,13 +12,15 @@ const HEADER_ATTR: Record<NavPillHeaderId, string> = {
   "account-header": "data-dashboard-account-header",
 };
 
+type NavPillVariant = "topBar" | "sheet" | "embedded";
+
 export function NavPillShell({
   variant,
   headerId,
   trigger,
   menu,
 }: {
-  variant: "topBar" | "sheet";
+  variant: NavPillVariant;
   headerId: NavPillHeaderId;
   trigger: ReactNode;
   menu: ReactNode;

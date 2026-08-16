@@ -1,7 +1,8 @@
 "use client"
 
 import { Search } from "lucide-react"
-import { useCallback, type KeyboardEvent } from "react"
+import { useCallback, useEffect, useState, type KeyboardEvent } from "react"
+import { createPortal } from "react-dom"
 import { usePathname, useRouter } from "next/navigation"
 import { AnimatePresence, LazyMotion, domAnimation, m } from "motion/react"
 import AgentChatClient from "@/components/agent/AgentChatClient"
@@ -12,6 +13,7 @@ import { useAgentPanel } from "../agent-panel/AgentPanelContext"
 import {
   desktopTopBarUtilityPillClass,
   dispatchNavProgressStart,
+  topBarIconButtonClass,
 } from "../sidebar/sidebar-helpers"
 
 const headerSearchShellBase =
@@ -40,6 +42,11 @@ export function HeaderSearch({ variant = "topBar" }: HeaderSearchProps) {
   const pathname = usePathname()
   const isMobile = variant === "mobile"
   const { input, setInput, isRunning, handleSendText } = chatState
+  const [portalReady, setPortalReady] = useState(false)
+
+  useEffect(() => {
+    setPortalReady(true)
+  }, [])
 
   const handleCollapsedSubmit = useCallback(async () => {
     const trimmed = input.trim()
@@ -70,18 +77,8 @@ export function HeaderSearch({ variant = "topBar" }: HeaderSearchProps) {
   }, [handleCollapsedSubmit])
 
   if (isMobile) {
-    return (
-      <>
-        <button
-          type="button"
-          onClick={() => expand()}
-          aria-label="Search or ask"
-          title="Search or ask (⌘K)"
-          className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-foreground/[0.08] transition-colors"
-        >
-          <Search className="size-5" />
-        </button>
-
+    const mobileOverlay = portalReady
+      ? createPortal(
         <LazyMotion features={domAnimation}>
           <AnimatePresence>
             {isExpanded && (
@@ -91,7 +88,7 @@ export function HeaderSearch({ variant = "topBar" }: HeaderSearchProps) {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
-                className="fixed inset-0 z-50 flex flex-col bg-sidebar md:hidden"
+                className="fixed inset-0 z-[60] flex flex-col bg-sidebar md:hidden"
               >
                 <div className="min-h-0 flex-1">
                   <AgentChatClient
@@ -106,7 +103,24 @@ export function HeaderSearch({ variant = "topBar" }: HeaderSearchProps) {
               </m.div>
             )}
           </AnimatePresence>
-        </LazyMotion>
+        </LazyMotion>,
+        document.body,
+      )
+      : null
+
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => expand()}
+          aria-label="Search or ask"
+          title="Search or ask (⌘K)"
+          className={topBarIconButtonClass}
+        >
+          <Search className="size-5" />
+        </button>
+
+        {mobileOverlay}
       </>
     )
   }

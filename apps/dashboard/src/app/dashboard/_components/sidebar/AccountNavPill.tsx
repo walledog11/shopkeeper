@@ -25,10 +25,12 @@ export function AccountNavPill({
 }: {
   navAuth: NavAuth;
   onClose?: () => void;
-  variant: "topBar" | "sheet";
+  variant: "topBar" | "sheet" | "embedded";
 }) {
   const { user, fullName, roleLabel } = navAuth;
   const isTopBar = variant === "topBar";
+  const isEmbedded = variant === "embedded";
+  const showAvatarOnly = isTopBar || isEmbedded;
 
   const trigger = (
     <button
@@ -37,7 +39,7 @@ export function AccountNavPill({
       title="Account settings"
       className={cn(
         "flex items-center outline-none text-left transition-colors min-w-0",
-        isTopBar
+        showAvatarOnly
           ? "h-12 px-3 rounded-xl hover:bg-sidebar-accent/50"
           : "w-full gap-2.5 rounded-lg px-3 py-2.5 hover:bg-foreground/[0.05]",
       )}
@@ -47,10 +49,10 @@ export function AccountNavPill({
         imageUrl={user?.imageUrl}
         className={cn(
           "rounded-full bg-muted text-sidebar-foreground font-bold shrink-0 ring-1 ring-border/60",
-          isTopBar ? "size-7 text-xs" : "size-8 text-xs ring-border",
+          showAvatarOnly ? "size-7 text-xs" : "size-8 text-xs ring-border",
         )}
       />
-      {!isTopBar && (
+      {!showAvatarOnly && (
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-sidebar-foreground truncate leading-tight text-sm">{fullName}</p>
           <p className="text-xs font-medium text-muted-foreground truncate leading-tight mt-0.5">{roleLabel}</p>

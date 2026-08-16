@@ -31,7 +31,17 @@ function NeedsYouLoadingSkeleton() {
     >
       <Card className={needsYouCardShellClassName("front")}>
         <div className="rounded-t-3xl border-b border-border/60 bg-card px-5 py-3.5 sm:px-6">
-          <div className="flex w-full items-center gap-2">
+          <div className="flex w-full flex-col gap-2 sm:hidden">
+            <div className="flex w-full items-center gap-2">
+              <Skeleton className="needs-you-shimmer h-10 w-10 shrink-0 rounded-2xl bg-foreground/[0.06]" />
+              <Skeleton className="needs-you-shimmer h-10 min-w-0 flex-1 rounded-2xl bg-foreground/[0.06]" />
+            </div>
+            <div className="flex w-full items-center gap-2">
+              <Skeleton className="needs-you-shimmer h-10 min-w-0 flex-1 rounded-2xl bg-foreground/[0.06]" />
+              <Skeleton className="needs-you-shimmer h-10 w-16 shrink-0 rounded-2xl bg-foreground/[0.06]" />
+            </div>
+          </div>
+          <div className="hidden w-full items-center gap-2 sm:flex">
             <Skeleton className="needs-you-shimmer h-10 w-10 shrink-0 rounded-2xl bg-foreground/[0.06]" />
             <Skeleton className="needs-you-shimmer h-10 min-w-0 flex-1 rounded-2xl bg-foreground/[0.06]" />
             <Skeleton className="needs-you-shimmer h-10 w-14 shrink-0 rounded-2xl bg-foreground/[0.06]" />

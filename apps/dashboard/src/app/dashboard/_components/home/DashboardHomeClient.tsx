@@ -50,7 +50,6 @@ export default function DashboardHomeClient({
           "flex flex-col min-h-full w-full mx-auto px-5 md:px-6 lg:px-8 pt-3 pb-4 gap-3",
           dashboardChromeMaxWidthClass,
         )}>
-
           <WorkflowSetupBanner
             steps={data.workflowSteps}
             initialDismissed={workflowBannerDismissed}
@@ -64,7 +63,7 @@ export default function DashboardHomeClient({
             instagramAvailable={instagramAvailable}
           />
 
-          <div className="flex flex-col gap-3 min-w-0">
+          <div className="flex min-w-0 flex-col gap-3">
             <ConciergeBriefing
               greeting={greeting}
               userName={userName}

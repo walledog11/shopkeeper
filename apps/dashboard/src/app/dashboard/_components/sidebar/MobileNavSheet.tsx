@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import type { MouseEvent } from "react";
 import { CircleHelp, X } from "lucide-react";
+import { cn } from "@/lib/ui/cn";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { usePanelBriefingData } from "../agent-panel/usePanelBriefingData";
 import { useHelp } from "../help/HelpContext";
@@ -11,6 +12,12 @@ import { NavGroupList } from "./NavGroupList";
 import { WorkspaceNavPill } from "./WorkspaceNavPill";
 import { AccountNavPill } from "./AccountNavPill";
 import { LogOutButton } from "./LogOutButton";
+import {
+  desktopTopBarUtilityPillClass,
+  mobileNavGroupCardClass,
+  mobileNavLinkClass,
+  topBarIconButtonClass,
+} from "./sidebar-helpers";
 import type { NavAuth } from "./useNavAuth";
 
 export function MobileNavSheet({
@@ -51,31 +58,39 @@ export function MobileNavSheet({
       <SheetContent
         side="right"
         showCloseButton={false}
-        className="flex w-full flex-col gap-0 border-border bg-background p-0 sm:max-w-sm"
+        overlayClassName="bg-foreground/[0.06]"
+        className={cn(
+          "flex w-full flex-col gap-0 border-border/80 p-0 shadow-[0_8px_24px_-6px_rgba(43,33,24,0.14),0_2px_8px_-2px_rgba(43,33,24,0.08)] sm:max-w-sm",
+          "bg-sidebar/95 backdrop-blur-md supports-[backdrop-filter]:bg-sidebar/85",
+        )}
       >
         <SheetTitle className="sr-only">More</SheetTitle>
 
-        <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3">
-          <div className="min-w-0 flex-1">
+        <div className="flex shrink-0 items-center gap-2 px-4 pt-4 pb-3">
+          <div className={cn(desktopTopBarUtilityPillClass, "min-w-0 flex-1")}>
             <WorkspaceNavPill
               navAuth={navAuth}
               onSwitching={onSwitching}
               onClose={onClose}
-              variant="sheet"
+              variant="embedded"
             />
           </div>
-          <AccountNavPill navAuth={navAuth} onClose={onClose} variant="topBar" />
+
+          <div className={desktopTopBarUtilityPillClass}>
+            <AccountNavPill navAuth={navAuth} onClose={onClose} variant="embedded" />
+          </div>
+
           <button
             type="button"
             onClick={onClose}
             aria-label="Close menu"
-            className="shrink-0 rounded-md p-2 text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground"
+            className={topBarIconButtonClass}
           >
             <X className="size-5" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4">
+        <div className="flex-1 overflow-y-auto px-4 py-2">
           <NavGroupList
             sections={mobileNavSections}
             pathname={pathname}
@@ -85,16 +100,18 @@ export function MobileNavSheet({
           />
         </div>
 
-        <div className="shrink-0 border-t border-border px-4 py-3 space-y-1">
-          <button
-            type="button"
-            onClick={handleOpenHelp}
-            className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground"
-          >
-            <CircleHelp className="size-4 shrink-0" />
-            Help
-          </button>
-          <LogOutButton navAuth={navAuth} variant="sheet" onClick={onClose} />
+        <div className="shrink-0 px-4 pb-4 pt-2">
+          <div className={mobileNavGroupCardClass}>
+            <button
+              type="button"
+              onClick={handleOpenHelp}
+              className={mobileNavLinkClass(false)}
+            >
+              <CircleHelp className="size-[18px] shrink-0 stroke-[1.5] text-sidebar-foreground/70" />
+              <span className="flex-1 text-sm font-medium leading-tight">Help</span>
+            </button>
+            <LogOutButton navAuth={navAuth} variant="sheet" onClick={onClose} />
+          </div>
         </div>
       </SheetContent>
     </Sheet>

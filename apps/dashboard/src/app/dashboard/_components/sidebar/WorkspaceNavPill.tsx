@@ -33,10 +33,11 @@ export function WorkspaceNavPill({
   navAuth: NavAuth;
   onSwitching: (v: boolean) => void;
   onClose?: () => void;
-  variant: "topBar" | "sheet";
+  variant: "topBar" | "sheet" | "embedded";
 }) {
   const { organization, userMemberships, setActive, mounted } = navAuth;
   const isTopBar = variant === "topBar";
+  const isEmbedded = variant === "embedded";
   const memberships = userMemberships.data as WorkspaceMembership[] | undefined;
   const workspaceName = organization?.name ?? "Workspace";
 
@@ -64,7 +65,9 @@ export function WorkspaceNavPill({
         "flex items-center outline-none text-left transition-colors min-w-0",
         isTopBar
           ? "gap-1.5 h-12 max-w-[14rem] px-4 rounded-xl hover:bg-sidebar-accent/50"
-          : "w-full gap-2 rounded-lg px-3 py-2.5 hover:bg-foreground/[0.05]",
+          : isEmbedded
+            ? "h-12 w-full gap-1.5 px-4 rounded-xl hover:bg-sidebar-accent/50"
+            : "w-full gap-2 rounded-lg px-3 py-2.5 hover:bg-foreground/[0.05]",
       )}
     >
       <span className="truncate text-sm font-semibold text-sidebar-foreground">{workspaceName}</span>

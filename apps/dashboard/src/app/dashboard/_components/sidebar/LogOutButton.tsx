@@ -25,10 +25,10 @@ export function LogOutButton({
       <button
         type="button"
         onClick={handleClick}
-        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-semibold text-destructive transition-colors hover:bg-foreground/[0.05]"
+        className="flex w-full items-center gap-3 px-4 py-3.5 text-left text-sm font-medium text-destructive transition-colors hover:bg-sidebar-accent/80"
       >
-        <LogOut className="size-4 shrink-0" />
-        Log out
+        <LogOut className="size-[18px] shrink-0 stroke-[1.5]" />
+        <span className="flex-1 leading-tight">Log out</span>
       </button>
     );
   }

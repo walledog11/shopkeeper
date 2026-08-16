@@ -22,6 +22,10 @@ export const topBarDropdownItemClass =
 export const desktopTopBarPillClass =
   "flex w-fit max-w-full items-center h-12 rounded-xl border border-border/80 bg-sidebar/95 shadow-[0_8px_24px_-6px_rgba(43,33,24,0.14),0_2px_8px_-2px_rgba(43,33,24,0.08)] backdrop-blur-md supports-[backdrop-filter]:bg-sidebar/85";
 
+/** Icon-only controls inside desktop or mobile top-bar pills. */
+export const topBarIconButtonClass =
+  "inline-flex size-9 shrink-0 items-center justify-center rounded-md text-sidebar-foreground/70 transition-colors outline-none hover:bg-sidebar-accent/80 hover:text-sidebar-foreground";
+
 /** Shared width for desktop chrome so the top bar and main column feel like one layout. */
 export const dashboardChromeMaxWidthClass = "max-w-6xl";
 
@@ -52,6 +56,24 @@ export function navPillDropdownPanelClass(isTopBar: boolean) {
 export function formatOpenCount(openCount: number) {
   return openCount > 9 ? "9+" : openCount;
 }
+
+export function mobileNavLinkClass(active: boolean) {
+  return cn(
+    "flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors outline-none",
+    active
+      ? "bg-sidebar-accent font-medium text-sidebar-foreground"
+      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/80 hover:text-sidebar-foreground",
+  );
+}
+
+export const mobileNavGroupCardClass =
+  "overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] divide-y divide-border";
+
+export const inboxOpenCountBadgeClass =
+  "min-w-[22px] h-[22px] px-1 rounded-md text-[11px] font-bold flex items-center justify-center bg-green-600 text-background tabular-nums leading-none";
+
+export const reviewCountBadgeClass =
+  "min-w-[22px] h-[22px] px-1 rounded-md text-[11px] font-bold flex items-center justify-center bg-amber-600 text-background tabular-nums leading-none";
 
 export function dispatchNavProgressStart() {
   window.dispatchEvent(new Event("nav-progress-start"));

@@ -19,6 +19,7 @@ import { AccountNavPill } from "./AccountNavPill";
 import {
   desktopTopBarPillClass,
   dashboardChromeMaxWidthClass,
+  desktopTopBarUtilityPillClass,
   isRouteActive,
   topBarDropdownItemClass,
   topBarDropdownPanelClass,
@@ -117,14 +118,15 @@ export function DesktopTopBar({
         "mx-auto flex w-full items-center gap-3 px-5 md:px-6 lg:px-8",
         dashboardChromeMaxWidthClass,
       )}>
+        <div className={cn(desktopTopBarUtilityPillClass, "shrink-0 px-3")}>
+          <Logo iconOnly inPill />
+        </div>
+
         <header
           data-dashboard-desktop-header
           className={cn(desktopTopBarPillClass, "gap-2 px-4 shrink-0")}
         >
-          <div className="flex items-center gap-1 shrink-0">
-            <Logo iconOnly />
-
-            <nav aria-label="Dashboard" className="flex items-center gap-1 shrink-0">
+          <nav aria-label="Dashboard" className="flex items-center gap-1 shrink-0">
             <Link
               href={inboxNavItem.href}
               onClick={(e) => handleNavClick(e, inboxIsActive)}
@@ -178,7 +180,6 @@ export function DesktopTopBar({
               <span>{teamNavItem.name}</span>
             </Link>
           </nav>
-          </div>
         </header>
 
         <div className="min-w-0 flex-1">

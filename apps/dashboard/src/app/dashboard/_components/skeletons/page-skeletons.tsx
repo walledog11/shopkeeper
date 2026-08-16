@@ -27,46 +27,46 @@ export function HomePageSkeleton() {
           "flex flex-col min-h-full w-full mx-auto px-5 md:px-6 lg:px-8 pt-3 pb-4 gap-3",
           dashboardChromeMaxWidthClass,
         )}>
-          <Card className={needsYouCardShellClassName("briefing")} aria-busy="true" aria-label="Loading home briefing">
-            <div className="px-5 py-4 sm:px-6">
-              <Pulse className="h-7 w-[72%] max-w-md rounded-lg sm:h-8" />
-              <div className="mt-3 max-w-2xl space-y-2">
-                <Pulse className="h-4 w-full rounded-full" />
-                <Pulse className="h-4 w-[62%] rounded-full" />
-              </div>
-            </div>
-            <div className="flex gap-2 rounded-b-3xl border-t border-border/50 bg-muted/30 px-5 py-4 sm:px-6">
-              <Pulse className="h-12 min-w-0 flex-1 rounded-2xl" />
-              <Pulse className="h-12 min-w-0 flex-1 rounded-2xl" />
-            </div>
-          </Card>
+          <Pulse className="h-11 w-full rounded-md border border-foreground/[0.07] bg-foreground/[0.02]" />
 
-          <section className="mt-5 sm:mt-10 flex flex-col gap-2.5" aria-busy="true" aria-label="Loading action plan cards">
-            <Card className={needsYouCardShellClassName("front")}>
-              <div className="rounded-t-3xl border-b border-border/60 bg-card px-5 pb-4 pt-5 sm:px-6">
-                <div className="flex flex-col items-center gap-3">
-                  <div className="flex w-full items-center gap-2">
-                    <Skeleton className="h-10 w-10 shrink-0 rounded-2xl bg-foreground/[0.06]" />
-                    <Skeleton className="h-10 min-w-0 flex-1 rounded-2xl bg-foreground/[0.06]" />
-                    <Skeleton className="h-10 w-14 shrink-0 rounded-2xl bg-foreground/[0.06]" />
-                    <Skeleton className="h-10 w-16 shrink-0 rounded-2xl bg-foreground/[0.06]" />
-                  </div>
-                  <div className="w-full space-y-2">
-                    <Skeleton className="mx-auto h-7 w-[72%] rounded-full bg-foreground/[0.08]" />
-                    <Skeleton className="mx-auto h-7 w-[48%] rounded-full bg-foreground/[0.08]" />
-                  </div>
+          <Card className={needsYouCardShellClassName("briefing")} aria-busy="true" aria-label="Loading home briefing">
+              <div className="px-5 py-3 sm:px-6 sm:py-4">
+                <Pulse className="h-7 w-[72%] max-w-md rounded-lg sm:h-8" />
+                <div className="mt-3 max-w-2xl space-y-2">
+                  <Pulse className="h-4 w-full rounded-full" />
+                  <Pulse className="h-4 w-[62%] rounded-full" />
                 </div>
               </div>
-              <div className="bg-card px-5 py-4 sm:px-6 space-y-4">
-                <Skeleton className="h-20 w-[85%] rounded-[18px_18px_18px_0] bg-foreground/[0.06]" />
-                <Skeleton className="ml-auto h-24 w-[85%] rounded-[18px_18px_0_18px] bg-foreground/[0.05]" />
-              </div>
-              <div className="rounded-b-3xl border-t border-border/50 bg-muted/30 px-5 py-4 sm:px-6 space-y-2">
-                <Skeleton className="h-12 w-full rounded-2xl bg-foreground/[0.08]" />
-                <Skeleton className="h-12 w-full rounded-2xl bg-foreground/[0.05]" />
+              <div className="flex gap-2 rounded-b-3xl border-t border-border/50 bg-muted/30 px-5 py-3 sm:px-6 sm:py-4">
+                <Pulse className="h-12 min-w-0 flex-1 rounded-2xl" />
+                <Pulse className="h-12 min-w-0 flex-1 rounded-2xl" />
               </div>
             </Card>
-          </section>
+
+            <section className="mt-5 sm:mt-10 flex flex-col gap-2.5" aria-busy="true" aria-label="Loading action plan cards">
+              <Card className={needsYouCardShellClassName("front")}>
+                <div className="rounded-t-3xl border-b border-border/60 bg-card px-5 py-3.5 sm:px-6">
+                  <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
+                    <div className="flex w-full items-center gap-2">
+                      <Skeleton className="h-10 w-10 shrink-0 rounded-2xl bg-foreground/[0.06]" />
+                      <Skeleton className="h-10 min-w-0 flex-1 rounded-2xl bg-foreground/[0.06]" />
+                    </div>
+                    <div className="flex w-full items-center gap-2 sm:w-auto">
+                      <Skeleton className="h-10 min-w-0 flex-1 rounded-2xl bg-foreground/[0.06] sm:w-14 sm:flex-none" />
+                      <Skeleton className="h-10 w-16 shrink-0 rounded-2xl bg-foreground/[0.06]" />
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-4 bg-card px-5 py-4 sm:px-6">
+                  <Skeleton className="h-20 w-[85%] rounded-[18px_18px_18px_0] bg-foreground/[0.06]" />
+                  <Skeleton className="ml-auto h-24 w-[85%] rounded-[18px_18px_0_18px] bg-foreground/[0.05]" />
+                </div>
+                <div className="space-y-2 rounded-b-3xl border-t border-border/50 bg-muted/30 px-5 py-4 sm:px-6">
+                  <Skeleton className="h-12 w-full rounded-2xl bg-foreground/[0.08]" />
+                  <Skeleton className="h-12 w-full rounded-2xl bg-foreground/[0.05]" />
+                </div>
+              </Card>
+            </section>
         </div>
       </div>
     </PageShell>

@@ -80,7 +80,7 @@ export default function ConciergeBriefing({
 
   return (
     <NeedsYouCardShell variant="briefing">
-      <div className="px-5 py-4 sm:px-6">
+      <div className="px-5 py-3 sm:px-6 sm:py-4">
         <h1 className="font-sans text-xl font-semibold leading-tight tracking-tight text-foreground sm:text-2xl">
           {greeting}{userName ? <>, <span className="italic text-muted-foreground">{userName}</span></> : ""}.
         </h1>
@@ -92,14 +92,18 @@ export default function ConciergeBriefing({
         ) : (
           <p className="mt-1.5 max-w-2xl text-sm leading-relaxed tracking-[-0.01em] text-muted-foreground">
             <BriefingNarrativeInline segments={narrativeSegments} />
-            {opsNotes.map(note => (
-              <span key={note.id}> <OpsNoteLink note={note} />.</span>
-            ))}
+            {opsNotes.length > 0 && (
+              <span className={cn(needsYouCount > 0 && "hidden sm:contents")}>
+                {opsNotes.map(note => (
+                  <span key={note.id}> <OpsNoteLink note={note} />.</span>
+                ))}
+              </span>
+            )}
           </p>
         )}
       </div>
 
-      <NeedsYouCardFooter>
+      <NeedsYouCardFooter className="px-5 py-3 sm:px-6 sm:py-4">
         <div className="flex gap-2">
           {isLoading ? (
             <>

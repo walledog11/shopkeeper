@@ -75,9 +75,20 @@ export function NeedsYouCardBody({ children }: { children: ReactNode }) {
   )
 }
 
-export function NeedsYouCardFooter({ children }: { children: ReactNode }) {
+export function NeedsYouCardFooter({
+  children,
+  className,
+}: {
+  children: ReactNode
+  className?: string
+}) {
   return (
-    <div className="relative z-10 mt-auto rounded-b-3xl border-t border-border/50 bg-muted/30 px-5 py-4 sm:px-6">
+    <div
+      className={cn(
+        "relative z-10 mt-auto rounded-b-3xl border-t border-border/50 bg-muted/30 px-5 py-4 sm:px-6",
+        className,
+      )}
+    >
       {children}
     </div>
   )
@@ -153,55 +164,81 @@ function NeedsYouTicketMetaPill({ item }: { item: HomeNeedsAttentionItem }) {
   const localPart = customerLabel && isEmail ? customerLabel.slice(0, emailAt) : customerLabel
   const emailDomain = customerLabel && isEmail ? customerLabel.slice(emailAt + 1) : null
 
+  const channelPill = (
+    <div className={cn(needsYouMetaPillShellClassName, channel.badgeClassName, "w-10 shrink-0")}>
+      <Image
+        src={channel.logo}
+        alt=""
+        width={16}
+        height={16}
+        className="size-4 shrink-0 object-contain"
+        aria-hidden
+      />
+      <span className="sr-only">{channel.label}</span>
+    </div>
+  )
+
+  const customerPill = (
+    <MetaPill className="min-w-0 flex-1 gap-1.5 px-3">
+      {customerLabel && (
+        isEmail ? (
+          <span className="min-w-0 truncate text-sm font-semibold leading-tight text-[#1a1a1a]">
+            <span>{localPart}</span>
+            <span className="font-medium text-[#6b5d4f]">@{emailDomain}</span>
+          </span>
+        ) : (
+          <span className="truncate text-sm font-semibold leading-tight text-[#1a1a1a]">
+            {customerLabel}
+          </span>
+        )
+      )}
+      {item.isVip && (
+        <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.1em] text-violet-700">
+          VIP
+        </span>
+      )}
+    </MetaPill>
+  )
+
+  const topicPill = (
+    <MetaPill className={cn("shrink-0 px-3 sm:max-w-none", topicPillClassName, "min-w-0 flex-1 sm:flex-none sm:shrink-0")}>
+      <span className="truncate text-xs font-bold tabular-nums leading-none sm:max-w-[5.5rem]">
+        {topicLabel}
+      </span>
+    </MetaPill>
+  )
+
+  const datePill = (
+    <MetaPill className="shrink-0 px-3">
+      <time
+        dateTime={item.lastMessageAt}
+        className="text-xs font-semibold tabular-nums tracking-tight text-[#1a1a1a]"
+      >
+        {dateLabel}
+      </time>
+    </MetaPill>
+  )
+
   return (
-    <div className="flex w-full min-w-0 items-center gap-2">
-      <div className={cn(needsYouMetaPillShellClassName, channel.badgeClassName, "w-10 shrink-0")}>
-        <Image
-          src={channel.logo}
-          alt=""
-          width={16}
-          height={16}
-          className="size-4 shrink-0 object-contain"
-          aria-hidden
-        />
-        <span className="sr-only">{channel.label}</span>
+    <>
+      <div className="hidden w-full min-w-0 items-center gap-2 sm:flex">
+        {channelPill}
+        {customerPill}
+        {topicPill}
+        {datePill}
       </div>
 
-      <MetaPill className="min-w-0 flex-1 gap-1.5 px-3">
-        {customerLabel && (
-          isEmail ? (
-            <span className="min-w-0 truncate text-sm font-semibold leading-tight text-[#1a1a1a]">
-              <span>{localPart}</span>
-              <span className="font-medium text-[#6b5d4f]">@{emailDomain}</span>
-            </span>
-          ) : (
-            <span className="truncate text-sm font-semibold leading-tight text-[#1a1a1a]">
-              {customerLabel}
-            </span>
-          )
-        )}
-        {item.isVip && (
-          <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.1em] text-violet-700">
-            VIP
-          </span>
-        )}
-      </MetaPill>
-
-      <MetaPill className={cn("shrink-0 px-3", topicPillClassName)}>
-        <span className="max-w-[5.5rem] truncate text-xs font-bold tabular-nums leading-none">
-          {topicLabel}
-        </span>
-      </MetaPill>
-
-      <MetaPill className="shrink-0 px-3">
-        <time
-          dateTime={item.lastMessageAt}
-          className="text-xs font-semibold tabular-nums tracking-tight text-[#1a1a1a]"
-        >
-          {dateLabel}
-        </time>
-      </MetaPill>
-    </div>
+      <div className="flex w-full min-w-0 flex-col gap-2 sm:hidden">
+        <div className="flex min-w-0 items-center gap-2">
+          {channelPill}
+          {customerPill}
+        </div>
+        <div className="flex min-w-0 items-center gap-2">
+          {topicPill}
+          {datePill}
+        </div>
+      </div>
+    </>
   )
 }
 
