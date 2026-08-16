@@ -313,5 +313,6 @@ describe('AI Summary worker — current request', () => {
     expect(updated?.requestDisposition).toBeNull();
     expect(updated?.requestSourceMessageId).not.toBe(current.id);
     expect(updated?.requestSourceMessageId).toBeNull();
+    expect(updated?.classifierSignals).toBeNull();
   });
 });

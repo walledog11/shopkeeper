@@ -147,8 +147,8 @@ export async function generateThreadIntelligence(
         aiTitle: aiData.title,
         aiSummary: aiData.summary,
         tag: aiData.tag,
-        classifierSignals: classifierSignals(aiData),
         ...(requestIsCurrent && {
+          classifierSignals: classifierSignals(aiData),
           requestSummary: aiData.requestSummary || null,
           requestDisposition: aiData.requestDisposition,
           requestSourceMessageId: sourceMessageId,
