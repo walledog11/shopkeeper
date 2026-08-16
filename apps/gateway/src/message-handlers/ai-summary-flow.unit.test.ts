@@ -124,6 +124,13 @@ describe('processAiSummaryJob merchant-work gate', () => {
       requestDisposition: 'acknowledgement',
       requestSummary: 'Customer says thanks.',
     });
+    mocks.burst.mockResolvedValue({
+      isFollowUp: false,
+      messages: [
+        { id: 'message_0', contentText: 'Hello.' },
+        { id: 'message_1', contentText: 'Thanks!' },
+      ],
+    });
 
     await processAiSummaryJob(JOB);
 
@@ -146,6 +153,28 @@ describe('processAiSummaryJob merchant-work gate', () => {
     expect(mocks.planNotification.mock.calls[0]![4]).toBe(
       'Customer asks for a refund on order #1042.',
     );
+  });
+
+  it('does not suppress an earlier request with a latest-email preclassification', async () => {
+    mocks.requireOrgThread.mockResolvedValue({
+      cachedPlan: {},
+      cachedPlanMessageId: 'message_1',
+      requestSourceMessageId: 'message_1',
+      requestDisposition: 'acknowledgement',
+      requestSummary: 'Customer says thanks.',
+    });
+    mocks.burst.mockResolvedValue({
+      isFollowUp: false,
+      messages: [
+        { id: 'message_0', contentText: 'Where is my order?' },
+        { id: 'message_1', contentText: 'Thanks!' },
+      ],
+    });
+
+    await processAiSummaryJob({ ...JOB, skipSummary: true });
+
+    expect(mocks.consumePlanCache).not.toHaveBeenCalled();
+    expect(mocks.planNotification).toHaveBeenCalledOnce();
   });
 
   it('never suppresses on a verdict written against an older request', async () => {
@@ -230,7 +259,7 @@ describe('processAiSummaryJob safe replies', () => {
       ],
     });
 
-    await processAiSummaryJob(JOB);
+    await processAiSummaryJob({ ...JOB, skipSummary: true });
 
     expect(mocks.autoAck).toHaveBeenCalledWith('org_1', 'thread_1');
   });

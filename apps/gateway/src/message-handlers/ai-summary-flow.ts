@@ -11,7 +11,6 @@ import { CHANNEL } from '../constants.js';
 import logger from '../logger.js';
 import { getConversationBurst } from './conversation-burst.js';
 import { generateThreadIntelligence } from './intelligence.js';
-import { mayParkMerchantWork } from './planning-types.js';
 import {
   precomputeThreadPlan,
   sendAutoAck,
@@ -69,11 +68,13 @@ async function resolvePublishDecision(
   organizationId: string,
   threadId: string,
   identity: { planId: string; sourceMessageId: string } | undefined,
+  skipSummary?: boolean,
 ): Promise<PublishDecision> {
   if (!identity) return { publish: true, requestSummary: null };
-  const [thread, latest] = await Promise.all([
+  const [thread, latest, burst] = await Promise.all([
     requireOrgThread(threadId, organizationId),
     getLatestConversationMessage(threadId, organizationId),
+    getConversationBurst(threadId),
   ]);
   const cached = readAgentPlanCache(thread.cachedPlan);
   const isCurrent = latest?.senderType === 'customer'
@@ -88,7 +89,10 @@ async function resolvePublishDecision(
   // place — and suppressing a refund because the message before it was "thanks"
   // is the one failure this gate must never produce.
   const verdictIsForThisRequest = thread.requestSourceMessageId === identity.sourceMessageId;
-  if (verdictIsForThisRequest && !mayParkMerchantWork(thread.requestDisposition)) {
+  if (
+    verdictIsForThisRequest
+    && shouldSkipRequestWork(thread, burst, identity.sourceMessageId, skipSummary)
+  ) {
     return { publish: false, reason: 'parks_no_work' };
   }
   return {
@@ -181,6 +185,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
         allowAutoExecute: withinBusinessHours,
         instruction: parallelInstruction,
         sourceMessageId,
+        skipSummary,
       })
     : null;
 
@@ -203,6 +208,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
       : await precomputeThreadPlan(organizationId, threadId, settings, {
           allowAutoExecute: false,
           sourceMessageId,
+          skipSummary,
         });
     if (planResult?.autoExecuted) {
       // Routine answers and clarification questions are useful immediately and
@@ -221,7 +227,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
       return;
     }
     const burst = await getConversationBurst(threadId);
-    if (shouldSkipRequestWork(updatedThread, burst, sourceMessageId)) {
+    if (shouldSkipRequestWork(updatedThread, burst, sourceMessageId, skipSummary)) {
       logger.info({ threadId, organizationId }, '[AISummary] Outside business hours — skipping auto-ack');
       return;
     }
@@ -235,6 +241,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
     : await precomputeThreadPlan(organizationId, threadId, settings, {
         allowAutoExecute: true,
         sourceMessageId,
+        skipSummary,
       });
 
   if (!planResult) {
@@ -256,7 +263,12 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
     return;
   }
 
-  const decision = await resolvePublishDecision(organizationId, threadId, planResult.identity);
+  const decision = await resolvePublishDecision(
+    organizationId,
+    threadId,
+    planResult.identity,
+    skipSummary,
+  );
   if (!decision.publish) {
     if (decision.reason === 'parks_no_work') {
       // Nobody asked for anything, so nothing should be waiting on any surface.

@@ -76,7 +76,7 @@ describe('precomputeThreadPlan', () => {
     expect(mockGenerateThreadPlan).not.toHaveBeenCalled();
   });
 
-  it('still plans when an earlier customer request is unanswered', async () => {
+  it('still plans when a preclassified acknowledgement follows an earlier unanswered request', async () => {
     mockFindThread.mockResolvedValue({
       status: 'open',
       requestDisposition: 'acknowledgement',
@@ -94,10 +94,33 @@ describe('precomputeThreadPlan', () => {
       'org_1',
       'thread_1',
       { autoPlanOnOpen: true },
-      { sourceMessageId: 'message_1' },
+      { sourceMessageId: 'message_1', skipSummary: true },
     );
 
     expect(mockGenerateThreadPlan).toHaveBeenCalledOnce();
+  });
+
+  it('skips planning when a whole-burst classifier finds no merchant work', async () => {
+    mockFindThread.mockResolvedValue({
+      status: 'open',
+      requestDisposition: 'acknowledgement',
+      requestSourceMessageId: 'message_1',
+    });
+    mockBurst.mockResolvedValue({
+      isFollowUp: false,
+      messages: [
+        { id: 'message_0', contentText: 'Where is my order?' },
+        { id: 'message_1', contentText: 'Thanks!' },
+      ],
+    });
+
+    await expect(precomputeThreadPlan(
+      'org_1',
+      'thread_1',
+      { autoPlanOnOpen: true },
+      { sourceMessageId: 'message_1' },
+    )).resolves.toBeNull();
+    expect(mockGenerateThreadPlan).not.toHaveBeenCalled();
   });
 });
 

@@ -14,18 +14,21 @@ export function shouldSkipRequestWork(
   } | null | undefined,
   burst: ConversationBurst,
   sourceMessageId?: string,
+  skipSummary?: boolean,
 ): boolean {
   if (!sourceMessageId) return false;
+  const dispositionCoversBurst = skipSummary !== true
+    || burst.messages[0]?.id === sourceMessageId;
   return thread?.requestSourceMessageId !== sourceMessageId
     || burst.messages.at(-1)?.id !== sourceMessageId
-    || (!mayParkMerchantWork(thread.requestDisposition) && burst.messages.length === 1);
+    || (dispositionCoversBurst && !mayParkMerchantWork(thread.requestDisposition));
 }
 
 export async function precomputeThreadPlan(
   organizationId: string,
   threadId: string,
   settings: Pick<OrgSettings, 'autoPlanOnOpen'>,
-  options: { allowAutoExecute?: boolean; instruction?: string; sourceMessageId?: string } = {},
+  options: { allowAutoExecute?: boolean; instruction?: string; sourceMessageId?: string; skipSummary?: boolean } = {},
 ): Promise<PrecomputedPlanResult | null> {
   if (settings.autoPlanOnOpen === false) {
     logger.warn({ threadId, organizationId }, '[Worker] autoPlanOnOpen disabled — no plan will be generated for this thread');
@@ -41,7 +44,7 @@ export async function precomputeThreadPlan(
       return null;
     }
     const burst = await getConversationBurst(threadId);
-    if (shouldSkipRequestWork(thread, burst, options.sourceMessageId)) {
+    if (shouldSkipRequestWork(thread, burst, options.sourceMessageId, options.skipSummary)) {
       return null;
     }
 
