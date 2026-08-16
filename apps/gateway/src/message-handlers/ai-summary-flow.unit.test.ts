@@ -50,7 +50,8 @@ vi.mock('@shopkeeper/agent/settings', () => ({
 
 vi.mock('./intelligence.js', () => ({ generateThreadIntelligence: mocks.intelligence }));
 vi.mock('./conversation-burst.js', () => ({ getConversationBurst: mocks.burst }));
-vi.mock('./planning.js', () => ({
+vi.mock('./planning.js', async (importOriginal) => ({
+  ...await importOriginal<typeof import('./planning.js')>(),
   precomputeThreadPlan: mocks.precompute,
   sendAutoAck: mocks.autoAck,
 }));

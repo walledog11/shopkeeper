@@ -15,6 +15,7 @@ import { mayParkMerchantWork } from './planning-types.js';
 import {
   precomputeThreadPlan,
   sendAutoAck,
+  shouldSkipRequestWork,
 } from './planning.js';
 import {
   sendOperatorAutoExecutionNotification,
@@ -220,11 +221,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
       return;
     }
     const burst = await getConversationBurst(threadId);
-    if (
-      updatedThread?.requestSourceMessageId !== sourceMessageId
-      || burst.messages.at(-1)?.id !== sourceMessageId
-      || (!mayParkMerchantWork(updatedThread.requestDisposition) && burst.messages.length === 1)
-    ) {
+    if (shouldSkipRequestWork(updatedThread, burst, sourceMessageId)) {
       logger.info({ threadId, organizationId }, '[AISummary] Outside business hours — skipping auto-ack');
       return;
     }

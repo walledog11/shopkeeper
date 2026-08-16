@@ -1,11 +1,25 @@
-import { db } from '@shopkeeper/db';
+import { db, type DbThreadRequestDisposition } from '@shopkeeper/db';
 import type { OrgSettings } from '@shopkeeper/agent/types';
 import { STATUS } from '../constants.js';
 import logger from '../logger.js';
-import { getConversationBurst } from './conversation-burst.js';
+import { getConversationBurst, type ConversationBurst } from './conversation-burst.js';
 import { requestAutoAck } from './planning-dashboard-client.js';
 import { generateThreadPlan } from './generate-thread-plan.js';
 import { mayParkMerchantWork, type PrecomputedPlanResult } from './planning-types.js';
+
+export function shouldSkipRequestWork(
+  thread: {
+    requestDisposition: DbThreadRequestDisposition | null;
+    requestSourceMessageId: string | null;
+  } | null | undefined,
+  burst: ConversationBurst,
+  sourceMessageId?: string,
+): boolean {
+  if (!sourceMessageId) return false;
+  return thread?.requestSourceMessageId !== sourceMessageId
+    || burst.messages.at(-1)?.id !== sourceMessageId
+    || (!mayParkMerchantWork(thread.requestDisposition) && burst.messages.length === 1);
+}
 
 export async function precomputeThreadPlan(
   organizationId: string,
@@ -27,14 +41,7 @@ export async function precomputeThreadPlan(
       return null;
     }
     const burst = await getConversationBurst(threadId);
-    if (
-      options.sourceMessageId
-      && (
-        thread.requestSourceMessageId !== options.sourceMessageId
-        || burst.messages.at(-1)?.id !== options.sourceMessageId
-        || (!mayParkMerchantWork(thread.requestDisposition) && burst.messages.length === 1)
-      )
-    ) {
+    if (shouldSkipRequestWork(thread, burst, options.sourceMessageId)) {
       return null;
     }
 

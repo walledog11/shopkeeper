@@ -30,7 +30,7 @@ vi.mock('../logger.js', () => ({
 vi.mock('./conversation-burst.js', () => ({ getConversationBurst: mockBurst }));
 vi.mock('./generate-thread-plan.js', () => ({ generateThreadPlan: mockGenerateThreadPlan }));
 
-import { precomputeThreadPlan, sendAutoAck } from './planning.js';
+import { precomputeThreadPlan, sendAutoAck, shouldSkipRequestWork } from './planning.js';
 
 beforeEach(() => {
   mockLogger.debug.mockClear();
@@ -53,6 +53,13 @@ beforeEach(() => {
 });
 
 describe('precomputeThreadPlan', () => {
+  it('does not apply the request-specific gate without a source message id', () => {
+    expect(shouldSkipRequestWork(
+      { requestDisposition: 'none', requestSourceMessageId: null },
+      { isFollowUp: false, messages: [] },
+    )).toBe(false);
+  });
+
   it.each(['none', 'acknowledgement'])('skips planning for a current %s request', async (requestDisposition) => {
     mockFindThread.mockResolvedValue({
       status: 'open',
