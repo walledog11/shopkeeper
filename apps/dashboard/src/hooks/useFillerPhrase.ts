@@ -5,6 +5,11 @@ export function useFillerPhrase(phrases: string[], active: boolean, intervalMs =
 
   useEffect(() => {
     if (!active) return
+    setIndex(0)
+  }, [active, phrases])
+
+  useEffect(() => {
+    if (!active) return
     const id = setInterval(() => {
       setIndex(i => (i + 1) % phrases.length)
     }, intervalMs)

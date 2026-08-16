@@ -2,8 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
-import AgentAvatar from "@/components/agent/AgentAvatar";
-import { useAgentPanel } from "../agent-panel/AgentPanelContext";
+import { HeaderSearch } from "../header-search/HeaderSearch";
 import { Logo } from "../sidebar/Logo";
 
 const ROUTE_TITLES: { prefix: string; title: string }[] = [
@@ -34,7 +33,6 @@ export function MobileHubHeader({
   onOpenNav: () => void;
 }) {
   const pathname = usePathname();
-  const { open: openAgentPanel } = useAgentPanel();
   const routeTitle = resolveRouteTitle(pathname);
 
   return (
@@ -51,15 +49,7 @@ export function MobileHubHeader({
       ) : null}
 
       <div className="flex items-center gap-1">
-        <button
-          type="button"
-          onClick={() => openAgentPanel({ source: "command" })}
-          aria-label="Open agent"
-          title="Open agent"
-          className="p-0.5 rounded-full border border-border bg-foreground hover:bg-foreground/90 transition-colors"
-        >
-          <AgentAvatar agentName={agentName} size="sm" imageSrc="/logos/coco-header-icon.png" />
-        </button>
+        <HeaderSearch agentName={agentName} variant="mobile" />
 
         <button
           type="button"

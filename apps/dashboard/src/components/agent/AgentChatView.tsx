@@ -4,6 +4,7 @@ import type { KeyboardEvent } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { formatClockTime } from "@/lib/format/date"
+import { cn } from "@/lib/ui/cn"
 import AgentAvatar from "@/components/agent/AgentAvatar"
 import AgentPanelBriefing from "@/app/dashboard/_components/agent-panel/AgentPanelBriefing"
 import AgentPanelPendingLedger from "@/app/dashboard/_components/agent-panel/AgentPanelPendingLedger"
@@ -20,6 +21,7 @@ export interface AgentChatClientProps {
   agentName: string
   compact?: boolean
   embedded?: boolean
+  headerSearchMode?: boolean
   onClose?: () => void
   restoreHistory?: boolean
   openContext?: AgentPanelOpenContext | null
@@ -29,6 +31,7 @@ export function AgentChatView({
   agentName,
   compact,
   embedded,
+  headerSearchMode,
   onClose,
   openContext,
   state,
@@ -52,7 +55,7 @@ export function AgentChatView({
   const walkthrough = openContext?.walkthrough ?? null
   // The bottom-anchored layout belongs to the briefing. A walkthrough fills the
   // panel from the top, and no longer pads itself with chat lines to get there.
-  const isEmptyBriefing = messages.length === 0 && !walkthrough && (compact || embedded)
+  const isEmptyBriefing = messages.length === 0 && !walkthrough && (compact || embedded) && !headerSearchMode
 
   const {
     buildWalkthroughInstruction,
@@ -104,9 +107,144 @@ export function AgentChatView({
     textareaRef.current?.focus()
   }
 
+  const scrollAreaClass = headerSearchMode
+    ? "min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pt-2 pb-2 space-y-2"
+    : "min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
+
+  const defaultScrollInnerClass = `px-5 md:px-6 ${
+    compact
+      ? `pb-6 ${onClose ? "pt-14" : "pt-4"}`
+      : "py-6"
+  } ${isEmptyBriefing ? "flex min-h-full flex-col justify-end" : "space-y-6"}`
+
+  const messageBody = (
+    <>
+      {!walkthrough && !headerSearchMode && (
+        <div className={isEmptyBriefing ? "mb-8" : undefined}>
+          <AgentPanelPendingLedger />
+        </div>
+      )}
+
+      {messages.length === 0 && !compact && !embedded && (
+        <div className="max-w-xl mx-auto">
+          <div className="bg-card border border-border rounded-xl p-5">
+            <AgentAvatar agentName={agentName} size="lg" className="mb-3" />
+            <h2 className="text-base font-semibold text-foreground mb-1">
+              {greeting}{firstName ? `, ${firstName}` : ""}.
+            </h2>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Ask me to look up orders, issue refunds, search your knowledge base, draft customer replies, or open any page in the dashboard.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {messages.length === 0 && (compact || embedded) && !walkthrough && !headerSearchMode && (
+        <AgentPanelBriefing
+          greeting={greeting}
+          firstName={firstName}
+          openContext={openContext}
+          onChipSelect={handleChipSelect}
+        />
+      )}
+
+      {messages.map((msg, index) => {
+        if (msg.role === "user") {
+          if (headerSearchMode) {
+            return (
+              <div key={messageKey(msg, index)} className="flex justify-end">
+                <div className="max-w-[90%] rounded-2xl rounded-tr-sm border border-border bg-card px-3 py-2 text-sm text-foreground break-words">
+                  {msg.text}
+                </div>
+              </div>
+            )
+          }
+
+          return (
+            <div key={messageKey(msg, index)} className="flex justify-end items-end gap-2.5">
+              <div className="flex flex-col items-end gap-1 max-w-[70%]">
+                <span className="text-xs text-muted-foreground">{formatClockTime(msg.timestamp)}</span>
+                <div className="bg-card border border-border text-foreground text-sm rounded-2xl rounded-tr-sm px-4 py-2.5 shadow-sm break-words">
+                  {msg.text}
+                </div>
+              </div>
+              <div className="shrink-0 size-7 rounded-full bg-muted border border-border flex items-center justify-center text-xs font-semibold text-foreground mb-0.5">
+                {initial}
+              </div>
+            </div>
+          )
+        }
+
+        if (msg.role === "thinking") {
+          if (headerSearchMode) {
+            return (
+              <div key={messageKey(msg, index)} className="w-full">
+                <div className="rounded-2xl rounded-tl-sm border border-border bg-green-600/15 px-3 py-2.5">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="size-3.5 shrink-0 animate-spin text-foreground/45" />
+                    <span>{fillerPhrase}</span>
+                  </div>
+                </div>
+              </div>
+            )
+          }
+
+          return (
+            <div key={messageKey(msg, index)} className="flex items-start gap-3">
+              <AgentAvatar agentName={agentName} size="md" className="mt-0.5" />
+              <div className="flex items-center gap-2 text-sm text-muted-foreground pt-1">
+                <Loader2 className="size-3.5 animate-spin text-green-500" />
+                {fillerPhrase}
+              </div>
+            </div>
+          )
+        }
+
+        return (
+          <AgentChatMessage
+            key={messageKey(msg, index)}
+            agentName={agentName}
+            message={msg}
+            isRunning={isRunning}
+            hideAvatar={headerSearchMode}
+            onApprove={() => void handleSendText("Yes, do it")}
+            onDismiss={() => void handleSendText("No")}
+          />
+        )
+      })}
+
+      {walkthrough && (
+        <div className="space-y-6">
+          {walkthroughOpening && <WalkthroughNote agentName={agentName} text={walkthroughOpening} />}
+          {decisionNotes.map((note, index) => (
+            <WalkthroughNote key={`${index}-${note}`} agentName={agentName} text={note} />
+          ))}
+          {currentWalkthroughItem && (
+            <WalkthroughCard
+              key={currentWalkthroughItem.threadId}
+              item={currentWalkthroughItem}
+              agentName={agentName}
+              position={walkthroughIndex + 1}
+              total={walkthroughItems.length}
+              disabled={isRunning}
+              onApproved={() => handleWalkthroughDecision(currentWalkthroughItem, "approved")}
+              onSkip={() => handleWalkthroughDecision(currentWalkthroughItem, "skipped")}
+            />
+          )}
+          {walkthroughClosing && <WalkthroughNote agentName={agentName} text={walkthroughClosing} />}
+        </div>
+      )}
+
+      <div ref={messagesEndRef} />
+    </>
+  )
+
   return (
-    <div className="relative flex h-full w-full min-w-0 flex-col overflow-hidden">
-      {compact && onClose && (
+    <div className={cn(
+      "w-full min-w-0",
+      headerSearchMode ? "flex h-full min-h-0 flex-col" : "relative flex h-full flex-col overflow-hidden",
+    )}>
+      {compact && onClose && !headerSearchMode && (
         <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-end p-3">
           <button
             type="button"
@@ -119,111 +257,15 @@ export function AgentChatView({
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
-        <div
-          className={`px-5 md:px-6 ${
-            compact ? `pb-6 ${onClose ? "pt-14" : "pt-4"}` : "py-6"
-          } ${isEmptyBriefing ? "flex min-h-full flex-col justify-end" : "space-y-6"}`}
-        >
-        {/* The ledger leads. A walkthrough is already a decision list, so the two
-            never stack. */}
-        {!walkthrough && (
-          <div className={isEmptyBriefing ? "mb-8" : undefined}>
-            <AgentPanelPendingLedger />
+      <div className={scrollAreaClass}>
+        {headerSearchMode ? messageBody : (
+          <div className={defaultScrollInnerClass}>
+            {messageBody}
           </div>
         )}
-
-        {messages.length === 0 && !compact && !embedded && (
-          <div className="max-w-xl mx-auto">
-            <div className="bg-card border border-border rounded-xl p-5">
-              <AgentAvatar agentName={agentName} size="lg" className="mb-3" />
-              <h2 className="text-base font-semibold text-foreground mb-1">
-                {greeting}{firstName ? `, ${firstName}` : ""}.
-              </h2>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Ask me to look up orders, issue refunds, search your knowledge base, draft customer replies, or open any page in the dashboard.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {messages.length === 0 && (compact || embedded) && !walkthrough && (
-          <AgentPanelBriefing
-            greeting={greeting}
-            firstName={firstName}
-            openContext={openContext}
-            onChipSelect={handleChipSelect}
-          />
-        )}
-
-        {messages.map((msg, index) => {
-          if (msg.role === "user") {
-            return (
-              <div key={messageKey(msg, index)} className="flex justify-end items-end gap-2.5">
-                <div className="flex flex-col items-end gap-1 max-w-[70%]">
-                  <span className="text-xs text-muted-foreground">{formatClockTime(msg.timestamp)}</span>
-                  <div className="bg-card border border-border text-foreground text-sm rounded-2xl rounded-tr-sm px-4 py-2.5 shadow-sm break-words">
-                    {msg.text}
-                  </div>
-                </div>
-                <div className="shrink-0 size-7 rounded-full bg-muted border border-border flex items-center justify-center text-xs font-semibold text-foreground mb-0.5">
-                  {initial}
-                </div>
-              </div>
-            )
-          }
-
-          if (msg.role === "thinking") {
-            return (
-              <div key={messageKey(msg, index)} className="flex items-start gap-3">
-                <AgentAvatar agentName={agentName} size="md" className="mt-0.5" />
-                <div className="flex items-center gap-2 text-sm text-muted-foreground pt-1">
-                  <Loader2 className="size-3.5 animate-spin text-green-500" />
-                  {fillerPhrase}
-                </div>
-              </div>
-            )
-          }
-
-          return (
-            <AgentChatMessage
-              key={messageKey(msg, index)}
-              agentName={agentName}
-              message={msg}
-              isRunning={isRunning}
-              onApprove={() => void handleSendText("Yes, do it")}
-              onDismiss={() => void handleSendText("No")}
-            />
-          )
-        })}
-
-        {walkthrough && (
-          <div className="space-y-6">
-            {walkthroughOpening && <WalkthroughNote agentName={agentName} text={walkthroughOpening} />}
-            {decisionNotes.map((note, index) => (
-              <WalkthroughNote key={`${index}-${note}`} agentName={agentName} text={note} />
-            ))}
-            {currentWalkthroughItem && (
-              <WalkthroughCard
-                key={currentWalkthroughItem.threadId}
-                item={currentWalkthroughItem}
-                agentName={agentName}
-                position={walkthroughIndex + 1}
-                total={walkthroughItems.length}
-                disabled={isRunning}
-                onApproved={() => handleWalkthroughDecision(currentWalkthroughItem, "approved")}
-                onSkip={() => handleWalkthroughDecision(currentWalkthroughItem, "skipped")}
-              />
-            )}
-            {walkthroughClosing && <WalkthroughNote agentName={agentName} text={walkthroughClosing} />}
-          </div>
-        )}
-
-        <div ref={messagesEndRef} />
-        </div>
       </div>
 
-      {compact && (
+      {compact && !headerSearchMode && (
         <AgentPanelTelegramNudge
           agentName={agentName}
           enabled
@@ -231,17 +273,32 @@ export function AgentChatView({
         />
       )}
 
-      <AgentChatComposer
-        compact={compact}
-        currentWalkthroughItem={currentWalkthroughItem}
-        input={input}
-        isRunning={isRunning}
-        onComposerKeyDown={handleComposerKeyDown}
-        onSend={() => void handleSendInput()}
-        onStartFresh={() => setShowStartFreshConfirm(true)}
-        setInput={setInput}
-        textareaRef={textareaRef}
-      />
+      {headerSearchMode ? (
+        <AgentChatComposer
+          compact={compact}
+          pill
+          currentWalkthroughItem={currentWalkthroughItem}
+          input={input}
+          isRunning={isRunning}
+          onComposerKeyDown={handleComposerKeyDown}
+          onSend={() => void handleSendInput()}
+          onStartFresh={() => setShowStartFreshConfirm(true)}
+          setInput={setInput}
+          textareaRef={textareaRef}
+        />
+      ) : (
+        <AgentChatComposer
+          compact={compact}
+          currentWalkthroughItem={currentWalkthroughItem}
+          input={input}
+          isRunning={isRunning}
+          onComposerKeyDown={handleComposerKeyDown}
+          onSend={() => void handleSendInput()}
+          onStartFresh={() => setShowStartFreshConfirm(true)}
+          setInput={setInput}
+          textareaRef={textareaRef}
+        />
+      )}
 
       <Dialog open={showStartFreshConfirm} onOpenChange={setShowStartFreshConfirm}>
         <DialogContent showCloseButton={false} className="max-w-sm">

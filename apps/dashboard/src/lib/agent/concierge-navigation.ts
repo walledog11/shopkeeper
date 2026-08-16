@@ -11,6 +11,7 @@ const QUESTION_PATTERN = /\b(what|how|why|when|who|which|any|anything|is there|a
 const NAV_VERB_PATTERN = /\b(take me|bring me|go to|open|navigate|switch to|pull up|show me the|show me my|head to|jump to)\b/;
 const SETUP_PATTERN = /\b(add|connect|set up|setup|change|update|configure|edit)\b/;
 const EXPLICIT_PAGE_PATTERN = /\b(integrations page|settings page|agent settings|trust level|workspace settings)\b/;
+const AGENT_TASK_PATTERN = /\b(summarize|summarise|summary|recap|overview|list|draft|reply|look up|lookup|find|check|status)\b/;
 
 function normalizeInstruction(text: string): string {
   return text
@@ -22,12 +23,18 @@ function normalizeInstruction(text: string): string {
 
 function looksLikeNavigationIntent(normalized: string): boolean {
   if (!normalized) return false;
+  if (AGENT_TASK_PATTERN.test(normalized)) return false;
   if (QUESTION_PATTERN.test(normalized) && !NAV_VERB_PATTERN.test(normalized)) {
     return false;
   }
   return NAV_VERB_PATTERN.test(normalized)
     || SETUP_PATTERN.test(normalized)
     || EXPLICIT_PAGE_PATTERN.test(normalized);
+}
+
+/** True when the merchant is asking to go somewhere, not to do agent work in chat. */
+export function isConciergeNavigationRequest(instruction: string): boolean {
+  return looksLikeNavigationIntent(normalizeInstruction(instruction));
 }
 
 function scoreDestination(destination: DashboardDestination, normalized: string): number {

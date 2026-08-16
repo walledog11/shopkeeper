@@ -30,12 +30,14 @@ export function AgentChatMessage({
   onApprove,
   onDismiss,
   isRunning,
+  hideAvatar,
 }: {
   agentName: string
   message: Extract<ChatMessage, { role: "agent" }>
   onApprove: () => void
   onDismiss: () => void
   isRunning: boolean
+  hideAvatar?: boolean
 }) {
   const visibleActions = message.actions.filter(a =>
     a.tool !== "send_reply"
@@ -45,15 +47,17 @@ export function AgentChatMessage({
   const awaitingApproval = message.awaitingApproval === true
 
   return (
-    <div className="flex items-start gap-3">
-      <AgentAvatar agentName={agentName} size="md" className="mt-0.5" />
-      <div className="flex-1 min-w-0 max-w-[75%]">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-xs font-medium text-foreground">{agentName}</span>
-          <span className="text-xs text-muted-foreground">{formatClockTime(message.timestamp)}</span>
-        </div>
+    <div className={hideAvatar ? "" : "flex items-start gap-3"}>
+      {!hideAvatar && <AgentAvatar agentName={agentName} size="md" className="mt-0.5" />}
+      <div className={hideAvatar ? "min-w-0 max-w-full" : "flex-1 min-w-0 max-w-[75%]"}>
+        {!hideAvatar && (
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs font-medium text-foreground">{agentName}</span>
+            <span className="text-xs text-muted-foreground">{formatClockTime(message.timestamp)}</span>
+          </div>
+        )}
         {visibleActions.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mb-2.5">
+          <div className={`flex flex-wrap gap-1.5 ${hideAvatar ? "mb-1.5" : "mb-2.5"}`}>
             {visibleActions.map((action) => {
               const variant = getToolChipVariant(action)
               const hint = variant !== "error" ? getToolResultHint(action.tool, action.result) : null

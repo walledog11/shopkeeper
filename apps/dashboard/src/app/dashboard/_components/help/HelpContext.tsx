@@ -12,21 +12,19 @@ interface HelpContextValue {
 const HelpContext = createContext<HelpContextValue | null>(null);
 
 export function HelpProvider({ children }: { children: ReactNode }) {
-  const { isOpen, tab, openTab, close } = useRightRail();
-
-  const helpIsOpen = isOpen && tab === "help";
+  const { isOpen, open, close } = useRightRail();
 
   const openHelp = useCallback(() => {
-    openTab("help");
-  }, [openTab]);
+    open();
+  }, [open]);
 
   const closeHelp = useCallback(() => {
     close();
   }, [close]);
 
   const value = useMemo(
-    () => ({ isOpen: helpIsOpen, openHelp, closeHelp }),
-    [closeHelp, helpIsOpen, openHelp],
+    () => ({ isOpen, openHelp, closeHelp }),
+    [closeHelp, isOpen, openHelp],
   );
 
   return <HelpContext.Provider value={value}>{children}</HelpContext.Provider>;

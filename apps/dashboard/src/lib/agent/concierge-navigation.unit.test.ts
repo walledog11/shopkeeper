@@ -31,6 +31,8 @@ describe("matchConciergeNavigationIntent", () => {
   it("does not treat inbox questions as navigation", () => {
     expect(matchConciergeNavigationIntent("what's in my inbox")).toBeNull();
     expect(matchConciergeNavigationIntent("anything urgent in tickets?")).toBeNull();
+    expect(matchConciergeNavigationIntent("summarize all my open tickets")).toBeNull();
+    expect(matchConciergeNavigationIntent("summarize open tickets")).toBeNull();
   });
 });
 

@@ -6,8 +6,10 @@ import { useRouter, usePathname } from "next/navigation"
 import { useUser } from "@clerk/nextjs"
 import { useFillerPhrase } from "@/hooks/useFillerPhrase"
 import { dispatchNavProgressStart } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
+import { getConciergeFillerPhrases } from "@/lib/agent/concierge-filler-phrases"
 import {
   extractConciergeNavigation,
+  isConciergeNavigationRequest,
   matchConciergeNavigationIntent,
   type NavigateDashboardPayload,
 } from "@/lib/agent/concierge-navigation"
@@ -18,13 +20,7 @@ import {
   type ChatMessage,
 } from "./agent-chat-session"
 
-const CONCIERGE_FILLER_PHRASES = [
-  "Checking Shopify…",
-  "Drafting reply…",
-  "Looking up the order…",
-  "Searching knowledge base…",
-  "Pulling customer history…",
-] as const
+const DEFAULT_FILLER_PHRASES = getConciergeFillerPhrases("")
 
 interface UseAgentChatStateProps {
   /** Load the operator thread's history on mount. Off for surfaces that open on a blank slate. */
@@ -38,7 +34,7 @@ interface SendInstructionOptions {
 // Restored history shares one load timestamp, so position is what actually
 // distinguishes two identical lines in a transcript.
 export function messageKey(message: ChatMessage, index: number): string {
-  if (message.role === "thinking") return "thinking"
+  if (message.role === "thinking") return `thinking-${index}`
   const time = message.timestamp.toISOString()
   return message.role === "user"
     ? `user-${index}-${time}-${message.text}`
@@ -57,7 +53,8 @@ export function useAgentChatState({ restoreHistory = true }: UseAgentChatStatePr
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState("")
   const [isRunning, setIsRunning] = useState(false)
-  const fillerPhrase = useFillerPhrase([...CONCIERGE_FILLER_PHRASES], isRunning)
+  const [fillerPhrases, setFillerPhrases] = useState<string[]>([...DEFAULT_FILLER_PHRASES])
+  const fillerPhrase = useFillerPhrase(fillerPhrases, isRunning)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const restoreHistoryRef = useRef(restoreHistory)
@@ -111,6 +108,7 @@ export function useAgentChatState({ restoreHistory = true }: UseAgentChatStatePr
     }
 
     const sentAt = new Date()
+    setFillerPhrases([...getConciergeFillerPhrases(trimmed)])
     setIsRunning(true)
     setMessages(prev => [
       ...prev,
@@ -130,7 +128,7 @@ export function useAgentChatState({ restoreHistory = true }: UseAgentChatStatePr
       }
 
       const navigation = extractConciergeNavigation(result.actionsPerformed)
-      if (navigation) {
+      if (navigation && isConciergeNavigationRequest(trimmed)) {
         navigateConcierge(navigation)
         setMessages(prev => prev.slice(0, -2))
         return

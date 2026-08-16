@@ -6,6 +6,8 @@ import { needsYouCardShellClassName } from "@/app/dashboard/_components/home/nee
 import { GlassToolbarSkeleton } from "./GlassToolbarSkeleton"
 import { MemoryLibrarySkeleton } from "./MemoryLibrarySkeleton"
 import { Pulse } from "./Pulse"
+import { dashboardChromeMaxWidthClass } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
+import { cn } from "@/lib/ui/cn"
 
 function PageShell({
   children,
@@ -21,7 +23,10 @@ export function HomePageSkeleton() {
   return (
     <PageShell className="@container h-full flex flex-col overflow-hidden bg-background">
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
-        <div className="flex flex-col min-h-full w-full max-w-2xl mx-auto px-5 md:px-6 lg:px-8 pt-3 pb-4 gap-3">
+        <div className={cn(
+          "flex flex-col min-h-full w-full mx-auto px-5 md:px-6 lg:px-8 pt-3 pb-4 gap-3",
+          dashboardChromeMaxWidthClass,
+        )}>
           <Card className={needsYouCardShellClassName("briefing")} aria-busy="true" aria-label="Loading home briefing">
             <div className="px-5 py-4 sm:px-6">
               <Pulse className="h-7 w-[72%] max-w-md rounded-lg sm:h-8" />

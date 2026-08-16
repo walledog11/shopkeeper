@@ -62,8 +62,7 @@ function DashboardSidebarContent({
         </div>
       )}
 
-      <div className="flex flex-1 min-h-0 w-full overflow-x-hidden flex-row bg-background">
-        <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex flex-1 min-h-0 w-full overflow-x-hidden flex-col bg-background">
         <DesktopTopBar
           agentName={agentName}
           openCount={openCount}
@@ -71,18 +70,21 @@ function DashboardSidebarContent({
           navAuth={navAuth}
         />
 
-          <MobileHubHeader
-            agentName={agentName}
-            onOpenNav={openMobileNav}
-          />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-row">
+          <div className="flex min-w-0 flex-1 flex-col">
+            <MobileHubHeader
+              agentName={agentName}
+              onOpenNav={openMobileNav}
+            />
 
-          <div className="dashboard-content relative z-0 flex-1 min-h-0 overflow-hidden flex flex-col">
-            {children}
-            <MainContentScrim />
+            <div className="dashboard-content relative z-0 flex-1 min-h-0 overflow-hidden flex flex-col">
+              {children}
+              <MainContentScrim />
+            </div>
           </div>
-        </div>
 
-        {rightRail}
+          {rightRail}
+        </div>
       </div>
 
       <MobileNavSheet

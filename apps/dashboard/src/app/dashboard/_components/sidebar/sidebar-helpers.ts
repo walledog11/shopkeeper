@@ -22,6 +22,13 @@ export const topBarDropdownItemClass =
 export const desktopTopBarPillClass =
   "flex w-fit max-w-full items-center h-12 rounded-xl border border-border/80 bg-sidebar/95 shadow-[0_8px_24px_-6px_rgba(43,33,24,0.14),0_2px_8px_-2px_rgba(43,33,24,0.08)] backdrop-blur-md supports-[backdrop-filter]:bg-sidebar/85";
 
+/** Shared width for desktop chrome so the top bar and main column feel like one layout. */
+export const dashboardChromeMaxWidthClass = "max-w-6xl";
+
+/** Slightly quieter chrome for search / workspace / account so the nav pill reads first. */
+export const desktopTopBarUtilityPillClass =
+  "flex w-fit max-w-full items-center h-12 rounded-xl border border-border/70 bg-sidebar/90 shadow-[0_4px_16px_-4px_rgba(43,33,24,0.10)] backdrop-blur-md supports-[backdrop-filter]:bg-sidebar/80";
+
 export const desktopTopBarDropdownPanelClass =
   "w-56 rounded-xl border border-border/80 bg-sidebar/95 p-2 text-sidebar-foreground shadow-[0_8px_24px_-6px_rgba(43,33,24,0.14),0_2px_8px_-2px_rgba(43,33,24,0.08)] backdrop-blur-md supports-[backdrop-filter]:bg-sidebar/85";
 

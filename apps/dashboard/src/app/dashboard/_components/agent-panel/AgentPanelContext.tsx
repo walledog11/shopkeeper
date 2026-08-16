@@ -5,14 +5,16 @@ import { usePathname } from "next/navigation"
 import type { AgentChatState } from "@/components/agent/useAgentChatState"
 import { useAgentChatState } from "@/components/agent/useAgentChatState"
 import { isDashboardHome, type AgentPanelOpenContext } from "@/lib/agent/panel"
-import { useRightRail } from "../right-rail/RightRailContext"
 
 interface AgentPanelContextValue {
-  isOpen: boolean
+  isExpanded: boolean
   openContext: AgentPanelOpenContext | null
   chatState: AgentChatState
+  searchInputRef: React.RefObject<HTMLInputElement | null>
   open: (context?: AgentPanelOpenContext) => void
   close: () => void
+  expand: () => void
+  focusSearch: () => void
   toggle: () => void
 }
 
@@ -20,35 +22,46 @@ const AgentPanelContext = createContext<AgentPanelContextValue | null>(null)
 
 export function AgentPanelProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const { isOpen, tab, openTab, close: closeRail } = useRightRail()
+  const [isExpanded, setIsExpanded] = useState(false)
   const [openContext, setOpenContext] = useState<AgentPanelOpenContext | null>(null)
   const chatState = useAgentChatState({ restoreHistory: false })
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const prevPathnameRef = useRef(pathname)
   const clearPanelRef = useRef(chatState.handleClearPanel)
   clearPanelRef.current = chatState.handleClearPanel
 
-  const conciergeIsOpen = isOpen && tab === "concierge"
+  const expand = useCallback(() => {
+    setIsExpanded(true)
+  }, [])
+
+  const close = useCallback(() => {
+    setIsExpanded(false)
+    setOpenContext(null)
+  }, [])
 
   const open = useCallback((context?: AgentPanelOpenContext) => {
     if (context?.walkthrough || context?.threadId) {
       clearPanelRef.current()
     }
     setOpenContext(context ?? null)
-    openTab("concierge")
-  }, [openTab])
+    setIsExpanded(true)
+  }, [])
 
-  const close = useCallback(() => {
-    closeRail()
-    setOpenContext(null)
-  }, [closeRail])
+  const focusSearch = useCallback(() => {
+    if (isExpanded) {
+      chatState.textareaRef.current?.focus()
+      return
+    }
+    searchInputRef.current?.focus()
+  }, [chatState.textareaRef, isExpanded])
 
   const toggle = useCallback(() => {
-    if (isOpen && tab === "concierge") {
+    if (isExpanded) {
       close()
       return
     }
-    open()
-  }, [close, isOpen, open, tab])
+    focusSearch()
+  }, [close, focusSearch, isExpanded])
 
   useEffect(() => {
     const previous = prevPathnameRef.current
@@ -57,6 +70,14 @@ export function AgentPanelProvider({ children }: { children: React.ReactNode }) 
       clearPanelRef.current()
     }
   }, [pathname])
+
+  useEffect(() => {
+    if (!isExpanded) return
+    const id = requestAnimationFrame(() => {
+      chatState.textareaRef.current?.focus()
+    })
+    return () => cancelAnimationFrame(id)
+  }, [isExpanded, chatState.textareaRef])
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -70,8 +91,18 @@ export function AgentPanelProvider({ children }: { children: React.ReactNode }) 
   }, [toggle])
 
   const value = useMemo(
-    () => ({ isOpen: conciergeIsOpen, openContext, chatState, open, close, toggle }),
-    [chatState, close, conciergeIsOpen, open, openContext, toggle],
+    () => ({
+      isExpanded,
+      openContext,
+      chatState,
+      searchInputRef,
+      open,
+      close,
+      expand,
+      focusSearch,
+      toggle,
+    }),
+    [chatState, close, expand, focusSearch, isExpanded, open, openContext, toggle],
   )
 
   return (

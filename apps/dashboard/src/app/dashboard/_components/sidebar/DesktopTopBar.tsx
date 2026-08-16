@@ -11,14 +11,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/ui/cn";
-import AgentAvatar from "@/components/agent/AgentAvatar";
-import { useAgentPanel } from "../agent-panel/AgentPanelContext";
 import { inboxNavItem, integrationsNavItem, shopNavItem, teamNavItem, topBarDropdowns, type NavItem } from "../nav-items";
+import { HeaderSearch } from "../header-search/HeaderSearch";
 import { OpenCountBadge } from "./OpenCountBadge";
 import { Logo } from "./Logo";
 import { AccountNavPill } from "./AccountNavPill";
 import {
   desktopTopBarPillClass,
+  dashboardChromeMaxWidthClass,
   isRouteActive,
   topBarDropdownItemClass,
   topBarDropdownPanelClass,
@@ -108,29 +108,25 @@ export function DesktopTopBar({
 }) {
   const pathname = usePathname();
   const prefetchNav = useDashboardNavPrefetch();
-  const { open: openAgent, close: closeAgent, isOpen: agentIsOpen } = useAgentPanel();
   const inboxIsActive = isRouteActive(pathname, inboxNavItem.href);
   const shopIsActive = isRouteActive(pathname, shopNavItem.href);
   const integrationsIsActive = isRouteActive(pathname, integrationsNavItem.href);
   const teamIsActive = isRouteActive(pathname, teamNavItem.href);
 
-  const handleAgentClick = () => {
-    if (agentIsOpen) closeAgent();
-    else openAgent({ source: "command" });
-  };
-
   return (
-    <div className="hidden md:flex items-center w-full px-4 pt-2 pb-2 shrink-0 relative z-40">
-      <div className="flex-1 min-w-0" />
+    <div className="hidden md:block w-full shrink-0 pt-2 pb-2 relative z-40">
+      <div className={cn(
+        "mx-auto flex w-full items-center gap-3 px-5 md:px-6 lg:px-8",
+        dashboardChromeMaxWidthClass,
+      )}>
+        <header
+          data-dashboard-desktop-header
+          className={cn(desktopTopBarPillClass, "gap-2 px-4 shrink-0")}
+        >
+          <div className="flex items-center gap-1 shrink-0">
+            <Logo iconOnly />
 
-      <header
-        data-dashboard-desktop-header
-        className={cn(desktopTopBarPillClass, "gap-2 px-4 shrink-0")}
-      >
-        <div className="flex items-center gap-1 shrink-0">
-          <Logo iconOnly />
-
-          <nav aria-label="Dashboard" className="flex items-center gap-1 shrink-0">
+            <nav aria-label="Dashboard" className="flex items-center gap-1 shrink-0">
             <Link
               href={inboxNavItem.href}
               onClick={(e) => handleNavClick(e, inboxIsActive)}
@@ -184,30 +180,17 @@ export function DesktopTopBar({
               <span>{teamNavItem.name}</span>
             </Link>
           </nav>
+          </div>
+        </header>
+
+        <div className="min-w-0 flex-1">
+          <HeaderSearch agentName={agentName} />
         </div>
 
-        <div className="flex items-center gap-0.5 rounded-lg bg-muted/40 p-1 shrink-0">
-          <button
-            type="button"
-            onClick={handleAgentClick}
-            aria-label={agentIsOpen ? `Close ${agentName}` : `Open ${agentName}`}
-            title={agentIsOpen ? `Close ${agentName}` : `Chat with ${agentName} (⌘K)`}
-            aria-expanded={agentIsOpen}
-            className={cn(
-              "flex items-center justify-center rounded-full border p-1 transition-colors shrink-0",
-              agentIsOpen
-                ? "border-foreground bg-foreground ring-2 ring-foreground/20"
-                : "border-border bg-foreground hover:bg-foreground/90",
-            )}
-          >
-            <AgentAvatar agentName={agentName} size="sm" imageSrc="/logos/coco-header-icon.png" />
-          </button>
+        <div className="flex shrink-0 items-center gap-3">
+          <WorkspaceNavPill navAuth={navAuth} onSwitching={onSwitching} variant="topBar" />
+          <AccountNavPill navAuth={navAuth} variant="topBar" />
         </div>
-      </header>
-
-      <div className="flex-1 min-w-0 flex items-center justify-end gap-3 pl-6">
-        <WorkspaceNavPill navAuth={navAuth} onSwitching={onSwitching} variant="topBar" />
-        <AccountNavPill navAuth={navAuth} variant="topBar" />
       </div>
     </div>
   );

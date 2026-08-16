@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/ui/cn";
 import { DropdownMenu, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { desktopTopBarPillClass } from "./sidebar-helpers";
+import { desktopTopBarUtilityPillClass } from "./sidebar-helpers";
 
 type NavPillHeaderId = "workspace-header" | "account-header";
 
@@ -33,7 +33,7 @@ export function NavPillShell({
   if (variant !== "topBar") return dropdown;
 
   return (
-    <header {...{ [HEADER_ATTR[headerId]]: "" }} className={cn(desktopTopBarPillClass, "shrink-0")}>
+    <header {...{ [HEADER_ATTR[headerId]]: "" }} className={cn(desktopTopBarUtilityPillClass, "shrink-0")}>
       {dropdown}
     </header>
   );

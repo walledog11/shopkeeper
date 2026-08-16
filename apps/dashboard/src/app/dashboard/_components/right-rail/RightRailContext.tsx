@@ -9,12 +9,9 @@ import {
   type ReactNode,
 } from "react";
 
-export type RightRailTab = "concierge" | "help";
-
 interface RightRailContextValue {
   isOpen: boolean;
-  tab: RightRailTab;
-  openTab: (tab: RightRailTab) => void;
+  open: () => void;
   close: () => void;
 }
 
@@ -22,24 +19,18 @@ const RightRailContext = createContext<RightRailContextValue | null>(null);
 
 export function RightRailProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [tab, setTabState] = useState<RightRailTab>("concierge");
 
-  const setTab = useCallback((next: RightRailTab) => {
-    setTabState(next);
-  }, []);
-
-  const openTab = useCallback((next: RightRailTab) => {
-    setTab(next);
+  const open = useCallback(() => {
     setIsOpen(true);
-  }, [setTab]);
+  }, []);
 
   const close = useCallback(() => {
     setIsOpen(false);
   }, []);
 
   const value = useMemo(
-    () => ({ isOpen, tab, openTab, close }),
-    [close, isOpen, openTab, tab],
+    () => ({ isOpen, open, close }),
+    [close, isOpen],
   );
 
   return <RightRailContext.Provider value={value}>{children}</RightRailContext.Provider>;

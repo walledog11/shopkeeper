@@ -3,9 +3,7 @@
 import * as React from "react";
 import { X } from "lucide-react";
 import { AnimatePresence, LazyMotion, domAnimation, m } from "motion/react";
-import AgentChatClient from "@/components/agent/AgentChatClient";
 import { cn } from "@/lib/ui/cn";
-import { useAgentPanel } from "../agent-panel/AgentPanelContext";
 import { RIGHT_RAIL_SPRING, RIGHT_RAIL_WIDTH } from "./constants";
 import { HelpRailContent } from "./HelpRailContent";
 import { useRightRail } from "./RightRailContext";
@@ -31,8 +29,7 @@ function RailHeader({ title, onClose }: { title: string; onClose: () => void }) 
 }
 
 export default function DashboardRightRail({ agentName }: Props) {
-  const { isOpen, tab, close } = useRightRail();
-  const { openContext, chatState } = useAgentPanel();
+  const { isOpen, close } = useRightRail();
   const isLargeScreen = React.useSyncExternalStore(
     (onStoreChange) => {
       if (typeof window === "undefined") return () => {};
@@ -45,22 +42,11 @@ export default function DashboardRightRail({ agentName }: Props) {
     () => false,
   );
 
-  const headerTitle = tab === "help" ? "Help" : agentName;
-
   const panelBody = (
     <>
-      <RailHeader title={headerTitle} onClose={close} />
+      <RailHeader title="Help" onClose={close} />
       <div className="min-h-0 flex-1 overflow-hidden">
-        {tab === "concierge" ? (
-          <AgentChatClient
-            agentName={agentName}
-            compact
-            openContext={openContext}
-            state={chatState}
-          />
-        ) : (
-          <HelpRailContent agentName={agentName} active={isOpen} />
-        )}
+        <HelpRailContent agentName={agentName} active={isOpen} />
       </div>
     </>
   );
