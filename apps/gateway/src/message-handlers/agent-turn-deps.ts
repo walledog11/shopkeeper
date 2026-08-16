@@ -41,13 +41,18 @@ export function buildGatewayTurnDeps(): ExecuteAgentTurnDeps {
       orgId: string,
       mode,
       operatorLedger,
+      operatorDeskMode,
     ): Promise<AgentContext> =>
       buildContext(
         threadId,
         orgId,
         gatewayThreadSink,
-        mode || operatorLedger
-          ? { ...(mode ? { agentActionMode: mode } : {}), ...(operatorLedger ? { operatorLedger } : {}) }
+        mode || operatorLedger || operatorDeskMode
+          ? {
+              ...(mode ? { agentActionMode: mode } : {}),
+              ...(operatorLedger ? { operatorLedger } : {}),
+              ...(operatorDeskMode ? { operatorDeskMode } : {}),
+            }
           : undefined,
       ),
     runAgent: gatewayRunAgent,

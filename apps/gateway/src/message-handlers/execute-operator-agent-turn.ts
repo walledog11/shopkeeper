@@ -26,6 +26,7 @@ export interface ExecuteOperatorAgentTurnParams {
   // executeOperatorApprovedCachedPlan so it cannot bypass the durable claim.
   operatorKey: string;
   operatorLedger?: string;
+  operatorDeskMode?: boolean;
   moduleTools?: Record<string, AgentToolDefinition>;
 }
 
@@ -85,6 +86,7 @@ export async function executeOperatorAgentTurn(
     ...(params.turnId ? { turnId: params.turnId } : {}),
     failureRoute: FAILURE_ROUTE,
     ...(params.operatorLedger ? { operatorLedger: params.operatorLedger } : {}),
+    ...(params.operatorDeskMode ? { operatorDeskMode: params.operatorDeskMode } : {}),
     ...(params.moduleTools ? { moduleTools: params.moduleTools } : {}),
     persistUserMessage: true,
     persistAgentMessage: true,

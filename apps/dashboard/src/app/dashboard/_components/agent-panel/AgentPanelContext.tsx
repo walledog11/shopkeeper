@@ -58,6 +58,17 @@ export function AgentPanelProvider({ children }: { children: React.ReactNode }) 
     }
   }, [pathname])
 
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault()
+        toggle()
+      }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [toggle])
+
   const value = useMemo(
     () => ({ isOpen: conciergeIsOpen, openContext, chatState, open, close, toggle }),
     [chatState, close, conciergeIsOpen, open, openContext, toggle],

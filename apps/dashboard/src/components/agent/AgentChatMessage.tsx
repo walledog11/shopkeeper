@@ -37,7 +37,11 @@ export function AgentChatMessage({
   onDismiss: () => void
   isRunning: boolean
 }) {
-  const visibleActions = message.actions.filter(a => a.tool !== "send_reply" && a.tool !== "add_internal_note")
+  const visibleActions = message.actions.filter(a =>
+    a.tool !== "send_reply"
+    && a.tool !== "add_internal_note"
+    && a.tool !== "navigate_dashboard",
+  )
   const awaitingApproval = message.awaitingApproval === true
 
   return (

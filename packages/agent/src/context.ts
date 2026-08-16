@@ -91,6 +91,8 @@ export interface BuildContextOptions {
   // Operator channel only: host-rendered pending-state ledger. Copied verbatim
   // onto the context and surfaced in the operator prompt; opaque to the core.
   operatorLedger?: string;
+  // Dashboard Concierge only: navigation tools and prompt guidance apply.
+  operatorDeskMode?: boolean;
 }
 
 function mergePinnedKbArticles(
@@ -234,6 +236,7 @@ export async function buildContext(
   const isVerified = isStorefront && verifiedOrders.length > 0;
 
   let recentOrders: ShopifyOrderSummary[] = [];
+  let recentOrdersFetchFailed = false;
   if (shopifyCustomerId && shopifyIntegration?.accessToken) {
     const ctx: ShopifyContext = { shop: shopifyIntegration.externalAccountId, accessToken: shopifyIntegration.accessToken };
 
@@ -256,7 +259,16 @@ export async function buildContext(
           fields: "id,name,created_at,financial_status,fulfillment_status,current_total_price,line_items,shipping_address",
         },
       }
-    ).catch(() => null);
+    ).catch((error) => {
+      recentOrdersFetchFailed = true;
+      logger.warn({
+        orgId,
+        threadId: thread.id,
+        shopifyCustomerId,
+        err: error,
+      }, "[agent:context] recent orders pre-fetch failed");
+      return null;
+    });
 
     const [nameData, ordersData] = await Promise.all([nameFetch, ordersFetch]);
 
@@ -392,6 +404,7 @@ export async function buildContext(
     },
     openThreadCount,
     recentOrders,
+    ...(recentOrdersFetchFailed ? { recentOrdersFetchFailed: true } : {}),
     linkedShopifyCustomerName: isOperator ? shopifyCustomerName : null,
     kbArticles: kbArticles.map(a => ({ title: a.title, body: a.body })),
     classifierSignals: parseClassifierSignals(thread.classifierSignals),
@@ -402,5 +415,6 @@ export async function buildContext(
             : options.operatorLedger,
         }
       : {}),
+    ...(options?.operatorDeskMode ? { operatorDeskMode: true } : {}),
   };
 }

@@ -65,9 +65,8 @@ export function AgentChatView({
     walkthroughOpening,
   } = useAgentWalkthrough({ walkthrough })
 
-  // An instruction carried in from ⌘K lands in the composer rather than sending
-  // itself: the palette knows the intent, but "refund 1234" is the merchant's
-  // send to make.
+  // An instruction carried in from another surface lands in the composer rather
+  // than sending itself — the merchant still chooses when to send.
   const seededInstructionRef = useRef<string | null>(null)
   useEffect(() => {
     const instruction = openContext?.instruction?.trim()
@@ -142,7 +141,7 @@ export function AgentChatView({
                 {greeting}{firstName ? `, ${firstName}` : ""}.
               </h2>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Ask me to look up orders, issue refunds, search your knowledge base, or draft customer replies.
+                Ask me to look up orders, issue refunds, search your knowledge base, draft customer replies, or open any page in the dashboard.
               </p>
             </div>
           </div>

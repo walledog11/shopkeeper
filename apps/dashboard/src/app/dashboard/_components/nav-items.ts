@@ -112,10 +112,3 @@ export const mobileNavSections: NavSection[] = [
     items: [topBarSettingsItems[0], topBarSettingsItems[2], topBarSettingsItems[1]],
   },
 ];
-
-export const commandPaletteSections = [
-  { heading: "Inbox", items: [inboxNavItem] },
-  { heading: "Agent", items: topBarAgentItems },
-  { heading: "Shop", items: topBarShopItems },
-  { heading: "Workspace", items: topBarSettingsItems },
-] as const;

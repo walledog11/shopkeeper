@@ -1,3 +1,4 @@
+import './config/load-env.js';
 import express from 'express';
 import { db } from '@shopkeeper/db';
 import webhookRoutes from './routes/webhooks.js';

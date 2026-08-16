@@ -42,6 +42,7 @@ export interface ExecuteAgentTurnDeps {
     orgId: string,
     mode?: AgentActionMode,
     operatorLedger?: string,
+    operatorDeskMode?: boolean,
   ) => Promise<AgentContext>;
   runAgent: ExecuteTurnRunAgent;
 }
@@ -67,6 +68,7 @@ export interface ExecuteAgentTurnParams {
   // Operator freeform turns only: the host-rendered pending-state ledger passed
   // into buildContext, and the operator control tools passed into runAgent.
   operatorLedger?: string;
+  operatorDeskMode?: boolean;
   moduleTools?: Record<string, AgentToolDefinition>;
   auditMetadata?: {
     senderPhone?: string | null;
@@ -106,6 +108,7 @@ export async function executeAgentTurn(
       params.orgId,
       params.auditMode,
       params.operatorLedger,
+      params.operatorDeskMode,
     );
     const result = await deps.runAgent(
       ctx,

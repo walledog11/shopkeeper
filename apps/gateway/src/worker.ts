@@ -1,3 +1,4 @@
+import './config/load-env.js';
 import { db } from '@shopkeeper/db';
 import logger from './logger.js';
 import { validateGatewayEnv } from './config/env.js';

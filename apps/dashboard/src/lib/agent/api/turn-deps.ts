@@ -35,7 +35,7 @@ const runWithFailureCounter: ExecuteTurnRunAgent = (ctx, instruction, approvedTo
 export function buildDashboardTurnDeps(): ExecuteAgentTurnDeps {
   return {
     lock: upstashLockProvider,
-    buildContext: (threadId, orgId, mode) =>
+    buildContext: (threadId, orgId, mode, _operatorLedger, _operatorDeskMode) =>
       buildContext(threadId, orgId, mode ? { agentActionMode: mode } : undefined),
     runAgent: runWithFailureCounter,
   };

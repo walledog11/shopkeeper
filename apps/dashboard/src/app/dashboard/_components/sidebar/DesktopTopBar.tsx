@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type MouseEvent } from "react";
-import { ChevronDown, Search } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,7 +13,6 @@ import {
 import { cn } from "@/lib/ui/cn";
 import AgentAvatar from "@/components/agent/AgentAvatar";
 import { useAgentPanel } from "../agent-panel/AgentPanelContext";
-import { useCommandPalette } from "../CommandPaletteContext";
 import { inboxNavItem, integrationsNavItem, shopNavItem, teamNavItem, topBarDropdowns, type NavItem } from "../nav-items";
 import { OpenCountBadge } from "./OpenCountBadge";
 import { Logo } from "./Logo";
@@ -109,7 +108,6 @@ export function DesktopTopBar({
 }) {
   const pathname = usePathname();
   const prefetchNav = useDashboardNavPrefetch();
-  const { open: openCmd } = useCommandPalette();
   const { open: openAgent, close: closeAgent, isOpen: agentIsOpen } = useAgentPanel();
   const inboxIsActive = isRouteActive(pathname, inboxNavItem.href);
   const shopIsActive = isRouteActive(pathname, shopNavItem.href);
@@ -193,7 +191,7 @@ export function DesktopTopBar({
             type="button"
             onClick={handleAgentClick}
             aria-label={agentIsOpen ? `Close ${agentName}` : `Open ${agentName}`}
-            title={agentIsOpen ? `Close ${agentName}` : `Chat with ${agentName}`}
+            title={agentIsOpen ? `Close ${agentName}` : `Chat with ${agentName} (⌘K)`}
             aria-expanded={agentIsOpen}
             className={cn(
               "flex items-center justify-center rounded-full border p-1 transition-colors shrink-0",
@@ -203,16 +201,6 @@ export function DesktopTopBar({
             )}
           >
             <AgentAvatar agentName={agentName} size="sm" imageSrc="/logos/coco-header-icon.png" />
-          </button>
-
-          <button
-            type="button"
-            onClick={openCmd}
-            aria-label="Search and quick actions"
-            title="Search pages, chat, and help (⌘K)"
-            className="flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground shrink-0"
-          >
-            <Search className="size-4 shrink-0" />
           </button>
         </div>
       </header>

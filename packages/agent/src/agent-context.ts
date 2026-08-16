@@ -145,6 +145,7 @@ export interface SupportContext extends BaseAgentContext {
   };
   openThreadCount: number;
   recentOrders: ShopifyOrderSummary[];
+  recentOrdersFetchFailed?: boolean;
   linkedShopifyCustomerName: string | null;
   kbArticles: { title: string; body: string }[];
   // Operator channel only: a host-rendered, opaque snapshot of what is awaiting the
@@ -152,6 +153,8 @@ export interface SupportContext extends BaseAgentContext {
   // age). The core treats it as a string and drops it into the operator prompt's
   // `## Pending state` section; no gateway concept leaks into the package.
   operatorLedger?: string;
+  // Dashboard Concierge only: the merchant is at the desk, so navigation tools apply.
+  operatorDeskMode?: boolean;
   // Structured classifier signals persisted on the thread (Phase 1). Optional:
   // present only for classified inbound threads. Routing (Phase 2) reads it;
   // absent/null means fall back to the regex path.

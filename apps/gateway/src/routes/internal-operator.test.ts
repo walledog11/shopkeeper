@@ -287,6 +287,7 @@ describe('POST /internal/operator/turn', () => {
       'get_ticket',
       'list_active_tickets',
       'mark_ticket_spam',
+      'navigate_dashboard',
       'reject_pending_plan',
       'revise_pending_plan',
       'search_product_help',

@@ -8,3 +8,7 @@ export function loadGatewayEnv(): void {
     override: process.env.NODE_ENV !== 'production' && process.env.E2E_TEST_RUN !== 'true',
   });
 }
+
+// Gateway entrypoints import this module first so dotenv runs before any
+// @shopkeeper/agent import evaluates the Anthropic singleton.
+loadGatewayEnv();

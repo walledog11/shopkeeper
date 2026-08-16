@@ -247,6 +247,10 @@ const OPERATOR_INBOX_TOOL_INSTRUCTIONS = `- When the operator asks about the inb
 
 const OPERATOR_PRODUCT_HELP_INSTRUCTIONS = `- When the operator asks how Shopkeeper itself works — why tickets are not appearing, how forwarding or integrations are set up, what a dashboard setting does, or how to troubleshoot the product — call search_product_help before escalating. This is operator-only product documentation, not the customer-facing knowledge base.`;
 
+const OPERATOR_DASHBOARD_NAV_INSTRUCTIONS = `- When the merchant wants to go somewhere in the dashboard or set something up in the UI ("take me to integrations", "I want to add email", "change trust level", "open agent settings"), call navigate_dashboard with the best destination id, then briefly tell them you're opening that page.
+- Prefer navigate_dashboard over search_product_help when they clearly want to go do something, not just understand how it works.
+- After navigate_dashboard runs, do not invent URLs — the tool opens the page for them.`;
+
 // Generic, settings-free support identity + the static instruction scaffolding.
 // Identical for every support thread of every org, so it forms a cacheable prefix
 // shared across requests. The per-store identity/context lives in the volatile half.
@@ -301,9 +305,10 @@ export function buildSystemPromptParts(ctx: AgentContext, settings?: Partial<Org
     const pendingStateSection = ctx.operatorLedger
       ? `\n\n## Pending state\n${promptText(ctx.operatorLedger, CONTEXT_BUDGETS.operatorLedgerChars)}`
       : "";
+    const deskNavInstructions = ctx.operatorDeskMode ? `\n${OPERATOR_DASHBOARD_NAV_INSTRUCTIONS}` : "";
     const instructions = ctx.operatorLedger
-      ? `${OPERATOR_INSTRUCTIONS}\n${OPERATOR_CONTROL_TOOL_INSTRUCTIONS}\n${OPERATOR_INBOX_TOOL_INSTRUCTIONS}\n${OPERATOR_PRODUCT_HELP_INSTRUCTIONS}`
-      : `${OPERATOR_INSTRUCTIONS}\n${OPERATOR_PRODUCT_HELP_INSTRUCTIONS}`;
+      ? `${OPERATOR_INSTRUCTIONS}\n${OPERATOR_CONTROL_TOOL_INSTRUCTIONS}\n${OPERATOR_INBOX_TOOL_INSTRUCTIONS}\n${OPERATOR_PRODUCT_HELP_INSTRUCTIONS}${deskNavInstructions}`
+      : `${OPERATOR_INSTRUCTIONS}\n${OPERATOR_PRODUCT_HELP_INSTRUCTIONS}${deskNavInstructions}`;
 
     return {
       stable: "",

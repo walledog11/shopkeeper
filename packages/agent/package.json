@@ -205,6 +205,10 @@
     "./product-help": {
       "types": "./dist/product-help/index.d.ts",
       "default": "./dist/product-help/index.js"
+    },
+    "./dashboard-destinations": {
+      "types": "./dist/dashboard-destinations.d.ts",
+      "default": "./dist/dashboard-destinations.js"
     }
   },
   "scripts": {

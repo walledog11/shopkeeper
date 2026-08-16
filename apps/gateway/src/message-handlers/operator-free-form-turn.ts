@@ -3,6 +3,7 @@ import { buildOperatorSessionTools } from './operator-session-tools.js';
 import { buildOperatorInboxTools } from './operator-inbox-tools.js';
 import { buildOperatorDigestTools } from './operator-digest-tools.js';
 import { buildOperatorProductHelpTools } from './operator-product-help-tools.js';
+import { buildOperatorDashboardNavTools } from './operator-dashboard-nav-tools.js';
 import {
   executeOperatorAgentTurn,
   type ExecuteOperatorAgentTurnResult,
@@ -29,6 +30,7 @@ export async function runOperatorFreeFormTurn(
 ): Promise<ExecuteOperatorAgentTurnResult> {
   const { organizationId, clerkUserId, context } = params;
   const { body, presence, senderRef, deliveryRef, turnId } = params.message;
+  const deskMode = !deliveryRef;
 
   // No delivery ref means no provider push: the merchant is at the dashboard,
   // where a pending plan is a button rather than a line to reply to.
@@ -48,6 +50,7 @@ export async function runOperatorFreeFormTurn(
     ...buildOperatorInboxTools({ organizationId }),
     ...buildOperatorDigestTools({ organizationId, context }),
     ...buildOperatorProductHelpTools(),
+    ...(deskMode ? buildOperatorDashboardNavTools() : {}),
   };
 
   return presence(
@@ -60,6 +63,7 @@ export async function runOperatorFreeFormTurn(
       ...(deliveryRef ? { senderPhone: deliveryRef } : {}),
       clerkUserId,
       operatorLedger,
+      operatorDeskMode: deskMode,
       moduleTools,
     }),
   );

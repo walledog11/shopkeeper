@@ -9,7 +9,6 @@ import AgentPanelUrlSync from "../_components/agent-panel/AgentPanelUrlSync";
 import { AgentPanelProvider } from "../_components/agent-panel/AgentPanelContext";
 import { RightRailProvider } from "../_components/right-rail/RightRailContext";
 import DashboardRightRail from "../_components/right-rail/DashboardRightRail";
-import { CommandPaletteProvider } from "../_components/CommandPaletteContext";
 import RealtimeProvider from "@/components/realtime/RealtimeProvider";
 import { getOrCreateOrg } from "@/lib/server/org";
 import { getIncompleteOnboardingRedirect } from "@/lib/server/onboarding-guard";
@@ -128,7 +127,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <RightRailProvider>
     <HelpProvider>
       <AgentPanelProvider>
-      <CommandPaletteProvider agentName={settings.agentName}>
       <Suspense fallback={null}>
         <AgentPanelUrlSync />
       </Suspense>
@@ -151,7 +149,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
           {children}
         </DashboardSidebar>
       </div>
-      </CommandPaletteProvider>
       </AgentPanelProvider>
     </HelpProvider>
     </RightRailProvider>
