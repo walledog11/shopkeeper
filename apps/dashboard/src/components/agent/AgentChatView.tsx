@@ -15,6 +15,7 @@ import type { PanelSuggestionChip } from "@/lib/agent/panel-briefing"
 import { AgentChatComposer } from "./AgentChatComposer"
 import { AgentChatMessage } from "./AgentChatMessage"
 import { useAgentWalkthrough } from "./useAgentWalkthrough"
+import { CONCIERGE_BUBBLE } from "@/app/dashboard/_components/home/needs-you-card-styles"
 import { messageKey, type AgentChatState } from "./useAgentChatState"
 
 export interface AgentChatClientProps {
@@ -106,7 +107,7 @@ export function AgentChatView({
   }
 
   const scrollAreaClass = headerSearchMode
-    ? "min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pt-2 pb-2 space-y-2"
+    ? "min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pt-1 pb-2 space-y-2"
     : "min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
 
   const defaultScrollInnerClass = `px-5 md:px-6 ${
@@ -151,7 +152,7 @@ export function AgentChatView({
           if (headerSearchMode) {
             return (
               <div key={messageKey(msg, index)} className="flex justify-end">
-                <div className="max-w-[90%] rounded-2xl rounded-tr-sm border border-border bg-card px-3 py-2 text-sm text-foreground break-words">
+                <div className={cn("max-w-[88%] px-3.5 py-2.5 break-words", CONCIERGE_BUBBLE.user.shell, CONCIERGE_BUBBLE.user.text)}>
                   {msg.text}
                 </div>
               </div>
@@ -176,10 +177,10 @@ export function AgentChatView({
         if (msg.role === "thinking") {
           if (headerSearchMode) {
             return (
-              <div key={messageKey(msg, index)} className="w-full">
-                <div className="rounded-2xl rounded-tl-sm border border-border bg-green-600/15 px-3 py-2.5">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="size-3.5 shrink-0 animate-spin text-foreground/45" />
+              <div key={messageKey(msg, index)} className="flex justify-start">
+                <div className={cn("max-w-[88%] px-3.5 py-2.5", CONCIERGE_BUBBLE.agent.shell, CONCIERGE_BUBBLE.agent.text)}>
+                  <div className="flex items-center gap-2 text-white/70">
+                    <Loader2 className="size-3.5 shrink-0 animate-spin text-white/45" />
                     <span>{fillerPhrase}</span>
                   </div>
                 </div>
@@ -238,9 +239,22 @@ export function AgentChatView({
   return (
     <div className={cn(
       "w-full min-w-0",
-      headerSearchMode ? "flex h-full min-h-0 flex-col" : "relative flex h-full flex-col overflow-hidden",
+      headerSearchMode ? "relative flex h-full min-h-0 flex-col" : "relative flex h-full flex-col overflow-hidden",
     )}>
-      {compact && onClose && !headerSearchMode && (
+      {onClose && headerSearchMode && (
+        <div className="flex shrink-0 items-center px-3 pt-2.5 pb-1">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close search"
+            className="size-8 rounded-full border border-border bg-background/95 backdrop-blur-sm flex items-center justify-center text-muted-foreground shadow-sm transition-colors hover:bg-background hover:text-foreground"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+      )}
+
+      {onClose && compact && !headerSearchMode && (
         <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-end p-3">
           <button
             type="button"

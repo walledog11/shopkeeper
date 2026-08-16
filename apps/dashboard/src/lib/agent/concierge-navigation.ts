@@ -12,6 +12,7 @@ const NAV_VERB_PATTERN = /\b(take me|bring me|go to|open|navigate|switch to|pull
 const SETUP_PATTERN = /\b(add|connect|set up|setup|change|update|configure|edit)\b/;
 const EXPLICIT_PAGE_PATTERN = /\b(integrations page|settings page|agent settings|trust level|workspace settings)\b/;
 const AGENT_TASK_PATTERN = /\b(summarize|summarise|summary|recap|overview|list|draft|reply|look up|lookup|find|check|status)\b/;
+const PAGE_LOOKUP_PATTERN = /\b(how many|how much|count of|number of)\b/;
 
 function normalizeInstruction(text: string): string {
   return text
@@ -24,12 +25,40 @@ function normalizeInstruction(text: string): string {
 function looksLikeNavigationIntent(normalized: string): boolean {
   if (!normalized) return false;
   if (AGENT_TASK_PATTERN.test(normalized)) return false;
+  if (looksLikePageLookupQuestion(normalized)) return true;
   if (QUESTION_PATTERN.test(normalized) && !NAV_VERB_PATTERN.test(normalized)) {
     return false;
   }
   return NAV_VERB_PATTERN.test(normalized)
     || SETUP_PATTERN.test(normalized)
     || EXPLICIT_PAGE_PATTERN.test(normalized);
+}
+
+/** Count-style questions about a dashboard page surface, e.g. "how many open orders". */
+function looksLikePageLookupQuestion(normalized: string): boolean {
+  if (AGENT_TASK_PATTERN.test(normalized)) return false;
+  if (!PAGE_LOOKUP_PATTERN.test(normalized)) return false;
+  return DASHBOARD_DESTINATIONS.some((destination) => scoreDestination(destination, normalized) >= 10);
+}
+
+function pickBestDestination(normalized: string): NavigateDashboardPayload | null {
+  let best: { destination: DashboardDestination; score: number } | null = null;
+
+  for (const destination of DASHBOARD_DESTINATIONS) {
+    const score = scoreDestination(destination, normalized);
+    if (score <= 0) continue;
+    if (!best || score > best.score) {
+      best = { destination, score };
+    }
+  }
+
+  if (!best || best.score < 10) return null;
+
+  return {
+    type: "navigate",
+    href: best.destination.href,
+    label: best.destination.label,
+  };
 }
 
 /** True when the merchant is asking to go somewhere, not to do agent work in chat. */
@@ -59,24 +88,7 @@ function scoreDestination(destination: DashboardDestination, normalized: string)
 export function matchConciergeNavigationIntent(instruction: string): NavigateDashboardPayload | null {
   const normalized = normalizeInstruction(instruction);
   if (!looksLikeNavigationIntent(normalized)) return null;
-
-  let best: { destination: DashboardDestination; score: number } | null = null;
-
-  for (const destination of DASHBOARD_DESTINATIONS) {
-    const score = scoreDestination(destination, normalized);
-    if (score <= 0) continue;
-    if (!best || score > best.score) {
-      best = { destination, score };
-    }
-  }
-
-  if (!best || best.score < 10) return null;
-
-  return {
-    type: "navigate",
-    href: best.destination.href,
-    label: best.destination.label,
-  };
+  return pickBestDestination(normalized);
 }
 
 export function extractConciergeNavigation(actions: ActionEntry[]): NavigateDashboardPayload | null {

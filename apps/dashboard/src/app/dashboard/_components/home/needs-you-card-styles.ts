@@ -50,6 +50,25 @@ export function isInboundTone(tone: BubbleTone): boolean {
   return tone === "customer"
 }
 
+/** Concierge panel bubbles mirror Needs You action-plan card tones and shadows. */
+export const CONCIERGE_BUBBLE = {
+  user: {
+    shell: cn(needsYouSoftShadowClassName, "rounded-[18px_18px_0_18px] bg-white"),
+    text: BUBBLE_TONE.customer.text,
+  },
+  agent: {
+    shell: cn(
+      needsYouSoftShadowClassName,
+      "rounded-[18px_18px_18px_0] bg-gradient-to-b from-[#2a2622] to-[#1a1a1a]",
+    ),
+    text: BUBBLE_TONE.reply.text,
+  },
+  agentFlag: {
+    shell: cn(needsYouSoftShadowClassName, "rounded-[18px_18px_18px_0] bg-[#fff4e5]"),
+    text: BUBBLE_TONE.flag.text,
+  },
+} as const
+
 export function needsYouConversationSurfaceClassName() {
   return "bg-card"
 }

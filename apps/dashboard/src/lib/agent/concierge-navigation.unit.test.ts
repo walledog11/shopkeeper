@@ -34,6 +34,19 @@ describe("matchConciergeNavigationIntent", () => {
     expect(matchConciergeNavigationIntent("summarize all my open tickets")).toBeNull();
     expect(matchConciergeNavigationIntent("summarize open tickets")).toBeNull();
   });
+
+  it("routes count-style order questions to the shop page", () => {
+    expect(matchConciergeNavigationIntent("how many open orders")).toEqual({
+      type: "navigate",
+      href: "/dashboard/orders",
+      label: "Shop",
+    });
+    expect(matchConciergeNavigationIntent("how many orders do I have")).toEqual({
+      type: "navigate",
+      href: "/dashboard/orders",
+      label: "Shop",
+    });
+  });
 });
 
 describe("extractConciergeNavigation", () => {

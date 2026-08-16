@@ -14,6 +14,7 @@ interface AgentPanelContextValue {
   open: (context?: AgentPanelOpenContext) => void
   close: () => void
   expand: () => void
+  startFreshConversation: () => void
   focusSearch: () => void
   toggle: () => void
 }
@@ -32,6 +33,11 @@ export function AgentPanelProvider({ children }: { children: React.ReactNode }) 
 
   const expand = useCallback(() => {
     setIsExpanded(true)
+  }, [])
+
+  const startFreshConversation = useCallback(() => {
+    clearPanelRef.current()
+    setOpenContext(null)
   }, [])
 
   const close = useCallback(() => {
@@ -99,10 +105,11 @@ export function AgentPanelProvider({ children }: { children: React.ReactNode }) 
       open,
       close,
       expand,
+      startFreshConversation,
       focusSearch,
       toggle,
     }),
-    [chatState, close, expand, focusSearch, isExpanded, open, openContext, toggle],
+    [chatState, close, expand, focusSearch, isExpanded, open, openContext, startFreshConversation, toggle],
   )
 
   return (

@@ -1,6 +1,6 @@
 "use client"
 
-import { Search, X } from "lucide-react"
+import { Search } from "lucide-react"
 import { useCallback, type KeyboardEvent } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { AnimatePresence, LazyMotion, domAnimation, m } from "motion/react"
@@ -34,6 +34,7 @@ export function HeaderSearch({ variant = "topBar" }: HeaderSearchProps) {
     searchInputRef,
     close,
     expand,
+    startFreshConversation,
   } = useAgentPanel()
   const router = useRouter()
   const pathname = usePathname()
@@ -55,10 +56,11 @@ export function HeaderSearch({ variant = "topBar" }: HeaderSearchProps) {
       return
     }
 
+    startFreshConversation()
     setInput("")
     expand()
     await handleSendText(trimmed)
-  }, [expand, handleSendText, input, isRunning, pathname, router, setInput])
+  }, [expand, handleSendText, input, isRunning, pathname, router, setInput, startFreshConversation])
 
   const handleCollapsedKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
@@ -91,22 +93,12 @@ export function HeaderSearch({ variant = "topBar" }: HeaderSearchProps) {
                 transition={{ duration: 0.2 }}
                 className="fixed inset-0 z-50 flex flex-col bg-sidebar md:hidden"
               >
-                <div className="flex shrink-0 items-center justify-between border-b border-border/60 px-4 h-14">
-                  <span className="text-sm font-semibold text-sidebar-foreground">{AGENT_DISPLAY_NAME}</span>
-                  <button
-                    type="button"
-                    onClick={close}
-                    aria-label="Close search"
-                    className="flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent/80 hover:text-foreground"
-                  >
-                    <X className="size-4" />
-                  </button>
-                </div>
                 <div className="min-h-0 flex-1">
                   <AgentChatClient
                     compact
                     embedded
                     headerSearchMode
+                    onClose={close}
                     openContext={openContext}
                     state={chatState}
                   />
@@ -148,32 +140,16 @@ export function HeaderSearch({ variant = "topBar" }: HeaderSearchProps) {
           )}
         >
           {isExpanded ? (
-            <>
-              <div className="flex shrink-0 items-center gap-2 border-b border-border/60 px-4 h-12">
-                <Search className="size-4 shrink-0 text-sidebar-foreground/50" />
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-sidebar-foreground">
-                  {AGENT_DISPLAY_NAME}
-                </span>
-                <button
-                  type="button"
-                  onClick={close}
-                  aria-label="Close search"
-                  className="flex size-7 shrink-0 items-center justify-center rounded-md text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent/80 hover:text-sidebar-foreground"
-                >
-                  <X className="size-4" />
-                </button>
-              </div>
-
-              <div className="flex min-h-0 flex-1 flex-col">
-                <AgentChatClient
-                  compact
-                  embedded
-                  headerSearchMode
-                  openContext={openContext}
-                  state={chatState}
-                />
-              </div>
-            </>
+            <div className="flex min-h-0 flex-1 flex-col">
+              <AgentChatClient
+                compact
+                embedded
+                headerSearchMode
+                onClose={close}
+                openContext={openContext}
+                state={chatState}
+              />
+            </div>
           ) : (
             <div className="flex h-12 w-full min-w-0 items-center gap-2 px-4">
               <Search className="size-4 shrink-0 text-sidebar-foreground/50" />

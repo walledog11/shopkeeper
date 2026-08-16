@@ -45,7 +45,7 @@ export function AgentChatComposer({
             onChange={e => setInput(e.target.value)}
             onKeyDown={onComposerKeyDown}
             disabled={isRunning}
-            placeholder="write a message..."
+            placeholder="Write a message..."
             className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground resize-none outline-none leading-5 min-h-[24px] max-h-20"
             style={{ fieldSizing: "content" } as CSSProperties}
           />

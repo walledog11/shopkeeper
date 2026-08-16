@@ -9,6 +9,8 @@ import {
   getToolChipVariant,
   TOOL_CHIP_CLASS,
 } from "@/lib/agent/tool-action-display"
+import { CONCIERGE_BUBBLE } from "@/app/dashboard/_components/home/needs-you-card-styles"
+import { cn } from "@/lib/ui/cn"
 import type { ChatMessage } from "./agent-chat-session"
 
 function getToolResultHint(tool: string, result: string): string | null {
@@ -46,9 +48,9 @@ export function AgentChatMessage({
   const awaitingApproval = message.awaitingApproval === true
 
   return (
-    <div className={hideAvatar ? "" : "flex items-start gap-3"}>
+    <div className={hideAvatar ? "flex justify-start" : "flex items-start gap-3"}>
       {!hideAvatar && <AgentAvatar size="md" className="mt-0.5" />}
-      <div className={hideAvatar ? "min-w-0 max-w-full" : "flex-1 min-w-0 max-w-[75%]"}>
+      <div className={hideAvatar ? "min-w-0 max-w-[88%]" : "flex-1 min-w-0 max-w-[75%]"}>
         {!hideAvatar && (
           <div className="flex items-center gap-2 mb-2">
             <span className="text-xs font-medium text-foreground">{AGENT_DISPLAY_NAME}</span>
@@ -76,12 +78,22 @@ export function AgentChatMessage({
             })}
           </div>
         )}
-        <div className={
-          awaitingApproval
-            ? "bg-amber-600/[0.07] border border-amber-600/25 text-foreground text-sm rounded-2xl rounded-tl-sm px-4 py-2.5 shadow-sm break-words"
-            : "bg-green-600/20 border border-border text-foreground text-sm rounded-2xl rounded-tl-sm px-4 py-2.5 shadow-sm break-words"
-        }>
-          <AgentMessageMarkdown text={message.summary} />
+        <div className={cn(
+          "break-words",
+          hideAvatar
+            ? cn(
+                "px-3.5 py-2.5",
+                awaitingApproval ? CONCIERGE_BUBBLE.agentFlag.shell : CONCIERGE_BUBBLE.agent.shell,
+                awaitingApproval ? CONCIERGE_BUBBLE.agentFlag.text : CONCIERGE_BUBBLE.agent.text,
+              )
+            : awaitingApproval
+              ? "bg-amber-600/[0.07] border border-amber-600/25 text-foreground text-sm rounded-2xl rounded-tl-sm px-4 py-2.5 shadow-sm"
+              : "bg-green-600/20 border border-border text-foreground text-sm rounded-2xl rounded-tl-sm px-4 py-2.5 shadow-sm",
+        )}>
+          <AgentMessageMarkdown
+            text={message.summary}
+            inverted={hideAvatar && !awaitingApproval}
+          />
         </div>
         {awaitingApproval && (
           <div className="mt-2.5 flex flex-wrap gap-2">
