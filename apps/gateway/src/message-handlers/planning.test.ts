@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockLogger } = vi.hoisted(() => ({
+const { mockBurst, mockFindThread, mockGenerateThreadPlan, mockLogger } = vi.hoisted(() => ({
+  mockBurst: vi.fn(),
+  mockFindThread: vi.fn(),
+  mockGenerateThreadPlan: vi.fn(),
   mockLogger: {
     debug: vi.fn(),
     error: vi.fn(),
@@ -9,17 +12,86 @@ const { mockLogger } = vi.hoisted(() => ({
   },
 }));
 
+vi.mock('@shopkeeper/db', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@shopkeeper/db')>();
+  return {
+    ...actual,
+    db: {
+      ...actual.db,
+      thread: { ...actual.db.thread, findUnique: mockFindThread },
+    },
+  };
+});
+
 vi.mock('../logger.js', () => ({
   default: mockLogger,
 }));
 
-import { sendAutoAck } from './planning.js';
+vi.mock('./conversation-burst.js', () => ({ getConversationBurst: mockBurst }));
+vi.mock('./generate-thread-plan.js', () => ({ generateThreadPlan: mockGenerateThreadPlan }));
+
+import { precomputeThreadPlan, sendAutoAck } from './planning.js';
 
 beforeEach(() => {
   mockLogger.debug.mockClear();
   mockLogger.error.mockClear();
   mockLogger.info.mockClear();
   mockLogger.warn.mockClear();
+  mockFindThread.mockReset().mockResolvedValue({
+    status: 'open',
+    requestDisposition: 'merchant_action',
+    requestSourceMessageId: 'message_1',
+  });
+  mockBurst.mockReset().mockResolvedValue({
+    isFollowUp: false,
+    messages: [{ id: 'message_1', contentText: 'Please refund my order.' }],
+  });
+  mockGenerateThreadPlan.mockReset().mockResolvedValue({
+    plan: { steps: [{ tool: 'send_reply' }], rawToolCalls: [] },
+    instruction: 'Handle this request',
+  });
+});
+
+describe('precomputeThreadPlan', () => {
+  it.each(['none', 'acknowledgement'])('skips planning for a current %s request', async (requestDisposition) => {
+    mockFindThread.mockResolvedValue({
+      status: 'open',
+      requestDisposition,
+      requestSourceMessageId: 'message_1',
+    });
+
+    await expect(precomputeThreadPlan(
+      'org_1',
+      'thread_1',
+      { autoPlanOnOpen: true },
+      { sourceMessageId: 'message_1' },
+    )).resolves.toBeNull();
+    expect(mockGenerateThreadPlan).not.toHaveBeenCalled();
+  });
+
+  it('still plans when an earlier customer request is unanswered', async () => {
+    mockFindThread.mockResolvedValue({
+      status: 'open',
+      requestDisposition: 'acknowledgement',
+      requestSourceMessageId: 'message_1',
+    });
+    mockBurst.mockResolvedValue({
+      isFollowUp: false,
+      messages: [
+        { id: 'message_0', contentText: 'Where is my order?' },
+        { id: 'message_1', contentText: 'Thanks!' },
+      ],
+    });
+
+    await precomputeThreadPlan(
+      'org_1',
+      'thread_1',
+      { autoPlanOnOpen: true },
+      { sourceMessageId: 'message_1' },
+    );
+
+    expect(mockGenerateThreadPlan).toHaveBeenCalledOnce();
+  });
 });
 
 describe('sendAutoAck', () => {

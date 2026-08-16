@@ -2,9 +2,10 @@ import { db } from '@shopkeeper/db';
 import type { OrgSettings } from '@shopkeeper/agent/types';
 import { STATUS } from '../constants.js';
 import logger from '../logger.js';
+import { getConversationBurst } from './conversation-burst.js';
 import { requestAutoAck } from './planning-dashboard-client.js';
 import { generateThreadPlan } from './generate-thread-plan.js';
-import type { PrecomputedPlanResult } from './planning-types.js';
+import { mayParkMerchantWork, type PrecomputedPlanResult } from './planning-types.js';
 
 export async function precomputeThreadPlan(
   organizationId: string,
@@ -20,9 +21,20 @@ export async function precomputeThreadPlan(
   try {
     const thread = await db.thread.findUnique({
       where: { id: threadId },
-      select: { status: true },
+      select: { status: true, requestDisposition: true, requestSourceMessageId: true },
     });
     if (!thread || thread.status !== STATUS.OPEN) {
+      return null;
+    }
+    const burst = await getConversationBurst(threadId);
+    if (
+      options.sourceMessageId
+      && (
+        thread.requestSourceMessageId !== options.sourceMessageId
+        || burst.messages.at(-1)?.id !== options.sourceMessageId
+        || (!mayParkMerchantWork(thread.requestDisposition) && burst.messages.length === 1)
+      )
+    ) {
       return null;
     }
 

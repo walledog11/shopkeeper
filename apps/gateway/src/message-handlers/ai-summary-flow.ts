@@ -9,6 +9,7 @@ import { consumeThreadCachedPlan } from '@shopkeeper/agent/plan-execution';
 import { resolveAgentSettings, isWithinBusinessHours } from '@shopkeeper/agent/settings';
 import { CHANNEL } from '../constants.js';
 import logger from '../logger.js';
+import { getConversationBurst } from './conversation-burst.js';
 import { generateThreadIntelligence } from './intelligence.js';
 import { mayParkMerchantWork } from './planning-types.js';
 import {
@@ -27,7 +28,8 @@ export const DEFAULT_PLAN_INSTRUCTION = "Handle this customer's latest request";
 export function canParallelizeThreadPlanning(thread: {
   channelType: string;
   filterDecidedAt: Date | null;
-}): boolean {
+  requestSourceMessageId: string | null;
+}, sourceMessageId: string): boolean {
   // Any customer-origin channel whose filter can change must decide sender
   // trust before a safe reply is eligible to execute. Shopify order-event notes
   // and internal channels are never filtered and can still plan in parallel.
@@ -35,7 +37,8 @@ export function canParallelizeThreadPlanning(thread: {
     || thread.channelType === CHANNEL.SHOPIFY_CHAT
     || thread.channelType === CHANNEL.IG_DM
     || thread.channelType === CHANNEL.TIKTOK;
-  return !filterable || thread.filterDecidedAt !== null;
+  return (!filterable || thread.filterDecidedAt !== null)
+    && thread.requestSourceMessageId === sourceMessageId;
 }
 
 export function resolveParallelPlanInstruction(latestCustomerMessageText: string | null): string {
@@ -108,7 +111,12 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
   const [threadSnapshot, latestConversation] = await Promise.all([
     db.thread.findUnique({
       where: { id: threadId },
-      select: { channelType: true, filterDecidedAt: true, filterStatus: true },
+      select: {
+        channelType: true,
+        filterDecidedAt: true,
+        filterStatus: true,
+        requestSourceMessageId: true,
+      },
     }),
     getLatestConversationMessage(threadId, organizationId),
   ]);
@@ -132,7 +140,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
     );
   }
 
-  const parallelPlan = canParallelizeThreadPlanning(threadSnapshot);
+  const parallelPlan = canParallelizeThreadPlanning(threadSnapshot, sourceMessageId);
 
   if (
     parallelPlan
@@ -209,6 +217,15 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
           planResult,
         );
       }
+      return;
+    }
+    const burst = await getConversationBurst(threadId);
+    if (
+      updatedThread?.requestSourceMessageId !== sourceMessageId
+      || burst.messages.at(-1)?.id !== sourceMessageId
+      || (!mayParkMerchantWork(updatedThread.requestDisposition) && burst.messages.length === 1)
+    ) {
+      logger.info({ threadId, organizationId }, '[AISummary] Outside business hours — skipping auto-ack');
       return;
     }
     logger.info({ threadId, organizationId }, '[AISummary] Outside business hours — sending auto-ack');

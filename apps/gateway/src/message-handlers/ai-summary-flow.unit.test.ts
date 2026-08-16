@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   precompute: vi.fn(),
   autoAck: vi.fn(),
   autoNotification: vi.fn(),
+  burst: vi.fn(),
   planNotification: vi.fn(),
   questionNotification: vi.fn(),
   withinBusinessHours: vi.fn(),
@@ -48,6 +49,7 @@ vi.mock('@shopkeeper/agent/settings', () => ({
 }));
 
 vi.mock('./intelligence.js', () => ({ generateThreadIntelligence: mocks.intelligence }));
+vi.mock('./conversation-burst.js', () => ({ getConversationBurst: mocks.burst }));
 vi.mock('./planning.js', () => ({
   precomputeThreadPlan: mocks.precompute,
   sendAutoAck: mocks.autoAck,
@@ -67,10 +69,20 @@ beforeEach(() => {
     channelType: 'email',
     filterDecidedAt: null,
     filterStatus: 'genuine',
+    requestSourceMessageId: null,
   });
   mocks.findOrganization.mockResolvedValue({ settings: {} });
   mocks.latestConversation.mockResolvedValue({ id: 'message_1', senderType: 'customer' });
-  mocks.intelligence.mockResolvedValue({ filterStatus: 'genuine', aiSummary: 'Needs an order lookup.' });
+  mocks.intelligence.mockResolvedValue({
+    filterStatus: 'genuine',
+    aiSummary: 'Needs an order lookup.',
+    requestDisposition: 'merchant_action',
+    requestSourceMessageId: 'message_1',
+  });
+  mocks.burst.mockResolvedValue({
+    isFollowUp: false,
+    messages: [{ id: 'message_1', contentText: 'Please refund my order.' }],
+  });
   mocks.withinBusinessHours.mockReturnValue(false);
   mocks.readPlanCache.mockReturnValue({ planId: 'plan_1' });
   mocks.requireOrgThread.mockResolvedValue({
@@ -189,6 +201,39 @@ describe('processAiSummaryJob merchant-work gate', () => {
 });
 
 describe('processAiSummaryJob safe replies', () => {
+  it.each(['none', 'acknowledgement'])('does not auto-ack an off-hours %s request', async (requestDisposition) => {
+    mocks.precompute.mockResolvedValue(null);
+    mocks.intelligence.mockResolvedValue({
+      filterStatus: 'genuine',
+      requestDisposition,
+      requestSourceMessageId: 'message_1',
+    });
+
+    await processAiSummaryJob(JOB);
+
+    expect(mocks.autoAck).not.toHaveBeenCalled();
+  });
+
+  it('still auto-acks off hours when an earlier customer request is unanswered', async () => {
+    mocks.precompute.mockResolvedValue(PLAN_WITH_IDENTITY);
+    mocks.intelligence.mockResolvedValue({
+      filterStatus: 'genuine',
+      requestDisposition: 'acknowledgement',
+      requestSourceMessageId: 'message_1',
+    });
+    mocks.burst.mockResolvedValue({
+      isFollowUp: false,
+      messages: [
+        { id: 'message_0', contentText: 'Where is my order?' },
+        { id: 'message_1', contentText: 'Thanks!' },
+      ],
+    });
+
+    await processAiSummaryJob(JOB);
+
+    expect(mocks.autoAck).toHaveBeenCalledWith('org_1', 'thread_1');
+  });
+
   it('uses a successful clarification reply instead of an outside-hours auto-ack or merchant notification', async () => {
     mocks.precompute.mockResolvedValue({
       plan: { steps: [{ tool: 'send_reply' }], rawToolCalls: [] },

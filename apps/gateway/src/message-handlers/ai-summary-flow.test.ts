@@ -12,31 +12,41 @@ describe('canParallelizeThreadPlanning', () => {
     expect(canParallelizeThreadPlanning({
       channelType: ChannelType.email,
       filterDecidedAt: null,
-    })).toBe(false);
+      requestSourceMessageId: 'message_1',
+    }, 'message_1')).toBe(false);
   });
 
-  it('parallelizes email follow-ups after filterDecidedAt is set', () => {
+  it('parallelizes only when sender trust and current-request intelligence are ready', () => {
     expect(canParallelizeThreadPlanning({
       channelType: ChannelType.email,
       filterDecidedAt: new Date(),
-    })).toBe(true);
+      requestSourceMessageId: 'message_1',
+    }, 'message_1')).toBe(true);
+    expect(canParallelizeThreadPlanning({
+      channelType: ChannelType.email,
+      filterDecidedAt: new Date(),
+      requestSourceMessageId: 'message_0',
+    }, 'message_1')).toBe(false);
   });
 
   it('waits for sender trust on other filterable customer channels', () => {
     expect(canParallelizeThreadPlanning({
       channelType: ChannelType.ig_dm,
       filterDecidedAt: null,
-    })).toBe(false);
+      requestSourceMessageId: 'message_1',
+    }, 'message_1')).toBe(false);
 
     expect(canParallelizeThreadPlanning({
       channelType: ChannelType.shopify_chat,
       filterDecidedAt: null,
-    })).toBe(false);
+      requestSourceMessageId: 'message_1',
+    }, 'message_1')).toBe(false);
 
     expect(canParallelizeThreadPlanning({
       channelType: ChannelType.shopify,
       filterDecidedAt: null,
-    })).toBe(true);
+      requestSourceMessageId: 'message_1',
+    }, 'message_1')).toBe(true);
   });
 });
 
