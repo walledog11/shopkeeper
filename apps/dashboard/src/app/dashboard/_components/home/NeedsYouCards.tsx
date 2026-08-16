@@ -4,6 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { AlertCircle, Loader2 } from "lucide-react"
 import MerchantAnswerForm from "@/components/agent/MerchantAnswerForm"
+import { cn } from "@/lib/ui/cn"
 import type { HomeNeedsAttentionItem } from "@/lib/home/summary-contract"
 import {
   NeedsYouBubble,
@@ -12,6 +13,7 @@ import {
   NeedsYouCardHeader,
   NeedsYouCardHeaderRow,
   NeedsYouCardShell,
+  NeedsYouEscalationCallout,
   NeedsYouPrimaryButton,
 } from "./needs-you-card-ui"
 import { needsYouSecondaryButtonClassName, type BubbleTone } from "./needs-you-card-styles"
@@ -69,9 +71,11 @@ export function NeedsYouCard({
   }
 
   const isConsequential = item.kind === "needs_review"
+  const isEscalationOnly = item.isEscalationOnly ?? false
+  const escalationReason = item.escalationReason ?? null
 
   const bubbles: { key: string; text: string; tone: BubbleTone }[] = []
-  if (item.actionText) {
+  if (!isEscalationOnly && item.actionText) {
     bubbles.push({
       key: "action",
       text: item.actionText,
@@ -85,7 +89,7 @@ export function NeedsYouCard({
       tone: "reply",
     })
   }
-  if (bubbles.length === 0) {
+  if (!isEscalationOnly && bubbles.length === 0) {
     const text = item.proposalSummary || item.contextLine || item.customerMessage
     if (text) {
       bubbles.push({
@@ -152,11 +156,15 @@ export function NeedsYouCard({
         )}
 
         <div className="flex flex-col gap-3">
-          {bubbles.map(bubble => (
-            <NeedsYouBubble key={bubble.key} tone={bubble.tone} flush>
-              {bubble.text}
-            </NeedsYouBubble>
-          ))}
+          {isEscalationOnly ? (
+            <NeedsYouEscalationCallout reason={escalationReason} />
+          ) : (
+            bubbles.map(bubble => (
+              <NeedsYouBubble key={bubble.key} tone={bubble.tone} flush>
+                {bubble.text}
+              </NeedsYouBubble>
+            ))
+          )}
         </div>
 
         {approvalError && (
@@ -169,31 +177,45 @@ export function NeedsYouCard({
 
       <NeedsYouCardFooter>
         <div className="flex flex-col gap-2">
-          <NeedsYouPrimaryButton
-            confirming={confirming}
-            disabled={isApproving}
-            onClick={onApproveClick}
-          >
-            {isApproving && <Loader2 aria-hidden className="size-4 animate-spin" />}
-            {isApproving ? "Approving" : confirming ? "Confirm approve" : "Approve"}
-          </NeedsYouPrimaryButton>
-
-          {confirming ? (
-            <button
-              type="button"
-              onClick={() => setConfirming(false)}
-              disabled={isApproving}
-              className={needsYouSecondaryButtonClassName}
-            >
-              Cancel
-            </button>
-          ) : (
+          {isEscalationOnly ? (
             <Link
               href={isSampleNeedsYouItem(item.threadId) ? "/dashboard/tickets" : `/dashboard/tickets?thread=${item.threadId}`}
-              className={needsYouSecondaryButtonClassName}
+              className={cn(
+                needsYouSecondaryButtonClassName,
+                "border-foreground bg-gradient-to-b from-foreground to-foreground/90 text-background shadow-md shadow-foreground/10 hover:-translate-y-0.5 hover:bg-foreground hover:text-background",
+              )}
             >
-              View Ticket
+              Handle in ticket
             </Link>
+          ) : (
+            <>
+              <NeedsYouPrimaryButton
+                confirming={confirming}
+                disabled={isApproving}
+                onClick={onApproveClick}
+              >
+                {isApproving && <Loader2 aria-hidden className="size-4 animate-spin" />}
+                {isApproving ? "Approving" : confirming ? "Confirm approve" : "Approve"}
+              </NeedsYouPrimaryButton>
+
+              {confirming ? (
+                <button
+                  type="button"
+                  onClick={() => setConfirming(false)}
+                  disabled={isApproving}
+                  className={needsYouSecondaryButtonClassName}
+                >
+                  Cancel
+                </button>
+              ) : (
+                <Link
+                  href={isSampleNeedsYouItem(item.threadId) ? "/dashboard/tickets" : `/dashboard/tickets?thread=${item.threadId}`}
+                  className={needsYouSecondaryButtonClassName}
+                >
+                  View Ticket
+                </Link>
+              )}
+            </>
           )}
         </div>
       </NeedsYouCardFooter>

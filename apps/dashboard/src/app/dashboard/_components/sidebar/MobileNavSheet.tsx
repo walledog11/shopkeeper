@@ -8,8 +8,8 @@ import { usePanelBriefingData } from "../agent-panel/usePanelBriefingData";
 import { useHelp } from "../help/HelpContext";
 import { mobileNavSections } from "../nav-items";
 import { NavGroupList } from "./NavGroupList";
-import { OrgSwitcher } from "./OrgSwitcher";
-import { UserAvatarLink } from "./UserAvatarLink";
+import { WorkspaceNavPill } from "./WorkspaceNavPill";
+import { AccountNavPill } from "./AccountNavPill";
 import { LogOutButton } from "./LogOutButton";
 import type { NavAuth } from "./useNavAuth";
 
@@ -59,9 +59,14 @@ export function MobileNavSheet({
 
         <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3">
           <div className="min-w-0 flex-1">
-            <OrgSwitcher navAuth={navAuth} onSwitching={onSwitching} onClose={onClose} variant="sheet" />
+            <WorkspaceNavPill
+              navAuth={navAuth}
+              onSwitching={onSwitching}
+              onClose={onClose}
+              variant="sheet"
+            />
           </div>
-          <UserAvatarLink navAuth={navAuth} variant="topBar" />
+          <AccountNavPill navAuth={navAuth} onClose={onClose} variant="topBar" />
           <button
             type="button"
             onClick={onClose}

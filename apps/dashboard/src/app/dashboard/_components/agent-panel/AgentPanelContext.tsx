@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import type { AgentChatState } from "@/components/agent/useAgentChatState"
 import { useAgentChatState } from "@/components/agent/useAgentChatState"
 import { isDashboardHome, type AgentPanelOpenContext } from "@/lib/agent/panel"
+import { useRightRail } from "../right-rail/RightRailContext"
 
 interface AgentPanelContextValue {
   isOpen: boolean
@@ -19,32 +20,35 @@ const AgentPanelContext = createContext<AgentPanelContextValue | null>(null)
 
 export function AgentPanelProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const [isOpen, setIsOpen] = useState(false)
+  const { isOpen, tab, openTab, close: closeRail } = useRightRail()
   const [openContext, setOpenContext] = useState<AgentPanelOpenContext | null>(null)
   const chatState = useAgentChatState({ restoreHistory: false })
   const prevPathnameRef = useRef(pathname)
   const clearPanelRef = useRef(chatState.handleClearPanel)
   clearPanelRef.current = chatState.handleClearPanel
 
+  const conciergeIsOpen = isOpen && tab === "concierge"
+
   const open = useCallback((context?: AgentPanelOpenContext) => {
     if (context?.walkthrough || context?.threadId) {
       clearPanelRef.current()
     }
     setOpenContext(context ?? null)
-    setIsOpen(true)
-  }, [])
+    openTab("concierge")
+  }, [openTab])
 
   const close = useCallback(() => {
-    setIsOpen(false)
+    closeRail()
     setOpenContext(null)
-  }, [])
+  }, [closeRail])
 
   const toggle = useCallback(() => {
-    setIsOpen((wasOpen) => {
-      if (wasOpen) setOpenContext(null)
-      return !wasOpen
-    })
-  }, [])
+    if (isOpen && tab === "concierge") {
+      close()
+      return
+    }
+    open()
+  }, [close, isOpen, open, tab])
 
   useEffect(() => {
     const previous = prevPathnameRef.current
@@ -55,8 +59,8 @@ export function AgentPanelProvider({ children }: { children: React.ReactNode }) 
   }, [pathname])
 
   const value = useMemo(
-    () => ({ isOpen, openContext, chatState, open, close, toggle }),
-    [chatState, close, isOpen, open, openContext, toggle],
+    () => ({ isOpen: conciergeIsOpen, openContext, chatState, open, close, toggle }),
+    [chatState, close, conciergeIsOpen, open, openContext, toggle],
   )
 
   return (

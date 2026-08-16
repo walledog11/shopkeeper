@@ -8,6 +8,7 @@ Shopkeeper is an AI operating layer for solo and small e-commerce businesses on 
 Open work: [`docs/to-do-list.md`](docs/to-do-list.md).
 
 ## Docs
+- Testing and paid eval policy: [`docs/production/critical-path-test-checklist.md`](docs/production/critical-path-test-checklist.md)
 - Production checklist: [`docs/production/checklist.md`](docs/production/checklist.md)
 - Deployment guide: [`docs/production/deployment.md`](docs/production/deployment.md)
 - Production runbook: [`docs/production/runbook.md`](docs/production/runbook.md)

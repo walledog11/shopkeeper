@@ -1,36 +1,39 @@
-"use client"
+"use client";
 
-import { createContext, use, useState, useCallback, useMemo, type ReactNode } from "react"
+import { createContext, use, useCallback, useMemo, type ReactNode } from "react";
+import { useRightRail } from "../right-rail/RightRailContext";
 
 interface HelpContextValue {
-  isOpen: boolean
-  openHelp: () => void
-  closeHelp: () => void
-  toggleHelp: () => void
+  isOpen: boolean;
+  openHelp: () => void;
+  closeHelp: () => void;
 }
 
-const HelpContext = createContext<HelpContextValue | null>(null)
+const HelpContext = createContext<HelpContextValue | null>(null);
 
 export function HelpProvider({ children }: { children: ReactNode }) {
-  const [isOpen, setIsOpen] = useState(false)
+  const { isOpen, tab, openTab, close } = useRightRail();
 
-  const openHelp = useCallback(() => setIsOpen(true), [])
-  const closeHelp = useCallback(() => setIsOpen(false), [])
-  const toggleHelp = useCallback(() => setIsOpen(v => !v), [])
+  const helpIsOpen = isOpen && tab === "help";
+
+  const openHelp = useCallback(() => {
+    openTab("help");
+  }, [openTab]);
+
+  const closeHelp = useCallback(() => {
+    close();
+  }, [close]);
+
   const value = useMemo(
-    () => ({ isOpen, openHelp, closeHelp, toggleHelp }),
-    [closeHelp, isOpen, openHelp, toggleHelp],
-  )
+    () => ({ isOpen: helpIsOpen, openHelp, closeHelp }),
+    [closeHelp, helpIsOpen, openHelp],
+  );
 
-  return (
-    <HelpContext.Provider value={value}>
-      {children}
-    </HelpContext.Provider>
-  )
+  return <HelpContext.Provider value={value}>{children}</HelpContext.Provider>;
 }
 
 export function useHelp() {
-  const ctx = use(HelpContext)
-  if (!ctx) throw new Error("useHelp must be used within HelpProvider")
-  return ctx
+  const ctx = use(HelpContext);
+  if (!ctx) throw new Error("useHelp must be used within HelpProvider");
+  return ctx;
 }

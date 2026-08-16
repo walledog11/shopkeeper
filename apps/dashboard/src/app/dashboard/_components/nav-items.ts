@@ -62,31 +62,36 @@ export const shopNavItem: NavItem = {
 
 export const topBarShopItems: NavItem[] = [shopNavItem];
 
+export const workspaceSettingsNavItem: NavItem = {
+  name: "Settings",
+  mobileName: "Workspace settings",
+  href: "/dashboard/settings",
+  icon: Settings2,
+  description: "Billing and workspace admin",
+};
+
+export const integrationsNavItem: NavItem = {
+  name: "Integrations",
+  href: "/dashboard/integrations",
+  icon: Cable,
+  description: "Connect channels and external tools",
+};
+
+export const teamNavItem: NavItem = {
+  name: "Team",
+  href: "/dashboard/team",
+  icon: IdCardLanyard,
+  description: "Members, roles, and access",
+};
+
 export const topBarSettingsItems: NavItem[] = [
-  {
-    name: "Settings",
-    href: "/dashboard/settings",
-    icon: Settings2,
-    description: "Account, billing, and workspace admin",
-  },
-  {
-    name: "Integrations",
-    href: "/dashboard/integrations",
-    icon: Cable,
-    description: "Connect channels and external tools",
-  },
-  {
-    name: "Team",
-    href: "/dashboard/team",
-    icon: IdCardLanyard,
-    description: "Members, roles, and access",
-  },
+  workspaceSettingsNavItem,
+  integrationsNavItem,
+  teamNavItem,
 ];
 
 export const topBarDropdowns = [
   { label: "Agent", items: topBarAgentItems },
-  { label: "Shop", items: topBarShopItems },
-  { label: "Workspace", items: topBarSettingsItems },
 ] as const;
 
 /** Mobile sidebar nav sections. */

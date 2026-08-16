@@ -123,7 +123,7 @@ export function AgentChatView({
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         <div
           className={`px-5 md:px-6 ${
-            compact ? "pb-6 pt-14" : "py-6"
+            compact ? `pb-6 ${onClose ? "pt-14" : "pt-4"}` : "py-6"
           } ${isEmptyBriefing ? "flex min-h-full flex-col justify-end" : "space-y-6"}`}
         >
         {/* The ledger leads. A walkthrough is already a decision list, so the two

@@ -19,6 +19,8 @@ export const SAMPLE_NEEDS_YOU_ITEMS: HomeNeedsAttentionItem[] = [
     orderRef: "#1042",
     tag: "returns",
     isVip: false,
+    isEscalationOnly: false,
+    escalationReason: null,
   },
   {
     threadId: "sample-refund-review",
@@ -38,6 +40,8 @@ export const SAMPLE_NEEDS_YOU_ITEMS: HomeNeedsAttentionItem[] = [
     orderRef: "#1038",
     tag: "damaged",
     isVip: true,
+    isEscalationOnly: false,
+    escalationReason: null,
   },
 ]
 

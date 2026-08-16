@@ -11,6 +11,7 @@ import { MobileHubHeader } from "./mobile-chrome/MobileHubHeader";
 import { DesktopTopBar } from "./sidebar/DesktopTopBar";
 import { MobileNavSheet } from "./sidebar/MobileNavSheet";
 import { useNavAuth } from "./sidebar/useNavAuth";
+import { MainContentScrim } from "./right-rail/MainContentScrim";
 
 function useDashboardOpenCount(initialInboxCount: number) {
   const pathname = usePathname();
@@ -25,11 +26,13 @@ function DashboardSidebarContent({
   initialAutonomyTier,
   agentName,
   initialInboxCount,
+  rightRail,
 }: {
   children: React.ReactNode;
   initialAutonomyTier: AutonomyTier;
   agentName: string;
   initialInboxCount: number;
+  rightRail: React.ReactNode;
 }) {
   const openCount = useDashboardOpenCount(initialInboxCount);
   const navAuth = useNavAuth(initialAutonomyTier);
@@ -59,7 +62,8 @@ function DashboardSidebarContent({
         </div>
       )}
 
-      <div className="flex-1 min-h-0 w-full overflow-x-hidden flex flex-col bg-background">
+      <div className="flex flex-1 min-h-0 w-full overflow-x-hidden flex-row bg-background">
+        <div className="flex min-w-0 flex-1 flex-col">
         <DesktopTopBar
           agentName={agentName}
           openCount={openCount}
@@ -67,14 +71,18 @@ function DashboardSidebarContent({
           navAuth={navAuth}
         />
 
-        <MobileHubHeader
-          agentName={agentName}
-          onOpenNav={openMobileNav}
-        />
+          <MobileHubHeader
+            agentName={agentName}
+            onOpenNav={openMobileNav}
+          />
 
-        <div className="dashboard-content flex-1 min-h-0 overflow-hidden flex flex-col">
-          {children}
+          <div className="dashboard-content relative z-0 flex-1 min-h-0 overflow-hidden flex flex-col">
+            {children}
+            <MainContentScrim />
+          </div>
         </div>
+
+        {rightRail}
       </div>
 
       <MobileNavSheet
@@ -94,11 +102,13 @@ export default function DashboardSidebar({
   initialAutonomyTier,
   agentName,
   initialInboxCount,
+  rightRail,
 }: {
   children: React.ReactNode;
   initialAutonomyTier: AutonomyTier;
   agentName: string;
   initialInboxCount: number;
+  rightRail: React.ReactNode;
 }) {
   return (
     <OpenThreadCountProvider>
@@ -106,6 +116,7 @@ export default function DashboardSidebar({
         initialAutonomyTier={initialAutonomyTier}
         agentName={agentName}
         initialInboxCount={initialInboxCount}
+        rightRail={rightRail}
       >
         {children}
       </DashboardSidebarContent>

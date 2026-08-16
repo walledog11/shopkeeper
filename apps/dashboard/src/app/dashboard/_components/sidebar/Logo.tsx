@@ -11,7 +11,7 @@ export function Logo({ iconOnly = false }: { iconOnly?: boolean }) {
       aria-label="Shopkeeper"
       className={cn(
         "flex items-center shrink-0 text-[#2b2118] transition-colors hover:text-[#2b2118]/75",
-        iconOnly ? "justify-center p-1" : "gap-2",
+        iconOnly ? "justify-center p-1 mr-2" : "gap-2",
       )}
     >
       <Store className="size-6" strokeWidth={1.75} />

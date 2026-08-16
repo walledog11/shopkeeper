@@ -89,6 +89,42 @@ export function planReplyText(plan: AgentPlan | null): string | null {
   return null
 }
 
+function escalationReasonFromToolCall(toolCall: RawToolCall | null): string | null {
+  const input = toolCall?.input
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null
+  const reason = (input as { reason?: unknown }).reason
+  return typeof reason === "string" && reason.trim() ? reason.trim() : null
+}
+
+export function planHasEscalation(plan: AgentPlan | null): boolean {
+  if (!plan) return false
+  return plan.rawToolCalls.some(toolCall => toolCall.name === "escalate_to_human")
+    || plan.steps.some(step => step.tool === "escalate_to_human")
+}
+
+export function planEscalationReason(plan: AgentPlan | null): string | null {
+  if (!plan) return null
+  const fromCall = escalationReasonFromToolCall(
+    plan.rawToolCalls.find(toolCall => toolCall.name === "escalate_to_human") ?? null,
+  )
+  if (fromCall) return fromCall
+
+  const escalateStep = plan.steps.find(step => step.tool === "escalate_to_human")
+  if (escalateStep?.description?.trim()) return escalateStep.description.trim()
+  if (escalateStep?.label?.trim()) return escalateStep.label.trim()
+
+  const routingReason = plan.routing?.decision === "escalate"
+    ? plan.routing.signals?.join(", ")
+    : null
+  return routingReason?.trim() || null
+}
+
+/** Escalation with no customer-facing send_reply / send_email draft. */
+export function isEscalationOnlyPlan(plan: AgentPlan | null): boolean {
+  if (!planHasEscalation(plan)) return false
+  return !planReplyText(plan)
+}
+
 function usesCustomerOrOrderContext(plan: AgentPlan): boolean {
   return plan.rawToolCalls.some(toolCall => CUSTOMER_OR_ORDER_READ_TOOLS.has(toolCall.name))
 }

@@ -8,8 +8,8 @@ import {
   executeApprovedAgentPlan,
   fetchAgentPlan,
   planRequestErrorTurn,
-  regenerateAgentPlan,
 } from "./conversation-agent-requests"
+import { REPLAN_CUSTOMER_REPLY_INSTRUCTION } from "@/lib/agent/replan-instruction"
 import { captureClientProductEvent } from "@/lib/product-events"
 
 interface UseConversationAgentFlowProps {
@@ -25,6 +25,7 @@ interface UseConversationAgentFlowProps {
   onAgentComplete: (turn: AgentTurn) => void
   onPrivateAnswerStart?: () => void
   onNoteModeReset: () => void
+  onPlanCacheUpdated?: () => void | Promise<void>
 }
 
 // How long a server-confirmed plan card lingers before it slides away.
@@ -112,6 +113,7 @@ export function useConversationAgentFlow({
   onAgentComplete,
   onPrivateAnswerStart,
   onNoteModeReset,
+  onPlanCacheUpdated,
 }: UseConversationAgentFlowProps) {
   const [pendingInstruction, setPendingInstruction] = useState<string | null>(null)
   const [pendingPlanState, dispatchPendingPlan] = useReducer(pendingPlanReducer, {
@@ -267,13 +269,28 @@ export function useConversationAgentFlow({
   const handlePlanRegenerate = async () => {
     if (!pendingPlan || isRegenerating) return
 
+    const instruction = REPLAN_CUSTOMER_REPLY_INSTRUCTION
     setIsRegenerating(true)
-    const instruction = pendingPlan.instruction
 
     try {
-      const plan = await regenerateAgentPlan(ticket.id, instruction)
-      const resolved = plan ? resolvePendingPlan(plan, instruction) : null
-      if (resolved) setPendingPlan(resolved)
+      const plan = await fetchAgentPlan(ticket.id, instruction, { force: true })
+      const resolved = resolvePendingPlan(plan, instruction)
+      if (resolved) {
+        setPendingPlan(resolved)
+        await onPlanCacheUpdated?.()
+        return
+      }
+
+      setPendingPlan(null)
+      onAgentTurnAdd(createAgentTurn({
+        instruction,
+        actions: [],
+        summary: plan.steps.length === 0
+          ? "This ticket was already answered — there is no new draft to generate."
+          : "Regeneration did not produce a reviewable plan. Try drafting again from the composer.",
+      }))
+    } catch (err) {
+      onAgentTurnAdd(createAgentTurn(planRequestErrorTurn(instruction, err)))
     } finally {
       setIsRegenerating(false)
     }
@@ -306,8 +323,8 @@ export function useConversationAgentFlow({
     await requestAgentPlan(instruction)
   }
 
-  const requestRefreshDraft = async (instruction = "draft a reply") => {
-    await requestAgentPlan(instruction, { force: true })
+  const requestRefreshDraft = async () => {
+    await requestAgentPlan(REPLAN_CUSTOMER_REPLY_INSTRUCTION, { force: true })
   }
 
   return {

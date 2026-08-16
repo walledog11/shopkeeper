@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef } from "react"
 import { useSearchParams } from "next/navigation"
-import { getCurrentPlanForThread } from "@shopkeeper/agent/plan-cache-shape"
+import { getResolvedCachedPlanForThread } from "@/lib/agent/cached-thread-plan"
 import { useMobileChromeOverride } from "@/app/dashboard/_components/mobile-chrome/MobileChromeContext"
 import { useIsMobile } from "@/hooks/useMobile"
 import { useOpenThreadCountOverride } from "@/hooks/OpenThreadCountContext"
@@ -110,7 +110,7 @@ export function useTicketsPageView({
   })
 
   const cachedPlan = useMemo(
-    () => activeThread ? getCurrentPlanForThread(activeThread, activeThread.messages) : null,
+    () => activeThread ? getResolvedCachedPlanForThread(activeThread) : null,
     [activeThread],
   )
 

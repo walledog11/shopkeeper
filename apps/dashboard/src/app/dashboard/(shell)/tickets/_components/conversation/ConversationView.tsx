@@ -153,6 +153,7 @@ export default function ConversationView({
     onAgentComplete,
     onPrivateAnswerStart: () => setViewTab('notes'),
     onNoteModeReset: () => setViewTab('chat'),
+    onPlanCacheUpdated: onTicketRefresh,
   })
 
   const planPhrase = useFillerPhrase([

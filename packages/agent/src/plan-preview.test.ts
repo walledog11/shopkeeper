@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { MUTATIVE_INTENT_NO_ACTION_WARNING } from "./planner-safety/index.js"
-import { buildPlanPreview, classifyHomePlan, isPlanWarningBlocking, planWarningTiers } from "./plan-preview.js"
+import { buildPlanPreview, classifyHomePlan, isEscalationOnlyPlan, isPlanWarningBlocking, planEscalationReason, planWarningTiers } from "./plan-preview.js"
 import type { AgentPlan, OrgSettings, PlanStep, RawToolCall } from "./types.js"
 
 const sendReplyCall: RawToolCall = {
@@ -615,5 +615,44 @@ describe("classifyHomePlan — a verified shopper's own order", () => {
     )
 
     expect(result.kind).not.toBe("quick_reply")
+  })
+})
+
+describe("escalation plan helpers", () => {
+  it("detects escalation-only plans without a customer reply", () => {
+    const escalateOnly: AgentPlan = {
+      instruction: "handle",
+      steps: [{
+        id: "esc_1",
+        tool: "escalate_to_human",
+        label: "Escalate",
+        description: "",
+        category: "internal",
+        enabled: true,
+      }],
+      rawToolCalls: [{
+        id: "esc_1",
+        name: "escalate_to_human",
+        input: { reason: "Partnership inquiry — needs marketing." },
+      }],
+      routing: { decision: "escalate", signals: ["out_of_scope_commercial"] },
+    }
+
+    expect(isEscalationOnlyPlan(escalateOnly)).toBe(true)
+    expect(planEscalationReason(escalateOnly)).toBe("Partnership inquiry — needs marketing.")
+  })
+
+  it("does not treat a reply plus escalation as escalation-only", () => {
+    const planWithReply: AgentPlan = {
+      instruction: "handle",
+      steps: [sendReplyStep],
+      rawToolCalls: [
+        sendReplyCall,
+        { id: "esc_1", name: "escalate_to_human", input: { reason: "Also flag for review." } },
+      ],
+    }
+
+    expect(isEscalationOnlyPlan(planWithReply)).toBe(false)
+    expect(planEscalationReason(planWithReply)).toBe("Also flag for review.")
   })
 })

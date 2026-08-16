@@ -9,7 +9,6 @@ import AuthShell from "../_components/AuthShell";
 import { authCardClassName } from "../_components/auth-styles";
 import { AuthBackLink } from "../_components/AuthBackLink";
 import { AuthLoadingCard } from "../_components/AuthLoadingCard";
-import { OrgAvatar } from "@/components/OrgAvatar";
 import { formatRole } from "@/lib/format/role";
 import {
   Card,
@@ -25,7 +24,6 @@ type MembershipItem = {
   organization: {
     id: string;
     name: string;
-    imageUrl?: string | null;
   };
 };
 
@@ -113,12 +111,6 @@ export default function SelectOrgPage() {
                         disabled={pendingOrgId !== null}
                         className="group flex w-full items-center gap-3 px-6 py-3.5 text-left transition-colors hover:bg-accent disabled:cursor-wait"
                       >
-                        <OrgAvatar
-                          name={org.name}
-                          imageUrl={org.imageUrl}
-                          className="size-9 shrink-0 rounded-md border border-border bg-muted text-xs font-semibold text-foreground/70"
-                        />
-
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-foreground">{org.name}</p>
                           <p className="mt-0.5 text-xs uppercase tracking-wider text-muted-foreground">

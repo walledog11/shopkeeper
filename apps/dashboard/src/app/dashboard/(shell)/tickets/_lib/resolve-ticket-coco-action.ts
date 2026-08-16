@@ -11,6 +11,7 @@ import {
   planWarningTiers,
 } from "@shopkeeper/agent/plan-preview"
 import type { AgentPlan, OrgSettings, Thread } from "@/types"
+import { REPLAN_CUSTOMER_REPLY_INSTRUCTION } from "@/lib/agent/replan-instruction"
 
 export type TicketCocoActionVariant = "send" | "draft" | "caution" | "neutral" | "loading"
 
@@ -80,10 +81,8 @@ function hasStaleCachedPlan(
   return readAgentPlanCacheRecordShape(thread.cachedPlan) !== null
 }
 
-function refreshDraftInstruction(
-  thread: Pick<Thread, "cachedPlan" | "cachedPlanMessageId">,
-): string {
-  return readAgentPlanCacheRecordShape(thread.cachedPlan)?.instruction.trim() || "draft a reply"
+function refreshDraftInstruction(): string {
+  return REPLAN_CUSTOMER_REPLY_INSTRUCTION
 }
 
 function reviewLabel(plan: AgentPlan): Pick<TicketCocoAction, "id" | "label" | "shortLabel" | "variant"> {
@@ -180,7 +179,7 @@ export function resolveTicketCocoAction(input: ResolveTicketCocoActionInput): Ti
       shortLabel: "Refresh",
       variant: "neutral",
       handler: "refresh-draft",
-      instruction: refreshDraftInstruction(input.thread),
+      instruction: refreshDraftInstruction(),
     }
   }
 

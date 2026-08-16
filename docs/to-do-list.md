@@ -42,8 +42,9 @@ Code work that is started and not finished.
   safe-reply auto-execution, which changed planner-visible routing. Still true
   whenever it runs — fixtures carry no `classifierSignals`, so the gate has never
   exercised production's `computeClassifierRouting` path. Runs are expensive:
-  justify before running, single-fixture probes for diagnosis, no tune-then-rerun
-  loop.
+  follow the [paid model-eval workflow](production/critical-path-test-checklist.md#paid-model-backed-agent-evals):
+  single-fixture one-repeat probes for diagnosis, explicit approval before an
+  unfiltered live-key run, and no automatic tune-then-rerun loop.
 - [ ] **Bounded conversation context and cross-channel memory.** Keep persistent
   shopper identity separate from short conversation episodes; plan from the
   newest request and retrieve only verified, relevant history or open

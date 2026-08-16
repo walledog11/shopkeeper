@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Bot, Sparkles } from "lucide-react";
+import { Bot, CircleHelp, Sparkles } from "lucide-react";
 import {
   CommandDialog,
   CommandEmpty,
@@ -12,6 +12,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { useAgentPanel } from "./agent-panel/AgentPanelContext";
+import { useHelp } from "./help/HelpContext";
 import { commandPaletteSections } from "./nav-items";
 import { dispatchNavProgressStart } from "./sidebar/sidebar-helpers";
 
@@ -24,6 +25,7 @@ interface Props {
 export default function CommandPalette({ open, onClose, agentName }: Props) {
   const { push } = useRouter();
   const { open: openAgentPanel } = useAgentPanel();
+  const { openHelp } = useHelp();
   const [query, setQuery] = useState("");
 
   // Programmatic, so the shell's link delegation never sees it.
@@ -81,6 +83,20 @@ export default function CommandPalette({ open, onClose, agentName }: Props) {
               <Bot className="size-3.5 text-muted-foreground" />
             </div>
             <span className="flex-1 text-sm font-medium">Chat with {agentName}</span>
+          </CommandItem>
+          <CommandItem
+            value="Help"
+            keywords={["help", "support", "docs", "documentation", "guide"]}
+            onSelect={() => {
+              openHelp();
+              onClose();
+            }}
+            className="gap-3 cursor-pointer"
+          >
+            <div className="size-7 rounded-md bg-muted flex items-center justify-center shrink-0">
+              <CircleHelp className="size-3.5 text-muted-foreground" />
+            </div>
+            <span className="flex-1 text-sm font-medium">Help</span>
           </CommandItem>
         </CommandGroup>
         {commandPaletteSections.map(({ heading, items }) => (

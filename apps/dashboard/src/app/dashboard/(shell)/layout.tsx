@@ -5,10 +5,10 @@ import { HelpProvider } from "../_components/help/HelpContext";
 import NotificationBar, { type Notification } from "../_components/NotificationBar";
 import NavProgressBar from "../_components/NavProgressBar";
 import DashboardSidebar from "../_components/DashboardSidebar";
-import HelpPanel from "../_components/help/HelpPanel";
-import AgentPanelRoot from "../_components/agent-panel/AgentPanelRoot";
 import AgentPanelUrlSync from "../_components/agent-panel/AgentPanelUrlSync";
 import { AgentPanelProvider } from "../_components/agent-panel/AgentPanelContext";
+import { RightRailProvider } from "../_components/right-rail/RightRailContext";
+import DashboardRightRail from "../_components/right-rail/DashboardRightRail";
 import { CommandPaletteProvider } from "../_components/CommandPaletteContext";
 import RealtimeProvider from "@/components/realtime/RealtimeProvider";
 import { getOrCreateOrg } from "@/lib/server/org";
@@ -125,6 +125,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const visibleNotifications = notifications.filter(notification => !dismissedNotificationIds.has(notification.id));
 
   return (
+    <RightRailProvider>
     <HelpProvider>
       <AgentPanelProvider>
       <CommandPaletteProvider agentName={settings.agentName}>
@@ -145,18 +146,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
           initialAutonomyTier={settings.autonomyTier ?? "guarded"}
           agentName={settings.agentName}
           initialInboxCount={inboxBadgeCount}
+          rightRail={<DashboardRightRail agentName={settings.agentName} />}
         >
-          <div className="flex-1 overflow-hidden flex min-h-0">
-            <div className="flex-1 overflow-hidden flex flex-col min-w-0">
-              {children}
-            </div>
-            <HelpPanel agentName={settings.agentName} />
-            <AgentPanelRoot agentName={settings.agentName} />
-          </div>
+          {children}
         </DashboardSidebar>
       </div>
       </CommandPaletteProvider>
       </AgentPanelProvider>
     </HelpProvider>
+    </RightRailProvider>
   );
 }

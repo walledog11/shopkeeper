@@ -284,7 +284,10 @@ seam is visible, and only within one page load.
 
 - [ ] Run the full agent eval gate **once**, after A, B, and C are all complete —
   not once per item. Safe-reply auto-execution owes a gate run of its own; batch
-  it into this one, since both change planner-visible routing.
+  it into this one, since both change planner-visible routing. Follow the
+  [paid model-eval workflow](production/critical-path-test-checklist.md#paid-model-backed-agent-evals):
+  targeted one-repeat probes first, then explicit approval for the single
+  unfiltered run.
 - [ ] Verify on the dev store: widget, dashboard, operator notification, and
   reply/approval paths together.
 
@@ -346,7 +349,7 @@ npm run test:unit -w apps/dashboard
 npm run test:integration -w apps/dashboard
 npm run typecheck
 npm run lint
-npm run test:evals -w apps/dashboard   # once, at item F
+npm run test:evals -w apps/dashboard   # paid; once at item F, under the linked eval policy
 ```
 
 Two things to know before reading a red dashboard integration run as your fault:

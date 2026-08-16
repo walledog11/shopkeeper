@@ -20,6 +20,8 @@ function item(overrides: Partial<HomeNeedsAttentionItem> = {}): HomeNeedsAttenti
     orderRef: null,
     tag: null,
     isVip: false,
+    isEscalationOnly: false,
+    escalationReason: null,
     ...overrides,
   }
 }

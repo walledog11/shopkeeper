@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, type MouseEvent } from "react";
-import { ChevronDown, CircleHelp, Search, X } from "lucide-react";
+import { ChevronDown, Search } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,18 +14,18 @@ import { cn } from "@/lib/ui/cn";
 import AgentAvatar from "@/components/agent/AgentAvatar";
 import { useAgentPanel } from "../agent-panel/AgentPanelContext";
 import { useCommandPalette } from "../CommandPaletteContext";
-import { useHelp } from "../help/HelpContext";
-import { inboxNavItem, topBarDropdowns, type NavItem } from "../nav-items";
+import { inboxNavItem, integrationsNavItem, shopNavItem, teamNavItem, topBarDropdowns, type NavItem } from "../nav-items";
 import { OpenCountBadge } from "./OpenCountBadge";
 import { Logo } from "./Logo";
-import { OrgSwitcher } from "./OrgSwitcher";
+import { AccountNavPill } from "./AccountNavPill";
 import {
+  desktopTopBarPillClass,
   isRouteActive,
   topBarDropdownItemClass,
   topBarDropdownPanelClass,
   topBarNavTriggerClass,
 } from "./sidebar-helpers";
-import { UserAvatarLink } from "./UserAvatarLink";
+import { WorkspaceNavPill } from "./WorkspaceNavPill";
 import type { NavAuth } from "./useNavAuth";
 import {
   dashboardNavPrefetchHandlers,
@@ -56,7 +56,7 @@ function NavDropdown({
       <DropdownMenuTrigger asChild>
         <button type="button" className={cn("group", topBarNavTriggerClass(isGroupActive))}>
           <span>{label}</span>
-          <ChevronDown className="size-3.5 text-sidebar-foreground/40 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+          <ChevronDown className="size-4 text-sidebar-foreground/40 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
@@ -110,94 +110,117 @@ export function DesktopTopBar({
   const pathname = usePathname();
   const prefetchNav = useDashboardNavPrefetch();
   const { open: openCmd } = useCommandPalette();
-  const { open: openAgentPanel } = useAgentPanel();
-  const { isOpen: helpIsOpen, toggleHelp } = useHelp();
+  const { open: openAgent, close: closeAgent, isOpen: agentIsOpen } = useAgentPanel();
   const inboxIsActive = isRouteActive(pathname, inboxNavItem.href);
+  const shopIsActive = isRouteActive(pathname, shopNavItem.href);
+  const integrationsIsActive = isRouteActive(pathname, integrationsNavItem.href);
+  const teamIsActive = isRouteActive(pathname, teamNavItem.href);
+
+  const handleAgentClick = () => {
+    if (agentIsOpen) closeAgent();
+    else openAgent({ source: "command" });
+  };
 
   return (
-    <header
-      data-dashboard-desktop-header
-      className="relative hidden md:flex items-center gap-2 px-4 h-14 border-b border-border shrink-0 bg-sidebar"
-    >
-      <div className="flex items-center shrink-0">
-        <Logo iconOnly />
-      </div>
+    <div className="hidden md:flex items-center w-full px-4 pt-2 pb-2 shrink-0 relative z-40">
+      <div className="flex-1 min-w-0" />
 
-      <nav
-        aria-label="Dashboard"
-        className="flex items-center gap-0.5 shrink-0 mx-auto lg:absolute lg:left-1/2 lg:-translate-x-1/2"
+      <header
+        data-dashboard-desktop-header
+        className={cn(desktopTopBarPillClass, "gap-2 px-4 shrink-0")}
       >
-        <Link
-          href={inboxNavItem.href}
-          onClick={(e) => handleNavClick(e, inboxIsActive)}
-          {...dashboardNavPrefetchHandlers(prefetchNav, inboxNavItem.href)}
-          className={topBarNavTriggerClass(inboxIsActive)}
-        >
-          <span>{inboxNavItem.name}</span>
-          {inboxNavItem.badge && (
-            <OpenCountBadge
-              openCount={openCount}
-              animate
-              className="min-w-[18px] h-[18px] px-1 rounded-md text-[10px] font-bold flex items-center justify-center bg-green-600 text-background tabular-nums leading-none"
-            />
-          )}
-        </Link>
+        <div className="flex items-center gap-1 shrink-0">
+          <Logo iconOnly />
 
-        {topBarDropdowns.map(({ label, items }) => (
-          <NavDropdown
-            key={label}
-            label={label}
-            items={items}
-            onNavigate={handleNavClick}
-            prefetchNav={prefetchNav}
-          />
-        ))}
+          <nav aria-label="Dashboard" className="flex items-center gap-1 shrink-0">
+            <Link
+              href={inboxNavItem.href}
+              onClick={(e) => handleNavClick(e, inboxIsActive)}
+              {...dashboardNavPrefetchHandlers(prefetchNav, inboxNavItem.href)}
+              className={topBarNavTriggerClass(inboxIsActive)}
+            >
+              <span>{inboxNavItem.name}</span>
+              {inboxNavItem.badge && (
+                <OpenCountBadge
+                  openCount={openCount}
+                  animate
+                  className="min-w-[22px] h-[22px] px-1 rounded-md text-[11px] font-bold flex items-center justify-center bg-green-600 text-background tabular-nums leading-none"
+                />
+              )}
+            </Link>
 
-      </nav>
+            <Link
+              href={shopNavItem.href}
+              onClick={(e) => handleNavClick(e, shopIsActive)}
+              {...dashboardNavPrefetchHandlers(prefetchNav, shopNavItem.href)}
+              className={topBarNavTriggerClass(shopIsActive)}
+            >
+              <span>{shopNavItem.name}</span>
+            </Link>
 
-      <div className="flex items-center gap-2 shrink-0 lg:ml-auto">
-        <button
-          type="button"
-          onClick={() => openAgentPanel({ source: "command" })}
-          aria-label="Open agent"
-          title="Open agent"
-          className="flex items-center justify-center p-0.5 rounded-full border border-border bg-foreground hover:bg-foreground/90 transition-colors shrink-0"
-        >
-          <AgentAvatar agentName={agentName} size="sm" imageSrc="/logos/coco-header-icon.png" />
-        </button>
+            {topBarDropdowns.map(({ label, items }) => (
+              <NavDropdown
+                key={label}
+                label={label}
+                items={items}
+                onNavigate={handleNavClick}
+                prefetchNav={prefetchNav}
+              />
+            ))}
 
-        <button
-          type="button"
-          onClick={openCmd}
-          aria-label="Search"
-          className="flex items-center justify-center xl:justify-start gap-2 h-9 w-9 xl:h-auto xl:w-44 2xl:w-52 xl:px-3 xl:py-1.5 rounded-md border border-border bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors outline-none shrink-0"
-        >
-          <Search className="size-3.5 shrink-0" />
-          <span className="hidden xl:block flex-1 text-sm text-left truncate">Search</span>
-          <kbd className="hidden xl:inline text-[10px] font-semibold bg-secondary px-1.5 py-0.5 rounded text-muted-foreground leading-none">
-            ⌘K
-          </kbd>
-        </button>
+            <Link
+              href={integrationsNavItem.href}
+              onClick={(e) => handleNavClick(e, integrationsIsActive)}
+              {...dashboardNavPrefetchHandlers(prefetchNav, integrationsNavItem.href)}
+              className={topBarNavTriggerClass(integrationsIsActive)}
+            >
+              <span>{integrationsNavItem.name}</span>
+            </Link>
 
-        <button
-          type="button"
-          onClick={toggleHelp}
-          aria-label={helpIsOpen ? "Close help" : "Help"}
-          title={helpIsOpen ? "Close help" : "Help"}
-          aria-expanded={helpIsOpen}
-          className={cn(
-            "flex items-center justify-center h-9 w-9 rounded-md border border-border transition-colors outline-none shrink-0",
-            helpIsOpen
-              ? "bg-muted text-foreground"
-              : "bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted",
-          )}
-        >
-          {helpIsOpen ? <X className="size-4 shrink-0" /> : <CircleHelp className="size-4 shrink-0" />}
-        </button>
+            <Link
+              href={teamNavItem.href}
+              onClick={(e) => handleNavClick(e, teamIsActive)}
+              {...dashboardNavPrefetchHandlers(prefetchNav, teamNavItem.href)}
+              className={topBarNavTriggerClass(teamIsActive)}
+            >
+              <span>{teamNavItem.name}</span>
+            </Link>
+          </nav>
+        </div>
 
-        <OrgSwitcher navAuth={navAuth} onSwitching={onSwitching} variant="topBar" />
-        <UserAvatarLink navAuth={navAuth} variant="topBar" />
+        <div className="flex items-center gap-0.5 rounded-lg bg-muted/40 p-1 shrink-0">
+          <button
+            type="button"
+            onClick={handleAgentClick}
+            aria-label={agentIsOpen ? `Close ${agentName}` : `Open ${agentName}`}
+            title={agentIsOpen ? `Close ${agentName}` : `Chat with ${agentName}`}
+            aria-expanded={agentIsOpen}
+            className={cn(
+              "flex items-center justify-center rounded-full border p-1 transition-colors shrink-0",
+              agentIsOpen
+                ? "border-foreground bg-foreground ring-2 ring-foreground/20"
+                : "border-border bg-foreground hover:bg-foreground/90",
+            )}
+          >
+            <AgentAvatar agentName={agentName} size="sm" imageSrc="/logos/coco-header-icon.png" />
+          </button>
+
+          <button
+            type="button"
+            onClick={openCmd}
+            aria-label="Search and quick actions"
+            title="Search pages, chat, and help (⌘K)"
+            className="flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background/80 hover:text-foreground shrink-0"
+          >
+            <Search className="size-4 shrink-0" />
+          </button>
+        </div>
+      </header>
+
+      <div className="flex-1 min-w-0 flex items-center justify-end gap-3 pl-6">
+        <WorkspaceNavPill navAuth={navAuth} onSwitching={onSwitching} variant="topBar" />
+        <AccountNavPill navAuth={navAuth} variant="topBar" />
       </div>
-    </header>
+    </div>
   );
 }

@@ -12,6 +12,7 @@ import {
   BUBBLE_TONE,
   isInboundTone,
   needsYouMetaPillShellClassName,
+  needsYouSoftShadowClassName,
   needsYouCardShellClassName,
   needsYouConversationSurfaceClassName,
   type BubbleTone,
@@ -78,6 +79,26 @@ export function NeedsYouCardFooter({ children }: { children: ReactNode }) {
   return (
     <div className="relative z-10 mt-auto rounded-b-3xl border-t border-border/50 bg-muted/30 px-5 py-4 sm:px-6">
       {children}
+    </div>
+  )
+}
+
+export function NeedsYouEscalationCallout({ reason }: { reason: string | null }) {
+  return (
+    <div
+      className={cn(
+        needsYouSoftShadowClassName,
+        "mt-3 rounded-2xl border border-amber-600/20 bg-[#fff4e5] px-4 py-3",
+      )}
+    >
+      <p className="text-sm font-semibold text-[#1a1a1a]">
+        Needs a human — no reply drafted
+      </p>
+      <p className="mt-1 text-sm leading-relaxed text-[#6b5d4f]">
+        {reason
+          ? reason
+          : "Shopkeeper flagged this for you instead of sending a customer message. Open the ticket to reply or re-draft."}
+      </p>
     </div>
   )
 }

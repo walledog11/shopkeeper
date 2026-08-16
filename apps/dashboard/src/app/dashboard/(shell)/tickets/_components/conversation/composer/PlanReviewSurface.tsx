@@ -52,7 +52,7 @@ export function PlanReviewSurface({
 
   return (
     <ActionPlanCard
-      key={`${pendingPlan.instruction}:${pendingPlan.rawToolCalls.map(toolCall => toolCall.id).join(",")}`}
+      key={pendingPlan.planId ?? `${pendingPlan.instruction}:${pendingPlan.rawToolCalls.map(toolCall => toolCall.id).join(",")}`}
       plan={pendingPlan}
       agentName={agentName}
       customerName={customerName}

@@ -21,6 +21,10 @@ export interface HomeNeedsAttentionItem {
   orderRef: string | null
   tag: string | null
   isVip: boolean
+  /** True when the cached plan escalates without drafting a customer reply. */
+  isEscalationOnly: boolean
+  /** Why the agent escalated — from escalate_to_human or routing signals. */
+  escalationReason: string | null
 }
 
 export interface HomeClearedTopic {

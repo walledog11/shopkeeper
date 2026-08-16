@@ -1,7 +1,13 @@
 import { db, SenderType } from "@shopkeeper/db"
 import type { ChannelType, OrgSettings } from "@/types"
 import { getCurrentPlanForThread } from "@shopkeeper/agent/plan-cache-shape"
-import { buildPlanPreview, classifyHomePlan, planReplyText } from "@shopkeeper/agent/plan-preview"
+import {
+  buildPlanPreview,
+  classifyHomePlan,
+  isEscalationOnlyPlan,
+  planEscalationReason,
+  planReplyText,
+} from "@shopkeeper/agent/plan-preview"
 import {
   HOME_NEEDS_ATTENTION_LIMIT,
   type HomeNeedsAttentionItem,
@@ -96,6 +102,8 @@ export async function loadNeedsAttention(
       orderRef: copy.orderRef,
       tag: thread.tag,
       isVip: vipCustomerIds.has(thread.customerId),
+      isEscalationOnly: isEscalationOnlyPlan(plan),
+      escalationReason: planEscalationReason(plan),
     }]
   })
 }
