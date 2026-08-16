@@ -142,6 +142,7 @@ export interface PhaseUsage {
 export interface EvalUsage {
   modelCalls: number;
   plannerModelCalls: number;
+  models: Record<string, PhaseUsage>;
   inputTokens: number;
   outputTokens: number;
   cacheReadInputTokens: number;
@@ -199,6 +200,7 @@ export interface BaselineUsage {
   planner: PhaseUsage;
   run: PhaseUsage;
   judge: PhaseUsage;
+  models?: Record<string, PhaseUsage>;
 }
 
 export interface EvalBaseline {

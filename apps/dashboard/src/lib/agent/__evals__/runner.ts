@@ -38,7 +38,7 @@ export {
   writeBaseline,
 } from "./baseline"
 export { mutativeIntentActionFailures } from "./assertions"
-export { formatUsageBreakdown, formatUsageDelta, probeSystemPromptCacheRead } from "./usage"
+export { formatModelUsageBreakdown, formatUsageBreakdown, formatUsageDelta, probeSystemPromptCacheRead } from "./usage"
 
 const simulatedToolResults = vi.hoisted(() => ({
   current: null as Map<string, string> | null,
@@ -109,6 +109,7 @@ function createEvalUsage(): EvalUsage {
   return {
     modelCalls: 0,
     plannerModelCalls: 0,
+    models: {},
     inputTokens: 0,
     outputTokens: 0,
     cacheReadInputTokens: 0,
@@ -156,7 +157,8 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
         options as never,
       )
       if (currentPhase === usage.plannerUsage) usage.plannerModelCalls += 1
-      recordEvalUsage(usage, response, currentPhase)
+      const model = typeof response.model === "string" ? response.model : undefined
+      recordEvalUsage(usage, response, currentPhase, model)
       return response
     }) as CreateFn
     messages.create = wrappedCreate

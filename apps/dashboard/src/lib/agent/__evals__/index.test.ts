@@ -19,6 +19,7 @@ import {
   summarizeGates,
   formatSummary,
   formatGateSummary,
+  formatModelUsageBreakdown,
   formatUsageBreakdown,
   formatUsageDelta,
   shouldUpdateBaseline,
@@ -152,6 +153,7 @@ describe.sequential("agent evals", () => {
     writeEvalReportLine(formatGateSummary(summarizeGates(collected, fixtures)));
     writeEvalReportLine(formatSummary(summary));
     writeEvalReportLine(formatUsageBreakdown(collected));
+    writeEvalReportLine(formatModelUsageBreakdown(collected));
 
     if (shouldUpdateBaseline()) {
       writeBaseline(summary);

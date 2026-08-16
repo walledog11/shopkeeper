@@ -35,6 +35,7 @@ export function recordEvalUsage(
   usage: EvalUsage,
   response: unknown,
   phase: PhaseUsage | null,
+  model?: string,
 ) {
   if (!response || typeof response !== "object" || !("usage" in response)) return
   const modelUsage = readModelUsage(response as { usage?: unknown })
@@ -44,6 +45,11 @@ export function recordEvalUsage(
   usage.cacheReadInputTokens += modelUsage.cacheReadInputTokens
   usage.cacheCreationInputTokens += modelUsage.cacheCreationInputTokens
   if (phase) addPhaseUsage(phase, modelUsage)
+  if (model) {
+    const modelTotal = usage.models[model] ?? zeroPhaseUsage()
+    addPhaseUsage(modelTotal, modelUsage)
+    usage.models[model] = modelTotal
+  }
 }
 
 export function zeroPhaseUsage(): PhaseUsage {
@@ -85,6 +91,7 @@ export function summarizeUsage(summaries: readonly FixtureRunSummary[]): Baselin
     planner: zeroPhaseUsage(),
     run: zeroPhaseUsage(),
     judge: zeroPhaseUsage(),
+    models: {},
   }
   for (const summary of summaries) {
     for (const result of summary.results) {
@@ -92,9 +99,24 @@ export function summarizeUsage(summaries: readonly FixtureRunSummary[]): Baselin
       addPhaseUsage(usage.planner, result.usage.plannerUsage)
       addPhaseUsage(usage.run, result.usage.runUsage)
       addPhaseUsage(usage.judge, result.usage.judgeUsage)
+      for (const [model, modelUsage] of Object.entries(result.usage.models)) {
+        const modelTotal = usage.models![model] ?? zeroPhaseUsage()
+        addPhaseUsage(modelTotal, modelUsage)
+        usage.models![model] = modelTotal
+      }
     }
   }
   return usage
+}
+
+export function formatModelUsageBreakdown(summaries: readonly FixtureRunSummary[]): string {
+  const models = summarizeUsage(summaries).models ?? {}
+  return [
+    "[eval:model-usage] token breakdown by model (tokens, not $):",
+    ...Object.entries(models).sort(([a], [b]) => a.localeCompare(b)).map(
+      ([model, usage]) => phaseUsageLine(model, usage),
+    ),
+  ].join("\n")
 }
 
 export function formatUsageBreakdown(summaries: readonly FixtureRunSummary[]): string {
