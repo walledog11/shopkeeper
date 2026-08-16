@@ -26,6 +26,9 @@ describe("proxy path access policy", () => {
     expect(isPublicPath("/api/agent/io-send-internal")).toBe(true);
     expect(isPublicPath("/api/messages/auto-ack")).toBe(true);
     expect(isPublicPath("/api/messages/internal")).toBe(true);
+    // Authenticated by `x-internal-secret` in withInternalRoute; a proxy 401
+    // here fails every integration disconnect's provider cleanup.
+    expect(isPublicPath("/api/integrations/internal/disconnect-cleanup")).toBe(true);
   });
 
   it("requires auth but not an org for signed-in onboarding and workspace selection pages", () => {

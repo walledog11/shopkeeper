@@ -414,6 +414,8 @@ async function updateShopifyIntegration(
       accessToken: args.accessToken,
       fromEmail: args.shopName,
       tokenExpiresAt: null,
+      // Re-authorizing clears a lifecycle left behind by a failed disconnect.
+      lifecycleStatus: 'active',
       ...(metadata !== undefined && { metadata }),
     },
   });

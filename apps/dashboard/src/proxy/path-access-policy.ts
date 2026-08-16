@@ -23,6 +23,10 @@ export const publicRoutePatterns = [
   "/api/agent/io-send-internal(.*)",
   "/api/messages/auto-ack(.*)",
   "/api/messages/internal(.*)",
+  // Gateway-to-dashboard call carrying `x-internal-secret`, not a Clerk
+  // session. Without this the proxy 401s it before withInternalRoute can check
+  // the secret, so every integration disconnect fails its provider cleanup.
+  "/api/integrations/internal(.*)",
   // First shopper-facing public route on this list — everything else here is a
   // webhook or an OAuth callback. Authentication is Shopify's app-proxy
   // signature plus a session bearer token, enforced in the routes themselves.

@@ -78,6 +78,10 @@ export async function upsertEmailIntegration(
     tokenExpiresAt: args.tokenExpiresAt ?? null,
     fromEmail: args.fromEmail ?? existing?.fromEmail ?? args.externalAccountId,
     emailProvider: provider,
+    // A fresh authorization makes the integration active again. Without this a
+    // row left in `cleanup_failed` by a failed disconnect stays filtered out of
+    // getIntegrationsForOrg, so reconnecting saves tokens the UI never shows.
+    lifecycleStatus: 'active',
     metadata: mergeEmailMetadata(
       existing?.metadata,
       args.provider,

@@ -120,6 +120,8 @@ export async function persistInstagramConnection(
         refreshToken: null,
         fromEmail: input.username,
         tokenExpiresAt: input.expiresAt,
+        // Re-authorizing clears a lifecycle left behind by a failed disconnect.
+        lifecycleStatus: 'active',
         metadata: instagramLoginMetadata(
           existing?.externalAccountId === input.accountId ? existing.metadata : null,
           input,

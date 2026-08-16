@@ -75,7 +75,10 @@ async function updateIntegrationById(id: string, data: IntegrationUpsertData): P
 export async function upsertRaceSafeIntegration(
   args: RaceSafeIntegrationUpsertArgs,
 ): Promise<Integration> {
-  const data = args.data ?? {};
+  // Connecting is what makes an integration active, so this also clears a
+  // lifecycle a failed disconnect left behind — otherwise the reconnected row
+  // stays filtered out of getIntegrationsForOrg and the card never updates.
+  const data = { ...(args.data ?? {}), lifecycleStatus: 'active' as const };
   const key: IntegrationUniqueKey = {
     organizationId: args.organizationId,
     platform: args.platform,
