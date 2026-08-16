@@ -22,17 +22,17 @@ export function HomePageSkeleton() {
     <PageShell className="@container h-full flex flex-col overflow-hidden bg-background">
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <div className="flex flex-col min-h-full w-full max-w-2xl mx-auto px-5 md:px-6 lg:px-8 pt-3 pb-4 gap-3">
-          <Card className="bg-card border-border rounded-2xl" aria-busy="true" aria-label="Loading home briefing">
-            <div className="px-6 pt-5 pb-5">
-              <Pulse className="h-8 w-[72%] max-w-md rounded-lg" />
-              <div className="mt-3 space-y-2 max-w-2xl">
+          <Card className={needsYouCardShellClassName("briefing")} aria-busy="true" aria-label="Loading home briefing">
+            <div className="px-5 py-4 sm:px-6">
+              <Pulse className="h-7 w-[72%] max-w-md rounded-lg sm:h-8" />
+              <div className="mt-3 max-w-2xl space-y-2">
                 <Pulse className="h-4 w-full rounded-full" />
                 <Pulse className="h-4 w-[62%] rounded-full" />
               </div>
-              <div className="mt-4 flex items-center justify-between gap-3">
-                <Pulse className="h-[27px] w-44 rounded-full" />
-                <Pulse className="h-3 w-24 rounded-full" />
-              </div>
+            </div>
+            <div className="flex gap-2 rounded-b-3xl border-t border-border/50 bg-muted/30 px-5 py-4 sm:px-6">
+              <Pulse className="h-12 min-w-0 flex-1 rounded-2xl" />
+              <Pulse className="h-12 min-w-0 flex-1 rounded-2xl" />
             </div>
           </Card>
 
@@ -40,7 +40,12 @@ export function HomePageSkeleton() {
             <Card className={needsYouCardShellClassName("front")}>
               <div className="rounded-t-3xl border-b border-border/60 bg-card px-5 pb-4 pt-5 sm:px-6">
                 <div className="flex flex-col items-center gap-3">
-                  <Skeleton className="h-11 w-full rounded-xl bg-foreground/[0.06]" />
+                  <div className="flex w-full items-center gap-2">
+                    <Skeleton className="h-10 w-10 shrink-0 rounded-2xl bg-foreground/[0.06]" />
+                    <Skeleton className="h-10 min-w-0 flex-1 rounded-2xl bg-foreground/[0.06]" />
+                    <Skeleton className="h-10 w-14 shrink-0 rounded-2xl bg-foreground/[0.06]" />
+                    <Skeleton className="h-10 w-16 shrink-0 rounded-2xl bg-foreground/[0.06]" />
+                  </div>
                   <div className="w-full space-y-2">
                     <Skeleton className="mx-auto h-7 w-[72%] rounded-full bg-foreground/[0.08]" />
                     <Skeleton className="mx-auto h-7 w-[48%] rounded-full bg-foreground/[0.08]" />

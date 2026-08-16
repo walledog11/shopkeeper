@@ -60,6 +60,8 @@ function buildContext(
   return {
     orgId,
     orgName: "Test Store",
+    ...(setup.authState ? { authState: setup.authState } : {}),
+    ...(setup.verifiedOrders ? { verifiedOrders: setup.verifiedOrders } : {}),
     thread: {
       id: threadId,
       status: "open",
@@ -76,7 +78,9 @@ function buildContext(
     ...(setup.classifierIntents
       ? {
           classifierSignals: {
-            version: 1,
+            // Keep aligned with email-classification.ts. Routing is tolerant of
+            // old versions, but evals should model the shape production writes.
+            version: 4,
             language: "en",
             intents: { ...emptyIntents(), ...setup.classifierIntents },
           },

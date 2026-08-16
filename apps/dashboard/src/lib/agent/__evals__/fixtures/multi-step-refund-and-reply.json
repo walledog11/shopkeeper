@@ -1,6 +1,6 @@
 {
   "id": "multi-step-refund-and-reply",
-  "description": "Customer asks for a refund and confirmation. Agent should issue the refund first, then notify the customer via send_reply (refund must occur before reply in the plan ordering).",
+  "description": "Customer asks for an exact full-order refund and confirmation. Agent should issue the refund first, then notify the customer via send_reply (refund must occur before reply in the plan ordering).",
   "setup": {
     "classifierIntents": {
       "mutative_request": true
@@ -20,7 +20,7 @@
     "messages": [
       {
         "senderType": "customer",
-        "contentText": "Order #1040 was the wrong color. Please refund me and let me know once it's done."
+        "contentText": "Order #1040 was the wrong color. Please issue the exact full $30.00 USD refund for the entire order and let me know once it's done."
       }
     ],
     "recentOrders": [

@@ -5,10 +5,13 @@ export {
   stripEmptySendReplyToolCalls,
 } from "./refunds.js"
 
+export { stripInternalNotesWithoutActions } from "./internal-notes.js"
+
 export {
   hasAmbiguousCustomerSearchResult,
   hasCriticalPlanningReadErrorsForBlocks,
   MUTATIVE_INTENT_NO_ACTION_WARNING,
+  shouldEscalateFulfilledAddressChangeRequest,
   shouldEscalateFulfilledCancelRequest,
 } from "./mutative.js"
 

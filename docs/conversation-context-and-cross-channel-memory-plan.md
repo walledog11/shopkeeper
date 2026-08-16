@@ -1,6 +1,6 @@
 # Conversation Episodes for Storefront Chat
 
-**Status:** P0, P1, and items A, B and C shipped. D, E, and F remain.
+**Status:** P0, P1, and items A through E shipped. F remains.
 **Decision date:** 2026-08-12. **Revised:** 2026-08-14 — cut to what shipping and
 testing the storefront chat widget actually requires; identity, obligations, and
 prior-episode retrieval are deferred with reasons below.
@@ -246,7 +246,7 @@ effect is on email and Instagram threads, plus one fewer query per customer turn
   that asserts it never does, and extended the storefront episode test to assert
   the built prompt carries nothing from the closed episode.
 
-### D. Stop counting rollovers as resolutions
+### D. Stop counting rollovers as resolutions — **done**
 
 `get_support_stats` (`packages/agent/src/tools/support-stats.ts:62-70`) counts
 every `status = 'closed'` thread as a resolution, and `inboxThreadSql` excludes
@@ -255,32 +255,30 @@ fake resolution, skews `avgMinutes` (which is `updated_at - created_at`, meaning
 3-day-idle episode reports a ~3-day "resolution time"), and inflates
 `tickets.total`/`byDay`/`byChannel` without any new customer contact.
 
-`closedReason` exists to tell "they moved on to a new question" from "nobody ever
-came back." Nothing reads it yet.
+`closedReason` tells "they moved on to a new question" from "nobody ever came
+back."
 
-- [ ] Exclude `closedReason = 'episode_rollover'` from the resolution and ticket
+- [x] Exclude `closedReason = 'episode_rollover'` from the resolution and ticket
   counts, or count the episode chain as one ticket. The briefing is the flagship
   surface; it must not report invented resolutions.
-- [ ] Have the retention sweep (`apps/gateway/src/maintenance/inactive-thread-sweep.ts`)
-  stamp `closedReason = 'inactivity'` when it closes a quiet thread. It closes
-  today and records no reason, so the two cases are indistinguishable.
+- [x] Have the retention sweep (`apps/gateway/src/maintenance/inactive-thread-sweep.ts`)
+  stamp `closedReason = 'inactivity'` when it closes a quiet thread, keeping the
+  two cases distinguishable.
 
-### E. Widget: mark the boundary
+### E. Widget: mark the boundary — **done**
 
 Bootstrap reads messages from `session.threadId`, which rollover repoints, so the
 expired episode leaves the widget on its own after the next message. Only the
 seam is visible, and only within one page load.
 
-- [ ] Forward `isNewThread` through the dashboard proxy first. The gateway returns
-  it (`internal-storefront-chat.ts:97`) but
-  `apps/dashboard/src/app/api/storefront-chat/proxy/messages/route.ts` answers a
-  flat `{ accepted: true }`, so the widget cannot branch on a field it never
-  receives. This item is three edits, not two.
-- [ ] When a message response returns `isNewThread: true` and messages are already
-  on screen, render a "New conversation" divider.
-- [ ] Reset the optimistic-echo and `seen` bookkeeping
-  (`extensions/shopkeeper-chat/assets/shopkeeper-chat.js:173,216-217,227`) at that
-  boundary, so identical text in two episodes is not suppressed as an echo.
+- [x] Forwarded the gateway's `isNewThread` response through the dashboard proxy
+  as a validated boolean.
+- [x] When a message response returns `isNewThread: true` and conversation
+  messages are already on screen, the widget renders a "New conversation"
+  divider immediately before the optimistic new message.
+- [x] Reset the optimistic-echo and `seen` bookkeeping at that boundary while
+  retaining the current in-flight echo, so identical text in two episodes is not
+  suppressed or rendered twice.
 
 ### F. Ship
 
@@ -335,7 +333,7 @@ Cut from this plan, with the reason each can wait:
 - [x] Two concurrent first messages after expiry create one new open episode and
   persist both messages exactly once. — verified load-bearing; removing the
   customer row lock fails it 3/3.
-- [ ] A rolled-over episode does not appear as a resolved ticket in the briefing.
+- [x] A rolled-over episode does not appear as a resolved ticket in the briefing.
 
 ## Verification commands
 

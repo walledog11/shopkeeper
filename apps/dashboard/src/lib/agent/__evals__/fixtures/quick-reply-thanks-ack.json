@@ -4,7 +4,7 @@
   "advisory": true,
   "setup": {
     "classifierIntents": {
-      "order_status": true
+      "no_request": true
     },
     "channelType": "email",
     "tag": "Support",

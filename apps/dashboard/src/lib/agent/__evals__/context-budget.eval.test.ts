@@ -16,11 +16,16 @@ function promptTokens(result: EvalResult): number {
     + result.usage.cacheReadInputTokens
 }
 
+function promptTokensPerModelCall(result: EvalResult): number {
+  return promptTokens(result) / Math.max(result.usage.modelCalls, 1)
+}
+
 const LONG_CONTEXT_FIXTURE: Fixture = {
   id: "context-budget-long-thread",
   description: "A long resolved conversation still answers the latest return-policy question.",
   suite: "extended",
   setup: {
+    classifierIntents: { policy_question: true },
     channelType: "email",
     tag: "Returns",
     customerName: "Long Thread Customer",
@@ -78,17 +83,32 @@ describe.sequential("AI context budget quality/cost comparison", () => {
 
     const legacyPromptTokens = promptTokens(legacy)
     const boundedPromptTokens = promptTokens(bounded)
+    const legacyPromptTokensPerCall = promptTokensPerModelCall(legacy)
+    const boundedPromptTokensPerCall = promptTokensPerModelCall(bounded)
     console.log(JSON.stringify({
       fixture: LONG_CONTEXT_FIXTURE.id,
-      legacy: { pass: legacy.pass, promptTokens: legacyPromptTokens },
-      bounded: { pass: bounded.pass, promptTokens: boundedPromptTokens },
-      reduction: legacyPromptTokens > 0
-        ? 1 - boundedPromptTokens / legacyPromptTokens
+      legacy: {
+        pass: legacy.pass,
+        modelCalls: legacy.usage.modelCalls,
+        promptTokens: legacyPromptTokens,
+        promptTokensPerCall: legacyPromptTokensPerCall,
+      },
+      bounded: {
+        pass: bounded.pass,
+        modelCalls: bounded.usage.modelCalls,
+        promptTokens: boundedPromptTokens,
+        promptTokensPerCall: boundedPromptTokensPerCall,
+      },
+      reductionPerCall: legacyPromptTokensPerCall > 0
+        ? 1 - boundedPromptTokensPerCall / legacyPromptTokensPerCall
         : 0,
     }))
 
     expect(legacy.failures).toEqual([])
     expect(bounded.failures).toEqual([])
-    expect(boundedPromptTokens).toBeLessThan(legacyPromptTokens * 0.8)
+    // The model may elect a read before replying in either mode, so total calls
+    // are stochastic. Compare the bounded prompt cost per agent call; otherwise
+    // an extra correct read can make a smaller context look more expensive.
+    expect(boundedPromptTokensPerCall).toBeLessThan(legacyPromptTokensPerCall * 0.8)
   }, 240_000)
 })

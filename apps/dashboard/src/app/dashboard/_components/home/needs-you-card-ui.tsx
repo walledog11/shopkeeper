@@ -6,11 +6,12 @@ import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/ui/cn"
 import { getChannelInfoByName } from "@/lib/messaging/channels"
 import { timeAgoCard } from "@/lib/messaging/customer-display"
+import { getTagStyle } from "@/app/dashboard/_lib/ticket-tags"
 import type { HomeNeedsAttentionItem } from "@/lib/home/summary-contract"
 import {
   BUBBLE_TONE,
   isInboundTone,
-  needsYouMetaPillClassName,
+  needsYouMetaPillShellClassName,
   needsYouCardShellClassName,
   needsYouConversationSurfaceClassName,
   type BubbleTone,
@@ -81,14 +82,50 @@ export function NeedsYouCardFooter({ children }: { children: ReactNode }) {
   )
 }
 
+function MetaPill({ className, children }: { className?: string; children: ReactNode }) {
+  return (
+    <div className={cn(needsYouMetaPillShellClassName, "bg-white", className)}>
+      {children}
+    </div>
+  )
+}
+
+const ONE_WORD_TAG_LABELS: Record<string, string> = {
+  "Order Status": "Status",
+  "Product Inquiry": "Product",
+  needs_human: "Escalated",
+}
+
+const KIND_TOPIC_LABELS: Record<HomeNeedsAttentionItem["kind"], string> = {
+  quick_reply: "Reply",
+  needs_review: "Review",
+  needs_merchant_input: "Question",
+}
+
+function oneWordTicketTopicLabel(item: HomeNeedsAttentionItem): string {
+  if (item.tag) {
+    if (ONE_WORD_TAG_LABELS[item.tag]) return ONE_WORD_TAG_LABELS[item.tag]
+    const tagLabel = getTagStyle(item.tag).label
+    const [firstWord] = tagLabel.split(/\s+/)
+    if (firstWord) return firstWord
+  }
+  return KIND_TOPIC_LABELS[item.kind]
+}
+
 function NeedsYouTicketMetaPill({ item }: { item: HomeNeedsAttentionItem }) {
   const channel = getChannelInfoByName(item.channelName)
-  const orderRef = item.orderRef?.trim()
-  const showOrderRef = Boolean(orderRef && !item.headline.includes(orderRef.replace(/^#/, "")))
+  const orderRef = item.orderRef?.trim() || null
   const customerLabel = item.customerName?.trim() || null
   const at = new Date(item.lastMessageAt)
   const timeLabel = timeAgoCard(at, new Date())
   const isRelative = timeLabel === "Just now" || timeLabel === "Yesterday" || timeLabel.includes("ago")
+  const dateLabel = isRelative
+    ? timeLabel
+    : at.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+  const topicLabel = orderRef ?? oneWordTicketTopicLabel(item)
+  const topicPillClassName = orderRef
+    ? "bg-[#f5ebe0] text-[#1a1a1a]"
+    : getTagStyle(item.tag).className
 
   const emailAt = customerLabel?.indexOf("@") ?? -1
   const isEmail = emailAt > 0
@@ -96,82 +133,53 @@ function NeedsYouTicketMetaPill({ item }: { item: HomeNeedsAttentionItem }) {
   const emailDomain = customerLabel && isEmail ? customerLabel.slice(emailAt + 1) : null
 
   return (
-    <div
-      className={cn(
-        "flex w-full min-w-0 items-stretch divide-x divide-border/60",
-        needsYouMetaPillClassName,
-      )}
-    >
-      {customerLabel && (
-        <div className="flex min-w-0 flex-1 flex-col justify-center px-3 py-1.5">
-          <span className="text-[8px] font-bold uppercase tracking-[0.14em] text-[#6b5d4f]">
-            From
-          </span>
-          {isEmail ? (
-            <span className="min-w-0 truncate text-xs font-semibold leading-tight text-[#1a1a1a]">
+    <div className="flex w-full min-w-0 items-center gap-2">
+      <div className={cn(needsYouMetaPillShellClassName, channel.badgeClassName, "w-10 shrink-0")}>
+        <Image
+          src={channel.logo}
+          alt=""
+          width={16}
+          height={16}
+          className="size-4 shrink-0 object-contain"
+          aria-hidden
+        />
+        <span className="sr-only">{channel.label}</span>
+      </div>
+
+      <MetaPill className="min-w-0 flex-1 gap-1.5 px-3">
+        {customerLabel && (
+          isEmail ? (
+            <span className="min-w-0 truncate text-sm font-semibold leading-tight text-[#1a1a1a]">
               <span>{localPart}</span>
               <span className="font-medium text-[#6b5d4f]">@{emailDomain}</span>
             </span>
           ) : (
-            <span className="truncate text-xs font-semibold leading-tight text-[#1a1a1a]">
+            <span className="truncate text-sm font-semibold leading-tight text-[#1a1a1a]">
               {customerLabel}
             </span>
-          )}
-        </div>
-      )}
-
-      {(showOrderRef || item.isVip) && (
-        <div className="flex shrink-0 flex-col items-center justify-center gap-0.5 bg-[#f5ebe0] px-2.5 py-1.5">
-          {showOrderRef && orderRef && (
-            <span className="text-[10px] font-bold tabular-nums leading-none text-[#1a1a1a]">
-              {orderRef}
-            </span>
-          )}
-          {item.isVip && (
-            <span className="text-[8px] font-bold uppercase tracking-[0.12em] text-violet-700">
-              VIP
-            </span>
-          )}
-        </div>
-      )}
-
-      <span
-        className={cn(
-          "inline-flex shrink-0 items-center gap-1 px-2.5 py-1.5 text-[10px] font-semibold",
-          channel.badgeClassName,
+          )
         )}
-      >
-        <Image
-          src={channel.logo}
-          alt=""
-          width={12}
-          height={12}
-          className="size-3 shrink-0 object-contain"
-          aria-hidden
-        />
-        <span className="max-w-[5rem] truncate">{channel.label}</span>
-      </span>
+        {item.isVip && (
+          <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.1em] text-violet-700">
+            VIP
+          </span>
+        )}
+      </MetaPill>
 
-      {isRelative ? (
+      <MetaPill className={cn("shrink-0 px-3", topicPillClassName)}>
+        <span className="max-w-[5.5rem] truncate text-xs font-bold tabular-nums leading-none">
+          {topicLabel}
+        </span>
+      </MetaPill>
+
+      <MetaPill className="shrink-0 px-3">
         <time
           dateTime={item.lastMessageAt}
-          className="flex shrink-0 items-center px-2.5 py-1.5 text-[10px] font-semibold tabular-nums tracking-tight text-[#1a1a1a]"
+          className="text-xs font-semibold tabular-nums tracking-tight text-[#1a1a1a]"
         >
-          {timeLabel}
+          {dateLabel}
         </time>
-      ) : (
-        <time
-          dateTime={item.lastMessageAt}
-          className="flex min-w-[2.65rem] shrink-0 flex-col items-center justify-center bg-[#f5ebe0] px-2 py-1 text-center"
-        >
-          <span className="text-[8px] font-bold uppercase tracking-[0.14em] text-[#6b5d4f]">
-            {at.toLocaleDateString("en-US", { month: "short" })}
-          </span>
-          <span className="text-sm font-bold tabular-nums leading-none text-[#1a1a1a]">
-            {at.getDate()}
-          </span>
-        </time>
-      )}
+      </MetaPill>
     </div>
   )
 }
@@ -219,11 +227,13 @@ export function NeedsYouBubble({
 
 export function NeedsYouPrimaryButton({
   children,
+  className,
   confirming = false,
   disabled = false,
   onClick,
 }: {
   children: ReactNode
+  className?: string
   confirming?: boolean
   disabled?: boolean
   onClick?: () => void
@@ -239,6 +249,7 @@ export function NeedsYouPrimaryButton({
         confirming
           ? "bg-gradient-to-b from-amber-600 to-amber-700 text-[#ffffff] shadow-md shadow-amber-600/20 hover:-translate-y-0.5 hover:from-amber-600 hover:to-amber-700/95"
           : "bg-gradient-to-b from-foreground to-foreground/90 text-background shadow-md shadow-foreground/10 hover:-translate-y-0.5 hover:from-foreground hover:to-foreground/85",
+        className,
       )}
     >
       {children}

@@ -181,6 +181,17 @@ describe('storefront chat budget hop', () => {
     expect(forwarded.sessionId).toBe(session.id);
   });
 
+  it.each([true, false])('forwards isNewThread=%s from the gateway', async (isNewThread) => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ threadId: 'thread-1', isNewThread }), { status: 202 }),
+    );
+
+    const response = await POST(signedPostRequest());
+
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toEqual({ accepted: true, isNewThread });
+  });
+
   it('still reports a genuine gateway failure as a delivery failure', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('', { status: 500 }));
 

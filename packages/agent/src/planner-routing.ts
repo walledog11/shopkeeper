@@ -26,9 +26,13 @@ import {
   hasCriticalPlanningReadErrorsForBlocks,
   MUTATIVE_INTENT_NO_ACTION_WARNING,
   sendReplyDeflectsToManagedChannels,
+  shouldEscalateFulfilledAddressChangeRequest,
   shouldEscalateFulfilledCancelRequest,
 } from "./planner-safety/index.js";
-import { refundTargetsAlreadyFullyRefunded } from "./planner-safety/refunds.js";
+import {
+  refundTargetsAlreadyFullyRefunded,
+  refundTargetsNonPaidOrder,
+} from "./planner-safety/refunds.js";
 import type { ToolStatus } from "./tools/result.js";
 import { TOOL_CATEGORIES } from "./tools/registry/index.js";
 import type { RawToolCall, RoutingDecision } from "./types.js";
@@ -70,6 +74,24 @@ function planShape(rawToolCalls: readonly RawToolCall[]): PlanShape {
     hasSendReply: rawToolCalls.some((call) => call.name === "send_reply"),
     hasAskOperator: rawToolCalls.some((call) => call.name === "ask_operator"),
   };
+}
+
+function hasExplicitCompensationRequest(ctx: AgentContext): boolean {
+  // This enforcement sits on the production classifier path. Preserve the
+  // legacy no-signal fallback, and do not reinterpret a classified policy
+  // question merely because its prose contains the word "refund".
+  if (!ctx.classifierSignals?.intents.mutative_request) return false;
+  if (ctx.classifierSignals.intents.policy_question) return false;
+  return customerMessageTexts(ctx).some((text) => {
+    const lower = text.toLowerCase();
+    const explicitRefund = /\brefund(?:ed|ing|s)?\b/.test(lower)
+      && hasMutativeRequestIntent(text);
+    const explicitGiftCard = (
+      /\b(?:send|give|issue|create|provide)\b[^.?!]{0,48}\b(?:gift card|store credit)\b/.test(lower)
+      || /\bcredit\s+(?:my|the|this)\s+account\b/.test(lower)
+    );
+    return explicitRefund || explicitGiftCard;
+  });
 }
 
 // Order-state-dependent decisions (already-refunded strip, fulfilled-order cancel
@@ -200,6 +222,14 @@ const ESCALATION_REASONS: Record<string, string> = {
     "Wholesale, bulk, or B2B inquiry — out of scope for automated support.",
   fulfilled_cancel:
     "Cancellation requested for an already-fulfilled order — needs human review.",
+  fulfilled_address_change:
+    "Address change requested for an already-fulfilled order — needs human review.",
+  already_refunded:
+    "Refund requested for an order that is already fully refunded — needs human review.",
+  non_paid_refund:
+    "Refund requested for an order whose payment is not in the paid state — needs human review.",
+  compensation_exception:
+    "Compensation was requested but the plan contains no safe compensation action — needs human review.",
   ambiguous_customer:
     "Multiple matching customers found — needs a human to confirm identity.",
   read_error:
@@ -228,13 +258,31 @@ export interface RoutePlanInput {
   readResultsMap: ReadonlyMap<string, string>;
 }
 
-// Structural escalations that do not read customer prose: they compare plan tool
-// calls / read results against order + customer state. Lifted out of the old
+// Deterministic structural escalations: they compare the requested operation,
+// plan reads, and known order/customer state. Lifted out of the old
 // shouldForcePlanningEscalation (the fraud/injection/contradiction/out-of-scope
 // branches now come from the classifier/regex intent routing instead).
 function structuralEscalationSignal(input: RoutePlanInput): string | null {
   const { ctx, instruction } = input;
   if (shouldEscalateFulfilledCancelRequest(ctx, instruction)) return "fulfilled_cancel";
+  if (shouldEscalateFulfilledAddressChangeRequest(ctx, instruction)) return "fulfilled_address_change";
+  // The model sometimes notices the prior refund but drafts a holding reply
+  // instead of the escalation the compensation policy requires. The refund
+  // call is stripped before routing, so make the order state itself decisive;
+  // otherwise the classifier sees only a generic mutative reply and parks it as
+  // needs_review without the explicit handoff promised by the policy.
+  if (refundTargetsAlreadyFullyRefunded(ctx, instruction)) return "already_refunded";
+  if (refundTargetsNonPaidOrder(ctx, instruction, input.rawToolCalls)) return "non_paid_refund";
+  const shape = planShape(input.rawToolCalls);
+  // Compensation policy already says vague amounts, missing identity, prior
+  // refunds, mismatched balances, and every other unfulfilled money request go
+  // to a human. Enforce the terminal shape after planning so a model that emits
+  // only a holding reply cannot turn that hard rule into a soft review card.
+  // Any real action (including an exchange chosen from "refund or exchange")
+  // remains model-elected and continues through ordinary policy checks.
+  if (!shape.hasAction && !shape.hasEscalation && hasExplicitCompensationRequest(ctx)) {
+    return "compensation_exception";
+  }
   if (hasAmbiguousCustomerSearchResult(input.readBlocks, input.readResultsMap)) {
     return "ambiguous_customer";
   }

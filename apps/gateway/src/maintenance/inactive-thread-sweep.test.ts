@@ -52,6 +52,13 @@ describe('closeInactiveOpenThreads', () => {
     return thread?.status;
   }
 
+  async function closureOf(threadId: string) {
+    return db.thread.findUnique({
+      where: { id: threadId },
+      select: { status: true, closedReason: true },
+    });
+  }
+
   it('closes a seven-day-silent answered thread', async () => {
     const thread = await openThread();
     const inbound = await createTestMessage(thread.id, 'Where is my order?', SenderType.customer);
@@ -60,7 +67,7 @@ describe('closeInactiveOpenThreads', () => {
 
     await closeInactiveOpenThreads(NOW);
 
-    expect(await statusOf(thread.id)).toBe('closed');
+    expect(await closureOf(thread.id)).toEqual({ status: 'closed', closedReason: 'inactivity' });
   });
 
   it('keeps a six-day answered thread open', async () => {
@@ -94,7 +101,7 @@ describe('closeInactiveOpenThreads', () => {
 
     await closeInactiveOpenThreads(NOW);
 
-    expect(await statusOf(thread.id)).toBe('closed');
+    expect(await closureOf(thread.id)).toEqual({ status: 'closed', closedReason: 'inactivity' });
   });
 
   it('keeps an escalated thread open', async () => {

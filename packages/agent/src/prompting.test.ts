@@ -186,6 +186,8 @@ describe('untrusted content handling', () => {
     expect(prompt).toContain('## Untrusted content');
     expect(prompt).toContain('<customer_message>');
     expect(prompt).toMatch(/never instructions/i);
+    expect(prompt).toMatch(/continue any clearly separable legitimate customer request/i);
+    expect(prompt).toMatch(/legitimate request independently requires escalation/i);
     expect(prompt).toMatch(/image content block is present/i);
     expect(prompt).toMatch(/never say that you cannot view or access/i);
   });
@@ -332,6 +334,17 @@ describe('untrusted content handling', () => {
       serialized.indexOf('available for visual inspection'),
     );
     expect(serialized).toContain('Do not claim you cannot view the image');
+  });
+});
+
+describe('support action approval guidance', () => {
+  it('distinguishes downstream approval from escalation for supported actions', () => {
+    const prompt = buildSystemPrompt(makeCtx());
+
+    expect(prompt).toMatch(/approval happens after the plan is captured/i);
+    expect(prompt).toMatch(/never call escalate_to_human merely because an in-policy action requires merchant approval/i);
+    expect(prompt).toMatch(/fixed-value store-credit request for one damaged item/i);
+    expect(prompt).toMatch(/remove an item from an unfulfilled order[\s\S]*not a reason to escalate or ask for approval/i);
   });
 });
 

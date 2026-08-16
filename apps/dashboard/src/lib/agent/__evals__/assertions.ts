@@ -73,6 +73,9 @@ export function collectPlanExpectationFailures(
 ): { failures: string[]; replyText: string } {
   const failures: string[] = []
   const calledTools = plan.rawToolCalls.map(toolCall => toolCall.name)
+  const calledToolDetails = plan.rawToolCalls
+    .map(toolCall => `${toolCall.name}(${JSON.stringify(toolCall.input)})`)
+    .join(", ")
   const calledToolSet = new Set(calledTools)
   const sendReplyCall = plan.rawToolCalls.find(toolCall => toolCall.name === "send_reply")
   const replyText = sendReplyCall
@@ -84,7 +87,7 @@ export function collectPlanExpectationFailures(
 
   for (const tool of expected.mustCallTools ?? []) {
     if (!calledToolSet.has(tool)) {
-      failures.push(`expected tool "${tool}" to be called; called: [${calledTools.join(", ")}]`)
+      failures.push(`expected tool "${tool}" to be called; called: [${calledToolDetails}]`)
     }
   }
   for (const tool of expected.mustNotCallTools ?? []) {

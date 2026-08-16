@@ -69,6 +69,39 @@ describe("validateFixtures", () => {
     expect(() => validateFixtures([invalid])).toThrow(/mode is invalid/)
   })
 
+  it("validates classifier intents against the production vocabulary", () => {
+    const invalid = fixture({
+      setup: {
+        channelType: "email",
+        messages: [],
+        classifierIntents: {
+          mutative_request: "yes",
+          invented_intent: true,
+        } as never,
+      },
+    })
+
+    expect(() => validateFixtures([invalid])).toThrow(/mutative_request must be boolean/)
+    expect(() => validateFixtures([invalid])).toThrow(/unknown intent "invented_intent"/)
+  })
+
+  it("requires storefront fixtures to model their authorization boundary", () => {
+    const missing = fixture({
+      setup: { channelType: "shopify_chat", messages: [] },
+    })
+    const guestWithVerifiedOrder = fixture({
+      setup: {
+        channelType: "shopify_chat",
+        authState: "guest",
+        verifiedOrders: [{ orderId: "1", orderName: "#1" }],
+        messages: [],
+      },
+    })
+
+    expect(() => validateFixtures([missing])).toThrow(/must declare setup\.authState/)
+    expect(() => validateFixtures([guestWithVerifiedOrder])).toThrow(/guest fixtures cannot carry/)
+  })
+
   it("rejects effectively duplicate fixtures even when IDs and descriptions differ", () => {
     const first = fixture()
     const second = fixture({ id: "second", description: "Different prose" })

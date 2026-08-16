@@ -127,6 +127,8 @@
     ".msg .avatar { flex-shrink: 0; width: 34px; height: 34px; }",
     ".msg .avatar svg { display: block; width: 34px; height: 34px; }",
     ".msg.note { align-self: center; background: none; color: " + colorMuted + "; font-size: 13px; text-align: center; max-width: 100%; }",
+    ".conversation-boundary { align-self: stretch; display: flex; align-items: center; gap: 10px; color: " + colorMuted + "; font-size: 12px; font-weight: 600; text-align: center; }",
+    ".conversation-boundary::before, .conversation-boundary::after { content: ''; height: 1px; flex: 1; background: " + colorTanShadow + "; }",
     ".msg.typing .bubble { display: flex; align-items: center; gap: 4px; min-width: 52px; min-height: 40px; padding: 12px 14px; }",
     ".typing-dot { width: 7px; height: 7px; border-radius: 50%; background: " + colorMuted + "; animation: typing-bounce 1.2s ease-in-out infinite; }",
     ".typing-dot:nth-child(2) { animation-delay: .15s; }",
@@ -636,6 +638,22 @@
     return i !== -1;
   }
 
+  function beginNewConversation(beforeEl, currentEcho, showDivider) {
+    seen = Object.create(null);
+    awaitingEcho = currentEcho ? [currentEcho] : [];
+    if (!showDivider) return;
+
+    var divider = document.createElement("div");
+    divider.className = "conversation-boundary";
+    divider.setAttribute("role", "separator");
+    divider.setAttribute("aria-label", "New conversation");
+    var label = document.createElement("span");
+    label.textContent = "New conversation";
+    divider.appendChild(label);
+    log.insertBefore(divider, beforeEl);
+    scrollLogToEnd();
+  }
+
   var WAITING_NOTICE_MS = 20000;
   var waitingTimer = null;
   var waitingNoticeShown = false;
@@ -966,6 +984,7 @@
   function sendMessage(text) {
     if (!text || !session || !session.token) return;
 
+    var hadConversationOnScreen = Boolean(log.querySelector(".msg.me, .msg.them"));
     hasSentMessage = true;
     renderPrompts();
     sendBtn.disabled = true;
@@ -999,6 +1018,9 @@
           hideTyping();
           append(verificationNote(body.verification, "that order"), "note");
           return;
+        }
+        if (body.isNewThread === true) {
+          beginNewConversation(pending, text, hadConversationOnScreen);
         }
         setTimeout(poll, 1200);
       });

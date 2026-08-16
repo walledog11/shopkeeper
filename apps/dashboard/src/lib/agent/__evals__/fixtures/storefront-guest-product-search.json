@@ -1,0 +1,58 @@
+{
+  "id": "storefront-guest-product-search",
+  "description": "An anonymous storefront shopper can search the public catalog and receive a reply without gaining access to customer, order, or mutation tools.",
+  "suite": "core",
+  "setup": {
+    "classifierIntents": {},
+    "channelType": "shopify_chat",
+    "authState": "guest",
+    "customerName": null,
+    "customerPlatformId": "shopify_chat:eval-guest",
+    "shopifyCustomerId": null,
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
+    "messages": [
+      {
+        "senderType": "customer",
+        "contentText": "Is the navy Pencil Half Zip available in medium?"
+      }
+    ],
+    "recentOrders": [],
+    "simulateToolResults": [
+      {
+        "tool": "search_shopify_products",
+        "result": "Pencil Half Zip, Navy, Medium is available."
+      }
+    ]
+  },
+  "instruction": "Answer the shopper's product availability question.",
+  "expectedPlan": {
+    "mustCallTools": [
+      "search_shopify_products",
+      "send_reply"
+    ],
+    "mustCallToolsWithInput": [
+      {
+        "tool": "search_shopify_products",
+        "textContains": {
+          "query": "Pencil Half Zip"
+        }
+      }
+    ],
+    "mustNotCallTools": [
+      "get_order_by_name",
+      "get_shopify_orders",
+      "get_order_tracking",
+      "search_shopify_customers",
+      "create_refund",
+      "create_gift_card",
+      "cancel_order",
+      "edit_shopify_order",
+      "update_shopify_order_address",
+      "update_shopify_customer_info"
+    ],
+    "mustClassifyAs": "quick_reply"
+  }
+}

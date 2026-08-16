@@ -234,6 +234,155 @@ describe("routePlan", () => {
     expect(out.escalationReason).toMatch(/fulfilled/i);
   });
 
+  it("escalates an address change for a fulfilled order even when the model only replied", () => {
+    const out = routePlan({
+      ...baseRouteInput(),
+      ctx: makeCtx({
+        classifierSignals: withSignals({ mutative_request: true }),
+        recentMessages: [{
+          senderType: "customer",
+          contentText: "I gave the wrong address for order #1031. Please redirect it.",
+        }],
+        recentOrders: [{
+          id: "9000001031",
+          name: "#1031",
+          created_at: "2026-05-01T00:00:00Z",
+          financial_status: "paid",
+          fulfillment_status: "fulfilled",
+          total_price: "120.00",
+          currency: "USD",
+          items: [],
+          shipping_address: null,
+        }],
+      }),
+      rawToolCalls: [reply],
+    });
+
+    expect(out.decision).toBe("escalate");
+    expect(out.signals).toEqual(["fulfilled_address_change"]);
+    expect(out.escalationReason).toMatch(/already-fulfilled/i);
+  });
+
+  it("escalates an already-refunded order even when the model only drafted a reply", () => {
+    const out = routePlan({
+      ...baseRouteInput(),
+      ctx: makeCtx({
+        classifierSignals: withSignals({ mutative_request: true }),
+        recentMessages: [{ senderType: "customer", contentText: "Refund order #1020." }],
+        recentOrders: [{
+          id: "9000001020",
+          name: "#1020",
+          created_at: "2026-05-01T00:00:00Z",
+          financial_status: "refunded",
+          fulfillment_status: "fulfilled",
+          total_price: "38.00",
+          currency: "USD",
+          items: [],
+          shipping_address: null,
+        }],
+      }),
+      instruction: "Reply about the refund request.",
+      rawToolCalls: [reply],
+    });
+    expect(out.decision).toBe("escalate");
+    expect(out.signals).toEqual(["already_refunded"]);
+    expect(out.escalationReason).toMatch(/already fully refunded/i);
+  });
+
+  it("escalates a refund action against an order that is not paid", () => {
+    const out = routePlan({
+      ...baseRouteInput(),
+      ctx: makeCtx({
+        classifierSignals: withSignals({ mutative_request: true }),
+        recentMessages: [{ senderType: "customer", contentText: "Refund order #1010." }],
+        recentOrders: [{
+          id: "9000001010",
+          name: "#1010",
+          created_at: "2026-05-01T00:00:00Z",
+          financial_status: "authorized",
+          fulfillment_status: null,
+          total_price: "42.00",
+          currency: "USD",
+          items: [],
+          shipping_address: null,
+        }],
+      }),
+      instruction: "Handle the refund request.",
+      rawToolCalls: [
+        { id: "tu_refund", name: "create_refund", input: { order_id: "9000001010", amount: "42.00" } },
+        reply,
+      ],
+    });
+
+    expect(out.decision).toBe("escalate");
+    expect(out.signals).toEqual(["non_paid_refund"]);
+    expect(out.escalationReason).toMatch(/not in the paid state/i);
+  });
+
+  it("escalates a compensation request when the model only drafted a holding reply", () => {
+    const out = routePlan({
+      ...baseRouteInput(),
+      ctx: makeCtx({
+        classifierSignals: withSignals({ mutative_request: true }),
+        recentMessages: [{ senderType: "customer", contentText: "I'm unhappy. Just refund me." }],
+      }),
+      rawToolCalls: [reply],
+    });
+    expect(out.decision).toBe("escalate");
+    expect(out.signals).toEqual(["compensation_exception"]);
+  });
+
+  it("escalates a gift-card request with no safe action", () => {
+    const out = routePlan({
+      ...baseRouteInput(),
+      ctx: makeCtx({
+        classifierSignals: withSignals({ mutative_request: true }),
+        recentMessages: [{
+          senderType: "customer",
+          contentText: "Please send me a gift card for the damaged mug.",
+        }],
+      }),
+      rawToolCalls: [reply],
+    });
+    expect(out.decision).toBe("escalate");
+    expect(out.signals).toEqual(["compensation_exception"]);
+  });
+
+  it("does not treat an informational refund-policy question as compensation", () => {
+    const out = routePlan({
+      ...baseRouteInput(),
+      ctx: makeCtx({
+        classifierSignals: withSignals({ policy_question: true }),
+        recentMessages: [{
+          senderType: "customer",
+          contentText: "Can I send an unworn item back for a refund?",
+        }],
+      }),
+      rawToolCalls: [reply],
+    });
+    expect(out.decision).toBe("auto_execute");
+  });
+
+  it("keeps an exchange action when the customer offered refund or exchange", () => {
+    const exchange: RawToolCall = {
+      id: "tu_exchange",
+      name: "create_exchange",
+      input: { order_id: "6060", variant_id: "old", exchange_variant_id: "new" },
+    };
+    const out = routePlan({
+      ...baseRouteInput(),
+      ctx: makeCtx({
+        classifierSignals: withSignals({ mutative_request: true }),
+        recentMessages: [{
+          senderType: "customer",
+          contentText: "Could I get a refund, or swap it for a large if that's easier?",
+        }],
+      }),
+      rawToolCalls: [exchange, reply],
+    });
+    expect(out.decision).toBe("auto_execute");
+  });
+
   it("escalates when a customer search returned multiple matches", () => {
     const out = routePlan({
       ...baseRouteInput(),

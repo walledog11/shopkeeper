@@ -1,4 +1,5 @@
 import { isAgentToolName } from "@shopkeeper/agent/tools"
+import { INTENT_KEYS } from "@shopkeeper/agent/classifier-signals"
 import type { Fixture, ToolInputExpectation } from "./types"
 
 const SUITES = new Set(["core", "extended"])
@@ -22,6 +23,8 @@ const FINANCIAL_TOOLS = new Set(["create_refund", "create_gift_card"])
 const PLAN_CLASSIFICATIONS = new Set(["quick_reply", "needs_review", "auto_execute", "needs_merchant_input"])
 const ACTION_STATUSES = new Set(["success", "error", "policy_block", "escalated", "unknown"])
 const ACTION_MODES = new Set(["human_approved", "auto_executed", "read_only"])
+const AUTH_STATES = new Set(["guest", "verified"])
+const CLASSIFIER_INTENTS = new Set<string>(INTENT_KEYS)
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -141,6 +144,34 @@ export function validateFixtures(fixtures: readonly unknown[], filenames?: reado
     if (!expectedPlan) local.push("expectedPlan is required")
     if (setup && !CHANNELS.has(setup.channelType as string)) local.push("setup.channelType is invalid")
     if (setup && !Array.isArray(setup.messages)) local.push("setup.messages is required")
+    if (setup?.authState !== undefined && !AUTH_STATES.has(setup.authState as string)) {
+      local.push("setup.authState is invalid")
+    }
+    if (setup?.channelType === "shopify_chat" && setup.authState === undefined) {
+      local.push("shopify_chat fixtures must declare setup.authState")
+    }
+    if (setup?.authState !== undefined && setup.channelType !== "shopify_chat") {
+      local.push("setup.authState is only valid for shopify_chat fixtures")
+    }
+    if (setup?.authState === "guest" && (setup.verifiedOrders?.length ?? 0) > 0) {
+      local.push("guest fixtures cannot carry setup.verifiedOrders")
+    }
+    if (setup?.authState === "verified" && (setup.verifiedOrders?.length ?? 0) === 0) {
+      local.push("verified fixtures must carry setup.verifiedOrders")
+    }
+    if (setup?.classifierIntents !== undefined) {
+      if (!isRecord(setup.classifierIntents)) {
+        local.push("setup.classifierIntents must be an object")
+      } else {
+        for (const [intent, value] of Object.entries(setup.classifierIntents)) {
+          if (!CLASSIFIER_INTENTS.has(intent)) {
+            local.push(`setup.classifierIntents names unknown intent ${JSON.stringify(intent)}`)
+          } else if (typeof value !== "boolean") {
+            local.push(`setup.classifierIntents.${intent} must be boolean`)
+          }
+        }
+      }
+    }
     for (const [messageIndex, message] of (Array.isArray(setup?.messages) ? setup.messages : []).entries()) {
       if (!isRecord(message)) {
         local.push(`setup.messages[${messageIndex}] must be an object`)

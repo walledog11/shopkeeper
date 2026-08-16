@@ -9,7 +9,7 @@
     "shopifyCustomerId": "701",
     "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
     "messages": [{ "senderType": "customer", "contentText": "Please remove the blue hat from order #7010 before it ships." }],
-    "recentOrders": [{ "id": "7010", "name": "#7010", "financial_status": "paid", "fulfillment_status": null, "total_price": "55.00", "currency": "USD", "items": [{ "title": "Blue Hat", "quantity": 1, "variant_id": "7701" }] }]
+    "recentOrders": [{ "id": "7010", "name": "#7010", "financial_status": "paid", "fulfillment_status": null, "total_price": "55.00", "currency": "USD", "items": [{ "title": "Blue Hat", "quantity": 1, "variant_id": "7701" }, { "title": "Canvas Tote", "quantity": 1, "variant_id": "7702" }] }]
   },
   "instruction": "Handle the requested order edit.",
   "expectedPlan": {

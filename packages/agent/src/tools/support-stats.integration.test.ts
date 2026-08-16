@@ -166,4 +166,59 @@ describe("getSupportStats", () => {
     expect(expanded.tickets.total).toBe(3);
     expect(expanded.tickets.byTag).toContainEqual({ tag: "Shipping", count: 2 });
   });
+
+  it("excludes episode rollovers from tickets and resolutions but keeps their messages", async () => {
+    const org = await createTestOrg();
+    orgIds.push(org.id);
+    const customer = await createTestCustomer(org.id, "rollover-stats@example.com");
+    const now = new Date();
+    const twoDaysAgo = new Date(now.getTime() - 2 * 86_400_000);
+
+    await db.thread.create({
+      data: {
+        organizationId: org.id,
+        customerId: customer.id,
+        channelType: ChannelType.email,
+        status: "closed",
+        closedReason: "resolved",
+        tag: "Shipping",
+        createdAt: twoDaysAgo,
+        updatedAt: new Date(twoDaysAgo.getTime() + 30 * 60_000),
+        lastMessageAt: twoDaysAgo,
+      },
+    });
+    const rolloverThread = await db.thread.create({
+      data: {
+        organizationId: org.id,
+        customerId: customer.id,
+        channelType: ChannelType.shopify_chat,
+        status: "closed",
+        closedReason: "episode_rollover",
+        tag: "Returns",
+        createdAt: now,
+        updatedAt: new Date(now.getTime() + 3 * 86_400_000),
+        lastMessageAt: now,
+      },
+    });
+    await db.message.create({
+      data: {
+        threadId: rolloverThread.id,
+        organizationId: org.id,
+        senderType: SenderType.customer,
+        contentText: "I have a new question.",
+        sentAt: now,
+      },
+    });
+
+    const stats = await getSupportStats(org.id, 7);
+
+    expect(stats.tickets).toEqual({
+      total: 1,
+      byTag: [{ tag: "Shipping", count: 1 }],
+      byChannel: [{ channel: "email", count: 1 }],
+      byDay: [{ day: twoDaysAgo.toISOString().slice(0, 10), count: 1 }],
+    });
+    expect(stats.messages).toEqual({ customer: 1, agent: 0, ai: 0 });
+    expect(stats.resolution).toEqual({ closedCount: 1, avgMinutes: 30 });
+  });
 });

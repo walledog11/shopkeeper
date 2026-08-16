@@ -3,6 +3,7 @@
   "description": "A customer explicitly asks for carrier tracking on a fulfilled order, exercising positive tracking-tool routing.",
   "suite": "extended",
   "setup": {
+    "classifierIntents": { "order_status": true },
     "channelType": "email",
     "customerName": "Taylor Reed",
     "shopifyCustomerId": "501",

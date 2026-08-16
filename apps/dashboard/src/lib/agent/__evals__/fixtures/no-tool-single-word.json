@@ -2,7 +2,9 @@
   "id": "no-tool-single-word",
   "description": "Calibration canary for the bias-to-escalate prompt. A resolved customer sends a single '?' with no prior context in the thread. There is nothing actionable to do and no real uncertainty about identity or scope - the right move is to send a short clarification reply, not escalate and not perform any mutative action. Pairs with the 'must escalate' fixtures to keep the prompt from over-tipping toward escalation on every ambiguous input.",
   "setup": {
-    "classifierIntents": {},
+    "classifierIntents": {
+      "no_request": true
+    },
     "channelType": "email",
     "tag": "Support",
     "customerName": "Sam Rivera",

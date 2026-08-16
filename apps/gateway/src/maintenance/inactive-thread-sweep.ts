@@ -192,7 +192,7 @@ export async function closeInactiveOpenThreads(now: Date = new Date()): Promise<
     if (toClose.length > 0) {
       const result = await db.thread.updateMany({
         where: { id: { in: toClose }, status: THREAD_STATUS.OPEN },
-        data: { status: THREAD_STATUS.CLOSED },
+        data: { status: THREAD_STATUS.CLOSED, closedReason: 'inactivity' },
       });
       closed += result.count;
     }

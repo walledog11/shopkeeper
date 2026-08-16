@@ -51,8 +51,9 @@
       "cancel_order"
     ],
     "mustCallTools": [
-      "send_reply"
-    ]
+      "escalate_to_human"
+    ],
+    "mustEscalate": true
   },
   "suite": "core"
 }

@@ -23,7 +23,13 @@
         "contentText": "Hi, what's your return window on unworn items?"
       }
     ],
-    "recentOrders": []
+    "recentOrders": [],
+    "kbArticles": [
+      {
+        "title": "Returns policy",
+        "body": "Unworn items in original condition may be returned within 14 days of delivery."
+      }
+    ]
   },
   "instruction": "Reply to the customer.",
   "expectedPlan": {

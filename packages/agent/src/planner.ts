@@ -12,6 +12,7 @@ import {
   appendInitialPlanningWarnings,
   appendPlanningReadWarnings,
 } from "./planner-read-tools.js";
+import { stripInternalNotesWithoutActions } from "./planner-safety/internal-notes.js";
 import { applyEscalationRouting, logRoutingShadow, routePlan } from "./planner-routing.js";
 import {
   stripCreateRefundForAlreadyRefundedOrders,
@@ -134,6 +135,7 @@ export async function planAgent(
   // drop refunds for already-refunded orders and empty send_reply calls.
   let rawToolCalls = stripCreateRefundForAlreadyRefundedOrders(ctx, instruction, loop.rawToolCalls);
   rawToolCalls = stripEmptySendReplyToolCalls(rawToolCalls);
+  rawToolCalls = stripInternalNotesWithoutActions(rawToolCalls);
 
   const warnings: string[] = [];
   appendInitialPlanningWarnings({ ctx, operatorMode, warnings });

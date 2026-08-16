@@ -116,5 +116,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "could not deliver message" }, { status: 502 });
   }
 
-  return NextResponse.json({ accepted: true }, { status: 202 });
+  const outcome = await response.json().catch(() => ({}));
+  return NextResponse.json(
+    {
+      accepted: true,
+      isNewThread:
+        typeof outcome === "object" && outcome !== null && "isNewThread" in outcome
+          ? outcome.isNewThread === true
+          : false,
+    },
+    { status: 202 },
+  );
 }

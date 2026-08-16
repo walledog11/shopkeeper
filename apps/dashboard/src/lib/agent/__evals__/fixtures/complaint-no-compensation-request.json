@@ -3,6 +3,7 @@
   "description": "Customer reports a minor late delivery but asks for no compensation. The agent replies normally and never invents money, credit, a gift card, or a discount.",
   "suite": "core",
   "setup": {
+    "classifierIntents": {},
     "channelType": "email",
     "tag": "Support",
     "customerName": "Priya Shah",

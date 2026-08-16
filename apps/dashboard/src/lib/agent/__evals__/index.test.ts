@@ -6,6 +6,7 @@
 // (when `process.env.CI` is set). Override with `RUN_JUDGE_EVALS`:
 //   RUN_JUDGE_EVALS=1     → force-enable (e.g. nightly / scheduled CI runs)
 //   RUN_JUDGE_EVALS=0     → force-disable
+//   EVAL_FIXTURE=id[,id]  → run only named fixtures and skip full-baseline comparison
 // Skipping keeps per-push spend in check — each judged fixture adds a Sonnet call.
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
@@ -29,6 +30,11 @@ import {
 } from "./runner";
 import type { Fixture, FixtureRunSummary } from "./types";
 import { validateFixtures } from "./fixture-validator";
+import {
+  requestedEvalSuite,
+  requestedFixtureIds,
+  selectFixtures,
+} from "./selection";
 
 const FIXTURES_DIR = join(__dirname, "fixtures");
 
@@ -39,12 +45,6 @@ function loadFixtures(): Fixture[] {
   return fixtures;
 }
 
-function requestedSuite(): "core" | "full" {
-  const value = process.env.EVAL_SUITE?.trim().toLowerCase() ?? "full";
-  if (value !== "core" && value !== "full") throw new Error(`Invalid EVAL_SUITE ${JSON.stringify(value)}`);
-  return value;
-}
-
 const hasRealKey =
   typeof process.env.ANTHROPIC_API_KEY === "string" &&
   process.env.ANTHROPIC_API_KEY.length > 0 &&
@@ -52,11 +52,13 @@ const hasRealKey =
 const ANTHROPIC_API_HOST = "api.anthropic.com";
 
 describe.sequential("agent evals", () => {
-  const suite = requestedSuite();
+  const suite = requestedEvalSuite();
+  const requestedIds = requestedFixtureIds();
+  if (requestedIds && shouldUpdateBaseline()) {
+    throw new Error("EVAL_FIXTURE cannot be combined with UPDATE_EVAL_BASELINE")
+  }
   const allFixtures = loadFixtures();
-  const fixtures = suite === "core"
-    ? allFixtures.filter(fixture => fixture.suite === "core")
-    : allFixtures;
+  const fixtures = selectFixtures(allFixtures, suite, requestedIds);
   if (fixtures.length === 0) {
     it("executes at least one fixture", () => {
       throw new Error(`EVAL_SUITE=${suite} selected zero fixtures`);
@@ -147,7 +149,10 @@ describe.sequential("agent evals", () => {
       return;
     }
 
-    if (suite === "core") return;
+    // A targeted diagnosis is intentionally incomparable to the full committed
+    // baseline. The selected fixture still hard-fails above; only the aggregate
+    // and category regression comparison is skipped.
+    if (suite === "core" || requestedIds) return;
 
     const baseline = loadBaseline();
     if (!baseline) {
@@ -173,15 +178,17 @@ describe.sequential("agent evals", () => {
     }
   });
 
-  it(
-    "prompt caching: an identical cached system prompt reads from cache on repeat",
-    async () => {
-      const cache = await probeSystemPromptCacheRead();
-      console.log(
-        `[eval:cache] first cacheCreation=${cache.firstCreate} cacheRead=${cache.firstRead}; second cacheCreation=${cache.secondCreate} cacheRead=${cache.secondRead}`,
-      );
-      expect(cache.secondRead).toBeGreaterThan(0);
-    },
-    120_000,
-  );
+  if (!requestedIds) {
+    it(
+      "prompt caching: an identical cached system prompt reads from cache on repeat",
+      async () => {
+        const cache = await probeSystemPromptCacheRead();
+        console.log(
+          `[eval:cache] first cacheCreation=${cache.firstCreate} cacheRead=${cache.firstRead}; second cacheCreation=${cache.secondCreate} cacheRead=${cache.secondRead}`,
+        );
+        expect(cache.secondRead).toBeGreaterThan(0);
+      },
+      120_000,
+    );
+  }
 });

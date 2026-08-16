@@ -1,6 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk"
 import type { AgentContext } from "../agent-context.js"
 import { planningIntentTexts } from "../intent.js"
+import { findReferencedOrder } from "../order-reference.js"
 import type { ToolStatus } from "../tools/result.js"
 
 const ORDER_LOOKUP_TOOLS = new Set([
@@ -47,4 +48,24 @@ export function shouldEscalateFulfilledCancelRequest(
   const intentTexts = planningIntentTexts(ctx, instruction)
   const wantsCancel = intentTexts.some(text => /\bcancel(?:lation|led|ing)?\b/i.test(text))
   return wantsCancel && ctx.recentOrders.some(order => order.fulfillment_status === "fulfilled")
+}
+
+export function shouldEscalateFulfilledAddressChangeRequest(
+  ctx: AgentContext,
+  instruction: string,
+): boolean {
+  const requestText = planningIntentTexts(ctx, instruction).find(text => {
+    const lower = text.toLowerCase()
+    return /\b(address|shipping)\b/.test(lower)
+      && /\b(change|update|edit|correct|redirect|wrong)\b/.test(lower)
+  })
+  if (!requestText) return false
+
+  const referenced = findReferencedOrder(ctx.recentOrders, requestText)
+  const targets = referenced
+    ? [referenced]
+    : ctx.recentOrders.length === 1
+      ? [ctx.recentOrders[0]]
+      : []
+  return targets.some(order => order.fulfillment_status === "fulfilled")
 }

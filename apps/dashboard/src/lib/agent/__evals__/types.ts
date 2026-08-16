@@ -1,5 +1,11 @@
 import type { OrgSettings } from "@/types";
-import type { AgentActionMode, AgentActionStatus, ShopifyOrderSummary } from "@shopkeeper/agent/context";
+import type {
+  AgentActionMode,
+  AgentActionStatus,
+  AgentAuthState,
+  ShopifyOrderSummary,
+  VerifiedOrderRef,
+} from "@shopkeeper/agent/context";
 import type { ClassifierIntents } from "@shopkeeper/agent/classifier-signals";
 
 export type ClassifierIntentKey = keyof ClassifierIntents;
@@ -20,7 +26,19 @@ export interface SimulatedToolResult {
 }
 
 export interface ThreadSetup {
-  channelType: "email" | "instagram" | "telegram" | "shopify" | "dashboard_agent" | "sms_agent";
+  channelType:
+    | "ig_dm"
+    | "email"
+    | "tiktok"
+    | "shopify"
+    | "sms"
+    | "sms_agent"
+    | "dashboard_agent"
+    | "imessage"
+    | "shopify_chat";
+  /** Storefront fixtures must name the authorization boundary they exercise. */
+  authState?: AgentAuthState;
+  verifiedOrders?: VerifiedOrderRef[];
   tag?: string;
   aiSummary?: string;
   customerName?: string;

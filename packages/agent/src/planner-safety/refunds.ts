@@ -7,6 +7,10 @@ function isOrderFullyRefunded(order: ShopifyOrderSummary): boolean {
   return order.financial_status?.toLowerCase() === "refunded"
 }
 
+function isOrderPaid(order: ShopifyOrderSummary): boolean {
+  return order.financial_status?.toLowerCase() === "paid"
+}
+
 function refundTargetOrders(
   ctx: AgentContext,
   instruction: string,
@@ -32,6 +36,23 @@ export function refundTargetsAlreadyFullyRefunded(
 ): boolean {
   const targets = refundTargetOrders(ctx, instruction)
   return targets.length > 0 && targets.every(isOrderFullyRefunded)
+}
+
+export function refundTargetsNonPaidOrder(
+  ctx: AgentContext,
+  instruction: string,
+  rawToolCalls: readonly RawToolCall[],
+): boolean {
+  if (refundTargetOrders(ctx, instruction).some(order => !isOrderPaid(order))) {
+    return true
+  }
+
+  return rawToolCalls.some(toolCall => {
+    if (toolCall.name !== "create_refund") return false
+    const orderId = refundOrderIdFromToolCall(toolCall)
+    if (!orderId) return false
+    return ctx.recentOrders.some(order => order.id === orderId && !isOrderPaid(order))
+  })
 }
 
 function refundOrderIdFromToolCall(toolCall: RawToolCall): string | null {

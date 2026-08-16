@@ -20,6 +20,16 @@ function inboxThreadSql(orgId: string) {
   `;
 }
 
+// A rollover closes one conversation episode because a new one started. It is
+// not another ticket or a resolution, but its messages still belong in message
+// volume. Keep this predicate separate from inboxThreadSql for that reason.
+function reportableTicketSql(orgId: string) {
+  return Prisma.sql`
+    ${inboxThreadSql(orgId)}
+    AND t.closed_reason IS DISTINCT FROM 'episode_rollover'
+  `;
+}
+
 export async function getSupportStats(orgId: string, days: number): Promise<SupportStatsSummary> {
   const to = new Date();
   const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
@@ -28,7 +38,7 @@ export async function getSupportStats(orgId: string, days: number): Promise<Supp
     db.$queryRaw<{ tag: string; count: bigint }[]>`
       SELECT COALESCE(t.tag, 'General') AS tag, COUNT(*)::bigint AS count
       FROM threads t
-      WHERE ${inboxThreadSql(orgId)}
+      WHERE ${reportableTicketSql(orgId)}
         AND t.created_at >= ${from}
       GROUP BY COALESCE(t.tag, 'General')
       ORDER BY count DESC
@@ -36,7 +46,7 @@ export async function getSupportStats(orgId: string, days: number): Promise<Supp
     db.$queryRaw<{ channel: string; count: bigint }[]>`
       SELECT t.channel_type::text AS channel, COUNT(*)::bigint AS count
       FROM threads t
-      WHERE ${inboxThreadSql(orgId)}
+      WHERE ${reportableTicketSql(orgId)}
         AND t.created_at >= ${from}
       GROUP BY t.channel_type
       ORDER BY count DESC
@@ -44,7 +54,7 @@ export async function getSupportStats(orgId: string, days: number): Promise<Supp
     db.$queryRaw<{ day: string; count: bigint }[]>`
       SELECT TO_CHAR(DATE_TRUNC('day', t.created_at), 'YYYY-MM-DD') AS day, COUNT(*)::bigint AS count
       FROM threads t
-      WHERE ${inboxThreadSql(orgId)}
+      WHERE ${reportableTicketSql(orgId)}
         AND t.created_at >= ${from}
       GROUP BY 1
       ORDER BY 1
@@ -64,7 +74,7 @@ export async function getSupportStats(orgId: string, days: number): Promise<Supp
         AVG(EXTRACT(EPOCH FROM (t.updated_at - t.created_at)) / 60)::float AS avg_minutes,
         COUNT(*)::bigint AS closed_count
       FROM threads t
-      WHERE ${inboxThreadSql(orgId)}
+      WHERE ${reportableTicketSql(orgId)}
         AND t.created_at >= ${from}
         AND t.status = 'closed'
     `,

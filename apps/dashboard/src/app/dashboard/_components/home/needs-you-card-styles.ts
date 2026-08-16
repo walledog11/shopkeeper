@@ -2,12 +2,14 @@ import { cn } from "@/lib/ui/cn"
 
 export type BubbleTone = "action" | "reply" | "flag" | "customer"
 
-export type NeedsYouCardVariant = "front" | "peek" | "shell"
+export type NeedsYouCardVariant = "front" | "peek" | "shell" | "briefing"
 
 const brutalBubble = "border-2 border-[#1a1a1a] shadow-[-2px_2px_0_#c4a574]"
 
-export const needsYouMetaPillClassName =
-  "overflow-hidden rounded-xl bg-white shadow-[0_1px_2px_rgba(0,0,0,0.05),0_6px_18px_rgba(0,0,0,0.08)]"
+export const needsYouMetaPillShellClassName =
+  "flex h-10 items-center justify-center overflow-hidden rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.05),0_6px_18px_rgba(0,0,0,0.08)]"
+
+export const needsYouMetaPillClassName = cn(needsYouMetaPillShellClassName, "bg-white")
 
 export const BUBBLE_TONE: Record<BubbleTone, { bubble: string; text: string }> = {
   customer: {
@@ -53,7 +55,9 @@ export function needsYouCardShellClassName(variant: NeedsYouCardVariant = "front
   return cn(
     "relative isolate h-full w-full overflow-hidden rounded-3xl box-border flex flex-col bg-card",
     "border border-border",
-    "shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)]",
+    variant === "briefing"
+      ? "shadow-[0_1px_2px_rgba(0,0,0,0.03),0_4px_16px_rgba(0,0,0,0.04)]"
+      : "shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)]",
     variant === "shell" && "brightness-[0.98] saturate-[0.96]",
   )
 }

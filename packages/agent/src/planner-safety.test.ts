@@ -6,9 +6,11 @@ import {
   sendReplyDeflectsToManagedChannels,
   sendReplyHasText,
   shouldBlockCreateRefundForAlreadyRefundedOrder,
+  shouldEscalateFulfilledAddressChangeRequest,
   shouldEscalateFulfilledCancelRequest,
   stripCreateRefundForAlreadyRefundedOrders,
   stripEmptySendReplyToolCalls,
+  stripInternalNotesWithoutActions,
 } from "./planner-safety/index.js";
 import type { AgentContext } from "./agent-context.js";
 import type { RawToolCall } from "./types.js";
@@ -84,6 +86,40 @@ describe("shouldEscalateFulfilledCancelRequest", () => {
   });
 });
 
+describe("shouldEscalateFulfilledAddressChangeRequest", () => {
+  const fulfilledOrder = {
+    id: "9000001031",
+    name: "#1031",
+    created_at: null,
+    financial_status: "paid",
+    fulfillment_status: "fulfilled",
+    total_price: "120.00",
+    currency: "USD",
+    items: [],
+  };
+
+  it("detects an address redirect for a referenced fulfilled order", () => {
+    const ctx = makeCtx({
+      recentMessages: [{
+        senderType: "customer",
+        contentText: "I gave the wrong address for order #1031. Please redirect it.",
+      }],
+      recentOrders: [fulfilledOrder],
+    });
+
+    expect(shouldEscalateFulfilledAddressChangeRequest(ctx, "Handle the request.")).toBe(true);
+  });
+
+  it("does not trigger for an unfulfilled order", () => {
+    const ctx = makeCtx({
+      recentMessages: [{ senderType: "customer", contentText: "Change address for order #1031." }],
+      recentOrders: [{ ...fulfilledOrder, fulfillment_status: null }],
+    });
+
+    expect(shouldEscalateFulfilledAddressChangeRequest(ctx, "Handle the request.")).toBe(false);
+  });
+});
+
 describe("stripCreateRefundForAlreadyRefundedOrders", () => {
   it("removes create_refund when the referenced order is already refunded", () => {
     const ctx = makeCtx({
@@ -120,6 +156,26 @@ describe("stripEmptySendReplyToolCalls", () => {
 
     expect(sendReplyHasText(calls[1])).toBe(true);
     expect(stripEmptySendReplyToolCalls(calls).map((call) => call.id)).toEqual(["tu_ok"]);
+  });
+});
+
+describe("stripInternalNotesWithoutActions", () => {
+  it("removes a note from a reply-only plan", () => {
+    const calls: RawToolCall[] = [
+      { id: "tu_reply", name: "send_reply", input: { text: "I can't share that data." } },
+      { id: "tu_note", name: "add_internal_note", input: { text: "Customer requested private data." } },
+    ];
+
+    expect(stripInternalNotesWithoutActions(calls).map(call => call.name)).toEqual(["send_reply"]);
+  });
+
+  it("keeps a note that documents an action", () => {
+    const calls: RawToolCall[] = [
+      { id: "tu_refund", name: "create_refund", input: { order_id: "1", amount: "10.00" } },
+      { id: "tu_note", name: "add_internal_note", input: { text: "Refunded the order." } },
+    ];
+
+    expect(stripInternalNotesWithoutActions(calls)).toEqual(calls);
   });
 });
 

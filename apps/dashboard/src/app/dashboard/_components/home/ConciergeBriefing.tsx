@@ -1,8 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { Card } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { cn } from "@/lib/ui/cn"
 import { useAgentPanel } from "@/app/dashboard/_components/agent-panel/AgentPanelContext"
 import type { WalkthroughItem } from "@/lib/agent/panel"
 import { BriefingNarrativeInline } from "@/app/dashboard/_components/agent-panel/AgentPanelBriefing"
@@ -11,6 +11,12 @@ import {
   buildBriefingOpsNotes,
   type BriefingOpsNote,
 } from "@/lib/agent/panel-briefing"
+import {
+  NeedsYouCardFooter,
+  NeedsYouCardShell,
+  NeedsYouPrimaryButton,
+} from "./needs-you-card-ui"
+import { needsYouSecondaryButtonClassName } from "./needs-you-card-styles"
 
 interface Props {
   greeting: string
@@ -74,32 +80,37 @@ export default function ConciergeBriefing({
   const opsNotes = buildBriefingOpsNotes(briefingInput)
 
   return (
-    <Card className="bg-card border-border rounded-2xl">
-      <div className="flex items-start gap-3.5 px-6 pt-5 pb-5">
-        <div className="min-w-0 flex-1">
-          <h1 className="font-sans text-[27px] font-semibold leading-tight tracking-[-0.02em] text-foreground">
-            {greeting}{userName ? <>, <span className="italic text-muted-foreground">{userName}</span></> : ""}.
-          </h1>
-          {isLoading ? (
-            <div aria-busy="true" aria-label="Loading briefing" className="mt-1.5 max-w-2xl space-y-2">
-              <Skeleton className="h-4 w-full rounded-full bg-foreground/[0.07]" />
-              <Skeleton className="h-4 w-[62%] rounded-full bg-foreground/[0.07]" />
-            </div>
-          ) : (
-            <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed tracking-[-0.01em] max-w-2xl">
-              <BriefingNarrativeInline segments={narrativeSegments} />
-              {opsNotes.map(note => (
-                <span key={note.id}> <OpsNoteLink note={note} />.</span>
-              ))}
-            </p>
-          )}
+    <NeedsYouCardShell variant="briefing">
+      <div className="px-5 py-4 sm:px-6">
+        <h1 className="font-sans text-xl font-semibold leading-tight tracking-tight text-foreground sm:text-2xl">
+          {greeting}{userName ? <>, <span className="italic text-muted-foreground">{userName}</span></> : ""}.
+        </h1>
+        {isLoading ? (
+          <div aria-busy="true" aria-label="Loading briefing" className="mt-1.5 max-w-2xl space-y-2">
+            <Skeleton className="h-4 w-full rounded-full bg-foreground/[0.07]" />
+            <Skeleton className="h-4 w-[62%] rounded-full bg-foreground/[0.07]" />
+          </div>
+        ) : (
+          <p className="mt-1.5 max-w-2xl text-sm leading-relaxed tracking-[-0.01em] text-muted-foreground">
+            <BriefingNarrativeInline segments={narrativeSegments} />
+            {opsNotes.map(note => (
+              <span key={note.id}> <OpsNoteLink note={note} />.</span>
+            ))}
+          </p>
+        )}
+      </div>
 
-          <div className="flex items-center justify-between gap-3 mt-4 flex-wrap">
-            {isLoading ? (
-              <Skeleton className="h-[27px] w-44 rounded-full bg-foreground/[0.09]" />
-            ) : (
-              <button
-                type="button"
+      <NeedsYouCardFooter>
+        <div className="flex gap-2">
+          {isLoading ? (
+            <>
+              <Skeleton className="h-12 min-w-0 flex-1 rounded-2xl bg-foreground/[0.08]" />
+              <Skeleton className="h-12 min-w-0 flex-1 rounded-2xl bg-foreground/[0.05]" />
+            </>
+          ) : (
+            <>
+              <NeedsYouPrimaryButton
+                className="min-w-0 flex-1 text-sm sm:text-base"
                 onClick={() =>
                   open(
                     walkthroughCount > 0
@@ -107,30 +118,29 @@ export default function ConciergeBriefing({
                       : { source: "home" },
                   )
                 }
-                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-foreground text-background text-xs font-semibold hover:bg-foreground/90 transition-colors"
               >
-                {walkthroughCount > 0
-                  ? `Walk me through ${walkthroughCount} judgment call${walkthroughCount === 1 ? "" : "s"}`
-                  : `Ask ${agentName}`}
-              </button>
-            )}
-            <Link
-              href="/dashboard/tickets"
-              className={`text-xs font-medium transition-colors ${
-                isLoading
-                  ? "pointer-events-none text-transparent"
-                  : "text-muted-foreground hover:text-strong"
-              }`}
-            >
-              {isLoading ? (
-                <Skeleton className="inline-block h-3 w-24 rounded-full bg-foreground/[0.06]" />
-              ) : (
-                "Browse all tickets"
-              )}
-            </Link>
-          </div>
+                {walkthroughCount > 0 ? (
+                  <>
+                    <span className="sm:hidden">{walkthroughCount} to review</span>
+                    <span className="hidden sm:inline">
+                      Walk me through {walkthroughCount} ticket{walkthroughCount === 1 ? "" : "s"}
+                    </span>
+                  </>
+                ) : (
+                  `Ask ${agentName}`
+                )}
+              </NeedsYouPrimaryButton>
+              <Link
+                href="/dashboard/tickets"
+                className={cn(needsYouSecondaryButtonClassName, "min-w-0 flex-1 text-sm sm:text-base")}
+              >
+                <span className="sm:hidden">All tickets</span>
+                <span className="hidden sm:inline">Browse all tickets</span>
+              </Link>
+            </>
+          )}
         </div>
-      </div>
-    </Card>
+      </NeedsYouCardFooter>
+    </NeedsYouCardShell>
   )
 }
