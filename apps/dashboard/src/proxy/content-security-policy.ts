@@ -20,6 +20,32 @@ function gatewayEventsOrigin(): string[] {
   }
 }
 
+// Every integration connect starts as a same-origin form POST that 303s to the
+// provider's authorize page. Chrome checks each redirect hop of a form
+// submission against `form-action`, so the authorize origins belong here or the
+// hop is blocked and the popup dies on its spinner. TikTok Shop's authorize host
+// is env-driven with no default, so it is derived rather than hardcoded.
+function providerAuthorizeOrigins(): string[] {
+  const origins = [
+    'https://accounts.google.com',
+    'https://*.myshopify.com',
+    'https://admin.shopify.com',
+    'https://www.instagram.com',
+    'https://www.facebook.com',
+  ];
+
+  const tiktokAuthUrl = process.env.TIKTOK_SHOP_AUTH_URL ?? process.env.TIKTOK_SHOP_AUTHORIZE_URL;
+  if (tiktokAuthUrl) {
+    try {
+      origins.push(new URL(tiktokAuthUrl).origin);
+    } catch {
+      // A malformed value is already rejected by the TikTok config loader.
+    }
+  }
+
+  return origins;
+}
+
 /**
  * Merged into Clerk's defaults, which already cover its own frontend API,
  * telemetry and script hosts. `strict: true` drops the default `http:`/`https:`
@@ -46,7 +72,7 @@ export const cspDirectives: CspDirectives = {
   "worker-src": ["'self'", "blob:"],
   "object-src": ["'none'"],
   "base-uri": ["'self'"],
-  "form-action": ["'self'", "https://*.clerk.com"],
+  "form-action": ["'self'", "https://*.clerk.com", ...providerAuthorizeOrigins()],
   "frame-ancestors": ["'self'"],
   "report-uri": [CSP_REPORT_ENDPOINT],
 };

@@ -50,8 +50,11 @@ export default clerkMiddleware(async (auth, req) => {
 }, {
   // Clerk mints the nonce, stamps it onto its own script tag and the forwarded
   // request headers Next reads to nonce its bundles, and merges these
-  // directives into its defaults. Enforced after report-only observation
-  // (2026-08-06): auth, Shopify OAuth, and dashboard flows clean in prod logs.
+  // directives into its defaults. Enforcement went live 2026-08-06 while the
+  // OAuth popup shell still violated it two ways — un-nonced inline script and
+  // an authorize hop outside `form-action` — which broke every integration
+  // connect until 2026-08-15. Both are fixed; re-verify a real connect before
+  // changing anything the shell or `form-action` depends on.
   contentSecurityPolicy: {
     strict: true,
     reportOnly: false,
