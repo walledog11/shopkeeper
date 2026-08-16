@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChannelType, db } from "@shopkeeper/db";
 import {
   cleanupTestData,
@@ -10,7 +10,17 @@ import {
   createTestThread,
 } from "@shopkeeper/db/test-helpers";
 import { buildContext, type ThreadSink } from "./context.js";
+import { classifyHomePlan } from "./plan-preview.js";
+import { planAgent } from "./planner.js";
 import { hashVerificationCode } from "./storefront-verification.js";
+
+const { mockAnthropicCreate } = vi.hoisted(() => ({ mockAnthropicCreate: vi.fn() }));
+
+vi.mock("@anthropic-ai/sdk", () => ({
+  default: class Anthropic {
+    messages = { create: mockAnthropicCreate };
+  },
+}));
 
 const orgIds: string[] = [];
 
@@ -25,6 +35,7 @@ const sink: ThreadSink = {
 };
 
 afterEach(async () => {
+  mockAnthropicCreate.mockReset();
   await Promise.all(orgIds.splice(0).map((orgId) => cleanupTestData(orgId)));
 });
 
@@ -222,5 +233,43 @@ describe("storefront auth state in buildContext", () => {
 
     expect(ctx!.authState).toBeUndefined();
     expect(ctx!.verifiedOrders).toBeUndefined();
+  });
+});
+
+describe("recent-orders prefetch safety", () => {
+  it("classifies a reply plan as needs_review when the Shopify prefetch failed", async () => {
+    const org = await createTestOrg();
+    orgIds.push(org.id);
+    await createTestIntegration(org.id, {
+      platform: ChannelType.shopify,
+      externalAccountId: `ctx-${randomUUID()}.myshopify.com`,
+      accessToken: "shpat_test",
+    });
+    const customer = await createTestCustomer(org.id, `${randomUUID()}@example.com`, { name: "Jane" });
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email, {
+      shopifyCustomerId: "123456789",
+    });
+    await createTestMessage(thread.id, "Where is my order?");
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Shopify unavailable"));
+    mockAnthropicCreate.mockResolvedValue({
+      stop_reason: "tool_use",
+      content: [{
+        type: "tool_use",
+        id: "send_1",
+        name: "send_reply",
+        input: { text: "I couldn't find any orders on your account." },
+      }],
+      usage: { input_tokens: 10, output_tokens: 5 },
+    });
+
+    try {
+      const ctx = await buildContext(thread.id, org.id, sink);
+      const plan = await planAgent(ctx, "Handle this customer's latest request");
+
+      expect(fetchSpy).toHaveBeenCalled();
+      expect(classifyHomePlan(plan).kind).toBe("needs_review");
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 });
