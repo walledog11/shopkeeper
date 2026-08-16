@@ -31,18 +31,12 @@ function NeedsYouLoadingSkeleton() {
       className="mt-5 sm:mt-10 flex flex-col gap-2.5"
     >
       <Card className={needsYouCardShellClassName("front")}>
-        <div className="rounded-t-3xl border-b border-border/60 bg-card px-5 pb-4 pt-5 sm:px-6">
-          <div className="flex flex-col items-center gap-3">
-            <div className="flex w-full items-center gap-2">
-              <Skeleton className="needs-you-shimmer h-10 w-10 shrink-0 rounded-2xl bg-foreground/[0.06]" />
-              <Skeleton className="needs-you-shimmer h-10 min-w-0 flex-1 rounded-2xl bg-foreground/[0.06]" />
-              <Skeleton className="needs-you-shimmer h-10 w-14 shrink-0 rounded-2xl bg-foreground/[0.06]" />
-              <Skeleton className="needs-you-shimmer h-10 w-16 shrink-0 rounded-2xl bg-foreground/[0.06]" />
-            </div>
-            <div className="w-full space-y-2">
-              <Skeleton className="needs-you-shimmer mx-auto h-7 w-[72%] rounded-full bg-foreground/[0.08]" />
-              <Skeleton className="needs-you-shimmer mx-auto h-7 w-[48%] rounded-full bg-foreground/[0.08]" />
-            </div>
+        <div className="rounded-t-3xl border-b border-border/60 bg-card px-5 py-3.5 sm:px-6">
+          <div className="flex w-full items-center gap-2">
+            <Skeleton className="needs-you-shimmer h-10 w-10 shrink-0 rounded-2xl bg-foreground/[0.06]" />
+            <Skeleton className="needs-you-shimmer h-10 min-w-0 flex-1 rounded-2xl bg-foreground/[0.06]" />
+            <Skeleton className="needs-you-shimmer h-10 w-14 shrink-0 rounded-2xl bg-foreground/[0.06]" />
+            <Skeleton className="needs-you-shimmer h-10 w-16 shrink-0 rounded-2xl bg-foreground/[0.06]" />
           </div>
         </div>
 

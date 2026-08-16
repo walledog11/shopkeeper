@@ -11,11 +11,6 @@ import { getChannelInfo } from "@/lib/messaging/channels"
 import { customerDisplayLabel, timeAgoShort } from "@/lib/messaging/customer-display"
 import { currentPlanPredicate, type ThreadIdRow } from "@/lib/server/home-summary-queries"
 
-function clampCustomerMessage(text: string | null, max = 300): string {
-  const cleaned = (text ?? "").trim()
-  return cleaned.length > max ? `${cleaned.slice(0, max - 1)}…` : cleaned
-}
-
 export async function loadNeedsAttention(
   organizationId: string,
   settings: Partial<OrgSettings> | null,
@@ -88,7 +83,7 @@ export async function loadNeedsAttention(
       customerName: thread.customer?.name || thread.customer?.platformId
         ? customerDisplayLabel(thread.customer)
         : null,
-      customerMessage: clampCustomerMessage(latestMessage.contentText),
+      customerMessage: (latestMessage.contentText ?? "").trim(),
       channelName: getChannelInfo(thread.channelType as ChannelType).name,
       timeAgo: timeAgoShort(latestMessage.sentAt, now),
       lastMessageAt: latestMessage.sentAt.toISOString(),

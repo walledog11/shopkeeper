@@ -185,15 +185,7 @@ function NeedsYouTicketMetaPill({ item }: { item: HomeNeedsAttentionItem }) {
 }
 
 export function NeedsYouCardHeaderRow({ item }: { item: HomeNeedsAttentionItem }) {
-  return (
-    <div className="flex w-full flex-col items-center gap-3">
-      <NeedsYouTicketMetaPill item={item} />
-
-      <h3 className="w-full text-balance text-center font-sans text-xl font-semibold leading-tight tracking-tight text-foreground line-clamp-2 sm:text-2xl">
-        {item.headline}
-      </h3>
-    </div>
-  )
+  return <NeedsYouTicketMetaPill item={item} />
 }
 
 export function NeedsYouBubble({
@@ -217,7 +209,7 @@ export function NeedsYouBubble({
       )}
     >
       <div className={cn("px-3.5 py-2.5", styles.bubble)}>
-        <div className={cn("whitespace-pre-wrap break-words line-clamp-4", styles.text)}>
+        <div className={cn("whitespace-pre-wrap break-words", styles.text)}>
           {children}
         </div>
       </div>
