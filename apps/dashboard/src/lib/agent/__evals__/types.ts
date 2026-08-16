@@ -141,6 +141,7 @@ export interface PhaseUsage {
 
 export interface EvalUsage {
   modelCalls: number;
+  plannerModelCalls: number;
   inputTokens: number;
   outputTokens: number;
   cacheReadInputTokens: number;

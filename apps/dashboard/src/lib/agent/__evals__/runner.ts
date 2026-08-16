@@ -108,6 +108,7 @@ export async function runFixtureRepeated(
 function createEvalUsage(): EvalUsage {
   return {
     modelCalls: 0,
+    plannerModelCalls: 0,
     inputTokens: 0,
     outputTokens: 0,
     cacheReadInputTokens: 0,
@@ -154,6 +155,7 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
         body as never,
         options as never,
       )
+      if (currentPhase === usage.plannerUsage) usage.plannerModelCalls += 1
       recordEvalUsage(usage, response, currentPhase)
       return response
     }) as CreateFn

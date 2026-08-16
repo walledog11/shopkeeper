@@ -9,8 +9,8 @@
 //   EVAL_FIXTURE=id[,id]  → run only named fixtures and skip full-baseline comparison
 // Skipping keeps per-push spend in check — each judged fixture adds a Sonnet call.
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { appendFileSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { allowTestNetworkHosts } from "../../../../../../scripts/test-network-guard.mjs";
 import {
   runFixtureRepeated,
@@ -37,6 +37,12 @@ import {
 } from "./selection";
 
 const FIXTURES_DIR = join(__dirname, "fixtures");
+const EVAL_REPORT_PATH = join(__dirname, "../../../../../../test-results/eval-report.log");
+
+function writeEvalReportLine(line: string): void {
+  console.log(line);
+  appendFileSync(EVAL_REPORT_PATH, `${line}\n`);
+}
 
 function loadFixtures(): Fixture[] {
   const files = readdirSync(FIXTURES_DIR).filter((f) => f.endsWith(".json")).sort();
@@ -81,6 +87,9 @@ describe.sequential("agent evals", () => {
     allowTestNetworkHosts(ANTHROPIC_API_HOST);
   });
 
+  mkdirSync(dirname(EVAL_REPORT_PATH), { recursive: true });
+  writeFileSync(EVAL_REPORT_PATH, "");
+
   const repeats = evalRepeats();
   const collected: FixtureRunSummary[] = [];
 
@@ -104,11 +113,12 @@ describe.sequential("agent evals", () => {
         // what already ran instead of losing everything when the final afterAll never fires.
         if (shouldUpdateBaseline()) writeBaseline(summarizeResults(collected));
         const last = summary.results[summary.results.length - 1];
-        console.log(
-          `[eval] ${summary.id} passRate=${summary.passes}/${summary.repeats} latency=${last.latencyMs}ms calls=${last.usage.modelCalls} in=${last.usage.inputTokens} out=${last.usage.outputTokens} cacheRead=${last.usage.cacheReadInputTokens} judge[in=${last.usage.judgeUsage.inputTokens} out=${last.usage.judgeUsage.outputTokens} cacheRead=${last.usage.judgeUsage.cacheReadInputTokens}]`,
+        const plannerIterations = summary.results.map(result => result.usage.plannerModelCalls).join(",");
+        writeEvalReportLine(
+          `[eval] ${summary.id} passRate=${summary.passes}/${summary.repeats} latency=${last.latencyMs}ms calls=${last.usage.modelCalls} plannerIterations=[${plannerIterations}] in=${last.usage.inputTokens} out=${last.usage.outputTokens} cacheRead=${last.usage.cacheReadInputTokens} judge[in=${last.usage.judgeUsage.inputTokens} out=${last.usage.judgeUsage.outputTokens} cacheRead=${last.usage.judgeUsage.cacheReadInputTokens}]`,
         );
         for (const f of summary.results.find((r) => !r.pass)?.failures ?? []) {
-          console.log(`  - ${f}`);
+          writeEvalReportLine(`  - ${f}`);
         }
         // A fixture that fails every repeat is hard-broken — fail the test. Flappy fixtures
         // (some repeats pass) clear this bar; their pass-rate is recorded and gated against
@@ -118,7 +128,7 @@ describe.sequential("agent evals", () => {
         // safety gate. See Fixture.advisory.
         if (fixture.advisory && suite === "full") {
           if (summary.passes === 0) {
-            console.log(`  ~ advisory ${summary.id}: 0/${summary.repeats} (not gated)`);
+            writeEvalReportLine(`  ~ advisory ${summary.id}: 0/${summary.repeats} (not gated)`);
           }
         } else {
           expect(summary.passes).toBe(summary.repeats);
@@ -139,13 +149,13 @@ describe.sequential("agent evals", () => {
   afterAll(() => {
     if (collected.length === 0) return;
     const summary = summarizeResults(collected);
-    console.log(formatGateSummary(summarizeGates(collected, fixtures)));
-    console.log(formatSummary(summary));
-    console.log(formatUsageBreakdown(collected));
+    writeEvalReportLine(formatGateSummary(summarizeGates(collected, fixtures)));
+    writeEvalReportLine(formatSummary(summary));
+    writeEvalReportLine(formatUsageBreakdown(collected));
 
     if (shouldUpdateBaseline()) {
       writeBaseline(summary);
-      console.log("[eval:baseline] wrote baseline.json");
+      writeEvalReportLine("[eval:baseline] wrote baseline.json");
       return;
     }
 
@@ -156,7 +166,7 @@ describe.sequential("agent evals", () => {
 
     const baseline = loadBaseline();
     if (!baseline) {
-      console.log(
+      writeEvalReportLine(
         "[eval:baseline] no committed baseline; skipping regression gate. Run with UPDATE_EVAL_BASELINE=1 to create one.",
       );
       return;
@@ -165,15 +175,16 @@ describe.sequential("agent evals", () => {
     // Cost movement, reported but never gated: a tuning change is allowed to
     // cost more if it scores better, and that call is the merchant's, not CI's.
     if (summary.usage && baseline.usage) {
-      console.log(formatUsageDelta(summary.usage, baseline.usage));
+      writeEvalReportLine(formatUsageDelta(summary.usage, baseline.usage));
     }
 
     const threshold = regressionThreshold();
     const { aggregate, categories, fixtures: fixtureRegressions } = compareToBaseline(summary, baseline, threshold);
     for (const msg of [...categories, ...fixtureRegressions]) {
-      console.log(`[eval:baseline] WARN ${msg}`);
+      writeEvalReportLine(`[eval:baseline] WARN ${msg}`);
     }
     if (aggregate) {
+      writeEvalReportLine(`[eval:baseline] ERROR ${aggregate}`);
       throw new Error(`[eval:baseline] regression: ${aggregate}`);
     }
   });
@@ -183,7 +194,7 @@ describe.sequential("agent evals", () => {
       "prompt caching: an identical cached system prompt reads from cache on repeat",
       async () => {
         const cache = await probeSystemPromptCacheRead();
-        console.log(
+        writeEvalReportLine(
           `[eval:cache] first cacheCreation=${cache.firstCreate} cacheRead=${cache.firstRead}; second cacheCreation=${cache.secondCreate} cacheRead=${cache.secondRead}`,
         );
         expect(cache.secondRead).toBeGreaterThan(0);
