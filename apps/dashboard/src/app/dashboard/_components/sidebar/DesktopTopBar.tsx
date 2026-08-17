@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/ui/cn";
-import { inboxNavItem, integrationsNavItem, shopNavItem, teamNavItem, topBarDropdowns, type NavItem } from "../nav-items";
+import { inboxNavItem, shopNavItem, topBarDropdowns, type NavItem } from "../nav-items";
 import { HeaderSearch } from "../header-search/HeaderSearch";
 import { OpenCountBadge } from "./OpenCountBadge";
 import { Logo } from "./Logo";
@@ -25,7 +25,7 @@ import {
   topBarDropdownPanelClass,
   topBarNavTriggerClass,
 } from "./sidebar-helpers";
-import { WorkspaceNavPill } from "./WorkspaceNavPill";
+import { OrganizationNavPill } from "./OrganizationNavPill";
 import type { NavAuth } from "./useNavAuth";
 import {
   dashboardNavPrefetchHandlers,
@@ -109,8 +109,6 @@ export function DesktopTopBar({
   const prefetchNav = useDashboardNavPrefetch();
   const inboxIsActive = isRouteActive(pathname, inboxNavItem.href);
   const shopIsActive = isRouteActive(pathname, shopNavItem.href);
-  const integrationsIsActive = isRouteActive(pathname, integrationsNavItem.href);
-  const teamIsActive = isRouteActive(pathname, teamNavItem.href);
 
   return (
     <div className="hidden md:block w-full shrink-0 pt-2 pb-2 relative z-40">
@@ -161,24 +159,6 @@ export function DesktopTopBar({
                 prefetchNav={prefetchNav}
               />
             ))}
-
-            <Link
-              href={integrationsNavItem.href}
-              onClick={(e) => handleNavClick(e, integrationsIsActive)}
-              {...dashboardNavPrefetchHandlers(prefetchNav, integrationsNavItem.href)}
-              className={topBarNavTriggerClass(integrationsIsActive)}
-            >
-              <span>{integrationsNavItem.name}</span>
-            </Link>
-
-            <Link
-              href={teamNavItem.href}
-              onClick={(e) => handleNavClick(e, teamIsActive)}
-              {...dashboardNavPrefetchHandlers(prefetchNav, teamNavItem.href)}
-              className={topBarNavTriggerClass(teamIsActive)}
-            >
-              <span>{teamNavItem.name}</span>
-            </Link>
           </nav>
         </header>
 
@@ -187,7 +167,7 @@ export function DesktopTopBar({
         </div>
 
         <div className="flex shrink-0 items-center gap-3">
-          <WorkspaceNavPill navAuth={navAuth} onSwitching={onSwitching} variant="topBar" />
+          <OrganizationNavPill navAuth={navAuth} onSwitching={onSwitching} variant="topBar" />
           <AccountNavPill navAuth={navAuth} variant="topBar" />
         </div>
       </div>

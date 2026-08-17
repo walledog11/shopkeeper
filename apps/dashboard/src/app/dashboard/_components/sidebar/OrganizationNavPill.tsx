@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/ui/cn";
-import { workspaceSettingsNavItem } from "../nav-items";
+import { organizationSettingsNavItem } from "../nav-items";
 import { NavPillShell } from "./nav-pill-shared";
 import {
   desktopTopBarDropdownMenuItemClass,
@@ -17,14 +17,14 @@ import {
 } from "./sidebar-helpers";
 import type { NavAuth } from "./useNavAuth";
 
-type WorkspaceMembership = {
+type OrganizationMembership = {
   organization: {
     id: string;
     name: string;
   };
 };
 
-export function WorkspaceNavPill({
+export function OrganizationNavPill({
   navAuth,
   onSwitching,
   onClose,
@@ -38,8 +38,8 @@ export function WorkspaceNavPill({
   const { organization, userMemberships, setActive, mounted } = navAuth;
   const isTopBar = variant === "topBar";
   const isEmbedded = variant === "embedded";
-  const memberships = userMemberships.data as WorkspaceMembership[] | undefined;
-  const workspaceName = organization?.name ?? "Workspace";
+  const memberships = userMemberships.data as OrganizationMembership[] | undefined;
+  const organizationName = organization?.name ?? "Organization";
 
   const switchOrganization = async (organizationId: string) => {
     if (organizationId === organization?.id || !setActive) return;
@@ -51,7 +51,7 @@ export function WorkspaceNavPill({
       await setActive({ organization: organizationId });
       window.location.reload();
     } catch (error) {
-      console.error("Failed to switch workspace", error);
+      console.error("Failed to switch organization", error);
       onSwitching(false);
     }
   };
@@ -59,8 +59,8 @@ export function WorkspaceNavPill({
   const trigger = (
     <button
       type="button"
-      aria-label={`${workspaceName} workspace menu`}
-      title={workspaceName}
+      aria-label={`${organizationName} organization menu`}
+      title={organizationName}
       className={cn(
         "flex items-center outline-none text-left transition-colors min-w-0",
         isTopBar
@@ -70,7 +70,7 @@ export function WorkspaceNavPill({
             : "w-full gap-2 rounded-lg px-3 py-2.5 hover:bg-foreground/[0.05]",
       )}
     >
-      <span className="truncate text-sm font-semibold text-sidebar-foreground">{workspaceName}</span>
+      <span className="truncate text-sm font-semibold text-sidebar-foreground">{organizationName}</span>
       <ChevronDown className="size-4 shrink-0 text-sidebar-foreground/40" />
     </button>
   );
@@ -83,7 +83,7 @@ export function WorkspaceNavPill({
       className={navPillDropdownPanelClass(isTopBar)}
     >
       <DropdownMenuLabel className="px-2.5 py-1.5 text-xs font-medium text-sidebar-foreground/60">
-        Switch workspace
+        Switch organization
       </DropdownMenuLabel>
       {mounted &&
         memberships?.map((mem) => {
@@ -103,20 +103,20 @@ export function WorkspaceNavPill({
       <DropdownMenuItem asChild className={desktopTopBarDropdownMenuItemClass()}>
         <Link href="/create-workspace" onClick={() => onClose?.()}>
           <Plus className="size-4 shrink-0 text-sidebar-foreground/50" />
-          <span className="font-medium">Create workspace</span>
+          <span className="font-medium">Add organization</span>
         </Link>
       </DropdownMenuItem>
       <DropdownMenuSeparator className="bg-border/80 my-1" />
       <DropdownMenuItem asChild className={desktopTopBarDropdownMenuItemClass()}>
-        <Link href={workspaceSettingsNavItem.href} onClick={() => onClose?.()}>
+        <Link href={organizationSettingsNavItem.href} onClick={() => onClose?.()}>
           <Settings2 className="size-4 shrink-0 text-sidebar-foreground/50" />
-          <span className="font-medium">Workspace settings</span>
+          <span className="font-medium">Organization settings</span>
         </Link>
       </DropdownMenuItem>
     </DropdownMenuContent>
   );
 
   return (
-    <NavPillShell variant={variant} headerId="workspace-header" trigger={trigger} menu={menu} />
+    <NavPillShell variant={variant} headerId="organization-header" trigger={trigger} menu={menu} />
   );
 }

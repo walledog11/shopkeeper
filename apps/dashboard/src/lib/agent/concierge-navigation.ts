@@ -10,7 +10,7 @@ import {
 const QUESTION_PATTERN = /\b(what|how|why|when|who|which|any|anything|is there|are there|do i have|tell me about|explain)\b/;
 const NAV_VERB_PATTERN = /\b(take me|bring me|go to|open|navigate|switch to|pull up|show me the|show me my|head to|jump to)\b/;
 const SETUP_PATTERN = /\b(add|connect|set up|setup|change|update|configure|edit)\b/;
-const EXPLICIT_PAGE_PATTERN = /\b(integrations page|settings page|agent settings|trust level|workspace settings)\b/;
+const EXPLICIT_PAGE_PATTERN = /\b(integrations page|settings page|agent settings|trust level|organization settings|workspace settings)\b/;
 const AGENT_TASK_PATTERN = /\b(summarize|summarise|summary|recap|overview|list|draft|reply|look up|lookup|find|check|status)\b/;
 const PAGE_LOOKUP_PATTERN = /\b(how many|how much|count of|number of)\b/;
 

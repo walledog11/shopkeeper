@@ -78,9 +78,9 @@ export const DASHBOARD_DESTINATIONS: readonly DashboardDestination[] = [
   {
     id: "workspace_settings",
     href: "/dashboard/settings",
-    label: "Workspace settings",
-    description: "Billing and workspace admin",
-    keywords: ["workspace settings", "billing", "admin", "subscription", "plan"],
+    label: "Organization settings",
+    description: "Billing and organization admin",
+    keywords: ["organization settings", "workspace settings", "billing", "admin", "subscription", "plan"],
   },
   {
     id: "team",

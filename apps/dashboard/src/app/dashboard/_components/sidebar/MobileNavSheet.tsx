@@ -9,7 +9,7 @@ import { usePanelBriefingData } from "../agent-panel/usePanelBriefingData";
 import { useHelp } from "../help/HelpContext";
 import { mobileNavSections } from "../nav-items";
 import { NavGroupList } from "./NavGroupList";
-import { WorkspaceNavPill } from "./WorkspaceNavPill";
+import { OrganizationNavPill } from "./OrganizationNavPill";
 import { AccountNavPill } from "./AccountNavPill";
 import { LogOutButton } from "./LogOutButton";
 import {
@@ -68,7 +68,7 @@ export function MobileNavSheet({
 
         <div className="flex shrink-0 items-center gap-2 px-4 pt-4 pb-3">
           <div className={cn(desktopTopBarUtilityPillClass, "min-w-0 flex-1")}>
-            <WorkspaceNavPill
+            <OrganizationNavPill
               navAuth={navAuth}
               onSwitching={onSwitching}
               onClose={onClose}

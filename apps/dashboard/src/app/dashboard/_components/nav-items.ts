@@ -60,12 +60,12 @@ export const shopNavItem: NavItem = {
 
 export const topBarShopItems: NavItem[] = [shopNavItem];
 
-export const workspaceSettingsNavItem: NavItem = {
+export const organizationSettingsNavItem: NavItem = {
   name: "Settings",
-  mobileName: "Workspace settings",
+  mobileName: "Organization settings",
   href: "/dashboard/settings",
   icon: Settings2,
-  description: "Billing and workspace admin",
+  description: "Billing and organization admin",
 };
 
 export const integrationsNavItem: NavItem = {
@@ -82,14 +82,14 @@ export const teamNavItem: NavItem = {
   description: "Members, roles, and access",
 };
 
-export const topBarSettingsItems: NavItem[] = [
-  workspaceSettingsNavItem,
+export const topBarWorkspaceItems: NavItem[] = [
   integrationsNavItem,
   teamNavItem,
 ];
 
 export const topBarDropdowns = [
   { label: "Agent", items: topBarAgentItems },
+  { label: "Workspace", items: topBarWorkspaceItems },
 ] as const;
 
 /** Mobile sidebar nav sections. */
@@ -106,6 +106,6 @@ export const mobileNavSections: NavSection[] = [
   },
   {
     heading: "Workspace",
-    items: [topBarSettingsItems[0], topBarSettingsItems[2], topBarSettingsItems[1]],
+    items: topBarWorkspaceItems,
   },
 ];

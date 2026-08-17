@@ -5,10 +5,10 @@ import { cn } from "@/lib/ui/cn";
 import { DropdownMenu, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { desktopTopBarUtilityPillClass } from "./sidebar-helpers";
 
-type NavPillHeaderId = "workspace-header" | "account-header";
+type NavPillHeaderId = "organization-header" | "account-header";
 
 const HEADER_ATTR: Record<NavPillHeaderId, string> = {
-  "workspace-header": "data-dashboard-workspace-header",
+  "organization-header": "data-dashboard-organization-header",
   "account-header": "data-dashboard-account-header",
 };
 
