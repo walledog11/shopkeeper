@@ -30,7 +30,7 @@ export function RightRailProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(
     () => ({ isOpen, open, close }),
-    [close, isOpen],
+    [close, isOpen, open],
   );
 
   return <RightRailContext.Provider value={value}>{children}</RightRailContext.Provider>;

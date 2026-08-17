@@ -34,6 +34,7 @@ function messageContext(body: string): OperatorMessageContext {
     chatId: 'chat_1',
     body,
     senderRef: 'telegram:123',
+    deliveryRef: 'telegram:chat_1',
     reply: vi.fn().mockResolvedValue(undefined),
     presence: async (_progress, work) => work(),
   };

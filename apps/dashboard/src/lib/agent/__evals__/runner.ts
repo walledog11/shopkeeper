@@ -157,7 +157,7 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
         options as never,
       )
       if (currentPhase === usage.plannerUsage) usage.plannerModelCalls += 1
-      const model = typeof response.model === "string" ? response.model : undefined
+      const model = "model" in response && typeof response.model === "string" ? response.model : undefined
       recordEvalUsage(usage, response, currentPhase, model)
       return response
     }) as CreateFn

@@ -56,8 +56,8 @@ export function TicketFilteredQueue({
 }: TicketFilteredQueueProps) {
   const panel = panelForMode(mode)
   const description = mode === "spam"
-    ? panel.description
-    : panel.description(AGENT_DISPLAY_NAME)
+    ? SPAM_PANEL.description
+    : QUEUE_QUIET_TIER_PANEL[mode].description(AGENT_DISPLAY_NAME)
 
   return (
     <TooltipProvider delayDuration={300}>

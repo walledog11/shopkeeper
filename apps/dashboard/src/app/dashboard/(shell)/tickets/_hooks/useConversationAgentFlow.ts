@@ -286,6 +286,7 @@ export function useConversationAgentFlow({
         summary: plan.steps.length === 0
           ? "This ticket was already answered — there is no new draft to generate."
           : "Regeneration did not produce a reviewable plan. Try drafting again from the composer.",
+        error: null,
       }))
     } catch (err) {
       onAgentTurnAdd(createAgentTurn(planRequestErrorTurn(instruction, err)))

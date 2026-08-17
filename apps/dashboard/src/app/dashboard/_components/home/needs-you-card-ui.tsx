@@ -8,6 +8,7 @@ import { getChannelInfoByName } from "@/lib/messaging/channels"
 import { timeAgoCard } from "@/lib/messaging/customer-display"
 import { getTagStyle } from "@/app/dashboard/_lib/ticket-tags"
 import type { HomeNeedsAttentionItem } from "@/lib/home/summary-contract"
+import type { TicketListPresentationStatusTone } from "@/app/dashboard/(shell)/tickets/_lib/ticket-list-presentation"
 import {
   BUBBLE_TONE,
   isInboundTone,
@@ -215,7 +216,24 @@ const ORDER_PILL_CLASS_NAME = "bg-[#f5ebe0] text-[#1a1a1a]"
 const META_PILL_HEIGHT_CLASS = "h-9 sm:h-10"
 const META_CHANNEL_PILL_CLASS = "h-9 w-9 shrink-0 sm:h-10 sm:w-10"
 
-export function TicketCardMetaRow({ meta }: { meta: TicketCardMeta }) {
+const STATUS_META_TONE_CLASS: Record<TicketListPresentationStatusTone, string> = {
+  send: "bg-emerald-500 text-white",
+  caution: "bg-amber-500/15 text-amber-700",
+  neutral: "bg-foreground/[0.08] text-muted-foreground",
+  danger: "bg-red-500/10 text-red-600",
+}
+
+export type TicketCardMetaLayout = "default" | "browse"
+
+export function TicketCardMetaRow({
+  meta,
+  status,
+  layout = "default",
+}: {
+  meta: TicketCardMeta
+  status?: { label: string; tone: TicketListPresentationStatusTone }
+  layout?: TicketCardMetaLayout
+}) {
   const channel = getChannelInfoByName(meta.channelName)
   const orderRef = meta.orderRef?.trim() || null
   const categoryLabel = categoryLabelFromMeta(meta)
@@ -247,7 +265,15 @@ export function TicketCardMetaRow({ meta }: { meta: TicketCardMeta }) {
   )
 
   const customerPill = (
-    <MetaPill className={cn("min-w-0 flex-1 gap-1.5 px-2.5 sm:px-3", META_PILL_HEIGHT_CLASS)}>
+    <MetaPill
+      className={cn(
+        "min-w-0 gap-1.5 px-2.5 sm:px-3",
+        META_PILL_HEIGHT_CLASS,
+        layout === "browse"
+          ? "max-w-[min(100%,13rem)] shrink sm:max-w-[11rem]"
+          : "min-w-0 flex-1",
+      )}
+    >
       {customerLabel && (
         isEmail ? (
           <span className="min-w-0 truncate text-xs font-semibold leading-tight text-[#1a1a1a] sm:text-sm">
@@ -284,6 +310,20 @@ export function TicketCardMetaRow({ meta }: { meta: TicketCardMeta }) {
     </MetaPill>
   ) : null
 
+  const statusPill = status ? (
+    <MetaPill
+      className={cn(
+        "shrink-0 px-2.5 sm:px-3",
+        META_PILL_HEIGHT_CLASS,
+        STATUS_META_TONE_CLASS[status.tone],
+      )}
+    >
+      <span className="whitespace-nowrap text-[11px] font-bold leading-none sm:text-xs">
+        {status.label}
+      </span>
+    </MetaPill>
+  ) : null
+
   const datePill = (
     <MetaPill className={cn("shrink-0 px-2.5 sm:px-3", META_PILL_HEIGHT_CLASS)}>
       <time
@@ -295,10 +335,11 @@ export function TicketCardMetaRow({ meta }: { meta: TicketCardMeta }) {
     </MetaPill>
   )
 
-  const metaTailPills = orderPill || topicPill ? (
+  const metaTailPills = orderPill || topicPill || (layout === "browse" && statusPill) ? (
     <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto sm:gap-2">
       {orderPill}
       {topicPill}
+      {layout === "browse" ? statusPill : null}
     </div>
   ) : null
 
@@ -309,6 +350,7 @@ export function TicketCardMetaRow({ meta }: { meta: TicketCardMeta }) {
         {customerPill}
         {orderPill}
         {topicPill}
+        {statusPill}
         {datePill}
       </div>
 

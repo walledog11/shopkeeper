@@ -38,9 +38,6 @@ export function dashboardPageShellClassName(className?: string) {
   );
 }
 
-/** Archive/search lists stay a touch narrower than the queue for scanability. */
-export const inboxArchiveContentClassName = "mx-auto w-full max-w-4xl";
-
 /** Slightly quieter chrome for search / workspace / account so the nav pill reads first. */
 export const desktopTopBarUtilityPillClass =
   "flex w-fit max-w-full items-center h-12 rounded-xl border border-border/70 bg-sidebar/90 shadow-[0_4px_16px_-4px_rgba(43,33,24,0.10)] backdrop-blur-md supports-[backdrop-filter]:bg-sidebar/80";

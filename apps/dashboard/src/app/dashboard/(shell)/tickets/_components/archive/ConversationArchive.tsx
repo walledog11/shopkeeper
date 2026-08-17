@@ -1,13 +1,12 @@
 "use client"
 
-import { AnimatePresence, LazyMotion, domAnimation } from "motion/react"
+import { AnimatePresence, LazyMotion, domAnimation, m, useReducedMotion } from "motion/react"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { TicketQueueCard } from "../queue/TicketQueueCard"
+import { TicketQueueLoading } from "../queue/TicketQueueLoading"
 import { EmptyState } from "../thread-list/EmptyState"
-import { ThreadListLoading } from "../thread-list/ThreadListLoading"
-import { TicketRow } from "../thread-list/TicketRow"
 import type { TicketListView, TicketQueueTierFilter, TicketTagFilter } from "../thread-list/constants"
 import { ArchiveHeader } from "./ArchiveHeader"
-import { inboxArchiveContentClassName } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
 import type { ChannelType, OrgSettings, Ticket } from "@/types"
 
 interface ConversationArchiveProps {
@@ -94,9 +93,19 @@ export function ConversationArchive({
   } = listState ?? {}
 
   const hasSelection = selectedIds.length > 0
+  const reduceMotion = useReducedMotion()
   // Remount AnimatePresence on any list-identity change (view / filter / search)
   // so a wholesale swap is instant; within a stable list, add/remove animates.
   const listMotionKey = `${activeView}:${isSearchMode ? "search" : "list"}:${channelFilter ?? "all"}:${tagFilter ?? "all"}:${searchQuery}`
+
+  const motionProps = reduceMotion
+    ? { initial: false as const, exit: { opacity: 0 }, transition: { duration: 0 } }
+    : {
+        initial: { opacity: 0, y: 8 },
+        animate: { opacity: 1, y: 0 },
+        exit: { opacity: 0, y: -4 },
+        transition: { duration: 0.18, ease: "easeOut" as const },
+      }
 
   return (
     <>
@@ -125,65 +134,72 @@ export function ConversationArchive({
       />
 
       <div data-testid="tickets-list" className="w-full">
-        <div className={inboxArchiveContentClassName}>
-          {listLoading ? (
-            <div className="overflow-hidden rounded-2xl border border-border bg-card">
-              <ThreadListLoading />
-            </div>
-          ) : tickets.length === 0 ? (
-            <EmptyState
-              activeView={activeView}
-              channelFilter={channelFilter}
-              connectedChannels={connectedChannels}
-              isSearchMode={isSearchMode}
-              searchQuery={searchQuery}
-              tagFilter={tagFilter}
-              totalCount={totalCount}
-              onViewChange={onViewChange}
-            />
-          ) : (
-            <LazyMotion features={domAnimation}>
-              <TooltipProvider delayDuration={300}>
-                <div className="overflow-hidden rounded-2xl border border-border bg-card divide-y divide-foreground/[0.06]">
-                  <AnimatePresence key={listMotionKey} initial={false}>
-                    {tickets.map(ticket => (
-                      <TicketRow
-                        key={ticket.id}
-                        animate
-                        activeView={activeView}
-                        activeTicketId={activeTicketId}
-                        approvingTicketId={approvingTicketId}
-                        context={{ hasShopify, isSearchMode }}
-                        selection={{ hasSelection, isSelected: selectedIds.includes(ticket.id) }}
-                        orgSettings={orgSettings}
-                        ticket={ticket}
-                        onQuickApproveFromList={onQuickApproveFromList}
-                        onReviewFromList={onReviewFromList}
-                        onSelectTicket={onSelectTicket}
-                        onToggleSelect={onToggleSelect}
-                        onMarkAsSpam={onMarkAsSpam}
-                        onRecover={onRecover}
-                      />
-                    ))}
-                  </AnimatePresence>
-                </div>
-
-                {!isSearchMode && hasMore && (
-                  <div className="pt-3">
-                    <button
-                      type="button"
-                      onClick={onLoadMore}
-                      disabled={isLoadingMore}
-                      className="w-full rounded-full border border-border py-2 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
+        {listLoading ? (
+          <TicketQueueLoading />
+        ) : tickets.length === 0 ? (
+          <EmptyState
+            activeView={activeView}
+            channelFilter={channelFilter}
+            connectedChannels={connectedChannels}
+            isSearchMode={isSearchMode}
+            searchQuery={searchQuery}
+            tagFilter={tagFilter}
+            totalCount={totalCount}
+            onViewChange={onViewChange}
+          />
+        ) : (
+          <LazyMotion features={domAnimation}>
+            <TooltipProvider delayDuration={300}>
+              <div className="flex flex-col gap-3">
+                <AnimatePresence key={listMotionKey} initial={false}>
+                  {tickets.map(ticket => (
+                    <m.div
+                      key={ticket.id}
+                      data-testid="ticket-row"
+                      data-ticket-id={ticket.id}
+                      data-ticket-channel={ticket.channelType}
+                      {...motionProps}
                     >
-                      {isLoadingMore ? "Loading…" : "Load more"}
-                    </button>
-                  </div>
-                )}
-              </TooltipProvider>
-            </LazyMotion>
-          )}
-        </div>
+                      <TicketQueueCard
+                        variant="browse"
+                        ticket={ticket}
+                        activeView={activeView}
+                        hasShopify={hasShopify}
+                        orgSettings={orgSettings}
+                        isActive={activeTicketId === ticket.id}
+                        isApproving={approvingTicketId === ticket.id}
+                        actionsDisabled={approvingTicketId !== null && approvingTicketId !== ticket.id}
+                        selection={{
+                          hasSelection,
+                          isSelected: selectedIds.includes(ticket.id),
+                          onToggleSelect: () => onToggleSelect(ticket.id),
+                        }}
+                        onOpen={() => onSelectTicket(ticket.id)}
+                        onSend={() => onQuickApproveFromList(ticket.id)}
+                        onReview={() => onReviewFromList(ticket.id)}
+                        onMarkAsSpam={onMarkAsSpam ? () => onMarkAsSpam(ticket.id) : undefined}
+                        onRecover={onRecover ? () => onRecover(ticket.id) : undefined}
+                      />
+                    </m.div>
+                  ))}
+                </AnimatePresence>
+              </div>
+
+              {!isSearchMode && hasMore && (
+                <div className="pt-3">
+                  <button
+                    type="button"
+                    onClick={onLoadMore}
+                    disabled={isLoadingMore}
+                    className="w-full rounded-full border border-border py-2 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
+                  >
+                    {isLoadingMore ? "Loading…" : "Load more"}
+                  </button>
+                </div>
+              )}
+            </TooltipProvider>
+          </LazyMotion>
+        )}
       </div>
     </>
   )

@@ -182,6 +182,7 @@ describe('POST /webhooks/telegram — free-form instruction', () => {
       clerkUserId: `usr_${chatId}`,
       turnId: expect.any(String),
       operatorLedger: expect.any(String),
+      operatorDeskMode: false,
       moduleTools: expect.any(Object),
     });
     expect(lastReplyText()).toBe('Looked it up.');

@@ -25,6 +25,8 @@ function item(overrides: Partial<WalkthroughItem> = {}): WalkthroughItem {
     orderRef: "#1042",
     tag: "Returns",
     isVip: true,
+    isEscalationOnly: false,
+    escalationReason: null,
     ...overrides,
   }
 }

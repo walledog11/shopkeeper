@@ -6,8 +6,6 @@ import { BulkActions } from "../thread-list/BulkActions"
 import { TicketListFiltersPanel } from "../thread-list/TicketListFiltersPanel"
 import type { TicketListView, TicketQueueTierFilter, TicketTagFilter } from "../thread-list/constants"
 import { QUEUE_QUIET_TIER_FOOTER_LABELS } from "../../_lib/group-tickets-by-triage-tier"
-import { inboxArchiveContentClassName } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
-import { cn } from "@/lib/ui/cn"
 import type { ChannelType } from "@/types"
 
 interface ArchiveHeaderProps {
@@ -100,7 +98,7 @@ export function ArchiveHeader({
 
   return (
     <header data-testid="archive-header" className="w-full">
-      <div className={cn(inboxArchiveContentClassName, "flex flex-col gap-3")}>
+      <div className="flex w-full flex-col gap-3">
         <div className="flex items-center gap-3">
           <button
             type="button"
