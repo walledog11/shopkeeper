@@ -10,7 +10,6 @@ function buildThreadCountKey(kind: "for_me" | "spam") {
   const params = new URLSearchParams({ count: "true" })
   if (kind === "for_me") {
     params.set("status", "open")
-    params.set("forMe", "true")
   } else {
     params.set("status", "open")
     params.set("filterStatus", "filtered")

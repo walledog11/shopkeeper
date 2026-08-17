@@ -49,9 +49,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
     // rendering 0 and popping on every route. These filters mirror the query string
     // in `useInboxBadgeCountQuery` exactly — diverge and the badge moves on first poll.
     countThreadsBySqlFilters(org.id, {
-      forMe: true,
-      hasDraft: false,
-      needsReply: false,
       wantsFiltered: false,
       status: "open",
     }),

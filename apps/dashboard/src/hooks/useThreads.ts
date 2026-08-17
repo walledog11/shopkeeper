@@ -25,7 +25,7 @@ function useIsDocumentVisible() {
 export function useInboxBadgeCountQuery(enabled = true, initialCount?: number) {
   const isVisible = useIsDocumentVisible();
   const { data, error, isLoading, mutate } = useSWR<ThreadCount>(
-    enabled ? '/api/threads?status=open&forMe=true&count=true' : null,
+    enabled ? '/api/threads?status=open&count=true' : null,
     fetcher,
     {
       refreshInterval: isVisible ? (REALTIME_ENABLED ? 60000 : 15000) : 0,

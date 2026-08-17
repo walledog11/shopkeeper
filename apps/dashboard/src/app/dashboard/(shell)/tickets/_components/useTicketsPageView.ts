@@ -52,9 +52,7 @@ export function useTicketsPageView({
     threadSources,
   } = useTicketThreadSources({
     activeView,
-    channelFilter,
     loadAllSources: queryThreadId !== null,
-    tagFilter,
   })
 
   const { setOverride: setSidebarOpenCount } = useOpenThreadCountOverride()
@@ -105,6 +103,8 @@ export function useTicketsPageView({
     listThreads,
     orgSettings,
     tierFilter,
+    channelFilter,
+    tagFilter,
   })
 
   const cachedPlan = useMemo(
@@ -112,31 +112,26 @@ export function useTicketsPageView({
     [activeThread],
   )
 
+  const streamIncludesClosed = effectiveActiveView === "for_me" || effectiveActiveView === "all_open"
+
   const {
     patchThreadCaches,
     moveThreadStatus,
     moveThreadFilterStatus,
     revalidateThreadCaches,
   } = useThreadCacheCoordinator({
-    openThreads: threadSources.for_me.threads,
-    allOpenThreads: threadSources.all_open.threads,
-    closedThreads: threadSources.closed.threads,
+    streamThreads: threadSources.for_me.threads,
     filteredThreads: threadSources.spam.threads,
     activeThread: activeThreadData?.thread,
-    mutateOpen: threadSources.for_me.mutate,
-    mutateClosed: threadSources.closed.mutate,
+    streamIncludesClosed,
+    mutateStream: threadSources.for_me.mutate,
     mutateFiltered: threadSources.spam.mutate,
-    removeFromOpen: threadSources.for_me.removeThreadById,
-    removeFromClosed: threadSources.closed.removeThreadById,
+    removeFromStream: threadSources.for_me.removeThreadById,
     removeFromFiltered: threadSources.spam.removeThreadById,
-    prependToOpen: threadSources.for_me.prependThread,
-    prependToClosed: threadSources.closed.prependThread,
+    prependToStream: threadSources.for_me.prependThread,
     prependToFiltered: threadSources.spam.prependThread,
     mutateSearch,
     mutateActiveThread,
-    mutateAllOpen: threadSources.all_open.mutate,
-    removeFromAllOpen: threadSources.all_open.removeThreadById,
-    prependToAllOpen: threadSources.all_open.prependThread,
   })
 
   const revalidateTicketData = useCallback(async () => {

@@ -43,41 +43,26 @@ describe('thread list query validation', () => {
       includeCount: false,
       cursor: undefined,
       limit: 50,
-      needsReply: false,
-      forMe: false,
-      hasDraft: false,
-      tag: undefined,
-      channelType: undefined,
     });
   });
 
   it('parses supported enum, boolean, and limit values', () => {
     const query = new URLSearchParams({
-      status: 'closed',
+      status: 'all',
       filterStatus: 'filtered',
       preview: 'true',
       count: 'false',
       includeCount: 'true',
       limit: '100',
-      needsReply: 'true',
-      forMe: 'false',
-      hasDraft: 'true',
-      tag: 'Returns',
-      channelType: 'email',
     });
 
     expect(parseThreadListQuery(query)).toMatchObject({
-      status: 'closed',
+      status: 'all',
       filterStatus: 'filtered',
       preview: true,
       countOnly: false,
       includeCount: true,
       limit: 100,
-      needsReply: true,
-      forMe: false,
-      hasDraft: true,
-      tag: 'Returns',
-      channelType: 'email',
     });
   });
 
@@ -88,11 +73,6 @@ describe('thread list query validation', () => {
     ['preview', 'yes'],
     ['count', '1'],
     ['includeCount', 'TRUE'],
-    ['needsReply', ''],
-    ['forMe', 'null'],
-    ['hasDraft', 'no'],
-    ['tag', 'General'],
-    ['channelType', 'whatsapp'],
     ['limit', '0'],
     ['limit', '101'],
     ['limit', '2.5'],
