@@ -1,11 +1,14 @@
 "use client"
 
-import { useCallback, useRef, useState, type ComponentProps, type CSSProperties, type RefObject } from "react"
+import { useCallback, useMemo, useRef, useState, type ComponentProps, type CSSProperties, type RefObject } from "react"
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
+import { NeedsYouCardBody } from "@/app/dashboard/_components/home/needs-you-card-ui"
+import { cn } from "@/lib/ui/cn"
 import { useFillerPhrase } from "@/hooks/useFillerPhrase"
 import { useIsMobile } from "@/hooks/useMobile"
 import { requestShopifyLinkFocus } from "@/lib/messaging/shopify-link-focus"
 import { useConversationAgentFlow } from "../../_hooks/useConversationAgentFlow"
+import { buildTicketQueueCardContent } from "../../_lib/ticket-queue-card-content"
 import ConversationHeader from "./ConversationHeader"
 import ConversationContextBar from "./ConversationContextBar"
 import ChatTimeline from "./timeline/ChatTimeline"
@@ -184,6 +187,11 @@ export default function ConversationView({
 
   const agentBusy = isSending || isAgentRunning || isPlanLoading || isPlanExecuting
 
+  const headerMeta = useMemo(
+    () => buildTicketQueueCardContent(ticket, orgSettings).meta,
+    [orgSettings, ticket],
+  )
+
   const focusPlanCard = useCallback(() => {
     setViewTab("chat")
     requestAnimationFrame(() => {
@@ -239,8 +247,7 @@ export default function ConversationView({
       <ConversationHeader
         activeTab={activeTab}
         cocoAction={headerCocoAction}
-        customer={ticket.customer}
-        platform={ticket.platform}
+        meta={headerMeta}
         onCocoAction={() => { void handleCocoAction() }}
         onBack={onBack}
         onResolve={onResolve}
@@ -249,15 +256,13 @@ export default function ConversationView({
         embedded={embedded}
       />
       {thread && onLinkShopifyCustomer && (
-        <div className="shrink-0 px-3 pt-3 md:px-5 md:pt-4">
-          <ConversationContextBar
-            thread={thread}
-            hasShopify={hasShopify}
-            onLinkShopifyCustomer={onLinkShopifyCustomer}
-            expanded={contextExpanded}
-            onExpandedChange={setContextExpanded}
-          />
-        </div>
+        <ConversationContextBar
+          thread={thread}
+          hasShopify={hasShopify}
+          onLinkShopifyCustomer={onLinkShopifyCustomer}
+          expanded={contextExpanded}
+          onExpandedChange={setContextExpanded}
+        />
       )}
 
       {activeTab === 'closed' && (
@@ -472,36 +477,41 @@ function ConversationTimelinePanel({
   timelineRef,
 }: ConversationTimelinePanelProps) {
   return (
-    <div
+    <NeedsYouCardBody
       ref={timelineRef}
-      data-testid={status.viewTab === 'notes' ? 'notes-timeline' : 'chat-timeline'}
-      data-thread-id={ticketId}
-      className={`mobile-ticket-timeline flex-1 overflow-y-auto custom-scrollbar p-5 space-y-4 transition-colors ${
-        status.viewTab === 'notes' ? 'bg-amber-500/[0.03]' : 'bg-background'
-      }`}
-    >
-      {status.isThreadLoading ? (
-        <TimelineSkeleton />
-      ) : status.viewTab === 'notes' ? (
-        <NotesTimeline
-          agentTurns={agentTurns}
-          isAgentRunning={status.isAgentRunning}
-          isPlanLoading={status.isPlanLoading}
-          messages={messages}
-          pendingInstruction={pendingInstruction}
-          planPhrase={planPhrase}
-          runPhrase={runPhrase}
-        />
-      ) : (
-        <ChatTimeline
-          failedMessages={failedMessages}
-          isAgentRunning={status.isAgentRunning}
-          messages={messages}
-          messagesEndRef={messagesEndRef}
-          onRetry={onRetry}
-          onRetrySend={onRetrySend}
-        />
+      className={cn(
+        "mobile-ticket-timeline overflow-y-auto custom-scrollbar transition-colors",
+        status.viewTab === "notes" ? "bg-amber-500/[0.03]" : "",
       )}
-    </div>
+    >
+      <div
+        data-testid={status.viewTab === "notes" ? "notes-timeline" : "chat-timeline"}
+        data-thread-id={ticketId}
+        className="flex min-h-full flex-col gap-3"
+      >
+        {status.isThreadLoading ? (
+          <TimelineSkeleton />
+        ) : status.viewTab === "notes" ? (
+          <NotesTimeline
+            agentTurns={agentTurns}
+            isAgentRunning={status.isAgentRunning}
+            isPlanLoading={status.isPlanLoading}
+            messages={messages}
+            pendingInstruction={pendingInstruction}
+            planPhrase={planPhrase}
+            runPhrase={runPhrase}
+          />
+        ) : (
+          <ChatTimeline
+            failedMessages={failedMessages}
+            isAgentRunning={status.isAgentRunning}
+            messages={messages}
+            messagesEndRef={messagesEndRef}
+            onRetry={onRetry}
+            onRetrySend={onRetrySend}
+          />
+        )}
+      </div>
+    </NeedsYouCardBody>
   )
 }

@@ -1,5 +1,9 @@
 import { AlertTriangle, Check, Loader2 } from "lucide-react"
 import { isShopifyCustomerWarning } from "@shopkeeper/agent/plan-preview"
+import {
+  NeedsYouBubble,
+  NeedsYouInfoCallout,
+} from "@/app/dashboard/_components/home/needs-you-card-ui"
 import type { PlanStep } from "@/types"
 import { formatPlanStepSentence } from "./plan-step-display"
 
@@ -54,38 +58,50 @@ export function ActionPlanBody({
       {(blockingWarnings.length > 0 || informationalWarnings.length > 0) && (
         <div className="mt-0.5 space-y-2">
           {blockingWarnings.map(warning => (
-            <div key={warning} className="flex items-start gap-2">
-              <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-red-600" />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold leading-snug text-red-600">
-                  {warningDisplayText(warning, true)}
-                </p>
-                {isShopifyCustomerWarning(warning) && onFocusShopifyLink && (
-                  <button
-                    type="button"
-                    onClick={onFocusShopifyLink}
-                    className="mt-1 text-xs font-semibold text-red-600 transition-colors hover:text-red-700"
-                  >
-                    Check customer panel →
-                  </button>
-                )}
+            <div
+              key={warning}
+              className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3"
+            >
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-red-600" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold leading-snug text-red-600">
+                    {warningDisplayText(warning, true)}
+                  </p>
+                  {isShopifyCustomerWarning(warning) && onFocusShopifyLink && (
+                    <button
+                      type="button"
+                      onClick={onFocusShopifyLink}
+                      className="mt-1 text-xs font-semibold text-red-600 transition-colors hover:text-red-700"
+                    >
+                      Check customer panel →
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ))}
           {informationalWarnings.map(warning => (
-            <div key={warning} className="flex items-start gap-2">
-              <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-red-600" />
-              <p className="text-sm font-semibold leading-snug text-red-600">
-                {warningDisplayText(warning, false)}
-              </p>
-            </div>
+            <NeedsYouInfoCallout
+              key={warning}
+              actionLabel={
+                isShopifyCustomerWarning(warning) && onFocusShopifyLink
+                  ? "Check customer panel →"
+                  : undefined
+              }
+              onAction={isShopifyCustomerWarning(warning) ? onFocusShopifyLink : undefined}
+            >
+              {warningDisplayText(warning, false)}
+            </NeedsYouInfoCallout>
           ))}
         </div>
       )}
 
       {showReplyHero ? (
-        <div className="mt-3 rounded-2xl border border-border bg-foreground/[0.04] px-4 py-3">
-          <p className={draftTextClass}>{replyText}</p>
+        <div className="mt-3">
+          <NeedsYouBubble tone="reply" flush>
+            <span className={draftTextClass}>{replyText}</span>
+          </NeedsYouBubble>
         </div>
       ) : (
         <ol className="mt-3 flex flex-col gap-1.5">

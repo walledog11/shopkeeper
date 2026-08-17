@@ -31,6 +31,27 @@ export const TRIAGE_TIER_SECTION_LABELS: Record<TicketTriageTier, string> = {
   closed: "Closed",
 }
 
+export type QuietQueueTier = "working" | "noise"
+
+export const QUEUE_QUIET_TIER_FOOTER_LABELS: Record<QuietQueueTier, string> = {
+  working: "Drafting replies",
+  noise: "Unknown senders",
+}
+
+export const QUEUE_QUIET_TIER_PANEL: Record<
+  QuietQueueTier,
+  { title: string; description: (agentName: string) => string }
+> = {
+  working: {
+    title: "Drafting replies",
+    description: agentName => `${agentName} is still writing these`,
+  },
+  noise: {
+    title: "Unknown senders",
+    description: () => "Trust the real ones. Spam the rest.",
+  },
+}
+
 const COLLAPSIBLE_TIERS = new Set<TicketTriageTier>(["working", "noise", "waiting_customer"])
 
 export interface TicketTriageTierGroup {

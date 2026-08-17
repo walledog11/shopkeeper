@@ -5,8 +5,9 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 import { EmptyState } from "../thread-list/EmptyState"
 import { ThreadListLoading } from "../thread-list/ThreadListLoading"
 import { TicketRow } from "../thread-list/TicketRow"
-import type { TicketListView, TicketTagFilter } from "../thread-list/constants"
+import type { TicketListView, TicketQueueTierFilter, TicketTagFilter } from "../thread-list/constants"
 import { ArchiveHeader } from "./ArchiveHeader"
+import { inboxArchiveContentClassName } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
 import type { ChannelType, OrgSettings, Ticket } from "@/types"
 
 interface ConversationArchiveProps {
@@ -17,6 +18,7 @@ interface ConversationArchiveProps {
   connectedChannels: ChannelType[]
   spamCount: number
   tagFilter: TicketTagFilter | null
+  tierFilter: TicketQueueTierFilter | null
   activeTicketId: string | null
   searchQuery: string
   hasShopify: boolean
@@ -34,6 +36,7 @@ interface ConversationArchiveProps {
   onTagFilterChange: (tag: TicketTagFilter | null) => void
   onSearchChange: (q: string) => void
   onViewChange: (view: TicketListView) => void
+  onTierFilterChange: (tier: TicketQueueTierFilter | null) => void
   onViewSpam: () => void
   onSelectTicket: (id: string) => void
   onToggleSelect: (id: string) => void
@@ -56,6 +59,7 @@ export function ConversationArchive({
   connectedChannels,
   spamCount,
   tagFilter,
+  tierFilter,
   activeTicketId,
   searchQuery,
   hasShopify,
@@ -67,6 +71,7 @@ export function ConversationArchive({
   onTagFilterChange,
   onSearchChange,
   onViewChange,
+  onTierFilterChange,
   onViewSpam,
   onSelectTicket,
   onToggleSelect,
@@ -94,13 +99,14 @@ export function ConversationArchive({
   const listMotionKey = `${activeView}:${isSearchMode ? "search" : "list"}:${channelFilter ?? "all"}:${tagFilter ?? "all"}:${searchQuery}`
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <>
       <ArchiveHeader
         activeView={activeView}
         channelFilter={channelFilter}
         connectedChannels={connectedChannels}
         spamCount={spamCount}
         tagFilter={tagFilter}
+        tierFilter={tierFilter}
         hasSelection={hasSelection}
         selectedCount={selectedIds.length}
         isSearchLoading={isSearchLoading}
@@ -113,12 +119,13 @@ export function ConversationArchive({
         onClearSelection={onClearSelection}
         onSearchChange={onSearchChange}
         onTagFilterChange={onTagFilterChange}
+        onTierFilterChange={onTierFilterChange}
         onViewChange={onViewChange}
         onViewSpam={onViewSpam}
       />
 
-      <div data-testid="tickets-list" className="custom-scrollbar flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-2xl px-5 py-5 md:px-6">
+      <div data-testid="tickets-list" className="w-full">
+        <div className={inboxArchiveContentClassName}>
           {listLoading ? (
             <div className="overflow-hidden rounded-2xl border border-border bg-card">
               <ThreadListLoading />
@@ -178,6 +185,6 @@ export function ConversationArchive({
           )}
         </div>
       </div>
-    </div>
+    </>
   )
 }

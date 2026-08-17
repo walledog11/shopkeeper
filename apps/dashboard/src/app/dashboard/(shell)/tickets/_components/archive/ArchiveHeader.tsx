@@ -4,7 +4,10 @@ import { ChevronLeft, Loader2, Search, SlidersHorizontal, X } from "lucide-react
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { BulkActions } from "../thread-list/BulkActions"
 import { TicketListFiltersPanel } from "../thread-list/TicketListFiltersPanel"
-import type { TicketListView, TicketTagFilter } from "../thread-list/constants"
+import type { TicketListView, TicketQueueTierFilter, TicketTagFilter } from "../thread-list/constants"
+import { QUEUE_QUIET_TIER_FOOTER_LABELS } from "../../_lib/group-tickets-by-triage-tier"
+import { inboxArchiveContentClassName } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
+import { cn } from "@/lib/ui/cn"
 import type { ChannelType } from "@/types"
 
 interface ArchiveHeaderProps {
@@ -13,6 +16,7 @@ interface ArchiveHeaderProps {
   connectedChannels: ChannelType[]
   spamCount: number
   tagFilter: TicketTagFilter | null
+  tierFilter: TicketQueueTierFilter | null
   hasSelection: boolean
   selectedCount: number
   isSearchLoading?: boolean
@@ -25,6 +29,7 @@ interface ArchiveHeaderProps {
   onClearSelection: () => void
   onSearchChange: (q: string) => void
   onTagFilterChange: (tag: TicketTagFilter | null) => void
+  onTierFilterChange: (tier: TicketQueueTierFilter | null) => void
   onViewChange: (view: TicketListView) => void
   onViewSpam: () => void
 }
@@ -40,6 +45,7 @@ export function ArchiveHeader({
   connectedChannels,
   spamCount,
   tagFilter,
+  tierFilter,
   hasSelection,
   selectedCount,
   isSearchLoading,
@@ -52,6 +58,7 @@ export function ArchiveHeader({
   onClearSelection,
   onSearchChange,
   onTagFilterChange,
+  onTierFilterChange,
   onViewChange,
   onViewSpam,
 }: ArchiveHeaderProps) {
@@ -92,8 +99,8 @@ export function ArchiveHeader({
   )
 
   return (
-    <header data-testid="archive-header" className="shrink-0 px-5 pt-4 md:px-6">
-      <div className="mx-auto flex w-full max-w-2xl flex-col gap-3">
+    <header data-testid="archive-header" className="w-full">
+      <div className={cn(inboxArchiveContentClassName, "flex flex-col gap-3")}>
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -141,7 +148,25 @@ export function ArchiveHeader({
           </Popover>
         </div>
 
-        {!isSearchMode && <div className="flex items-center">{scopeControl}</div>}
+        {!isSearchMode && (
+          <div className="flex flex-wrap items-center gap-2">
+            {scopeControl}
+            {tierFilter && activeView === "all_open" && (
+              <button
+                type="button"
+                onClick={() => onTierFilterChange(null)}
+                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ${
+                  tierFilter === "noise"
+                    ? "border-amber-600/25 bg-amber-600/[0.08] text-amber-900"
+                    : "border-border bg-foreground/[0.06] text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {QUEUE_QUIET_TIER_FOOTER_LABELS[tierFilter]}
+                <X className="size-3" aria-hidden />
+              </button>
+            )}
+          </div>
+        )}
 
         <div className="flex h-10 items-center gap-2 rounded-full border border-border bg-card px-4">
           <Search className="size-4 shrink-0 text-faint" />

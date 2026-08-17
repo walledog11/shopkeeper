@@ -3,6 +3,7 @@
 import { isImageAttachmentUrl } from "@/lib/attachments/blob-ref"
 import { AlertTriangle, Loader2, MessageSquare } from "lucide-react"
 import Image from "next/image"
+import { NeedsYouBubble } from "@/app/dashboard/_components/home/needs-you-card-ui"
 import type { FailedMessage, Ticket } from "@/types"
 
 interface Props {
@@ -60,6 +61,13 @@ export default function ChatTimeline({
         // the receiving system, so re-sending to the same address repeats it.
         const isBounced = isOutbound && msg.sendStatus === "bounced"
 
+        const bubbleContent = (
+          <>
+            {msg.text}
+            <AttachmentList attachments={msg.attachments ?? []} />
+          </>
+        )
+
         return (
           <div
             key={msg.id}
@@ -69,23 +77,30 @@ export default function ChatTimeline({
             data-send-status={msg.sendStatus ?? undefined}
             className={`flex flex-col gap-1 ${isOutbound ? "items-end" : "items-start"}`}
           >
-            <div
-              data-testid="chat-message-bubble"
-              data-message-id={msg.id}
-              data-sender={msg.sender}
-              className={`px-4 py-3 text-[14px] max-w-[80%] leading-relaxed shadow-sm ${
-                isFailed || isBounced
-                  ? "bg-red-500/10 border border-red-500/30 text-strong rounded-2xl rounded-tr-md"
-                  : isUnknown
-                    ? "bg-amber-500/10 border border-amber-500/30 text-strong rounded-2xl rounded-tr-md"
-                  : isOutbound
-                    ? "bg-foreground/[0.14] text-strong rounded-2xl rounded-tr-md"
-                    : "bg-card border border-border text-strong rounded-2xl rounded-tl-md"
-              }`}
-            >
-              {msg.text}
-              <AttachmentList attachments={msg.attachments ?? []} />
-            </div>
+            {isFailed || isBounced || isUnknown ? (
+              <div
+                data-testid="chat-message-bubble"
+                data-message-id={msg.id}
+                data-sender={msg.sender}
+                className={`max-w-[88%] px-4 py-3 text-[15px] leading-relaxed ${
+                  isFailed || isBounced
+                    ? "rounded-2xl border border-red-500/30 bg-red-500/10 text-[#1a1a1a]"
+                    : "rounded-2xl border border-amber-500/30 bg-amber-500/10 text-[#1a1a1a]"
+                }`}
+              >
+                {bubbleContent}
+              </div>
+            ) : (
+              <div
+                data-testid="chat-message-bubble"
+                data-message-id={msg.id}
+                data-sender={msg.sender}
+              >
+                <NeedsYouBubble tone={isOutbound ? "reply" : "customer"} flush>
+                  {bubbleContent}
+                </NeedsYouBubble>
+              </div>
+            )}
             {isPending ? (
               <span className="flex items-center gap-1.5 text-xs text-faint mx-1">
                 <Loader2 className="size-3 animate-spin" />

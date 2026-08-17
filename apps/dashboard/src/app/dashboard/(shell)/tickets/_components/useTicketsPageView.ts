@@ -18,6 +18,7 @@ import { useVisibleTicketList } from "../_hooks/useVisibleTicketList"
 import { parseInitialTicketListView, useTicketsPageState } from "./useTicketsPageState"
 import type {
   TicketListView,
+  TicketQueueTierFilter,
   TicketTagFilter,
 } from "./thread-list/constants"
 import type { ChannelType, OrgSettings, Thread } from "@/types"
@@ -38,7 +39,7 @@ export function useTicketsPageView({
   const correctReply = searchParams.get("correct") === "1"
   const initialView = parseInitialTicketListView(searchParams.get("view"))
   const [pageState, dispatchPageState] = useTicketsPageState(initialView)
-  const { activeView, channelFilter, dismissCorrectHint, searchQuery, tagFilter } = pageState
+  const { activeView, channelFilter, dismissCorrectHint, searchQuery, tagFilter, tierFilter } = pageState
   const isMobile = useIsMobile()
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -103,6 +104,7 @@ export function useTicketsPageView({
     isSearchMode,
     listThreads,
     orgSettings,
+    tierFilter,
   })
 
   const cachedPlan = useMemo(
@@ -197,6 +199,14 @@ export function useTicketsPageView({
     setSelectedIds([])
   }
 
+  const handleBrowseQuietTier = (tier: TicketQueueTierFilter) => {
+    dispatchPageState({ type: "quietTierBrowsed", tier })
+    setActiveTicketId(null)
+    setReplyText("")
+    setSendError(null)
+    setSelectedIds([])
+  }
+
   const handleSearchChange = (q: string) => {
     dispatchPageState({ type: "searchChanged", searchQuery: q })
     setActiveTicketId(null)
@@ -254,6 +264,7 @@ export function useTicketsPageView({
         connectedChannels,
         searchQuery,
         tagFilter,
+        tierFilter,
       },
       flags: {
         correctReplyVisible: correctReply && !dismissCorrectHint,
@@ -310,6 +321,10 @@ export function useTicketsPageView({
         onSelectTicket: (id: string) => { setActiveTicketId(id); setSendError(null) },
         onSend: handleSendMessage,
         onViewChange: handleViewChange,
+        onBrowseQuietTier: handleBrowseQuietTier,
+        onTierFilterChange: (next: TicketQueueTierFilter | null) => {
+          dispatchPageState({ type: "tierFilterChanged", tierFilter: next })
+        },
         onToggleSelect: handleToggleSelect,
         onViewSpam: () => handleViewChange("spam"),
       },

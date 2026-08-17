@@ -1,25 +1,24 @@
 "use client"
 
 import { useMemo } from "react"
-import Image from "next/image"
+import { Loader2, RotateCcw } from "lucide-react"
+import { cn } from "@/lib/ui/cn"
+import {
+  NeedsYouBubble,
+  NeedsYouCardBody,
+  NeedsYouCardFooter,
+  NeedsYouCardHeader,
+  NeedsYouCardShell,
+  NeedsYouEscalationCallout,
+  NeedsYouPrimaryButton,
+  TicketCardMetaRow,
+} from "@/app/dashboard/_components/home/needs-you-card-ui"
+import { needsYouSecondaryButtonClassName } from "@/app/dashboard/_components/home/needs-you-card-styles"
 import { buildTicketListPresentationFromTicket } from "../../_lib/ticket-list-presentation"
-import { getInitials, type TicketListView } from "../thread-list/constants"
-import { TicketTagPill } from "../thread-list/ticket-tag-pill"
-import { TicketRowActions } from "../thread-list/TicketRowActions"
+import { buildTicketQueueCardContent } from "../../_lib/ticket-queue-card-content"
+import type { TicketListView } from "../thread-list/constants"
 import { canShowTicketRowSendAction } from "../thread-list/ticket-row-action-visibility"
-import { TicketRowStatusPill } from "../thread-list/ticket-row-status-pill"
 import type { OrgSettings, Ticket } from "@/types"
-
-// The queue section header already names the tier ("Needs review", "Ready to
-// send", …), so a pill that only echoes it is noise. Keep pills that carry
-// extra signal — the refund flag, the untrusted-sender flag, or a tool label.
-const GENERIC_STATUS_LABELS = new Set([
-  "Answer needed",
-  "Needs review",
-  "Ready to send",
-  "Drafting…",
-  "Waiting on customer",
-])
 
 interface TicketQueueCardProps {
   ticket: Ticket
@@ -32,6 +31,7 @@ interface TicketQueueCardProps {
   onOpen: () => void
   onSend: () => void
   onReview: () => void
+  onRecover?: () => void
 }
 
 export function TicketQueueCard({
@@ -44,7 +44,8 @@ export function TicketQueueCard({
   actionsDisabled,
   onOpen,
   onSend,
-  onReview,
+  onReview: _onReview,
+  onRecover,
 }: TicketQueueCardProps) {
   const presentation = useMemo(
     () => buildTicketListPresentationFromTicket(ticket, {
@@ -55,71 +56,87 @@ export function TicketQueueCard({
     }),
     [activeView, hasShopify, orgSettings, ticket],
   )
+  const content = useMemo(
+    () => buildTicketQueueCardContent(ticket, orgSettings),
+    [orgSettings, ticket],
+  )
 
-  const initials = getInitials(presentation.customerLabel)
-  // The whole card opens the conversation, so a "Review" button would just
-  // duplicate that. Only surface the quick-approve "Send", which is the one
-  // action that isn't reachable by opening the card.
+  const isSpamView = activeView === "spam"
   const showSend = canShowTicketRowSendAction(presentation)
-  const showStatusPill = !GENERIC_STATUS_LABELS.has(presentation.primaryStatus.label)
-  const title = presentation.headline && presentation.headline !== ticket.tag
-    ? presentation.headline
-    : ticket.subject
-  const preview = presentation.subline || ticket.preview
+  const showRecover = isSpamView && !!onRecover
+  const showFooter = showSend || content.isEscalationOnly || showRecover
+  const spamReason = isSpamView ? ticket.filterReason?.trim() || null : null
 
   return (
-    <div
-      className={`flex flex-col gap-3 rounded-3xl border bg-card px-5 py-4 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] transition-colors ${
-        isActive ? "border-foreground/30" : "border-border"
-      }`}
+    <NeedsYouCardShell
+      className={cn(
+        isActive && "border-foreground/35 shadow-[0_8px_32px_rgba(0,0,0,0.08)]",
+      )}
     >
-      <button
-        type="button"
-        onClick={onOpen}
-        className="flex min-w-0 flex-col gap-2 border-0 bg-transparent p-0 text-left [font-family:inherit]"
-      >
-        <div className="flex w-full items-baseline justify-between gap-4">
-          <h3 className="min-w-0 flex-1 font-sans text-lg font-semibold leading-snug tracking-tight text-foreground line-clamp-2">
-            {title}
-          </h3>
-          <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-            <Image src={ticket.logo} width={14} height={14} alt={presentation.channelName} className="size-3.5 shrink-0 object-contain opacity-55" />
-            <span className="tabular-nums">{presentation.timeAgo}</span>
-          </span>
-        </div>
+      <NeedsYouCardHeader>
+        <button
+          type="button"
+          data-testid="ticket-queue-card-open"
+          onClick={onOpen}
+          className="flex w-full min-w-0 cursor-pointer border-0 bg-transparent p-0 text-left [font-family:inherit]"
+        >
+          <TicketCardMetaRow meta={content.meta} />
+        </button>
+      </NeedsYouCardHeader>
 
-        <span className="inline-flex max-w-full items-center gap-1.5 text-[11px] font-semibold text-foreground/35">
-          <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-foreground/[0.08] text-[9px] font-bold text-muted-foreground">
-            {initials}
-          </span>
-          <span className="truncate">{presentation.customerLabel}</span>
-        </span>
-
-        <TicketTagPill
-          tag={presentation.tier === "escalated" ? null : ticket.tag}
-          className="w-fit"
-        />
-        {preview && (
-          <p className="text-sm leading-relaxed text-muted-foreground line-clamp-3">{preview}</p>
+      <NeedsYouCardBody>
+        {content.customerMessage && (
+          <NeedsYouBubble tone="customer">
+            {content.customerMessage}
+          </NeedsYouBubble>
         )}
-      </button>
 
-      {(showStatusPill || showSend) && (
-        <div className="mt-1 flex items-center justify-between gap-2">
-          {showStatusPill
-            ? <TicketRowStatusPill label={presentation.primaryStatus.label} tone={presentation.primaryStatus.tone} />
-            : <span aria-hidden />}
-          {showSend && (
-            <TicketRowActions
-              presentation={presentation}
-              isApproving={isApproving}
-              disabled={actionsDisabled}
-              onSend={onSend}
-              onReview={onReview}
-            />
+        <div className="flex flex-col gap-3">
+          {spamReason ? (
+            <p className="rounded-2xl border border-border/80 bg-muted/40 px-4 py-3 text-sm leading-relaxed text-muted-foreground">
+              {spamReason}
+            </p>
+          ) : content.isEscalationOnly ? (
+            <NeedsYouEscalationCallout reason={content.escalationReason} />
+          ) : (
+            content.bubbles.map(bubble => (
+              <NeedsYouBubble key={bubble.key} tone={bubble.tone} flush>
+                {bubble.text}
+              </NeedsYouBubble>
+            ))
           )}
         </div>
+      </NeedsYouCardBody>
+
+      {showFooter && (
+        <NeedsYouCardFooter>
+          {showRecover ? (
+            <button
+              type="button"
+              data-testid="ticket-row-recover"
+              disabled={actionsDisabled}
+              onClick={onRecover}
+              className={cn(needsYouSecondaryButtonClassName, "gap-2")}
+            >
+              <RotateCcw className="size-4" aria-hidden />
+              Recover to inbox
+            </button>
+          ) : content.isEscalationOnly ? (
+            <NeedsYouPrimaryButton onClick={onOpen}>
+              Handle in ticket
+            </NeedsYouPrimaryButton>
+          ) : showSend ? (
+            <NeedsYouPrimaryButton
+              data-testid="ticket-row-send"
+              disabled={actionsDisabled || isApproving}
+              onClick={onSend}
+            >
+              {isApproving && <Loader2 aria-hidden className="size-4 animate-spin" />}
+              {isApproving ? "Sending" : "Send"}
+            </NeedsYouPrimaryButton>
+          ) : null}
+        </NeedsYouCardFooter>
       )}
-    </div>
+    </NeedsYouCardShell>
   )
 }

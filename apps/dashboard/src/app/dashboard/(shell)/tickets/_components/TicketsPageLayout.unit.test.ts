@@ -224,6 +224,7 @@ function baseProps(overrides: LayoutPropsOverrides = {}): LayoutProps {
       connectedChannels: ["email"],
       searchQuery: "",
       tagFilter: null,
+      tierFilter: null,
       ...overrides.filters,
     },
     flags: {
@@ -269,6 +270,8 @@ function baseProps(overrides: LayoutPropsOverrides = {}): LayoutProps {
       onSelectTicket: vi.fn(),
       onSend: vi.fn(),
       onViewChange: vi.fn(),
+      onBrowseQuietTier: vi.fn(),
+      onTierFilterChange: vi.fn(),
       onViewSpam: vi.fn(),
       onToggleSelect: vi.fn(),
       ...overrides.actions,
@@ -384,8 +387,7 @@ function click(element: Element) {
 }
 
 function firstCardSummaryButton(rootElement: ParentNode) {
-  const button = Array.from(rootElement.querySelectorAll("button"))
-    .find(element => element.querySelector("h3"))
+  const button = rootElement.querySelector('[data-testid="ticket-queue-card-open"]')
   if (!button) throw new Error("Card summary button not found")
   return button
 }
@@ -473,7 +475,7 @@ describe("TicketsPageLayout queue and history", () => {
     expect(ticketDialog()).toBeNull()
   })
 
-  it("renders an actionable plan as a 'Ready to send' section card", () => {
+  it("renders an actionable plan as a sendable queue card", () => {
     const item = ticket({
       hasPlan: true,
       cachedPlan: cachedPlan(quickReplyPlan()),
@@ -481,30 +483,114 @@ describe("TicketsPageLayout queue and history", () => {
     })
     const view = render(React.createElement(LayoutHarness, { tickets: [item] }))
 
-    const sectionHeadings = Array.from(view.querySelectorAll("h2")).map(node => node.textContent)
-    expect(sectionHeadings).toContain("Ready to send")
     expect(firstCardSummaryButton(view)).not.toBeNull()
     expect(view.querySelector('[data-testid="ticket-row-send"]')).not.toBeNull()
   })
 
-  it("collapses a non-actionable ticket into an expandable quiet row, not a card", () => {
-    // Default ticket: open, last message from the customer, no plan yet -> the
-    // agent is working on it. That is status, not a decision, so it must not
-    // occupy a full card in the queue.
+  it("shows quiet tiers as footer links that browse the filtered card queue", () => {
     const item = ticket()
-    const view = render(React.createElement(LayoutHarness, { tickets: [item] }))
+    const onBrowseQuietTier = vi.fn()
+    const view = render(React.createElement(TicketsPageLayout, baseProps({
+      list: {
+        filteredTickets: [item],
+      },
+      actions: {
+        onBrowseQuietTier,
+      },
+    })))
 
-    const cardButton = Array.from(view.querySelectorAll("button")).find(node => node.querySelector("h3"))
-    expect(cardButton).toBeUndefined()
+    const cardButton = view.querySelector('[data-testid="ticket-queue-card-open"]')
+    expect(cardButton).toBeNull()
     expect(view.querySelector('[data-testid="ticket-row"]')).toBeNull()
 
-    const quietToggle = Array.from(view.querySelectorAll("button"))
-      .find(node => node.textContent?.includes("Agent working"))
-    expect(quietToggle).not.toBeUndefined()
+    const backgroundLink = view.querySelector('[data-testid="ticket-queue-more"] button')
+    expect(backgroundLink).not.toBeNull()
+    expect(backgroundLink?.textContent).toContain("Drafting replies")
 
-    click(quietToggle as Element)
+    click(backgroundLink as Element)
 
-    expect(view.querySelector('[data-testid="ticket-row"]')).not.toBeNull()
+    expect(onBrowseQuietTier).toHaveBeenCalledWith("working")
+  })
+
+  it("renders tier-filtered views as card queue with contextual header", () => {
+    const item = ticket()
+    const view = render(React.createElement(TicketsPageLayout, baseProps({
+      list: {
+        effectiveActiveView: "all_open",
+        filteredTickets: [item],
+      },
+      filters: {
+        tierFilter: "working",
+      },
+    })))
+
+    expect(view.querySelector('[data-testid="archive-header"]')).toBeNull()
+    expect(view.querySelector('[data-testid="filtered-queue-header"]')).not.toBeNull()
+    expect(view.querySelector('[data-testid="filtered-queue-list"]')).not.toBeNull()
+    expect(view.querySelector('[data-testid="ticket-queue-card-open"]')).not.toBeNull()
+    expect(view.querySelector('[data-testid="ticket-row"]')).toBeNull()
+    expect(view.textContent).toContain("Drafting replies")
+  })
+
+  it("renders review-sender items as a compact sender triage list", () => {
+    const item = ticket({
+      filterStatus: "questionable",
+      filterReason: "Unknown domain",
+    })
+    const onRecover = vi.fn()
+    const onMarkAsSpam = vi.fn()
+    const view = render(React.createElement(TicketsPageLayout, baseProps({
+      list: {
+        effectiveActiveView: "all_open",
+        filteredTickets: [item],
+      },
+      filters: {
+        tierFilter: "noise",
+      },
+      actions: {
+        onRecover,
+        onMarkAsSpam,
+      },
+    })))
+
+    expect(view.querySelector('[data-testid="sender-review-list"]')).not.toBeNull()
+    expect(view.querySelector('[data-testid="ticket-queue-card-open"]')).toBeNull()
+    expect(view.textContent).toContain("Unknown senders")
+    expect(view.textContent).toContain("Unknown domain")
+    expect(view.textContent).toContain("Trust sender")
+
+    click(view.querySelector('[data-testid="sender-review-trust"]') as Element)
+    expect(onRecover).toHaveBeenCalledWith(item.id)
+
+    click(view.querySelector('[data-testid="sender-review-spam"]') as Element)
+    expect(onMarkAsSpam).toHaveBeenCalledWith(item.id)
+  })
+
+  it("renders spam view as card queue with recover action", () => {
+    const item = ticket({
+      filterStatus: "filtered",
+      filterReason: "Unrecognized sender domain",
+    })
+    const onRecover = vi.fn()
+    const view = render(React.createElement(TicketsPageLayout, baseProps({
+      list: {
+        effectiveActiveView: "spam",
+        filteredTickets: [item],
+      },
+      actions: {
+        onRecover,
+      },
+    })))
+
+    expect(view.querySelector('[data-testid="filtered-queue-header"]')).not.toBeNull()
+    expect(view.querySelector('[data-testid="ticket-queue-card-open"]')).not.toBeNull()
+    expect(view.textContent).toContain("Spam")
+    expect(view.textContent).toContain("Unrecognized sender domain")
+
+    const recoverButton = view.querySelector('[data-testid="ticket-row-recover"]')
+    expect(recoverButton).not.toBeNull()
+    click(recoverButton as Element)
+    expect(onRecover).toHaveBeenCalledWith(item.id)
   })
 
   it("closes the dialog when the conversation is dismissed", () => {

@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import type { ReactNode } from "react"
+import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react"
 import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/ui/cn"
 import { getChannelInfoByName } from "@/lib/messaging/channels"
@@ -54,26 +54,42 @@ export function NeedsYouCardShell({
   )
 }
 
-export function NeedsYouCardHeader({ children }: { children: ReactNode }) {
-  return (
-    <div className="relative z-10 rounded-t-3xl border-b border-border/60 bg-card px-5 py-3.5 sm:px-6">
-      {children}
-    </div>
-  )
-}
-
-export function NeedsYouCardBody({ children }: { children: ReactNode }) {
+export function NeedsYouCardHeader({
+  children,
+  className,
+}: {
+  children: ReactNode
+  className?: string
+}) {
   return (
     <div
       className={cn(
-        "relative z-10 flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-5 py-4 sm:px-6",
-        needsYouConversationSurfaceClassName(),
+        "relative z-10 rounded-t-3xl border-b border-border/60 bg-card px-4 py-2.5 sm:px-5 sm:py-3.5 md:px-6",
+        className,
       )}
     >
       {children}
     </div>
   )
 }
+
+export const NeedsYouCardBody = forwardRef<HTMLDivElement, {
+  children: ReactNode
+  className?: string
+}>(function NeedsYouCardBody({ children, className }, ref) {
+  return (
+    <div
+      ref={ref}
+      className={cn(
+        "relative z-10 flex min-h-0 flex-1 flex-col gap-2.5 overflow-hidden px-4 py-3 sm:gap-3 sm:px-5 sm:py-4 md:px-6",
+        needsYouConversationSurfaceClassName(),
+        className,
+      )}
+    >
+      {children}
+    </div>
+  )
+})
 
 export function NeedsYouCardFooter({
   children,
@@ -114,6 +130,43 @@ export function NeedsYouEscalationCallout({ reason }: { reason: string | null })
   )
 }
 
+export function NeedsYouInfoCallout({
+  children,
+  actionLabel,
+  onAction,
+  title,
+}: {
+  children: ReactNode
+  actionLabel?: string
+  onAction?: () => void
+  title?: string
+}) {
+  return (
+    <div
+      className={cn(
+        needsYouSoftShadowClassName,
+        "rounded-2xl border border-amber-600/20 bg-[#fff4e5] px-4 py-3",
+      )}
+    >
+      {title ? (
+        <p className="text-sm font-semibold text-[#1a1a1a]">{title}</p>
+      ) : null}
+      <p className={cn("text-sm leading-relaxed text-[#6b5d4f]", title && "mt-1")}>
+        {children}
+      </p>
+      {actionLabel && onAction ? (
+        <button
+          type="button"
+          onClick={onAction}
+          className="mt-2 text-xs font-semibold text-[#6b5d4f] transition-colors hover:text-[#1a1a1a]"
+        >
+          {actionLabel}
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
 function MetaPill({ className, children }: { className?: string; children: ReactNode }) {
   return (
     <div className={cn(needsYouMetaPillShellClassName, "bg-white", className)}>
@@ -132,6 +185,143 @@ const KIND_TOPIC_LABELS: Record<HomeNeedsAttentionItem["kind"], string> = {
   quick_reply: "Reply",
   needs_review: "Review",
   needs_merchant_input: "Question",
+}
+
+export interface TicketCardMeta {
+  channelName: string
+  customerName: string | null
+  lastMessageAt: string
+  tag: string | null
+  orderRef?: string | null
+  isVip?: boolean
+  topicLabel?: string | null
+}
+
+function topicLabelFromTag(tag: string | null, fallback: string | null = null): string | null {
+  if (!tag || tag === "General") return fallback
+  if (ONE_WORD_TAG_LABELS[tag]) return ONE_WORD_TAG_LABELS[tag]
+  const tagLabel = getTagStyle(tag).label
+  const [firstWord] = tagLabel.split(/\s+/)
+  return firstWord || fallback
+}
+
+function categoryLabelFromMeta(meta: TicketCardMeta): string | null {
+  if (meta.topicLabel?.trim()) return meta.topicLabel.trim()
+  return topicLabelFromTag(meta.tag ?? null)
+}
+
+const ORDER_PILL_CLASS_NAME = "bg-[#f5ebe0] text-[#1a1a1a]"
+
+const META_PILL_HEIGHT_CLASS = "h-9 sm:h-10"
+const META_CHANNEL_PILL_CLASS = "h-9 w-9 shrink-0 sm:h-10 sm:w-10"
+
+export function TicketCardMetaRow({ meta }: { meta: TicketCardMeta }) {
+  const channel = getChannelInfoByName(meta.channelName)
+  const orderRef = meta.orderRef?.trim() || null
+  const categoryLabel = categoryLabelFromMeta(meta)
+  const customerLabel = meta.customerName?.trim() || null
+  const at = new Date(meta.lastMessageAt)
+  const timeLabel = timeAgoCard(at, new Date())
+  const isRelative = timeLabel === "Just now" || timeLabel === "Yesterday" || timeLabel.includes("ago")
+  const dateLabel = isRelative
+    ? timeLabel
+    : at.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+
+  const emailAt = customerLabel?.indexOf("@") ?? -1
+  const isEmail = emailAt > 0
+  const localPart = customerLabel && isEmail ? customerLabel.slice(0, emailAt) : customerLabel
+  const emailDomain = customerLabel && isEmail ? customerLabel.slice(emailAt + 1) : null
+
+  const channelPill = (
+    <div className={cn(needsYouMetaPillShellClassName, META_PILL_HEIGHT_CLASS, META_CHANNEL_PILL_CLASS, channel.badgeClassName)}>
+      <Image
+        src={channel.logo}
+        alt=""
+        width={16}
+        height={16}
+        className="size-4 shrink-0 object-contain"
+        aria-hidden
+      />
+      <span className="sr-only">{channel.label}</span>
+    </div>
+  )
+
+  const customerPill = (
+    <MetaPill className={cn("min-w-0 flex-1 gap-1.5 px-2.5 sm:px-3", META_PILL_HEIGHT_CLASS)}>
+      {customerLabel && (
+        isEmail ? (
+          <span className="min-w-0 truncate text-xs font-semibold leading-tight text-[#1a1a1a] sm:text-sm">
+            <span>{localPart}</span>
+            <span className="font-medium text-[#6b5d4f]">@{emailDomain}</span>
+          </span>
+        ) : (
+          <span className="truncate text-xs font-semibold leading-tight text-[#1a1a1a] sm:text-sm">
+            {customerLabel}
+          </span>
+        )
+      )}
+      {meta.isVip && (
+        <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.1em] text-violet-700">
+          VIP
+        </span>
+      )}
+    </MetaPill>
+  )
+
+  const orderPill = orderRef ? (
+    <MetaPill className={cn("shrink-0 px-2.5 sm:px-3", META_PILL_HEIGHT_CLASS, ORDER_PILL_CLASS_NAME)}>
+      <span className="whitespace-nowrap text-[11px] font-bold leading-none tabular-nums sm:text-xs">
+        {orderRef}
+      </span>
+    </MetaPill>
+  ) : null
+
+  const topicPill = categoryLabel ? (
+    <MetaPill className={cn("shrink-0 px-2.5 sm:px-3", META_PILL_HEIGHT_CLASS, getTagStyle(meta.tag).className)}>
+      <span className="whitespace-nowrap text-[11px] font-bold leading-none sm:text-xs">
+        {categoryLabel}
+      </span>
+    </MetaPill>
+  ) : null
+
+  const datePill = (
+    <MetaPill className={cn("shrink-0 px-2.5 sm:px-3", META_PILL_HEIGHT_CLASS)}>
+      <time
+        dateTime={meta.lastMessageAt}
+        className="text-[11px] font-semibold tabular-nums tracking-tight text-[#1a1a1a] sm:text-xs"
+      >
+        {dateLabel}
+      </time>
+    </MetaPill>
+  )
+
+  const metaTailPills = orderPill || topicPill ? (
+    <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto sm:gap-2">
+      {orderPill}
+      {topicPill}
+    </div>
+  ) : null
+
+  return (
+    <>
+      <div className="hidden w-full min-w-0 items-center gap-2 sm:flex">
+        {channelPill}
+        {customerPill}
+        {orderPill}
+        {topicPill}
+        {datePill}
+      </div>
+
+      <div className="flex w-full min-w-0 flex-col gap-1.5 sm:hidden">
+        <div className="flex min-w-0 items-center gap-1.5">
+          {channelPill}
+          {customerPill}
+          {datePill}
+        </div>
+        {metaTailPills}
+      </div>
+    </>
+  )
 }
 
 function oneWordTicketTopicLabel(item: HomeNeedsAttentionItem): string {
@@ -261,13 +451,16 @@ export function NeedsYouBubble({
   return (
     <div
       className={cn(
-        flush ? "" : "mt-1",
-        "max-w-[88%]",
+        flush ? "" : "mt-0.5 sm:mt-1",
+        "max-w-[94%] sm:max-w-[88%]",
         inbound ? "self-start" : "self-end ml-auto",
       )}
     >
-      <div className={cn("px-3.5 py-2.5", styles.bubble)}>
-        <div className={cn("whitespace-pre-wrap break-words", styles.text)}>
+      <div className={cn("px-3 py-2 sm:px-3.5 sm:py-2.5", styles.bubble)}>
+        <div className={cn(
+          "whitespace-pre-wrap break-words text-[14px] leading-[1.45] sm:text-[15px] sm:leading-[1.4]",
+          styles.text,
+        )}>
           {children}
         </div>
       </div>
@@ -281,18 +474,20 @@ export function NeedsYouPrimaryButton({
   confirming = false,
   disabled = false,
   onClick,
+  ...props
 }: {
   children: ReactNode
   className?: string
   confirming?: boolean
   disabled?: boolean
   onClick?: () => void
-}) {
+} & ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
+      {...props}
       className={cn(
         "inline-flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-base font-semibold transition-all",
         "disabled:opacity-40 disabled:hover:translate-y-0",

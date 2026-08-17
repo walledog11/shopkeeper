@@ -4,6 +4,9 @@ import type { ChannelType } from "@/types"
 
 export type TicketListView = "for_me" | "all_open" | "closed" | "spam"
 
+/** Quiet inbox tiers surfaced as footer links on the default queue. */
+export type TicketQueueTierFilter = "working" | "noise"
+
 export const TICKET_TAG_FILTERS = [
   "Shipping",
   "Returns",

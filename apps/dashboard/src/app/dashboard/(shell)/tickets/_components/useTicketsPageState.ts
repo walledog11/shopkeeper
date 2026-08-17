@@ -2,7 +2,7 @@
 
 import { useReducer } from "react"
 import type { ChannelType } from "@/types"
-import type { TicketListView, TicketTagFilter } from "./thread-list/constants"
+import type { TicketListView, TicketQueueTierFilter, TicketTagFilter } from "./thread-list/constants"
 
 interface TicketsPageState {
   activeView: TicketListView
@@ -10,13 +10,16 @@ interface TicketsPageState {
   dismissCorrectHint: boolean
   searchQuery: string
   tagFilter: TicketTagFilter | null
+  tierFilter: TicketQueueTierFilter | null
 }
 
 export type TicketsPageAction =
   | { type: "channelFilterChanged"; channelFilter: ChannelType | null }
   | { type: "correctHintDismissed" }
+  | { type: "quietTierBrowsed"; tier: TicketQueueTierFilter }
   | { type: "searchChanged"; searchQuery: string }
   | { type: "tagFilterChanged"; tagFilter: TicketTagFilter | null }
+  | { type: "tierFilterChanged"; tierFilter: TicketQueueTierFilter | null }
   | { type: "viewChanged"; view: TicketListView }
 
 const VALID_VIEWS = new Set<TicketListView>(["for_me", "all_open", "closed", "spam"])
@@ -34,6 +37,7 @@ const INITIAL_TICKETS_PAGE_STATE: TicketsPageState = {
   dismissCorrectHint: false,
   searchQuery: "",
   tagFilter: null,
+  tierFilter: null,
 }
 
 function ticketsPageReducer(state: TicketsPageState, action: TicketsPageAction): TicketsPageState {
@@ -42,15 +46,25 @@ function ticketsPageReducer(state: TicketsPageState, action: TicketsPageAction):
       return { ...state, channelFilter: action.channelFilter }
     case "correctHintDismissed":
       return { ...state, dismissCorrectHint: true }
+    case "quietTierBrowsed":
+      return {
+        ...state,
+        activeView: "all_open",
+        searchQuery: "",
+        tierFilter: action.tier,
+      }
     case "searchChanged":
       return { ...state, searchQuery: action.searchQuery }
     case "tagFilterChanged":
       return { ...state, tagFilter: action.tagFilter }
+    case "tierFilterChanged":
+      return { ...state, tierFilter: action.tierFilter }
     case "viewChanged":
       return {
         ...state,
         activeView: action.view,
         searchQuery: "",
+        tierFilter: null,
       }
   }
 }

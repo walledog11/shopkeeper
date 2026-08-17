@@ -1,6 +1,7 @@
 "use client"
 
 import MerchantAnswerForm from "@/components/agent/MerchantAnswerForm"
+import { NeedsYouCardFooter } from "@/app/dashboard/_components/home/needs-you-card-ui"
 import type { AgentPlan, PlanExecutionOutcome, RawToolCall } from "@/types"
 import ActionPlanCard from "./ActionPlanCard"
 
@@ -37,13 +38,15 @@ export function PlanReviewSurface({
 }) {
   if (question) {
     return (
-      <div className="w-full rounded-2xl border border-border bg-card px-4 py-4 shadow-sm sm:px-5">
-        <MerchantAnswerForm
-          threadId={threadId}
-          question={question}
-          onAnswered={onAnswered}
-        />
-      </div>
+      <NeedsYouCardFooter className="pointer-events-auto p-0">
+        <div className="px-5 py-4 sm:px-6">
+          <MerchantAnswerForm
+            threadId={threadId}
+            question={question}
+            onAnswered={onAnswered}
+          />
+        </div>
+      </NeedsYouCardFooter>
     )
   }
 

@@ -7,13 +7,17 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import type { ChannelType, Thread, Ticket } from "@/types"
 import type { TicketToast } from "../_hooks/useTicketActions"
 import { ConversationArchive } from "./archive/ConversationArchive"
+import { TicketFilteredQueue } from "./queue/TicketFilteredQueue"
 import { TicketQueue } from "./queue/TicketQueue"
 import { TicketQueueLoading } from "./queue/TicketQueueLoading"
-import type { TicketListView, TicketTagFilter } from "./thread-list/constants"
+import type { TicketListView, TicketQueueTierFilter, TicketTagFilter } from "./thread-list/constants"
 import { viewToConversationTab as toConversationTab } from "./thread-list/constants"
 import ConversationView from "./conversation/ConversationView"
 import { ConversationBodySkeleton } from "./conversation/ConversationSkeletons"
 import { ConversationLoadState } from "./TicketsPageStates"
+import { dashboardPageShellClassName } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
+import { needsYouCardShellClassName } from "@/app/dashboard/_components/home/needs-you-card-styles"
+import { cn } from "@/lib/ui/cn"
 
 type ConversationViewProps = ComponentProps<typeof ConversationView>
 type ArchiveProps = ComponentProps<typeof ConversationArchive>
@@ -51,6 +55,7 @@ interface TicketsPageLayoutFilters {
   connectedChannels: ChannelType[]
   searchQuery: string
   tagFilter: TicketTagFilter | null
+  tierFilter: TicketQueueTierFilter | null
 }
 
 interface TicketsPageLayoutListState {
@@ -94,6 +99,8 @@ interface TicketsPageLayoutActions {
   onSelectTicket: ArchiveProps["onSelectTicket"]
   onSend: ConversationViewProps["onSend"]
   onViewChange: ArchiveProps["onViewChange"]
+  onBrowseQuietTier: (tier: TicketQueueTierFilter) => void
+  onTierFilterChange: (tier: TicketQueueTierFilter | null) => void
   onViewSpam: ArchiveProps["onViewSpam"]
   onToggleSelect: ArchiveProps["onToggleSelect"]
 }
@@ -130,17 +137,15 @@ function QueueHeader({ onViewAll }: { onViewAll: () => void }) {
   // The nav bar already shows "Inbox" + the open count, so this row carries
   // only the affordance the nav bar lacks: a jump to the full history list.
   return (
-    <div className="shrink-0 px-5 pb-1 pt-4 md:px-6">
-      <div className="mx-auto flex w-full max-w-2xl justify-end">
-        <button
-          type="button"
-          onClick={onViewAll}
-          className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-        >
-          All conversations
-          <ChevronRight className="size-4" aria-hidden />
-        </button>
-      </div>
+    <div className="flex w-full justify-end">
+      <button
+        type="button"
+        onClick={onViewAll}
+        className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+      >
+        All conversations
+        <ChevronRight className="size-4" aria-hidden />
+      </button>
     </div>
   )
 }
@@ -233,6 +238,7 @@ export function TicketsPageLayout({
     connectedChannels,
     searchQuery,
     tagFilter,
+    tierFilter,
   } = filters
   const {
     onBack,
@@ -251,6 +257,8 @@ export function TicketsPageLayout({
     onSearchChange,
     onSelectTicket,
     onViewChange,
+    onBrowseQuietTier,
+    onTierFilterChange,
     onViewSpam,
     onToggleSelect,
   } = actions
@@ -261,6 +269,11 @@ export function TicketsPageLayout({
     : toConversationTab(effectiveActiveView)
 
   const isForMe = !flags.isSearchMode && effectiveActiveView === "for_me"
+  const filteredQueueMode = !flags.isSearchMode && effectiveActiveView === "spam"
+    ? "spam" as const
+    : !flags.isSearchMode && effectiveActiveView === "all_open" && tierFilter
+      ? tierFilter
+      : null
   const showConversation = Boolean(activeTicketId)
 
   const correctReplyBanner = flags.correctReplyVisible
@@ -308,7 +321,10 @@ export function TicketsPageLayout({
     <Dialog open={showConversation} onOpenChange={open => { if (!open) onBack() }}>
       <DialogContent
         showCloseButton={false}
-        className="left-0 top-0 flex h-[100dvh] max-h-[100dvh] w-full max-w-full translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-border bg-background p-0 pt-[env(safe-area-inset-top)] shadow-xl sm:left-1/2 sm:top-1/2 sm:h-auto sm:max-h-[86vh] sm:w-[calc(100%-2rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:pt-0 sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl"
+        className={cn(
+          "left-0 top-0 flex h-[100dvh] max-h-[100dvh] w-full max-w-full translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden border-border bg-card p-0 pt-[env(safe-area-inset-top)] sm:left-1/2 sm:top-1/2 sm:h-auto sm:max-h-[86vh] sm:w-[calc(100%-2rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:pt-0 sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl",
+          needsYouCardShellClassName("shell"),
+        )}
       >
         <DialogTitle className="sr-only">Conversation</DialogTitle>
         {lastDialogBodyRef.current}
@@ -318,66 +334,94 @@ export function TicketsPageLayout({
 
   return (
     <div className="flex size-full flex-col overflow-hidden bg-background relative">
-      {isForMe ? (
-        <>
-          <QueueHeader onViewAll={() => onViewChange("all_open")} />
+      <div className="custom-scrollbar flex-1 overflow-y-auto overflow-x-hidden">
+        <div className={dashboardPageShellClassName()}>
+          {isForMe ? (
+            <>
+              <QueueHeader onViewAll={() => onViewChange("all_open")} />
 
-          {flags.listLoading && !activeTicketId ? (
-            <TicketQueueLoading />
+              {flags.listLoading && !activeTicketId ? (
+                <TicketQueueLoading />
+              ) : (
+                <TicketQueue
+                  tickets={filteredTickets}
+                  activeView={effectiveActiveView}
+                  hasShopify={flags.hasShopify}
+                  orgSettings={orgSettings}
+                  activeTicketId={activeTicketId}
+                  approvingTicketId={approvingTicketId}
+                  onSelectTicket={onSelectTicket}
+                  onQuickApprove={onQuickApproveFromList}
+                  onReview={onReviewFromList}
+                  onViewAll={() => onViewChange("all_open")}
+                  onBrowseQuietTier={onBrowseQuietTier}
+                />
+              )}
+            </>
+          ) : filteredQueueMode ? (
+            flags.listLoading && !activeTicketId ? (
+              <TicketQueueLoading />
+            ) : (
+              <TicketFilteredQueue
+                tickets={filteredTickets}
+                mode={filteredQueueMode}
+                activeView={effectiveActiveView}
+                hasShopify={flags.hasShopify}
+                orgSettings={orgSettings}
+                activeTicketId={activeTicketId}
+                approvingTicketId={approvingTicketId}
+                onBack={() => onViewChange("for_me")}
+                onSelectTicket={onSelectTicket}
+                onQuickApprove={onQuickApproveFromList}
+                onReview={onReviewFromList}
+                onRecover={onRecover}
+                onMarkAsSpam={onMarkAsSpam}
+              />
+            )
           ) : (
-            <TicketQueue
+            <ConversationArchive
               tickets={filteredTickets}
+              totalCount={liveTicketCount}
               activeView={effectiveActiveView}
+              channelFilter={channelFilter}
+              connectedChannels={connectedChannels}
+              spamCount={spamCount}
+              tagFilter={tagFilter}
+              tierFilter={tierFilter}
+              activeTicketId={activeTicketId}
+              searchQuery={searchQuery}
               hasShopify={flags.hasShopify}
               orgSettings={orgSettings}
-              activeTicketId={activeTicketId}
               approvingTicketId={approvingTicketId}
+              listState={{
+                searchMode: flags.isSearchMode,
+                searchLoading: flags.isSearchLoading,
+                listLoading: flags.listLoading,
+                hasMore: flags.hasMore,
+                loadingMore: flags.isLoadingMore,
+              }}
+              selectedIds={selectedIds}
+              onChannelFilterChange={onChannelFilterChange}
+              onTagFilterChange={onTagFilterChange}
+              onSearchChange={onSearchChange}
+              onViewChange={onViewChange}
+              onTierFilterChange={onTierFilterChange}
+              onViewSpam={onViewSpam}
               onSelectTicket={onSelectTicket}
-              onQuickApprove={onQuickApproveFromList}
-              onReview={onReviewFromList}
+              onToggleSelect={onToggleSelect}
+              onBulkClose={onBulkClose}
+              onBulkArchive={onBulkArchive}
+              onBulkTag={onBulkTag}
+              onClearSelection={onClearSelection}
+              onLoadMore={onLoadMore}
+              onMarkAsSpam={onMarkAsSpam}
+              onRecover={onRecover}
+              onQuickApproveFromList={onQuickApproveFromList}
+              onReviewFromList={onReviewFromList}
             />
           )}
-        </>
-      ) : (
-        <ConversationArchive
-          tickets={filteredTickets}
-          totalCount={liveTicketCount}
-          activeView={effectiveActiveView}
-          channelFilter={channelFilter}
-          connectedChannels={connectedChannels}
-          spamCount={spamCount}
-          tagFilter={tagFilter}
-          activeTicketId={activeTicketId}
-          searchQuery={searchQuery}
-          hasShopify={flags.hasShopify}
-          orgSettings={orgSettings}
-          approvingTicketId={approvingTicketId}
-          listState={{
-            searchMode: flags.isSearchMode,
-            searchLoading: flags.isSearchLoading,
-            listLoading: flags.listLoading,
-            hasMore: flags.hasMore,
-            loadingMore: flags.isLoadingMore,
-          }}
-          selectedIds={selectedIds}
-          onChannelFilterChange={onChannelFilterChange}
-          onTagFilterChange={onTagFilterChange}
-          onSearchChange={onSearchChange}
-          onViewChange={onViewChange}
-          onViewSpam={onViewSpam}
-          onSelectTicket={onSelectTicket}
-          onToggleSelect={onToggleSelect}
-          onBulkClose={onBulkClose}
-          onBulkArchive={onBulkArchive}
-          onBulkTag={onBulkTag}
-          onClearSelection={onClearSelection}
-          onLoadMore={onLoadMore}
-          onMarkAsSpam={onMarkAsSpam}
-          onRecover={onRecover}
-          onQuickApproveFromList={onQuickApproveFromList}
-          onReviewFromList={onReviewFromList}
-        />
-      )}
+        </div>
+      </div>
 
       {ticketDialog}
 

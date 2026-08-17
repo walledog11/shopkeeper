@@ -6,7 +6,7 @@ import {
   buildTicketListPresentationFromTicket,
   compareTicketTriageTier,
 } from "../_lib/ticket-list-presentation"
-import type { TicketListView } from "../_components/thread-list/constants"
+import type { TicketListView, TicketQueueTierFilter } from "../_components/thread-list/constants"
 import type { OrgSettings, Thread, Ticket } from "@/types"
 
 export function useVisibleTicketList(input: {
@@ -15,6 +15,7 @@ export function useVisibleTicketList(input: {
   isSearchMode: boolean
   listThreads: Thread[]
   orgSettings?: Partial<OrgSettings> | null
+  tierFilter: TicketQueueTierFilter | null
 }): {
   filteredTickets: Ticket[]
   liveTickets: Ticket[]
@@ -25,6 +26,7 @@ export function useVisibleTicketList(input: {
     isSearchMode,
     listThreads,
     orgSettings,
+    tierFilter,
   } = input
 
   const liveTickets: Ticket[] = useMemo(
@@ -33,7 +35,19 @@ export function useVisibleTicketList(input: {
   )
 
   const filteredTickets = useMemo(() => {
-    const tickets = [...liveTickets]
+    let tickets = [...liveTickets]
+
+    if (!isSearchMode && effectiveActiveView === "all_open" && tierFilter) {
+      tickets = tickets.filter(ticket => {
+        const { tier } = buildTicketListPresentationFromTicket(ticket, {
+          orgSettings,
+          hasShopify,
+          listView: "all_open",
+          activeTab: "open",
+        })
+        return tier === tierFilter
+      })
+    }
 
     if (!isSearchMode && effectiveActiveView === "for_me") {
       tickets.sort((left, right) => {
@@ -63,7 +77,7 @@ export function useVisibleTicketList(input: {
     }
 
     return tickets
-  }, [effectiveActiveView, hasShopify, isSearchMode, liveTickets, orgSettings])
+  }, [effectiveActiveView, hasShopify, isSearchMode, liveTickets, orgSettings, tierFilter])
 
   return { filteredTickets, liveTickets }
 }

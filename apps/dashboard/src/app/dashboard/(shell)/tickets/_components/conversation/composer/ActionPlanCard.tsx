@@ -2,12 +2,17 @@
 
 import { AlertTriangle, Check, ChevronUp, CircleX, Loader2, RefreshCw } from "lucide-react"
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
+import {
+  NeedsYouCardFooter,
+  NeedsYouPrimaryButton,
+} from "@/app/dashboard/_components/home/needs-you-card-ui"
+import { needsYouSecondaryButtonClassName } from "@/app/dashboard/_components/home/needs-you-card-styles"
+import { cn } from "@/lib/ui/cn"
 import type { AgentPlan, PlanExecutionOutcome, RawToolCall } from "@/types"
 import { ActionPlanBody } from "./ActionPlanBody"
 import { useActionPlanReviewState } from "./useActionPlanReviewState"
 
-const PLAN_CARD_CLASS =
-  "w-full rounded-2xl bg-card border border-border shadow-sm overflow-hidden"
+const PLAN_CARD_CLASS = "w-full overflow-hidden"
 
 interface Props {
   plan: AgentPlan
@@ -47,7 +52,7 @@ function ActionPlanCardHeader({
   status,
 }: ActionPlanCardHeaderProps) {
   return (
-    <div className="flex h-11 items-center gap-2 px-3 sm:px-4 shrink-0">
+    <div className="flex h-11 items-center gap-2 px-5 sm:px-6 shrink-0">
       {status.compactHeader && !isMobileSticky ? (
         <button
           type="button"
@@ -180,19 +185,19 @@ function ActionPlanControls({
         }
       </p>
       <div className={`flex ${status.showEditTakeover ? "gap-2" : ""}`}>
-        <button type="button"
+        <NeedsYouPrimaryButton
+          type="button"
           data-testid="action-plan-run"
           onClick={onApproveClick}
           disabled={status.isRunning || status.enabledCount === 0 || Boolean(status.executionOutcome)}
-          className={`${status.showEditTakeover ? "flex-1" : "w-full"} inline-flex items-center justify-center gap-2 py-3 rounded-2xl text-[15px] font-semibold transition active:scale-[0.98] disabled:opacity-40 ${
-            status.executionOutcome === "committed"
-              ? "bg-green-600 text-[#ffffff] disabled:opacity-100"
-              : status.inReviewFlow || (status.hasBlockingWarnings && status.warningsReviewed)
-                ? "bg-amber-600 hover:bg-amber-700 text-[#ffffff]"
-                : status.primaryNeedsCaution
-                  ? "bg-foreground text-background hover:bg-foreground/90 ring-2 ring-amber-500/70 ring-offset-2 ring-offset-card"
-                  : "bg-foreground text-background hover:bg-foreground/90"
-          }`}
+          confirming={
+            status.inReviewFlow || (status.hasBlockingWarnings && status.warningsReviewed)
+          }
+          className={cn(
+            status.showEditTakeover && "flex-1",
+            status.executionOutcome === "committed" && "from-green-600 to-green-700 shadow-green-600/20",
+            status.primaryNeedsCaution && !status.inReviewFlow && "ring-2 ring-amber-500/70 ring-offset-2 ring-offset-card",
+          )}
         >
           {status.executionOutcome === "committed"
             ? <><Check className="size-4 animate-in zoom-in-75 fade-in duration-200" /> {successLabel}</>
@@ -200,14 +205,14 @@ function ActionPlanControls({
               ? <><Loader2 className="size-4 animate-spin" /> Sending…</>
               : primaryLabel
           }
-        </button>
+        </NeedsYouPrimaryButton>
         {status.showEditTakeover && (
           <button
             type="button"
             data-testid="action-plan-edit"
             onClick={onEdit}
             disabled={status.isRunning || Boolean(status.executionOutcome)}
-            className="flex-1 inline-flex items-center justify-center py-3 rounded-2xl text-[15px] font-semibold bg-foreground/[0.05] hover:bg-foreground/[0.08] text-strong transition-colors disabled:opacity-40"
+            className={cn(needsYouSecondaryButtonClassName, "flex-1")}
           >
             Edit & send myself
           </button>
@@ -279,12 +284,13 @@ export default function ActionPlanCard({
   }
 
   return (
-    <div
-      data-testid="action-plan-card"
-      data-layout={isMobileSticky ? "mobile-floating" : "default"}
-      className={PLAN_CARD_CLASS}
-    >
-      <ActionPlanCardHeader
+    <NeedsYouCardFooter className="pointer-events-auto p-0">
+      <div
+        data-testid="action-plan-card"
+        data-layout={isMobileSticky ? "mobile-floating" : "default"}
+        className={PLAN_CARD_CLASS}
+      >
+        <ActionPlanCardHeader
         collapsedPreview={collapsedPreview}
         headerLabel={headerLabel}
         isMobileSticky={isMobileSticky}
@@ -305,7 +311,7 @@ export default function ActionPlanCard({
       >
         <div className="overflow-hidden min-h-0">
           <div
-            className={`px-4 sm:px-5 pb-4 transition-opacity duration-200 ease-out ${
+            className={`px-5 pb-4 sm:px-6 transition-opacity duration-200 ease-out ${
               (state.collapsed && !isMobileSticky) || (state.compactHeader && !isMobileSticky) ? "opacity-0" : "opacity-100"
             }`}
           >
@@ -344,6 +350,7 @@ export default function ActionPlanCard({
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </NeedsYouCardFooter>
   )
 }

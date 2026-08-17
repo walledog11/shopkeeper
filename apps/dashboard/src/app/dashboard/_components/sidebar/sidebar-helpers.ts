@@ -29,6 +29,18 @@ export const topBarIconButtonClass =
 /** Shared width for desktop chrome so the top bar and main column feel like one layout. */
 export const dashboardChromeMaxWidthClass = "max-w-6xl";
 
+/** Centered page column — matches desktop top bar width and padding. */
+export function dashboardPageShellClassName(className?: string) {
+  return cn(
+    "flex flex-col min-h-full w-full mx-auto px-5 md:px-6 lg:px-8 pt-3 pb-4 gap-3",
+    dashboardChromeMaxWidthClass,
+    className,
+  );
+}
+
+/** Archive/search lists stay a touch narrower than the queue for scanability. */
+export const inboxArchiveContentClassName = "mx-auto w-full max-w-4xl";
+
 /** Slightly quieter chrome for search / workspace / account so the nav pill reads first. */
 export const desktopTopBarUtilityPillClass =
   "flex w-fit max-w-full items-center h-12 rounded-xl border border-border/70 bg-sidebar/90 shadow-[0_4px_16px_-4px_rgba(43,33,24,0.10)] backdrop-blur-md supports-[backdrop-filter]:bg-sidebar/80";

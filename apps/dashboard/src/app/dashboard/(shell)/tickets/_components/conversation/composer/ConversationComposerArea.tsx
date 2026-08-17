@@ -179,7 +179,7 @@ export default function ConversationComposerArea({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 4 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="pointer-events-auto px-5 pb-2 pt-1"
+            className="pointer-events-auto shrink-0"
           >
             <PlanReviewSurface
               customerName={composer.customerName}

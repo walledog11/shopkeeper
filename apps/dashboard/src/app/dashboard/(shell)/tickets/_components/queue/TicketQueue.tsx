@@ -2,13 +2,14 @@
 
 import { useMemo, useState } from "react"
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
-import { CheckCircle2, ChevronDown, ChevronRight } from "lucide-react"
+import { CheckCircle2, ChevronRight, Loader2, ShieldAlert } from "lucide-react"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import {
   groupTicketsByTriageTier,
+  QUEUE_QUIET_TIER_PANEL,
+  type QuietQueueTier,
   type TicketTriageTierGroup,
 } from "../../_lib/group-tickets-by-triage-tier"
-import { TicketRow } from "../thread-list/TicketRow"
 import type { TicketListView } from "../thread-list/constants"
 import { TicketQueueCard } from "./TicketQueueCard"
 import type { OrgSettings, Ticket } from "@/types"
@@ -25,6 +26,8 @@ interface TicketQueueProps {
   onSelectTicket: (id: string) => void
   onQuickApprove: (id: string) => void
   onReview: (id: string) => void
+  onViewAll: () => void
+  onBrowseQuietTier: (tier: QuietQueueTier) => void
 }
 
 export function TicketQueue({
@@ -37,6 +40,8 @@ export function TicketQueue({
   onSelectTicket,
   onQuickApprove,
   onReview,
+  onViewAll,
+  onBrowseQuietTier,
 }: TicketQueueProps) {
   const groups = useMemo(
     () => groupTicketsByTriageTier(tickets, {
@@ -64,43 +69,45 @@ export function TicketQueue({
   }
 
   if (groups.length === 0) {
-    return <CaughtUp />
+    return (
+      <div className="flex w-full flex-col">
+        <CaughtUp onViewAll={onViewAll} />
+      </div>
+    )
   }
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="custom-scrollbar flex-1 overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-5 py-6 md:px-6">
-          {actionable.length === 0 && (
-            <div className="flex items-center gap-2 px-1 text-sm text-muted-foreground">
-              <CheckCircle2 className="size-4 text-emerald-500 shrink-0" />
-              You&apos;re all caught up — nothing needs you right now.
-            </div>
+      <div className="flex w-full flex-col gap-8">
+          {actionable.length === 0 && quiet.length > 0 && (
+            <p className="px-1 text-sm text-muted-foreground">You&apos;re all caught up.</p>
           )}
 
           {actionable.map(group => (
-            <QueueSection key={group.tier} group={group} {...cardCallbacks} />
+            <QueueSection
+              key={group.tier}
+              group={group}
+              showHeading={actionable.length > 1}
+              {...cardCallbacks}
+            />
           ))}
 
           {quiet.length > 0 && (
-            <div className="flex flex-col gap-2">
-              {quiet.map(group => (
-                <QuietTierRow key={group.tier} group={group} {...cardCallbacks} />
-              ))}
-            </div>
+            <QueueMorePanel quiet={quiet} onBrowseQuietTier={onBrowseQuietTier} />
           )}
-        </div>
       </div>
     </TooltipProvider>
   )
 }
 
-interface SectionProps extends Omit<TicketQueueProps, "tickets"> {
+interface SectionProps extends Omit<TicketQueueProps, "tickets" | "onViewAll" | "onBrowseQuietTier"> {
   group: TicketTriageTierGroup
+  showHeading?: boolean
 }
 
 function QueueSection({
   group,
+  showHeading = true,
   activeView,
   hasShopify,
   orgSettings = null,
@@ -116,10 +123,12 @@ function QueueSection({
 
   return (
     <section className="flex flex-col gap-3">
-      <div className="flex items-baseline gap-2 px-1">
-        <h2 className="text-sm font-semibold text-foreground">{group.label}</h2>
-        <span className="text-sm tabular-nums text-faint">{group.tickets.length}</span>
-      </div>
+      {showHeading && (
+        <div className="flex items-baseline gap-2 px-1">
+          <h2 className="text-sm font-semibold text-foreground">{group.label}</h2>
+          <span className="text-sm tabular-nums text-faint">{group.tickets.length}</span>
+        </div>
+      )}
 
       <div className="flex flex-col gap-3">
         {visible.map(ticket => (
@@ -152,63 +161,67 @@ function QueueSection({
   )
 }
 
-function QuietTierRow({
-  group,
-  activeView,
-  hasShopify,
-  orgSettings = null,
-  activeTicketId,
-  approvingTicketId,
-  onSelectTicket,
-  onQuickApprove,
-  onReview,
-}: SectionProps) {
-  const [expanded, setExpanded] = useState(false)
-
+function QueueMorePanel({
+  quiet,
+  onBrowseQuietTier,
+}: {
+  quiet: TicketTriageTierGroup[]
+  onBrowseQuietTier: (tier: QuietQueueTier) => void
+}) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-card/40">
-      <button
-        type="button"
-        onClick={() => setExpanded(value => !value)}
-        aria-expanded={expanded}
-        className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left transition-colors hover:bg-foreground/[0.03]"
-      >
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-sm font-medium text-muted-foreground">{group.label}</span>
-        </span>
-        <span className="flex shrink-0 items-center gap-1.5 text-xs tabular-nums text-faint">
-          {group.tickets.length}
-          {expanded
-            ? <ChevronDown className="size-3.5" aria-hidden />
-            : <ChevronRight className="size-3.5" aria-hidden />}
-        </span>
-      </button>
+    <section
+      data-testid="ticket-queue-more"
+      className="flex flex-col gap-3"
+    >
+      <div className="flex items-baseline gap-2 px-1">
+        <h2 className="text-sm font-semibold text-foreground">More in your inbox</h2>
+      </div>
 
-      {expanded && (
-        <div className="divide-y divide-foreground/[0.06] border-t border-border bg-background">
-          {group.tickets.map(ticket => (
-            <TicketRow
-              key={ticket.id}
-              activeView={activeView}
-              activeTicketId={activeTicketId}
-              approvingTicketId={approvingTicketId}
-              context={{ hasShopify }}
-              selection={{ hasSelection: false, isSelected: false }}
-              orgSettings={orgSettings}
-              ticket={ticket}
-              onQuickApproveFromList={onQuickApprove}
-              onReviewFromList={onReview}
-              onSelectTicket={onSelectTicket}
-              onToggleSelect={() => {}}
-            />
-          ))}
-        </div>
-      )}
-    </div>
+      <div className={quiet.length > 1 ? "grid grid-cols-1 gap-3 sm:grid-cols-2" : "grid grid-cols-1 gap-3"}>
+        {quiet.map(group => {
+          const tier = group.tier as QuietQueueTier
+          const panel = QUEUE_QUIET_TIER_PANEL[tier]
+          const needsAttention = tier === "noise"
+
+          return (
+            <button
+              key={group.tier}
+              type="button"
+              onClick={() => onBrowseQuietTier(tier)}
+              className="flex min-w-0 items-center gap-3 rounded-2xl border border-border bg-card p-3.5 text-left shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] transition-colors hover:bg-foreground/[0.02]"
+            >
+              <span
+                className={`flex size-9 shrink-0 items-center justify-center rounded-lg border ${
+                  needsAttention
+                    ? "border-amber-600/20 bg-amber-600/[0.08] text-amber-800"
+                    : "border-border bg-foreground/[0.04] text-muted-foreground"
+                }`}
+              >
+                {needsAttention
+                  ? <ShieldAlert className="size-4" aria-hidden />
+                  : <Loader2 className="size-4" aria-hidden />}
+              </span>
+
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-foreground">{panel.title}</span>
+                <span className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted-foreground">
+                  {panel.description(AGENT_DISPLAY_NAME)}
+                </span>
+              </span>
+
+              <span className="flex shrink-0 items-center gap-1 text-xs tabular-nums text-faint">
+                {group.tickets.length}
+                <ChevronRight className="size-3.5" aria-hidden />
+              </span>
+            </button>
+          )
+        })}
+      </div>
+    </section>
   )
 }
 
-function CaughtUp() {
+function CaughtUp({ onViewAll }: { onViewAll: () => void }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
       <span className="flex size-11 items-center justify-center rounded-full border border-border bg-foreground/[0.04]">
@@ -220,6 +233,14 @@ function CaughtUp() {
           {AGENT_DISPLAY_NAME} will flag anything that needs your eye.
         </p>
       </div>
+      <button
+        type="button"
+        onClick={onViewAll}
+        className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+      >
+        All conversations
+        <ChevronRight className="size-4" aria-hidden />
+      </button>
     </div>
   )
 }
