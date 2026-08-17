@@ -159,6 +159,7 @@ export async function planAgent(
       readBlocks: loop.readBlocks,
       readStatusMap: loop.readStatus,
       readResultsMap: loop.readResults,
+      settings: resolvedSettings,
     });
     if (outcome.decision === "escalate") {
       rawToolCalls = applyEscalationRouting(

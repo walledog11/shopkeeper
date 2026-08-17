@@ -1,45 +1,45 @@
 {
-  "generatedAt": "2026-08-16T23:50:08.728Z",
+  "generatedAt": "2026-08-17T01:42:32.440Z",
   "repeats": 3,
   "total": 252,
-  "passed": 247,
-  "passRate": 0.9801587301587301,
+  "passed": 250,
+  "passRate": 0.9920634920634921,
   "usage": {
     "runs": 252,
     "planner": {
-      "inputTokens": 97061,
-      "outputTokens": 59644,
-      "cacheReadInputTokens": 5238620,
-      "cacheCreationInputTokens": 212900
+      "inputTokens": 94502,
+      "outputTokens": 57513,
+      "cacheReadInputTokens": 5085145,
+      "cacheCreationInputTokens": 212826
     },
     "run": {
-      "inputTokens": 24073,
-      "outputTokens": 861,
+      "inputTokens": 24079,
+      "outputTokens": 913,
       "cacheReadInputTokens": 0,
       "cacheCreationInputTokens": 0
     },
     "judge": {
-      "inputTokens": 24437,
-      "outputTokens": 2697,
+      "inputTokens": 24380,
+      "outputTokens": 2673,
       "cacheReadInputTokens": 0,
       "cacheCreationInputTokens": 0
     },
     "models": {
       "claude-sonnet-5": {
-        "inputTokens": 97061,
-        "outputTokens": 59644,
-        "cacheReadInputTokens": 5238620,
-        "cacheCreationInputTokens": 212900
+        "inputTokens": 94502,
+        "outputTokens": 57513,
+        "cacheReadInputTokens": 5085145,
+        "cacheCreationInputTokens": 212826
       },
       "claude-sonnet-4-6": {
-        "inputTokens": 24437,
-        "outputTokens": 2697,
+        "inputTokens": 24380,
+        "outputTokens": 2673,
         "cacheReadInputTokens": 0,
         "cacheCreationInputTokens": 0
       },
       "claude-haiku-4-5-20251001": {
-        "inputTokens": 24073,
-        "outputTokens": 861,
+        "inputTokens": 24079,
+        "outputTokens": 913,
         "cacheReadInputTokens": 0,
         "cacheCreationInputTokens": 0
       }
@@ -148,13 +148,13 @@
     },
     "quick-reply": {
       "total": 12,
-      "passed": 9,
-      "passRate": 0.75
+      "passed": 10,
+      "passRate": 0.8333333333333334
     },
     "refund": {
       "total": 27,
-      "passed": 25,
-      "passRate": 0.9259259259259259
+      "passed": 27,
+      "passRate": 1
     },
     "return-label": {
       "total": 6,
@@ -470,8 +470,8 @@
     },
     "quick-reply-thanks-ack": {
       "repeats": 3,
-      "passes": 0,
-      "passRate": 0
+      "passes": 1,
+      "passRate": 0.3333333333333333
     },
     "refund-already-refunded": {
       "repeats": 3,
@@ -500,8 +500,8 @@
     },
     "refund-over-cap-escalate": {
       "repeats": 3,
-      "passes": 1,
-      "passRate": 0.3333333333333333
+      "passes": 3,
+      "passRate": 1
     },
     "refund-partial": {
       "repeats": 3,

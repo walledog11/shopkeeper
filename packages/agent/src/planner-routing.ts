@@ -34,8 +34,8 @@ import {
   refundTargetsNonPaidOrder,
 } from "./planner-safety/refunds.js";
 import type { ToolStatus } from "./tools/result.js";
-import { TOOL_CATEGORIES } from "./tools/registry/index.js";
-import type { RawToolCall, RoutingDecision } from "./types.js";
+import { getToolDefinition, TOOL_CATEGORIES } from "./tools/registry/index.js";
+import type { OrgSettings, RawToolCall, RoutingDecision } from "./types.js";
 
 export type { RoutingDecision };
 
@@ -234,6 +234,8 @@ const ESCALATION_REASONS: Record<string, string> = {
     "Multiple matching customers found — needs a human to confirm identity.",
   read_error:
     "Order or customer lookup failed — could not verify details to act safely.",
+  over_compensation_cap:
+    "Compensation above the workspace limit was planned — needs human review.",
 };
 
 function reasonFromSignals(signals: readonly string[]): string {
@@ -256,6 +258,26 @@ export interface RoutePlanInput {
   readBlocks: readonly Anthropic.ToolUseBlock[];
   readStatusMap: ReadonlyMap<string, ToolStatus>;
   readResultsMap: ReadonlyMap<string, string>;
+  settings?: OrgSettings;
+}
+
+// The compensation cap reaches the planner as prompt text, and a prompt is not an
+// enforcement point — the model has planned an over-cap refund while asserting in
+// the same plan that it was within cap. static-policy blocks the execution; this
+// makes the plan route to a human instead of arriving as a reviewable card. Reads
+// the same `refundAmountLimits` marker static-policy does, so the set of capped
+// tools stays declared in one place.
+function planExceedsCompensationCap(
+  rawToolCalls: readonly RawToolCall[],
+  settings: OrgSettings | undefined,
+): boolean {
+  const cap = settings?.maxRefundAmount;
+  if (cap === null || cap === undefined || cap <= 0) return false;
+  return rawToolCalls.some((toolCall) => {
+    if (!getToolDefinition(toolCall.name)?.policy.refundAmountLimits) return false;
+    const amount = Number((toolCall.input as { amount?: unknown })?.amount);
+    return Number.isFinite(amount) && amount > cap;
+  });
 }
 
 // Deterministic structural escalations: they compare the requested operation,
@@ -273,6 +295,7 @@ function structuralEscalationSignal(input: RoutePlanInput): string | null {
   // needs_review without the explicit handoff promised by the policy.
   if (refundTargetsAlreadyFullyRefunded(ctx, instruction)) return "already_refunded";
   if (refundTargetsNonPaidOrder(ctx, instruction, input.rawToolCalls)) return "non_paid_refund";
+  if (planExceedsCompensationCap(input.rawToolCalls, input.settings)) return "over_compensation_cap";
   const shape = planShape(input.rawToolCalls);
   // Compensation policy already says vague amounts, missing identity, prior
   // refunds, mismatched balances, and every other unfulfilled money request go

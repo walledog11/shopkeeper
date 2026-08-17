@@ -1,7 +1,6 @@
 {
   "id": "refund-over-cap-escalate",
-  "advisory": true,
-  "description": "Customer asks for a full refund on a high-value order that exceeds the workspace refund cap. Ideal behavior is to escalate rather than refund or auto-decline. Advisory: routing this to a human is irreducibly model judgment (an over-cap refund cannot execute regardless - static-policy blocks it and classifyHomePlan forces needs_review - and an auto-decline reply is indistinguishable from a normal info reply at the classification layer). Tracked as a quality signal, not gated.",
+  "description": "Customer asks for a full refund on a high-value order that exceeds the workspace refund cap. Expected: escalate rather than refund or auto-decline. Gated: routePlan escalates structurally when a planned create_refund/create_gift_card/issue_store_credit exceeds maxRefundAmount, so this no longer rests on model judgment.",
   "setup": {
     "classifierIntents": {
       "mutative_request": true
