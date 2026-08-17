@@ -28,6 +28,9 @@ export const GET = withOrgRoute(
         deletedAt: null,
         OR: [
           { customer: { name: { contains: q, mode: 'insensitive' } } },
+          // Email address / IG handle / phone — often the only name a customer has.
+          { customer: { platformId: { contains: q, mode: 'insensitive' } } },
+          { subject: { contains: q, mode: 'insensitive' } },
           { aiSummary: { contains: q, mode: 'insensitive' } },
           { tag: { contains: q, mode: 'insensitive' } },
           {

@@ -3,7 +3,10 @@
 import { useState } from "react"
 import { Loader2 } from "lucide-react"
 import { DashboardDetailDialog } from "@/app/dashboard/_components/board/DashboardDetailDialog"
+import { dashboardPageShellClassName } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
 import { Skeleton } from "@/components/ui/skeleton"
+import { boardCardShellClassName } from "@/lib/ui/board-card-styles"
+import { cn } from "@/lib/ui/cn"
 import type { ActionLogEntry } from "@/types"
 import {
   REVIEW_FILTERS,
@@ -43,20 +46,25 @@ export function ReviewList({
 
   return (
     <>
-      <div className="custom-scrollbar flex-1 overflow-y-auto px-4 pb-6 sm:px-6">
-        <div className="mx-auto w-full max-w-3xl">
-          <div className="flex flex-wrap gap-1.5 py-4" role="group" aria-label="Filter the audit trail">
+      <div className="custom-scrollbar flex-1 overflow-y-auto">
+        <div className={dashboardPageShellClassName()}>
+          <div
+            className="grid w-full grid-cols-2 gap-1.5 sm:grid-cols-5"
+            role="group"
+            aria-label="Filter the audit trail"
+          >
             {REVIEW_FILTERS.map(filter => (
               <button
                 key={filter.id}
                 type="button"
                 aria-pressed={filter.id === activeFilter}
                 onClick={() => onFilterChange(filter.id)}
-                className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                className={cn(
+                  "min-w-0 rounded-2xl border px-2 py-2.5 text-center text-xs font-semibold transition-colors sm:px-3",
                   filter.id === activeFilter
                     ? "border-foreground/[0.18] bg-foreground/[0.08] text-strong"
-                    : "border-border text-muted-foreground hover:border-foreground/[0.16] hover:text-strong"
-                }`}
+                    : "border-border text-muted-foreground hover:border-foreground/[0.16] hover:text-strong",
+                )}
               >
                 {filter.label}
               </button>
@@ -64,30 +72,36 @@ export function ReviewList({
           </div>
 
           {state.isLoading && state.entries.length === 0 ? (
-            <div data-testid="review-list-loading" className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4">
+            <div
+              data-testid="review-list-loading"
+              className="flex flex-col gap-3"
+            >
               {[0, 1, 2, 3].map(index => (
-                <Skeleton key={`review-row-skeleton-${index}`} className="h-16 rounded-xl bg-foreground/[0.06]" />
+                <Skeleton
+                  key={`review-row-skeleton-${index}`}
+                  className={cn(boardCardShellClassName(), "h-28 rounded-3xl bg-foreground/[0.06]")}
+                />
               ))}
             </div>
           ) : state.error ? (
-            <div className="rounded-2xl border border-border bg-card px-5 py-8 text-center">
+            <div className={cn(boardCardShellClassName(), "px-5 py-8 text-center")}>
               <p className="text-sm font-semibold text-muted-foreground">That didn&apos;t load</p>
               <button
                 type="button"
                 onClick={state.onRetry}
-                className="mt-3 rounded-full border border-border px-3 py-1 text-xs font-semibold text-muted-foreground hover:text-strong"
+                className="mt-3 rounded-2xl border border-border px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-strong"
               >
                 Try again
               </button>
             </div>
           ) : state.entries.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-foreground/[0.10] bg-card/35 px-6 py-12 text-center">
+            <div className={cn(boardCardShellClassName(), "border-dashed px-6 py-12 text-center")}>
               <p className="text-sm font-semibold text-muted-foreground">{config.emptyTitle}</p>
               <p className="mt-1 text-xs leading-relaxed text-faint">{config.emptyBody}</p>
             </div>
           ) : (
             <>
-              <ul data-testid="review-list" className="overflow-hidden rounded-2xl border border-border bg-card">
+              <ul data-testid="review-list" className="flex flex-col gap-3">
                 {state.entries.map(entry => (
                   <ReviewRow
                     key={entry.id}
@@ -106,7 +120,7 @@ export function ReviewList({
                     type="button"
                     onClick={state.onLoadMore}
                     disabled={state.isLoadingMore}
-                    className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-strong disabled:opacity-50"
+                    className="inline-flex items-center gap-2 rounded-2xl border border-border px-4 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:text-strong disabled:opacity-50"
                   >
                     {state.isLoadingMore && <Loader2 className="size-3 animate-spin" />}
                     Show older

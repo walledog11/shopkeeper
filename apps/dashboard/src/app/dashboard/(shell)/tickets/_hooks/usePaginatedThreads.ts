@@ -2,19 +2,16 @@ import { useCallback, useEffect, useState } from "react";
 import useSWRInfinite from "swr/infinite";
 import { fetcher } from "@/lib/api/fetcher";
 import { REALTIME_ENABLED } from "@/lib/realtime/config";
-import type { ChannelType, Thread } from "@/types";
+import type { Thread } from "@/types";
 
 const PAGINATED_LIMIT = 25;
 
 type ThreadsPage = { threads: Thread[]; nextCursor: string | null; totalCount?: number };
 
 export type ThreadListQuery = {
-  status?: "open" | "closed"
+  /** `all` interleaves open and closed under one cursor. */
+  status?: "open" | "closed" | "all"
   filterStatus?: "filtered"
-  forMe?: boolean
-  hasDraft?: boolean
-  tag?: string
-  channelType?: ChannelType
 }
 
 function useIsDocumentVisible() {
@@ -37,10 +34,6 @@ function buildThreadListUrl(query: ThreadListQuery, pageIndex: number, previousP
   params.set("limit", String(PAGINATED_LIMIT));
   if (preview) params.set("preview", "true");
   if (query.filterStatus) params.set("filterStatus", query.filterStatus);
-  if (query.forMe) params.set("forMe", "true");
-  if (query.hasDraft) params.set("hasDraft", "true");
-  if (query.tag) params.set("tag", query.tag);
-  if (query.channelType) params.set("channelType", query.channelType);
   if (pageIndex === 0) params.set("includeCount", "true");
   if (pageIndex > 0 && previousPageData?.nextCursor) {
     params.set("cursor", previousPageData.nextCursor);
@@ -54,8 +47,7 @@ export function usePaginatedThreads(
   enabled = true,
 ) {
   const isVisible = useIsDocumentVisible();
-  const status = query.status ?? "open";
-  const isPrimary = status === "open" && !query.filterStatus;
+  const isPrimary = !query.filterStatus;
   const baseInterval = REALTIME_ENABLED
     ? (isPrimary ? 60000 : 120000)
     : (isPrimary ? 15000 : 60000);

@@ -1,18 +1,23 @@
 import { cn } from "@/lib/ui/cn"
+import {
+  boardCardShellClassName,
+  boardCardShadowClassName,
+  boardMetaPillClassName,
+  boardMetaPillShellClassName,
+  boardSecondaryButtonClassName,
+  boardSoftShadowClassName,
+  type BoardCardVariant,
+} from "@/lib/ui/board-card-styles"
 
 export type BubbleTone = "action" | "reply" | "flag" | "customer"
 
 export type NeedsYouCardVariant = "front" | "peek" | "shell" | "briefing"
 
-export const needsYouSoftShadowClassName =
-  "shadow-[0_1px_2px_rgba(0,0,0,0.05),0_6px_18px_rgba(0,0,0,0.08)]"
+export const needsYouSoftShadowClassName = boardSoftShadowClassName
 
-export const needsYouMetaPillShellClassName = cn(
-  "flex h-10 items-center justify-center overflow-hidden rounded-2xl",
-  needsYouSoftShadowClassName,
-)
+export const needsYouMetaPillShellClassName = boardMetaPillShellClassName
 
-export const needsYouMetaPillClassName = cn(needsYouMetaPillShellClassName, "bg-white")
+export const needsYouMetaPillClassName = boardMetaPillClassName
 
 export const BUBBLE_TONE: Record<BubbleTone, { bubble: string; text: string }> = {
   customer: {
@@ -73,16 +78,20 @@ export function needsYouConversationSurfaceClassName() {
   return "bg-card"
 }
 
+function toBoardCardVariant(variant: NeedsYouCardVariant): BoardCardVariant {
+  if (variant === "briefing") return "briefing"
+  if (variant === "shell") return "shell"
+  return "default"
+}
+
 export function needsYouCardShellClassName(variant: NeedsYouCardVariant = "front") {
   return cn(
-    "relative isolate h-full w-full overflow-hidden rounded-3xl box-border flex flex-col bg-card",
-    "border border-border",
-    variant === "briefing"
-      ? "shadow-[0_1px_2px_rgba(0,0,0,0.03),0_4px_16px_rgba(0,0,0,0.04)]"
-      : "shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)]",
-    variant === "shell" && "brightness-[0.98] saturate-[0.96]",
+    "h-full w-full box-border flex flex-col",
+    boardCardShellClassName(toBoardCardVariant(variant)),
   )
 }
 
-export const needsYouSecondaryButtonClassName =
-  "inline-flex w-full items-center justify-center rounded-2xl border border-border bg-transparent py-3.5 text-base font-semibold text-muted-foreground transition-colors hover:bg-foreground/[0.04] disabled:opacity-40"
+export const needsYouSecondaryButtonClassName = boardSecondaryButtonClassName
+
+// Re-export for callers that need the shadow token directly.
+export { boardCardShadowClassName }

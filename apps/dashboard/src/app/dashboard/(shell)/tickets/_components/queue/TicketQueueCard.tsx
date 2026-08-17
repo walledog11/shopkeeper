@@ -86,12 +86,22 @@ export function TicketQueueCard({
   const showRecover = isSpamView && !!onRecover
   const showFooter = showSend || showReview || content.isEscalationOnly || showRecover
   const spamReason = isSpamView ? ticket.filterReason?.trim() || null : null
-  const browsePreview = presentation.subline.trim() || ticket.preview?.trim() || null
   const showMarkAsSpam = isBrowse
     && !!onMarkAsSpam
     && ticket.status !== "closed"
     && ticket.filterStatus !== "filtered"
     && !selection?.hasSelection
+
+  const openButton = (
+    <button
+      type="button"
+      data-testid="ticket-queue-card-open"
+      onClick={onOpen}
+      className="flex w-full min-w-0 cursor-pointer border-0 bg-transparent p-0 text-left [font-family:inherit]"
+    >
+      <TicketCardMetaRow meta={content.meta} />
+    </button>
+  )
 
   return (
     <NeedsYouCardShell
@@ -102,8 +112,8 @@ export function TicketQueueCard({
       )}
     >
       <NeedsYouCardHeader className={cn(showMarkAsSpam && "pr-10 sm:pr-12")}>
-        <div className={cn("flex min-w-0 gap-2", isBrowse ? "items-center" : "items-start")}>
-          {selection && (
+        {selection ? (
+          <div className="flex min-w-0 items-start gap-2">
             <button
               type="button"
               onClick={event => {
@@ -111,8 +121,7 @@ export function TicketQueueCard({
                 selection.onToggleSelect()
               }}
               className={cn(
-                "hidden shrink-0 transition-opacity md:inline-flex",
-                isBrowse ? "self-center" : "mt-1.5",
+                "mt-1.5 hidden shrink-0 transition-opacity md:inline-flex",
                 selection.hasSelection || selection.isSelected
                   ? "opacity-100"
                   : "opacity-0 group-hover/card:opacity-100",
@@ -124,27 +133,11 @@ export function TicketQueueCard({
                 : <Square className="size-4 text-faint" />
               }
             </button>
-          )}
-
-          <button
-            type="button"
-            data-testid="ticket-queue-card-open"
-            onClick={onOpen}
-            className="flex min-w-0 flex-1 cursor-pointer flex-col border-0 bg-transparent p-0 text-left [font-family:inherit]"
-          >
-            <TicketCardMetaRow
-              meta={content.meta}
-              layout={isBrowse ? "browse" : "default"}
-              status={isBrowse ? presentation.primaryStatus : undefined}
-            />
-
-            {isBrowse && presentation.showSubject && ticket.subject?.trim() && (
-              <p className="mt-2 line-clamp-2 text-sm font-semibold leading-snug text-foreground sm:line-clamp-1">
-                {ticket.subject}
-              </p>
-            )}
-          </button>
-        </div>
+            {openButton}
+          </div>
+        ) : (
+          openButton
+        )}
 
         {showMarkAsSpam && (
           <button
@@ -161,52 +154,28 @@ export function TicketQueueCard({
         )}
       </NeedsYouCardHeader>
 
-      <NeedsYouCardBody
-        className={isBrowse ? "gap-2 pt-2 pb-3 sm:gap-2.5 sm:pt-2.5 sm:pb-3.5" : undefined}
-      >
-        {isBrowse ? (
-          <>
-            {spamReason ? (
-              <p className="rounded-2xl border border-border/80 bg-muted/40 px-4 py-3 text-sm leading-relaxed text-muted-foreground">
-                {spamReason}
-              </p>
-            ) : content.isEscalationOnly ? (
-              <NeedsYouEscalationCallout reason={content.escalationReason} />
-            ) : content.customerMessage ? (
-              <NeedsYouBubble tone="customer">
-                {content.customerMessage}
-              </NeedsYouBubble>
-            ) : browsePreview ? (
-              <p className="text-sm leading-relaxed text-muted-foreground line-clamp-2">
-                {browsePreview}
-              </p>
-            ) : null}
-          </>
-        ) : (
-          <>
-            {content.customerMessage && (
-              <NeedsYouBubble tone="customer">
-                {content.customerMessage}
-              </NeedsYouBubble>
-            )}
-
-            <div className="flex flex-col gap-3">
-              {spamReason ? (
-                <p className="rounded-2xl border border-border/80 bg-muted/40 px-4 py-3 text-sm leading-relaxed text-muted-foreground">
-                  {spamReason}
-                </p>
-              ) : content.isEscalationOnly ? (
-                <NeedsYouEscalationCallout reason={content.escalationReason} />
-              ) : (
-                content.bubbles.map(bubble => (
-                  <NeedsYouBubble key={bubble.key} tone={bubble.tone} flush>
-                    {bubble.text}
-                  </NeedsYouBubble>
-                ))
-              )}
-            </div>
-          </>
+      <NeedsYouCardBody>
+        {content.customerMessage && (
+          <NeedsYouBubble tone="customer">
+            {content.customerMessage}
+          </NeedsYouBubble>
         )}
+
+        <div className="flex flex-col gap-3">
+          {spamReason ? (
+            <p className="rounded-2xl border border-border/80 bg-muted/40 px-4 py-3 text-sm leading-relaxed text-muted-foreground">
+              {spamReason}
+            </p>
+          ) : content.isEscalationOnly ? (
+            <NeedsYouEscalationCallout reason={content.escalationReason} />
+          ) : (
+            content.bubbles.map(bubble => (
+              <NeedsYouBubble key={bubble.key} tone={bubble.tone} flush>
+                {bubble.text}
+              </NeedsYouBubble>
+            ))
+          )}
+        </div>
       </NeedsYouCardBody>
 
       {showFooter && (

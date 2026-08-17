@@ -1,7 +1,6 @@
 "use client"
 
 import { useOrganization } from "@clerk/nextjs"
-import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import type { OrgSettings, OrgSettingsPatch, VoiceProposal } from "@/types"
 import type { GatewayRuntimeFlags } from "@/lib/server/gateway-runtime-flags"
 import {
@@ -36,15 +35,8 @@ export default function AgentTab(props: Props) {
   const { emailConnected, shopifyConnected } = props
 
   return (
-    <div className="mx-auto w-full max-w-3xl space-y-6 pb-20">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">Agent settings</h1>
-        <p className="mt-0.5 text-sm text-faint">
-          How {AGENT_DISPLAY_NAME} represents your store, how much it can do alone, and when it is on duty.
-        </p>
-      </div>
-
-      <div className="space-y-6">
+    <div className="flex w-full flex-col gap-3">
+      <div className="space-y-3">
         <AgentIdentitySection controller={controller} />
         <AgentAutonomySection controller={controller} />
         <WhenOnDutySection controller={controller} emailConnected={emailConnected} />

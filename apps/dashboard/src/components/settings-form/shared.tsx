@@ -5,6 +5,8 @@ import { Check, ChevronRight, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
+import { boardCardShellClassName } from "@/lib/ui/board-card-styles"
+import { cn } from "@/lib/ui/cn"
 
 export function SaveButton({ saving, saved, onClick, disabled }: {
   saving: boolean
@@ -74,7 +76,7 @@ export function SectionCard({ title, description, children, variant = "settings"
   variant?: "settings" | "board"
 }) {
   const shellClassName = variant === "board"
-    ? "rounded-3xl border border-border bg-card px-5 py-5 shadow-sm sm:px-5 sm:py-5 space-y-5"
+    ? cn(boardCardShellClassName("default"), "px-5 py-5 sm:px-5 sm:py-5 space-y-5")
     : "bg-card rounded-xl border border-border overflow-hidden p-5 sm:p-6 space-y-5"
   const titleClassName = variant === "board"
     ? "text-sm font-semibold text-foreground/90"

@@ -1,9 +1,4 @@
-import {
-  ChannelType,
-  ThreadFilterFeedback,
-  ThreadFilterStatus,
-  type DbChannelType,
-} from '@shopkeeper/db';
+import { ThreadFilterFeedback, ThreadFilterStatus } from '@shopkeeper/db';
 import { THREAD_STATUS } from '@shopkeeper/agent/thread-constants';
 import { BadRequestError } from '@/lib/api/errors';
 import { requireJsonObject } from '@/lib/api/body';
@@ -14,9 +9,9 @@ const THREAD_PATCH_FIELDS = ['status', 'tag', 'shopifyCustomerId', 'filterStatus
 const BULK_THREAD_PATCH_FIELDS = ['ids', 'action', 'tag'];
 const SHOPIFY_THREAD_FIELDS = ['shopifyCustomerId', 'customerEmail', 'customerName', 'orderName'];
 const BULK_THREAD_ACTIONS = ['close', 'open', 'tag', 'archive'] as const;
-const THREAD_LIST_STATUSES = [THREAD_STATUS.OPEN, THREAD_STATUS.CLOSED] as const;
-const THREAD_LIST_TAGS = new Set(['Shipping', 'Returns', 'Order Status', 'Product Inquiry']);
-const THREAD_LIST_CHANNEL_TYPES = new Set<DbChannelType>(Object.values(ChannelType));
+// `all` is the merged stream — open and closed interleaved by recency under one
+// cursor. Paging two lists client-side reorders rows on every page fetch.
+const THREAD_LIST_STATUSES = [THREAD_STATUS.OPEN, THREAD_STATUS.CLOSED, 'all'] as const;
 const DEFAULT_THREAD_PAGE_SIZE = 50;
 const MAX_THREAD_PAGE_SIZE = 100;
 
@@ -58,22 +53,6 @@ function parseThreadListLimit(value: string | null): number {
   return limit;
 }
 
-function parseThreadListTag(value: string | null): string | undefined {
-  if (value === null) return undefined;
-  if (!THREAD_LIST_TAGS.has(value)) {
-    throw new BadRequestError('Invalid tag');
-  }
-  return value;
-}
-
-function parseThreadListChannelType(value: string | null): DbChannelType | undefined {
-  if (value === null) return undefined;
-  if (!THREAD_LIST_CHANNEL_TYPES.has(value as DbChannelType)) {
-    throw new BadRequestError('Invalid channelType');
-  }
-  return value as DbChannelType;
-}
-
 export function parseThreadListQuery(searchParams: URLSearchParams) {
   const rawCursor = searchParams.get('cursor');
   let cursor: ThreadCursor | undefined;
@@ -93,11 +72,6 @@ export function parseThreadListQuery(searchParams: URLSearchParams) {
     includeCount: parseThreadListBoolean(searchParams, 'includeCount'),
     cursor,
     limit: parseThreadListLimit(searchParams.get('limit')),
-    needsReply: parseThreadListBoolean(searchParams, 'needsReply'),
-    forMe: parseThreadListBoolean(searchParams, 'forMe'),
-    hasDraft: parseThreadListBoolean(searchParams, 'hasDraft'),
-    tag: parseThreadListTag(searchParams.get('tag')),
-    channelType: parseThreadListChannelType(searchParams.get('channelType')),
   };
 }
 

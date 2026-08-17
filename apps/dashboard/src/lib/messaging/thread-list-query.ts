@@ -1,6 +1,4 @@
-import { Prisma, db as defaultDb, type DbChannelType } from "@shopkeeper/db"
-import { SUPPORTED_AGENT_PLAN_CACHE_VERSIONS } from "@shopkeeper/agent/plan-cache-shape"
-import { canonicalInboxThreadSql } from "@/lib/messaging/inbox-filter"
+import { Prisma, db as defaultDb } from "@shopkeeper/db"
 
 // Thread lists sort by (last_message_at DESC, id DESC), so the page cursor must
 // carry both components — paging by id alone skips or repeats rows whenever UUID
@@ -29,103 +27,13 @@ export function decodeThreadCursor(raw: string): ThreadCursor | null {
   return { lastMessageAt, id }
 }
 
-export function draftReadyPlanSql(organizationId: string) {
-  return Prisma.sql`
-    t.status = 'open'
-    AND t.cached_plan IS NOT NULL
-    AND t.cached_plan_message_id IS NOT NULL
-    AND t.cached_plan->>'version' IN (${Prisma.join(SUPPORTED_AGENT_PLAN_CACHE_VERSIONS.map(String))})
-    AND CASE
-      WHEN jsonb_typeof(t.cached_plan #> '{plan,steps}') = 'array'
-      THEN jsonb_array_length(t.cached_plan #> '{plan,steps}') > 0
-      ELSE FALSE
-    END
-    AND t.cached_plan_message_id = (
-      SELECT m.id
-      FROM messages m
-      WHERE m.thread_id = t.id
-        AND m.deleted_at IS NULL
-        AND m.sender_type <> 'note'
-      ORDER BY m.sent_at DESC, m.id DESC
-      LIMIT 1
-    )
-    AND EXISTS (
-      SELECT 1
-      FROM messages cached_message
-      WHERE cached_message.id = t.cached_plan_message_id
-        AND cached_message.thread_id = t.id
-        AND cached_message.deleted_at IS NULL
-        AND cached_message.sender_type = 'customer'
-    )
-    AND ${canonicalInboxThreadSql(organizationId)}
-  `
-}
-
-// Escalated threads stay in scope regardless of who spoke last: the agent
-// handed the ticket over, so it is the merchant's whether or not the last
-// message was the agent's own "this is above my line" reply.
-export function forMeThreadSql(organizationId: string) {
-  return Prisma.sql`
-    t.status = 'open'
-    AND ${canonicalInboxThreadSql(organizationId)}
-    AND (
-      t.escalated_at IS NOT NULL
-      OR t.last_message_sender_type = 'customer'
-      OR (
-        t.cached_plan IS NOT NULL
-        AND t.cached_plan_message_id IS NOT NULL
-        AND t.cached_plan->>'version' IN (${Prisma.join(SUPPORTED_AGENT_PLAN_CACHE_VERSIONS.map(String))})
-        AND CASE
-          WHEN jsonb_typeof(t.cached_plan #> '{plan,steps}') = 'array'
-          THEN jsonb_array_length(t.cached_plan #> '{plan,steps}') > 0
-          ELSE FALSE
-        END
-        AND t.cached_plan_message_id = (
-          SELECT m.id
-          FROM messages m
-          WHERE m.thread_id = t.id
-            AND m.deleted_at IS NULL
-            AND m.sender_type <> 'note'
-          ORDER BY m.sent_at DESC, m.id DESC
-          LIMIT 1
-        )
-        AND EXISTS (
-          SELECT 1
-          FROM messages cached_message
-          WHERE cached_message.id = t.cached_plan_message_id
-            AND cached_message.thread_id = t.id
-            AND cached_message.deleted_at IS NULL
-            AND cached_message.sender_type = 'customer'
-        )
-      )
-    )
-  `
-}
-
 export type ThreadListSqlFilters = {
-  forMe?: boolean
-  hasDraft?: boolean
-  needsReply?: boolean
-  tag?: string
-  channelType?: DbChannelType
   wantsFiltered?: boolean
+  /** Omit to interleave open and closed under one cursor. */
   status?: "open" | "closed"
 }
 
 function inboxScopeSql(organizationId: string, filters: ThreadListSqlFilters) {
-  if (filters.forMe) {
-    if (filters.tag && filters.channelType) {
-      return Prisma.sql`${forMeThreadSql(organizationId)} AND t.tag = ${filters.tag} AND t.channel_type = ${filters.channelType}`
-    }
-    if (filters.tag) {
-      return Prisma.sql`${forMeThreadSql(organizationId)} AND t.tag = ${filters.tag}`
-    }
-    if (filters.channelType) {
-      return Prisma.sql`${forMeThreadSql(organizationId)} AND t.channel_type = ${filters.channelType}`
-    }
-    return forMeThreadSql(organizationId)
-  }
-
   if (filters.wantsFiltered) {
     return Prisma.sql`
       t.deleted_at IS NULL
@@ -134,19 +42,6 @@ function inboxScopeSql(organizationId: string, filters: ThreadListSqlFilters) {
       AND t.channel_type NOT IN ('sms_agent', 'dashboard_agent')
       AND t.filter_status = 'filtered'
     `
-  }
-
-  if (filters.hasDraft) {
-    if (filters.tag && filters.channelType) {
-      return Prisma.sql`${draftReadyPlanSql(organizationId)} AND t.tag = ${filters.tag} AND t.channel_type = ${filters.channelType}`
-    }
-    if (filters.tag) {
-      return Prisma.sql`${draftReadyPlanSql(organizationId)} AND t.tag = ${filters.tag}`
-    }
-    if (filters.channelType) {
-      return Prisma.sql`${draftReadyPlanSql(organizationId)} AND t.channel_type = ${filters.channelType}`
-    }
-    return draftReadyPlanSql(organizationId)
   }
 
   return Prisma.sql`
@@ -160,9 +55,6 @@ function inboxScopeSql(organizationId: string, filters: ThreadListSqlFilters) {
       : filters.status === "closed"
         ? Prisma.sql`AND t.status = 'closed'`
         : Prisma.empty}
-    ${filters.needsReply ? Prisma.sql`AND t.last_message_sender_type = 'customer'` : Prisma.empty}
-    ${filters.tag ? Prisma.sql`AND t.tag = ${filters.tag}` : Prisma.empty}
-    ${filters.channelType ? Prisma.sql`AND t.channel_type = ${filters.channelType}` : Prisma.empty}
   `
 }
 

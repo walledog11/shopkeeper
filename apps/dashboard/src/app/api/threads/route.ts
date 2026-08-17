@@ -25,22 +25,12 @@ export const GET = withOrgRoute(
       includeCount,
       cursor,
       limit,
-      needsReply,
-      forMe,
-      hasDraft,
-      tag,
-      channelType,
     } = parseThreadListQuery(searchParams);
     const wantsFiltered = filterStatus === ThreadFilterStatus.filtered;
 
     const sqlFilters = {
-      forMe,
-      hasDraft,
-      needsReply: !forMe && needsReply,
-      tag,
-      channelType,
       wantsFiltered,
-      status: wantsFiltered ? undefined : status,
+      status: wantsFiltered || status === 'all' ? undefined : status,
     };
 
     if (countOnly) {

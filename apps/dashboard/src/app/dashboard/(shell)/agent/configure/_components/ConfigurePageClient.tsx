@@ -3,6 +3,8 @@
 import AgentTab from "./AgentTab"
 import type { OrgSettings, OrgSettingsPatch, VoiceProposal } from "@/types"
 import type { GatewayRuntimeFlags } from "@/lib/server/gateway-runtime-flags"
+import { dashboardPageShellClassName } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
+import { cn } from "@/lib/ui/cn"
 
 interface Props {
   settings: OrgSettings
@@ -18,17 +20,19 @@ interface Props {
 export default function ConfigurePageClient(props: Props) {
   return (
     <div className="relative flex size-full min-w-0 flex-col overflow-hidden bg-background">
-      <div className="custom-scrollbar flex-1 overflow-y-auto px-4 py-6 sm:px-6">
-        <AgentTab
-          settings={props.settings}
-          rawSettings={props.rawSettings}
-          version={props.version}
-          orgName={props.orgName}
-          voiceProposal={props.voiceProposal}
-          emailConnected={props.emailConnected}
-        shopifyConnected={props.shopifyConnected}
-        runtimeFlags={props.runtimeFlags}
-      />
+      <div className="custom-scrollbar flex-1 overflow-y-auto">
+        <div className={cn(dashboardPageShellClassName(), "pb-20")}>
+          <AgentTab
+            settings={props.settings}
+            rawSettings={props.rawSettings}
+            version={props.version}
+            orgName={props.orgName}
+            voiceProposal={props.voiceProposal}
+            emailConnected={props.emailConnected}
+            shopifyConnected={props.shopifyConnected}
+            runtimeFlags={props.runtimeFlags}
+          />
+        </div>
       </div>
     </div>
   )

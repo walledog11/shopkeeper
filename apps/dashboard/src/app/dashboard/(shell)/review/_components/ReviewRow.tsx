@@ -6,6 +6,8 @@ import {
 } from "@/lib/agent/action-log-display"
 import { formatRelativeTime } from "@/lib/format/date"
 import { getActionLogChannelInfo } from "@/lib/messaging/channels"
+import { boardCardShellClassName } from "@/lib/ui/board-card-styles"
+import { cn } from "@/lib/ui/cn"
 import type { ActionLogEntry } from "@/types"
 import {
   primaryPreviewText,
@@ -43,13 +45,13 @@ export function ReviewRow({
   const modeNote = reviewModeNote(entry)
 
   return (
-    <li className="border-b border-border last:border-b-0">
+    <li className={cn(boardCardShellClassName(), "list-none")}>
       <button
         type="button"
         onClick={onOpen}
-        className="flex w-full items-start gap-3 px-4 pt-3.5 text-left [font-family:inherit] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground/70 sm:px-5"
+        className="flex w-full items-start gap-3 rounded-t-3xl px-4 pt-4 text-left [font-family:inherit] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground/70 sm:px-5"
       >
-        <div className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border ${tone.icon}`}>
+        <div className={`mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-2xl border ${tone.icon}`}>
           <Icon className="size-4" />
         </div>
         <div className="min-w-0 flex-1">
@@ -82,7 +84,7 @@ export function ReviewRow({
         </div>
       </button>
 
-      <div className="flex items-center justify-between gap-3 px-4 pb-3 pt-2 pl-[3.75rem] sm:px-5 sm:pl-[4.25rem]">
+      <div className="flex items-center justify-between gap-3 rounded-b-3xl border-t border-border/50 bg-muted/30 px-4 pb-4 pt-3 pl-[3.75rem] sm:px-5 sm:pl-[4.25rem]">
         {href && sourceLabel ? (
           <Link
             href={href}
