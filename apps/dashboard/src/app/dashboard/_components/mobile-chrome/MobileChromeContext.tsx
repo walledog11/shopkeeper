@@ -14,16 +14,11 @@ import { usePathname } from "next/navigation";
 import { resolveMobileChromeMode } from "./resolveMobileChromeMode";
 import { MOBILE_CHROME_PRIORITY, type MobileChromeMode } from "./types";
 
-interface MobileNavContextValue {
-  openNav: () => void;
-}
-
 interface MobileChromeContextValue {
   mode: MobileChromeMode;
   registerOverride: (id: string, mode: MobileChromeMode | null) => void;
 }
 
-const MobileNavContext = createContext<MobileNavContextValue | null>(null);
 const MobileChromeContext = createContext<MobileChromeContextValue | null>(null);
 
 function pickOverride(overrides: Map<string, MobileChromeMode>): MobileChromeMode | null {
@@ -43,10 +38,8 @@ function pickOverride(overrides: Map<string, MobileChromeMode>): MobileChromeMod
 
 export function MobileChromeProvider({
   children,
-  onOpenNav,
 }: {
   children: ReactNode;
-  onOpenNav: () => void;
 }) {
   const pathname = usePathname();
   const routeMode = resolveMobileChromeMode(pathname);
@@ -66,16 +59,13 @@ export function MobileChromeProvider({
 
   const mode = pickOverride(overrides) ?? routeMode;
 
-  const navValue = useMemo<MobileNavContextValue>(() => ({ openNav: onOpenNav }), [onOpenNav]);
   const chromeValue = useMemo<MobileChromeContextValue>(
     () => ({ mode, registerOverride }),
     [mode, registerOverride],
   );
 
   return (
-    <MobileNavContext.Provider value={navValue}>
-      <MobileChromeContext.Provider value={chromeValue}>{children}</MobileChromeContext.Provider>
-    </MobileNavContext.Provider>
+    <MobileChromeContext.Provider value={chromeValue}>{children}</MobileChromeContext.Provider>
   );
 }
 
@@ -83,12 +73,6 @@ export function useMobileChrome() {
   const ctx = use(MobileChromeContext);
   if (!ctx) throw new Error("useMobileChrome must be used inside MobileChromeProvider");
   return ctx.mode;
-}
-
-export function useMobileNav() {
-  const ctx = use(MobileNavContext);
-  if (!ctx) throw new Error("useMobileNav must be used inside MobileChromeProvider");
-  return ctx;
 }
 
 export function useMobileChromeOverride(mode: MobileChromeMode | null) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { OpenThreadCountProvider, useOpenThreadCountOverride } from "@/hooks/OpenThreadCountContext";
 import { useInboxBadgeCountQuery } from "@/hooks/useThreads";
@@ -9,7 +9,6 @@ import { MobileChromeProvider } from "./mobile-chrome/MobileChromeContext";
 import { MobileChromeSync } from "./mobile-chrome/MobileChromeSync";
 import { MobileHubHeader } from "./mobile-chrome/MobileHubHeader";
 import { DesktopTopBar } from "./sidebar/DesktopTopBar";
-import { MobileNavSheet } from "./sidebar/MobileNavSheet";
 import { useNavAuth } from "./sidebar/useNavAuth";
 import { MainContentScrim } from "./right-rail/MainContentScrim";
 
@@ -35,8 +34,6 @@ function DashboardSidebarContent({
   const openCount = useDashboardOpenCount(initialInboxCount);
   const navAuth = useNavAuth(initialAutonomyTier);
   const [isSwitching, setIsSwitching] = useState(false);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const openMobileNav = useCallback(() => setMobileNavOpen(true), []);
 
   useEffect(() => {
     document.documentElement.classList.add("dashboard-locked");
@@ -49,7 +46,7 @@ function DashboardSidebarContent({
   }, []);
 
   return (
-    <MobileChromeProvider onOpenNav={openMobileNav}>
+    <MobileChromeProvider>
       <MobileChromeSync />
       {isSwitching && (
         <div className="fixed inset-0 z-50 bg-background/70 backdrop-blur-sm flex items-center justify-center">
@@ -69,7 +66,11 @@ function DashboardSidebarContent({
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-row">
           <div className="flex min-w-0 flex-1 flex-col">
-            <MobileHubHeader onOpenNav={openMobileNav} />
+            <MobileHubHeader
+              openCount={openCount}
+              onSwitching={setIsSwitching}
+              navAuth={navAuth}
+            />
 
             <div className="dashboard-content relative z-0 flex-1 min-h-0 overflow-hidden flex flex-col">
               {children}
@@ -80,14 +81,6 @@ function DashboardSidebarContent({
           {rightRail}
         </div>
       </div>
-
-      <MobileNavSheet
-        open={mobileNavOpen}
-        onClose={() => setMobileNavOpen(false)}
-        openCount={openCount}
-        onSwitching={setIsSwitching}
-        navAuth={navAuth}
-      />
     </MobileChromeProvider>
   );
 }

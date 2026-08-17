@@ -92,9 +92,9 @@ export const topBarDropdowns = [
   { label: "Workspace", items: topBarWorkspaceItems },
 ] as const;
 
-/** Mobile sidebar nav sections. */
+/** Mobile nav sections (logo links home). */
 export const mobileNavSections: NavSection[] = [
-  { heading: "Today", items: [homeNavItem, inboxNavItem] },
+  { heading: "Today", items: [inboxNavItem] },
   { heading: "Shop", items: [shopNavItem] },
   {
     heading: "Shopkeeper",
