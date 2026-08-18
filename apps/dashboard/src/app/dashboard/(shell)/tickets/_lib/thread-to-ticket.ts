@@ -31,7 +31,7 @@ export function threadToTicket(thread: Thread): Ticket {
     tag: thread.tag || "Support",
     tagColor: "text-slate-500 bg-slate-100 border-slate-200",
     escalatedAt: thread.escalatedAt ?? null,
-    aiSummary: thread.aiSummary || `${AGENT_DISPLAY_NAME} is reading this ticket…`,
+    aiSummary: thread.aiSummary ?? "",
     aiTitle: thread.aiTitle ?? null,
     status: thread.status,
     lastCustomerMessageAt: lastCustomerMsg?.sentAt ?? null,

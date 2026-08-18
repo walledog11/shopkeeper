@@ -33,7 +33,13 @@ function actionButtonLabel(row: InboxRowModel, isSending: boolean): string {
 
 const compactSecondaryClassName = cn(
   needsYouSecondaryButtonClassName,
-  "w-auto px-4 py-2.5 text-sm",
+  "shrink-0 whitespace-nowrap px-4 py-2.5 text-sm",
+)
+
+const compactPrimaryClassName = cn(
+  "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all",
+  "bg-gradient-to-b from-amber-600 to-amber-700 text-white shadow-md shadow-amber-600/20",
+  "hover:-translate-y-0.5 disabled:opacity-40 disabled:hover:translate-y-0",
 )
 
 const primaryDraftClassName = cn(
@@ -183,7 +189,7 @@ export function InboxTicketCard({
         )}
 
         {showTrustFooter && (
-          <NeedsYouCardFooter className="flex items-center justify-end gap-2 px-4 py-3 sm:px-5">
+          <NeedsYouCardFooter className="flex flex-wrap items-center justify-end gap-2 px-4 py-3 sm:px-5">
             <button type="button" onClick={actions.onNotReal} disabled={actionsDisabled} className={compactSecondaryClassName}>
               Mark as spam
             </button>
@@ -192,7 +198,7 @@ export function InboxTicketCard({
               data-testid="ticket-row-trust"
               disabled={actionsDisabled}
               onClick={actions.onTrust}
-              className={cn(primaryDraftClassName, "w-auto")}
+              className={compactPrimaryClassName}
             >
               Mark as customer
             </button>

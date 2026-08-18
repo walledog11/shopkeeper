@@ -257,7 +257,7 @@ export function InboxPageLayout({
           )}
         >
           <DialogTitle className="sr-only">Conversation</DialogTitle>
-          {lastDialogBodyRef.current}
+          {dialogBody ?? lastDialogBodyRef.current}
         </DialogContent>
       </Dialog>
 
