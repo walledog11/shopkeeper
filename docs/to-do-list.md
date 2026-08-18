@@ -170,39 +170,29 @@ Code work that is started and not finished.
 
 ### Eval-gate residue
 
-The gate is **green** and the baseline is current — 250/252 across 84 fixtures at
-3 repeats, captured 2026-08-17 (`e9345501`, then `4037a82a`). Read that as a
-hand-captured result, not a standing CI property: CI has no model key, so it has
-re-checked nothing since (last item below). The 2026-08-08 red
-run is closed: the thirteen failures are fixed, `storefront-guest-product-search`
-gives the gate its storefront coverage, safe-reply auto-execution has had its
-run, and 79 of 84 fixtures now carry `classifierIntents` — so production's
-`computeClassifierRouting` path is exercised, which it never was before. The
-1-hour stable-prefix TTL is confirmed as of 2026-08-18: a third thread context
-eight minutes after a cold write read back the full 11,848-token prefix and
-wrote only the 43-token volatile delta, which a 5-minute block could not have
-done. What is left is one advisory fixture and the CI credential gap that keeps
-any of this from being re-checked automatically:
+The gate is **green** and the baseline is current — 250/252 across 84 fixtures
+at 3 repeats, captured 2026-08-17 (`e9345501`, then `4037a82a`) — and CI can now
+re-check it: `ANTHROPIC_API_KEY` became a repo secret 2026-08-18 and PR #38 ran
+44/44 hard-gated core fixtures plus `clear-fraud 1/1` on real model calls. The
+2026-08-08 red run is closed: the thirteen failures are fixed,
+`storefront-guest-product-search` gives the gate its storefront coverage,
+safe-reply auto-execution has had its run, and 79 of 84 fixtures now carry
+`classifierIntents` — so production's `computeClassifierRouting` path is
+exercised, which it never was before. The 1-hour stable-prefix TTL is confirmed
+as of 2026-08-18: a third thread context eight minutes after a cold write read
+back the full 11,848-token prefix and wrote only the 43-token volatile delta,
+which a 5-minute block could not have done. What is left is one advisory
+fixture:
 
 - [ ] **`quick-reply-thanks-ack` passes 1/3.** The only fixture below full. Runs
   classify `needs_review` after repeated `get_order_by_name` errors and escalate.
   Advisory, so it does not gate.
-- [ ] **The gate is green on a laptop, not in CI — `ANTHROPIC_API_KEY` is not a
-  repo secret.** `gh secret list` has seven secrets and that is not one of them,
-  so every job in `evals.yml` exits 1 at its own `Require model credentials`
-  step. On a pull request that surfaces honestly: PR #36 showed *Core dashboard
-  eval gates* and *Gateway pre-filter and clear-fraud gates* failing in ~15s, and
-  was merged 2026-08-18 with both still red — every other check green, and the
-  merged diff reaching no prompt, tool, or control-flow surface. The nightly does
-  not surface it, because `full-nightly` carries `continue-on-error: true` — the
-  job fails, the run reports success, and `evals.yml` has shown twelve
-  consecutive green scheduled runs that executed no evals at all. The 2026-08-17
-  baseline was captured by hand and is real; what is not real is any belief that
-  CI has been re-checking it since. Add the secret, then drop the
-  `continue-on-error` that hid this, or the next silent stretch looks identical.
-  Until then every PR touching `packages/agent/**` arrives with two red checks
-  that mean "no key," not "regression" — which is exactly the signal that stops
-  being read.
+
+The nightly now executes for real. `full-nightly` had carried
+`continue-on-error: true`, so it exited at its own credential check in ~17s and
+reported success — twelve consecutive green scheduled runs that ran no evals.
+That flag is gone as of PR #38, so the 07:00 UTC run costs a full 84-fixture
+single-repeat suite every night and a genuine regression now turns it red.
 
 Runs stay expensive. Follow the
 [paid model-eval workflow](production/critical-path-test-checklist.md#paid-model-backed-agent-evals):
