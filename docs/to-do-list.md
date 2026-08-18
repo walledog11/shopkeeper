@@ -108,18 +108,17 @@ Code work that is started and not finished.
   obligations. P0, P1 and items A–E have shipped; F is the live dev-store run,
   filed under Prove in prod above. Full sequence and the deferred list:
   [conversation-context-and-cross-channel-memory-plan.md](conversation-context-and-cross-channel-memory-plan.md).
-- [ ] **Decide whether the spend backstop should price 1-hour cache writes
-  correctly.** `LLM_PRICING` in `packages/db/llm-spend.ts` prices
-  `cacheCreationPerToken` at 1.25× input on every model, and `usage.ts:48`
-  hardcodes the same `1.25 *` multiplier — both are the **5-minute** TTL write
-  premium. But `buildSplitCachedSystemPrompt` sets `ttl: "1h"` on the stable
-  block, and all three production planner paths use it (`planner.ts:57`,
-  `planner-skip-reply.ts:193`, `run.ts:214`). A 1-hour write costs 2× input, so
-  cache-creation tokens are undercounted by 0.75× — against a file whose own
-  comment says the backstop must never undercount. Not filed as a straight bug
-  fix because correcting it raises measured spend against the shared daily cap
-  and could start tripping `llm_daily_spend` for real orgs; the two files have to
-  move together.
+- [ ] **Ship the 1-hour cache-write pricing fix, then read one day of spend.**
+  The code is written on `price-1h-cache-writes` (`2d7f63dc`): `LLM_PRICING` and
+  `usage.ts` price the 1h stable block at 2× input and the 5m volatile block at
+  1.25×, reading the per-TTL breakdown the API returns rather than applying a
+  flat multiplier. The cap worry that held this is measured and closed — a cold
+  write is ~11.8k tokens at 1h and a warm call writes none, so the correction is
+  ~2.7¢ per cold write on Sonnet 5, bounded by the 1-hour TTL and a prefix all 17
+  orgs share: under $0.64/day worst case against a $20 cap whose worst real day
+  was $4.82. Operator turns and composer-ask never write a 1h block at all. Only
+  measured spend moves; existing `llm_daily_spend` rows are untouched. Delete
+  this entry once the fix is deployed and the first day's rows look sane.
 - [ ] **Conversation-to-sale attribution.** Connect meaningful storefront-chat
   interactions and product recommendations to later Shopify orders so merchants
   can distinguish direct, product-assisted, and chat-assisted revenue. Report it
@@ -148,16 +147,15 @@ The gate is **green** and the baseline is current — 250/252 across 84 fixtures
 run is closed: the thirteen failures are fixed, `storefront-guest-product-search`
 gives the gate its storefront coverage, safe-reply auto-execution has had its
 run, and 79 of 84 fixtures now carry `classifierIntents` — so production's
-`computeClassifierRouting` path is exercised, which it never was before. What is
-left is small and deliberately not urgent:
+`computeClassifierRouting` path is exercised, which it never was before. The
+1-hour stable-prefix TTL is confirmed as of 2026-08-18: a third thread context
+eight minutes after a cold write read back the full 11,848-token prefix and
+wrote only the 43-token volatile delta, which a 5-minute block could not have
+done. What is left is one advisory fixture:
 
 - [ ] **`quick-reply-thanks-ack` passes 1/3.** The only fixture below full. Runs
   classify `needs_review` after repeated `get_order_by_name` errors and escalate.
   Advisory, so it does not gate.
-- [ ] **The 1-hour stable-prefix cache TTL is unverified.** `ttl: "1h"` is set on
-  the stable block in `buildSplitCachedSystemPrompt`, but no one has confirmed a
-  cache hit across two plans separated by at least seven minutes with different
-  thread contexts.
 
 Runs stay expensive. Follow the
 [paid model-eval workflow](production/critical-path-test-checklist.md#paid-model-backed-agent-evals):
