@@ -108,18 +108,32 @@ Code work that is started and not finished.
   obligations. P0, P1 and items A–E have shipped; F is the live dev-store run,
   filed under Prove in prod above. Full sequence and the deferred list:
   [conversation-context-and-cross-channel-memory-plan.md](conversation-context-and-cross-channel-memory-plan.md).
-- [ ] **Decide whether the spend backstop should price 1-hour cache writes
-  correctly.** `LLM_PRICING` in `packages/db/llm-spend.ts` prices
-  `cacheCreationPerToken` at 1.25× input on every model, and `usage.ts:48`
-  hardcodes the same `1.25 *` multiplier — both are the **5-minute** TTL write
-  premium. But `buildSplitCachedSystemPrompt` sets `ttl: "1h"` on the stable
-  block, and all three production planner paths use it (`planner.ts:57`,
-  `planner-skip-reply.ts:193`, `run.ts:214`). A 1-hour write costs 2× input, so
-  cache-creation tokens are undercounted by 0.75× — against a file whose own
-  comment says the backstop must never undercount. Not filed as a straight bug
-  fix because correcting it raises measured spend against the shared daily cap
-  and could start tripping `llm_daily_spend` for real orgs; the two files have to
-  move together.
+- [ ] **Ship the 1-hour cache-write pricing fix, then read one day of spend.**
+  The code is written on `price-1h-cache-writes` (`2d7f63dc`): `LLM_PRICING` and
+  `usage.ts` price the 1h stable block at 2× input and the 5m volatile block at
+  1.25×, reading the per-TTL breakdown the API returns rather than applying a
+  flat multiplier. The cap worry that held this is measured and closed — a cold
+  write is ~11.8k tokens at 1h and a warm call writes none, so the correction is
+  ~2.7¢ per cold write on Sonnet 5, bounded by the 1-hour TTL and a prefix all 17
+  orgs share: under $0.64/day worst case against a $20 cap whose worst real day
+  was $4.82. Operator turns and composer-ask never write a 1h block at all. Only
+  measured spend moves; existing `llm_daily_spend` rows are untouched — true
+  only as of `d8d10289`, which took `budgetTokens` back off the TTL split (see
+  the loop-budget entry below). Open as PR #36. Delete this entry once the fix
+  is deployed and the first day's rows look sane.
+- [ ] **A cold support turn spends three quarters of its loop budget before it
+  acts.** Found while shipping the pricing fix. `budgetTokens` weights cache
+  writes at 1.25× and `agent-loop.ts:233` stops the run once they pass
+  `TOKEN_BUDGET` (20,000), but production's measured cold split-prompt call
+  writes ~11.8k tokens into the 1h stable block — 14,954 weighted tokens, 75% of
+  the budget, consumed before the first tool call. It fires whenever the shared
+  prefix has gone cold, so the first support run after any quiet hour iterates
+  on what is left. Nothing is broken today and the pricing fix no longer touches
+  it, but the guard cannot tell a cold cache from a runaway loop: the write is a
+  one-time startup cost, the same whether the turn makes one tool call or ten.
+  Either exclude cache writes from the budget or recalibrate `TOKEN_BUDGET`
+  against a warm and a cold run. Support-planner surface, so it needs the eval
+  gate — which cannot currently run in CI (see the missing key below).
 - [ ] **Conversation-to-sale attribution.** Connect meaningful storefront-chat
   interactions and product recommendations to later Shopify orders so merchants
   can distinguish direct, product-assisted, and chat-assisted revenue. Report it
@@ -144,20 +158,32 @@ Code work that is started and not finished.
 ### Eval-gate residue
 
 The gate is **green** and the baseline is current — 250/252 across 84 fixtures at
-3 repeats, captured 2026-08-17 (`e9345501`, then `4037a82a`). The 2026-08-08 red
+3 repeats, captured 2026-08-17 (`e9345501`, then `4037a82a`). Read that as a
+hand-captured result, not a standing CI property: CI has no model key, so it has
+re-checked nothing since (last item below). The 2026-08-08 red
 run is closed: the thirteen failures are fixed, `storefront-guest-product-search`
 gives the gate its storefront coverage, safe-reply auto-execution has had its
 run, and 79 of 84 fixtures now carry `classifierIntents` — so production's
-`computeClassifierRouting` path is exercised, which it never was before. What is
-left is small and deliberately not urgent:
+`computeClassifierRouting` path is exercised, which it never was before. The
+1-hour stable-prefix TTL is confirmed as of 2026-08-18: a third thread context
+eight minutes after a cold write read back the full 11,848-token prefix and
+wrote only the 43-token volatile delta, which a 5-minute block could not have
+done. What is left is one advisory fixture:
 
 - [ ] **`quick-reply-thanks-ack` passes 1/3.** The only fixture below full. Runs
   classify `needs_review` after repeated `get_order_by_name` errors and escalate.
   Advisory, so it does not gate.
-- [ ] **The 1-hour stable-prefix cache TTL is unverified.** `ttl: "1h"` is set on
-  the stable block in `buildSplitCachedSystemPrompt`, but no one has confirmed a
-  cache hit across two plans separated by at least seven minutes with different
-  thread contexts.
+- [ ] **The gate is green on a laptop, not in CI — `ANTHROPIC_API_KEY` is not a
+  repo secret.** `gh secret list` has seven secrets and that is not one of them,
+  so every job in `evals.yml` exits 1 at its own `Require model credentials`
+  step. On a pull request that surfaces honestly: PR #36 shows *Core dashboard
+  eval gates* and *Gateway pre-filter and clear-fraud gates* failing in ~15s. The
+  nightly does not, because `full-nightly` carries `continue-on-error: true` —
+  the job fails, the run reports success, and `evals.yml` has shown twelve
+  consecutive green scheduled runs that executed no evals at all. The 2026-08-17
+  baseline was captured by hand and is real; what is not real is any belief that
+  CI has been re-checking it since. Add the secret, then drop the
+  `continue-on-error` that hid this, or the next silent stretch looks identical.
 
 Runs stay expensive. Follow the
 [paid model-eval workflow](production/critical-path-test-checklist.md#paid-model-backed-agent-evals):
