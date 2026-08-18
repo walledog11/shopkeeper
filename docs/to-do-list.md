@@ -31,36 +31,42 @@ channel to build. See [product-truth.md](product-truth.md) §2.
 
 ## Deploy
 
-Release actions on the surfaces that carry code to merchants. Both are minutes
-of work and both fail **silently** — that is why they sort above everything else.
+Release actions on the surfaces that carry code to merchants. They fail
+**silently** — that is why they sort above everything else.
 
 "On HEAD" names three surfaces, not one: Vercel, Railway, and the Shopify app
-version. As of 2026-08-18 Vercel production is `READY` on `0b43a03c`, which is
-`master`. The other two are unconfirmed.
-
-- [ ] **Confirm the 2026-08-14 migrations reached production.** Three landed that
-  day — `20260814120000_add_conversation_episodes`,
-  `20260814130000_add_knowledge_base_singleton_key`, and
-  `20260814140000_add_shopify_privacy_requests` — and the code that reads all
-  three is already serving in production. Migration-behind-code has hit this repo
-  twice, two for two, and the failure is invisible from the merchant side: the
-  dashboard stays healthy and an unsigned probe answers `401`, which reads as
-  alive. Run from the repo root, never from inside `packages/db` — the Prisma CLI
-  ignores an inline `DATABASE_URL` there and resolves the package's own env:
-
-  ```sh
-  npx prisma migrate status --schema=packages/db/prisma/schema.prisma
-  npm run db:migrate:deploy
-  ```
+version. As of 2026-08-18 Vercel production is `READY` on `master` and the
+database is current — the 2026-08-14 migrations landed that day, all six partial
+unique indexes verified surviving at 6/6. The **Shopify app version is the one
+surface still behind.**
 
 - [ ] **Run `shopify app deploy`.** The theme extension last changed 2026-08-15
   (`1f59d2b2`) and `shopify.app.toml` last changed 2026-08-14 (`79e12292`, which
   added the `compliance_topics` block). Neither reaches a storefront nor Shopify
-  until an app version ships, so the live widget may be days stale and the
-  compliance declarations may not exist on Shopify's side at all. This is the
-  same gap that made the verification card absent from the store on 2026-08-12
-  while every route behind it was live. Blocks the compliance item under
-  Console / config, and the widget half of the storefront-chat rollout below.
+  until an app version ships, so the live widget is days stale and the compliance
+  declarations do not exist on Shopify's side. This is the same gap that made the
+  verification card absent from the store on 2026-08-12 while every route behind
+  it was live. Blocks the compliance item under Console / config, and the widget
+  half of the storefront-chat rollout below.
+
+  Two things were checked on 2026-08-18 and reduce the risk of running it.
+  `access_scopes` is **unchanged** from the released `-9` — `79e12292` only added
+  the webhook block — so no merchant sees a re-authorization prompt from this
+  deploy. And the ordering hazard is cleared: activating `compliance_topics`
+  makes Shopify deliver to `shopify-compliance.ts`, which upserts into
+  `shopify_privacy_requests`, and that table now exists. Deploying *before* the
+  migration would have pointed live compliance traffic at a missing table.
+
+  Not runnable from an agent session — the CLI (a devDependency, so `npx
+  shopify`) has no stored session or token here and stalls on a browser login.
+  `--allow-updates` is Shopify's CI/CD flag: it permits adding and updating
+  extensions and config without a prompt, and without `--allow-deletes` nothing
+  can be silently removed. Add `--no-release` first if you want to stage and
+  inspect before releasing.
+
+  ```sh
+  npx shopify app deploy --allow-updates --message "<what shipped>"
+  ```
 
 ---
 
@@ -220,10 +226,12 @@ empty string, indistinguishable from unset.
 - [ ] **Prove Shopify compliance webhooks.** The HMAC-gated handlers, durable
   data-request workflow, redaction paths and app-level declarations for
   `customers/data_request`, `customers/redact` and `shop/redact` are implemented
-  and declared in `shopify.app.toml`. Both deploy halves are the Deploy section
-  above — the migration and the app version. Once those land, exercise Shopify's
-  compliance checks or signed production deliveries. Operator fulfillment and
-  completion steps live in
+  and declared in `shopify.app.toml`. The database half is done — the
+  `shopify_privacy_requests` table the handlers write to landed 2026-08-18. What
+  remains is the app version, in the Deploy section above; until it ships,
+  Shopify has no compliance declarations to deliver against. Once it does,
+  exercise Shopify's compliance checks or signed production deliveries. Operator
+  fulfillment and completion steps live in
   [production/data-deletion.md](production/data-deletion.md).
 
 ---
