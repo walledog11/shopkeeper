@@ -188,11 +188,16 @@ fixture:
   classify `needs_review` after repeated `get_order_by_name` errors and escalate.
   Advisory, so it does not gate.
 
-The nightly now executes for real. `full-nightly` had carried
-`continue-on-error: true`, so it exited at its own credential check in ~17s and
-reported success — twelve consecutive green scheduled runs that ran no evals.
-That flag is gone as of PR #38, so the 07:00 UTC run costs a full 84-fixture
-single-repeat suite every night and a genuine regression now turns it red.
+There is no nightly any more. It had carried `continue-on-error: true`, so it
+exited at its own credential check in ~17s and reported success — twelve
+consecutive green scheduled runs that ran no evals. The flag is gone (PR #38)
+and the cron with it: a scheduled run only catches regression *without* a code
+change, the PR gate catches the rest at the moment it lands, and with no users
+the six-day detection lag costs nothing. The full 84-fixture suite and the judge
+evals are now a `workflow_dispatch` you fire deliberately — before a rollout
+gate, before closing an eval item, after a model bump — not a calendar event.
+`package.json` and `package-lock.json` joined the `paths` filter in the same
+change, so an SDK bump can no longer sail past the gate.
 
 Runs stay expensive. Follow the
 [paid model-eval workflow](production/critical-path-test-checklist.md#paid-model-backed-agent-evals):

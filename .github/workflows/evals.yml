@@ -8,9 +8,9 @@ on:
       - 'apps/dashboard/src/lib/messaging/**'
       - 'apps/gateway/src/order-ops.eval.test.ts'
       - 'packages/db/refund-spend.ts'
+      - 'package.json'
+      - 'package-lock.json'
       - '.github/workflows/evals.yml'
-  schedule:
-    - cron: '0 7 * * *'
   workflow_dispatch:
     inputs:
       mode:
@@ -117,7 +117,7 @@ jobs:
 
   full-nightly:
     name: Full dashboard and gateway drift suite
-    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'full')
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'full'
     runs-on: ubuntu-latest
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
