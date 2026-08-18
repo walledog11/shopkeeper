@@ -1,6 +1,8 @@
 # Conversation Episodes for Storefront Chat
 
-**Status:** P0, P1, and items A through E shipped. F remains.
+**Status:** P0, P1, and items A through E shipped. F is half done — the eval
+gate ran 2026-08-17; the live dev-store run remains, tracked in
+[to-do-list.md](to-do-list.md) under Prove in prod.
 **Decision date:** 2026-08-12. **Revised:** 2026-08-14 — cut to what shipping and
 testing the storefront chat widget actually requires; identity, obligations, and
 prior-episode retrieval are deferred with reasons below.
@@ -282,12 +284,13 @@ seam is visible, and only within one page load.
 
 ### F. Ship
 
-- [ ] Run the full agent eval gate **once**, after A, B, and C are all complete —
+- [x] Run the full agent eval gate **once**, after A, B, and C are all complete —
   not once per item. Safe-reply auto-execution owes a gate run of its own; batch
-  it into this one, since both change planner-visible routing. Follow the
-  [paid model-eval workflow](production/critical-path-test-checklist.md#paid-model-backed-agent-evals):
-  targeted one-repeat probes first, then explicit approval for the single
-  unfiltered run.
+  it into this one, since both change planner-visible routing. — done by the
+  2026-08-17 full recapture (`e9345501`, then `4037a82a`): 84 fixtures at 3
+  repeats, 250/252, with A, B and C all landed beforehand and safe-reply routing
+  in the same run. Baseline is current; only the advisory `quick-reply-thanks-ack`
+  sits below full.
 - [ ] Verify on the dev store: widget, dashboard, operator notification, and
   reply/approval paths together.
 
