@@ -15,7 +15,11 @@ All three deploy surfaces are current as of 2026-08-18 — Vercel on `master`, t
 database migrated (six partial unique indexes verified at 6/6), and the Shopify
 app released as `shopkeeper-production-26`, which shipped the theme extension and
 the `compliance_topics` declarations. When any of them falls behind again, that
-outranks everything in this file: all three fail silently.
+outranks everything in this file: all three fail silently. Railway is not in that
+trio and probably should be — it fails just as quietly. Both app surfaces were
+last confirmed together on `4fa54da4` (2026-08-18), Vercel Ready and Railway
+SUCCESS; a change landing in `packages/db` or `packages/agent` needs both before
+either app's behavior is what the code says.
 
 **Guiding principle for pending integrations.** Shopkeeper is still in active
 development — channels and features are being added, not finalized. Pending
@@ -108,32 +112,41 @@ Code work that is started and not finished.
   obligations. P0, P1 and items A–E have shipped; F is the live dev-store run,
   filed under Prove in prod above. Full sequence and the deferred list:
   [conversation-context-and-cross-channel-memory-plan.md](conversation-context-and-cross-channel-memory-plan.md).
-- [ ] **Ship the 1-hour cache-write pricing fix, then read one day of spend.**
-  The code is written on `price-1h-cache-writes` (`2d7f63dc`): `LLM_PRICING` and
-  `usage.ts` price the 1h stable block at 2× input and the 5m volatile block at
-  1.25×, reading the per-TTL breakdown the API returns rather than applying a
-  flat multiplier. The cap worry that held this is measured and closed — a cold
-  write is ~11.8k tokens at 1h and a warm call writes none, so the correction is
-  ~2.7¢ per cold write on Sonnet 5, bounded by the 1-hour TTL and a prefix all 17
-  orgs share: under $0.64/day worst case against a $20 cap whose worst real day
-  was $4.82. Operator turns and composer-ask never write a 1h block at all. Only
-  measured spend moves; existing `llm_daily_spend` rows are untouched — true
-  only as of `d8d10289`, which took `budgetTokens` back off the TTL split (see
-  the loop-budget entry below). Open as PR #36. Delete this entry once the fix
-  is deployed and the first day's rows look sane.
+- [ ] **Read one day of spend against the 1-hour cache-write pricing fix.**
+  Shipped 2026-08-18, PR #36, merge `4fa54da4`, live on both surfaces — Vercel
+  Ready and Railway SUCCESS on that commit. `usageToNanoDollars` now prices the
+  1h stable block at 2× input and the 5m volatile block at 1.25×, reading the
+  per-TTL breakdown the API returns instead of a flat multiplier. Existing
+  `llm_daily_spend` rows were not rewritten, so **today's row straddles the
+  deploy** — everything before it priced at the old flat 1.25×. The first
+  readable day is **2026-08-19 UTC**; today will undershoot and is evidence of
+  nothing. Expect a small correction: ~2.7¢ per cold write on Sonnet 5, bounded
+  by the 1-hour TTL and a prefix all 17 orgs share, under $0.64/day worst case
+  against a $20 cap whose worst real day was $4.82. Operator turns and
+  composer-ask never write a 1h block at all. Delete this entry once a full
+  day's rows look sane.
 - [ ] **A cold support turn spends three quarters of its loop budget before it
-  acts.** Found while shipping the pricing fix. `budgetTokens` weights cache
-  writes at 1.25× and `agent-loop.ts:233` stops the run once they pass
-  `TOKEN_BUDGET` (20,000), but production's measured cold split-prompt call
-  writes ~11.8k tokens into the 1h stable block — 14,954 weighted tokens, 75% of
-  the budget, consumed before the first tool call. It fires whenever the shared
-  prefix has gone cold, so the first support run after any quiet hour iterates
-  on what is left. Nothing is broken today and the pricing fix no longer touches
-  it, but the guard cannot tell a cold cache from a runaway loop: the write is a
-  one-time startup cost, the same whether the turn makes one tool call or ten.
-  Either exclude cache writes from the budget or recalibrate `TOKEN_BUDGET`
-  against a warm and a cold run. Support-planner surface, so it needs the eval
-  gate — which cannot currently run in CI (see the missing key below).
+  acts.** `budgetTokens` weights cache writes at 1.25× and `agent-loop.ts:233`
+  ends the run once they pass `TOKEN_BUDGET` (20,000), but production's measured
+  cold split-prompt call writes ~11.8k tokens into the 1h stable block — 14,954
+  weighted tokens, 75% of the budget, spent before the first tool call. It
+  fires whenever the shared prefix has gone cold, so the first support run after
+  any quiet hour iterates on what is left. The guard cannot tell a cold cache
+  from a runaway loop: that write is a one-time startup cost, the same whether
+  the turn makes one tool call or ten.
+
+  Nothing is broken today, and this is *why* the pricing fix deliberately does
+  not share its weights. Pricing 1h writes at 2× in `budgetTokens` too — which is
+  what `2d7f63dc` originally did — took the same cold call to 23,840 and ended
+  every cold support run at `token_budget` before its first tool call; warm calls
+  (1,330) were unaffected, so it would have surfaced as an intermittent
+  first-ticket-of-the-morning fault. `d8d10289` reverted that half to master's
+  formula, byte-identical, and pinned it with a regression test. The comment in
+  `usage.ts` explains the divergence; it is deliberate, not an oversight to
+  tidy up. Fixing this properly means either excluding cache writes from the
+  budget or recalibrating `TOKEN_BUDGET` against a warm and a cold run.
+  Support-planner surface, so it needs the eval gate — which cannot currently
+  run in CI (see the missing key below).
 - [ ] **Conversation-to-sale attribution.** Connect meaningful storefront-chat
   interactions and product recommendations to later Shopify orders so merchants
   can distinguish direct, product-assisted, and chat-assisted revenue. Report it
@@ -168,7 +181,8 @@ run, and 79 of 84 fixtures now carry `classifierIntents` — so production's
 1-hour stable-prefix TTL is confirmed as of 2026-08-18: a third thread context
 eight minutes after a cold write read back the full 11,848-token prefix and
 wrote only the 43-token volatile delta, which a 5-minute block could not have
-done. What is left is one advisory fixture:
+done. What is left is one advisory fixture and the CI credential gap that keeps
+any of this from being re-checked automatically:
 
 - [ ] **`quick-reply-thanks-ack` passes 1/3.** The only fixture below full. Runs
   classify `needs_review` after repeated `get_order_by_name` errors and escalate.
@@ -176,14 +190,19 @@ done. What is left is one advisory fixture:
 - [ ] **The gate is green on a laptop, not in CI — `ANTHROPIC_API_KEY` is not a
   repo secret.** `gh secret list` has seven secrets and that is not one of them,
   so every job in `evals.yml` exits 1 at its own `Require model credentials`
-  step. On a pull request that surfaces honestly: PR #36 shows *Core dashboard
-  eval gates* and *Gateway pre-filter and clear-fraud gates* failing in ~15s. The
-  nightly does not, because `full-nightly` carries `continue-on-error: true` —
-  the job fails, the run reports success, and `evals.yml` has shown twelve
+  step. On a pull request that surfaces honestly: PR #36 showed *Core dashboard
+  eval gates* and *Gateway pre-filter and clear-fraud gates* failing in ~15s, and
+  was merged 2026-08-18 with both still red — every other check green, and the
+  merged diff reaching no prompt, tool, or control-flow surface. The nightly does
+  not surface it, because `full-nightly` carries `continue-on-error: true` — the
+  job fails, the run reports success, and `evals.yml` has shown twelve
   consecutive green scheduled runs that executed no evals at all. The 2026-08-17
   baseline was captured by hand and is real; what is not real is any belief that
   CI has been re-checking it since. Add the secret, then drop the
   `continue-on-error` that hid this, or the next silent stretch looks identical.
+  Until then every PR touching `packages/agent/**` arrives with two red checks
+  that mean "no key," not "regression" — which is exactly the signal that stops
+  being read.
 
 Runs stay expensive. Follow the
 [paid model-eval workflow](production/critical-path-test-checklist.md#paid-model-backed-agent-evals):
