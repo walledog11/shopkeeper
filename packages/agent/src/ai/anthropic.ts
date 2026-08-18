@@ -2,10 +2,27 @@ import Anthropic from "@anthropic-ai/sdk";
 
 let anthropicClient: Anthropic | null = null;
 
+// The SDK defaults — a 10-minute timeout and 2 retries — are wrong for both
+// hosts. Dashboard agent routes declare `maxDuration = 60`, so the platform
+// kills the request long before the SDK timeout can fire, and the caller gets an
+// opaque function timeout instead of a logged provider error. In the gateway
+// there is no platform cap at all, so a wedged call holds a BullMQ worker slot
+// for ten minutes.
+//
+// 60s clears the worst legitimate completion with room to spare: every call site
+// is non-streaming and bounded at or below PLAN_REPLAN_MAX_TOKENS (2048), which
+// lands well under a minute. Retries drop to 1 because the gateway already
+// retries at the job level (`attempts: 3`), and the two multiply — SDK 2 + BullMQ
+// 3 is up to nine provider calls for one job.
+const REQUEST_TIMEOUT_MS = 60_000;
+const MAX_RETRIES = 1;
+
 function resolveAnthropicClient(): Anthropic {
   if (!anthropicClient) {
     anthropicClient = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY,
+      timeout: REQUEST_TIMEOUT_MS,
+      maxRetries: MAX_RETRIES,
     });
   }
   return anthropicClient;
