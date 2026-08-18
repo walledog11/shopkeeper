@@ -8,7 +8,12 @@ export const NANO_DOLLARS_PER_USD = 1_000_000_000;
 export interface LlmTokenPriceNanoUsd {
   inputPerToken: number;
   outputPerToken: number;
-  cacheCreationPerToken: number;
+  // Cache writes are priced by TTL, not by a single cache-creation rate: the
+  // 5-minute default costs 1.25x input, the 1-hour extended TTL costs 2x.
+  // `buildSplitCachedSystemPrompt` writes one block at each TTL, so both rates
+  // are live on every planner call.
+  cacheWrite5mPerToken: number;
+  cacheWrite1hPerToken: number;
   cacheReadPerToken: number;
 }
 
@@ -17,53 +22,67 @@ export interface LlmTokenPriceNanoUsd {
 // to FALLBACK_PRICE so we err on the side of overcounting, not undercounting.
 export const LLM_PRICING: Record<string, LlmTokenPriceNanoUsd> = {
   "claude-haiku-4-5-20251001": {
-    inputPerToken: 1000,         // $1.00 / MTok
-    outputPerToken: 5000,        // $5.00 / MTok
-    cacheCreationPerToken: 1250, // $1.25 / MTok
-    cacheReadPerToken: 100,      // $0.10 / MTok
+    inputPerToken: 1000,        // $1.00 / MTok
+    outputPerToken: 5000,       // $5.00 / MTok
+    cacheWrite5mPerToken: 1250, // $1.25 / MTok
+    cacheWrite1hPerToken: 2000, // $2.00 / MTok
+    cacheReadPerToken: 100,     // $0.10 / MTok
   },
   // The agent eval judge (apps/dashboard/src/lib/agent/__evals__/judge.ts).
   // Sonnet-tier standard rate, same $3/$15 as Sonnet 5. Never reached by
   // production traffic — priced so eval runs report real cost instead of
   // falling through to FALLBACK_PRICE.
   "claude-sonnet-4-6": {
-    inputPerToken: 3000,         // $3.00 / MTok
-    outputPerToken: 15000,       // $15.00 / MTok
-    cacheCreationPerToken: 3750, // $3.75 / MTok
-    cacheReadPerToken: 300,      // $0.30 / MTok
+    inputPerToken: 3000,        // $3.00 / MTok
+    outputPerToken: 15000,      // $15.00 / MTok
+    cacheWrite5mPerToken: 3750, // $3.75 / MTok
+    cacheWrite1hPerToken: 6000, // $6.00 / MTok
+    cacheReadPerToken: 300,     // $0.30 / MTok
   },
   // Sonnet 5 launch promo is $2/$10 through 2026-08-31, reverting to standard
   // $3/$15 after. We pin the standard rate: this backstop must never undercount,
   // and $3/$15 overcounts slightly during the promo (safe) then becomes exact —
   // no Sept-1 code change needed.
   "claude-sonnet-5": {
-    inputPerToken: 3000,         // $3.00 / MTok
-    outputPerToken: 15000,       // $15.00 / MTok
-    cacheCreationPerToken: 3750, // $3.75 / MTok
-    cacheReadPerToken: 300,      // $0.30 / MTok
+    inputPerToken: 3000,        // $3.00 / MTok
+    outputPerToken: 15000,      // $15.00 / MTok
+    cacheWrite5mPerToken: 3750, // $3.75 / MTok
+    cacheWrite1hPerToken: 6000, // $6.00 / MTok
+    cacheReadPerToken: 300,     // $0.30 / MTok
   },
 };
 
 const FALLBACK_PRICE: LlmTokenPriceNanoUsd = {
   inputPerToken: 5000,
   outputPerToken: 25000,
-  cacheCreationPerToken: 6250,
+  cacheWrite5mPerToken: 6250,
+  cacheWrite1hPerToken: 10000,
   cacheReadPerToken: 500,
 };
 
 export interface LlmUsageTokens {
   inputTokens: number;
   outputTokens: number;
+  /** Every cache write, both TTLs — the provider's authoritative total. */
   cacheCreationInputTokens?: number;
+  /** The 1-hour-TTL share of the above. Omitted when the provider sends no breakdown. */
+  cacheCreation1hInputTokens?: number;
   cacheReadInputTokens?: number;
 }
 
 export function usageToNanoDollars(usage: LlmUsageTokens, model: string): number {
   const price = LLM_PRICING[model] ?? FALLBACK_PRICE;
+  const cacheWrites = usage.cacheCreationInputTokens ?? 0;
+  // Without a breakdown, charge every cache write at the dearer 1-hour rate.
+  // Splitting the difference would undercount whenever the 1-hour block missed,
+  // and this backstop must never undercount.
+  const write1h = Math.min(usage.cacheCreation1hInputTokens ?? cacheWrites, cacheWrites);
+  const write5m = cacheWrites - write1h;
   return (
     usage.inputTokens * price.inputPerToken +
     usage.outputTokens * price.outputPerToken +
-    (usage.cacheCreationInputTokens ?? 0) * price.cacheCreationPerToken +
+    write1h * price.cacheWrite1hPerToken +
+    write5m * price.cacheWrite5mPerToken +
     (usage.cacheReadInputTokens ?? 0) * price.cacheReadPerToken
   );
 }
