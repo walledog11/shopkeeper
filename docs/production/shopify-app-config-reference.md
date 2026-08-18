@@ -1,14 +1,42 @@
 # Shopify app configuration — rollback reference
 
-> ⚠️ **The rollback target in this file is stale — do not act on it (2026-08-18).**
-> The released version is now `shopkeeper-production-26`, not `-9`. Roughly
-> seventeen versions shipped between 2026-08-07 and 2026-08-18 without being
-> recorded here, so **releasing `-8` today would revert far more than the M0a/M0b
-> change** — including the `[app_proxy]` block the storefront chat proxy depends
-> on and the `compliance_topics` declarations added in `-26`. Read the real list
-> with `npx shopify app versions list` and pick the target from that before
-> rolling anything back. Everything below still describes M0a/M0b accurately as
-> history; only the "re-release `-8`" instruction is unsafe.
+> ## Rollback target — read this before rolling anything back
+>
+> **Verified against `npx shopify app versions list --json` on 2026-08-18.**
+> Twenty versions exist, `-7` through `-26`. The active release is
+> **`shopkeeper-production-26`**.
+>
+> **To undo the most recent release, go to `-25`, not `-8`.**
+>
+> ```sh
+> npx shopify app release --version shopkeeper-production-25
+> ```
+>
+> The rest of this file was written when `-9` was current and calls `-8` "the
+> rollback path". `-8` does still exist and is still re-releasable — the claim is
+> not false, it is *incomplete*, which is worse in an incident. Seventeen versions
+> shipped after `-9` without being recorded here, so releasing `-8` today reverts
+> eighteen versions: the `[app_proxy]` block the storefront chat proxy depends on,
+> the entire chat widget, and the `compliance_topics` declarations.
+>
+> | Version | Date | What reverting *past* it costs you |
+> | --- | --- | --- |
+> | `-26` | 2026-08-18 | active — compliance webhooks + current widget |
+> | `-25` | 2026-08-15 | **one-step rollback target**; last release before `-26` |
+> | `-15`…`-25` | 2026-08-15 | chat widget UI, eleven releases in one night |
+> | `-13`, `-14` | 2026-08-12 | M1.5 verification widget card |
+> | `-9`…`-12` | 2026-08-08/10 | `write_app_proxy` scope + `[app_proxy]` block (M0a/M0b) |
+> | `-8` | 2026-08-03 | pre-storefront-chat; app proxy gone entirely |
+>
+> Re-derive this table rather than trusting it — the drift it documents took
+> eleven days to notice:
+>
+> ```sh
+> npx shopify app versions list --json
+> ```
+>
+> (`versions list` without `--json` paginates and blocks on input.) Everything
+> below remains accurate as M0a/M0b history.
 
 > **Current webhook configuration (2026-08-09):** the historical notes below
 > describe the pre-migration state. The five order/uninstall subscriptions now
@@ -23,10 +51,10 @@ migration from Dev-Dashboard-configured app settings to a CLI-authoritative
 [storefront-chat-verification-2026-08.md](storefront-chat-verification-2026-08.md).
 
 **Both shipped 2026-08-07** as `shopkeeper-production-9`, in one file rather than
-two deploys. This file stays useful as the rollback path: `-8` is the
-pre-storefront-chat configuration and remains re-releasable with
-`npx shopify app release --version shopkeeper-production-8`. See "Outstanding"
-for what was skipped along the way.
+two deploys. `-8` is the pre-storefront-chat configuration and is still
+re-releasable — but it is no longer the rollback target for anything current, and
+reaching for it is now a mistake. See the table at the top of this file, and
+"Outstanding" for what was skipped along the way.
 
 This record contains sanitized configuration only. It intentionally omits the
 client secret, access tokens, and the app secret. `SHOPIFY_CLIENT_ID` and

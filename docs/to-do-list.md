@@ -187,16 +187,16 @@ empty string, indistinguishable from unset.
   explanation of that prompt, which was supposed to be written *before*
   deploying. Scopes are unchanged since, so the check is still valid against the
   current release.
-- [ ] **Re-establish the Shopify app rollback target.** The 2026-08-18 deploy
-  released `shopkeeper-production-26`, but every doc still names `-9` as current
-  and `-8` as the rollback — so roughly seventeen versions shipped between
-  2026-08-07 and 2026-08-18 without being recorded anywhere. Rolling back to `-8`
-  today would revert far more than the v9 change, including the `[app_proxy]`
-  block the storefront chat proxy depends on. Read the real version list
-  (`npx shopify app versions list`), decide the actual rollback target, and
-  correct
-  [production/shopify-app-config-reference.md](production/shopify-app-config-reference.md),
-  whose rollback guidance is currently unsafe to follow.
+- [ ] **Record app versions as they ship, or stop treating the reference doc as
+  current.** Seventeen versions went out between `-9` and `-26` with nothing
+  written down, so the rollback target in
+  [production/shopify-app-config-reference.md](production/shopify-app-config-reference.md)
+  pointed eighteen versions back for eleven days and nobody noticed. The target
+  itself is fixed — verified 2026-08-18, `-25` is the one-step rollback — but the
+  drift will recur, because releasing is a CLI call and recording is a manual
+  edit. Either make the deploy write its own version note, or delete the version
+  bookkeeping from that file and point at `npx shopify app versions list --json`
+  as the only source of truth. Do not leave a third copy that goes stale again.
 - [ ] **Prove Shopify compliance webhooks.** The HMAC-gated handlers, durable
   data-request workflow, redaction paths and app-level declarations for
   `customers/data_request`, `customers/redact` and `shop/redact` are implemented
