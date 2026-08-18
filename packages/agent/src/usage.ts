@@ -11,10 +11,16 @@ export interface ModelUsageMetrics {
   cacheReadInputTokens: number;
   totalTokens: number;
   // Cost-weighted token count for the loop's iteration budget. Cache reads are
-  // ~10x cheaper, and cache writes cost 1.25x an input token at the 5-minute
-  // default or 2x at the 1-hour TTL, so summing them at full weight (as
-  // totalTokens does) makes a cached operator turn look far heavier than it
-  // costs. totalTokens stays raw for logging/spend continuity.
+  // ~10x cheaper and cache writes ~1.25x an input token, so summing them at full
+  // weight (as totalTokens does) makes a cached operator turn look far heavier
+  // than it costs. totalTokens stays raw for logging/spend continuity.
+  //
+  // Deliberately flat at 1.25x, NOT the 2x that `usageToNanoDollars` now charges
+  // a 1-hour write: the 1h block is a one-time ~11.8k-token startup cost, the
+  // same whether the turn makes one tool call or ten. Pricing it in would spend
+  // TOKEN_BUDGET on a cold cache rather than on iterations — at 2x, a single
+  // cold support write is 23.8k against a 20k budget, stopping the loop before
+  // its first tool call.
   budgetTokens: number;
 }
 
@@ -55,8 +61,6 @@ export function readModelUsage(response: { usage?: unknown }) {
     usage.cache_creation?.ephemeral_1h_input_tokens ?? cacheCreationInputTokens,
     cacheCreationInputTokens,
   );
-  const cacheCreation5mInputTokens = cacheCreationInputTokens - cacheCreation1hInputTokens;
-
   return {
     inputTokens,
     outputTokens,
@@ -65,11 +69,7 @@ export function readModelUsage(response: { usage?: unknown }) {
     cacheReadInputTokens,
     totalTokens: inputTokens + outputTokens + cacheCreationInputTokens + cacheReadInputTokens,
     budgetTokens: Math.round(
-      inputTokens
-        + outputTokens
-        + 2 * cacheCreation1hInputTokens
-        + 1.25 * cacheCreation5mInputTokens
-        + 0.1 * cacheReadInputTokens,
+      inputTokens + outputTokens + 1.25 * cacheCreationInputTokens + 0.1 * cacheReadInputTokens,
     ),
   };
 }
