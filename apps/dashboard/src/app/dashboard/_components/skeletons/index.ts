@@ -10,6 +10,5 @@ export {
   ReviewPageSkeleton,
   SettingsPageSkeleton,
   TeamPageSkeleton,
-  TicketsArchivePageSkeleton,
   TicketsPageSkeleton,
 } from "./page-skeletons"

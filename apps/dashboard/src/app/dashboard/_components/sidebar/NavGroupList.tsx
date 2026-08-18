@@ -6,7 +6,6 @@ import { cn } from "@/lib/ui/cn";
 import type { NavItem, NavSection } from "../nav-items";
 import { OpenCountBadge } from "./OpenCountBadge";
 import {
-  inboxOpenCountBadgeClass,
   isRouteActive,
   mobileNavGroupCardClass,
   mobileNavLinkClass,
@@ -17,9 +16,8 @@ import {
   useDashboardNavPrefetch,
 } from "./useDashboardNavPrefetch";
 
-function itemBadgeCount(item: NavItem, needsYouCount: number, openCount: number): number | null {
+function itemBadgeCount(item: NavItem, needsYouCount: number): number | null {
   if (item.href === "/dashboard/review" && needsYouCount > 0) return needsYouCount;
-  if (item.badge && openCount > 0) return openCount;
   return null;
 }
 
@@ -27,13 +25,11 @@ export function NavGroupList({
   sections,
   pathname,
   needsYouCount,
-  openCount = 0,
   onNavigate,
 }: {
   sections: NavSection[];
   pathname: string;
   needsYouCount: number;
-  openCount?: number;
   onNavigate: (e: MouseEvent<HTMLAnchorElement>, isActive: boolean) => void;
 }) {
   const prefetchNav = useDashboardNavPrefetch();
@@ -51,7 +47,7 @@ export function NavGroupList({
             <div className={mobileNavGroupCardClass}>
               {section.items.map((item) => {
                 const isActive = isRouteActive(pathname, item.href);
-                const badgeCount = itemBadgeCount(item, needsYouCount, openCount);
+                const badgeCount = itemBadgeCount(item, needsYouCount);
                 const label = item.mobileName ?? item.name;
 
                 return (
@@ -74,8 +70,7 @@ export function NavGroupList({
                     {badgeCount != null && (
                       <OpenCountBadge
                         openCount={badgeCount}
-                        animate={item.badge}
-                        className={item.badge ? inboxOpenCountBadgeClass : reviewCountBadgeClass}
+                        className={reviewCountBadgeClass}
                       />
                     )}
                   </Link>

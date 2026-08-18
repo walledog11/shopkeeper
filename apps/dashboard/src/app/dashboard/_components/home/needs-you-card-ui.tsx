@@ -187,6 +187,8 @@ const KIND_TOPIC_LABELS: Record<HomeNeedsAttentionItem["kind"], string> = {
   needs_merchant_input: "Question",
 }
 
+export type TicketCardMetaStatusTone = "send" | "caution" | "neutral" | "danger"
+
 export interface TicketCardMeta {
   channelName: string
   customerName: string | null
@@ -195,6 +197,16 @@ export interface TicketCardMeta {
   orderRef?: string | null
   isVip?: boolean
   topicLabel?: string | null
+  /** When set, renders instead of the tag topic pill (inbox status, etc.). */
+  statusLabel?: string | null
+  statusTone?: TicketCardMetaStatusTone
+}
+
+const META_STATUS_PILL_CLASS: Record<TicketCardMetaStatusTone, string> = {
+  send: "bg-[#f5ebe0] text-[#1a1a1a]",
+  caution: "bg-[#fff4e5] text-[#1a1a1a]",
+  neutral: "bg-white text-[#6b5d4f]",
+  danger: "bg-[#fff4e5] text-red-800",
 }
 
 function topicLabelFromTag(tag: string | null, fallback: string | null = null): string | null {
@@ -276,7 +288,20 @@ export function TicketCardMetaRow({ meta }: { meta: TicketCardMeta }) {
     </MetaPill>
   ) : null
 
-  const topicPill = categoryLabel ? (
+  const statusPill = meta.statusLabel ? (
+    <MetaPill className={cn(
+      "shrink-0 px-2.5 sm:px-3",
+      META_PILL_HEIGHT_CLASS,
+      META_STATUS_PILL_CLASS[meta.statusTone ?? "neutral"],
+    )}
+    >
+      <span className="whitespace-nowrap text-[11px] font-bold leading-none sm:text-xs">
+        {meta.statusLabel}
+      </span>
+    </MetaPill>
+  ) : null
+
+  const topicPill = !meta.statusLabel && categoryLabel ? (
     <MetaPill className={cn("shrink-0 px-2.5 sm:px-3", META_PILL_HEIGHT_CLASS, getTagStyle(meta.tag).className)}>
       <span className="whitespace-nowrap text-[11px] font-bold leading-none sm:text-xs">
         {categoryLabel}
@@ -295,9 +320,10 @@ export function TicketCardMetaRow({ meta }: { meta: TicketCardMeta }) {
     </MetaPill>
   )
 
-  const metaTailPills = orderPill || topicPill ? (
+  const metaTailPills = orderPill || statusPill || topicPill ? (
     <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto sm:gap-2">
       {orderPill}
+      {statusPill}
       {topicPill}
     </div>
   ) : null
@@ -308,6 +334,7 @@ export function TicketCardMetaRow({ meta }: { meta: TicketCardMeta }) {
         {channelPill}
         {customerPill}
         {orderPill}
+        {statusPill}
         {topicPill}
         {datePill}
       </div>

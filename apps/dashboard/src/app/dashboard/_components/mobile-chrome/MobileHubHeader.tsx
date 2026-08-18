@@ -34,11 +34,9 @@ function observeLayoutShift(element: HTMLElement, onChange: () => void) {
 }
 
 export function MobileHubHeader({
-  openCount,
   onSwitching,
   navAuth,
 }: {
-  openCount: number;
   onSwitching: (v: boolean) => void;
   navAuth: NavAuth;
 }) {
@@ -80,7 +78,6 @@ export function MobileHubHeader({
           <MobileHubNavDropdown
             open={navOpen}
             onOpenChange={setNavOpen}
-            openCount={openCount}
             onSwitching={onSwitching}
             navAuth={navAuth}
           />

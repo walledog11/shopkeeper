@@ -41,6 +41,7 @@ export function threadToTicket(thread: Thread): Ticket {
     shopifyCustomerId: thread.shopifyCustomerId,
     filterStatus: thread.filterStatus,
     filterReason: thread.filterReason,
+    requestDisposition: thread.requestDisposition ?? null,
     messages: thread.messages.flatMap((message) => {
         if (message.senderType === SENDER_TYPE.NOTE && isAgentTurnContent(message.contentText)) return [];
         const isAgentNote =

@@ -17,6 +17,7 @@ import type {
   ThreadFilterStatus as DbThreadFilterStatus,
   ThreadStatus as DbThreadStatus,
   VoiceProposal as DbVoiceProposal,
+  DbThreadRequestDisposition,
 } from "@shopkeeper/db";
 
 // DB enum value types come from @shopkeeper/db so dashboard DTOs cannot drift from
@@ -26,6 +27,7 @@ export type ThreadStatus = DbThreadStatus;
 export type SenderType = DbSenderType;
 export type ThreadFilterStatus = DbThreadFilterStatus;
 export type ThreadFilterFeedback = DbThreadFilterFeedback;
+export type ThreadRequestDisposition = DbThreadRequestDisposition;
 
 // Agent-domain types live in @shopkeeper/agent/types; re-exported here so existing
 // `@/types` imports are unchanged.
@@ -156,6 +158,7 @@ export interface Thread {
   filterStatus: ThreadFilterStatus;
   filterReason: string | null;
   filterFeedback: ThreadFilterFeedback;
+  requestDisposition: ThreadRequestDisposition | null;
   customer: Customer;
   messages: Message[];
 }
@@ -185,6 +188,7 @@ export interface Ticket {
   shopifyCustomerId: string | null;
   filterStatus: ThreadFilterStatus;
   filterReason: string | null;
+  requestDisposition: ThreadRequestDisposition | null;
   messages: {
     sender: SenderType;
     text: string | null;

@@ -1,7 +1,6 @@
 import { Card } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { TicketQueueLoading } from "@/app/dashboard/(shell)/tickets/_components/queue/TicketQueueLoading"
-import { ThreadListLoading } from "@/app/dashboard/(shell)/tickets/_components/thread-list/ThreadListLoading"
+import { InboxStreamLoading } from "@/app/dashboard/(shell)/tickets/_components/stream/InboxStreamLoading"
 import { needsYouCardShellClassName } from "@/app/dashboard/_components/home/needs-you-card-styles"
 import { GlassToolbarSkeleton } from "./GlassToolbarSkeleton"
 import { MemoryLibrarySkeleton } from "./MemoryLibrarySkeleton"
@@ -76,29 +75,14 @@ export function HomePageSkeleton() {
 export function TicketsPageSkeleton() {
   return (
     <PageShell>
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="shrink-0 border-b border-border px-5 py-4">
-          <Pulse className="h-5 w-32 rounded-md" />
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        <div className={cn(
+          "flex flex-col min-h-full w-full mx-auto px-5 md:px-6 lg:px-8 pt-3 pb-4 gap-3",
+          dashboardChromeMaxWidthClass,
+        )}>
+          <Pulse className="h-10 w-full rounded-full border border-border bg-card" />
+          <InboxStreamLoading />
         </div>
-        <TicketQueueLoading />
-      </div>
-    </PageShell>
-  )
-}
-
-export function TicketsArchivePageSkeleton() {
-  return (
-    <PageShell>
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="shrink-0 space-y-3 border-b border-border px-4 py-3">
-          <Pulse className="h-8 w-full max-w-md rounded-lg" />
-          <div className="flex gap-2">
-            <Pulse className="h-7 w-16 rounded-full" />
-            <Pulse className="h-7 w-20 rounded-full" />
-            <Pulse className="h-7 w-14 rounded-full" />
-          </div>
-        </div>
-        <ThreadListLoading />
       </div>
     </PageShell>
   )

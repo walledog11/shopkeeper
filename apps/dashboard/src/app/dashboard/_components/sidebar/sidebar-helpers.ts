@@ -78,9 +78,6 @@ export function mobileNavLinkClass(active: boolean) {
 export const mobileNavGroupCardClass =
   "overflow-hidden rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] divide-y divide-border";
 
-export const inboxOpenCountBadgeClass =
-  "min-w-[22px] h-[22px] px-1 rounded-md text-[11px] font-bold flex items-center justify-center bg-green-600 text-background tabular-nums leading-none";
-
 export const reviewCountBadgeClass =
   "min-w-[22px] h-[22px] px-1 rounded-md text-[11px] font-bold flex items-center justify-center bg-amber-600 text-background tabular-nums leading-none";
 

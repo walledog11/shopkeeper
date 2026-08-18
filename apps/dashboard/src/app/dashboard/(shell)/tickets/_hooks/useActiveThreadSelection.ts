@@ -3,17 +3,12 @@ import useSWR from 'swr'
 import { fetcher } from '@/lib/api/fetcher'
 import { threadToTicket } from '../_lib/thread-to-ticket'
 import type { ActiveThreadData } from './useThreadCacheCoordinator'
-import type { TicketListView } from '../_components/thread-list/constants'
 import type { Thread, Ticket } from '@/types'
 
 interface UseActiveThreadSelectionProps {
   queryThreadId: string | null
-  activeView: TicketListView
-  forMeThreads: Thread[]
-  allOpenThreads: Thread[]
-  closedThreads: Thread[]
-  spamThreads: Thread[]
-  searchThreads: Thread[]
+  /** Every thread already on the client, in any cache — used only for a preview. */
+  knownThreads: Thread[]
 }
 
 function createLoadingTicket(threadId: string): Ticket {
@@ -40,18 +35,14 @@ function createLoadingTicket(threadId: string): Ticket {
     shopifyCustomerId: null,
     filterStatus: 'genuine',
     filterReason: null,
+    requestDisposition: null,
     messages: [],
   }
 }
 
 export function useActiveThreadSelection({
   queryThreadId,
-  activeView,
-  forMeThreads,
-  allOpenThreads,
-  closedThreads,
-  spamThreads,
-  searchThreads,
+  knownThreads,
 }: UseActiveThreadSelectionProps) {
   const [selectedActiveTicketId, setSelectedActiveTicketId] = useState<string | null>(null)
   const [dismissedQueryThreadId, setDismissedQueryThreadId] = useState<string | null>(null)
@@ -75,31 +66,12 @@ export function useActiveThreadSelection({
   } = useSWR<ActiveThreadData>(activeThreadKey, fetcher)
   const activeThread = activeThreadData?.thread
 
-  const effectiveActiveView = useMemo(() => {
-    if (queryActiveTicketId) {
-      if (activeThread?.id === queryActiveTicketId) {
-        if (activeThread.filterStatus === 'filtered') return 'spam'
-        return activeThread.status === 'closed' ? 'closed' : activeView === 'all_open' ? 'all_open' : 'for_me'
-      }
-      if (forMeThreads.some(thread => thread.id === queryActiveTicketId)) return 'for_me'
-      if (allOpenThreads.some(thread => thread.id === queryActiveTicketId)) return 'all_open'
-      if (closedThreads.some(thread => thread.id === queryActiveTicketId)) return 'closed'
-      if (spamThreads.some(thread => thread.id === queryActiveTicketId)) return 'spam'
-    }
-    return activeView
-  }, [activeView, activeThread, allOpenThreads, closedThreads, forMeThreads, queryActiveTicketId, spamThreads])
-
   const activeTicket = activeThread ? threadToTicket(activeThread) : undefined
   const activeThreadPreview = useMemo(
-    () => {
-      if (!activeTicketId) return undefined
-      return forMeThreads.find(thread => thread.id === activeTicketId)
-        ?? allOpenThreads.find(thread => thread.id === activeTicketId)
-        ?? closedThreads.find(thread => thread.id === activeTicketId)
-        ?? spamThreads.find(thread => thread.id === activeTicketId)
-        ?? searchThreads.find(thread => thread.id === activeTicketId)
-    },
-    [activeTicketId, allOpenThreads, closedThreads, forMeThreads, searchThreads, spamThreads],
+    () => activeTicketId
+      ? knownThreads.find(thread => thread.id === activeTicketId)
+      : undefined,
+    [activeTicketId, knownThreads],
   )
   const activeTicketPreview = useMemo(
     () => activeThreadPreview ? threadToTicket(activeThreadPreview) : undefined,
@@ -123,9 +95,7 @@ export function useActiveThreadSelection({
     activeThreadError,
     activeThreadPreview,
     activeTicket,
-    activeTicketPreview,
     conversationTicket,
-    effectiveActiveView,
     isConversationLoading,
     mutateActiveThread,
   }

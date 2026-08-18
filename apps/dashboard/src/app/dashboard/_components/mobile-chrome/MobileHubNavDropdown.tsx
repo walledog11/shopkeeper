@@ -40,13 +40,11 @@ type OrganizationMembership = {
 export function MobileHubNavDropdown({
   open,
   onOpenChange,
-  openCount,
   onSwitching,
   navAuth,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  openCount: number;
   onSwitching: (v: boolean) => void;
   navAuth: NavAuth;
 }) {
@@ -182,7 +180,6 @@ export function MobileHubNavDropdown({
                             sections={mobileNavSections}
                             pathname={pathname}
                             needsYouCount={needsYouCount}
-                            openCount={openCount}
                             onNavigate={handleNavClick}
                           />
 

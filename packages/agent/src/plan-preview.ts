@@ -2,6 +2,31 @@ import type { AgentPlan, OrgSettings, PlanStep, RawToolCall } from "./types.js"
 import { resolveAgentSettings, TIERS_THAT_AUTO_EXECUTE, type AutonomyTier } from "./settings.js"
 import { isQuestionableSender } from "./sender-trust.js"
 import { TOOL_CATEGORIES } from "./tools/registry/index.js"
+
+export function merchantRoutingQuestionFromCustomerMessage(
+  latestCustomerMessage: string | null | undefined,
+): string {
+  const latest = latestCustomerMessage?.trim() ?? ""
+  if (!latest) return "What should I tell the customer?"
+  const quoted = latest.length > 120 ? `${latest.slice(0, 119)}…` : latest
+  return `What should I tell the customer about: "${quoted}"?`
+}
+
+export function planHasUngroundedKbReply(plan: AgentPlan): boolean {
+  const hasKbMiss = (plan.warnings ?? []).some(
+    warning => warning.toLowerCase().includes("no relevant kb articles found"),
+  )
+  if (!hasKbMiss) return false
+  if (plan.rawToolCalls.some(toolCall => (
+    toolCall.name === "ask_operator" || toolCall.name === "escalate_to_human"
+  ))) {
+    return false
+  }
+  if (plan.rawToolCalls.some(toolCall => TOOL_CATEGORIES[toolCall.name] === "action")) {
+    return false
+  }
+  return plan.rawToolCalls.some(toolCall => toolCall.name === "send_reply")
+}
 import { checkStaticToolPolicy } from "./tools/static-policy.js"
 
 export type HomePlanKind = "quick_reply" | "needs_review" | "auto_execute" | "needs_merchant_input"
@@ -246,6 +271,15 @@ export function classifyHomePlan(
       replyText: null,
       sendReplyToolCall: null,
       question: routingQuestion,
+    }
+  }
+
+  if (planHasUngroundedKbReply(plan)) {
+    return {
+      kind: "needs_merchant_input",
+      replyText: null,
+      sendReplyToolCall: null,
+      question: null,
     }
   }
 

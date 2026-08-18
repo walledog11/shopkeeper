@@ -20,7 +20,6 @@ interface UseTicketActionsProps {
     nextFilterFeedback?: ThreadFilterFeedback,
   ) => Promise<void>
   setActiveTicketId: Dispatch<SetStateAction<string | null>>
-  setSelectedIds: Dispatch<SetStateAction<string[]>>
 }
 
 const jsonPost = (body: unknown): RequestInit => ({
@@ -42,7 +41,6 @@ export function useTicketActions({
   moveThreadStatus,
   moveThreadFilterStatus,
   setActiveTicketId,
-  setSelectedIds,
 }: UseTicketActionsProps) {
   const [replyText, setReplyText] = useState('')
   const [isSending, setIsSending] = useState(false)
@@ -198,36 +196,6 @@ export function useTicketActions({
     }
   }, [activeTicketId, patchThreadCaches, revalidateThreadCaches, showToast])
 
-  const handleBulkClose = useCallback(async (selectedIds: string[]) => {
-    if (selectedIds.length === 0) return
-    const ids = [...selectedIds]
-    try {
-      await requestOk('/api/threads/bulk', jsonPatch({ ids, action: 'close' }), 'Failed to close selected tickets')
-      await revalidateThreadCaches()
-      setSelectedIds([])
-      if (activeTicketId && ids.includes(activeTicketId)) setActiveTicketId(null)
-      showToast(`${ids.length} ticket${ids.length !== 1 ? 's' : ''} closed`)
-    } catch (err) {
-      console.error('Bulk close failed', err)
-      showToast(errorMessageFromUnknown(err, 'Failed to close selected tickets.'), 'error')
-    }
-  }, [activeTicketId, revalidateThreadCaches, setActiveTicketId, setSelectedIds, showToast])
-
-  const handleBulkArchive = useCallback(async (selectedIds: string[]) => {
-    if (selectedIds.length === 0) return
-    const ids = [...selectedIds]
-    try {
-      await requestOk('/api/threads/bulk', jsonPatch({ ids, action: 'archive' }), 'Failed to archive selected tickets')
-      await revalidateThreadCaches()
-      setSelectedIds([])
-      if (activeTicketId && ids.includes(activeTicketId)) setActiveTicketId(null)
-      showToast(`${ids.length} ticket${ids.length !== 1 ? 's' : ''} archived`)
-    } catch (err) {
-      console.error('Bulk archive failed', err)
-      showToast(errorMessageFromUnknown(err, 'Failed to archive selected tickets.'), 'error')
-    }
-  }, [activeTicketId, revalidateThreadCaches, setActiveTicketId, setSelectedIds, showToast])
-
   const handleMarkAsSpam = useCallback(async (threadId: string) => {
     try {
       await requestOk(`/api/threads/${threadId}`, jsonPatch({ filterStatus: 'filtered', filterFeedback: 'confirmed_spam' }), 'Failed to mark as spam')
@@ -258,21 +226,6 @@ export function useTicketActions({
     }
   }, [activeTicketId, moveThreadFilterStatus, revalidateThreadCaches, setActiveTicketId, showToast])
 
-  const handleBulkTag = useCallback(async (selectedIds: string[], tag: string) => {
-    const trimmedTag = tag.trim()
-    if (selectedIds.length === 0 || !trimmedTag) return
-    const ids = [...selectedIds]
-    try {
-      await requestOk('/api/threads/bulk', jsonPatch({ ids, action: 'tag', tag: trimmedTag }), 'Failed to tag selected tickets')
-      await revalidateThreadCaches()
-      setSelectedIds([])
-      showToast(`Tagged ${ids.length} ticket${ids.length !== 1 ? 's' : ''}`)
-    } catch (err) {
-      console.error('Bulk tag failed', err)
-      showToast(errorMessageFromUnknown(err, 'Failed to tag selected tickets.'), 'error')
-    }
-  }, [revalidateThreadCaches, setSelectedIds, showToast])
-
   return {
     replyText,
     setReplyText,
@@ -288,9 +241,6 @@ export function useTicketActions({
     handleResolve,
     handleReopen,
     handleLinkShopifyCustomer,
-    handleBulkClose,
-    handleBulkArchive,
-    handleBulkTag,
     handleMarkAsSpam,
     handleRecover,
   }

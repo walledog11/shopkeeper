@@ -451,6 +451,26 @@ describe("routePlan", () => {
     expect(out.warnings).toContain(CIRCULAR_CHANNEL_DEFLECTION_WARNING);
   });
 
+  it("routes an ungrounded KB reply to needs_review with a merchant question", () => {
+    const kbBlock = readBlock("tu_kb", "search_kb");
+    const out = routePlan({
+      ...baseRouteInput(),
+      ctx: makeCtx({
+        classifierSignals: withSignals({}),
+        recentMessages: [{
+          senderType: "customer",
+          contentText: "Any tips for making my candle burn evenly?",
+        }],
+      }),
+      rawToolCalls: [reply],
+      readBlocks: [kbBlock],
+      readStatusMap: new Map([["tu_kb", "not_found"]]),
+    });
+    expect(out.decision).toBe("needs_review");
+    expect(out.signals).toContain("kb_miss");
+    expect(out.question).toContain("candle burn evenly");
+  });
+
   it("auto-executes a clean reply with no signals firing", () => {
     const out = routePlan({
       ...baseRouteInput(),

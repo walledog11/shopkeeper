@@ -35,6 +35,8 @@ import {
 } from "./planner-safety/refunds.js";
 import type { ToolStatus } from "./tools/result.js";
 import { getToolDefinition, TOOL_CATEGORIES } from "./tools/registry/index.js";
+import { merchantRoutingQuestionFromCustomerMessage } from "./plan-preview.js";
+import { isMerchantAnswerPlanningInstruction } from "./kb-learned.js";
 import type { OrgSettings, RawToolCall, RoutingDecision } from "./types.js";
 
 export type { RoutingDecision };
@@ -243,12 +245,23 @@ function reasonFromSignals(signals: readonly string[]): string {
   return reasons.length > 0 ? reasons.join(" ") : "Needs human review.";
 }
 
-// A merchant-facing question for a policy gap the plan could not answer. Reuses
-// the last customer message, mirroring the old buildPolicyGapAskOperatorCall text.
 function buildMerchantRoutingQuestion(ctx: AgentContext): string {
   const customerTexts = customerMessageTexts(ctx);
-  const latest = customerTexts[customerTexts.length - 1]?.trim() ?? "this question";
-  return `What should I tell the customer about: "${latest}"?`;
+  return merchantRoutingQuestionFromCustomerMessage(customerTexts[customerTexts.length - 1]);
+}
+
+function planSearchedKbWithNoResults(input: RoutePlanInput): boolean {
+  return input.readBlocks.some(
+    (block) => block.name === "search_kb" && input.readStatusMap.get(block.id) === "not_found",
+  );
+}
+
+function isRoutineOrderStatusReply(input: RoutePlanInput): boolean {
+  const { ctx } = input;
+  if (!ctx.classifierSignals?.intents.order_status) return false;
+  if (ctx.recentOrders.length === 0) return false;
+  const shape = planShape(input.rawToolCalls);
+  return shape.hasSendReply && !shape.hasAction && !shape.hasAskOperator && !shape.hasEscalation;
 }
 
 export interface RoutePlanInput {
@@ -356,7 +369,23 @@ export function routePlan(input: RoutePlanInput): RoutingOutcome {
     needsReview = true;
   }
 
-  const question = signals.includes("policy_question") ? buildMerchantRoutingQuestion(ctx) : null;
+  const shape = planShape(rawToolCalls);
+  if (
+    !isMerchantAnswerPlanningInstruction(instruction)
+    && planSearchedKbWithNoResults(input)
+    && shape.hasSendReply
+    && !shape.hasAction
+    && !shape.hasAskOperator
+    && !shape.hasEscalation
+    && !isRoutineOrderStatusReply(input)
+  ) {
+    if (!signals.includes("kb_miss")) signals.push("kb_miss");
+    needsReview = true;
+  }
+
+  const question = signals.includes("policy_question") || signals.includes("kb_miss")
+    ? buildMerchantRoutingQuestion(ctx)
+    : null;
 
   return {
     decision: needsReview ? "needs_review" : "auto_execute",

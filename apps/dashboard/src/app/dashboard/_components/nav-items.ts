@@ -5,7 +5,6 @@ export interface NavItem {
   name: string;
   href: string;
   icon: LucideIcon;
-  badge?: boolean;
   description?: string;
   /** Friendlier label for mobile overflow nav */
   mobileName?: string;
@@ -26,7 +25,6 @@ export const inboxNavItem: NavItem = {
   name: "Inbox",
   href: "/dashboard/tickets",
   icon: Inbox,
-  badge: true,
 };
 
 export const topBarAgentItems: NavItem[] = [

@@ -144,8 +144,10 @@ describe("classifyHomePlan — info-only plans (existing behavior, default tier)
     expect(classifyHomePlan(plan({ warnings: ["Policy conflict"] })).kind).toBe("needs_review")
   })
 
-  it("allows a missing-KB warning — a reply-grounding note, not a blocker", () => {
-    expect(classifyHomePlan(plan({ warnings: [KB_NOT_FOUND_WARNING] })).kind).toBe("quick_reply")
+  it("requires merchant input when KB search found nothing and the plan only drafts a reply", () => {
+    const result = classifyHomePlan(plan({ warnings: [KB_NOT_FOUND_WARNING] }))
+    expect(result.kind).toBe("needs_merchant_input")
+    expect(result.question).toBeNull()
   })
 
   it("allows a missing Shopify customer warning when the reply does not depend on customer or order context", () => {

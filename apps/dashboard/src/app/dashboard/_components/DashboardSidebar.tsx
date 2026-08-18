@@ -1,9 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
-import { OpenThreadCountProvider, useOpenThreadCountOverride } from "@/hooks/OpenThreadCountContext";
-import { useInboxBadgeCountQuery } from "@/hooks/useThreads";
 import type { AutonomyTier } from "@shopkeeper/agent/settings";
 import { MobileChromeProvider } from "./mobile-chrome/MobileChromeContext";
 import { MobileChromeSync } from "./mobile-chrome/MobileChromeSync";
@@ -12,26 +9,15 @@ import { DesktopTopBar } from "./sidebar/DesktopTopBar";
 import { useNavAuth } from "./sidebar/useNavAuth";
 import { MainContentScrim } from "./right-rail/MainContentScrim";
 
-function useDashboardOpenCount(initialInboxCount: number) {
-  const pathname = usePathname();
-  const onTickets = pathname.startsWith("/dashboard/tickets");
-  const { override } = useOpenThreadCountOverride();
-  const { count: polledCount } = useInboxBadgeCountQuery(!onTickets, initialInboxCount);
-  return onTickets ? (override ?? polledCount) : polledCount;
-}
-
 function DashboardSidebarContent({
   children,
   initialAutonomyTier,
-  initialInboxCount,
   rightRail,
 }: {
   children: React.ReactNode;
   initialAutonomyTier: AutonomyTier;
-  initialInboxCount: number;
   rightRail: React.ReactNode;
 }) {
-  const openCount = useDashboardOpenCount(initialInboxCount);
   const navAuth = useNavAuth(initialAutonomyTier);
   const [isSwitching, setIsSwitching] = useState(false);
 
@@ -59,7 +45,6 @@ function DashboardSidebarContent({
 
       <div className="flex flex-1 min-h-0 w-full overflow-x-hidden flex-col bg-background">
         <DesktopTopBar
-          openCount={openCount}
           onSwitching={setIsSwitching}
           navAuth={navAuth}
         />
@@ -67,7 +52,6 @@ function DashboardSidebarContent({
         <div className="flex min-h-0 min-w-0 flex-1 flex-row">
           <div className="flex min-w-0 flex-1 flex-col">
             <MobileHubHeader
-              openCount={openCount}
               onSwitching={setIsSwitching}
               navAuth={navAuth}
             />
@@ -88,23 +72,18 @@ function DashboardSidebarContent({
 export default function DashboardSidebar({
   children,
   initialAutonomyTier,
-  initialInboxCount,
   rightRail,
 }: {
   children: React.ReactNode;
   initialAutonomyTier: AutonomyTier;
-  initialInboxCount: number;
   rightRail: React.ReactNode;
 }) {
   return (
-    <OpenThreadCountProvider>
-      <DashboardSidebarContent
-        initialAutonomyTier={initialAutonomyTier}
-        initialInboxCount={initialInboxCount}
-        rightRail={rightRail}
-      >
-        {children}
-      </DashboardSidebarContent>
-    </OpenThreadCountProvider>
+    <DashboardSidebarContent
+      initialAutonomyTier={initialAutonomyTier}
+      rightRail={rightRail}
+    >
+      {children}
+    </DashboardSidebarContent>
   );
 }

@@ -13,7 +13,6 @@ import {
 import { cn } from "@/lib/ui/cn";
 import { inboxNavItem, shopNavItem, topBarDropdowns, type NavItem } from "../nav-items";
 import { HeaderSearch } from "../header-search/HeaderSearch";
-import { OpenCountBadge } from "./OpenCountBadge";
 import { Logo } from "./Logo";
 import { AccountNavPill } from "./AccountNavPill";
 import {
@@ -97,11 +96,9 @@ function NavDropdown({
 }
 
 export function DesktopTopBar({
-  openCount,
   onSwitching,
   navAuth,
 }: {
-  openCount: number;
   onSwitching: (v: boolean) => void;
   navAuth: NavAuth;
 }) {
@@ -132,13 +129,6 @@ export function DesktopTopBar({
               className={topBarNavTriggerClass(inboxIsActive)}
             >
               <span>{inboxNavItem.name}</span>
-              {inboxNavItem.badge && (
-                <OpenCountBadge
-                  openCount={openCount}
-                  animate
-                  className="min-w-[22px] h-[22px] px-1 rounded-md text-[11px] font-bold flex items-center justify-center bg-green-600 text-background tabular-nums leading-none"
-                />
-              )}
             </Link>
 
             <Link

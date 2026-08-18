@@ -8,7 +8,7 @@ import { useFillerPhrase } from "@/hooks/useFillerPhrase"
 import { useIsMobile } from "@/hooks/useMobile"
 import { requestShopifyLinkFocus } from "@/lib/messaging/shopify-link-focus"
 import { useConversationAgentFlow } from "../../_hooks/useConversationAgentFlow"
-import { buildTicketQueueCardContent } from "../../_lib/ticket-queue-card-content"
+import { buildTicketCardMeta } from "../../_lib/inbox-row"
 import ConversationHeader from "./ConversationHeader"
 import ConversationContextBar from "./ConversationContextBar"
 import ChatTimeline from "./timeline/ChatTimeline"
@@ -188,8 +188,8 @@ export default function ConversationView({
   const agentBusy = isSending || isAgentRunning || isPlanLoading || isPlanExecuting
 
   const headerMeta = useMemo(
-    () => buildTicketQueueCardContent(ticket, orgSettings).meta,
-    [orgSettings, ticket],
+    () => buildTicketCardMeta(ticket),
+    [ticket],
   )
 
   const focusPlanCard = useCallback(() => {
