@@ -1,10 +1,11 @@
 // Seeds the local preview store used to screenshot-judge dashboard UI changes.
-// A solo-merchant store: open tickets across email and Instagram, cached plans
+// A solo-merchant store: open tickets across email, Instagram, and Shopify chat,
 // covering quick_reply / needs_review / needs_merchant_input, an escalated
 // ticket, overnight-cleared tickets, KB articles, and an agent-action trail.
 //
-// Run: node scripts/with-test-env.mjs node scripts/seed-preview-store.mjs
-// Then: E2E_AUTH_BYPASS=true node scripts/with-test-env.mjs npm run dev:e2e -w apps/dashboard
+// Run: npm run preview:seed
+// Then: npm run preview:serve   (production build, fastest)
+//    or npm run preview:dev     (next dev with HMR on :3100)
 import { randomUUID } from 'node:crypto';
 import { resetTestData, resolveTestEnv, seedE2ETestData } from './test-infra.mjs';
 
@@ -15,8 +16,12 @@ const AGENT_NAME = 'Wren';
 const now = Date.now();
 const ago = (minutes) => new Date(now - minutes * 60_000);
 
-function planStep(tool, label, description, category) {
-  return { id: randomUUID(), tool, label, description, category, enabled: true };
+function planStep(tool, label, description, category, id = randomUUID()) {
+  return { id, tool, label, description, category, enabled: true };
+}
+
+function toolCall(id, name, input) {
+  return { id, name, input };
 }
 
 function cachedPlan({ instruction, steps, rawToolCalls, warnings }) {
@@ -78,6 +83,9 @@ async function main() {
     const jonas = await customer('Jonas Weber', 'jonas.weber@example.com');
     const alice = await customer('Alice Fournier', 'alice.fournier@example.com');
     const rina = await customer('Rina Kobayashi', '17841400000000001');
+    const josh = await customer('Josh', 'shopify_chat:preview-josh');
+    const gary = await customer('Gary', '17841400000000002');
+    const malik = await customer('Malik', 'malik.customer@example.com');
 
     // 1. Quick reply — a WISMO the agent can answer outright.
     const t1 = await thread({
@@ -216,7 +224,7 @@ async function main() {
     await message(t5.id, 'customer', 'Can I swap the king for a super king? Order #1029.', ago(320));
     await message(t5.id, 'ai', 'Of course. The super king is $40 more — happy to send a return label and charge the difference, or refund the king and you reorder. Which suits you?', ago(300));
 
-    // 6. Another open ticket, no plan yet.
+    // 6. Merchant-input — care question not fully covered in memory.
     const t6 = await thread({
       customerId: alice.id,
       channelType: 'email',
@@ -227,7 +235,146 @@ async function main() {
       lastMessageSenderType: 'customer',
       aiSummary: 'Asking whether the linen can be tumble dried.',
     });
-    await message(t6.id, 'customer', 'Quick one — can the linen go in the tumble dryer or will it shrink?', ago(6));
+    const m6 = await message(t6.id, 'customer', 'Quick one — can the linen go in the tumble dryer or will it shrink?', ago(6));
+    await prisma.thread.update({
+      where: { id: t6.id },
+      data: {
+        cachedPlanMessageId: m6.id,
+        cachedPlan: cachedPlan({
+          instruction: 'Answer the customer',
+          steps: [
+            planStep('search_kb', 'Search memory', 'Look for linen care and drying guidance', 'read'),
+            planStep('ask_operator', 'Ask you', 'Confirm tumble-dry guidance for linen', 'internal'),
+          ],
+          rawToolCalls: [
+            { id: randomUUID(), name: 'search_kb', input: { query: 'linen tumble dry care instructions' } },
+            {
+              id: randomUUID(),
+              name: 'ask_operator',
+              input: {
+                question: 'Can our linen go in the tumble dryer on low, or should we tell customers line dry only?',
+              },
+            },
+          ],
+        }),
+      },
+    });
+
+    // 7. Merchant-input — restock timing needs merchant confirmation.
+    const t7 = await thread({
+      customerId: josh.id,
+      channelType: 'shopify_chat',
+      status: 'open',
+      tag: 'Product Inquiry',
+      lastMessageAt: ago(8),
+      lastMessageSenderType: 'customer',
+      aiSummary: 'Asking when the pink snowboard will be back in stock.',
+    });
+    const m7 = await message(t7.id, 'customer', 'Hey do you know when the new pink snowboard will restock?', ago(8));
+    await prisma.thread.update({
+      where: { id: t7.id },
+      data: {
+        cachedPlanMessageId: m7.id,
+        cachedPlan: cachedPlan({
+          instruction: 'Answer the customer',
+          steps: [
+            planStep('search_kb', 'Search memory', 'Check for pink snowboard restock notes', 'read'),
+            planStep('ask_operator', 'Ask you', 'Confirm the pink snowboard restock date', 'internal'),
+          ],
+          rawToolCalls: [
+            { id: randomUUID(), name: 'search_kb', input: { query: 'pink snowboard restock' } },
+            {
+              id: randomUUID(),
+              name: 'ask_operator',
+              input: {
+                question: 'When will the pink snowboard restock — is mid-September still accurate, and should we mention notify-me?',
+              },
+            },
+          ],
+        }),
+      },
+    });
+
+    // 8. Quick reply — shipping update the agent can send without merchant input.
+    const t8 = await thread({
+      customerId: gary.id,
+      channelType: 'ig_dm',
+      status: 'open',
+      tag: 'Shipping',
+      lastMessageAt: ago(22),
+      lastMessageSenderType: 'customer',
+      aiSummary: 'Wants a shipping update — says the order has been waiting a while.',
+    });
+    const m8 = await message(t8.id, 'customer', "When will my order ship it's been a while", ago(22));
+    const garyReadId = randomUUID();
+    const garyReplyId = randomUUID();
+    await prisma.thread.update({
+      where: { id: t8.id },
+      data: {
+        cachedPlanMessageId: m8.id,
+        cachedPlan: cachedPlan({
+          instruction: 'Answer the customer',
+          steps: [
+            planStep('send_reply', 'Send reply', 'Reply to Gary with the shipping update', 'communication', garyReplyId),
+          ],
+          rawToolCalls: [
+            toolCall(garyReadId, 'get_shopify_orders', { customer_email: 'gary@example.com' }),
+            toolCall(garyReplyId, 'send_reply', {
+              text: "Hey Gary — checked on this: your order left the warehouse yesterday and is with the carrier now. Tracking shows delivery Friday. I'll drop the link here if you need it.",
+            }),
+          ],
+        }),
+      },
+    });
+
+    // 9. Needs review — address change proposal for merchant approval.
+    const t9 = await thread({
+      customerId: malik.id,
+      channelType: 'email',
+      status: 'open',
+      subject: 'Change shipping address',
+      tag: 'Order Status',
+      lastMessageAt: ago(14),
+      lastMessageSenderType: 'customer',
+      aiSummary: 'Wants the shipping address updated on a recent order.',
+    });
+    const m9 = await message(t9.id, 'customer', 'Could you change the address on my order?', ago(14));
+    await prisma.thread.update({
+      where: { id: t9.id },
+      data: {
+        cachedPlanMessageId: m9.id,
+        cachedPlan: cachedPlan({
+          instruction: 'Answer the customer',
+          steps: [
+            planStep('get_order_by_name', 'Find order', "Look up Malik's most recent open order", 'read'),
+            planStep('update_shopify_order_address', 'Update address', 'Update shipping address on order #1062 to 742 Evergreen Terrace, Springfield, IL 62704', 'action'),
+            planStep('send_reply', 'Send reply', 'Confirm the address change to Malik', 'communication'),
+          ],
+          rawToolCalls: [
+            { id: randomUUID(), name: 'get_shopify_orders', input: { customer_email: 'malik.customer@example.com' } },
+            {
+              id: randomUUID(),
+              name: 'update_shopify_order_address',
+              input: {
+                order_number: '#1062',
+                address1: '742 Evergreen Terrace',
+                city: 'Springfield',
+                province: 'IL',
+                zip: '62704',
+                country: 'US',
+              },
+            },
+            {
+              id: randomUUID(),
+              name: 'send_reply',
+              input: {
+                text: "Hi Malik — I can update the shipping address on order #1062 before it leaves the warehouse. Reply with the full new address and I'll confirm once it's changed.",
+              },
+            },
+          ],
+        }),
+      },
+    });
 
     // Overnight cleared: closed in the last 24h with the agent last to speak.
     // Five distinct tags against a four-tag query cap, so the remainder folds
@@ -277,6 +424,7 @@ async function main() {
     await article(notes.id, 'Return window', 'Thirty days from delivery on unused items in original packaging. Sale items are final.', ['Returns']);
     await article(notes.id, 'Damaged on arrival', 'Refund in full without asking for the item back when a photo shows a seam or weave fault.', ['Returns']);
     await article(notes.id, 'Restock timing', 'The oatmeal and clay colourways restock on the first Tuesday of each month.', ['Product Inquiry']);
+    await article(shopifyBase.id, 'Pink snowboard restock', 'The pink snowboard is sold out. The next restock is expected mid-September; shoppers can use notify-me on the product page.', ['Product Inquiry']);
     await article(shopifyBase.id, 'Shipping policy', 'Free standard shipping over $120. Express is $18 and ships same day before 2pm.', ['Shipping']);
     await article(shopifyBase.id, 'Refund policy', 'Refunds are issued to the original payment method within 5 business days of receipt.', ['Returns']);
     await article(wholesale.id, 'Minimum order', 'Wholesale opens at twelve units per colourway with net-30 terms after the first order.', []);
@@ -299,7 +447,7 @@ async function main() {
         { query: 'international shipping canada duty' }],
       ['create_gift_card', 'action', 'success', 'human_approved', 'Created the explicitly requested $40 gift card for a late delivery.', t5.id,
         { amount: 40, customer_id: jonas.id }],
-      ['send_email', 'communication', 'error', 'auto_executed', 'Postmark rejected the address.', t6.id,
+      ['send_email', 'communication', 'error', 'auto_executed', 'Postmark rejected the address.', t5.id,
         { subject: 'Your linen care guide', body: 'Cool wash, line dry, warm iron while slightly damp.' }],
       ['flag_order', 'action', 'success', 'auto_executed', 'Flagged order #1044: billing and shipping countries differ.', null,
         { order_number: '1044' }],
@@ -330,6 +478,12 @@ async function main() {
       actions: await prisma.agentAction.count({ where: { organizationId: org.id } }),
       ticketDetail: `/dashboard/tickets/${t6.id}`,
       escalatedTicket: `/dashboard/tickets/${t4.id}`,
+      userScenarios: {
+        aliceMerchantInput: `/dashboard/tickets/${t6.id}`,
+        joshShopifyChat: `/dashboard/tickets/${t7.id}`,
+        garyInstagram: `/dashboard/tickets/${t8.id}`,
+        malikEmail: `/dashboard/tickets/${t9.id}`,
+      },
     });
   } finally {
     await prisma.$disconnect();

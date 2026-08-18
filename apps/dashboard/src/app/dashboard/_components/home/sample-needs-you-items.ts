@@ -13,6 +13,7 @@ export const SAMPLE_NEEDS_YOU_ITEMS: HomeNeedsAttentionItem[] = [
     contextLine: "Customer asking about return window for a recent linen throw order.",
     proposalSummary: "",
     actionText: null,
+    actionDisplay: null,
     replyText:
       "Hi Maya — thanks for reaching out! You have 30 days from delivery to return unworn items in original packaging. I can send a prepaid label if you'd like to swap for another color.",
     question: null,
@@ -34,6 +35,11 @@ export const SAMPLE_NEEDS_YOU_ITEMS: HomeNeedsAttentionItem[] = [
     contextLine: "Customer received a cracked mug and requested a refund.",
     proposalSummary: "",
     actionText: "Issue a $28.00 refund on order #1038 for the cracked Ceramic Mug.",
+    actionDisplay: {
+      chipLabel: "Issue $28 refund",
+      orderRef: "#1038",
+      detailLines: ["Cracked Ceramic Mug"],
+    },
     replyText:
       "So sorry about the mug, Jordan — that's not the unboxing experience we want for you. I've processed a full refund; you should see it back on your card in 3–5 business days.",
     question: null,

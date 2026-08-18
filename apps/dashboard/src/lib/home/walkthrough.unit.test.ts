@@ -15,6 +15,7 @@ function item(overrides: Partial<HomeNeedsAttentionItem> = {}): HomeNeedsAttenti
     contextLine: "context",
     proposalSummary: "proposal",
     actionText: null,
+    actionDisplay: null,
     replyText: "reply",
     question: null,
     orderRef: null,

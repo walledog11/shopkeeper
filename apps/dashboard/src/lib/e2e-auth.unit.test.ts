@@ -3,10 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { getE2EAuthIdentity, isE2EAuthBypassEnabled } from './e2e-auth';
 
 describe('E2E auth bypass guard', () => {
-  it('is disabled unless both NODE_ENV=test and E2E_AUTH_BYPASS=true are set', () => {
+  it('is disabled in production and without E2E_AUTH_BYPASS=true', () => {
     expect(isE2EAuthBypassEnabled({ NODE_ENV: 'test' })).toBe(false);
     expect(isE2EAuthBypassEnabled({ NODE_ENV: 'production', E2E_AUTH_BYPASS: 'true' })).toBe(false);
-    expect(isE2EAuthBypassEnabled({ NODE_ENV: 'development', E2E_AUTH_BYPASS: 'true' })).toBe(false);
+    expect(isE2EAuthBypassEnabled({ NODE_ENV: 'test', E2E_AUTH_BYPASS: 'false' })).toBe(false);
+  });
+
+  it('is enabled for local preview servers on test or development', () => {
+    expect(isE2EAuthBypassEnabled({ NODE_ENV: 'development', E2E_AUTH_BYPASS: 'true' })).toBe(true);
     expect(isE2EAuthBypassEnabled({ NODE_ENV: 'test', E2E_AUTH_BYPASS: 'true' })).toBe(true);
   });
 

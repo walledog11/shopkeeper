@@ -22,6 +22,18 @@ const ENV_FILE_PATHS = [
   path.join(REPO_ROOT, 'apps/gateway/.env.e2e.local'),
 ];
 
+function envOr(baseEnv, env, key, fallback) {
+  const fromBase = baseEnv[key];
+  if (typeof fromBase === 'string' && fromBase.length > 0) {
+    return fromBase;
+  }
+  const fromFiles = env[key];
+  if (typeof fromFiles === 'string' && fromFiles.length > 0) {
+    return fromFiles;
+  }
+  return fallback;
+}
+
 export function getTestEnv(baseEnv = process.env) {
   const envFiles = loadEnvFiles();
   const env = {
@@ -45,12 +57,12 @@ export function getTestEnv(baseEnv = process.env) {
     E2E_TEST_RUN: baseEnv.E2E_TEST_RUN || 'true',
     CLERK_SECRET_KEY: env.CLERK_SECRET_KEY || 'sk_test_clerk',
     CLERK_PUBLISHABLE_KEY: env.CLERK_PUBLISHABLE_KEY || env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_Y2xlcmsuZXhhbXBsZS5jb20k', // gitleaks:allow
-    ANTHROPIC_API_KEY: baseEnv.ANTHROPIC_API_KEY || 'test-anthropic-key',
-    INTERNAL_API_SECRET: baseEnv.INTERNAL_API_SECRET || 'test-internal-secret',
-    INTERNAL_API_SECRET_PREV: baseEnv.INTERNAL_API_SECRET_PREV || 'test-internal-secret-prev',
-    TOKEN_ENCRYPTION_KEY: baseEnv.TOKEN_ENCRYPTION_KEY || '0'.repeat(64),
-    OAUTH_ATTEMPT_SECRET: baseEnv.OAUTH_ATTEMPT_SECRET || 'test-oauth-attempt-secret-at-least-32-characters',
-    BLOB_READ_WRITE_TOKEN: baseEnv.BLOB_READ_WRITE_TOKEN || 'test-blob-token',
+    ANTHROPIC_API_KEY: envOr(baseEnv, env, 'ANTHROPIC_API_KEY', 'test-anthropic-key'),
+    INTERNAL_API_SECRET: envOr(baseEnv, env, 'INTERNAL_API_SECRET', 'test-internal-secret'),
+    INTERNAL_API_SECRET_PREV: envOr(baseEnv, env, 'INTERNAL_API_SECRET_PREV', 'test-internal-secret-prev'),
+    TOKEN_ENCRYPTION_KEY: envOr(baseEnv, env, 'TOKEN_ENCRYPTION_KEY', '0'.repeat(64)),
+    OAUTH_ATTEMPT_SECRET: envOr(baseEnv, env, 'OAUTH_ATTEMPT_SECRET', 'test-oauth-attempt-secret-at-least-32-characters'),
+    BLOB_READ_WRITE_TOKEN: envOr(baseEnv, env, 'BLOB_READ_WRITE_TOKEN', 'test-blob-token'),
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || env.CLERK_PUBLISHABLE_KEY || 'pk_test_Y2xlcmsuZXhhbXBsZS5jb20k', // gitleaks:allow
     E2E_AUTH_BYPASS: env.E2E_AUTH_BYPASS || 'false',
     E2E_AI_MODE: baseEnv.E2E_AI_MODE || 'deterministic',

@@ -8,6 +8,7 @@ import { getChannelInfoByName } from "@/lib/messaging/channels"
 import { timeAgoCard } from "@/lib/messaging/customer-display"
 import { getTagStyle } from "@/app/dashboard/_lib/ticket-tags"
 import type { HomeNeedsAttentionItem } from "@/lib/home/summary-contract"
+import type { HomeActionDisplay } from "@shopkeeper/agent/plan-preview"
 import {
   BUBBLE_TONE,
   isInboundTone,
@@ -461,6 +462,42 @@ function NeedsYouTicketMetaPill({ item }: { item: HomeNeedsAttentionItem }) {
 
 export function NeedsYouCardHeaderRow({ item }: { item: HomeNeedsAttentionItem }) {
   return <NeedsYouTicketMetaPill item={item} />
+}
+
+export function NeedsYouActionReceipt({
+  display,
+  hideOrderRef = false,
+}: {
+  display: HomeActionDisplay
+  hideOrderRef?: boolean
+}) {
+  const showOrderRef = Boolean(display.orderRef) && !hideOrderRef
+  const detailText = display.detailLines.join(", ")
+
+  return (
+    <div
+      className={cn(
+        needsYouSoftShadowClassName,
+        "inline-flex max-w-full rounded-2xl bg-white px-3 py-2",
+      )}
+    >
+      <p className="min-w-0 text-sm leading-snug">
+        <span className="font-bold text-[#1a1a1a]">{display.chipLabel}</span>
+        {showOrderRef ? (
+          <>
+            <span className="text-[#6b5d4f]/50"> · </span>
+            <span className="font-bold tabular-nums text-[#1a1a1a]">{display.orderRef}</span>
+          </>
+        ) : null}
+        {detailText ? (
+          <>
+            <span className="text-[#6b5d4f]/50"> · </span>
+            <span className="text-[#6b5d4f]">{detailText}</span>
+          </>
+        ) : null}
+      </p>
+    </div>
+  )
 }
 
 export function NeedsYouBubble({

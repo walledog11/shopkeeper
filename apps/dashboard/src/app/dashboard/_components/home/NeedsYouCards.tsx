@@ -7,6 +7,7 @@ import MerchantAnswerForm from "@/components/agent/MerchantAnswerForm"
 import { cn } from "@/lib/ui/cn"
 import type { HomeNeedsAttentionItem } from "@/lib/home/summary-contract"
 import {
+  NeedsYouActionReceipt,
   NeedsYouBubble,
   NeedsYouCardBody,
   NeedsYouCardFooter,
@@ -16,7 +17,7 @@ import {
   NeedsYouEscalationCallout,
   NeedsYouPrimaryButton,
 } from "./needs-you-card-ui"
-import { needsYouSecondaryButtonClassName, type BubbleTone } from "./needs-you-card-styles"
+import { needsYouSecondaryButtonClassName } from "./needs-you-card-styles"
 import { isSampleNeedsYouItem } from "./sample-needs-you-items"
 
 export function NeedsYouCard({
@@ -71,31 +72,17 @@ export function NeedsYouCard({
   const isEscalationOnly = item.isEscalationOnly ?? false
   const escalationReason = item.escalationReason ?? null
 
-  const bubbles: { key: string; text: string; tone: BubbleTone }[] = []
-  if (!isEscalationOnly && item.actionText) {
-    bubbles.push({
-      key: "action",
-      text: item.actionText,
-      tone: "action",
-    })
-  }
-  if (item.replyText) {
-    bubbles.push({
-      key: "reply",
-      text: item.replyText,
-      tone: "reply",
-    })
-  }
-  if (!isEscalationOnly && bubbles.length === 0) {
-    const text = item.proposalSummary || item.contextLine || item.customerMessage
-    if (text) {
-      bubbles.push({
-        key: "flag",
-        text,
-        tone: isConsequential ? "flag" : "reply",
-      })
-    }
-  }
+  const fallbackBubbleText = !isEscalationOnly && !item.actionDisplay && !item.actionText && !item.replyText
+    ? (item.proposalSummary || item.contextLine || item.customerMessage)
+    : null
+
+  const showAction = !isEscalationOnly && item.actionDisplay
+  const hideActionOrderRef = Boolean(
+    showAction
+    && item.actionDisplay?.orderRef
+    && item.orderRef
+    && item.actionDisplay.orderRef === item.orderRef,
+  )
 
   const approve = async () => {
     if (isApproving) return
@@ -156,24 +143,42 @@ export function NeedsYouCard({
           {isEscalationOnly ? (
             <NeedsYouEscalationCallout reason={escalationReason} />
           ) : (
-            bubbles.map(bubble => (
-              <NeedsYouBubble key={bubble.key} tone={bubble.tone} flush>
-                {bubble.text}
-              </NeedsYouBubble>
-            ))
+            <>
+              {item.replyText && (
+                <NeedsYouBubble tone="reply" flush>
+                  {item.replyText}
+                </NeedsYouBubble>
+              )}
+              {fallbackBubbleText && (
+                <NeedsYouBubble tone={isConsequential ? "flag" : "reply"} flush>
+                  {fallbackBubbleText}
+                </NeedsYouBubble>
+              )}
+            </>
           )}
         </div>
+      </NeedsYouCardBody>
+
+      <NeedsYouCardFooter>
+        {showAction && (
+          <NeedsYouActionReceipt
+            display={item.actionDisplay!}
+            hideOrderRef={hideActionOrderRef}
+          />
+        )}
 
         {approvalError && (
-          <p className="mt-3 flex items-center gap-1.5 text-xs text-red-600">
+          <p className={cn(
+            "flex items-center gap-1.5 text-xs text-red-600",
+            showAction ? "mt-2.5" : "",
+          )}
+          >
             <AlertCircle aria-hidden className="size-3 shrink-0" />
             {approvalError}
           </p>
         )}
-      </NeedsYouCardBody>
 
-      <NeedsYouCardFooter>
-        <div className="flex flex-col gap-2">
+        <div className={cn("flex flex-col gap-2", (showAction || approvalError) && "mt-2.5")}>
           {isEscalationOnly ? (
             <Link
               href={isSampleNeedsYouItem(item.threadId) ? "/dashboard/tickets" : `/dashboard/tickets?thread=${item.threadId}`}

@@ -1,7 +1,7 @@
 import type { AgentPlan, OrgSettings, PlanStep, RawToolCall } from "./types.js"
 import { resolveAgentSettings, TIERS_THAT_AUTO_EXECUTE, type AutonomyTier } from "./settings.js"
 import { isQuestionableSender } from "./sender-trust.js"
-import { TOOL_CATEGORIES } from "./tools/registry/index.js"
+import { PLAN_STEP_LABELS, TOOL_CATEGORIES } from "./tools/registry/index.js"
 
 export function merchantRoutingQuestionFromCustomerMessage(
   latestCustomerMessage: string | null | undefined,
@@ -87,6 +87,12 @@ export interface PlanPreview {
   proposal: string
   actionText: string | null
   orderRef: string | null
+}
+
+export interface HomeActionDisplay {
+  chipLabel: string
+  orderRef: string | null
+  detailLines: string[]
 }
 
 const REPLY_TOOL_NAMES = ["send_reply", "send_email"]
@@ -416,8 +422,127 @@ function buildProposal(plan: AgentPlan | null, headlineStep?: PlanStep | null): 
 function orderRefFromPlan(plan: AgentPlan): string | null {
   const lookup = plan.rawToolCalls.find(c => c.name === "get_order_by_name")
   const name = (lookup?.input as { order_name?: string } | undefined)?.order_name
-  if (typeof name !== "string" || !name.trim()) return null
-  return name.startsWith("#") ? name : `#${name}`
+  if (typeof name === "string" && name.trim()) {
+    return name.startsWith("#") ? name : `#${name}`
+  }
+
+  for (const toolCall of plan.rawToolCalls) {
+    const ref = orderRefFromToolInput(toolCall.input)
+    if (ref) return ref
+  }
+
+  return null
+}
+
+function orderRefFromToolInput(input: unknown): string | null {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null
+  const record = input as Record<string, unknown>
+  const orderName = record.order_name ?? record.order_number
+  if (typeof orderName === "string" && orderName.trim()) {
+    const trimmed = orderName.trim()
+    return trimmed.startsWith("#") ? trimmed : `#${trimmed}`
+  }
+  return null
+}
+
+function rawToolCallForStep(plan: AgentPlan, step: PlanStep): RawToolCall | null {
+  const byId = plan.rawToolCalls.find(toolCall => toolCall.id === step.id)
+  if (byId) return byId
+  return plan.rawToolCalls.find(toolCall => toolCall.name === step.tool) ?? null
+}
+
+function formatAddressDetailLines(input: Record<string, unknown>): string[] {
+  const lines: string[] = []
+  if (typeof input.address1 === "string" && input.address1.trim()) {
+    lines.push(input.address1.trim())
+  }
+  if (typeof input.address2 === "string" && input.address2.trim()) {
+    lines.push(input.address2.trim())
+  }
+  const cityLine = [input.city, input.province, input.zip]
+    .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
+    .join(", ")
+  if (cityLine) lines.push(cityLine)
+  const country = typeof input.country === "string" ? input.country.trim() : ""
+  if (country && country !== "US" && country !== "United States") {
+    lines.push(country)
+  }
+  return lines
+}
+
+function actionChipLabel(step: PlanStep): string {
+  if (step.label?.trim()) return step.label.trim()
+  return PLAN_STEP_LABELS[step.tool] ?? step.tool.replace(/_/g, " ")
+}
+
+function buildHomeActionDisplayFromTool(
+  step: PlanStep,
+  toolCall: RawToolCall | null,
+): HomeActionDisplay {
+  const input = (toolCall?.input ?? {}) as Record<string, unknown>
+  const orderRef = orderRefFromToolInput(input)
+  let chipLabel = actionChipLabel(step)
+  let detailLines: string[] = []
+
+  switch (step.tool) {
+    case "create_refund": {
+      const amount = input.amount
+      if (typeof amount === "string" || typeof amount === "number") {
+        const normalized = String(amount).replace(/^\$/, "").trim()
+        chipLabel = normalized ? `Issue $${normalized} refund` : "Issue refund"
+      }
+      if (typeof input.reason === "string" && input.reason.trim()) {
+        detailLines = [input.reason.trim()]
+      }
+      break
+    }
+    case "update_shopify_order_address":
+      chipLabel = "Update address"
+      detailLines = formatAddressDetailLines(input)
+      break
+    case "cancel_order":
+      chipLabel = "Cancel order"
+      if (typeof input.reason === "string" && input.reason.trim()) {
+        detailLines = [input.reason.trim()]
+      }
+      break
+    case "issue_store_credit": {
+      const amount = input.amount
+      if (typeof amount === "string" || typeof amount === "number") {
+        chipLabel = `Issue $${String(amount).replace(/^\$/, "").trim()} store credit`
+      }
+      break
+    }
+    case "create_gift_card": {
+      const amount = input.amount
+      if (typeof amount === "string" || typeof amount === "number") {
+        chipLabel = `Create $${String(amount).replace(/^\$/, "").trim()} gift card`
+      }
+      break
+    }
+    case "issue_discount":
+      if (typeof input.percentage === "string" || typeof input.percentage === "number") {
+        chipLabel = `Issue ${input.percentage}% discount`
+      }
+      break
+    case "fulfill_order":
+      chipLabel = "Mark fulfilled"
+      if (typeof input.tracking_number === "string" && input.tracking_number.trim()) {
+        detailLines = [`Tracking ${input.tracking_number.trim()}`]
+      }
+      break
+    default:
+      break
+  }
+
+  return { chipLabel, orderRef, detailLines }
+}
+
+export function buildHomeActionDisplay(plan: AgentPlan | null): HomeActionDisplay | null {
+  if (!plan) return null
+  const step = findActionStep(plan)
+  if (!step) return null
+  return buildHomeActionDisplayFromTool(step, rawToolCallForStep(plan, step))
 }
 
 export function buildPlanPreview(

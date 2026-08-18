@@ -5,7 +5,12 @@ export interface E2EAuthIdentity {
 }
 
 export function isE2EAuthBypassEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env.NODE_ENV === 'test' && env.E2E_AUTH_BYPASS === 'true';
+  if (env.NODE_ENV === 'production' || env.E2E_AUTH_BYPASS !== 'true') {
+    return false;
+  }
+  // `next dev` runs with NODE_ENV=development; the preview harness still needs
+  // auth bypass when pointed at the local test database.
+  return env.NODE_ENV === 'test' || env.NODE_ENV === 'development';
 }
 
 export function getE2EAuthIdentity(env: NodeJS.ProcessEnv = process.env): E2EAuthIdentity | null {

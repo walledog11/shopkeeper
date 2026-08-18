@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { MUTATIVE_INTENT_NO_ACTION_WARNING } from "./planner-safety/index.js"
-import { buildPlanPreview, classifyHomePlan, isEscalationOnlyPlan, isPlanWarningBlocking, planEscalationReason, planWarningTiers } from "./plan-preview.js"
+import { buildHomeActionDisplay, buildPlanPreview, classifyHomePlan, isEscalationOnlyPlan, isPlanWarningBlocking, planEscalationReason, planWarningTiers } from "./plan-preview.js"
 import type { AgentPlan, OrgSettings, PlanStep, RawToolCall } from "./types.js"
 
 const sendReplyCall: RawToolCall = {
@@ -481,6 +481,71 @@ const trackingStep: PlanStep = {
   category: "read",
   enabled: true,
 }
+
+describe("buildHomeActionDisplay", () => {
+  it("structures an address update with chip, order ref, and address lines", () => {
+    const display = buildHomeActionDisplay(plan({
+      steps: [{
+        id: "addr_1",
+        tool: "update_shopify_order_address",
+        label: "Update address",
+        description: "Change the shipping address before fulfillment",
+        category: "action",
+        enabled: true,
+      }],
+      rawToolCalls: [{
+        id: "addr_1",
+        name: "update_shopify_order_address",
+        input: {
+          order_number: "#1062",
+          address1: "742 Evergreen Terrace",
+          city: "Springfield",
+          province: "IL",
+          zip: "62704",
+          country: "US",
+        },
+      }],
+    }))
+
+    expect(display).toEqual({
+      chipLabel: "Update address",
+      orderRef: "#1062",
+      detailLines: ["742 Evergreen Terrace", "Springfield, IL, 62704"],
+    })
+  })
+
+  it("structures a refund with amount chip and reason detail", () => {
+    const display = buildHomeActionDisplay(refundPlan({
+      input: { order_id: "9000", amount: "28.00", reason: "cracked Ceramic Mug" },
+    }))
+
+    expect(display).toEqual({
+      chipLabel: "Issue $28.00 refund",
+      orderRef: null,
+      detailLines: ["cracked Ceramic Mug"],
+    })
+  })
+
+  it("reads order_number from action tools when building plan orderRef", () => {
+    const preview = buildPlanPreview(plan({
+      steps: [{
+        id: "addr_1",
+        tool: "update_shopify_order_address",
+        label: "Update address",
+        description: "Update address",
+        category: "action",
+        enabled: true,
+      }],
+      rawToolCalls: [{
+        id: "addr_1",
+        name: "update_shopify_order_address",
+        input: { order_number: "#1062", address1: "1 Main", city: "LA", province: "CA", zip: "90001", country: "US" },
+      }],
+    }), null, "Change my address")
+
+    expect(preview.orderRef).toBe("#1062")
+  })
+})
 
 describe("buildPlanPreview — merchant-facing copy", () => {
   it("falls through to the customer's message when there is no plan", () => {

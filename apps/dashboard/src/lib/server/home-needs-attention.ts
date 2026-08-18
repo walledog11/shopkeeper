@@ -3,6 +3,7 @@ import type { ChannelType, OrgSettings } from "@/types"
 import { getCurrentPlanForThread } from "@shopkeeper/agent/plan-cache-shape"
 import {
   buildPlanPreview,
+  buildHomeActionDisplay,
   classifyHomePlan,
   isEscalationOnlyPlan,
   planEscalationReason,
@@ -97,6 +98,7 @@ export async function loadNeedsAttention(
       contextLine: copy.context,
       proposalSummary: copy.proposal,
       actionText: copy.actionText,
+      actionDisplay: buildHomeActionDisplay(plan),
       replyText: planReplyText(plan),
       question: classification.question,
       orderRef: copy.orderRef,

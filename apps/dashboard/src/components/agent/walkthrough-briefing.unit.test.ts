@@ -20,6 +20,7 @@ function item(overrides: Partial<WalkthroughItem> = {}): WalkthroughItem {
     headline: "Return request",
     proposalSummary: "Approve the return and send the label.",
     actionText: null,
+    actionDisplay: null,
     replyText: "I can help with that return.",
     question: null,
     orderRef: "#1042",

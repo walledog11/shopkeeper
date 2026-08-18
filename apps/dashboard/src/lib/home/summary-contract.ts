@@ -1,3 +1,5 @@
+import type { HomeActionDisplay } from "@shopkeeper/agent/plan-preview"
+
 export const HOME_SUMMARY_REFRESH_INTERVAL_MS =
   process.env.NEXT_PUBLIC_GATEWAY_EVENTS_URL ? 60_000 : 30_000
 export const HOME_NEEDS_ATTENTION_LIMIT = 5
@@ -16,6 +18,7 @@ export interface HomeNeedsAttentionItem {
   contextLine: string
   proposalSummary: string
   actionText: string | null
+  actionDisplay: HomeActionDisplay | null
   replyText: string | null
   question: string | null
   orderRef: string | null
