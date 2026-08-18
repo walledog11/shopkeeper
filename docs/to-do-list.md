@@ -10,8 +10,12 @@ residue, failure-drill procedures, and standing policies live in the linked docs
 below — not duplicated here.
 
 Work is grouped by **what kind of action** it needs, not by when it was filed.
-Deploy actions come first because everything merchant-facing is downstream of
-them and they take minutes.
+
+All three deploy surfaces are current as of 2026-08-18 — Vercel on `master`, the
+database migrated (six partial unique indexes verified at 6/6), and the Shopify
+app released as `shopkeeper-production-26`, which shipped the theme extension and
+the `compliance_topics` declarations. When any of them falls behind again, that
+outranks everything in this file: all three fail silently.
 
 **Guiding principle for pending integrations.** Shopkeeper is still in active
 development — channels and features are being added, not finalized. Pending
@@ -25,48 +29,6 @@ deprioritized as of 2026-08-07 — it is a merchant-control channel, so it adds 
 third route alongside Telegram and iMessage rather than new customer reach, and
 US penetration is low in the target market. Do not propose it as the next
 channel to build. See [product-truth.md](product-truth.md) §2.
-
----
-
-
-## Deploy
-
-Release actions on the surfaces that carry code to merchants. They fail
-**silently** — that is why they sort above everything else.
-
-"On HEAD" names three surfaces, not one: Vercel, Railway, and the Shopify app
-version. As of 2026-08-18 Vercel production is `READY` on `master` and the
-database is current — the 2026-08-14 migrations landed that day, all six partial
-unique indexes verified surviving at 6/6. The **Shopify app version is the one
-surface still behind.**
-
-- [ ] **Run `shopify app deploy`.** The theme extension last changed 2026-08-15
-  (`1f59d2b2`) and `shopify.app.toml` last changed 2026-08-14 (`79e12292`, which
-  added the `compliance_topics` block). Neither reaches a storefront nor Shopify
-  until an app version ships, so the live widget is days stale and the compliance
-  declarations do not exist on Shopify's side. This is the same gap that made the
-  verification card absent from the store on 2026-08-12 while every route behind
-  it was live. Blocks the compliance item under Console / config, and the widget
-  half of the storefront-chat rollout below.
-
-  Two things were checked on 2026-08-18 and reduce the risk of running it.
-  `access_scopes` is **unchanged** from the released `-9` — `79e12292` only added
-  the webhook block — so no merchant sees a re-authorization prompt from this
-  deploy. And the ordering hazard is cleared: activating `compliance_topics`
-  makes Shopify deliver to `shopify-compliance.ts`, which upserts into
-  `shopify_privacy_requests`, and that table now exists. Deploying *before* the
-  migration would have pointed live compliance traffic at a missing table.
-
-  Not runnable from an agent session — the CLI (a devDependency, so `npx
-  shopify`) has no stored session or token here and stalls on a browser login.
-  `--allow-updates` is Shopify's CI/CD flag: it permits adding and updating
-  extensions and config without a prompt, and without `--allow-deletes` nothing
-  can be silently removed. Add `--no-release` first if you want to stage and
-  inspect before releasing.
-
-  ```sh
-  npx shopify app deploy --allow-updates --message "<what shipped>"
-  ```
 
 ---
 
@@ -106,8 +68,8 @@ is the only one where the failure mode is total and silent.
   removed, then the full loop verified with no ops touching metadata. Never
   exercised outside the dev store the author controls. The condition that held
   this — notification shape plus the operability items — was met 2026-08-13, so
-  what remains is the rollout itself. Needs the `shopify app deploy` above first,
-  or the merchant activates a stale widget.
+  what remains is the rollout itself. The stale-widget blocker is gone — the
+  extension shipped in `shopkeeper-production-26` on 2026-08-18.
 - [ ] **Guest escalation that keeps its reply, exercised live.** The regression
   where guest order questions escalated with no reply at all was fixed by passing
   `keepReply` into `applyEscalationRouting` — but **the router-materialized path
@@ -125,11 +87,13 @@ is the only one where the failure mode is total and silent.
   are complete. Launch gated on Meta App Review and a non-role merchant account
   completing the full DM loop (connect → inbound → approve reply →
   disconnect/reconnect). Ops in [runbook.md](production/runbook.md).
-- [ ] **What version 9 of the Shopify app actually grants.** No fresh install has
-  confirmed the scope set, and no connected production merchant has been checked
-  for the re-authorization prompt `write_app_proxy` raises. The merchant-facing
-  explanation for that prompt was never written either; connected merchants are
-  few enough to tell directly.
+- [ ] **What the released Shopify app version actually grants.** No fresh install
+  has confirmed the scope set, and no connected production merchant has been
+  checked for the re-authorization prompt `write_app_proxy` raises. The
+  merchant-facing explanation for that prompt was never written either; connected
+  merchants are few enough to tell directly. Scopes have not changed since `-9`,
+  so the question is unchanged in substance — but it is now about
+  `shopkeeper-production-26` (released 2026-08-18), not `-9`.
 
 ---
 
@@ -214,15 +178,25 @@ when its closing verification passes. Re-verify env presence with
 `vercel env ls production` — `vercel env pull` redacts sensitive vars to an
 empty string, indistinguishable from unset.
 
-- [ ] **Confirm the connected store survived app version 9.** `shopify.app.toml`
-  shipped 2026-08-07 as `shopkeeper-production-9`, adding `write_app_proxy` and
-  the `[app_proxy]` block (M0a and M0b, both closed). Two console checks were
-  never done: whether the one connected production store shows the new scope as
-  granted or backfilled, and whether it raised a re-authorization prompt. Also
-  still owed from M0b — the merchant-facing explanation of that prompt, which
-  was supposed to be written *before* deploying. `-8` remains re-releasable;
-  reference in
-  [production/shopify-app-config-reference.md](production/shopify-app-config-reference.md).
+- [ ] **Confirm the connected store survived the `write_app_proxy` scope add.**
+  `shopify.app.toml` shipped 2026-08-07 as `shopkeeper-production-9`, adding
+  `write_app_proxy` and the `[app_proxy]` block (M0a and M0b, both closed). Two
+  console checks were never done: whether the one connected production store
+  shows the new scope as granted or backfilled, and whether it raised a
+  re-authorization prompt. Also still owed from M0b — the merchant-facing
+  explanation of that prompt, which was supposed to be written *before*
+  deploying. Scopes are unchanged since, so the check is still valid against the
+  current release.
+- [ ] **Re-establish the Shopify app rollback target.** The 2026-08-18 deploy
+  released `shopkeeper-production-26`, but every doc still names `-9` as current
+  and `-8` as the rollback — so roughly seventeen versions shipped between
+  2026-08-07 and 2026-08-18 without being recorded anywhere. Rolling back to `-8`
+  today would revert far more than the v9 change, including the `[app_proxy]`
+  block the storefront chat proxy depends on. Read the real version list
+  (`npx shopify app versions list`), decide the actual rollback target, and
+  correct
+  [production/shopify-app-config-reference.md](production/shopify-app-config-reference.md),
+  whose rollback guidance is currently unsafe to follow.
 - [ ] **Prove Shopify compliance webhooks.** The HMAC-gated handlers, durable
   data-request workflow, redaction paths and app-level declarations for
   `customers/data_request`, `customers/redact` and `shop/redact` are implemented

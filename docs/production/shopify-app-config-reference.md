@@ -1,5 +1,15 @@
 # Shopify app configuration — rollback reference
 
+> ⚠️ **The rollback target in this file is stale — do not act on it (2026-08-18).**
+> The released version is now `shopkeeper-production-26`, not `-9`. Roughly
+> seventeen versions shipped between 2026-08-07 and 2026-08-18 without being
+> recorded here, so **releasing `-8` today would revert far more than the M0a/M0b
+> change** — including the `[app_proxy]` block the storefront chat proxy depends
+> on and the `compliance_topics` declarations added in `-26`. Read the real list
+> with `npx shopify app versions list` and pick the target from that before
+> rolling anything back. Everything below still describes M0a/M0b accurately as
+> history; only the "re-release `-8`" instruction is unsafe.
+
 > **Current webhook configuration (2026-08-09):** the historical notes below
 > describe the pre-migration state. The five order/uninstall subscriptions now
 > live in the root `shopify.app.toml`, and OAuth no longer creates per-shop
