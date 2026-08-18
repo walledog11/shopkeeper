@@ -22,6 +22,16 @@ export const LLM_PRICING: Record<string, LlmTokenPriceNanoUsd> = {
     cacheCreationPerToken: 1250, // $1.25 / MTok
     cacheReadPerToken: 100,      // $0.10 / MTok
   },
+  // The agent eval judge (apps/dashboard/src/lib/agent/__evals__/judge.ts).
+  // Sonnet-tier standard rate, same $3/$15 as Sonnet 5. Never reached by
+  // production traffic — priced so eval runs report real cost instead of
+  // falling through to FALLBACK_PRICE.
+  "claude-sonnet-4-6": {
+    inputPerToken: 3000,         // $3.00 / MTok
+    outputPerToken: 15000,       // $15.00 / MTok
+    cacheCreationPerToken: 3750, // $3.75 / MTok
+    cacheReadPerToken: 300,      // $0.30 / MTok
+  },
   // Sonnet 5 launch promo is $2/$10 through 2026-08-31, reverting to standard
   // $3/$15 after. We pin the standard rate: this backstop must never undercount,
   // and $3/$15 overcounts slightly during the promo (safe) then becomes exact —
