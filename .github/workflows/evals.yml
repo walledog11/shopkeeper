@@ -8,8 +8,10 @@ on:
       - 'apps/dashboard/src/lib/messaging/**'
       - 'apps/gateway/src/order-ops.eval.test.ts'
       - 'packages/db/refund-spend.ts'
-      - 'package.json'
-      - 'package-lock.json'
+      # `package.json` / `package-lock.json` are deliberately absent: a run costs
+      # ~$0.70 in live model calls, and a dependency bump cannot change planner
+      # behaviour. Bump the Anthropic SDK or a model pin and dispatch this
+      # workflow by hand.
       - '.github/workflows/evals.yml'
   workflow_dispatch:
     inputs:
