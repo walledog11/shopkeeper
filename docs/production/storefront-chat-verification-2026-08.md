@@ -66,6 +66,23 @@ Extracted from the runs below. Each one cost a live failure to learn.
   Caught in the digest first, then in the operator card.
 - **The gate is only red once somebody runs it.** A fixture edit that could never
   pass sat on master for three days unnoticed.
+- **A link that is built is not a link that resolves.** Every operator notification
+  had shipped a `Full thread:` deep link to a route that does not exist, because
+  the tests assert the string is constructed and nothing ever opened it. Any
+  outbound URL — notification, email, deep link — needs one live click, once.
+  Found 2026-08-19.
+- **Free text in a tool argument reaches the merchant ungrounded.** `escalate_to_human`
+  takes a model-authored `reason`, and the operator card renders it verbatim.
+  Nothing checks it against the tool calls actually in the plan, so a card can
+  assert an action — "a return has been initiated" — that was neither executed nor
+  proposed. `AgentAction` answers what ran and the cached plan answers what was
+  planned; a claim absent from both is fabricated, and only the pair proves it.
+  Found 2026-08-19.
+- **A deterministic fast path passing is not the model path working.** `yes`
+  executed a pending plan verbatim; "go ahead and approve the refund" — same plan,
+  same thread — exhausted the iteration cap, because naming an action in prose
+  reads as a fresh instruction rather than as approval. Verify the prose path
+  separately or the keyword path will hide it. Found 2026-08-19.
 
 ---
 
@@ -674,12 +691,17 @@ Fixed by releasing `-13`.
   `cardShell` scrolled before the fields existed.
 - "Check an order" stretching to a full-width underlined fragment.
 
-**Still open: a dead email integration fails completely silently.** The org's
+**A dead email integration failed completely silently — closed.** The org's
 default sender was a Gmail connection whose token Google rejects, so the first real
 request told the shopper a code was sent, mailed nothing, and left one Vercel log
 line as the only evidence. Resolution happens before the order lookup so a *missing*
 integration fails identically for every order number, but credentials are only
-exercised at send time, after the response is already decided.
+exercised at send time, after the response is already decided. The response still
+cannot change — that is the disclosure invariant — but the failure is no longer
+silent on the merchant's side: `verification.ts:196` logs the diagnostics and
+`emitOpsAlert` raises a `provider_send` alert fingerprinted per email integration,
+so one dead sender is one alert however many shoppers hit it. Verified in source
+2026-08-19.
 
 ### The first live card — and what it cost to read it properly
 
@@ -703,6 +725,157 @@ artifact". Two specifics worth keeping here:
   collapsed from 13 bullets to 5 specifically to kill this, and M1.5 reintroduced it
   by creating a new boundary to narrate. Every future capability with an edge will
   try to explain that edge out loud.
+
+---
+
+## The episode loop live, 2026-08-19
+
+Item F of
+[conversation-context-and-cross-channel-memory-plan.md](../conversation-context-and-cross-channel-memory-plan.md)
+— widget, dashboard, operator notification and the approval path exercised
+together on the dev store. **The episode machinery passed on every point.** What
+the run surfaced instead was four defects on the storefront *escalation* path,
+none of which a test could have reached, plus two copy problems.
+
+### Preflight
+
+Three deploy surfaces and the migration check, per the durable findings above:
+Vercel `d7ccbe2b` (confirmed from deployment metadata, not from a timestamp that
+merely looked close), Railway SUCCESS on the same commit, Shopify app
+`shopkeeper-production-26` active, and `prisma migrate status` clean at 73
+migrations.
+
+**The widget's two switches need two different techniques.** The merchant switch
+is readable — `Integration.metadata.storefrontChat.enabled` on the **`shopify`**
+row, not a `shopify_chat` row, which does not exist; `shopify_chat` is a thread
+`channelType` only, so looking for an integration by that name finds nothing and
+reads as "never set up". The platform switch is not readable: `STOREFRONT_CHAT_ENABLED`
+lists as *Encrypted* in `vercel env ls` but `vercel env pull` returns
+`"[SENSITIVE]"`, so the listing's label does not predict whether the value comes
+back. It is provable anyway, because `bootstrap/route.ts:20` checks the global
+flag *before* the signature check at line 30: an unsigned POST to
+`/api/storefront-chat/proxy/bootstrap` answers **401 "invalid signature"** when
+the feature is on and **403 "disabled"** when it is off. Production answered 401.
+
+### The rollover, on genuinely elapsed time
+
+The browser session had last been used on 2026-08-09, so no backdating was
+needed — the first message crossed the 24-hour boundary on ten days of real
+inactivity. Every part of the hard-rollover branch fired, inside one transaction
+spanning roughly 400ms:
+
+| | |
+| --- | --- |
+| Expired thread `1ad68ff4` | `closedReason = episode_rollover`, `cachedPlan` cleared |
+| Its episode row | `endedAt = 04:14:33.969Z` |
+| New thread `3768e2a3` | open, own plan cached |
+| Its episode row | `startedAt = 04:14:34.364Z`, `endedAt` null, same session |
+
+**Item E confirmed with both controls.** The "New conversation" divider rendered
+at the seam on the rollover message, and did *not* render on the next message in
+the same episode. It appears only once the 202 lands — a screenshot taken between
+send and response shows no divider and is not evidence of its absence. After a
+reload the expired episode drops out of the widget entirely, as designed.
+
+**Verification survived the boundary**, live rather than by test: the operator
+card for the new episode still carried `Verified: entered a code emailed to the
+address on #1024`.
+
+**Two unanswered messages produce one merged plan.** The second message replaced
+the pending plan rather than queueing beside it, and its summary covered both
+requests — correct under product rule 3, since neither had been answered.
+
+### Four defects
+
+**1. The escalation reason carried a fabricated action claim.** The card told the
+merchant *"A return has been initiated for the damaged item; please confirm/process
+the refund."* No return was initiated. The plan's complete tool list was
+`get_order_by_name` and `escalate_to_human`; `AgentAction` logged the read and
+nothing else. The sentence exists only inside the `reason` string of
+`escalate_to_human`, which is model-authored free text rendered verbatim to the
+merchant's phone with nothing grounding it against the calls actually in the plan.
+A merchant acting on that card would process a refund believing the return leg was
+already done. This is the failure mode the product principles name directly, on a
+refund, where trust is binary.
+
+**2. Every operator deep link 404s.** The card's `Full thread:` link resolves to
+"Page not found", and not for that thread — there is no dynamic route under
+`/dashboard` at all. `tickets/` holds only `page.tsx`, and the app directory
+contains no `[…]` segment anywhere. Two call sites emit the path form:
+
+- `apps/gateway/src/operator-escalation.ts:25` — `Open: ${dashboardUrl}/dashboard/tickets/${threadId}`
+- `apps/gateway/src/message-handlers/planning-notifications.ts:334` — `Full thread: …`
+
+The dashboard's own links use the query form — `/dashboard/tickets?thread=${threadId}`
+(`NeedsYouCards.tsx:61`, `AgentPanelPendingLedger.tsx:98`) — which was loaded
+against the same thread and resolves. Nothing caught this because the tests assert
+the string is *built*, never that the route exists.
+
+**3. Prose approval fails; only the keyword path works.** Replying *"go ahead and
+approve the refund"* returned **"Agent stopped - this request required too many
+steps."** — `maxIterations` exhausted (default 10, unset on this org). The audit
+row shows the turn ran `get_order_by_name` and kept going: naming an action in
+prose reads as a *new instruction to perform a refund* rather than as approval of
+the pending plan, and the pending plan's own control tools were never reached. The
+plan survived un-consumed. Replying `yes` twelve minutes later executed it verbatim
+— `get_order_by_name` then `escalate_to_human`, both `human_approved`, pending
+state cleared. Same plan, same thread: a clean A/B in which the deterministic fast
+path succeeds and the model path fails on the sentence a merchant is most likely
+to type. The operator-turn eval was waived in favour of exactly this live
+verification; this is its result.
+
+**4. The shopper is left with silence.** After a fully approved escalation the
+widget shows the two customer messages and nothing else. The *"Someone from the
+shop is looking at this"* line is transient client state rendered from the message
+POST response and does not survive a reload. Merchant side complete and audited;
+shopper side indistinguishable from a broken widget, which is the precise outcome
+the standing constraint on `keepReply` exists to prevent.
+
+### What `keepReply` does not cover
+
+`keepReply` spares a `send_reply` the model already drafted from being filtered
+out by `applyEscalationRouting`. It cannot help when the model elects escalation
+and drafts no reply at all — there is nothing to keep, and nothing synthesizes a
+holding message in its place. The guard protects against the router *deleting* a
+reply; the gap is the case where no reply was ever written. Both cards in this run
+were of that shape.
+
+Relatedly, the router-materialized escalation **still has not fired**. The second
+plan routed `escalate`, but the model had already called `escalate_to_human`
+itself, so `applyEscalationRouting` took its `existing` branch and preserved the
+model's tool-use id rather than synthesizing `tu_route_escalate`. Firing the
+router path needs `routePlan` to return `escalate` while the model does *not*
+elect it.
+
+### Copy, still outstanding
+
+- **The `Verified:` line diagnosed on 2026-08-12 is still shipping**, unchanged.
+  The diagnosis needs one correction: it was attributed to the card asking for
+  approval at all, but it appeared here on an escalation card that asks for no
+  approval. It is unconditional.
+- **The same fact twice.** The plan summary and the escalation reason both state
+  damaged snowboard / #1024 / refund, in two registers, one after the other.
+- **The ticket header renders the raw identifier as a name** —
+  `Shopify Chat:E36cd568-3053-4448-8e62-6cb`, which is the
+  `shopify_chat:${session.id}` platformId a guest customer is keyed on.
+
+### Scripts
+
+Four throwaway scripts under `apps/gateway/src/scripts/`, all run through
+`railway run` against production: `episode-run-preflight.ts` (deploy-independent
+run state — integrations, operator bindings, both sides of a rollover, session
+episodes), `backdate-episode-clock.ts` (moves one thread's conversational clock so
+the next inbound crosses the boundary; signed offset, so `HOURS=-25` undoes
+`HOURS=25`), `inspect-cached-plan.ts` (what was *planned*, which is what
+distinguished defect 1 from a tense bug), and the existing
+`inspect-escalation-routing.ts`.
+
+**Do not reach for the dashboard's close button to force a rollover.** A closed
+thread is simply not found by `resolveInboundEpisode`, so it takes the plain
+create branch and returns `rolledOverFromThreadId: null` — skipping
+`episode_rollover`, the cached-plan expiry, the session `endedAt` and
+`removePendingPlanForThread`, which is everything worth verifying. Only the idle
+boundary reaches that branch.
 
 ---
 

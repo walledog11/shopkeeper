@@ -54,9 +54,16 @@ provider. **None of these is a code task.**
 - [ ] **The storefront-chat episode loop, end to end on the dev store.** Item F of
   the conversation-episodes plan. Its eval half is **done** — the gate run that
   item owed was satisfied by the 2026-08-17 full recapture, which came after A, B
-  and C had all landed and folded in safe-reply auto-execution. What is left is
-  the live run: widget, dashboard, operator notification, and reply/approval paths
-  exercised together. Closing it closes the plan file.
+  and C had all landed and folded in safe-reply auto-execution. The live run
+  happened 2026-08-19 and **the episode machinery passed on every point**:
+  rollover on ten days of genuinely elapsed idle time, `episode_rollover` with the
+  cached plan cleared, session episode ended and rebound, and item E's divider
+  confirmed with both controls. One gap remains before this can close — agent text
+  actually reaching the shopper was never demonstrated, because no plan in that
+  episode contained `send_reply` at all. That is the same root as the escalation
+  defects below, so close those first and re-run a single answerable question.
+  Evidence: "The episode loop live, 2026-08-19" in
+  [storefront-chat-verification-2026-08.md](production/storefront-chat-verification-2026-08.md).
 - [ ] **One real merchant workspace on storefront chat, in approval mode.** Toggle
   on through the integration card, theme embed activated, Shopify Inbox bubble
   removed, then the full loop verified with no ops touching metadata. Never
@@ -69,7 +76,12 @@ provider. **None of these is a code task.**
   `keepReply` into `applyEscalationRouting` — but **the router-materialized path
   has still never fired in a live test**. The one live card that showed a reply and
   a handoff together came through a *model-elected* escalation, which was the path
-  that already worked. Storefront chat, dev store. Background:
+  that already worked. The 2026-08-19 run did not fire it either: the plan routed
+  `escalate`, but the model had already called `escalate_to_human`, so the
+  `existing` branch preserved the model's tool-use id instead of synthesizing
+  `tu_route_escalate`. Firing it needs a case where `routePlan` returns `escalate`
+  and the model does **not** elect it — so the message has to be one the model
+  believes it can answer. Storefront chat, dev store. Background:
   [storefront-chat-verification-2026-08.md](production/storefront-chat-verification-2026-08.md).
 - [ ] **Postmark outbound canary.** Send and bounce attribution under real
   traffic. Inbound is proven end to end as of 2026-08-02 (server
@@ -115,6 +127,33 @@ Code work that is started and not finished.
   under $0.64/day worst case against a $20 cap whose worst real day was $4.82.
   Operator turns and composer-ask never write a 1h block at all. Delete this
   entry once a full day's rows look sane.
+- [ ] **Fix what the 2026-08-19 storefront run found.** Four defects on the
+  escalation path, in severity order. Full evidence in
+  [storefront-chat-verification-2026-08.md](production/storefront-chat-verification-2026-08.md)
+  under "The episode loop live, 2026-08-19".
+  1. **A card asserted an action that never happened** — "a return has been
+     initiated", with no such call planned or executed. `escalate_to_human` takes
+     a model-authored `reason` that the operator card renders verbatim, ungrounded
+     against the plan's own tool calls. Highest severity: it is a fabricated
+     mutation claim, on a refund, sent to the merchant's phone.
+  2. **Every operator deep link 404s.** `operator-escalation.ts:25` and
+     `planning-notifications.ts:334` emit `/dashboard/tickets/${threadId}`; no
+     dynamic route exists. The dashboard's own links use
+     `/dashboard/tickets?thread=${threadId}`, which resolves.
+  3. **Prose approval fails where `yes` works.** "go ahead and approve the refund"
+     exhausted `maxIterations`; the same pending plan ran verbatim on `yes`. Prose
+     naming an action reads as a new instruction, and the pending plan's control
+     tools are never reached.
+  4. **An escalated shopper is left with silence.** The "someone from the shop is
+     looking at this" line is transient client state and does not survive a reload.
+     Note `keepReply` cannot fix this — it spares a drafted reply from being
+     filtered, and here no reply was ever drafted.
+
+  Also outstanding, lower severity: the builder-facing `Verified:` line diagnosed
+  2026-08-12 is still shipping (and is unconditional, not tied to the approval
+  framing as that entry claims); plan summary and escalation reason state the same
+  fact twice; the ticket header renders the raw `shopify_chat:${session.id}`
+  platformId as the customer's name.
 - [ ] **Conversation-to-sale attribution.** Connect meaningful storefront-chat
   interactions and product recommendations to later Shopify orders so merchants
   can distinguish direct, product-assisted, and chat-assisted revenue. Report it
