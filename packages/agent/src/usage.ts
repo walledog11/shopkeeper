@@ -11,16 +11,19 @@ export interface ModelUsageMetrics {
   cacheReadInputTokens: number;
   totalTokens: number;
   // Cost-weighted token count for the loop's iteration budget. Cache reads are
-  // ~10x cheaper and cache writes ~1.25x an input token, so summing them at full
-  // weight (as totalTokens does) makes a cached operator turn look far heavier
-  // than it costs. totalTokens stays raw for logging/spend continuity.
+  // ~10x cheaper and 5m cache writes ~1.25x an input token, so summing them at
+  // full weight (as totalTokens does) makes a cached operator turn look far
+  // heavier than it costs. totalTokens stays raw for logging/spend continuity.
   //
-  // Deliberately flat at 1.25x, NOT the 2x that `usageToNanoDollars` now charges
-  // a 1-hour write: the 1h block is a one-time ~11.8k-token startup cost, the
-  // same whether the turn makes one tool call or ten. Pricing it in would spend
-  // TOKEN_BUDGET on a cold cache rather than on iterations — at 2x, a single
-  // cold support write is 23.8k against a 20k budget, stopping the loop before
-  // its first tool call.
+  // The 1h block is excluded outright — the divergence from `usageToNanoDollars`,
+  // which bills it at 2x and is right to. It is the stable system prefix from
+  // `buildSplitCachedSystemPrompt`: written once on a cold cache, then read by
+  // every later call in this run and in other threads'. That is a startup cost,
+  // identical whether the turn makes one tool call or ten, so it is not loop
+  // progress and must not consume what TOKEN_BUDGET reserves for iterations.
+  // Charging it spent 75% of the budget (14,954 of 20,000) on a cold support
+  // turn before its first tool call, while an identical warm turn spent 7% — the
+  // guard's headroom tracked cache temperature rather than loop behavior.
   budgetTokens: number;
 }
 
@@ -61,6 +64,13 @@ export function readModelUsage(response: { usage?: unknown }) {
     usage.cache_creation?.ephemeral_1h_input_tokens ?? cacheCreationInputTokens,
     cacheCreationInputTokens,
   );
+  // The loop budget needs the OPPOSITE no-breakdown default to pricing above: an
+  // unattributed write must COUNT against it, or a missing breakdown silently
+  // blinds the runaway-loop guard. Hence `?? 0`, and not `cacheCreation1hInputTokens`.
+  const stableCacheCreation = Math.min(
+    usage.cache_creation?.ephemeral_1h_input_tokens ?? 0,
+    cacheCreationInputTokens,
+  );
   return {
     inputTokens,
     outputTokens,
@@ -69,7 +79,10 @@ export function readModelUsage(response: { usage?: unknown }) {
     cacheReadInputTokens,
     totalTokens: inputTokens + outputTokens + cacheCreationInputTokens + cacheReadInputTokens,
     budgetTokens: Math.round(
-      inputTokens + outputTokens + 1.25 * cacheCreationInputTokens + 0.1 * cacheReadInputTokens,
+      inputTokens +
+        outputTokens +
+        1.25 * (cacheCreationInputTokens - stableCacheCreation) +
+        0.1 * cacheReadInputTokens,
     ),
   };
 }

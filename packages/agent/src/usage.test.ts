@@ -3,7 +3,7 @@ import { TOKEN_BUDGET } from "./run-policy.js";
 import { createModelUsageMetrics, readModelUsage, recordModelUsage } from "./usage.js";
 
 describe("readModelUsage budgetTokens weighting", () => {
-  it("weights every cache write at 1.25x and cache reads at 0.1x, whatever the TTL split", () => {
+  it("excludes the 1h stable-prefix write and weights 5m writes 1.25x, reads 0.1x", () => {
     const usage = readModelUsage({
       usage: {
         input_tokens: 100,
@@ -16,19 +16,23 @@ describe("readModelUsage budgetTokens weighting", () => {
 
     // totalTokens counts every token at full weight (spend/logging continuity).
     expect(usage.totalTokens).toBe(4350);
-    // The TTL split still reaches the pricing function...
+    // The 1h split still reaches the pricing function, which bills it at 2x...
     expect(usage.cacheCreation1hInputTokens).toBe(160);
-    // ...but not the loop budget: 100 + 50 + 1.25*200 + 0.1*4000 = 800
-    expect(usage.budgetTokens).toBe(800);
+    // ...but the loop budget drops it entirely, since the stable prefix is a
+    // one-time startup write: 100 + 50 + 1.25*40 + 0.1*4000 = 600
+    expect(usage.budgetTokens).toBe(600);
   });
 
-  it("keeps the budget weight flat when no breakdown is sent", () => {
+  it("counts an unattributed write, inverting the pricing default", () => {
+    // Pricing defaults a missing breakdown to all-1h so it never undercounts the
+    // bill. The budget must default the other way: if this returned 0 the guard
+    // would go blind whenever the API omitted `cache_creation`.
     const usage = readModelUsage({
       usage: { input_tokens: 100, output_tokens: 50, cache_creation_input_tokens: 200 },
     });
 
     expect(usage.cacheCreation1hInputTokens).toBe(200);
-    // budgetTokens: 100 + 50 + 1.25*200 = 400
+    // budgetTokens: 100 + 50 + 1.25*200 = 400 — the whole write counts.
     expect(usage.budgetTokens).toBe(400);
   });
 
@@ -58,11 +62,11 @@ describe("readModelUsage budgetTokens weighting", () => {
     expect(usage.budgetTokens).toBe(15);
   });
 
-  it("leaves a cold support write room to iterate inside TOKEN_BUDGET", () => {
-    // Production's measured cold split-prompt call: the 1h stable prefix plus a
-    // small 5m volatile block. agent-loop stops the run when budgetTokens tops
-    // TOKEN_BUDGET, so weighting the one-time 1h write at 2x would end the turn
-    // before its first tool call.
+  it("leaves a cold turn the same iteration headroom as a warm one", () => {
+    // Production's measured pair for the same prompt. agent-loop stops the run
+    // when budgetTokens tops TOKEN_BUDGET, so any gap between these two is
+    // iteration headroom that depends on cache temperature rather than on what
+    // the turn is doing. Cold used to burn 14,954 of 20,000 here.
     const cold = readModelUsage({
       usage: {
         input_tokens: 83,
@@ -72,8 +76,19 @@ describe("readModelUsage budgetTokens weighting", () => {
         cache_read_input_tokens: 0,
       },
     });
+    const warm = readModelUsage({
+      usage: {
+        input_tokens: 83,
+        output_tokens: 8,
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 11848,
+      },
+    });
 
-    expect(cold.budgetTokens).toBeLessThan(TOKEN_BUDGET);
+    expect(cold.budgetTokens).toBe(144);
+    // Both are a rounding error against the budget the loop actually needs.
+    expect(cold.budgetTokens).toBeLessThan(TOKEN_BUDGET * 0.1);
+    expect(warm.budgetTokens).toBeLessThan(TOKEN_BUDGET * 0.1);
   });
 });
 
