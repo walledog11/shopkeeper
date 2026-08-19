@@ -30,13 +30,20 @@ behavior is what the code says — PR #42 was such a change.
 invalid_request_error`, "credit balance is too low". No eval gate can run until
 it is topped up, which is a hard blocker on anything owing one — see Eval-gate
 residue. Nothing is billed while it is empty, so a blocked run is safe, just
-useless. The way it was found is worth not repeating: **a bare
-`npm run test:integration` in either app runs that app's paid eval suite.**
-Neither integration config excludes its evals (dashboard's `src/**/*.test.tsx?`
-picks up `src/lib/agent/__evals__/`, gateway's `src/**/*.test.ts` picks up
-`order-ops.eval.test.ts`), and `scripts/with-test-env.mjs` reads a real
+useless. The way it was found is **fixed as of 2026-08-19** and worth recording:
+a bare `npm run test:integration` in either app used to run that app's paid eval
+suite, and so did `verify:pr` by way of `test:coverage`. Neither config excludes
+the evals (dashboard's `src/**/*.test.tsx?` picks up `src/lib/agent/__evals__/`,
+gateway's `src/**/*.test.ts` picks up `order-ops.eval.test.ts`; the
+`src/**/__evals__/**` entry in `vitest.config.ts` is a *coverage-report*
+exclusion, not a run exclusion), and `scripts/with-test-env.mjs` resolves a real
 `ANTHROPIC_API_KEY` out of `apps/dashboard/.env.local` / `apps/gateway/.env` even
-when the shell has none. Scope every integration run to the files you changed.
+when the shell has none — verified, not assumed. The paid files now skip unless
+`EVAL_RUN=1` (every `test:evals*` script) or `REQUIRE_MODEL_EVALS=1` (the eval
+workflows) is set; see `__evals__/selection.ts:evalsEnabled`. Fixture validation
+still runs on every integration pass, and the gateway's free deterministic
+pre-filter is deliberately ungated. This also took `regenerate-baseline` from
+four paid suites to three — its verify step runs `test:integration`.
 
 **Guiding principle for pending integrations.** Shopkeeper is still in active
 development — channels and features are being added, not finalized. Pending
@@ -239,6 +246,19 @@ free check passes.
 - [ ] **`quick-reply-thanks-ack` passes 1/3.** The only fixture below full. Runs
   classify `needs_review` after repeated `get_order_by_name` errors and escalate.
   Advisory, so it does not gate.
+- [ ] **Land agent-path work on a branch and open a PR.** This is the mechanism
+  that keeps refilling this section, established 2026-08-19: **31 of 34
+  agent-path commits between 2026-08-09 and 08-19 went straight to `master`** —
+  `packages/agent` and `apps/dashboard/src/lib/agent` alike — and `evals.yml`
+  triggers on `pull_request`, so none were gated. Planner-behavior changes among
+  them — `a3132387` (plan from what they just asked), `be0226d1` (end the
+  conversation), `264df812` (send the safe replies), `4037a82a` (escalate above
+  the workspace cap), `88d56895` (block auto-replies on prefetch failure). Each
+  one converts an automatic ~$0.51 core-gate run into a manual item discharged
+  later by a ~$2.60 local full-suite run. Across 2026-08-16..19 CI spent $1.53
+  and local runs spent ~$20.50; that gap is the backlog, not the gate doing its
+  job. The standing rule is now in `.claude/CLAUDE.md` under Agent-change
+  invariants. Items here keep coming back until this is the default.
 
 **Escalation reason text has no eval coverage at all** — established 2026-08-19,
 and worth knowing in both directions. Zero of the 84 fixtures assert on
@@ -248,6 +268,15 @@ while adding and removing no tool call — `groundEscalationReasons` — provabl
 cannot move an assertion and owes no paid run. The flip side is that the sentence
 the operator card calls the most useful line in the notification is ungated, so a
 regression in it surfaces only in production.
+
+That reasoning is the general test, not a one-off exemption: **ask whether the
+change can move an assertion, not whether it touched a gated path.** The
+`evals.yml` `paths` filter is coarse on purpose — it is a net, not a verdict — so
+read what the fixtures assert before booking a paid run. The inverse holds too: a
+tool *description* edit sits in the prompt the model reads and is gated even
+though no assertion names it, which is why the `escalate_to_human` description
+item above owes a run and `groundEscalationReasons` did not. Standing rule in
+`.claude/CLAUDE.md` under Agent-change invariants.
 
 There is no nightly any more. It had carried `continue-on-error: true`, so it
 exited at its own credential check in ~17s and reported success — twelve
