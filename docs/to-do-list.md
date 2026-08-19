@@ -113,28 +113,6 @@ Code work that is started and not finished.
   against a $20 cap whose worst real day was $4.82. Operator turns and
   composer-ask never write a 1h block at all. Delete this entry once a full
   day's rows look sane.
-- [ ] **A cold support turn spends three quarters of its loop budget before it
-  acts.** `budgetTokens` weights cache writes at 1.25× and `agent-loop.ts:233`
-  ends the run once they pass `TOKEN_BUDGET` (20,000), but production's measured
-  cold split-prompt call writes ~11.8k tokens into the 1h stable block — 14,954
-  weighted tokens, 75% of the budget, spent before the first tool call. It
-  fires whenever the shared prefix has gone cold, so the first support run after
-  any quiet hour iterates on what is left. The guard cannot tell a cold cache
-  from a runaway loop: that write is a one-time startup cost, the same whether
-  the turn makes one tool call or ten.
-
-  Nothing is broken today, and this is *why* the pricing fix deliberately does
-  not share its weights. Pricing 1h writes at 2× in `budgetTokens` too — which is
-  what `2d7f63dc` originally did — took the same cold call to 23,840 and ended
-  every cold support run at `token_budget` before its first tool call; warm calls
-  (1,330) were unaffected, so it would have surfaced as an intermittent
-  first-ticket-of-the-morning fault. `d8d10289` reverted that half to master's
-  formula, byte-identical, and pinned it with a regression test. The comment in
-  `usage.ts` explains the divergence; it is deliberate, not an oversight to
-  tidy up. Fixing this properly means either excluding cache writes from the
-  budget or recalibrating `TOKEN_BUDGET` against a warm and a cold run.
-  Support-planner surface, so it needs the eval gate — which cannot currently
-  run in CI (see the missing key below).
 - [ ] **Conversation-to-sale attribution.** Connect meaningful storefront-chat
   interactions and product recommendations to later Shopify orders so merchants
   can distinguish direct, product-assisted, and chat-assisted revenue. Report it
