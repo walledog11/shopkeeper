@@ -8,8 +8,10 @@ on:
       - 'apps/dashboard/src/lib/messaging/**'
       - 'apps/gateway/src/order-ops.eval.test.ts'
       - 'packages/db/refund-spend.ts'
-      - 'package.json'
-      - 'package-lock.json'
+      # `package.json` / `package-lock.json` are deliberately absent: a run costs
+      # ~$0.48 in live model calls (measured 2026-08-19), and a dependency bump
+      # cannot change planner behaviour. Bump the Anthropic SDK or a model pin
+      # and dispatch this workflow by hand.
       - '.github/workflows/evals.yml'
   workflow_dispatch:
     inputs:
@@ -18,6 +20,17 @@ on:
         type: choice
         options: [full, baseline]
         default: full
+
+# `pull_request` fires on `synchronize`, so without this every push to an open PR
+# starts another ~$0.48 gate and lets the superseded one run to completion —
+# paying to measure commits that no longer exist. Cancelling is scoped to PRs on
+# purpose: a `workflow_dispatch` is someone deliberately buying a full drift run
+# or a ~$2.55 three-repeat baseline, and must never be killed by a later one.
+# The groups are distinct anyway (`refs/pull/N/merge` vs `refs/heads/...`), so
+# this only guards dispatch-against-dispatch.
+concurrency:
+  group: evals-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: write

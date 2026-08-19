@@ -29,6 +29,20 @@ npm run test:e2e:send-reply-hop
 npm run test:coverage
 ```
 
+**Live-model eval files are swept into the integration and coverage runs, and
+opt out by default.** Nothing excludes them: the dashboard integration and
+coverage configs both `include: ['src/**/*.test.{ts,tsx}']`, which matches
+`src/lib/agent/__evals__/index.test.ts`, and the gateway's matches
+`src/order-ops.eval.test.ts`. The `src/**/__evals__/**` entry in `vitest.config.ts`
+sits under `coverage.exclude` — it drops the harness from the *report*, not from
+the *run*. Because `with-test-env.mjs` also supplies a real key from `.env.local`,
+a bare `npm run test:integration` or `verify:pr` used to bill a full 84-fixture
+suite (~$0.85) with no prompt. They now skip unless `EVAL_RUN=1` (set by every
+`test:evals*` script) or `REQUIRE_MODEL_EVALS=1` (set by the eval workflows) —
+see `__evals__/selection.ts:evalsEnabled`. Fixture loading and validation still
+run on every integration pass, and the gateway's free `order-ops deterministic
+pre-filter` suite is deliberately left ungated.
+
 Knip's reviewed baseline is zero findings for unused files, dependencies, dev
 dependencies, unlisted imports, binaries, and duplicate exports; those rules are
 blocking. Export and exported-type analysis is enabled at warning severity with
@@ -144,21 +158,30 @@ Do not add ad hoc environment flags to bypass the guard.
 The dashboard agent eval harness lives in `apps/dashboard/src/lib/agent/__evals__`. It runs live planner calls against JSON fixtures and compares pass rates to a committed baseline.
 
 ```sh
-# Fast local iteration (single repeat per fixture)
-EVAL_REPEATS=1 npm run test:evals -w apps/dashboard
+# Cheapest diagnosis — one fixture, ungated
+npm run test:evals:fixture -w apps/dashboard -- -t "refund-over-cap-escalate"
 
-# Pre-merge gate (matches CI)
-EVAL_REPEATS=3 npm run test:evals -w apps/dashboard
+# Fast local iteration (single repeat per fixture, ~$0.85)
+EVAL_CONFIRM=1 EVAL_REPEATS=1 npm run test:evals -w apps/dashboard
 
-# Regenerate baseline.json — always use 3 repeats so flappy fixtures are visible
-npm run test:evals:baseline -w apps/dashboard
+# Pre-merge gate (matches CI) — prefer letting the PR trigger it instead
+EVAL_CONFIRM=1 EVAL_REPEATS=3 npm run test:evals -w apps/dashboard
+
+# Regenerate baseline.json — always use 3 repeats so flappy fixtures are visible.
+# Prefer CI; a local run refuses unless you opt in.
+gh workflow run evals.yml -f mode=baseline
+EVAL_CONFIRM=1 npm run test:evals:baseline -w apps/dashboard
 ```
 
-`test:evals:baseline` sets `EVAL_REPEATS=3` and `UPDATE_EVAL_BASELINE=1`. Do not regenerate the baseline at `EVAL_REPEATS=1`; that produces a noisy repeats=1 snapshot that hides flaky fixtures.
+`test:evals:baseline` sets `EVAL_REPEATS=3` and compares against the committed baseline; `test:evals:baseline:overwrite` adds `UPDATE_EVAL_BASELINE=1` and rewrites it. The two were split in `9fa26fe8` so a three-repeat capture can be read before it replaces anything. Do not regenerate the baseline at `EVAL_REPEATS=1`; that produces a noisy repeats=1 snapshot that hides flaky fixtures.
+
+Eval runs are the dominant line on the API bill — **74% of all Anthropic spend over 2026-08-16..19**, and only a quarter of the runs left a log behind. `scripts/confirm-eval-run.mjs` therefore gates **both** `test:evals` (~84 calls, ~$0.85) and `test:evals:baseline` (~252 calls, ~$2.55) on `EVAL_CONFIRM=1`. `CI=true` bypasses it, so the `core-dashboard` and `regenerate-baseline` workflow jobs are unaffected. `test:evals:fixture` is deliberately never gated — a single-fixture probe is the sanctioned way to diagnose.
+
+To audit eval spend from billing data alone: `claude-sonnet-4-6` is the eval judge (`__evals__/judge.ts`) and nothing else in this codebase uses it, so its daily cost in the Console is a pure eval meter — roughly **$0.114 per full 252-run suite**, and total eval spend is about **20x** the judge line.
 
 Two prerequisites, both of which fail quietly rather than loudly:
 
-- **`ANTHROPIC_API_KEY` must be in the shell**, not just an `.env` file. `with-test-env.mjs` does not forward it, so the whole suite reports `skipped` — not failed — when it is missing.
+- **`ANTHROPIC_API_KEY` resolves from `.env` files, not just the shell.** `with-test-env.mjs` merges `apps/dashboard/.env.local` and `apps/gateway/.env` (see `ENV_FILE_PATHS`) and falls back to the literal `test-anthropic-key` only when no file supplies one, at which point the suite reports `skipped` rather than failed. Verified 2026-08-19: with `ANTHROPIC_API_KEY` unset in the shell, `getTestEnv()` still returns the real 108-char local key. **So a live key is present by default on a dev machine, and anything that sweeps the eval files in bills for them** — see the warning above `npm run test:integration`.
 - **The test database must be up** (`npm run test:services:up`). Fixtures seed a real org, so with Postgres down every fixture fails instantly with `runner threw: … Can't reach database server`. The tell is `calls=0` in the `[eval]` line: no model call was made, so nothing was spent.
 
 To run a subset, filter by test name — the name is `<fixture id> — <description>`, so the filter matches description text too:
