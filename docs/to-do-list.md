@@ -3,7 +3,7 @@
 Open work only. Completed work is deleted, not archived — git history is the
 record. Do not add "recently completed" sections to this file.
 
-Last reviewed: 2026-08-18.
+Last reviewed: 2026-08-19.
 
 Single source of truth for **actionable** open work. Evidence checklists, console
 residue, failure-drill procedures, and standing policies live in the linked docs
@@ -11,15 +11,17 @@ below — not duplicated here.
 
 Work is grouped by **what kind of action** it needs, not by when it was filed.
 
-All three deploy surfaces are current as of 2026-08-18 — Vercel on `master`, the
-database migrated (six partial unique indexes verified at 6/6), and the Shopify
-app released as `shopkeeper-production-26`, which shipped the theme extension and
-the `compliance_topics` declarations. When any of them falls behind again, that
-outranks everything in this file: all three fail silently. Railway is not in that
-trio and probably should be — it fails just as quietly. Both app surfaces were
-last confirmed together on `4fa54da4` (2026-08-18), Vercel Ready and Railway
-SUCCESS; a change landing in `packages/db` or `packages/agent` needs both before
-either app's behavior is what the code says.
+All three deploy surfaces are current — Vercel Ready on `88ec0be6`
+(2026-08-19), the database migrated (six partial unique indexes verified at
+6/6), and the Shopify app released as `shopkeeper-production-26` (2026-08-18),
+which shipped the theme extension and the `compliance_topics` declarations. When
+any of them falls behind again, that outranks everything in this file: all three
+fail silently. Railway is not in that trio and probably should be — it fails
+just as quietly; it took the same `88ec0be6` push and answers `/health`, but
+`/health` is liveness-only and cannot report a deployed commit, so "Railway is
+current" is never something you can read off it. A change landing in
+`packages/db` or `packages/agent` needs both app surfaces before either app's
+behavior is what the code says — PR #42 was such a change.
 
 **Guiding principle for pending integrations.** Shopkeeper is still in active
 development — channels and features are being added, not finalized. Pending
@@ -105,14 +107,14 @@ Code work that is started and not finished.
   Ready and Railway SUCCESS on that commit. `usageToNanoDollars` now prices the
   1h stable block at 2× input and the 5m volatile block at 1.25×, reading the
   per-TTL breakdown the API returns instead of a flat multiplier. Existing
-  `llm_daily_spend` rows were not rewritten, so **today's row straddles the
-  deploy** — everything before it priced at the old flat 1.25×. The first
-  readable day is **2026-08-19 UTC**; today will undershoot and is evidence of
-  nothing. Expect a small correction: ~2.7¢ per cold write on Sonnet 5, bounded
-  by the 1-hour TTL and a prefix all 17 orgs share, under $0.64/day worst case
-  against a $20 cap whose worst real day was $4.82. Operator turns and
-  composer-ask never write a 1h block at all. Delete this entry once a full
-  day's rows look sane.
+  `llm_daily_spend` rows were not rewritten, so the 2026-08-18 row straddles
+  the deploy — everything before it priced at the old flat 1.25×, and that row
+  is evidence of nothing. **2026-08-19 UTC is the first clean day**, so read it
+  on 2026-08-20 once it has closed. Expect a small correction: ~2.7¢ per cold
+  write on Sonnet 5, bounded by the 1-hour TTL and a prefix all 17 orgs share,
+  under $0.64/day worst case against a $20 cap whose worst real day was $4.82.
+  Operator turns and composer-ask never write a 1h block at all. Delete this
+  entry once a full day's rows look sane.
 - [ ] **Conversation-to-sale attribution.** Connect meaningful storefront-chat
   interactions and product recommendations to later Shopify orders so merchants
   can distinguish direct, product-assisted, and chat-assisted revenue. Report it
@@ -137,18 +139,20 @@ Code work that is started and not finished.
 ### Eval-gate residue
 
 The gate is **green** and the baseline is current — 250/252 across 84 fixtures
-at 3 repeats, captured 2026-08-17 (`e9345501`, then `4037a82a`) — and CI can now
-re-check it: `ANTHROPIC_API_KEY` became a repo secret 2026-08-18 and PR #38 ran
-44/44 hard-gated core fixtures plus `clear-fraud 1/1` on real model calls. The
-2026-08-08 red run is closed: the thirteen failures are fixed,
-`storefront-guest-product-search` gives the gate its storefront coverage,
-safe-reply auto-execution has had its run, and 79 of 84 fixtures now carry
-`classifierIntents` — so production's `computeClassifierRouting` path is
-exercised, which it never was before. The 1-hour stable-prefix TTL is confirmed
-as of 2026-08-18: a third thread context eight minutes after a cold write read
-back the full 11,848-token prefix and wrote only the 43-token volatile delta,
-which a 5-minute block could not have done. What is left is one advisory
-fixture:
+at 3 repeats, captured 2026-08-17 (`e9345501`, then `4037a82a`) — and CI can
+now re-check it: `ANTHROPIC_API_KEY` became a repo secret 2026-08-18, and the
+gate has since run clean on three separate PRs — #38, #40 and #42 — at 44/44
+hard-gated core fixtures plus `clear-fraud 1/1` each time, on real model calls.
+#42 is the one that matters: a change to the agent loop's budget accounting,
+cleared by the gate rather than by assertion. The 2026-08-08 red run is closed:
+the thirteen failures are fixed, `storefront-guest-product-search` gives the
+gate its storefront coverage, safe-reply auto-execution has had its run, and 79
+of 84 fixtures now carry `classifierIntents` — so production's
+`computeClassifierRouting` path is exercised, which it never was before. The
+1-hour stable-prefix TTL is confirmed as of 2026-08-18: a third thread context
+eight minutes after a cold write read back the full 11,848-token prefix and
+wrote only the 43-token volatile delta, which a 5-minute block could not have
+done. What is left is one advisory fixture:
 
 - [ ] **`quick-reply-thanks-ack` passes 1/3.** The only fixture below full. Runs
   classify `needs_review` after repeated `get_order_by_name` errors and escalate.
@@ -156,8 +160,8 @@ fixture:
 
 There is no nightly any more. It had carried `continue-on-error: true`, so it
 exited at its own credential check in ~17s and reported success — twelve
-consecutive green scheduled runs that ran no evals. The flag is gone (PR #38)
-and the cron with it: a scheduled run only catches regression *without* a code
+consecutive green scheduled runs that ran no evals. The flag went in PR #38 and the cron in
+PR #40: a scheduled run only catches regression *without* a code
 change, the PR gate catches the rest at the moment it lands, and with no users
 the six-day detection lag costs nothing. The full 84-fixture suite and the judge
 evals are now a `workflow_dispatch` you fire deliberately — before a rollout
