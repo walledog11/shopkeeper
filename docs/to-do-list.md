@@ -40,20 +40,8 @@ channel to build. See [product-truth.md](product-truth.md) §2.
 ## Prove in prod
 
 Shipped code that needs a production canary, observation window, or configured
-provider. **None of these is a code task.** The first item is ranked highest: it
-is the only one where the failure mode is total and silent.
+provider. **None of these is a code task.**
 
-- [ ] **One Shopify order event, delivered exactly once.** Step 5 of
-  [shopify-webhook-migration.md](production/shopify-webhook-migration.md), still
-  unperformed. Per-shop subscriptions were deleted in favour of app-level
-  declaration (`e7d881c9`), and the audit confirms the connected store now carries
-  `total=0` shop-specific subscriptions — so app config is the **only** delivery
-  path, and a wrong declaration means the shop receives nothing rather than
-  everything twice. The topic strings themselves are no longer the risk: as of
-  2026-08-18 `webhooks-shopify.ts` and `shopify.app.toml` agree on all five, and
-  `orders/create` is correct in both places the order-ops trigger reads it. What
-  remains unproven is delivery. Nothing persists a Shopify webhook receipt, so a
-  real order event on the dev store is the only thing that can close it.
 - [ ] **Storefront chat dev-store browser matrix.** Run Online Store 2.0 and a
   vintage theme on desktop and mobile, with the embed on and off and the Shopify
   Inbox bubble present and removed. The automated remainder is covered: real
