@@ -13,7 +13,7 @@ import {
   appendPlanningReadWarnings,
 } from "./planner-read-tools.js";
 import { stripInternalNotesWithoutActions } from "./planner-safety/internal-notes.js";
-import { applyEscalationRouting, logRoutingShadow, routePlan } from "./planner-routing.js";
+import { applyEscalationRouting, groundEscalationReasons, logRoutingShadow, routePlan } from "./planner-routing.js";
 import {
   stripCreateRefundForAlreadyRefundedOrders,
   stripEmptySendReplyToolCalls,
@@ -177,6 +177,13 @@ export async function planAgent(
       question: outcome.question ?? null,
     };
   }
+
+  // After routing, so it covers both the model-elected escalation and a plan the
+  // router left alone that still carries one.
+  rawToolCalls = groundEscalationReasons(rawToolCalls, {
+    orgId: ctx.orgId,
+    threadId: ctx.thread.id,
+  });
 
   const steps = buildPlanSteps(rawToolCalls);
   logger.info({

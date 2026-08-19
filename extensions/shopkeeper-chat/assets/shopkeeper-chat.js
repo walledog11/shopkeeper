@@ -665,15 +665,57 @@
     }
   }
 
+  var HANDOFF_NOTICE = "Someone from the shop is looking at this — the reply will appear right here.";
+
   function armWaitingNotice() {
     clearWaitingNotice();
     waitingTimer = setTimeout(function () {
       waitingTimer = null;
       if (waitingNoticeShown) return;
-      waitingNoticeShown = true;
-      hideTyping();
-      append("Someone from the shop is looking at this — the reply will appear right here.", "note");
+      showHandoffNotice(false);
     }, WAITING_NOTICE_MS);
+  }
+
+  // The timer above is a guess that the reply is slow; `escalated` is the server
+  // saying a human owns the thread. They render the same sentence, so they share
+  // one node — otherwise a poll landing after the timer fired would print it
+  // twice. Because the server-driven one is re-derived on every bootstrap and
+  // poll it survives a reload, which the transient note did not: a shopper who
+  // refreshed mid-escalation was left staring at their own unanswered question.
+  var noticeEl = null;
+  var noticeFromServer = false;
+
+  function showHandoffNotice(fromServer) {
+    if (fromServer) noticeFromServer = true;
+    clearWaitingNotice();
+    waitingNoticeShown = true;
+    hideTyping();
+    if (!noticeEl) {
+      noticeEl = append(HANDOFF_NOTICE, "note");
+      return;
+    }
+    // Already up. Move it only when something rendered below it, and scroll only
+    // then: this runs on every poll, and an unconditional scroll-to-end every 8
+    // seconds would drag a shopper reading back through the thread to the bottom.
+    if (log.lastChild !== noticeEl) {
+      log.appendChild(noticeEl);
+      scrollLogToEnd();
+    }
+  }
+
+  function setEscalated(isEscalated) {
+    if (isEscalated) {
+      showHandoffNotice(true);
+      return;
+    }
+    // Only retract what the server put up. An agent that is merely slow was never
+    // handed off, and pulling the line back out mid-wait reads as a glitch.
+    if (noticeEl && noticeFromServer) {
+      noticeEl.remove();
+      noticeEl = null;
+      noticeFromServer = false;
+      waitingNoticeShown = false;
+    }
   }
 
   function render(messages) {
@@ -723,6 +765,7 @@
       if (!data) return;
       if (greeting && !(data.messages || []).length) append(greeting, "note");
       render(data.messages);
+      setEscalated(data.escalated === true);
       startPolling();
     });
   }
@@ -747,7 +790,9 @@
     authedFetch("/messages", {}).then(function (r) {
       return r.ok ? r.json() : null;
     }).then(function (data) {
-      if (data) render(data.messages);
+      if (!data) return;
+      render(data.messages);
+      setEscalated(data.escalated === true);
     }).catch(function () { /* transient */ });
   }
 

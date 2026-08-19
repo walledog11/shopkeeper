@@ -1,7 +1,13 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChannelType, db } from '@shopkeeper/db';
-import { cleanupTestData, createTestIntegration, createTestOrg } from '@shopkeeper/db/test-helpers';
+import {
+  cleanupTestData,
+  createTestCustomer,
+  createTestIntegration,
+  createTestOrg,
+  createTestThread,
+} from '@shopkeeper/db/test-helpers';
 import { appProxyCanonicalString } from '@/lib/shopify/app-proxy';
 import { createResumeSecret, mintSessionToken } from '@/lib/storefront-chat/session-token';
 import { GET, POST } from './route';
@@ -99,7 +105,7 @@ describe('storefront chat messages gating', () => {
     const response = await GET(signedGetRequest());
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ messages: [] });
+    await expect(response.json()).resolves.toEqual({ escalated: false, messages: [] });
   });
 
   it('refuses a live token once the merchant disables chat', async () => {
@@ -198,5 +204,40 @@ describe('storefront chat budget hop', () => {
     const response = await POST(signedPostRequest());
 
     expect(response.status).toBe(502);
+  });
+});
+
+describe('storefront chat escalation state', () => {
+  async function bindThread(escalatedAt: Date | null) {
+    const customer = await createTestCustomer(org.id, `shopify_chat:${session.id}`);
+    const thread = await createTestThread(org.id, customer.id, ChannelType.shopify_chat);
+    await db.thread.update({ where: { id: thread.id }, data: { escalatedAt } });
+    await db.storefrontChatSession.update({
+      where: { id: session.id },
+      data: { threadId: thread.id },
+    });
+    return thread;
+  }
+
+  it('reports an escalated thread so the notice survives a reload', async () => {
+    await bindThread(new Date());
+
+    const response = await GET(signedGetRequest());
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ escalated: true });
+  });
+
+  it('reports no escalation once the merchant has replied', async () => {
+    await bindThread(null);
+
+    const response = await GET(signedGetRequest());
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ escalated: false });
+  });
+
+  it('reports no escalation before a thread exists', async () => {
+    const response = await GET(signedGetRequest());
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ escalated: false, messages: [] });
   });
 });

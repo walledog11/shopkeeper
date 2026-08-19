@@ -146,7 +146,7 @@ describe('formatOperatorPlanMessage', () => {
     expect(message).toContain('1. Email Jane');
     expect(message).toContain('2. Refund');
     expect(message).toContain('The reply: "Your refund is on its way!"');
-    expect(message).toContain('Full thread: https://dashboard.example.com/dashboard/tickets/thread_1');
+    expect(message).toContain('Full thread: https://dashboard.example.com/dashboard/tickets?thread=thread_1');
     expect(message).toContain('Sound good?');
     expect(message).not.toContain('New ticket');
     expect(message).not.toContain('skip 1');
@@ -387,8 +387,8 @@ describe('formatOperatorPlanMessage', () => {
       { verifiedOrders: ['#1024'] },
     );
 
-    expect(message).toContain('Verified: entered a code emailed to the address on #1024.');
-    expect(message.indexOf('Verified:')).toBeLessThan(message.indexOf("I'd "));
+    expect(message).toContain('They confirmed the email on #1024.');
+    expect(message.indexOf('They confirmed the email')).toBeLessThan(message.indexOf("I'd "));
   });
 
   it('names every verified order', () => {
@@ -400,7 +400,7 @@ describe('formatOperatorPlanMessage', () => {
       { verifiedOrders: ['#1024', '#1031'] },
     );
 
-    expect(message).toContain('the address on #1024, #1031.');
+    expect(message).toContain('They confirmed the email on #1024, #1031.');
   });
 
   it('says nothing about verification for an unverified storefront visitor', () => {
@@ -496,7 +496,7 @@ describe('sendOperatorPlanNotification', () => {
     });
 
     const [, , body] = notifyOperatorSpy.mock.calls[0] ?? [];
-    expect(body).toContain(`Full thread: https://dashboard.example.com/dashboard/tickets/${THREAD_ID}`);
+    expect(body).toContain(`Full thread: https://dashboard.example.com/dashboard/tickets?thread=${THREAD_ID}`);
     expect(body).toContain('Good to send?');
     // Nothing is parked on this fresh context, so no overwrite disclosure.
     expect(body).not.toContain('This replaces');

@@ -424,3 +424,74 @@ export function applyEscalationRouting(
     { id: "tu_route_escalate", name: "escalate_to_human", input: { reason } },
   ];
 }
+
+// A plan is a proposal — planAgent runs no tools — so at plan time nothing the
+// agent could have done has happened yet. An escalation reason asserting a
+// completed mutation is therefore describing something that does not exist: the
+// 2026-08-19 storefront run put "a return has been initiated" on the merchant's
+// phone for a plan whose only calls were reads. The operator card renders this
+// sentence verbatim as the most useful line in the notification, so it has to be
+// one the plan can account for.
+//
+// Grounding is deliberately narrow. The claim is dropped only when the plan holds
+// no action-category call at all, which makes it unambiguously unsupported; a plan
+// that does propose the matching action is at worst premature, and the card lists
+// those steps separately. Claims the model attributes to the customer are left
+// alone — "customer says they already returned it" reports what someone else did.
+const MUTATION_SUBJECT =
+  "refunds?|returns?|exchanges?|cancellations?|gift cards?|store credit|replacements?|discounts?|orders?|address(?:es)?|labels?|shipments?";
+
+const MUTATION_VERB =
+  "initiated|issued|processed|created|started|placed|sent|applied|approved|arranged|completed|refunded|returned|cancell?ed|exchanged|fulfilled|shipped|updated|changed|edited";
+
+const MUTATION_CLAIM_PATTERNS = [
+  // Agentless passive: "a return has been initiated", "the refund was processed".
+  new RegExp(
+    `\\b(?:${MUTATION_SUBJECT})\\b[^.!?]{0,40}?\\b(?:has|have|had|was|were)\\s+(?:already\\s+)?been\\s+(?:${MUTATION_VERB})\\b`,
+    "i",
+  ),
+  // First person: "I've issued the refund", "we already cancelled the order".
+  new RegExp(
+    `\\b(?:i|we)(?:'ve|'d)?\\s+(?:have\\s+|had\\s+)?(?:already\\s+)?(?:${MUTATION_VERB})\\b[^.!?]{0,40}?\\b(?:${MUTATION_SUBJECT})\\b`,
+    "i",
+  ),
+];
+
+const CUSTOMER_ATTRIBUTION =
+  /\b(?:customer|shopper|buyer|they|she|he)\s+(?:\w+\s+){0,2}(?:says?|said|claims?|claimed|reports?|reported|states?|stated|mentions?|mentioned|believes?|thinks?)\b|\baccording to\b/i;
+
+export const UNGROUNDED_ESCALATION_REASON = "I couldn't complete this myself.";
+
+export function groundEscalationReasons(
+  rawToolCalls: readonly RawToolCall[],
+  logContext: { orgId: string; threadId: string },
+): RawToolCall[] {
+  if (rawToolCalls.some((toolCall) => TOOL_CATEGORIES[toolCall.name] === "action")) {
+    return [...rawToolCalls];
+  }
+
+  return rawToolCalls.map((toolCall) => {
+    if (toolCall.name !== "escalate_to_human") return toolCall;
+    const input = toolCall.input;
+    if (!input || typeof input !== "object" || Array.isArray(input)) return toolCall;
+    const reason = (input as { reason?: unknown }).reason;
+    if (typeof reason !== "string" || !reason.trim()) return toolCall;
+
+    const normalized = reason.replace(/[‘’]/g, "'");
+    if (CUSTOMER_ATTRIBUTION.test(normalized)) return toolCall;
+    if (!MUTATION_CLAIM_PATTERNS.some((pattern) => pattern.test(normalized))) return toolCall;
+
+    logger.warn(
+      {
+        ...logContext,
+        purpose: "agent_plan_ungrounded_escalation_reason",
+        droppedReason: reason.trim(),
+      },
+      "[agent:plan] escalation reason claimed a mutation the plan never proposed",
+    );
+    return {
+      ...toolCall,
+      input: { ...(input as Record<string, unknown>), reason: UNGROUNDED_ESCALATION_REASON },
+    };
+  });
+}

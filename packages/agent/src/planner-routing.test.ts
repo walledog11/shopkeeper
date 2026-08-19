@@ -5,6 +5,8 @@ import type { RawToolCall } from "./types.js";
 import {
   applyEscalationRouting,
   computeClassifierRouting,
+  groundEscalationReasons,
+  UNGROUNDED_ESCALATION_REASON,
   computeLegacyRouting,
   routePlan,
 } from "./planner-routing.js";
@@ -542,5 +544,64 @@ describe("applyEscalationRouting", () => {
     expect(applyEscalationRouting(calls, "r", { keepReply: false }).map((call) => call.name)).toEqual(
       ["escalate_to_human"],
     );
+  });
+});
+
+describe("groundEscalationReasons", () => {
+  const log = { orgId: "org_1", threadId: "thread_1" };
+  const reads: RawToolCall[] = [{ id: "tu_read", name: "get_order_by_name", input: {} }];
+
+  function escalateWith(reason: string): RawToolCall {
+    return { id: "tu_escalate", name: "escalate_to_human", input: { reason } };
+  }
+
+  function reasonOf(calls: RawToolCall[]): string {
+    const call = calls.find((entry) => entry.name === "escalate_to_human");
+    return (call?.input as { reason: string }).reason;
+  }
+
+  it("drops the claim the 2026-08-19 storefront run sent to the merchant", () => {
+    const out = groundEscalationReasons(
+      [...reads, escalateWith("A return has been initiated for this order, but the refund needs your approval.")],
+      log,
+    );
+    expect(reasonOf(out)).toBe(UNGROUNDED_ESCALATION_REASON);
+  });
+
+  it("drops a first-person completion claim", () => {
+    const out = groundEscalationReasons([...reads, escalateWith("I've issued the refund — the rest is yours.")], log);
+    expect(reasonOf(out)).toBe(UNGROUNDED_ESCALATION_REASON);
+  });
+
+  it("keeps a claim the plan's own action call supports", () => {
+    const reason = "A return has been initiated, but the exchange needs your call.";
+    const out = groundEscalationReasons(
+      [...reads, { id: "tu_return", name: "create_return", input: {} }, escalateWith(reason)],
+      log,
+    );
+    expect(reasonOf(out)).toBe(reason);
+  });
+
+  it("keeps a claim attributed to the customer", () => {
+    const reason = "Customer says they already returned the item, but no return exists on the order.";
+    const out = groundEscalationReasons([...reads, escalateWith(reason)], log);
+    expect(reasonOf(out)).toBe(reason);
+  });
+
+  it("keeps a reason that asserts no completed mutation", () => {
+    const reason = "Wholesale pricing question — out of scope for automated support.";
+    const out = groundEscalationReasons([...reads, escalateWith(reason)], log);
+    expect(reasonOf(out)).toBe(reason);
+  });
+
+  it("keeps the router's own templated reasons", () => {
+    const reason = "Refund requested for an order that is already fully refunded — needs human review.";
+    const out = groundEscalationReasons([...reads, escalateWith(reason)], log);
+    expect(reasonOf(out)).toBe(reason);
+  });
+
+  it("leaves a plan with no escalation untouched", () => {
+    const calls: RawToolCall[] = [...reads, { id: "tu_reply", name: "send_reply", input: { text: "Hi." } }];
+    expect(groundEscalationReasons(calls, log)).toEqual(calls);
   });
 });

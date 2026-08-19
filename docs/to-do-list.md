@@ -11,17 +11,32 @@ below — not duplicated here.
 
 Work is grouped by **what kind of action** it needs, not by when it was filed.
 
-All three deploy surfaces are current — Vercel Ready on `88ec0be6`
+All three deploy surfaces were current as of `88ec0be6` — Vercel Ready
 (2026-08-19), the database migrated (six partial unique indexes verified at
 6/6), and the Shopify app released as `shopkeeper-production-26` (2026-08-18),
-which shipped the theme extension and the `compliance_topics` declarations. When
-any of them falls behind again, that outranks everything in this file: all three
-fail silently. Railway is not in that trio and probably should be — it fails
-just as quietly; it took the same `88ec0be6` push and answers `/health`, but
-`/health` is liveness-only and cannot report a deployed commit, so "Railway is
-current" is never something you can read off it. A change landing in
+which shipped the theme extension and the `compliance_topics` declarations.
+`origin/master` has since moved to `08c1c283`; both commits are a gateway script
+and docs, so no app surface changed. The next thing to land does change them —
+see Build. When any of them falls behind again, that outranks everything in this
+file: all three fail silently. Railway is not in that trio and probably should
+be — it fails just as quietly; it answers `/health`, but `/health` is
+liveness-only and cannot report a deployed commit, so "Railway is current" is
+never something you can read off it. What you *can* read is the deploy list: the
+most recent is `61abe989`, SUCCESS at 2026-08-18 21:49 PT. A change landing in
 `packages/db` or `packages/agent` needs both app surfaces before either app's
 behavior is what the code says — PR #42 was such a change.
+
+**The Anthropic account is out of credits (2026-08-19).** Calls come back `400
+invalid_request_error`, "credit balance is too low". No eval gate can run until
+it is topped up, which is a hard blocker on anything owing one — see Eval-gate
+residue. Nothing is billed while it is empty, so a blocked run is safe, just
+useless. The way it was found is worth not repeating: **a bare
+`npm run test:integration` in either app runs that app's paid eval suite.**
+Neither integration config excludes its evals (dashboard's `src/**/*.test.tsx?`
+picks up `src/lib/agent/__evals__/`, gateway's `src/**/*.test.ts` picks up
+`order-ops.eval.test.ts`), and `scripts/with-test-env.mjs` reads a real
+`ANTHROPIC_API_KEY` out of `apps/dashboard/.env.local` / `apps/gateway/.env` even
+when the shell has none. Scope every integration run to the files you changed.
 
 **Guiding principle for pending integrations.** Shopkeeper is still in active
 development — channels and features are being added, not finalized. Pending
@@ -61,8 +76,9 @@ provider. **None of these is a code task.**
   confirmed with both controls. One gap remains before this can close — agent text
   actually reaching the shopper was never demonstrated, because no plan in that
   episode contained `send_reply` at all. That is the same root as the escalation
-  defects below, so close those first and re-run a single answerable question.
-  Evidence: "The episode loop live, 2026-08-19" in
+  defects below, whose fixes are now written and waiting to land; once they are
+  merged and deployed, re-run a single answerable question. Evidence: "The episode
+  loop live, 2026-08-19" in
   [storefront-chat-verification-2026-08.md](production/storefront-chat-verification-2026-08.md).
 - [ ] **One real merchant workspace on storefront chat, in approval mode.** Toggle
   on through the integration card, theme embed activated, Shopify Inbox bubble
@@ -81,7 +97,9 @@ provider. **None of these is a code task.**
   `existing` branch preserved the model's tool-use id instead of synthesizing
   `tu_route_escalate`. Firing it needs a case where `routePlan` returns `escalate`
   and the model does **not** elect it — so the message has to be one the model
-  believes it can answer. Storefront chat, dev store. Background:
+  believes it can answer. Storefront chat, dev store. Note the pending
+  `escalate_to_human` description change makes model-elected escalation reasons
+  terser, not rarer, so it does not help produce this case. Background:
   [storefront-chat-verification-2026-08.md](production/storefront-chat-verification-2026-08.md).
 - [ ] **Postmark outbound canary.** Send and bounce attribution under real
   traffic. Inbound is proven end to end as of 2026-08-02 (server
@@ -127,33 +145,49 @@ Code work that is started and not finished.
   under $0.64/day worst case against a $20 cap whose worst real day was $4.82.
   Operator turns and composer-ask never write a 1h block at all. Delete this
   entry once a full day's rows look sane.
-- [ ] **Fix what the 2026-08-19 storefront run found.** Four defects on the
-  escalation path, in severity order. Full evidence in
+- [ ] **Land the fixes for what the 2026-08-19 storefront run found.** All four
+  defects and all three lower-severity copy items are **written and passing, in the
+  working tree on `master`, uncommitted** — 17 files, +307/−38. Nothing here is
+  code work any more; what remains is landing it and the verification each piece
+  owes. Original evidence in
   [storefront-chat-verification-2026-08.md](production/storefront-chat-verification-2026-08.md)
   under "The episode loop live, 2026-08-19".
-  1. **A card asserted an action that never happened** — "a return has been
-     initiated", with no such call planned or executed. `escalate_to_human` takes
-     a model-authored `reason` that the operator card renders verbatim, ungrounded
-     against the plan's own tool calls. Highest severity: it is a fabricated
-     mutation claim, on a refund, sent to the merchant's phone.
-  2. **Every operator deep link 404s.** `operator-escalation.ts:25` and
-     `planning-notifications.ts:334` emit `/dashboard/tickets/${threadId}`; no
-     dynamic route exists. The dashboard's own links use
-     `/dashboard/tickets?thread=${threadId}`, which resolves.
-  3. **Prose approval fails where `yes` works.** "go ahead and approve the refund"
-     exhausted `maxIterations`; the same pending plan ran verbatim on `yes`. Prose
-     naming an action reads as a new instruction, and the pending plan's control
-     tools are never reached.
-  4. **An escalated shopper is left with silence.** The "someone from the shop is
-     looking at this" line is transient client state and does not survive a reload.
-     Note `keepReply` cannot fix this — it spares a drafted reply from being
-     filtered, and here no reply was ever drafted.
+  1. **Fabricated mutation claim** ("a return has been initiated", nothing planned
+     or executed). Fixed by `groundEscalationReasons` in `planner-routing.ts`,
+     called from `planner.ts` after routing. It rests on a stronger invariant than
+     cross-referencing tool calls: `planAgent` executes nothing, so at plan time a
+     past-tense mutation claim describes something that does not exist. Narrow by
+     design — drops the reason only when the plan holds no action-category call,
+     and never when the claim is attributed to the customer. Owes no gate run (see
+     Eval-gate residue).
+  2. **Operator deep links 404.** Both emitters now use
+     `/dashboard/tickets?thread=`. Five test assertions had encoded the broken
+     URL, which is why it survived; those are updated too.
+  3. **Prose approval.** Not a missing capability — `approve_pending_plan` exists
+     and is always passed. Two bullets in `OPERATOR_CONTROL_TOOL_INSTRUCTIONS`
+     contradicted each other, and the "brand-new instruction" reading won. Both
+     halves fixed. **Owes a live phone round-trip** — text "go ahead and approve
+     the refund" at a real pending plan and watch for `approve_pending_plan`
+     instead of an order lookup. Operator prompt changes are never verified by
+     evals.
+  4. **Escalated shopper left in silence.** The notice was a 20-second client-side
+     timer unconnected to whether anything was escalated. `escalatedAt` is now
+     reported by `/bootstrap` and `/messages`, and the widget re-derives the notice
+     each poll, so it survives a reload and clears itself when the merchant replies.
+     **Owes a Shopify app version release** — the widget is a theme extension
+     asset, so the server sends `escalated` to a widget that cannot read it until a
+     version after `shopkeeper-production-26` ships.
 
-  Also outstanding, lower severity: the builder-facing `Verified:` line diagnosed
-  2026-08-12 is still shipping (and is unconditional, not tied to the approval
-  framing as that entry claims); plan summary and escalation reason state the same
-  fact twice; the ticket header renders the raw `shopify_chat:${session.id}`
-  platformId as the customer's name.
+  The three copy items: the `Verified:` line now reads "They confirmed the email on
+  #1024." — mechanism kept so the merchant can still judge the disclosure, audit-log
+  register dropped. The ticket header renders "Storefront visitor" instead of
+  title-casing `shopify_chat:<uuid>` into a name. **The same fact twice was fixed at
+  the source and is the one piece that owes an eval gate run**: no presentational
+  fix was honest, because word overlap dies on paraphrase (the observed pair shares
+  4 of 11 content words) and dropping either line loses specifics in real cases, so
+  `escalate_to_human`'s `reason` field description now asks for the blocker rather
+  than the customer's story. That is the shared registry. It is blocked on credits,
+  and it is the hunk to drop if the gate is not worth running.
 - [ ] **Conversation-to-sale attribution.** Connect meaningful storefront-chat
   interactions and product recommendations to later Shopify orders so merchants
   can distinguish direct, product-assisted, and chat-assisted revenue. Report it
@@ -191,11 +225,29 @@ of 84 fixtures now carry `classifierIntents` — so production's
 1-hour stable-prefix TTL is confirmed as of 2026-08-18: a third thread context
 eight minutes after a cold write read back the full 11,848-token prefix and
 wrote only the 43-token volatile delta, which a 5-minute block could not have
-done. What is left is one advisory fixture:
+done.
 
+**The gate cannot run right now — the account is out of credits (2026-08-19, see
+the header).** That is the only thing standing between the pending
+`escalate_to_human` description change and merge; the code is written and every
+free check passes.
+
+- [ ] **Run the gate for the `escalate_to_human` `reason` description**, once
+  credits are back. It is a shared-registry change, so it is gated even though the
+  reason string itself is not asserted anywhere (below). Nothing else in the
+  pending working-tree changes owes a run.
 - [ ] **`quick-reply-thanks-ack` passes 1/3.** The only fixture below full. Runs
   classify `needs_review` after repeated `get_order_by_name` errors and escalate.
   Advisory, so it does not gate.
+
+**Escalation reason text has no eval coverage at all** — established 2026-08-19,
+and worth knowing in both directions. Zero of the 84 fixtures assert on
+`escalate_to_human` inputs (64 mention the tool, none check its `reason`), and
+`judge.ts` grades only `replyText`. So a change that rewrites the reason string
+while adding and removing no tool call — `groundEscalationReasons` — provably
+cannot move an assertion and owes no paid run. The flip side is that the sentence
+the operator card calls the most useful line in the notification is ungated, so a
+regression in it surfaces only in production.
 
 There is no nightly any more. It had carried `continue-on-error: true`, so it
 exited at its own credential check in ~17s and reported success — twelve
@@ -227,6 +279,15 @@ when its closing verification passes. Re-verify env presence with
 `vercel env ls production` — `vercel env pull` redacts sensitive vars to an
 empty string, indistinguishable from unset.
 
+- [ ] **Top up Anthropic credits.** Out as of 2026-08-19; details and the
+  `test:integration` trap that found it are in the header. Blocks the eval gate,
+  and with it the one pending change that owes a run.
+- [ ] **Release a Shopify app version carrying the storefront-chat widget change.**
+  The escalation notice fix (defect 4 above) edits
+  `extensions/shopkeeper-chat/assets/shopkeeper-chat.js`, which shoppers only
+  receive through a released version. The server half ships with the dashboard and
+  is inert without it. Fold this into the version-recording decision below rather
+  than releasing and writing nothing down again.
 - [ ] **Confirm the connected store survived the `write_app_proxy` scope add.**
   `shopify.app.toml` shipped 2026-08-07 as `shopkeeper-production-9`, adding
   `write_app_proxy` and the `[app_proxy]` block (M0a and M0b, both closed). Two

@@ -1,3 +1,5 @@
+export const STOREFRONT_VISITOR_NAME = "Storefront visitor";
+
 export function getCustomerName(
   customer: { name?: string | null; platformId?: string | null } | null | undefined
 ): string {
@@ -5,6 +7,11 @@ export function getCustomerName(
 
   const id = customer?.platformId;
   if (!id) return "Unknown Customer";
+  // A storefront guest is keyed on `shopify_chat:<session uuid>`. The title-casing
+  // below turns that into "Shopify Chat:E36cd568-3053-…" and presents a session id
+  // as the person's name. Nobody has identified them, so say that — matching the
+  // "Someone on your storefront" / "the visitor" register the operator cards use.
+  if (id.startsWith("shopify_chat:")) return STOREFRONT_VISITOR_NAME;
   if (id.includes("@")) return id;
   if (/^\d+$/.test(id)) return `Customer ${id.slice(-6)}`;
 

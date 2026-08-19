@@ -22,7 +22,7 @@ export function formatEscalationMessage(
     '',
     summary ? `"${summary}"` : null,
     summary ? '' : null,
-    `Open: ${dashboardUrl}/dashboard/tickets/${threadId}`,
+    `Open: ${dashboardUrl}/dashboard/tickets?thread=${threadId}`,
   ];
 
   return lines.filter((l): l is string => l !== null).join('\n');

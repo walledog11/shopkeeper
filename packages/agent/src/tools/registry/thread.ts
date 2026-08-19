@@ -61,7 +61,7 @@ export const THREAD_TOOL_DEFINITIONS = [
     description:
       "Hand off the ticket to the merchant when a tool failure, missing data, or out-of-scope question prevents you from helping. Keeps the ticket open, records the escalation time, applies the 'needs_human' tag, and logs the reason. Stop after calling this — do not attempt any other tools or send a reply.",
     fields: {
-      reason: stringArg("A short explanation of why a human needs to take over (e.g. 'Customer is asking about wholesale pricing — out of scope', 'Shopify returned 503 on refund attempt').", { required: true }),
+      reason: stringArg("A short explanation of WHY you cannot finish this yourself — the blocker, not the customer's story. Whoever reads this already has a summary of what the customer asked immediately above it, so restating the situation prints the same fact twice; add only what that summary does not already say. Good: 'Shopify returned 503 on the refund attempt', 'Refund is above the approval cap', 'Wholesale pricing — out of scope'. Bad: 'The customer received a damaged snowboard and is requesting a refund on order #1024'.", { required: true }),
     },
     category: "internal",
     group: "thread",

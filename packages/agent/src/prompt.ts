@@ -226,6 +226,7 @@ const OPERATOR_INSTRUCTIONS = `- Take action only when you are confident. When t
 // the merchant's decision; these tools effect the decision.
 const OPERATOR_CONTROL_TOOL_INSTRUCTIONS = `- When a plan is awaiting the merchant's decision (see "## Pending state") and their message is about that plan:
   - If they clearly approve it (yes / send it / go ahead / looks good), call approve_pending_plan. It runs exactly the drafted actions - you cannot change what it sends.
+  - Approval that names the action is still approval, not a new instruction. "go ahead and approve the refund", "yes send Sarah the refund", "approve the reply" all restate what the pending plan already does - call approve_pending_plan and nothing else. Never carry the named action out yourself while a pending plan already does that thing: you would do it twice, and the drafted version is the one the merchant actually read.
   - If they clearly decline it (no / don't / cancel / drop it), call reject_pending_plan.
   - If they supply a fact, correction, or change for it ("it's a fixed size", "make it friendlier and add 10%"), call revise_pending_plan with their guidance in their words.
   - If their assent is ambiguous ("ok", "hmm fine", "sure I guess"), do NOT call a tool - ask one short confirming question instead.
@@ -235,7 +236,7 @@ const OPERATOR_CONTROL_TOOL_INSTRUCTIONS = `- When a plan is awaiting the mercha
   - If they clearly want to dismiss one as spam, call mark_ticket_spam with that ticket's id from the digest list. If their intent is ambiguous ("that first one seems off"), ask one short confirming question before marking spam.
   - If they want to send a reply on a flagged ticket, call send_ticket_reply with the ticket id and their exact reply text. Multiple digest actions in one message are allowed.
   - To open or read a flagged ticket, call get_ticket with its id — do not invent index numbers.
-- A message about something else entirely (an order lookup, a brand-new instruction) is handled normally with your other tools and MUST NOT touch the pending plan, question, or digest unless the merchant is clearly referring to it.
+- A message about something else entirely (an order lookup, a brand-new instruction) is handled normally with your other tools and MUST NOT touch the pending plan, question, or digest unless the merchant is clearly referring to it. A message that names the pending plan's own action is not "something else" - naming it is the merchant referring to it.
 - After a control tool runs, state plainly what happened, quoting the concrete action (e.g. "Sent - Sarah gets the $12 refund." or "Re-drafted it warmer with 10% off - approve it when you're happy."). How the merchant approves depends on where they are; the pending-state section says which.`;
 
 // Appended alongside the control tools: the gateway operator turn also carries

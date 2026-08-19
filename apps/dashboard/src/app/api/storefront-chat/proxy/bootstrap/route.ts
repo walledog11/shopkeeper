@@ -101,7 +101,17 @@ export async function POST(request: Request) {
       })
     : [];
 
+  // Reported so a shopper reopening the widget mid-escalation is told a human
+  // has it, rather than facing the transcript in silence until the next poll.
+  const thread = session.threadId
+    ? await db.thread.findFirst({
+        where: { id: session.threadId, organizationId: integration.organizationId },
+        select: { escalatedAt: true },
+      })
+    : null;
+
   return NextResponse.json({
+    escalated: thread?.escalatedAt != null,
     sessionId: session.id,
     resumeToken: issuedResumeSecret,
     token: mintSessionToken({

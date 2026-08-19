@@ -160,7 +160,7 @@ describe('POST /internal/operator/escalate', () => {
     const bodyArg = sendMessageSpy.mock.calls[0][1] as string;
     expect(bodyArg).toContain('Escalated');
     expect(bodyArg).toContain('Wholesale pricing question.');
-    expect(bodyArg).toContain(`/dashboard/tickets/${thread.id}`);
+    expect(bodyArg).toContain(`/dashboard/tickets?thread=${thread.id}`);
   });
 
   it('does not count a failed send but still returns 200 when Telegram send fails for a bound operator', async () => {

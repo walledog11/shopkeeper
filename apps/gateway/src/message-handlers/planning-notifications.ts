@@ -277,14 +277,14 @@ export function formatOperatorPlanMessage(
 
   // Directly under the header, because it qualifies the header: everything above
   // describes an anonymous storefront visitor, and this is the one fact that
-  // makes disclosing order details to them correct rather than a leak. Naming
-  // the mechanism rather than asserting "verified" lets the merchant judge how
-  // much it is worth.
+  // makes disclosing order details to them correct rather than a leak. It still
+  // names the mechanism — an email they had to receive — so the merchant can
+  // judge what it is worth, but in the register a colleague would use. The
+  // earlier "Verified: entered a code emailed to the address on #1024." asked
+  // them to audit an authentication scheme to answer a shipping question.
   const verifiedOrders = options?.verifiedOrders ?? [];
   if (verifiedOrders.length > 0) {
-    lines.push(
-      `Verified: entered a code emailed to the address on ${verifiedOrders.join(', ')}.`,
-    );
+    lines.push(`They confirmed the email on ${verifiedOrders.join(', ')}.`);
   }
 
   // Escalation is never something the merchant approves — it is the statement
@@ -331,7 +331,7 @@ export function formatOperatorPlanMessage(
   }
 
   if (options?.threadId && options.dashboardUrl) {
-    lines.push('', `Full thread: ${options.dashboardUrl}/dashboard/tickets/${options.threadId}`);
+    lines.push('', `Full thread: ${options.dashboardUrl}/dashboard/tickets?thread=${options.threadId}`);
   }
 
   if (options?.queueNotice) {

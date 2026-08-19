@@ -15,22 +15,34 @@ export async function GET(request: Request) {
   if (authorized instanceof NextResponse) return authorized;
   const { session, threadId } = authorized;
 
-  if (!threadId) return NextResponse.json({ messages: [] });
+  if (!threadId) return NextResponse.json({ escalated: false, messages: [] });
 
   // Internal notes and agent transcripts never leave Shopkeeper — only what the
   // customer is meant to see.
-  const messages = await db.message.findMany({
-    where: {
-      threadId,
-      organizationId: session.orgId,
-      senderType: { in: ["customer", "agent", "ai"] },
-    },
-    orderBy: { sentAt: "asc" },
-    take: 100,
-    select: { id: true, contentText: true, senderType: true, sentAt: true },
-  });
+  const [messages, thread] = await Promise.all([
+    db.message.findMany({
+      where: {
+        threadId,
+        organizationId: session.orgId,
+        senderType: { in: ["customer", "agent", "ai"] },
+      },
+      orderBy: { sentAt: "asc" },
+      take: 100,
+      select: { id: true, contentText: true, senderType: true, sentAt: true },
+    }),
+    // A shopper whose question was handed to a human sees nothing happen —
+    // escalation is invisible from their side, and on this channel it is the
+    // normal terminal state for the most common question. Reporting the flag
+    // lets the widget say so from server state, so the notice survives a reload
+    // instead of dying with the tab. Cleared when the merchant replies.
+    db.thread.findFirst({
+      where: { id: threadId, organizationId: session.orgId },
+      select: { escalatedAt: true },
+    }),
+  ]);
 
   return NextResponse.json({
+    escalated: thread?.escalatedAt != null,
     messages: messages.map((m) => ({
       id: m.id,
       text: m.contentText ?? "",

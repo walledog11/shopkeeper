@@ -55,7 +55,7 @@ describe('formatEscalationMessage', () => {
         '',
         '"Customer asked about bulk discounts."',
         '',
-        `Open: ${DASHBOARD_URL}/dashboard/tickets/${THREAD_ID}`,
+        `Open: ${DASHBOARD_URL}/dashboard/tickets?thread=${THREAD_ID}`,
       ].join('\n'),
     );
   });
@@ -75,7 +75,7 @@ describe('formatEscalationMessage', () => {
         'Escalated — Instagram DM',
         'Reason: Needs human review',
         '',
-        `Open: ${DASHBOARD_URL}/dashboard/tickets/${THREAD_ID}`,
+        `Open: ${DASHBOARD_URL}/dashboard/tickets?thread=${THREAD_ID}`,
       ].join('\n'),
     );
   });
@@ -144,7 +144,7 @@ describe('pushOperatorEscalation', () => {
     const bodyArg = sendMessageSpy.mock.calls[0][1] as string;
     expect(bodyArg).toContain('Escalated — Shopify');
     expect(bodyArg).toContain('Order issue');
-    expect(bodyArg).toContain(`/dashboard/tickets/${thread.id}`);
+    expect(bodyArg).toContain(`/dashboard/tickets?thread=${thread.id}`);
   });
 
   it('notifies operators bound over iMessage alongside Telegram', async () => {
