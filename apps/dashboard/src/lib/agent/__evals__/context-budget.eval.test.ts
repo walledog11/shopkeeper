@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { allowTestNetworkHosts } from "../../../../../../scripts/test-network-guard.mjs"
 import { runFixture } from "./runner"
+import { evalsEnabled } from "./selection"
 import type { EvalResult, Fixture } from "./types"
 
 const hasRealKey =
@@ -68,6 +69,11 @@ afterEach(() => {
 })
 
 describe.sequential("AI context budget quality/cost comparison", () => {
+  if (!evalsEnabled()) {
+    it.skip("live-model evals (set EVAL_RUN=1, or use npm run test:evals)", () => {})
+    return
+  }
+
   if (!hasRealKey) {
     it.skip("requires ANTHROPIC_API_KEY to be set to a real key", () => {})
     return

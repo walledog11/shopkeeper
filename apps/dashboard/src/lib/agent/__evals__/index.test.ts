@@ -32,6 +32,7 @@ import {
 import type { Fixture, FixtureRunSummary } from "./types";
 import { validateFixtures } from "./fixture-validator";
 import {
+  evalsEnabled,
   requestedEvalSuite,
   requestedFixtureIds,
   selectFixtures,
@@ -70,6 +71,13 @@ describe.sequential("agent evals", () => {
     it("executes at least one fixture", () => {
       throw new Error(`EVAL_SUITE=${suite} selected zero fixtures`);
     });
+    return;
+  }
+
+  // Fixture loading and validation above are free and worth keeping on every
+  // integration run; everything past here spends. See selection.ts:evalsEnabled.
+  if (!evalsEnabled()) {
+    it.skip("live-model evals (set EVAL_RUN=1, or use npm run test:evals)", () => {});
     return;
   }
 

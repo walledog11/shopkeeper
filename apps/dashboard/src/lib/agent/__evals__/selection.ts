@@ -10,6 +10,21 @@ export function requestedEvalSuite(value: string | undefined = process.env.EVAL_
   return normalized
 }
 
+/**
+ * Whether live-model eval files may spend.
+ *
+ * The `include` glob in both `vitest.integration.config.ts` and
+ * `vitest.config.ts` matches every non-unit test file, this one included, and
+ * `with-test-env.mjs` supplies a real key out of `.env.local` even when the
+ * shell has none — so without this gate a bare `npm run test:integration`, or
+ * `verify:pr` by way of coverage, silently bills a full suite. Opting in is
+ * explicit: the `test:evals*` scripts set `EVAL_RUN=1`, and the eval workflows
+ * set `REQUIRE_MODEL_EVALS=1`.
+ */
+export function evalsEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.EVAL_RUN === "1" || env.REQUIRE_MODEL_EVALS === "1"
+}
+
 export function requestedFixtureIds(
   value: string | undefined = process.env.EVAL_FIXTURE,
 ): Set<string> | null {

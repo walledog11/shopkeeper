@@ -23,6 +23,16 @@ const hasRealKey =
   && process.env.ANTHROPIC_API_KEY.length > 0
   && process.env.ANTHROPIC_API_KEY !== 'test-anthropic-key';
 
+// A real key alone is not consent to spend: the `include` glob in
+// `vitest.integration.config.ts` matches this file, and `with-test-env.mjs`
+// supplies a key from `apps/gateway/.env` even when the shell has none, so a
+// bare `npm run test:integration` would bill the fixtures. `npm run test:evals` sets
+// `EVAL_RUN=1`; the eval workflow sets `REQUIRE_MODEL_EVALS=1`. Mirrors
+// `__evals__/selection.ts:evalsEnabled` in the dashboard. The deterministic
+// pre-filter suite below is free and stays ungated.
+const evalsEnabled =
+  process.env.EVAL_RUN === '1' || process.env.REQUIRE_MODEL_EVALS === '1';
+
 // Per-fixture simulated read-tool results. The order-ops loop dispatches read
 // tools (get_shopify_customer, get_order_tracking) through the shared executor.
 // The mock intercepts *every* read tool so it never reaches the live Shopify API:
@@ -336,6 +346,11 @@ describe('order-ops deterministic pre-filter', () => {
 });
 
 describe.sequential('order-ops fraud-review evals', () => {
+  if (!evalsEnabled) {
+    it.skip('live-model evals (set EVAL_RUN=1, or use npm run test:evals)', () => {});
+    return;
+  }
+
   if (!hasRealKey) {
     it.skip('requires ANTHROPIC_API_KEY to be set to a real key', () => {});
     return;

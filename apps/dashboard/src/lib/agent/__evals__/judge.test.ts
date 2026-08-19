@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { allowTestNetworkHosts } from "../../../../../../scripts/test-network-guard.mjs";
 import { judgeReply } from "./judge";
+import { evalsEnabled } from "./selection";
 import type { RubricCheck } from "./types";
 
 const hasRealKey =
@@ -10,6 +11,11 @@ const hasRealKey =
 const ANTHROPIC_API_HOST = "api.anthropic.com";
 
 describe("judgeReply", () => {
+  if (!evalsEnabled()) {
+    it.skip("live-model evals (set EVAL_RUN=1, or use npm run test:evals)", () => {});
+    return;
+  }
+
   if (!hasRealKey) {
     it.skip("requires ANTHROPIC_API_KEY to be set to a real key", () => {});
     return;
