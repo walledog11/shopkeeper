@@ -665,7 +665,7 @@
     }
   }
 
-  var HANDOFF_NOTICE = "Someone from the shop is looking at this — the reply will appear right here.";
+  var HANDOFF_NOTICE = "Someone from the shop is looking at this and will follow up here.";
 
   function armWaitingNotice() {
     clearWaitingNotice();
