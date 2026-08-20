@@ -166,7 +166,7 @@ export function appendPlanningReadWarnings(input: {
       } else if (block.name === "get_order_tracking") {
         warnings.push("No tracking information found - the order may not have been fulfilled yet.");
       } else if (block.name === "search_shopify_products") {
-        warnings.push("No matching product found - the order edit step may need a corrected product name.");
+        warnings.push("No matching product found - the name may be wrong, or the store may not carry it.");
       } else if (block.name === "search_kb") {
         warnings.push("No relevant KB articles found - the reply is based only on the conversation, not your documentation.");
       }
