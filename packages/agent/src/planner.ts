@@ -13,7 +13,7 @@ import {
   appendPlanningReadWarnings,
 } from "./planner-read-tools.js";
 import { stripInternalNotesWithoutActions } from "./planner-safety/internal-notes.js";
-import { applyEscalationRouting, groundEscalationReasons, logRoutingShadow, routePlan } from "./planner-routing.js";
+import { applyEscalationRouting, groundEscalationReasons, groundReplyText, logRoutingShadow, routePlan } from "./planner-routing.js";
 import {
   stripCreateRefundForAlreadyRefundedOrders,
   stripEmptySendReplyToolCalls,
@@ -181,6 +181,14 @@ export async function planAgent(
   // After routing, so it covers both the model-elected escalation and a plan the
   // router left alone that still carries one.
   rawToolCalls = groundEscalationReasons(rawToolCalls, {
+    orgId: ctx.orgId,
+    threadId: ctx.thread.id,
+  });
+
+  // Same invariant, applied to the field the customer reads rather than the one
+  // the merchant reads. Runs after the escalation routing above, so it also
+  // covers the reply `keepReply` preserves alongside a materialized handoff.
+  rawToolCalls = groundReplyText(rawToolCalls, {
     orgId: ctx.orgId,
     threadId: ctx.thread.id,
   });

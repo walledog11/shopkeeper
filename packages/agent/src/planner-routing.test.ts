@@ -6,7 +6,9 @@ import {
   applyEscalationRouting,
   computeClassifierRouting,
   groundEscalationReasons,
+  groundReplyText,
   UNGROUNDED_ESCALATION_REASON,
+  UNGROUNDED_REPLY_FALLBACK,
   computeLegacyRouting,
   routePlan,
 } from "./planner-routing.js";
@@ -603,5 +605,93 @@ describe("groundEscalationReasons", () => {
   it("leaves a plan with no escalation untouched", () => {
     const calls: RawToolCall[] = [...reads, { id: "tu_reply", name: "send_reply", input: { text: "Hi." } }];
     expect(groundEscalationReasons(calls, log)).toEqual(calls);
+  });
+});
+
+describe("groundReplyText", () => {
+  const log = { orgId: "org_1", threadId: "thread_1" };
+  const reads: RawToolCall[] = [{ id: "tu_read", name: "get_order_by_name", input: {} }];
+
+  function replyWith(text: string): RawToolCall {
+    return { id: "tu_reply", name: "send_reply", input: { text } };
+  }
+
+  function textOf(calls: RawToolCall[]): string {
+    const call = calls.find((entry) => entry.name === "send_reply");
+    return (call?.input as { text: string }).text;
+  }
+
+  it("drops the claim the 2026-08-20 storefront run sent to the shopper", () => {
+    const out = groundReplyText(
+      [
+        ...reads,
+        replyWith(
+          "Thanks for reaching out! I'm opening a return request for the Hydrogen snowboard on order #1024. You'll get a confirmation by email.",
+        ),
+      ],
+      log,
+    );
+    expect(textOf(out)).toBe("Thanks for reaching out! You'll get a confirmation by email.");
+  });
+
+  it("drops a first-person past-tense mutation claim, and the clause carrying it", () => {
+    const out = groundReplyText([...reads, replyWith("Good news — I've issued the refund. It lands in 3-5 days.")], log);
+    expect(textOf(out)).toBe("It lands in 3-5 days.");
+  });
+
+  it("drops a promised mutation nothing in the plan performs", () => {
+    const out = groundReplyText([...reads, replyWith("Sorry about that. I'll cancel the order right away.")], log);
+    expect(textOf(out)).toBe("Sorry about that.");
+  });
+
+  it("keeps a claim the plan's own action call supports", () => {
+    const text = "I've issued the refund. It lands in 3-5 days.";
+    const out = groundReplyText(
+      [...reads, { id: "tu_refund", name: "create_refund", input: {} }, replyWith(text)],
+      log,
+    );
+    expect(textOf(out)).toBe(text);
+  });
+
+  it("keeps an order-state report read out of Shopify", () => {
+    const text = "Your refund has been processed and your order was shipped on Monday.";
+    expect(textOf(groundReplyText([...reads, replyWith(text)], log))).toBe(text);
+  });
+
+  it("keeps first person plural, which reads as the store rather than the agent", () => {
+    const text = "We shipped your order Monday.";
+    expect(textOf(groundReplyText([...reads, replyWith(text)], log))).toBe(text);
+  });
+
+  it("keeps a promise to send a message rather than perform a mutation", () => {
+    const text = "I'll update you once the refund clears.";
+    expect(textOf(groundReplyText([...reads, replyWith(text)], log))).toBe(text);
+  });
+
+  it("keeps a claim attributed to the customer", () => {
+    const text = "You mentioned you already returned the snowboard, so I want to check that first.";
+    expect(textOf(groundReplyText([...reads, replyWith(text)], log))).toBe(text);
+  });
+
+  it("substitutes a fallback when the whole reply was the fabrication", () => {
+    const out = groundReplyText([...reads, replyWith("I'm processing your refund now.")], log);
+    expect(textOf(out)).toBe(UNGROUNDED_REPLY_FALLBACK);
+  });
+
+  it("grounds send_email bodies too", () => {
+    const call: RawToolCall = {
+      id: "tu_email",
+      name: "send_email",
+      input: { to: "a@b.com", subject: "Your order", body: "Hi Jane. I've cancelled the order for you." },
+    };
+    const out = groundReplyText([...reads, call], log);
+    const emailed = out.find((entry) => entry.name === "send_email");
+    expect((emailed?.input as { body: string }).body).toBe("Hi Jane.");
+    expect((emailed?.input as { subject: string }).subject).toBe("Your order");
+  });
+
+  it("leaves a grounded reply untouched", () => {
+    const calls: RawToolCall[] = [...reads, replyWith("Your order is on its way — tracking is 1Z999.")];
+    expect(groundReplyText(calls, log)).toEqual(calls);
   });
 });
