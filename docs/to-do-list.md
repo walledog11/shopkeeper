@@ -198,12 +198,21 @@ Code work that is started and not finished.
   passive-voiced fabrication still passes. That is the deliberate price of not
   mutilating truthful replies.
 
-  Owes the gate, and this one genuinely owes it — `judge.ts` grades `replyText`, so
-  a change that rewrites reply text can move assertions by construction. On its own
-  PR per the standing rule, with no other agent-path change riding along. Unit
-  coverage is in `planner-routing.test.ts` (`groundReplyText`, 11 cases including
-  the two keep-it cases above); `packages/agent` is green at 838 tests and `tsc`
-  is clean, but neither of those is the gate.
+  **The gate has run and it is clean.** PR #48, branch `fix/ground-reply-text`,
+  with no other agent-path change riding along — the core gate came back
+  **hard-gated 44/44 (100%)** in 4m55s
+  ([run 32427359636](https://github.com/walledog11/shopkeeper/actions/runs/32427359636)),
+  on real model calls with `REQUIRE_MODEL_EVALS=1` and 208s of test execution, so
+  this is not one of the fast greens that ran nothing. It genuinely owed the run —
+  `judge.ts` grades `replyText`, so a change that rewrites reply text can move
+  assertions by construction — and it moved none. Gateway pre-filter and
+  clear-fraud gates passed alongside it. Unit coverage is in
+  `planner-routing.test.ts` (`groundReplyText`, 11 cases including the two keep-it
+  cases above); `packages/agent` is green at 842 tests and `tsc` is clean.
+
+  What is left is the merge, and then the live case: a shopper message that
+  produces a reply the model wants to attach a mutation claim to. Delete this
+  entry once that has been seen once in production.
 - [ ] **Bounded conversation context and cross-channel memory.** Keep persistent
   shopper identity separate from short conversation episodes; plan from the
   newest request and retrieve only verified, relevant history or open
@@ -348,12 +357,15 @@ assertion?" test split them. Product search shipped (`32df62bf`) — fixtures in
 tool output through `simulateToolResults`, so the harness never executes
 `packages/agent/src/shopify/products.ts` and changing the query string it sends
 could not reach an assertion; it owed a live check against the real store, and got
-one. **Grounding `send_reply` text is written and is gated**: `judge.ts` grades
-`replyText`, so a change that rewrites reply text can move assertions by
+one. **Grounding `send_reply` text was gated and came back clean**: `judge.ts`
+grades `replyText`, so a change that rewrites reply text can move assertions by
 construction. It went onto its own branch with no other agent-path change riding
-along, so the core gate fires on the PR the way the standing rule intends — the
-first item in this section to be handled that way from the start rather than
-settled after the fact.
+along, the core gate fired on PR #48 the way the standing rule intends, and it
+returned hard-gated 44/44. This is the first item in this section handled that
+way from the start rather than settled after the fact, and it is what the rule
+below is asking for — the run cost roughly $0.51 and happened automatically,
+instead of becoming another line in the backlog to be discharged later by a
+~$2.60 local full-suite run.
 
 The planner read-warning reworded on 2026-08-20 owes no run either. It is a
 `warnings[]` string assembled after planning in `planner-read-tools.ts`; no fixture
