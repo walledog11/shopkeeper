@@ -1,7 +1,8 @@
 # Landing Page Overhaul
 
-**Status:** Nothing started. Two live defects found and verified 2026-08-20;
-everything else is proposed, not decided.
+**Status:** Defect 1 is fixed except for the film republish, which needs the
+Blob token — see the checklist at the end of that section. Defects 2 and 3 are
+open. Everything below the defects is proposed, not decided.
 **Decision date:** 2026-08-20, from a side-by-side audit of
 [zipchat.ai](https://www.zipchat.ai/) against the live `useshopkeeper.com`.
 **Scope:** `apps/dashboard/src/app/(marketing)/` only. The dashboard paper theme
@@ -54,10 +55,41 @@ trust row beneath it at y≈541, both visible on load.
 The poster is also served `cache-control: public, max-age=0, must-revalidate`
 — a static asset with caching disabled.
 
-**Fix:** a real first frame, a much smaller loop, and the CTA above the fold.
-The strongest version is to delete the video entirely and make the hero the live
-demo (item 4 below) — a film of the product is a weaker artifact than the
-product.
+**Fixed 2026-08-20** (`Hero.tsx`, `next.config.js`, `demo-poster.webp`):
+
+- The poster is now a real frame — t=13.7 of the film, the beat where the agent
+  says what happened overnight and offers four options for approval. It is the
+  one still that carries the whole product thesis. 41KB at q85, against the
+  3KB blank it replaced.
+- The CTA pair and the status line moved above the film, so both clear the fold
+  at 1512×804 and at 390×844. The film now opens the section below them.
+- `/atmosphere/:file*` gets `max-age=3600, stale-while-revalidate=86400`.
+
+Verified in real Chrome against the local dev server: with the video still in
+its exact failure state (`readyState: 0`, `videoWidth: 0`) the hero now shows
+the product rather than an empty box. That is the proof — the symptom is gone
+even when the video never loads.
+
+**Still open, needs the Blob token.** Once the film *does* play it restarts from
+its own opening, which is a near-blank cream title card for roughly the first
+two seconds — so the hero briefly empties out again at the start of every
+38.5-second loop. Confirmed in real Chrome by seeking to `t=0.3`. The poster
+cannot fix this; only re-cutting the film can. Two changes, one publish:
+
+1. **Trim the dead lead-in** so frame 0 is already meaningful. This is an edit
+   decision on a designed artifact, so it is deliberately left to the author.
+2. **Re-encode smaller.** 1440×1080 is oversized for an 880px-wide box.
+   `scale=1200:900:flags=lanczos` at `-crf 26 -preset slow` gives **1.17MB from
+   5.2MB — 78% off** with no visible loss (checked at t=13.7, text still crisp).
+
+Then publish per [the demo-film recipe](../.claude/CLAUDE.md): upload with
+`LANDING_BLOB_TOKEN`, and bump `?v=` on the `<video src>` in `Hero.tsx` so
+returning browsers refetch — the blob is served `max-age=31536000` and
+overwriting purges only Vercel's edge, not already-cached clients.
+
+Longer term the strongest version is to delete the video entirely and make the
+hero the live demo (item 5 below) — a film of the product is a weaker artifact
+than the product.
 
 ### 2. The pricing page and FAQ claim things the code does not do
 
@@ -134,8 +166,8 @@ convention.
 
 ### Ship now
 
-1. **Hero fix** — real first frame, small loop or live component, CTA above the
-   fold, poster caching. Defect 1.
+1. **Hero fix** — poster, CTA placement, and caching are done. What remains is
+   the film trim + re-encode + republish, which needs the Blob token. Defect 1.
 2. **Claims audit** — reconcile `Pricing.tsx` and `FAQ.tsx` against what exists.
    Defect 2.
 3. **Replace or accept the placeholder photography.** Defect 3.
