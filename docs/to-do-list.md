@@ -11,9 +11,10 @@ below — not duplicated here.
 
 Work is grouped by **what kind of action** it needs, not by when it was filed.
 
-`origin/master` is `57e2057c`, and **all four deploy surfaces are current on
-it.** Verified 2026-08-19: Vercel Ready on `57e2057c` (15:12 PT), Railway SUCCESS
-on the same commit (22:12 UTC), no migration directory changed since `88ec0be6`
+`origin/master` is `963f44b6`, and **all four deploy surfaces are current on
+it.** Re-verified 2026-08-20: Vercel Ready on `963f44b6` (13:04 PT, 13s after the
+commit) and Railway SUCCESS on the same commit (20:04 UTC), both read off the
+CLI. No migration directory changed since `88ec0be6`
 where the database was last verified at 6/6 partial unique indexes, and
 **`shopkeeper-production-27` released 2026-08-19 22:48** carrying the widget half
 of defect 4 — the last surface that was behind. `-26` is now the one-step
@@ -84,10 +85,11 @@ provider. **None of these is a code task.**
   exercised outside the dev store the author controls. The condition that held
   this — notification shape plus the operability items — was met 2026-08-13, so
   what remains is the rollout itself. The stale-widget blocker is gone — the
-  extension is current as of `shopkeeper-production-27` (2026-08-19). **Two of the
-  2026-08-20 defects should land first**, though: a merchant whose shopper asks a
-  product question gets an escalation instead of an answer, and one who taps the
-  operator link cannot open the thread. Both are in Build.
+  extension is current as of `shopkeeper-production-27` (2026-08-19). The two
+  2026-08-20 defects that held this are **both fixed**: product search matches
+  again (`32df62bf`, live on both surfaces), and the operator link now opens the
+  thread. What is left is a release — the widget copy fix below is a theme app
+  extension asset, so it reaches merchants only in the next app version.
 - [ ] **Guest escalation that keeps its reply, exercised live.** The regression
   where guest order questions escalated with no reply at all was fixed by passing
   `keepReply` into `applyEscalationRouting` — but **the router-materialized path
@@ -103,9 +105,9 @@ provider. **None of these is a code task.**
   terser, not rarer, so it does not help produce this case. **The 2026-08-20 run
   did not fire it either**, for the other reason: its two plans elected
   `escalate_to_human` or contained no escalation at all, so the router never had
-  to synthesize anything. Fixing the product-search defect below should help
-  produce the case, since it makes "a message the model believes it can answer"
-  an actual category again. Background:
+  to synthesize anything. The product-search fix (`32df62bf`) should help produce
+  the case, since it makes "a message the model believes it can answer" an actual
+  category again. Background:
   [storefront-chat-verification-2026-08.md](production/storefront-chat-verification-2026-08.md).
 - [ ] **Postmark outbound canary.** Send and bounce attribution under real
   traffic. Inbound is proven end to end as of 2026-08-02 (server
@@ -150,32 +152,6 @@ Code work that is started and not finished.
   decision on over-limit behavior (block, degrade, or upsell). When it ships,
   `Pricing.tsx` and the FAQ can carry the numbers again.
 
-- [ ] **Product search cannot match anything a shopper would type.**
-  `searchShopifyProducts` calls REST `products.json?title=<query>`, and that filter
-  is exact full-title equality — not substring, not full-text. Proven against the
-  live dev store on one token, 2026-08-20: no filter returns 6 products
-  (`The Collection Snowboard: Liquid`, `The Archived Snowboard`, …), `title=snowboard`
-  returns 0, `title=Collection Snowboard` returns 0. `read_products` is granted, so
-  it is neither scopes nor auth. This is why the storefront kept escalating instead
-  of answering: a product question is the one thing a guest can ask with no identity
-  verification, so it is the cheapest path to a reply, and it fails every time. It is
-  a **shared-registry tool**, so every channel inherits it.
-  `packages/agent/src/shopify/products.ts`. **Fixed on
-  `fix/product-search-exact-match`, awaiting a direct merge** — REST swapped for the
-  GraphQL `products(query:)` connection, result mapped back onto the REST shape so
-  `serializeProduct` and the tool result the model sees are unchanged. Search
-  operators are stripped, because titles here contain colons and Shopify reads `:`
-  as a field filter. Verified by running the shipped code path against the dev
-  store: `snowboard` 0 → 5 products, `Collection Snowboard` → 3,
-  `The Collection Snowboard: Liquid` → exactly 1, nonsense → clean `not_found`;
-  831 agent tests and typecheck green. **It owes no gate run** — fixtures inject
-  tool output via `simulateToolResults`, so the harness never executes `products.ts`
-  and changing the query it sends provably cannot move an assertion; see the
-  Eval-gate residue note. Two things it deliberately does **not** do: stem plurals
-  (`snowboard` finds the boards, `snowboards` does not — the model writes this
-  argument and normalizes in practice), and suppress cross-field matches (Shopify
-  searches description and tags, so `snowboard` also returns `Gift Card`). Delete
-  this entry once merged.
 - [ ] **Ground `send_reply` text the way escalation reasons are grounded.** The
   approved reply in the 2026-08-20 run told the shopper *"I'm opening a return
   request for the Hydrogen snowboard on order #1024"* with no `create_return`
@@ -185,24 +161,6 @@ Code work that is started and not finished.
   fabrication is now in the worse position. The invariant is unchanged and already
   established: `planAgent` executes nothing, so at plan time a past-tense mutation
   claim describes something that does not exist. Agent-path; PR and gate.
-- [ ] **The inbox will not open a conversation.** Neither clicking a ticket card nor
-  the `?thread=` deep link mounts the conversation dialog — reproduced 2026-08-20 on
-  a clean load with no clicks, on a fresh load plus one click, and on both a
-  `shopify_chat` and an `email` thread, with no console errors or exceptions.
-  `activeTicketId` should be `queryThreadId` on load (`useActiveThreadSelection.ts`)
-  and `showConversation` is `Boolean(activeTicketId)` (`InboxPageLayout.tsx:186`), so
-  the failure is below that; not diagnosed further. This **downgrades rather than
-  completes** the operator deep-link fix: the link no longer 404s, it silently lands
-  the merchant on an inbox list, which is harder to notice than the 404 was. It also
-  blocks the last leg of defect 4 below, since the composer lives inside the
-  conversation that will not open. The dashboard **home** "needs you" card still
-  approves correctly, which is how the 2026-08-20 run was completed.
-- [ ] **Two smaller items from the same run.** The planner warning
-  `No matching product found - the order edit step may need a corrected product name`
-  fires against plans containing no order edit — text written for one caller, reused
-  by another. And the storefront escalation notice still reads "the reply will appear
-  right here" *below* an agent reply that has already arrived: correct under the
-  `escalatedAt` contract, wrong as a sentence.
 - [ ] **Bounded conversation context and cross-channel memory.** Keep persistent
   shopper identity separate from short conversation episodes; plan from the
   newest request and retrieve only verified, relevant history or open
@@ -246,10 +204,15 @@ Code work that is started and not finished.
      `/dashboard/tickets?thread=`. Five test assertions had encoded the broken
      URL, which is why it survived; those are updated too. **Verified 2026-08-20
      that the route resolves — and that it does not open the thread.** The 404 is
-     gone and the merchant still does not land on the conversation, so this fix is
-     downgraded rather than done; the remainder is its own Build item above. The
-     tests could not have caught it: they assert the string is built, and the route
-     now exists.
+     gone, and the reason the merchant still landed on an inbox list was a
+     separate dialog-positioning bug, **fixed and verified in-browser 2026-08-20**:
+     `needsYouCardShellClassName("shell")` ends in `relative`, which twMerge
+     resolved against the dialog's own `fixed`, so the panel rendered in normal
+     flow below a body Radix had already locked from scrolling. **Owes nothing.**
+     The tests could not have caught it as written — `toBeVisible()` passes on a
+     panel below the fold and a bare `toBeInViewport()` passes on one that merely
+     overlaps it, so `core-workflow.spec.ts` now asserts `ratio: 1`, which fails
+     against the old code and passes against the new.
   3. **Prose approval.** Not a missing capability — `approve_pending_plan` exists
      and is always passed. Two bullets in `OPERATOR_CONTROL_TOOL_INSTRUCTIONS`
      contradicted each other, and the "brand-new instruction" reading won. Both
@@ -273,8 +236,8 @@ Code work that is started and not finished.
      merchant and confirm it disappears. Note that approving an agent plan cannot
      discharge it: `recordMerchantReply` is explicitly merchant-only ("the agent's
      own sends must not"), which was confirmed live when `escalatedAt` survived an
-     approved `send_reply`. So the clearing leg needs the composer, which is
-     blocked by the inbox item above.
+     approved `send_reply`. So the clearing leg needs the composer — which
+     opens again as of 2026-08-20, so it is no longer blocked.
 
   The three copy items: the `Verified:` line now reads "They confirmed the email on
   #1024." — mechanism kept so the merchant can still judge the disclosure, audit-log
@@ -337,18 +300,18 @@ edit did not change election behaviour. The two `[eval:baseline]` WARNs are both
 fixture below, at 1 repeat against a 3-repeat baseline, which is the documented
 way that fixture produces phantom regressions.
 
-**Two agent-path fixes are queued as of 2026-08-20**, and the "can this change move
-an assertion?" test splits them — do not bundle them into one PR, because they do
-not owe the same thing:
+**Two agent-path fixes were queued 2026-08-20** and the "can this change move an
+assertion?" test split them. Product search shipped (`32df62bf`) — fixtures inject
+tool output through `simulateToolResults`, so the harness never executes
+`packages/agent/src/shopify/products.ts` and changing the query string it sends
+could not reach an assertion; it owed a live check against the real store, and got
+one. **Grounding `send_reply` text is still queued and is gated**: `judge.ts`
+grades `replyText`, so a change that rewrites reply text can move assertions by
+construction. Take the core gate on its own PR.
 
-- **Grounding `send_reply` text is gated.** `judge.ts` grades `replyText`, so a
-  change that rewrites reply text can move assertions by construction. Take the
-  core gate on its own PR.
-- **The product-search filter is not.** Fixtures inject tool output through
-  `simulateToolResults`, so the harness never executes
-  `packages/agent/src/shopify/products.ts` at all. Changing the query string it
-  sends to Shopify cannot reach an assertion. It owes a live check against the real
-  store, not a paid run.
+The planner read-warning reworded on 2026-08-20 owes no run either. It is a
+`warnings[]` string assembled after planning in `planner-read-tools.ts`; no fixture
+asserts on it and `judge.ts` grades only `replyText`, so it cannot move a result.
 
 **The product-search fix goes to `master` without a PR, deliberately** (decided
 2026-08-20, branch `fix/product-search-exact-match`) — the first time that has been
