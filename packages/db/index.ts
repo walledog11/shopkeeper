@@ -366,3 +366,17 @@ export type {
   BeginWorkspaceDeletionResult,
   WorkspaceDeletionClaim,
 } from './workspace-deletion.js';
+export {
+  countConversationsThisMonth,
+  getConversationAllowance,
+  PLAN_LIMITS,
+  planLimitsFor,
+  resolvePlanTier,
+  utcMonthStart,
+  utcMonthString,
+} from './plan-limits.js';
+export type {
+  ConversationAllowance,
+  PlanLimits,
+  PlanTier,
+} from './plan-limits.js';

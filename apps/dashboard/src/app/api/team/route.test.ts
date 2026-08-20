@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { db } from '@shopkeeper/db';
 import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers';
 
 vi.mock('@clerk/nextjs/server', () => ({
@@ -98,6 +99,76 @@ describe('POST /api/team', () => {
       emailAddress: 'new@example.com',
       role: 'org:member',
     }));
+  });
+
+  describe('seat limits', () => {
+    beforeEach(async () => {
+      process.env.PRICE_ID_STARTER = 'price_starter';
+      process.env.PRICE_ID_PRO = 'price_pro';
+    });
+
+    afterEach(() => {
+      delete process.env.PRICE_ID_STARTER;
+      delete process.env.PRICE_ID_PRO;
+    });
+
+    async function invite() {
+      return POST(new Request('http://localhost/api/team', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emailAddress: 'new@example.com', role: 'org:member' }),
+      }));
+    }
+
+    it('refuses the invite when the plan seats are already taken', async () => {
+      await db.organization.update({
+        where: { id: org.id },
+        data: { stripePriceId: 'price_starter' },
+      });
+
+      // Starter is one seat, and the default mock already has one member.
+      const res = await invite();
+
+      expect(res.status).toBe(403);
+      expect((await res.json()).error).toContain('1 seat');
+      expect(mockCreateInvitation).not.toHaveBeenCalled();
+    });
+
+    it('counts a pending invitation against the seats', async () => {
+      await db.organization.update({
+        where: { id: org.id },
+        data: { stripePriceId: 'price_pro' },
+      });
+      mockGetInvitations.mockResolvedValueOnce({
+        data: [{ id: 'inv_pending', emailAddress: 'pending@example.com', role: 'org:member', createdAt: 1 }],
+      });
+
+      // Pro is two seats: one member plus one outstanding invitation fills them,
+      // so a third would only be caught if pending invitations count.
+      const res = await invite();
+
+      expect(res.status).toBe(403);
+      expect(mockCreateInvitation).not.toHaveBeenCalled();
+    });
+
+    it('allows the invite while a seat is free', async () => {
+      await db.organization.update({
+        where: { id: org.id },
+        data: { stripePriceId: 'price_pro' },
+      });
+
+      const res = await invite();
+
+      expect(res.status).toBe(200);
+      expect(mockCreateInvitation).toHaveBeenCalled();
+    });
+
+    it('does not enforce seats for an org with no recognised subscription', async () => {
+      const res = await invite();
+
+      expect(res.status).toBe(200);
+      expect(mockCreateInvitation).toHaveBeenCalled();
+    });
   });
 
   it('allows org admins to invite other admins', async () => {

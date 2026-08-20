@@ -35,6 +35,19 @@ export function getInternalApiSecret(): string {
   return requireEnv('INTERNAL_API_SECRET');
 }
 
+// Both optional on purpose. The gateway only needs these to tell a Starter
+// subscription from a Pro one; with neither set, every org resolves to the
+// unknown tier, which is unbounded, so the conversation cap stays inert until
+// the prices actually exist in Stripe.
+export function getBillingPriceIds(): { starter?: string; pro?: string } {
+  const starter = process.env.PRICE_ID_STARTER?.trim();
+  const pro = process.env.PRICE_ID_PRO?.trim();
+  return {
+    ...(starter ? { starter } : {}),
+    ...(pro ? { pro } : {}),
+  };
+}
+
 export function getGatewayDashboardUrl(): string {
   const config = parseGatewayProductionConfig(process.env);
   const url = config.dashboardUrl || config.dashboardInternalUrl;

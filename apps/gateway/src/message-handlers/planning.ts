@@ -5,6 +5,7 @@ import logger from '../logger.js';
 import { getConversationBurst, type ConversationBurst } from './conversation-burst.js';
 import { requestAutoAck } from './planning-dashboard-client.js';
 import { generateThreadPlan } from './generate-thread-plan.js';
+import { degradeForConversationLimit } from './plan-limit.js';
 import { mayParkMerchantWork, type PrecomputedPlanResult } from './planning-types.js';
 
 export function shouldSkipRequestWork(
@@ -45,6 +46,16 @@ export async function precomputeThreadPlan(
     }
     const burst = await getConversationBurst(threadId);
     if (shouldSkipRequestWork(thread, burst, options.sourceMessageId, options.skipSummary)) {
+      return null;
+    }
+
+    // Plan limits degrade, they never block. The customer's message is already
+    // persisted by the time we get here, so an org over its monthly conversation
+    // allowance simply stops getting drafted plans — nobody's question is
+    // dropped, and the merchant still sees the thread in the inbox and can
+    // answer it by hand. Blocking here would let a billing cap produce customer
+    // silence, which is the failure this product cannot afford.
+    if (await degradeForConversationLimit(organizationId, threadId)) {
       return null;
     }
 
