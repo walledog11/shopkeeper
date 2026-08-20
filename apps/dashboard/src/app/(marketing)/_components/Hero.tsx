@@ -88,7 +88,7 @@ export function Hero() {
         </div>
         <video
           aria-label="Shopkeeper demo film"
-          src="https://cfkjygwgphgv2dom.public.blob.vercel-storage.com/demo-film.mp4?v=2"
+          src="https://cfkjygwgphgv2dom.public.blob.vercel-storage.com/demo-film.mp4?v=3"
           poster="/atmosphere/demo-poster.webp"
           autoPlay
           muted
