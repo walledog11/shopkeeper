@@ -943,6 +943,15 @@ back to escalation, which is why the storefront kept producing handoffs instead 
 answers. This is a shared-registry tool, so every channel inherits it.
 `packages/agent/src/shopify/products.ts`.
 
+**The gate could never have caught this, and still cannot.** Fixtures supply tool
+output through `simulateToolResults` — `storefront-guest-product-search` hands the
+model a working product result outright — so the harness never executes
+`products.ts`, and nothing in `packages/agent/src/shopify/*` has any eval coverage
+at all. The suite grades what the model does *with* a tool result; it is silent on
+whether the tool can produce one. That is why 74/74 hard-gated coexisted with a
+product search that returned zero rows for every query a shopper would type, and it
+means the fix owes a live probe rather than a paid run.
+
 **2. The fabricated mutation claim has moved into the reply text.** The approved
 `send_reply` told the shopper *"since it's a defective item, I'm opening a return
 request for the Hydrogen snowboard on order #1024"*. The plan's complete tool list

@@ -141,9 +141,12 @@ Code work that is started and not finished.
   it is neither scopes nor auth. This is why the storefront kept escalating instead
   of answering: a product question is the one thing a guest can ask with no identity
   verification, so it is the cheapest path to a reply, and it fails every time. It is
-  a **shared-registry tool**, so every channel inherits it, and the fix is agent-path
-  work — branch, PR, and it will move `storefront-guest-product-search`, so it owes a
-  gate run. `packages/agent/src/shopify/products.ts`.
+  a **shared-registry tool**, so every channel inherits it.
+  `packages/agent/src/shopify/products.ts`. **It owes no gate run**: fixtures inject
+  tool output via `simulateToolResults`, so the eval harness never executes
+  `products.ts`, and changing the query it sends provably cannot move an assertion.
+  Verify it against the real store instead — the same three-request probe that found
+  it. Land it on a branch anyway; that is about review, not the gate.
 - [ ] **Ground `send_reply` text the way escalation reasons are grounded.** The
   approved reply in the 2026-08-20 run told the shopper *"I'm opening a return
   request for the Hydrogen snowboard on order #1024"* with no `create_return`
@@ -305,12 +308,26 @@ edit did not change election behaviour. The two `[eval:baseline]` WARNs are both
 fixture below, at 1 repeat against a 3-repeat baseline, which is the documented
 way that fixture produces phantom regressions.
 
-**Two agent-path fixes are queued as of 2026-08-20** — the product-search filter
-and grounding `send_reply` text, both in Build. Each is the case the standing rule
-exists for: land them on a branch behind a PR and take the ~$0.51 core gate, rather
-than pushing to `master` and converting it into another manual full-suite run.
-Product search is unambiguously gated — `storefront-guest-product-search` asserts
-on a guest product answer that currently cannot succeed, so the fix should move it.
+**Two agent-path fixes are queued as of 2026-08-20**, and the "can this change move
+an assertion?" test splits them — do not bundle them into one PR, because they do
+not owe the same thing:
+
+- **Grounding `send_reply` text is gated.** `judge.ts` grades `replyText`, so a
+  change that rewrites reply text can move assertions by construction. Take the
+  core gate on its own PR.
+- **The product-search filter is not.** Fixtures inject tool output through
+  `simulateToolResults`, so the harness never executes
+  `packages/agent/src/shopify/products.ts` at all. Changing the query string it
+  sends to Shopify cannot reach an assertion. It owes a live check against the real
+  store, not a paid run.
+
+**That second point is a blind spot, not just an exemption.** Every Shopify tool
+result in the suite is simulated, so nothing in `packages/agent/src/shopify/*` has
+any eval coverage: a tool can be structurally broken against the live API — as
+product search was, returning zero rows for every natural query — while the gate
+stays green at 74/74. Evals grade what the model does with a tool result; they say
+nothing about whether the tool can produce one. Live probes are the only cover that
+layer has.
 
 - [ ] **`quick-reply-thanks-ack` passes 1/3.** The only fixture below full. Runs
   classify `needs_review` after repeated `get_order_by_name` errors and escalate.
