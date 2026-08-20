@@ -1,8 +1,8 @@
 # Landing Page Overhaul
 
-**Status:** Defect 2 is closed. Defect 1 is fixed except for the film republish,
-which needs the Blob token — see the checklist at the end of that section.
-Defect 3 is open. Everything below the defects is proposed, not decided.
+**Status:** Defects 1 and 2 are closed. Defect 3 is open and its premise is
+partly wrong — see the note in that section before doing any work on it.
+Everything below the defects is proposed, not decided.
 **Decision date:** 2026-08-20, from a side-by-side audit of
 [zipchat.ai](https://www.zipchat.ai/) against the live `useshopkeeper.com`.
 **Scope:** `apps/dashboard/src/app/(marketing)/` only. The dashboard paper theme
@@ -70,22 +70,36 @@ its exact failure state (`readyState: 0`, `videoWidth: 0`) the hero now shows
 the product rather than an empty box. That is the proof — the symptom is gone
 even when the video never loads.
 
-**Still open, needs the Blob token.** Once the film *does* play it restarts from
-its own opening, which is a near-blank cream title card for roughly the first
-two seconds — so the hero briefly empties out again at the start of every
-38.5-second loop. Confirmed in real Chrome by seeking to `t=0.3`. The poster
-cannot fix this; only re-cutting the film can. Two changes, one publish:
+**Closed 2026-08-20** (`f9bdf494`). The film was re-cut, published, and
+verified live: `content-length` 1048894 against the old 5201167, new etag,
+`Hero.tsx` bumped to `?v=3`.
 
-1. **Trim the dead lead-in** so frame 0 is already meaningful. This is an edit
-   decision on a designed artifact, so it is deliberately left to the author.
-2. **Re-encode smaller.** 1440×1080 is oversized for an 880px-wide box.
-   `scale=1200:900:flags=lanczos` at `-crf 26 -preset slow` gives **1.17MB from
-   5.2MB — 78% off** with no visible loss (checked at t=13.7, text still crisp).
+- **Trim.** The film now starts at old `t=3.0` (frame 90) — the establishing
+  shot, Shopkeeper among the merchant's other chats with Jess's 2:14 AM
+  complaint readable. 35.53s, down from 38.5s. The trim point was a judgment
+  call; the rendered frames make redoing it a ~1 minute job.
+- **Re-encode.** 2400×1800 → 1200×900 at `-crf 26 -preset slow`:
+  **1,048,894 bytes from 5,201,167 — 79.8% off.** Checked the approval beat in
+  the encoded file; text is still crisp.
 
-Then publish per [the demo-film recipe](../.claude/CLAUDE.md): upload with
-`LANDING_BLOB_TOKEN`, and bump `?v=` on the `<video src>` in `Hero.tsx` so
-returning browsers refetch — the blob is served `max-age=31536000` and
-overwriting purges only Vercel's edge, not already-cached clients.
+**Two corrections to what this section originally claimed**, both from measured
+ink coverage rather than impression — recorded so nobody re-derives them:
+
+- The lead-in was **not** "near-blank for roughly two seconds". `t=0.00` is
+  genuinely blank, but only for that one frame (~33ms at 30fps); content is in
+  by `t≈0.2`, and `t=0.25–2.0` is the film's *densest* stretch. The real defect
+  was that it is a **title card** — app icon and wordmark, no product — which is
+  why the trim goes to 3.0 rather than the ~2.0 this section implied.
+- Blank frames also sit at **every scene boundary**: `t=4.75`, `9.25`, `30.25`
+  and `35.25` all measure 0.00% ink. Those are crossfade gaps, unrelated to the
+  loop symptom, and were deliberately left alone. Minor, but real.
+
+The previous film was backed up before the overwrite. The publish route is per
+[the demo-film recipe](../.claude/CLAUDE.md); note that neither the production
+nor the development `BLOB_READ_WRITE_TOKEN` can write it — both belong to
+`shopkeeper-attachments` (`guhNmxJhZ94ZQhD1`), not
+`shopkeeper-landing-assets` (`store_CfkjygWGPhGv2dom`). The landing token comes
+from the Vercel dashboard and nowhere else.
 
 Longer term the strongest version is to delete the video entirely and make the
 hero the live demo (item 5 below) — a film of the product is a weaker artifact
@@ -157,6 +171,17 @@ serving in production: `hero-light.jpg` (Hero), `integrations-leaves.jpg`
 (Integrations), `footer-dawn.jpg` (Footer). Each carries a "swap … for the final
 shot" comment.
 
+**Check the premise before doing this work (noted 2026-08-20).** These are not
+displayed as photographs. `hero-light.jpg` renders at `blur(26px)` with
+`opacity-75`, `sepia(0.18) saturate(0.85) brightness(1.07)`, behind a radial
+mask that fades it out past 74% (`Hero.tsx:78-86`) — an atmosphere *wash*, not
+an image a visitor reads as an image. If the other two are treated the same way,
+then "swap for the final shot" may be work that changes nothing anyone can see,
+and the honest resolution is to delete the comments rather than commission
+photography. That has not been confirmed for `integrations-leaves.jpg` or
+`footer-dawn.jpg` yet — confirm all three, at real viewing size, before either
+accepting or replacing them.
+
 ## The aesthetic decision: keep the paper, invert the ratio
 
 The question asked was whether to move past the paper aesthetic. The answer is
@@ -200,8 +225,8 @@ convention.
 
 ### Ship now
 
-1. **Hero fix** — poster, CTA placement, and caching are done. What remains is
-   the film trim + re-encode + republish, which needs the Blob token. Defect 1.
+1. ~~**Hero fix**~~ — done 2026-08-20. Poster, CTA placement and caching in
+   `c96f28b7`; film trim, re-encode and republish in `f9bdf494`. Defect 1.
 2. ~~**Claims audit**~~ — done 2026-08-20, `46eb2db5` + `c558c788`. Eight false
    claims found and fixed; plan-limit enforcement filed under Build in
    [to-do-list.md](to-do-list.md). Defect 2.
