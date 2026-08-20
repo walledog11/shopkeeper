@@ -23,7 +23,7 @@ const faqs = [
   },
   {
     q: "Can multiple team members use Shopkeeper?",
-    a: "Yes. Pro includes two team seats, and internal notes let your team align privately before replying.",
+    a: "Yes — invite your whole team on any plan. Internal notes let them align privately before anyone replies.",
   },
   {
     q: "Is my customers' data secure?",
