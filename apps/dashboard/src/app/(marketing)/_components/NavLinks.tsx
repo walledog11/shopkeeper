@@ -1,64 +1,80 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useUser } from "@clerk/nextjs";
 import {
+  ArrowUpRight,
   ChevronDown,
-  CircleHelp,
-  Heart,
-  LayoutGrid,
-  Mail,
+  ChevronRight,
   Menu,
+  MessageCircle,
+  Moon,
+  ShieldCheck,
+  Store,
   Sunrise,
-  Tag,
   X,
   type LucideIcon,
 } from "lucide-react";
-import { CONTACT_EMAIL } from "@/lib/brand";
+import { NAV_CTA_LABEL, PRODUCT_NAME } from "@/lib/brand";
 import { cn } from "@/lib/ui/cn";
 
-type NavItem = {
+type ProductCard = {
   href: string;
   title: string;
   subtitle: string;
   icon: LucideIcon;
+  badge?: string;
 };
 
-const productItems: NavItem[] = [
+type Partner = {
+  href: string;
+  name: string;
+  logo: string;
+  badge?: string;
+};
+
+const productCards: ProductCard[] = [
   {
-    href: "#how",
-    title: "How it works",
-    subtitle: "See Shopkeeper in action",
-    icon: LayoutGrid,
+    href: "#how-replies",
+    title: "Answers while you sleep",
+    subtitle: "Reads every DM and email the second it lands, and pulls the real order from Shopify.",
+    icon: Moon,
   },
   {
-    href: "#channels",
-    title: "Channels",
-    subtitle: "Instagram, email & iMessage",
-    icon: Heart,
+    href: "#how-approvals",
+    title: "Asks before it acts",
+    subtitle: "You set the rules. Refunds and cancellations wait for one tap on your phone.",
+    icon: ShieldCheck,
   },
   {
     href: "#briefing",
-    title: "Morning briefing",
-    subtitle: "Wake up to work already done",
+    title: "A briefing, not a backlog",
+    subtitle: "Every morning, a text of what it handled overnight — and the rare thing that needs you.",
     icon: Sunrise,
+  },
+  {
+    href: "#channels",
+    title: "Wherever you already are",
+    subtitle: "Texting Shopkeeper feels like texting your best employee.",
+    icon: MessageCircle,
+    badge: "New",
   },
 ];
 
-const resourceItems: NavItem[] = [
-  {
-    href: "#pricing",
-    title: "Pricing",
-    subtitle: "Plans for every stage",
-    icon: Tag,
-  },
-  {
-    href: "#faq",
-    title: "FAQ",
-    subtitle: "Common questions answered",
-    icon: CircleHelp,
-  },
+const partners: Partner[] = [
+  { href: "#how-store", name: "Shopify", logo: "/logos/shopify.svg" },
+  { href: "#how-replies", name: "Instagram", logo: "/logos/instagram-outline.svg" },
+  { href: "#how-replies", name: "Email", logo: "/logos/email.svg" },
+  { href: "#channels", name: "iMessage", logo: "/logos/imessage.svg", badge: "New" },
+  { href: "#channels", name: "Telegram", logo: "/logos/telegram.svg" },
 ];
+
+/* Slot outside the frosted navbar pill — backdrop-filter on a descendant of
+   another backdrop-filter (or a `translate`) cannot see the page behind it. */
+export const MegaMenuSlotContext = createContext<HTMLElement | null>(null);
 
 /* Menu keyboard behavior shared by the desktop dropdowns and the mobile menu:
    outside-click / Escape to close (Escape hands focus back to the trigger),
@@ -69,6 +85,7 @@ function useMenuKeyboard(
   setOpen: (value: boolean) => void,
   rootRef: React.RefObject<HTMLDivElement | null>,
   triggerRef: React.RefObject<HTMLButtonElement | null>,
+  panelRef?: React.RefObject<HTMLDivElement | null>,
 ) {
   const focusFirstOnOpen = useRef(false);
 
@@ -77,16 +94,25 @@ function useMenuKeyboard(
 
     if (focusFirstOnOpen.current) {
       focusFirstOnOpen.current = false;
-      rootRef.current?.querySelector<HTMLElement>("[role=menuitem]")?.focus();
+      (panelRef?.current ?? rootRef.current)
+        ?.querySelector<HTMLElement>("[role=menuitem]")
+        ?.focus();
     }
 
     function onPointerDown(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (rootRef.current?.contains(target) || panelRef?.current?.contains(target)) return;
+      setOpen(false);
     }
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
-      if (rootRef.current?.contains(document.activeElement)) triggerRef.current?.focus();
+      if (
+        rootRef.current?.contains(document.activeElement) ||
+        panelRef?.current?.contains(document.activeElement)
+      ) {
+        triggerRef.current?.focus();
+      }
       setOpen(false);
     }
 
@@ -96,7 +122,7 @@ function useMenuKeyboard(
       document.removeEventListener("mousedown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [open, setOpen, rootRef, triggerRef]);
+  }, [open, setOpen, rootRef, triggerRef, panelRef]);
 
   return function onArrowKeys(event: React.KeyboardEvent) {
     if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
@@ -107,7 +133,7 @@ function useMenuKeyboard(
       return;
     }
     const items = Array.from(
-      rootRef.current?.querySelectorAll<HTMLElement>("[role=menuitem]") ?? [],
+      (panelRef?.current ?? rootRef.current)?.querySelectorAll<HTMLElement>("[role=menuitem]") ?? [],
     );
     if (items.length === 0) return;
     const index = items.indexOf(document.activeElement as HTMLElement);
@@ -119,133 +145,283 @@ function useMenuKeyboard(
   };
 }
 
-function NavDropdown({ label, items }: { label: string; items: NavItem[] }) {
+/* Open immediately; delay close so the pointer can cross the gap between the
+   Product trigger and a panel that's positioned against the whole pill. */
+function useHoverMenu(setOpen: (value: boolean) => void) {
+  const timeoutRef = useRef<number>(0);
+
+  useEffect(() => () => window.clearTimeout(timeoutRef.current), []);
+
+  return {
+    openMenu() {
+      window.clearTimeout(timeoutRef.current);
+      setOpen(true);
+    },
+    closeMenu() {
+      window.clearTimeout(timeoutRef.current);
+      timeoutRef.current = window.setTimeout(() => setOpen(false), 180);
+    },
+  };
+}
+
+function NewBadge() {
+  return <span className="m-nav-mega-new">New</span>;
+}
+
+function ProductMenu() {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const onArrowKeys = useMenuKeyboard(open, setOpen, rootRef, triggerRef);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const slot = useContext(MegaMenuSlotContext);
+  const onArrowKeys = useMenuKeyboard(open, setOpen, rootRef, triggerRef, panelRef);
+  const { openMenu, closeMenu } = useHoverMenu(setOpen);
+
+  const panel = (
+    <div
+      ref={panelRef}
+      className={cn("m-nav-pop m-nav-pop-glass pt-2", open && "m-nav-pop-open")}
+      onMouseEnter={openMenu}
+      onMouseLeave={closeMenu}
+    >
+      <div id="m-nav-product-menu" className="m-nav-mega" role="menu">
+          <div className="m-nav-mega-cards">
+            {productCards.map((card) => {
+              const Icon = card.icon;
+              return (
+                <Link
+                  key={card.title}
+                  href={card.href}
+                  role="menuitem"
+                  className="m-nav-mega-card"
+                  onClick={() => setOpen(false)}
+                >
+                  <span className="m-nav-mega-card-icon">
+                    <Icon className="size-4" strokeWidth={1.75} />
+                  </span>
+                  <span className="m-nav-mega-card-title">
+                    {card.title}
+                    {card.badge ? <NewBadge /> : null}
+                  </span>
+                  <ArrowUpRight
+                    className="m-nav-mega-arrow size-3.5"
+                    strokeWidth={1.75}
+                    aria-hidden
+                  />
+                  <span className="m-nav-mega-card-subtitle">{card.subtitle}</span>
+                </Link>
+              );
+            })}
+          </div>
+
+          <div className="m-nav-mega-rail">
+            <div className="m-nav-mega-rail-label">Works with</div>
+            {partners.map((partner) => (
+              <Link
+                key={partner.name}
+                href={partner.href}
+                role="menuitem"
+                className="m-nav-mega-partner"
+                onClick={() => setOpen(false)}
+              >
+                <span className="m-nav-mega-partner-logo">
+                  <Image
+                    src={partner.logo}
+                    alt=""
+                    width={16}
+                    height={16}
+                    className="size-4 object-contain"
+                  />
+                </span>
+                <span className="m-nav-mega-partner-name">{partner.name}</span>
+                {partner.badge ? <NewBadge /> : null}
+              </Link>
+            ))}
+            <Link
+              href="#channels"
+              role="menuitem"
+              className="m-nav-mega-more"
+              onClick={() => setOpen(false)}
+            >
+              See how you reach it
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+
 
   return (
-    <div
-      ref={rootRef}
-      className="relative"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-      onKeyDown={onArrowKeys}
-    >
+    <div ref={rootRef} className="flex w-fit shrink-0" onKeyDown={onArrowKeys}>
       <button
         ref={triggerRef}
         type="button"
         aria-expanded={open}
         aria-haspopup="menu"
+        aria-controls="m-nav-product-menu"
         className="m-nav-trigger"
         onClick={() => setOpen((value) => !value)}
+        onMouseEnter={openMenu}
+        onMouseLeave={closeMenu}
       >
-        {label}
+        Product
         <ChevronDown
-          className={cn("size-3.5 stroke-[2.25] transition-transform duration-200", open && "rotate-180")}
+          className={cn("size-4 stroke-[2.25] transition-transform duration-200", open && "rotate-180")}
           aria-hidden
         />
       </button>
-
-      <div
-        className={cn(
-          "m-nav-pop absolute left-0 top-full z-50 w-[min(100vw-2rem,19rem)] pt-3",
-          open && "m-nav-pop-open",
-        )}
-      >
-        <div className="m-nav-dropdown" role="menu">
-          {items.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                role="menuitem"
-                className="m-nav-dropdown-item"
-                onClick={() => setOpen(false)}
-              >
-                <Icon className="m-nav-dropdown-icon size-[18px] shrink-0" strokeWidth={1.75} />
-                <span>
-                  <span className="m-nav-dropdown-title">{item.title}</span>
-                  <span className="m-nav-dropdown-subtitle">{item.subtitle}</span>
-                </span>
-              </Link>
-            );
-          })}
-        </div>
-      </div>
+      {slot ? createPortal(panel, slot) : null}
     </div>
   );
 }
 
 export function NavLinks() {
   return (
-    <div className="hidden items-center gap-8 md:flex">
-      <NavDropdown label="Product" items={productItems} />
-      <NavDropdown label="Resources" items={resourceItems} />
-      <Link href={`mailto:${CONTACT_EMAIL}`} className="m-nav-link">
-        Contact
+    <div className="m-nav-links">
+      <ProductMenu />
+      <Link href="#pricing" className="m-nav-link">
+        Pricing
+      </Link>
+      <Link href="#faq" className="m-nav-link">
+        FAQ
       </Link>
     </div>
   );
 }
 
+const WORDMARK = PRODUCT_NAME.toLowerCase();
+
 export function MobileNav() {
   const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
+  const [productOpen, setProductOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const onArrowKeys = useMenuKeyboard(open, setOpen, rootRef, triggerRef);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const { isSignedIn } = useUser();
 
-  const Icon = open ? X : Menu;
+  useEffect(() => {
+    if (!open) {
+      setProductOpen(false);
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    closeRef.current?.focus();
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      triggerRef.current?.focus();
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  function close() {
+    setOpen(false);
+  }
+
+  const sheet = (
+    <div
+      className="m-nav-sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Menu"
+    >
+      <div className="m-nav-sheet-bar">
+        <Link href="/" aria-label={PRODUCT_NAME} className="m-nav-logo" onClick={close}>
+          <Store className="size-7" strokeWidth={1.75} aria-hidden />
+          <span className="m-nav-wordmark" aria-hidden>
+            {WORDMARK}
+          </span>
+        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/signup" className="m-nav-cta" onClick={close}>
+            {NAV_CTA_LABEL}
+          </Link>
+          <button
+            ref={closeRef}
+            type="button"
+            className="m-nav-menu-btn"
+            aria-label="Close menu"
+            onClick={close}
+          >
+            <X className="size-5" strokeWidth={2} />
+          </button>
+        </div>
+      </div>
+
+      <nav className="m-nav-sheet-list">
+        <button
+          type="button"
+          className="m-nav-sheet-item"
+          aria-expanded={productOpen}
+          onClick={() => setProductOpen((value) => !value)}
+        >
+          Product
+          <ChevronRight
+            className={cn("size-5 shrink-0 transition-transform duration-200", productOpen && "rotate-90")}
+            strokeWidth={2}
+            aria-hidden
+          />
+        </button>
+        {productOpen ? (
+          <div className="m-nav-sheet-sub">
+            {productCards.map((card) => (
+              <Link
+                key={card.title}
+                href={card.href}
+                className="m-nav-sheet-subitem"
+                onClick={close}
+              >
+                {card.title}
+                {card.badge ? <NewBadge /> : null}
+              </Link>
+            ))}
+          </div>
+        ) : null}
+
+        <Link href="#pricing" className="m-nav-sheet-item" onClick={close}>
+          Pricing
+        </Link>
+        <Link href="#faq" className="m-nav-sheet-item" onClick={close}>
+          FAQ
+        </Link>
+        {isSignedIn ? (
+          <Link href="/dashboard" className="m-nav-sheet-item" onClick={close}>
+            Dashboard
+          </Link>
+        ) : (
+          <Link href="/login" className="m-nav-sheet-item" onClick={close}>
+            Log in
+          </Link>
+        )}
+      </nav>
+
+      <Link href="/signup" className="m-nav-sheet-cta" onClick={close}>
+        {NAV_CTA_LABEL}
+      </Link>
+    </div>
+  );
 
   return (
-    <div ref={rootRef} className="relative md:hidden" onKeyDown={onArrowKeys}>
+    <div className="md:hidden">
       <button
         ref={triggerRef}
         type="button"
         aria-expanded={open}
-        aria-haspopup="menu"
-        aria-label={open ? "Close menu" : "Open menu"}
-        className="flex size-9 cursor-pointer items-center justify-center border-0 bg-transparent p-0 text-[#2b2118]"
-        onClick={() => setOpen((value) => !value)}
+        aria-haspopup="dialog"
+        aria-label="Open menu"
+        className="m-nav-menu-btn"
+        onClick={() => setOpen(true)}
       >
-        <Icon className="size-5" strokeWidth={2} />
+        <Menu className="size-5" strokeWidth={2} />
       </button>
-
-      <div
-        className={cn(
-          "m-nav-pop absolute right-0 top-full z-50 w-[min(100vw-2.5rem,17rem)] pt-4",
-          open && "m-nav-pop-open",
-        )}
-      >
-        <div className="m-nav-dropdown" role="menu">
-          {[...productItems, ...resourceItems].map((item) => {
-            const ItemIcon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                role="menuitem"
-                className="m-nav-dropdown-item items-center py-2.5"
-                onClick={() => setOpen(false)}
-              >
-                <ItemIcon className="m-nav-dropdown-icon mt-0 size-[18px] shrink-0" strokeWidth={1.75} />
-                <span className="m-nav-dropdown-title">{item.title}</span>
-              </Link>
-            );
-          })}
-          <Link
-            href={`mailto:${CONTACT_EMAIL}`}
-            role="menuitem"
-            className="m-nav-dropdown-item items-center py-2.5"
-            onClick={() => setOpen(false)}
-          >
-            <Mail className="m-nav-dropdown-icon mt-0 size-[18px] shrink-0" strokeWidth={1.75} />
-            <span className="m-nav-dropdown-title">Contact</span>
-          </Link>
-        </div>
-      </div>
+      {open ? createPortal(sheet, document.body) : null}
     </div>
   );
 }

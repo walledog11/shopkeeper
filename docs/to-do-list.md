@@ -11,26 +11,31 @@ below — not duplicated here.
 
 Work is grouped by **what kind of action** it needs, not by when it was filed.
 
-All three deploy surfaces were current as of `88ec0be6` — Vercel Ready
-(2026-08-19), the database migrated (six partial unique indexes verified at
-6/6), and the Shopify app released as `shopkeeper-production-26` (2026-08-18),
-which shipped the theme extension and the `compliance_topics` declarations.
-`origin/master` has since moved to `08c1c283`; both commits are a gateway script
-and docs, so no app surface changed. The next thing to land does change them —
-see Build. When any of them falls behind again, that outranks everything in this
-file: all three fail silently. Railway is not in that trio and probably should
-be — it fails just as quietly; it answers `/health`, but `/health` is
-liveness-only and cannot report a deployed commit, so "Railway is current" is
-never something you can read off it. What you *can* read is the deploy list: the
-most recent is `61abe989`, SUCCESS at 2026-08-18 21:49 PT. A change landing in
-`packages/db` or `packages/agent` needs both app surfaces before either app's
-behavior is what the code says — PR #42 was such a change.
+`origin/master` is `57e2057c`, and **all four deploy surfaces are current on
+it.** Verified 2026-08-19: Vercel Ready on `57e2057c` (15:12 PT), Railway SUCCESS
+on the same commit (22:12 UTC), no migration directory changed since `88ec0be6`
+where the database was last verified at 6/6 partial unique indexes, and
+**`shopkeeper-production-27` released 2026-08-19 22:48** carrying the widget half
+of defect 4 — the last surface that was behind. `-26` is now the one-step
+rollback target; derive that from the CLI rather than from here, per
+[production/shopify-app-config-reference.md](production/shopify-app-config-reference.md).
 
-**The Anthropic account is out of credits (2026-08-19).** Calls come back `400
-invalid_request_error`, "credit balance is too low". No eval gate can run until
-it is topped up, which is a hard blocker on anything owing one — see Eval-gate
-residue. Nothing is billed while it is empty, so a blocked run is safe, just
-useless. The way it was found is **fixed as of 2026-08-19** and worth recording:
+A behind surface outranks everything else in this file, because every one of
+them fails silently. Railway belongs in the set rather than beside it — it fails
+just as quietly; it answers `/health`, but `/health` is liveness-only and cannot
+report a deployed commit, so "Railway is current" is never something you read
+off it. What you *can* read is `railway deployment list --json`, which carries
+the commit hash per deploy. A change landing in `packages/db` or
+`packages/agent` needs both app surfaces before either app's behavior is what
+the code says.
+
+**The Anthropic account ran out of credits on 2026-08-19 and is funded again**
+— verified the same day by a 1-token probe returning HTTP 200 against the key in
+`apps/gateway/.env`. The eval gate is no longer blocked. While the balance was
+empty, calls came back `400 invalid_request_error`, "credit balance is too low",
+and nothing was billed — so a blocked run was safe, just useless. That is the
+cheap way to re-check it if the symptom returns. The way the outage was found is
+**fixed as of 2026-08-19** and worth recording:
 a bare `npm run test:integration` in either app used to run that app's paid eval
 suite, and so did `verify:pr` by way of `test:coverage`. Neither config excludes
 the evals (dashboard's `src/**/*.test.tsx?` picks up `src/lib/agent/__evals__/`,
@@ -83,9 +88,11 @@ provider. **None of these is a code task.**
   confirmed with both controls. One gap remains before this can close — agent text
   actually reaching the shopper was never demonstrated, because no plan in that
   episode contained `send_reply` at all. That is the same root as the escalation
-  defects below, whose fixes are now written and waiting to land; once they are
-  merged and deployed, re-run a single answerable question. Evidence: "The episode
-  loop live, 2026-08-19" in
+  defects, whose fixes **landed in `35f79a5c` and are deployed to both app
+  surfaces**, and the widget half shipped as `shopkeeper-production-27` on
+  2026-08-19. **Nothing blocks this any more** — re-run a single answerable
+  question and confirm agent text reaches the shopper. Evidence: "The episode loop
+  live, 2026-08-19" in
   [storefront-chat-verification-2026-08.md](production/storefront-chat-verification-2026-08.md).
 - [ ] **One real merchant workspace on storefront chat, in approval mode.** Toggle
   on through the integration card, theme embed activated, Shopify Inbox bubble
@@ -93,7 +100,7 @@ provider. **None of these is a code task.**
   exercised outside the dev store the author controls. The condition that held
   this — notification shape plus the operability items — was met 2026-08-13, so
   what remains is the rollout itself. The stale-widget blocker is gone — the
-  extension shipped in `shopkeeper-production-26` on 2026-08-18.
+  extension is current as of `shopkeeper-production-27` (2026-08-19).
 - [ ] **Guest escalation that keeps its reply, exercised live.** The regression
   where guest order questions escalated with no reply at all was fixed by passing
   `keepReply` into `applyEscalationRouting` — but **the router-materialized path
@@ -124,7 +131,7 @@ provider. **None of these is a code task.**
   merchant-facing explanation for that prompt was never written either; connected
   merchants are few enough to tell directly. Scopes have not changed since `-9`,
   so the question is unchanged in substance — but it is now about
-  `shopkeeper-production-26` (released 2026-08-18), not `-9`.
+  `shopkeeper-production-27` (released 2026-08-19), not `-9`.
 
 ---
 
@@ -152,11 +159,11 @@ Code work that is started and not finished.
   under $0.64/day worst case against a $20 cap whose worst real day was $4.82.
   Operator turns and composer-ask never write a 1h block at all. Delete this
   entry once a full day's rows look sane.
-- [ ] **Land the fixes for what the 2026-08-19 storefront run found.** All four
-  defects and all three lower-severity copy items are **written and passing, in the
-  working tree on `master`, uncommitted** — 17 files, +307/−38. Nothing here is
-  code work any more; what remains is landing it and the verification each piece
-  owes. Original evidence in
+- [ ] **Verify the seven fixes the 2026-08-19 storefront run produced.** The code
+  **landed in `35f79a5c` on 2026-08-19** — 17 files, +307/−38 — and is deployed to
+  both app surfaces. It went **straight to `master` with no PR**, so the eval gate
+  never saw it; that debt is in Eval-gate residue. No code work remains. What
+  remains is the verification each piece owes. Original evidence in
   [storefront-chat-verification-2026-08.md](production/storefront-chat-verification-2026-08.md)
   under "The episode loop live, 2026-08-19".
   1. **Fabricated mutation claim** ("a return has been initiated", nothing planned
@@ -165,11 +172,12 @@ Code work that is started and not finished.
      cross-referencing tool calls: `planAgent` executes nothing, so at plan time a
      past-tense mutation claim describes something that does not exist. Narrow by
      design — drops the reason only when the plan holds no action-category call,
-     and never when the claim is attributed to the customer. Owes no gate run (see
-     Eval-gate residue).
+     and never when the claim is attributed to the customer. **Owes nothing** — no
+     gate run (see Eval-gate residue), no live step.
   2. **Operator deep links 404.** Both emitters now use
      `/dashboard/tickets?thread=`. Five test assertions had encoded the broken
-     URL, which is why it survived; those are updated too.
+     URL, which is why it survived; those are updated too. **Owes nothing** — the
+     tests carry it.
   3. **Prose approval.** Not a missing capability — `approve_pending_plan` exists
      and is always passed. Two bullets in `OPERATOR_CONTROL_TOOL_INSTRUCTIONS`
      contradicted each other, and the "brand-new instruction" reading won. Both
@@ -181,9 +189,13 @@ Code work that is started and not finished.
      timer unconnected to whether anything was escalated. `escalatedAt` is now
      reported by `/bootstrap` and `/messages`, and the widget re-derives the notice
      each poll, so it survives a reload and clears itself when the merchant replies.
-     **Owes a Shopify app version release** — the widget is a theme extension
-     asset, so the server sends `escalated` to a widget that cannot read it until a
-     version after `shopkeeper-production-26` ships.
+     The widget half **shipped in `shopkeeper-production-27` on 2026-08-19**, so
+     both halves are now live. The client/server contract was checked across the
+     rename before release — the endpoints select `escalatedAt` and emit boolean
+     `escalated` (`bootstrap/route.ts:114`, `messages/route.ts:45`), which is what
+     the widget reads — so this is not a no-op. **Owes the live check**: escalate a
+     storefront thread, confirm the shopper sees the notice, reload to confirm it
+     survives, then reply and confirm it clears.
 
   The three copy items: the `Verified:` line now reads "They confirmed the email on
   #1024." — mechanism kept so the merchant can still judge the disclosure, audit-log
@@ -193,8 +205,8 @@ Code work that is started and not finished.
   fix was honest, because word overlap dies on paraphrase (the observed pair shares
   4 of 11 content words) and dropping either line loses specifics in real cases, so
   `escalate_to_human`'s `reason` field description now asks for the blocker rather
-  than the customer's story. That is the shared registry. It is blocked on credits,
-  and it is the hunk to drop if the gate is not worth running.
+  than the customer's story. That is the shared registry, it is already live in
+  production ungated, and the run it owes is in Eval-gate residue.
 - [ ] **Conversation-to-sale attribution.** Connect meaningful storefront-chat
   interactions and product recommendations to later Shopify orders so merchants
   can distinguish direct, product-assisted, and chat-assisted revenue. Report it
@@ -234,15 +246,17 @@ eight minutes after a cold write read back the full 11,848-token prefix and
 wrote only the 43-token volatile delta, which a 5-minute block could not have
 done.
 
-**The gate cannot run right now — the account is out of credits (2026-08-19, see
-the header).** That is the only thing standing between the pending
-`escalate_to_human` description change and merge; the code is written and every
-free check passes.
+**The `escalate_to_human` description change is gated and clean.** It shipped
+ungated in `35f79a5c` (straight to `master`), so the debt was settled after the
+fact by a `workflow_dispatch mode: full` run on 2026-08-19 —
+[run 32311082225](https://github.com/walledog11/shopkeeper/actions/runs/32311082225),
+47 minutes, real model calls. Result: **hard-gated 74/74 (100%)**, aggregate
+**83/84 (98.8%)** at 1 repeat. No escalation fixture moved, so the description
+edit did not change election behaviour. The two `[eval:baseline]` WARNs are both
+`quick-reply-thanks-ack` (0/1 against a 33.3% baseline) — the known advisory
+fixture below, at 1 repeat against a 3-repeat baseline, which is the documented
+way that fixture produces phantom regressions.
 
-- [ ] **Run the gate for the `escalate_to_human` `reason` description**, once
-  credits are back. It is a shared-registry change, so it is gated even though the
-  reason string itself is not asserted anywhere (below). Nothing else in the
-  pending working-tree changes owes a run.
 - [ ] **`quick-reply-thanks-ack` passes 1/3.** The only fixture below full. Runs
   classify `needs_review` after repeated `get_order_by_name` errors and escalate.
   Advisory, so it does not gate.
@@ -257,8 +271,11 @@ free check passes.
   one converts an automatic ~$0.51 core-gate run into a manual item discharged
   later by a ~$2.60 local full-suite run. Across 2026-08-16..19 CI spent $1.53
   and local runs spent ~$20.50; that gap is the backlog, not the gate doing its
-  job. The standing rule is now in `.claude/CLAUDE.md` under Agent-change
-  invariants. Items here keep coming back until this is the default.
+  job. **`35f79a5c` is the newest instance and it is the live one** — it edited
+  the shared tool registry, went to `master` with no PR, and is the reason the
+  item above is a full-suite dispatch instead of a core gate. The standing rule is
+  in `.claude/CLAUDE.md` under Agent-change invariants. Items here keep coming
+  back until this is the default.
 
 **Escalation reason text has no eval coverage at all** — established 2026-08-19,
 and worth knowing in both directions. Zero of the 84 fixtures assert on
@@ -308,15 +325,6 @@ when its closing verification passes. Re-verify env presence with
 `vercel env ls production` — `vercel env pull` redacts sensitive vars to an
 empty string, indistinguishable from unset.
 
-- [ ] **Top up Anthropic credits.** Out as of 2026-08-19; details and the
-  `test:integration` trap that found it are in the header. Blocks the eval gate,
-  and with it the one pending change that owes a run.
-- [ ] **Release a Shopify app version carrying the storefront-chat widget change.**
-  The escalation notice fix (defect 4 above) edits
-  `extensions/shopkeeper-chat/assets/shopkeeper-chat.js`, which shoppers only
-  receive through a released version. The server half ships with the dashboard and
-  is inert without it. Fold this into the version-recording decision below rather
-  than releasing and writing nothing down again.
 - [ ] **Confirm the connected store survived the `write_app_proxy` scope add.**
   `shopify.app.toml` shipped 2026-08-07 as `shopkeeper-production-9`, adding
   `write_app_proxy` and the `[app_proxy]` block (M0a and M0b, both closed). Two
@@ -326,25 +334,16 @@ empty string, indistinguishable from unset.
   explanation of that prompt, which was supposed to be written *before*
   deploying. Scopes are unchanged since, so the check is still valid against the
   current release.
-- [ ] **Record app versions as they ship, or stop treating the reference doc as
-  current.** Seventeen versions went out between `-9` and `-26` with nothing
-  written down, so the rollback target in
-  [production/shopify-app-config-reference.md](production/shopify-app-config-reference.md)
-  pointed eighteen versions back for eleven days and nobody noticed. The target
-  itself is fixed — verified 2026-08-18, `-25` is the one-step rollback — but the
-  drift will recur, because releasing is a CLI call and recording is a manual
-  edit. Either make the deploy write its own version note, or delete the version
-  bookkeeping from that file and point at `npx shopify app versions list --json`
-  as the only source of truth. Do not leave a third copy that goes stale again.
 - [ ] **Prove Shopify compliance webhooks.** The HMAC-gated handlers, durable
   data-request workflow, redaction paths and app-level declarations for
   `customers/data_request`, `customers/redact` and `shop/redact` are implemented
   and declared in `shopify.app.toml`. The database half is done — the
-  `shopify_privacy_requests` table the handlers write to landed 2026-08-18. What
-  remains is the app version, in the Deploy section above; until it ships,
-  Shopify has no compliance declarations to deliver against. Once it does,
-  exercise Shopify's compliance checks or signed production deliveries. Operator
-  fulfillment and completion steps live in
+  `shopify_privacy_requests` table the handlers write to landed 2026-08-18. **The
+  app version it was waiting on already shipped** — `shopkeeper-production-26`
+  carried the `compliance_topics` declarations on 2026-08-18, so Shopify has
+  something to deliver against and this is no longer blocked on a release. What
+  remains is exercising Shopify's compliance checks or signed production
+  deliveries. Operator fulfillment and completion steps live in
   [production/data-deletion.md](production/data-deletion.md).
 
 ---

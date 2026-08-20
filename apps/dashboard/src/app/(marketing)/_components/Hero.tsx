@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { GlassLink } from "./GlassLink";
 import { InkDoodle } from "./Marginalia";
+import { HIRE_CTA_LABEL } from "@/lib/brand";
 
 function rise(delayMs: number) {
   return {
@@ -48,11 +49,20 @@ export function Hero() {
       </h1>
 
       <p
-        className="mx-auto mb-9 max-w-[min(540px,88vw)] text-[15px] leading-[1.45] text-stone-600 sm:text-[16px]"
+        className="mx-auto mb-7 max-w-[min(540px,88vw)] text-[15px] leading-[1.45] text-stone-600 sm:text-[16px]"
         style={rise(160)}
       >
         It answers your customers overnight, fixes orders right in Shopify, and texts you the moment something needs your call.
       </p>
+
+      <div className="mb-10 flex flex-wrap items-center justify-center gap-3" style={rise(240)}>
+        <GlassLink href="/signup" variant="primary" className="px-6 py-3">
+          {HIRE_CTA_LABEL}
+        </GlassLink>
+        <GlassLink href="#how" variant="secondary" className="px-6 py-3">
+          Watch it work ↓
+        </GlassLink>
+      </div>
 
       <div style={rise(320)} className="relative mt-2">
         {/* Warm morning-light wash behind the demo film — placeholder photography,
@@ -89,15 +99,6 @@ export function Hero() {
       >
         Live today for support — order ops, inventory &amp; suppliers on the way.
       </p>
-
-      <div className="mt-7 flex flex-wrap items-center justify-center gap-3" style={rise(420)}>
-        <GlassLink href="/signup" variant="primary" className="px-6 py-3">
-          Hire Shopkeeper — free for 14 days
-        </GlassLink>
-        <GlassLink href="#how" variant="secondary" className="px-6 py-3">
-          Watch it work ↓
-        </GlassLink>
-      </div>
     </section>
   );
 }

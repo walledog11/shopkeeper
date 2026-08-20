@@ -4,6 +4,15 @@ import { CONTACT_EMAIL } from "@/lib/brand";
 
 const COPYRIGHT_YEAR = 2026;
 
+const footerLinks = [
+  { href: "/#how", label: "Product" },
+  { href: "/#pricing", label: "Pricing" },
+  { href: "/#faq", label: "FAQ" },
+  { href: `mailto:${CONTACT_EMAIL}`, label: "Contact" },
+  { href: "/privacy", label: "Privacy" },
+  { href: "/terms", label: "Terms" },
+] as const;
+
 export function Footer() {
   return (
     <footer className="relative isolate overflow-hidden px-6 pt-12">
@@ -24,15 +33,21 @@ export function Footer() {
         <div className="m-grain absolute inset-0" />
       </div>
       <div className="mx-auto max-w-6xl">
-        <div className="flex flex-wrap items-center justify-between gap-5">
+        <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-4">
           <div className="text-[13px] text-stone-500">
             © {COPYRIGHT_YEAR} Shopkeeper · The AI employee for Shopify brands.
           </div>
-          <div className="flex flex-wrap gap-5 text-[13px] text-stone-600">
-            <Link href="/privacy" className="text-inherit transition-colors hover:text-stone-900">Privacy</Link>
-            <Link href="/terms" className="text-inherit transition-colors hover:text-stone-900">Terms</Link>
-            <a href={`mailto:${CONTACT_EMAIL}`} className="text-inherit transition-colors hover:text-stone-900">Contact</a>
-          </div>
+          <nav aria-label="Footer" className="flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-stone-600">
+            {footerLinks.map((link) => (
+              <Link
+                key={link.label}
+                href={link.href}
+                className="text-inherit transition-colors hover:text-stone-900"
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
         </div>
 
         {/* Giant wordmark outro, descenders cropped by the page edge */}
