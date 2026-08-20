@@ -155,23 +155,39 @@ provider. **None of these is a code task.**
 
 Code work that is started and not finished.
 
-- [ ] **Plan limits and per-tier gating are sold but not built.** There is no
-  plan-based feature gating anywhere in the repo. `stripeStatus` is read in
-  exactly three places, all banners
-  (`apps/dashboard/src/app/dashboard/(shell)/layout.tsx:72,86,97`); nothing keys
-  a feature, a quota, or a seat count off the subscription tier. Grepping
-  `apps/dashboard/src` and `packages` for `conversationLimit`,
-  `conversationsPerMonth`, `seatLimit`, and `maxSeats` returns zero matches, so a
-  $19 Starter subscriber gets Shopify actions, phone approvals, voice training,
-  and unbounded conversations and seats — the whole product. The landing page no
-  longer claims otherwise (`c558c788`, decision 2026-08-20: say what is true now,
-  build enforcement later), so **nothing is being mis-sold while this waits** —
-  but the tiers cannot mean anything commercially until it lands. Needs: a
-  per-org monthly conversation counter and an enforcement point in
-  `apps/gateway/src/message-handlers/`, a seat check against Clerk org
-  membership, per-tier gating in `packages/agent/src/tools/executor.ts`, and a
-  decision on over-limit behavior (block, degrade, or upsell). When it ships,
-  `Pricing.tsx` and the FAQ can carry the numbers again.
+- [ ] **Plan limits — built and inert, waiting on Stripe prices.** The gap was
+  real: grepping for `conversationLimit`, `conversationsPerMonth`, `seatLimit` and
+  `maxSeats` returned zero matches, so a $19 Starter subscriber got unbounded
+  conversations and seats. PR #49 (`feat/plan-limits`) closes it, green on every
+  check.
+
+  **Volume and seats only.** `c558c788` moved Shopify actions, phone approvals and
+  voice training *down* to Starter and said every plan runs the whole product, so
+  re-gating them would have reversed a decision made the day before.
+  `executor.ts` is untouched and no tool is gated by tier — the per-tier tool
+  gating this entry used to ask for was the wrong ask, not deferred work.
+
+  The numbers are recovered from `c558c788` rather than invented: **Starter 500
+  conversations/mo and 1 seat, Pro unbounded and 2 seats**. So `Pricing.tsx` and
+  the FAQ can carry them again without a second decision.
+
+  **Conversations degrade, seats refuse** (decision 2026-08-20). The cap attaches
+  to `precomputeThreadPlan` beside the existing `autoPlanOnOpen` skip, so an
+  over-cap org stops getting drafted plans while the message still lands in the
+  inbox — a billing cap must never be the reason a customer gets silence.
+  Inviting is the opposite case, a deliberate admin action with someone reading
+  the response, so it 403s and counts pending invitations. The merchant is told
+  once per billing period via `Organization.settings`; the operator-notify dedupe
+  is a one-hour Redis TTL and cannot express "once this month".
+
+  **What is left is the console half, not code.** `PRICE_ID_STARTER` and
+  `PRICE_ID_PRO` are unprovisioned, so every org resolves to the unknown tier,
+  which is deliberately unbounded — the enforcement ships inert and starts biting
+  only once the prices exist. Capping a real workspace on the strength of a
+  missing env var would be the opposite of failing safe. To activate: create the
+  two Stripe prices, set both vars in Vercel **and** Railway (the gateway reads
+  them too), then confirm a Starter org is capped and a Pro org is not. That is
+  the same trigger already listed under Parked / decide.
 
 - [ ] **Ground `send_reply` text the way escalation reasons are grounded — written,
   on a PR, waiting on the gate.** The approved reply in the 2026-08-20 run told the
