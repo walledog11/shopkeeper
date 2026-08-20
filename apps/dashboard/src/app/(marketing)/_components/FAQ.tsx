@@ -7,15 +7,15 @@ import { SectionLabel } from "./SectionLabel";
 const faqs = [
   {
     q: "Will it ever send something embarrassing on my behalf?",
-    a: "Not unless you tell it to. By default, Shopkeeper drafts every reply and waits for your approval — one text on your phone (iMessage or Telegram) or right in the dashboard. As you build trust you can raise its trust level to send simple replies on its own — refunds and cancellations still need your OK.",
+    a: "Not unless you tell it to. By default, Shopkeeper drafts every reply and waits for your approval — one text on your phone (iMessage or Telegram) or right in the dashboard. As you build trust you can raise its trust level so it handles simple replies on its own. Money stays on a leash either way: you set the largest refund it may issue without asking, and anything over that line comes back to you. Cancellations you can block outright.",
   },
   {
     q: "How does it learn my voice?",
-    a: "It reads your last 100 outgoing replies on connect. From then on it learns from every draft you edit before sending.",
+    a: "From your edits. Every time you rewrite a draft before it goes out, Shopkeeper keeps the change and folds it into a brand-voice brief it maintains for itself. You can also just tell it, in your own words, how you want to sound.",
   },
   {
     q: "Can I export my data?",
-    a: "Yes — full conversation history, customer notes, and tags export to CSV any time. We don't hold your data hostage.",
+    a: "Every action Shopkeeper takes exports to CSV any time — the customer, the channel, what it did, and how it turned out. Message-by-message conversation history isn't in the export yet. We don't hold your data hostage.",
   },
   {
     q: "What if I don't use Shopify?",
