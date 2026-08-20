@@ -1,8 +1,8 @@
 # Landing Page Overhaul
 
-**Status:** Defect 1 is fixed except for the film republish, which needs the
-Blob token — see the checklist at the end of that section. Defects 2 and 3 are
-open. Everything below the defects is proposed, not decided.
+**Status:** Defect 2 is closed. Defect 1 is fixed except for the film republish,
+which needs the Blob token — see the checklist at the end of that section.
+Defect 3 is open. Everything below the defects is proposed, not decided.
 **Decision date:** 2026-08-20, from a side-by-side audit of
 [zipchat.ai](https://www.zipchat.ai/) against the live `useshopkeeper.com`.
 **Scope:** `apps/dashboard/src/app/(marketing)/` only. The dashboard paper theme
@@ -113,8 +113,42 @@ This matters more here than it would on most products. Product principle 3 is
 that promises unbuilt limits is the same failure mode wearing a different hat.
 Either build them or change the copy; do not ship the page as-is.
 
-**This table is from targeted greps, not a full audit.** Two of the claims I
-checked did not hold, which is reason to check the rest.
+**Fixed 2026-08-20** (`46eb2db5` FAQ, `c558c788` Pricing). The suspicion above
+was right: the full sweep found **eight** false claims, not five.
+
+Beyond the table, and worse than it:
+
+- **`FAQ.tsx` "refunds and cancellations still need your OK" was false in
+  exactly the configuration the sentence describes.** At `trusted`/`broad`/
+  `full` a `create_refund` under `maxRefundAmount` passes
+  `checkStaticToolPolicy` and classifies as `auto_execute` with no human in the
+  loop (`packages/agent/src/plan-preview.ts:290-317`), and `blockCancellations`
+  defaults to `false`. This was a *safety* claim inverted against product
+  principle 3 — the most serious thing on the page.
+- **"reads your last 100 outgoing replies on connect" has no implementation.**
+  Voice learning is `VoiceEdit`-driven and capped at `VOICE_SYNTHESIS_MAX_EDITS
+  = 30` (`packages/db/voice.ts:22`); there is no on-connect backfill.
+- **"No credit card" is false.** Checkout runs subscription mode without
+  `payment_method_collection: 'if_required'`
+  (`api/billing/checkout/route.ts`), so a card is collected. `14 days free` is
+  real — `trial_period_days: 14`.
+- **"Custom AI instructions per channel" does not exist.** `aiContext` and
+  `defaultInstruction` are org-wide.
+- **"SLA"** has no defined terms anywhere.
+
+The root cause under most of them: **there is no plan-based feature gating in
+the repo at all.** Every feature the page reserved for $49 and $129 already
+ships to $19. Decision 2026-08-20 was to say what is true now and build
+enforcement later, so the tier lists were rewritten around the one thing that
+actually differs — support level — with volume as guidance in the tier
+descriptions rather than an enforced cap. The enforcement build is filed under
+Build in [to-do-list.md](to-do-list.md); when it lands the numbers can return.
+
+Verified: typecheck and lint clean, screenshots at 1440 and 390 against a
+worktree dev server. One cosmetic residue, deliberately not papered over —
+desktop cards are equal-height, so the now-shorter Pro and Scale lists leave a
+gap above their CTAs. Mobile stacks fine. Filling it means writing new support
+promises, which is the author's call, not a copy fix.
 
 ### 3. Placeholder photography is live
 
@@ -168,13 +202,17 @@ convention.
 
 1. **Hero fix** — poster, CTA placement, and caching are done. What remains is
    the film trim + re-encode + republish, which needs the Blob token. Defect 1.
-2. **Claims audit** — reconcile `Pricing.tsx` and `FAQ.tsx` against what exists.
-   Defect 2.
+2. ~~**Claims audit**~~ — done 2026-08-20, `46eb2db5` + `c558c788`. Eight false
+   claims found and fixed; plan-limit enforcement filed under Build in
+   [to-do-list.md](to-do-list.md). Defect 2.
 3. **Replace or accept the placeholder photography.** Defect 3.
-4. **Nav** — there is no Pricing link and no persistent CTA. `Navbar.tsx` is
-   Product / Resources / Contact plus an auth avatar. Zipchat keeps "Start free
-   trial" pinned at all times across five nav items. A visitor currently cannot
-   reach pricing from the nav.
+4. **Nav** — **mostly a false alarm; verified 2026-08-20.** Pricing *is*
+   reachable, at `NavLinks.tsx:29` under the Resources dropdown, and signed-out
+   visitors *do* get a persistent "Sign up free" CTA
+   (`AuthNavLinks.tsx:88`) — the auth avatar only replaces it once you are
+   signed in, which is the right behavior. The only real residue is that
+   Pricing sits one hover deep rather than top-level. That is a judgment call
+   about nav weight, not a defect.
 
 ### Build — new surfaces
 

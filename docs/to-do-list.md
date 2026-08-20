@@ -132,6 +132,24 @@ provider. **None of these is a code task.**
 
 Code work that is started and not finished.
 
+- [ ] **Plan limits and per-tier gating are sold but not built.** There is no
+  plan-based feature gating anywhere in the repo. `stripeStatus` is read in
+  exactly three places, all banners
+  (`apps/dashboard/src/app/dashboard/(shell)/layout.tsx:72,86,97`); nothing keys
+  a feature, a quota, or a seat count off the subscription tier. Grepping
+  `apps/dashboard/src` and `packages` for `conversationLimit`,
+  `conversationsPerMonth`, `seatLimit`, and `maxSeats` returns zero matches, so a
+  $19 Starter subscriber gets Shopify actions, phone approvals, voice training,
+  and unbounded conversations and seats — the whole product. The landing page no
+  longer claims otherwise (`c558c788`, decision 2026-08-20: say what is true now,
+  build enforcement later), so **nothing is being mis-sold while this waits** —
+  but the tiers cannot mean anything commercially until it lands. Needs: a
+  per-org monthly conversation counter and an enforcement point in
+  `apps/gateway/src/message-handlers/`, a seat check against Clerk org
+  membership, per-tier gating in `packages/agent/src/tools/executor.ts`, and a
+  decision on over-limit behavior (block, degrade, or upsell). When it ships,
+  `Pricing.tsx` and the FAQ can carry the numbers again.
+
 - [ ] **Product search cannot match anything a shopper would type.**
   `searchShopifyProducts` calls REST `products.json?title=<query>`, and that filter
   is exact full-title equality — not substring, not full-text. Proven against the
