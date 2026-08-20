@@ -94,6 +94,12 @@ test('auth-bypass core workflow sends a manual reply and approves an agent plan'
 
   await page.goto(`/dashboard/tickets?thread=${manualThread.id}`);
   await expect(page.getByTestId('ticket-conversation')).toBeVisible();
+  // toBeVisible() passes on a panel sitting below the fold, and a bare
+  // toBeInViewport() passes on one that merely overlaps it — which is how a
+  // dialog that had lost `position: fixed` stayed green here. Radix locks body
+  // scroll while it is open, so anything off screen is unreachable. Require the
+  // whole panel.
+  await expect(page.getByTestId('ticket-conversation')).toBeInViewport({ ratio: 1 });
   await expect(page.getByTestId('chat-message').filter({ hasText: inboundText })).toBeVisible();
 
   const textarea = page.getByTestId('reply-composer-textarea');
