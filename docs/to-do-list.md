@@ -142,11 +142,22 @@ Code work that is started and not finished.
   of answering: a product question is the one thing a guest can ask with no identity
   verification, so it is the cheapest path to a reply, and it fails every time. It is
   a **shared-registry tool**, so every channel inherits it.
-  `packages/agent/src/shopify/products.ts`. **It owes no gate run**: fixtures inject
-  tool output via `simulateToolResults`, so the eval harness never executes
-  `products.ts`, and changing the query it sends provably cannot move an assertion.
-  Verify it against the real store instead — the same three-request probe that found
-  it. Land it on a branch anyway; that is about review, not the gate.
+  `packages/agent/src/shopify/products.ts`. **Fixed on
+  `fix/product-search-exact-match`, awaiting a direct merge** — REST swapped for the
+  GraphQL `products(query:)` connection, result mapped back onto the REST shape so
+  `serializeProduct` and the tool result the model sees are unchanged. Search
+  operators are stripped, because titles here contain colons and Shopify reads `:`
+  as a field filter. Verified by running the shipped code path against the dev
+  store: `snowboard` 0 → 5 products, `Collection Snowboard` → 3,
+  `The Collection Snowboard: Liquid` → exactly 1, nonsense → clean `not_found`;
+  831 agent tests and typecheck green. **It owes no gate run** — fixtures inject
+  tool output via `simulateToolResults`, so the harness never executes `products.ts`
+  and changing the query it sends provably cannot move an assertion; see the
+  Eval-gate residue note. Two things it deliberately does **not** do: stem plurals
+  (`snowboard` finds the boards, `snowboards` does not — the model writes this
+  argument and normalizes in practice), and suppress cross-field matches (Shopify
+  searches description and tags, so `snowboard` also returns `Gift Card`). Delete
+  this entry once merged.
 - [ ] **Ground `send_reply` text the way escalation reasons are grounded.** The
   approved reply in the 2026-08-20 run told the shopper *"I'm opening a return
   request for the Hydrogen snowboard on order #1024"* with no `create_return`
@@ -320,6 +331,19 @@ not owe the same thing:
   `packages/agent/src/shopify/products.ts` at all. Changing the query string it
   sends to Shopify cannot reach an assertion. It owes a live check against the real
   store, not a paid run.
+
+**The product-search fix goes to `master` without a PR, deliberately** (decided
+2026-08-20, branch `fix/product-search-exact-match`) — the first time that has been
+the right call rather than the thing this section exists to complain about.
+`evals.yml` lists `packages/agent/**`, so a
+PR would have fired a ~$0.48 core gate that provably could not move an assertion,
+against a file the harness never executes. The coarse `paths` filter is a net, not
+a verdict, and this is the case the "can this change move an assertion?" test is
+for. What it owed instead was a live check, and it got one: the shipped code path
+run against the dev store returned 5 products for `snowboard` where the old filter
+returned 0, 3 for `Collection Snowboard`, exactly 1 for a title containing a colon,
+and a clean `not_found` for a nonsense query. Do not read this as licence to skip
+the gate generally — the 31-of-34 backlog below is what that looks like.
 
 **That second point is a blind spot, not just an exemption.** Every Shopify tool
 result in the suite is simulated, so nothing in `packages/agent/src/shopify/*` has
