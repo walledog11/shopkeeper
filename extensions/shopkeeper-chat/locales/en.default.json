@@ -10,7 +10,7 @@
     "greeting": "Hi! Ask us anything about our products or policies.",
     "error_start": "We couldn't start the chat just now. Please try again shortly.",
     "error_send": "Not delivered. Check your connection and try again.",
-    "waiting_notice": "Someone from the shop is looking at this — the reply will appear right here.",
+    "waiting_notice": "Someone from the shop is looking at this and will follow up here.",
     "verify_order": "Check an order"
   }
 }
