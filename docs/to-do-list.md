@@ -11,14 +11,27 @@ below — not duplicated here.
 
 Work is grouped by **what kind of action** it needs, not by when it was filed.
 
-`origin/master` is `963f44b6`, and **all four deploy surfaces are current on
-it.** Re-verified 2026-08-20: Vercel Ready on `963f44b6` (13:04 PT, 13s after the
-commit) and Railway SUCCESS on the same commit (20:04 UTC), both read off the
-CLI. No migration directory changed since `88ec0be6`
-where the database was last verified at 6/6 partial unique indexes, and
-**`shopkeeper-production-27` released 2026-08-19 22:48** carrying the widget half
-of defect 4 — the last surface that was behind. `-26` is now the one-step
-rollback target; derive that from the CLI rather than from here, per
+`origin/master` is `5ee51baa`, and **three of the four deploy surfaces are
+current on it — the Shopify app version is not.** Re-verified 2026-08-20 23:00
+UTC: Vercel Ready on `5ee51baa` (built 22:19, ready 22:21 UTC) and Railway
+SUCCESS on the same commit (22:19 UTC). Both commit hashes were read off the
+deployment records themselves — Vercel's `meta.githubCommitSha` via the API,
+Railway's `meta.commitHash` via `railway deployment list --json` — not inferred
+from a timestamp sitting close to a commit, which is the trap this paragraph
+exists to avoid. No migration directory changed since `88ec0be6`, where the
+database was last verified at 6/6 partial unique indexes; confirmed by diffing
+`packages/db/prisma/migrations` across the whole range rather than assumed.
+
+**The fourth surface is behind, and this is the case the rule below is about.**
+`shopkeeper-production-27` (2026-08-19 22:48) is still the active version —
+confirmed against `shopify app versions list`, where it is the only `★ active`
+row. But `5ee51baa` changed `extensions/shopkeeper-chat/assets/shopkeeper-chat.js`
+and its locale string, and theme app extension assets reach merchants only in a
+released app version. So the handoff-notice fix is live on both app surfaces and
+in nobody's storefront. It needs a `-28`; releasing one is a merchant-facing
+action, so it is listed under Prove in prod rather than done silently. `-26` is
+the one-step rollback target from `-27`; derive that from the CLI rather than
+from here, per
 [production/shopify-app-config-reference.md](production/shopify-app-config-reference.md).
 
 A behind surface outranks everything else in this file, because every one of
@@ -71,6 +84,14 @@ channel to build. See [product-truth.md](product-truth.md) §2.
 
 Shipped code that needs a production canary, observation window, or configured
 provider. **None of these is a code task.**
+
+- [ ] **Release `shopkeeper-production-28`.** The behind surface named in the
+  header. `5ee51baa` fixed the storefront handoff notice that promised a reply
+  which had already arrived, but it is a theme app extension asset, so merchants
+  keep reading the old string until a version ships. Nothing else is waiting on
+  this release, and no scope changed, so it is a `shopify app deploy` and a
+  confirmation that `-28` becomes the `★ active` row. Do it before the merchant
+  rollout below, which would otherwise put a real merchant on the stale copy.
 
 - [ ] **Storefront chat dev-store browser matrix.** Run Online Store 2.0 and a
   vintage theme on desktop and mobile, with the embed on and off and the Shopify
@@ -152,15 +173,37 @@ Code work that is started and not finished.
   decision on over-limit behavior (block, degrade, or upsell). When it ships,
   `Pricing.tsx` and the FAQ can carry the numbers again.
 
-- [ ] **Ground `send_reply` text the way escalation reasons are grounded.** The
-  approved reply in the 2026-08-20 run told the shopper *"I'm opening a return
-  request for the Hydrogen snowboard on order #1024"* with no `create_return`
-  anywhere in the plan. `groundEscalationReasons` covers `escalate_to_human.reason`,
-  which a merchant reads on a card and can challenge; it does not touch
-  `send_reply.text`, which the shopper reads with no one in between — so the same
-  fabrication is now in the worse position. The invariant is unchanged and already
-  established: `planAgent` executes nothing, so at plan time a past-tense mutation
-  claim describes something that does not exist. Agent-path; PR and gate.
+- [ ] **Ground `send_reply` text the way escalation reasons are grounded — written,
+  on a PR, waiting on the gate.** The approved reply in the 2026-08-20 run told the
+  shopper *"I'm opening a return request for the Hydrogen snowboard on order
+  #1024"* with no `create_return` anywhere in the plan. `groundReplyText` in
+  `planner-routing.ts` now covers `send_reply.text` and `send_email.body`, called
+  from `planner.ts` immediately after `groundEscalationReasons` so it also reaches
+  the reply `keepReply` preserves beside a materialized handoff. Same invariant:
+  `planAgent` executes nothing, so at plan time a claim that the agent has done, is
+  doing, or will do something describes an action that does not exist.
+
+  **It is deliberately narrower than the escalation grounding, and the narrowing is
+  the interesting part.** Reusing those patterns verbatim would have been wrong in
+  two ways that only show up on shopper-facing prose. Agentless passive is not
+  matched, because *"Your refund has been processed"* is the ordinary shape of a
+  **true** report read out of `get_order` — the escalation field never carries those,
+  a reply carries them constantly. First person plural is not matched either,
+  because *"We shipped your order Monday"* reads as the store, not the agent, so it
+  can be grounded the same way. What is left is first-person-singular
+  self-attribution, past/progressive/promised, which is the fabrication actually
+  observed. It edits sentence-by-sentence rather than replacing the field, since a
+  reply is usually mostly good; a fallback stands in only when every sentence was
+  the fabrication. Residual gap, recorded rather than papered over: a `we`-voiced or
+  passive-voiced fabrication still passes. That is the deliberate price of not
+  mutilating truthful replies.
+
+  Owes the gate, and this one genuinely owes it — `judge.ts` grades `replyText`, so
+  a change that rewrites reply text can move assertions by construction. On its own
+  PR per the standing rule, with no other agent-path change riding along. Unit
+  coverage is in `planner-routing.test.ts` (`groundReplyText`, 11 cases including
+  the two keep-it cases above); `packages/agent` is green at 838 tests and `tsc`
+  is clean, but neither of those is the gate.
 - [ ] **Bounded conversation context and cross-channel memory.** Keep persistent
   shopper identity separate from short conversation episodes; plan from the
   newest request and retrieve only verified, relevant history or open
@@ -305,9 +348,12 @@ assertion?" test split them. Product search shipped (`32df62bf`) — fixtures in
 tool output through `simulateToolResults`, so the harness never executes
 `packages/agent/src/shopify/products.ts` and changing the query string it sends
 could not reach an assertion; it owed a live check against the real store, and got
-one. **Grounding `send_reply` text is still queued and is gated**: `judge.ts`
-grades `replyText`, so a change that rewrites reply text can move assertions by
-construction. Take the core gate on its own PR.
+one. **Grounding `send_reply` text is written and is gated**: `judge.ts` grades
+`replyText`, so a change that rewrites reply text can move assertions by
+construction. It went onto its own branch with no other agent-path change riding
+along, so the core gate fires on the PR the way the standing rule intends — the
+first item in this section to be handled that way from the start rather than
+settled after the fact.
 
 The planner read-warning reworded on 2026-08-20 owes no run either. It is a
 `warnings[]` string assembled after planning in `planner-read-tools.ts`; no fixture
