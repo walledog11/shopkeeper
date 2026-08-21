@@ -510,7 +510,13 @@ export function formatEscalatedTicketLine(thread: BriefingTicketRow): string {
   const subject = handoffSubject(thread, summary);
   if (summary) {
     const humanized = humanizeReportedSummary(subject, summary);
-    if (humanized) return `${endClause(humanized)} I flagged it for you.`;
+    // Capped like the blocked line above. The rewritten branch used to return
+    // uncapped, which was survivable while the input was a truncated episode
+    // summary and is not now: a request summary carrying a deadline, an address
+    // change and a refund fallback reaches 300 characters in one breath.
+    if (humanized) {
+      return `${endClause(truncateBriefingText(humanized, HANDOFF_SUMMARY_MAX))} I flagged it for you.`;
+    }
     return `${subject}: ${truncateBriefingText(summary, HANDOFF_SUMMARY_MAX)}. I flagged it for you.`;
   }
   return `${subject} asked for a human. I flagged it for you.`;
@@ -975,7 +981,7 @@ export function formatApprovalItemLine(params: {
   const source = params.requestSummary?.trim() || params.aiSummary;
   const summary = source?.trim();
   const humanized = summary ? humanizeReportedSummary(subject, summary) : null;
-  if (humanized) return `${endClause(humanized)} ${ready}`;
+  if (humanized) return `${endClause(truncateBriefingText(humanized, HANDOFF_SUMMARY_MAX))} ${ready}`;
 
   const topic = briefingTopic(params.aiTitle ?? null, source, params.tag);
   return topic ? `${subject} — ${action} · ${topic}` : `${subject} — ${action}`;
