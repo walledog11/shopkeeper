@@ -55,7 +55,15 @@ async function getE2EOrg() {
 }
 
 async function ensureE2EEmailIntegration(orgId) {
-  const emailAddress = process.env.E2E_TEST_EMAIL_ADDRESS || 'support-e2e@inbound.test';
+  // Inbound claiming keys on the recipient's *local part being the organization
+  // UUID* — webhooks-email.ts rejects a non-UUID local part via recordUnclaimedRecipient
+  // and still answers 200. A fixed address therefore drops every inbound message
+  // while looking perfectly healthy from the caller's side. Only the domain is
+  // configurable; the local part has to be the org id, which is the same shape
+  // webhook-ingest.spec.ts has always built by hand.
+  const configured = process.env.E2E_TEST_EMAIL_ADDRESS || 'support-e2e@inbound.test';
+  const domain = configured.split('@')[1] || 'inbound.test';
+  const emailAddress = `${orgId}@${domain}`;
 
   return db.integration.upsert({
     where: {
