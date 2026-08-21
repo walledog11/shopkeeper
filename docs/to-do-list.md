@@ -21,9 +21,13 @@ from a timestamp sitting close to a commit, which is the trap this paragraph
 exists to avoid. No migration directory changed between `88ec0be6` — where the
 database was last verified at 6/6 partial unique indexes — and `adfec608`;
 confirmed by diffing `packages/db/prisma/migrations` across the whole range
-rather than assumed. The one migration added since is
-`20260821120000_add_conversation_attribution`, which is additive and nullable
-and has **not** been applied to production.
+rather than assumed. **Two migrations have been added since, and neither has
+been applied to production** — `20260821120000_add_conversation_attribution` and
+`20260821130000_add_verification_candidate_email_hash` (the latter on PR #51).
+Both are additive and nullable, so both are safe to apply ahead of the code that
+writes them, which is the deliberate ordering for this channel: storefront-chat
+migrations have twice shipped *behind* their code, and the second took the
+channel down on silent `P2022` 500s.
 
 **The fourth surface is behind, and this is the case the rule below is about.**
 `shopkeeper-production-27` (2026-08-19 22:48) is still the active version —
@@ -381,14 +385,15 @@ Code work that is started and not finished.
   question and then buys — has no server-side identity bridge at all and would
   need cart-attribute plumbing in the theme extension, which is a merchant-facing
   extension change and a new app version.
-- [ ] **Expand confidence outside the curated coverage islands — routes, ratchet
-  and the Clerk contract are done; two gaps remain.** The route half closed on
-  2026-08-21. The "20 untested routes" figure was an overcount: sixteen lacked a
-  colocated file, but nine of those are exercised where their real risk lives
-  (`cross-org-isolation.test.ts`, `tenant-data-surfaces.test.ts`,
-  `billing-write-gate.unit.test.ts`), so writing route files for them would have
-  been the duplication the original entry warned against. Seven had nothing at
-  all and now have 51 tests between them — health, health/deep, realtime/token,
+- [ ] **Expand confidence outside the curated coverage islands — routes, ratchet,
+  plan execution and the Clerk contract are done; recovery paths remain.** The
+  route half closed on 2026-08-21. The "20 untested routes" figure was an
+  overcount: sixteen lacked a colocated file, but nine of those are exercised
+  where their real risk lives (`cross-org-isolation.test.ts`,
+  `tenant-data-surfaces.test.ts`, `billing-write-gate.unit.test.ts`), so writing
+  route files for them would have been the duplication the original entry warned
+  against. Seven had nothing at all and now have 51 tests between them — health,
+  health/deep, realtime/token,
   threads/customer/[customerId], shopify/customers/search, webhooks/tiktok-shop,
   billing. The ratchet went from eight groups to fourteen, every new threshold
   measured against a real coverage run first rather than picked and hoped for.
@@ -524,6 +529,18 @@ layer has.
   gateway, dashboard and `packages/db` only, so `evals.yml` never matched it. Both
   halves of the rule working on the same day — the gate firing where it should and
   staying quiet where it should not — is the state this item is asking for.
+
+  **PR #51 (2026-08-21) is the third instance, and it is the interesting one**
+  because the rule and the "can this move an assertion?" test pointed opposite
+  ways. Its `packages/agent` changes are an ops-alert category constant and a
+  `hashVerifiedEmail` helper — neither a prompt, a tool description, nor planner
+  logic — so the change provably could not move a fixture and owed nothing. The
+  coarse `paths` filter fired the gate anyway; it came back **hard-gated 44/44
+  (100%)** in 4m34s on real model calls, no fixture moved. That is the filter
+  being a net rather than a verdict, exactly as described below, and ~$0.51 is
+  the right price for not having to be sure by hand. The lesson is not to
+  suppress the run — it is that the rule is cheap to follow and expensive to
+  skip, which is the whole point of this item.
 
 **Escalation reason text has no eval coverage at all** — established 2026-08-19,
 and worth knowing in both directions. Zero of the 84 fixtures assert on
