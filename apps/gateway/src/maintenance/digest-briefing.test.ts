@@ -13,6 +13,7 @@ import {
   DIGEST_CURSOR_KEY,
   formatBlockedTicketLine,
   formatBriefingTicketLine,
+  formatEscalatedTicketLine,
   formatHandledSection,
   formatNeedsYouAsk,
   formatNeedsYouProse,
@@ -360,6 +361,103 @@ describe('formatBriefingTicketLine', () => {
   it('maps classifier tags to plain language', () => {
     expect(formatBriefingTicketLine('Ayumu', null, null, 'Order Status'))
       .toBe("Ayumu: Where's my order?");
+  });
+
+  // Verification is the merchant's evidence that this person owns the order, so
+  // the line that reports it must not also call them unidentified. The operator
+  // card for the same thread says "They confirmed the email on #1024".
+  it('calls a verified shopper the customer on their order, not a visitor', () => {
+    expect(formatBriefingTicketLine(
+      null,
+      'Damaged Snowboard Refund',
+      null,
+      null,
+      'shopify_chat',
+      ['#1024'],
+    )).toBe('The customer on #1024: Damaged Snowboard Refund');
+  });
+
+  // Only while nobody has identified them.
+  it('still names the channel for an unverified storefront visitor', () => {
+    expect(formatBriefingTicketLine(
+      null,
+      'Damaged Snowboard Refund',
+      null,
+      null,
+      'shopify_chat',
+      [],
+    )).toBe('Storefront visitor: Damaged Snowboard Refund');
+  });
+});
+
+describe('formatEscalatedTicketLine', () => {
+  // The line the 2026-08-21 briefing got wrong, in one case. `aiSummary` is the
+  // episode summary — every ask made across the conversation — so a merchant read
+  // one escalation as a refund request *and* a shipping question *and* a pricing
+  // question *and* a privacy question, above a plan that only addressed the
+  // refund. `requestSummary` is the ask that is actually outstanding.
+  it('reports the outstanding request, not the whole conversation', () => {
+    const line = formatEscalatedTicketLine({
+      customer: { name: null },
+      channelType: 'shopify_chat',
+      aiTitle: null,
+      aiSummary:
+        'Customer reports that the snowboard from order #1024 arrived with a deep scratch on the base '
+        + 'and requests a refund. They also ask whether order #1024 has shipped and to confirm the '
+        + "delivery address, and asks about the shop's privacy policy.",
+      requestSummary: 'Customer requests a refund for the scratched snowboard on order #1024.',
+      tag: 'Refund',
+      verifiedOrders: ['#1024'],
+    });
+    expect(line).toBe(
+      'The customer requested a refund for the scratched snowboard on order #1024. I flagged it for you.',
+    );
+    expect(line).not.toContain('privacy policy');
+    expect(line).not.toContain('delivery address');
+    expect(line).not.toContain('Storefront visitor');
+  });
+
+  // The order earns a place in the subject only when the sentence after it does
+  // not already name it — otherwise the line says #1024 twice.
+  it('names the verified order in the subject when the summary does not', () => {
+    expect(formatEscalatedTicketLine({
+      customer: { name: null },
+      channelType: 'shopify_chat',
+      aiTitle: null,
+      aiSummary: null,
+      requestSummary: 'Customer wants to change the delivery address before it ships.',
+      tag: 'Shipping',
+      verifiedOrders: ['#1024'],
+    })).toBe(
+      'The customer on #1024 wanted to change the delivery address before it ships. I flagged it for you.',
+    );
+  });
+
+  // Proactive plans (delivery exception, return arrival) have no inbound message
+  // to summarise and leave requestSummary null by construction.
+  it('falls back to the episode summary when no request was summarised', () => {
+    expect(formatEscalatedTicketLine({
+      customer: { name: 'Dana Ruiz' },
+      channelType: 'email',
+      aiTitle: null,
+      aiSummary: 'Customer asks to move order #1043 to a new flat.',
+      requestSummary: null,
+      tag: 'Shipping',
+    })).toBe('Dana asked to move order #1043 to a new flat. I flagged it for you.');
+  });
+
+  // "request" takes a bare object and "ask" takes one only with `for`, so
+  // backshifting one verb into the other dropped the preposition and the
+  // briefing said "asked a refund".
+  it('backshifts requests to requested rather than to asked', () => {
+    expect(formatEscalatedTicketLine({
+      customer: { name: 'Bo Nkemelu' },
+      channelType: 'email',
+      aiTitle: null,
+      aiSummary: null,
+      requestSummary: 'Customer requests a refund for the torn sweater.',
+      tag: 'Refund',
+    })).toBe('Bo requested a refund for the torn sweater. I flagged it for you.');
   });
 });
 
