@@ -180,6 +180,17 @@ Code work that is started and not finished.
   once per billing period via `Organization.settings`; the operator-notify dedupe
   is a one-hour Redis TTL and cannot express "once this month".
 
+  **One known limitation, priced and left in.** The once-per-period marker lives
+  on `Organization.settings`, and `buildSettingsUpdate` rebuilds that blob from
+  `normalizeStoredOrgSettings`, which is a whitelist — so saving any org setting
+  drops the marker and the merchant gets one duplicate notice that month. Every
+  fix costs more than the bug: a dedicated column means a migration and its
+  deploy-ordering landmine, whitelisting the key means an eval run against
+  `packages/agent`, and a per-call Redis TTL means threading an argument through
+  the notify path every proactive send shares. Revisit only if merchants report
+  repeats. Worth knowing separately: **that whitelist silently drops any key it
+  does not know**, which is a trap for anything else tempted to stash state there.
+
   **What is left is the console half, not code.** `PRICE_ID_STARTER` and
   `PRICE_ID_PRO` are unprovisioned, so every org resolves to the unknown tier,
   which is deliberately unbounded — the enforcement ships inert and starts biting
@@ -428,6 +439,17 @@ layer has.
   in `.claude/CLAUDE.md` under Agent-change invariants. Items here keep coming
   back until this is the default.
 
+  **2026-08-20 is the first day the rule was followed without being reminded**,
+  and it is worth recording what that looks like, because the backlog above is
+  the only other evidence in this file. `groundReplyText` went to
+  `fix/ground-reply-text` and PR #48 with nothing else riding along; the core gate
+  fired on its own, came back hard-gated 44/44, and cost ~$0.51 at the moment the
+  change landed rather than becoming a line here to be discharged later at ~$2.60.
+  The same day, `feat/plan-limits` (PR #49) was correctly *not* gated: it is
+  gateway, dashboard and `packages/db` only, so `evals.yml` never matched it. Both
+  halves of the rule working on the same day — the gate firing where it should and
+  staying quiet where it should not — is the state this item is asking for.
+
 **Escalation reason text has no eval coverage at all** — established 2026-08-19,
 and worth knowing in both directions. Zero of the 84 fixtures assert on
 `escalate_to_human` inputs (64 mention the tool, none check its `reason`), and
@@ -475,6 +497,18 @@ display names, Telegram migration, and Gmail restricted-scope packet work:**
 when its closing verification passes. Re-verify env presence with
 `vercel env ls production` — `vercel env pull` redacts sensitive vars to an
 empty string, indistinguishable from unset.
+
+- [ ] **Provision the two Stripe prices, in both services.** This was a "resume
+  when triggered" row until 2026-08-20; the trigger has fired, because the
+  enforcement now exists and is waiting on it. Create `PRICE_ID_STARTER` and
+  `PRICE_ID_PRO` in Stripe, then set both in **Vercel *and* Railway** — the old
+  row said Vercel only, which is no longer sufficient: the gateway reads them to
+  tell a Starter subscription from a Pro one when applying the conversation cap,
+  and a value set on one service and not the other silently produces two
+  different answers about the same org. Until then every org resolves to the
+  unbounded unknown tier and no limit applies. Verify by confirming a Starter org
+  is capped and a Pro org is not. Stripe steps live in
+  [phase-6-external-services.md](phase-6-external-services.md).
 
 - [ ] **Confirm the connected store survived the `write_app_proxy` scope add.**
   `shopify.app.toml` shipped 2026-08-07 as `shopkeeper-production-9`, adding
@@ -528,7 +562,6 @@ resume. Gated-off integrations cost nothing to keep dark.
 | Trigger | Work | Where |
 | --- | --- | --- |
 | Privacy policy ships | PostHog Phase 5: staging payload review, then `PRODUCT_ANALYTICS_ENABLED=true` | [posthog-reports.md](production/posthog-reports.md) |
-| Two-tier billing ships | Create Stripe `PRICE_ID_STARTER` / `PRICE_ID_PRO` and set in Vercel production | [phase-6-external-services.md](phase-6-external-services.md) (Stripe) |
 | Redis TLS migration | Gateway `REDIS_URL` → `rediss://` on both services | [compatibility-retirement-backlog.md](compatibility-retirement-backlog.md) |
 | Paid beta | Better Stack Level 1 log drains + escalation (free tier done 2026-07-31) | [runbook.md](production/runbook.md), [alerting-evidence.md](production/alerting-evidence.md) |
 
