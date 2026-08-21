@@ -162,16 +162,16 @@ enum IntegrationLifecycleStatus {
 // One Organization = one Shopify business using the app.
 // clerkOrgId maps to the organization ID from Clerk.com (e.g. org_xxxx).
 model Organization {
-  id                        String                      @id @default(uuid()) @db.Uuid
-  clerkOrgId                String                      @unique @map("clerk_org_id")
-  name                      String                      @db.VarChar(255)
-  settings                  Json?                       @default("{}") @map("settings") @db.JsonB
-  defaultEmailIntegrationId String?                     @map("default_email_integration_id") @db.Uuid
+  id                        String   @id @default(uuid()) @db.Uuid
+  clerkOrgId                String   @unique @map("clerk_org_id")
+  name                      String   @db.VarChar(255)
+  settings                  Json?    @default("{}") @map("settings") @db.JsonB
+  defaultEmailIntegrationId String?  @map("default_email_integration_id") @db.Uuid
   // Pending brand-voice update synthesized from operator edits, awaiting approval.
   // Shape: { brief, rationale, basedOnCount, createdAt }. Cleared on approve/dismiss.
-  voiceProposal             Json?                       @map("voice_proposal") @db.JsonB
-  createdAt                 DateTime                    @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt                 DateTime                    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  voiceProposal             Json?    @map("voice_proposal") @db.JsonB
+  createdAt                 DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                 DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
   lifecycleStatus           OrganizationLifecycleStatus @default(active) @map("lifecycle_status")
 
   stripeCustomerId          String?   @unique @map("stripe_customer_id") @db.VarChar(255)
@@ -182,35 +182,35 @@ model Organization {
   stripeStateEventCreatedAt DateTime? @map("stripe_state_event_created_at") @db.Timestamptz
   stripeStateEventId        String?   @map("stripe_state_event_id") @db.VarChar(255)
 
-  customers                     Customer[]
-  threads                       Thread[]
-  integrations                  Integration[]                  @relation("OrganizationIntegrations")
-  shopifyPrivacyRequests        ShopifyPrivacyRequest[]
-  defaultEmailIntegration       Integration?                   @relation("DefaultEmailIntegration", fields: [defaultEmailIntegrationId], references: [id], onDelete: SetNull)
-  members                       OrgMember[]
-  operatorContexts              OperatorContext[]
-  operatorEvents                OperatorEvent[]
-  bindTokens                    OrgMemberBindToken[]
-  knowledgeBases                KnowledgeBase[]
-  kbArticles                    KbArticle[]
-  kbCitations                   KbCitation[]
-  agentActions                  AgentAction[]
-  voiceEdits                    VoiceEdit[]
-  llmDailySpend                 LlmDailySpend[]
-  refundDailySpend              RefundDailySpend[]
-  refundSpendReservations       RefundSpendReservation[]
-  shadowDecisions               AutonomyShadowDecision[]
-  planExecutions                PlanExecution[]
-  returnWatches                 ReturnWatch[]
-  shipmentWatches               ShipmentWatch[]
-  followUpWatches               FollowUpWatch[]
-  stripeWebhookEvents           StripeWebhookEvent[]
-  messages                      Message[]
-  storefrontChatSessions        StorefrontChatSession[]
-  storefrontChatDailyUsage      StorefrontChatDailyUsage[]
-  storefrontChatVerifications   StorefrontChatVerification[]
+  customers               Customer[]
+  threads                 Thread[]
+  integrations            Integration[]            @relation("OrganizationIntegrations")
+  shopifyPrivacyRequests  ShopifyPrivacyRequest[]
+  defaultEmailIntegration Integration?             @relation("DefaultEmailIntegration", fields: [defaultEmailIntegrationId], references: [id], onDelete: SetNull)
+  members                 OrgMember[]
+  operatorContexts        OperatorContext[]
+  operatorEvents          OperatorEvent[]
+  bindTokens              OrgMemberBindToken[]
+  knowledgeBases          KnowledgeBase[]
+  kbArticles              KbArticle[]
+  kbCitations             KbCitation[]
+  agentActions            AgentAction[]
+  voiceEdits              VoiceEdit[]
+  llmDailySpend           LlmDailySpend[]
+  refundDailySpend        RefundDailySpend[]
+  refundSpendReservations RefundSpendReservation[]
+  shadowDecisions         AutonomyShadowDecision[]
+  planExecutions          PlanExecution[]
+  returnWatches           ReturnWatch[]
+  shipmentWatches         ShipmentWatch[]
+  followUpWatches         FollowUpWatch[]
+  stripeWebhookEvents     StripeWebhookEvent[]
+  messages                Message[]
+  storefrontChatSessions  StorefrontChatSession[]
+  storefrontChatDailyUsage StorefrontChatDailyUsage[]
+  storefrontChatVerifications StorefrontChatVerification[]
   storefrontChatSessionEpisodes StorefrontChatSessionEpisode[]
-  conversationAttributions      ConversationAttribution[]
+  conversationAttributions ConversationAttribution[]
 
   @@index([clerkOrgId])
   @@index([lifecycleStatus])
@@ -354,24 +354,24 @@ model VoiceEdit {
 // Stores a connected platform account for an organization.
 // e.g. Instagram page, support email address, Shopify store.
 model Integration {
-  id                String                     @id @default(uuid()) @db.Uuid
-  organizationId    String                     @map("organization_id") @db.Uuid
+  id                String         @id @default(uuid()) @db.Uuid
+  organizationId    String         @map("organization_id") @db.Uuid
   platform          ChannelType
-  emailProvider     EmailProvider?             @map("email_provider")
-  externalAccountId String                     @map("external_account_id") @db.VarChar(255)
-  fromEmail         String?                    @map("from_email") @db.VarChar(255)
-  accessToken       String?                    @map("access_token") @db.Text
-  refreshToken      String?                    @map("refresh_token") @db.Text
-  tokenExpiresAt    DateTime?                  @map("token_expires_at") @db.Timestamptz
-  metadata          Json?                      @default("{}") @db.JsonB
-  createdAt         DateTime                   @default(now()) @map("created_at") @db.Timestamptz
+  emailProvider     EmailProvider? @map("email_provider")
+  externalAccountId String         @map("external_account_id") @db.VarChar(255)
+  fromEmail         String?        @map("from_email") @db.VarChar(255)
+  accessToken       String?        @map("access_token") @db.Text
+  refreshToken      String?        @map("refresh_token") @db.Text
+  tokenExpiresAt    DateTime?      @map("token_expires_at") @db.Timestamptz
+  metadata          Json?          @default("{}") @db.JsonB
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz
   lifecycleStatus   IntegrationLifecycleStatus @default(active) @map("lifecycle_status")
 
-  organization             Organization               @relation("OrganizationIntegrations", fields: [organizationId], references: [id], onDelete: Cascade)
-  defaultForOrganizations  Organization[]             @relation("DefaultEmailIntegration")
-  replyThreads             Thread[]                   @relation("ThreadReplyIntegration")
-  messages                 Message[]
-  storefrontChatSessions   StorefrontChatSession[]
+  organization            Organization            @relation("OrganizationIntegrations", fields: [organizationId], references: [id], onDelete: Cascade)
+  defaultForOrganizations Organization[]          @relation("DefaultEmailIntegration")
+  replyThreads            Thread[]                @relation("ThreadReplyIntegration")
+  messages                Message[]
+  storefrontChatSessions  StorefrontChatSession[]
   storefrontChatDailyUsage StorefrontChatDailyUsage[]
 
   @@unique([organizationId, emailProvider])
@@ -423,18 +423,18 @@ model IntegrationDisconnect {
 // rows drive that operator workflow. The authenticated export route marks them
 // exported; completion remains a separate confirmation after direct delivery.
 model ShopifyPrivacyRequest {
-  id                String    @id @default(uuid()) @db.Uuid
-  organizationId    String    @map("organization_id") @db.Uuid
-  shopDomain        String    @map("shop_domain") @db.VarChar(255)
-  topic             String    @db.VarChar(64)
-  shopifyRequestId  String    @map("shopify_request_id") @db.VarChar(255)
-  shopifyCustomerId String?   @map("shopify_customer_id") @db.VarChar(255)
-  customerEmail     String?   @map("customer_email") @db.VarChar(320)
-  orderIds          String[]  @default([]) @map("order_ids")
-  status            String    @default("pending") @db.VarChar(32)
-  receivedAt        DateTime  @default(now()) @map("received_at") @db.Timestamptz
-  exportedAt        DateTime? @map("exported_at") @db.Timestamptz
-  completedAt       DateTime? @map("completed_at") @db.Timestamptz
+  id                  String    @id @default(uuid()) @db.Uuid
+  organizationId      String    @map("organization_id") @db.Uuid
+  shopDomain          String    @map("shop_domain") @db.VarChar(255)
+  topic               String    @db.VarChar(64)
+  shopifyRequestId    String    @map("shopify_request_id") @db.VarChar(255)
+  shopifyCustomerId   String?   @map("shopify_customer_id") @db.VarChar(255)
+  customerEmail       String?   @map("customer_email") @db.VarChar(320)
+  orderIds            String[]  @default([]) @map("order_ids")
+  status              String    @default("pending") @db.VarChar(32)
+  receivedAt          DateTime  @default(now()) @map("received_at") @db.Timestamptz
+  exportedAt          DateTime? @map("exported_at") @db.Timestamptz
+  completedAt         DateTime? @map("completed_at") @db.Timestamptz
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -453,9 +453,9 @@ model Customer {
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
   deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
 
-  organization             Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  threads                  Thread[]
-  storefrontChatSessions   StorefrontChatSession[]
+  organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  threads                Thread[]
+  storefrontChatSessions StorefrontChatSession[]
   conversationAttributions ConversationAttribution[]
 
   // platformId is unique per org, not globally — two orgs can share the same customer email
@@ -467,47 +467,47 @@ model Customer {
 }
 
 model Thread {
-  id                        String                    @id @default(uuid()) @db.Uuid
-  organizationId            String                    @map("organization_id") @db.Uuid
-  customerId                String                    @map("customer_id") @db.Uuid
-  channelType               ChannelType               @map("channel_type")
-  status                    ThreadStatus              @default(open)
+  id                        String               @id @default(uuid()) @db.Uuid
+  organizationId            String               @map("organization_id") @db.Uuid
+  customerId                String               @map("customer_id") @db.Uuid
+  channelType               ChannelType          @map("channel_type")
+  status                    ThreadStatus         @default(open)
   // Nullable by design: threads closed before conversation episodes shipped have
   // no recorded reason, and guessing one is worse than admitting it is unknown.
-  closedReason              ThreadClosedReason?       @map("closed_reason")
-  createdAt                 DateTime                  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt                 DateTime                  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-  lastMessageAt             DateTime                  @default(now()) @map("last_message_at") @db.Timestamptz
-  lastMessageSenderType     SenderType?               @map("last_message_sender_type")
+  closedReason              ThreadClosedReason?  @map("closed_reason")
+  createdAt                 DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                 DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  lastMessageAt             DateTime             @default(now()) @map("last_message_at") @db.Timestamptz
+  lastMessageSenderType     SenderType?          @map("last_message_sender_type")
   // Episode summary: background for this conversation only. It is never the
   // planning instruction or the notification delta — that is requestSummary.
-  aiSummary                 String?                   @map("ai_summary")
-  aiTitle                   String?                   @map("ai_title")
+  aiSummary                 String?              @map("ai_summary")
+  aiTitle                   String?              @map("ai_title")
   // The newest unanswered customer burst, separate from the episode summary.
   // Written by P2; inert until then.
   requestSummary            String?                   @map("request_summary")
   requestSourceMessageId    String?                   @map("request_source_message_id") @db.Uuid
   requestDisposition        ThreadRequestDisposition? @map("request_disposition")
   subject                   String?
-  tag                       String?                   @default("Support")
-  shopifyCustomerId         String?                   @map("shopify_customer_id") @db.VarChar(255)
-  operatorKey               String?                   @map("operator_key")
-  externalSpaceId           String?                   @map("external_space_id")
-  cachedPlanMessageId       String?                   @map("cached_plan_message_id") @db.Uuid
-  cachedPlan                Json?                     @map("cached_plan") @db.JsonB
-  archivedAt                DateTime?                 @map("archived_at") @db.Timestamptz
-  deletedAt                 DateTime?                 @map("deleted_at") @db.Timestamptz
+  tag                       String?              @default("Support")
+  shopifyCustomerId         String?              @map("shopify_customer_id") @db.VarChar(255)
+  operatorKey               String?              @map("operator_key")
+  externalSpaceId           String?              @map("external_space_id")
+  cachedPlanMessageId       String?              @map("cached_plan_message_id") @db.Uuid
+  cachedPlan                Json?                @map("cached_plan") @db.JsonB
+  archivedAt                DateTime?            @map("archived_at") @db.Timestamptz
+  deletedAt                 DateTime?            @map("deleted_at") @db.Timestamptz
   // Escalation is orthogonal to lifecycle status (P5-04): an escalated ticket
   // stays `open` so it remains in the inbox and inbound follow-ups correlate to
   // it. Set when the agent hands off to the merchant; null otherwise.
-  escalatedAt               DateTime?                 @map("escalated_at") @db.Timestamptz
-  filterStatus              ThreadFilterStatus        @default(genuine) @map("filter_status")
-  filterReason              String?                   @map("filter_reason") @db.Text
-  filterDecidedAt           DateTime?                 @map("filter_decided_at") @db.Timestamptz
-  filterFeedback            ThreadFilterFeedback      @default(none) @map("filter_feedback")
-  classifierSignals         Json?                     @map("classifier_signals") @db.JsonB
-  replyIntegrationId        String?                   @map("reply_integration_id") @db.Uuid
-  replyIntegrationUpdatedAt DateTime?                 @map("reply_integration_updated_at") @db.Timestamptz
+  escalatedAt               DateTime?            @map("escalated_at") @db.Timestamptz
+  filterStatus              ThreadFilterStatus   @default(genuine) @map("filter_status")
+  filterReason              String?              @map("filter_reason") @db.Text
+  filterDecidedAt           DateTime?            @map("filter_decided_at") @db.Timestamptz
+  filterFeedback            ThreadFilterFeedback @default(none) @map("filter_feedback")
+  classifierSignals         Json?                @map("classifier_signals") @db.JsonB
+  replyIntegrationId        String?              @map("reply_integration_id") @db.Uuid
+  replyIntegrationUpdatedAt DateTime?            @map("reply_integration_updated_at") @db.Timestamptz
 
   organization     Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   customer         Customer                 @relation(fields: [customerId], references: [id], onDelete: Cascade)
@@ -521,8 +521,8 @@ model Thread {
   shipmentWatches  ShipmentWatch[]
   followUpWatches  FollowUpWatch[]
 
-  storefrontChatSessions   StorefrontChatSession[]
-  storefrontChatEpisodes   StorefrontChatSessionEpisode[]
+  storefrontChatSessions StorefrontChatSession[]
+  storefrontChatEpisodes StorefrontChatSessionEpisode[]
   conversationAttributions ConversationAttribution[]
 
   @@unique([organizationId, operatorKey])
@@ -779,33 +779,33 @@ model KbCitation {
 //   mode:     human_approved | auto_executed | read_only
 //   category: mirrors TOOL_CATEGORIES from lib/agent/tools/registry.ts
 model AgentAction {
-  id                   String    @id @default(uuid()) @db.Uuid
-  turnId               String    @map("turn_id") @db.Uuid
-  organizationId       String    @map("organization_id") @db.Uuid
-  threadId             String?   @map("thread_id") @db.Uuid
-  customerId           String?   @map("customer_id") @db.Uuid
-  executionId          String?   @map("execution_id") @db.Uuid
-  providerOperationKey String?   @map("provider_operation_key") @db.VarChar(255)
-  tool                 String    @db.VarChar(64)
-  category             String    @db.VarChar(32)
-  input                Json      @db.JsonB
-  output               String?   @db.Text
-  status               String    @db.VarChar(32)
-  errorDetail          String?   @map("error_detail") @db.Text
-  mode                 String    @db.VarChar(32)
-  instruction          String?   @db.Text
-  summary              String?   @db.Text
-  approverId           String?   @map("approver_id") @db.VarChar(255)
-  approvedAt           DateTime? @map("approved_at") @db.Timestamptz
-  approvedPlanHash     String?   @map("approved_plan_hash") @db.VarChar(64)
-  instructionHash      String?   @map("instruction_hash") @db.VarChar(64)
-  feedback             String?   @db.VarChar(16)
-  executedAt           DateTime  @default(now()) @map("executed_at") @db.Timestamptz
-  durationMs           Int       @map("duration_ms")
+  id               String    @id @default(uuid()) @db.Uuid
+  turnId           String    @map("turn_id") @db.Uuid
+  organizationId   String    @map("organization_id") @db.Uuid
+  threadId         String?   @map("thread_id") @db.Uuid
+  customerId       String?   @map("customer_id") @db.Uuid
+  executionId      String?   @map("execution_id") @db.Uuid
+  providerOperationKey String? @map("provider_operation_key") @db.VarChar(255)
+  tool             String    @db.VarChar(64)
+  category         String    @db.VarChar(32)
+  input            Json      @db.JsonB
+  output           String?   @db.Text
+  status           String    @db.VarChar(32)
+  errorDetail      String?   @map("error_detail") @db.Text
+  mode             String    @db.VarChar(32)
+  instruction      String?   @db.Text
+  summary          String?   @db.Text
+  approverId       String?   @map("approver_id") @db.VarChar(255)
+  approvedAt       DateTime? @map("approved_at") @db.Timestamptz
+  approvedPlanHash String?   @map("approved_plan_hash") @db.VarChar(64)
+  instructionHash  String?   @map("instruction_hash") @db.VarChar(64)
+  feedback         String?   @db.VarChar(16)
+  executedAt       DateTime  @default(now()) @map("executed_at") @db.Timestamptz
+  durationMs       Int       @map("duration_ms")
 
-  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  thread        Thread?        @relation(fields: [threadId], references: [id], onDelete: SetNull)
-  execution     PlanExecution? @relation(fields: [executionId], references: [id], onDelete: SetNull)
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  thread       Thread?        @relation(fields: [threadId], references: [id], onDelete: SetNull)
+  execution    PlanExecution? @relation(fields: [executionId], references: [id], onDelete: SetNull)
   returnWatches ReturnWatch[]
 
   @@index([organizationId, executedAt(sort: Desc)])
@@ -850,19 +850,19 @@ model ReturnWatch {
 
 // Durable shipment↔ticket association for the delivery-exception monitor (B4).
 model ShipmentWatch {
-  id              String                 @id @default(uuid()) @db.Uuid
-  organizationId  String                 @map("organization_id") @db.Uuid
-  threadId        String?                @map("thread_id") @db.Uuid
-  orderId         String                 @map("order_id") @db.VarChar(32)
-  trackingNumber  String                 @map("tracking_number") @db.VarChar(64)
-  trackingCompany String?                @map("tracking_company") @db.VarChar(64)
-  issueType       ShipmentWatchIssueType @map("issue_type")
-  issueSummary    String?                @map("issue_summary") @db.VarChar(255)
-  status          ShipmentWatchStatus    @default(open)
-  detectedAt      DateTime?              @map("detected_at") @db.Timestamptz
-  planPushedAt    DateTime?              @map("plan_pushed_at") @db.Timestamptz
-  createdAt       DateTime               @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt       DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  id               String                 @id @default(uuid()) @db.Uuid
+  organizationId   String                 @map("organization_id") @db.Uuid
+  threadId         String?                @map("thread_id") @db.Uuid
+  orderId          String                 @map("order_id") @db.VarChar(32)
+  trackingNumber   String                 @map("tracking_number") @db.VarChar(64)
+  trackingCompany  String?                @map("tracking_company") @db.VarChar(64)
+  issueType        ShipmentWatchIssueType @map("issue_type")
+  issueSummary     String?                @map("issue_summary") @db.VarChar(255)
+  status           ShipmentWatchStatus    @default(open)
+  detectedAt       DateTime?              @map("detected_at") @db.Timestamptz
+  planPushedAt     DateTime?              @map("plan_pushed_at") @db.Timestamptz
+  createdAt        DateTime               @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   thread       Thread?      @relation(fields: [threadId], references: [id], onDelete: SetNull)
@@ -972,33 +972,33 @@ model AutonomyShadowDecision {
 // customer column. Verified sessions (M2) add those, and adding them here early
 // would invite the guest path to read something it must never trust.
 model StorefrontChatSession {
-  id                String    @id @default(uuid()) @db.Uuid
-  organizationId    String    @map("organization_id") @db.Uuid
-  integrationId     String    @map("integration_id") @db.Uuid
-  customerId        String?   @map("customer_id") @db.Uuid
-  threadId          String?   @map("thread_id") @db.Uuid
-  storefrontHost    String    @map("storefront_host") @db.VarChar(255)
-  resumeSecretHash  String    @map("resume_secret_hash") @db.VarChar(64)
+  id               String    @id @default(uuid()) @db.Uuid
+  organizationId   String    @map("organization_id") @db.Uuid
+  integrationId    String    @map("integration_id") @db.Uuid
+  customerId       String?   @map("customer_id") @db.Uuid
+  threadId         String?   @map("thread_id") @db.Uuid
+  storefrontHost   String    @map("storefront_host") @db.VarChar(255)
+  resumeSecretHash String    @map("resume_secret_hash") @db.VarChar(64)
   // Shopper messages accepted on this session, for the per-session budget. A
   // lifetime count rather than a daily one: the session itself expires, and a
   // shopper who clears it to reset the count lands on the per-shop daily budget
   // and the per-IP burst limit instead.
-  messageCount      Int       @default(0) @map("message_count")
+  messageCount     Int       @default(0) @map("message_count")
   // Verification emails sent from this session. Budgeted separately and far
   // tighter than messages: without its own ceiling the widget becomes a way to
   // mail-bomb whoever's address is on an order.
-  verificationSends Int       @default(0) @map("verification_sends")
-  lastSeenAt        DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz
-  expiresAt         DateTime  @map("expires_at") @db.Timestamptz
-  revokedAt         DateTime? @map("revoked_at") @db.Timestamptz
+  verificationSends Int      @default(0) @map("verification_sends")
+  lastSeenAt       DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz
   // SHA-256 of the lowercased address the shopper proved control of, written on
   // the first successful verification. Storefront shoppers are otherwise
   // anonymous (`platformId` is `shopify_chat:<uuid>`), so this is the only
   // durable link between a browser session and a later order. Stored as a hash
   // because equality is all attribution needs — the address itself is already
   // on the order in Shopify and does not need a second home here.
-  verifiedEmailHash String?   @map("verified_email_hash") @db.VarChar(64)
-  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  verifiedEmailHash String?  @map("verified_email_hash") @db.VarChar(64)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   integration  Integration  @relation(fields: [integrationId], references: [id], onDelete: Cascade)
@@ -1061,25 +1061,25 @@ model StorefrontChatSessionEpisode {
 }
 
 model StorefrontChatVerification {
-  id                 String    @id @default(uuid()) @db.Uuid
-  organizationId     String    @map("organization_id") @db.Uuid
-  sessionId          String    @map("session_id") @db.Uuid
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  sessionId      String    @map("session_id") @db.Uuid
   // The order as the shopper names it (`#1026`), normalized with the leading #.
-  orderName          String    @map("order_name") @db.VarChar(64)
+  orderName      String    @map("order_name") @db.VarChar(64)
   // Shopify's numeric order id, resolved at send time so a verified session
   // never has to re-resolve the name against a moving catalogue.
-  orderId            String    @map("order_id") @db.VarChar(64)
-  codeHash           String    @map("code_hash") @db.VarChar(64)
+  orderId        String    @map("order_id") @db.VarChar(64)
+  codeHash       String    @map("code_hash") @db.VarChar(64)
   // SHA-256 of the address on the order, captured when the code was mailed and
   // promoted onto the session's `verifiedEmailHash` only once a correct code
   // proves control. Writing the session hash at request time would let anyone
   // claim any address by naming an order and supplying a matching email.
-  candidateEmailHash String?   @map("candidate_email_hash") @db.VarChar(64)
-  expiresAt          DateTime  @map("expires_at") @db.Timestamptz
-  attempts           Int       @default(0)
-  verifiedAt         DateTime? @map("verified_at") @db.Timestamptz
-  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  candidateEmailHash String? @map("candidate_email_hash") @db.VarChar(64)
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz
+  attempts       Int       @default(0)
+  verifiedAt     DateTime? @map("verified_at") @db.Timestamptz
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
   organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   session      StorefrontChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
@@ -1102,27 +1102,27 @@ model StorefrontChatVerification {
 // bought is a thing the agent put in front of the shopper. Neither proves the
 // conversation caused the sale, and the reporting surface says so.
 model ConversationAttribution {
-  id             String  @id @default(uuid()) @db.Uuid
-  organizationId String  @map("organization_id") @db.Uuid
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
   // Null for `direct` — there is no conversation to point at.
   threadId       String? @map("thread_id") @db.Uuid
   customerId     String? @map("customer_id") @db.Uuid
 
-  orderId         String @map("order_id") @db.VarChar(64)
-  orderName       String @map("order_name") @db.VarChar(64)
+  orderId   String @map("order_id") @db.VarChar(64)
+  orderName String @map("order_name") @db.VarChar(64)
   // Minor units. Shopify sends decimal strings; money is never carried as a
   // float here, and mixing currencies is guarded by grouping on `currency`.
   orderTotalCents Int    @map("order_total_cents")
   currency        String @db.VarChar(8)
 
   // direct | chat_assisted | product_assisted
-  kind              String @db.VarChar(32)
+  kind String @db.VarChar(32)
   // How the order was tied to a conversation: verified_email, customer_platform_id,
   // shopify_customer, or none for `direct`.
-  matchBasis        String @map("match_basis") @db.VarChar(32)
+  matchBasis String @map("match_basis") @db.VarChar(32)
   // Shopify product ids that appear both in the order and in what the agent
   // surfaced during the conversation. Only set for `product_assisted`.
-  matchedProductIds Json?  @map("matched_product_ids") @db.JsonB
+  matchedProductIds Json? @map("matched_product_ids") @db.JsonB
 
   // The last shopper activity on the matched thread, so the reporting surface
   // can show the gap between conversation and purchase without a second query.
