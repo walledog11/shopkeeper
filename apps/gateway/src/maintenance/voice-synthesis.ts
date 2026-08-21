@@ -120,7 +120,6 @@ export async function synthesizeVoiceBrief({
   const response = await anthropic.messages.create({
     model: MODEL.VOICE_SYNTHESIS,
     max_tokens: MAX_OUTPUT_TOKENS,
-    temperature: 0,
     system: [{
       type: 'text',
       text: VOICE_SYNTHESIS_SYSTEM_PROMPT,
