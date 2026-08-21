@@ -401,31 +401,6 @@ Code work that is started and not finished.
   anything. The gate now runs unless explicitly disabled, fires on PRs touching
   auth-sensitive paths, and fails loudly on a missing credential instead of
   skipping. First real run found two stale assertions (see below); it passes 9/9.
-- [ ] **The inbound email webhook answers 200 for mail it silently discards.**
-  Found 2026-08-21 while fixing the Clerk contract, where it masked the real
-  cause twice in one sitting. `webhooks-email.ts` claims a message by requiring
-  the recipient's **local part to be the organization UUID**: it regex-tests the
-  local part, then looks the integration up by `organizationId: localPart`.
-  Every miss — non-UUID local part, no matching integration, missing
-  `OriginalRecipient` — calls `recordUnclaimedRecipient` and returns
-  `200 OK`. Nothing in the response distinguishes "delivered" from "dropped".
-
-  In production that means an inbound misconfiguration looks perfectly healthy
-  from the sender's side, which is the same trap already recorded against the
-  Postmark rebuild ("a 200 from the inbound hook can mean silently unclaimed").
-  The 200 itself is probably correct — Postmark should not retry a message we
-  will never claim — so the fix is observability, not status codes: unclaimed
-  recipients are already recorded, so surface them as an ops alert when the rate
-  is non-trivial rather than leaving them in a table nobody reads.
-
-- [ ] **A malformed `customerId` path param 500s instead of 404ing.**
-  `GET /api/threads/customer/<garbage>` reaches Prisma with a non-UUID value and
-  throws `Inconsistent column data`, which `handleApiError` turns into a 500. The
-  route is authenticated and org-scoped so there is no security consequence — the
-  cost is that client-side typos are indistinguishable from server faults in
-  Sentry. Noted rather than fixed because the fix is added input validation and
-  the standing rule is not to add error handling beyond what a task asks for.
-
 - [ ] **Split the highest-risk multi-purpose modules along operational seams.**
   Start with `digest-briefing.ts`, `digest.ts`, `reconciliation-probes.ts`,
   `gmail-sync.ts`, `planning-notifications.ts`, and the database package barrel.
