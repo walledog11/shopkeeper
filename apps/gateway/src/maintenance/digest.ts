@@ -9,7 +9,9 @@ import logger from '../logger.js';
 import { listOperatorBindings, notifyOperator, type OperatorBinding, type OperatorNotifyResult } from '../operator-notify.js';
 import type { PendingDigest } from '../operator-context.js';
 import { digestNotificationIdempotencyKey } from '../operator-notify-idempotency.js';
+import { listVerifiedOrderNamesByThread } from '../storefront-chat-verified-orders.js';
 import {
+  briefingSummarySource,
   countWord,
   formatEscalatedTicketLine,
   formatHandledSection,
@@ -62,9 +64,15 @@ export interface DigestThreadRow {
   filterDecidedAt: Date | null;
   aiTitle: string | null;
   aiSummary: string | null;
+  // The newest unanswered ask, preferred over `aiSummary` everywhere a line is
+  // built from prose. See `briefingSummarySource`.
+  requestSummary: string | null;
   filterReason: string | null;
   escalatedAt: Date | null;
   customer: { name: string | null };
+  // Orders a storefront shopper proved control of, joined on after the thread
+  // query. Empty on every other channel.
+  verifiedOrders?: readonly string[];
   // Lifecycle-state inputs. `messages` is the newest non-note message only, in
   // the same descending shape `loadStaleThreadWaitingItems` passes to
   // plan-cache helpers — those read the last conversational sender from the
@@ -220,7 +228,7 @@ function hasNoRequest(thread: DigestThreadRow): boolean {
 // Slicing at a character count lands mid-word, and a raw address here becomes a
 // tappable mailto in the middle of the merchant's morning text.
 function flaggedBlurb(thread: DigestThreadRow): string {
-  const blurb = (thread.aiSummary ?? thread.filterReason ?? '').trim();
+  const blurb = (briefingSummarySource(thread) ?? thread.filterReason ?? '').trim();
   return truncateBriefingText(redactBriefingContacts(blurb), DIGEST_SUMMARY_TRUNC);
 }
 
@@ -360,6 +368,7 @@ export async function buildOrgDigest(
         filterDecidedAt: true,
         aiTitle: true,
         aiSummary: true,
+        requestSummary: true,
         filterReason: true,
         escalatedAt: true,
         customer: { select: { name: true } },
@@ -387,7 +396,24 @@ export async function buildOrgDigest(
 
   if (openThreads.length === 0 && waitingItems.length === 0 && !includeEmptyInbox) return null;
 
-  const buckets = bucketDigestThreads(openThreads, now, since);
+  // Verification state for this briefing's storefront tickets, in one query
+  // rather than one per thread. Every thread id goes in: only a storefront
+  // session can hold a verification row, so the join filters the channel itself
+  // and the digest does not have to know about channel constants to ask. Without
+  // this the briefing calls a shopper who proved control of an order a
+  // "Storefront visitor", contradicting the operator card on the same thread.
+  const verifiedByThread = await listVerifiedOrderNamesByThread(
+    organizationId,
+    openThreads.map((thread) => thread.id),
+  );
+  const threads: DigestThreadRow[] = verifiedByThread.size === 0
+    ? openThreads
+    : openThreads.map((thread) => {
+      const verifiedOrders = verifiedByThread.get(thread.id);
+      return verifiedOrders ? { ...thread, verifiedOrders } : thread;
+    });
+
+  const buckets = bucketDigestThreads(threads, now, since);
   const waitingThreadIds = new Set(waitingItems.map((item) => item.threadId));
 
   const flaggedCandidates = buckets.questionable.filter((thread) => !hasNoRequest(thread));

@@ -8,6 +8,7 @@ import { SENDER_TYPE } from '@shopkeeper/agent/thread-constants';
 import { db } from '@shopkeeper/db';
 import { Prisma } from '@prisma/client';
 import { CHANNEL } from '../constants.js';
+import { listVerifiedOrderNamesByThread } from '../storefront-chat-verified-orders.js';
 import { parseStoredPendingPlan } from '../operator-context.js';
 
 export const DIGEST_CURSOR_KEY = 'lastSuccessfulDigestAt';
@@ -191,7 +192,11 @@ const REPORTED_VERB_PAST: Record<string, string> = {
   sent: 'sent',
   say: 'said', says: 'said', said: 'said',
   'is asking': 'asked', ask: 'asked', asks: 'asked', asked: 'asked',
-  request: 'asked', requests: 'asked', requested: 'asked',
+  // Backshifted to its own past tense, not to "asked". "request" takes a bare
+  // object and "ask" takes one only with `for`, so mapping across the two verbs
+  // dropped the preposition: "and requests a refund" came out of the briefing as
+  // "and asked a refund".
+  request: 'requested', requests: 'requested', requested: 'requested',
   want: 'wanted', wants: 'wanted',
   mention: 'mentioned', mentions: 'mentioned',
   note: 'noted', notes: 'noted',
@@ -274,18 +279,53 @@ export function briefingTopic(
 // `leadsWithAction` means the line already spends a segment on what the agent
 // wants to do, so a named customer is subject enough; three segments before the
 // topic is more punctuation than information on a phone.
+/**
+ * The one place the briefing decides what to call the person on a ticket. Null
+ * means nobody has been identified and the caller supplies its own fallback —
+ * `briefingSubject` can fall back to an order reference, the approval line
+ * cannot.
+ *
+ * Someone who entered a code mailed to the address on an order has proved they
+ * are the customer on it, and that is the word a merchant reading their phone
+ * would use. "Storefront visitor" is honest only while nobody has identified
+ * them; kept past that it states the opposite of what happened, and it
+ * contradicts the two surfaces that already read verification — the operator
+ * card ("They confirmed the email on #1024") and the classifier, which is told
+ * to call this same person "the shopper". Naming the order keeps the claim
+ * scoped the way verification is: to that order, never to an account.
+ */
+function briefingPersonName(
+  customerName: string | null,
+  channelType: string | null,
+  verifiedOrders: readonly string[] = [],
+  // The text this subject introduces, when the caller has it. An order named
+  // here as well as in the subject prints the same order twice in one sentence —
+  // "The customer on #1024 requested a refund … on order #1024" — and the
+  // sentence is the better place for it.
+  followingText = '',
+): string | null {
+  const named = briefingSubjectName(customerName);
+  if (named) return named;
+  if (channelType !== CHANNEL.SHOPIFY_CHAT) return null;
+  if (verifiedOrders.length === 0) return VISITOR_SUBJECT;
+  const unnamed = verifiedOrders.filter((order) => !followingText.includes(order.replace('#', '')));
+  return unnamed.length > 0 ? `The customer on ${unnamed.join(', ')}` : 'The customer';
+}
+
 function briefingSubject(
   customerName: string | null,
   channelType: string | null,
   orderRef: string | null,
   topic: string | null,
   leadsWithAction = false,
+  verifiedOrders: readonly string[] = [],
 ): string {
-  const name = briefingSubjectName(customerName)
-    ?? (channelType === CHANNEL.SHOPIFY_CHAT ? VISITOR_SUBJECT : null);
-  const alreadyInTopic = orderRef != null
-    && (topic ?? '').includes(orderRef.replace('#', ''));
-  const ref = orderRef && !alreadyInTopic && !(name && leadsWithAction) ? orderRef : null;
+  const name = briefingPersonName(customerName, channelType, verifiedOrders);
+  // The verified form already names the order, so the ` · #1024` suffix would
+  // print it twice.
+  const alreadyNamed = orderRef != null
+    && ((topic ?? '').includes(orderRef.replace('#', '')) || (name?.includes(orderRef) ?? false));
+  const ref = orderRef && !alreadyNamed && !(name && leadsWithAction) ? orderRef : null;
   if (name && ref) return `${name} · ${ref}`;
   return ref ?? name ?? 'Someone';
 }
@@ -347,10 +387,11 @@ export function formatBriefingTicketLine(
   aiSummary: string | null,
   tag: string | null,
   channelType?: string | null,
+  verifiedOrders: readonly string[] = [],
 ): string {
   const topic = briefingTopic(aiTitle, aiSummary, tag);
   const orderRef = extractOrderRef(`${aiTitle ?? ''} ${aiSummary ?? ''}`);
-  const subject = briefingSubject(customerName, channelType ?? null, orderRef, topic);
+  const subject = briefingSubject(customerName, channelType ?? null, orderRef, topic, false, verifiedOrders);
   if (topic) return `${subject}: ${topic}`;
   return subject === 'Someone' ? 'Open ticket' : subject;
 }
@@ -358,11 +399,36 @@ export function formatBriefingTicketLine(
 export interface BriefingTicketRow {
   aiTitle?: string | null;
   aiSummary: string | null;
+  /** The newest unanswered ask. Preferred over `aiSummary` — see `briefingSummarySource`. */
+  requestSummary?: string | null;
   tag: string | null;
   channelType?: string | null;
   customer: { name: string | null };
   /** Text of the newest customer message, for the sections that quote it. */
   pendingMessage?: string | null;
+  /** Orders this storefront shopper proved control of. Empty for every other channel. */
+  verifiedOrders?: readonly string[];
+}
+
+/**
+ * Which summary a briefing line is built from.
+ *
+ * `requestSummary` is the newest unanswered ask. `aiSummary` is the episode
+ * summary — everything said in the conversation so far, true however the
+ * conversation moved on. Every other operator surface reads the first:
+ * `generateThreadPlan` takes `requestSummary` as its instruction, and the plan
+ * and question cards render it. The briefing was the last place still reading
+ * the second, which is how one escalation reached a merchant's phone as a refund
+ * request *and* a shipping question *and* a pricing question *and* a privacy
+ * question — four asks from across the conversation, printed as though they had
+ * arrived together, above a plan that only ever addressed the refund.
+ *
+ * `aiSummary` stays as the fallback: proactive plans (delivery exception, return
+ * arrival) have no inbound message to summarise and leave `requestSummary` null
+ * by construction, and threads classified before the field existed have none.
+ */
+export function briefingSummarySource(thread: BriefingTicketRow): string | null {
+  return thread.requestSummary?.trim() || thread.aiSummary;
 }
 
 /**
@@ -391,18 +457,27 @@ function cleanBriefingText(text: string | null | undefined): string {
   return redactBriefingContacts((text ?? '').replace(/\s+/g, ' ').trim());
 }
 
-export function formatBlockedTicketLine(thread: BriefingTicketRow): string {
-  // Subject only: pass no title, summary or tag so what follows the name is the
-  // request itself rather than a label for it as well.
-  const named = formatBriefingTicketLine(
+/**
+ * The name a handoff line opens with. Only the person — a handoff prints the
+ * request itself next, so a topic label here would say it twice — and the text
+ * that follows is passed in so a verified subject does not restate an order that
+ * sentence is about to name.
+ */
+function handoffSubject(thread: BriefingTicketRow, followingText: string): string {
+  return briefingPersonName(
     thread.customer?.name ?? null,
-    null,
-    null,
-    null,
     thread.channelType ?? null,
-  );
-  const subject = named === 'Open ticket' ? 'Someone' : named;
+    thread.verifiedOrders ?? [],
+    followingText,
+  ) ?? 'Someone';
+}
+
+export function formatBlockedTicketLine(thread: BriefingTicketRow): string {
   const message = cleanBriefingText(thread.pendingMessage);
+  const subject = handoffSubject(
+    thread,
+    `${message} ${cleanBriefingText(briefingSummarySource(thread))}`,
+  );
 
   // Short enough to print whole. Covers the one-word case the merchant is meant
   // to judge for themselves: if a bare "yo" ever reaches a handoff, it arrives as
@@ -416,7 +491,7 @@ export function formatBlockedTicketLine(thread: BriefingTicketRow): string {
     return `${subject} ${message.includes('?') ? 'asked' : 'wrote'}: "${message}"`;
   }
 
-  const summary = cleanBriefingText(thread.aiSummary);
+  const summary = cleanBriefingText(briefingSummarySource(thread));
   if (summary) {
     const humanized = humanizeReportedSummary(subject, summary);
     if (humanized) return truncateBriefingText(humanized, HANDOFF_SUMMARY_MAX);
@@ -431,15 +506,8 @@ export function formatBlockedTicketLine(thread: BriefingTicketRow): string {
 
 /** Explicit human escalation the agent parked for merchant judgment. */
 export function formatEscalatedTicketLine(thread: BriefingTicketRow): string {
-  const named = formatBriefingTicketLine(
-    thread.customer?.name ?? null,
-    null,
-    null,
-    null,
-    thread.channelType ?? null,
-  );
-  const subject = named === 'Open ticket' ? 'Someone' : named;
-  const summary = cleanBriefingText(thread.aiSummary);
+  const summary = cleanBriefingText(briefingSummarySource(thread));
+  const subject = handoffSubject(thread, summary);
   if (summary) {
     const humanized = humanizeReportedSummary(subject, summary);
     if (humanized) return `${endClause(humanized)} I flagged it for you.`;
@@ -452,9 +520,10 @@ function formatTicketLine(thread: BriefingTicketRow): string {
   return formatBriefingTicketLine(
     thread.customer?.name ?? null,
     thread.aiTitle ?? null,
-    thread.aiSummary,
+    briefingSummarySource(thread),
     thread.tag,
     thread.channelType ?? null,
+    thread.verifiedOrders ?? [],
   );
 }
 
@@ -719,6 +788,7 @@ async function loadStaleThreadWaitingItems(
       updatedAt: true,
       aiTitle: true,
       aiSummary: true,
+      requestSummary: true,
       tag: true,
       channelType: true,
       filterStatus: true,
@@ -731,6 +801,11 @@ async function loadStaleThreadWaitingItems(
       },
     },
   });
+
+  const verifiedByThread = await listVerifiedOrderNamesByThread(
+    organizationId,
+    threads.map((thread) => thread.id),
+  );
 
   const items: WaitingItem[] = [];
   for (const thread of threads) {
@@ -759,9 +834,11 @@ async function loadStaleThreadWaitingItems(
         channelType: thread.channelType,
         aiTitle: thread.aiTitle,
         aiSummary: thread.aiSummary,
+        requestSummary: thread.requestSummary,
         tag: thread.tag,
         rawToolCalls: plan.rawToolCalls,
         instruction: cached.instruction,
+        verifiedOrders: verifiedByThread.get(thread.id) ?? [],
       }),
     });
   }
@@ -875,13 +952,18 @@ export function formatApprovalItemLine(params: {
   channelType?: string | null;
   aiTitle?: string | null;
   aiSummary: string | null;
+  requestSummary?: string | null;
   tag: string | null;
   rawToolCalls: Array<{ id: string; name: string; input?: unknown }>;
   instruction: string;
   actionLabel?: string;
+  verifiedOrders?: readonly string[];
 }): string {
-  const subject = briefingSubjectName(params.customerName)
-    ?? (params.channelType === CHANNEL.SHOPIFY_CHAT ? VISITOR_SUBJECT : 'Someone');
+  const subject = briefingPersonName(
+    params.customerName,
+    params.channelType ?? null,
+    params.verifiedOrders ?? [],
+  ) ?? 'Someone';
   const refundAmount = extractRefundAmount(
     params.rawToolCalls.find((toolCall) => toolCall.name === 'create_refund')?.input,
   );
@@ -890,11 +972,12 @@ export function formatApprovalItemLine(params: {
     : lowerFirst(approvalActionHead(params.rawToolCalls) ?? params.actionLabel ?? 'reply');
   const ready = refundAmount ? `I've got ${refundAmount} ready.` : `${capitalize(action)}'s drafted.`;
 
-  const summary = params.aiSummary?.trim();
+  const source = params.requestSummary?.trim() || params.aiSummary;
+  const summary = source?.trim();
   const humanized = summary ? humanizeReportedSummary(subject, summary) : null;
   if (humanized) return `${endClause(humanized)} ${ready}`;
 
-  const topic = briefingTopic(params.aiTitle ?? null, params.aiSummary, params.tag);
+  const topic = briefingTopic(params.aiTitle ?? null, source, params.tag);
   return topic ? `${subject} — ${action} · ${topic}` : `${subject} — ${action}`;
 }
 

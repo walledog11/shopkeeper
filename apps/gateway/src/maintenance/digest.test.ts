@@ -23,6 +23,7 @@ function makeThread(overrides: Partial<{
   channelType: string;
   aiTitle: string | null;
   aiSummary: string | null;
+  requestSummary: string | null;
   filterReason: string | null;
   escalatedAt: Date | null;
   noRequest: boolean;
@@ -39,6 +40,7 @@ function makeThread(overrides: Partial<{
       ? new Date(NOW.getTime() - ageHours * HOUR)
       : overrides.filterDecidedAt,
     aiSummary: overrides.aiSummary ?? null,
+    requestSummary: overrides.requestSummary ?? null,
     filterReason: overrides.filterReason ?? null,
     escalatedAt: overrides.escalatedAt ?? null,
     customer: { name: overrides.customerName === undefined ? 'Jane' : overrides.customerName },
