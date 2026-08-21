@@ -17,6 +17,7 @@ const DEFAULT_CONFIG: GatewayOpsAlertConfig = {
   webhookSignatureThreshold: 5,
   providerSendThreshold: 3,
   agentFailureThreshold: 3,
+  unclaimedRecipientThreshold: 5,
 };
 
 afterEach(() => {

@@ -26,6 +26,7 @@ import {
   truncateBriefingText,
 } from './digest-briefing.js';
 import { loadDigestShopifyGarnish } from './digest-shopify-garnish.js';
+import { loadAttributionLine } from '../message-handlers/conversation-attribution.js';
 import {
   createMaintenanceQueue,
   createMaintenanceWorker,
@@ -341,7 +342,7 @@ export async function buildOrgDigest(
   options: { opener?: string | null; includeEmptyInbox?: boolean } = {},
 ): Promise<OrgDigest | null> {
   const since = resolveHandledWindowStart(settings, now);
-  const [openThreads, weeklyStats, handledRollup, waitingItems, garnishLines] = await Promise.all([
+  const [openThreads, weeklyStats, handledRollup, waitingItems, garnishLines, attributionLine] = await Promise.all([
     db.thread.findMany({
       where: {
         ...canonicalInboxThreadWhere(organizationId),
@@ -378,6 +379,7 @@ export async function buildOrgDigest(
     loadHandledRollup(organizationId, since),
     loadWaitingOnYouItems(organizationId, now),
     loadDigestShopifyGarnish(organizationId, settings, now),
+    loadAttributionLine(organizationId, since),
   ]);
 
   const handledSection = formatHandledSection(handledRollup);
@@ -434,7 +436,10 @@ export async function buildOrgDigest(
         opener: options.opener ?? null,
         needsYou,
         handledSection,
-        garnishLines,
+        // Sits with the sales pulse: same register, same place in the message.
+        // It is DB-derived rather than fetched, so it is appended here instead
+        // of inside the Shopify garnish loader.
+        garnishLines: attributionLine ? [...garnishLines, attributionLine] : garnishLines,
       },
     ),
     pendingDigest: {

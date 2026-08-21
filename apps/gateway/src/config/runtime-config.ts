@@ -69,6 +69,7 @@ export interface GatewayOpsAlertConfig {
   webhookSignatureThreshold: number;
   providerSendThreshold: number;
   agentFailureThreshold: number;
+  unclaimedRecipientThreshold: number;
 }
 
 export function getGatewayWorkerRedisConfig(): GatewayWorkerRedisConfig {
@@ -86,6 +87,7 @@ export function getGatewayOpsAlertConfig(): GatewayOpsAlertConfig {
     webhookSignatureThreshold: parsePositiveIntEnv('WEBHOOK_SIGNATURE_ALERT_THRESHOLD', 5),
     providerSendThreshold: parsePositiveIntEnv('PROVIDER_SEND_ALERT_THRESHOLD', 3),
     agentFailureThreshold: parsePositiveIntEnv('AGENT_FAILURE_ALERT_THRESHOLD', 3),
+    unclaimedRecipientThreshold: parsePositiveIntEnv('UNCLAIMED_RECIPIENT_ALERT_THRESHOLD', 5),
   };
 }
 

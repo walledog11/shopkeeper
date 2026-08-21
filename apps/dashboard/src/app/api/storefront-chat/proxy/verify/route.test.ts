@@ -2,7 +2,7 @@ import { createHmac, randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChannelType, db } from '@shopkeeper/db';
 import { cleanupTestData, createTestIntegration, createTestOrg } from '@shopkeeper/db/test-helpers';
-import { hashVerificationCode } from '@shopkeeper/agent/storefront-verification';
+import { hashVerificationCode, hashVerifiedEmail } from '@shopkeeper/agent/storefront-verification';
 import type { OutboundEmail } from '@shopkeeper/email/types';
 import { appProxyCanonicalString } from '@/lib/shopify/app-proxy';
 import { createResumeSecret, mintSessionToken } from '@/lib/storefront-chat/session-token';
@@ -309,6 +309,61 @@ describe('storefront chat order verification', () => {
 
     await expect(submitCode('#1025', '424242').then((r) => r.json())).resolves.toEqual({
       status: 'no_challenge',
+    });
+  });
+
+  // The identity bridge for conversation-to-sale attribution. Storefront
+  // shoppers are anonymous (`platformId` is `shopify_chat:<uuid>`), so a proved
+  // address is the only durable link between this browser session and a later
+  // order — which makes it the only thing worth forging.
+  describe('the verified-email identity bridge', () => {
+    it('records nothing on the session until a correct code proves control', async () => {
+      await requestCode('#1025', OWNER_EMAIL);
+
+      // The candidate is parked on the challenge, where it cannot be read as
+      // proof of anything.
+      const challenge = await db.storefrontChatVerification.findFirstOrThrow({
+        where: { sessionId: session.id },
+      });
+      expect(challenge.candidateEmailHash).toBe(hashVerifiedEmail(OWNER_EMAIL));
+
+      const before = await db.storefrontChatSession.findUniqueOrThrow({ where: { id: session.id } });
+      expect(before.verifiedEmailHash).toBeNull();
+    });
+
+    it('promotes the hash onto the session once the code is accepted', async () => {
+      await requestCode('#1025', OWNER_EMAIL);
+      const code = send.mock.calls[0][0].text.match(/\d{6}/)![0];
+
+      await expect(submitCode('#1025', code).then((r) => r.json())).resolves.toEqual({
+        status: 'verified',
+      });
+
+      const after = await db.storefrontChatSession.findUniqueOrThrow({ where: { id: session.id } });
+      expect(after.verifiedEmailHash).toBe(hashVerifiedEmail(OWNER_EMAIL));
+    });
+
+    it('leaves the session anonymous when the code is wrong', async () => {
+      await requestCode('#1025', OWNER_EMAIL);
+
+      await expect(submitCode('#1025', '000000').then((r) => r.json())).resolves.toMatchObject({
+        status: 'wrong_code',
+      });
+
+      const after = await db.storefrontChatSession.findUniqueOrThrow({ where: { id: session.id } });
+      expect(after.verifiedEmailHash).toBeNull();
+    });
+
+    it('hashes the address on the order, not the one the shopper typed', async () => {
+      // These are the same address here, but the supplied one is attacker-
+      // controlled text and the order one is not. Only the latter may become
+      // an identity, so the stored hash must be case-insensitively the order's.
+      await requestCode('#1025', OWNER_EMAIL.toUpperCase());
+      const code = send.mock.calls[0][0].text.match(/\d{6}/)![0];
+      await submitCode('#1025', code);
+
+      const after = await db.storefrontChatSession.findUniqueOrThrow({ where: { id: session.id } });
+      expect(after.verifiedEmailHash).toBe(hashVerifiedEmail(OWNER_EMAIL));
     });
   });
 

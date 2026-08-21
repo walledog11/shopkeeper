@@ -1,0 +1,21 @@
+-- Hand-written, per the note on the Thread model: `prisma migrate dev` diffs the
+-- partial unique index threads_one_open_per_customer as absent and emits a DROP
+-- INDEX for it. Nothing here touches that index.
+--
+-- Additive and nullable, so it is safe to apply before the code that writes it.
+-- That ordering is the standing rule for this channel: storefront-chat
+-- migrations have twice shipped *behind* their code, and the second took the
+-- channel down on silent P2022 500s.
+--
+-- Why this column exists. The shopper's address is supplied and checked against
+-- the order at `requestVerification`, but verification only *succeeds* later, in
+-- `submitVerificationCode`, which holds the session and the order name and no
+-- address at all. Writing the session's `verified_email_hash` at request time
+-- would mark a session email-verified before the code is confirmed — anyone
+-- could claim any address by naming an order and typing a matching email. So
+-- the hash is parked here as a candidate at request time and promoted onto the
+-- session only when a correct code proves control. The alternative was
+-- re-fetching the order from Shopify at the success point, which puts a network
+-- call in the one path that must not fail.
+ALTER TABLE "storefront_chat_verifications"
+ADD COLUMN "candidate_email_hash" VARCHAR(64);

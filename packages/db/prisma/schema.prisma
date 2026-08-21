@@ -1070,6 +1070,11 @@ model StorefrontChatVerification {
   // never has to re-resolve the name against a moving catalogue.
   orderId        String    @map("order_id") @db.VarChar(64)
   codeHash       String    @map("code_hash") @db.VarChar(64)
+  // SHA-256 of the address on the order, captured when the code was mailed and
+  // promoted onto the session's `verifiedEmailHash` only once a correct code
+  // proves control. Writing the session hash at request time would let anyone
+  // claim any address by naming an order and supplying a matching email.
+  candidateEmailHash String? @map("candidate_email_hash") @db.VarChar(64)
   expiresAt      DateTime  @map("expires_at") @db.Timestamptz
   attempts       Int       @default(0)
   verifiedAt     DateTime? @map("verified_at") @db.Timestamptz

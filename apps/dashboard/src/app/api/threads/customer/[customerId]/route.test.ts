@@ -181,4 +181,14 @@ describe('GET /api/threads/customer/[customerId]', () => {
 
     expect(threads).toEqual([]);
   });
+
+  it('404s a malformed customer id instead of 500ing on it', async () => {
+    // `customer_id` is @db.Uuid, so a non-UUID reaches Postgres as
+    // `Inconsistent column data` and handleApiError turns it into a 500 —
+    // making a client-side typo indistinguishable from a server fault.
+    for (const malformed of ['garbage', '123', 'not-a-uuid', `${'a'.repeat(36)}`]) {
+      const response = await call(malformed);
+      expect(response.status).toBe(404);
+    }
+  });
 });

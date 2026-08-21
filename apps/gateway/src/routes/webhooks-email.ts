@@ -9,6 +9,7 @@ import { rateLimit, sendTooManyRequests } from '../rate-limit.js';
 import { applyInboundAttachmentBudget } from '../storage/attachment-budget.js';
 import { emailInboundJsonParser, emailInboundUrlencodedParser } from './body-parsers.js';
 import { getMessageQueue, getRateLimitRedis } from './webhooks-shared.js';
+import { recordUnclaimedInbound, type UnclaimedInboundReason } from './webhooks-unclaimed-alerts.js';
 import { recordEmailBounce } from '../message-handlers/email-bounce.js';
 
 function isProductionEnv(): boolean {
@@ -40,13 +41,13 @@ function normalizeEmailAddress(value: string): string {
   return value.replace(/.*<(.+)>/, '$1').trim().toLowerCase();
 }
 
-async function recordUnclaimedRecipient(recipient: string): Promise<void> {
+async function recordUnclaimedRecipient(recipient: string, reason: UnclaimedInboundReason): Promise<void> {
   const normalized = normalizeEmailAddress(recipient);
   const recipientDomain = normalized.split('@')[1] || 'invalid';
   const recipientHash = createHash('sha256').update(normalized).digest('hex').slice(0, 16);
 
   logger.info(
-    { event: 'unclaimed_recipient', recipientDomain, recipientHash },
+    { event: 'unclaimed_recipient', reason, recipientDomain, recipientHash },
     '[Webhook] Unclaimed Postmark recipient acknowledged',
   );
   try {
@@ -58,6 +59,15 @@ async function recordUnclaimedRecipient(recipient: string): Promise<void> {
     logger.warn(
       { err: error, event: 'unclaimed_recipient_counter_failed', recipientDomain, recipientHash },
       '[Webhook] Failed to count unclaimed Postmark recipient',
+    );
+  }
+
+  try {
+    await recordUnclaimedInbound(reason, { counterClient: getRateLimitRedis(), recipientDomain });
+  } catch (error) {
+    logger.warn(
+      { err: error, event: 'unclaimed_recipient_alert_failed', reason, recipientDomain },
+      '[Webhook] Failed to raise unclaimed-recipient ops alert',
     );
   }
 }
@@ -102,7 +112,7 @@ export function registerEmailWebhookRoutes(router: Router): void {
       }
 
       if (!originalRecipient) {
-        await recordUnclaimedRecipient('missing@invalid');
+        await recordUnclaimedRecipient('missing@invalid', 'missing_recipient');
         return res.status(200).send('OK');
       }
 
@@ -114,7 +124,7 @@ export function registerEmailWebhookRoutes(router: Router): void {
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
       if (!uuidRegex.test(localPart)) {
-        await recordUnclaimedRecipient(recipientAddress);
+        await recordUnclaimedRecipient(recipientAddress, 'malformed_local_part');
         return res.status(200).send('OK');
       }
 
@@ -127,7 +137,7 @@ export function registerEmailWebhookRoutes(router: Router): void {
         select: { id: true, organizationId: true },
       });
       if (!integration) {
-        await recordUnclaimedRecipient(recipientAddress);
+        await recordUnclaimedRecipient(recipientAddress, 'no_integration');
         return res.status(200).send('OK');
       }
       const organizationId = integration.organizationId;

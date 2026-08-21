@@ -332,44 +332,55 @@ Code work that is started and not finished.
   than the customer's story. That is the shared registry and it shipped ungated, so
   it owed a gate run — **which has since been made and came back clean** (run
   32311082225, hard-gated 74/74; no escalation fixture moved). Nothing outstanding.
-- [ ] **Conversation-to-sale attribution — schema landed, nothing writes it yet.**
-  Connect meaningful storefront-chat interactions and product recommendations to
-  later Shopify orders so merchants can distinguish direct, product-assisted, and
-  chat-assisted revenue. Report it as attribution rather than proof that the
+- [ ] **Conversation-to-sale attribution — built end to end; needs a live order.**
+  Connects storefront-chat interactions and product recommendations to later
+  Shopify orders so merchants can distinguish direct, product-assisted, and
+  chat-assisted revenue. Reported as attribution rather than proof that the
   conversation caused the purchase.
 
-  **The migration shipped ahead of the writer on purpose** (2026-08-21).
-  `conversation_attributions` holds one row per order, `direct` ones included —
-  that is not padding, it is the only way to report direct revenue, because
-  orders are read live from Shopify and persisted nowhere else, so there is no
-  existing total to divide. Three CHECK constraints keep the table honest: `kind`
-  and `match_basis` are closed sets, and a `direct` row may not name a thread
-  while an attributed row must, so the table cannot express "chat-assisted by
-  nothing in particular". Both foreign keys are `SET NULL` so deleting a thread
-  or redacting a customer does not retroactively change last month's totals.
+  **Schema, identity bridge, writer, classifier, hook and reporting all landed
+  2026-08-21.** `conversation_attributions` holds one row per order, `direct`
+  ones included — not padding, it is the only way to report direct revenue,
+  because orders are read live from Shopify and persisted nowhere else. Three
+  CHECK constraints keep the table honest, and both foreign keys are `SET NULL`
+  so deleting a thread or redacting a customer cannot retroactively change last
+  month's totals.
 
-  **The identity bridge is the interesting constraint.** Storefront shoppers are
-  anonymous — `platformId` is `shopify_chat:<uuid>` — and the session never
-  records a Shopify customer id, so there is nothing to join a later order to.
-  Verification is the only point where an address is proven, so
-  `storefront_chat_sessions.verified_email_hash` was added to capture it.
+  **The identity bridge was the interesting constraint, and it resolved to a
+  candidate column.** The shopper's address is supplied at `requestVerification`
+  and checked against the order there, but verification only *succeeds* in
+  `submitVerificationCode`, which holds no address. Writing the session hash at
+  request time would have marked a session email-verified before the code was
+  confirmed — anyone could claim any address. So the hash is parked on the
+  challenge row as `candidate_email_hash` and promoted onto the session only when
+  a correct code proves control. Chosen over the Shopify re-fetch because that
+  puts a network call in the one path that must not fail. First verification
+  wins, so a session cannot rewrite the identity it already proved.
 
-  **What is left, and one wrinkle found while building it.** The writer, the
-  classifier, the hook in `handleShopifyJob`, and a reporting surface are all
-  unwritten. The wrinkle: the shopper's email is supplied at
-  `requestVerification` and checked against the order there, but verification
-  only *succeeds* later in `submitVerificationCode`, which holds the order name
-  and session but not the email. Writing the hash at request time would mark a
-  session email-verified before the code is confirmed — anyone could claim any
-  address. So it needs either a candidate-hash column promoted on success, or a
-  Shopify re-fetch of the order at the success point, failing soft so a Shopify
-  blip cannot break verification itself.
+  **Two design points worth not undoing.** The hook sits *above* the
+  customer-identity guard in `handleShopifyJob`: a guest order with no customer
+  record is dropped for messaging but is still revenue, and the attributed share
+  means nothing without a complete denominator — there is a test that fails if it
+  is moved below. And only `orders/create` counts; Shopify fires `orders/updated`
+  on creation too, often twice as payment settles.
+
+  **Reporting is a briefing line, deliberately not a page.** Analytics/reports
+  were removed in the June 2026 cleanup, and the merchant reads the briefing on
+  their phone. The line states the join and not a cause — "3 of your 11 orders
+  came from someone who'd talked to me first" — and is scoped to the digest
+  cursor, not to current state, so it cannot re-report the same revenue every
+  morning.
+
+  **What is left is a live order**, end to end on the dev store: talk to the
+  widget, verify an email, buy something, confirm the row lands as
+  `chat_assisted` and the next briefing says so.
 
   **Known coverage limit, worth stating before anyone reads the numbers.** This
-  attributes shoppers who verified an email. The larger case — an anonymous
-  shopper who asks a pre-purchase question and then buys — has no server-side
-  identity bridge at all and would need cart-attribute plumbing in the theme
-  extension, which is a merchant-facing extension change and a new app version.
+  attributes shoppers who verified an email, or who already exist as a customer
+  record. The larger case — a wholly anonymous shopper who asks a pre-purchase
+  question and then buys — has no server-side identity bridge at all and would
+  need cart-attribute plumbing in the theme extension, which is a merchant-facing
+  extension change and a new app version.
 - [ ] **Expand confidence outside the curated coverage islands — routes, ratchet
   and the Clerk contract are done; two gaps remain.** The route half closed on
   2026-08-21. The "20 untested routes" figure was an overcount: sixteen lacked a
@@ -382,15 +393,20 @@ Code work that is started and not finished.
   billing. The ratchet went from eight groups to fourteen, every new threshold
   measured against a real coverage run first rather than picked and hoped for.
 
-  **What is left is two specific things, not a general "more coverage".**
+  **Plan execution is ratcheted as of 2026-08-21.** `plan-execution.ts` went from
+  **60.20% lines / 52.99% branches** to **94.89% / 91.45%**, and the group
+  (`plan-execution.ts` + `plan-cache.ts`) now aggregates **94.34% / 90.48%**
+  against the 80/70 bar — measured on a real coverage run, then admitted, which
+  is the order a ratchet requires. Fifteen groups now. The tests are guard-first
+  because that is where the risk is: a stale or edited plan, a duplicate step, a
+  replayed approval, a turn that throws after a provider already accepted the
+  mutation. The stubs for every guard case throw if execution is reached, so each
+  one asserts the plan was refused *before* a tool call could leave the process,
+  rather than merely that an error came back.
 
-  1. **Plan execution cannot be ratcheted yet.** `plan-execution.ts` and
-     `plan-cache.ts` aggregate **62.26% lines / 54.76% branches**, well under the
-     80/70 bar. It was measured and deliberately left out — admitting it would
-     have meant lowering the threshold to fit, which is the opposite of a
-     ratchet. Raise the coverage, then add the group.
-  2. **Recovery and reconciliation paths** are still thin, and are the one item
-     from the original audit that nothing here touched.
+  **What is left is one specific thing, not a general "more coverage".**
+  **Recovery and reconciliation paths** are still thin, and are the one item from
+  the original audit that nothing here touched.
 
   The **real-Clerk browser contract now works**, which is the part that was worse
   than the entry described. It was gated on `vars.CLERK_E2E_ENABLED == 'true'`, a
@@ -401,31 +417,6 @@ Code work that is started and not finished.
   anything. The gate now runs unless explicitly disabled, fires on PRs touching
   auth-sensitive paths, and fails loudly on a missing credential instead of
   skipping. First real run found two stale assertions (see below); it passes 9/9.
-- [ ] **The inbound email webhook answers 200 for mail it silently discards.**
-  Found 2026-08-21 while fixing the Clerk contract, where it masked the real
-  cause twice in one sitting. `webhooks-email.ts` claims a message by requiring
-  the recipient's **local part to be the organization UUID**: it regex-tests the
-  local part, then looks the integration up by `organizationId: localPart`.
-  Every miss — non-UUID local part, no matching integration, missing
-  `OriginalRecipient` — calls `recordUnclaimedRecipient` and returns
-  `200 OK`. Nothing in the response distinguishes "delivered" from "dropped".
-
-  In production that means an inbound misconfiguration looks perfectly healthy
-  from the sender's side, which is the same trap already recorded against the
-  Postmark rebuild ("a 200 from the inbound hook can mean silently unclaimed").
-  The 200 itself is probably correct — Postmark should not retry a message we
-  will never claim — so the fix is observability, not status codes: unclaimed
-  recipients are already recorded, so surface them as an ops alert when the rate
-  is non-trivial rather than leaving them in a table nobody reads.
-
-- [ ] **A malformed `customerId` path param 500s instead of 404ing.**
-  `GET /api/threads/customer/<garbage>` reaches Prisma with a non-UUID value and
-  throws `Inconsistent column data`, which `handleApiError` turns into a 500. The
-  route is authenticated and org-scoped so there is no security consequence — the
-  cost is that client-side typos are indistinguishable from server faults in
-  Sentry. Noted rather than fixed because the fix is added input validation and
-  the standing rule is not to add error handling beyond what a task asks for.
-
 - [ ] **Split the highest-risk multi-purpose modules along operational seams.**
   Start with `digest-briefing.ts`, `digest.ts`, `reconciliation-probes.ts`,
   `gmail-sync.ts`, `planning-notifications.ts`, and the database package barrel.

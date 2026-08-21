@@ -5,6 +5,8 @@ import { CHANNEL_TYPE } from '@shopkeeper/agent/thread-constants';
 
 export const dynamic = 'force-dynamic';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export const GET = withOrgRoute<{ customerId: string }>(
   {
     context: 'Customer threads GET',
@@ -13,6 +15,10 @@ export const GET = withOrgRoute<{ customerId: string }>(
   },
   async ({ org, request, params }) => {
     const { customerId } = params;
+    if (!UUID_RE.test(customerId)) {
+      return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
+    }
+
     const { searchParams } = new URL(request.url);
     const limitParam = Number(searchParams.get('limit'));
     const limit = Number.isInteger(limitParam) && limitParam > 0

@@ -63,6 +63,17 @@ const groups = [
       || file.endsWith('/src/workers/operator-event.ts'),
   },
   {
+    // The approve -> execute path. Its guards are the only thing standing
+    // between a stale or edited plan and a real provider mutation, and a
+    // replayed approval is a double refund. Held out of this ratchet until
+    // 2026-08-21 because it measured 62.26/54.76 and admitting it would have
+    // meant lowering the bar to fit.
+    name: 'agent plan execution',
+    report: 'packages/agent/coverage/coverage-summary.json',
+    matches: (file) => file.endsWith('/src/plan-execution.ts')
+      || file.endsWith('/src/plan-cache.ts'),
+  },
+  {
     // Grounding rewrites agent-authored prose after planning. No eval fixture
     // asserts on escalation reason text and judge.ts grades only replyText, so
     // this ratchet is the only automated cover these functions have.
