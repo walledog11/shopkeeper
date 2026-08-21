@@ -1,6 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { cn } from "@/lib/ui/cn";
 
 /** Fades content up into place the first time it scrolls into view. */
 export function Reveal({
@@ -12,10 +13,40 @@ export function Reveal({
   delay?: number;
   className?: string;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [shown, setShown] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setShown(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+        setShown(true);
+        observer.disconnect();
+      },
+      { threshold: 0.12, rootMargin: "0px 0px -10% 0px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <div
-      className={`animate-[m-rise_0.7s_ease-out_both] motion-reduce:animate-none ${className}`}
-      style={delay ? { animationDelay: `${delay}ms` } : undefined}
+      ref={ref}
+      className={cn(
+        shown
+          ? "animate-[m-rise_0.7s_ease-out_both] motion-reduce:animate-none"
+          : "opacity-0",
+        className,
+      )}
+      style={shown && delay ? { animationDelay: `${delay}ms` } : undefined}
     >
       {children}
     </div>

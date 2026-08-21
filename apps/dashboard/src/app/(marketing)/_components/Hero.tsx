@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { GlassLink } from "./GlassLink";
 import { InkDoodle } from "./Marginalia";
+import { HIRE_CTA_LABEL } from "@/lib/brand";
 
 function rise(delayMs: number) {
   return {
@@ -48,29 +49,22 @@ export function Hero() {
       </h1>
 
       <p
-        className="mx-auto mb-9 max-w-[min(540px,88vw)] text-[15px] leading-[1.45] text-stone-600 sm:text-[16px]"
+        className="mx-auto mb-7 max-w-[min(540px,88vw)] text-[15px] leading-[1.45] text-stone-600 sm:text-[16px]"
         style={rise(160)}
       >
         It answers your customers overnight, fixes orders right in Shopify, and texts you the moment something needs your call.
       </p>
 
-      <div className="flex flex-wrap items-center justify-center gap-3" style={rise(240)}>
+      <div className="mb-10 flex flex-wrap items-center justify-center gap-3" style={rise(240)}>
         <GlassLink href="/signup" variant="primary" className="px-6 py-3">
-          Hire Shopkeeper — free for 14 days
+          {HIRE_CTA_LABEL}
         </GlassLink>
         <GlassLink href="#how" variant="secondary" className="px-6 py-3">
           Watch it work ↓
         </GlassLink>
       </div>
 
-      <p
-        className="mx-auto mt-5 max-w-[min(520px,88vw)] -rotate-[0.6deg] text-[17px] leading-none text-stone-600 [font-family:var(--m-hand)]"
-        style={rise(300)}
-      >
-        Live today for support — order ops, inventory &amp; suppliers on the way.
-      </p>
-
-      <div style={rise(360)} className="relative mt-11">
+      <div style={rise(320)} className="relative mt-2">
         {/* Warm morning-light wash behind the demo film — placeholder photography,
             swap /atmosphere/hero-light.jpg for the final shot. */}
         <div
@@ -98,6 +92,13 @@ export function Hero() {
           className="mx-auto aspect-[4/3] w-full max-w-[880px] rounded-[28px] bg-[#f6f2eb] shadow-[0_40px_80px_-30px_rgba(22,20,19,0.4)]"
         />
       </div>
+
+      <p
+        className="mx-auto mt-5 max-w-[min(520px,88vw)] -rotate-[0.6deg] text-[17px] leading-none text-stone-600 [font-family:var(--m-hand)]"
+        style={rise(380)}
+      >
+        Live today for support — order ops, inventory &amp; suppliers on the way.
+      </p>
     </section>
   );
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useClerk, useUser } from "@clerk/nextjs";
 import { LayoutDashboard, LogOut } from "lucide-react";
 import { OrgAvatar } from "@/components/OrgAvatar";
+import { NAV_CTA_LABEL } from "@/lib/brand";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,11 +12,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const quietLinkClass =
-  "inline-flex items-center whitespace-nowrap px-2 py-2 text-sm font-medium text-[#2b2118] transition-colors hover:text-[var(--m-quill)] sm:text-[15px]";
+const quietLinkClass = "m-nav-login";
 
-const primaryLinkClass =
-  "m-glass-btn m-glass-btn-primary whitespace-nowrap px-4 py-2 text-sm sm:px-5 sm:py-2.5";
+const primaryLinkClass = "m-nav-cta";
 
 function AuthNavLoading() {
   return (
@@ -24,8 +23,8 @@ function AuthNavLoading() {
       role="status"
       aria-label="Loading account actions"
     >
-      <span className="h-9 w-14 animate-pulse rounded-full bg-[#2b2118]/8 sm:w-16" />
-      <span className="h-9 w-20 animate-pulse rounded-full bg-[#2b2118]/12 sm:w-24" />
+      <span className="hidden h-10 w-16 animate-pulse rounded-full bg-[#2b2118]/8 md:inline-flex" />
+      <span className="h-11 w-[7.5rem] animate-pulse rounded-full bg-[#2b2118]/12 md:h-10" />
     </div>
   );
 }
@@ -42,12 +41,12 @@ function AccountMenu() {
         <button
           type="button"
           aria-label={`Open account menu for ${name}`}
-          className="flex size-9 shrink-0 items-center justify-center rounded-full outline-none ring-offset-2 transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-[#2b2118] sm:size-10"
+          className="flex size-10 shrink-0 items-center justify-center rounded-full outline-none ring-offset-2 transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-[#2b2118]"
         >
           <OrgAvatar
             name={name}
             imageUrl={user?.imageUrl}
-            className="size-8 border border-[#2b2118]/15 bg-[#efe9df] text-xs font-semibold text-[#2b2118] sm:size-9"
+            className="size-9 border border-[#2b2118]/15 bg-[#efe9df] text-sm font-semibold text-[#2b2118]"
           />
         </button>
       </DropdownMenuTrigger>
@@ -89,8 +88,7 @@ export function AuthNavLinks() {
           Log in
         </Link>
         <Link href="/signup" className={primaryLinkClass}>
-          <span className="sm:hidden">Sign up</span>
-          <span className="hidden sm:inline">Sign up free</span>
+          {NAV_CTA_LABEL}
         </Link>
       </>
     );

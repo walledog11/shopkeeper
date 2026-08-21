@@ -13,6 +13,7 @@ import type { ChatMessage } from "./chat-demo/shared";
 type ChatVariant = "instagram" | "imessage";
 
 interface Feature {
+  id: string;
   num: string;
   title: React.ReactNode;
   body: React.ReactNode;
@@ -32,6 +33,7 @@ interface Feature {
 
 const FEATURES: Feature[] = [
   {
+    id: "how-replies",
     num: "01",
     title: (
       <>
@@ -71,6 +73,7 @@ const FEATURES: Feature[] = [
     },
   },
   {
+    id: "how-approvals",
     num: "02",
     title: (
       <>
@@ -114,6 +117,7 @@ const FEATURES: Feature[] = [
     },
   },
   {
+    id: "how-store",
     num: "03",
     title: (
       <>
@@ -249,6 +253,24 @@ function MobileCarousel() {
   const touchStart = useRef<{ x: number; y: number } | null>(null);
 
   const go = (next: number) => setActive(Math.min(FEATURES.length - 1, Math.max(0, next)));
+
+  useEffect(() => {
+    const applyHash = () => {
+      if (window.matchMedia("(min-width: 768px)").matches) return;
+      const hash = window.location.hash.slice(1);
+      const index = FEATURES.findIndex((feature) => feature.id === hash);
+      if (index < 0) return;
+      setActive(index);
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      document.getElementById("how")?.scrollIntoView({
+        behavior: reduce ? "auto" : "smooth",
+        block: "start",
+      });
+    };
+    applyHash();
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
+  }, []);
 
   return (
     <div
@@ -398,9 +420,10 @@ export function Features() {
             {FEATURES.map((f, i) => (
               <div
                 key={f.num}
+                id={f.id}
                 ref={el => { stepRefs.current[i] = el; }}
                 data-step={i}
-                className="flex min-h-[74vh] flex-col justify-center"
+                className="flex min-h-[74vh] scroll-mt-24 flex-col justify-center"
               >
                 <div
                   className={`transition-opacity duration-500 motion-reduce:transition-none ${

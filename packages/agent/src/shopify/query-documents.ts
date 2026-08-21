@@ -24,6 +24,7 @@ import {
   ORDER_FULFILLMENT_ORDERS_QUERY,
 } from "./fulfillment.js";
 import { CREATED_ORDER_LOOKUP_QUERY } from "./order-creation.js";
+import { PRODUCT_SEARCH_QUERY } from "./products.js";
 import {
   CUSTOMER_STORE_CREDIT_TRANSACTIONS_QUERY,
   GIFT_CARDS_BY_CODE_QUERY,
@@ -95,5 +96,9 @@ export const SHOPIFY_QUERY_DOCUMENTS: Record<string, ShopifyQueryDocument> = {
   shopCurrency: {
     document: SHOP_CURRENCY_QUERY,
     variables: {},
+  },
+  productSearch: {
+    document: PRODUCT_SEARCH_QUERY,
+    variables: { query: "shopkeeper-validation", first: 1 },
   },
 };

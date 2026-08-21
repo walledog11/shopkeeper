@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
-const googleSansFlex =
-  '"Google Sans Flex", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+const generalSans =
+  '"General Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
@@ -11,9 +11,9 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
         {
           backgroundColor: "#f6f2eb",
           color: "#2b2118",
-          "--font-google-sans-flex": googleSansFlex,
+          "--font-general-sans": generalSans,
           "--m-serif": "Georgia, 'Times New Roman', serif",
-          fontFamily: googleSansFlex,
+          fontFamily: generalSans,
         } as React.CSSProperties
       }
     >

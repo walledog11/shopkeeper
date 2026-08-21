@@ -2,41 +2,40 @@
 
 > ## Rollback target — read this before rolling anything back
 >
-> **Verified against `npx shopify app versions list --json` on 2026-08-18.**
-> Twenty versions exist, `-7` through `-26`. The active release is
-> **`shopkeeper-production-26`**.
->
-> **To undo the most recent release, go to `-25`, not `-8`.**
->
-> ```sh
-> npx shopify app release --version shopkeeper-production-25
-> ```
->
-> The rest of this file was written when `-9` was current and calls `-8` "the
-> rollback path". `-8` does still exist and is still re-releasable — the claim is
-> not false, it is *incomplete*, which is worse in an incident. Seventeen versions
-> shipped after `-9` without being recorded here, so releasing `-8` today reverts
-> eighteen versions: the `[app_proxy]` block the storefront chat proxy depends on,
-> the entire chat widget, and the `compliance_topics` declarations.
->
-> | Version | Date | What reverting *past* it costs you |
-> | --- | --- | --- |
-> | `-26` | 2026-08-18 | active — compliance webhooks + current widget |
-> | `-25` | 2026-08-15 | **one-step rollback target**; last release before `-26` |
-> | `-15`…`-25` | 2026-08-15 | chat widget UI, eleven releases in one night |
-> | `-13`, `-14` | 2026-08-12 | M1.5 verification widget card |
-> | `-9`…`-12` | 2026-08-08/10 | `write_app_proxy` scope + `[app_proxy]` block (M0a/M0b) |
-> | `-8` | 2026-08-03 | pre-storefront-chat; app proxy gone entirely |
->
-> Re-derive this table rather than trusting it — the drift it documents took
-> eleven days to notice:
+> **This file no longer records which version is active or which is the one-step
+> rollback target.** It used to, and it was wrong for eleven days: seventeen
+> versions shipped between `-9` and `-26` with nothing written down, so the
+> rollback target here pointed eighteen versions back. Releasing is a CLI call and
+> recording was a manual edit — that asymmetry guarantees drift, so the
+> bookkeeping is gone rather than repaired. Ask the CLI instead; it is the only
+> source of truth:
 >
 > ```sh
 > npx shopify app versions list --json
 > ```
 >
-> (`versions list` without `--json` paginates and blocks on input.) Everything
-> below remains accurate as M0a/M0b history.
+> (`versions list` without `--json` paginates and blocks on input.) The active
+> release is the one with `"status": "active"`. **The one-step rollback target is
+> the next one below it by `createdAt` — not the oldest, and not `-8`.** Then:
+>
+> ```sh
+> npx shopify app release --version <tag>
+> ```
+>
+> What the CLI *cannot* tell you is what a given rollback costs you, so that is
+> all this table keeps. The boundaries are historical and do not move; only the
+> question "how far back am I going" changes.
+>
+> | Reverting past… | Costs you |
+> | --- | --- |
+> | `-26` (2026-08-18) | the `compliance_topics` declarations |
+> | `-15`…`-25` (2026-08-15) | the chat widget UI work — eleven releases in one night |
+> | `-13`, `-14` (2026-08-12) | the M1.5 verification widget card |
+> | `-9`…`-12` (2026-08-08/10) | the `write_app_proxy` scope and the `[app_proxy]` block (M0a/M0b) |
+> | `-8` (2026-08-03) | the app proxy entirely — pre-storefront-chat |
+>
+> So `-8` is re-releasable and always was, but reaching for it reverts the whole
+> storefront chat surface. Everything below remains accurate as M0a/M0b history.
 
 > **Current webhook configuration (2026-08-09):** the historical notes below
 > describe the pre-migration state. The five order/uninstall subscriptions now
