@@ -5,6 +5,7 @@ import {
   emptyIntents,
   CLASSIFIER_SYSTEM_PROMPT,
   CLASSIFIER_VERSION,
+  CLASSIFIER_OUTPUT_SCHEMA,
   classifierSystemPrompt,
 } from './email-classification.js';
 
@@ -113,7 +114,74 @@ describe('classifierSignals', () => {
       version: CLASSIFIER_VERSION,
       language: 'fr',
       intents: result.intents,
+      requestFacts: result.requestFacts,
     });
+  });
+});
+
+describe('parseClassifierJson — requestFacts', () => {
+  it('parses the fields the briefing composes its line from', () => {
+    const result = parseClassifierJson(fullResponse({
+      requestFacts: {
+        ask: 'refund',
+        subject: 'the olive linen napkins',
+        order: '#1024',
+        deadline: '2026-08-23',
+        deadlineText: 'before the weekend',
+        alternative: 'exchange',
+      },
+    }));
+
+    expect(result.requestFacts).toEqual({
+      ask: 'refund',
+      subject: 'the olive linen napkins',
+      order: '#1024',
+      deadline: '2026-08-23',
+      deadlineText: 'before the weekend',
+      alternative: 'exchange',
+    });
+  });
+
+  // Threads classified before the field existed have none, and must stay
+  // readable rather than costing the whole classification.
+  it('defaults to an empty ask when the field is absent', () => {
+    const result = parseClassifierJson(fullResponse());
+    expect(result.requestFacts.ask).toBe('none');
+    expect(result.requestFacts.deadline).toBeNull();
+  });
+
+  it('rejects an ask outside the vocabulary rather than passing it through', () => {
+    const result = parseClassifierJson(fullResponse({
+      requestFacts: { ask: 'wire_transfer', order: '#1024' },
+    }));
+    expect(result.requestFacts.ask).toBe('none');
+    expect(result.requestFacts.order).toBe('#1024');
+  });
+
+  it('normalizes an order written without the hash', () => {
+    const result = parseClassifierJson(fullResponse({
+      requestFacts: { ask: 'cancel', order: 'order 1024' },
+    }));
+    expect(result.requestFacts.order).toBe('#1024');
+  });
+
+  it('drops a deadline that is not an ISO date, keeping the words', () => {
+    const result = parseClassifierJson(fullResponse({
+      requestFacts: { ask: 'refund', deadline: 'Friday', deadlineText: 'by Friday' },
+    }));
+    expect(result.requestFacts.deadline).toBeNull();
+    expect(result.requestFacts.deadlineText).toBe('by Friday');
+  });
+});
+
+describe('CLASSIFIER_OUTPUT_SCHEMA', () => {
+  // The classifier used to ask for JSON in prose on every inbound message, so a
+  // malformed field cost the whole classification.
+  it('constrains every field the prompt asks for', () => {
+    expect(CLASSIFIER_OUTPUT_SCHEMA.required).toContain('requestFacts');
+    expect(CLASSIFIER_OUTPUT_SCHEMA.properties.requestFacts.properties.ask.enum)
+      .toContain('refund');
+    expect(CLASSIFIER_OUTPUT_SCHEMA.additionalProperties).toBe(false);
   });
 });
 

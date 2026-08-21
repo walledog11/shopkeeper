@@ -12,13 +12,18 @@ import {
   resolveContextBudgetMode,
 } from '@shopkeeper/agent/context-budget';
 import {
+  CLASSIFIER_TAGS,
   CLASSIFIER_TEXT_LIMITS,
   isClassifierTag,
   normalizeClassifierLanguage,
   emptyIntents,
+  emptyRequestFacts,
+  parseRequestFacts,
+  REQUEST_ASKS,
   INTENT_KEYS,
   type ClassifierIntents,
   type ClassifierTag,
+  type RequestFacts,
 } from '@shopkeeper/agent/classifier-signals';
 import logger from '../logger.js';
 import { CHANNEL, MODEL } from '../constants.js';
@@ -41,20 +46,25 @@ export interface ClassificationResult {
   // this is the delta, and it is what the planner is instructed with.
   requestSummary: string;
   requestDisposition: DbThreadRequestDisposition;
+  // The same request as fields. The briefing composes its line from these, so
+  // length is controlled by choosing what to render rather than by cutting a
+  // sentence mid-word.
+  requestFacts: RequestFacts;
 }
 
 // Bumped whenever the classifier's output contract changes so persisted
 // signals can be interpreted against the schema that produced them.
-// 4 added requestSummary/requestDisposition.
-export const CLASSIFIER_VERSION = 4;
+// 4 added requestSummary/requestDisposition. 5 added requestFacts.
+export const CLASSIFIER_VERSION = 5;
 
 // Shape persisted to Thread.classifierSignals (JSONB). Kept minimal — a version
-// tag plus the two new signal groups.
+// tag plus the signal groups.
 export function classifierSignals(result: ClassificationResult) {
   return {
     version: CLASSIFIER_VERSION,
     language: result.language,
     intents: result.intents,
+    requestFacts: result.requestFacts,
   };
 }
 
@@ -86,8 +96,66 @@ Read the customer message and produce these fields in strict JSON:
   - "informational": a genuine question answerable by looking something up or stating a policy — where an order is, whether you ship somewhere, what the return window is.
   - "merchant_action": asks for something that changes an order, money, or inventory — refund, cancel, return, exchange, address edit — or otherwise needs the shop owner's decision.
   - "unclear": there is a request but you cannot tell what it needs. Prefer this over guessing.
+- "requestFacts": the same current request stated as fields rather than a sentence, so a phone briefing can lead with whichever one matters. Describe only what the customer actually said; never infer.
+  - "ask": exactly one of "refund", "cancel", "return", "exchange", "address_change", "order_status", "product_question", "policy_question", "complaint", "other", "none". Use "none" when nothing is being asked.
+  - "subject": the product or thing the request is about, in at most six words, with no order number ("the olive linen napkins"). Null when the request names none.
+  - "order": the order the request concerns, as it was written ("#1024"). Null when none was given.
+  - "deadline": the date the customer needs this by, as YYYY-MM-DD, resolved against the "Today" line in the message. Null unless they named or implied a specific date.
+  - "deadlineText": the customer's own words that set that date ("before Friday", "by the 30th"), at most 40 characters. Null when they named no timing.
+  - "alternative": a second option the customer said they would also accept, from the same list as "ask" ("refund or exchange" → ask "refund", alternative "exchange"). Null when they offered none.
 
-Respond ONLY in strict JSON: {"title":"...","summary":"...","tag":"...","classification":"...","reason":"...","language":"en","intents":{"mutative_request":false,"policy_question":false,"order_status":false,"fraud_signals":false,"contradiction":false,"out_of_scope_commercial":false,"forwarded_injection":false,"no_request":false},"requestSummary":"...","requestDisposition":"..."}`;
+Respond ONLY in strict JSON: {"title":"...","summary":"...","tag":"...","classification":"...","reason":"...","language":"en","intents":{"mutative_request":false,"policy_question":false,"order_status":false,"fraud_signals":false,"contradiction":false,"out_of_scope_commercial":false,"forwarded_injection":false,"no_request":false},"requestSummary":"...","requestDisposition":"...","requestFacts":{"ask":"none","subject":null,"order":null,"deadline":null,"deadlineText":null,"alternative":null}}`;
+
+const REQUEST_DISPOSITIONS: readonly DbThreadRequestDisposition[] = [
+  'none',
+  'acknowledgement',
+  'informational',
+  'merchant_action',
+  'unclear',
+];
+
+// The classifier runs on every inbound message and used to ask for JSON in
+// prose, so a malformed field cost a whole classification. The shape is declared
+// once here and enforced by the API instead.
+const NULLABLE_STRING = { type: ['string', 'null'] } as const;
+
+export const CLASSIFIER_OUTPUT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    title: { type: 'string', maxLength: CLASSIFIER_TEXT_LIMITS.title },
+    summary: { type: 'string', maxLength: CLASSIFIER_TEXT_LIMITS.summary },
+    tag: { type: 'string', enum: [...CLASSIFIER_TAGS] },
+    classification: { type: 'string', enum: ['genuine', 'questionable', 'filtered'] },
+    reason: { type: 'string', maxLength: CLASSIFIER_TEXT_LIMITS.reason },
+    language: { type: 'string' },
+    intents: {
+      type: 'object',
+      additionalProperties: false,
+      properties: Object.fromEntries(INTENT_KEYS.map((key) => [key, { type: 'boolean' }])),
+      required: [...INTENT_KEYS],
+    },
+    requestSummary: { type: 'string', maxLength: CLASSIFIER_TEXT_LIMITS.summary },
+    requestDisposition: { type: 'string', enum: [...REQUEST_DISPOSITIONS] },
+    requestFacts: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        ask: { type: 'string', enum: [...REQUEST_ASKS] },
+        subject: NULLABLE_STRING,
+        order: NULLABLE_STRING,
+        deadline: NULLABLE_STRING,
+        deadlineText: NULLABLE_STRING,
+        alternative: { type: ['string', 'null'], enum: [...REQUEST_ASKS, null] },
+      },
+      required: ['ask', 'subject', 'order', 'deadline', 'deadlineText', 'alternative'],
+    },
+  },
+  required: [
+    'title', 'summary', 'tag', 'classification', 'reason', 'language',
+    'intents', 'requestSummary', 'requestDisposition', 'requestFacts',
+  ],
+} as const;
 
 // Storefront chat is the one channel where nobody has identified themselves: the
 // person can type any name they like and most type none at all. "The customer"
@@ -208,14 +276,6 @@ function parseLanguage(raw: unknown): string {
   return normalizeClassifierLanguage(raw);
 }
 
-const REQUEST_DISPOSITIONS: readonly DbThreadRequestDisposition[] = [
-  'none',
-  'acknowledgement',
-  'informational',
-  'merchant_action',
-  'unclear',
-];
-
 // Falls back to `unclear` rather than `none`, and that direction matters: only
 // merchant_action and unclear may park work for the merchant, so an unreadable
 // verdict must leave the request visible. Defaulting to `none` would let a
@@ -248,6 +308,7 @@ export function parseClassifierJson(raw: string): ClassificationResult {
     intents?: unknown;
     requestSummary?: unknown;
     requestDisposition?: unknown;
+    requestFacts?: unknown;
   };
   const summary = requireBoundedClassifierText(parsed.summary, 'summary');
   const reason = requireBoundedClassifierText(parsed.reason, 'reason');
@@ -272,6 +333,7 @@ export function parseClassifierJson(raw: string): ClassificationResult {
       ? parsed.requestSummary.trim().slice(0, CLASSIFIER_TEXT_LIMITS.summary)
       : '',
     requestDisposition: parseRequestDisposition(parsed.requestDisposition),
+    requestFacts: parseRequestFacts(parsed.requestFacts),
   };
 }
 
@@ -295,6 +357,7 @@ function deterministicE2EClassification(subject: string, body: string): Classifi
     language: 'en',
     requestSummary: '',
     requestDisposition: 'none',
+    requestFacts: emptyRequestFacts(),
   };
 }
 
@@ -319,9 +382,12 @@ export async function classifyAndSummarizeNewEmail(
     const contextBudgetMode = resolveContextBudgetMode();
     const boundedInput = buildBoundedEmailClassifierInput(subject, body);
     const legacyInput = `Subject: ${subject}\n\nBody: ${body}`;
-    const classifierInput = contextBudgetMode === 'enforce'
+    const bodyInput = contextBudgetMode === 'enforce'
       ? boundedInput
       : legacyInput;
+    // "by Friday" is only a date relative to something. Kept in the user message
+    // rather than the system prompt so the cached prefix stays byte-stable.
+    const classifierInput = `Today: ${new Date().toISOString().slice(0, 10)}\n\n${bodyInput}`;
 
     if (contextBudgetMode !== 'off') {
       logger.info({
@@ -336,8 +402,14 @@ export async function classifyAndSummarizeNewEmail(
 
     const response = await anthropic.messages.create({
       model: MODEL.CLAUDE,
-      max_tokens: 400,
+      max_tokens: 700,
       system: CLASSIFIER_SYSTEM_PROMPT,
+      output_config: {
+        format: {
+          type: 'json_schema',
+          schema: CLASSIFIER_OUTPUT_SCHEMA,
+        },
+      },
       messages: [{ role: 'user', content: classifierInput }],
     });
     const usage = readModelUsage(response);
