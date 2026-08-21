@@ -495,3 +495,123 @@ export function groundEscalationReasons(
     };
   });
 }
+
+// The same invariant applied to what the customer reads. `planAgent` executes
+// nothing, so at plan time a reply claiming the agent has done, is doing, or
+// will do something describes an action that does not exist. The escalation
+// grounding above protects a field the merchant reads on a card and can
+// challenge; this one protects `send_reply.text` and `send_email.body`, which
+// the customer reads with no one in between whenever the plan auto-executes.
+//
+// Deliberately narrower than the escalation patterns in two ways, because a
+// false positive here mutilates a truthful reply to a customer:
+//
+//  - Agentless passive is not matched. "Your refund has been processed" is the
+//    normal shape of a grounded report read out of `get_order`, not a claim the
+//    agent acted.
+//  - First person plural is not matched. "We shipped your order Monday" reads
+//    as the store, so it can be grounded the same way; only "I" is
+//    unambiguously the agent speaking about itself.
+//
+// What is left is the fabrication that has actually been observed: the agent
+// attributing a mutation to itself that nothing in the plan performs.
+
+const MUTATION_VERB_PROGRESSIVE =
+  "initiating|issuing|processing|creating|starting|placing|sending|applying|approving|arranging|completing|refunding|returning|cancell?ing|exchanging|fulfill?ing|shipping|updating|changing|editing|opening|setting up";
+
+const MUTATION_VERB_BASE =
+  "initiate|issue|process|create|start|place|send|apply|approve|arrange|complete|refund|return|cancel|exchange|fulfill?|ship|update|change|edit|open|set up";
+
+// `(?!\s+you\b)` keeps the communication idiom out of it: "I'll update you once
+// the refund clears" promises a message, not a mutation. It does not block
+// "updating your address", because `\byou\b` cannot match inside "your".
+const REPLY_MUTATION_CLAIM_PATTERNS = [
+  // Past: "I've issued the refund", "I already cancelled the order".
+  new RegExp(
+    `\\bi\\b\\s*(?:'ve|'d)?\\s*(?:have|had)?\\s*(?:just|already)?\\s*(?:${MUTATION_VERB})\\b(?!\\s+you\\b)[^.!?]{0,40}?\\b(?:${MUTATION_SUBJECT})\\b`,
+    "i",
+  ),
+  // In progress: "I'm opening a return request for order #1024".
+  new RegExp(
+    `\\bi\\b\\s*(?:'m|am)\\s+(?:currently|now|already)?\\s*(?:${MUTATION_VERB_PROGRESSIVE})\\b(?!\\s+you\\b)[^.!?]{0,40}?\\b(?:${MUTATION_SUBJECT})\\b`,
+    "i",
+  ),
+  // Promised: "I'll issue the refund", "I will cancel that order".
+  new RegExp(
+    `\\bi\\b\\s*(?:'ll|will)\\s+(?:go ahead and|now)?\\s*(?:${MUTATION_VERB_BASE})\\b(?!\\s+you\\b)[^.!?]{0,40}?\\b(?:${MUTATION_SUBJECT})\\b`,
+    "i",
+  ),
+];
+
+// Stands in only when every sentence was a fabricated claim. Honest in both
+// places it can land: an escalated thread where a human follows up, and a plan
+// the merchant is about to read on a card.
+export const UNGROUNDED_REPLY_FALLBACK = "Let me look into this and follow up.";
+
+const REPLY_TEXT_FIELDS: Record<string, string> = {
+  send_reply: "text",
+  send_email: "body",
+};
+
+// Sentence-level rather than whole-field, because a reply is usually mostly
+// good — the fabricated promise is one sentence among several that answer the
+// question. Split per line first so a greeting or signature on its own line
+// survives a dropped sentence elsewhere.
+function stripUngroundedSentences(text: string): { kept: string; dropped: string[] } {
+  const dropped: string[] = [];
+  const kept = text
+    .split("\n")
+    .map((line) => {
+      const sentences = line.match(/[^.!?]+[.!?]*\s*/g);
+      if (!sentences) return line;
+      return sentences
+        .filter((sentence) => {
+          const normalized = sentence.replace(/[‘’]/g, "'");
+          if (CUSTOMER_ATTRIBUTION.test(normalized)) return true;
+          if (!REPLY_MUTATION_CLAIM_PATTERNS.some((pattern) => pattern.test(normalized))) return true;
+          dropped.push(sentence.trim());
+          return false;
+        })
+        .join("");
+    })
+    .join("\n");
+  return { kept, dropped };
+}
+
+export function groundReplyText(
+  rawToolCalls: readonly RawToolCall[],
+  logContext: { orgId: string; threadId: string },
+): RawToolCall[] {
+  if (rawToolCalls.some((toolCall) => TOOL_CATEGORIES[toolCall.name] === "action")) {
+    return [...rawToolCalls];
+  }
+
+  return rawToolCalls.map((toolCall) => {
+    const field = REPLY_TEXT_FIELDS[toolCall.name];
+    if (!field) return toolCall;
+    const input = toolCall.input;
+    if (!input || typeof input !== "object" || Array.isArray(input)) return toolCall;
+    const text = (input as Record<string, unknown>)[field];
+    if (typeof text !== "string" || !text.trim()) return toolCall;
+
+    const { kept, dropped } = stripUngroundedSentences(text);
+    if (dropped.length === 0) return toolCall;
+
+    logger.warn(
+      {
+        ...logContext,
+        purpose: "agent_plan_ungrounded_reply_text",
+        tool: toolCall.name,
+        droppedSentences: dropped,
+      },
+      "[agent:plan] reply text claimed a mutation the plan never proposed",
+    );
+    return {
+      ...toolCall,
+      input: {
+        ...(input as Record<string, unknown>),
+        [field]: kept.trim() || UNGROUNDED_REPLY_FALLBACK,
+      },
+    };
+  });
+}
