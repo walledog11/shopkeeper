@@ -13,6 +13,7 @@ export const OPS_ALERT_CATEGORIES = [
   'provider_cleanup',
   'agent_failure',
   'gmail_inbound',
+  'inbound_unclaimed',
 ] as const;
 
 export type OpsAlertCategory = typeof OPS_ALERT_CATEGORIES[number];

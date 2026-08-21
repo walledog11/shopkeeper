@@ -86,6 +86,30 @@ describe('POST /webhooks/email/inbound', () => {
     expect(queueAddSpy).not.toHaveBeenCalled();
   });
 
+  it('records why each dropped message was unclaimed, not just that it was', async () => {
+    // The 200 above is indistinguishable from delivery, so the reason is the
+    // only thing that tells an operator which misconfiguration to go and fix.
+    const cases: Array<[Record<string, string>, string]> = [
+      [{ OriginalRecipient: 'nobody@unknown.com' }, 'malformed_local_part'],
+      [{ OriginalRecipient: `${crypto.randomUUID()}@inbound.shopkeeper.delivery` }, 'no_integration'],
+      [{}, 'missing_recipient'],
+    ];
+
+    for (const [overrides, expectedReason] of cases) {
+      mockLogger.info.mockClear();
+
+      const res = await request(app)
+        .post('/webhooks/email/inbound')
+        .send({ From: 'Spam <x@y.com>', Subject: 'Nope', TextBody: 'test', ...overrides });
+
+      expect(res.status).toBe(200);
+      const unclaimed = mockLogger.info.mock.calls.find(
+        ([fields]) => (fields as { event?: string })?.event === 'unclaimed_recipient',
+      );
+      expect(unclaimed?.[0]).toMatchObject({ reason: expectedReason });
+    }
+  });
+
   it('returns 400 when From or TextBody is missing', async () => {
     const res = await request(app)
       .post('/webhooks/email/inbound')

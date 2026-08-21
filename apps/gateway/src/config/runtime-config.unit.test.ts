@@ -109,6 +109,7 @@ describe('getGatewayOpsAlertConfig', () => {
       webhookSignatureThreshold: 5,
       providerSendThreshold: 3,
       agentFailureThreshold: 3,
+      unclaimedRecipientThreshold: 5,
     });
   });
 
@@ -122,6 +123,7 @@ describe('getGatewayOpsAlertConfig', () => {
     vi.stubEnv('WEBHOOK_SIGNATURE_ALERT_THRESHOLD', '9');
     vi.stubEnv('PROVIDER_SEND_ALERT_THRESHOLD', '4');
     vi.stubEnv('AGENT_FAILURE_ALERT_THRESHOLD', '6');
+    vi.stubEnv('UNCLAIMED_RECIPIENT_ALERT_THRESHOLD', '8');
 
     expect(getGatewayOpsAlertConfig()).toEqual({
       enabled: false,
@@ -133,6 +135,7 @@ describe('getGatewayOpsAlertConfig', () => {
       webhookSignatureThreshold: 9,
       providerSendThreshold: 4,
       agentFailureThreshold: 6,
+      unclaimedRecipientThreshold: 8,
     });
   });
 
