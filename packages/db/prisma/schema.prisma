@@ -210,6 +210,7 @@ model Organization {
   storefrontChatDailyUsage StorefrontChatDailyUsage[]
   storefrontChatVerifications StorefrontChatVerification[]
   storefrontChatSessionEpisodes StorefrontChatSessionEpisode[]
+  conversationAttributions ConversationAttribution[]
 
   @@index([clerkOrgId])
   @@index([lifecycleStatus])
@@ -455,6 +456,7 @@ model Customer {
   organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   threads                Thread[]
   storefrontChatSessions StorefrontChatSession[]
+  conversationAttributions ConversationAttribution[]
 
   // platformId is unique per org, not globally — two orgs can share the same customer email
   @@unique([organizationId, platformId])
@@ -521,6 +523,7 @@ model Thread {
 
   storefrontChatSessions StorefrontChatSession[]
   storefrontChatEpisodes StorefrontChatSessionEpisode[]
+  conversationAttributions ConversationAttribution[]
 
   @@unique([organizationId, operatorKey])
   @@unique([organizationId, id], map: "threads_organization_id_id_key")
@@ -988,6 +991,13 @@ model StorefrontChatSession {
   lastSeenAt       DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz
   expiresAt        DateTime  @map("expires_at") @db.Timestamptz
   revokedAt        DateTime? @map("revoked_at") @db.Timestamptz
+  // SHA-256 of the lowercased address the shopper proved control of, written on
+  // the first successful verification. Storefront shoppers are otherwise
+  // anonymous (`platformId` is `shopify_chat:<uuid>`), so this is the only
+  // durable link between a browser session and a later order. Stored as a hash
+  // because equality is all attribution needs — the address itself is already
+  // on the order in Shopify and does not need a second home here.
+  verifiedEmailHash String?  @map("verified_email_hash") @db.VarChar(64)
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -1075,6 +1085,57 @@ model StorefrontChatVerification {
   @@index([organizationId, createdAt])
   @@index([expiresAt])
   @@map("storefront_chat_verifications")
+}
+
+// One row per order the shop receives, classified by whether a conversation
+// preceded it. Recording unattributed orders too is deliberate: "direct" is a
+// number the merchant asked for, and it cannot be derived from a table that
+// only holds the orders we managed to match.
+//
+// This is *attribution*, not causation — it records that a conversation
+// happened before a purchase, and (for `product_assisted`) that the thing
+// bought is a thing the agent put in front of the shopper. Neither proves the
+// conversation caused the sale, and the reporting surface says so.
+model ConversationAttribution {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  // Null for `direct` — there is no conversation to point at.
+  threadId       String? @map("thread_id") @db.Uuid
+  customerId     String? @map("customer_id") @db.Uuid
+
+  orderId   String @map("order_id") @db.VarChar(64)
+  orderName String @map("order_name") @db.VarChar(64)
+  // Minor units. Shopify sends decimal strings; money is never carried as a
+  // float here, and mixing currencies is guarded by grouping on `currency`.
+  orderTotalCents Int    @map("order_total_cents")
+  currency        String @db.VarChar(8)
+
+  // direct | chat_assisted | product_assisted
+  kind String @db.VarChar(32)
+  // How the order was tied to a conversation: verified_email, customer_platform_id,
+  // shopify_customer, or none for `direct`.
+  matchBasis String @map("match_basis") @db.VarChar(32)
+  // Shopify product ids that appear both in the order and in what the agent
+  // surfaced during the conversation. Only set for `product_assisted`.
+  matchedProductIds Json? @map("matched_product_ids") @db.JsonB
+
+  // The last shopper activity on the matched thread, so the reporting surface
+  // can show the gap between conversation and purchase without a second query.
+  lastConversationAt DateTime? @map("last_conversation_at") @db.Timestamptz
+  orderedAt          DateTime  @map("ordered_at") @db.Timestamptz
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  thread       Thread?      @relation(fields: [threadId], references: [id], onDelete: SetNull)
+  customer     Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  // Order webhooks retry, and orders/create can arrive more than once. One row
+  // per order per org is what keeps revenue from being counted twice.
+  @@unique([organizationId, orderId], map: "conversation_attributions_organization_id_order_id_key")
+  @@index([organizationId, orderedAt(sort: Desc)])
+  @@index([organizationId, kind, orderedAt(sort: Desc)])
+  @@index([threadId])
+  @@map("conversation_attributions")
 }
 
 model StorefrontChatDailyUsage {
