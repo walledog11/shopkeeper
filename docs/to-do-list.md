@@ -382,15 +382,20 @@ Code work that is started and not finished.
   billing. The ratchet went from eight groups to fourteen, every new threshold
   measured against a real coverage run first rather than picked and hoped for.
 
-  **What is left is two specific things, not a general "more coverage".**
+  **Plan execution is ratcheted as of 2026-08-21.** `plan-execution.ts` went from
+  **60.20% lines / 52.99% branches** to **94.89% / 91.45%**, and the group
+  (`plan-execution.ts` + `plan-cache.ts`) now aggregates **94.34% / 90.48%**
+  against the 80/70 bar — measured on a real coverage run, then admitted, which
+  is the order a ratchet requires. Fifteen groups now. The tests are guard-first
+  because that is where the risk is: a stale or edited plan, a duplicate step, a
+  replayed approval, a turn that throws after a provider already accepted the
+  mutation. The stubs for every guard case throw if execution is reached, so each
+  one asserts the plan was refused *before* a tool call could leave the process,
+  rather than merely that an error came back.
 
-  1. **Plan execution cannot be ratcheted yet.** `plan-execution.ts` and
-     `plan-cache.ts` aggregate **62.26% lines / 54.76% branches**, well under the
-     80/70 bar. It was measured and deliberately left out — admitting it would
-     have meant lowering the threshold to fit, which is the opposite of a
-     ratchet. Raise the coverage, then add the group.
-  2. **Recovery and reconciliation paths** are still thin, and are the one item
-     from the original audit that nothing here touched.
+  **What is left is one specific thing, not a general "more coverage".**
+  **Recovery and reconciliation paths** are still thin, and are the one item from
+  the original audit that nothing here touched.
 
   The **real-Clerk browser contract now works**, which is the part that was worse
   than the entry described. It was gated on `vars.CLERK_E2E_ENABLED == 'true'`, a
