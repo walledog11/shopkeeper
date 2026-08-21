@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { clerkClient } from '@clerk/nextjs/server';
+import { planLimitsFor } from '@shopkeeper/db';
 import { readRequiredJsonObject } from '@/lib/api/body';
-import { getDashboardAppUrl } from '@/lib/env';
+import { getOrCreateOrg } from '@/lib/server/org';
+import { getBillingPriceIds, getDashboardAppUrl } from '@/lib/env';
 import { withClerkOrgRoute } from '@/lib/api/clerk-route';
 import { parseTeamInviteBody } from '@/app/api/team/_lib/validation';
 
@@ -46,6 +48,35 @@ export const POST = withClerkOrgRoute(
     const { emailAddress, role } = parseTeamInviteBody(await readRequiredJsonObject(request));
 
     const client = await clerkClient();
+
+    // Seats are the one limit that refuses rather than degrades. Inviting is a
+    // deliberate admin action with a person on the other end of the response, so
+    // a clear refusal is honest; the conversation cap degrades instead precisely
+    // because nobody is watching when a customer message arrives.
+    const org = await getOrCreateOrg();
+    const seats = planLimitsFor(org.stripePriceId, getBillingPriceIds()).seats;
+    if (seats !== null) {
+      const [memberships, pending] = await Promise.all([
+        client.organizations.getOrganizationMembershipList({ organizationId: auth.orgId, limit: 100 }),
+        client.organizations.getOrganizationInvitationList({ organizationId: auth.orgId, status: ['pending'] }),
+      ]);
+      // Pending invitations count: they become seats the moment they are
+      // accepted, and not counting them would let an admin invite past the limit
+      // in one sitting. `totalCount` is what Clerk paginates on; fall back to the
+      // page length so a response without it cannot silently read as zero and
+      // wave the check through.
+      const claimed = (memberships.totalCount ?? memberships.data.length)
+        + (pending.totalCount ?? pending.data.length);
+      if (claimed >= seats) {
+        return NextResponse.json(
+          {
+            error: `Your plan includes ${seats} ${seats === 1 ? 'seat' : 'seats'}, and ${claimed} are already taken. Upgrade to invite more.`,
+          },
+          { status: 403 },
+        );
+      }
+    }
+
     const invitation = await client.organizations.createOrganizationInvitation({
       organizationId: auth.orgId,
       emailAddress,
