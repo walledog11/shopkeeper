@@ -23,6 +23,13 @@ export interface ShopifyOrderPayload {
   id: number;
   order_number?: number;
   name?: string;
+  // Decimal string ("41.99"), as Shopify sends it. Never parsed to a float.
+  total_price?: string;
+  currency?: string;
+  created_at?: string;
+  // Present on guest orders, where `customer` may be absent entirely.
+  email?: string;
+  line_items?: Array<{ product_id?: number | null }>;
   customer?: {
     id: number;
     email?: string;

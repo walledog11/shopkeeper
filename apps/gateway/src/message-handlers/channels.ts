@@ -26,6 +26,7 @@ import {
   type ClassificationResult,
 } from './email-classification.js';
 import { processInboundMessage } from './inbound-persistence.js';
+import { recordConversationAttributionSafely } from './conversation-attribution.js';
 
 async function lookupShopifyCustomerName(organizationId: string, email: string): Promise<string | null> {
   const integration = await db.integration.findFirst({
@@ -356,6 +357,15 @@ export async function handleShopifyJob(job: Job<InboundJobData>, aiSummaryQueue:
   const { topic, rawPayload } = job.data as { topic: string; rawPayload: ShopifyOrderPayload };
   const customer = rawPayload.customer;
   const email = customer?.email;
+
+  // Before the identity guard below, deliberately. A guest order with no
+  // customer record attached is still revenue, and the attribution table can
+  // only report the attributed *share* if it holds every order as its
+  // denominator. Only orders/create — the other topics restate an order that
+  // has already been counted.
+  if (topic === 'orders/create') {
+    await recordConversationAttributionSafely(organizationId, rawPayload, traceId);
+  }
 
   if (!email && !customer?.id) {
     logger.warn({ traceId }, '[Worker] Shopify order missing customer identity — dropping');
