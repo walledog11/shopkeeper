@@ -13,8 +13,8 @@ import type { ShopifyOrderPayload } from '../types.js';
 // are read live from Shopify and persisted nowhere else, so without the direct
 // rows there is no denominator to report the attributed share against.
 
-export type AttributionKind = 'direct' | 'chat_assisted' | 'product_assisted';
-export type AttributionMatchBasis =
+type AttributionKind = 'direct' | 'chat_assisted' | 'product_assisted';
+type AttributionMatchBasis =
   | 'none'
   | 'verified_email'
   | 'customer_platform_id'
