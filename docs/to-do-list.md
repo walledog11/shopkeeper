@@ -332,44 +332,55 @@ Code work that is started and not finished.
   than the customer's story. That is the shared registry and it shipped ungated, so
   it owed a gate run — **which has since been made and came back clean** (run
   32311082225, hard-gated 74/74; no escalation fixture moved). Nothing outstanding.
-- [ ] **Conversation-to-sale attribution — schema landed, nothing writes it yet.**
-  Connect meaningful storefront-chat interactions and product recommendations to
-  later Shopify orders so merchants can distinguish direct, product-assisted, and
-  chat-assisted revenue. Report it as attribution rather than proof that the
+- [ ] **Conversation-to-sale attribution — built end to end; needs a live order.**
+  Connects storefront-chat interactions and product recommendations to later
+  Shopify orders so merchants can distinguish direct, product-assisted, and
+  chat-assisted revenue. Reported as attribution rather than proof that the
   conversation caused the purchase.
 
-  **The migration shipped ahead of the writer on purpose** (2026-08-21).
-  `conversation_attributions` holds one row per order, `direct` ones included —
-  that is not padding, it is the only way to report direct revenue, because
-  orders are read live from Shopify and persisted nowhere else, so there is no
-  existing total to divide. Three CHECK constraints keep the table honest: `kind`
-  and `match_basis` are closed sets, and a `direct` row may not name a thread
-  while an attributed row must, so the table cannot express "chat-assisted by
-  nothing in particular". Both foreign keys are `SET NULL` so deleting a thread
-  or redacting a customer does not retroactively change last month's totals.
+  **Schema, identity bridge, writer, classifier, hook and reporting all landed
+  2026-08-21.** `conversation_attributions` holds one row per order, `direct`
+  ones included — not padding, it is the only way to report direct revenue,
+  because orders are read live from Shopify and persisted nowhere else. Three
+  CHECK constraints keep the table honest, and both foreign keys are `SET NULL`
+  so deleting a thread or redacting a customer cannot retroactively change last
+  month's totals.
 
-  **The identity bridge is the interesting constraint.** Storefront shoppers are
-  anonymous — `platformId` is `shopify_chat:<uuid>` — and the session never
-  records a Shopify customer id, so there is nothing to join a later order to.
-  Verification is the only point where an address is proven, so
-  `storefront_chat_sessions.verified_email_hash` was added to capture it.
+  **The identity bridge was the interesting constraint, and it resolved to a
+  candidate column.** The shopper's address is supplied at `requestVerification`
+  and checked against the order there, but verification only *succeeds* in
+  `submitVerificationCode`, which holds no address. Writing the session hash at
+  request time would have marked a session email-verified before the code was
+  confirmed — anyone could claim any address. So the hash is parked on the
+  challenge row as `candidate_email_hash` and promoted onto the session only when
+  a correct code proves control. Chosen over the Shopify re-fetch because that
+  puts a network call in the one path that must not fail. First verification
+  wins, so a session cannot rewrite the identity it already proved.
 
-  **What is left, and one wrinkle found while building it.** The writer, the
-  classifier, the hook in `handleShopifyJob`, and a reporting surface are all
-  unwritten. The wrinkle: the shopper's email is supplied at
-  `requestVerification` and checked against the order there, but verification
-  only *succeeds* later in `submitVerificationCode`, which holds the order name
-  and session but not the email. Writing the hash at request time would mark a
-  session email-verified before the code is confirmed — anyone could claim any
-  address. So it needs either a candidate-hash column promoted on success, or a
-  Shopify re-fetch of the order at the success point, failing soft so a Shopify
-  blip cannot break verification itself.
+  **Two design points worth not undoing.** The hook sits *above* the
+  customer-identity guard in `handleShopifyJob`: a guest order with no customer
+  record is dropped for messaging but is still revenue, and the attributed share
+  means nothing without a complete denominator — there is a test that fails if it
+  is moved below. And only `orders/create` counts; Shopify fires `orders/updated`
+  on creation too, often twice as payment settles.
+
+  **Reporting is a briefing line, deliberately not a page.** Analytics/reports
+  were removed in the June 2026 cleanup, and the merchant reads the briefing on
+  their phone. The line states the join and not a cause — "3 of your 11 orders
+  came from someone who'd talked to me first" — and is scoped to the digest
+  cursor, not to current state, so it cannot re-report the same revenue every
+  morning.
+
+  **What is left is a live order**, end to end on the dev store: talk to the
+  widget, verify an email, buy something, confirm the row lands as
+  `chat_assisted` and the next briefing says so.
 
   **Known coverage limit, worth stating before anyone reads the numbers.** This
-  attributes shoppers who verified an email. The larger case — an anonymous
-  shopper who asks a pre-purchase question and then buys — has no server-side
-  identity bridge at all and would need cart-attribute plumbing in the theme
-  extension, which is a merchant-facing extension change and a new app version.
+  attributes shoppers who verified an email, or who already exist as a customer
+  record. The larger case — a wholly anonymous shopper who asks a pre-purchase
+  question and then buys — has no server-side identity bridge at all and would
+  need cart-attribute plumbing in the theme extension, which is a merchant-facing
+  extension change and a new app version.
 - [ ] **Expand confidence outside the curated coverage islands — routes, ratchet
   and the Clerk contract are done; two gaps remain.** The route half closed on
   2026-08-21. The "20 untested routes" figure was an overcount: sixteen lacked a

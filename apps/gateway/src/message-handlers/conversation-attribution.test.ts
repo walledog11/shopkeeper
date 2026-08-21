@@ -12,6 +12,8 @@ import {
 import { hashVerifiedEmail } from '@shopkeeper/agent/storefront-verification';
 import {
   ATTRIBUTION_LOOKBACK_DAYS,
+  formatAttributionLine,
+  loadAttributionRollup,
   parseAttributionOrder,
   productIdsFromToolOutput,
   recordConversationAttribution,
@@ -304,5 +306,94 @@ describe('recordConversationAttribution', () => {
     expect(row.lastConversationAt?.toISOString()).toBe(
       new Date(ORDERED_AT.getTime() - 7_200_000).toISOString(),
     );
+  });
+});
+
+describe('the briefing line', () => {
+  async function attribute(kind: 'direct' | 'chat_assisted', cents: number, orderedAt: Date) {
+    const threadId = kind === 'direct' ? null : (await threadFor(`c-${randomUUID()}@example.com`)).thread.id;
+    await db.conversationAttribution.create({
+      data: {
+        organizationId: org.id,
+        threadId,
+        orderId: randomUUID(),
+        orderName: '#1',
+        orderTotalCents: cents,
+        currency: 'USD',
+        kind,
+        matchBasis: kind === 'direct' ? 'none' : 'customer_platform_id',
+        orderedAt,
+      },
+    });
+  }
+
+  it('counts only orders inside the briefing window', async () => {
+    const since = new Date(Date.now() - 3_600_000);
+    await attribute('chat_assisted', 4199, new Date());
+    await attribute('direct', 1000, new Date());
+    // Yesterday's order was already reported in yesterday's briefing. Counting
+    // it again is the stock-versus-flow trap: the number would ratchet up all
+    // week and re-report revenue the merchant has already seen.
+    await attribute('chat_assisted', 999_00, new Date(Date.now() - 48 * 3_600_000));
+
+    const rollup = await loadAttributionRollup(org.id, since);
+
+    expect(rollup).toMatchObject({
+      orderCount: 2,
+      attributedCount: 1,
+      totalCents: 5199,
+      attributedCents: 4199,
+    });
+  });
+
+  it('says nothing when no order followed a conversation', async () => {
+    await attribute('direct', 4199, new Date());
+
+    const rollup = await loadAttributionRollup(org.id, new Date(Date.now() - 3_600_000));
+
+    // A line that says "0 of your 3 orders" every morning is noise, and the
+    // briefing earns its place by not printing the absence of news.
+    expect(formatAttributionLine(rollup)).toBeNull();
+  });
+
+  it('reports the share without claiming it caused the sale', () => {
+    const line = formatAttributionLine({
+      orderCount: 11,
+      attributedCount: 3,
+      totalCents: 194_000,
+      attributedCents: 41_200,
+      currency: 'USD',
+    });
+
+    expect(line).toBe("3 of your 11 orders came from someone who'd talked to me first — $412 of $1,940.");
+    // "came from someone who'd talked to me first" is a join, which is what was
+    // proved. "I earned you $412" is a causal claim, which was not.
+    expect(line).not.toMatch(/earned|thanks to|because/i);
+  });
+
+  it('drops the amounts rather than adding two currencies together', () => {
+    const line = formatAttributionLine({
+      orderCount: 4,
+      attributedCount: 2,
+      totalCents: 20_000,
+      attributedCents: 9_000,
+      currency: null,
+    });
+
+    expect(line).toBe("2 of your 4 orders came from someone who'd talked to me first.");
+  });
+
+  it('reads naturally when there is only one order', () => {
+    const line = formatAttributionLine({
+      orderCount: 1,
+      attributedCount: 1,
+      totalCents: 4199,
+      attributedCents: 4199,
+      currency: 'USD',
+    });
+
+    // "1 of your 1 order — $41.99 of $41.99" is the tell that a template wrote
+    // it: the share is stated twice and there is no share.
+    expect(line).toBe("Your one order came from someone who'd talked to me first — $41.99.");
   });
 });

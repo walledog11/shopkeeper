@@ -296,3 +296,96 @@ export async function recordConversationAttributionSafely(
     );
   }
 }
+
+export interface AttributionRollup {
+  orderCount: number;
+  attributedCount: number;
+  totalCents: number;
+  attributedCents: number;
+  currency: string | null;
+}
+
+// Scoped to the briefing cursor, never to current state. "Since your last
+// briefing" has to mean the flow of orders in that window — a stock count would
+// re-report the same revenue every morning and ratchet up all week.
+export async function loadAttributionRollup(
+  organizationId: string,
+  since: Date,
+): Promise<AttributionRollup> {
+  const rows = await db.conversationAttribution.findMany({
+    where: { organizationId, orderedAt: { gte: since } },
+    select: { kind: true, orderTotalCents: true, currency: true },
+  });
+
+  const currencies = new Set(rows.map((row) => row.currency));
+  let attributedCount = 0;
+  let totalCents = 0;
+  let attributedCents = 0;
+
+  for (const row of rows) {
+    totalCents += row.orderTotalCents;
+    if (row.kind !== 'direct') {
+      attributedCount += 1;
+      attributedCents += row.orderTotalCents;
+    }
+  }
+
+  return {
+    orderCount: rows.length,
+    attributedCount,
+    totalCents,
+    attributedCents,
+    // Money is only summable within one currency. A mixed window reports the
+    // counts and drops the amounts rather than adding pounds to dollars.
+    currency: currencies.size === 1 ? [...currencies][0] : null,
+  };
+}
+
+function formatMoney(cents: number, currency: string): string {
+  const amount = (cents / 100).toLocaleString('en-US', {
+    minimumFractionDigits: cents % 100 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
+  });
+  return currency === 'USD' ? `$${amount}` : `${amount} ${currency}`;
+}
+
+// Deliberately "talked to me first", not "I earned this". The join is a proved
+// email or a matching customer record, which establishes that the shopper who
+// talked also bought — not that the conversation caused the purchase. Claiming
+// more is the overclaim this whole feature is written to avoid.
+export function formatAttributionLine(rollup: AttributionRollup): string | null {
+  if (rollup.orderCount === 0 || rollup.attributedCount === 0) return null;
+
+  const everyOrder = rollup.attributedCount === rollup.orderCount;
+  const money = rollup.currency
+    ? everyOrder
+      ? ` — ${formatMoney(rollup.attributedCents, rollup.currency)}`
+      : ` — ${formatMoney(rollup.attributedCents, rollup.currency)} of ${formatMoney(rollup.totalCents, rollup.currency)}`
+    : '';
+
+  // "1 of your 1 order" is the tell that a template wrote the sentence. When
+  // every order in the window is attributed there is no share to state, so the
+  // count carries it alone.
+  const subject = everyOrder
+    ? rollup.orderCount === 1
+      ? 'Your one order'
+      : `All ${rollup.orderCount} of your orders`
+    : `${rollup.attributedCount} of your ${rollup.orderCount} orders`;
+
+  return `${subject} came from someone who'd talked to me first${money}.`;
+}
+
+export async function loadAttributionLine(
+  organizationId: string,
+  since: Date,
+): Promise<string | null> {
+  try {
+    return formatAttributionLine(await loadAttributionRollup(organizationId, since));
+  } catch (error) {
+    logger.warn(
+      { err: error instanceof Error ? error.message : String(error), organizationId },
+      '[Attribution] Briefing line unavailable',
+    );
+    return null;
+  }
+}
