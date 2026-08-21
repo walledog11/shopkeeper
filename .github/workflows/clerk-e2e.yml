@@ -1,14 +1,38 @@
 name: Clerk Browser Contract
 
+# The PR e2e job in ci.yml runs with E2E_AUTH_BYPASS=true, so no pull request
+# exercises real Clerk sign-in, session handling, or org resolution. This
+# workflow is the compensating control, and it fires on two triggers: nightly,
+# and on any PR that touches the auth-sensitive surfaces listed below.
 on:
   schedule:
     - cron: '30 8 * * *'
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'apps/dashboard/src/lib/e2e-auth.ts'
+      - 'apps/dashboard/src/lib/server/e2e-org.ts'
+      - 'apps/dashboard/src/lib/server/org.ts'
+      - 'apps/dashboard/src/lib/api/route.ts'
+      - 'apps/dashboard/src/lib/api/permissions.ts'
+      - 'apps/dashboard/src/proxy.ts'
+      - 'apps/dashboard/src/proxy/**'
+      - 'apps/dashboard/src/middleware.ts'
+      - '.github/workflows/clerk-e2e.yml'
 
 jobs:
   clerk-browser:
     name: Real Clerk browser E2E
-    if: ${{ github.event_name == 'workflow_dispatch' || vars.CLERK_E2E_ENABLED == 'true' }}
+    # Runs unless explicitly disabled. This was previously gated on
+    # `vars.CLERK_E2E_ENABLED == 'true'`, a variable that was never created, so
+    # every scheduled run since the workflow landed reported `skipped` — ten in a
+    # row before this change. A compensating control that silently declines to
+    # run is worse than none, because the run list looks clean.
+    # Fork PRs cannot read secrets, so they are excluded rather than failed.
+    if: >-
+      ${{ vars.CLERK_E2E_ENABLED != 'false'
+      && (github.event_name != 'pull_request'
+      || github.event.pull_request.head.repo.full_name == github.repository) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -41,6 +65,22 @@ jobs:
       UPSTASH_REDIS_REST_TOKEN: test-upstash-token
     steps:
       - uses: actions/checkout@v4
+      - name: Verify Clerk credentials are present
+        # Fail before doing any work rather than letting the browser contract
+        # run against a half-configured environment and pass for the wrong
+        # reason. A missing credential must be loud: this workflow exists to
+        # cover a path nothing else covers.
+        run: |
+          missing=()
+          [ -n "$CLERK_SECRET_KEY" ] || missing+=(CLERK_SECRET_KEY)
+          [ -n "$CLERK_PUBLISHABLE_KEY" ] || missing+=(CLERK_PUBLISHABLE_KEY)
+          [ -n "$CLERK_E2E_EMAIL" ] || missing+=(CLERK_E2E_EMAIL)
+          [ -n "$E2E_CLERK_ORG_ID" ] || missing+=(E2E_CLERK_ORG_ID)
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Real-Clerk browser contract cannot run; missing: ${missing[*]}"
+            exit 1
+          fi
+          echo "All Clerk credentials present."
       - uses: actions/setup-node@v4
         with:
           node-version: 22

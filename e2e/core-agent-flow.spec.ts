@@ -46,6 +46,11 @@ test('receive inbound email, view ticket, and send a recorded manual reply', asy
   const inboundResponse = await request.post(`${gatewayUrl}/webhooks/email/inbound`, {
     form: {
       From: `Core E2E <${customerEmail}>`,
+      // The claim is made on OriginalRecipient alone — webhooks-email.ts never
+      // falls back to `To`, and a message with no OriginalRecipient is recorded
+      // unclaimed and still answered 200. Sending only `To` therefore produced a
+      // passing 2xx assertion below and no thread at all.
+      OriginalRecipient: emailIntegration.externalAccountId,
       To: emailIntegration.externalAccountId,
       Subject: `Core browser E2E ${runId}`,
       TextBody: inboundText,
@@ -410,7 +415,7 @@ test('blocks cross-org thread API and UI access in an authenticated session', as
   await expect(page.getByTestId('chat-timeline')).toHaveCount(0);
 });
 
-test('rejects unsupported channel dispatch without outbound or agent persistence', async ({ page }) => {
+test('rejects undeliverable channel dispatch without outbound or agent persistence', async ({ page }) => {
   const clerkEnv = requireClerkE2EEnv();
   const org = await getE2EOrg();
   const runId = randomUUID();
@@ -469,7 +474,14 @@ test('rejects unsupported channel dispatch without outbound or agent persistence
 
   expect(dispatchResult.ok).toBe(false);
   expect(dispatchResult.status).toBe(502);
-  expect(dispatchResult.body).toMatchObject({ error: 'Unsupported channel' });
+  // TikTok Shop is wired end to end but gated off, so it no longer falls
+  // through to the generic "Unsupported channel" branch in dispatch-message.ts
+  // — it reaches its own dispatcher and fails there for want of an integration.
+  // The invariant under test is unchanged: an undeliverable dispatch must not
+  // record outbound or persist an agent message.
+  expect(dispatchResult.body).toMatchObject({
+    error: 'No TikTok Shop integration configured',
+  });
 
   const outboundRecords = await readOutboundRecords();
   expect(outboundRecords).not.toContainEqual(expect.objectContaining({ threadId: thread.id }));

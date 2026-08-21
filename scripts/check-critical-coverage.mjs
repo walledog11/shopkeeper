@@ -23,6 +23,54 @@ const groups = [
     matches: (file) => file.endsWith('/src/billing/write-gate.ts'),
   },
   {
+    // The token is the only thing standing between an org's SSE stream and any
+    // caller who can reach the gateway, and it is minted in one app and verified
+    // in the other.
+    name: 'dashboard realtime token',
+    report: 'apps/dashboard/coverage/coverage-summary.json',
+    matches: (file) => file.endsWith('/src/lib/realtime/token.ts')
+      || file.endsWith('/src/app/api/realtime/token/route.ts'),
+  },
+  {
+    name: 'gateway realtime subscription',
+    report: 'apps/gateway/coverage/coverage-summary.json',
+    matches: (file) => file.endsWith('/src/realtime/token.ts')
+      || file.endsWith('/src/realtime/sse.ts'),
+  },
+  {
+    // Health is what uptime monitoring reads. A regression that makes /health
+    // touch a dependency, or makes deep report ok while a dependency is down,
+    // is invisible until an outage is missed.
+    name: 'dashboard health endpoints',
+    report: 'apps/dashboard/coverage/coverage-summary.json',
+    matches: (file) => /\/src\/app\/api\/health(\/deep)?\/route\.ts$/.test(file),
+  },
+  {
+    name: 'dashboard webhook ingress',
+    report: 'apps/dashboard/coverage/coverage-summary.json',
+    matches: (file) => /\/src\/app\/api\/webhooks\/(clerk|email|meta|tiktok-shop)\/route\.ts$/.test(file),
+  },
+  {
+    // P4-03. The claim/sweep path is the unknown-outcome recovery surface:
+    // it decides whether a committed-but-undelivered operator reply is resent
+    // or silently dropped.
+    name: 'gateway durable operator events',
+    report: 'apps/gateway/coverage/coverage-summary.json',
+    matches: (file) => file.endsWith('/src/operator-event-ingest.ts')
+      || file.endsWith('/src/operator-event-store.ts')
+      || file.endsWith('/src/operator-event-reply.ts')
+      || file.endsWith('/src/maintenance/operator-event-sweep.ts')
+      || file.endsWith('/src/workers/operator-event.ts'),
+  },
+  {
+    // Grounding rewrites agent-authored prose after planning. No eval fixture
+    // asserts on escalation reason text and judge.ts grades only replyText, so
+    // this ratchet is the only automated cover these functions have.
+    name: 'agent planner routing',
+    report: 'packages/agent/coverage/coverage-summary.json',
+    matches: (file) => file.endsWith('/src/planner-routing.ts'),
+  },
+  {
     name: 'gateway webhook validation',
     report: 'apps/gateway/coverage/coverage-summary.json',
     matches: (file) => file.endsWith('/src/routes/telegram/webhook-validation.ts')

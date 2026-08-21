@@ -3,7 +3,7 @@
 Open work only. Completed work is deleted, not archived — git history is the
 record. Do not add "recently completed" sections to this file.
 
-Last reviewed: 2026-08-20.
+Last reviewed: 2026-08-21.
 
 Single source of truth for **actionable** open work. Evidence checklists, console
 residue, failure-drill procedures, and standing policies live in the linked docs
@@ -11,16 +11,19 @@ below — not duplicated here.
 
 Work is grouped by **what kind of action** it needs, not by when it was filed.
 
-`origin/master` is `5ee51baa`, and **three of the four deploy surfaces are
-current on it — the Shopify app version is not.** Re-verified 2026-08-20 23:00
-UTC: Vercel Ready on `5ee51baa` (built 22:19, ready 22:21 UTC) and Railway
-SUCCESS on the same commit (22:19 UTC). Both commit hashes were read off the
+`origin/master` is `adfec608`, and **three of the four deploy surfaces are
+current on it — the Shopify app version is not.** Re-verified 2026-08-21 01:20
+UTC, after PRs #48 and #49 merged: Vercel READY on `adfec608` and Railway
+SUCCESS on the same commit (01:08 UTC). Both commit hashes were read off the
 deployment records themselves — Vercel's `meta.githubCommitSha` via the API,
 Railway's `meta.commitHash` via `railway deployment list --json` — not inferred
 from a timestamp sitting close to a commit, which is the trap this paragraph
-exists to avoid. No migration directory changed since `88ec0be6`, where the
-database was last verified at 6/6 partial unique indexes; confirmed by diffing
-`packages/db/prisma/migrations` across the whole range rather than assumed.
+exists to avoid. No migration directory changed between `88ec0be6` — where the
+database was last verified at 6/6 partial unique indexes — and `adfec608`;
+confirmed by diffing `packages/db/prisma/migrations` across the whole range
+rather than assumed. The one migration added since is
+`20260821120000_add_conversation_attribution`, which is additive and nullable
+and has **not** been applied to production.
 
 **The fourth surface is behind, and this is the case the rule below is about.**
 `shopkeeper-production-27` (2026-08-19 22:48) is still the active version —
@@ -329,19 +332,100 @@ Code work that is started and not finished.
   than the customer's story. That is the shared registry and it shipped ungated, so
   it owed a gate run — **which has since been made and came back clean** (run
   32311082225, hard-gated 74/74; no escalation fixture moved). Nothing outstanding.
-- [ ] **Conversation-to-sale attribution.** Connect meaningful storefront-chat
-  interactions and product recommendations to later Shopify orders so merchants
-  can distinguish direct, product-assisted, and chat-assisted revenue. Report it
-  as attribution rather than proof that the conversation caused the purchase.
-- [ ] **Expand confidence outside the curated coverage islands.** The audit found
-  20 of 76 dashboard API routes without a colocated route test, low coverage in
-  several recovery/reconciliation paths, only eight groups in the critical
-  coverage ratchet, and PR browser smoke running with authentication bypass. Map
-  equivalent indirect tests before adding duplicates, then prioritize tenant
-  boundaries, health/realtime tokens, webhook routes, unknown-outcome recovery,
-  plan execution, and a targeted real-Clerk contract on auth-sensitive changes.
-  Ratchet thresholds from a clean, reproducible coverage run rather than chasing
-  a repository-wide percentage.
+- [ ] **Conversation-to-sale attribution — schema landed, nothing writes it yet.**
+  Connect meaningful storefront-chat interactions and product recommendations to
+  later Shopify orders so merchants can distinguish direct, product-assisted, and
+  chat-assisted revenue. Report it as attribution rather than proof that the
+  conversation caused the purchase.
+
+  **The migration shipped ahead of the writer on purpose** (2026-08-21).
+  `conversation_attributions` holds one row per order, `direct` ones included —
+  that is not padding, it is the only way to report direct revenue, because
+  orders are read live from Shopify and persisted nowhere else, so there is no
+  existing total to divide. Three CHECK constraints keep the table honest: `kind`
+  and `match_basis` are closed sets, and a `direct` row may not name a thread
+  while an attributed row must, so the table cannot express "chat-assisted by
+  nothing in particular". Both foreign keys are `SET NULL` so deleting a thread
+  or redacting a customer does not retroactively change last month's totals.
+
+  **The identity bridge is the interesting constraint.** Storefront shoppers are
+  anonymous — `platformId` is `shopify_chat:<uuid>` — and the session never
+  records a Shopify customer id, so there is nothing to join a later order to.
+  Verification is the only point where an address is proven, so
+  `storefront_chat_sessions.verified_email_hash` was added to capture it.
+
+  **What is left, and one wrinkle found while building it.** The writer, the
+  classifier, the hook in `handleShopifyJob`, and a reporting surface are all
+  unwritten. The wrinkle: the shopper's email is supplied at
+  `requestVerification` and checked against the order there, but verification
+  only *succeeds* later in `submitVerificationCode`, which holds the order name
+  and session but not the email. Writing the hash at request time would mark a
+  session email-verified before the code is confirmed — anyone could claim any
+  address. So it needs either a candidate-hash column promoted on success, or a
+  Shopify re-fetch of the order at the success point, failing soft so a Shopify
+  blip cannot break verification itself.
+
+  **Known coverage limit, worth stating before anyone reads the numbers.** This
+  attributes shoppers who verified an email. The larger case — an anonymous
+  shopper who asks a pre-purchase question and then buys — has no server-side
+  identity bridge at all and would need cart-attribute plumbing in the theme
+  extension, which is a merchant-facing extension change and a new app version.
+- [ ] **Expand confidence outside the curated coverage islands — routes, ratchet
+  and the Clerk contract are done; two gaps remain.** The route half closed on
+  2026-08-21. The "20 untested routes" figure was an overcount: sixteen lacked a
+  colocated file, but nine of those are exercised where their real risk lives
+  (`cross-org-isolation.test.ts`, `tenant-data-surfaces.test.ts`,
+  `billing-write-gate.unit.test.ts`), so writing route files for them would have
+  been the duplication the original entry warned against. Seven had nothing at
+  all and now have 51 tests between them — health, health/deep, realtime/token,
+  threads/customer/[customerId], shopify/customers/search, webhooks/tiktok-shop,
+  billing. The ratchet went from eight groups to fourteen, every new threshold
+  measured against a real coverage run first rather than picked and hoped for.
+
+  **What is left is two specific things, not a general "more coverage".**
+
+  1. **Plan execution cannot be ratcheted yet.** `plan-execution.ts` and
+     `plan-cache.ts` aggregate **62.26% lines / 54.76% branches**, well under the
+     80/70 bar. It was measured and deliberately left out — admitting it would
+     have meant lowering the threshold to fit, which is the opposite of a
+     ratchet. Raise the coverage, then add the group.
+  2. **Recovery and reconciliation paths** are still thin, and are the one item
+     from the original audit that nothing here touched.
+
+  The **real-Clerk browser contract now works**, which is the part that was worse
+  than the entry described. It was gated on `vars.CLERK_E2E_ENABLED == 'true'`, a
+  repository variable that was never created, while every Clerk secret it needs
+  has existed since May — so it reported `skipped` on all **53** dispatches and
+  had never executed once. PR browser smoke still runs with `E2E_AUTH_BYPASS=true`
+  by design; the contract is the compensating control, and it was not controlling
+  anything. The gate now runs unless explicitly disabled, fires on PRs touching
+  auth-sensitive paths, and fails loudly on a missing credential instead of
+  skipping. First real run found two stale assertions (see below); it passes 9/9.
+- [ ] **The inbound email webhook answers 200 for mail it silently discards.**
+  Found 2026-08-21 while fixing the Clerk contract, where it masked the real
+  cause twice in one sitting. `webhooks-email.ts` claims a message by requiring
+  the recipient's **local part to be the organization UUID**: it regex-tests the
+  local part, then looks the integration up by `organizationId: localPart`.
+  Every miss — non-UUID local part, no matching integration, missing
+  `OriginalRecipient` — calls `recordUnclaimedRecipient` and returns
+  `200 OK`. Nothing in the response distinguishes "delivered" from "dropped".
+
+  In production that means an inbound misconfiguration looks perfectly healthy
+  from the sender's side, which is the same trap already recorded against the
+  Postmark rebuild ("a 200 from the inbound hook can mean silently unclaimed").
+  The 200 itself is probably correct — Postmark should not retry a message we
+  will never claim — so the fix is observability, not status codes: unclaimed
+  recipients are already recorded, so surface them as an ops alert when the rate
+  is non-trivial rather than leaving them in a table nobody reads.
+
+- [ ] **A malformed `customerId` path param 500s instead of 404ing.**
+  `GET /api/threads/customer/<garbage>` reaches Prisma with a non-UUID value and
+  throws `Inconsistent column data`, which `handleApiError` turns into a 500. The
+  route is authenticated and org-scoped so there is no security consequence — the
+  cost is that client-side typos are indistinguishable from server faults in
+  Sentry. Noted rather than fixed because the fix is added input validation and
+  the standing rule is not to add error handling beyond what a task asks for.
+
 - [ ] **Split the highest-risk multi-purpose modules along operational seams.**
   Start with `digest-briefing.ts`, `digest.ts`, `reconciliation-probes.ts`,
   `gmail-sync.ts`, `planning-notifications.ts`, and the database package barrel.
