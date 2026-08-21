@@ -9,6 +9,16 @@ const NOTICE_MONTH_KEY = 'conversationLimitNoticeMonth';
 // keeps receiving customer messages, so without this marker the merchant would
 // be texted on every one of them. The operator-notify dedupe cannot carry this:
 // it is a one-hour Redis TTL.
+//
+// Known limitation, accepted deliberately: `buildSettingsUpdate` rebuilds
+// settings from `normalizeStoredOrgSettings`, which is a whitelist, so this key
+// is dropped whenever the merchant saves any org setting. The cost is one
+// duplicate notice that month — self-limiting, and the notice is still true when
+// it arrives. Every fix is more expensive than the bug: a dedicated column means
+// a migration and its deploy-ordering landmine, adding the key to the stored
+// settings whitelist means an eval run against `packages/agent`, and a per-call
+// Redis TTL means threading an optional argument through the notify path every
+// proactive send shares. Revisit if merchants start seeing repeats.
 async function claimPeriodNotice(organizationId: string, period: string): Promise<boolean> {
   const org = await db.organization.findUnique({
     where: { id: organizationId },
