@@ -879,6 +879,144 @@ boundary reaches that branch.
 
 ---
 
+## The reply loop closed, 2026-08-20
+
+The run item F actually owed: a single answerable question, approved, with agent
+text arriving in the widget. It closed — and it cost five new defects to get
+there, most of them on the path that *produces* a reply rather than the path that
+delivers it. Timestamps are UTC; the session was the evening of 2026-08-19 Pacific.
+
+### Preflight
+
+`episode-run-preflight.ts` against production: org Palette, shop
+`palette-dev-3peukw16.myshopify.com`, `lifecycle=active`, `widget=ENABLED`,
+operator `telegram=0 imessage=1`, settings `autonomyTier="guarded"`,
+`autoExecuteMode="off"`. One open `shopify_chat` thread — `3768e2a3`, the one the
+2026-08-19 run left behind — with its conversational clock 19.9h old, inside the
+24-hour boundary and therefore continuing rather than rolling over. Rollover was
+not re-exercised; it had already passed on ten days of genuinely elapsed idle time.
+
+### What closed
+
+**Agent text reaches the shopper.** Proven on both sides: the `Message` row is
+`senderType=agent` at `2026-08-20T00:30:25.528Z`, and the widget renders it
+agent-side, across a full page reload. Before this the thread held two customer
+rows and two `note` rows and nothing else — every prior run ended with the shopper
+reading silence. **Item F has no remaining gap.**
+
+**Defect 4's reload leg, in a stronger form than it was written.** The "Someone
+from the shop is looking at this" line came back on a *cold* load ten days after
+the escalation, not merely across a reload inside one session. It is derived from
+`escalatedAt = 2026-08-19T04:37:20.682Z` as reported by `/bootstrap`, which is the
+fix behaving as designed rather than a timer that happens to still be running.
+
+**The ticket header copy fix.** The inbox renders `Storefront visitor`, not
+`Shopify Chat:E36cd568-…`.
+
+**`/dashboard/tickets?thread=` resolves** — no 404. That is as far as it goes; see
+defect 5.
+
+**Agent sends do not discharge an escalation.** `escalatedAt` was still set after
+the approved `send_reply` executed. That is `recordMerchantReply`'s documented
+contract ("the agent's own sends must not") holding in production, and it has a
+consequence for what remains: the notice-clears-on-merchant-reply leg cannot be
+exercised by approving a plan at all. It needs the composer.
+
+### Five defects
+
+**1. `search_shopify_products` cannot match anything a shopper would type.**
+`products.json?title=<query>` is exact full-title equality in the REST Admin API,
+not substring and not full-text. Against the live store, on one token, in one
+sitting:
+
+| Request | Result |
+| --- | --- |
+| `products.json?limit=6` | HTTP 200, 6 products — `The Collection Snowboard: Liquid`, `The Archived Snowboard`, … |
+| `products.json?title=snowboard` | HTTP 200, 0 products |
+| `products.json?title=Collection Snowboard` | HTTP 200, 0 products |
+
+`read_products` is granted, so this is neither scopes nor auth — it is the filter.
+The consequence is larger than one bad answer. A product question is the one thing
+a guest can ask that needs no identity verification, which makes it the cheapest
+available path to a reply, and it returns nothing every time; the model then falls
+back to escalation, which is why the storefront kept producing handoffs instead of
+answers. This is a shared-registry tool, so every channel inherits it.
+`packages/agent/src/shopify/products.ts`.
+
+**The gate could never have caught this, and still cannot.** Fixtures supply tool
+output through `simulateToolResults` — `storefront-guest-product-search` hands the
+model a working product result outright — so the harness never executes
+`products.ts`, and nothing in `packages/agent/src/shopify/*` has any eval coverage
+at all. The suite grades what the model does *with* a tool result; it is silent on
+whether the tool can produce one. That is why 74/74 hard-gated coexisted with a
+product search that returned zero rows for every query a shopper would type, and it
+means the fix owes a live probe rather than a paid run.
+
+**2. The fabricated mutation claim has moved into the reply text.** The approved
+`send_reply` told the shopper *"since it's a defective item, I'm opening a return
+request for the Hydrogen snowboard on order #1024"*. The plan's complete tool list
+was `get_order_by_name`, `search_shopify_products` ×2, `send_reply` — no
+`create_return`, and `planAgent` executes nothing in any case. This is defect 1 of
+the 2026-08-19 run in a strictly worse position: `groundEscalationReasons` grounds
+`escalate_to_human.reason`, which a merchant reads on a card and can challenge, and
+does not touch `send_reply.text`, which the shopper reads with no one in between.
+The invariant the existing fix already rests on — at plan time a past-tense
+mutation claim describes something that does not exist — applies here unchanged.
+
+**3. The search failure is narrated to the shopper.** *"unfortunately I'm not
+finding other snowboard models pulling up in our catalog search right now"* — on a
+store with four snowboards. Defect 1 is the cause; this is what the merchant's
+customer actually reads.
+
+**4. A warning names a step the plan does not contain.** `No matching product
+found - the order edit step may need a corrected product name` fired twice against
+a plan with no order edit anywhere in it. The text is written for one caller and
+reused by another.
+
+**5. No inbox conversation opens.** Neither clicking a ticket card nor the
+`?thread=` deep link mounts the conversation dialog. Reproduced on a clean load
+with no clicks, on a fresh load followed by a single click, and against both a
+`shopify_chat` and an `email` thread. No console errors and no exceptions; `find`
+over the accessibility tree confirms no conversation body exists in the DOM.
+`activeTicketId` should be `queryThreadId` on load (`useActiveThreadSelection.ts`)
+and `showConversation` is `Boolean(activeTicketId)` (`InboxPageLayout.tsx:186`), so
+whatever fails sits below that. **This downgrades the deep-link fix rather than
+completing it**: the operator link no longer 404s, it silently lands the merchant
+on an inbox list instead of on the thread, which is harder to notice than the 404
+was. Not diagnosed further — the hypothesis budget was spent, and the rule is to
+stop and ask rather than reach for a fourth theory.
+
+### Smaller things worth keeping
+
+- The escalation notice still reads "the reply will appear right here" *below* an
+  agent reply that has already arrived. Correct under the `escalatedAt` contract,
+  wrong as a sentence.
+- **The guard held.** `Customer requested a refund/cancel but no action was
+  planned — review before sending` forced `needs_review` on exactly the plan
+  carrying the fabrication, so it could not auto-execute. The plan-level safety net
+  caught what the reply text did not.
+- The org's Shopify-sourced knowledge base is two articles, one tagged
+  `shopify:policy:undefined`.
+- The inbox labels a guest storefront visitor `VIP`.
+
+### What the run did not reach
+
+- The notice clearing on a merchant reply — blocked by defect 5, since the
+  composer lives inside the conversation that will not open.
+- The router-materialized escalation, still unfired. Both plans in this run either
+  elected `escalate_to_human` themselves or contained no escalation at all, so
+  `applyEscalationRouting` never had to synthesize `tu_route_escalate`.
+- Prose approval, which needs a phone.
+
+### Method note
+
+Approval was made from the dashboard **home** "needs you" card — which works — via
+`POST /api/agent/quick-approve` (`allowedKinds: ["quick_reply", "needs_review"]`).
+The tickets page could not be used for it. The two-step confirm (`Approve`, then
+`Confirm approve`) behaved correctly.
+
+---
+
 ## The eval gate — archaeology, 2026-08-08
 
 Running the gate for the escalation-routing change surfaced a failure with nothing

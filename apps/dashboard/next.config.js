@@ -36,6 +36,15 @@ const nextConfig = {
       { source: '/(.*)', headers: SECURITY_HEADERS },
       { source: `/:path${NOINDEX_PATH_GROUP}`, headers: NOINDEX_HEADERS },
       { source: `/:path${NOINDEX_PATH_GROUP}/:rest*`, headers: NOINDEX_HEADERS },
+      // public/ is unfingerprinted, so Next serves it max-age=0 and the hero
+      // poster is refetched on every visit. These change rarely; the short TTL
+      // plus background revalidate self-heals within a day of a swap.
+      {
+        source: '/atmosphere/:file*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=3600, stale-while-revalidate=86400' },
+        ],
+      },
     ];
   },
   async redirects() {

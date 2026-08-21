@@ -7,6 +7,9 @@ import { Reveal } from "./Reveal";
 import { SectionLabel } from "./SectionLabel";
 import { cn } from "@/lib/ui/cn";
 
+// Every plan runs the same product — there is no per-tier feature gating in the
+// codebase, so nothing here may imply one. The ladder is volume guidance (the
+// descriptions) and how much hand-holding comes with it (the lists).
 const tiers = [
   {
     name: "Starter",
@@ -14,7 +17,13 @@ const tiers = [
     price: "$19",
     per: "/mo",
     desc: "For solo founders just getting their DMs under control.",
-    features: ["Unified inbox — IG & email", "AI drafts every reply", "Up to 500 conversations/mo"],
+    features: [
+      "Unified inbox — IG & email",
+      "AI drafts every reply",
+      "Shopify actions (refund, address, track)",
+      "Approve from your phone — iMessage or Telegram",
+      "Custom voice training",
+    ],
     cta: "Start free trial",
     href: "/signup",
     featured: false,
@@ -24,14 +33,8 @@ const tiers = [
     badge: "Most picked",
     price: "$49",
     per: "/mo",
-    desc: "For brands ready to delegate work, not just drafts.",
-    features: [
-      "Everything in Starter",
-      "Shopify actions (refund, address, track)",
-      "Approve from your phone — iMessage or Telegram",
-      "Custom voice training",
-      "2 team seats included",
-    ],
+    desc: "For brands with steady volume who want us closer at hand.",
+    features: ["Everything in Starter", "Priority support"],
     cta: "Try Pro free →",
     href: "/signup",
     featured: true,
@@ -42,13 +45,7 @@ const tiers = [
     price: "$129",
     per: "/mo",
     desc: "For teams running 100+ tickets a day.",
-    features: [
-      "Everything in Pro",
-      "Unlimited conversations",
-      "Custom AI instructions per channel",
-      "SLA + audit log",
-      "Dedicated onboarding",
-    ],
+    features: ["Everything in Pro", "Dedicated onboarding"],
     cta: "Talk to us",
     href: `mailto:${CONTACT_EMAIL}`,
     featured: false,
@@ -63,7 +60,7 @@ export function Pricing() {
         <h2 className="mx-auto mb-5 max-w-[20ch] text-[clamp(36px,5vw,68px)] font-bold leading-[1] tracking-[0.03em] [font-family:var(--m-hand)]">
           Costs less than <em className="italic text-[var(--m-quill)]">a part-time hire.</em>
         </h2>
-        <p className="mx-auto mb-14 max-w-[48ch] text-[16px] leading-relaxed text-stone-700">
+        <p className="mx-auto mb-4 max-w-[48ch] text-[16px] leading-relaxed text-stone-700">
           Every plan starts with{" "}
           <span className="relative inline-block whitespace-nowrap">
             14 days free
@@ -73,7 +70,7 @@ export function Pricing() {
               className="pointer-events-none absolute -inset-x-2 -inset-y-1 h-[calc(100%+8px)] w-[calc(100%+16px)] opacity-70 [color:var(--m-pen)]"
             />
           </span>
-          . No credit card, no{" "}
+          . Cancel any time, no{" "}
           <span className="relative inline-block whitespace-nowrap">
             &ldquo;talk to sales&rdquo;
             <InkDoodle
@@ -83,6 +80,11 @@ export function Pricing() {
             />
           </span>{" "}
           maze.
+        </p>
+        <p className="mx-auto mb-14 max-w-[52ch] text-[15px] leading-relaxed text-stone-600">
+          Every plan runs the whole product. Pick the one that matches your
+          volume — what changes as you move up is how much of us you get, not
+          what Shopkeeper can do.
         </p>
       </Reveal>
 

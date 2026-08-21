@@ -3,7 +3,7 @@
 Open work only. Completed work is deleted, not archived — git history is the
 record. Do not add "recently completed" sections to this file.
 
-Last reviewed: 2026-08-19.
+Last reviewed: 2026-08-20.
 
 Single source of truth for **actionable** open work. Evidence checklists, console
 residue, failure-drill procedures, and standing policies live in the linked docs
@@ -11,13 +11,27 @@ below — not duplicated here.
 
 Work is grouped by **what kind of action** it needs, not by when it was filed.
 
-`origin/master` is `57e2057c`, and **all four deploy surfaces are current on
-it.** Verified 2026-08-19: Vercel Ready on `57e2057c` (15:12 PT), Railway SUCCESS
-on the same commit (22:12 UTC), no migration directory changed since `88ec0be6`
-where the database was last verified at 6/6 partial unique indexes, and
-**`shopkeeper-production-27` released 2026-08-19 22:48** carrying the widget half
-of defect 4 — the last surface that was behind. `-26` is now the one-step
-rollback target; derive that from the CLI rather than from here, per
+`origin/master` is `5ee51baa`, and **three of the four deploy surfaces are
+current on it — the Shopify app version is not.** Re-verified 2026-08-20 23:00
+UTC: Vercel Ready on `5ee51baa` (built 22:19, ready 22:21 UTC) and Railway
+SUCCESS on the same commit (22:19 UTC). Both commit hashes were read off the
+deployment records themselves — Vercel's `meta.githubCommitSha` via the API,
+Railway's `meta.commitHash` via `railway deployment list --json` — not inferred
+from a timestamp sitting close to a commit, which is the trap this paragraph
+exists to avoid. No migration directory changed since `88ec0be6`, where the
+database was last verified at 6/6 partial unique indexes; confirmed by diffing
+`packages/db/prisma/migrations` across the whole range rather than assumed.
+
+**The fourth surface is behind, and this is the case the rule below is about.**
+`shopkeeper-production-27` (2026-08-19 22:48) is still the active version —
+confirmed against `shopify app versions list`, where it is the only `★ active`
+row. But `5ee51baa` changed `extensions/shopkeeper-chat/assets/shopkeeper-chat.js`
+and its locale string, and theme app extension assets reach merchants only in a
+released app version. So the handoff-notice fix is live on both app surfaces and
+in nobody's storefront. It needs a `-28`; releasing one is a merchant-facing
+action, so it is listed under Prove in prod rather than done silently. `-26` is
+the one-step rollback target from `-27`; derive that from the CLI rather than
+from here, per
 [production/shopify-app-config-reference.md](production/shopify-app-config-reference.md).
 
 A behind surface outranks everything else in this file, because every one of
@@ -71,6 +85,14 @@ channel to build. See [product-truth.md](product-truth.md) §2.
 Shipped code that needs a production canary, observation window, or configured
 provider. **None of these is a code task.**
 
+- [ ] **Release `shopkeeper-production-28`.** The behind surface named in the
+  header. `5ee51baa` fixed the storefront handoff notice that promised a reply
+  which had already arrived, but it is a theme app extension asset, so merchants
+  keep reading the old string until a version ships. Nothing else is waiting on
+  this release, and no scope changed, so it is a `shopify app deploy` and a
+  confirmation that `-28` becomes the `★ active` row. Do it before the merchant
+  rollout below, which would otherwise put a real merchant on the stale copy.
+
 - [ ] **Storefront chat dev-store browser matrix.** Run Online Store 2.0 and a
   vintage theme on desktop and mobile, with the embed on and off and the Shopify
   Inbox bubble present and removed. The automated remainder is covered: real
@@ -78,29 +100,17 @@ provider. **None of these is a code task.**
   revocation, and reply/approval/auto-execution dispatch persistence. Evidence
   and the full matrix:
   [storefront-chat-verification-2026-08.md](production/storefront-chat-verification-2026-08.md).
-- [ ] **The storefront-chat episode loop, end to end on the dev store.** Item F of
-  the conversation-episodes plan. Its eval half is **done** — the gate run that
-  item owed was satisfied by the 2026-08-17 full recapture, which came after A, B
-  and C had all landed and folded in safe-reply auto-execution. The live run
-  happened 2026-08-19 and **the episode machinery passed on every point**:
-  rollover on ten days of genuinely elapsed idle time, `episode_rollover` with the
-  cached plan cleared, session episode ended and rebound, and item E's divider
-  confirmed with both controls. One gap remains before this can close — agent text
-  actually reaching the shopper was never demonstrated, because no plan in that
-  episode contained `send_reply` at all. That is the same root as the escalation
-  defects, whose fixes **landed in `35f79a5c` and are deployed to both app
-  surfaces**, and the widget half shipped as `shopkeeper-production-27` on
-  2026-08-19. **Nothing blocks this any more** — re-run a single answerable
-  question and confirm agent text reaches the shopper. Evidence: "The episode loop
-  live, 2026-08-19" in
-  [storefront-chat-verification-2026-08.md](production/storefront-chat-verification-2026-08.md).
 - [ ] **One real merchant workspace on storefront chat, in approval mode.** Toggle
   on through the integration card, theme embed activated, Shopify Inbox bubble
   removed, then the full loop verified with no ops touching metadata. Never
   exercised outside the dev store the author controls. The condition that held
   this — notification shape plus the operability items — was met 2026-08-13, so
   what remains is the rollout itself. The stale-widget blocker is gone — the
-  extension is current as of `shopkeeper-production-27` (2026-08-19).
+  extension is current as of `shopkeeper-production-27` (2026-08-19). The two
+  2026-08-20 defects that held this are **both fixed**: product search matches
+  again (`32df62bf`, live on both surfaces), and the operator link now opens the
+  thread. What is left is a release — the widget copy fix below is a theme app
+  extension asset, so it reaches merchants only in the next app version.
 - [ ] **Guest escalation that keeps its reply, exercised live.** The regression
   where guest order questions escalated with no reply at all was fixed by passing
   `keepReply` into `applyEscalationRouting` — but **the router-materialized path
@@ -113,7 +123,12 @@ provider. **None of these is a code task.**
   and the model does **not** elect it — so the message has to be one the model
   believes it can answer. Storefront chat, dev store. Note the pending
   `escalate_to_human` description change makes model-elected escalation reasons
-  terser, not rarer, so it does not help produce this case. Background:
+  terser, not rarer, so it does not help produce this case. **The 2026-08-20 run
+  did not fire it either**, for the other reason: its two plans elected
+  `escalate_to_human` or contained no escalation at all, so the router never had
+  to synthesize anything. The product-search fix (`32df62bf`) should help produce
+  the case, since it makes "a message the model believes it can answer" an actual
+  category again. Background:
   [storefront-chat-verification-2026-08.md](production/storefront-chat-verification-2026-08.md).
 - [ ] **Postmark outbound canary.** Send and bounce attribution under real
   traffic. Inbound is proven end to end as of 2026-08-02 (server
@@ -140,11 +155,98 @@ provider. **None of these is a code task.**
 
 Code work that is started and not finished.
 
+- [ ] **Plan limits — built and inert, waiting on Stripe prices.** The gap was
+  real: grepping for `conversationLimit`, `conversationsPerMonth`, `seatLimit` and
+  `maxSeats` returned zero matches, so a $19 Starter subscriber got unbounded
+  conversations and seats. PR #49 (`feat/plan-limits`) closes it, green on every
+  check.
+
+  **Volume and seats only.** `c558c788` moved Shopify actions, phone approvals and
+  voice training *down* to Starter and said every plan runs the whole product, so
+  re-gating them would have reversed a decision made the day before.
+  `executor.ts` is untouched and no tool is gated by tier — the per-tier tool
+  gating this entry used to ask for was the wrong ask, not deferred work.
+
+  The numbers are recovered from `c558c788` rather than invented: **Starter 500
+  conversations/mo and 1 seat, Pro unbounded and 2 seats**. So `Pricing.tsx` and
+  the FAQ can carry them again without a second decision.
+
+  **Conversations degrade, seats refuse** (decision 2026-08-20). The cap attaches
+  to `precomputeThreadPlan` beside the existing `autoPlanOnOpen` skip, so an
+  over-cap org stops getting drafted plans while the message still lands in the
+  inbox — a billing cap must never be the reason a customer gets silence.
+  Inviting is the opposite case, a deliberate admin action with someone reading
+  the response, so it 403s and counts pending invitations. The merchant is told
+  once per billing period via `Organization.settings`; the operator-notify dedupe
+  is a one-hour Redis TTL and cannot express "once this month".
+
+  **One known limitation, priced and left in.** The once-per-period marker lives
+  on `Organization.settings`, and `buildSettingsUpdate` rebuilds that blob from
+  `normalizeStoredOrgSettings`, which is a whitelist — so saving any org setting
+  drops the marker and the merchant gets one duplicate notice that month. Every
+  fix costs more than the bug: a dedicated column means a migration and its
+  deploy-ordering landmine, whitelisting the key means an eval run against
+  `packages/agent`, and a per-call Redis TTL means threading an argument through
+  the notify path every proactive send shares. Revisit only if merchants report
+  repeats. Worth knowing separately: **that whitelist silently drops any key it
+  does not know**, which is a trap for anything else tempted to stash state there.
+
+  **What is left is the console half, not code.** `PRICE_ID_STARTER` and
+  `PRICE_ID_PRO` are unprovisioned, so every org resolves to the unknown tier,
+  which is deliberately unbounded — the enforcement ships inert and starts biting
+  only once the prices exist. Capping a real workspace on the strength of a
+  missing env var would be the opposite of failing safe. To activate: create the
+  two Stripe prices, set both vars in Vercel **and** Railway (the gateway reads
+  them too), then confirm a Starter org is capped and a Pro org is not. That is
+  the same trigger already listed under Parked / decide.
+
+- [ ] **Ground `send_reply` text the way escalation reasons are grounded — written,
+  on a PR, waiting on the gate.** The approved reply in the 2026-08-20 run told the
+  shopper *"I'm opening a return request for the Hydrogen snowboard on order
+  #1024"* with no `create_return` anywhere in the plan. `groundReplyText` in
+  `planner-routing.ts` now covers `send_reply.text` and `send_email.body`, called
+  from `planner.ts` immediately after `groundEscalationReasons` so it also reaches
+  the reply `keepReply` preserves beside a materialized handoff. Same invariant:
+  `planAgent` executes nothing, so at plan time a claim that the agent has done, is
+  doing, or will do something describes an action that does not exist.
+
+  **It is deliberately narrower than the escalation grounding, and the narrowing is
+  the interesting part.** Reusing those patterns verbatim would have been wrong in
+  two ways that only show up on shopper-facing prose. Agentless passive is not
+  matched, because *"Your refund has been processed"* is the ordinary shape of a
+  **true** report read out of `get_order` — the escalation field never carries those,
+  a reply carries them constantly. First person plural is not matched either,
+  because *"We shipped your order Monday"* reads as the store, not the agent, so it
+  can be grounded the same way. What is left is first-person-singular
+  self-attribution, past/progressive/promised, which is the fabrication actually
+  observed. It edits sentence-by-sentence rather than replacing the field, since a
+  reply is usually mostly good; a fallback stands in only when every sentence was
+  the fabrication. Residual gap, recorded rather than papered over: a `we`-voiced or
+  passive-voiced fabrication still passes. That is the deliberate price of not
+  mutilating truthful replies.
+
+  **The gate has run and it is clean.** PR #48, branch `fix/ground-reply-text`,
+  with no other agent-path change riding along — the core gate came back
+  **hard-gated 44/44 (100%)** in 4m55s
+  ([run 32427359636](https://github.com/walledog11/shopkeeper/actions/runs/32427359636)),
+  on real model calls with `REQUIRE_MODEL_EVALS=1` and 208s of test execution, so
+  this is not one of the fast greens that ran nothing. It genuinely owed the run —
+  `judge.ts` grades `replyText`, so a change that rewrites reply text can move
+  assertions by construction — and it moved none. Gateway pre-filter and
+  clear-fraud gates passed alongside it. Unit coverage is in
+  `planner-routing.test.ts` (`groundReplyText`, 11 cases including the two keep-it
+  cases above); `packages/agent` is green at 842 tests and `tsc` is clean.
+
+  What is left is the merge, and then the live case: a shopper message that
+  produces a reply the model wants to attach a mutation claim to. Delete this
+  entry once that has been seen once in production.
 - [ ] **Bounded conversation context and cross-channel memory.** Keep persistent
   shopper identity separate from short conversation episodes; plan from the
   newest request and retrieve only verified, relevant history or open
-  obligations. P0, P1 and items A–E have shipped; F is the live dev-store run,
-  filed under Prove in prod above. Full sequence and the deferred list:
+  obligations. P0, P1 and items A–E shipped, and **item F closed 2026-08-20** when
+  agent text finally reached the shopper on the dev store — `senderType=agent` at
+  `00:30:25.528Z`, rendered in the widget across a reload. Only the plan's deferred
+  list remains, and nothing on it is open work:
   [conversation-context-and-cross-channel-memory-plan.md](conversation-context-and-cross-channel-memory-plan.md).
 - [ ] **Read one day of spend against the 1-hour cache-write pricing fix.**
   Shipped 2026-08-18, PR #36, merge `4fa54da4`, live on both surfaces — Vercel
@@ -162,10 +264,13 @@ Code work that is started and not finished.
 - [ ] **Verify the seven fixes the 2026-08-19 storefront run produced.** The code
   **landed in `35f79a5c` on 2026-08-19** — 17 files, +307/−38 — and is deployed to
   both app surfaces. It went **straight to `master` with no PR**, so the eval gate
-  never saw it; that debt is in Eval-gate residue. No code work remains. What
-  remains is the verification each piece owes. Original evidence in
+  never saw it; that debt is in Eval-gate residue, and has since been settled. Most
+  of what remains is the verification each piece owes — **the 2026-08-20 run
+  discharged much of it**, and found that one fix (the deep link) is less complete
+  than it looked, which is now code work again. Original evidence in
   [storefront-chat-verification-2026-08.md](production/storefront-chat-verification-2026-08.md)
-  under "The episode loop live, 2026-08-19".
+  under "The episode loop live, 2026-08-19"; the follow-up run is under "The reply
+  loop closed, 2026-08-20".
   1. **Fabricated mutation claim** ("a return has been initiated", nothing planned
      or executed). Fixed by `groundEscalationReasons` in `planner-routing.ts`,
      called from `planner.ts` after routing. It rests on a stronger invariant than
@@ -176,8 +281,17 @@ Code work that is started and not finished.
      gate run (see Eval-gate residue), no live step.
   2. **Operator deep links 404.** Both emitters now use
      `/dashboard/tickets?thread=`. Five test assertions had encoded the broken
-     URL, which is why it survived; those are updated too. **Owes nothing** — the
-     tests carry it.
+     URL, which is why it survived; those are updated too. **Verified 2026-08-20
+     that the route resolves — and that it does not open the thread.** The 404 is
+     gone, and the reason the merchant still landed on an inbox list was a
+     separate dialog-positioning bug, **fixed and verified in-browser 2026-08-20**:
+     `needsYouCardShellClassName("shell")` ends in `relative`, which twMerge
+     resolved against the dialog's own `fixed`, so the panel rendered in normal
+     flow below a body Radix had already locked from scrolling. **Owes nothing.**
+     The tests could not have caught it as written — `toBeVisible()` passes on a
+     panel below the fold and a bare `toBeInViewport()` passes on one that merely
+     overlaps it, so `core-workflow.spec.ts` now asserts `ratio: 1`, which fails
+     against the old code and passes against the new.
   3. **Prose approval.** Not a missing capability — `approve_pending_plan` exists
      and is always passed. Two bullets in `OPERATOR_CONTROL_TOOL_INSTRUCTIONS`
      contradicted each other, and the "brand-new instruction" reading won. Both
@@ -193,20 +307,28 @@ Code work that is started and not finished.
      both halves are now live. The client/server contract was checked across the
      rename before release — the endpoints select `escalatedAt` and emit boolean
      `escalated` (`bootstrap/route.ts:114`, `messages/route.ts:45`), which is what
-     the widget reads — so this is not a no-op. **Owes the live check**: escalate a
-     storefront thread, confirm the shopper sees the notice, reload to confirm it
-     survives, then reply and confirm it clears.
+     the widget reads — so this is not a no-op. **Two of the three legs are
+     verified as of 2026-08-20**, the reload one in a stronger form than it was
+     written: the notice came back on a *cold* load ten days after the escalation,
+     derived from `escalatedAt = 2026-08-19T04:37:20.682Z` rather than from a timer
+     that happened to be running. **Owes only the clearing leg** — reply as the
+     merchant and confirm it disappears. Note that approving an agent plan cannot
+     discharge it: `recordMerchantReply` is explicitly merchant-only ("the agent's
+     own sends must not"), which was confirmed live when `escalatedAt` survived an
+     approved `send_reply`. So the clearing leg needs the composer — which
+     opens again as of 2026-08-20, so it is no longer blocked.
 
   The three copy items: the `Verified:` line now reads "They confirmed the email on
   #1024." — mechanism kept so the merchant can still judge the disclosure, audit-log
   register dropped. The ticket header renders "Storefront visitor" instead of
-  title-casing `shopify_chat:<uuid>` into a name. **The same fact twice was fixed at
-  the source and is the one piece that owes an eval gate run**: no presentational
-  fix was honest, because word overlap dies on paraphrase (the observed pair shares
-  4 of 11 content words) and dropping either line loses specifics in real cases, so
+  title-casing `shopify_chat:<uuid>` into a name — **verified live 2026-08-20**.
+  **The same fact twice was fixed at the source**: no presentational fix was honest,
+  because word overlap dies on paraphrase (the observed pair shares 4 of 11 content
+  words) and dropping either line loses specifics in real cases, so
   `escalate_to_human`'s `reason` field description now asks for the blocker rather
-  than the customer's story. That is the shared registry, it is already live in
-  production ungated, and the run it owes is in Eval-gate residue.
+  than the customer's story. That is the shared registry and it shipped ungated, so
+  it owed a gate run — **which has since been made and came back clean** (run
+  32311082225, hard-gated 74/74; no escalation fixture moved). Nothing outstanding.
 - [ ] **Conversation-to-sale attribution.** Connect meaningful storefront-chat
   interactions and product recommendations to later Shopify orders so merchants
   can distinguish direct, product-assisted, and chat-assisted revenue. Report it
@@ -257,6 +379,46 @@ edit did not change election behaviour. The two `[eval:baseline]` WARNs are both
 fixture below, at 1 repeat against a 3-repeat baseline, which is the documented
 way that fixture produces phantom regressions.
 
+**Two agent-path fixes were queued 2026-08-20** and the "can this change move an
+assertion?" test split them. Product search shipped (`32df62bf`) — fixtures inject
+tool output through `simulateToolResults`, so the harness never executes
+`packages/agent/src/shopify/products.ts` and changing the query string it sends
+could not reach an assertion; it owed a live check against the real store, and got
+one. **Grounding `send_reply` text was gated and came back clean**: `judge.ts`
+grades `replyText`, so a change that rewrites reply text can move assertions by
+construction. It went onto its own branch with no other agent-path change riding
+along, the core gate fired on PR #48 the way the standing rule intends, and it
+returned hard-gated 44/44. This is the first item in this section handled that
+way from the start rather than settled after the fact, and it is what the rule
+below is asking for — the run cost roughly $0.51 and happened automatically,
+instead of becoming another line in the backlog to be discharged later by a
+~$2.60 local full-suite run.
+
+The planner read-warning reworded on 2026-08-20 owes no run either. It is a
+`warnings[]` string assembled after planning in `planner-read-tools.ts`; no fixture
+asserts on it and `judge.ts` grades only `replyText`, so it cannot move a result.
+
+**The product-search fix goes to `master` without a PR, deliberately** (decided
+2026-08-20, branch `fix/product-search-exact-match`) — the first time that has been
+the right call rather than the thing this section exists to complain about.
+`evals.yml` lists `packages/agent/**`, so a
+PR would have fired a ~$0.48 core gate that provably could not move an assertion,
+against a file the harness never executes. The coarse `paths` filter is a net, not
+a verdict, and this is the case the "can this change move an assertion?" test is
+for. What it owed instead was a live check, and it got one: the shipped code path
+run against the dev store returned 5 products for `snowboard` where the old filter
+returned 0, 3 for `Collection Snowboard`, exactly 1 for a title containing a colon,
+and a clean `not_found` for a nonsense query. Do not read this as licence to skip
+the gate generally — the 31-of-34 backlog below is what that looks like.
+
+**That second point is a blind spot, not just an exemption.** Every Shopify tool
+result in the suite is simulated, so nothing in `packages/agent/src/shopify/*` has
+any eval coverage: a tool can be structurally broken against the live API — as
+product search was, returning zero rows for every natural query — while the gate
+stays green at 74/74. Evals grade what the model does with a tool result; they say
+nothing about whether the tool can produce one. Live probes are the only cover that
+layer has.
+
 - [ ] **`quick-reply-thanks-ack` passes 1/3.** The only fixture below full. Runs
   classify `needs_review` after repeated `get_order_by_name` errors and escalate.
   Advisory, so it does not gate.
@@ -276,6 +438,17 @@ way that fixture produces phantom regressions.
   item above is a full-suite dispatch instead of a core gate. The standing rule is
   in `.claude/CLAUDE.md` under Agent-change invariants. Items here keep coming
   back until this is the default.
+
+  **2026-08-20 is the first day the rule was followed without being reminded**,
+  and it is worth recording what that looks like, because the backlog above is
+  the only other evidence in this file. `groundReplyText` went to
+  `fix/ground-reply-text` and PR #48 with nothing else riding along; the core gate
+  fired on its own, came back hard-gated 44/44, and cost ~$0.51 at the moment the
+  change landed rather than becoming a line here to be discharged later at ~$2.60.
+  The same day, `feat/plan-limits` (PR #49) was correctly *not* gated: it is
+  gateway, dashboard and `packages/db` only, so `evals.yml` never matched it. Both
+  halves of the rule working on the same day — the gate firing where it should and
+  staying quiet where it should not — is the state this item is asking for.
 
 **Escalation reason text has no eval coverage at all** — established 2026-08-19,
 and worth knowing in both directions. Zero of the 84 fixtures assert on
@@ -324,6 +497,18 @@ display names, Telegram migration, and Gmail restricted-scope packet work:**
 when its closing verification passes. Re-verify env presence with
 `vercel env ls production` — `vercel env pull` redacts sensitive vars to an
 empty string, indistinguishable from unset.
+
+- [ ] **Provision the two Stripe prices, in both services.** This was a "resume
+  when triggered" row until 2026-08-20; the trigger has fired, because the
+  enforcement now exists and is waiting on it. Create `PRICE_ID_STARTER` and
+  `PRICE_ID_PRO` in Stripe, then set both in **Vercel *and* Railway** — the old
+  row said Vercel only, which is no longer sufficient: the gateway reads them to
+  tell a Starter subscription from a Pro one when applying the conversation cap,
+  and a value set on one service and not the other silently produces two
+  different answers about the same org. Until then every org resolves to the
+  unbounded unknown tier and no limit applies. Verify by confirming a Starter org
+  is capped and a Pro org is not. Stripe steps live in
+  [phase-6-external-services.md](phase-6-external-services.md).
 
 - [ ] **Confirm the connected store survived the `write_app_proxy` scope add.**
   `shopify.app.toml` shipped 2026-08-07 as `shopkeeper-production-9`, adding
@@ -377,7 +562,6 @@ resume. Gated-off integrations cost nothing to keep dark.
 | Trigger | Work | Where |
 | --- | --- | --- |
 | Privacy policy ships | PostHog Phase 5: staging payload review, then `PRODUCT_ANALYTICS_ENABLED=true` | [posthog-reports.md](production/posthog-reports.md) |
-| Two-tier billing ships | Create Stripe `PRICE_ID_STARTER` / `PRICE_ID_PRO` and set in Vercel production | [phase-6-external-services.md](phase-6-external-services.md) (Stripe) |
 | Redis TLS migration | Gateway `REDIS_URL` → `rediss://` on both services | [compatibility-retirement-backlog.md](compatibility-retirement-backlog.md) |
 | Paid beta | Better Stack Level 1 log drains + escalation (free tier done 2026-07-31) | [runbook.md](production/runbook.md), [alerting-evidence.md](production/alerting-evidence.md) |
 
