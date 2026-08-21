@@ -9,6 +9,7 @@ import {
   evaluateVerificationAttempt,
   generateVerificationCode,
   hashVerificationCode,
+  hashVerifiedEmail,
   normalizeCode,
   normalizeOrderName,
   verificationExpiry,
@@ -146,11 +147,16 @@ export async function requestVerification(
       orderName,
       orderId: String(order.id),
       codeHash: hashVerificationCode(code),
+      // The address ON THE ORDER, which is where the code is going. Parked as a
+      // candidate: it is promoted onto the session only once a correct code
+      // proves the shopper controls it.
+      candidateEmailHash: hashVerifiedEmail(order.email!),
       expiresAt: verificationExpiry(),
     },
     update: {
       orderId: String(order.id),
       codeHash: hashVerificationCode(code),
+      candidateEmailHash: hashVerifiedEmail(order.email!),
       expiresAt: verificationExpiry(),
       attempts: 0,
       verifiedAt: null,
@@ -236,7 +242,14 @@ export async function submitVerificationCode(
   const orderName = normalizeOrderName(input.orderName);
   const record = await db.storefrontChatVerification.findFirst({
     where: { sessionId: input.sessionId, organizationId: input.orgId, orderName },
-    select: { id: true, codeHash: true, expiresAt: true, attempts: true, verifiedAt: true },
+    select: {
+      id: true,
+      codeHash: true,
+      expiresAt: true,
+      attempts: true,
+      verifiedAt: true,
+      candidateEmailHash: true,
+    },
   });
 
   const outcome = evaluateVerificationAttempt(record, input.code);
@@ -246,6 +259,22 @@ export async function submitVerificationCode(
       where: { id: record!.id },
       data: { verifiedAt: new Date() },
     });
+    // Promote the candidate only now, when a correct code has proved the
+    // shopper controls the address. This is the only durable link between an
+    // anonymous browser session and a later order, so it is also the only place
+    // that link can be forged — hence "on success" and nowhere else. First
+    // verification wins: a session that later verifies a second order under a
+    // different address keeps the identity it originally proved.
+    if (record!.candidateEmailHash) {
+      await db.storefrontChatSession.updateMany({
+        where: {
+          id: input.sessionId,
+          organizationId: input.orgId,
+          verifiedEmailHash: null,
+        },
+        data: { verifiedEmailHash: record!.candidateEmailHash },
+      });
+    }
   } else if (outcome.status === "wrong_code") {
     await db.storefrontChatVerification.update({
       where: { id: record!.id },

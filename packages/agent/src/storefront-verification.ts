@@ -50,6 +50,12 @@ export function emailsMatch(supplied: string | null | undefined, onOrder: string
   return a.length > 0 && a === b;
 }
 
+// SHA-256 of the lowercased address, so a session can be matched to a later
+// order by equality without giving the address a second home outside Shopify.
+export function hashVerifiedEmail(email: string): string {
+  return createHash("sha256").update(email.trim().toLowerCase()).digest("hex");
+}
+
 // Constant-time compare so a wrong code cannot be narrowed digit by digit from
 // response timing. Length is checked first because timingSafeEqual throws on a
 // length mismatch, and code length is not a secret.
