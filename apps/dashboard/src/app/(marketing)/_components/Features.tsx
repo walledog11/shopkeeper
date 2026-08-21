@@ -42,22 +42,22 @@ const FEATURES: Feature[] = [
     ),
     body: (
       <>
-        Shopkeeper reads every DM and email the second it lands, pulls the real order from Shopify, and
-        replies the way you would. When it isn&apos;t sure, it doesn&apos;t guess —{" "}
+        Shopkeeper uses the available customer message and Shopify context to prepare a grounded reply.
+        Routine answers follow your autonomy setting; when it isn&apos;t sure, it doesn&apos;t guess —{" "}
         <span className="m-ink-underline">it hands the thread to you</span>.
       </>
     ),
     bullets: [
-      "Instagram, email & iMessage in one brain",
-      "Learns your tone from the replies you've already sent",
-      "Escalates to you instead of bluffing",
+      "Customer intake through Instagram and email",
+      "Merchant control through iMessage or the dashboard",
+      "Learns from approved edits and sample replies",
     ],
-    note: "11 DMs handled before your alarm.",
+    note: "routine support kept moving overnight.",
     annotation: "2:14 am — you were asleep",
     chat: {
       variant: "instagram",
       title: "linen & loom",
-      subtitle: "linenandloom",
+      subtitle: "Instagram",
       avatar: "L",
       avatarBg: "linear-gradient(135deg,#f09433,#dc2743)",
       messages: [
@@ -82,17 +82,17 @@ const FEATURES: Feature[] = [
     ),
     body: (
       <>
-        You set the rules — refund caps, blocked actions, how much rope it gets. Shopkeeper starts cautious
-        and earns autonomy one approval at a time, because{" "}
+        You set the rules — refund caps, blocked actions, and the autonomy mode. Ask first is the default
+        for order changes, money, and exceptions, because{" "}
         <span className="m-ink-underline">one bad refund can undo months of trust</span>.
       </>
     ),
     bullets: [
       "Refund limits and blocked cancellations you control",
-      "Approve with one text — iMessage or Telegram",
+      "Approve through iMessage or the dashboard",
       "Every action logged on the thread",
     ],
-    note: "$212 saved — order intact.",
+    note: "proposed, approved, and logged.",
     annotation: "your call — one tap",
     chat: {
       variant: "imessage",
@@ -126,16 +126,16 @@ const FEATURES: Feature[] = [
     ),
     body: (
       <>
-        Live Shopify orders and inventory, your policies, every past conversation. Ask it anything about
-        your store and it answers <span className="m-ink-underline">from data, not vibes</span>.
+        Live Shopify orders and inventory, merchant-provided policies, and available customer context.
+        Ask about your store and it answers <span className="m-ink-underline">from data, not vibes</span>.
       </>
     ),
     bullets: [
       "Reads live orders, inventory & tracking",
-      "Remembers every customer conversation",
-      "Cites your policies and FAQs, not generic ones",
+      "Uses available conversation and customer history",
+      "Follows your policies and approved guidance",
     ],
-    note: "restock day: all 9 got a text.",
+    note: "store context and guidance, reviewed together.",
     annotation: "live from your Shopify",
     chat: {
       variant: "imessage",
@@ -147,13 +147,13 @@ const FEATURES: Feature[] = [
         { from: "user", text: "how many linen jumpsuits left in xs?", time: "4:20 PM" },
         {
           from: "agent",
-          text: "11 in XS, 3 in S. It's also your most-asked item this week — 9 DMs about a restock.",
+          text: "Shopify shows 11 in XS and 3 in S right now.",
           time: "4:20 PM",
         },
         { from: "user", text: "restock lands tuesday", time: "4:22 PM" },
         {
           from: "agent",
-          text: "Noted 📌 I'll tell anyone who asks, and I can message the 9 who already did once it drops. Want that?",
+          text: "Got it. Want me to save Tuesday's restock as temporary guidance for future questions?",
           time: "4:22 PM",
         },
       ],

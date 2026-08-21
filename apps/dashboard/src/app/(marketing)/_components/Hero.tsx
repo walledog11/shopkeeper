@@ -2,6 +2,7 @@ import Image from "next/image";
 import { GlassLink } from "./GlassLink";
 import { InkDoodle } from "./Marginalia";
 import { HIRE_CTA_LABEL } from "@/lib/brand";
+import { HeroMedia } from "./HeroMedia";
 
 function rise(delayMs: number) {
   return {
@@ -29,12 +30,12 @@ export function Hero() {
 
       <div className="mb-7 inline-block" style={rise(0)}>
         <a
-          href="#channels"
+          href="#system"
           className="inline-flex -rotate-[2.2deg] items-center gap-2 rounded-lg border border-stone-900/10 bg-[#fbf8f2] px-3 py-1.5 text-[13px] font-medium text-stone-600 shadow-[3px_3px_0_rgba(43,33,24,0.11)] transition-transform duration-200 hover:-rotate-[0.8deg]"
         >
-          <span className="font-semibold text-stone-900">New</span>
+          <span className="font-semibold text-stone-900">AI support operator</span>
           <span aria-hidden className="text-stone-300">·</span>
-          Apple Messages
+          Built for Shopify
           <span aria-hidden className="text-stone-400">›</span>
         </a>
       </div>
@@ -43,24 +44,25 @@ export function Hero() {
         className="mx-auto mb-7 max-w-[min(760px,92vw)] text-[clamp(42px,5.5vw,72px)] font-bold leading-[1.05] tracking-[0.03em] [font-family:var(--m-hand)] [text-shadow:0_1px_0_rgba(255,255,255,0.55),0_2px_16px_rgba(249,245,238,0.9)]"
         style={rise(80)}
       >
-        The AI employee
+        Customer support that
         <br />
-        for your Shopify store
+        can actually fix the order
       </h1>
 
       <p
         className="mx-auto mb-7 max-w-[min(540px,88vw)] text-[15px] leading-[1.45] text-stone-600 sm:text-[16px]"
         style={rise(160)}
       >
-        It answers your customers overnight, fixes orders right in Shopify, and texts you the moment something needs your call.
+        Shopkeeper answers routine questions, prepares and completes Shopify order work, and asks you
+        before consequential actions.
       </p>
 
       <div className="mb-10 flex flex-wrap items-center justify-center gap-3" style={rise(240)}>
         <GlassLink href="/signup" variant="primary" className="px-6 py-3">
           {HIRE_CTA_LABEL}
         </GlassLink>
-        <GlassLink href="#how" variant="secondary" className="px-6 py-3">
-          Watch it work ↓
+        <GlassLink href="#workflow" variant="secondary" className="px-6 py-3">
+          See an order change ↓
         </GlassLink>
       </div>
 
@@ -80,24 +82,14 @@ export function Hero() {
           />
           <div className="m-grain absolute inset-0" />
         </div>
-        <video
-          aria-label="Shopkeeper demo film"
-          src="https://cfkjygwgphgv2dom.public.blob.vercel-storage.com/demo-film.mp4?v=3"
-          poster="/atmosphere/demo-poster.webp"
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="metadata"
-          className="mx-auto aspect-[4/3] w-full max-w-[880px] rounded-[28px] bg-[#f6f2eb] shadow-[0_40px_80px_-30px_rgba(22,20,19,0.4)]"
-        />
+        <HeroMedia />
       </div>
 
       <p
         className="mx-auto mt-5 max-w-[min(520px,88vw)] -rotate-[0.6deg] text-[17px] leading-none text-stone-600 [font-family:var(--m-hand)]"
         style={rise(380)}
       >
-        Live today for support — order ops, inventory &amp; suppliers on the way.
+        Instagram + email support · Shopify order work · approvals through iMessage
       </p>
     </section>
   );

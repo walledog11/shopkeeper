@@ -1,7 +1,7 @@
 # Shopkeeper — AI Support for Shopify Brands
 
 ## What This Is
-Shopkeeper is an AI operating layer for solo and small e-commerce businesses on Shopify — a general-purpose agent that handles operational work and is reachable from wherever the merchant is (Telegram and iMessage today; the dashboard is one surface, not *the* surface).
+Shopkeeper is an AI operating layer for solo and small e-commerce businesses on Shopify — a general-purpose agent that handles operational work and is reachable through iMessage; the dashboard is one surface, not *the* surface.
 
 **Customer support is the V1 wedge and the current focus.** Think Zendesk but AI-first and purpose-built for Shopify: a multi-channel support inbox plus an AI agent that reads and acts on Shopify data (orders, customers, refunds, etc.) directly inside the workflow. The architecture is built so the same agent core — memory, approval/autonomy workflows, multi-channel interaction, tool use — extends into adjacent workflow modules over time: order operations → inventory & supplier comms → marketing ops → financial ops. Only the support module is built today; the codebase assumes the others will share the core.
 
@@ -44,7 +44,7 @@ Run `nvm use` from the repository root to select the version declared in `.nvmrc
 2. Gateway verifies signature (HMAC/Meta), resolves org, enqueues job to BullMQ
 3. Worker upserts customer/thread/message, sanitizes input (prompt injection protection), deduplicates by `externalMessageId`
 4. Worker enqueues AI summary job → Claude generates 1-sentence summary + tag (Shipping/Returns/Order Status/Product Inquiry/General)
-5. After summarizing, the worker generates the agent plan in-process (`@shopkeeper/agent` planner) and caches it on the thread, then sends a Telegram or iMessage notification to all bound org members
+5. After summarizing, the worker generates the agent plan in-process (`@shopkeeper/agent` planner) and caches it on the thread, then sends an iMessage notification to bound org members; the internal Telegram test transport can exercise the same path in test environments
 6. Dashboard polls `/api/threads?status=open` via SWR every 3s and shows the new thread
 7. Agent opens the ticket → auto-plan is shown → agent approves → `POST /api/agent` executes
 
@@ -56,14 +56,14 @@ Run `nvm use` from the repository root to select the version declared in `.nvmrc
 ## Channels
 - **Email** — complete. **Hybrid model**: inbound rail and outbound provider are separate concerns. *Inbound* (customer mail → ticket) uses Postmark forwarding (`{orgId}@inbound.<domain>` → `POST /webhooks/email/inbound` → `process-email` job) plus controlled-rollout native Gmail Pub/Sub/history sync behind `GMAIL_NATIVE_INBOUND`. *Outbound* (replies) is per-integration from `Integration.metadata.provider` — Gmail API or Postmark fallback — with reply threading, quote stripping, and an AI spam filter on new senders. A daily `email-token-health` cron probes Gmail refresh tokens and flags "Reconnect" in Integrations on failure.
 - **Instagram DM** — Instagram Login OAuth, isolated inbound webhooks, private media storage, agent image understanding, exact-account replies, and token health are implemented. The complete Standard Access lifecycle has passed; Advanced Access approval and a non-role merchant pass remain launch gates
-- **Telegram** — complete (operator-only, single Shopkeeper bot, inbound via `/webhooks/telegram`, outbound plan notifications to bound org members, yes/no/skip plan approval via reply)
+- **Telegram test transport** — internal testing only; not a product integration and never a marketing or onboarding surface
 - **iMessage** — complete (operator-only, platform-wide Photon Spectrum line, merchant binds iPhone via connect code in Integrations, inbound via `/webhooks/photon`, outbound plan notifications with dashboard deep links, yes/no/skip approval via reply)
 - **Shopify** — complete (OAuth custom app, webhook ingestion for orders/created/fulfilled/updated/cancelled, HMAC verification, KB sync, Orders + Customers dashboard views)
 - **TikTok** — not started (type stubs and UI placeholder only)
 
 ### Internal Channel Types (not user-facing)
 - `dashboard_agent` — thread created for each standalone Concierge chat session on `/dashboard/agent`
-- `sms_agent` — thread created when a team member interacts with the agent via Telegram (legacy name)
+- `sms_agent` — legacy thread name used by the internal Telegram test transport
 
 ## Dashboard Navigation Structure
 ```
@@ -96,8 +96,8 @@ Triggered from the tickets page. When a ticket is opened:
 ### Operator Mode (dashboard_agent, sms_agent)
 Direct interface for the merchant/team. No customer in context — the agent takes instructions and acts on Shopify directly.
 - **Dashboard**: `/dashboard/agent` page has a persistent chat interface (session-based, one `dashboard_agent` thread per session).
-- **Telegram**: new ticket notification sent to all bound org members. Reply `yes` to execute the plan, `no` to skip, or type freeform instructions.
-- **iMessage**: same operator flows as Telegram — plan pushes include a dashboard deep link; reply `yes` / `no` / `skip N` or freeform from a linked iPhone.
+- **Telegram test transport**: internal-only harness for exercising notification, approval, skip, and freeform-instruction paths.
+- **iMessage**: product operator flow. Plan pushes include a dashboard deep link; reply `yes` / `no` / `skip N` or freeform from a linked iPhone.
 
 ### Agent Tools
 Tool registry and execution live in the extracted core under `packages/agent/src/tools/` (`@shopkeeper/agent`).
@@ -183,11 +183,11 @@ Configurable per org via Agent → Configure:
 
 ### Team
 - Org member management via Clerk.com
-- Bound Telegram chats and iMessage handles per org member for operator notifications
+- Bound iMessage handles for product operator notifications; Telegram chat bindings exist only for internal transport testing
 
 ### Workspace
 - `/dashboard/settings`: org name, branding, billing, exports, retention, and workspace deletion
-- `/dashboard/integrations`: connect/disconnect Instagram, Shopify, Telegram, iMessage, email, and other channels
+- `/dashboard/integrations`: connect/disconnect Instagram, Shopify, iMessage, email, and other product channels
 - `/dashboard/team`: members, roles, and access
 - Personal profile and security live in the avatar menu via Clerk's account portal
 
@@ -198,14 +198,14 @@ Configurable per org via Agent → Configure:
 - **Customer** — unique by `(organizationId, platformId)`. `platformId` is email for email channel, IG sender ID for DMs.
 - **Thread** — belongs to org + customer. Has `channelType`, active `status` values (`open`/`closed`; legacy `pending` remains database-readable), orthogonal `escalated_at`, `aiSummary`, `tag`, `shopifyCustomerId`, `cachedPlan` (agent plan cache), soft-delete + archive fields.
 - **Message** — belongs to thread. `senderType`: customer/agent/ai/note. Agent action logs are stored as `note` messages prefixed with `__shopkeeper_agent__` (legacy rows may use `__clerk_agent__`).
-- **OperatorContext** — persists Telegram/iMessage operator state per organization and channel context key (pending plan/digest/question). DB-backed, not Redis.
-- **OrgMember** — extends Clerk org membership with Telegram chat and iMessage sender bindings for operator notifications.
+- **OperatorContext** — persists iMessage operator state and internal Telegram test state per organization and channel context key (pending plan/digest/question). DB-backed, not Redis.
+- **OrgMember** — extends Clerk org membership with iMessage sender bindings and internal Telegram test bindings.
 - **KnowledgeBase** — named KB container. `source`: "user" | "shopify".
 - **KbArticle** — belongs to org + KB. Has tags for context filtering.
 - **Feedback** — in-app NPS/survey (rating + comment + categories).
 
 ## Key Files
-- `apps/gateway/src/routes/` — webhook handlers (Meta/Instagram, email, Telegram, iMessage/Photon, Shopify)
+- `apps/gateway/src/routes/` — webhook handlers (Meta/Instagram, email, iMessage/Photon, Shopify, and the internal Telegram test transport)
 - `apps/gateway/src/worker.ts` — BullMQ worker: inbound message processing + AI summary + maintenance workers
 - `apps/gateway/src/message-handlers/` — per-channel job handlers (`channels.ts`), AI summary generation (`intelligence.ts`), and operator-channel planning/notifications
 - `apps/gateway/src/maintenance/workers.ts` — daily IG token health check, 90-day archive + 90-day purge workers
@@ -262,7 +262,7 @@ Optional dashboard variables:
 - `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET` — Instagram Login OAuth
 - `INSTAGRAM_BETA_ORG_IDS` — optional comma-separated Clerk organization IDs allowed to connect while the switch is enabled; empty enables every workspace
 - `INSTAGRAM_WEBHOOK_APP_SECRET` — parent Meta app signing secret, only needed when using the local dashboard webhook proxy
-- `TELEGRAM_BOT_USERNAME` — operator-channel deep link in the dashboard
+- `TELEGRAM_BOT_USERNAME` — internal test-transport deep link
 - `IMESSAGE_LINE_HANDLE` — platform iMessage handle merchants text to bind (dashboard); enables Integrations + onboarding connect UX
 - `USPS_CLIENT_ID`, `USPS_CLIENT_SECRET` — direct USPS tracking lookup
 
@@ -291,7 +291,7 @@ Optional gateway variables:
 - `DASHBOARD_INTERNAL_URL` — local dashboard URL used only for dev callback forwarding
 - `GATEWAY_RUNTIME_ROLE` — defaults to `all`; use only when splitting server and worker processes
 - `INSTAGRAM_WEBHOOK_APP_SECRET`, `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` — Instagram webhook signing and verification; the signing secret is the parent Meta app secret, not the Instagram Login OAuth secret
-- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` — Telegram operator channel
+- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` — internal Telegram test transport
 - `SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET`, `SPECTRUM_WEBHOOK_SECRET` — platform-wide Photon Spectrum credentials for the iMessage operator line (gateway)
 - `POSTMARK_INBOUND_USERNAME`, `POSTMARK_INBOUND_PASSWORD` — required in production for Postmark inbound webhook basic auth; optional in local dev
 - `LOG_LEVEL`, `LOG_PRETTY` — gateway logging controls

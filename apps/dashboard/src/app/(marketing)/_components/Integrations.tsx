@@ -13,21 +13,21 @@ type BriefingMessage = ChatMessage & { divider?: string };
 const briefingMessages: BriefingMessage[] = [
   {
     from: "agent",
-    text: "Morning ☀️ 6 messages came in overnight — all handled. Four tracking checks, a sizing question, and Maya ordered the linen jumpsuit in M but meant S. I fixed order #3102 in Shopify before it shipped and sent her the new confirmation.",
+    text: "Morning ☀️ Routine tracking and sizing questions kept moving overnight. Maya also asked to swap order #3102 from M to S; you approved it, Shopify is updated, and her confirmation was sent.",
     time: "7:31 AM",
-    divider: "Today 7:31 AM",
+    divider: "Seeded example · Today 7:31 AM",
   },
   { from: "user", text: "anything need me?", time: "7:48 AM" },
   {
     from: "agent",
-    text: "Just one: Dana's parcel says delivered but she can't find it. I sent her the carrier's delivery photo and opened a trace with USPS — I'll update you at 5 if it hasn't turned up.",
+    text: "Just one: Dana's USPS shipment has a delivery exception. I prepared a customer heads-up and left it waiting for your approval.",
     time: "7:48 AM",
   },
+  { from: "user", text: "approve the heads-up", time: "7:50 AM" },
   {
     from: "agent",
-    text: "Update: found it — safe with her neighbor 📦 Nothing else needs you today.",
-    time: "4:02 PM",
-    divider: "4:02 PM",
+    text: "Sent and logged. I'll keep monitoring the supported tracking updates.",
+    time: "7:50 AM",
   },
 ];
 
@@ -136,13 +136,13 @@ export function Integrations() {
 
       <div className="mx-auto max-w-6xl px-6 text-center">
         <Reveal>
-          <SectionLabel>every morning</SectionLabel>
+          <SectionLabel>optional morning briefing</SectionLabel>
           <h2 className="mx-auto mb-5 max-w-[18ch] text-[clamp(36px,5vw,68px)] font-bold leading-[1.05] tracking-[0.03em] [font-family:var(--m-hand)]">
             Wake up to a briefing, <em className="italic text-[var(--m-quill)]">not a backlog.</em>
           </h2>
           <p className="mx-auto mb-14 max-w-[52ch] text-[16px] leading-relaxed text-stone-700">
-            Every morning, Shopkeeper texts you what happened overnight — the questions it answered, the
-            orders it fixed in Shopify, and the rare thing that actually needs your call.
+            Enable a briefing through a configured merchant channel to review routine support, completed
+            work, and the exceptions that still need your judgment.
           </p>
         </Reveal>
 

@@ -6,28 +6,32 @@ import { SectionLabel } from "./SectionLabel";
 
 const faqs = [
   {
-    q: "Will it ever send something embarrassing on my behalf?",
-    a: "Not unless you tell it to. By default, Shopkeeper drafts every reply and waits for your approval — one text on your phone (iMessage or Telegram) or right in the dashboard. As you build trust you can raise its trust level so it handles simple replies on its own. Money stays on a leash either way: you set the largest refund it may issue without asking, and anything over that line comes back to you. Cancellations you can block outright.",
+    q: "What can Shopkeeper send automatically?",
+    a: "Draft only never sends replies or changes Shopify. The default Ask first mode can keep routine replies moving, but changes, money, and exceptions pause for merchant approval. Trusted is an explicit opt-in for simple replies; configured limits and approval rules still apply.",
   },
   {
     q: "How does it learn my voice?",
-    a: "From your edits. Every time you rewrite a draft before it goes out, Shopkeeper keeps the change and folds it into a brand-voice brief it maintains for itself. You can also just tell it, in your own words, how you want to sound.",
+    a: "You can add sample replies, and Shopkeeper learns from edits you approve. After enough examples it can propose an updated voice brief, which changes only after you review and approve it.",
   },
   {
     q: "Can I export my data?",
-    a: "Every action Shopkeeper takes exports to CSV any time — the customer, the channel, what it did, and how it turned out. Message-by-message conversation history isn't in the export yet. We don't hold your data hostage.",
+    a: "Yes. Workspace and customer data export as JSON, and the action history exports as CSV.",
   },
   {
     q: "What if I don't use Shopify?",
-    a: "Inbox + AI drafts work standalone. Shopify-specific actions (refund, address change) only fire if you connect a store.",
+    a: "Customer replies can use connected channels and the guidance you provide, but order context and actions such as refunds, address changes, and exchanges require Shopify.",
   },
   {
-    q: "Can multiple team members use Shopkeeper?",
-    a: "Yes — invite your whole team on any plan. Internal notes let them align privately before anyone replies.",
+    q: "Which channels are supported today?",
+    a: "Customers can reach Shopkeeper through Instagram, Gmail, or forwarded support email. Merchants can review and approve through iMessage or the dashboard.",
   },
   {
-    q: "Is my customers' data secure?",
-    a: "All customer data is encrypted in transit and at rest. Each organization's data is strictly isolated — no cross-tenant access.",
+    q: "What happens when Shopkeeper is uncertain?",
+    a: "It can ask for missing policy or judgment, pause consequential work for approval, or block and escalate work that falls outside the rules instead of improvising.",
+  },
+  {
+    q: "How is customer data protected?",
+    a: "Workspace access is scoped to the organization, connected-provider credentials are encrypted before storage, and the product provides supported workspace and customer export controls.",
   },
 ];
 

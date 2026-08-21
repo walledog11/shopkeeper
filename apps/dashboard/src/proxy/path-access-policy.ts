@@ -10,6 +10,7 @@ export const publicRoutePatterns = [
   "/",
   "/privacy",
   "/terms",
+  "/product(.*)",
   "/login(.*)",
   "/signup(.*)",
   "/demo-film",

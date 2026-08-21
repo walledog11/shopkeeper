@@ -1,11 +1,8 @@
 import { Navbar } from "./_components/Navbar";
 import { MarginThread } from "./_components/MarginThread";
 import { Hero } from "./_components/Hero";
-import { Channels } from "./_components/Channels";
-import { Touchpoints } from "./_components/Touchpoints";
+import { CoreProductOverview, ProactiveOperations, TrustSection } from "./_components/ProductOverview";
 import { Onboarding } from "./_components/Onboarding";
-import { Features } from "./_components/Features";
-import { Integrations } from "./_components/Integrations";
 import { Pricing } from "./_components/Pricing";
 import { FAQ as Faq } from "./_components/FAQ";
 import { CTA as Cta } from "./_components/CTA";
@@ -17,11 +14,10 @@ export default function Home() {
       <MarginThread />
       <Navbar />
       <Hero />
-      <Integrations />
-      <Channels />
-      <Touchpoints />
+      <CoreProductOverview />
+      <ProactiveOperations />
       <Onboarding />
-      <Features />
+      <TrustSection />
       <Pricing />
       <Faq />
       <Cta />

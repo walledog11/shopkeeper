@@ -19,11 +19,14 @@ Where the merchant talks to the AI agent:
 
 - iMessage: merchant approval/control channel.
 - WhatsApp: merchant approval/control channel.
-- Telegram: beta/internal merchant approval/control channel.
 
 These are not customer support inboxes. They are where the merchant approves actions, asks questions, gives instructions, and receives summaries.
 
-WhatsApp is deprioritized as of 2026-08-07. Telegram and iMessage already cover this layer, so WhatsApp would be a third route to the same place rather than new reach, and its US penetration is low in the market Shopkeeper targets. It stays on the roadmap and is not a removal candidate — build it when a merchant asks for it, not as the default next channel.
+WhatsApp is deprioritized as of 2026-08-07. iMessage already covers the phone-native layer, and WhatsApp's US penetration is low in the market Shopkeeper targets. It stays on the roadmap and is not a removal candidate — build it when a merchant asks for it, not as the default next channel.
+
+The Telegram transport is for internal testing only. It is not a Shopkeeper
+integration and must not appear in public positioning, onboarding, integration
+catalogs, or marketing materials.
 
 ## 3. System-of-Action Integrations
 
@@ -60,7 +63,7 @@ Customer messages from social/email -> AI understands Shopify context -> merchan
 That means the product should optimize for:
 
 - Customer intake from Instagram first, with Gmail as the simple fallback.
-- Fast merchant control from phone-native channels, especially iMessage and Telegram — the two that are live.
+- Fast merchant control through iMessage, with the dashboard as the review and fallback surface.
 - Shopify-backed action plans, not generic chatbot replies.
 - Clear approval, execution, and audit trails.
 - A dashboard that supports setup and trust, without making the product feel like another helpdesk queue.

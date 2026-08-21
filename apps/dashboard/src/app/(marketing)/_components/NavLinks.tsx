@@ -11,10 +11,8 @@ import {
   ChevronRight,
   Menu,
   MessageCircle,
-  Moon,
   ShieldCheck,
   Store,
-  Sunrise,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -26,50 +24,50 @@ type ProductCard = {
   title: string;
   subtitle: string;
   icon: LucideIcon;
-  badge?: string;
 };
 
 type Partner = {
   href: string;
   name: string;
   logo: string;
-  badge?: string;
 };
 
 const productCards: ProductCard[] = [
   {
-    href: "#how-replies",
-    title: "Answers while you sleep",
-    subtitle: "Reads every DM and email the second it lands, and pulls the real order from Shopify.",
-    icon: Moon,
+    href: "/product/order-operations",
+    title: "Order operations",
+    subtitle: "See the Shopify work Shopkeeper can prepare and complete.",
+    icon: Store,
   },
   {
-    href: "#how-approvals",
-    title: "Asks before it acts",
-    subtitle: "You set the rules. Refunds and cancellations wait for one tap on your phone.",
+    href: "/#controls",
+    title: "Approvals and controls",
+    subtitle: "Set the rules for what can reply, what must ask, and what stays blocked.",
     icon: ShieldCheck,
   },
   {
-    href: "#briefing",
-    title: "A briefing, not a backlog",
-    subtitle: "Every morning, a text of what it handled overnight — and the rare thing that needs you.",
-    icon: Sunrise,
+    href: "/#system",
+    title: "How it works",
+    subtitle: "Follow a request from the customer channel to Shopify and the action log.",
+    icon: ArrowUpRight,
   },
   {
-    href: "#channels",
-    title: "Wherever you already are",
-    subtitle: "Texting Shopkeeper feels like texting your best employee.",
+    href: "/#context",
+    title: "Store context",
+    subtitle: "Orders, inventory, policies, customer history, and approved voice guidance.",
     icon: MessageCircle,
-    badge: "New",
   },
 ];
 
 const partners: Partner[] = [
-  { href: "#how-store", name: "Shopify", logo: "/logos/shopify.svg" },
-  { href: "#how-replies", name: "Instagram", logo: "/logos/instagram-outline.svg" },
-  { href: "#how-replies", name: "Email", logo: "/logos/email.svg" },
-  { href: "#channels", name: "iMessage", logo: "/logos/imessage.svg", badge: "New" },
-  { href: "#channels", name: "Telegram", logo: "/logos/telegram.svg" },
+  { href: "/#system", name: "Shopify", logo: "/logos/shopify.svg" },
+  {
+    href: "/#system",
+    name: "Instagram",
+    logo: "/logos/instagram-outline.svg",
+  },
+  { href: "/#system", name: "Email", logo: "/logos/email.svg" },
+  { href: "/#system", name: "iMessage", logo: "/logos/imessage.svg" },
 ];
 
 /* Slot outside the frosted navbar pill — backdrop-filter on a descendant of
@@ -164,10 +162,6 @@ function useHoverMenu(setOpen: (value: boolean) => void) {
   };
 }
 
-function NewBadge() {
-  return <span className="m-nav-mega-new">New</span>;
-}
-
 function ProductMenu() {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -201,7 +195,6 @@ function ProductMenu() {
                   </span>
                   <span className="m-nav-mega-card-title">
                     {card.title}
-                    {card.badge ? <NewBadge /> : null}
                   </span>
                   <ArrowUpRight
                     className="m-nav-mega-arrow size-3.5"
@@ -234,16 +227,15 @@ function ProductMenu() {
                   />
                 </span>
                 <span className="m-nav-mega-partner-name">{partner.name}</span>
-                {partner.badge ? <NewBadge /> : null}
               </Link>
             ))}
             <Link
-              href="#channels"
+              href="/#system"
               role="menuitem"
               className="m-nav-mega-more"
               onClick={() => setOpen(false)}
             >
-              See how you reach it
+              See how the system fits together
             </Link>
           </div>
         </div>
@@ -279,10 +271,13 @@ export function NavLinks() {
   return (
     <div className="m-nav-links">
       <ProductMenu />
-      <Link href="#pricing" className="m-nav-link">
+      <Link href="/#trust" className="m-nav-link">
+        Security
+      </Link>
+      <Link href="/#pricing" className="m-nav-link">
         Pricing
       </Link>
-      <Link href="#faq" className="m-nav-link">
+      <Link href="/#faq" className="m-nav-link">
         FAQ
       </Link>
     </div>
@@ -379,16 +374,18 @@ export function MobileNav() {
                 onClick={close}
               >
                 {card.title}
-                {card.badge ? <NewBadge /> : null}
               </Link>
             ))}
           </div>
         ) : null}
 
-        <Link href="#pricing" className="m-nav-sheet-item" onClick={close}>
+        <Link href="/#pricing" className="m-nav-sheet-item" onClick={close}>
           Pricing
         </Link>
-        <Link href="#faq" className="m-nav-sheet-item" onClick={close}>
+        <Link href="/#trust" className="m-nav-sheet-item" onClick={close}>
+          Security
+        </Link>
+        <Link href="/#faq" className="m-nav-sheet-item" onClick={close}>
           FAQ
         </Link>
         {isSignedIn ? (

@@ -5,7 +5,7 @@ import { CONTACT_EMAIL } from "@/lib/brand";
 const COPYRIGHT_YEAR = 2026;
 
 const footerLinks = [
-  { href: "/#how", label: "Product" },
+  { href: "/#workflow", label: "Product" },
   { href: "/#pricing", label: "Pricing" },
   { href: "/#faq", label: "FAQ" },
   { href: `mailto:${CONTACT_EMAIL}`, label: "Contact" },
@@ -35,7 +35,7 @@ export function Footer() {
       <div className="mx-auto max-w-6xl">
         <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-4">
           <div className="text-[13px] text-stone-500">
-            © {COPYRIGHT_YEAR} Shopkeeper · The AI employee for Shopify brands.
+            © {COPYRIGHT_YEAR} Shopkeeper · AI support operator for Shopify stores.
           </div>
           <nav aria-label="Footer" className="flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-stone-600">
             {footerLinks.map((link) => (

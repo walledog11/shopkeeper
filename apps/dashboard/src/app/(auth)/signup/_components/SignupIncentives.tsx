@@ -3,8 +3,8 @@ import { Inbox, MessageSquare, ShoppingBag, Smartphone } from "lucide-react";
 const signupFeatures = [
   {
     icon: Inbox,
-    label: "Unified inbox",
-    detail: "IG, email & SMS in one place",
+    label: "Customer support intake",
+    detail: "Instagram and email in one place",
   },
   {
     icon: MessageSquare,
@@ -18,8 +18,8 @@ const signupFeatures = [
   },
   {
     icon: Smartphone,
-    label: "Approve from Telegram",
-    detail: "One tap from your phone",
+    label: "Merchant control",
+    detail: "Review and approve in iMessage",
   },
 ] as const;
 

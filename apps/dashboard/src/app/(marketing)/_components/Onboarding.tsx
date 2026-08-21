@@ -21,7 +21,7 @@ const STEPS = [
     id: "channels",
     title: "Turn them on",
     desc: "Instagram and email for customers. iMessage when something needs you.",
-    aria: "Turning on Instagram, email, website chat, iMessage, and Telegram.",
+    aria: "Turning on Instagram, email, website chat, and iMessage.",
     duration: 8000,
   },
 ] as const;
@@ -39,7 +39,6 @@ const CHANNELS = [
   { label: "Email", logo: "/logos/email.svg" },
   { label: "Website chat", icon: <ChatMark /> },
   { label: "iMessage", logo: "/logos/imessage.svg" },
-  { label: "Telegram", logo: "/logos/telegram.svg" },
 ] as const;
 
 export function Onboarding() {

@@ -24,20 +24,21 @@ const moments: {
     stampTilt: "rotate-[4deg]",
     body: (
       <>
-        A sizing question came in at 6:40 — <b>answered from your size guide</b> before you were up.
+        A sizing question arrived through a customer channel — <b>answered from your size guide</b>
+        before you were up.
       </>
     ),
   },
   {
     time: "11:34 am",
-    channel: "Telegram",
-    logo: "/logos/telegram.svg",
+    channel: "iMessage",
+    logo: "/logos/imessage.svg",
     side: "right",
     stampTilt: "-rotate-[3deg]",
     body: (
       <>
-        Caught a wrong address on #3114 <b>before it shipped</b>{" "}— the customer confirmed the
-        fix, Shopify&apos;s updated.
+        Caught a wrong address on #3114 <b>before it shipped</b>. You approved the correction here,
+        and Shopify is updated.
       </>
     ),
   },
@@ -49,8 +50,8 @@ const moments: {
     stampTilt: "rotate-[3deg]",
     body: (
       <>
-        You answered &ldquo;do you ship to Canada?&rdquo; once — <b>it&apos;s in the knowledge base
-        now.</b> I take it from here.
+        You answered a policy-gap question and chose to save it — <b>the approved guidance is in the
+        knowledge base now.</b>
       </>
     ),
   },
@@ -97,15 +98,16 @@ export function Channels() {
         className="m-coffee-ring pointer-events-none absolute left-1 top-[42%] hidden size-36 -translate-y-1/2 lg:block"
       />
       <Reveal>
-        <SectionLabel>everywhere you are</SectionLabel>
+        <SectionLabel>merchant control</SectionLabel>
         <h2 className="mx-auto mb-5 max-w-[22ch] text-[clamp(36px,5vw,68px)] font-bold leading-[1] tracking-[0.03em] [font-family:var(--m-hand)]">
-          Reach your new hire from{" "}
+          Stay in control from{" "}
           <em className="italic text-[var(--m-quill)]">
-            <HandUnderline>wherever you already are.</HandUnderline>
+            <HandUnderline>the channel you already use.</HandUnderline>
           </em>
         </h2>
         <p className="mx-auto mb-14 max-w-[52ch] text-[16px] leading-relaxed text-stone-700">
-          Texting Shopkeeper feels like texting your best employee — because that&apos;s what it is.
+          Customers write through supported intake channels. Shopkeeper brings consequential decisions
+          to you through iMessage or the dashboard.
         </p>
       </Reveal>
 

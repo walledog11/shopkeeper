@@ -12,6 +12,7 @@ describe("proxy path access policy", () => {
     expect(isPublicPath("/")).toBe(true);
     expect(isPublicPath("/privacy")).toBe(true);
     expect(isPublicPath("/terms")).toBe(true);
+    expect(isPublicPath("/product/order-operations")).toBe(true);
     expect(isPublicPath("/login")).toBe(true);
     expect(isPublicPath("/signup")).toBe(true);
   });

@@ -90,26 +90,6 @@ function VerifiedBadge({ size = 26 }: { size?: number }) {
   );
 }
 
-function TelegramMark({ size }: { size: number }) {
-  return (
-    <svg viewBox="0 0 24 24" style={{ width: size, height: size }}>
-      <circle cx="12" cy="12" r="11" fill="#229ED9" />
-      <path
-        fill="#fff"
-        d="M17.3 7.3 15.6 16c-.13.6-.49.75-.99.47l-2.74-2.02-1.32 1.27c-.15.15-.27.27-.55.27l.2-2.78 5.06-4.58c.22-.2-.05-.3-.34-.11l-6.25 3.94-2.7-.84c-.58-.18-.6-.58.13-.86l10.55-4.07c.49-.18.92.11.65.61z"
-      />
-    </svg>
-  );
-}
-
-function WhatsAppMark({ size }: { size: number }) {
-  return (
-    <svg viewBox="0 0 24 24" style={{ width: size, height: size }} fill="#25D366">
-      <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5 13.7c-.2.6-1.2 1.2-1.7 1.2-.4.1-1 .1-1.6-.1-.4-.1-.9-.3-1.5-.6-2.6-1.1-4.3-3.8-4.4-4-.1-.2-1.1-1.4-1.1-2.7 0-1.3.7-1.9.9-2.2.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.4l.8 2c.1.2.1.4 0 .6l-.4.6-.4.5c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.1.5.1.7-.1l1-1.2c.2-.3.4-.2.7-.1l1.9.9c.3.1.5.2.5.3.1.1.1.6-.2 1.2z" />
-    </svg>
-  );
-}
-
 function TypingDots({ t }: { t: number }) {
   return (
     <div className="flex items-center gap-2 rounded-[26px] rounded-bl-lg bg-white px-7 py-6 shadow-sm">
@@ -216,7 +196,7 @@ function SceneComplaint({ t }: { t: number }) {
   );
 }
 
-/* ---------- scenes 3+4: the Telegram thread (9.2 – 24.3) ---------- */
+/* ---------- scenes 3+4: the iMessage thread (9.2 – 24.3) ---------- */
 
 const GAP = 22;
 
@@ -348,8 +328,8 @@ const THREAD: ThreadMsg[] = [
     side: "agent",
     render: () => (
       <Bubble side="agent">
-        I&apos;m watching the tracking too — if the carrier doesn&apos;t move by Friday, I&apos;ll file the
-        claim myself.
+        I&apos;m watching the tracking too — if it still hasn&apos;t moved by Friday, I&apos;ll prepare a customer
+        update for your approval.
       </Bubble>
     ),
   },
@@ -505,19 +485,17 @@ function SceneCapabilities({ t }: { t: number }) {
 const HUB = { x: 600, y: 566 };
 const RADIUS = 244;
 
-// Customer channels spaced evenly around the one employee. Offset 30° so the
+// Product surfaces spaced evenly around the one employee. Offset 45° so the
 // top-center stays clear for the heading and nothing sits dead-center.
 const CHANNELS: { name: string; logo?: string; mark?: (s: number) => React.ReactNode }[] = [
   { name: "Instagram", logo: "/logos/instagram-logo.png" },
   { name: "Email", logo: "/logos/email.svg" },
-  { name: "iMessage", logo: "/logos/sms.svg" },
-  { name: "WhatsApp", mark: (s) => <WhatsAppMark size={s} /> },
-  { name: "Telegram", mark: (s) => <TelegramMark size={s} /> },
-  { name: "TikTok", logo: "/logos/tiktok-logo.png" },
+  { name: "iMessage", logo: "/logos/imessage.svg" },
+  { name: "Shopify", logo: "/logos/shopify.svg" },
 ];
 
 function channelPos(i: number) {
-  const theta = ((30 + i * 60) * Math.PI) / 180;
+  const theta = ((45 + i * (360 / CHANNELS.length)) * Math.PI) / 180;
   return { x: HUB.x + RADIUS * Math.sin(theta), y: HUB.y - RADIUS * Math.cos(theta) };
 }
 
@@ -530,9 +508,9 @@ function SceneChannels({ t }: { t: number }) {
   return (
     <div className="absolute inset-0" style={{ opacity: o }}>
       <h2 className="absolute inset-x-0 top-[86px] text-center text-[58px] leading-[1.12] text-[#161413] [font-family:var(--m-hand)]" style={rise(t, 30.2)}>
-        Wherever your customers are,
+        Customers write. You approve. Shopify changes.
         <br />
-        <span className="text-[#9c9285]">one employee across all of it.</span>
+        <span className="text-[#9c9285]">One operator across the whole workflow.</span>
       </h2>
 
       {/* spokes from the one employee out to every channel */}
@@ -579,7 +557,7 @@ function SceneChannels({ t }: { t: number }) {
         return (
           <div
             key={c.name}
-            className="absolute grid size-[108px] place-items-center rounded-[26px] bg-white shadow-[0_18px_38px_rgba(43,33,24,0.16)]"
+            className="absolute flex size-[108px] flex-col items-center justify-center gap-1 rounded-[26px] bg-white shadow-[0_18px_38px_rgba(43,33,24,0.16)]"
             style={{
               left: x - 54,
               top: y - 54 + fy,
@@ -590,8 +568,9 @@ function SceneChannels({ t }: { t: number }) {
             {c.mark ? (
               c.mark(56)
             ) : (
-              <Image src={c.logo as string} alt={c.name} width={56} height={56} className="size-[56px] object-contain" />
+              <Image src={c.logo as string} alt="" width={48} height={48} className="size-[48px] object-contain" />
             )}
+            <span className="text-[14px] font-medium text-stone-600">{c.name}</span>
           </div>
         );
       })}
