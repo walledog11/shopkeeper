@@ -84,7 +84,7 @@ export function formatAskPhrase(facts: RequestFacts): string | null {
   return facts.subject ? `${asks} — ${facts.subject}` : asks;
 }
 
-export interface BriefingLineParts {
+interface BriefingLineParts {
   /** Rendered first when present. */
   deadline: string | null;
   /** Who the item is about, supplied by the caller — naming is its own rule. */
