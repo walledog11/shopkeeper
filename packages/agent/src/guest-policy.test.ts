@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { AgentContext } from "./agent-context.js";
+import type { ProducedPlanSignalCode } from "./types.js";
 import { GUEST_TOOL_NAMES, isGuestAllowedTool, isGuestContext, isGuestOnlyTool } from "./guest-policy.js";
-import { appendInitialPlanningWarnings } from "./planner-read-tools.js";
+import { appendInitialPlanningSignals } from "./planner-read-tools.js";
 import { resolveAgentSettings, type AutonomyTier } from "./settings.js";
 import { TOOL_DEFINITIONS, selectAgentTools } from "./tools/registry/index.js";
 import { checkStaticToolPolicy } from "./tools/static-policy.js";
@@ -48,7 +49,7 @@ describe("guest state", () => {
   });
 });
 
-describe("planning warnings", () => {
+describe("planning signals", () => {
   function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
     return {
       orgId: "org_test",
@@ -74,33 +75,29 @@ describe("planning warnings", () => {
   }
 
   it("does not ask the merchant to link a Shopify customer a guest cannot have", () => {
-    const warnings: string[] = [];
-    appendInitialPlanningWarnings({ ctx: makeCtx(GUEST), operatorMode: false, warnings });
-    expect(warnings).toEqual([]);
+    const codes: ProducedPlanSignalCode[] = [];
+    appendInitialPlanningSignals({ ctx: makeCtx(GUEST), operatorMode: false, codes });
+    expect(codes).toEqual([]);
   });
 
   it("still raises it on a normal channel with no linked customer", () => {
-    const warnings: string[] = [];
-    appendInitialPlanningWarnings({
+    const codes: ProducedPlanSignalCode[] = [];
+    appendInitialPlanningSignals({
       ctx: makeCtx({ thread: { ...makeCtx().thread, channelType: "email" } }),
       operatorMode: false,
-      warnings,
+      codes,
     });
-    expect(warnings).toEqual([
-      "Couldn't find a Shopify customer - verify the correct account is linked before approving.",
-    ]);
+    expect(codes).toEqual(["shopify_customer_unresolved"]);
   });
 
-  it("warns when the recent-orders pre-fetch failed", () => {
-    const warnings: string[] = [];
-    appendInitialPlanningWarnings({
+  it("signals when the recent-orders pre-fetch failed", () => {
+    const codes: ProducedPlanSignalCode[] = [];
+    appendInitialPlanningSignals({
       ctx: makeCtx({ recentOrdersFetchFailed: true }),
       operatorMode: false,
-      warnings,
+      codes,
     });
-    expect(warnings).toContain(
-      "Shopify recent-orders pre-fetch failed - verify order details before approving.",
-    );
+    expect(codes).toContain("recent_orders_fetch_failed");
   });
 });
 

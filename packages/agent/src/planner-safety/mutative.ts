@@ -38,9 +38,6 @@ export function hasAmbiguousCustomerSearchResult(
   return false
 }
 
-export const MUTATIVE_INTENT_NO_ACTION_WARNING =
-  "Customer requested a refund/cancel but no action was planned — review before sending."
-
 export function shouldEscalateFulfilledCancelRequest(
   ctx: AgentContext,
   instruction: string,

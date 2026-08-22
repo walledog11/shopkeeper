@@ -70,6 +70,10 @@
       "types": "./dist/plan-preview.d.ts",
       "default": "./dist/plan-preview.js"
     },
+    "./plan-signals": {
+      "types": "./dist/plan-signals.d.ts",
+      "default": "./dist/plan-signals.js"
+    },
     "./agent-actions": {
       "types": "./dist/agent-actions.d.ts",
       "default": "./dist/agent-actions.js"

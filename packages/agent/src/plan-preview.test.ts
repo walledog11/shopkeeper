@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest"
-import { MUTATIVE_INTENT_NO_ACTION_WARNING } from "./planner-safety/index.js"
-import { buildHomeActionDisplay, buildPlanPreview, classifyHomePlan, isEscalationOnlyPlan, isPlanWarningBlocking, planEscalationReason, planWarningTiers } from "./plan-preview.js"
-import type { AgentPlan, OrgSettings, PlanStep, RawToolCall } from "./types.js"
+import { buildHomeActionDisplay, buildPlanPreview, classifyHomePlan, isEscalationOnlyPlan, planEscalationReason } from "./plan-preview.js"
+import { buildPlanSignals, planSignalTiers } from "./plan-signals.js"
+import type { AgentPlan, OrgSettings, PlanStep, ProducedPlanSignalCode, RawToolCall } from "./types.js"
+
+// Signals as the planner builds them: severity resolved against the plan's own
+// tool calls, never hand-written by the test.
+function signalsFor(codes: ProducedPlanSignalCode[], rawToolCalls: RawToolCall[] = []) {
+  return buildPlanSignals(codes, rawToolCalls)
+}
 
 const sendReplyCall: RawToolCall = {
   id: "send_1",
@@ -35,8 +41,6 @@ const refundCall: RawToolCall = {
 
 // Emitted by the planner whenever search_kb returns nothing (common for KB-light
 // stores). It is a reply-grounding note, not an action-risk signal.
-const KB_NOT_FOUND_WARNING =
-  "No relevant KB articles found - the reply is based only on the conversation, not your documentation."
 
 function plan(overrides: Partial<AgentPlan> = {}): AgentPlan {
   return {
@@ -69,7 +73,7 @@ function hollowRefundReplyPlan(overrides: Partial<AgentPlan> = {}): AgentPlan {
   return plan({
     instruction: "Refund order",
     rawToolCalls: [hollowRefundReplyCall],
-    warnings: [MUTATIVE_INTENT_NO_ACTION_WARNING],
+    signals: signalsFor(["mutative_intent_no_action"]),
     ...overrides,
   })
 }
@@ -140,39 +144,40 @@ describe("classifyHomePlan — info-only plans (existing behavior, default tier)
     expect(result.kind).toBe("needs_review")
   })
 
-  it("requires review when blocking warnings are present", () => {
+  it("requires review when a blocking signal is present", () => {
+    expect(classifyHomePlan(plan({ signals: signalsFor(["shopify_lookup_failed"]) })).kind).toBe("needs_review")
+  })
+
+  it("requires review for a warning cached before signals existed", () => {
     expect(classifyHomePlan(plan({ warnings: ["Policy conflict"] })).kind).toBe("needs_review")
   })
 
   it("requires merchant input when KB search found nothing and the plan only drafts a reply", () => {
-    const result = classifyHomePlan(plan({ warnings: [KB_NOT_FOUND_WARNING] }))
+    const result = classifyHomePlan(plan({ signals: signalsFor(["kb_no_match"]) }))
     expect(result.kind).toBe("needs_merchant_input")
     expect(result.question).toBeNull()
   })
 
-  it("allows a missing Shopify customer warning when the reply does not depend on customer or order context", () => {
+  it("allows a missing Shopify customer when the reply does not depend on customer or order context", () => {
     expect(classifyHomePlan(plan({
-      warnings: ["Couldn't find a Shopify customer - verify the correct account is linked before approving."],
+      signals: signalsFor(["shopify_customer_unresolved"]),
     })).kind).toBe("quick_reply")
   })
 
-  it("requires review for a missing Shopify customer warning when the plan used customer or order context", () => {
+  it("requires review for a missing Shopify customer when the plan used customer or order context", () => {
+    const rawToolCalls: RawToolCall[] = [
+      { id: "read_1", name: "get_shopify_orders", input: { customer_id: "123" } },
+      sendReplyCall,
+    ]
     expect(classifyHomePlan(plan({
-      rawToolCalls: [
-        { id: "read_1", name: "get_shopify_orders", input: { customer_id: "123" } },
-        sendReplyCall,
-      ],
-      warnings: ["Couldn't find a Shopify customer - verify the correct account is linked before approving."],
+      rawToolCalls,
+      signals: signalsFor(["shopify_customer_unresolved"], rawToolCalls),
     })).kind).toBe("needs_review")
   })
 
-  it("requires review for missing order or tracking warnings", () => {
-    for (const warning of [
-      "No matching order found - confirm the order number with the customer before proceeding.",
-      "No tracking information found - the order may not have been fulfilled yet.",
-      "Shopify recent-orders pre-fetch failed - verify order details before approving.",
-    ]) {
-      expect(classifyHomePlan(plan({ warnings: [warning] })).kind).toBe("needs_review")
+  it("requires review for missing order, tracking, and pre-fetch signals", () => {
+    for (const code of ["order_not_found", "order_tracking_not_found", "recent_orders_fetch_failed"] as const) {
+      expect(classifyHomePlan(plan({ signals: signalsFor([code]) })).kind).toBe("needs_review")
     }
   })
 
@@ -307,9 +312,9 @@ describe("classifyHomePlan — tier × action matrix", () => {
       expect(result.sendReplyToolCall).toEqual(sendReplyCall)
     })
 
-    it("keeps a refund under cap as auto_execute despite a benign missing-KB warning", () => {
+    it("keeps a refund under cap as auto_execute despite a benign missing-KB signal", () => {
       const result = classifyHomePlan(
-        { ...refundPlan({ input: { order_id: "9000", amount: "20.00", reason: "x" } }), warnings: [KB_NOT_FOUND_WARNING] },
+        { ...refundPlan({ input: { order_id: "9000", amount: "20.00", reason: "x" } }), signals: signalsFor(["kb_no_match"]) },
         settings({ autonomyTier: "trusted", maxRefundAmount: 100 }),
       )
       expect(result.kind).toBe("auto_execute")
@@ -332,7 +337,7 @@ describe("classifyHomePlan — tier × action matrix", () => {
           instruction: "Refund order",
           steps: [],
           rawToolCalls: [],
-          warnings: [MUTATIVE_INTENT_NO_ACTION_WARNING],
+          signals: signalsFor(["mutative_intent_no_action"]),
         },
         settings({ autonomyTier: "trusted", maxRefundAmount: 100 }),
       )
@@ -383,11 +388,11 @@ describe("classifyHomePlan — tier × action matrix", () => {
       expect(result.kind).toBe("needs_review")
     })
 
-    it("downgrades to needs_review when a blocking warning is present", () => {
+    it("downgrades to needs_review when a blocking signal is present", () => {
       const result = classifyHomePlan(
         {
           ...refundPlan({ input: { order_id: "9000", amount: "5.00" } }),
-          warnings: ["No matching order found - confirm the order number with the customer before proceeding."],
+          signals: signalsFor(["order_not_found"]),
         },
         settings({ autonomyTier: "trusted", maxRefundAmount: 100 }),
       )
@@ -436,40 +441,55 @@ describe("classifyHomePlan — questionable sender policy", () => {
   })
 })
 
-describe("planWarningTiers", () => {
-  const shopifyWarning = "Couldn't find a Shopify customer - verify the correct account is linked before approving."
-
-  it("treats a missing Shopify customer warning as informational for reply-only plans", () => {
-    const tiers = planWarningTiers(plan({ warnings: [shopifyWarning] }))
+describe("planSignalTiers", () => {
+  it("treats a missing Shopify customer as advisory for reply-only plans", () => {
+    const tiers = planSignalTiers(plan({ signals: signalsFor(["shopify_customer_unresolved"]) }))
     expect(tiers.blocking).toEqual([])
-    expect(tiers.informational).toEqual([shopifyWarning])
-    expect(isPlanWarningBlocking(shopifyWarning, plan({ warnings: [shopifyWarning] }))).toBe(false)
+    expect(tiers.advisory.map(signal => signal.code)).toEqual(["shopify_customer_unresolved"])
   })
 
-  it("treats a missing Shopify customer warning as blocking when order context was used", () => {
-    const warnedPlan = plan({
-      rawToolCalls: [
-        { id: "read_1", name: "get_shopify_orders", input: { customer_id: "123" } },
-        sendReplyCall,
-      ],
-      warnings: [shopifyWarning],
-    })
-    const tiers = planWarningTiers(warnedPlan)
-    expect(tiers.blocking).toEqual([shopifyWarning])
-    expect(tiers.informational).toEqual([])
-    expect(isPlanWarningBlocking(shopifyWarning, warnedPlan)).toBe(true)
+  it("treats a missing Shopify customer as blocking when order context was used", () => {
+    const rawToolCalls: RawToolCall[] = [
+      { id: "read_1", name: "get_shopify_orders", input: { customer_id: "123" } },
+      sendReplyCall,
+    ]
+    const tiers = planSignalTiers(plan({
+      rawToolCalls,
+      signals: signalsFor(["shopify_customer_unresolved"], rawToolCalls),
+    }))
+    expect(tiers.blocking.map(signal => signal.code)).toEqual(["shopify_customer_unresolved"])
+    expect(tiers.advisory).toEqual([])
   })
 
-  it("treats policy warnings as blocking", () => {
-    expect(isPlanWarningBlocking("Policy conflict", plan({ warnings: ["Policy conflict"] }))).toBe(true)
+  it("treats a KB miss as advisory", () => {
+    const tiers = planSignalTiers(plan({ signals: signalsFor(["kb_no_match"]) }))
+    expect(tiers.blocking).toEqual([])
+    expect(tiers.advisory.map(signal => signal.code)).toEqual(["kb_no_match"])
   })
 
-  it("treats mutative-intent guard warnings as blocking", () => {
-    const warnedPlan = hollowRefundReplyPlan()
-    const tiers = planWarningTiers(warnedPlan)
-    expect(tiers.blocking).toEqual([MUTATIVE_INTENT_NO_ACTION_WARNING])
-    expect(tiers.informational).toEqual([])
-    expect(isPlanWarningBlocking(MUTATIVE_INTENT_NO_ACTION_WARNING, warnedPlan)).toBe(true)
+  it("treats every other signal as blocking", () => {
+    const tiers = planSignalTiers(plan({ signals: signalsFor(["shopify_lookup_failed", "order_not_found"]) }))
+    expect(tiers.blocking.map(signal => signal.code)).toEqual(["shopify_lookup_failed", "order_not_found"])
+    expect(tiers.advisory).toEqual([])
+  })
+
+  it("treats mutative-intent guard signals as blocking", () => {
+    const tiers = planSignalTiers(hollowRefundReplyPlan())
+    expect(tiers.blocking.map(signal => signal.code)).toEqual(["mutative_intent_no_action"])
+    expect(tiers.advisory).toEqual([])
+  })
+
+  it("treats a warning cached before signals existed as blocking, uncoded", () => {
+    const tiers = planSignalTiers(plan({ warnings: ["Policy conflict"] }))
+    expect(tiers.blocking).toEqual([
+      { code: "legacy_warning", severity: "blocking", message: "Policy conflict" },
+    ])
+    expect(tiers.advisory).toEqual([])
+  })
+
+  it("collapses a condition raised twice into one signal", () => {
+    expect(signalsFor(["order_not_found", "order_not_found"]).map(signal => signal.code))
+      .toEqual(["order_not_found"])
   })
 })
 

@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import logger from "./logger.js";
-import type { OrgSettings } from "./types.js";
+import type { OrgSettings, ProducedPlanSignalCode } from "./types.js";
 import { executeToolStructured } from "./tools/executor.js";
 import type { ToolStatus } from "./tools/result.js";
 import type { AgentContext, ShopifyOrderSummary } from "./agent-context.js";
@@ -15,7 +15,7 @@ type PlanningReadToolResult = {
 
 // Whether the order a lookup tool was asked about is already in the planning
 // context. If so, a live not-found is fixture/timing noise, not a real "order
-// not found", and must not raise the warning that downgrades the auto-execute
+// not found", and must not raise the signal that downgrades the auto-execute
 // classifier.
 function orderAlreadyInContext(block: Anthropic.ToolUseBlock, recentOrders: ShopifyOrderSummary[]): boolean {
   if (recentOrders.length === 0) return false;
@@ -52,20 +52,20 @@ function trackingContextSteer(order: ShopifyOrderSummary): string {
     : `${state} No live carrier tracking is available right now, but this status is enough to answer a routine "where is my order?" question. Reply from it with send_reply now. Do not escalate_to_human or ask_operator just because tracking details are unavailable.`;
 }
 
-export function appendInitialPlanningWarnings(input: {
+export function appendInitialPlanningSignals(input: {
   ctx: AgentContext;
   operatorMode: boolean;
-  warnings: string[];
+  codes: ProducedPlanSignalCode[];
 }): void {
-  const { ctx, operatorMode, warnings } = input;
+  const { ctx, operatorMode, codes } = input;
   if (ctx.recentOrdersFetchFailed) {
-    warnings.push("Shopify recent-orders pre-fetch failed - verify order details before approving.");
+    codes.push("recent_orders_fetch_failed");
   }
   // A guest shopper has no Shopify customer by construction, so this would fire
   // on every storefront plan and ask the merchant to verify a link that cannot
-  // exist. A warning present on every plan is a warning nobody reads.
+  // exist. A signal present on every plan is a signal nobody reads.
   if (ctx.shopify && !ctx.thread.shopifyCustomerId && !operatorMode && !isStorefrontContext(ctx)) {
-    warnings.push("Couldn't find a Shopify customer - verify the correct account is linked before approving.");
+    codes.push("shopify_customer_unresolved");
   }
 }
 
@@ -107,7 +107,7 @@ export async function executePlanningReadTools(input: {
           content = executed.message;
           status = executed.status;
         } catch {
-          // A thrown lookup is treated as "nothing found" for warning purposes.
+          // A thrown lookup is treated as "nothing found" for signal purposes.
           content = "Lookup failed";
           status = "not_found";
         }
@@ -133,16 +133,16 @@ export async function executePlanningReadTools(input: {
   return { readToolCalls, readResultsMap, readStatusMap };
 }
 
-export function appendPlanningReadWarnings(input: {
-  warnings: string[];
+export function appendPlanningReadSignals(input: {
+  codes: ProducedPlanSignalCode[];
   readBlocks: Anthropic.ToolUseBlock[];
   readResultsMap: Map<string, string>;
   readStatusMap: Map<string, ToolStatus>;
   recentOrders: ShopifyOrderSummary[];
 }): void {
-  const { warnings, readBlocks, readResultsMap, readStatusMap, recentOrders } = input;
+  const { codes, readBlocks, readResultsMap, readStatusMap, recentOrders } = input;
   const readBlocksById = new Map(readBlocks.map((block) => [block.id, block]));
-  let hasShopifyCustomerWarning = warnings.some(w => w.includes("Shopify customer"));
+  let hasShopifyCustomerSignal = codes.includes("shopify_customer_unresolved");
   for (const id of readResultsMap.keys()) {
     const block = readBlocksById.get(id);
     if (!block) continue;
@@ -154,21 +154,21 @@ export function appendPlanningReadWarnings(input: {
         || block.name === "get_shopify_orders"
         || block.name === "get_order_by_name");
     if (isLookupError) {
-      warnings.push("Shopify lookup failed during planning - verify order/customer details before approving.");
+      codes.push("shopify_lookup_failed");
     } else if (isMissing) {
-      if ((block.name === "get_shopify_customer" || block.name === "search_shopify_customers") && !hasShopifyCustomerWarning) {
-        warnings.push("Couldn't find a Shopify customer - verify the correct account is linked before approving.");
-        hasShopifyCustomerWarning = true;
+      if ((block.name === "get_shopify_customer" || block.name === "search_shopify_customers") && !hasShopifyCustomerSignal) {
+        codes.push("shopify_customer_unresolved");
+        hasShopifyCustomerSignal = true;
       } else if (block.name === "get_shopify_orders" || block.name === "get_order_by_name") {
         if (!orderAlreadyInContext(block, recentOrders)) {
-          warnings.push("No matching order found - confirm the order number with the customer before proceeding.");
+          codes.push("order_not_found");
         }
       } else if (block.name === "get_order_tracking") {
-        warnings.push("No tracking information found - the order may not have been fulfilled yet.");
+        codes.push("order_tracking_not_found");
       } else if (block.name === "search_shopify_products") {
-        warnings.push("No matching product found - the name may be wrong, or the store may not carry it.");
+        codes.push("product_not_found");
       } else if (block.name === "search_kb") {
-        warnings.push("No relevant KB articles found - the reply is based only on the conversation, not your documentation.");
+        codes.push("kb_no_match");
       }
     }
   }

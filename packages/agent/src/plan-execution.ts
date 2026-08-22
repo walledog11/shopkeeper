@@ -385,7 +385,7 @@ export async function maybeAutoExecuteCurrentCachedHomePlan(params: {
 
   // A structurally clean quick reply is the low-risk conversational lane: one
   // customer-facing send, optional reads, no mutation, no merchant question and
-  // no blocking warning. It is ordinary support work, so every tier except the
+  // no blocking signal. It is ordinary support work, so every tier except the
   // explicit Draft only tier (which classifies it as needs_review) sends it
   // without consuming merchant attention. The mutative rollout switch below is
   // deliberately irrelevant here; turning on clarifying questions must not turn

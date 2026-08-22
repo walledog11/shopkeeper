@@ -12,10 +12,6 @@ import {
   computeLegacyRouting,
   routePlan,
 } from "./planner-routing.js";
-import {
-  CIRCULAR_CHANNEL_DEFLECTION_WARNING,
-  MUTATIVE_INTENT_NO_ACTION_WARNING,
-} from "./planner-safety/index.js";
 import type Anthropic from "@anthropic-ai/sdk";
 
 function intents(overrides: Partial<ClassifierIntents> = {}): ClassifierIntents {
@@ -74,7 +70,7 @@ describe("computeClassifierRouting", () => {
     });
     expect(out.decision).toBe("needs_review");
     expect(out.signals).toEqual(["mutative_request"]);
-    expect(out.warnings).toContain(MUTATIVE_INTENT_NO_ACTION_WARNING);
+    expect(out.signalCodes).toContain("mutative_intent_no_action");
   });
 
   it("allows mutative intent through when the plan has an action tool", () => {
@@ -426,7 +422,7 @@ describe("routePlan", () => {
       rawToolCalls: [reply],
     });
     expect(out.decision).toBe("needs_review");
-    expect(out.warnings).toContain(MUTATIVE_INTENT_NO_ACTION_WARNING);
+    expect(out.signalCodes).toContain("mutative_intent_no_action");
   });
 
   it("routes an unanswered policy question to needs_review with a merchant question", () => {
@@ -452,7 +448,7 @@ describe("routePlan", () => {
     });
     expect(out.decision).toBe("needs_review");
     expect(out.signals).toContain("channel_deflection");
-    expect(out.warnings).toContain(CIRCULAR_CHANNEL_DEFLECTION_WARNING);
+    expect(out.signalCodes).toContain("circular_channel_deflection");
   });
 
   it("routes an ungrounded KB reply to needs_review with a merchant question", () => {

@@ -1,5 +1,6 @@
 import type { AgentPlan, OrgSettings, PlanStep, RawToolCall } from "./types.js"
 import { resolveAgentSettings, TIERS_THAT_AUTO_EXECUTE, type AutonomyTier } from "./settings.js"
+import { planHasSignal, planSignalTiers, planSignals } from "./plan-signals.js"
 import { isQuestionableSender } from "./sender-trust.js"
 import { PLAN_STEP_LABELS, TOOL_CATEGORIES } from "./tools/registry/index.js"
 
@@ -13,10 +14,7 @@ export function merchantRoutingQuestionFromCustomerMessage(
 }
 
 export function planHasUngroundedKbReply(plan: AgentPlan): boolean {
-  const hasKbMiss = (plan.warnings ?? []).some(
-    warning => warning.toLowerCase().includes("no relevant kb articles found"),
-  )
-  if (!hasKbMiss) return false
+  if (!planHasSignal(plan, "kb_no_match")) return false
   if (plan.rawToolCalls.some(toolCall => (
     toolCall.name === "ask_operator" || toolCall.name === "escalate_to_human"
   ))) {
@@ -42,14 +40,6 @@ export interface HomePlanClassification {
 const QUICK_REPLY_READ_TOOLS = new Set([
   "search_kb",
   "search_shopify_products",
-  "search_shopify_customers",
-  "get_shopify_customer",
-  "get_shopify_orders",
-  "get_order_by_name",
-  "get_order_tracking",
-])
-
-const CUSTOMER_OR_ORDER_READ_TOOLS = new Set([
   "search_shopify_customers",
   "get_shopify_customer",
   "get_shopify_orders",
@@ -156,46 +146,6 @@ export function isEscalationOnlyPlan(plan: AgentPlan | null): boolean {
   return !planReplyText(plan)
 }
 
-function usesCustomerOrOrderContext(plan: AgentPlan): boolean {
-  return plan.rawToolCalls.some(toolCall => CUSTOMER_OR_ORDER_READ_TOOLS.has(toolCall.name))
-}
-
-function warningBlocksQuickReply(warning: string, plan: AgentPlan): boolean {
-  const lower = warning.toLowerCase()
-
-  if (lower.includes("couldn't find a shopify customer") || lower.includes("could not find a shopify customer")) {
-    return usesCustomerOrOrderContext(plan)
-  }
-
-  // A missing-KB match is a reply-grounding note, not an action-risk signal — it
-  // fires whenever the store has no matching article (common for KB-light stores)
-  // and must not force an otherwise-clean auto_execute / quick_reply plan to review.
-  if (lower.includes("no relevant kb articles found")) {
-    return false
-  }
-
-  return true
-}
-
-export function isShopifyCustomerWarning(warning: string): boolean {
-  const lower = warning.toLowerCase()
-  return lower.includes("couldn't find a shopify customer") || lower.includes("could not find a shopify customer")
-}
-
-export function isPlanWarningBlocking(warning: string, plan: AgentPlan): boolean {
-  return warningBlocksQuickReply(warning, plan)
-}
-
-export function planWarningTiers(plan: AgentPlan): { blocking: string[]; informational: string[] } {
-  const blocking: string[] = []
-  const informational: string[] = []
-  for (const warning of plan.warnings ?? []) {
-    if (warningBlocksQuickReply(warning, plan)) blocking.push(warning)
-    else informational.push(warning)
-  }
-  return { blocking, informational }
-}
-
 const NEEDS_REVIEW: HomePlanClassification = {
   kind: "needs_review",
   replyText: null,
@@ -256,7 +206,7 @@ export function classifyHomePlan(
 
   // An ask_operator plan parks the ticket for the merchant — a state distinct
   // from a customer-facing reply. The agent chose to ask, so surface it before
-  // the warning / quick-reply / questionable-sender checks (which are about
+  // the signal / quick-reply / questionable-sender checks (which are about
   // customer-facing sends). Mirrors how escalate short-circuits in the planner.
   const askOperatorCall = plan.rawToolCalls.find((toolCall) => toolCall.name === "ask_operator") ?? null
   if (askOperatorCall) {
@@ -289,7 +239,7 @@ export function classifyHomePlan(
     }
   }
 
-  if ((plan.warnings ?? []).some(warning => warningBlocksQuickReply(warning, plan))) {
+  if (planSignalTiers(plan).blocking.length > 0) {
     return applyQuestionableSenderPolicy(NEEDS_REVIEW, options?.filterStatus)
   }
 
@@ -370,8 +320,10 @@ function subjectFromSummary(summary: string): string {
   return trim(stripped[0].toUpperCase() + stripped.slice(1), 100)
 }
 
-function warningLead(warning: string): string {
-  const head = warning.split(/\s[-–,]\s/)[0] ?? warning
+// Display only: the condition clause of a signal message, without the advice
+// that follows it. Never used to decide anything — that reads `code`.
+function signalLead(message: string): string {
+  const head = message.split(/\s[-–,]\s/)[0] ?? message
   return head.replace(/[.?!]+$/, "").trim()
 }
 
@@ -406,16 +358,16 @@ function summarizeActionChain(plan: AgentPlan, excludeStepId?: string): string {
 // status where the merchant expects to read the ticket.
 function buildProposal(plan: AgentPlan | null, headlineStep?: PlanStep | null): string {
   if (!plan) return ""
-  const warnings = (plan.warnings ?? []).slice(0, 2).flatMap((warning) => {
-    const lead = warningLead(warning)
+  const leads = planSignals(plan).slice(0, 2).flatMap((signal) => {
+    const lead = signalLead(signal.message)
     return lead ? [lead] : []
   })
   const action = summarizeActionChain(plan, headlineStep?.id)
-  if (warnings.length === 0 && !action) {
+  if (leads.length === 0 && !action) {
     return ""
   }
-  if (warnings.length === 0) return action
-  const left = warnings.join(". ")
+  if (leads.length === 0) return action
+  const left = leads.join(". ")
   return action ? `${left} — ${action}` : left
 }
 

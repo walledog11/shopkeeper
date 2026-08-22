@@ -1,8 +1,5 @@
 import type { RawToolCall } from "../types.js"
 
-export const CIRCULAR_CHANNEL_DEFLECTION_WARNING =
-  "Draft reply deflected the customer to a channel the agent already manages — review before sending."
-
 const MANAGED_CHANNEL_DEFLECTION_RES: readonly RegExp[] = [
   /\breach out to\b/i,
   /\bcontact us\b/i,

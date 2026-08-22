@@ -1,19 +1,24 @@
 import { AlertTriangle, Check, Loader2 } from "lucide-react"
-import { isShopifyCustomerWarning } from "@shopkeeper/agent/plan-preview"
 import {
   NeedsYouBubble,
   NeedsYouInfoCallout,
 } from "@/app/dashboard/_components/home/needs-you-card-ui"
-import type { PlanStep } from "@/types"
+import type { PlanSignal, PlanStep } from "@/types"
 import { formatPlanStepSentence } from "./plan-step-display"
 
 type DisplayStep = PlanStep & { enabled: boolean }
 
-function warningDisplayText(warning: string, blocking: boolean): string {
-  if (isShopifyCustomerWarning(warning) && !blocking) {
+function isShopifyLinkSignal(signal: PlanSignal): boolean {
+  return signal.code === "shopify_customer_unresolved"
+}
+
+// The planner's message tells the merchant to verify the link before approving,
+// which overstates an advisory signal on a reply that never used order context.
+function signalDisplayText(signal: PlanSignal): string {
+  if (isShopifyLinkSignal(signal) && signal.severity === "advisory") {
     return "No Shopify customer linked — check the customer panel if this reply needs order context."
   }
-  return warning
+  return signal.message
 }
 
 function stepChipLabel(step: PlanStep): string {
@@ -26,9 +31,9 @@ function stepChipLabel(step: PlanStep): string {
 
 export function ActionPlanBody({
   actionSteps,
-  blockingWarnings,
+  blockingSignals,
   customerName,
-  informationalWarnings,
+  advisorySignals,
   isExecuting,
   isMobileSticky,
   onFocusShopifyLink,
@@ -38,9 +43,9 @@ export function ActionPlanBody({
   toggleStep,
 }: {
   actionSteps: DisplayStep[]
-  blockingWarnings: string[]
+  blockingSignals: PlanSignal[]
   customerName?: string | null
-  informationalWarnings: string[]
+  advisorySignals: PlanSignal[]
   isExecuting: boolean
   isMobileSticky: boolean
   onFocusShopifyLink?: () => void
@@ -55,20 +60,20 @@ export function ActionPlanBody({
 
   return (
     <>
-      {(blockingWarnings.length > 0 || informationalWarnings.length > 0) && (
+      {(blockingSignals.length > 0 || advisorySignals.length > 0) && (
         <div className="mt-0.5 space-y-2">
-          {blockingWarnings.map(warning => (
+          {blockingSignals.map(signal => (
             <div
-              key={warning}
+              key={signal.message}
               className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3"
             >
               <div className="flex items-start gap-2">
                 <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-red-600" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold leading-snug text-red-600">
-                    {warningDisplayText(warning, true)}
+                    {signalDisplayText(signal)}
                   </p>
-                  {isShopifyCustomerWarning(warning) && onFocusShopifyLink && (
+                  {isShopifyLinkSignal(signal) && onFocusShopifyLink && (
                     <button
                       type="button"
                       onClick={onFocusShopifyLink}
@@ -81,17 +86,17 @@ export function ActionPlanBody({
               </div>
             </div>
           ))}
-          {informationalWarnings.map(warning => (
+          {advisorySignals.map(signal => (
             <NeedsYouInfoCallout
-              key={warning}
+              key={signal.message}
               actionLabel={
-                isShopifyCustomerWarning(warning) && onFocusShopifyLink
+                isShopifyLinkSignal(signal) && onFocusShopifyLink
                   ? "Check customer panel →"
                   : undefined
               }
-              onAction={isShopifyCustomerWarning(warning) ? onFocusShopifyLink : undefined}
+              onAction={isShopifyLinkSignal(signal) ? onFocusShopifyLink : undefined}
             >
-              {warningDisplayText(warning, false)}
+              {signalDisplayText(signal)}
             </NeedsYouInfoCallout>
           ))}
         </div>

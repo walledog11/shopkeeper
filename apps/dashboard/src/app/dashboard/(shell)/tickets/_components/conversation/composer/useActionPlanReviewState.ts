@@ -2,7 +2,8 @@
 
 import { useReducer, useRef } from "react"
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
-import { planReplyText, planWarningTiers } from "@shopkeeper/agent/plan-preview"
+import { planReplyText } from "@shopkeeper/agent/plan-preview"
+import { planSignalTiers } from "@shopkeeper/agent/plan-signals"
 import { TOOL_CATEGORIES } from "@shopkeeper/agent/tools"
 import type { AgentPlan, PlanExecutionOutcome, RawToolCall } from "@/types"
 import { getPlanCollapsedPreview } from "./plan-step-display"
@@ -100,9 +101,9 @@ export function useActionPlanReviewState({
   const replyText = planReplyText(plan)
   const showReplyHero = Boolean(replyText && replyStep)
   const recipient = planRecipientDisplay(customerName)
-  const { blocking: blockingWarnings, informational: informationalWarnings } = planWarningTiers(plan)
-  const hasBlockingWarnings = blockingWarnings.length > 0
-  const needsWarningReview = hasBlockingWarnings && !state.warningsReviewed
+  const { blocking: blockingSignals, advisory: advisorySignals } = planSignalTiers(plan)
+  const hasBlockingSignals = blockingSignals.length > 0
+  const needsWarningReview = hasBlockingSignals && !state.warningsReviewed
   const enabledCount = steps.filter(step => step.enabled).length
   const consequential = steps.some(step => step.enabled && TOOL_CATEGORIES[step.tool] === "action")
   const enabledActions = shopifyActionSteps.some(step => step.enabled)
@@ -166,12 +167,12 @@ export function useActionPlanReviewState({
 
   return {
     actionSteps,
-    blockingWarnings,
+    blockingSignals,
     collapsedPreview: getPlanCollapsedPreview(plan),
     enabledCount,
-    hasBlockingWarnings,
+    hasBlockingSignals,
     headerLabel,
-    informationalWarnings,
+    advisorySignals,
     inReviewFlow,
     isRunning,
     onApproveClick,

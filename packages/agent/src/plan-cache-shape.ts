@@ -1,5 +1,5 @@
 import { SENDER_TYPE } from "./thread-constants.js"
-import type { AgentPlan, PlanStep, RawToolCall, ToolCategory } from "./types.js"
+import type { AgentPlan, PlanSignal, PlanStep, RawToolCall, ToolCategory } from "./types.js"
 
 export type PlanThreadMessage = {
   id: string
@@ -49,6 +49,15 @@ function isStringRecord(value: unknown): value is Record<string, string> {
   return isRecord(value) && Object.values(value).every(v => typeof v === "string")
 }
 
+function isPlanSignal(value: unknown): value is PlanSignal {
+  if (!isRecord(value)) return false
+  return (
+    typeof value.code === "string" &&
+    (value.severity === "blocking" || value.severity === "advisory") &&
+    typeof value.message === "string"
+  )
+}
+
 function isAgentPlan(value: unknown): value is AgentPlan {
   if (!isRecord(value)) return false
   if (typeof value.instruction !== "string") return false
@@ -56,6 +65,7 @@ function isAgentPlan(value: unknown): value is AgentPlan {
   if (!Array.isArray(value.rawToolCalls) || !value.rawToolCalls.every(isRawToolCall)) return false
   if (value.readResults !== undefined && !isStringRecord(value.readResults)) return false
   if (value.warnings !== undefined && (!Array.isArray(value.warnings) || !value.warnings.every(w => typeof w === "string"))) return false
+  if (value.signals !== undefined && (!Array.isArray(value.signals) || !value.signals.every(isPlanSignal))) return false
   if (value.routing !== undefined) {
     if (!isRecord(value.routing)) return false
     const { decision, signals, question } = value.routing

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { AGENT_PLAN_CACHE_VERSION } from "@shopkeeper/agent/plan-cache-shape"
+import { buildPlanSignals } from "@shopkeeper/agent/plan-signals"
 import { resolveTicketCocoAction } from "./resolve-ticket-coco-action"
 import type { AgentPlan } from "@/types"
 
@@ -108,13 +109,14 @@ describe("resolveTicketCocoAction", () => {
   })
 
   it("returns link customer when a plan needs Shopify context", () => {
+    const orderToolCalls = [
+      { id: "lookup-1", name: "get_shopify_orders", input: {} },
+      { id: "reply-1", name: "send_reply", input: { text: "Your order is on the way." } },
+    ]
     const orderPlan: AgentPlan = {
       instruction: "Look up order and reply",
-      warnings: ["Couldn't find a Shopify customer linked to this thread."],
-      rawToolCalls: [
-        { id: "lookup-1", name: "get_shopify_orders", input: {} },
-        { id: "reply-1", name: "send_reply", input: { text: "Your order is on the way." } },
-      ],
+      signals: buildPlanSignals(["shopify_customer_unresolved"], orderToolCalls),
+      rawToolCalls: orderToolCalls,
       steps: [
         {
           id: "lookup-1",

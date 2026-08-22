@@ -106,7 +106,7 @@ interface ActionPlanControlsProps {
   successLabel: string
   status: {
     enabledCount: number
-    hasBlockingWarnings: boolean
+    hasBlockingSignals: boolean
     inReviewFlow: boolean
     executionOutcome: PlanExecutionOutcome | null
     isRunning: boolean
@@ -191,7 +191,7 @@ function ActionPlanControls({
           onClick={onApproveClick}
           disabled={status.isRunning || status.enabledCount === 0 || Boolean(status.executionOutcome)}
           confirming={
-            status.inReviewFlow || (status.hasBlockingWarnings && status.warningsReviewed)
+            status.inReviewFlow || (status.hasBlockingSignals && status.warningsReviewed)
           }
           className={cn(
             status.showEditTakeover && "flex-1",
@@ -258,12 +258,12 @@ export default function ActionPlanCard({
   })
   const {
     actionSteps,
-    blockingWarnings,
+    blockingSignals,
     collapsedPreview,
     enabledCount,
-    hasBlockingWarnings,
+    hasBlockingSignals,
     headerLabel,
-    informationalWarnings,
+    advisorySignals,
     inReviewFlow,
     isRunning,
     onApproveClick,
@@ -317,9 +317,9 @@ export default function ActionPlanCard({
           >
             <ActionPlanBody
               actionSteps={actionSteps}
-              blockingWarnings={blockingWarnings}
+              blockingSignals={blockingSignals}
               customerName={customerName}
-              informationalWarnings={informationalWarnings}
+              advisorySignals={advisorySignals}
               isExecuting={isRunning || Boolean(executionOutcome)}
               isMobileSticky={isMobileSticky}
               onFocusShopifyLink={onFocusShopifyLink}
@@ -339,7 +339,7 @@ export default function ActionPlanCard({
               status={{
                 enabledCount,
                 executionOutcome,
-                hasBlockingWarnings,
+                hasBlockingSignals,
                 inReviewFlow,
                 isRunning,
                 primaryNeedsCaution,

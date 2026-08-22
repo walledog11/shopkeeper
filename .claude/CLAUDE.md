@@ -114,11 +114,12 @@ evidence and the phased work order). These describe the direction every change m
 including changes that don't mention them. Moving away from one needs a reason in the diff.
 
 - **Never branch on prose.** Control flow reads codes, enums, and typed fields; English is
-  display-only. `warningBlocksQuickReply` (`plan-preview.ts:163`) decides whether the agent
-  may act without a human by substring-matching a sentence another module wrote — producer
-  and test already assert different sentences, and rewording one silently changes what the
-  agent is allowed to do. New decision points carry a `code`, not a `.includes(`. Adding a
-  case to a prose matcher is never the fix.
+  display-only. `warningBlocksQuickReply` used to decide whether the agent may act without a
+  human by substring-matching a sentence another module wrote, and producer and test had
+  already drifted to different sentences. It is gone: plan conditions are
+  `PlanSignal { code, severity, message }` (`packages/agent/src/plan-signals.ts`), severity
+  is resolved once in `planAgent`, and `message` is display-only. New decision points carry
+  a `code`, not a `.includes(`. Adding a case to a prose matcher is never the fix.
 - **Validate, don't repair.** A wrong model output is evidence the model misunderstood the
   situation, not a sentence to edit. `planner.ts:135-192` runs six sequential repair passes,
   two of which delete sentences from the reply the customer will read; shipping the

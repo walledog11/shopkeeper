@@ -21,10 +21,8 @@ import {
 } from "./intent.js";
 import logger from "./logger.js";
 import {
-  CIRCULAR_CHANNEL_DEFLECTION_WARNING,
   hasAmbiguousCustomerSearchResult,
   hasCriticalPlanningReadErrorsForBlocks,
-  MUTATIVE_INTENT_NO_ACTION_WARNING,
   sendReplyDeflectsToManagedChannels,
   shouldEscalateFulfilledAddressChangeRequest,
   shouldEscalateFulfilledCancelRequest,
@@ -37,7 +35,7 @@ import type { ToolStatus } from "./tools/result.js";
 import { getToolDefinition, TOOL_CATEGORIES } from "./tools/registry/index.js";
 import { merchantRoutingQuestionFromCustomerMessage } from "./plan-preview.js";
 import { isMerchantAnswerPlanningInstruction } from "./kb-learned.js";
-import type { OrgSettings, RawToolCall, RoutingDecision } from "./types.js";
+import type { OrgSettings, ProducedPlanSignalCode, RawToolCall, RoutingDecision } from "./types.js";
 
 export type { RoutingDecision };
 
@@ -45,7 +43,7 @@ export interface RoutingOutcome {
   decision: RoutingDecision;
   // Which intent signals drove the decision (shared vocabulary across both sides).
   signals: string[];
-  warnings: string[];
+  signalCodes: ProducedPlanSignalCode[];
   // Set only for `escalate`: the templated reason the system writes into the
   // deterministic escalate_to_human call (never model-authored).
   escalationReason?: string;
@@ -108,22 +106,22 @@ export function computeClassifierRouting(input: {
 
   const escalateSignals = ESCALATE_INTENT_KEYS.filter((key) => intents[key]);
   if (escalateSignals.length > 0) {
-    return { decision: "escalate", signals: [...escalateSignals], warnings: [] };
+    return { decision: "escalate", signals: [...escalateSignals], signalCodes: [] };
   }
 
   if (intents.mutative_request && !plan.hasAction && !plan.hasEscalation) {
     return {
       decision: "needs_review",
       signals: ["mutative_request"],
-      warnings: [MUTATIVE_INTENT_NO_ACTION_WARNING],
+      signalCodes: ["mutative_intent_no_action"],
     };
   }
 
   if (intents.policy_question && !plan.hasSendReply && !plan.hasAskOperator && !plan.hasEscalation) {
-    return { decision: "needs_review", signals: ["policy_question"], warnings: [] };
+    return { decision: "needs_review", signals: ["policy_question"], signalCodes: [] };
   }
 
-  return { decision: "auto_execute", signals: [], warnings: [] };
+  return { decision: "auto_execute", signals: [], signalCodes: [] };
 }
 
 // Re-derives the routing outcome the current regex guards produce, from the same
@@ -145,7 +143,7 @@ export function computeLegacyRouting(input: {
   if (hasContradictoryInstructionSignals(...intentTexts)) escalateSignals.push("contradiction");
   if (hasOutOfScopeCommercialRequestSignals(...customerTexts)) escalateSignals.push("out_of_scope_commercial");
   if (escalateSignals.length > 0) {
-    return { decision: "escalate", signals: escalateSignals, warnings: [] };
+    return { decision: "escalate", signals: escalateSignals, signalCodes: [] };
   }
 
   if (
@@ -157,7 +155,7 @@ export function computeLegacyRouting(input: {
     return {
       decision: "needs_review",
       signals: ["mutative_request"],
-      warnings: [MUTATIVE_INTENT_NO_ACTION_WARNING],
+      signalCodes: ["mutative_intent_no_action"],
     };
   }
 
@@ -167,10 +165,10 @@ export function computeLegacyRouting(input: {
     && !plan.hasAskOperator
     && !plan.hasEscalation
   ) {
-    return { decision: "needs_review", signals: ["policy_question"], warnings: [] };
+    return { decision: "needs_review", signals: ["policy_question"], signalCodes: [] };
   }
 
-  return { decision: "auto_execute", signals: [], warnings: [] };
+  return { decision: "auto_execute", signals: [], signalCodes: [] };
 }
 
 // Emits a structured comparison of the legacy regex routing vs. the
@@ -344,7 +342,7 @@ export function routePlan(input: RoutePlanInput): RoutingOutcome {
     return {
       decision: "escalate",
       signals: [structuralSignal],
-      warnings: [],
+      signalCodes: [],
       escalationReason: reasonFromSignals([structuralSignal]),
     };
   }
@@ -358,13 +356,13 @@ export function routePlan(input: RoutePlanInput): RoutingOutcome {
   }
 
   const signals = [...intentOutcome.signals];
-  const warnings = [...intentOutcome.warnings];
+  const signalCodes = [...intentOutcome.signalCodes];
   let needsReview = intentOutcome.decision === "needs_review";
 
   if (rawToolCalls.some(sendReplyDeflectsToManagedChannels)) {
     if (!signals.includes("channel_deflection")) signals.push("channel_deflection");
-    if (!warnings.includes(CIRCULAR_CHANNEL_DEFLECTION_WARNING)) {
-      warnings.push(CIRCULAR_CHANNEL_DEFLECTION_WARNING);
+    if (!signalCodes.includes("circular_channel_deflection")) {
+      signalCodes.push("circular_channel_deflection");
     }
     needsReview = true;
   }
@@ -390,7 +388,7 @@ export function routePlan(input: RoutePlanInput): RoutingOutcome {
   return {
     decision: needsReview ? "needs_review" : "auto_execute",
     signals,
-    warnings,
+    signalCodes,
     question,
   };
 }

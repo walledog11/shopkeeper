@@ -1,8 +1,9 @@
+import type { PlanSignal } from '@shopkeeper/agent/types';
 import { loadGatewayEnv } from '../config/load-env.js';
 
 loadGatewayEnv();
 
-// THROWAWAY — dump one thread's cached plan: routing decision, warnings, the
+// THROWAWAY — dump one thread's cached plan: routing decision, signals, the
 // steps the merchant is shown, and the raw tool calls behind them.
 //
 // Written for the live storefront-chat run, to tell a *proposed* mutation from
@@ -15,6 +16,7 @@ loadGatewayEnv();
 
 async function main() {
   const { db } = await import('@shopkeeper/db');
+  const { planSignals } = await import('@shopkeeper/agent/plan-signals');
 
   const threadId = process.env.THREAD_ID;
   if (!threadId) throw new Error('Set THREAD_ID');
@@ -35,6 +37,7 @@ async function main() {
       summary?: string;
       steps?: unknown[];
       warnings?: string[];
+      signals?: PlanSignal[];
       rawToolCalls?: { id?: string; name?: string; input?: unknown }[];
       routing?: { decision?: string; question?: string | null };
     };
@@ -57,9 +60,10 @@ async function main() {
     console.log(`    input: ${JSON.stringify(call.input)}`);
   }
 
-  if (plan.warnings?.length) {
-    console.log('\nwarnings:');
-    for (const w of plan.warnings) console.log(`  ${w}`);
+  const signals = planSignals(plan);
+  if (signals.length) {
+    console.log('\nsignals:');
+    for (const signal of signals) console.log(`  [${signal.severity}] ${signal.code}: ${signal.message}`);
   }
 
   await db.$disconnect();
