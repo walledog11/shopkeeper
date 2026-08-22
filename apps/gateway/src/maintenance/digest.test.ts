@@ -57,6 +57,30 @@ function makeThread(overrides: Partial<{
 // has not said what they want yet.
 const NO_REQUEST_SIGNALS = { version: 3, language: 'en', intents: { no_request: true } };
 
+// A v5 row carrying only the fields a test cares about; the rest are absent,
+// which is what the classifier writes when it could not read them.
+function factsSignals(facts: {
+  ask: string;
+  subject?: string;
+  order?: string;
+  deadline?: string;
+  deadlineText?: string;
+}) {
+  return {
+    version: 5,
+    language: 'en',
+    intents: {},
+    requestFacts: {
+      ask: facts.ask,
+      subject: facts.subject ?? null,
+      order: facts.order ?? null,
+      deadline: facts.deadline ?? null,
+      deadlineText: facts.deadlineText ?? null,
+      alternative: null,
+    },
+  };
+}
+
 // createTestMessage stamps sentAt from the clock, so two messages written in the
 // same millisecond fall back to the `id desc` tiebreak — a random UUID order,
 // which decides whether a thread reads as answered or as blocked. Any fixture
@@ -460,6 +484,83 @@ describe('buildOrgDigest — inbox scope', () => {
     expect(digest.message).toContain(
       'By Friday — Dana Reyes · #1024: refund or exchange — the olive linen napkins.',
     );
+  });
+
+  // The line led with the deadline and the list still buried it: `byDeadlineFirst`
+  // shipped built, tested, and uncalled. Ordering is per group, because the
+  // briefing renders by kind — across groups is an order nobody reads.
+  it('leads the flagged group with the soonest deadline, not the newest thread', async () => {
+    org = await createTestOrg();
+    const [dated, undated] = await Promise.all([
+      createTestCustomer(org.id, 'dated@example.com', { name: 'Ada Frost' }),
+      createTestCustomer(org.id, 'undated@example.com', { name: 'Bo Nardi' }),
+    ]);
+
+    // The dated thread is the older of the two, so the thread query's
+    // `updatedAt desc` puts it second. Only the deadline moves it back.
+    const datedThread = await createTestThread(org.id, dated.id, 'email');
+    await createTestMessage(datedThread.id, 'I need these before the weekend.');
+    await db.thread.update({
+      where: { id: datedThread.id },
+      data: {
+        filterStatus: ThreadFilterStatus.questionable,
+        filterDecidedAt: NOW,
+        updatedAt: new Date(NOW.getTime() - 6 * HOUR),
+        classifierSignals: factsSignals({
+          ask: 'refund',
+          subject: 'the linen napkins',
+          deadline: '2026-04-30',
+          deadlineText: 'before the weekend',
+        }),
+      },
+    });
+
+    const undatedThread = await createTestThread(org.id, undated.id, 'email');
+    await createTestMessage(undatedThread.id, 'Can I return this?');
+    await db.thread.update({
+      where: { id: undatedThread.id },
+      data: {
+        filterStatus: ThreadFilterStatus.questionable,
+        filterDecidedAt: NOW,
+        updatedAt: new Date(NOW.getTime() - 1 * HOUR),
+        classifierSignals: factsSignals({ ask: 'return', subject: 'a wool throw' }),
+      },
+    });
+
+    const message = (await buildOrgDigest(org.id, NOW))!.message;
+    expect(message).toContain('Ada Frost');
+    expect(message.indexOf('Ada Frost')).toBeLessThan(message.indexOf('Bo Nardi'));
+  });
+
+  // Same ordering, through the approval group, which reaches it by a different
+  // route: the facts ride on the waiting item rather than being read off the row.
+  it('leads the approval group with the soonest deadline', async () => {
+    org = await createTestOrg();
+    const [undated, dated] = await Promise.all([
+      createTestCustomer(org.id, 'plain@example.com', { name: 'Cleo Vance' }),
+      createTestCustomer(org.id, 'urgent@example.com', { name: 'Dev Okoye' }),
+    ]);
+
+    for (const [customer, facts] of [
+      [undated, factsSignals({ ask: 'refund', subject: 'a chipped bowl' })],
+      [dated, factsSignals({ ask: 'refund', subject: 'a cracked vase', deadline: '2026-04-30' })],
+    ] as const) {
+      const thread = await createTestThread(org.id, customer.id, 'email');
+      const message = await createTestMessage(thread.id, 'Please refund this.');
+      await db.thread.update({
+        where: { id: thread.id },
+        data: {
+          cachedPlan: refundPlanCache('Refund the order', message.id),
+          cachedPlanMessageId: message.id,
+          classifierSignals: facts,
+          updatedAt: new Date(NOW.getTime() - 4 * HOUR),
+        },
+      });
+    }
+
+    const digest = (await buildOrgDigest(org.id, NOW))!;
+    expect(digest.message).toContain('Dev');
+    expect(digest.message.indexOf('Dev')).toBeLessThan(digest.message.indexOf('Cleo'));
   });
 
   // Once the spam filter reaches storefront chat, "yo" from an anonymous

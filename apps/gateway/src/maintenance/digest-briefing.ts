@@ -32,6 +32,8 @@ export interface WaitingItem {
   line: string;
   /** Links the briefing ordinal back to its entry in the operator plan queue. */
   planId?: string;
+  /** What the briefing orders on. Null when the classifier read no facts. */
+  requestFacts: RequestFacts | null;
 }
 
 const COUNT_WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
@@ -446,7 +448,7 @@ function handoffSubject(thread: BriefingTicketRow, followingText: string): strin
  * every thread classified before version 5 and for any the classifier could not
  * read an ask off, which is what keeps the prose fallbacks below reachable.
  */
-function rowRequestFacts(thread: { classifierSignals?: unknown }): RequestFacts | null {
+export function rowRequestFacts(thread: { classifierSignals?: unknown }): RequestFacts | null {
   return parseClassifierSignals(thread.classifierSignals)?.requestFacts ?? null;
 }
 
@@ -767,10 +769,12 @@ async function loadOperatorWaitingItems(
       }
       const dedupeKey = pendingPlan.planId
         ?? `${pendingPlan.threadId}:${pendingPlan.planHash ?? ''}:${pendingPlan.instructionHash ?? ''}`;
+      const requestFacts = thread ? rowRequestFacts(thread) : null;
       items.push({
         dedupeKey,
         threadId: pendingPlan.threadId,
         ...(pendingPlan.planId ? { planId: pendingPlan.planId } : {}),
+        requestFacts,
         line: formatApprovalItemLine({
           customerName: thread?.customer?.name ?? pendingPlan.customerName ?? null,
           channelType: thread?.channelType ?? null,
@@ -780,7 +784,7 @@ async function loadOperatorWaitingItems(
           rawToolCalls: pendingPlan.rawToolCalls,
           instruction: pendingPlan.instruction,
           actionLabel: pendingPlan.actionLabel,
-          requestFacts: thread ? rowRequestFacts(thread) : null,
+          requestFacts,
           now,
         }),
       });
@@ -848,10 +852,12 @@ async function loadStaleThreadWaitingItems(
     }
 
     const dedupeKey = cached.planId ?? `thread:${thread.id}:${cached.instruction}`;
+    const requestFacts = rowRequestFacts(thread);
     items.push({
       dedupeKey,
       threadId: thread.id,
       ...(cached.planId ? { planId: cached.planId } : {}),
+      requestFacts,
       line: formatApprovalItemLine({
         customerName: thread.customer?.name ?? null,
         channelType: thread.channelType,
@@ -862,7 +868,7 @@ async function loadStaleThreadWaitingItems(
         rawToolCalls: plan.rawToolCalls,
         instruction: cached.instruction,
         verifiedOrders: verifiedByThread.get(thread.id) ?? [],
-        requestFacts: rowRequestFacts(thread),
+        requestFacts,
         now,
       }),
     });
@@ -898,10 +904,13 @@ export async function loadWaitingOnYouItems(
   }
 
   // Operator-parked plans first, in queue order, then the stale-thread ones.
-  // Do not re-sort: this list is *numbered* in the message, and the operator
-  // ledger numbers `pendingPlans` in the same order, so "the second one" has to
-  // mean the same plan on both sides. (`selectPendingPlan` fails closed on an
-  // ordinal past the end of the queue, so the stale-thread tail is safe.)
+  // This is a merge order, not a reading order: `buildOrgDigest` sorts these by
+  // deadline before they become briefing items. That used to be unsafe, because
+  // the briefing numbered its list and the ledger numbered `pendingPlans` in the
+  // same order, so "the second one" had to mean the same plan on both sides.
+  // Neither still holds — the briefing is prose, and `selectPendingPlan` reads a
+  // typed digit off `pendingDigest.items`, which is stored in the order the
+  // merchant read rather than the order this queue happens to be in.
   return merged;
 }
 

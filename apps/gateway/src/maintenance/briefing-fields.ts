@@ -135,11 +135,11 @@ export function formatFactsBriefingLine(
  */
 export function byDeadlineFirst<T>(
   items: readonly T[],
-  factsOf: (item: T) => RequestFacts,
+  factsOf: (item: T) => RequestFacts | null,
   now: Date,
 ): T[] {
   return items
-    .map((item, index) => ({ item, index, days: daysUntilDeadline(factsOf(item).deadline, now) }))
+    .map((item, index) => ({ item, index, days: daysUntilDeadline(factsOf(item)?.deadline ?? null, now) }))
     .sort((a, b) => {
       if (a.days === null && b.days === null) return a.index - b.index;
       if (a.days === null) return 1;

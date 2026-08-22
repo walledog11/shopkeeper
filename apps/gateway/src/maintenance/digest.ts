@@ -22,12 +22,13 @@ import {
   type BriefingItem,
   loadHandledRollup,
   loadWaitingOnYouItems,
+  rowRequestFacts,
   finalizeDigestSend,
   redactBriefingContacts,
   resolveHandledWindowStart,
   truncateBriefingText,
 } from './digest-briefing.js';
-import { formatFactsBriefingLine } from './briefing-fields.js';
+import { byDeadlineFirst, formatFactsBriefingLine } from './briefing-fields.js';
 import { loadDigestShopifyGarnish } from './digest-shopify-garnish.js';
 import { loadAttributionLine } from '../message-handlers/conversation-attribution.js';
 import {
@@ -418,24 +419,33 @@ export async function buildOrgDigest(
   const waitingThreadIds = new Set(waitingItems.map((item) => item.threadId));
 
   const flaggedCandidates = buckets.questionable.filter((thread) => !hasNoRequest(thread));
+  // Ordered after the limit, not before: the cut is about how much of the
+  // briefing these are worth, and reordering it would change which ten the
+  // merchant sees rather than which one they see first.
   const flagged = flaggedCandidates.slice(0, DIGEST_QUESTIONABLE_LIMIT);
+  const escalated = buckets.genuine
+    .filter((thread) => thread.escalatedAt && !waitingThreadIds.has(thread.id) && !hasNoRequest(thread));
+  // Soonest deadline first, within each group. Across groups is not a choice
+  // this can make: `formatNeedsYouProse` renders by kind, so only the order
+  // inside one group ever reaches the merchant. Sorting here rather than at
+  // render time keeps `pendingDigest.items` in the order they read, which is
+  // what a typed digit resolves against.
   const needsYou: BriefingItem[] = [
-    ...waitingItems.map((item): BriefingItem => ({
+    ...byDeadlineFirst(waitingItems, (item) => item.requestFacts, now).map((item): BriefingItem => ({
       threadId: item.threadId,
       kind: 'approval',
       ...(item.planId ? { planId: item.planId } : {}),
       line: item.line,
     })),
-    ...buckets.genuine
-      .filter((thread) => thread.escalatedAt && !waitingThreadIds.has(thread.id) && !hasNoRequest(thread))
+    ...byDeadlineFirst(escalated, rowRequestFacts, now)
       .map((thread): BriefingItem => ({
         threadId: thread.id,
         kind: 'decision',
         line: formatEscalatedTicketLine(thread),
       })),
-    ...flagged.map((thread): BriefingItem => {
+    ...byDeadlineFirst(flagged, rowRequestFacts, now).map((thread): BriefingItem => {
       const name = thread.customer.name ?? 'Someone new';
-      const facts = parseClassifierSignals(thread.classifierSignals)?.requestFacts;
+      const facts = rowRequestFacts(thread);
       const factsLine = facts ? formatFactsBriefingLine(facts, name, now) : null;
       const blurb = flaggedBlurb(thread);
       const prose = blurb
