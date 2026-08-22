@@ -73,6 +73,21 @@ describe('runVoiceSynthesis', () => {
     expect(unconsumed).toBe(0);
   });
 
+  // Claude 5 models reject temperature/top_p/top_k with a 400. The daily job
+  // catches per-org failures and still reports success, so nothing else here
+  // would notice a sampling parameter being reintroduced.
+  it('sends no sampling parameters', async () => {
+    await seedEdits(org.id, 6);
+    mockAnthropicCreate.mockResolvedValue(anthropicReply('Warm and direct.', 'Operators cut the apologies.'));
+
+    await runVoiceSynthesis();
+
+    const request = mockAnthropicCreate.mock.calls[0][0];
+    expect(request).not.toHaveProperty('temperature');
+    expect(request).not.toHaveProperty('top_p');
+    expect(request).not.toHaveProperty('top_k');
+  });
+
   it('skips orgs below the minimum edit threshold', async () => {
     await seedEdits(org.id, 3);
 
