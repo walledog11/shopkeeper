@@ -8,7 +8,7 @@ import { SENDER_TYPE } from '@shopkeeper/agent/thread-constants';
 import { db } from '@shopkeeper/db';
 import { Prisma } from '@prisma/client';
 import { parseClassifierSignals, type RequestFacts } from '@shopkeeper/agent/classifier-signals';
-import { CHANNEL } from '../constants.js';
+import { classifyPerson, customerFirstName, personLabel } from '@shopkeeper/agent/person-name';
 import { formatFactsBriefingLine } from './briefing-fields.js';
 import { listVerifiedOrderNamesByThread } from '../storefront-chat-verified-orders.js';
 import { parseStoredPendingPlan } from '../operator-context.js';
@@ -91,12 +91,6 @@ function extractRefundAmount(input: unknown): string | null {
   return null;
 }
 
-function customerFirstName(customerName: string | null | undefined): string | null {
-  const trimmed = customerName?.trim();
-  if (!trimmed) return null;
-  return trimmed.split(/\s+/)[0] ?? null;
-}
-
 // One iMessage line of context. The classifier already writes `aiTitle` at 3-to-6
 // words, so this cap is a backstop for the summary fallback, not the usual path.
 const BRIEFING_TOPIC_MAX = 60;
@@ -110,16 +104,6 @@ const BRIEFING_TAG_LABELS: Record<string, string> = {
 function briefingTagLabel(tag: string): string {
   return BRIEFING_TAG_LABELS[tag] ?? tag;
 }
-
-function briefingSubjectName(customerName: string | null): string | null {
-  const firstName = customerFirstName(customerName);
-  if (!firstName || firstName.toLowerCase() === 'customer') return null;
-  return firstName;
-}
-
-// Nobody on storefront chat has identified themselves, so there is no name to
-// print — but "Someone" twice in one list says less than the channel does.
-const VISITOR_SUBJECT = 'Storefront visitor';
 
 export function truncateBriefingText(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text;
@@ -282,36 +266,17 @@ export function briefingTopic(
 // wants to do, so a named customer is subject enough; three segments before the
 // topic is more punctuation than information on a phone.
 /**
- * The one place the briefing decides what to call the person on a ticket. Null
- * means nobody has been identified and the caller supplies its own fallback —
- * `briefingSubject` can fall back to an order reference, the approval line
- * cannot.
- *
- * Someone who entered a code mailed to the address on an order has proved they
- * are the customer on it, and that is the word a merchant reading their phone
- * would use. "Storefront visitor" is honest only while nobody has identified
- * them; kept past that it states the opposite of what happened, and it
- * contradicts the two surfaces that already read verification — the operator
- * card ("They confirmed the email on #1024") and the classifier, which is told
- * to call this same person "the shopper". Naming the order keeps the claim
- * scoped the way verification is: to that order, never to an account.
+ * What the briefing calls the person on a ticket. Null means nobody has been
+ * identified and the caller supplies its own fallback — `briefingSubject` can
+ * fall back to an order reference, the approval line cannot.
  */
 function briefingPersonName(
   customerName: string | null,
   channelType: string | null,
   verifiedOrders: readonly string[] = [],
-  // The text this subject introduces, when the caller has it. An order named
-  // here as well as in the subject prints the same order twice in one sentence —
-  // "The customer on #1024 requested a refund … on order #1024" — and the
-  // sentence is the better place for it.
   followingText = '',
 ): string | null {
-  const named = briefingSubjectName(customerName);
-  if (named) return named;
-  if (channelType !== CHANNEL.SHOPIFY_CHAT) return null;
-  if (verifiedOrders.length === 0) return VISITOR_SUBJECT;
-  const unnamed = verifiedOrders.filter((order) => !followingText.includes(order.replace('#', '')));
-  return unnamed.length > 0 ? `The customer on ${unnamed.join(', ')}` : 'The customer';
+  return personLabel(classifyPerson({ customerName, channelType, verifiedOrders, followingText }));
 }
 
 function briefingSubject(

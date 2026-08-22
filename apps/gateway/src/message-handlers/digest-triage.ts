@@ -2,7 +2,7 @@ import { db } from '@shopkeeper/db';
 import { wrapUntrusted } from '@shopkeeper/agent/message-history';
 import { postDashboardInternal, type DashboardApiResult } from '../clients/dashboard-internal.js';
 import { relativeAge } from '../routes/telegram/format.js';
-import { customerFirstName } from './planning-notifications.js';
+import { customerFirstName } from '@shopkeeper/agent/person-name';
 import { briefingOrdinal, type PendingDigest } from '../operator-context.js';
 
 export const DIGEST_SUMMARY_TRUNC = 90;

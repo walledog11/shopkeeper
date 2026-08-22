@@ -10,6 +10,7 @@ import { hashInstruction, hashPlan } from '@shopkeeper/agent/agent-actions';
 import { extractCachedQuestion, getPendingCustomerMessageId } from '@shopkeeper/agent/plan-cache-shape';
 import { clearThreadPlanCache } from '@shopkeeper/agent/plan-execution';
 import type { AgentPlan, OrgSettings } from '@shopkeeper/agent/types';
+import { classifyPerson } from '@shopkeeper/agent/person-name';
 import logger from '../logger.js';
 import { gatewayThreadSink } from './agent-thread-sink.js';
 import { toGatewayAgentPlan } from './agent-plan-adapter.js';
@@ -174,7 +175,10 @@ export async function applyOperatorAnswerReplan(
   // The answering device is excluded from the fan-out below, so this parks the
   // merchant's own copy —
   // including the display fields the fan-out would otherwise have supplied.
-  const actionLabel = parkedActionLabel(notifyPlan.steps, customerName);
+  const actionLabel = parkedActionLabel(
+    notifyPlan.steps,
+    classifyPerson({ customerName, channelType: meta?.channelType ?? thread.channelType }),
+  );
   const pendingPlan: PendingPlan = {
     threadId,
     instruction: baseInstruction,

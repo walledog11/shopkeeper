@@ -58,6 +58,10 @@
       "types": "./dist/classifier-signals.d.ts",
       "default": "./dist/classifier-signals.js"
     },
+    "./person-name": {
+      "types": "./dist/person-name.d.ts",
+      "default": "./dist/person-name.js"
+    },
     "./context-budget": {
       "types": "./dist/context-budget.d.ts",
       "default": "./dist/context-budget.js"

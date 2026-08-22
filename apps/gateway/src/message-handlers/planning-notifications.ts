@@ -22,6 +22,13 @@ import type { PlanIdentity, PrecomputedPlanResult } from './planning-types.js';
 import { firstDraftExcerpt, type OperatorSurface } from './operator-ledger.js';
 import { getContext, resolvePendingPlanContexts, removePendingPlanForThread, type PendingPlan } from '../operator-context.js';
 import { memberOperatorKey } from '@shopkeeper/agent/internal-thread';
+import {
+  classifyPerson,
+  customerFirstName,
+  personObject,
+  personSubject,
+  type PersonName,
+} from '@shopkeeper/agent/person-name';
 import { getOperatorPlanQueueMax } from '../config/runtime-config.js';
 import { listVerifiedOrderNames } from '../storefront-chat-verified-orders.js';
 import { getConversationBurst } from './conversation-burst.js';
@@ -151,10 +158,6 @@ function lowerFirst(text: string): string {
   return /^[A-Z][a-z]/.test(text) ? text.charAt(0).toLowerCase() + text.slice(1) : text;
 }
 
-export function customerFirstName(customerName: string | null): string | null {
-  return customerName ? customerName.split(' ')[0] ?? null : null;
-}
-
 // Summaries are model-written and arrive with or without a final stop; without
 // one they run into whatever follows.
 function endSentence(text: string): string {
@@ -164,24 +167,16 @@ function endSentence(text: string): string {
 // Two lines, not one joined by an em-dash. The summary is model-written prose
 // that routinely carries its own commas, colons and quotes, so splicing it after
 // a dash produces a sentence with three kinds of punctuation fighting.
-// An anonymous storefront visitor is not "the customer". Nobody has identified
-// them, they may have bought nothing, and on this channel they can type any name
-// they like — calling them a customer asserts a relationship the merchant does
-// not have and that the agent has no way to check.
-function anonymousNoun(channelType: DbChannelType): string {
-  return channelType === CHANNEL.SHOPIFY_CHAT ? 'Someone on your storefront' : 'The customer';
-}
-
 function formatHeaderLines(
-  customerName: string | null,
+  person: PersonName,
   channelType: DbChannelType,
   summary: string,
   stage: ConversationStage,
 ): string[] {
-  const firstName = customerFirstName(customerName);
+  const firstName = person.kind === 'named' ? person.firstName : null;
   let lead: string;
   if (stage.isFollowUp) {
-    const who = firstName ?? anonymousNoun(channelType);
+    const who = personSubject(person);
     lead = stage.newMessages > 1
       ? `${who} sent ${stage.newMessages} more messages ${channelRepliedPhrase(channelType)}`
       : `${who} replied ${channelRepliedPhrase(channelType)}`;
@@ -222,19 +217,19 @@ function escalationReason(
 
 // A phrase that completes "I won't …", parked alongside the plan so a fast-path
 // dismissal can name what it dropped without re-reading the thread.
-export function parkedActionLabel(steps: PlanStep[], customerName: string | null): string | undefined {
+export function parkedActionLabel(steps: PlanStep[], person: PersonName): string | undefined {
   const actionableSteps = steps.filter((step) => step.category !== 'read');
   if (actionableSteps.length === 0) return undefined;
 
-  const firstName = customerFirstName(customerName);
+  const firstName = person.kind === 'named' ? person.firstName : null;
   const forCustomer = firstName ? ` for ${firstName}` : '';
   if (actionableSteps.length > 1) {
     return `run those ${actionableSteps.length} steps${forCustomer}`;
   }
 
   const step = actionableSteps[0]!;
-  if (step.tool === 'send_reply') return `reply to ${firstName ?? 'the customer'}`;
-  if (step.tool === 'send_email') return `email ${firstName ?? 'the customer'}`;
+  if (step.tool === 'send_reply') return `reply to ${personObject(person)}`;
+  if (step.tool === 'send_email') return `email ${personObject(person)}`;
 
   const label = (step.tool ? PLAN_STEP_LABELS[step.tool] : undefined) ?? step.label;
   if (!label) return undefined;
@@ -263,17 +258,22 @@ export function formatOperatorPlanMessage(
   },
 ): string {
   const stage = options?.stage ?? FRESH_STAGE;
-  const firstName = customerFirstName(customerName);
-  // A storefront visitor has not identified themselves, so the nameless fallback
-  // cannot call them a customer either — the same reason the header says
-  // "Someone on your storefront" rather than "the customer".
-  const namelessNoun = channelType === CHANNEL.SHOPIFY_CHAT ? 'the visitor' : 'the customer';
+  const verifiedOrders = options?.verifiedOrders ?? [];
+  // The card states the verified orders on their own line below, so the name
+  // does not repeat them: a verified shopper is "the customer" here, not "the
+  // customer on #1024 … They confirmed the email on #1024".
+  const person = classifyPerson({
+    customerName,
+    channelType,
+    verifiedOrders,
+    followingText: verifiedOrders.join(', '),
+  });
   const actionableSteps = steps.filter((step) => step.category !== 'read');
 
   // The actual draft the merchant is approving, so approval is not sight-unseen.
   const draftBody = options?.rawToolCalls ? firstDraftExcerpt(options.rawToolCalls) : null;
 
-  const lines: string[] = formatHeaderLines(customerName, channelType, summary, stage);
+  const lines: string[] = formatHeaderLines(person, channelType, summary, stage);
 
   // Directly under the header, because it qualifies the header: everything above
   // describes an anonymous storefront visitor, and this is the one fact that
@@ -282,7 +282,6 @@ export function formatOperatorPlanMessage(
   // judge what it is worth, but in the register a colleague would use. The
   // earlier "Verified: entered a code emailed to the address on #1024." asked
   // them to audit an authentication scheme to answer a shipping question.
-  const verifiedOrders = options?.verifiedOrders ?? [];
   if (verifiedOrders.length > 0) {
     lines.push(`They confirmed the email on ${verifiedOrders.join(', ')}.`);
   }
@@ -308,13 +307,13 @@ export function formatOperatorPlanMessage(
     // One step is not a list. Numbering a single item is the tell that a machine
     // wrote the card; say it as a sentence instead. parkedActionLabel already
     // renders the phrase that completes "I won't …", which completes "I'd …" too.
-    const only = parkedActionLabel(approvableSteps, customerName);
+    const only = parkedActionLabel(approvableSteps, person);
     lines.push('', only ? `I'd ${only}.` : `I'd ${lowerFirst(approvableSteps[0]!.label || approvableSteps[0]!.description)}.`);
     if (draftBody) lines.push('', `The reply: "${draftBody}"`);
   } else if (approvableSteps.length > 0) {
     const stepLines = approvableSteps.map((step, index) => {
-      if (step.tool === 'send_reply') return `${index + 1}. Reply to ${firstName ?? namelessNoun}`;
-      if (step.tool === 'send_email') return `${index + 1}. Email ${firstName ?? namelessNoun}`;
+      if (step.tool === 'send_reply') return `${index + 1}. Reply to ${personObject(person)}`;
+      if (step.tool === 'send_email') return `${index + 1}. Email ${personObject(person)}`;
       return `${index + 1}. ${step.label || step.description}`;
     });
     lines.push('', "Here's what I'd do:", ...stepLines);
@@ -504,7 +503,7 @@ function formatQuestionMessage(
   stage: ConversationStage,
 ): string {
   return [
-    ...formatHeaderLines(customerName, channelType, summary, stage),
+    ...formatHeaderLines(classifyPerson({ customerName, channelType }), channelType, summary, stage),
     '',
     `${question} I'll draft the reply once I know.`,
   ].join('\n');
@@ -580,7 +579,15 @@ export async function sendOperatorPlanNotification(
     plan.rawToolCalls,
     instruction,
   );
-  const actionLabel = parkedActionLabel(plan.steps, customerName);
+  const actionLabel = parkedActionLabel(
+    plan.steps,
+    classifyPerson({
+      customerName,
+      channelType,
+      verifiedOrders,
+      followingText: verifiedOrders.join(', '),
+    }),
+  );
   const maxDepth = getOperatorPlanQueueMax();
   const parkPlan: PendingPlan = {
     threadId,

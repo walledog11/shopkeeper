@@ -55,6 +55,7 @@ import {
   sendOperatorPlanNotification,
   sendOperatorQuestionNotification,
 } from './planning-notifications.js';
+import { classifyPerson } from '@shopkeeper/agent/person-name';
 import { OperatorNotifyError } from '../operator-notify.js';
 import { appendPendingPlan, getContext, updateContext } from '../operator-context.js';
 import type { AgentPlan } from '../types.js';
@@ -87,35 +88,45 @@ beforeEach(() => {
 describe('parkedActionLabel', () => {
   const step = (tool: string, label: string, category = 'write') =>
     ({ category, tool, description: label, label, enabled: true });
+  const person = (customerName: string | null, channelType = 'email') =>
+    classifyPerson({ customerName, channelType });
 
   it('names the customer for a single reply step', () => {
-    expect(parkedActionLabel([step('send_reply', 'Reply')], 'Sarah Chen')).toBe('reply to Sarah');
-    expect(parkedActionLabel([step('send_email', 'Reply')], 'Sarah Chen')).toBe('email Sarah');
+    expect(parkedActionLabel([step('send_reply', 'Reply')], person('Sarah Chen'))).toBe('reply to Sarah');
+    expect(parkedActionLabel([step('send_email', 'Reply')], person('Sarah Chen'))).toBe('email Sarah');
   });
 
   it('falls back to the registry plan-step label for non-send actions', () => {
-    expect(parkedActionLabel([step('create_refund', 'Refund')], 'Sarah Chen')).toBe(
+    expect(parkedActionLabel([step('create_refund', 'Refund')], person('Sarah Chen'))).toBe(
       'issue refund for Sarah',
     );
   });
 
   it('counts the steps for a multi-action plan', () => {
     expect(
-      parkedActionLabel([step('create_refund', 'Refund'), step('send_reply', 'Reply')], 'Sarah Chen'),
+      parkedActionLabel([step('create_refund', 'Refund'), step('send_reply', 'Reply')], person('Sarah Chen')),
     ).toBe('run those 2 steps for Sarah');
   });
 
   it('drops the customer clause when the customer has no name', () => {
-    expect(parkedActionLabel([step('send_reply', 'Reply')], null)).toBe('reply to the customer');
-    expect(parkedActionLabel([step('create_refund', 'Refund')], null)).toBe('issue refund');
+    expect(parkedActionLabel([step('send_reply', 'Reply')], person(null))).toBe('reply to the customer');
+    expect(parkedActionLabel([step('create_refund', 'Refund')], person(null))).toBe('issue refund');
+  });
+
+  // Nobody on storefront chat has identified themselves, so the label cannot
+  // call them a customer — the same rule the card header follows.
+  it('calls an unidentified storefront shopper a visitor', () => {
+    expect(parkedActionLabel([step('send_reply', 'Reply')], person(null, 'shopify_chat'))).toBe(
+      'reply to the visitor',
+    );
   });
 
   it('ignores read steps and yields nothing for a read-only plan', () => {
-    expect(parkedActionLabel([step('get_order', 'Look up order', 'read')], 'Sarah Chen')).toBeUndefined();
+    expect(parkedActionLabel([step('get_order', 'Look up order', 'read')], person('Sarah Chen'))).toBeUndefined();
     expect(
       parkedActionLabel(
         [step('get_order', 'Look up order', 'read'), step('send_reply', 'Reply')],
-        'Sarah Chen',
+        person('Sarah Chen'),
       ),
     ).toBe('reply to Sarah');
   });
@@ -150,6 +161,44 @@ describe('formatOperatorPlanMessage', () => {
     expect(message).toContain('Sound good?');
     expect(message).not.toContain('New ticket');
     expect(message).not.toContain('skip 1');
+  });
+
+  // The header used to call a shopper who had proved they owned an order
+  // "Someone on your storefront", one line above the card's own statement that
+  // they had confirmed the email on it. Both surfaces read the same
+  // classification now, so the card cannot contradict itself.
+  it('stops calling a verified storefront shopper anonymous', () => {
+    const message = formatOperatorPlanMessage(
+      null,
+      ChannelType.shopify_chat,
+      'Wants the order sent to a new address.',
+      [{ category: 'write', tool: 'send_reply', description: 'Reply', label: 'Reply', enabled: true }],
+      {
+        stage: { isFollowUp: true, newMessages: 1 },
+        verifiedOrders: ['#1024'],
+        rawToolCalls: [{ name: 'send_reply', input: { text: 'On it.' } }],
+      },
+    );
+
+    expect(message).toContain('The customer replied in your storefront chat.');
+    expect(message).toContain('They confirmed the email on #1024.');
+    expect(message).not.toContain('Someone on your storefront');
+  });
+
+  it('still calls an unverified storefront shopper anonymous', () => {
+    const message = formatOperatorPlanMessage(
+      null,
+      ChannelType.shopify_chat,
+      'Asking about sizing.',
+      [{ category: 'write', tool: 'send_reply', description: 'Reply', label: 'Reply', enabled: true }],
+      {
+        stage: { isFollowUp: true, newMessages: 1 },
+        rawToolCalls: [{ name: 'send_reply', input: { text: 'On it.' } }],
+      },
+    );
+
+    expect(message).toContain('Someone on your storefront replied in your storefront chat.');
+    expect(message).not.toContain('The customer');
   });
 
   it('states a single non-send step as a sentence, never as a one-item list', () => {

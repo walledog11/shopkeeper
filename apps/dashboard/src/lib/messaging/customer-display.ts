@@ -1,4 +1,5 @@
-import { getCustomerName, STOREFRONT_VISITOR_NAME } from "@/lib/messaging/customer-name"
+import { STOREFRONT_VISITOR_LABEL } from "@shopkeeper/agent/person-name"
+import { getCustomerName } from "@/lib/messaging/customer-name"
 
 export function realCustomerName(
   customer: { name?: string | null; platformId?: string | null } | null | undefined,
@@ -6,7 +7,7 @@ export function realCustomerName(
   const name = getCustomerName(customer)
   if (name.includes("@")) return null
   // A stand-in for someone who never identified themselves is not a name.
-  if (name === STOREFRONT_VISITOR_NAME) return null
+  if (name === STOREFRONT_VISITOR_LABEL) return null
   if (customer?.platformId && name === customer.platformId) return null
   return name
 }
