@@ -108,8 +108,51 @@ Names live in each app's `.env.example`; values in Vercel/Railway.
 
 Both `DATABASE_URL`s append `?pgbouncer=true&connection_limit=1`. `TOKEN_ENCRYPTION_KEY` (AES-256-GCM, 32 raw bytes — hex64, base64, or 32 ASCII chars) encrypts `Integration.accessToken`/`refreshToken` at rest, applied transparently via Prisma `$extends`; same value in both apps; required in production.
 
+## Architecture
+Design law, derived from the 2026-08-21 pipeline audit (`AGENT_AUDIT.md`, which holds the
+evidence and the phased work order). These describe the direction every change moves in,
+including changes that don't mention them. Moving away from one needs a reason in the diff.
+
+- **Never branch on prose.** Control flow reads codes, enums, and typed fields; English is
+  display-only. `warningBlocksQuickReply` (`plan-preview.ts:163`) decides whether the agent
+  may act without a human by substring-matching a sentence another module wrote — producer
+  and test already assert different sentences, and rewording one silently changes what the
+  agent is allowed to do. New decision points carry a `code`, not a `.includes(`. Adding a
+  case to a prose matcher is never the fix.
+- **Validate, don't repair.** A wrong model output is evidence the model misunderstood the
+  situation, not a sentence to edit. `planner.ts:135-192` runs six sequential repair passes,
+  two of which delete sentences from the reply the customer will read; shipping the
+  remainder is a worse failure than stopping. Prefer returning the plan to the merchant with
+  a reason. Where a schema can express the rule, put it in the tool schema rather than in a
+  later pass.
+- **Compose from fields; don't rewrite sentences.** The classifier emits structured facts and
+  the surface renders them. It must never emit an English sentence that a downstream layer
+  re-tenses, re-subjects, re-punctuates, and truncates — that is what grew
+  `digest-briefing.ts` into a hand-rolled NLP engine larger than the agent it serves. Control
+  length by choosing which fields to render, never by cutting a string.
+- **One decision, one owner.** "May this run without a human?" is answered in four places
+  across two packages, chained through a mutable `plan.routing` field, with static policy
+  evaluated twice. A decision re-derived at each call site has no owner and nothing keeps the
+  copies agreeing. Collapse toward one function with one return type; never add a fifth site.
+- **One helper per concept.** "What do we call this person" had five implementations and
+  reported a verified customer to the merchant as an anonymous visitor. Grep before writing a
+  text/format helper — `customerFirstName`, `endSentence`, and `lowerFirst` each drifted into
+  two versions with different trimming.
+- **Growth by special case means a capability is missing.** A prompt bullet, a repair pass, a
+  regex carve-out, or a per-phrase fix added in response to one observed bad output is a
+  signal to find the missing structure, not a fix worth keeping. `SUPPORT_INSTRUCTIONS` is 27
+  prohibitions; most describe invariants a schema or the executor could enforce structurally.
+
 ## Coding
-- Don't add features, comments, error handling, or abstractions beyond what's asked.
+- Don't add features, comments, error handling, or abstractions beyond what's asked. This
+  bounds the diff, not the judgment: when the ask sits on top of a structural problem — a
+  fifth copy of a helper, a seventh repair pass, a new branch on prose — build what was
+  asked, then name the problem in a sentence. Staying silent is how `digest-briefing.ts`
+  reached 1,068 lines one reasonable minimal diff at a time.
+- **Local verification is free; model calls are not.** Typecheck, lint, and unit/integration
+  runs cost nothing — run them without asking and before every push. Only live-model runs
+  (`test:evals*`, anything setting `EVAL_RUN=1`) need justifying. Eval-cost discipline is
+  never a reason to skip `npm run typecheck`.
 - Read the file before editing it.
 - Edit existing files. Don't create new ones unless necessary.
 - Tailwind classes, not inline `style`.

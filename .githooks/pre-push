@@ -1,0 +1,8 @@
+#!/bin/sh
+# Typecheck before every push. Local verification is free; a red master is not.
+# PR 57 went red on a widened type in a test fixture, which skipped Build, E2E and
+# Integration — a full CI cycle that returned no information about the change.
+# Bypass deliberately with: git push --no-verify
+set -e
+echo "pre-push: npm run typecheck"
+npm run typecheck

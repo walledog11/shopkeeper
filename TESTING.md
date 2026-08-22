@@ -6,6 +6,13 @@ Use the root PR verification path before sending changes that touch app behavior
 npm run verify:pr
 ```
 
+A pre-push hook runs `npm run typecheck` before every push — checked in at
+`.githooks/pre-push`, but inert until each clone runs `git config core.hooksPath
+.githooks`, since hook paths are local config. It exists because a widened type in a
+test fixture once failed the static gate, which skips Build, E2E, and Integration, so
+CI burned a full cycle and reported nothing. Turbo caches it to a few seconds. Bypass a
+known-good push with `git push --no-verify`.
+
 That is the canonical local and CI contract. It runs structure checks, repo and
 app lint, root Knip, an explicit workspace typecheck, fast unit tests, node
 script tests, auth-bypass smoke E2E, comprehensive coverage, and the production
