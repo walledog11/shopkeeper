@@ -138,6 +138,7 @@ export function classifierResponse(
     intents?: Partial<Record<string, boolean>>;
     requestSummary?: string;
     requestDisposition?: string;
+    requestFacts?: Record<string, unknown>;
   } = {},
 ) {
   const payload = {
@@ -158,6 +159,7 @@ export function classifierResponse(
       forwarded_injection: false,
       ...opts.intents,
     },
+    ...(opts.requestFacts ? { requestFacts: opts.requestFacts } : {}),
   };
   return { content: [{ type: 'text' as const, text: JSON.stringify(payload) }] };
 }

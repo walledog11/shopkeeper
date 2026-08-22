@@ -235,6 +235,40 @@ export async function handleIgDmJob(job: Job<InboundJobData>, aiSummaryQueue: Qu
   }
 }
 
+// A sender with a prior genuine thread cannot be spam. That guarantee is worth
+// keeping — it was the point of the bypass this replaces. What the bypass also
+// did was decline to read what the customer was asking, which a prior genuine
+// thread says nothing about: it wrote emptyIntents(), an empty requestSummary
+// and emptyRequestFacts(), and because a precomputed result sets skipSummary
+// (inbound-persistence.ts) the classifier never ran later either. Every repeat
+// customer emailing in was permanently ask-less, so the briefing fell to its
+// prose fallback for exactly the traffic that matters most.
+//
+// So classify, then override the verdict rather than the whole record. The
+// placeholder survives only for a failed classification — outage or spend cap —
+// where it still keeps a known sender out of the spam bucket at the cost of an
+// unread request. Same trade as before, now on the rare path instead of the
+// normal one.
+function knownSenderClassification(
+  classified: ClassificationResult | null,
+  subject: string | null | undefined,
+): ClassificationResult {
+  const filterReason = 'Existing customer with prior genuine thread';
+  if (classified) return { ...classified, filterStatus: 'genuine', filterReason };
+  return {
+    title: subject?.trim()?.slice(0, 60) || 'New email',
+    summary: subject?.slice(0, 200) || 'New email',
+    tag: 'General',
+    filterStatus: 'genuine',
+    filterReason,
+    intents: emptyIntents(),
+    language: '',
+    requestSummary: '',
+    requestDisposition: 'unclear',
+    requestFacts: emptyRequestFacts(),
+  };
+}
+
 export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Queue): Promise<void> {
   const { organizationId, traceId } = job.data;
   const { senderName, subject, body } = job.data;
@@ -295,24 +329,10 @@ export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Q
             select: { id: true },
           })
         : null;
+      const classified = await classifyAndSummarizeNewEmail(organizationId, subject!, body!);
       precomputed = priorGenuine
-        ? {
-            title: subject?.trim()?.slice(0, 60) || 'New email',
-            summary: subject?.slice(0, 200) || 'New email',
-            tag: 'General',
-            filterStatus: 'genuine',
-            filterReason: 'Existing customer with prior genuine thread',
-            // Classifier is skipped on this fast path — no intent signals to
-            // record, and no read on what is being asked. `unclear` keeps the
-            // request visible to the merchant rather than letting a fast path
-            // decide nothing needs doing.
-            intents: emptyIntents(),
-            language: '',
-            requestSummary: '',
-            requestDisposition: 'unclear',
-            requestFacts: emptyRequestFacts(),
-          }
-        : await classifyAndSummarizeNewEmail(organizationId, subject!, body!);
+        ? knownSenderClassification(classified, subject)
+        : classified;
     }
 
     const emailLocal = senderEmail!.split('@')[0];

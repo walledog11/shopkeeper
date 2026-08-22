@@ -184,7 +184,7 @@ describe('Message worker — email branch', () => {
     expect(threads[0].escalatedAt).not.toBeNull();
   });
 
-  it('skips classifier when customer has a prior genuine thread (existing-customer bypass)', async () => {
+  it('overrides the verdict for a known sender but still reads what they asked', async () => {
     const existing = await db.customer.create({
       data: { organizationId: org.id, platformId: 'customer@example.com', name: 'Existing' },
     });
@@ -199,16 +199,38 @@ describe('Message worker — email branch', () => {
       },
     });
 
+    // `filtered` on purpose: it proves the override is what keeps the thread
+    // genuine, rather than the absence of a classification.
+    getMockAnthropicCreate().mockResolvedValueOnce(
+      classifierResponse('filtered', {
+        requestFacts: {
+          ask: 'refund',
+          subject: 'olive linen napkins',
+          order: '#1024',
+          deadline: null,
+          deadlineText: null,
+          alternative: null,
+        },
+      }),
+    );
+
     const handler = getCapturedHandlers().get('inbound-messages');
     await handler!(makeEmailJob(org.id));
 
-    expect(getMockAnthropicCreate()).not.toHaveBeenCalled();
+    expect(getMockAnthropicCreate()).toHaveBeenCalled();
 
     const newThread = await db.thread.findFirst({
       where: { organizationId: org.id, customerId: existing.id, status: 'open', channelType: ChannelType.email },
     });
     expect(newThread?.filterStatus).toBe('genuine');
     expect(newThread?.filterReason).toBe('Existing customer with prior genuine thread');
+
+    // The old bypass wrote emptyRequestFacts() here, and a precomputed result
+    // sets skipSummary, so nothing filled them in later: every repeat customer
+    // stayed permanently ask-less and the briefing fell to its prose path.
+    const signals = newThread?.classifierSignals as { requestFacts?: { ask?: string; order?: string } } | null;
+    expect(signals?.requestFacts?.ask).toBe('refund');
+    expect(signals?.requestFacts?.order).toBe('#1024');
   });
 
   it('skips classifier when spamFilterEnabled is false (kill switch)', async () => {
