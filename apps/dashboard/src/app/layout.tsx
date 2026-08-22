@@ -24,9 +24,9 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-const title = "Shopkeeper — the AI support operator for Shopify stores";
+const title = "Shopkeeper for Shopify — customer support that fixes the order";
 const description =
-  "Shopkeeper answers routine customer questions, prepares and completes Shopify order work, and asks before consequential actions.";
+  "Shopkeeper handles routine customer support, completes supported Shopify order work, and asks the merchant when a decision needs approval.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(getDashboardAppUrl()),

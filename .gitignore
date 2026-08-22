@@ -24,6 +24,9 @@ playwright-report/
 test-results/
 .nyc_output/
 
+# Local landing-page capture fixtures and raw media
+artifacts/landing-media/
+
 # Log files
 *.log
 

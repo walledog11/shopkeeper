@@ -1,8 +1,13 @@
 import Image from "next/image";
 import { GlassLink } from "./GlassLink";
-import { InkDoodle } from "./Marginalia";
-import { HIRE_CTA_LABEL } from "@/lib/brand";
+import { NAV_CTA_LABEL } from "@/lib/brand";
 import { HeroMedia } from "./HeroMedia";
+
+const integrationRoles = [
+  { name: "Instagram + email", role: "Customer messages", logo: "/logos/instagram-logo.png" },
+  { name: "iMessage", role: "Your approvals", logo: "/logos/imessage.svg" },
+  { name: "Shopify", role: "Order work", logo: "/logos/shopify.svg" },
+] as const;
 
 function rise(delayMs: number) {
   return {
@@ -13,84 +18,101 @@ function rise(delayMs: number) {
 
 export function Hero() {
   return (
-    <section className="relative isolate px-6 pb-20 pt-14 text-center sm:pt-14">
-
-      {/* Soft paper-white clearing behind the copy — lets the crumpled texture
-          recede directly under the type, then return to full grain at the edges. */}
+    <section className="relative isolate px-5 pb-20 pt-12 text-center sm:px-6 sm:pt-16 md:pb-28">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[600px] [background:radial-gradient(58%_52%_at_50%_40%,rgba(249,245,238,0.95)_0%,rgba(249,245,238,0.55)_42%,transparent_72%)]"
       />
 
-      <InkDoodle
-        kind="asterisk"
-        delay={700}
-        className="pointer-events-none absolute left-[8%] top-[290px] hidden w-6 -rotate-6 text-stone-900/35 lg:block"
-      />
-
-      <div className="mb-7 inline-block" style={rise(0)}>
-        <a
-          href="#system"
-          className="inline-flex -rotate-[2.2deg] items-center gap-2 rounded-lg border border-stone-900/10 bg-[#fbf8f2] px-3 py-1.5 text-[13px] font-medium text-stone-600 shadow-[3px_3px_0_rgba(43,33,24,0.11)] transition-transform duration-200 hover:-rotate-[0.8deg]"
-        >
-          <span className="font-semibold text-stone-900">AI support operator</span>
-          <span aria-hidden className="text-stone-300">·</span>
-          Built for Shopify
-          <span aria-hidden className="text-stone-400">›</span>
-        </a>
-      </div>
+      <p className="m-kicker mb-5" style={rise(0)}>
+        AI support operator for Shopify stores
+      </p>
 
       <h1
-        className="mx-auto mb-7 max-w-[min(760px,92vw)] text-[clamp(42px,5.5vw,72px)] font-bold leading-[1.05] tracking-[0.03em] [font-family:var(--m-hand)] [text-shadow:0_1px_0_rgba(255,255,255,0.55),0_2px_16px_rgba(249,245,238,0.9)]"
-        style={rise(80)}
+        className="m-display mx-auto mb-6 max-w-[min(820px,94vw)] text-[clamp(2.55rem,6vw,5rem)]"
+        style={rise(0)}
       >
-        Customer support that
-        <br />
-        can actually fix the order
+        Customer support that can actually fix the order.
       </h1>
 
       <p
-        className="mx-auto mb-7 max-w-[min(540px,88vw)] text-[15px] leading-[1.45] text-stone-600 sm:text-[16px]"
-        style={rise(160)}
+        className="mx-auto mb-8 max-w-[620px] text-[17px] leading-[1.6] text-stone-600 sm:text-[18px]"
+        style={rise(80)}
       >
-        Shopkeeper answers routine questions, prepares and completes Shopify order work, and asks you
-        before consequential actions.
+        Shopkeeper handles routine support where customers already message you,
+        checks the live order, and completes the Shopify work. When a decision
+        needs you, it asks.
       </p>
 
-      <div className="mb-10 flex flex-wrap items-center justify-center gap-3" style={rise(240)}>
-        <GlassLink href="/signup" variant="primary" className="px-6 py-3">
-          {HIRE_CTA_LABEL}
-        </GlassLink>
-        <GlassLink href="#workflow" variant="secondary" className="px-6 py-3">
-          See an order change ↓
-        </GlassLink>
-      </div>
-
-      <div style={rise(320)} className="relative mt-2">
-        {/* Warm morning-light wash behind the demo film — placeholder photography,
-            swap /atmosphere/hero-light.jpg for the final shot. */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -inset-x-32 -inset-y-16 -z-10 overflow-hidden [mask-image:radial-gradient(62%_60%_at_50%_50%,black_28%,transparent_74%)]"
-        >
-          <Image
-            src="/atmosphere/hero-light.jpg"
-            alt=""
-            fill
-            sizes="100vw"
-            className="scale-110 object-cover opacity-75 [filter:blur(26px)_sepia(0.18)_saturate(0.85)_brightness(1.07)]"
-          />
-          <div className="m-grain absolute inset-0" />
+      <div className="mb-9" style={rise(160)}>
+        <div className="flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
+          <GlassLink href="/signup" variant="primary" className="min-h-12 justify-center px-6 py-3">
+            {NAV_CTA_LABEL}
+          </GlassLink>
+          <GlassLink href="#demo" variant="outline" className="min-h-12 justify-center px-6 py-3">
+            See Shopkeeper work
+          </GlassLink>
         </div>
-        <HeroMedia />
+        <p className="mt-3 text-[13px] text-stone-500">
+          14 days free · payment method collected when you choose a plan
+        </p>
       </div>
 
-      <p
-        className="mx-auto mt-5 max-w-[min(520px,88vw)] -rotate-[0.6deg] text-[17px] leading-none text-stone-600 [font-family:var(--m-hand)]"
-        style={rise(380)}
+      <div
+        className="mx-auto mb-14 grid max-w-[760px] divide-y divide-stone-900/10 border-y border-stone-900/10 text-left sm:grid-cols-3 sm:divide-x sm:divide-y-0"
+        style={rise(210)}
+        aria-label="How Shopkeeper connects"
       >
-        Instagram + email support · Shopify order work · approvals through iMessage
-      </p>
+        {integrationRoles.map((item) => (
+          <div key={item.role} className="flex items-center gap-3 px-3 py-4 sm:px-5">
+            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white/65 ring-1 ring-stone-900/8">
+              <Image src={item.logo} alt="" width={22} height={22} className="size-[22px] object-contain" />
+            </span>
+            <span>
+              <span className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-stone-400">
+                {item.role}
+              </span>
+              <span className="mt-0.5 block text-[13px] font-semibold text-stone-800">{item.name}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <div id="demo" style={rise(260)} className="relative mx-auto mt-2 max-w-6xl scroll-mt-28">
+        <div className="mb-7 text-center">
+          <p className="m-kicker">Example workflow · Demo data</p>
+          <h2 className="m-display mx-auto mt-4 max-w-[18ch] text-[clamp(1.9rem,4vw,3.25rem)]">
+            One message. The order gets handled.
+          </h2>
+          <p className="mx-auto mt-4 max-w-[52ch] text-[15px] leading-relaxed text-stone-600">
+            A customer asks for a size swap. Shopkeeper checks the order and stock,
+            brings you the decision, then updates Shopify and replies.
+          </p>
+        </div>
+
+        <div className="relative">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -inset-x-32 -inset-y-16 -z-10 overflow-hidden [mask-image:radial-gradient(62%_60%_at_50%_50%,black_28%,transparent_74%)]"
+          >
+            <Image
+              src="/atmosphere/hero-light.jpg"
+              alt=""
+              fill
+              sizes="100vw"
+              className="scale-110 object-cover opacity-75 [filter:blur(26px)_sepia(0.18)_saturate(0.85)_brightness(1.07)]"
+            />
+            <div className="m-grain absolute inset-0" />
+          </div>
+          <div className="mx-auto max-w-[560px] rounded-[2.25rem] bg-white/35 p-2 shadow-[0_30px_80px_-52px_rgba(43,33,24,0.5)] ring-1 ring-stone-900/5 sm:p-3">
+            <HeroMedia />
+          </div>
+        </div>
+        <p className="mx-auto mt-5 max-w-[54ch] text-center text-[12px] leading-relaxed text-stone-500">
+          Representative workflow using fictional customer, store, and order details.
+          Eligibility and approval depend on the order state and your settings.
+        </p>
+      </div>
     </section>
   );
 }

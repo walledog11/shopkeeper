@@ -1,133 +1,126 @@
-import type { CSSProperties } from "react";
 import Link from "next/link";
-import { InkCheck } from "./InkCheck";
-import { InkDoodle } from "./Marginalia";
-import { Reveal } from "./Reveal";
-import { SectionLabel } from "./SectionLabel";
+import { Check } from "lucide-react";
 import { cn } from "@/lib/ui/cn";
+
+const sharedFeatures = [
+  "Instagram, Gmail, and forwarded email",
+  "Supported Shopify actions",
+  "iMessage, Telegram, or dashboard approvals",
+  "Action history and control modes",
+] as const;
 
 const tiers = [
   {
     name: "Starter",
-    badge: null,
     price: "$19",
-    per: "/mo",
-    desc: "For stores starting with customer support and assisted replies.",
-    features: [
-      "Instagram and email customer intake",
-      "AI-assisted customer replies",
-      "Shopify order and customer context",
-    ],
-    cta: "Start free trial",
-    href: "/signup",
+    description: "For a founder with a smaller support volume.",
+    allowance: "500 customer conversations / month",
+    seats: "1 seat",
+    cta: "Start with Starter",
     featured: false,
   },
   {
     name: "Pro",
-    badge: "Most picked",
     price: "$49",
-    per: "/mo",
-    desc: "For brands ready to delegate work, not just drafts.",
-    features: [
-      "Everything in Starter",
-      "Shopify order actions and action history",
-      "Approvals through iMessage or the dashboard",
-      "Configurable limits and approved voice guidance",
-    ],
-    cta: "Try Pro free →",
-    href: "/signup",
+    description: "For a growing store or a two-person team.",
+    allowance: "Unlimited customer conversations",
+    seats: "2 seats",
+    cta: "Start with Pro",
     featured: true,
   },
-];
+] as const;
 
 export function Pricing() {
   return (
-    <section id="pricing" className="mx-auto max-w-6xl scroll-mt-24 px-6 py-12 text-center">
-      <Reveal>
-        <SectionLabel>what it costs</SectionLabel>
-        <h2 className="mx-auto mb-5 max-w-[20ch] text-[clamp(36px,5vw,68px)] font-bold leading-[1] tracking-[0.03em] [font-family:var(--m-hand)]">
-          Costs less than <em className="italic text-[var(--m-quill)]">a part-time hire.</em>
-        </h2>
-        <p className="mx-auto mb-14 max-w-[48ch] text-[16px] leading-relaxed text-stone-700">
-          Every plan starts with{" "}
-          <span className="relative inline-block whitespace-nowrap">
-            14 days free
-            <InkDoodle
-              kind="ellipse"
-              delay={500}
-              className="pointer-events-none absolute -inset-x-2 -inset-y-1 h-[calc(100%+8px)] w-[calc(100%+16px)] opacity-70 [color:var(--m-pen)]"
-            />
-          </span>
-          . Review the current plan and total in checkout before subscribing.
+    <section id="pricing" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-16 sm:px-6 md:py-24">
+      <div className="grid gap-8 lg:grid-cols-[1fr_0.9fr] lg:items-end lg:gap-16">
+        <div>
+          <p className="m-kicker">Simple pricing</p>
+          <h2 className="m-display mt-5 max-w-[14ch] text-[clamp(2.1rem,4.6vw,4.15rem)]">
+            Start small. Keep the whole operator.
+          </h2>
+        </div>
+        <p className="max-w-[52ch] text-[16px] leading-[1.7] text-stone-600">
+          Both plans include supported channels, Shopify order work, approval
+          controls, and action history. Choose based on volume and team size.
         </p>
-      </Reveal>
+      </div>
 
-      <div className="mx-auto grid max-w-4xl gap-5 text-left md:grid-cols-2">
-        {tiers.map((tier, i) => (
-          <Reveal key={tier.name} delay={i * 100} className="h-full">
-          <div
-            style={{ "--m-tilt": i === 1 ? "0.5deg" : "-0.7deg", animationDelay: `${i * 100}ms` } as CSSProperties}
-            className={`relative flex h-full flex-col rounded-3xl border p-8 transition-transform duration-300 animate-[m-settle_0.7s_ease-out_backwards] motion-reduce:animate-none hover:-translate-y-1 ${
-              i === 1 ? "rotate-[0.5deg]" : "-rotate-[0.7deg]"
-            } ${
+      <div className="mt-12 grid max-w-5xl gap-5 md:grid-cols-2">
+        {tiers.map((tier) => (
+          <article
+            key={tier.name}
+            className={cn(
+              "relative flex flex-col overflow-hidden rounded-[2rem] border p-6 sm:p-8",
               tier.featured
-                ? "border-[#2b2118] bg-[#2b2118] text-[#f6f2eb]"
-                : "border-stone-900/10 bg-[#fdfbf7] text-stone-900"
-            }`}
+                ? "border-[#2b2118] bg-[#2b2118] text-[#f6f2eb] shadow-[0_32px_72px_-52px_rgba(22,20,19,0.9)]"
+                : "border-stone-900/10 bg-[#fdfbf7]/80 text-stone-900",
+            )}
           >
-            {!tier.featured && (
-              <span
-                aria-hidden
-                className={`absolute -top-2 h-[18px] w-20 rounded-[2px] bg-[#cdb896]/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] mix-blend-multiply ${
-                  i === 0 ? "left-7 -rotate-[5deg]" : "right-7 rotate-[5deg]"
-                }`}
-              />
-            )}
-            {tier.badge && (
-              <span
-                aria-label={tier.badge}
-                className="m-stamp absolute -right-3 -top-4 grid -rotate-[8deg] place-items-center rounded-[50%] border-2 border-[#b0472f]/85 px-4 py-2 text-[11px] font-extrabold uppercase leading-none tracking-[0.14em] text-[#b0472f]"
-              >
-                {tier.badge}
-              </span>
-            )}
-            <div className="mb-5 flex items-center gap-2.5">
-              <span className="text-[24px] font-bold tracking-[0.03em] [font-family:var(--m-hand)]">{tier.name}</span>
+            <div className="flex items-center justify-between gap-4">
+              <h3 className="text-[15px] font-semibold tracking-tight">{tier.name}</h3>
+              {tier.featured ? (
+                <span className="rounded-full border border-white/15 bg-white/[0.07] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.09em] text-[#f6f2eb]/75">
+                  Recommended
+                </span>
+              ) : null}
             </div>
-            <div className="mb-2 flex items-baseline gap-1.5 text-[56px] font-bold leading-none tracking-[0.03em] [font-family:var(--m-hand)]">
+
+            <div className="mt-5 flex items-baseline gap-1.5 text-[clamp(2.75rem,6vw,4rem)] font-semibold leading-none tracking-[-0.055em]">
               {tier.price}
-              <small className={`text-sm font-bold ${tier.featured ? "text-[#f6f2eb]/60" : "text-stone-500"}`}>
-                {tier.per}
+              <small className={cn("text-sm font-semibold tracking-normal", tier.featured ? "text-[#f6f2eb]/45" : "text-stone-400")}>
+                / month
               </small>
             </div>
-            <p className={`mb-7 min-h-10 text-[13px] leading-relaxed ${tier.featured ? "text-[#f6f2eb]/70" : "text-stone-600"}`}>
-              {tier.desc}
+            <p className={cn("mt-4 text-[14px] leading-relaxed", tier.featured ? "text-[#f6f2eb]/65" : "text-stone-600")}>
+              {tier.description}
             </p>
-            <ul className="m-0 mb-8 flex list-none flex-col gap-2.5 p-0 text-[13.5px] leading-snug">
-              {tier.features.map((f) => (
-                <li key={f} className="flex items-start gap-2.5">
-                  <InkCheck
-                    className={`mt-[3px] size-[15px] shrink-0 ${
-                      tier.featured ? "text-[#f6f2eb]/85" : "text-[#2b2118]"
-                    }`}
-                  />
-                  {f}
+
+            <div className={cn("mt-7 grid gap-3 border-y py-5 sm:grid-cols-2", tier.featured ? "border-white/10" : "border-stone-900/10")}>
+              <PlanFact label="Usage" value={tier.allowance} featured={tier.featured} />
+              <PlanFact label="Team" value={tier.seats} featured={tier.featured} />
+            </div>
+
+            <ul className="mt-6 flex list-none flex-col gap-3 p-0 text-[13px] leading-relaxed">
+              {sharedFeatures.map((feature) => (
+                <li key={feature} className="flex items-start gap-2.5">
+                  <Check className={cn("mt-0.5 size-4 shrink-0", tier.featured ? "text-emerald-200" : "text-[#2f7a4a]")} strokeWidth={2.2} aria-hidden />
+                  <span className={tier.featured ? "text-[#f6f2eb]/72" : "text-stone-700"}>{feature}</span>
                 </li>
               ))}
             </ul>
+
             <Link
-              href={tier.href}
+              href="/signup"
               className={cn(
-                "mt-auto w-full p-3 text-center",
+                "mt-8 min-h-12 w-full justify-center p-3 text-center",
                 tier.featured ? "m-glass-btn m-glass-btn-light" : "m-glass-btn m-glass-btn-outline",
               )}
             >
               {tier.cta}
             </Link>
-          </div>
-          </Reveal>
+          </article>
         ))}
       </div>
+
+      <p className="mt-6 max-w-3xl text-[12px] leading-relaxed text-stone-500">
+        14-day trial. A payment method is collected when you choose a plan. A customer
+        conversation is a customer support thread opened during the month; messages to
+        your own Shopkeeper operator do not count.
+      </p>
     </section>
+  );
+}
+
+function PlanFact({ label, value, featured }: { label: string; value: string; featured: boolean }) {
+  return (
+    <div>
+      <p className={cn("text-[10px] font-bold uppercase tracking-[0.09em]", featured ? "text-[#f6f2eb]/35" : "text-stone-400")}>
+        {label}
+      </p>
+      <p className={cn("mt-1.5 text-[12px] font-semibold leading-snug", featured ? "text-[#f6f2eb]/80" : "text-stone-700")}>
+        {value}
+      </p>
+    </div>
   );
 }

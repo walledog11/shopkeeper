@@ -124,11 +124,11 @@ export default function OrderOperationsPage() {
       <article>
         <header className="mx-auto max-w-6xl px-6 pb-16 pt-16 text-center sm:pt-24">
           <Link
-            href="/#operations"
+            href="/"
             className="mb-8 inline-flex items-center gap-2 text-sm font-semibold text-stone-600 underline decoration-stone-300 underline-offset-4 hover:text-stone-900"
           >
             <ArrowLeft className="size-4" aria-hidden />
-            Back to product overview
+            Back to overview
           </Link>
           <SectionLabel>order operations</SectionLabel>
           <h1 className="mx-auto max-w-[18ch] text-[clamp(48px,7vw,88px)] font-bold leading-[0.95] tracking-[0.03em] [font-family:var(--m-hand)]">
@@ -216,6 +216,15 @@ export default function OrderOperationsPage() {
                 <p className="mt-3 text-sm leading-relaxed text-stone-600">{body}</p>
               </div>
             ))}
+          </div>
+          <div className="mt-6 text-center">
+            <Link
+              href="/product/approvals-and-controls"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-stone-800 underline decoration-stone-300 underline-offset-4 hover:text-stone-950"
+            >
+              Explore approval modes and limits
+              <ArrowRight className="size-4" aria-hidden />
+            </Link>
           </div>
         </section>
 

@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { Reveal } from "./Reveal";
 import { SectionLabel } from "./SectionLabel";
 
 const STORE_URL = "linenandloom.com";
@@ -12,15 +11,15 @@ const TYPE_MS_PER_CHAR = 175;
 const STEPS = [
   {
     id: "connect",
-    title: "Connect it",
-    desc: "Auto-reads products, policies, and orders from Shopify.",
+    title: "Connect Shopify",
+    desc: "Use live order, product, inventory, and customer context. Read available store policies and pages into knowledge.",
     aria: "Connecting a Shopify store. Products, policies, orders, FAQs, and custom instructions sync one by one.",
     duration: 10500,
   },
   {
     id: "channels",
-    title: "Turn them on",
-    desc: "Instagram and email for customers. iMessage when something needs you.",
+    title: "Choose where messages go",
+    desc: "Connect a customer inbox, then add Instagram or website chat. Use iMessage when approvals should reach your phone.",
     aria: "Turning on Instagram, email, website chat, and iMessage.",
     duration: 8000,
   },
@@ -92,18 +91,21 @@ export function Onboarding() {
   const playing = started && !staticPlay;
 
   return (
-    <section id="onboarding" className="scroll-mt-24 py-12">
-      <div className="mx-auto max-w-6xl px-6">
-        <Reveal>
-          <SectionLabel>day one</SectionLabel>
-          <h2 className="mx-auto mb-10 max-w-[18ch] text-center text-[clamp(36px,5vw,68px)] font-bold leading-[1] tracking-[0.03em] [font-family:var(--m-hand)]">
-            From install to live{" "}
-            <em className="italic text-[var(--m-quill)]">in minutes.</em>
+    <section id="onboarding" className="scroll-mt-24 py-16 md:py-24">
+      <div className="mx-auto max-w-6xl px-5 sm:px-6">
+        <div>
+          <SectionLabel>guided setup</SectionLabel>
+          <h2 className="m-display mx-auto max-w-[17ch] text-center text-[clamp(2.1rem,4.6vw,4.15rem)]">
+            Connect the store. Choose where Shopkeeper should reach you.
           </h2>
-        </Reveal>
+          <p className="mx-auto mb-12 mt-5 max-w-[58ch] text-center text-[16px] leading-relaxed text-stone-600">
+            No helpdesk migration project. Start with Shopify and one customer channel;
+            Shopkeeper begins in Ask first so you can review the work.
+          </p>
+        </div>
 
         <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
-          <Reveal delay={40}>
+          <div>
             <div
               ref={stageRef}
               className="m-onboard-stage"
@@ -113,20 +115,20 @@ export function Onboarding() {
               {activeStep === 0 ? (
                 <ConnectScene
                   key={`connect-${playId}`}
-                  staticPlay={staticPlay}
+                  staticPlay={staticPlay || !started}
                   playing={playing}
                 />
               ) : (
                 <ChannelsScene
                   key={`channels-${playId}`}
-                  staticPlay={staticPlay}
+                  staticPlay={staticPlay || !started}
                   playing={playing}
                 />
               )}
             </div>
-          </Reveal>
+          </div>
 
-          <Reveal delay={80}>
+          <div>
             <div className="flex flex-col gap-2">
               {STEPS.map((item, index) => {
                 const active = index === activeStep;
@@ -140,7 +142,7 @@ export function Onboarding() {
                       active ? "opacity-100" : "opacity-35 hover:opacity-70"
                     }`}
                   >
-                    <h3 className="mb-2 text-[28px] font-bold leading-none tracking-[0.03em] [font-family:var(--m-hand)]">
+                    <h3 className="mb-2 text-[1.25rem] font-semibold tracking-tight">
                       {item.title}
                     </h3>
                     <p className="max-w-[42ch] text-[16px] leading-relaxed text-stone-700">
@@ -150,8 +152,9 @@ export function Onboarding() {
                 );
               })}
             </div>
-          </Reveal>
+          </div>
         </div>
+        <p className="mt-6 text-center text-[12px] text-stone-500">Example setup · Demo store data</p>
       </div>
     </section>
   );

@@ -1,101 +1,76 @@
-"use client";
-
-import { useState } from "react";
-import { Reveal } from "./Reveal";
-import { SectionLabel } from "./SectionLabel";
-
 const faqs = [
   {
-    q: "What can Shopkeeper send automatically?",
-    a: "Draft only never sends replies or changes Shopify. The default Ask first mode can keep routine replies moving, but changes, money, and exceptions pause for merchant approval. Trusted is an explicit opt-in for simple replies; configured limits and approval rules still apply.",
+    q: "Do I need Gorgias or another helpdesk?",
+    a: "No. Shopkeeper has its own conversation, configuration, and review surfaces. You can connect the customer channels you already use without adding another helpdesk underneath it.",
   },
   {
-    q: "How does it learn my voice?",
-    a: "You can add sample replies, and Shopkeeper learns from edits you approve. After enough examples it can propose an updated voice brief, which changes only after you review and approve it.",
+    q: "Do I have to replace Gmail?",
+    a: "No. Connect Gmail or Google Workspace and keep replying from that address, or forward another support inbox into Shopkeeper.",
   },
   {
-    q: "Can I export my data?",
-    a: "Yes. Workspace and customer data export as JSON, and the action history exports as CSV.",
+    q: "Which channels does Shopkeeper support?",
+    a: "Customers can reach Shopkeeper through an Instagram Professional account, Gmail, or forwarded support email. Shopify storefront chat is also supported with its Shopify setup. Merchants can use iMessage, Telegram, or the dashboard for direction and approval.",
   },
   {
-    q: "What if I don't use Shopify?",
-    a: "Customer replies can use connected channels and the guidance you provide, but order context and actions such as refunds, address changes, and exchanges require Shopify.",
+    q: "What can it do in Shopify?",
+    a: "Shopkeeper can look up orders, customers, products, inventory, fulfillment, and tracking. Supported work includes eligible address changes, order-item edits, cancellations, exact full refunds within configured limits, returns, exchanges, gift cards, return labels, customer updates, notes, and fulfillment with tracking. The order state and your settings still determine what can run.",
   },
   {
-    q: "Which channels are supported today?",
-    a: "Customers can reach Shopkeeper through Instagram, Gmail, or forwarded support email. Merchants can review and approve through iMessage or the dashboard.",
+    q: "Can I require approval before it changes an order?",
+    a: "Yes. Draft only prepares work without sending or changing anything. Ask first—the default—lets routine answers move while money, changes, and exceptions can wait for you. You can also control action permissions and financial limits.",
   },
   {
-    q: "What happens when Shopkeeper is uncertain?",
-    a: "It can ask for missing policy or judgment, pause consequential work for approval, or block and escalate work that falls outside the rules instead of improvising.",
+    q: "What happens when Shopkeeper is not sure?",
+    a: "It can ask you for missing store guidance, stop an ineligible action, or escalate the conversation. It should not invent a policy or force a Shopify change past a failed check.",
   },
   {
-    q: "How is customer data protected?",
-    a: "Workspace access is scoped to the organization, connected-provider credentials are encrypted before storage, and the product provides supported workspace and customer export controls.",
+    q: "What if an action fails?",
+    a: "The action history keeps the proposal, approval, execution status, result, and customer-facing output together. Failed or uncertain outcomes remain visible for review instead of being presented as completed work.",
   },
-];
-
-/* One ruled row on the notebook sheet — the rule runs full-bleed to the sheet
-   edges (negative margins undo the sheet padding), like a printed line. */
-function FaqItem({ q, a }: { q: string; a: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="-ml-14 -mr-6 border-t border-solid border-[#88aac9]/40 pl-14 pr-6 sm:-ml-20 sm:-mr-10 sm:pl-20 sm:pr-10">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-        className="flex w-full cursor-pointer items-center justify-between border-0 bg-transparent py-6 text-left font-sans text-[clamp(17px,2.5vw,21px)] font-semibold tracking-[-0.01em]"
-      >
-        <span>{q}</span>
-        <span className={`ml-4 shrink-0 text-lg font-normal transition-transform duration-200 [font-family:var(--m-mono)] ${open ? "rotate-45" : ""}`}>+</span>
-      </button>
-      <div
-        className={`grid transition-[grid-template-rows] duration-300 ease-out ${
-          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-        }`}
-      >
-        <div className="overflow-hidden">
-          <div className="flex gap-2.5 pb-6 text-sm leading-[1.6] text-stone-700">
-            <span aria-hidden className="text-[20px] leading-[1.1] [color:var(--m-pen)] [font-family:var(--m-hand)]">
-              A.
-            </span>
-            <span>{a}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+  {
+    q: "Is customer message content used to train AI models?",
+    a: "No. Shopkeeper does not use merchant customer message content to train general-purpose AI models. The Privacy Policy explains how connected-channel and customer data is used to provide the service.",
+  },
+  {
+    q: "How long does setup take?",
+    a: "Setup is a short guided flow: connect Shopify, let Shopkeeper read available store policies and pages, connect a customer inbox, and choose how approvals reach you. Additional channels can be added afterward.",
+  },
+  {
+    q: "Is a credit card required for the trial?",
+    a: "You can create an account before checkout. A payment method is collected when you choose a Starter or Pro plan and begin its 14-day Stripe trial.",
+  },
+  {
+    q: "What usage is included?",
+    a: "Starter includes 500 new customer conversations per month and 1 seat. Pro has no customer-conversation cap and includes 2 seats. Chats between you and your Shopkeeper operator do not count. If Starter goes over its allowance, new customer messages still arrive but Shopkeeper pauses planning until the allowance resets or the plan changes.",
+  },
+  {
+    q: "How do I cancel or change my plan?",
+    a: "Workspace admins can manage the subscription and payment method through the billing portal in Shopkeeper. Exact cancellation timing follows the options configured in that portal.",
+  },
+] as const;
 
 export function FAQ() {
   return (
-    <section id="faq" className="mx-auto max-w-6xl scroll-mt-24 px-6 py-12 text-center">
-      <Reveal>
-        <SectionLabel>before you hire</SectionLabel>
-        <h2 className="mx-auto mb-12 max-w-[20ch] text-[clamp(36px,5vw,68px)] font-bold leading-[1] tracking-[0.03em] [font-family:var(--m-hand)]">
-          Things people ask{" "}
-          <em className="italic text-[var(--m-quill)]">before they trust an AI.</em>
-        </h2>
-      </Reveal>
-
-      <Reveal delay={120} className="mx-auto max-w-[780px] text-left">
-        {/* Ruled notebook sheet: pale-blue printed rules, red margin line, taped
-            to the desk at the top. Questions are the printed matter; answers come
-            back in pen. */}
-        <div className="relative rounded-[3px] border border-stone-900/10 bg-[#fcfaf4] pl-14 pr-6 pt-4 shadow-[0_28px_60px_-28px_rgba(43,33,24,0.4),0_8px_20px_-10px_rgba(43,33,24,0.14)] sm:pl-20 sm:pr-10">
-          <span
-            aria-hidden
-            className="absolute -top-2 left-1/2 h-[18px] w-24 -translate-x-1/2 -rotate-[3deg] rounded-[2px] bg-[#cdb896]/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] mix-blend-multiply"
-          />
-          <span aria-hidden className="absolute inset-y-0 left-9 w-px bg-[#c05a45]/50 sm:left-14" />
-          <span aria-hidden className="absolute inset-y-0 left-[calc(2.25rem+3px)] w-px bg-[#c05a45]/25 sm:left-[calc(3.5rem+3px)]" />
-          {faqs.map(item => (
-            <FaqItem key={item.q} {...item} />
-          ))}
-          <div className="-ml-14 -mr-6 border-t border-solid border-[#88aac9]/40 pb-5 sm:-ml-20 sm:-mr-10" />
+    <section id="faq" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-16 sm:px-6 md:py-24">
+      <div className="grid gap-10 lg:grid-cols-[0.72fr_1.28fr] lg:gap-20">
+        <div>
+          <p className="m-kicker">Questions before you connect</p>
+          <h2 className="m-display mt-5 max-w-[10ch] text-[clamp(2.1rem,4.6vw,4.15rem)]">
+            The practical details.
+          </h2>
         </div>
-      </Reveal>
+        <div className="border-b border-stone-900/10">
+          {faqs.map((item) => (
+            <details key={item.q} className="group border-t border-stone-900/10">
+              <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-5 py-5 text-[clamp(1rem,2vw,1.15rem)] font-semibold tracking-[-0.02em] text-stone-800 outline-none marker:hidden focus-visible:ring-2 focus-visible:ring-stone-700/30 [&::-webkit-details-marker]:hidden">
+                <span>{item.q}</span>
+                <span aria-hidden className="grid size-7 shrink-0 place-items-center rounded-full border border-stone-900/10 text-[18px] font-normal text-stone-500 transition-transform duration-200 group-open:rotate-45 motion-reduce:transition-none">+</span>
+              </summary>
+              <p className="max-w-[70ch] pb-6 pr-10 text-[14px] leading-[1.7] text-stone-600">{item.a}</p>
+            </details>
+          ))}
+        </div>
+      </div>
     </section>
   );
 }
