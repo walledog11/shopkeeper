@@ -225,13 +225,15 @@ Estimates are engineering days for one person, and they are estimates. "Gate" me
 
 Carried forward from the 2026-08-16 work order. **Closed 2026-08-21.** Two were real and are fixed; one was already fixed before this audit was written, and one was miscategorised.
 
+Line references in *closed* items describe the code as it was when the bug was found; the fix moved or deleted most of them. Re-derived 2026-08-22: the substance of all four holds, and 0.2's four citations (`context.ts:263`, `:407`, `planner-read-tools.ts:61`, `planner.ts:141`) are still exact.
+
 - [x] **0.1 — `temperature: 0` breaks brand-voice synthesis, silently.** `voice-synthesis.ts:123` + `constants.ts:7`. Sonnet 5 rejects non-default sampling parameters with a 400. The daily job catches it per-org (`voice-synthesis.ts:236-241`), reports success, and the only test mocks the SDK, so nothing has ever validated the parameter. `VoiceEdit` rows accumulate and the brief never improves. **Fix:** delete the line; add a test asserting the request body rather than mocking it. **~15 min.** Confirm the 400 first so you fix the real cause. *(PR #54. The 400 was confirmed against the current API contract before the line came out. Only live instance in the repo — `ai/index.ts:73` and the dashboard summary route also pass `temperature`, but both run on Haiku 4.5, where it is still accepted.)*
 
 - [x] **0.2 — A Shopify blip becomes a confident wrong reply, auto-sent.** ~~`context.ts:259`~~ **Already fixed when this audit was written; the finding was stale.** `recentOrdersFetchFailed` is set at `context.ts:263`, carried on the context at `:407`, and produces a blocking warning at `planner-read-tools.ts:61` via `planner.ts:141`. It lands in `warningBlocksQuickReply`'s default-`true` branch, so quick-reply auto-send is already blocked. It was implemented as a prose warning, which made it a **Phase 1.2 conversion target** rather than a live bug; it is now the `recent_orders_fetch_failed` signal, still blocking.
 
 - [x] **0.3 — Skipped-step re-draft executes without telling the customer.** `planner-skip-reply.ts:218-228`. After two failed forced-tool attempts the function returns `withoutTerminal` — the mutative actions minus the customer notification. The refund happens; the customer is never told. **Fix:** on re-draft failure, do not execute — return the plan to the merchant. **1–2 h.** *(PR #55. `refreshTerminalSendAfterSkip` now returns `{ status: "ok", toolCalls } | { status: "redraft_failed" }`; the operator handler runs nothing, leaves the plan pending, and says why.)*
 
-- [x] **0.4 — Money-path escalation is English-regex-gated on a multilingual product.** **Dropped as a standalone item 2026-08-21 — it is not a live bug, and this list overstated it.** The guard only fires when the plan has no action and no escalation (`planner-routing.ts:319`), so a missed match degrades `escalate` to `needs_review`. Both stop at a human; neither auto-sends and neither moves money. The delta is which surface the merchant sees on a reply-only plan — polish, not a trust-binary failure, and it did not belong in a list headed "live bugs" beside 0.3. The part worth keeping — deleting the prose regex, driving off `intents` plus plan shape — falls out of **Phase 3** for free when `routePlan` and `classifyHomePlan` collapse into `decideAutonomy`. Doing it alone buys a paid eval run and a set of non-English fixtures to turn `needs_review` into `escalate`.
+- [x] **0.4 — Money-path escalation is English-regex-gated on a multilingual product.** **Dropped as a standalone item 2026-08-21 — it is not a live bug, and this list overstated it.** The guard only fires when the plan has no action and no escalation (`planner-routing.ts:317`), so a missed match degrades `escalate` to `needs_review`. Both stop at a human; neither auto-sends and neither moves money. The delta is which surface the merchant sees on a reply-only plan — polish, not a trust-binary failure, and it did not belong in a list headed "live bugs" beside 0.3. The part worth keeping — deleting the prose regex, driving off `intents` plus plan shape — falls out of **Phase 3** for free when `routePlan` and `classifyHomePlan` collapse into `decideAutonomy`. Doing it alone buys a paid eval run and a set of non-English fixtures to turn `needs_review` into `escalate`.
 
 ---
 
@@ -282,7 +284,7 @@ The real project, and the one that needs product judgment rather than only engin
 
 - [x] **4.1** Design the field schema. Start from what the briefing and the operator card actually need to say, not from what the classifier currently emits. *(PR #56. `RequestFacts { ask, subject, order, deadline, deadlineText, alternative }` in `packages/agent/src/classifier-signals.ts`; `ask` is a closed vocabulary so consumers branch on a value, never on prose.)*
 - [x] **4.2** Move the classifier to schema-enforced structured output (`output_config` + `json_schema`) — this also closes prior work order item 5, which flagged that the one call on every inbound message's critical path asks for JSON in prose. `voice-synthesis.ts:129-134` already demonstrates the pattern in this codebase. *(PR #56. `CLASSIFIER_OUTPUT_SCHEMA` covers every field the prompt asks for, not just the new ones. `CLASSIFIER_VERSION` → 5. A `Today:` line goes in the user message — not the system prompt — so "by Friday" can resolve to a date without moving the cached prefix.)*
-- [x] **4.3** Write the renderer: compose sentences from fields, with explicit field priority so the load-bearing fact leads. *(PR #56 built `briefing-fields.ts` — deadline → who → ask, with `byDeadlineFirst` sorting dated items above undated ones — and wired `formatTicketLine`. PR #57 wired the four remaining lines: `formatEscalatedTicketLine`, `formatBlockedTicketLine`, `formatApprovalItemLine` (both call sites; the operator select never read `classifierSignals` at all) and the flagged line in `digest.ts`. Deadlines render from the date, never by rewording the customer: `deadlineText` prints verbatim or not at all, so there is nothing to repair afterwards.)*
+- [x] **4.3** Write the renderer: compose sentences from fields, with explicit field priority so the load-bearing fact leads. *(PR #56 built `briefing-fields.ts` — deadline → who → ask — and wired `formatTicketLine`. **`byDeadlineFirst` was built and never called**: it is exported, unit-tested at `briefing-fields.unit.test.ts:107`, and has zero call sites in production, so the line-level lead landed and the list-level ordering did not. See the Decisions note below. PR #57 wired the four remaining lines: `formatEscalatedTicketLine`, `formatBlockedTicketLine`, `formatApprovalItemLine` (both call sites; the operator select never read `classifierSignals` at all) and the flagged line in `digest.ts`. Deadlines render from the date, never by rewording the customer: `deadlineText` prints verbatim or not at all, so there is nothing to repair afterwards.)*
 - [ ] **4.4** Delete the tense engine (`humanizeReportedSummary`, `REPORTED_VERB_PAST`, `REPORTED_SPEECH`, `SUMMARY_PREAMBLE`), `tidyPunctuation`, and the truncation cascade. **No longer blocked on 4.3 — blocked on two decisions instead**, and the second is the larger one:
   - *Pre-v5 threads.* Every line prefers fields, but the prose path is still the fallback for threads classified before version 5, so deleting it strands them. Backfill `requestFacts` onto open pre-v5 threads, or keep the fallback until they age out. v5 shipped 2026-08-21 in #56 and prod has no merchants, so the stranded population is test threads — "let them age out" is close to free.
   - *`ask: "none"`.* `formatFactsBriefingLine` returns null when `!parts.ask && !parts.deadline` (`briefing-fields.ts:121`), and `ask: "none"` is a legitimate **v5** output. Not a rare one either: the existing-customer email fast path at `channels.ts:296-311` skips the classifier entirely and writes `requestFacts: emptyRequestFacts()`, so **every repeat customer emailing in gets `ask: "none"`** — the prose path is the normal path for them, not an edge case. So the prose path serves current-version threads too, not only old ones — `rowRequestFacts` says so in its own doc comment at `digest-briefing.ts:443-447` ("null for every thread classified before version 5 **and for any the classifier could not read an ask off**, which is what keeps the prose fallbacks below reachable"). The `:559-561` this item cited was never that comment; at the commit it was written against, those lines were `getPlanExecution` and `IRREGULAR_PAST`. The deletion cannot happen at all until a field-based rendering exists for the ask-less case. Backfilling does not touch this.
@@ -295,7 +297,8 @@ The real project, and the one that needs product judgment rather than only engin
 **Done when:** `digest-briefing.ts` contains no regex over model-written prose.
 
 **Decisions:**
-- ~~What does a briefing line lead with when a ticket has several asks?~~ **Decided 2026-08-21: the deadline.** Implemented in `formatDeadlineLead`, with `byDeadlineFirst` ordering the list the same way.
+- ~~What does a briefing line lead with when a ticket has several asks?~~ **Decided 2026-08-21: the deadline.** Implemented in `formatDeadlineLead` and wired into all five renderers.
+- [ ] **Ordering the briefing list by deadline is decided but not shipped.** `byDeadlineFirst` (`briefing-fields.ts:135-149`) does exactly what the decision says — soonest deadline first, undated items after, arrival order within each group — and **nothing calls it**. Its only reference outside its own definition is its unit test. So a dated item still sits wherever it landed in the list, under however many undated ones precede it, which is the same defect as burying the date inside a sentence. Either wire it into the waiting-items and approval-items builders or delete it; leaving it is a decision that reads as done and is not. *(Found 2026-08-22 while re-deriving §4. Nothing caught it because `knip` counts unused exports against a 139/151 warning baseline instead of failing on them — a dead export is absorbed silently.)*
 - ~~Should an unverified storefront visitor and a verified one read differently, and how?~~ **Decided 2026-08-22, in code.** `classifyPerson` splits `visitor` from `verified` (`person-name.ts`), and the three renderers print the split: a visitor is "Someone on your storefront" as a sentence subject and "the visitor" after a preposition; a verified shopper is "The customer on #1024", scoped to the orders they proved and never to an account.
 - [ ] Postal addresses currently reach the merchant's phone unredacted — `redactBriefingContacts` handles emails and links only. Redact, or keep? **Still open.**
 
@@ -360,6 +363,33 @@ chain end to end, all of 5.4, and every citation in 5.5.
 - The expensive errors are the ones that size work: 5.2's premise, 5.3's urgency, 5.1a's
   prerequisite. All three would have bought effort, and one of them a paid eval run,
   against a fact nobody had checked.
+
+**Second sweep, same day — Phases 0 through 4.** The first sweep corrected §1, §2 and
+Phase 5 and stopped there, which left most of the plan carried on the old footing. Phases
+0–3 and 4.1–4.3/4.6 were then re-derived too:
+
+- *Phase 0* — substance holds on all four. 0.2's four citations are still exact; 0.1's
+  `temperature` line is gone from `voice-synthesis.ts` and the surviving instance at
+  `ai/index.ts:73` is on Haiku, as claimed; 0.3's `refreshTerminalSendAfterSkip` returns
+  the two-case union; 0.4's guard is at `:317`, not `:319`.
+- *Phase 1* — holds exactly. Nine `ProducedPlanSignalCode`s plus `legacy_warning`, and
+  `warningBlocksQuickReply` / `isShopifyCustomerWarning` / `planWarningTiers` return zero
+  hits repo-wide.
+- *Phases 2 and 3* — open, no factual claims beyond 3.5, which held on the first sweep.
+- *Phase 4* — 4.1, 4.2 and 4.6 hold (`CLASSIFIER_VERSION = 5`, `CLASSIFIER_OUTPUT_SCHEMA`
+  wired at `email-classification.ts:410`; 118 exact-English assertions across the two
+  notification test files, which is what 4.6 exists to fix). **4.3 did not.**
+
+**`byDeadlineFirst` is built, tested, and never called.** It was recorded twice as shipped
+— once in 4.3's note and once as a closed decision — and it has no production call site.
+The line-level lead shipped; the list-level ordering did not. This is the tenth correction,
+and the only one so far where the audit claimed *code* was doing something it does not do,
+rather than miscounting something it does.
+
+It also names the gap that let it through: `knip` counts unused exports against a
+139-of-151 warning baseline rather than failing on them, so a dead export is absorbed in
+silence. Everything else in this file was checkable by reading; that one was checkable by
+the toolchain, and the toolchain was configured not to say.
 
 Still unmeasured and marked as such: the LOC-delta column in the phase table.
 
