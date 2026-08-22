@@ -7,6 +7,7 @@ import type {
   RawToolCall,
   PlanStep,
   AgentPlan,
+  PlanSignal,
   PlanExecutionOutcome,
   AgentTurn,
 } from "@shopkeeper/agent/types";
@@ -40,6 +41,7 @@ export type {
   RawToolCall,
   PlanStep,
   AgentPlan,
+  PlanSignal,
   PlanExecutionOutcome,
   AgentTurn,
 };

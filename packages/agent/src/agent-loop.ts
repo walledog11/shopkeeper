@@ -94,7 +94,7 @@ export interface RunAgentLoopParams {
 }
 
 // Executes reads for real (preserving the structured ToolStatus that plan
-// warnings + routing depend on) and records every emitted tool call as a plan
+// signals + routing depend on) and records every emitted tool call as a plan
 // step. Returns whether a terminal tool was proposed this iteration.
 async function handleCaptureBlocks(
   blocks: Anthropic.ToolUseBlock[],

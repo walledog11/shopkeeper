@@ -9,8 +9,8 @@ import logger from "./logger.js";
 import { buildMessageHistory } from "./message-history.js";
 import { decidePlannerTier, isLowRiskPlanOutcome } from "./planner-model-tier.js";
 import {
-  appendInitialPlanningWarnings,
-  appendPlanningReadWarnings,
+  appendInitialPlanningSignals,
+  appendPlanningReadSignals,
 } from "./planner-read-tools.js";
 import { stripInternalNotesWithoutActions } from "./planner-safety/internal-notes.js";
 import { applyEscalationRouting, groundEscalationReasons, groundReplyText, logRoutingShadow, routePlan } from "./planner-routing.js";
@@ -18,13 +18,14 @@ import {
   stripCreateRefundForAlreadyRefundedOrders,
   stripEmptySendReplyToolCalls,
 } from "./planner-safety/index.js";
+import { buildPlanSignals } from "./plan-signals.js";
 import { buildPlanSteps } from "./planner-steps.js";
 import { buildSystemPromptParts } from "./prompt.js";
 import { DEFAULT_MAX_ITERATIONS } from "./run-policy.js";
 import { resolveAgentSettings } from "./settings.js";
 import { enforceSpendCap } from "./spend.js";
 import { selectAgentTools } from "./tools/registry/index.js";
-import type { AgentPlan, OrgSettings } from "./types.js";
+import type { AgentPlan, OrgSettings, ProducedPlanSignalCode } from "./types.js";
 import { createModelUsageMetrics, hashInstructionForLog } from "./usage.js";
 import {
   CONTEXT_BUDGETS,
@@ -137,10 +138,10 @@ export async function planAgent(
   rawToolCalls = stripEmptySendReplyToolCalls(rawToolCalls);
   rawToolCalls = stripInternalNotesWithoutActions(rawToolCalls);
 
-  const warnings: string[] = [];
-  appendInitialPlanningWarnings({ ctx, operatorMode, warnings });
-  appendPlanningReadWarnings({
-    warnings,
+  const signalCodes: ProducedPlanSignalCode[] = [];
+  appendInitialPlanningSignals({ ctx, operatorMode, codes: signalCodes });
+  appendPlanningReadSignals({
+    codes: signalCodes,
     readBlocks: loop.readBlocks,
     readResultsMap: loop.readResults,
     readStatusMap: loop.readStatus,
@@ -148,7 +149,7 @@ export async function planAgent(
   });
 
   // Phase 3 routing: classify the plan and act on the disposition — materialize a
-  // deterministic escalation, record warnings, stamp the decision the dashboard
+  // deterministic escalation, record signals, stamp the decision the dashboard
   // consumes. Support-path only (operator plans skip it).
   let routing: AgentPlan["routing"];
   if (!operatorMode) {
@@ -168,9 +169,7 @@ export async function planAgent(
         { keepReply: isStorefrontContext(ctx) },
       );
     }
-    for (const warning of outcome.warnings) {
-      if (!warnings.includes(warning)) warnings.push(warning);
-    }
+    signalCodes.push(...outcome.signalCodes);
     routing = {
       decision: outcome.decision,
       signals: outcome.signals,
@@ -194,6 +193,9 @@ export async function planAgent(
   });
 
   const steps = buildPlanSteps(rawToolCalls);
+  // Severity is resolved here, against the finished tool calls: a plan the router
+  // rewrote is the plan the merchant sees, and the one signals must describe.
+  const signals = buildPlanSignals(signalCodes, rawToolCalls);
   logger.info({
     orgId: ctx.orgId,
     threadId: ctx.thread.id,
@@ -215,7 +217,8 @@ export async function planAgent(
     rawToolCalls: rawToolCalls.map(toolCall => toolCall.name),
     visibleStepCount: steps.length,
     visibleSteps: steps.map(step => step.tool),
-    warningCount: warnings.length,
+    signalCount: signals.length,
+    signalCodes: signals.map(signal => signal.code),
     instructionHash,
   }, "[agent:plan] complete");
 
@@ -241,7 +244,10 @@ export async function planAgent(
     steps,
     rawToolCalls,
     readResults,
-    warnings: warnings.length > 0 ? warnings : undefined,
+    signals: signals.length > 0 ? signals : undefined,
+    // Phase 1: derived from `signals` so plans cached by an earlier release stay
+    // readable. Drops out with the last consumer of `AgentPlan.warnings`.
+    warnings: signals.length > 0 ? signals.map(signal => signal.message) : undefined,
     routing,
   };
 }

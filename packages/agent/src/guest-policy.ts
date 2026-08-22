@@ -82,7 +82,7 @@ export function isVerifiedContext(
 
 // True for both storefront states. Every branch that exists because the visitor
 // arrived anonymously — the prompt section, the escalation keepReply flag, the
-// planning-warning exemption — applies to a verified shopper too: they are still
+// planning-signal exemption — applies to a verified shopper too: they are still
 // someone on the website with no customer record behind them.
 export function isStorefrontContext(
   ctx: Pick<BaseAgentContext, "authState"> | null | undefined,

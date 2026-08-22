@@ -317,7 +317,7 @@ export async function executeTool(
   return (await executePreparedTool(prepared.definition, prepared.input, ctx, settings)).result.message;
 }
 
-// Structured variant used by the planner, which derives plan warnings from the
+// Structured variant used by the planner, which derives plan signals from the
 // semantic status (e.g. not_found) rather than scraping the model-facing text.
 export async function executeToolStructured(
   name: string,

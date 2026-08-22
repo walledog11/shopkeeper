@@ -143,7 +143,7 @@ export const POST = withOrgRoute(
       durationMs: Date.now() - startedAt,
       rawToolCallCount: plan.rawToolCalls.length,
       visibleStepCount: plan.steps.length,
-      warningCount: plan.warnings?.length ?? 0,
+      signalCount: plan.signals?.length ?? 0,
       instructionHash,
     }, "[agent:plan] response");
 

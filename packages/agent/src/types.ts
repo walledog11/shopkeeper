@@ -127,6 +127,31 @@ export interface PlanStep {
 
 export type RoutingDecision = 'auto_execute' | 'needs_review' | 'escalate'
 
+/** Conditions the planner can raise about a plan. One code per distinct condition. */
+export type ProducedPlanSignalCode =
+  | 'shopify_customer_unresolved'
+  | 'recent_orders_fetch_failed'
+  | 'shopify_lookup_failed'
+  | 'order_not_found'
+  | 'order_tracking_not_found'
+  | 'product_not_found'
+  | 'kb_no_match'
+  | 'mutative_intent_no_action'
+  | 'circular_channel_deflection'
+
+/** `legacy_warning` is only ever read off a plan cached before signals existed. */
+export type PlanSignalCode = ProducedPlanSignalCode | 'legacy_warning'
+
+export type PlanSignalSeverity = 'blocking' | 'advisory'
+
+export interface PlanSignal {
+  code: PlanSignalCode
+  /** Whether the agent may act on this plan without a human. */
+  severity: PlanSignalSeverity
+  /** For humans only. Never matched on — branch on `code`. */
+  message: string
+}
+
 export interface AgentPlan {
   /** Stable internal analytics identifier for this cached plan version. */
   planId?: string
@@ -134,6 +159,11 @@ export interface AgentPlan {
   steps: PlanStep[]          // visible steps (reads excluded)
   rawToolCalls: RawToolCall[] // all tool calls including reads
   readResults?: Record<string, string> // tool_use.id → raw result string, for read-only tools
+  signals?: PlanSignal[]
+  /**
+   * @deprecated Derived from `signals` so plans cached by an earlier release stay
+   * readable. Read `signals` instead — this is display text with no code attached.
+   */
   warnings?: string[]
   /**
    * Phase 3 routing disposition: how the guards classified this plan without

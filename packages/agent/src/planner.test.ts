@@ -356,9 +356,7 @@ describe("planAgent routing", () => {
 
     expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual(["send_reply"]);
     expect(plan.routing?.decision).toBe("needs_review");
-    expect(plan.warnings).toContain(
-      "Customer requested a refund/cancel but no action was planned — review before sending.",
-    );
+    expect(plan.signals?.map((signal) => signal.code)).toContain("mutative_intent_no_action");
   });
 
   it("materializes a deterministic escalation for out-of-scope commercial requests", async () => {

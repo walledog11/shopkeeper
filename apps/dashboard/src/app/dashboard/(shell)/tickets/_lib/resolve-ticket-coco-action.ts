@@ -5,11 +5,8 @@ import {
   readAgentPlanCacheRecordShape,
   type PlanThreadMessage,
 } from "@shopkeeper/agent/plan-cache-shape"
-import {
-  classifyHomePlan,
-  isPlanWarningBlocking,
-  planWarningTiers,
-} from "@shopkeeper/agent/plan-preview"
+import { classifyHomePlan } from "@shopkeeper/agent/plan-preview"
+import { planSignalTiers } from "@shopkeeper/agent/plan-signals"
 import type { AgentPlan, OrgSettings, Thread } from "@/types"
 import { REPLAN_CUSTOMER_REPLY_INSTRUCTION } from "@/lib/agent/replan-instruction"
 
@@ -63,10 +60,7 @@ function planHasConsequentialAction(plan: AgentPlan): boolean {
 
 function planNeedsShopifyLink(plan: AgentPlan, shopifyCustomerId?: string | null): boolean {
   if (shopifyCustomerId) return false
-  const { blocking } = planWarningTiers(plan)
-  return blocking.some(warning => isPlanWarningBlocking(warning, plan) && (
-    warning.toLowerCase().includes("shopify customer")
-  ))
+  return planSignalTiers(plan).blocking.some(signal => signal.code === "shopify_customer_unresolved")
 }
 
 function hasStaleCachedPlan(

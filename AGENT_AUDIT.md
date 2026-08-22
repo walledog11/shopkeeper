@@ -49,7 +49,7 @@ It is already drifting. The producer writes `"Couldn't find a Shopify customer -
 
 And the warning text is known to be wrong: the 2026-08-20 run recorded `No matching product found - the order edit step may need a corrected product name` firing twice against a plan containing no order edit. That text is load-bearing for an autonomy decision.
 
-**This is the most dangerous line of code in the pipeline.** The prior audit quotes this function and recommends routing a new failure *through* it (its work order item 2). I disagree. It should not be extended; it should be deleted and replaced with a typed signal.
+**This is the most dangerous line of code in the pipeline.** The prior audit quotes this function and recommends routing a new failure *through* it (its work order item 2). I disagree. It should not be extended; it should be deleted and replaced with a typed signal. *(Done in Phase 1: the function, `isShopifyCustomerWarning` and `planWarningTiers` are deleted, and producers emit `PlanSignal { code, severity, message }` instead.)*
 
 ### 2.2 The autonomy decision has no owner
 
@@ -203,7 +203,7 @@ Estimates are engineering days for one person, and they are estimates. "Gate" me
 | Phase | Theme | Est. | Net LOC | Gate | Status |
 |---|---|---:|---:|---|---|
 | 0 | Live bugs | ~1.5 d | ~0 | none owed | **Closed** — 0.1 (#54), 0.3 (#55); 0.2 was already fixed, 0.4 dropped |
-| 1 | Typed signals (A) | ~1 d | −40 | No | Open |
+| 1 | Typed signals (A) | ~1 d | −40 | No | **Closed** — 1.1–1.5 |
 | 2 | Validate, don't repair (C) | ~2 d | −150 | Yes | Open |
 | 3 | One autonomy function (B) | ~3 d | −400 | Yes | Open — absorbs the 0.4 regex deletion |
 | 4 | Structured rendering (D) | 8–10 d | −1,500 | Yes + phone | **In progress** — 4.1–4.3 done (#56, #57); 4.4 next |
@@ -217,7 +217,7 @@ Carried forward from the 2026-08-16 work order. **Closed 2026-08-21.** Two were 
 
 - [x] **0.1 — `temperature: 0` breaks brand-voice synthesis, silently.** `voice-synthesis.ts:123` + `constants.ts:7`. Sonnet 5 rejects non-default sampling parameters with a 400. The daily job catches it per-org (`voice-synthesis.ts:236-241`), reports success, and the only test mocks the SDK, so nothing has ever validated the parameter. `VoiceEdit` rows accumulate and the brief never improves. **Fix:** delete the line; add a test asserting the request body rather than mocking it. **~15 min.** Confirm the 400 first so you fix the real cause. *(PR #54. The 400 was confirmed against the current API contract before the line came out. Only live instance in the repo — `ai/index.ts:73` and the dashboard summary route also pass `temperature`, but both run on Haiku 4.5, where it is still accepted.)*
 
-- [x] **0.2 — A Shopify blip becomes a confident wrong reply, auto-sent.** ~~`context.ts:259`~~ **Already fixed when this audit was written; the finding was stale.** `recentOrdersFetchFailed` is set at `context.ts:263`, carried on the context at `:407`, and produces a blocking warning at `planner-read-tools.ts:61` via `planner.ts:141`. It lands in `warningBlocksQuickReply`'s default-`true` branch, so quick-reply auto-send is already blocked. It is implemented as a prose warning, which makes it a **Phase 1.2 conversion target** rather than a live bug.
+- [x] **0.2 — A Shopify blip becomes a confident wrong reply, auto-sent.** ~~`context.ts:259`~~ **Already fixed when this audit was written; the finding was stale.** `recentOrdersFetchFailed` is set at `context.ts:263`, carried on the context at `:407`, and produces a blocking warning at `planner-read-tools.ts:61` via `planner.ts:141`. It lands in `warningBlocksQuickReply`'s default-`true` branch, so quick-reply auto-send is already blocked. It was implemented as a prose warning, which made it a **Phase 1.2 conversion target** rather than a live bug; it is now the `recent_orders_fetch_failed` signal, still blocking.
 
 - [x] **0.3 — Skipped-step re-draft executes without telling the customer.** `planner-skip-reply.ts:218-228`. After two failed forced-tool attempts the function returns `withoutTerminal` — the mutative actions minus the customer notification. The refund happens; the customer is never told. **Fix:** on re-draft failure, do not execute — return the plan to the merchant. **1–2 h.** *(PR #55. `refreshTerminalSendAfterSkip` now returns `{ status: "ok", toolCalls } | { status: "redraft_failed" }`; the operator handler runs nothing, leaves the plan pending, and says why.)*
 
@@ -229,13 +229,15 @@ Carried forward from the 2026-08-16 work order. **Closed 2026-08-21.** Two were 
 
 Smallest change with the largest safety return. Phase 3 depends on it.
 
-- [ ] **1.1** Define `PlanSignal { code, severity, message }` and the `code` union. Codes come from the existing warning producers, one code per distinct condition.
-- [ ] **1.2** Convert producers to emit signals: `planner-read-tools.ts:68`, `:160`, `:171`, and the pre-fetch-failure warning at `:61` carried over from 0.2. *(The order-edit warning that named a step the plan may not contain was fixed separately in `43f61275`; it now reads "No matching product found - the name may be wrong, or the store may not carry it." Nothing left to chase there — only the conversion to a typed code.)*
-- [ ] **1.3** Replace `warningBlocksQuickReply` with `signal.severity === "blocking"`. Delete `isShopifyCustomerWarning` and `planWarningTiers`.
-- [ ] **1.4** Update dashboard consumers to render `message` and branch on `code` — never on text.
-- [ ] **1.5** Keep `AgentPlan.warnings` as a derived `string[]` for one release so stored plans stay readable, then drop it.
+**Closed 2026-08-21.** `packages/agent/src/plan-signals.ts` is the new owner: one message table, one severity resolver, one reader.
 
-**Done when:** no `.includes(` over warning text exists anywhere in the repo.
+- [x] **1.1** Define `PlanSignal { code, severity, message }` and the `code` union. Codes come from the existing warning producers, one code per distinct condition. *(Nine `ProducedPlanSignalCode`s in `types.ts`, plus `legacy_warning`, which only ever appears when reading a plan cached before signals existed.)*
+- [x] **1.2** Convert producers to emit signals: `planner-read-tools.ts:68`, `:160`, `:171`, and the pre-fetch-failure warning at `:61` carried over from 0.2. *(Producers now push codes; `planner-safety`'s two exported warning strings are deleted and `RoutingOutcome.warnings` became `signalCodes`. `PLAN_SIGNAL_MESSAGES` is the only place the English lives, so the producer/test drift at `resolve-ticket-coco-action.unit.test.ts:113` cannot recur — that test builds its signal from the real resolver.)*
+- [x] **1.3** Replace `warningBlocksQuickReply` with `signal.severity === "blocking"`. Delete `isShopifyCustomerWarning` and `planWarningTiers`. *(Severity is resolved once in `planAgent`, against the finished tool calls, and stored. `kb_no_match` is advisory; `shopify_customer_unresolved` is the one plan-dependent case and keeps its old rule — blocking only when the plan used a customer/order read.)*
+- [x] **1.4** Update dashboard consumers to render `message` and branch on `code` — never on text. *(`planSignalTiers` replaces `planWarningTiers` in `useActionPlanReviewState` and `resolve-ticket-coco-action`; `ActionPlanBody` branches on `code` and severity.)*
+- [x] **1.5** Keep `AgentPlan.warnings` as a derived `string[]` for one release so stored plans stay readable, then drop it. *(Derived in `planner.ts` and marked `@deprecated`. A cached plan with warnings and no signals reads as one `legacy_warning` per warning, severity `blocking` — fail closed rather than guess a code from the text. Both drop out together.)*
+
+**Done when:** no `.includes(` over warning text exists anywhere in the repo. **Met** — the only remaining `.includes(` on this path tests a `ProducedPlanSignalCode[]`.
 
 ---
 
