@@ -9,6 +9,7 @@ import {
 } from '@shopkeeper/db/test-helpers';
 import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
+import type { RequestFacts } from '@shopkeeper/agent/classifier-signals';
 import {
   DIGEST_CURSOR_KEY,
   formatApprovalItemLine,
@@ -378,7 +379,7 @@ describe('handoff and approval lines — fields before prose', () => {
     order: '#1024',
     deadline: '2026-05-01',
     deadlineText: 'before the dinner party',
-  };
+  } satisfies RequestFacts;
   const LINE = 'By Friday — Dana · #1024: refund or exchange — the olive linen napkins';
 
   const factsRow = (overrides: Record<string, unknown> = {}) => ({
