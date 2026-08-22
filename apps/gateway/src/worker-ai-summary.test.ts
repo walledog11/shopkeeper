@@ -50,7 +50,7 @@ describe('AI Summary worker — filter gating', () => {
     const updated = await db.thread.findUnique({ where: { id: thread.id } });
     expect(updated?.filterStatus).toBe('questionable');
     expect(updated?.classifierSignals).toEqual({
-      version: 4,
+      version: 5,
       language: 'es',
       intents: {
         mutative_request: false,
@@ -61,6 +61,14 @@ describe('AI Summary worker — filter gating', () => {
         out_of_scope_commercial: false,
         forwarded_injection: false,
         no_request: false,
+      },
+      requestFacts: {
+        ask: 'none',
+        subject: null,
+        order: null,
+        deadline: null,
+        deadlineText: null,
+        alternative: null,
       },
     });
   });
