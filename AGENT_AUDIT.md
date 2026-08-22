@@ -2,7 +2,9 @@
 
 **Scope:** the control flow and the merchant-facing output layer. What decides whether the agent acts on its own, who owns that decision, and what happens to the model's output between the model and the merchant's phone. Plus the work order that comes out of it.
 
-**Date:** 2026-08-21. Static read of the working tree at `fix/briefing-request-summary-and-verified-subject`, plus one live classifier probe against a real multi-intent ticket. Every claim carries a `file:line`.
+**Date:** 2026-08-21, re-verified 2026-08-22. Static read of the working tree, plus one live classifier probe against a real multi-intent ticket.
+
+This file used to claim "every claim carries a `file:line`" as though that were the same as being checked. It is not, and §4b records what that cost. Where a number appears below, the command that produced it is stated or the number is marked unmeasured.
 
 **History.** This file previously held the 2026-08-16 audit of the *model-call* layer — LLM call-site census, token accounting, prompt-cache analysis, and ~2,600 lines of appendices with verbatim prompts and per-tool schema sizes. That material was not wrong and is not superseded; it is preserved in git at `2cc9749c` and worth reading when the question is cost or determinism. Every still-open item from its work order is carried forward in [§4 To-do](#4--to-do) with its original evidence. What replaced it is an audit of the layers that one deliberately did not cover.
 
@@ -10,13 +12,13 @@
 
 ## 1 — Verdict
 
-`packages/agent` is not bloated. The 2026-08-16 audit concluded this and I confirmed it independently: one agent loop of 117 lines, a tool registry that is a plain array, zero unused files per `knip`.
+`packages/agent` is not bloated. The 2026-08-16 audit concluded this and I confirmed it independently: one agent loop of 118 lines, a tool registry that is a plain array, no unused *files* per `knip` — though the same run carries a reviewed baseline of 139 unused exports and 121 unused types repo-wide, so "clean" here means clean of dead files, not of dead surface.
 
 The problems are on either side of it.
 
-**Nothing owns the autonomy decision.** It is spread across four call sites in two packages, evaluated in two different orders, and its final gate is a substring match on English prose.
+**Nothing owns the autonomy decision.** It is spread across four call sites in two packages, evaluated in two different orders, and its final gate was, until Phase 1, a substring match on English prose.
 
-**The output layer is bigger than the agent that feeds it.** 2,747 source LOC and 2,069 test LOC of hand-written English generation, against a 117-line agent loop.
+**The output layer is bigger than the agent that feeds it.** 2,790 source LOC and 2,289 test LOC of hand-written English generation, against a 118-line agent loop.
 
 Both are the same failure in different clothes: the system does not trust the model's output, so it grew a repair layer — and the repair layer has no schema, so it repairs prose with prose.
 
@@ -57,12 +59,12 @@ The same question — "may this run without a human?" — is answered in four pl
 
 | Where | When | What it decides |
 |---|---|---|
-| `routePlan` (`planner-routing.ts:339`) | plan time, inside `planAgent` | `proceed` / `escalate` + a merchant question |
-| `classifyHomePlan` (`plan-preview.ts:248`) | consume time | `quick_reply` / `auto_execute` / `needs_review` / `needs_merchant_input` |
-| `checkStaticToolPolicy` (`plan-preview.ts:305`) | consume time | re-derives whether each mutative call is permitted |
+| `routePlan` (`planner-routing.ts:337`) | plan time, inside `planAgent` | `proceed` / `escalate` + a merchant question |
+| `classifyHomePlan` (`plan-preview.ts:198`) | consume time | `quick_reply` / `auto_execute` / `needs_review` / `needs_merchant_input` |
+| `checkStaticToolPolicy` (`plan-preview.ts:255`) | consume time | re-derives whether each mutative call is permitted |
 | `checkParsedStaticToolPolicy` (`executor.ts:92`) | execute time | derives it again, authoritatively |
 
-They are chained through a mutable field: `routePlan` writes `plan.routing`, and `classifyHomePlan` reads `plan.routing?.question` (`plan-preview.ts:273`) to decide `needs_merchant_input`. Static policy is evaluated twice against the same tool calls, once to classify and once to enforce, through two different entry points into the same module.
+They are chained through a mutable field: `routePlan` writes `plan.routing`, and `classifyHomePlan` reads `plan.routing?.question` (`plan-preview.ts:223`) to decide `needs_merchant_input`. Static policy is evaluated twice against the same tool calls, once to classify and once to enforce, through two different entry points into the same module.
 
 Nothing guarantees the four agree. There is no single function you can read to learn what the agent is allowed to do.
 
@@ -77,7 +79,7 @@ Nothing guarantees the four agree. There is no single function you can read to l
 5. `groundEscalationReasons` — rewrites `escalate_to_human.reason`
 6. `groundReplyText` — deletes sentences from `send_reply.text`
 
-Each was added after a specific bad output. Passes 5 and 6 are the tell: `stripUngroundedSentences` (`planner-routing.ts:560`) removes individual sentences from the reply the customer will read, because the model asserts actions it did not plan.
+Each was added after a specific bad output. Passes 5 and 6 are the tell: `stripUngroundedSentences` (`planner-routing.ts:558`) removes individual sentences from the reply the customer will read, because the model asserts actions it did not plan.
 
 The system's response to "the model said something untrue" is to edit the sentence rather than reject the plan. A plan carrying a fabricated claim is not a plan with a bad sentence in it — it is evidence that the model misunderstood the situation, and shipping the remainder after excision is a worse failure mode than stopping.
 
@@ -85,18 +87,20 @@ This is the same pattern CLAUDE.md already names for prompts — *"a prompt grow
 
 ### 2.4 The output layer is bigger than the agent
 
-| File | Source | Tests |
+Measured at the audit's own commit (`0f396f50~1`), with the tree as of 2026-08-22 beside it:
+
+| File | Source (then → now) | Tests (then → now) |
 |---|---:|---:|
-| `digest-briefing.ts` | 1,068 | 655 |
-| `digest.ts` | 758 | 675 |
-| `planning-notifications.ts` | 682 | 739 |
-| `operator-ledger.ts` | 122 | — |
-| `digest-shopify-garnish.ts` | 117 | — |
-| **Total** | **2,747** | **2,069** |
+| `digest-briefing.ts` | 1,068 → 1,100 | 655 → 789 |
+| `digest.ts` | 758 → 762 | 675 → 712 |
+| `planning-notifications.ts` | 682 → 689 | 739 → 788 |
+| `operator-ledger.ts` | 122 → 122 | — |
+| `digest-shopify-garnish.ts` | 117 → 117 | — |
+| **Total** | **2,747 → 2,790** | **2,069 → 2,289** |
 
-Against that: the agent loop is 117 lines (`runAgentLoop`, `agent-loop.ts:144-261`), the planner 247, the tool registry 175.
+Against that: the agent loop is 118 lines (`runAgentLoop`, `agent-loop.ts:144-261`), the planner 253, the tool registry 175.
 
-`digest-briefing.ts` is the largest file in the entire pipeline. It contains a hand-rolled natural-language engine: two near-duplicate reported-speech regexes (one capturing, one not), a 30-entry irregular-verb backshift table, a five-rule punctuation repairer that exists only to clean up damage done by the other transforms in the same file, and a truncation cascade with three different budgets. 27 regex/`replace`/`match` operations in one file.
+`digest-briefing.ts` is the largest file in the entire pipeline. It contains a hand-rolled natural-language engine: two near-duplicate reported-speech regexes (one capturing, one not), a **29**-entry irregular-verb backshift table, a **six**-rule punctuation repairer that exists only to clean up damage done by the other transforms in the same file, and a truncation cascade with **four** budgets (`BRIEFING_TOPIC_MAX`, `HANDOFF_VERBATIM_MAX`, `HANDOFF_SUMMARY_MAX`, `BRIEFING_RECITE_MAX`). **28** `replace`/`match`/`test` calls in one file (29 at the audit's commit).
 
 It does not work reliably, and the file knows it — its own comments record that per-phrase fixes were tried and deleted because *"each was fitted to one morning's summaries and left the next morning's raw."* The bug that started this audit was `requests → asked` dropping a preposition, producing "asked a refund" on a merchant's phone.
 
@@ -116,8 +120,8 @@ Four different strings for one person. Only two consulted verification state, wh
 Three text helpers are duplicated and have drifted:
 
 - `customerFirstName` — `digest-briefing.ts:92` trims and splits on any whitespace; `planning-notifications.ts:154` splits on a single space with no trim. A leading space yields `""` on the operator card. *(One implementation now, the trimming one — Phase 4.5.)*
-- `endSentence` — `planning-notifications.ts:160` trims first; `digest.ts:237` does not, producing `"text ."`.
-- `lowerFirst` — duplicated verbatim.
+- `endSentence` — `planning-notifications.ts:163` trims first; `digest.ts:238` does not, producing `"text ."`.
+- `lowerFirst` — **not duplicated verbatim, which this list had backwards.** `digest-briefing.ts:930` lowercases unconditionally; `planning-notifications.ts:157` only lowercases when the string matches `/^[A-Z][a-z]/`. So an acronym opener diverges by surface: "URL expired" stays itself on the operator card and reaches the briefing as "uRL expired". It is the most drifted of the three, not the safe one.
 
 Plus the prior audit's `fallbackTitleFromSummary` (×2, drifted) and `isDeterministicE2EAIEnabled` (×2, different `NODE_ENV` semantics), both still open.
 
@@ -125,17 +129,23 @@ Plus the prior audit's `fallbackTitleFromSummary` (×2, drifted) and `isDetermin
 
 `Thread` carries `aiSummary` (whole episode), `requestSummary` (current ask), `aiTitle` (3–6 word topic), and the classifier also emits `requestDisposition`. The choice between them is re-derived at every call site rather than owned anywhere — `generate-thread-plan.ts:82` explains the rule in a comment, `delivery-exception-plan.ts:215` and `return-arrival-plan.ts:107` each restate it, and the digest simply never selected the column, which is the bug that produced the incoherent briefing.
 
-### 2.7 The prompt is 27 prohibitions
+### 2.7 The prompt is mostly prohibitions
 
-`SUPPORT_INSTRUCTIONS` is 10,924 characters, 38 bullets, **27 of which contain a prohibition** — measured, not estimated. It ships on every iteration of every ticket. Three bullets restate the same `get_order_tracking` rule.
+`SUPPORT_INSTRUCTIONS` is 10,924 characters over 38 bullets, and three of them restate the same `get_order_tracking` rule. It ships on every iteration of every ticket. Those three numbers reproduce exactly.
 
-A prompt that is 71% "don't" is a specification written as a plea. Most of those bullets describe invariants that a schema or the executor could enforce structurally.
+The fourth did not. This section claimed **27 bullets contain a prohibition, "measured, not estimated"** — but no method was recorded, and none obvious returns 27: counting `never`/`do not`/`don't`/`avoid` gives **22**, and admitting bare `no`/`not` gives **30**. A number defended as measured has to carry the measurement. Read it as "most of them", which is the part that survives either count.
 
-### 2.8 Context is unbounded in production
+A prompt written mostly as "don't" is a specification written as a plea. Most of those bullets describe invariants that a schema or the executor could enforce structurally.
 
-`resolveContextBudgetMode` returns `"off"` when `AGENT_CONTEXT_BUDGET_MODE` is unset (`context-budget.ts:44`). The bounded paths exist, are tested, and are switched off; the runbook explicitly pauses the `enforce` rollout. In the `off` branch the classifier loads the entire thread with no `take` (`intelligence.ts:44-47`).
+### 2.8 The context budget is off — and this section was wrong about what that costs
 
-A long-running thread grows the classifier prompt without limit until it fails. The mitigation is written and disabled.
+`resolveContextBudgetMode` returns `"off"` when `AGENT_CONTEXT_BUDGET_MODE` is unset (`context-budget.ts:44`). The bounded paths exist, are tested, and are switched off; the runbook explicitly pauses the `enforce` rollout. In the `off` branch the classifier query loads every non-note message on the thread with no `take` (`intelligence.ts:44-47`).
+
+**What this section then concluded — "a long-running thread grows the classifier prompt without limit until it fails" — is false.** Those rows never reach the prompt unbounded. `generateThreadIntelligence` passes them through `buildBoundedClassifierConversation` on *both* branches (`intelligence.ts:39-42`), and that function bounds unconditionally: last 20 messages, 4,000 characters each, 16,000 total, then an 18,000-character cap on the assembled text (`context-budget.ts:162-188`, `CONTEXT_BUDGETS` at `:14-17`). `enforce` only moves the same bound into the Prisma query. The real cost of `off` here is a fetch that reads a whole thread and discards most of it — worker memory and DB IO, not prompt growth.
+
+There *is* an unbounded-by-size path, and it is not the one this section named. In non-`enforce`, `buildContext` fetches a 50-message window and hands it to the planner unbudgeted (`context.ts:131-133`, `:344-346`); the per-message and total character caps apply only under `enforce`. Fifty long messages make a large planner prompt. So: bounded in count, uncapped in size, on the agent path — not the classifier.
+
+The error is worth keeping visible because of how it was made. The citation was exact, the code at it said what the section claimed, and the conclusion still did not follow — the next four lines, where the rows get budgeted, were never read. A `file:line` proves someone looked at that line. It proves nothing about the line after it.
 
 ---
 
@@ -207,7 +217,7 @@ Estimates are engineering days for one person, and they are estimates. "Gate" me
 | 2 | Validate, don't repair (C) | ~2 d | −150 | Yes | Open |
 | 3 | One autonomy function (B) | ~3 d | −400 | Yes | Open — absorbs the 0.4 regex deletion |
 | 4 | Structured rendering (D) | 8–10 d | −1,500 | Yes + phone | **In progress** — 4.1–4.3 (#56, #57) and 4.5 done; 4.4 blocked on two decisions |
-| 5 | Cost & housekeeping | ~3 d | −350 | 5.2 only | Open — 5.1 and 5.1a were both already true; nothing here gates Phase 3 |
+| 5 | Cost & housekeeping | ~3 d | −350 (unmeasured) | 5.2 only | Open — 5.1 closed, 5.1a struck; 5.2 and 5.3 re-sized after re-verification. Nothing here gates Phase 3 |
 
 ---
 
@@ -275,7 +285,7 @@ The real project, and the one that needs product judgment rather than only engin
 - [x] **4.3** Write the renderer: compose sentences from fields, with explicit field priority so the load-bearing fact leads. *(PR #56 built `briefing-fields.ts` — deadline → who → ask, with `byDeadlineFirst` sorting dated items above undated ones — and wired `formatTicketLine`. PR #57 wired the four remaining lines: `formatEscalatedTicketLine`, `formatBlockedTicketLine`, `formatApprovalItemLine` (both call sites; the operator select never read `classifierSignals` at all) and the flagged line in `digest.ts`. Deadlines render from the date, never by rewording the customer: `deadlineText` prints verbatim or not at all, so there is nothing to repair afterwards.)*
 - [ ] **4.4** Delete the tense engine (`humanizeReportedSummary`, `REPORTED_VERB_PAST`, `REPORTED_SPEECH`, `SUMMARY_PREAMBLE`), `tidyPunctuation`, and the truncation cascade. **No longer blocked on 4.3 — blocked on two decisions instead**, and the second is the larger one:
   - *Pre-v5 threads.* Every line prefers fields, but the prose path is still the fallback for threads classified before version 5, so deleting it strands them. Backfill `requestFacts` onto open pre-v5 threads, or keep the fallback until they age out. v5 shipped 2026-08-21 in #56 and prod has no merchants, so the stranded population is test threads — "let them age out" is close to free.
-  - *`ask: "none"`.* `formatFactsBriefingLine` returns null when `!parts.ask && !parts.deadline` (`briefing-fields.ts:121`), and `ask: "none"` is a legitimate **v5** output. Not a rare one either: the existing-customer email fast path at `channels.ts:296-311` skips the classifier entirely and writes `requestFacts: emptyRequestFacts()`, so **every repeat customer emailing in gets `ask: "none"`** — the prose path is the normal path for them, not an edge case. So the prose path serves current-version threads too, not only old ones (`digest-briefing.ts:559-561` says so), and the deletion cannot happen at all until a field-based rendering exists for that case. Backfilling does not touch this.
+  - *`ask: "none"`.* `formatFactsBriefingLine` returns null when `!parts.ask && !parts.deadline` (`briefing-fields.ts:121`), and `ask: "none"` is a legitimate **v5** output. Not a rare one either: the existing-customer email fast path at `channels.ts:296-311` skips the classifier entirely and writes `requestFacts: emptyRequestFacts()`, so **every repeat customer emailing in gets `ask: "none"`** — the prose path is the normal path for them, not an edge case. So the prose path serves current-version threads too, not only old ones — `rowRequestFacts` says so in its own doc comment at `digest-briefing.ts:443-447` ("null for every thread classified before version 5 **and for any the classifier could not read an ask off**, which is what keeps the prose fallbacks below reachable"). The `:559-561` this item cited was never that comment; at the commit it was written against, those lines were `getPlanExecution` and `IRREGULAR_PAST`. The deletion cannot happen at all until a field-based rendering exists for the ask-less case. Backfilling does not touch this.
 
   This is where the ~1,500-line deletion actually lands.
 - [x] **4.5** Collapse the remaining naming copies — `anonymousNoun`, `namelessNoun`, `customer-name.ts` — onto the one helper. *(`packages/agent/src/person-name.ts`: `classifyPerson` answers who this is once, and `personLabel` / `personSubject` / `personObject` render it in the three registers English needs — a list row, the start of a sentence, after a preposition. The six copies are gone, `customerFirstName`'s two implementations with them. It also closes the §2.5 bug at its remaining end: the operator card never read verification, so it opened "Someone on your storefront replied" one line above its own "They confirmed the email on #1024" — it now says "The customer", and drops the order number because the next line already prints it. The dashboard's `getCustomerName` stays: it derives a row label from a `platformId`, which is a different question, and now shares only the constant.)*
@@ -286,7 +296,7 @@ The real project, and the one that needs product judgment rather than only engin
 
 **Decisions:**
 - ~~What does a briefing line lead with when a ticket has several asks?~~ **Decided 2026-08-21: the deadline.** Implemented in `formatDeadlineLead`, with `byDeadlineFirst` ordering the list the same way.
-- [ ] Should an unverified storefront visitor and a verified one read differently, and how? **Still open** — changes what the renderer prints, so worth settling before 4.4.
+- ~~Should an unverified storefront visitor and a verified one read differently, and how?~~ **Decided 2026-08-22, in code.** `classifyPerson` splits `visitor` from `verified` (`person-name.ts`), and the three renderers print the split: a visitor is "Someone on your storefront" as a sentence subject and "the visitor" after a preposition; a verified shopper is "The customer on #1024", scoped to the orders they proved and never to an account.
 - [ ] Postal addresses currently reach the merchant's phone unredacted — `redactBriefingContacts` handles emails and links only. Redact, or keep? **Still open.**
 
 ---
@@ -295,13 +305,9 @@ The real project, and the one that needs product judgment rather than only engin
 
 - [x] **5.1** ~~Recapture the eval baseline so the cost gate turns on (prior item 7).~~ **Already done; the item was carried forward stale.** The baseline was regenerated in `e9345501` on 2026-08-17 — the day after the prior audit was written — at 3 repeats / 252 runs / 99.2%, and it carries the `usage` key. `index.test.ts:187` guards the cost line on `summary.usage && baseline.usage`, so `formatUsageDelta` has been running on every run since. **No spend owed.** One correction to the wording: it is reported, never gated ("a tuning change is allowed to cost more if it scores better, and that call is the merchant's, not CI's"), so 5.2 gets a cost *comparison*, not a cost gate.
 
-- [x] **5.1a** ~~Put `classifierSignals` in the fixtures. **0 of 84 carry it**, so the routing path production actually takes is ungraded.~~ **Wrong, and wrong in the way this file keeps being wrong** — it was written from a grep for `classifierSignals` under `fixtures/`, which returns nothing because the fixtures do not spell the field. **79 of the 84 declare `classifierIntents`**, and `fixture-runtime.ts:78-89` builds a v5 `classifierSignals` object from it onto the context `planAgent` receives. The classifier routing path at `planner-routing.ts:350` has been graded since `013e4f47` ("teach evals the classifier path").
-
-  The five without it are deliberate, not a gap: three operator-mode fixtures and `routing-order-create` / `routing-support-stats`, none of which run the inbound classifier in production either. `fixture-runtime.ts:76-77` says so — "left undefined when the fixture declares none, which keeps 'the classifier never ran' a distinct, testable state." Both branches are covered, in the proportion production takes them.
-
-  **Phase 3 has no fixture prerequisite.** The one real gap is narrower and buys nothing here: fixtures always write `requestFacts: emptyRequestFacts()`, so the Phase 4.1 field schema is unmodelled — but nothing in `packages/agent` or the dashboard reads `requestFacts` (the only consumers are the gateway's renderers, which the judge never sees), so modelling it would not change a single assertion.
-- [ ] **5.2** Intent-driven tool selection (prior item 8). All **30** schemas (28 when this was written; ~6,926 est. tokens) ship on every iteration — verified: nothing in `run.ts`, `planner.ts`, or `prompt.ts` reads `classifierSignals` for tool selection. The classifier's `intents` are already on `ctx.classifierSignals` (`classifier-signals.ts:194`). **1–2 days. High risk** — a wrongly-narrowed set produces "I can't help with that" instead of an action, and it changes the cached prefix per intent bucket. Measure before committing. **Gate on the full suite.**
-- [ ] **5.3** Decide the `AGENT_CONTEXT_BUDGET_MODE` rollout. It is `off` by default, `enforce` is paused in the runbook, and the `off` branch loads unbounded thread history into the classifier. Either finish the rollout or delete the dual paths (~280 LOC — **an unverified estimate**; `context-budget.ts` is 195 lines and 16 sites reference the mode) — the current state is the worst of both. Verified: `intelligence.ts:39-48` has no `take` in the non-`enforce` branch.
+- [x] **5.1a** ~~Put `classifierSignals` in the fixtures; 0 of 84 carry it.~~ **Struck — the claim was false.** 79 of the 84 declare `classifierIntents`, which `fixture-runtime.ts:78-89` turns into a v5 `classifierSignals` object on the context `planAgent` receives, so `planner-routing.ts:350` has been graded since `013e4f47`. The five without it are the three operator fixtures and `routing-order-create` / `routing-support-stats`, none of which run the inbound classifier in production either. **Phase 3 has no fixture prerequisite.** The one real gap — fixtures always write `emptyRequestFacts()` — buys nothing here, because only the gateway's renderers read `requestFacts` and the judge never sees them.
+- [ ] **5.2** Intent-driven tool selection (prior item 8). **28 schemas ship on every iteration, not 30** — `TOOL_DEFINITIONS` holds 30, but `AGENT_TOOLS` filters to `availability === "active"` (`registry/index.ts:115-116`) and `AGENT_TOOLS` is what reaches the API. The "(28 when this was written)" parenthetical this item used to carry had it exactly backwards: 28 was right, and re-counting the wrong array turned it into 30. Serialized, those 28 are 21,818 characters ≈ **5,455 tokens** at 4 chars/token; the `~6,926` quoted before has no recorded method. Verified: nothing in `run.ts`, `planner.ts`, or `prompt.ts` reads `classifierSignals` for tool selection, and the classifier's `intents` are already on `ctx.classifierSignals` (`classifier-signals.ts:194`). **1–2 days. High risk** — a wrongly-narrowed set produces "I can't help with that" instead of an action, and it changes the cached prefix per intent bucket. Measure before committing. **Gate on the full suite.**
+- [ ] **5.3** Decide the `AGENT_CONTEXT_BUDGET_MODE` rollout. It is `off` by default and `enforce` is paused in the runbook, so both paths ship and only one is ever exercised. **The urgency this item used to carry was false** — see §2.8: `off` does not feed unbounded history to the classifier, because `buildBoundedClassifierConversation` bounds the prompt either way. What `off` actually costs is a whole-thread row fetch in the classifier (`intelligence.ts:44-47`) and an uncapped *character* budget on the agent's 50-message window (`context.ts:344-346`). That makes this an efficiency-and-consistency call, not a reliability one — and it makes "delete the dual paths" the cheaper option rather than the riskier one. Size it before deciding: `context-budget.ts` is 195 lines and 23 files reference the mode. The `~280 LOC` this item quoted was never measured.
 - [ ] **5.4** Deduplicate: ~~`customerFirstName`~~ (done in 4.5), `endSentence`, `lowerFirst`, `fallbackTitleFromSummary` (×2, drifted), `isDeterministicE2EAIEnabled` (×2, different `NODE_ENV` semantics). ~~Delete `tools/tool-inputs.ts` (23 LOC, unimported).~~ **Wrong — it is imported**, type-only, by `agent-context.ts:9` for five tool input types. Nothing to delete. **~2 h.**
 - [ ] **5.5** ~~Remove the two prompt lines that duplicate code-enforced rules (`prompt.ts:195`, `:200`)~~ — **one of the two, not both.** Collapse the three restatements of the `get_order_tracking` rule (verified: 3 bullets).
   - `:200` ("if send_reply errors, do not change thread status") **is** code-enforced — `run-execution.ts:53` detects the failure and `:243` returns "skipped status update because send_reply failed." Safe to delete.
@@ -309,31 +315,53 @@ The real project, and the one that needs product judgment rather than only engin
 
 ---
 
-## 4b — Verification status
+## 4b — Verification log
 
-Every §4 item was re-checked against the tree on 2026-08-21, because four status claims
-had already proved stale or wrong and the rest were carried on the same footing. The
-split was sharp: **every claim anchored to a `file:line` survived; every claim asserted
-about the code without one failed.** Nine corrections are marked inline above.
+**2026-08-22.** Every checkable claim in this file was re-derived from the tree, after
+the user pointed out that corrections kept landing on a document that was still wrong.
+The previous pass had concluded that "every claim anchored to a `file:line` survived;
+every claim asserted without one failed," and had written a *new* wrong item (5.1a) into
+the middle of that conclusion. Both halves of the rule were false.
 
-The mechanism is in this file's own header — "every still-open item from its work order
-is carried forward with its original evidence." Carried forward, not re-run. Items tagged
-"prior work order item N" account for five of the nine errors.
+**What the second pass found.**
 
-Re-verified and holding: §2.1–§2.8 in full, and to-do items 2.1, 2.2, 2.5, 3.5's
-`channels.ts` citation, 4.6, 5.2, 5.3's unbounded-classifier claim, 5.5's `:200` half.
-Corrected: 0.2, 0.4, 3.5's LOC figure, 4.4's blocker, 5.1, 5.1a, 5.4's
-`tool-inputs.ts`, 5.5's `:195` half, plus §1's planner LOC and §2.4's verb-table count.
+*Wrong in a way that changes a decision or buys work:*
 
-Still unverified, and flagged rather than fixed: the `~280 LOC` in 5.3 and the LOC-delta
-column in the phase table are estimates nobody has measured.
+| Claim | Reality |
+|---|---|
+| §2.8 / 5.3 — "the classifier prompt grows without limit" | Bounded on both branches by `buildBoundedClassifierConversation`. The unbounded-by-size path is the agent context, not the classifier. |
+| 5.2 — "all 30 schemas ship on every iteration" | 28 ship; `AGENT_TOOLS` filters on `availability`. The prior text had 28 and a correction pass changed it to 30. |
+| 5.1a — "0 of 84 fixtures carry `classifierSignals`" | 79 carry it as `classifierIntents`. Struck; Phase 3 never had a fixture prerequisite. |
+| §2.5 — "`lowerFirst` — duplicated verbatim" | The two differ by a guard, and the difference is visible in merchant-facing output. Listed as the safe one; it is the drifted one. |
 
-**The pass then made the same mistake it had just diagnosed.** 5.1a — a *new* item, not a
-carried-forward one — asserted "0 of 84 fixtures carry `classifierSignals`" from a grep for
-a field name the fixtures never spell, and booked it as a prerequisite for Phase 3. 79 of
-them carry it under another name. Grepping for a string is not reading the code that
-consumes it, and an item written that way earns no more trust for being new. Corrected
-in place rather than deleted, because the failure is the point.
+*Wrong and cheap:* the irregular-verb table is 29 entries (this file said 20, then 30 — it
+was 29 both times); `tidyPunctuation` has six rules, not five; the truncation cascade has
+four budgets, not three; the regex-operation count was 29 at the audit's commit, not 27;
+the planner is 253 lines, not 247; §2.2's line numbers had drifted ~50 lines since Phase 1
+deleted code above them; 4.4 cited `digest-briefing.ts:559-561` for a comment that has
+never been at those lines.
+
+*Held on re-derivation:* §2.1, §2.2's four call sites, §2.3's six passes, §2.4's LOC table
+(exact at the audit's commit), §2.4's two near-duplicate reported-speech regexes, §2.6's
+three citations, §2.7's character and bullet counts, 3.5's ~72 lines, 4.4's `ask: "none"`
+chain end to end, all of 5.4, and every citation in 5.5.
+
+**The rule that actually falls out**, replacing the one the last pass invented:
+
+- A `file:line` proves someone read *that line*. §2.8's citation was exact, the code at it
+  said what the finding claimed, and the conclusion was still false — because the four
+  lines after it budget the rows the finding said were unbounded. Cite the line; verify the
+  claim.
+- A number defended as "measured, not estimated" has to carry its measurement, or it is an
+  estimate wearing a badge. §2.7's 27 is not reproducible under any obvious definition.
+- Re-counting is not verifying. Two of these errors were introduced *by* a correction pass,
+  by counting a different wrong thing (`TOOL_DEFINITIONS` for `AGENT_TOOLS`, a line-based
+  grep for a table with several entries per line).
+- The expensive errors are the ones that size work: 5.2's premise, 5.3's urgency, 5.1a's
+  prerequisite. All three would have bought effort, and one of them a paid eval run,
+  against a fact nobody had checked.
+
+Still unmeasured and marked as such: the LOC-delta column in the phase table.
 
 ---
 
