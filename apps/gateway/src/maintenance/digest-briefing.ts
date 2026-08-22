@@ -7,7 +7,9 @@ import { PLAN_STEP_LABELS } from '@shopkeeper/agent/tools';
 import { SENDER_TYPE } from '@shopkeeper/agent/thread-constants';
 import { db } from '@shopkeeper/db';
 import { Prisma } from '@prisma/client';
+import { parseClassifierSignals } from '@shopkeeper/agent/classifier-signals';
 import { CHANNEL } from '../constants.js';
+import { formatFactsBriefingLine } from './briefing-fields.js';
 import { listVerifiedOrderNamesByThread } from '../storefront-chat-verified-orders.js';
 import { parseStoredPendingPlan } from '../operator-context.js';
 
@@ -408,6 +410,8 @@ export interface BriefingTicketRow {
   pendingMessage?: string | null;
   /** Orders this storefront shopper proved control of. Empty for every other channel. */
   verifiedOrders?: readonly string[];
+  /** Raw `Thread.classifierSignals`. Carries `requestFacts` from version 5 on. */
+  classifierSignals?: unknown;
 }
 
 /**
@@ -522,7 +526,21 @@ export function formatEscalatedTicketLine(thread: BriefingTicketRow): string {
   return `${subject} asked for a human. I flagged it for you.`;
 }
 
-function formatTicketLine(thread: BriefingTicketRow): string {
+export function formatTicketLine(thread: BriefingTicketRow, now: Date = new Date()): string {
+  // Fields first, prose second. `formatFactsBriefingLine` returns null for every
+  // thread classified before requestFacts existed, and for any the classifier
+  // could not read an ask off — those keep the path below unchanged.
+  const facts = parseClassifierSignals(thread.classifierSignals)?.requestFacts;
+  if (facts) {
+    const person = briefingPersonName(
+      thread.customer?.name ?? null,
+      thread.channelType ?? null,
+      thread.verifiedOrders ?? [],
+    );
+    const line = formatFactsBriefingLine(facts, person, now);
+    if (line) return line;
+  }
+
   return formatBriefingTicketLine(
     thread.customer?.name ?? null,
     thread.aiTitle ?? null,
@@ -795,6 +813,7 @@ async function loadStaleThreadWaitingItems(
       aiTitle: true,
       aiSummary: true,
       requestSummary: true,
+      classifierSignals: true,
       tag: true,
       channelType: true,
       filterStatus: true,

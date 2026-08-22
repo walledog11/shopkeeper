@@ -17,6 +17,7 @@ import {
   formatHandledSection,
   formatNeedsYouAsk,
   formatNeedsYouProse,
+  formatTicketLine,
   loadHandledRollup,
   loadWaitingOnYouItems,
   resolveHandledWindowStart,
@@ -308,6 +309,63 @@ describe('formatBlockedTicketLine', () => {
       tag: null,
     }));
     expect(section).toContain('Bo: Damaged Sweater Return');
+  });
+});
+
+describe('formatTicketLine — fields before prose', () => {
+  const factsRow = (requestFacts: Record<string, unknown>) => ({
+    aiTitle: 'Napkin Order Question',
+    aiSummary: 'Customer requests a refund and mentions an upcoming dinner party.',
+    tag: 'Returns',
+    channelType: 'email',
+    customer: { name: 'Dana Reyes' },
+    classifierSignals: { version: 5, language: 'en', intents: {}, requestFacts },
+  });
+
+  // The whole point: a deadline the merchant must act on used to sit past the
+  // truncation point of a prose summary. Now it opens the line.
+  it('leads with the deadline instead of burying it in a sentence', () => {
+    expect(formatTicketLine(
+      factsRow({
+        ask: 'refund',
+        alternative: 'exchange',
+        subject: 'the olive linen napkins',
+        order: '#1024',
+        deadline: '2026-05-01',
+        deadlineText: 'before the dinner party',
+      }),
+      NOW,
+    )).toBe('By Friday — Dana · #1024: refund or exchange — the olive linen napkins');
+  });
+
+  it('renders without a deadline when the customer named no timing', () => {
+    expect(formatTicketLine(
+      factsRow({ ask: 'order_status', order: '#1024' }),
+      NOW,
+    )).toBe('Dana · #1024: order status');
+  });
+
+  // Every thread classified before version 5 has no facts, and must read exactly
+  // as it did before this path existed.
+  it('falls back to the prose path when the thread predates requestFacts', () => {
+    expect(formatTicketLine({
+      aiTitle: 'Order Update With No Detail',
+      aiSummary: 'Customer states that order #1025 has been updated.',
+      tag: null,
+      channelType: 'email',
+      customer: { name: 'Adam Jones' },
+      classifierSignals: { version: 4, language: 'en', intents: {} },
+    }, NOW)).toBe('Adam · #1025: Order Update With No Detail');
+  });
+
+  // The prose path derives its order ref from the title and summary, so an order
+  // known only to requestFacts does not reach it. That is the fallback behaving
+  // exactly as it did before this path existed, which is the point.
+  it('falls back when the classifier could not read an ask', () => {
+    expect(formatTicketLine(
+      factsRow({ ask: 'none', order: '#1024' }),
+      NOW,
+    )).toBe('Dana: Napkin Order Question');
   });
 });
 

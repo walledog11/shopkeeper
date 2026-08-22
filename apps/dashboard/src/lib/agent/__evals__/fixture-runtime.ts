@@ -11,7 +11,7 @@ import {
   type DbSenderType,
 } from "@shopkeeper/db"
 import type { AgentContext, AgentActionMode } from "@shopkeeper/agent/context"
-import { emptyIntents } from "@shopkeeper/agent/classifier-signals"
+import { emptyIntents, emptyRequestFacts } from "@shopkeeper/agent/classifier-signals"
 import {
   CONTEXT_BUDGETS,
   budgetKbArticles,
@@ -80,9 +80,10 @@ function buildContext(
           classifierSignals: {
             // Keep aligned with email-classification.ts. Routing is tolerant of
             // old versions, but evals should model the shape production writes.
-            version: 4,
+            version: 5,
             language: "en",
             intents: { ...emptyIntents(), ...setup.classifierIntents },
+            requestFacts: emptyRequestFacts(),
           },
         }
       : {}),

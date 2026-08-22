@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   emptyIntents,
+  emptyRequestFacts,
   parseClassifierSignals,
 } from "./classifier-signals.js";
 
@@ -33,7 +34,35 @@ describe("parseClassifierSignals", () => {
         forwarded_injection: false,
         no_request: false,
       },
+      requestFacts: emptyRequestFacts(),
     });
+  });
+
+  it("parses the request facts a version-5 row carries", () => {
+    const parsed = parseClassifierSignals({
+      version: 5,
+      language: "en",
+      intents: {},
+      requestFacts: {
+        ask: "exchange",
+        subject: "the olive linen napkins",
+        order: "#1024",
+        deadline: "2026-08-23",
+        deadlineText: "before the weekend",
+        alternative: "refund",
+      },
+    });
+    expect(parsed?.requestFacts.ask).toBe("exchange");
+    expect(parsed?.requestFacts.deadline).toBe("2026-08-23");
+    expect(parsed?.requestFacts.alternative).toBe("refund");
+  });
+
+  // Every row written before version 5 has no facts. They must read as "no
+  // facts" so the briefing keeps its prose path for them rather than printing
+  // a line with nothing in it.
+  it("reads a pre-requestFacts row as having no facts", () => {
+    const parsed = parseClassifierSignals({ version: 4, language: "en", intents: {} });
+    expect(parsed?.requestFacts).toEqual(emptyRequestFacts());
   });
 
   // A version-2 row has no `no_request` key at all. It must read as false, i.e.

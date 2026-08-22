@@ -16,6 +16,7 @@ import type {
   InstagramInboundJobData,
   ShopifyOrderPayload,
 } from '../types.js';
+import { emptyRequestFacts } from '@shopkeeper/agent/classifier-signals';
 import { uploadInboundAttachment } from '../storage/blob.js';
 import { applyInboundAttachmentBudget, mapWithConcurrency } from '../storage/attachment-budget.js';
 import { getInboundAttachmentLimits } from '../config/runtime-config.js';
@@ -309,6 +310,7 @@ export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Q
             language: '',
             requestSummary: '',
             requestDisposition: 'unclear',
+            requestFacts: emptyRequestFacts(),
           }
         : await classifyAndSummarizeNewEmail(organizationId, subject!, body!);
     }

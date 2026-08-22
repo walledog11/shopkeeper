@@ -77,7 +77,7 @@ describe('Message worker — email branch', () => {
     expect(thread?.aiSummary).toBe('Customer needs shipping help.');
     expect(thread?.tag).toBe('Shipping');
     expect(thread?.classifierSignals).toEqual({
-      version: 4,
+      version: 5,
       language: 'fr',
       intents: {
         mutative_request: false,
@@ -88,6 +88,14 @@ describe('Message worker — email branch', () => {
         out_of_scope_commercial: false,
         forwarded_injection: false,
         no_request: false,
+      },
+      requestFacts: {
+        ask: 'none',
+        subject: null,
+        order: null,
+        deadline: null,
+        deadlineText: null,
+        alternative: null,
       },
     });
   });
