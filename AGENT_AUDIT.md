@@ -207,7 +207,7 @@ Estimates are engineering days for one person, and they are estimates. "Gate" me
 | 2 | Validate, don't repair (C) | ~2 d | −150 | Yes | Open |
 | 3 | One autonomy function (B) | ~3 d | −400 | Yes | Open — absorbs the 0.4 regex deletion |
 | 4 | Structured rendering (D) | 8–10 d | −1,500 | Yes + phone | **In progress** — 4.1–4.3 (#56, #57) and 4.5 done; 4.4 blocked on two decisions |
-| 5 | Cost & housekeeping | ~3 d | −350 | 5.2 only | Open — 5.1 was already done; 5.1a (fixture signals) gates Phase 3 |
+| 5 | Cost & housekeeping | ~3 d | −350 | 5.2 only | Open — 5.1 and 5.1a were both already true; nothing here gates Phase 3 |
 
 ---
 
@@ -295,7 +295,11 @@ The real project, and the one that needs product judgment rather than only engin
 
 - [x] **5.1** ~~Recapture the eval baseline so the cost gate turns on (prior item 7).~~ **Already done; the item was carried forward stale.** The baseline was regenerated in `e9345501` on 2026-08-17 — the day after the prior audit was written — at 3 repeats / 252 runs / 99.2%, and it carries the `usage` key. `index.test.ts:187` guards the cost line on `summary.usage && baseline.usage`, so `formatUsageDelta` has been running on every run since. **No spend owed.** One correction to the wording: it is reported, never gated ("a tuning change is allowed to cost more if it scores better, and that call is the merchant's, not CI's"), so 5.2 gets a cost *comparison*, not a cost gate.
 
-- [ ] **5.1a** Put `classifierSignals` in the fixtures. **0 of 84 carry it**, so the routing path production actually takes is ungraded — the gate builds its context without the field and exercises the fallback branch every time. Phases 4.1–4.3 built on that field and Phase 3 will consume it, so this lands *before* Phase 3's gate or that gate measures the wrong path. Fixture work, no model spend to write it.
+- [x] **5.1a** ~~Put `classifierSignals` in the fixtures. **0 of 84 carry it**, so the routing path production actually takes is ungraded.~~ **Wrong, and wrong in the way this file keeps being wrong** — it was written from a grep for `classifierSignals` under `fixtures/`, which returns nothing because the fixtures do not spell the field. **79 of the 84 declare `classifierIntents`**, and `fixture-runtime.ts:78-89` builds a v5 `classifierSignals` object from it onto the context `planAgent` receives. The classifier routing path at `planner-routing.ts:350` has been graded since `013e4f47` ("teach evals the classifier path").
+
+  The five without it are deliberate, not a gap: three operator-mode fixtures and `routing-order-create` / `routing-support-stats`, none of which run the inbound classifier in production either. `fixture-runtime.ts:76-77` says so — "left undefined when the fixture declares none, which keeps 'the classifier never ran' a distinct, testable state." Both branches are covered, in the proportion production takes them.
+
+  **Phase 3 has no fixture prerequisite.** The one real gap is narrower and buys nothing here: fixtures always write `requestFacts: emptyRequestFacts()`, so the Phase 4.1 field schema is unmodelled — but nothing in `packages/agent` or the dashboard reads `requestFacts` (the only consumers are the gateway's renderers, which the judge never sees), so modelling it would not change a single assertion.
 - [ ] **5.2** Intent-driven tool selection (prior item 8). All **30** schemas (28 when this was written; ~6,926 est. tokens) ship on every iteration — verified: nothing in `run.ts`, `planner.ts`, or `prompt.ts` reads `classifierSignals` for tool selection. The classifier's `intents` are already on `ctx.classifierSignals` (`classifier-signals.ts:194`). **1–2 days. High risk** — a wrongly-narrowed set produces "I can't help with that" instead of an action, and it changes the cached prefix per intent bucket. Measure before committing. **Gate on the full suite.**
 - [ ] **5.3** Decide the `AGENT_CONTEXT_BUDGET_MODE` rollout. It is `off` by default, `enforce` is paused in the runbook, and the `off` branch loads unbounded thread history into the classifier. Either finish the rollout or delete the dual paths (~280 LOC — **an unverified estimate**; `context-budget.ts` is 195 lines and 16 sites reference the mode) — the current state is the worst of both. Verified: `intelligence.ts:39-48` has no `take` in the non-`enforce` branch.
 - [ ] **5.4** Deduplicate: ~~`customerFirstName`~~ (done in 4.5), `endSentence`, `lowerFirst`, `fallbackTitleFromSummary` (×2, drifted), `isDeterministicE2EAIEnabled` (×2, different `NODE_ENV` semantics). ~~Delete `tools/tool-inputs.ts` (23 LOC, unimported).~~ **Wrong — it is imported**, type-only, by `agent-context.ts:9` for five tool input types. Nothing to delete. **~2 h.**
@@ -310,19 +314,26 @@ The real project, and the one that needs product judgment rather than only engin
 Every §4 item was re-checked against the tree on 2026-08-21, because four status claims
 had already proved stale or wrong and the rest were carried on the same footing. The
 split was sharp: **every claim anchored to a `file:line` survived; every claim asserted
-about the code without one failed.** Eight corrections are marked inline above.
+about the code without one failed.** Nine corrections are marked inline above.
 
 The mechanism is in this file's own header — "every still-open item from its work order
 is carried forward with its original evidence." Carried forward, not re-run. Items tagged
-"prior work order item N" account for five of the eight errors.
+"prior work order item N" account for five of the nine errors.
 
 Re-verified and holding: §2.1–§2.8 in full, and to-do items 2.1, 2.2, 2.5, 3.5's
 `channels.ts` citation, 4.6, 5.2, 5.3's unbounded-classifier claim, 5.5's `:200` half.
-Corrected: 0.2, 0.4, 3.5's LOC figure, 4.4's blocker, 5.1, 5.4's `tool-inputs.ts`, 5.5's
-`:195` half, plus §1's planner LOC and §2.4's verb-table count.
+Corrected: 0.2, 0.4, 3.5's LOC figure, 4.4's blocker, 5.1, 5.1a, 5.4's
+`tool-inputs.ts`, 5.5's `:195` half, plus §1's planner LOC and §2.4's verb-table count.
 
 Still unverified, and flagged rather than fixed: the `~280 LOC` in 5.3 and the LOC-delta
 column in the phase table are estimates nobody has measured.
+
+**The pass then made the same mistake it had just diagnosed.** 5.1a — a *new* item, not a
+carried-forward one — asserted "0 of 84 fixtures carry `classifierSignals`" from a grep for
+a field name the fixtures never spell, and booked it as a prerequisite for Phase 3. 79 of
+them carry it under another name. Grepping for a string is not reading the code that
+consumes it, and an item written that way earns no more trust for being new. Corrected
+in place rather than deleted, because the failure is the point.
 
 ---
 
