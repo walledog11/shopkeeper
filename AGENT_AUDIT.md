@@ -94,9 +94,9 @@ This is the same pattern CLAUDE.md already names for prompts — *"a prompt grow
 | `digest-shopify-garnish.ts` | 117 | — |
 | **Total** | **2,747** | **2,069** |
 
-Against that: the agent loop is 117 lines, the planner 285, the tool registry 175.
+Against that: the agent loop is 117 lines (`runAgentLoop`, `agent-loop.ts:144-261`), the planner 247, the tool registry 175.
 
-`digest-briefing.ts` is the largest file in the entire pipeline. It contains a hand-rolled natural-language engine: two near-duplicate reported-speech regexes (one capturing, one not), a 20-entry irregular-verb backshift table, a five-rule punctuation repairer that exists only to clean up damage done by the other transforms in the same file, and a truncation cascade with three different budgets. 27 regex/`replace`/`match` operations in one file.
+`digest-briefing.ts` is the largest file in the entire pipeline. It contains a hand-rolled natural-language engine: two near-duplicate reported-speech regexes (one capturing, one not), a 30-entry irregular-verb backshift table, a five-rule punctuation repairer that exists only to clean up damage done by the other transforms in the same file, and a truncation cascade with three different budgets. 27 regex/`replace`/`match` operations in one file.
 
 It does not work reliably, and the file knows it — its own comments record that per-phrase fixes were tried and deleted because *"each was fitted to one morning's summaries and left the next morning's raw."* The bug that started this audit was `requests → asked` dropping a preposition, producing "asked a refund" on a merchant's phone.
 
@@ -111,11 +111,11 @@ The question "what do we call this person" is answered independently in:
 - `digest-briefing.ts` (`VISITOR_SUBJECT`), plus a fifth open-coded copy inside `formatApprovalItemLine`
 - `customer-name.ts:1` in the dashboard
 
-Four different strings for one person. Only two consulted verification state, which is why a shopper who had proved they owned order #1024 was reported to the merchant as an unidentified visitor while the operator card for the same thread said the opposite. *(Collapsed to one helper, `briefingPersonName`, on the current branch.)*
+Four different strings for one person. Only two consulted verification state, which is why a shopper who had proved they owned order #1024 was reported to the merchant as an unidentified visitor while the operator card for the same thread said the opposite. *(Closed in Phase 4.5: `classifyPerson` in `packages/agent/src/person-name.ts` answers this once, and three renderers print it in the registers English needs. The prompt-side copies at `email-classification.ts:100`/`:115` stay — they instruct the model rather than render for the merchant.)*
 
 Three text helpers are duplicated and have drifted:
 
-- `customerFirstName` — `digest-briefing.ts:92` trims and splits on any whitespace; `planning-notifications.ts:154` splits on a single space with no trim. A leading space yields `""` on the operator card.
+- `customerFirstName` — `digest-briefing.ts:92` trims and splits on any whitespace; `planning-notifications.ts:154` splits on a single space with no trim. A leading space yields `""` on the operator card. *(One implementation now, the trimming one — Phase 4.5.)*
 - `endSentence` — `planning-notifications.ts:160` trims first; `digest.ts:237` does not, producing `"text ."`.
 - `lowerFirst` — duplicated verbatim.
 
@@ -206,8 +206,8 @@ Estimates are engineering days for one person, and they are estimates. "Gate" me
 | 1 | Typed signals (A) | ~1 d | −40 | No | **Closed** — 1.1–1.5 |
 | 2 | Validate, don't repair (C) | ~2 d | −150 | Yes | Open |
 | 3 | One autonomy function (B) | ~3 d | −400 | Yes | Open — absorbs the 0.4 regex deletion |
-| 4 | Structured rendering (D) | 8–10 d | −1,500 | Yes + phone | **In progress** — 4.1–4.3 done (#56, #57); 4.4 next |
-| 5 | Cost & housekeeping | ~3 d | −350 | 5.2 only | Open |
+| 4 | Structured rendering (D) | 8–10 d | −1,500 | Yes + phone | **In progress** — 4.1–4.3 (#56, #57) and 4.5 done; 4.4 blocked on two decisions |
+| 5 | Cost & housekeeping | ~3 d | −350 | 5.2 only | Open — 5.1 was already done; 5.1a (fixture signals) gates Phase 3 |
 
 ---
 
@@ -259,7 +259,7 @@ Smallest change with the largest safety return. Phase 3 depends on it.
 - [ ] **3.2** Move `routePlan`'s decision and `classifyHomePlan`'s classification into it. Delete both.
 - [ ] **3.3** Remove the `plan.routing` mutable-field chaining; the verdict carries the merchant question.
 - [ ] **3.4** Evaluate static policy once. The executor enforces the verdict rather than re-deriving it.
-- [ ] **3.5** Delete `computeLegacyRouting` + `logRoutingShadow` (~340 LOC — prior work order item 9). Decide the no-signals fallback explicitly first: missing signals is a real state (classifier outage, `channels.ts:296-311` fast path).
+- [ ] **3.5** Delete `computeLegacyRouting` + `logRoutingShadow` (prior work order item 9). **The ~340 LOC figure this item carried is not supported** — the two functions are ~72 lines together (`planner-routing.ts:130-172` and `:179-209`). Any larger number has to come from helpers only they reach, and nothing here established which. Measure before quoting a size. Decide the no-signals fallback explicitly first: missing signals is a real state (classifier outage, `channels.ts:296-311` fast path).
 - [ ] **3.6 Gate.** Full suite, not the core gate.
 
 **Done when:** "why did the agent send that?" is answerable by reading one function.
@@ -273,8 +273,12 @@ The real project, and the one that needs product judgment rather than only engin
 - [x] **4.1** Design the field schema. Start from what the briefing and the operator card actually need to say, not from what the classifier currently emits. *(PR #56. `RequestFacts { ask, subject, order, deadline, deadlineText, alternative }` in `packages/agent/src/classifier-signals.ts`; `ask` is a closed vocabulary so consumers branch on a value, never on prose.)*
 - [x] **4.2** Move the classifier to schema-enforced structured output (`output_config` + `json_schema`) — this also closes prior work order item 5, which flagged that the one call on every inbound message's critical path asks for JSON in prose. `voice-synthesis.ts:129-134` already demonstrates the pattern in this codebase. *(PR #56. `CLASSIFIER_OUTPUT_SCHEMA` covers every field the prompt asks for, not just the new ones. `CLASSIFIER_VERSION` → 5. A `Today:` line goes in the user message — not the system prompt — so "by Friday" can resolve to a date without moving the cached prefix.)*
 - [x] **4.3** Write the renderer: compose sentences from fields, with explicit field priority so the load-bearing fact leads. *(PR #56 built `briefing-fields.ts` — deadline → who → ask, with `byDeadlineFirst` sorting dated items above undated ones — and wired `formatTicketLine`. PR #57 wired the four remaining lines: `formatEscalatedTicketLine`, `formatBlockedTicketLine`, `formatApprovalItemLine` (both call sites; the operator select never read `classifierSignals` at all) and the flagged line in `digest.ts`. Deadlines render from the date, never by rewording the customer: `deadlineText` prints verbatim or not at all, so there is nothing to repair afterwards.)*
-- [ ] **4.4** Delete the tense engine (`humanizeReportedSummary`, `REPORTED_VERB_PAST`, `REPORTED_SPEECH`, `SUMMARY_PREAMBLE`), `tidyPunctuation`, and the truncation cascade. **No longer blocked on 4.3 — blocked on the backfill question instead.** Every line now prefers fields, but the prose path is still the fallback for every thread classified before version 5, so deleting it strands them. Decide first: backfill `requestFacts` onto open pre-v5 threads, or keep the prose fallback until they age out. This is where the ~1,500-line deletion actually lands.
-- [ ] **4.5** Collapse the remaining naming copies — `anonymousNoun`, `namelessNoun`, `customer-name.ts` — onto the one helper.
+- [ ] **4.4** Delete the tense engine (`humanizeReportedSummary`, `REPORTED_VERB_PAST`, `REPORTED_SPEECH`, `SUMMARY_PREAMBLE`), `tidyPunctuation`, and the truncation cascade. **No longer blocked on 4.3 — blocked on two decisions instead**, and the second is the larger one:
+  - *Pre-v5 threads.* Every line prefers fields, but the prose path is still the fallback for threads classified before version 5, so deleting it strands them. Backfill `requestFacts` onto open pre-v5 threads, or keep the fallback until they age out. v5 shipped 2026-08-21 in #56 and prod has no merchants, so the stranded population is test threads — "let them age out" is close to free.
+  - *`ask: "none"`.* `formatFactsBriefingLine` returns null when `!parts.ask && !parts.deadline` (`briefing-fields.ts:121`), and `ask: "none"` is a legitimate **v5** output. Not a rare one either: the existing-customer email fast path at `channels.ts:296-311` skips the classifier entirely and writes `requestFacts: emptyRequestFacts()`, so **every repeat customer emailing in gets `ask: "none"`** — the prose path is the normal path for them, not an edge case. So the prose path serves current-version threads too, not only old ones (`digest-briefing.ts:559-561` says so), and the deletion cannot happen at all until a field-based rendering exists for that case. Backfilling does not touch this.
+
+  This is where the ~1,500-line deletion actually lands.
+- [x] **4.5** Collapse the remaining naming copies — `anonymousNoun`, `namelessNoun`, `customer-name.ts` — onto the one helper. *(`packages/agent/src/person-name.ts`: `classifyPerson` answers who this is once, and `personLabel` / `personSubject` / `personObject` render it in the three registers English needs — a list row, the start of a sentence, after a preposition. The six copies are gone, `customerFirstName`'s two implementations with them. It also closes the §2.5 bug at its remaining end: the operator card never read verification, so it opened "Someone on your storefront replied" one line above its own "They confirmed the email on #1024" — it now says "The customer", and drops the order number because the next line already prints it. The dashboard's `getCustomerName` stays: it derives a row label from a `platformId`, which is a different question, and now shares only the constant.)*
 - [ ] **4.6** Rewrite the notification tests against fields. They currently assert exact English strings, which is why they pass while the output is wrong.
 - [ ] **4.7 Gate**, plus a live phone round-trip: operator copy is verified by phone, not by evals.
 
@@ -289,11 +293,36 @@ The real project, and the one that needs product judgment rather than only engin
 
 ### Phase 5 — Cost & housekeeping
 
-- [ ] **5.1** Recapture the eval baseline so the cost gate turns on (prior item 7). `formatUsageDelta` is wired and never runs because the committed baseline has no `usage` key. **~1 h wall-clock, one full-suite spend.** Do this *before* 5.2 so it has a cost baseline to be judged against.
-- [ ] **5.2** Intent-driven tool selection (prior item 8). All 28 schemas (~6,926 est. tokens) ship on every iteration; the classifier's `intents` are already on `ctx.classifierSignals`. **1–2 days. High risk** — a wrongly-narrowed set produces "I can't help with that" instead of an action, and it changes the cached prefix per intent bucket. Measure before committing. **Gate on the full suite.**
-- [ ] **5.3** Decide the `AGENT_CONTEXT_BUDGET_MODE` rollout. It is `off` by default, `enforce` is paused in the runbook, and the `off` branch loads unbounded thread history into the classifier. Either finish the rollout or delete the dual paths (~280 LOC) — the current state is the worst of both.
-- [ ] **5.4** Deduplicate: `customerFirstName`, `endSentence`, `lowerFirst`, `fallbackTitleFromSummary` (×2, drifted), `isDeterministicE2EAIEnabled` (×2, different `NODE_ENV` semantics). Delete `tools/tool-inputs.ts` (23 LOC, unimported). **~2 h.**
-- [ ] **5.5** Remove the two prompt lines that duplicate code-enforced rules (`prompt.ts:195`, `:200`), and collapse the three restatements of the `get_order_tracking` rule.
+- [x] **5.1** ~~Recapture the eval baseline so the cost gate turns on (prior item 7).~~ **Already done; the item was carried forward stale.** The baseline was regenerated in `e9345501` on 2026-08-17 — the day after the prior audit was written — at 3 repeats / 252 runs / 99.2%, and it carries the `usage` key. `index.test.ts:187` guards the cost line on `summary.usage && baseline.usage`, so `formatUsageDelta` has been running on every run since. **No spend owed.** One correction to the wording: it is reported, never gated ("a tuning change is allowed to cost more if it scores better, and that call is the merchant's, not CI's"), so 5.2 gets a cost *comparison*, not a cost gate.
+
+- [ ] **5.1a** Put `classifierSignals` in the fixtures. **0 of 84 carry it**, so the routing path production actually takes is ungraded — the gate builds its context without the field and exercises the fallback branch every time. Phases 4.1–4.3 built on that field and Phase 3 will consume it, so this lands *before* Phase 3's gate or that gate measures the wrong path. Fixture work, no model spend to write it.
+- [ ] **5.2** Intent-driven tool selection (prior item 8). All **30** schemas (28 when this was written; ~6,926 est. tokens) ship on every iteration — verified: nothing in `run.ts`, `planner.ts`, or `prompt.ts` reads `classifierSignals` for tool selection. The classifier's `intents` are already on `ctx.classifierSignals` (`classifier-signals.ts:194`). **1–2 days. High risk** — a wrongly-narrowed set produces "I can't help with that" instead of an action, and it changes the cached prefix per intent bucket. Measure before committing. **Gate on the full suite.**
+- [ ] **5.3** Decide the `AGENT_CONTEXT_BUDGET_MODE` rollout. It is `off` by default, `enforce` is paused in the runbook, and the `off` branch loads unbounded thread history into the classifier. Either finish the rollout or delete the dual paths (~280 LOC — **an unverified estimate**; `context-budget.ts` is 195 lines and 16 sites reference the mode) — the current state is the worst of both. Verified: `intelligence.ts:39-48` has no `take` in the non-`enforce` branch.
+- [ ] **5.4** Deduplicate: ~~`customerFirstName`~~ (done in 4.5), `endSentence`, `lowerFirst`, `fallbackTitleFromSummary` (×2, drifted), `isDeterministicE2EAIEnabled` (×2, different `NODE_ENV` semantics). ~~Delete `tools/tool-inputs.ts` (23 LOC, unimported).~~ **Wrong — it is imported**, type-only, by `agent-context.ts:9` for five tool input types. Nothing to delete. **~2 h.**
+- [ ] **5.5** ~~Remove the two prompt lines that duplicate code-enforced rules (`prompt.ts:195`, `:200`)~~ — **one of the two, not both.** Collapse the three restatements of the `get_order_tracking` rule (verified: 3 bullets).
+  - `:200` ("if send_reply errors, do not change thread status") **is** code-enforced — `run-execution.ts:53` detects the failure and `:243` returns "skipped status update because send_reply failed." Safe to delete.
+  - `:195` is **not**, and deleting it would remove a live guard on the order-mutation path. The schema requires `address1`/`city`/`province`/`zip`/`country` (`registry/order.ts:46-51`), so the *complete* half is enforced — but the line's second half, "do NOT call the tool with placeholders or guessed values", is enforced nowhere. JSON Schema `required` makes a key present; it cannot stop `city: "Unknown"`. Nothing in `static-policy.ts`, `executor.ts`, or `shopify/order-address.ts` checks values. **Keep the line until a validator exists** — and note the irony: this is a case where §3C's "put it in the schema" genuinely cannot, which is the test any prompt-line deletion should have to pass.
+
+---
+
+## 4b — Verification status
+
+Every §4 item was re-checked against the tree on 2026-08-21, because four status claims
+had already proved stale or wrong and the rest were carried on the same footing. The
+split was sharp: **every claim anchored to a `file:line` survived; every claim asserted
+about the code without one failed.** Eight corrections are marked inline above.
+
+The mechanism is in this file's own header — "every still-open item from its work order
+is carried forward with its original evidence." Carried forward, not re-run. Items tagged
+"prior work order item N" account for five of the eight errors.
+
+Re-verified and holding: §2.1–§2.8 in full, and to-do items 2.1, 2.2, 2.5, 3.5's
+`channels.ts` citation, 4.6, 5.2, 5.3's unbounded-classifier claim, 5.5's `:200` half.
+Corrected: 0.2, 0.4, 3.5's LOC figure, 4.4's blocker, 5.1, 5.4's `tool-inputs.ts`, 5.5's
+`:195` half, plus §1's planner LOC and §2.4's verb-table count.
+
+Still unverified, and flagged rather than fixed: the `~280 LOC` in 5.3 and the LOC-delta
+column in the phase table are estimates nobody has measured.
 
 ---
 
