@@ -11,6 +11,7 @@ import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import {
   DIGEST_CURSOR_KEY,
+  formatApprovalItemLine,
   formatBlockedTicketLine,
   formatBriefingTicketLine,
   formatEscalatedTicketLine,
@@ -366,6 +367,80 @@ describe('formatTicketLine — fields before prose', () => {
       factsRow({ ask: 'none', order: '#1024' }),
       NOW,
     )).toBe('Dana: Napkin Order Question');
+  });
+});
+
+describe('handoff and approval lines — fields before prose', () => {
+  const FACTS = {
+    ask: 'refund',
+    alternative: 'exchange',
+    subject: 'the olive linen napkins',
+    order: '#1024',
+    deadline: '2026-05-01',
+    deadlineText: 'before the dinner party',
+  };
+  const LINE = 'By Friday — Dana · #1024: refund or exchange — the olive linen napkins';
+
+  const factsRow = (overrides: Record<string, unknown> = {}) => ({
+    aiTitle: 'Napkin Order Question',
+    aiSummary: 'Customer requests a refund and mentions an upcoming dinner party.',
+    tag: 'Returns',
+    channelType: 'email',
+    customer: { name: 'Dana Reyes' },
+    classifierSignals: { version: 5, language: 'en', intents: {}, requestFacts: FACTS },
+    ...overrides,
+  });
+
+  it('opens an escalated line with the deadline and keeps the flag clause', () => {
+    expect(formatEscalatedTicketLine(factsRow(), NOW)).toBe(`${LINE}. I flagged it for you.`);
+  });
+
+  it('leaves an escalated line on prose when the thread predates the fields', () => {
+    expect(formatEscalatedTicketLine(factsRow({
+      classifierSignals: { version: 4, language: 'en', intents: {} },
+    }), NOW)).toContain('I flagged it for you.');
+  });
+
+  // The verbatim branch is the one thing fields must not displace: the
+  // customer's own words beat any rendering of them, and it only fires when the
+  // whole message fits.
+  it('still quotes a short message rather than rendering fields', () => {
+    expect(formatBlockedTicketLine(factsRow({
+      pendingMessage: 'Can I swap these for the olive ones?',
+    }), NOW)).toBe('Dana asked: "Can I swap these for the olive ones?"');
+  });
+
+  it('renders fields once the message is too long to quote whole', () => {
+    expect(formatBlockedTicketLine(factsRow({
+      pendingMessage: 'a'.repeat(200),
+    }), NOW)).toBe(LINE);
+  });
+
+  it('opens an approval line with the deadline, then what a yes sends', () => {
+    expect(formatApprovalItemLine({
+      customerName: 'Dana Reyes',
+      channelType: 'email',
+      aiTitle: 'Napkin Order Question',
+      aiSummary: 'Customer requests a refund and mentions an upcoming dinner party.',
+      tag: 'Returns',
+      rawToolCalls: [{ id: 't1', name: 'send_reply', input: { text: 'On its way.' } }],
+      instruction: 'Refund request',
+      requestFacts: FACTS,
+      now: NOW,
+    })).toBe(`${LINE}. Reply's drafted.`);
+  });
+
+  it('leaves the approval line on prose when the classifier wrote no facts', () => {
+    expect(formatApprovalItemLine({
+      customerName: 'Dana Reyes',
+      channelType: 'email',
+      aiTitle: 'Napkin Order Question',
+      aiSummary: 'Customer requests a refund.',
+      tag: 'Returns',
+      rawToolCalls: [{ id: 't1', name: 'send_reply', input: { text: 'On its way.' } }],
+      instruction: 'Refund request',
+      now: NOW,
+    })).toContain("Reply's drafted.");
   });
 });
 

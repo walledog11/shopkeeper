@@ -425,6 +425,43 @@ describe('buildOrgDigest — inbox scope', () => {
     expect(message).not.toContain('Dana');
   });
 
+  // The flagged block was the last needs-you line still built by rewriting the
+  // classifier's sentence. A deadline it carried could only land wherever the
+  // sentence happened to put it; from fields it opens the line.
+  it('builds a flagged line from the classifier fields when it wrote them', async () => {
+    org = await createTestOrg();
+    const customer = await createTestCustomer(org.id, 'dana@example.com', { name: 'Dana Reyes' });
+    const thread = await createTestThread(org.id, customer.id, 'email');
+    await createTestMessage(thread.id, 'I need these back before the dinner party.');
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        filterStatus: ThreadFilterStatus.questionable,
+        filterDecidedAt: NOW,
+        aiSummary: 'Customer requests a refund and mentions an upcoming dinner party.',
+        classifierSignals: {
+          version: 5,
+          language: 'en',
+          intents: {},
+          requestFacts: {
+            ask: 'refund',
+            alternative: 'exchange',
+            subject: 'the olive linen napkins',
+            order: '#1024',
+            deadline: '2026-05-01',
+            deadlineText: 'before the dinner party',
+          },
+        },
+      },
+    });
+
+    const digest = (await buildOrgDigest(org.id, NOW))!;
+
+    expect(digest.message).toContain(
+      'By Friday — Dana Reyes · #1024: refund or exchange — the olive linen napkins.',
+    );
+  });
+
   // Once the spam filter reaches storefront chat, "yo" from an anonymous
   // visitor is a plausible `questionable` — so an ungated flagged block would
   // put the one-word storefront visitor back on the merchant's phone under a

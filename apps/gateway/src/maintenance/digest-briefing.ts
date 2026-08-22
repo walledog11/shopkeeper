@@ -7,7 +7,7 @@ import { PLAN_STEP_LABELS } from '@shopkeeper/agent/tools';
 import { SENDER_TYPE } from '@shopkeeper/agent/thread-constants';
 import { db } from '@shopkeeper/db';
 import { Prisma } from '@prisma/client';
-import { parseClassifierSignals } from '@shopkeeper/agent/classifier-signals';
+import { parseClassifierSignals, type RequestFacts } from '@shopkeeper/agent/classifier-signals';
 import { CHANNEL } from '../constants.js';
 import { formatFactsBriefingLine } from './briefing-fields.js';
 import { listVerifiedOrderNamesByThread } from '../storefront-chat-verified-orders.js';
@@ -476,7 +476,27 @@ function handoffSubject(thread: BriefingTicketRow, followingText: string): strin
   ) ?? 'Someone';
 }
 
-export function formatBlockedTicketLine(thread: BriefingTicketRow): string {
+/**
+ * The structured fields for a row, when the classifier wrote them. Null for
+ * every thread classified before version 5 and for any the classifier could not
+ * read an ask off, which is what keeps the prose fallbacks below reachable.
+ */
+function rowRequestFacts(thread: { classifierSignals?: unknown }): RequestFacts | null {
+  return parseClassifierSignals(thread.classifierSignals)?.requestFacts ?? null;
+}
+
+/**
+ * A handoff line from fields. The person is resolved against the order the line
+ * is about to print, so a verified subject does not name it twice.
+ */
+function factsHandoffLine(thread: BriefingTicketRow, now: Date): string | null {
+  const facts = rowRequestFacts(thread);
+  if (!facts) return null;
+  const line = formatFactsBriefingLine(facts, handoffSubject(thread, facts.order ?? ''), now);
+  return line ? truncateBriefingText(line, HANDOFF_SUMMARY_MAX) : null;
+}
+
+export function formatBlockedTicketLine(thread: BriefingTicketRow, now: Date = new Date()): string {
   const message = cleanBriefingText(thread.pendingMessage);
   const subject = handoffSubject(
     thread,
@@ -495,6 +515,12 @@ export function formatBlockedTicketLine(thread: BriefingTicketRow): string {
     return `${subject} ${message.includes('?') ? 'asked' : 'wrote'}: "${message}"`;
   }
 
+  // Fields before prose, but after the quote above: the customer's own words
+  // beat any rendering of them, and that branch only fires when the whole
+  // message fits, so nothing is lost by preferring it.
+  const factsLine = factsHandoffLine(thread, now);
+  if (factsLine) return factsLine;
+
   const summary = cleanBriefingText(briefingSummarySource(thread));
   if (summary) {
     const humanized = humanizeReportedSummary(subject, summary);
@@ -509,7 +535,10 @@ export function formatBlockedTicketLine(thread: BriefingTicketRow): string {
 }
 
 /** Explicit human escalation the agent parked for merchant judgment. */
-export function formatEscalatedTicketLine(thread: BriefingTicketRow): string {
+export function formatEscalatedTicketLine(thread: BriefingTicketRow, now: Date = new Date()): string {
+  const factsLine = factsHandoffLine(thread, now);
+  if (factsLine) return `${endClause(factsLine)} I flagged it for you.`;
+
   const summary = cleanBriefingText(briefingSummarySource(thread));
   const subject = handoffSubject(thread, summary);
   if (summary) {
@@ -720,6 +749,7 @@ export function formatHandledSection(rollup: HandledRollup): string | null {
 async function loadOperatorWaitingItems(
   organizationId: string,
   settings: ReturnType<typeof resolveAgentSettings>,
+  now: Date,
 ): Promise<WaitingItem[]> {
   const contexts = await db.operatorContext.findMany({
     where: {
@@ -749,6 +779,7 @@ async function loadOperatorWaitingItems(
           tag: true,
           channelType: true,
           filterStatus: true,
+          classifierSignals: true,
           cachedPlan: true,
           cachedPlanMessageId: true,
           customer: { select: { name: true } },
@@ -784,6 +815,8 @@ async function loadOperatorWaitingItems(
           rawToolCalls: pendingPlan.rawToolCalls,
           instruction: pendingPlan.instruction,
           actionLabel: pendingPlan.actionLabel,
+          requestFacts: thread ? rowRequestFacts(thread) : null,
+          now,
         }),
       });
     }
@@ -864,6 +897,8 @@ async function loadStaleThreadWaitingItems(
         rawToolCalls: plan.rawToolCalls,
         instruction: cached.instruction,
         verifiedOrders: verifiedByThread.get(thread.id) ?? [],
+        requestFacts: rowRequestFacts(thread),
+        now,
       }),
     });
   }
@@ -879,7 +914,7 @@ export async function loadWaitingOnYouItems(
     select: { settings: true },
   });
   const settings = resolveAgentSettings(organization?.settings);
-  const operatorItems = await loadOperatorWaitingItems(organizationId, settings);
+  const operatorItems = await loadOperatorWaitingItems(organizationId, settings, now);
   const seen = new Set<string>();
   const merged: WaitingItem[] = [];
 
@@ -983,6 +1018,9 @@ export function formatApprovalItemLine(params: {
   instruction: string;
   actionLabel?: string;
   verifiedOrders?: readonly string[];
+  /** The classifier's structured fields, when the thread has them. */
+  requestFacts?: RequestFacts | null;
+  now?: Date;
 }): string {
   const subject = briefingPersonName(
     params.customerName,
@@ -996,6 +1034,16 @@ export function formatApprovalItemLine(params: {
     ? `${refundAmount} refund`
     : lowerFirst(approvalActionHead(params.rawToolCalls) ?? params.actionLabel ?? 'reply');
   const ready = refundAmount ? `I've got ${refundAmount} ready.` : `${capitalize(action)}'s drafted.`;
+
+  // The clause states what the customer wanted; `ready` states what a yes does.
+  // Fields build the first half when the classifier wrote them, which is what
+  // lets a deadline open the line instead of landing past the truncation.
+  const factsClause = params.requestFacts
+    ? formatFactsBriefingLine(params.requestFacts, subject, params.now ?? new Date())
+    : null;
+  if (factsClause) {
+    return `${endClause(truncateBriefingText(factsClause, HANDOFF_SUMMARY_MAX))} ${ready}`;
+  }
 
   const source = params.requestSummary?.trim() || params.aiSummary;
   const summary = source?.trim();

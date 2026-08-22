@@ -27,6 +27,7 @@ import {
   resolveHandledWindowStart,
   truncateBriefingText,
 } from './digest-briefing.js';
+import { formatFactsBriefingLine } from './briefing-fields.js';
 import { loadDigestShopifyGarnish } from './digest-shopify-garnish.js';
 import { loadAttributionLine } from '../message-handlers/conversation-attribution.js';
 import {
@@ -434,16 +435,19 @@ export async function buildOrgDigest(
       })),
     ...flagged.map((thread): BriefingItem => {
       const name = thread.customer.name ?? 'Someone new';
+      const facts = parseClassifierSignals(thread.classifierSignals)?.requestFacts;
+      const factsLine = facts ? formatFactsBriefingLine(facts, name, now) : null;
       const blurb = flaggedBlurb(thread);
+      const prose = blurb
+        ? endSentence(humanizeReportedSummary(name, blurb) ?? `${name} wrote in. ${blurb}`)
+        : `${name} wrote in, and I can't tell whether they're a customer.`;
       return {
         threadId: thread.id,
         kind: 'flagged',
         // No per-item "Real customer?": the group lead already says these are
         // the ones the agent is unsure about, and repeating the question on
         // every line is the tell that a template wrote it.
-        line: blurb
-          ? endSentence(humanizeReportedSummary(name, blurb) ?? `${name} wrote in. ${blurb}`)
-          : `${name} wrote in, and I can't tell whether they're a customer.`,
+        line: factsLine ? endSentence(truncateBriefingText(factsLine, DIGEST_SUMMARY_TRUNC)) : prose,
       };
     }),
   ];
