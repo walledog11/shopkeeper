@@ -361,13 +361,34 @@ describe('formatTicketLine — fields before prose', () => {
   });
 
   // The prose path derives its order ref from the title and summary, so an order
-  // known only to requestFacts does not reach it. That is the fallback behaving
-  // exactly as it did before this path existed, which is the point.
-  it('falls back when the classifier could not read an ask', () => {
+  // known only to requestFacts never reached it. Rendering the ask-less case
+  // from fields is what lets #1024 onto the line at all.
+  it('names the topic from aiTitle when the classifier could not read an ask', () => {
     expect(formatTicketLine(
       factsRow({ ask: 'none', order: '#1024' }),
       NOW,
-    )).toBe('Dana: Napkin Order Question');
+    )).toBe('Dana · #1024 — Napkin Order Question');
+  });
+
+  // A stalled conversation and an unreadable ask look identical in the fields —
+  // both are `ask: "none"` — and want opposite lines. `no_request` is what
+  // separates them, and it is a field, not a reading of the summary.
+  it('says nothing was asked when the customer has not asked yet', () => {
+    const row = factsRow({ ask: 'none' });
+    expect(formatTicketLine(
+      { ...row, classifierSignals: { ...row.classifierSignals, intents: { no_request: true } } },
+      NOW,
+    )).toBe('Dana wrote in — nothing asked yet');
+  });
+
+  // Deliberately not "said hello": no_request also covers "yo" and "Test".
+  it('does not name a greeting the customer may not have written', () => {
+    const row = factsRow({ ask: 'none' });
+    const line = formatTicketLine(
+      { ...row, classifierSignals: { ...row.classifierSignals, intents: { no_request: true } } },
+      NOW,
+    );
+    expect(line).not.toMatch(/hello/i);
   });
 });
 

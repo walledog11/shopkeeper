@@ -9,7 +9,7 @@ import { db } from '@shopkeeper/db';
 import { Prisma } from '@prisma/client';
 import { parseClassifierSignals, type RequestFacts } from '@shopkeeper/agent/classifier-signals';
 import { classifyPerson, customerFirstName, personLabel } from '@shopkeeper/agent/person-name';
-import { formatFactsBriefingLine } from './briefing-fields.js';
+import { formatFactsBriefingLine, type AskLessContext } from './briefing-fields.js';
 import { listVerifiedOrderNamesByThread } from '../storefront-chat-verified-orders.js';
 import { parseStoredPendingPlan } from '../operator-context.js';
 
@@ -443,13 +443,44 @@ function handoffSubject(thread: BriefingTicketRow, followingText: string): strin
   ) ?? 'Someone';
 }
 
+/** The classifier version that introduced `requestFacts`. */
+const REQUEST_FACTS_MIN_VERSION = 5;
+
 /**
  * The structured fields for a row, when the classifier wrote them. Null for
- * every thread classified before version 5 and for any the classifier could not
- * read an ask off, which is what keeps the prose fallbacks below reachable.
+ * every thread classified before version 5, which is what keeps the prose
+ * fallbacks below reachable until those age out.
+ *
+ * The version check is load-bearing and used not to be: `parseClassifierSignals`
+ * fills `requestFacts` with `emptyRequestFacts()` whatever version wrote the
+ * row, so this returned empty facts for a version-4 thread rather than null.
+ * That was invisible while an unnamed ask rendered no line — the row fell
+ * through to prose either way — and became visible the moment one did.
  */
 export function rowRequestFacts(thread: { classifierSignals?: unknown }): RequestFacts | null {
-  return parseClassifierSignals(thread.classifierSignals)?.requestFacts ?? null;
+  const signals = parseClassifierSignals(thread.classifierSignals);
+  if (!signals || (signals.version ?? 0) < REQUEST_FACTS_MIN_VERSION) return null;
+  return signals.requestFacts;
+}
+
+/** The classifier read a greeting or fragment: nothing has been asked yet. */
+export function rowHasNoRequest(thread: { classifierSignals?: unknown }): boolean {
+  return parseClassifierSignals(thread.classifierSignals)?.intents.no_request === true;
+}
+
+/**
+ * What a row can still say when no ask was named. `aiTitle` goes through
+ * redaction — a topic can carry an address the classifier echoed — but not
+ * through `briefingTopic`, whose summary fallback and punctuation repair are
+ * the prose machinery this is replacing.
+ */
+function askLessTopic(aiTitle: string | null | undefined): string | null {
+  const title = aiTitle?.trim();
+  return title ? redactBriefingContacts(title) : null;
+}
+
+export function rowAskLess(thread: BriefingTicketRow): AskLessContext {
+  return { noRequest: rowHasNoRequest(thread), topic: askLessTopic(thread.aiTitle) };
 }
 
 /**
@@ -459,7 +490,12 @@ export function rowRequestFacts(thread: { classifierSignals?: unknown }): Reques
 function factsHandoffLine(thread: BriefingTicketRow, now: Date): string | null {
   const facts = rowRequestFacts(thread);
   if (!facts) return null;
-  const line = formatFactsBriefingLine(facts, handoffSubject(thread, facts.order ?? ''), now);
+  const line = formatFactsBriefingLine(
+    facts,
+    handoffSubject(thread, facts.order ?? ''),
+    now,
+    rowAskLess(thread),
+  );
   return line ? truncateBriefingText(line, HANDOFF_SUMMARY_MAX) : null;
 }
 
@@ -523,17 +559,19 @@ export function formatEscalatedTicketLine(thread: BriefingTicketRow, now: Date =
 }
 
 export function formatTicketLine(thread: BriefingTicketRow, now: Date = new Date()): string {
-  // Fields first, prose second. `formatFactsBriefingLine` returns null for every
-  // thread classified before requestFacts existed, and for any the classifier
-  // could not read an ask off — those keep the path below unchanged.
-  const facts = parseClassifierSignals(thread.classifierSignals)?.requestFacts;
+  // Fields first, prose second. A version-5 row with no ask named now renders
+  // from `aiTitle` instead of falling through. A row classified before
+  // requestFacts existed still does fall through, and must: it has no `order`
+  // field, and its `aiSummary` is a whole statement of the request, so a title
+  // line would be strictly less than the prose it replaced. Those age out.
+  const facts = rowRequestFacts(thread);
   if (facts) {
     const person = briefingPersonName(
       thread.customer?.name ?? null,
       thread.channelType ?? null,
       thread.verifiedOrders ?? [],
     );
-    const line = formatFactsBriefingLine(facts, person, now);
+    const line = formatFactsBriefingLine(facts, person, now, rowAskLess(thread));
     if (line) return line;
   }
 
@@ -785,6 +823,7 @@ async function loadOperatorWaitingItems(
           instruction: pendingPlan.instruction,
           actionLabel: pendingPlan.actionLabel,
           requestFacts,
+          noRequest: thread ? rowHasNoRequest(thread) : false,
           now,
         }),
       });
@@ -869,6 +908,7 @@ async function loadStaleThreadWaitingItems(
         instruction: cached.instruction,
         verifiedOrders: verifiedByThread.get(thread.id) ?? [],
         requestFacts,
+        noRequest: rowHasNoRequest(thread),
         now,
       }),
     });
@@ -994,6 +1034,8 @@ export function formatApprovalItemLine(params: {
   verifiedOrders?: readonly string[];
   /** The classifier's structured fields, when the thread has them. */
   requestFacts?: RequestFacts | null;
+  /** `intents.no_request` — nothing has been asked yet on this thread. */
+  noRequest?: boolean;
   now?: Date;
 }): string {
   const subject = briefingPersonName(
@@ -1013,7 +1055,12 @@ export function formatApprovalItemLine(params: {
   // Fields build the first half when the classifier wrote them, which is what
   // lets a deadline open the line instead of landing past the truncation.
   const factsClause = params.requestFacts
-    ? formatFactsBriefingLine(params.requestFacts, subject, params.now ?? new Date())
+    ? formatFactsBriefingLine(
+        params.requestFacts,
+        subject,
+        params.now ?? new Date(),
+        { noRequest: params.noRequest === true, topic: askLessTopic(params.aiTitle) },
+      )
     : null;
   if (factsClause) {
     return `${endClause(truncateBriefingText(factsClause, HANDOFF_SUMMARY_MAX))} ${ready}`;

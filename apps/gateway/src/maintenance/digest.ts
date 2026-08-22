@@ -1,6 +1,5 @@
 import { getSupportStats, type SupportStatsSummary } from '@shopkeeper/agent/support-stats';
 import { canonicalInboxThreadWhere } from '@shopkeeper/agent/inbox-filter';
-import { parseClassifierSignals } from '@shopkeeper/agent/classifier-signals';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { SENDER_TYPE } from '@shopkeeper/agent/thread-constants';
 import { db, ThreadFilterStatus, type DbThreadFilterStatus } from '@shopkeeper/db';
@@ -22,6 +21,8 @@ import {
   type BriefingItem,
   loadHandledRollup,
   loadWaitingOnYouItems,
+  rowAskLess,
+  rowHasNoRequest,
   rowRequestFacts,
   finalizeDigestSend,
   redactBriefingContacts,
@@ -223,7 +224,7 @@ export interface DigestMessageExtras {
  * briefing that hides what "yes" would do is worse than a noisy one.
  */
 function hasNoRequest(thread: DigestThreadRow): boolean {
-  return parseClassifierSignals(thread.classifierSignals)?.intents.no_request === true;
+  return rowHasNoRequest(thread);
 }
 
 
@@ -446,7 +447,7 @@ export async function buildOrgDigest(
     ...byDeadlineFirst(flagged, rowRequestFacts, now).map((thread): BriefingItem => {
       const name = thread.customer.name ?? 'Someone new';
       const facts = rowRequestFacts(thread);
-      const factsLine = facts ? formatFactsBriefingLine(facts, name, now) : null;
+      const factsLine = facts ? formatFactsBriefingLine(facts, name, now, rowAskLess(thread)) : null;
       const blurb = flaggedBlurb(thread);
       const prose = blurb
         ? endSentence(humanizeReportedSummary(name, blurb) ?? `${name} wrote in. ${blurb}`)

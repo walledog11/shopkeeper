@@ -107,18 +107,53 @@ export function briefingLineParts(
 }
 
 /**
+ * What to say when the classifier named no ask. Two different states share that
+ * shape and want different lines: the customer genuinely has not asked anything
+ * yet, and the classifier could not read an ask off a message that contained
+ * one. A thread classified before `requestFacts` existed also lands here, which
+ * is why this covers the old population without a backfill.
+ */
+export interface AskLessContext {
+  /** `intents.no_request` — a greeting or fragment with nothing asked yet. */
+  noRequest: boolean;
+  /**
+   * `Thread.aiTitle`, prepared by the caller. Three to six words by
+   * construction and printed verbatim — no re-tensing, no punctuation repair,
+   * no truncation cascade. That is the whole reason it can stand in for the
+   * prose path rather than extending it.
+   */
+  topic: string | null;
+}
+
+function askLessLine(parts: BriefingLineParts, askLess: AskLessContext | undefined): string | null {
+  if (!askLess) return null;
+
+  // Deliberately not "said hello": `no_request` also covers "yo" and "Test",
+  // and naming a greeting the customer did not write is the same defect as
+  // re-tensing their sentence.
+  if (askLess.noRequest) return `${parts.person ?? 'Someone'} wrote in — nothing asked yet`;
+
+  const topic = askLess.topic?.trim();
+  if (!topic) return null;
+
+  const subject = [parts.person, parts.order].filter(Boolean).join(' · ');
+  return subject ? `${subject} — ${topic}` : capitalizeFirst(topic);
+}
+
+/**
  * `By Friday — Dana · #1024: refund or exchange — the olive linen napkins`
  *
- * Null when the fields carry nothing worth a line, so the caller keeps its
- * existing prose fallback for threads classified before these fields existed.
+ * Null when neither the fields nor `askLess` carry anything worth a line, so
+ * the caller keeps its prose fallback for the rows that have nothing at all.
  */
 export function formatFactsBriefingLine(
   facts: RequestFacts,
   person: string | null,
   now: Date,
+  askLess?: AskLessContext,
 ): string | null {
   const parts = briefingLineParts(facts, person, now);
-  if (!parts.ask && !parts.deadline) return null;
+  if (!parts.ask && !parts.deadline) return askLessLine(parts, askLess);
 
   const subject = [parts.person, parts.order].filter(Boolean).join(' · ');
   const body = subject && parts.ask
