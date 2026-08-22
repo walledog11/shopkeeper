@@ -200,28 +200,28 @@ Six phases. Phase 0 is independent of the rest and goes first: those are live bu
 
 Estimates are engineering days for one person, and they are estimates. "Gate" means the eval suite must run on the PR — `evals.yml` triggers on `pull_request`, so a change pushed straight to `master` is never gated.
 
-| Phase | Theme | Est. | Net LOC | Gate |
-|---|---|---:|---:|---|
-| 0 | Live bugs | ~1.5 d | ~0 | 0.4 only |
-| 1 | Typed signals (A) | ~1 d | −40 | No |
-| 2 | Validate, don't repair (C) | ~2 d | −150 | Yes |
-| 3 | One autonomy function (B) | ~3 d | −400 | Yes |
-| 4 | Structured rendering (D) | 8–10 d | −1,500 | Yes + phone |
-| 5 | Cost & housekeeping | ~3 d | −350 | 5.2 only |
+| Phase | Theme | Est. | Net LOC | Gate | Status |
+|---|---|---:|---:|---|---|
+| 0 | Live bugs | ~1.5 d | ~0 | none owed | **Closed** — 0.1 (#54), 0.3 (#55); 0.2 was already fixed, 0.4 dropped |
+| 1 | Typed signals (A) | ~1 d | −40 | No | Open |
+| 2 | Validate, don't repair (C) | ~2 d | −150 | Yes | Open |
+| 3 | One autonomy function (B) | ~3 d | −400 | Yes | Open — absorbs the 0.4 regex deletion |
+| 4 | Structured rendering (D) | 8–10 d | −1,500 | Yes + phone | **In progress** — 4.1, 4.2 done; 4.3 partial (#56) |
+| 5 | Cost & housekeeping | ~3 d | −350 | 5.2 only | Open |
 
 ---
 
 ### Phase 0 — Live bugs
 
-Carried forward from the 2026-08-16 work order. All still open as of 2026-08-21.
+Carried forward from the 2026-08-16 work order. **Closed 2026-08-21.** Two were real and are fixed; one was already fixed before this audit was written, and one was miscategorised.
 
-- [ ] **0.1 — `temperature: 0` breaks brand-voice synthesis, silently.** `voice-synthesis.ts:123` + `constants.ts:7`. Sonnet 5 rejects non-default sampling parameters with a 400. The daily job catches it per-org (`voice-synthesis.ts:236-241`), reports success, and the only test mocks the SDK, so nothing has ever validated the parameter. `VoiceEdit` rows accumulate and the brief never improves. **Fix:** delete the line; add a test asserting the request body rather than mocking it. **~15 min.** Confirm the 400 first so you fix the real cause.
+- [x] **0.1 — `temperature: 0` breaks brand-voice synthesis, silently.** `voice-synthesis.ts:123` + `constants.ts:7`. Sonnet 5 rejects non-default sampling parameters with a 400. The daily job catches it per-org (`voice-synthesis.ts:236-241`), reports success, and the only test mocks the SDK, so nothing has ever validated the parameter. `VoiceEdit` rows accumulate and the brief never improves. **Fix:** delete the line; add a test asserting the request body rather than mocking it. **~15 min.** Confirm the 400 first so you fix the real cause. *(PR #54. The 400 was confirmed against the current API contract before the line came out. Only live instance in the repo — `ai/index.ts:73` and the dashboard summary route also pass `temperature`, but both run on Haiku 4.5, where it is still accepted.)*
 
-- [ ] **0.2 — A Shopify blip becomes a confident wrong reply, auto-sent.** `context.ts:259` → `plan-preview.ts` → `plan-execution.ts:393-399`. `.catch(() => null)` on the order pre-fetch yields `recentOrders: []` with no warning; the model reasons from "no orders", drafts one clean `send_reply`, and quick-reply auto-send ships it. **Fix:** make pre-fetch failure distinguishable from "genuinely no orders" and emit a blocking signal. **2–4 h.** *Do this after Phase 1* so it emits a typed signal rather than another matched string — the one sequence change from the original work order.
+- [x] **0.2 — A Shopify blip becomes a confident wrong reply, auto-sent.** ~~`context.ts:259`~~ **Already fixed when this audit was written; the finding was stale.** `recentOrdersFetchFailed` is set at `context.ts:263`, carried on the context at `:407`, and produces a blocking warning at `planner-read-tools.ts:61` via `planner.ts:141`. It lands in `warningBlocksQuickReply`'s default-`true` branch, so quick-reply auto-send is already blocked. It is implemented as a prose warning, which makes it a **Phase 1.2 conversion target** rather than a live bug.
 
-- [ ] **0.3 — Skipped-step re-draft executes without telling the customer.** `planner-skip-reply.ts:218-228`. After two failed forced-tool attempts the function returns `withoutTerminal` — the mutative actions minus the customer notification. The refund happens; the customer is never told. **Fix:** on re-draft failure, do not execute — return the plan to the merchant. **1–2 h.**
+- [x] **0.3 — Skipped-step re-draft executes without telling the customer.** `planner-skip-reply.ts:218-228`. After two failed forced-tool attempts the function returns `withoutTerminal` — the mutative actions minus the customer notification. The refund happens; the customer is never told. **Fix:** on re-draft failure, do not execute — return the plan to the merchant. **1–2 h.** *(PR #55. `refreshTerminalSendAfterSkip` now returns `{ status: "ok", toolCalls } | { status: "redraft_failed" }`; the operator handler runs nothing, leaves the plan pending, and says why.)*
 
-- [ ] **0.4 — Money-path escalation is English-regex-gated on a multilingual product.** `planner-routing.ts:88-90`. `hasExplicitCompensationRequest` requires `intents.mutative_request` *and* an English `/\brefund\b/` match, so a Spanish "quiero un reembolso" degrades to `needs_review` instead of hard escalation. The classifier already writes `language` and nothing reads it. **Fix:** drive it off `intents` plus plan shape, dropping the prose regex. **4–6 h. Gate.** Add non-English fixtures first.
+- [x] **0.4 — Money-path escalation is English-regex-gated on a multilingual product.** **Dropped as a standalone item 2026-08-21 — it is not a live bug, and this list overstated it.** The guard only fires when the plan has no action and no escalation (`planner-routing.ts:319`), so a missed match degrades `escalate` to `needs_review`. Both stop at a human; neither auto-sends and neither moves money. The delta is which surface the merchant sees on a reply-only plan — polish, not a trust-binary failure, and it did not belong in a list headed "live bugs" beside 0.3. The part worth keeping — deleting the prose regex, driving off `intents` plus plan shape — falls out of **Phase 3** for free when `routePlan` and `classifyHomePlan` collapse into `decideAutonomy`. Doing it alone buys a paid eval run and a set of non-English fixtures to turn `needs_review` into `escalate`.
 
 ---
 
@@ -230,7 +230,7 @@ Carried forward from the 2026-08-16 work order. All still open as of 2026-08-21.
 Smallest change with the largest safety return. Phase 3 depends on it.
 
 - [ ] **1.1** Define `PlanSignal { code, severity, message }` and the `code` union. Codes come from the existing warning producers, one code per distinct condition.
-- [ ] **1.2** Convert producers to emit signals: `planner-read-tools.ts:68`, `:160`, `:171`, and the order-edit warning that fires against plans containing no order edit.
+- [ ] **1.2** Convert producers to emit signals: `planner-read-tools.ts:68`, `:160`, `:171`, and the pre-fetch-failure warning at `:61` carried over from 0.2. *(The order-edit warning that named a step the plan may not contain was fixed separately in `43f61275`; it now reads "No matching product found - the name may be wrong, or the store may not carry it." Nothing left to chase there — only the conversion to a typed code.)*
 - [ ] **1.3** Replace `warningBlocksQuickReply` with `signal.severity === "blocking"`. Delete `isShopifyCustomerWarning` and `planWarningTiers`.
 - [ ] **1.4** Update dashboard consumers to render `message` and branch on `code` — never on text.
 - [ ] **1.5** Keep `AgentPlan.warnings` as a derived `string[]` for one release so stored plans stay readable, then drop it.
@@ -268,20 +268,20 @@ Smallest change with the largest safety return. Phase 3 depends on it.
 
 The real project, and the one that needs product judgment rather than only engineering.
 
-- [ ] **4.1** Design the field schema. Start from what the briefing and the operator card actually need to say, not from what the classifier currently emits.
-- [ ] **4.2** Move the classifier to schema-enforced structured output (`output_config` + `json_schema`) — this also closes prior work order item 5, which flagged that the one call on every inbound message's critical path asks for JSON in prose. `voice-synthesis.ts:129-134` already demonstrates the pattern in this codebase.
-- [ ] **4.3** Write the renderer: compose sentences from fields, with explicit field priority so the load-bearing fact leads.
-- [ ] **4.4** Delete the tense engine (`humanizeReportedSummary`, `REPORTED_VERB_PAST`, `REPORTED_SPEECH`, `SUMMARY_PREAMBLE`), `tidyPunctuation`, and the truncation cascade.
+- [x] **4.1** Design the field schema. Start from what the briefing and the operator card actually need to say, not from what the classifier currently emits. *(PR #56. `RequestFacts { ask, subject, order, deadline, deadlineText, alternative }` in `packages/agent/src/classifier-signals.ts`; `ask` is a closed vocabulary so consumers branch on a value, never on prose.)*
+- [x] **4.2** Move the classifier to schema-enforced structured output (`output_config` + `json_schema`) — this also closes prior work order item 5, which flagged that the one call on every inbound message's critical path asks for JSON in prose. `voice-synthesis.ts:129-134` already demonstrates the pattern in this codebase. *(PR #56. `CLASSIFIER_OUTPUT_SCHEMA` covers every field the prompt asks for, not just the new ones. `CLASSIFIER_VERSION` → 5. A `Today:` line goes in the user message — not the system prompt — so "by Friday" can resolve to a date without moving the cached prefix.)*
+- [x] **4.3 — partial.** Write the renderer: compose sentences from fields, with explicit field priority so the load-bearing fact leads. *(PR #56. `briefing-fields.ts` renders deadline → who → ask, and `byDeadlineFirst` sorts dated items above undated ones. **Wired into `formatTicketLine` only** — the approval line, the handoff lines and the digest still build from prose. Deadlines render from the date, never by rewording the customer: `deadlineText` prints verbatim or not at all, so there is nothing to repair afterwards.)*
+- [ ] **4.4** Delete the tense engine (`humanizeReportedSummary`, `REPORTED_VERB_PAST`, `REPORTED_SPEECH`, `SUMMARY_PREAMBLE`), `tidyPunctuation`, and the truncation cascade. **Blocked on 4.3 finishing**, not on effort: the prose path is still the fallback for every pre-version-5 thread and still builds the handoff lines, so deleting it now takes the fallback with it. This is where the ~1,500-line deletion actually lands.
 - [ ] **4.5** Collapse the remaining naming copies — `anonymousNoun`, `namelessNoun`, `customer-name.ts` — onto the one helper.
 - [ ] **4.6** Rewrite the notification tests against fields. They currently assert exact English strings, which is why they pass while the output is wrong.
 - [ ] **4.7 Gate**, plus a live phone round-trip: operator copy is verified by phone, not by evals.
 
 **Done when:** `digest-briefing.ts` contains no regex over model-written prose.
 
-**Decisions needed before starting:**
-- What does a briefing line lead with when a ticket has several asks? (The probe suggests: the deadline, then the decision.)
-- Should an unverified storefront visitor and a verified one read differently, and how?
-- Postal addresses currently reach the merchant's phone unredacted — `redactBriefingContacts` handles emails and links only. Redact, or keep?
+**Decisions:**
+- ~~What does a briefing line lead with when a ticket has several asks?~~ **Decided 2026-08-21: the deadline.** Implemented in `formatDeadlineLead`, with `byDeadlineFirst` ordering the list the same way.
+- [ ] Should an unverified storefront visitor and a verified one read differently, and how? **Still open** — changes what the renderer prints, so worth settling before 4.4.
+- [ ] Postal addresses currently reach the merchant's phone unredacted — `redactBriefingContacts` handles emails and links only. Redact, or keep? **Still open.**
 
 ---
 
