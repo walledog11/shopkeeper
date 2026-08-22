@@ -192,9 +192,31 @@ describe('CLASSIFIER_SYSTEM_PROMPT attachment safety', () => {
   });
 });
 
+// The prompt is now cache blocks rather than one string. Joined back together
+// it must read exactly as before — the split is a billing decision, not a
+// wording one.
+function promptText(blocks: { text: string }[]): string {
+  return blocks.map((block) => block.text).join('');
+}
+
 describe('classifierSystemPrompt', () => {
+  it('caches the shared prefix on every channel', () => {
+    const [stable] = classifierSystemPrompt('email');
+    expect(stable?.text).toBe(CLASSIFIER_SYSTEM_PROMPT);
+    expect(stable?.cache_control).toEqual({ type: 'ephemeral' });
+  });
+
+  it('splits the channel suffix into its own block so the prefix stays shared', () => {
+    const blocks = classifierSystemPrompt('shopify_chat', ['#1024']);
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]?.text).toBe(CLASSIFIER_SYSTEM_PROMPT);
+    // The shared half outlives one thread, so it is worth the longer TTL.
+    expect(blocks[0]?.cache_control).toEqual({ type: 'ephemeral', ttl: '1h' });
+    expect(blocks[1]?.cache_control).toEqual({ type: 'ephemeral' });
+  });
+
   it('tells the summariser a storefront visitor is not a known customer', () => {
-    const prompt = classifierSystemPrompt('shopify_chat');
+    const prompt = promptText(classifierSystemPrompt('shopify_chat'));
     expect(prompt.startsWith(CLASSIFIER_SYSTEM_PROMPT)).toBe(true);
     expect(prompt).toMatch(/never "the customer"/i);
     expect(prompt).toContain('the visitor');
@@ -202,12 +224,12 @@ describe('classifierSystemPrompt', () => {
 
   it('leaves every other channel byte-identical', () => {
     for (const channel of ['email', 'ig_dm', 'shopify', 'imessage', 'tiktok']) {
-      expect(classifierSystemPrompt(channel)).toBe(CLASSIFIER_SYSTEM_PROMPT);
+      expect(promptText(classifierSystemPrompt(channel))).toBe(CLASSIFIER_SYSTEM_PROMPT);
     }
   });
 
   it('stops asserting anonymity once the shopper has verified an order', () => {
-    const prompt = classifierSystemPrompt('shopify_chat', ['#1024']);
+    const prompt = promptText(classifierSystemPrompt('shopify_chat', ['#1024']));
     expect(prompt.startsWith(CLASSIFIER_SYSTEM_PROMPT)).toBe(true);
     expect(prompt).toContain('verified owner of #1024');
     // The guest suffix instructs the model to call the person "the visitor" and
@@ -219,16 +241,17 @@ describe('classifierSystemPrompt', () => {
   });
 
   it('scopes the verified claim to the orders actually proved', () => {
-    const prompt = classifierSystemPrompt('shopify_chat', ['#1024', '#1031']);
+    const prompt = promptText(classifierSystemPrompt('shopify_chat', ['#1024', '#1031']));
     expect(prompt).toContain('#1024, #1031');
     expect(prompt).toMatch(/any other order they mention as unverified/i);
   });
 
   it('keeps the guest wording when no order is verified', () => {
-    expect(classifierSystemPrompt('shopify_chat', [])).toBe(classifierSystemPrompt('shopify_chat'));
+    expect(promptText(classifierSystemPrompt('shopify_chat', [])))
+      .toBe(promptText(classifierSystemPrompt('shopify_chat')));
   });
 
   it('ignores verified orders on every other channel', () => {
-    expect(classifierSystemPrompt('email', ['#1024'])).toBe(CLASSIFIER_SYSTEM_PROMPT);
+    expect(promptText(classifierSystemPrompt('email', ['#1024']))).toBe(CLASSIFIER_SYSTEM_PROMPT);
   });
 });

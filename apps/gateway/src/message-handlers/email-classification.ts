@@ -4,7 +4,8 @@ import {
   type DbThreadRequestDisposition,
 } from '@shopkeeper/db';
 import { isSpendCapError } from '@shopkeeper/db';
-import { anthropic } from '@shopkeeper/agent/ai';
+import type Anthropic from '@anthropic-ai/sdk';
+import { anthropic, buildCachedSystemPrompt, buildSplitCachedSystemPrompt } from '@shopkeeper/agent/ai';
 import { enforceSpendCap, recordSpend } from '@shopkeeper/agent/spend';
 import { readModelUsage } from '@shopkeeper/agent/usage';
 import {
@@ -183,14 +184,22 @@ function storefrontVerifiedNoun(orderNames: readonly string[]): string {
 This thread is storefront chat, and the person has verified ownership of ${orders} by entering a code emailed to the address on that order. They are the verified owner of ${orders}, not an unidentified visitor — call them "the shopper" in "title" and "summary". Never say they gave no order number, no email, or no account information: ${orders} is established. Ownership extends to ${orders} only; treat any other order they mention as unverified.`;
 }
 
+// Returns cache blocks, not a string: this prompt ships on every inbound
+// message, which makes it the most-repeated prefix in the product. The channel
+// suffix is appended rather than templated (see above) precisely so the shared
+// prefix can be cached across every thread on every channel, and the suffix
+// cached across the calls of one thread.
 export function classifierSystemPrompt(
   channelType: string,
   verifiedOrderNames: readonly string[] = [],
-): string {
-  if (channelType !== CHANNEL.SHOPIFY_CHAT) return CLASSIFIER_SYSTEM_PROMPT;
-  return verifiedOrderNames.length > 0
-    ? `${CLASSIFIER_SYSTEM_PROMPT}${storefrontVerifiedNoun(verifiedOrderNames)}`
-    : `${CLASSIFIER_SYSTEM_PROMPT}${STOREFRONT_VISITOR_NOUN}`;
+): Anthropic.TextBlockParam[] {
+  if (channelType !== CHANNEL.SHOPIFY_CHAT) return buildCachedSystemPrompt(CLASSIFIER_SYSTEM_PROMPT);
+  return buildSplitCachedSystemPrompt(
+    CLASSIFIER_SYSTEM_PROMPT,
+    verifiedOrderNames.length > 0
+      ? storefrontVerifiedNoun(verifiedOrderNames)
+      : STOREFRONT_VISITOR_NOUN,
+  );
 }
 
 // Which channels the spam filter decides, and how far its verdict may go.
@@ -403,7 +412,7 @@ export async function classifyAndSummarizeNewEmail(
     const response = await anthropic.messages.create({
       model: MODEL.CLAUDE,
       max_tokens: 700,
-      system: CLASSIFIER_SYSTEM_PROMPT,
+      system: classifierSystemPrompt(CHANNEL.EMAIL),
       output_config: {
         format: {
           type: 'json_schema',
