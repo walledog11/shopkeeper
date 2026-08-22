@@ -64,12 +64,22 @@ export async function handlePendingPlanCommand(
 
   let approvedRawToolCalls = normalizeApprovedToolCalls(approvedToolCalls);
   if (command.type === 'plan-skip' && skippedActionableTool && findTerminalSendTool(approvedRawToolCalls)) {
-    approvedRawToolCalls = await refreshSkippedPlanTerminalSend(
+    const refreshed = await refreshSkippedPlanTerminalSend(
       organizationId,
       threadId,
       instruction,
       approvedRawToolCalls,
     );
+    // Running the remaining calls without a redrafted send means the actions
+    // land and the customer is never told. Leave the plan pending instead.
+    if (refreshed.status === 'redraft_failed') {
+      logger.warn({ chatId, threadId }, '[Operator] Skip redraft failed — plan not run');
+      await reply(
+        "I couldn't rewrite the reply to cover only the remaining steps, so I've run nothing — otherwise those actions would have gone through without telling the customer.\nThe plan is still waiting: reply yes to run it as first proposed, or no to dismiss it.",
+      );
+      return true;
+    }
+    approvedRawToolCalls = refreshed.toolCalls;
   }
 
   logger.info({ chatId, threadId, toolCallCount: approvedRawToolCalls.length }, '[Operator] Approving plan');

@@ -171,6 +171,13 @@ function buildSkippedPlanDraftMessages(
   ];
 }
 
+// A failed re-draft must not fall through to executing `withoutTerminal`: those
+// are the mutative actions minus the customer notification, so the refund lands
+// and the customer is never told. The caller returns the plan to the merchant.
+export type TerminalSendRefresh =
+  | { status: "ok"; toolCalls: RawToolCall[] }
+  | { status: "redraft_failed" };
+
 // After `skip N`, the cached send_reply/send_email still describes the full plan.
 // Re-draft the terminal send so customer copy matches the remaining approved actions.
 export async function refreshTerminalSendAfterSkip(input: {
@@ -178,13 +185,13 @@ export async function refreshTerminalSendAfterSkip(input: {
   instruction: string;
   approvedToolCalls: RawToolCall[];
   settings?: OrgSettings;
-}): Promise<RawToolCall[]> {
+}): Promise<TerminalSendRefresh> {
   const terminalTool = findTerminalSendTool(input.approvedToolCalls);
-  if (!terminalTool) return input.approvedToolCalls;
+  if (!terminalTool) return { status: "ok", toolCalls: input.approvedToolCalls };
 
   const withoutTerminal = stripTerminalSendTools(input.approvedToolCalls);
   const remainingSteps = buildPlanSteps(withoutTerminal);
-  if (remainingSteps.length === 0) return input.approvedToolCalls;
+  if (remainingSteps.length === 0) return { status: "ok", toolCalls: input.approvedToolCalls };
 
   const resolvedSettings = resolveAgentSettings(input.settings);
   await enforceSpendCap(input.ctx.orgId, resolvedSettings);
@@ -194,7 +201,7 @@ export async function refreshTerminalSendAfterSkip(input: {
   const tools = selectAgentTools(resolvedSettings);
   const terminalToolName = terminalTool.name as "send_reply" | "send_email";
   const sendTool = tools.find((tool) => tool.name === terminalToolName);
-  if (!sendTool) return input.approvedToolCalls;
+  if (!sendTool) return { status: "ok", toolCalls: input.approvedToolCalls };
 
   const usageTotals = createModelUsageMetrics();
   const drafted = await draftPlannerTerminalTool({
@@ -222,9 +229,9 @@ export async function refreshTerminalSendAfterSkip(input: {
         threadId: input.ctx.thread.id,
         terminalToolName,
       },
-      "[agent:plan] skip reply redraft failed — executing without terminal send",
+      "[agent:plan] skip reply redraft failed — returning plan to the merchant",
     );
-    return withoutTerminal;
+    return { status: "redraft_failed" };
   }
 
   logger.info(
@@ -237,5 +244,5 @@ export async function refreshTerminalSendAfterSkip(input: {
     "[agent:plan] skip reply redrafted",
   );
 
-  return [...withoutTerminal, ...drafted];
+  return { status: "ok", toolCalls: [...withoutTerminal, ...drafted] };
 }

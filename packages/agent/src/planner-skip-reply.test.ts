@@ -80,7 +80,7 @@ describe("refreshTerminalSendAfterSkip", () => {
       ctx: makeCtx(),
       instruction: "Handle address change",
       approvedToolCalls,
-    })).resolves.toEqual(approvedToolCalls);
+    })).resolves.toEqual({ status: "ok", toolCalls: approvedToolCalls });
 
     expect(runPlannerModelCallSpy).not.toHaveBeenCalled();
   });
@@ -114,15 +114,18 @@ describe("refreshTerminalSendAfterSkip", () => {
     expect(String((prompt as { content: string }).content)).toContain("Remaining approved actions");
     expect(String((prompt as { content: string }).content)).not.toContain("Added the item");
 
-    expect(result.map((toolCall) => toolCall.name)).toEqual([
+    if (result.status !== "ok") throw new Error("expected an ok refresh");
+    expect(result.toolCalls.map((toolCall) => toolCall.name)).toEqual([
       "get_shopify_orders",
       "update_shopify_order_address",
       "send_reply",
     ]);
-    expect((result.at(-1)?.input as { text: string }).text).toBe("Your shipping address has been updated.");
+    expect((result.toolCalls.at(-1)?.input as { text: string }).text).toBe("Your shipping address has been updated.");
   });
 
-  it("drops terminal send when redraft fails", async () => {
+  // Returning the mutative calls minus the send would execute the address
+  // change and never tell the customer.
+  it("reports failure rather than dropping the terminal send when redraft fails", async () => {
     runPlannerModelCallSpy.mockResolvedValue({ toolBlocks: [] });
 
     const approvedToolCalls: RawToolCall[] = [
@@ -136,6 +139,6 @@ describe("refreshTerminalSendAfterSkip", () => {
       approvedToolCalls,
     });
 
-    expect(result.map((toolCall) => toolCall.name)).toEqual(["update_shopify_order_address"]);
+    expect(result).toEqual({ status: "redraft_failed" });
   });
 });

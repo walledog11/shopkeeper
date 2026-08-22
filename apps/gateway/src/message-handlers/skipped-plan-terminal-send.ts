@@ -3,6 +3,7 @@ import { buildContext } from '@shopkeeper/agent/build-context';
 import {
   findTerminalSendTool,
   refreshTerminalSendAfterSkip,
+  type TerminalSendRefresh,
 } from '@shopkeeper/agent/planner-skip-reply';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import type { RawToolCall } from '@shopkeeper/agent/types';
@@ -13,9 +14,9 @@ export async function refreshSkippedPlanTerminalSend(
   threadId: string,
   instruction: string,
   approvedToolCalls: RawToolCall[],
-): Promise<RawToolCall[]> {
+): Promise<TerminalSendRefresh> {
   if (!findTerminalSendTool(approvedToolCalls)) {
-    return approvedToolCalls;
+    return { status: 'ok', toolCalls: approvedToolCalls };
   }
 
   const org = await db.organization.findUnique({

@@ -137,10 +137,13 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
       },
     });
 
-    refreshSkippedPlanTerminalSendSpy.mockResolvedValueOnce([
-      { id: 'a2', name: 'update_shopify_order_address', input: { address1: '1 Main St' } },
-      { id: 's2', name: 'send_reply', input: { text: 'Your address has been updated.' } },
-    ]);
+    refreshSkippedPlanTerminalSendSpy.mockResolvedValueOnce({
+      status: 'ok',
+      toolCalls: [
+        { id: 'a2', name: 'update_shopify_order_address', input: { address1: '1 Main St' } },
+        { id: 's2', name: 'send_reply', input: { text: 'Your address has been updated.' } },
+      ],
+    });
 
     await request(app)
       .post('/webhooks/telegram')
@@ -157,6 +160,43 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
         { id: 's2', name: 'send_reply', input: { text: 'Your address has been updated.' } },
       ],
     });
+  });
+
+  // A failed redraft used to fall through to the remaining calls, so the refund
+  // executed and the customer was never told.
+  it('"skip 1" runs nothing when the terminal send cannot be redrafted', async () => {
+    const chatId = '5555005';
+    const memberKey = await bindMember(chatId);
+    const threadId = '00000000-0000-4000-8000-000000000004';
+    await updateContext(org.id, memberKey, {
+      pendingPlan: {
+        threadId,
+        instruction: 'refund #1024',
+        rawToolCalls: [
+          { id: 'a1', name: 'edit_shopify_order', input: { quantity: 1 } },
+          { id: 'a2', name: 'create_refund', input: { amount: 40 } },
+          { id: 's1', name: 'send_reply', input: { text: 'Edited the order and refunded you.' } },
+        ],
+      },
+    });
+
+    refreshSkippedPlanTerminalSendSpy.mockResolvedValueOnce({ status: 'redraft_failed' });
+
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'skip 1' } });
+
+    await processPendingOperatorEvents(org.id);
+    await waitForReplies(1);
+
+    expect(refreshSkippedPlanTerminalSendSpy).toHaveBeenCalledOnce();
+    expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
+    expect(lastReplyText()).toContain("I've run nothing");
+
+    // The plan stays pending so the merchant can still approve or dismiss it.
+    const context = await getContext(org.id, memberKey);
+    expect(context.pendingPlans.at(-1)?.threadId).toBe(threadId);
   });
 
   // Older parked plans have no actionLabel — the fast path must still answer.

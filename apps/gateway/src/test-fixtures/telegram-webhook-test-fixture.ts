@@ -9,6 +9,8 @@ import {
   cleanupTestData,
 } from '@shopkeeper/db/test-helpers';
 import { updateContext, getContext } from '../operator-context.js';
+import type { TerminalSendRefresh } from '@shopkeeper/agent/planner-skip-reply';
+import type { RawToolCall } from '@shopkeeper/agent/types';
 import {
   clearMockLogger,
   createRegisteredWebhookRouterApp,
@@ -48,8 +50,8 @@ const {
     _organizationId: string,
     _threadId: string,
     _instruction: string,
-    approvedToolCalls: Array<{ id: string; name: string; input?: unknown }>,
-  ) => approvedToolCalls),
+    approvedToolCalls: RawToolCall[],
+  ): Promise<TerminalSendRefresh> => ({ status: 'ok', toolCalls: approvedToolCalls })),
   queueAddSpy: vi.fn().mockResolvedValue({ id: 'test-job-id' }),
   queueGetJobSpy: vi.fn().mockResolvedValue(null),
 }));
@@ -195,8 +197,8 @@ beforeEach(async () => {
     _organizationId: string,
     _threadId: string,
     _instruction: string,
-    approvedToolCalls: Array<{ id: string; name: string; input?: unknown }>,
-  ) => approvedToolCalls);
+    approvedToolCalls: RawToolCall[],
+  ): Promise<TerminalSendRefresh> => ({ status: 'ok', toolCalls: approvedToolCalls }));
   executeOperatorAgentTurnSpy.mockResolvedValue({
     summary: 'Done.',
     threadId: '00000000-0000-4000-8000-000000000001',
