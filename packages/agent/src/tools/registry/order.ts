@@ -115,7 +115,7 @@ export const ORDER_TOOL_DEFINITIONS = [
   defineTool({
     name: "create_refund",
     description:
-      "Issue an exact full-order refund only when the customer or merchant explicitly requested a full refund. Pass the identified paid order, its complete current refundable balance, and its currency. Partial, item-only, vague, mismatched, previously refunded, chargeback, and non-paid requests must be escalated instead.",
+      "Use when the customer keeps what they received - or there is nothing to send back - and money goes back to them. Issue an exact full-order refund only when the customer or merchant explicitly requested a full refund. Pass the identified paid order, its complete current refundable balance, and its currency. Partial, item-only, vague, mismatched, previously refunded, chargeback, and non-paid requests must be escalated instead. If the item is being sent back, use create_return. If nothing has shipped and the whole order should be stopped, use cancel_order.",
     fields: {
       order_id: stringArg("Shopify order ID (numeric).", { required: true }),
       amount: stringArg("Amount to refund in the store's currency (e.g. '19.99'). For a full refund, use the order's total from context. Always provide this.", { required: true }),
@@ -143,7 +143,7 @@ export const ORDER_TOOL_DEFINITIONS = [
   defineTool({
     name: "cancel_order",
     description:
-      "Cancel an unfulfilled Shopify order. Only works for orders that have not yet been fulfilled.",
+      "Use when nothing on the order has shipped and the customer wants the whole order stopped. Only works for orders that have not yet been fulfilled; the result reports the financial status Shopify left the order in, so no separate create_refund call is needed. If the order has already shipped, the goods have to come back instead - use create_return. If the order is still going ahead and only some items should come off it, use edit_shopify_order.",
     fields: {
       order_id: stringArg("Shopify order ID (numeric).", { required: true }),
       reason: stringArg("Reason for cancellation.", { enum: cancelReasons }),
@@ -208,7 +208,7 @@ export const ORDER_TOOL_DEFINITIONS = [
   defineTool({
     name: "edit_shopify_order",
     description:
-      "Add, remove, or swap a line item on an existing Shopify order using the Order Editing API. To add an item: provide variant_id and quantity. To remove an item: provide only remove_variant_id from the orders context, no search needed. To swap size/color: provide variant_id (new) and remove_variant_id (old). At least one of variant_id or remove_variant_id must be provided.",
+      "Use while the order has not shipped yet and its contents need to change but the order itself goes ahead. Adds, removes, or swaps a line item on an existing Shopify order using the Order Editing API. Once items have shipped they come back through create_return or create_exchange rather than an edit; to stop the whole unshipped order instead of changing it, use cancel_order. To add an item: provide variant_id and quantity. To remove an item: provide only remove_variant_id from the orders context, no search needed. To swap size/color: provide variant_id (new) and remove_variant_id (old). At least one of variant_id or remove_variant_id must be provided.",
     fields: {
       order_id: stringArg("Shopify order ID (numeric, e.g. '5678901234'). Use the id field from the orders context.", { required: true }),
       variant_id: stringArg("Variant ID to add. Required when adding or swapping. Omit for pure removal."),
@@ -247,7 +247,7 @@ export const ORDER_TOOL_DEFINITIONS = [
   defineTool({
     name: "create_return",
     description:
-      "Open a return (RMA) for items on a fulfilled Shopify order so the customer is authorized to send them back. This does NOT refund the customer or change the order total. If a later partial or item-only refund is owed, escalate it for merchant handling; create_refund is full-order-only. Use this when a customer wants to return what they got. By default it returns every returnable item on the order; pass variant_id (from the orders context) to return just that one item. Only works for items that have actually shipped.",
+      "Open a return (RMA) for items on a fulfilled Shopify order so the customer is authorized to send them back. This does NOT refund the customer or change the order total. If a later partial or item-only refund is owed, escalate it for merchant handling; create_refund is full-order-only. Use this when a customer wants to send back what they got and is not taking a replacement. By default it returns every returnable item on the order; pass variant_id (from the orders context) to return just that one item. Only works for items that have actually shipped. If they want a different size, colour or variant of the same item instead of their money back, use create_exchange.",
     fields: {
       order_id: stringArg("Shopify order ID (numeric). Use the id field from the orders context.", { required: true }),
       variant_id: stringArg("Variant ID of the single item to return, from the orders context. Omit to return all returnable items on the order."),
@@ -269,7 +269,7 @@ export const ORDER_TOOL_DEFINITIONS = [
   defineTool({
     name: "create_exchange",
     description:
-      "Set up an exchange on a fulfilled Shopify order: opens a return for the item the customer is sending back and records the replacement variant to ship once the return is processed. Use this instead of create_refund when the customer wants a different size, color, or variant and is keeping their money with the store. No money moves - the customer is not refunded or charged. Only works for items that have shipped; for unshipped orders use edit_shopify_order to swap items directly. The replacement must cost the same or less than the returned item - if it costs more, the customer would owe a balance, so escalate to the merchant instead of calling this.",
+      "Set up an exchange on a fulfilled Shopify order: opens a return for the item the customer is sending back and records the replacement variant to ship once the return is processed. Use this instead of create_refund when the customer wants a different size, color, or variant and is keeping their money with the store. No money moves - the customer is not refunded or charged. Only works for items that have shipped; for unshipped orders use edit_shopify_order to swap items directly. If they are sending the item back and not taking a replacement, use create_return. The replacement must cost the same or less than the returned item - if it costs more, the customer would owe a balance, so escalate to the merchant instead of calling this.",
     fields: {
       order_id: stringArg("Shopify order ID (numeric). Use the id field from the orders context.", { required: true }),
       variant_id: stringArg("Variant ID of the item the customer is sending back, from the orders context.", { required: true }),

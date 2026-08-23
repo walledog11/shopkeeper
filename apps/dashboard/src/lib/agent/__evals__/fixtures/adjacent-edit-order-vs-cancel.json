@@ -1,0 +1,79 @@
+{
+  "id": "adjacent-edit-order-vs-cancel",
+  "description": "Adjacent-pair selection: edit-order vs cancel. The customer says 'cancel', but names one item out of two on an unshipped order and asks for the rest to still come. The order goes ahead with different contents, which is edit_shopify_order with remove_variant_id; cancel_order would stop the item they are still waiting for.",
+  "setup": {
+    "classifierIntents": {
+      "mutative_request": true
+    },
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Dele Okonkwo",
+    "customerPlatformId": "dele@example.com",
+    "shopifyCustomerId": "10000007040",
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
+    "orgSettings": {
+      "blockCancellations": false
+    },
+    "messages": [
+      {
+        "senderType": "customer",
+        "contentText": "Please cancel the wool beanie on order #7040 - I bought one already. Still want the scarf, send that as normal."
+      }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000007040",
+        "name": "#7040",
+        "created_at": "2026-07-11T08:20:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": null,
+        "total_price": "94.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_7040a",
+            "title": "Wool Beanie - Charcoal",
+            "quantity": 1,
+            "variant_id": "710000007040",
+            "fulfillable_quantity": 1,
+            "current_quantity": 1,
+            "fulfillment_status": null
+          },
+          {
+            "line_item_id": "lineitem_7040b",
+            "title": "Lambswool Scarf - Charcoal",
+            "quantity": 1,
+            "variant_id": "710000007041",
+            "fulfillable_quantity": 1,
+            "current_quantity": 1,
+            "fulfillment_status": null
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Reply to the customer and handle their request.",
+  "expectedPlan": {
+    "mustCallTools": [
+      "edit_shopify_order"
+    ],
+    "mustNotCallTools": [
+      "cancel_order",
+      "create_refund",
+      "create_return"
+    ],
+    "mustCallToolsWithInput": [
+      {
+        "tool": "edit_shopify_order",
+        "inputEquals": {
+          "order_id": "9000007040",
+          "remove_variant_id": "710000007040"
+        }
+      }
+    ]
+  },
+  "suite": "core"
+}

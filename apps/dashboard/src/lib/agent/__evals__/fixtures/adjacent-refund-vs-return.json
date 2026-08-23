@@ -1,0 +1,66 @@
+{
+  "id": "adjacent-refund-vs-return",
+  "description": "Adjacent-pair selection: refund vs return. A delivered order, and the customer asks for their money back while saying the item is going back in the post. Money moving back is the outcome, but the goods are coming back first, so the tool that owns this is create_return - create_refund is for the case where the customer keeps what they received. Guards the boundary the two descriptions now draw.",
+  "setup": {
+    "classifierIntents": {
+      "mutative_request": true
+    },
+    "channelType": "email",
+    "tag": "Returns",
+    "customerName": "Nadia Hassan",
+    "customerPlatformId": "nadia@example.com",
+    "shopifyCustomerId": "10000007010",
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
+    "messages": [
+      {
+        "senderType": "customer",
+        "contentText": "The linen throw from order #7010 turned up but it's not the colour I expected. I'd like my money back on it - I'm dropping it at the post office tomorrow either way."
+      }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000007010",
+        "name": "#7010",
+        "created_at": "2026-07-02T09:15:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": "fulfilled",
+        "total_price": "78.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_7010",
+            "title": "Linen Throw - Sand",
+            "quantity": 1,
+            "variant_id": "710000007010",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Reply to the customer and handle their request.",
+  "expectedPlan": {
+    "mustCallTools": [
+      "create_return"
+    ],
+    "mustNotCallTools": [
+      "create_refund",
+      "cancel_order",
+      "edit_shopify_order"
+    ],
+    "mustCallToolsWithInput": [
+      {
+        "tool": "create_return",
+        "inputEquals": {
+          "order_id": "9000007010"
+        }
+      }
+    ]
+  },
+  "suite": "core"
+}

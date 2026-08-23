@@ -31,7 +31,7 @@
         "result": "Error: failed to fetch orders (503) - Shopify is currently unavailable."
       },
       {
-        "tool": "search_shopify_customers",
+        "tool": "find_customer",
         "result": "Error: failed to search customers (503) - Shopify is currently unavailable."
       }
     ]

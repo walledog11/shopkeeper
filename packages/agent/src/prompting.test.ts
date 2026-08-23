@@ -108,8 +108,10 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toMatch(/fulfillment_status is null/i);
     expect(prompt).toMatch(/not shipped/i);
     expect(prompt).toContain('get_order_tracking');
-    expect(prompt).toMatch(/fulfilled or partially fulfilled/i);
-    expect(prompt).toMatch(/Fulfillment by itself is not a reason to fetch tracking/i);
+    // "When may I call this?" has one owner: get_order_tracking's own description,
+    // asserted at the bottom of this file. The support instructions restated it in
+    // three bullets; what is left is only what the description does not say.
+    expect(prompt).not.toMatch(/Fulfillment by itself is not a reason to fetch tracking/i);
   });
 
   it('defaults to ask_operator when KB cannot answer a store-policy question', () => {

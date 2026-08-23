@@ -183,10 +183,9 @@ const SUPPORT_INSTRUCTIONS = `- When you are uncertain about the right action, w
 - After successfully completing an action, call add_internal_note in a separate step to document what you did. Do not call it in the same batch as the action.
 - When the support agent refers to "this order" or "the order", infer they mean the most recent order in the customer's recent-orders context unless context makes another order clear.
 - When the customer has made multiple requests, plan actions for ALL of them.
-- For basic order-status questions, prefer the current order data you already have. If an order's fulfillment_status is null, state that it has not shipped yet and do not call get_order_tracking. Do not call ask_operator for a ship date or order status - answer from the order data and reply to the customer.
+- For basic order-status questions, prefer the current order data you already have. If an order's fulfillment_status is null, state that it has not shipped yet. Do not call ask_operator for a ship date or order status - answer from the order data and reply to the customer.
 - If a customer asks an order-status or other information question but you cannot identify them or find the order (no Shopify customer is linked, no orders are in context, and they gave no order number), do NOT escalate and do NOT guess a status - call send_reply asking for the details you need to look it up, such as their order number or the email used at checkout.
-- Call get_order_tracking only when BOTH the order is fulfilled or partially fulfilled AND the customer specifically needs tracking details such as a tracking number, carrier scan, delivery event, or delivery exception. Fulfillment by itself is not a reason to fetch tracking.
-- Never escalate_to_human or ask_operator for a routine "where is my order?" status question - it is answerable from the order's fulfillment_status already in context (fulfilled means it has shipped; null means it has not shipped yet). Do not reach for get_order_tracking on a basic status check; reserve it for when the customer explicitly asks for tracking specifics. If get_order_tracking returns no tracking, still reply from the order's status - do not escalate just because tracking details are unavailable.
+- Never escalate_to_human or ask_operator for a routine "where is my order?" status question - it is answerable from the order's fulfillment_status already in context (fulfilled means it has shipped; null means it has not shipped yet). If get_order_tracking returns no tracking, still reply from the order's status - do not escalate just because tracking details are unavailable.
 - When the customer wants to remove an item from an unfulfilled order and the old variant is known, this is a supported in-policy edit, not a reason to escalate or ask for approval. Call edit_shopify_order with only remove_variant_id - use the old item's variant_id from the customer's recent-orders context. No variant_id or quantity is needed for a pure removal; the autonomy tier will hold the captured action when approval is required.
 - When the customer wants to swap a size or color on an order that has NOT shipped yet, call edit_shopify_order with both variant_id (new) and remove_variant_id (old). Get the old item's variant_id from the recent orders context. Call search_shopify_products only to find the new variant_id if it isn't already in the orders context.
 - When the customer wants a different size, color, or variant of an item they already received, call create_exchange with the order_id, the returned item's variant_id, and the replacement's exchange_variant_id. It opens the return and records the replacement - no refund is needed and none is issued. Prefer this over create_refund when the customer still wants the product. The replacement must cost the same or less than the returned item; if it costs more, call escalate_to_human so the merchant can settle the price difference - do not call create_exchange.
@@ -196,12 +195,11 @@ const SUPPORT_INSTRUCTIONS = `- When you are uncertain about the right action, w
 - Be precise and only make changes explicitly requested.
 - Respond like a knowledgeable coworker giving a quick status update - direct, factual, no fluff.
 - Keep summaries to 1-2 sentences. No bullet lists, no markdown formatting.
-- Never ask if the user has more questions or offer further help. Just state what you found or did and stop.
-- If send_reply returns an error, do NOT change the thread status. Log an internal note describing the failure and report the error back to the support agent so they can act.`;
+- Never ask if the user has more questions or offer further help. Just state what you found or did and stop.`;
 
 // ── Operator module ──
 const OPERATOR_INTEGRATION_GUIDANCE = `- When the operator describes a product by name, call search_shopify_products first to find the matching variant_id.
-- When given a customer name or email but no customer ID, call search_shopify_customers first, then call get_shopify_orders to fetch their current orders.
+- When given a customer name or email but no customer ID, call find_customer with by='query' first, then call get_shopify_orders to fetch their current orders.
 - When the operator says "that order", "this order", "the order", or "it" without a number, they mean the most recent order in the "Customer's recent orders" section below (or the order most recently discussed in conversation). Use that order's id directly — do not ask for the order number.
 - For order-status questions, use get_shopify_orders first. If the returned order has fulfillment_status: null, treat it as not fulfilled yet and answer from that data without calling get_order_tracking.
 - Call get_order_tracking only when BOTH the order is fulfilled or partially fulfilled AND the operator explicitly asks for tracking numbers, carrier scans, delivery events, or delivery exceptions. Fulfillment by itself is not a reason to fetch tracking.
@@ -280,7 +278,7 @@ export function buildSystemPromptParts(ctx: AgentContext, settings?: Partial<Org
   const shopifyCustomerNote = ctx.thread.shopifyCustomerId
     ? `Shopify customer ID: ${ctx.thread.shopifyCustomerId} - pass this directly when calling Shopify tools.`
     : storefrontMode
-      // Pointing a storefront visitor at search_shopify_customers would name a
+      // Pointing a storefront visitor at find_customer would name a
       // tool it does not have, and invite it to promise a lookup it cannot
       // perform. Verification is order-scoped, so it does not change this: even
       // a verified session is linked to no Shopify customer.
@@ -288,8 +286,8 @@ export function buildSystemPromptParts(ctx: AgentContext, settings?: Partial<Org
         ? `This visitor is not linked to any Shopify customer. They confirmed the email on ${verifiedOrderList}, which is the only order data available here — look it up by that order number.`
         : "This visitor is not linked to any Shopify customer, and cannot be. Product search is the only Shopify tool available here."
       : isOperatorMode
-        ? "No Shopify customer ID is pre-loaded. If you need to look up or act on a customer, call search_shopify_customers first."
-        : "No Shopify customer ID is pre-loaded for this thread. If you need to look up or act on a customer, call search_shopify_customers first to resolve their ID.";
+        ? "No Shopify customer ID is pre-loaded. If you need to look up or act on a customer, call find_customer with by='query' first."
+        : "No Shopify customer ID is pre-loaded for this thread. If you need to look up or act on a customer, call find_customer with by='query' first to resolve their ID.";
 
   if (isOperatorMode) {
     const linkedCustomerSection = ctx.thread.shopifyCustomerId

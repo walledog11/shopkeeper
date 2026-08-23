@@ -31,7 +31,7 @@
         "result": "Error: failed to fetch orders (500) - internal error fetching orders."
       },
       {
-        "tool": "search_shopify_customers",
+        "tool": "find_customer",
         "result": "Error: failed to search customers (500) - internal error."
       }
     ]

@@ -24,6 +24,7 @@ const VERIFIED = { authState: "verified" as const, verifiedOrders: [ORDER] };
 const FORBIDDEN_WHEN_VERIFIED = [
   // Customer-wide reads: this session proved control of an order, not an account.
   "get_shopify_orders",
+  "find_customer",
   "search_shopify_customers",
   "get_shopify_customer",
   // Mutations, in full — the same list a guest is refused.

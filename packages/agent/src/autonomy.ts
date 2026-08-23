@@ -84,6 +84,7 @@ export type AutonomyVerdict =
 const QUICK_REPLY_READ_TOOLS = new Set([
   "search_kb",
   "search_shopify_products",
+  "find_customer",
   "search_shopify_customers",
   "get_shopify_customer",
   "get_shopify_orders",

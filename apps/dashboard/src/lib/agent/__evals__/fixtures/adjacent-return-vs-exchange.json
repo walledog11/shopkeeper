@@ -1,0 +1,74 @@
+{
+  "id": "adjacent-return-vs-exchange",
+  "description": "Adjacent-pair selection: return vs exchange. The customer describes the action in return language - sending the item back - but what they want at the end of it is the same item in another size, at the same price. create_exchange owns that; create_return would open the return and leave the replacement unrecorded, and create_refund would send money the customer never asked for.",
+  "setup": {
+    "classifierIntents": {
+      "mutative_request": true
+    },
+    "channelType": "email",
+    "tag": "Returns",
+    "customerName": "Tomas Bergqvist",
+    "customerPlatformId": "tomas@example.com",
+    "shopifyCustomerId": "10000007020",
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
+    "messages": [
+      {
+        "senderType": "customer",
+        "contentText": "I need to return the rain shell from order #7020 - the small is too tight across the shoulders. Send me the medium instead and we're square."
+      }
+    ],
+    "simulateToolResults": [
+      {
+        "tool": "search_shopify_products",
+        "result": "[{\"product_id\":\"7000007020\",\"title\":\"Trail Rain Shell\",\"variants\":[{\"variant_id\":\"710000007020\",\"title\":\"Small\",\"price\":\"140.00\",\"inventory_quantity\":6},{\"variant_id\":\"710000007021\",\"title\":\"Medium\",\"price\":\"140.00\",\"inventory_quantity\":9}]}]"
+      }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000007020",
+        "name": "#7020",
+        "created_at": "2026-07-05T11:40:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": "fulfilled",
+        "total_price": "140.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_7020",
+            "title": "Trail Rain Shell - Small",
+            "quantity": 1,
+            "variant_id": "710000007020",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Reply to the customer and handle their request.",
+  "expectedPlan": {
+    "mustCallTools": [
+      "create_exchange"
+    ],
+    "mustNotCallTools": [
+      "create_return",
+      "create_refund",
+      "cancel_order",
+      "edit_shopify_order"
+    ],
+    "mustCallToolsWithInput": [
+      {
+        "tool": "create_exchange",
+        "inputEquals": {
+          "order_id": "9000007020",
+          "variant_id": "710000007020"
+        }
+      }
+    ]
+  },
+  "suite": "core"
+}

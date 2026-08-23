@@ -128,6 +128,8 @@ The renderer decisions are closed: `classifyPerson` splits verified and unverifi
 
 ## Phase 6 — Tool registry consolidation
 
+**Status 2026-08-23: 6.2 and 6.3 complete; 6.1 deferred, and the reason is a correction to this document.**
+
 **Depends on:** internal audit Phases 1–3 complete.
 **Recommended slot:** immediately **before** internal audit 5.2, not after.
 
@@ -135,7 +137,15 @@ The renderer decisions are closed: `classifyPerson` splits verified and unverifi
 
 ### 6.1 — Consolidate order-read tools
 
-`get_shopify_orders`, `get_order_by_name`, `get_order_fulfillment_status`, `get_order_tracking`. Fulfillment status and tracking are fields on the order object; three round trips reconstruct one record against a 10-iteration cap. Separately, `buildContext` already prefetches recent orders when the customer is linked.
+**Deferred 2026-08-23.** This section's premise is wrong about one of its four tools, which is enough to change the shape of the work, so per rule 2 it is reported rather than adapted around.
+
+*"Fulfillment status and tracking are fields on the order object"* holds for two of the four and not for the others. `get_shopify_orders` and `get_order_by_name` genuinely are one endpoint — both call `orders.json` through the same `orderFields()` projection (`packages/agent/src/shopify/orders.ts`), differing only in query parameter, and those two do consolidate. `get_order_fulfillment_status` is the same endpoint under a deliberately narrower field allowlist plus an email-match guard: a security projection, which is why this section already says to keep it for guests. But `get_order_tracking` calls a **different** endpoint, `orders/{id}/fulfillments.json`, and then the **live USPS API** (`packages/agent/src/shopify/tracking.ts`). It is not a projection on the order record, and folding it in behind an `include` flag would turn a call the model visibly did not make into a field it silently omitted — a worse failure mode than the one being fixed.
+
+The second constraint is one this section half-anticipates in its point 3: `get_order_by_name` and `get_order_tracking` are the *entire* verified-storefront capability (`VERIFIED_ORDER_TOOL_NAMES` in `packages/agent/src/guest-policy.ts`), so neither can be retired. They would have to survive as storefront-only tools excluded from the support set the way `get_order_fulfillment_status` already is (`planner.ts`, via `isGuestOnlyTool`). That is buildable, but it buys support **one** fewer schema in exchange for a new exclusion mechanism plus the full guest/verified policy-matrix coverage this section demands — and `buildContext` already prefetches recent orders for a linked customer, so the round-trip saving is smaller than the "three round trips" framing implies.
+
+**Revisit when 5.2 shows whether order-read redundancy costs anything in practice.** If it does, build `get_order { by: 'name' | 'id' | 'customer', value, limit?, fields? }` over `orders.json` only, leave `get_order_tracking` as its own tool, and do not expose `by: 'customer'` to either storefront state.
+
+Original text follows, for the record: `get_shopify_orders`, `get_order_by_name`, `get_order_fulfillment_status`, `get_order_tracking`. Fulfillment status and tracking are fields on the order object; three round trips reconstruct one record against a 10-iteration cap. Separately, `buildContext` already prefetches recent orders when the customer is linked.
 
 **Do:** preserve three security states explicitly:
 
@@ -151,9 +161,13 @@ The prompt currently restates the `get_order_tracking` rule three times (interna
 
 ### 6.2 — Consolidate customer lookup
 
+**Complete 2026-08-23.** `find_customer { by: 'query' | 'id', value, limit? }` replaces `search_shopify_customers` and `get_shopify_customer`. Both old names keep their definitions at `availability: "retired"` so historical `AgentAction` rows still render, and both return a policy block if a cached plan names one — the `issue_discount` pattern, now covered by a single `RETIRED_TOOL_NAMES` list in `registry.test.ts` that proves every retirement non-executable. The two Shopify implementations are unchanged and became module-private; `findCustomer` dispatches to them. Neither tool was ever in the guest or verified sets, so there was no policy matrix to re-prove — only the forbidden-lists in `guest-policy.test.ts` and `verified-policy.test.ts` to extend.
+
 Merge `search_shopify_customers` and `get_shopify_customer` into `find_customer`, same discriminated-lookup shape, same retirement pattern.
 
 ### 6.3 — Disambiguate the mutation surface
+
+**Complete 2026-08-23.** Descriptions for `create_refund`, `cancel_order`, `create_return`, `create_exchange` and `edit_shopify_order` now open with the situation each one owns and name the tool that owns the adjacent case. Four hard-gated `core` fixtures were added, one per adjacent pair, each phrased in the *other* tool's vocabulary so the decision cannot be made on wording alone: `adjacent-refund-vs-return`, `adjacent-return-vs-exchange`, `adjacent-cancel-vs-refund`, `adjacent-edit-order-vs-cancel`. The release profile is 48 fixtures rather than 44; the budget preflight estimates $0.66/87 calls against the standing $0.75/120 ceiling. No policy metadata, cap, or executor logic changed.
 
 Refund / return / exchange / cancel / edit-order / gift-card overlap in outcome space. An exchange is a return plus an order.
 
@@ -361,7 +375,7 @@ Tools: `create_discount` (mandatory `endsAt`), `list_active_discounts`, `end_dis
 | 2 | Validate, don't repair | internal audit | 1 | **complete** — implementation and paid behavior gate passed |
 | 3 | One autonomy function | internal audit | 1 | **complete** — implementation and paid behavior gate passed |
 | 4 | Structured rendering | internal audit | — | **complete** — live delivery/review and feedback corrections passed |
-| 6 | Tool consolidation | this doc | 1–3 | **slot before 5.2** |
+| 6 | Tool consolidation | this doc | 1–3 | **6.2/6.3 complete 2026-08-23; 6.1 deferred** — premise wrong on tracking, revisit with 5.2 |
 | 5 | Cost & housekeeping | internal audit | 6 recommended | 5.1 before 5.2; 5.2 takes §1.1 |
 | 7 | Bounded replan | this doc | 2, 3 | required before 10 |
 | 8 | Preference memory | this doc | 4 | **unblocked** — Phase 4 complete; the moat; blocks 9.3 |

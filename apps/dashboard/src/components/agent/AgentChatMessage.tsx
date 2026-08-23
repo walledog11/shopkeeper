@@ -19,6 +19,7 @@ function getToolResultHint(tool: string, result: string): string | null {
   if (!countMatch) return null
   const n = countMatch[1]
   const hints: Record<string, (n: string) => string> = {
+    find_customer: (n) => `${n} customer${n === "1" ? "" : "s"}`,
     search_shopify_customers: (n) => `${n} customer${n === "1" ? "" : "s"}`,
     search_shopify_products: (n) => `${n} product${n === "1" ? "" : "s"}`,
     get_shopify_orders: (n) => `${n} order${n === "1" ? "" : "s"}`,

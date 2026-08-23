@@ -25,7 +25,7 @@
       "get_order_by_name"
     ],
     "mustNotCallTools": [
-      "search_shopify_customers",
+      "find_customer",
       "create_refund",
       "cancel_order",
       "send_email",

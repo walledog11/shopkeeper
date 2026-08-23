@@ -12,8 +12,7 @@ import type { OrgSettings } from "../types.js";
 import { resolveAgentSettings } from "../settings.js";
 import {
   searchShopifyProducts,
-  searchShopifyCustomers,
-  getShopifyCustomer,
+  findCustomer,
   updateShopifyCustomerInfo,
   getShopifyOrders,
   updateShopifyOrderAddress,
@@ -100,8 +99,7 @@ async function enforceToolPolicy(
 
 const TOOL_EXECUTION_DEPS: ToolExecutionDeps = {
   searchShopifyProducts,
-  searchShopifyCustomers,
-  getShopifyCustomer,
+  findCustomer,
   updateShopifyCustomerInfo,
   getShopifyOrders,
   updateShopifyOrderAddress,

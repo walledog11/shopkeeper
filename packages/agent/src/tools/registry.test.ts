@@ -19,6 +19,7 @@ import {
 const VALID_TOOL_INPUTS: Record<ToolName, unknown> = {
   search_kb: { query: "returns policy" },
   search_shopify_products: { query: "pencil half zip", limit: 3 },
+  find_customer: { by: "query", value: "jane@example.com", limit: 2 },
   search_shopify_customers: { query: "jane@example.com", limit: 2 },
   get_shopify_customer: { customer_id: "1001" },
   update_shopify_customer_info: { customer_id: "1001", email: "jane@example.com" },
@@ -69,8 +70,7 @@ const VALID_TOOL_INPUTS: Record<ToolName, unknown> = {
 
 const SHOPIFY_TOOL_ROUTES = [
   ["search_shopify_products", "searchShopifyProducts"],
-  ["search_shopify_customers", "searchShopifyCustomers"],
-  ["get_shopify_customer", "getShopifyCustomer"],
+  ["find_customer", "findCustomer"],
   ["update_shopify_customer_info", "updateShopifyCustomerInfo"],
   ["get_shopify_orders", "getShopifyOrders"],
   ["update_shopify_order_address", "updateShopifyOrderAddress"],
@@ -88,6 +88,16 @@ const SHOPIFY_TOOL_ROUTES = [
   ["attach_return_label", "attachReturnLabel"],
   ["fulfill_order", "fulfillOrder"],
 ] as const satisfies readonly (readonly [ToolName, keyof ToolExecutionDeps])[];
+
+// Kept resolvable so historical AgentAction rows still render, and proved
+// non-executable below. A name lands here when its capability moves to another
+// tool, never when it simply stops being used.
+const RETIRED_TOOL_NAMES = [
+  "issue_discount",
+  "issue_store_credit",
+  "search_shopify_customers",
+  "get_shopify_customer",
+] as const satisfies readonly ToolName[];
 
 const THREAD_TOOL_ROUTES = [
   ["add_internal_note", "addInternalNote"],
@@ -142,8 +152,7 @@ function makeSupportCtx(): BaseAgentContext {
 function makeDeps(): ToolExecutionDeps {
   return {
     searchShopifyProducts: vi.fn().mockResolvedValue(toolOk("searchShopifyProducts")),
-    searchShopifyCustomers: vi.fn().mockResolvedValue(toolOk("searchShopifyCustomers")),
-    getShopifyCustomer: vi.fn().mockResolvedValue(toolOk("getShopifyCustomer")),
+    findCustomer: vi.fn().mockResolvedValue(toolOk("findCustomer")),
     updateShopifyCustomerInfo: vi.fn().mockResolvedValue(toolOk("updateShopifyCustomerInfo")),
     getShopifyOrders: vi.fn().mockResolvedValue(toolOk("getShopifyOrders")),
     updateShopifyOrderAddress: vi.fn().mockResolvedValue(toolOk("updateShopifyOrderAddress")),
@@ -292,8 +301,7 @@ describe("agent tool execution routing", () => {
       ...THREAD_TOOL_ROUTES.map(([name]) => name),
       "escalate_to_human",
       "ask_operator",
-      "issue_discount",
-      "issue_store_credit",
+      ...RETIRED_TOOL_NAMES,
     ];
 
     expect([...new Set(routedNames)].sort()).toEqual(
@@ -313,7 +321,7 @@ describe("agent tool execution routing", () => {
     expect(deps[depName]).toHaveBeenCalledTimes(1);
   });
 
-  it.each(["issue_discount", "issue_store_credit"] as const)(
+  it.each(RETIRED_TOOL_NAMES)(
     "never routes retired tool %s to a provider dependency",
     async (name) => {
       const ctx = makeCtx();
@@ -328,8 +336,9 @@ describe("agent tool execution routing", () => {
 
       expect(definition.availability).toBe("retired");
       expect(result.status).toBe("policy_block");
-      expect(deps.issueDiscount).not.toHaveBeenCalled();
-      expect(deps.issueStoreCredit).not.toHaveBeenCalled();
+      for (const dep of Object.values(deps)) {
+        if (vi.isMockFunction(dep)) expect(dep).not.toHaveBeenCalled();
+      }
     },
   );
 

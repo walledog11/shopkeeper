@@ -207,7 +207,7 @@ jobs:
       - run: npm ci
       - run: npm run test:services:up
       - run: node ./scripts/test-bootstrap.mjs
-      - name: Run 44 hard core fixtures; confirm only a stochastic failure
+      - name: Run 48 hard core fixtures; confirm only a stochastic failure
         run: |
           set -o pipefail
           npm run test:evals:fixture -w apps/dashboard 2>&1 | tee eval-output.log

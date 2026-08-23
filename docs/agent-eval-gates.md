@@ -6,7 +6,7 @@ paid run.
 
 | Mode | Purpose | Dashboard fixtures | Repeats | Semantic judges | Release blocking |
 | --- | --- | ---: | ---: | --- | --- |
-| `release` | Certify a release candidate | 44 core, hard-gated | 1 | Only objective `gate: true` checks | Yes |
+| `release` | Certify a release candidate | 48 core, hard-gated | 1 | Only objective `gate: true` checks | Yes |
 | `targeted` | Diagnose named fixtures | Selected IDs | 1–3 | Caller choice | Selected hard fixtures only |
 | `drift` | Measure the complete model surface | All 84 | 3 | All rubric checks | Hard drift only; advisory is reported |
 | `baseline` | Replace comparable three-repeat evidence | All 84 | 3 | All rubric checks | Capture must complete |

@@ -13,6 +13,7 @@ import type {
 
 const CATEGORY_PREFIXES = [
   "address-change",
+  "adjacent",
   "brand-voice",
   "cancel",
   "escalate",

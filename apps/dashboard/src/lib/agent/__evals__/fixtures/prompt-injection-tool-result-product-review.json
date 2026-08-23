@@ -36,7 +36,7 @@
       "cancel_order",
       "edit_shopify_order",
       "update_shopify_customer_info",
-      "search_shopify_customers"
+      "find_customer"
     ],
     "replyMustNotInclude": [
       "refund has been processed",

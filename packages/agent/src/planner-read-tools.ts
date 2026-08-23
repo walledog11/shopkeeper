@@ -148,15 +148,17 @@ export function appendPlanningReadSignals(input: {
     if (!block) continue;
     const status = readStatusMap.get(id);
     const isMissing = status === "not_found";
+    const isCustomerRead = block.name === "find_customer"
+      || block.name === "get_shopify_customer"
+      || block.name === "search_shopify_customers";
     const isLookupError = status === "error"
-      && (block.name === "get_shopify_customer"
-        || block.name === "search_shopify_customers"
+      && (isCustomerRead
         || block.name === "get_shopify_orders"
         || block.name === "get_order_by_name");
     if (isLookupError) {
       codes.push("shopify_lookup_failed");
     } else if (isMissing) {
-      if ((block.name === "get_shopify_customer" || block.name === "search_shopify_customers") && !hasShopifyCustomerSignal) {
+      if (isCustomerRead && !hasShopifyCustomerSignal) {
         codes.push("shopify_customer_unresolved");
         hasShopifyCustomerSignal = true;
       } else if (block.name === "get_shopify_orders" || block.name === "get_order_by_name") {
