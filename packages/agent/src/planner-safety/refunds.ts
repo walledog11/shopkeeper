@@ -79,24 +79,9 @@ export function shouldBlockCreateRefundForAlreadyRefundedOrder(
   })
 }
 
-export function stripCreateRefundForAlreadyRefundedOrders(
-  ctx: AgentContext,
-  instruction: string,
-  rawToolCalls: RawToolCall[],
-): RawToolCall[] {
-  if (!shouldBlockCreateRefundForAlreadyRefundedOrder(ctx, instruction, rawToolCalls)) {
-    return rawToolCalls
-  }
-  return rawToolCalls.filter(toolCall => toolCall.name !== "create_refund")
-}
-
 export function sendReplyHasText(toolCall: RawToolCall): boolean {
   const input = toolCall.input
   if (!input || typeof input !== "object") return false
   const text = (input as Record<string, unknown>).text
   return typeof text === "string" && text.trim().length > 0
-}
-
-export function stripEmptySendReplyToolCalls(rawToolCalls: RawToolCall[]): RawToolCall[] {
-  return rawToolCalls.filter(toolCall => toolCall.name !== "send_reply" || sendReplyHasText(toolCall))
 }

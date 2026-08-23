@@ -3,6 +3,7 @@ import { installAgentLogger, resetAgentLoggerForTests, type AgentLogger } from "
 import { planAgent } from "./planner.js";
 import type { AgentContext } from "./agent-context.js";
 import { AGENT_SETTINGS_DEFAULTS } from "./settings.js";
+import { emptyIntents, emptyRequestFacts, type ClassifierIntents } from "./classifier-signals.js";
 
 const {
   mockCreate,
@@ -75,6 +76,15 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
       updateThreadTag: vi.fn(),
     },
     ...overrides,
+  };
+}
+
+function classifierSignalsFor(intents: Partial<ClassifierIntents>) {
+  return {
+    version: 2,
+    language: "en",
+    intents: { ...emptyIntents(), ...intents },
+    requestFacts: emptyRequestFacts(),
   };
 }
 
@@ -331,17 +341,19 @@ describe("planAgent routing", () => {
       makeCtx({
         recentMessages: [{ senderType: "customer", contentText: "Please refund me for order #4003." }],
         recentOrders: [FULFILLED_ORDER_4003],
+        classifierSignals: classifierSignalsFor({ mutative_request: true }),
       }),
       "Reply to the customer and process their refund request.",
-      AGENT_SETTINGS_DEFAULTS,
+      { ...AGENT_SETTINGS_DEFAULTS, autonomyTier: "trusted", autoExecuteMode: "live" },
     );
 
     expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual(["create_refund", "send_reply"]);
-    expect(plan.routing?.decision).toBe("auto_execute");
+    expect(plan.routing).toBeUndefined();
+    expect(plan.routingEvidence?.classifierState).toBe("aligned");
     expect(completeLogPayload(injectedLogger)).toMatchObject({ routingDecision: "auto_execute" });
   });
 
-  it("routes a mutative request with no action to needs_review", async () => {
+  it("escalates a compensation request with no safe action", async () => {
     installAgentLogger(makeLogger());
     mockCreate.mockResolvedValueOnce(singleToolUse("send_reply", { text: "Your refund is on the way." }, "tu_reply"));
 
@@ -349,13 +361,14 @@ describe("planAgent routing", () => {
       makeCtx({
         recentMessages: [{ senderType: "customer", contentText: "Please refund me for order #4003." }],
         recentOrders: [FULFILLED_ORDER_4003],
+        classifierSignals: classifierSignalsFor({ mutative_request: true }),
       }),
       "Reply to the customer and process their refund request.",
       AGENT_SETTINGS_DEFAULTS,
     );
 
-    expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual(["send_reply"]);
-    expect(plan.routing?.decision).toBe("needs_review");
+    expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual(["escalate_to_human"]);
+    expect(plan.routing).toBeUndefined();
     expect(plan.signals?.map((signal) => signal.code)).toContain("mutative_intent_no_action");
   });
 
@@ -366,13 +379,39 @@ describe("planAgent routing", () => {
     const plan = await planAgent(
       makeCtx({
         recentMessages: [{ senderType: "customer", contentText: "Can you give me wholesale pricing on 10,000 units?" }],
+        classifierSignals: classifierSignalsFor({ out_of_scope_commercial: true }),
       }),
       "Handle this ticket.",
       AGENT_SETTINGS_DEFAULTS,
     );
 
-    expect(plan.routing?.decision).toBe("escalate");
+    expect(plan.routing).toBeUndefined();
+    expect(plan.routingEvidence?.codes).toContain("out_of_scope_commercial_request");
     expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual(["escalate_to_human"]);
+  });
+
+  it("preserves an invalid proposal and does not let routing hide it", async () => {
+    installAgentLogger(makeLogger());
+    const reply = "I've issued the wholesale refund.";
+    mockCreate.mockResolvedValueOnce(singleToolUse("send_reply", { text: reply }, "tu_reply"));
+
+    const plan = await planAgent(
+      makeCtx({
+        recentMessages: [{ senderType: "customer", contentText: "Can you give me wholesale pricing and refund me?" }],
+      }),
+      "Handle this ticket.",
+      AGENT_SETTINGS_DEFAULTS,
+    );
+
+    expect(plan.validation).toEqual({
+      status: "invalid",
+      issues: [expect.objectContaining({ code: "ungrounded_customer_reply" })],
+    });
+    expect(plan.rawToolCalls).toEqual([
+      { id: "tu_reply", name: "send_reply", input: { text: reply } },
+    ]);
+    expect(plan.routing).toBeUndefined();
+    expect(plan.signals?.map((signal) => signal.code)).toContain("ungrounded_customer_reply");
   });
 });
 

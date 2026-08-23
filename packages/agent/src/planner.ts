@@ -12,12 +12,10 @@ import {
   appendInitialPlanningSignals,
   appendPlanningReadSignals,
 } from "./planner-read-tools.js";
-import { stripInternalNotesWithoutActions } from "./planner-safety/internal-notes.js";
-import { applyEscalationRouting, groundEscalationReasons, groundReplyText, logRoutingShadow, routePlan } from "./planner-routing.js";
-import {
-  stripCreateRefundForAlreadyRefundedOrders,
-  stripEmptySendReplyToolCalls,
-} from "./planner-safety/index.js";
+import { applyEscalationRouting } from "./escalation-materialization.js";
+import { buildPlanRoutingEvidence } from "./planner-evidence.js";
+import { decideAutonomy } from "./autonomy.js";
+import { validatePlan } from "./plan-validation.js";
 import { buildPlanSignals } from "./plan-signals.js";
 import { buildPlanSteps } from "./planner-steps.js";
 import { buildSystemPromptParts } from "./prompt.js";
@@ -25,7 +23,7 @@ import { DEFAULT_MAX_ITERATIONS } from "./run-policy.js";
 import { resolveAgentSettings } from "./settings.js";
 import { enforceSpendCap } from "./spend.js";
 import { selectAgentTools } from "./tools/registry/index.js";
-import type { AgentPlan, OrgSettings, ProducedPlanSignalCode } from "./types.js";
+import type { AgentPlan, OrgSettings, PlanRoutingEvidence, ProducedPlanSignalCode } from "./types.js";
 import { createModelUsageMetrics, hashInstructionForLog } from "./usage.js";
 import {
   CONTEXT_BUDGETS,
@@ -132,11 +130,11 @@ export async function planAgent(
     loop = await runLoop(pickModel("agent_run"));
   }
 
-  // Structural cleanup that survives Phase 3 (order-state checks, not prose):
-  // drop refunds for already-refunded orders and empty send_reply calls.
-  let rawToolCalls = stripCreateRefundForAlreadyRefundedOrders(ctx, instruction, loop.rawToolCalls);
-  rawToolCalls = stripEmptySendReplyToolCalls(rawToolCalls);
-  rawToolCalls = stripInternalNotesWithoutActions(rawToolCalls);
+  // Validate the model's captured proposal exactly as authored. An invalid plan
+  // stays intact so the merchant can see what failed and routing cannot hide the
+  // error by rewriting it into a different, executable plan.
+  const validation = validatePlan({ ctx, instruction, rawToolCalls: loop.rawToolCalls });
+  let rawToolCalls = [...loop.rawToolCalls];
 
   const signalCodes: ProducedPlanSignalCode[] = [];
   appendInitialPlanningSignals({ ctx, operatorMode, codes: signalCodes });
@@ -148,12 +146,15 @@ export async function planAgent(
     recentOrders: ctx.recentOrders,
   });
 
-  // Phase 3 routing: classify the plan and act on the disposition — materialize a
-  // deterministic escalation, record signals, stamp the decision the dashboard
-  // consumes. Support-path only (operator plans skip it).
-  let routing: AgentPlan["routing"];
-  if (!operatorMode) {
-    const outcome = routePlan({
+  // Persist facts, not a derived disposition. The pure autonomy decision is
+  // recomputed wherever the plan is surfaced or executed.
+  let routingEvidence: PlanRoutingEvidence = {
+    classifierState: "not_applicable",
+    codes: [],
+  };
+  let routingDecision: ReturnType<typeof decideAutonomy>["kind"] | null = null;
+  if (!operatorMode && validation.status === "valid") {
+    const built = buildPlanRoutingEvidence({
       ctx,
       instruction,
       rawToolCalls,
@@ -162,40 +163,37 @@ export async function planAgent(
       readResultsMap: loop.readResults,
       settings: resolvedSettings,
     });
-    if (outcome.decision === "escalate") {
+    routingEvidence = built.evidence;
+    signalCodes.push(...built.signalCodes);
+    const originalSteps = buildPlanSteps(rawToolCalls);
+    const originalSignals = buildPlanSignals(signalCodes, rawToolCalls);
+    const verdict = decideAutonomy({
+      instruction,
+      steps: originalSteps,
+      rawToolCalls,
+      signals: originalSignals,
+      validation,
+      routingEvidence,
+    }, resolvedSettings);
+    routingDecision = verdict.kind;
+    if (verdict.kind === "escalate" && routingEvidence.escalationReason) {
       rawToolCalls = applyEscalationRouting(
         rawToolCalls,
-        outcome.escalationReason ?? "Needs human review.",
+        verdict.escalationReason ?? "Needs human review.",
         { keepReply: isStorefrontContext(ctx) },
       );
     }
-    signalCodes.push(...outcome.signalCodes);
-    routing = {
-      decision: outcome.decision,
-      signals: outcome.signals,
-      question: outcome.question ?? null,
-    };
   }
-
-  // After routing, so it covers both the model-elected escalation and a plan the
-  // router left alone that still carries one.
-  rawToolCalls = groundEscalationReasons(rawToolCalls, {
-    orgId: ctx.orgId,
-    threadId: ctx.thread.id,
-  });
-
-  // Same invariant, applied to the field the customer reads rather than the one
-  // the merchant reads. Runs after the escalation routing above, so it also
-  // covers the reply `keepReply` preserves alongside a materialized handoff.
-  rawToolCalls = groundReplyText(rawToolCalls, {
-    orgId: ctx.orgId,
-    threadId: ctx.thread.id,
-  });
 
   const steps = buildPlanSteps(rawToolCalls);
   // Severity is resolved here, against the finished tool calls: a plan the router
   // rewrote is the plan the merchant sees, and the one signals must describe.
+  signalCodes.push(...validation.issues.map((issue) => issue.code));
   const signals = buildPlanSignals(signalCodes, rawToolCalls);
+  const validationIssueCounts = validation.issues.reduce<Record<string, number>>((counts, issue) => {
+    counts[issue.code] = (counts[issue.code] ?? 0) + 1;
+    return counts;
+  }, {});
   logger.info({
     orgId: ctx.orgId,
     threadId: ctx.thread.id,
@@ -204,8 +202,9 @@ export async function planAgent(
     iterations: loop.iterations,
     reprompted: loop.reprompted,
     loopStop: loop.stop,
-    routingDecision: routing?.decision ?? null,
-    routingSignals: routing?.signals ?? null,
+    routingDecision,
+    routingEvidenceCodes: routingEvidence.codes,
+    classifierState: routingEvidence.classifierState,
     modelCalls: usageTotals.modelCalls,
     usageTotals,
     // Rollout observability: group by plannerTierReason to see which intents are
@@ -219,22 +218,11 @@ export async function planAgent(
     visibleSteps: steps.map(step => step.tool),
     signalCount: signals.length,
     signalCodes: signals.map(signal => signal.code),
+    validationStatus: validation.status,
+    validationIssueCodes: validation.issues.map(issue => issue.code),
+    validationIssueCounts,
     instructionHash,
   }, "[agent:plan] complete");
-
-  // Phase 2 shadow: compare classifier routing to the live regex guards on the
-  // finalized plan. Observability only — must never break planning.
-  if (!operatorMode) {
-    try {
-      logRoutingShadow({ ctx, instruction, rawToolCalls, instructionHash });
-    } catch (error) {
-      logger.warn({
-        orgId: ctx.orgId,
-        threadId: ctx.thread.id,
-        err: error,
-      }, "[agent:plan:shadow] failed");
-    }
-  }
 
   const readResults = loop.readResults.size > 0
     ? Object.fromEntries(loop.readResults)
@@ -245,9 +233,10 @@ export async function planAgent(
     rawToolCalls,
     readResults,
     signals: signals.length > 0 ? signals : undefined,
+    validation,
     // Phase 1: derived from `signals` so plans cached by an earlier release stay
     // readable. Drops out with the last consumer of `AgentPlan.warnings`.
     warnings: signals.length > 0 ? signals.map(signal => signal.message) : undefined,
-    routing,
+    routingEvidence,
   };
 }

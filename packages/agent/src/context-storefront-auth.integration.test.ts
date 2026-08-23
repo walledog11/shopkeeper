@@ -10,7 +10,7 @@ import {
   createTestThread,
 } from "@shopkeeper/db/test-helpers";
 import { buildContext, type ThreadSink } from "./context.js";
-import { classifyHomePlan } from "./plan-preview.js";
+import { decideAutonomy } from "./autonomy.js";
 import { planAgent } from "./planner.js";
 import { hashVerificationCode } from "./storefront-verification.js";
 
@@ -267,7 +267,7 @@ describe("recent-orders prefetch safety", () => {
       const plan = await planAgent(ctx, "Handle this customer's latest request");
 
       expect(fetchSpy).toHaveBeenCalled();
-      expect(classifyHomePlan(plan).kind).toBe("needs_review");
+      expect(decideAutonomy(plan).kind).toBe("needs_review");
     } finally {
       fetchSpy.mockRestore();
     }

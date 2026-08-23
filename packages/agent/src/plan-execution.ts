@@ -6,7 +6,7 @@ import { getLatestConversationMessage, requireOrgThread } from "./thread-auth.js
 import { isAgentPlanCacheHit, readAgentPlanCache } from "./plan-cache.js";
 import { getPendingCustomerMessageId } from "./plan-cache-shape.js";
 import { hashInstruction, hashPlan, type AgentActionApproval } from "./agent-actions.js";
-import { classifyHomePlan, type HomePlanClassification, type HomePlanKind } from "./plan-preview.js";
+import { decideAutonomy, type AutonomyVerdict } from "./autonomy.js";
 import { shouldBlockTrustedSendActions, shouldSkipAutoPlan } from "./sender-trust.js";
 import { resolveAutoExecuteMode } from "./settings.js";
 import { TOOL_CATEGORIES } from "./tools/registry/index.js";
@@ -20,6 +20,7 @@ import {
   type PlanExecutionIdentity,
 } from "./execution-ledger.js";
 import logger from "./logger.js";
+import { isInvalidPlan } from "./plan-validation.js";
 
 // Host-injected shadow recorder (Track 4.1). The dashboard wires this to the
 // real AutonomyShadowDecision rig; the gateway worker supplies a no-op (the rig
@@ -48,7 +49,7 @@ interface CurrentCachedPlan {
   lastCustomerMessageId: string | null;
   planId: string | null;
   plan: AgentPlan | null;
-  classification: HomePlanClassification;
+  verdict: AutonomyVerdict;
 }
 
 interface ExecutedCachedPlan extends CurrentCachedPlan {
@@ -69,6 +70,7 @@ export interface ExpectedPlanIdentity {
 }
 
 export type PlanExecutionLedgerMode = "off" | "shadow" | "enforce";
+export type ExecutionIntent = "automatic" | "merchant_approved";
 
 export function resolvePlanExecutionLedgerMode(
   value: string | undefined = process.env.PLAN_EXECUTION_LEDGER_MODE,
@@ -89,18 +91,6 @@ export function getExecutablePlanToolCalls(plan: AgentPlan): RawToolCall[] {
   });
 }
 
-function toolCallsForClassification(
-  plan: AgentPlan,
-  classification: HomePlanClassification,
-): RawToolCall[] {
-  if (classification.kind === "quick_reply") {
-    return classification.sendReplyToolCall ? [classification.sendReplyToolCall] : [];
-  }
-  // auto_execute (system) and needs_review (human one-tap approve) both run the
-  // full executable plan; runtime policy in the executor remains the backstop.
-  return getExecutablePlanToolCalls(plan);
-}
-
 function validateApprovedToolCalls(plan: AgentPlan, approvedToolCalls: RawToolCall[]): void {
   const approvedIds = new Set(approvedToolCalls.map((toolCall) => toolCall.id));
   if (approvedIds.size !== approvedToolCalls.length) {
@@ -117,6 +107,30 @@ function validateApprovedToolCalls(plan: AgentPlan, approvedToolCalls: RawToolCa
   });
   if (!allMatch) {
     throw new BadRequestError("Approved tool calls must come from the current reviewed plan");
+  }
+}
+
+/** @internal Pure guard exported for deterministic boundary tests. */
+export function validateCustomerFacingApprovalSet(
+  verdict: AutonomyVerdict,
+  approvedToolCalls: RawToolCall[],
+): void {
+  const approvedExecutable = approvedToolCalls.filter((call) => {
+    const category = TOOL_CATEGORIES[call.name];
+    return Boolean(category && EXECUTABLE_CATEGORIES.has(category));
+  });
+  const includesCustomerSend = approvedExecutable.some(
+    (call) => call.name === "send_reply" || call.name === "send_email",
+  );
+  if (!includesCustomerSend || !("toolCalls" in verdict)) return;
+
+  const plannedIds = new Set(verdict.toolCalls.map((call) => call.id));
+  const unchanged = approvedExecutable.length === verdict.toolCalls.length
+    && approvedExecutable.every((call) => plannedIds.has(call.id));
+  if (!unchanged) {
+    throw new BadRequestError(
+      "Changing action steps requires a revised customer reply and a newly reviewed plan",
+    );
   }
 }
 
@@ -149,6 +163,7 @@ async function loadCurrentCachedHomePlan(params: {
   orgId: string;
   threadId: string;
   settings: OrgSettings;
+  allowMutativeAutoExecute?: boolean;
 }): Promise<CurrentCachedPlan> {
   const thread = await requireOrgThread(params.threadId, params.orgId);
   const cachedPlan = readAgentPlanCache(thread.cachedPlan);
@@ -169,13 +184,26 @@ async function loadCurrentCachedHomePlan(params: {
     ? cachedPlan.plan
     : null;
 
+  const autonomyContext = {
+    filterStatus: thread.filterStatus,
+    threadEscalated: Boolean(thread.escalatedAt),
+    allowMutativeAutoExecute: params.allowMutativeAutoExecute,
+  };
+  const verdict = plan
+    ? decideAutonomy(plan, params.settings, autonomyContext)
+    : decideAutonomy({
+        instruction: "",
+        steps: [],
+        rawToolCalls: [],
+        routingEvidence: { classifierState: "not_applicable", codes: [] },
+      }, params.settings, autonomyContext);
   return {
     channel: thread.channelType,
     instruction,
     lastCustomerMessageId: cachedPlan?.lastCustomerMessageId ?? null,
     planId: cachedPlan?.planId ?? null,
     plan,
-    classification: classifyHomePlan(plan, params.settings, { filterStatus: thread.filterStatus }),
+    verdict,
   };
 }
 
@@ -213,17 +241,56 @@ export async function clearThreadPlanCache(params: {
   });
 }
 
+/** Clears only the exact cached plan the caller reviewed, never a newer replacement. */
+export async function dismissCurrentCachedPlan(params: {
+  orgId: string;
+  threadId: string;
+  expectedPlanId: string;
+}): Promise<boolean> {
+  return db.$transaction(async (tx) => {
+    const locked = await tx.$queryRaw<Array<{ cachedPlan: unknown }>>(Prisma.sql`
+      SELECT "cached_plan" AS "cachedPlan"
+      FROM "threads"
+      WHERE "id" = ${params.threadId}::uuid
+        AND "organization_id" = ${params.orgId}::uuid
+      FOR UPDATE
+    `);
+    const cached = locked[0]?.cachedPlan;
+    if (!cached || typeof cached !== "object" || Array.isArray(cached)) return false;
+    const planId = (cached as { planId?: unknown }).planId;
+    if (planId !== params.expectedPlanId) return false;
+
+    const execution = await tx.planExecution.findUnique({
+      where: {
+        organizationId_planId: {
+          organizationId: params.orgId,
+          planId: params.expectedPlanId,
+        },
+      },
+      select: { status: true },
+    });
+    if (execution && execution.status !== "pending" && execution.status !== "failed") {
+      throw new ConflictError("This plan has already been approved or is currently running.");
+    }
+
+    const cleared = await tx.thread.updateMany({
+      where: { id: params.threadId, organizationId: params.orgId },
+      data: { cachedPlan: Prisma.DbNull, cachedPlanMessageId: null },
+    });
+    return cleared.count === 1;
+  });
+}
+
 export async function executeCurrentCachedHomePlan(params: {
   orgId: string;
   threadId: string;
   settings: OrgSettings;
-  allowedKinds: HomePlanKind[];
+  executionIntent: ExecutionIntent;
   failureRoute: string;
   approver?: ApproverIdentity;
   approvedToolCalls?: RawToolCall[];
   expectedIdentity?: ExpectedPlanIdentity;
-  /** Set only by the autonomous executor, never by an approval route. */
-  automatic?: boolean;
+  allowMutativeAutoExecute?: boolean;
 }, deps: PlanExecutionDeps): Promise<ExecutedCachedPlan> {
   const thread = await requireOrgThread(params.threadId, params.orgId);
   if (shouldBlockTrustedSendActions(thread.filterStatus)) {
@@ -232,20 +299,42 @@ export async function executeCurrentCachedHomePlan(params: {
 
   const current = await loadCurrentCachedHomePlan(params);
 
-  if (!current.plan || !params.allowedKinds.includes(current.classification.kind)) {
+  if (current.plan && isInvalidPlan(current.plan)) {
+    throw new BadRequestError(
+      "This draft is invalid and cannot be approved. Regenerate, revise, dismiss, or take over.",
+    );
+  }
+
+  if (!current.plan) {
     throw new BadRequestError("Only current approved plans can be executed from this route");
+  }
+
+  const verdict = current.verdict;
+  const automaticAllowed = verdict.kind === "quick_reply" || verdict.kind === "auto_execute";
+  const merchantAllowed = automaticAllowed
+    || verdict.kind === "escalate"
+    || (verdict.kind === "needs_review" && verdict.approvalAllowed);
+  if (
+    (params.executionIntent === "automatic" && !automaticAllowed)
+    || (params.executionIntent === "merchant_approved" && !merchantAllowed)
+  ) {
+    throw new BadRequestError("This plan is not executable for the requested approval path");
   }
 
   validateExpectedIdentity({ ...current, plan: current.plan }, params.expectedIdentity);
 
   const approvedToolCalls = params.approvedToolCalls
-    ?? toolCallsForClassification(current.plan, current.classification);
+    ?? ("toolCalls" in verdict ? verdict.toolCalls : []);
   validateApprovedToolCalls(current.plan, approvedToolCalls);
-  if (approvedToolCalls.length === 0) {
+  validateCustomerFacingApprovalSet(verdict, approvedToolCalls);
+  if (!approvedToolCalls.some((call) => {
+    const category = TOOL_CATEGORIES[call.name];
+    return Boolean(category && EXECUTABLE_CATEGORIES.has(category));
+  })) {
     throw new BadRequestError("The current plan has no executable tool calls");
   }
 
-  const auditMode = params.automatic === true
+  const auditMode = params.executionIntent === "automatic"
     ? "auto_executed"
     : "human_approved";
   const approval: AgentActionApproval | undefined = auditMode === "human_approved" && params.approver
@@ -390,15 +479,14 @@ export async function maybeAutoExecuteCurrentCachedHomePlan(params: {
   // without consuming merchant attention. The mutative rollout switch below is
   // deliberately irrelevant here; turning on clarifying questions must not turn
   // on refunds or order changes.
-  if (current.classification.kind === "quick_reply") {
+  if (current.verdict.kind === "quick_reply") {
     return executeCurrentCachedHomePlan({
       ...params,
-      allowedKinds: ["quick_reply"],
-      automatic: true,
+      executionIntent: "automatic",
     }, deps);
   }
 
-  if (current.classification.kind !== "auto_execute" || params.allowMutativeAutoExecute === false) {
+  if (current.verdict.kind !== "auto_execute" || params.allowMutativeAutoExecute === false) {
     return null;
   }
 
@@ -420,8 +508,7 @@ export async function maybeAutoExecuteCurrentCachedHomePlan(params: {
 
   return executeCurrentCachedHomePlan({
     ...params,
-    allowedKinds: ["auto_execute"],
-    automatic: true,
+    executionIntent: "automatic",
   }, deps);
 }
 

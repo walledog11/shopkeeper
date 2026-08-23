@@ -396,6 +396,8 @@ export async function buildContext(
         ? truncateContextText(thread.aiSummary, CONTEXT_BUDGETS.priorSummaryChars)
         : thread.aiSummary,
       shopifyCustomerId,
+      requestSourceMessageId: thread.requestSourceMessageId,
+      latestCustomerMessageId: thread.messages.find((message) => message.senderType === "customer")?.id ?? null,
     },
     customer: {
       id: thread.customer.id,

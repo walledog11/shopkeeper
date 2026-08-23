@@ -24,6 +24,18 @@ export const PLAN_SIGNAL_MESSAGES: Record<ProducedPlanSignalCode, string> = {
     "Customer requested a refund/cancel but no action was planned — review before sending.",
   circular_channel_deflection:
     "Draft reply deflected the customer to a channel the agent already manages — review before sending.",
+  invalid_tool_input:
+    "The draft contains a step with invalid or incomplete inputs and cannot be approved as written.",
+  duplicate_tool_call_id:
+    "The draft reused a step identifier and cannot be approved safely.",
+  already_refunded_action:
+    "The draft attempted to refund an order that is already fully refunded.",
+  orphan_internal_note:
+    "The draft included an internal note without a corresponding store action.",
+  ungrounded_escalation_reason:
+    "The escalation reason claims work that this draft does not perform.",
+  ungrounded_customer_reply:
+    "The customer reply claims work that this draft does not perform.",
 }
 
 // Reads that make an unlinked Shopify customer consequential: the plan leaned on

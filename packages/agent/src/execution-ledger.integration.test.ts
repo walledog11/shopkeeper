@@ -112,7 +112,7 @@ describe("plan execution ledger", () => {
     }, deps);
 
     expect(sends).toBe(1);
-    expect(executed?.classification.kind).toBe("quick_reply");
+    expect(executed?.verdict.kind).toBe("quick_reply");
     const execution = await db.planExecution.findUniqueOrThrow({
       where: { organizationId_planId: { organizationId: org.id, planId: cache.planId! } },
     });
@@ -367,7 +367,7 @@ describe("plan execution ledger", () => {
       orgId: org.id,
       threadId: thread.id,
       settings,
-      allowedKinds: ["quick_reply", "needs_review"],
+      executionIntent: "merchant_approved",
       failureRoute: "test",
     }, deps);
 
@@ -375,7 +375,7 @@ describe("plan execution ledger", () => {
       orgId: org.id,
       threadId: thread.id,
       settings,
-      allowedKinds: ["quick_reply", "needs_review"],
+      executionIntent: "merchant_approved",
       failureRoute: "test",
       approvedToolCalls: [plan.rawToolCalls[0]!, plan.rawToolCalls[0]!],
     }, deps)).rejects.toBeInstanceOf(BadRequestError);

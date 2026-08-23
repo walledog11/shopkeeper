@@ -12,6 +12,7 @@ import { BadRequestError, ConflictError } from "./errors.js";
 import { buildAgentPlanCacheRecord, commitThreadPlanCacheIfCurrent } from "./plan-cache.js";
 import {
   executeCurrentCachedHomePlan,
+  dismissCurrentCachedPlan,
   findFailedToolResult,
   formatApproverId,
   getExecutablePlanToolCalls,
@@ -21,6 +22,8 @@ import {
   type PlanExecutionDeps,
 } from "./plan-execution.js";
 import { resolveAgentSettings } from "./settings.js";
+import { hashInstruction, hashPlan } from "./agent-actions.js";
+import { claimCurrentPlanExecution } from "./execution-ledger.js";
 import type { AgentContext, AgentResult } from "./agent-context.js";
 import type { AgentPlan, OrgSettings, RawToolCall } from "./types.js";
 
@@ -80,6 +83,26 @@ function mutativePlan(): AgentPlan {
       },
     ],
     rawToolCalls: [noteCall, sendReplyCall],
+  };
+}
+
+function escalationPlan(): AgentPlan {
+  const escalation: RawToolCall = {
+    id: "escalate_1",
+    name: "escalate_to_human",
+    input: { reason: "Needs merchant review." },
+  };
+  return {
+    instruction: "Escalate this request",
+    steps: [{
+      id: escalation.id,
+      tool: escalation.name,
+      label: "Escalate",
+      description: "Needs merchant review.",
+      category: "internal",
+      enabled: true,
+    }],
+    rawToolCalls: [escalation],
   };
 }
 
@@ -165,10 +188,51 @@ async function seedThreadWithPlan(options: {
   });
   expect(committed).toBe(true);
 
-  return { org, thread, message, plan, settings };
+  return { org, thread, message, plan, settings, cache };
 }
 
 describe("plan execution helpers", () => {
+  it("dismisses only the exact cached plan identity", async () => {
+    const { org, thread, cache } = await seedThreadWithPlan();
+
+    await expect(dismissCurrentCachedPlan({
+      orgId: org.id,
+      threadId: thread.id,
+      expectedPlanId: "stale-plan-id",
+    })).resolves.toBe(false);
+    expect((await db.thread.findUnique({ where: { id: thread.id } }))?.cachedPlan).not.toBeNull();
+
+    await expect(dismissCurrentCachedPlan({
+      orgId: org.id,
+      threadId: thread.id,
+      expectedPlanId: cache.planId!,
+    })).resolves.toBe(true);
+    const dismissed = await db.thread.findUnique({ where: { id: thread.id } });
+    expect(dismissed?.cachedPlan).toBeNull();
+    expect(dismissed?.cachedPlanMessageId).toBeNull();
+  });
+
+  it("refuses dismissal after execution has claimed the plan", async () => {
+    const { org, thread, message, cache } = await seedThreadWithPlan();
+    const claim = await claimCurrentPlanExecution({
+      orgId: org.id,
+      planId: cache.planId!,
+      threadId: thread.id,
+      sourceMessageId: message.id,
+      planHash: hashPlan(cache.plan),
+      instructionHash: hashInstruction(cache.instruction),
+      mode: "human_approved",
+    });
+    expect(claim.claimed).toBe(true);
+
+    await expect(dismissCurrentCachedPlan({
+      orgId: org.id,
+      threadId: thread.id,
+      expectedPlanId: cache.planId!,
+    })).rejects.toBeInstanceOf(ConflictError);
+    expect((await db.thread.findUnique({ where: { id: thread.id } }))?.cachedPlan).not.toBeNull();
+  });
+
   it("formats an approver with and without a display name", () => {
     expect(formatApproverId({ clerkUserId: "user_1", displayName: "Ada" })).toBe("user_1:Ada");
     expect(formatApproverId({ clerkUserId: "user_1", displayName: null })).toBe("user_1");
@@ -218,14 +282,51 @@ describe("plan execution helpers", () => {
 });
 
 describe("executeCurrentCachedHomePlan guards", () => {
-  it("refuses a plan whose kind the route does not allow", async () => {
-    const { org, thread, settings } = await seedThreadWithPlan();
+  it("refuses an invalid plan before any human or automatic execution path", async () => {
+    const { org, thread, settings } = await seedThreadWithPlan({
+      plan: {
+        ...quickReplyPlan(),
+        validation: {
+          status: "invalid",
+          issues: [{
+            code: "ungrounded_customer_reply",
+            message: "The reply claims work the plan does not perform.",
+            toolCallId: "send_1",
+            tool: "send_reply",
+          }],
+        },
+      },
+    });
 
     await expect(executeCurrentCachedHomePlan({
       orgId: org.id,
       threadId: thread.id,
       settings,
-      allowedKinds: ["auto_execute"],
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+    }, unreachableDeps())).rejects.toThrow(/invalid and cannot be approved/);
+
+    await expect(maybeAutoExecuteCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings,
+      failureRoute: "test",
+    }, unreachableDeps())).resolves.toBeNull();
+  });
+
+  it("refuses a plan whose kind the route does not allow", async () => {
+    const { org, thread, settings } = await seedThreadWithPlan({
+      plan: {
+        ...quickReplyPlan(),
+        signals: [{ code: "order_not_found", severity: "blocking", message: "missing" }],
+      },
+    });
+
+    await expect(executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings,
+      executionIntent: "automatic",
       failureRoute: "test",
     }, unreachableDeps())).rejects.toBeInstanceOf(BadRequestError);
   });
@@ -237,7 +338,7 @@ describe("executeCurrentCachedHomePlan guards", () => {
       orgId: org.id,
       threadId: thread.id,
       settings,
-      allowedKinds: ["quick_reply", "needs_review"],
+      executionIntent: "automatic",
       failureRoute: "test",
     }, unreachableDeps())).rejects.toThrow(/Review the sender/);
   });
@@ -249,7 +350,7 @@ describe("executeCurrentCachedHomePlan guards", () => {
       orgId: org.id,
       threadId: thread.id,
       settings,
-      allowedKinds: ["quick_reply"],
+      executionIntent: "merchant_approved",
       failureRoute: "test",
       expectedIdentity: { planHash: "a-hash-from-some-older-plan" },
     }, unreachableDeps())).rejects.toBeInstanceOf(ConflictError);
@@ -262,7 +363,7 @@ describe("executeCurrentCachedHomePlan guards", () => {
       orgId: org.id,
       threadId: thread.id,
       settings,
-      allowedKinds: ["quick_reply"],
+      executionIntent: "merchant_approved",
       failureRoute: "test",
       approvedToolCalls: [sendReplyCall, sendReplyCall],
     }, unreachableDeps())).rejects.toThrow(/duplicate plan steps/);
@@ -276,7 +377,7 @@ describe("executeCurrentCachedHomePlan guards", () => {
       orgId: org.id,
       threadId: thread.id,
       settings,
-      allowedKinds: ["quick_reply"],
+      executionIntent: "merchant_approved",
       failureRoute: "test",
       approvedToolCalls: [{ ...sendReplyCall, input: { text: "Refund issued, sorry!" } }],
     }, unreachableDeps())).rejects.toThrow(/must come from the current reviewed plan/);
@@ -289,14 +390,69 @@ describe("executeCurrentCachedHomePlan guards", () => {
       orgId: org.id,
       threadId: thread.id,
       settings,
-      allowedKinds: ["quick_reply"],
+      executionIntent: "merchant_approved",
       failureRoute: "test",
       approvedToolCalls: [],
     }, unreachableDeps())).rejects.toThrow(/no executable tool calls/);
   });
+
+  it("refuses a read-only subset rather than consuming the reviewed plan", async () => {
+    const withRead = quickReplyPlan();
+    const read: RawToolCall = { id: "read_1", name: "get_order_by_name", input: { name: "#1024" } };
+    withRead.rawToolCalls.unshift(read);
+    const { org, thread, settings } = await seedThreadWithPlan({ plan: withRead });
+
+    await expect(executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+      approvedToolCalls: [read],
+    }, unreachableDeps())).rejects.toThrow(/no executable tool calls/);
+  });
+
+  it("requires a revised plan when partial approval keeps the customer send", async () => {
+    const { org, thread, settings } = await seedThreadWithPlan({ plan: mutativePlan() });
+
+    await expect(executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+      approvedToolCalls: [sendReplyCall],
+    }, unreachableDeps())).rejects.toThrow(/revised customer reply/);
+  });
+
+  it("refuses merchant approval when any executable tool is statically disabled", async () => {
+    const settings = resolveAgentSettings({
+      toolsEnabled: { action: true, communication: false, internal: true, read: true },
+    });
+    const { org, thread } = await seedThreadWithPlan({ settings });
+    await expect(executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+    }, unreachableDeps())).rejects.toThrow(/not executable/);
+  });
 });
 
 describe("executeCurrentCachedHomePlan execution", () => {
+  it("executes an escalation only after explicit merchant approval", async () => {
+    const { org, thread, settings } = await seedThreadWithPlan({ plan: escalationPlan() });
+    const executed = await executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+    }, makeDeps());
+    expect(executed.approvedToolCalls).toEqual(escalationPlan().rawToolCalls);
+  });
+
   it("runs the approved calls, records the approver, and consumes the cache", async () => {
     const { org, thread, settings } = await seedThreadWithPlan();
     const runAgent = vi.fn(async () => okResult);
@@ -305,7 +461,7 @@ describe("executeCurrentCachedHomePlan execution", () => {
       orgId: org.id,
       threadId: thread.id,
       settings,
-      allowedKinds: ["quick_reply"],
+      executionIntent: "merchant_approved",
       failureRoute: "test",
       approver: { clerkUserId: "user_1", displayName: "Ada" },
     }, makeDeps({ runAgent }));
@@ -326,7 +482,7 @@ describe("executeCurrentCachedHomePlan execution", () => {
       orgId: org.id,
       threadId: thread.id,
       settings,
-      allowedKinds: ["quick_reply" as const],
+      executionIntent: "merchant_approved",
       failureRoute: "test",
     };
 
@@ -345,7 +501,7 @@ describe("executeCurrentCachedHomePlan execution", () => {
       orgId: first.org.id,
       threadId: first.thread.id,
       settings: first.settings,
-      allowedKinds: ["quick_reply"],
+      executionIntent: "merchant_approved",
       failureRoute: "test",
     }, makeDeps({
       shadow: { recordShadowDecision: async () => undefined, resolveShadowDecisionOnApproval },
@@ -359,9 +515,8 @@ describe("executeCurrentCachedHomePlan execution", () => {
       orgId: second.org.id,
       threadId: second.thread.id,
       settings: second.settings,
-      allowedKinds: ["quick_reply"],
+      executionIntent: "automatic",
       failureRoute: "test",
-      automatic: true,
     }, makeDeps({
       shadow: { recordShadowDecision: async () => undefined, resolveShadowDecisionOnApproval },
     }));
@@ -375,7 +530,7 @@ describe("executeCurrentCachedHomePlan execution", () => {
       orgId: org.id,
       threadId: thread.id,
       settings,
-      allowedKinds: ["quick_reply"],
+      executionIntent: "merchant_approved",
       failureRoute: "test",
     }, makeDeps({
       runAgent: async () => {
@@ -398,7 +553,7 @@ describe("executeCurrentCachedHomePlan execution", () => {
       orgId: org.id,
       threadId: thread.id,
       settings,
-      allowedKinds: ["quick_reply"],
+      executionIntent: "merchant_approved",
       failureRoute: "test",
     }, makeDeps({ runAgent: async () => failed }));
 
@@ -413,7 +568,7 @@ describe("executeCurrentCachedHomePlan execution", () => {
       orgId: org.id,
       threadId: thread.id,
       settings,
-      allowedKinds: ["quick_reply"],
+      executionIntent: "merchant_approved",
       failureRoute: "test",
     }, makeDeps());
 
@@ -429,7 +584,7 @@ describe("executeCurrentCachedHomePlan execution", () => {
       orgId: org.id,
       threadId: thread.id,
       settings,
-      allowedKinds: ["quick_reply"],
+      executionIntent: "merchant_approved",
       failureRoute: "test",
     }, makeDeps());
 
