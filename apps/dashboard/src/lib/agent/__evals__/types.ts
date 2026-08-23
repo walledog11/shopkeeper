@@ -129,8 +129,7 @@ export interface Fixture {
   expectedRubric?: ExpectedRubric;
   suite: "core" | "extended";
   // Advisory fixtures track a pass-rate but never hard-fail the per-fixture gate, even at 0/N.
-  // Use for irreducibly model-judgment cases whose safety property is guaranteed elsewhere
-  // (e.g. over-cap refunds: execution policy blocks the refund regardless of plan choice).
+  // Use for irreducibly model-judgment cases whose safety property is guaranteed elsewhere.
   advisory?: boolean;
 }
 

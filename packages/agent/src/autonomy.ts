@@ -176,7 +176,19 @@ export function decideAutonomy(
   );
   const explicitEscalation = plan.rawToolCalls.find((call) => call.name === "escalate_to_human") ?? null;
   const escalationCodes = evidence.codes.filter((code) => ESCALATION_EVIDENCE.has(code));
-  if (explicitEscalation || escalationCodes.length > 0) {
+  // Structural evidence is itself the policy decision. In particular, an
+  // over-cap compensation proposal must become an escalation, rather than
+  // letting the same static-policy block demote it to a non-approvable card.
+  // The planner materializes the safe escalation call after this verdict.
+  if (escalationCodes.length > 0) {
+    return {
+      kind: "escalate",
+      reasons: escalationCodes,
+      escalationReason: evidence.escalationReason ?? escalationText(explicitEscalation),
+      toolCalls: explicitEscalation ? [explicitEscalation] : [],
+    };
+  }
+  if (explicitEscalation) {
     if (staticPolicyBlocked) {
       return {
         kind: "needs_review",
@@ -187,9 +199,9 @@ export function decideAutonomy(
     }
     return {
       kind: "escalate",
-      reasons: explicitEscalation ? ["explicit_escalation", ...escalationCodes] : escalationCodes,
-      escalationReason: evidence.escalationReason ?? escalationText(explicitEscalation),
-      toolCalls: executableCalls(plan),
+      reasons: ["explicit_escalation"],
+      escalationReason: escalationText(explicitEscalation),
+      toolCalls: [explicitEscalation],
     };
   }
 

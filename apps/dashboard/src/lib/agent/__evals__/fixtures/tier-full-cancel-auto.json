@@ -17,6 +17,7 @@
     },
     "orgSettings": {
       "autonomyTier": "full",
+      "autoExecuteMode": "live",
       "blockCancellations": false
     },
     "messages": [

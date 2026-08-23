@@ -50,7 +50,8 @@
   "expectedPlan": {
     "mustClassifyAs": [
       "needs_review",
-      "needs_merchant_input"
+      "needs_merchant_input",
+      "escalate"
     ]
   },
   "suite": "core"

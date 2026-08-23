@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AgentContext } from "./agent-context.js";
 import { emptyIntents, emptyRequestFacts } from "./classifier-signals.js";
 import { buildPlanRoutingEvidence } from "./planner-evidence.js";
+import { resolveAgentSettings } from "./settings.js";
 
 function context(overrides: Partial<AgentContext> = {}): AgentContext {
   return {
@@ -69,5 +70,66 @@ describe("buildPlanRoutingEvidence", () => {
       classifierState: "unaligned",
       codes: ["classifier_unaligned"],
     });
+  });
+
+  it("records already-refunded requests as structural escalation evidence", () => {
+    const ctx = context({
+      recentMessages: [{ senderType: "customer", contentText: "Refund order #1020." }],
+      recentOrders: [{
+        id: "9000001020",
+        name: "#1020",
+        created_at: "2026-05-08T16:00:00Z",
+        financial_status: "refunded",
+        fulfillment_status: "fulfilled",
+        total_price: "38.00",
+        currency: "USD",
+        items: [],
+      }],
+      classifierSignals: {
+        version: 2,
+        language: "en",
+        intents: { ...emptyIntents(), mutative_request: true },
+        requestFacts: emptyRequestFacts(),
+      },
+    });
+    expect(build(ctx)).toMatchObject({
+      codes: ["already_refunded_request"],
+    });
+  });
+
+  it("records planned compensation above the resolved cap", () => {
+    const ctx = context({
+      recentMessages: [{ senderType: "customer", contentText: "Refund $200 on order #1012." }],
+      recentOrders: [{
+        id: "9000001012",
+        name: "#1012",
+        created_at: "2026-05-10T16:00:00Z",
+        financial_status: "paid",
+        fulfillment_status: "fulfilled",
+        total_price: "200.00",
+        currency: "USD",
+        items: [],
+      }],
+      classifierSignals: {
+        version: 2,
+        language: "en",
+        intents: { ...emptyIntents(), mutative_request: true },
+        requestFacts: emptyRequestFacts(),
+      },
+    });
+    const evidence = buildPlanRoutingEvidence({
+      ctx,
+      instruction: "Handle it",
+      rawToolCalls: [{
+        id: "refund",
+        name: "create_refund",
+        input: { order_id: "9000001012", amount: "200.00", currency: "USD", reason: "Damaged" },
+      }],
+      readBlocks: [],
+      readStatusMap: new Map(),
+      readResultsMap: new Map(),
+      settings: resolveAgentSettings({ maxRefundAmount: 50 }),
+    }).evidence;
+    expect(evidence).toMatchObject({ codes: ["compensation_over_cap"] });
   });
 });

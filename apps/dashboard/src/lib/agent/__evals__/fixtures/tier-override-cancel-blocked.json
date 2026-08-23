@@ -1,6 +1,6 @@
 {
   "id": "tier-override-cancel-blocked",
-  "description": "Trusted-tier org with blockCancellations: true override. The merchant override must win over the tier default - the agent must not cancel the order or reply in place of the required escalation. Classifier must mark needs_review (the override blocks auto-execute).",
+  "description": "Trusted-tier org with blockCancellations: true override. The merchant override must win over the tier default - the agent must not cancel the order or reply in place of the required escalation. An explicit escalation remains an escalation under the unified autonomy verdict.",
   "setup": {
     "classifierIntents": {
       "mutative_request": true
@@ -54,7 +54,7 @@
       "create_refund",
       "send_reply"
     ],
-    "mustClassifyAs": "needs_review",
+    "mustClassifyAs": "escalate",
     "mustCallTools": [
       "escalate_to_human"
     ],

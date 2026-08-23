@@ -16,7 +16,8 @@
       "accessToken": "shpat_test_fixture"
     },
     "orgSettings": {
-      "autonomyTier": "full"
+      "autonomyTier": "full",
+      "autoExecuteMode": "live"
     },
     "messages": [
       {

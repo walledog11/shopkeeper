@@ -125,6 +125,21 @@ describe("decideAutonomy", () => {
     expect(verdict).toMatchObject({ kind: "needs_review", approvalAllowed: false });
   });
 
+  it("lets structural escalation evidence replace a policy-blocked proposal", () => {
+    const verdict = decideAutonomy(plan([refund, reply], {
+      routingEvidence: {
+        classifierState: "aligned",
+        codes: ["compensation_over_cap"],
+        escalationReason: "Compensation above the workspace limit was planned — needs human review.",
+      },
+    }), settings({ maxRefundAmount: 5 }));
+    expect(verdict).toMatchObject({
+      kind: "escalate",
+      reasons: ["compensation_over_cap"],
+      toolCalls: [],
+    });
+  });
+
   it("requires a reply for mutative automatic execution", () => {
     const verdict = decideAutonomy(plan([refund]), settings());
     expect(verdict).toMatchObject({ kind: "needs_review", approvalAllowed: false });
