@@ -560,6 +560,7 @@ async function loadOperatorWaitingItems(
           filterStatus: true,
           cachedPlan: true,
           cachedPlanMessageId: true,
+          requestSourceMessageId: true,
           customer: { select: { name: true } },
           messages: {
             where: { deletedAt: null, senderType: { not: SENDER_TYPE.NOTE } },
@@ -582,18 +583,36 @@ async function loadOperatorWaitingItems(
         ?? `${pendingPlan.threadId}:${pendingPlan.planHash ?? ''}:${pendingPlan.instructionHash ?? ''}`;
       const requestDisplay = pendingPlan.requestDisplay ?? unavailableRequestDisplay();
       const requestFacts = requestDisplay.kind === 'classified' ? requestDisplay.facts : null;
+      const alignedSourceMessageId = thread?.requestSourceMessageId
+        && pendingPlan.sourceMessageId === thread.requestSourceMessageId
+        ? thread.requestSourceMessageId
+        : null;
+      const sourceMessage = alignedSourceMessageId
+        ? await db.message.findFirst({
+            where: {
+              id: alignedSourceMessageId,
+              organizationId,
+              threadId: pendingPlan.threadId,
+              senderType: SENDER_TYPE.CUSTOMER,
+              deletedAt: null,
+            },
+            select: { contentText: true },
+          })
+        : null;
+      const sourceMessageText = sourceMessage?.contentText ?? null;
       items.push({
         dedupeKey,
         threadId: pendingPlan.threadId,
         ...(pendingPlan.planId ? { planId: pendingPlan.planId } : {}),
         requestFacts,
-        needsThreadReview: !requestDisplayHasContext(requestDisplay, now),
+        needsThreadReview: !requestDisplayHasContext(requestDisplay, now) && !sourceMessageText?.trim(),
         line: formatApprovalItemLine({
           customerName: thread?.customer?.name ?? pendingPlan.customerName ?? null,
           channelType: thread?.channelType ?? null,
           rawToolCalls: pendingPlan.rawToolCalls,
           actionLabel: pendingPlan.actionLabel,
           requestDisplay,
+          sourceMessageText,
           now,
         }),
       });
@@ -625,6 +644,7 @@ async function loadStaleThreadWaitingItems(
       classifierSignals: true,
       channelType: true,
       filterStatus: true,
+      requestSourceMessageId: true,
       customer: { select: { name: true } },
       messages: {
         where: { deletedAt: null, senderType: { not: SENDER_TYPE.NOTE } },
@@ -662,12 +682,28 @@ async function loadStaleThreadWaitingItems(
     const requestContext = requestFacts
       ? formatFactsBriefingLine(requestFacts, null, now, rowAskLess(thread))
       : null;
+    const alignedSourceMessageId = thread.requestSourceMessageId === thread.cachedPlanMessageId
+      ? thread.requestSourceMessageId
+      : null;
+    const sourceMessage = alignedSourceMessageId
+      ? await db.message.findFirst({
+          where: {
+            id: alignedSourceMessageId,
+            organizationId,
+            threadId: thread.id,
+            senderType: SENDER_TYPE.CUSTOMER,
+            deletedAt: null,
+          },
+          select: { contentText: true },
+        })
+      : null;
+    const sourceMessageText = sourceMessage?.contentText ?? null;
     items.push({
       dedupeKey,
       threadId: thread.id,
       ...(cached.planId ? { planId: cached.planId } : {}),
       requestFacts,
-      needsThreadReview: requestContext === null,
+      needsThreadReview: requestContext === null && !sourceMessageText?.trim(),
       line: formatApprovalItemLine({
         customerName: thread.customer?.name ?? null,
         channelType: thread.channelType,
@@ -676,6 +712,7 @@ async function loadStaleThreadWaitingItems(
         verifiedOrders: verifiedByThread.get(thread.id) ?? [],
         requestFacts,
         noRequest: rowHasNoRequest(thread),
+        sourceMessageText,
         now,
       }),
     });
@@ -801,6 +838,8 @@ export function formatApprovalItemLine(params: {
   now?: Date;
   /** Immutable snapshot parked with the plan. Preferred for pending approvals. */
   requestDisplay?: RequestDisplay;
+  /** Source-aligned customer text for plans that predate request snapshots. */
+  sourceMessageText?: string | null;
 }): string {
   const subject = briefingPersonName(
     params.customerName,
@@ -815,7 +854,7 @@ export function formatApprovalItemLine(params: {
     : lowerFirst(approvalActionHead(params.rawToolCalls) ?? params.actionLabel ?? 'reply');
   const ready = refundAmount ? `I've got ${refundAmount} ready.` : `${capitalize(action)}'s drafted.`;
 
-  if (params.requestDisplay) {
+  if (params.requestDisplay && requestDisplayHasContext(params.requestDisplay, params.now)) {
     return `${endClause(formatRequestDisplayLine(
       params.requestDisplay,
       subject,
@@ -836,6 +875,15 @@ export function formatApprovalItemLine(params: {
     : null;
   if (factsClause) {
     return `${endClause(truncateBriefingText(factsClause, PHONE_LINE_MAX))} ${ready}`;
+  }
+  if (params.sourceMessageText?.trim()) {
+    const sourceClause = formatBlockedTicketLine({
+      customer: { name: params.customerName },
+      channelType: params.channelType,
+      verifiedOrders: params.verifiedOrders,
+      pendingMessage: params.sourceMessageText,
+    }, params.now ?? new Date());
+    return `${endClause(sourceClause)} ${ready}`;
   }
   return `${endClause(formatRequestDisplayLine(unavailableRequestDisplay(), null, params.now))} ${ready}`;
 }

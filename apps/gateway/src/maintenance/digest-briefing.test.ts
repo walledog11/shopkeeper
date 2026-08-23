@@ -431,6 +431,17 @@ describe('handoff and approval lines — fields before prose', () => {
     })).toBe("Request details unavailable — open the thread for the original message. Reply's drafted.");
   });
 
+  it('uses source-aligned text when an approval predates request snapshots', () => {
+    expect(formatApprovalItemLine({
+      customerName: 'Dana Reyes',
+      channelType: 'email',
+      rawToolCalls: [{ id: 't1', name: 'send_reply', input: { text: 'On its way.' } }],
+      requestDisplay: { version: 1, kind: 'unavailable' },
+      sourceMessageText: 'Can you move order #1043 to 14 Alder Road before Friday?',
+      now: NOW,
+    })).toBe('Dana asked: "Can you move order #1043 to 14 Alder Road before Friday?" Reply\'s drafted.');
+  });
+
   it('suppresses every shared decision closer when one item needs thread review', () => {
     const items = [
       {
@@ -524,6 +535,35 @@ describe('loadWaitingOnYouItems', () => {
     expect(items[0]?.line).toContain('Request details unavailable — open the thread');
   });
 
+  it('recovers source text for a legacy operator approval with aligned identity', async () => {
+    const customer = await createTestCustomer(org.id, 'legacy-approval@example.com', { name: 'Inez' });
+    const thread = await createTestThread(org.id, customer.id, 'email');
+    const source = await createTestMessage(thread.id, 'Can you refund the chipped bowl from order #778?');
+    const planId = 'acacacac-acac-4cac-8cac-acacacacacac';
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        requestSourceMessageId: source.id,
+        classifierSignals: { version: 4, language: 'en', intents: { mutative_request: true } },
+      },
+    });
+    await updateContext(org.id, 'legacy-approval', {
+      pendingPlan: {
+        threadId: thread.id,
+        instruction: 'Reply to the customer',
+        planId,
+        sourceMessageId: source.id,
+        rawToolCalls: [{ id: 'tc1', name: 'send_reply', input: { text: 'I can help.' } }],
+      },
+    });
+
+    const items = await loadWaitingOnYouItems(org.id, NOW);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ threadId: thread.id, planId, needsThreadReview: false });
+    expect(items[0]?.line).toContain('Can you refund the chipped bowl from order #778?');
+    expect(items[0]?.line).not.toContain('Request details unavailable');
+  });
+
   it('lists several waiting items without numbering them', async () => {
     // Two pending plans for the *same* customer: the case the old copy rendered
     // as two identical "Reply to Canary" bullets.
@@ -605,6 +645,29 @@ describe('loadWaitingOnYouItems', () => {
     expect(items).toHaveLength(1);
     expect(items[0]?.line).toContain('Bob');
     expect(items[0]?.line).toBe("Bob: refund. Ask the merchant's drafted.");
+  });
+
+  it('recovers source text for a stale pre-v5 dashboard approval', async () => {
+    const customer = await createTestCustomer(org.id, 'legacy-dashboard@example.com', { name: 'Bob Lee' });
+    const thread = await createTestThread(org.id, customer.id, 'email');
+    const message = await createTestMessage(thread.id, 'Could I get a refund for the cracked vase?');
+
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        cachedPlan: staleReviewPlanCache(message.id),
+        cachedPlanMessageId: message.id,
+        requestSourceMessageId: message.id,
+        updatedAt: new Date(NOW.getTime() - 4 * 3_600_000),
+        classifierSignals: { version: 4, language: 'en', intents: { mutative_request: true } },
+      },
+    });
+
+    const items = await loadWaitingOnYouItems(org.id, NOW);
+    expect(items).toHaveLength(1);
+    expect(items[0]?.needsThreadReview).toBe(false);
+    expect(items[0]?.line).toContain('Could I get a refund for the cracked vase?');
+    expect(items[0]?.line).not.toContain('Request details unavailable');
   });
 
   it('keeps safe replies out of the merchant queue while preserving real reviews', async () => {

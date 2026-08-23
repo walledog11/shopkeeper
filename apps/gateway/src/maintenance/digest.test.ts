@@ -476,6 +476,48 @@ describe('buildOrgDigest — inbox scope', () => {
       .toBeUndefined();
   });
 
+  it('uses aligned source text when classifier data is missing or malformed', async () => {
+    org = await createTestOrg();
+    const cases = [
+      {
+        email: 'missing-classifier@example.com',
+        name: 'Ari',
+        text: 'Can you confirm whether order #3100 ships today?',
+        classifierSignals: null,
+      },
+      {
+        email: 'malformed-classifier@example.com',
+        name: 'Bea',
+        text: 'Please change order #3101 to the blue version.',
+        classifierSignals: 'not-a-classifier-record',
+      },
+    ] as const;
+
+    for (const fixture of cases) {
+      const customer = await createTestCustomer(org.id, fixture.email, { name: fixture.name });
+      const thread = await createTestThread(org.id, customer.id, 'email');
+      const source = await createTestMessage(thread.id, fixture.text);
+      await db.thread.update({
+        where: { id: thread.id },
+        data: {
+          escalatedAt: NOW,
+          requestSourceMessageId: source.id,
+          ...(fixture.classifierSignals === null
+            ? {}
+            : { classifierSignals: fixture.classifierSignals }),
+        },
+      });
+    }
+
+    const digest = (await buildOrgDigest(org.id, NOW))!;
+    for (const fixture of cases) expect(digest.message).toContain(fixture.text);
+    expect(digest.message).not.toContain('Request details unavailable');
+    expect(digest.pendingDigest.items).toHaveLength(2);
+    expect(digest.pendingDigest.items.every((item) => (
+      item.kind === 'decision' && item.needsThreadReview !== true
+    ))).toBe(true);
+  });
+
   it('parks a context-free escalation for thread review without asking for a decision', async () => {
     org = await createTestOrg();
     const customer = await createTestCustomer(org.id, 'review-escalation@example.com', { name: 'Maya' });
@@ -517,6 +559,62 @@ describe('buildOrgDigest — inbox scope', () => {
     expect(digest.message).toContain(requestText);
     expect(pending).toMatchObject({ kind: 'flagged' });
     expect(pending?.needsThreadReview).toBeUndefined();
+  });
+
+  it('parks a flagged sender with no recoverable source for thread review', async () => {
+    org = await createTestOrg();
+    const customer = await createTestCustomer(org.id, 'review-flagged@example.com', { name: 'Nia' });
+    const thread = await createTestThread(org.id, customer.id, 'email');
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        filterStatus: ThreadFilterStatus.questionable,
+        filterDecidedAt: NOW,
+        classifierSignals: 'malformed',
+      },
+    });
+
+    const digest = (await buildOrgDigest(org.id, NOW))!;
+    const pending = digest.pendingDigest.items.find((item) => item.threadId === thread.id);
+    expect(pending).toMatchObject({ kind: 'flagged', needsThreadReview: true });
+    expect(digest.message).toContain('Request details unavailable — open the thread');
+    expect(digest.message).not.toMatch(/Should I go ahead\?|What do you want to do\?|Tell me what you want to do/);
+  });
+
+  it('suppresses the shared closer for a mixed actionable and thread-review briefing', async () => {
+    org = await createTestOrg();
+    const [approvalCustomer, reviewCustomer] = await Promise.all([
+      createTestCustomer(org.id, 'mixed-approval@example.com', { name: 'Cleo' }),
+      createTestCustomer(org.id, 'mixed-review@example.com', { name: 'Dev' }),
+    ]);
+
+    const approvalThread = await createTestThread(org.id, approvalCustomer.id, 'email');
+    const approvalMessage = await createTestMessage(approvalThread.id, 'Please refund the chipped bowl.');
+    await db.thread.update({
+      where: { id: approvalThread.id },
+      data: {
+        cachedPlan: refundPlanCache('Refund the chipped bowl', approvalMessage.id),
+        cachedPlanMessageId: approvalMessage.id,
+        requestSourceMessageId: approvalMessage.id,
+        classifierSignals: factsSignals({ ask: 'refund', subject: 'the chipped bowl' }),
+        updatedAt: new Date(NOW.getTime() - 4 * HOUR),
+      },
+    });
+
+    const reviewThread = await createTestThread(org.id, reviewCustomer.id, 'email');
+    await db.thread.update({
+      where: { id: reviewThread.id },
+      data: { escalatedAt: NOW, classifierSignals: 'malformed' },
+    });
+
+    const digest = (await buildOrgDigest(org.id, NOW))!;
+    expect(digest.message).toContain('One action is waiting for your approval.');
+    expect(digest.message).toContain('One needs you to open the thread first.');
+    expect(digest.message).not.toMatch(/Should I go ahead\?|What do you want to do\?|Tell me what you want to do/);
+    expect(digest.pendingDigest.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ threadId: approvalThread.id, kind: 'approval' }),
+      expect.objectContaining({ threadId: reviewThread.id, kind: 'decision', needsThreadReview: true }),
+    ]));
   });
 
   // Legacy rows still enter recovery, but a missing plan never becomes inferred

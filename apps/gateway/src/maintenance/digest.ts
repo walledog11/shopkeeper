@@ -298,14 +298,14 @@ export async function deliverOrgDigest(
   organizationId: string,
   member: OperatorBinding,
   digest: OrgDigest,
-  idempotencyKey: string,
+  idempotencyKey?: string,
 ): Promise<OperatorNotifyResult | null> {
   return notifyOperator(
     organizationId,
     member,
     digest.message,
     { pendingDigest: digest.pendingDigest },
-    { idempotencyKey },
+    idempotencyKey ? { idempotencyKey } : {},
   );
 }
 

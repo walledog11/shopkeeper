@@ -23,7 +23,7 @@ vi.mock('../clients/spectrum.js', () => ({
   sendImessageToSpace: sendImessageToSpaceSpy,
 }));
 
-import { sendScheduledDigests } from './digest.js';
+import { buildOrgDigest, sendScheduledDigests } from './digest.js';
 
 // shouldSendDigest fires when the local hour equals digestHour; pin the tz to
 // UTC and target the current UTC hour so the sweep runs regardless of clock.
@@ -153,6 +153,119 @@ describe('sendScheduledDigests — first-night briefing', () => {
     expect(messages[0]).not.toContain('Jane');
 
     expect((await readSettings(org.id)).firstBriefingPending).toBe(false);
+  });
+
+  it('delivers one scheduled briefing containing current and legacy persisted shapes', async () => {
+    await bindTelegram(org.id, chatId);
+    const [currentCustomer, legacyCustomer] = await Promise.all([
+      createTestCustomer(org.id, `current-${org.id}@example.com`, { name: 'Ari' }),
+      createTestCustomer(org.id, `legacy-${org.id}@example.com`, { name: 'Bea' }),
+    ]);
+    const currentThread = await createTestThread(org.id, currentCustomer.id, ChannelType.email);
+    const legacyThread = await createTestThread(org.id, legacyCustomer.id, ChannelType.email);
+    const currentSource = await createTestMessage(currentThread.id, 'Please refund order #4100.');
+    const legacyText = 'Can you move order #4101 to 14 Alder Road before Friday?';
+    const legacySource = await createTestMessage(legacyThread.id, legacyText);
+
+    await db.thread.update({
+      where: { id: currentThread.id },
+      data: {
+        escalatedAt: new Date(),
+        requestSourceMessageId: currentSource.id,
+        classifierSignals: {
+          version: 5,
+          language: 'en',
+          intents: { mutative_request: true },
+          requestFacts: { ask: 'refund', order: '#4100' },
+        },
+      },
+    });
+    await db.thread.update({
+      where: { id: legacyThread.id },
+      data: {
+        escalatedAt: new Date(),
+        requestSourceMessageId: legacySource.id,
+        classifierSignals: {
+          version: 4,
+          language: 'en',
+          intents: { mutative_request: true },
+        },
+      },
+    });
+    await db.organization.update({
+      where: { id: org.id },
+      data: { settings: armedSettings({ firstBriefingPending: false }) },
+    });
+
+    await sendScheduledDigests({ organizationIds: [org.id] });
+
+    const messages = myMessages();
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toContain('Ari · #4100: refund');
+    expect(messages[0]).toContain(legacyText);
+    expect(messages[0]).not.toContain('Request details unavailable');
+    const context = await db.operatorContext.findFirst({
+      where: { organizationId: org.id },
+      select: { pendingDigest: true },
+    });
+    expect(context?.pendingDigest).toMatchObject({
+      items: expect.arrayContaining([
+        expect.objectContaining({ threadId: currentThread.id, kind: 'decision' }),
+        expect.objectContaining({ threadId: legacyThread.id, kind: 'decision' }),
+      ]),
+    });
+  });
+
+  it('rollback disables delivery without discarding pending state or the legacy fallback', async () => {
+    await bindTelegram(org.id, chatId);
+    const customer = await createTestCustomer(org.id, `rollback-${org.id}@example.com`, { name: 'Cy' });
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    const legacyText = 'Could you refund the chipped cup from order #4200?';
+    const source = await createTestMessage(thread.id, legacyText);
+    const pendingPlans = [{
+      threadId: thread.id,
+      instruction: 'Refund the chipped cup',
+      planId: 'dededede-dede-4ede-8ede-dededededede',
+      sourceMessageId: source.id,
+      rawToolCalls: [{ id: 'reply-1', name: 'send_reply', input: { text: 'I can help.' } }],
+    }];
+    const pendingDigest = {
+      items: [{ threadId: thread.id, kind: 'approval', planId: pendingPlans[0]!.planId }],
+      threadIds: [],
+      sentAt: '2026-08-23T12:00:00.000Z',
+    };
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        requestSourceMessageId: source.id,
+        classifierSignals: { version: 4, language: 'en', intents: { mutative_request: true } },
+      },
+    });
+    await db.operatorContext.create({
+      data: {
+        organizationId: org.id,
+        memberKey: `member:rollback-${org.id}`,
+        pendingPlans,
+        pendingDigest,
+      },
+    });
+    await db.organization.update({
+      where: { id: org.id },
+      data: { settings: armedSettings({ digestEnabled: false, firstBriefingPending: false }) },
+    });
+
+    const manualDigest = (await buildOrgDigest(org.id, new Date()))!;
+    expect(manualDigest.message).toContain(legacyText);
+    expect(manualDigest.message).not.toContain('Request details unavailable');
+
+    await sendScheduledDigests({ organizationIds: [org.id] });
+
+    expect(myMessages()).toHaveLength(0);
+    const stored = await db.operatorContext.findFirst({
+      where: { organizationId: org.id },
+      select: { pendingPlans: true, pendingDigest: true },
+    });
+    expect(stored).toEqual({ pendingPlans, pendingDigest });
   });
 });
 
