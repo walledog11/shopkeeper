@@ -1,7 +1,10 @@
 /** User-facing product name. */
 export const PRODUCT_NAME = 'Shopkeeper';
 
-/** Primary marketing trial CTA — keep identical on nav, hero, and closing CTA. */
+/** Primary marketing hire CTA — keep identical on hero and closing CTA. */
+export const HIRE_CTA_LABEL = 'Hire Shopkeeper — free for 14 days';
+
+/** Shorter label for the compact marketing navbar button. */
 export const NAV_CTA_LABEL = 'Start free trial';
 
 /**

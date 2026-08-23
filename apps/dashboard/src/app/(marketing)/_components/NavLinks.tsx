@@ -11,7 +11,6 @@ import {
   ChevronRight,
   Menu,
   MessageCircle,
-  Plug,
   ShieldCheck,
   Store,
   X,
@@ -41,34 +40,34 @@ const productCards: ProductCard[] = [
     icon: Store,
   },
   {
-    href: "/product/approvals-and-controls",
+    href: "/#controls",
     title: "Approvals and controls",
     subtitle: "Set the rules for what can reply, what must ask, and what stays blocked.",
     icon: ShieldCheck,
   },
   {
-    href: "/product/integrations",
-    title: "Integrations",
-    subtitle: "Connect customer intake, merchant control, Shopify, and dashboard review.",
-    icon: Plug,
+    href: "/#system",
+    title: "How it works",
+    subtitle: "Follow a request from the customer channel to Shopify and the action log.",
+    icon: ArrowUpRight,
   },
   {
-    href: "/product/customer-support",
-    title: "Customer support",
-    subtitle: "Ground replies in store context, policy knowledge, and approved voice.",
+    href: "/#context",
+    title: "Store context",
+    subtitle: "Orders, inventory, policies, customer history, and approved voice guidance.",
     icon: MessageCircle,
   },
 ];
 
 const partners: Partner[] = [
-  { href: "/product/integrations", name: "Shopify", logo: "/logos/shopify.svg" },
+  { href: "/#system", name: "Shopify", logo: "/logos/shopify.svg" },
   {
-    href: "/product/integrations",
+    href: "/#system",
     name: "Instagram",
     logo: "/logos/instagram-outline.svg",
   },
-  { href: "/product/integrations", name: "Email", logo: "/logos/email.svg" },
-  { href: "/product/integrations", name: "iMessage", logo: "/logos/imessage.svg" },
+  { href: "/#system", name: "Email", logo: "/logos/email.svg" },
+  { href: "/#system", name: "iMessage", logo: "/logos/imessage.svg" },
 ];
 
 /* Slot outside the frosted navbar pill — backdrop-filter on a descendant of
@@ -231,12 +230,12 @@ function ProductMenu() {
               </Link>
             ))}
             <Link
-              href="/product/integrations"
+              href="/#system"
               role="menuitem"
               className="m-nav-mega-more"
               onClick={() => setOpen(false)}
             >
-              See every integration role
+              See how the system fits together
             </Link>
           </div>
         </div>
@@ -272,7 +271,7 @@ export function NavLinks() {
   return (
     <div className="m-nav-links">
       <ProductMenu />
-      <Link href="/product/security" className="m-nav-link">
+      <Link href="/#trust" className="m-nav-link">
         Security
       </Link>
       <Link href="/#pricing" className="m-nav-link">
@@ -383,7 +382,7 @@ export function MobileNav() {
         <Link href="/#pricing" className="m-nav-sheet-item" onClick={close}>
           Pricing
         </Link>
-        <Link href="/product/security" className="m-nav-sheet-item" onClick={close}>
+        <Link href="/#trust" className="m-nav-sheet-item" onClick={close}>
           Security
         </Link>
         <Link href="/#faq" className="m-nav-sheet-item" onClick={close}>
