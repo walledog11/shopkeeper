@@ -8,12 +8,9 @@ import {
   createTestThread,
 } from '@shopkeeper/db/test-helpers';
 import {
-  addressRedactionCandidates,
   buildRequestDisplaySnapshot,
   formatRequestDisplayLine,
   readRequestDisplay,
-  redactPostalAddresses,
-  redactToolInputForDisplay,
   systemRequestDisplay,
 } from './request-display.js';
 
@@ -53,7 +50,7 @@ function v5Signals(ask: 'refund' | 'address_change' = 'refund') {
 }
 
 describe('buildRequestDisplaySnapshot', () => {
-  it('persists classified fields only when v5 is aligned to the plan source', async () => {
+  it('persists actionable classified fields when v5 is aligned to the plan source', async () => {
     const customer = await createTestCustomer(org.id, 'snapshot@example.com');
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);
     const message = await createTestMessage(thread.id, 'Refund #1024 to 10 King Street, K1A 0B1');
@@ -80,11 +77,15 @@ describe('buildRequestDisplaySnapshot', () => {
       version: 1,
       kind: 'classified',
       sourceMessageId: message.id,
-      facts: expect.objectContaining({ ask: 'refund', order: '#1024' }),
+      facts: expect.objectContaining({
+        ask: 'refund',
+        order: '#1024',
+        subject: 'delivery to 10 King Street',
+      }),
     }));
     expect(display).not.toHaveProperty('quote');
-    expect(JSON.stringify(display)).not.toContain('10 King Street');
-    expect(JSON.stringify(display)).not.toContain('K1A 0B1');
+    expect(JSON.stringify(display)).toContain('10 King Street');
+    expect(JSON.stringify(display)).toContain('K1A 0B1');
 
     await db.thread.update({
       where: { id: thread.id },
@@ -114,43 +115,6 @@ describe('buildRequestDisplaySnapshot', () => {
       threadId: thread.id,
       sourceMessageId: message.id,
     })).resolves.toEqual({ version: 1, kind: 'unavailable' });
-  });
-});
-
-describe('postal redaction', () => {
-  const calls = [{
-    input: {
-      address1: '123 Main Street',
-      address2: 'Apartment 4',
-      city: 'Toronto',
-      province: 'ON',
-      zip: 'M5V 2T6',
-      country: 'Canada',
-    },
-  }];
-
-  it('replaces structured candidates longest-first in display prose', () => {
-    const candidates = addressRedactionCandidates(calls);
-    expect(candidates[0]?.length).toBeGreaterThan(candidates.at(-1)?.length ?? 0);
-    const redacted = redactPostalAddresses(
-      'Send it to 123 Main Street, Apartment 4, Toronto, ON, M5V 2T6, Canada.',
-      calls,
-    );
-    expect(redacted).not.toContain('123 Main Street');
-    expect(redacted).not.toContain('Apartment 4');
-    expect(redacted).not.toContain('M5V 2T6');
-    expect(redacted).toContain('[address redacted]');
-  });
-
-  it('redacts address fields structurally in tool input display copies', () => {
-    expect(redactToolInputForDisplay(calls[0]!.input)).toEqual({
-      address1: '[address redacted]',
-      address2: '[address redacted]',
-      city: '[address redacted]',
-      province: '[address redacted]',
-      zip: '[address redacted]',
-      country: '[address redacted]',
-    });
   });
 });
 

@@ -24,6 +24,19 @@ export async function requireOrgThread(threadId: string, orgId: string) {
       escalatedAt: true,
       cachedPlanMessageId: true,
       cachedPlan: true,
+      replyIntegrationId: true,
+      replyIntegration: {
+        select: {
+          id: true,
+          platform: true,
+          emailProvider: true,
+          accessToken: true,
+          refreshToken: true,
+          tokenExpiresAt: true,
+          lifecycleStatus: true,
+          metadata: true,
+        },
+      },
       messages: {
         where: { senderType: "customer" },
         orderBy: [{ sentAt: "desc" }, { id: "desc" }],

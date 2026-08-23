@@ -36,7 +36,6 @@ import { getConversationBurst } from './conversation-burst.js';
 import {
   buildRequestDisplaySnapshot,
   formatRequestDisplayLine,
-  redactPostalAddresses,
   type RequestDisplay,
   type SystemRequestKind,
 } from './request-display.js';
@@ -207,10 +206,11 @@ function formatRequestHeaderLines(
   channelType: DbChannelType,
   display: RequestDisplay,
   stage: ConversationStage,
+  now: Date,
 ): string[] {
   // Reuse the established channel/stage sentence, but never its prose summary.
   const lead = formatHeaderLines(person, channelType, '', stage)[0]!;
-  const request = formatRequestDisplayLine(display, personLabel(person));
+  const request = formatRequestDisplayLine(display, personLabel(person), now);
   return [
     lead,
     endSentence(request),
@@ -234,7 +234,7 @@ function escalationReason(
     if (!input || typeof input !== 'object') continue;
     const reason = (input as Record<string, unknown>).reason;
     if (typeof reason === 'string' && reason.trim()) {
-      return redactPostalAddresses(reason.trim(), rawToolCalls);
+      return reason.trim();
     }
   }
   return null;
@@ -271,6 +271,8 @@ export function formatOperatorPlanMessage(
     dashboardUrl?: string;
     rawToolCalls?: readonly { name: string; input?: unknown }[];
     stage?: ConversationStage;
+    /** Injectable clock for deterministic deadline rendering in tests. */
+    now?: Date;
     // Honesty disclosure about what parking this card does to the operator's
     // queue: `replaces` (cap-1: it evicts a different thread's pending plan),
     // `evicts` (cap>1: the queue is full so the oldest waiting plan is trimmed),
@@ -299,15 +301,19 @@ export function formatOperatorPlanMessage(
   // The actual draft the merchant is approving, so approval is not sight-unseen.
   const draftBody = options?.rawToolCalls ? firstDraftExcerpt(options.rawToolCalls) : null;
 
-  const lines: string[] = formatRequestHeaderLines(person, channelType, requestDisplay, stage);
+  const lines: string[] = formatRequestHeaderLines(
+    person,
+    channelType,
+    requestDisplay,
+    stage,
+    options?.now ?? new Date(),
+  );
 
   if (options?.validation?.status === 'invalid') {
     lines.push(
       '',
       "I couldn't produce a safe executable draft:",
-      ...options.validation.issues.map((issue) => (
-        `- ${redactPostalAddresses(issue.message, options.rawToolCalls ?? [])}`
-      )),
+      ...options.validation.issues.map((issue) => `- ${issue.message}`),
     );
     if (options?.threadId && options.dashboardUrl) {
       lines.push('', `Open the thread to regenerate or take over: ${options.dashboardUrl}/dashboard/tickets?thread=${options.threadId}`);
@@ -349,17 +355,14 @@ export function formatOperatorPlanMessage(
     // wrote the card; say it as a sentence instead. parkedActionLabel already
     // renders the phrase that completes "I won't …", which completes "I'd …" too.
     const only = parkedActionLabel(approvableSteps, person);
-    const fallback = redactPostalAddresses(
-      approvableSteps[0]!.label || approvableSteps[0]!.description,
-      options?.rawToolCalls ?? [],
-    );
+    const fallback = approvableSteps[0]!.label || approvableSteps[0]!.description;
     lines.push('', only ? `I'd ${only}.` : `I'd ${lowerFirst(fallback)}.`);
     if (draftBody) lines.push('', `The reply: "${draftBody}"`);
   } else if (approvableSteps.length > 0) {
     const stepLines = approvableSteps.map((step, index) => {
       if (step.tool === 'send_reply') return `${index + 1}. Reply to ${personObject(person)}`;
       if (step.tool === 'send_email') return `${index + 1}. Email ${personObject(person)}`;
-      return `${index + 1}. ${redactPostalAddresses(step.label || step.description, options?.rawToolCalls ?? [])}`;
+      return `${index + 1}. ${step.label || step.description}`;
     });
     lines.push('', "Here's what I'd do:", ...stepLines);
     if (draftBody) lines.push('', `The reply: "${draftBody}"`);
@@ -422,7 +425,7 @@ export function formatOperatorDraftSummary(
   const name = customerName ? customerName.split(' ')[0] : 'the customer';
   const actionableSteps = plan.steps.filter((step) => step.category !== 'read');
   const stepList = actionableSteps
-    .map((step) => redactPostalAddresses(step.label || step.description, plan.rawToolCalls))
+    .map((step) => step.label || step.description)
     .join('; ');
   const draftBody = firstDraftExcerpt(plan.rawToolCalls);
 
@@ -446,7 +449,6 @@ function formatAutoExecutionMessage(
   plan: AgentPlan,
   result: PrecomputedPlanResult,
 ): string {
-  const safeSummary = redactPostalAddresses(summary, plan.rawToolCalls);
   const firstName = customerFirstName(customerName);
   const noun = channelNoun(channelType);
   // Neutral possessive header: by the time this fans out, the agent's own reply
@@ -456,7 +458,7 @@ function formatAutoExecutionMessage(
     : `${noun.charAt(0).toUpperCase()}${noun.slice(1)}.`;
   const actionableSteps = plan.steps.filter((step) => step.category !== 'read');
   const stepLines = actionableSteps.map((step, index) => (
-    `${index + 1}. ${redactPostalAddresses(step.description || step.label, plan.rawToolCalls)}`
+    `${index + 1}. ${step.description || step.label}`
   ));
   const statusLine = result.autoExecutionStatus === 'error'
     ? 'I tried to handle this one myself but hit a problem:'
@@ -464,18 +466,14 @@ function formatAutoExecutionMessage(
 
   const lines: (string | null)[] = [
     headline,
-    endSentence(safeSummary),
+    endSentence(summary),
     '',
     statusLine,
     ...stepLines,
     result.autoExecutionSummary ? '' : null,
-    result.autoExecutionSummary
-      ? redactPostalAddresses(result.autoExecutionSummary, plan.rawToolCalls)
-      : null,
+    result.autoExecutionSummary ?? null,
     result.autoExecutionError ? '' : null,
-    result.autoExecutionError
-      ? `Error: ${redactPostalAddresses(result.autoExecutionError, plan.rawToolCalls)}`
-      : null,
+    result.autoExecutionError ? `Error: ${result.autoExecutionError}` : null,
   ];
 
   return lines.filter((line): line is string => line !== null).join('\n');
@@ -560,12 +558,10 @@ function formatQuestionMessage(
   question: string,
   stage: ConversationStage,
 ): string {
-  const safeSummary = redactPostalAddresses(summary);
-  const safeQuestion = redactPostalAddresses(question);
   return [
-    ...formatHeaderLines(classifyPerson({ customerName, channelType }), channelType, safeSummary, stage),
+    ...formatHeaderLines(classifyPerson({ customerName, channelType }), channelType, summary, stage),
     '',
-    `${safeQuestion} I'll draft the reply once I know.`,
+    `${question} I'll draft the reply once I know.`,
   ].join('\n');
 }
 

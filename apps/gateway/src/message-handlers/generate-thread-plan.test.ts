@@ -11,6 +11,7 @@ const {
   mockCommitThreadPlanCacheIfCurrent,
   mockGetLatestConversationMessage,
   mockThreadUpdate,
+  mockEscalateToHuman,
 } = vi.hoisted(() => ({
   mockMaybeAutoExecute: vi.fn(),
   mockRequireOrgThread: vi.fn(),
@@ -22,6 +23,7 @@ const {
   mockCommitThreadPlanCacheIfCurrent: vi.fn(),
   mockGetLatestConversationMessage: vi.fn(),
   mockThreadUpdate: vi.fn(),
+  mockEscalateToHuman: vi.fn(),
 }));
 
 vi.mock('@shopkeeper/agent/thread-auth', () => ({
@@ -35,6 +37,12 @@ vi.mock('@shopkeeper/agent/build-context', () => ({
 
 vi.mock('@shopkeeper/agent/planner', () => ({
   planAgent: mockPlanAgent,
+}));
+
+vi.mock('./agent-thread-sink.js', () => ({
+  gatewayThreadSink: {
+    escalateToHuman: mockEscalateToHuman,
+  },
 }));
 
 vi.mock('@shopkeeper/agent/plan-cache', () => ({
@@ -70,7 +78,7 @@ vi.mock('@shopkeeper/db', async (importOriginal) => {
       ...actual.db,
       organization: {
         ...actual.db.organization,
-        findUnique: vi.fn(async () => ({ settings: {} })),
+        findUnique: vi.fn(async () => ({ name: 'Test Store', settings: {} })),
       },
       thread: {
         ...actual.db.thread,
@@ -93,9 +101,21 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockRequireOrgThread.mockResolvedValue({
     id: 'thread_1',
+    channelType: 'email',
     aiSummary: 'Customer needs help',
     messages: [{ id: 'msg_1' }],
     cachedPlan: { plan: cachedPlan },
+    replyIntegrationId: 'gmail_1',
+    replyIntegration: {
+      id: 'gmail_1',
+      platform: 'email',
+      emailProvider: 'gmail',
+      lifecycleStatus: 'active',
+      accessToken: 'access_token',
+      refreshToken: 'refresh_token',
+      tokenExpiresAt: new Date('2030-01-01T00:00:00.000Z'),
+      metadata: { provider: 'gmail' },
+    },
   });
   mockReadAgentPlanCache.mockReturnValue({ plan: cachedPlan });
   mockGetLatestConversationMessage.mockResolvedValue({ id: 'msg_1', senderType: 'customer' });
@@ -109,9 +129,179 @@ beforeEach(() => {
   mockCommitThreadPlanCacheIfCurrent.mockResolvedValue(true);
   mockIsAgentPlanCacheHit.mockReturnValue(true);
   mockMaybeAutoExecute.mockResolvedValue(null);
+  mockEscalateToHuman.mockResolvedValue({ status: 'escalated', message: 'escalated' });
 });
 
 describe('generateThreadPlan auto-execute path', () => {
+  it.each([
+    {
+      label: 'absent',
+      replyIntegrationId: null,
+      replyIntegration: null,
+      reason: /no connected reply integration/i,
+    },
+    {
+      label: 'non-active',
+      replyIntegrationId: 'gmail_1',
+      replyIntegration: {
+        id: 'gmail_1',
+        platform: 'email',
+        emailProvider: 'gmail',
+        lifecycleStatus: 'disconnecting',
+        accessToken: 'access_token',
+        refreshToken: 'refresh_token',
+        tokenExpiresAt: new Date('2030-01-01T00:00:00.000Z'),
+        metadata: { provider: 'gmail' },
+      },
+      reason: /reply integration is disconnected/i,
+    },
+    {
+      label: 'provider-incomplete',
+      replyIntegrationId: 'gmail_1',
+      replyIntegration: {
+        id: 'gmail_1',
+        platform: 'email',
+        emailProvider: 'gmail',
+        lifecycleStatus: 'active',
+        accessToken: 'access_token',
+        refreshToken: null,
+        tokenExpiresAt: new Date('2030-01-01T00:00:00.000Z'),
+        metadata: { provider: 'gmail' },
+      },
+      reason: /needs reauthorization/i,
+    },
+    {
+      label: 'missing an access token that is not eligible for refresh',
+      replyIntegrationId: 'gmail_1',
+      replyIntegration: {
+        id: 'gmail_1',
+        platform: 'email',
+        emailProvider: 'gmail',
+        lifecycleStatus: 'active',
+        accessToken: null,
+        refreshToken: 'refresh_token',
+        tokenExpiresAt: new Date('2030-01-01T00:00:00.000Z'),
+        metadata: { provider: 'gmail' },
+      },
+      reason: /needs reauthorization/i,
+    },
+    {
+      label: 'marked for reauthorization',
+      replyIntegrationId: 'gmail_1',
+      replyIntegration: {
+        id: 'gmail_1',
+        platform: 'email',
+        emailProvider: 'gmail',
+        lifecycleStatus: 'active',
+        accessToken: 'access_token',
+        refreshToken: 'refresh_token',
+        tokenExpiresAt: new Date(0),
+        metadata: { provider: 'gmail' },
+      },
+      reason: /needs reauthorization/i,
+    },
+  ])('refuses to plan and escalates an email thread whose reply integration is $label', async ({
+    replyIntegrationId,
+    replyIntegration,
+    reason,
+  }) => {
+    mockRequireOrgThread.mockResolvedValueOnce({
+      id: 'thread_1',
+      channelType: 'email',
+      filterStatus: 'genuine',
+      cachedPlan: { plan: cachedPlan },
+      cachedPlanMessageId: 'msg_1',
+      replyIntegrationId,
+      replyIntegration,
+    });
+
+    const result = await generateThreadPlan('org_1', 'thread_1', true);
+
+    expect(result.plan).toBeNull();
+    expect(clearThreadPlanCache).toHaveBeenCalledWith({ orgId: 'org_1', threadId: 'thread_1' });
+    expect(mockEscalateToHuman).toHaveBeenCalledWith(
+      { reason: expect.stringMatching(reason) },
+      { orgId: 'org_1', orgName: 'Test Store', threadId: 'thread_1' },
+    );
+    expect(mockBuildContext).not.toHaveBeenCalled();
+    expect(mockPlanAgent).not.toHaveBeenCalled();
+    expect(mockMaybeAutoExecute).not.toHaveBeenCalled();
+  });
+
+  it('keeps an active Postmark reply route dispatch-capable without OAuth tokens', async () => {
+    mockRequireOrgThread.mockResolvedValueOnce({
+      id: 'thread_1',
+      channelType: 'email',
+      filterStatus: 'genuine',
+      cachedPlan: { plan: cachedPlan },
+      cachedPlanMessageId: 'msg_1',
+      replyIntegrationId: 'postmark_1',
+      replyIntegration: {
+        id: 'postmark_1',
+        platform: 'email',
+        emailProvider: 'postmark',
+        lifecycleStatus: 'active',
+        accessToken: null,
+        refreshToken: null,
+        tokenExpiresAt: null,
+        metadata: { provider: 'postmark' },
+      },
+    });
+
+    await expect(generateThreadPlan('org_1', 'thread_1', false)).resolves.toMatchObject({
+      plan: cachedPlan,
+    });
+
+    expect(mockEscalateToHuman).not.toHaveBeenCalled();
+    expect(mockMaybeAutoExecute).toHaveBeenCalledOnce();
+  });
+
+  it('keeps an expired Gmail access token dispatch-capable when a refresh token is present', async () => {
+    mockRequireOrgThread.mockResolvedValueOnce({
+      id: 'thread_1',
+      channelType: 'email',
+      filterStatus: 'genuine',
+      cachedPlan: { plan: cachedPlan },
+      cachedPlanMessageId: 'msg_1',
+      replyIntegrationId: 'gmail_1',
+      replyIntegration: {
+        id: 'gmail_1',
+        platform: 'email',
+        emailProvider: 'gmail',
+        lifecycleStatus: 'active',
+        accessToken: null,
+        refreshToken: 'refresh_token',
+        tokenExpiresAt: new Date(Date.now() - 60_000),
+        metadata: { provider: 'gmail' },
+      },
+    });
+
+    await expect(generateThreadPlan('org_1', 'thread_1', false)).resolves.toMatchObject({
+      plan: cachedPlan,
+    });
+
+    expect(mockEscalateToHuman).not.toHaveBeenCalled();
+    expect(mockMaybeAutoExecute).toHaveBeenCalledOnce();
+  });
+
+  it('does not duplicate the escalation when an unavailable email thread is already escalated', async () => {
+    mockRequireOrgThread.mockResolvedValueOnce({
+      id: 'thread_1',
+      channelType: 'email',
+      escalatedAt: new Date(),
+      filterStatus: 'genuine',
+      cachedPlan: null,
+      cachedPlanMessageId: null,
+      replyIntegrationId: null,
+      replyIntegration: null,
+    });
+
+    await expect(generateThreadPlan('org_1', 'thread_1', true)).resolves.toMatchObject({ plan: null });
+
+    expect(mockEscalateToHuman).not.toHaveBeenCalled();
+    expect(mockPlanAgent).not.toHaveBeenCalled();
+  });
+
   it('still checks the safe-reply lane when mutative auto-execute is disabled', async () => {
     const result = await generateThreadPlan('org_1', 'thread_1', false);
 

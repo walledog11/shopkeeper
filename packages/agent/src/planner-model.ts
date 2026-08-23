@@ -1,6 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { anthropic } from "./ai/anthropic.js";
 import logger from "./logger.js";
+import { resolveModelTuning } from "./model-tuning.js";
 import type { AgentContext } from "./agent-context.js";
 import { recordSpend } from "./spend.js";
 import { recordModelUsage, type createModelUsageMetrics } from "./usage.js";
@@ -42,6 +43,7 @@ export async function runPlannerModelCall(input: {
     toolChoice,
     selectLoggedToolBlocks,
   } = input;
+  const tuning = resolveModelTuning(model, "capture");
   const response = await anthropic.messages.create({
     model,
     max_tokens: maxTokens,
@@ -49,6 +51,7 @@ export async function runPlannerModelCall(input: {
     messages,
     tools,
     ...(toolChoice ? { tool_choice: toolChoice } : {}),
+    ...tuning,
   });
   const toolBlocks = response.content.filter((block): block is Anthropic.ToolUseBlock => block.type === "tool_use");
   const loggedToolBlocks = selectLoggedToolBlocks ? selectLoggedToolBlocks(toolBlocks) : toolBlocks;
@@ -61,6 +64,8 @@ export async function runPlannerModelCall(input: {
     phase,
     ...(attempt === undefined ? {} : { attempt }),
     model,
+    effort: tuning.output_config?.effort ?? null,
+    thinking: tuning.thinking?.type ?? null,
     stopReason: response.stop_reason,
     tools: loggedToolBlocks.map((block) => block.name),
     usage,
