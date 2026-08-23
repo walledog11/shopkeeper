@@ -2,6 +2,11 @@ import { db } from '@shopkeeper/db';
 import { isReadToolName, PLAN_STEP_LABELS } from '@shopkeeper/agent/tools';
 import { buildDigestLedgerSection } from './digest-triage.js';
 import type { OperatorContext, ToolCall } from '../operator-context.js';
+import {
+  formatRequestDisplayLine,
+  redactPostalAddresses,
+  unavailableRequestDisplay,
+} from './request-display.js';
 
 const NOTHING_PENDING = "Nothing is awaiting the merchant's decision.";
 const DRAFT_EXCERPT_LIMIT = 600;
@@ -49,7 +54,7 @@ function planStepLines(rawToolCalls: ToolCall[]): string[] {
 export function firstDraftExcerpt(rawToolCalls: readonly { name: string; input?: unknown }[]): string | null {
   for (const toolCall of rawToolCalls) {
     const body = extractSendDraftBody(toolCall);
-    if (body) return truncate(body, DRAFT_EXCERPT_LIMIT);
+    if (body) return truncate(redactPostalAddresses(body, rawToolCalls), DRAFT_EXCERPT_LIMIT);
   }
   return null;
 }
@@ -78,10 +83,12 @@ export async function renderOperatorLedger(
       const plan = pendingPlans[0]!;
       const steps = planStepLines(plan.rawToolCalls);
       const draft = firstDraftExcerpt(plan.rawToolCalls);
+      const display = plan.requestDisplay ?? unavailableRequestDisplay();
+      const person = nameByThread.get(plan.threadId) ?? 'the customer';
       return [
         "A drafted plan is awaiting the merchant's decision:",
-        `- Ticket: ${plan.threadId} (customer: ${nameByThread.get(plan.threadId) ?? 'the customer'})`,
-        `- What it's about: ${plan.instruction}`,
+        `- Ticket: ${plan.threadId} (customer: ${person})`,
+        `- What it's about: ${formatRequestDisplayLine(display, person)}`,
         ...(steps.length > 0 ? ['- Actions it will take:', ...steps] : []),
         ...(draft ? ['- Draft message the merchant is approving:', `  "${draft}"`] : []),
         '',
@@ -95,10 +102,12 @@ export async function renderOperatorLedger(
     pendingPlans.forEach((plan, index) => {
       const steps = planStepLines(plan.rawToolCalls);
       const draft = firstDraftExcerpt(plan.rawToolCalls);
+      const display = plan.requestDisplay ?? unavailableRequestDisplay();
+      const person = nameByThread.get(plan.threadId) ?? 'the customer';
       lines.push(
         '',
-        `${index + 1}. Ticket ${plan.threadId} (customer: ${nameByThread.get(plan.threadId) ?? 'the customer'})`,
-        `   What it's about: ${plan.instruction}`,
+        `${index + 1}. Ticket ${plan.threadId} (customer: ${person})`,
+        `   What it's about: ${formatRequestDisplayLine(display, person)}`,
         ...(steps.length > 0 ? ['   Actions it will take:', ...steps.map((step) => `  ${step}`)] : []),
         ...(draft ? ['   Draft message the merchant is approving:', `     "${draft}"`] : []),
       );

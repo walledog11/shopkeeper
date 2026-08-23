@@ -76,7 +76,7 @@ export async function precomputeThreadPlan(
       options.allowAutoExecute === true,
       { instruction: options.instruction, sourceMessageId: options.sourceMessageId },
     );
-    if (!plan?.steps || plan.steps.length === 0) {
+    if (!plan || (plan.steps.length === 0 && plan.validation?.status !== 'invalid')) {
       return null;
     }
     return {

@@ -41,6 +41,21 @@ describe('renderOperatorLedger', () => {
       pendingPlans: [{
         threadId: thread.id,
         instruction: 'Refund request for a late order',
+        requestDisplay: {
+          version: 1,
+          kind: 'classified',
+          sourceMessageId: 'message-1',
+          facts: {
+            ask: 'refund',
+            subject: 'late order',
+            order: null,
+            deadline: null,
+            deadlineText: null,
+            alternative: null,
+          },
+          noRequest: false,
+          topic: null,
+        },
         rawToolCalls: [
           { id: 'tc1', name: 'get_shopify_orders', input: { customer_id: '1' } },
           { id: 'tc1b', name: 'search_shopify_products', input: { query: 'shirt' } },
@@ -55,7 +70,7 @@ describe('renderOperatorLedger', () => {
 
     expect(ledger).toContain("A drafted plan is awaiting the merchant's decision:");
     expect(ledger).toContain(`Ticket: ${thread.id} (customer: Jane Doe)`);
-    expect(ledger).toContain('Refund request for a late order');
+    expect(ledger).toContain('Jane Doe: refund — late order');
     expect(ledger).toContain('Actions it will take:');
     // Read tools are dropped from the action list.
     expect(ledger).not.toContain('get_shopify_orders');

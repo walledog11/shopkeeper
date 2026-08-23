@@ -15,8 +15,8 @@ import type { AgentPlan } from '@shopkeeper/agent/types';
 // Reviewed-plan gateway smoke test. Runs the durable cached-plan approval path
 // end-to-end against the real DB and agent core, stubbing only the host seams a
 // test cannot reach: ioredis, Clerk, the billing gate, and Shopify's REST API.
-// It proves policy-blocked approvals still pass through one durable claim and
-// produce linked terminal/audit state without reaching Shopify.
+// It proves a plan that is already known to violate static policy is rejected
+// before the gateway lock, durable claim, audit write, or Shopify dispatch.
 //
 // Note: the operator path resolves agent settings from defaults, so the enforced
 // refund cap is the guarded-tier default ($50), not the org's configured tier.
@@ -101,24 +101,18 @@ afterEach(async () => {
 });
 
 describe('executeOperatorApprovedCachedPlan (smoke)', () => {
-  it('holds the thread lock and leaves an over-cap refund blocked in the operator conversation', async () => {
-    const result = await executeOperatorApprovedCachedPlan({
+  it('rejects an over-cap refund before claiming or dispatching it', async () => {
+    await expect(executeOperatorApprovedCachedPlan({
       orgId: org.id,
       threadId,
       instruction: 'refund order #1001',
       clerkUserId: 'usr_op',
       // $200 refund exceeds the guarded-tier default cap ($50) the operator path runs on.
       approvedToolCalls: [{ id: 'tc_1', name: 'create_refund', input: { order_id: '123', amount: '200.00' } }],
-    });
+    })).rejects.toThrow('not executable for the requested approval path');
 
-    // (1) Lock acquired for this thread and released once the turn completes.
-    expect(acquireSpy).toHaveBeenCalledWith(threadId, { failClosed: true });
-    expect(releaseSpy).toHaveBeenCalledTimes(1);
-
-    // (2) The over-cap refund is blocked, not executed — Shopify is never touched.
-    expect(result.actionsPerformed).toHaveLength(1);
-    expect(result.actionsPerformed[0]).toMatchObject({ tool: 'create_refund', status: 'policy_block' });
-    expect(result.summary).toContain('exceeds the workspace limit of $50');
+    expect(acquireSpy).not.toHaveBeenCalled();
+    expect(releaseSpy).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
 
     // The merchant is already the human: their operator thread remains active.
@@ -126,24 +120,11 @@ describe('executeOperatorApprovedCachedPlan (smoke)', () => {
     expect(operatorThread?.status).toBe('open');
     expect(operatorThread?.tag).not.toBe('needs_human');
 
-    // (3) A correct AgentAction audit row is persisted for the escalated action.
+    // No execution or action row exists because the centralized autonomy
+    // decision rejected the approval before the execution boundary.
     const rows = await db.agentAction.findMany({ where: { organizationId: org.id } });
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({
-      tool: 'create_refund',
-      category: 'action',
-      status: 'policy_block',
-      mode: 'human_approved',
-      threadId,
-    });
-    expect(rows[0].approverId).toContain('usr_op');
-    expect(rows[0].executionId).not.toBeNull();
-
-    const execution = await db.planExecution.findUniqueOrThrow({
-      where: { id: rows[0].executionId! },
-    });
-    expect(execution.status).toBe('failed');
-    expect(execution.lastError).toContain('exceeds the workspace limit of $50');
+    expect(rows).toHaveLength(0);
+    expect(await db.planExecution.findMany({ where: { organizationId: org.id } })).toHaveLength(0);
 
     // Nothing was actually refunded.
     const spend = await db.refundDailySpend.findFirst({ where: { organizationId: org.id } });

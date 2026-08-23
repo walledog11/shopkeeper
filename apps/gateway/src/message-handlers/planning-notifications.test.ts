@@ -48,6 +48,7 @@ vi.mock('../config/env.js', () => ({
 }));
 
 import {
+  formatOperatorDraftSummary,
   formatOperatorPlanMessage,
   getConversationStage,
   parkedActionLabel,
@@ -59,6 +60,7 @@ import { classifyPerson } from '@shopkeeper/agent/person-name';
 import { OperatorNotifyError } from '../operator-notify.js';
 import { appendPendingPlan, getContext, updateContext } from '../operator-context.js';
 import type { AgentPlan } from '../types.js';
+import type { RequestDisplay } from './request-display.js';
 
 // Send paths look up conversation stage by thread id, a uuid column in Postgres.
 const THREAD_ID = '00000000-0000-4000-8000-0000000000aa';
@@ -76,6 +78,24 @@ const plan: AgentPlan = {
   ],
   rawToolCalls: [{ id: 'tc_1', name: 'send_email' }],
 };
+
+function requestDisplay(topic: string): RequestDisplay {
+  return {
+    version: 1,
+    kind: 'classified',
+    sourceMessageId: 'fixture-message',
+    facts: {
+      ask: 'none',
+      subject: null,
+      order: null,
+      deadline: null,
+      deadlineText: null,
+      alternative: null,
+    },
+    noRequest: false,
+    topic,
+  };
+}
 
 beforeEach(() => {
   listOperatorBindingsSpy.mockReset();
@@ -133,11 +153,40 @@ describe('parkedActionLabel', () => {
 });
 
 describe('formatOperatorPlanMessage', () => {
+  it('shows validation failures without approval language', () => {
+    const message = formatOperatorPlanMessage(
+      'Jane Doe',
+      ChannelType.email,
+      requestDisplay('Needs a refund'),
+      plan.steps,
+      {
+        threadId: THREAD_ID,
+        dashboardUrl: 'https://dashboard.example.com',
+        rawToolCalls: plan.rawToolCalls,
+        validation: {
+          status: 'invalid',
+          issues: [{
+            code: 'invalid_tool_input',
+            message: 'The reply text cannot be blank.',
+            toolCallId: 'tc_1',
+            tool: 'send_email',
+          }],
+        },
+      },
+    );
+
+    expect(message).toContain("couldn't produce a safe executable draft");
+    expect(message).toContain('The reply text cannot be blank.');
+    expect(message).toContain('Nothing can run from this draft.');
+    expect(message).not.toContain('Sound good?');
+    expect(message).not.toContain('Good to send?');
+  });
+
   it('lists steps, the deep link, and the draft for multi-step plans', () => {
     const message = formatOperatorPlanMessage(
       'Jane Doe',
       ChannelType.email,
-      'Needs a refund',
+      requestDisplay('Needs a refund'),
       [
         { category: 'write', tool: 'send_email', description: 'Reply to customer', label: 'Reply', enabled: true },
         { category: 'write', tool: 'issue_refund', description: 'Issue full refund', label: 'Refund', enabled: true },
@@ -152,7 +201,7 @@ describe('formatOperatorPlanMessage', () => {
       },
     );
 
-    expect(message).toContain('New email from Jane.\nNeeds a refund.');
+    expect(message).toContain('New email from Jane.\nJane — Needs a refund.');
     expect(message).toContain("Here's what I'd do:");
     expect(message).toContain('1. Email Jane');
     expect(message).toContain('2. Refund');
@@ -171,7 +220,7 @@ describe('formatOperatorPlanMessage', () => {
     const message = formatOperatorPlanMessage(
       null,
       ChannelType.shopify_chat,
-      'Wants the order sent to a new address.',
+      requestDisplay('Wants the order sent to a new address'),
       [{ category: 'write', tool: 'send_reply', description: 'Reply', label: 'Reply', enabled: true }],
       {
         stage: { isFollowUp: true, newMessages: 1 },
@@ -189,7 +238,7 @@ describe('formatOperatorPlanMessage', () => {
     const message = formatOperatorPlanMessage(
       null,
       ChannelType.shopify_chat,
-      'Asking about sizing.',
+      requestDisplay('Asking about sizing'),
       [{ category: 'write', tool: 'send_reply', description: 'Reply', label: 'Reply', enabled: true }],
       {
         stage: { isFollowUp: true, newMessages: 1 },
@@ -205,7 +254,7 @@ describe('formatOperatorPlanMessage', () => {
     const message = formatOperatorPlanMessage(
       'Jane Doe',
       ChannelType.email,
-      'Customer wants their order cancelled.',
+      requestDisplay('Order cancellation request'),
       [{ category: 'write', tool: 'cancel_order', description: 'Cancel the order', label: 'Cancel order', enabled: true }],
       { rawToolCalls: [{ name: 'cancel_order', input: {} }] },
     );
@@ -216,13 +265,11 @@ describe('formatOperatorPlanMessage', () => {
     expect(message).toContain('Sound good?');
   });
 
-  it('writes no em-dashes of its own', () => {
-    // Summaries are customer-derived and may legitimately contain one, so this
-    // fixture is dash-free and asserts only the card's own copy.
+  it('uses the structured field separator without splicing model prose', () => {
     const message = formatOperatorPlanMessage(
       'Jane Doe',
       ChannelType.email,
-      'Customer wants a refund.',
+      requestDisplay('Refund request'),
       [{ category: 'write', tool: 'issue_refund', description: 'Issue refund', label: 'Refund', enabled: true }],
       {
         threadId: 'thread_1',
@@ -232,14 +279,15 @@ describe('formatOperatorPlanMessage', () => {
       },
     );
 
-    expect(message).not.toContain('—');
+    expect(message).toContain('Jane — Refund request.');
+    expect(message).not.toContain('Customer wants');
   });
 
   it('presents a lone reply on a DM thread as a draft, never as an email', () => {
     const message = formatOperatorPlanMessage(
       'Sarah Lee',
       ChannelType.ig_dm,
-      'Customer asked when the next restock will occur.',
+      requestDisplay('Next restock timing'),
       [{ category: 'write', tool: 'send_reply', description: 'Reply to customer', label: 'Reply', enabled: true }],
       {
         threadId: 'thread_1',
@@ -248,7 +296,7 @@ describe('formatOperatorPlanMessage', () => {
       },
     );
 
-    expect(message).toContain('New Instagram DM from Sarah.\nCustomer asked when the next restock will occur.');
+    expect(message).toContain('New Instagram DM from Sarah.\nSarah — Next restock timing.');
     expect(message).toContain('I\'d reply:\n"It drops in about a month!"');
     expect(message).toContain('Good to send?');
     expect(message).not.toContain('Email');
@@ -259,7 +307,7 @@ describe('formatOperatorPlanMessage', () => {
     const message = formatOperatorPlanMessage(
       null,
       ChannelType.shopify_chat,
-      'Visitor asked for tracking on four orders under two different names.',
+      requestDisplay('Tracking request for several orders'),
       [{ category: 'write', tool: 'escalate_to_human', description: 'Escalate to merchant', label: 'Escalate to merchant', enabled: true }],
       {
         rawToolCalls: [{
@@ -281,7 +329,7 @@ describe('formatOperatorPlanMessage', () => {
     const message = formatOperatorPlanMessage(
       null,
       ChannelType.shopify_chat,
-      'Visitor asked where order #1026 is.',
+      requestDisplay('Order status request'),
       [
         { category: 'write', tool: 'send_reply', description: 'Reply to customer', label: 'Reply', enabled: true },
         { category: 'write', tool: 'escalate_to_human', description: 'Escalate to merchant', label: 'Escalate to merchant', enabled: true },
@@ -307,7 +355,7 @@ describe('formatOperatorPlanMessage', () => {
     const message = formatOperatorPlanMessage(
       null,
       ChannelType.shopify_chat,
-      'Asked about return policy.',
+      requestDisplay('Return policy question'),
       [{ category: 'write', tool: 'send_reply', description: 'Reply to customer', label: 'Reply', enabled: true }],
       {
         rawToolCalls: [{ name: 'send_reply', input: { text: '30 days!' } }],
@@ -325,7 +373,7 @@ describe('formatOperatorPlanMessage', () => {
     const message = formatOperatorPlanMessage(
       'Sarah Lee',
       ChannelType.ig_dm,
-      'Wants a refund and an answer',
+      requestDisplay('Refund and reply'),
       [
         { category: 'write', tool: 'issue_refund', description: 'Issue full refund', label: 'Refund order #1042', enabled: true },
         { category: 'write', tool: 'send_reply', description: 'Reply to customer', label: 'Reply', enabled: true },
@@ -344,7 +392,7 @@ describe('formatOperatorPlanMessage', () => {
     const message = formatOperatorPlanMessage(
       'Sarah Lee',
       ChannelType.ig_dm,
-      'Customer is asking when the snowboard restocks.',
+      requestDisplay('Snowboard restock timing'),
       [{ category: 'write', tool: 'send_reply', description: 'Reply to customer', label: 'Reply', enabled: true }],
       {
         rawToolCalls: [{ name: 'send_reply', input: { text: 'About a month!' } }],
@@ -352,7 +400,7 @@ describe('formatOperatorPlanMessage', () => {
       },
     );
 
-    expect(message).toContain('Sarah replied on Instagram.\nCustomer is asking when the snowboard restocks.');
+    expect(message).toContain('Sarah replied on Instagram.\nSarah — Snowboard restock timing.');
     expect(message).not.toContain('New Instagram DM');
   });
 
@@ -360,30 +408,30 @@ describe('formatOperatorPlanMessage', () => {
     const followUp = formatOperatorPlanMessage(
       'Sarah Lee',
       ChannelType.ig_dm,
-      'Customer sent more details.',
+      requestDisplay('More details'),
       plan.steps,
       { stage: { isFollowUp: true, newMessages: 3 } },
     );
     // The summary is scoped to the three new messages the header just counted,
     // so it states the delta directly instead of being labelled as background.
-    expect(followUp).toContain('Sarah sent 3 more messages on Instagram.\nCustomer sent more details.');
+    expect(followUp).toContain('Sarah sent 3 more messages on Instagram.\nSarah — More details.');
     expect(followUp).not.toContain('Where it stands');
 
     const fresh = formatOperatorPlanMessage(
       null,
       ChannelType.ig_dm,
-      'Customer asked two things.',
+      requestDisplay('Two questions'),
       plan.steps,
       { stage: { isFollowUp: false, newMessages: 2 } },
     );
-    expect(fresh).toContain('New Instagram DM (2 messages).\nCustomer asked two things.');
+    expect(fresh).toContain('New Instagram DM (2 messages).\nTwo questions.');
   });
 
   it('asks for a send on reply-only plans without a draft excerpt', () => {
     const message = formatOperatorPlanMessage(
       null,
       ChannelType.email,
-      'Quick reply',
+      requestDisplay('Quick reply'),
       plan.steps,
       { threadId: 'thread_2', dashboardUrl: 'https://dashboard.example.com' },
     );
@@ -396,7 +444,7 @@ describe('formatOperatorPlanMessage', () => {
     const message = formatOperatorPlanMessage(
       'Jane Doe',
       ChannelType.email,
-      'Needs a refund',
+      requestDisplay('Needs a refund'),
       plan.steps,
       { queueNotice: { kind: 'replaces', customerName: 'Sarah Chen' } },
     );
@@ -409,7 +457,7 @@ describe('formatOperatorPlanMessage', () => {
     const message = formatOperatorPlanMessage(
       null,
       ChannelType.email,
-      'Needs a refund',
+      requestDisplay('Needs a refund'),
       plan.steps,
       { queueNotice: { kind: 'replaces', customerName: null } },
     );
@@ -418,7 +466,7 @@ describe('formatOperatorPlanMessage', () => {
   });
 
   it('omits the disclosure when nothing is being overwritten', () => {
-    const message = formatOperatorPlanMessage('Jane Doe', ChannelType.email, 'Needs a refund', plan.steps, {});
+    const message = formatOperatorPlanMessage('Jane Doe', ChannelType.email, requestDisplay('Needs a refund'), plan.steps, {});
 
     expect(message).not.toContain('This replaces');
   });
@@ -431,7 +479,7 @@ describe('formatOperatorPlanMessage', () => {
     const message = formatOperatorPlanMessage(
       null,
       ChannelType.shopify_chat,
-      'Shopper asked where order #1024 is.',
+      requestDisplay('Order #1024 status'),
       plan.steps,
       { verifiedOrders: ['#1024'] },
     );
@@ -444,7 +492,7 @@ describe('formatOperatorPlanMessage', () => {
     const message = formatOperatorPlanMessage(
       null,
       ChannelType.shopify_chat,
-      'Shopper asked about two orders.',
+      requestDisplay('Two order questions'),
       plan.steps,
       { verifiedOrders: ['#1024', '#1031'] },
     );
@@ -456,12 +504,42 @@ describe('formatOperatorPlanMessage', () => {
     const message = formatOperatorPlanMessage(
       null,
       ChannelType.shopify_chat,
-      'Visitor asked about shipping.',
+      requestDisplay('Shipping question'),
       plan.steps,
       {},
     );
 
     expect(message).not.toContain('Verified:');
+  });
+});
+
+describe('formatOperatorDraftSummary', () => {
+  it('uses the structured request snapshot and redacts addresses in steps and drafts', () => {
+    const address = '88 Market Street, San Francisco, CA 94105';
+    const summary = formatOperatorDraftSummary(
+      'Jane Doe',
+      {
+        steps: [{
+          category: 'write',
+          tool: 'send_reply',
+          description: `Confirm the move to ${address}`,
+          label: `Reply about ${address}`,
+          enabled: true,
+        }],
+        rawToolCalls: [
+          { id: 'address', name: 'update_shipping_address', input: { shipping_address: address } },
+          { id: 'reply', name: 'send_reply', input: { text: `We'll ship it to ${address}.` } },
+        ],
+      },
+      'messaging',
+      requestDisplay('Address change requested'),
+    );
+
+    expect(summary).toContain('Request: Jane — Address change requested.');
+    expect(summary).toContain('[address redacted]');
+    expect(summary).not.toContain(address);
+    expect(summary).not.toContain('88 Market Street');
+    expect(summary).not.toContain('94105');
   });
 });
 
@@ -559,6 +637,40 @@ describe('sendOperatorPlanNotification', () => {
       customerName: 'Jane Doe',
       actionLabel: 'email Jane',
     });
+  });
+
+  it('parks invalid validation metadata and never asks for approval', async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
+    listOperatorBindingsSpy.mockResolvedValue([TELEGRAM_BINDING]);
+    notifyOperatorSpy.mockResolvedValue({ channel: 'telegram', chatId: 'chat_1' });
+    const invalidPlan: AgentPlan = {
+      ...plan,
+      validation: {
+        status: 'invalid',
+        issues: [{
+          code: 'invalid_tool_input',
+          message: 'The reply text cannot be blank.',
+          toolCallId: 'tc_1',
+          tool: 'send_email',
+        }],
+      },
+    };
+
+    await sendOperatorPlanNotification(
+      org.id,
+      THREAD_ID,
+      'Jane Doe',
+      ChannelType.email,
+      'Needs a refund',
+      invalidPlan,
+      'Handle refund request',
+    );
+
+    const [, , body, , notifyOptions] = notifyOperatorSpy.mock.calls[0] ?? [];
+    expect(body).toContain("couldn't produce a safe executable draft");
+    expect(body).not.toContain('Good to send?');
+    expect(notifyOptions?.appendPlan?.plan?.validation).toEqual(invalidPlan.validation);
   });
 
   it('propagates critical notification failures so the worker job can retry', async () => {
@@ -721,6 +833,26 @@ describe('sendOperatorQuestionNotification', () => {
     ).rejects.toThrow(OperatorNotifyError);
   });
 
+  it('redacts obvious street and postal details from lock-screen question copy', async () => {
+    listOperatorBindingsSpy.mockResolvedValue([TELEGRAM_BINDING]);
+    notifyOperatorSpy.mockResolvedValue({ channel: 'telegram', chatId: 'chat_1' });
+
+    await sendOperatorQuestionNotification(
+      '00000000-0000-4000-8000-00000000c001',
+      THREAD_ID,
+      'Jane Doe',
+      ChannelType.email,
+      'Move the order to 123 Main Street, Beverly Hills CA 90210',
+      'Should I use 123 Main Street or postal code 90210?',
+      'Handle the address change',
+    );
+
+    const [, , body] = notifyOperatorSpy.mock.calls[0] ?? [];
+    expect(body).toContain('[address redacted]');
+    expect(body).not.toContain('123 Main Street');
+    expect(body).not.toContain('90210');
+  });
+
   it('clears only its own thread\'s queued plan, leaving other threads\' plans', async () => {
     const org = await createTestOrg();
     try {
@@ -752,6 +884,48 @@ describe('sendOperatorQuestionNotification', () => {
 });
 
 describe('sendOperatorAutoExecutionNotification', () => {
+  it('redacts structured address values across all phone-facing auto-execution copy', async () => {
+    listOperatorBindingsSpy.mockResolvedValue([TELEGRAM_BINDING]);
+    notifyOperatorSpy.mockResolvedValue({ channel: 'telegram', chatId: 'chat_1' });
+    const address = '88 Market Street, San Francisco, CA 94105';
+
+    await sendOperatorAutoExecutionNotification(
+      'org_1',
+      'thread_1',
+      'Jane Doe',
+      ChannelType.email,
+      `Please reroute this package to ${address}`,
+      {
+        plan: {
+          steps: [{
+            category: 'write',
+            tool: 'update_shipping_address',
+            description: `Change the delivery address to ${address}`,
+            label: 'Update address',
+            enabled: true,
+          }],
+          rawToolCalls: [{
+            id: 'tc_address',
+            name: 'update_shipping_address',
+            input: { shipping_address: address },
+          }],
+        },
+        instruction: `Update the order to ${address}`,
+        autoExecuted: true,
+        autoExecutionStatus: 'error',
+        autoExecutionSummary: `Attempted the change to ${address}`,
+        autoExecutionError: `Carrier rejected ${address}`,
+        autoExecutionActions: [],
+      },
+    );
+
+    const [, , body] = notifyOperatorSpy.mock.calls[0] ?? [];
+    expect(body).toContain('[address redacted]');
+    expect(body).not.toContain(address);
+    expect(body).not.toContain('88 Market Street');
+    expect(body).not.toContain('94105');
+  });
+
   it('swallows notification failures without rethrowing', async () => {
     listOperatorBindingsSpy.mockResolvedValue([TELEGRAM_BINDING]);
     notifyOperatorSpy.mockRejectedValue(new Error('network down'));

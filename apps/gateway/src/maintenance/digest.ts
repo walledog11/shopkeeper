@@ -10,13 +10,11 @@ import type { PendingDigest } from '../operator-context.js';
 import { digestNotificationIdempotencyKey } from '../operator-notify-idempotency.js';
 import { listVerifiedOrderNamesByThread } from '../storefront-chat-verified-orders.js';
 import {
-  briefingSummarySource,
   countWord,
   formatEscalatedTicketLine,
   formatHandledSection,
   formatNeedsYouAsk,
   formatNeedsYouProse,
-  humanizeReportedSummary,
   oneSentencePerLine,
   type BriefingItem,
   loadHandledRollup,
@@ -25,11 +23,15 @@ import {
   rowHasNoRequest,
   rowRequestFacts,
   finalizeDigestSend,
-  redactBriefingContacts,
   resolveHandledWindowStart,
   truncateBriefingText,
 } from './digest-briefing.js';
 import { byDeadlineFirst, formatFactsBriefingLine } from './briefing-fields.js';
+import {
+  formatRequestDisplayLine,
+  redactPostalAddresses,
+  unavailableRequestDisplay,
+} from '../message-handlers/request-display.js';
 import { loadDigestShopifyGarnish } from './digest-shopify-garnish.js';
 import { loadAttributionLine } from '../message-handlers/conversation-attribution.js';
 import {
@@ -44,12 +46,7 @@ const FOUR_HOURS_MS = 4 * ONE_HOUR_MS;
 const TWENTY_FOUR_HOURS_MS = 24 * ONE_HOUR_MS;
 
 export const DIGEST_QUESTIONABLE_LIMIT = 10;
-// Wide enough for the classifier's one-sentence summary to land whole. At 90 a
-// normal summary lost its last clause ("…floats a newsletter tie-up, while also
-// mentioning…"), and a merchant who cannot tell from the line has to ask, which
-// is the round trip the briefing exists to save. Still capped, because this block
-// takes up to DIGEST_QUESTIONABLE_LIMIT items where a handoff takes two.
-const DIGEST_SUMMARY_TRUNC = 140;
+const DIGEST_STRUCTURED_LINE_MAX = 140;
 const WEEKLY_SUMMARY_MIN_TICKETS = 3;
 const DIGEST_INTERVALS: Record<string, number> = {
   every_4h: 4,
@@ -66,11 +63,6 @@ export interface DigestThreadRow {
   filterStatus: DbThreadFilterStatus;
   filterDecidedAt: Date | null;
   aiTitle: string | null;
-  aiSummary: string | null;
-  // The newest unanswered ask, preferred over `aiSummary` everywhere a line is
-  // built from prose. See `briefingSummarySource`.
-  requestSummary: string | null;
-  filterReason: string | null;
   escalatedAt: Date | null;
   customer: { name: string | null };
   // Orders a storefront shopper proved control of, joined on after the thread
@@ -227,20 +219,6 @@ function hasNoRequest(thread: DigestThreadRow): boolean {
   return rowHasNoRequest(thread);
 }
 
-
-// Slicing at a character count lands mid-word, and a raw address here becomes a
-// tappable mailto in the middle of the merchant's morning text.
-function flaggedBlurb(thread: DigestThreadRow): string {
-  const blurb = (briefingSummarySource(thread) ?? thread.filterReason ?? '').trim();
-  return truncateBriefingText(redactBriefingContacts(blurb), DIGEST_SUMMARY_TRUNC);
-}
-
-// Summaries are model-written and land with or without a final stop. Inlined
-// into a paragraph, a missing one runs two sentences together.
-function endSentence(text: string): string {
-  return /[.!?…"']$/.test(text) ? text : `${text}.`;
-}
-
 // Just the disclosure that the agent binned things on the merchant's behalf.
 // The 7-day retention window is deliberately not mentioned: there is no
 // un-filter path on the operator channel (REVIEW relists *flagged*, not
@@ -370,9 +348,6 @@ export async function buildOrgDigest(
         filterStatus: true,
         filterDecidedAt: true,
         aiTitle: true,
-        aiSummary: true,
-        requestSummary: true,
-        filterReason: true,
         escalatedAt: true,
         customer: { select: { name: true } },
         cachedPlan: true,
@@ -448,17 +423,15 @@ export async function buildOrgDigest(
       const name = thread.customer.name ?? 'Someone new';
       const facts = rowRequestFacts(thread);
       const factsLine = facts ? formatFactsBriefingLine(facts, name, now, rowAskLess(thread)) : null;
-      const blurb = flaggedBlurb(thread);
-      const prose = blurb
-        ? endSentence(humanizeReportedSummary(name, blurb) ?? `${name} wrote in. ${blurb}`)
-        : `${name} wrote in, and I can't tell whether they're a customer.`;
       return {
         threadId: thread.id,
         kind: 'flagged',
         // No per-item "Real customer?": the group lead already says these are
         // the ones the agent is unsure about, and repeating the question on
         // every line is the tell that a template wrote it.
-        line: factsLine ? endSentence(truncateBriefingText(factsLine, DIGEST_SUMMARY_TRUNC)) : prose,
+        line: factsLine
+          ? `${truncateBriefingText(redactPostalAddresses(factsLine), DIGEST_STRUCTURED_LINE_MAX)}.`
+          : `${formatRequestDisplayLine(unavailableRequestDisplay(), null, now)}.`,
       };
     }),
   ];

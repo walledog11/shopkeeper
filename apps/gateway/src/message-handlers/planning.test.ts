@@ -53,6 +53,26 @@ beforeEach(() => {
 });
 
 describe('precomputeThreadPlan', () => {
+  it('publishes an invalid plan even when it has no visible steps', async () => {
+    mockGenerateThreadPlan.mockResolvedValue({
+      plan: {
+        steps: [],
+        rawToolCalls: [{ id: 'call_1', name: 'send_reply', input: { text: '' } }],
+        validation: {
+          status: 'invalid',
+          issues: [{ code: 'invalid_tool_input', message: 'The reply text cannot be blank.' }],
+        },
+      },
+      instruction: 'Handle this request',
+    });
+
+    await expect(precomputeThreadPlan(
+      'org_1',
+      'thread_1',
+      { autoPlanOnOpen: true },
+    )).resolves.toMatchObject({ plan: { validation: { status: 'invalid' } } });
+  });
+
   it('does not apply the request-specific gate without a source message id', () => {
     expect(shouldSkipRequestWork(
       { requestDisposition: 'none', requestSourceMessageId: null },

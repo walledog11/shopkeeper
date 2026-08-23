@@ -1,5 +1,5 @@
 import { getPlanExecution } from '@shopkeeper/agent/execution-ledger';
-import { classifyHomePlan } from '@shopkeeper/agent/plan-preview';
+import { decideAutonomy } from '@shopkeeper/agent/autonomy';
 import { getCurrentPlanForThread, readAgentPlanCacheRecordShape } from '@shopkeeper/agent/plan-cache-shape';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { canonicalInboxThreadWhere } from '@shopkeeper/agent/inbox-filter';
@@ -12,6 +12,12 @@ import { classifyPerson, customerFirstName, personLabel } from '@shopkeeper/agen
 import { formatFactsBriefingLine, type AskLessContext } from './briefing-fields.js';
 import { listVerifiedOrderNamesByThread } from '../storefront-chat-verified-orders.js';
 import { parseStoredPendingPlan } from '../operator-context.js';
+import {
+  formatRequestDisplayLine,
+  redactPostalAddresses,
+  unavailableRequestDisplay,
+  type RequestDisplay,
+} from '../message-handlers/request-display.js';
 
 export const DIGEST_CURSOR_KEY = 'lastSuccessfulDigestAt';
 export const WAITING_PLAN_MIN_AGE_MS = 3 * 3_600_000;
@@ -93,36 +99,12 @@ function extractRefundAmount(input: unknown): string | null {
   return null;
 }
 
-// One iMessage line of context. The classifier already writes `aiTitle` at 3-to-6
-// words, so this cap is a backstop for the summary fallback, not the usual path.
-const BRIEFING_TOPIC_MAX = 60;
-
-const BRIEFING_TAG_LABELS: Record<string, string> = {
-  'Order Status': "where's my order?",
-  Shipping: 'shipping question',
-  Refund: 'refund request',
-};
-
-function briefingTagLabel(tag: string): string {
-  return BRIEFING_TAG_LABELS[tag] ?? tag;
-}
-
 export function truncateBriefingText(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text;
   const slice = text.slice(0, maxLen);
   const lastSpace = slice.lastIndexOf(' ');
   const clipped = lastSpace > maxLen * 0.5 ? slice.slice(0, lastSpace) : slice;
   return `${clipped.replace(/[\s,;:(-]+$/, '')}…`;
-}
-
-function extractOrderRef(text: string): string | null {
-  const orderMatch = text.match(/\border\s*(#?\d{3,})\b/i);
-  if (orderMatch) {
-    const raw = orderMatch[1];
-    return raw.startsWith('#') ? raw : `#${raw}`;
-  }
-  const hashMatch = text.match(/(#\d{3,})/);
-  return hashMatch ? hashMatch[1] : null;
 }
 
 // An address or link in a briefing line is noise the merchant cannot act on,
@@ -133,132 +115,6 @@ export function redactBriefingContacts(text: string): string {
     .replace(/https?:\/\/\S+/gi, 'a link');
 }
 
-// Removing anything from mid-sentence strands the punctuation that framed it:
-// "for four orders (#1019, #1020)" became "for four orders (,".
-function tidyPunctuation(text: string): string {
-  return text
-    .replace(/\(\s*[,;]\s*/g, '(')
-    .replace(/\(\s*\)/g, '')
-    .replace(/\s+([,;.!?])/g, '$1')
-    .replace(/([,;])(?:\s*[,;])+/g, '$1')
-    .replace(/\s{2,}/g, ' ')
-    .replace(/[\s,;:(-]+$/, '')
-    .trim();
-}
-
-// One structural rule, not a list of remembered phrasings: drop the
-// "Customer <verb>" opener the classifier is prompted to write. Per-ticket
-// rewrites used to live here (", stated twice" → ", repeated"; "and mentions an
-// upcoming trip" → ", trip soon"). Each was fitted to one morning's summaries
-// and left the next morning's to fall through raw.
-const SUMMARY_PREAMBLE =
-  /^(?:the\s+)?(?:customer|visitor|shopper|sender|someone)\s+(?:states?|reports?|writes?|wrote|sent|says?|said|is\s+asking|asks?|asked|requests?|requested|wants?|mentions?|notes?|claims?|provides?|provided)\s+(?:that\s+|for\s+|about\s+|whether\s+|if\s+)?/i;
-
-// The classifier's own tic for a fragmentary message, straight from its prompt.
-const SINGLE_WORD_PREAMBLE = /^a\s+single\s+word:\s*/i;
-
-/**
- * The same opener as SUMMARY_PREAMBLE, but capturing, so a full sentence can be
- * rebuilt around the person instead of the opener being deleted.
- *
- * `aiSummary` is written third-person present for a dashboard field — "Customer
- * asks to move order #1043 to a new flat". Printed under a name on a phone it
- * reads like a system record of a person rather than a colleague telling you
- * what happened: the noun repeats what the line already said, and the present
- * tense narrates something that happened hours ago as though it were happening
- * now.
- */
-const REPORTED_SPEECH =
-  /^(?:the\s+)?(?:customer|visitor|shopper|sender|someone)\s+(states?|reports?|writes?|wrote|sent|says?|said|is\s+asking|asks?|asked|requests?|requested|wants?|mentions?|notes?|claims?|provides?|provided)\s+(that\s+|for\s+|about\s+|whether\s+|if\s+)?/i;
-
-// Closed set, because it is exactly the verbs the classifier prompt offers. A
-// general past-tense rule would be guessing at words that never arrive.
-const REPORTED_VERB_PAST: Record<string, string> = {
-  state: 'said', states: 'said',
-  report: 'reported', reports: 'reported',
-  write: 'wrote', writes: 'wrote', wrote: 'wrote',
-  sent: 'sent',
-  say: 'said', says: 'said', said: 'said',
-  'is asking': 'asked', ask: 'asked', asks: 'asked', asked: 'asked',
-  // Backshifted to its own past tense, not to "asked". "request" takes a bare
-  // object and "ask" takes one only with `for`, so mapping across the two verbs
-  // dropped the preposition: "and requests a refund" came out of the briefing as
-  // "and asked a refund".
-  request: 'requested', requests: 'requested', requested: 'requested',
-  want: 'wanted', wants: 'wanted',
-  mention: 'mentioned', mentions: 'mentioned',
-  note: 'noted', notes: 'noted',
-  claim: 'claimed', claims: 'claimed',
-  provide: 'gave', provides: 'gave', provided: 'gave',
-};
-
-/**
- * "Customer asks to move order #1043 to a new flat" plus "Dana" becomes "Dana
- * asked to move order #1043 to a new flat". Null when the summary does not open
- * in reported speech, which leaves the caller on its own `Name: blurb` shape
- * rather than inventing a sentence around prose that was not one.
- *
- * Only the opener is rewritten. Rewording the body is the classifier's job, and
- * per-phrase fixes here have already been tried and deleted once: each was
- * fitted to one morning's summaries and left the next morning's raw.
- */
-export function humanizeReportedSummary(subject: string, summary: string): string | null {
-  const match = summary.trim().match(REPORTED_SPEECH);
-  if (!match) return null;
-
-  const verb = REPORTED_VERB_PAST[match[1]!.toLowerCase().replace(/\s+/g, ' ')];
-  const rest = summary.trim().slice(match[0].length).trim();
-  if (!verb || !rest) return null;
-
-  // A summary often runs two verbs off one subject ("reports … and asks …").
-  // Backshifting only the first leaves "Tomás reported … and asks …", which is
-  // the kind of seam that makes a sentence read as generated.
-  const tail = rest.replace(
-    /\b(and|then|but)\s+(states?|reports?|writes?|says?|is\s+asking|asks?|requests?|wants?|mentions?|notes?|claims?|provides?)\b/gi,
-    (_whole, conjunction: string, following: string) => {
-      const past = REPORTED_VERB_PAST[following.toLowerCase().replace(/\s+/g, ' ')];
-      return past ? `${conjunction} ${past}` : `${conjunction} ${following}`;
-    },
-  );
-  return `${subject} ${verb} ${match[2]?.toLowerCase() ?? ''}${tail}`;
-}
-
-function topicFromSummary(summary: string): string {
-  const withoutPreamble = summary
-    .trim()
-    .replace(SUMMARY_PREAMBLE, '')
-    .replace(SINGLE_WORD_PREAMBLE, '')
-    // The article belonged to the verb that was just removed.
-    .replace(/^(?:an?|the)\s+/i, '');
-  const firstSentence = withoutPreamble.split(/(?<=[.!?])\s+/)[0] ?? withoutPreamble;
-  return firstSentence
-    .replace(/^["'](.+)["']$/, '$1')
-    .replace(/\.$/, '');
-}
-
-/**
- * The one line of context a briefing item gets. `aiTitle` is the classifier's
- * own 3-to-6-word subject line naming the topic — which is exactly the unit a
- * phone briefing needs. `aiSummary` is the dashboard's full third-person
- * sentence, capped at 1,000 characters; squeezing that down to a phone line is
- * what produced the mid-sentence truncations.
- */
-export function briefingTopic(
-  aiTitle: string | null,
-  aiSummary: string | null,
-  tag: string | null,
-  maxLen: number = BRIEFING_TOPIC_MAX,
-): string | null {
-  const title = aiTitle?.trim();
-  const summary = aiSummary?.trim();
-  const base = title || (summary ? topicFromSummary(summary) : '');
-  const cleaned = tidyPunctuation(redactBriefingContacts(base));
-  if (cleaned) return truncateBriefingText(capitalize(cleaned), maxLen);
-
-  const trimmedTag = tag?.trim();
-  if (!trimmedTag || trimmedTag === 'General') return null;
-  return capitalize(briefingTagLabel(trimmedTag));
-}
 
 // Who the item is about. The order number earns its place in the subject only
 // when the topic doesn't already carry it — cutting it out of the topic to
@@ -267,11 +123,7 @@ export function briefingTopic(
 // `leadsWithAction` means the line already spends a segment on what the agent
 // wants to do, so a named customer is subject enough; three segments before the
 // topic is more punctuation than information on a phone.
-/**
- * What the briefing calls the person on a ticket. Null means nobody has been
- * identified and the caller supplies its own fallback — `briefingSubject` can
- * fall back to an order reference, the approval line cannot.
- */
+/** What the briefing calls the person on a ticket. */
 function briefingPersonName(
   customerName: string | null,
   channelType: string | null,
@@ -279,24 +131,6 @@ function briefingPersonName(
   followingText = '',
 ): string | null {
   return personLabel(classifyPerson({ customerName, channelType, verifiedOrders, followingText }));
-}
-
-function briefingSubject(
-  customerName: string | null,
-  channelType: string | null,
-  orderRef: string | null,
-  topic: string | null,
-  leadsWithAction = false,
-  verifiedOrders: readonly string[] = [],
-): string {
-  const name = briefingPersonName(customerName, channelType, verifiedOrders);
-  // The verified form already names the order, so the ` · #1024` suffix would
-  // print it twice.
-  const alreadyNamed = orderRef != null
-    && ((topic ?? '').includes(orderRef.replace('#', '')) || (name?.includes(orderRef) ?? false));
-  const ref = orderRef && !alreadyNamed && !(name && leadsWithAction) ? orderRef : null;
-  if (name && ref) return `${name} · ${ref}`;
-  return ref ?? name ?? 'Someone';
 }
 
 /**
@@ -349,28 +183,8 @@ export function formatWaitingAge(now: Date, since: Date | null): string | null {
   return `waiting ${days} day${days === 1 ? '' : 's'}`;
 }
 
-// Compact one-line label for open tickets the merchant hasn't already seen above.
-export function formatBriefingTicketLine(
-  customerName: string | null,
-  aiTitle: string | null,
-  aiSummary: string | null,
-  tag: string | null,
-  channelType?: string | null,
-  verifiedOrders: readonly string[] = [],
-): string {
-  const topic = briefingTopic(aiTitle, aiSummary, tag);
-  const orderRef = extractOrderRef(`${aiTitle ?? ''} ${aiSummary ?? ''}`);
-  const subject = briefingSubject(customerName, channelType ?? null, orderRef, topic, false, verifiedOrders);
-  if (topic) return `${subject}: ${topic}`;
-  return subject === 'Someone' ? 'Open ticket' : subject;
-}
-
 export interface BriefingTicketRow {
   aiTitle?: string | null;
-  aiSummary: string | null;
-  /** The newest unanswered ask. Preferred over `aiSummary` — see `briefingSummarySource`. */
-  requestSummary?: string | null;
-  tag: string | null;
   channelType?: string | null;
   customer: { name: string | null };
   /** Text of the newest customer message, for the sections that quote it. */
@@ -381,51 +195,14 @@ export interface BriefingTicketRow {
   classifierSignals?: unknown;
 }
 
-/**
- * Which summary a briefing line is built from.
- *
- * `requestSummary` is the newest unanswered ask. `aiSummary` is the episode
- * summary — everything said in the conversation so far, true however the
- * conversation moved on. Every other operator surface reads the first:
- * `generateThreadPlan` takes `requestSummary` as its instruction, and the plan
- * and question cards render it. The briefing was the last place still reading
- * the second, which is how one escalation reached a merchant's phone as a refund
- * request *and* a shipping question *and* a pricing question *and* a privacy
- * question — four asks from across the conversation, printed as though they had
- * arrived together, above a plan that only ever addressed the refund.
- *
- * `aiSummary` stays as the fallback: proactive plans (delivery exception, return
- * arrival) have no inbound message to summarise and leave `requestSummary` null
- * by construction, and threads classified before the field existed have none.
- */
-export function briefingSummarySource(thread: BriefingTicketRow): string | null {
-  return thread.requestSummary?.trim() || thread.aiSummary;
-}
-
-/**
- * A handoff line has to carry everything the merchant needs to answer, because
- * anything missing costs a round trip: they ask what the message said, the agent
- * explains, and only then can they act. Two failures to avoid, and they pull in
- * opposite directions.
- *
- * The classifier's `title` is a topic label written for scanning ("Olive Linen
- * Napkins", "Unclear One Word Message"). It never states the request, so it is
- * not used here at all.
- *
- * A verbatim quote states the request exactly, but only while it fits. Cut at a
- * fixed width it becomes the same dead end from the other side: "…the photos look
- * lighter than the" tells the merchant a sentence existed.
- *
- * So: quote the customer whenever the whole message fits, since exact words beat
- * any paraphrase and a short message is the case where nothing is lost. Past that
- * width, use `aiSummary`, which is a complete one-sentence statement of the
- * request rather than a fragment of one. Nothing is elided in either branch.
- */
+/** A short customer message is more useful to a human handoff than a paraphrase. */
 const HANDOFF_VERBATIM_MAX = 120;
-const HANDOFF_SUMMARY_MAX = 240;
+const PHONE_LINE_MAX = 240;
 
 function cleanBriefingText(text: string | null | undefined): string {
-  return redactBriefingContacts((text ?? '').replace(/\s+/g, ' ').trim());
+  return redactPostalAddresses(
+    redactBriefingContacts((text ?? '').replace(/\s+/g, ' ').trim()),
+  );
 }
 
 /**
@@ -447,15 +224,12 @@ function handoffSubject(thread: BriefingTicketRow, followingText: string): strin
 const REQUEST_FACTS_MIN_VERSION = 5;
 
 /**
- * The structured fields for a row, when the classifier wrote them. Null for
- * every thread classified before version 5, which is what keeps the prose
- * fallbacks below reachable until those age out.
+ * The structured fields for a row, when the classifier wrote them. Older rows
+ * deliberately render as unavailable rather than reviving model-prose repair.
  *
  * The version check is load-bearing and used not to be: `parseClassifierSignals`
  * fills `requestFacts` with `emptyRequestFacts()` whatever version wrote the
  * row, so this returned empty facts for a version-4 thread rather than null.
- * That was invisible while an unnamed ask rendered no line — the row fell
- * through to prose either way — and became visible the moment one did.
  */
 export function rowRequestFacts(thread: { classifierSignals?: unknown }): RequestFacts | null {
   const signals = parseClassifierSignals(thread.classifierSignals);
@@ -469,14 +243,12 @@ export function rowHasNoRequest(thread: { classifierSignals?: unknown }): boolea
 }
 
 /**
- * What a row can still say when no ask was named. `aiTitle` goes through
- * redaction — a topic can carry an address the classifier echoed — but not
- * through `briefingTopic`, whose summary fallback and punctuation repair are
- * the prose machinery this is replacing.
+ * What a row can still say when no ask was named. `aiTitle` is a bounded topic
+ * field from the classifier, not a sentence to re-tense or otherwise repair.
  */
 function askLessTopic(aiTitle: string | null | undefined): string | null {
   const title = aiTitle?.trim();
-  return title ? redactBriefingContacts(title) : null;
+  return title ? redactPostalAddresses(redactBriefingContacts(title)) : null;
 }
 
 export function rowAskLess(thread: BriefingTicketRow): AskLessContext {
@@ -496,15 +268,12 @@ function factsHandoffLine(thread: BriefingTicketRow, now: Date): string | null {
     now,
     rowAskLess(thread),
   );
-  return line ? truncateBriefingText(line, HANDOFF_SUMMARY_MAX) : null;
+  return line ? truncateBriefingText(redactPostalAddresses(line), PHONE_LINE_MAX) : null;
 }
 
 export function formatBlockedTicketLine(thread: BriefingTicketRow, now: Date = new Date()): string {
   const message = cleanBriefingText(thread.pendingMessage);
-  const subject = handoffSubject(
-    thread,
-    `${message} ${cleanBriefingText(briefingSummarySource(thread))}`,
-  );
+  const subject = handoffSubject(thread, message);
 
   // Short enough to print whole. Covers the one-word case the merchant is meant
   // to judge for themselves: if a bare "yo" ever reaches a handoff, it arrives as
@@ -518,22 +287,13 @@ export function formatBlockedTicketLine(thread: BriefingTicketRow, now: Date = n
     return `${subject} ${message.includes('?') ? 'asked' : 'wrote'}: "${message}"`;
   }
 
-  // Fields before prose, but after the quote above: the customer's own words
-  // beat any rendering of them, and that branch only fires when the whole
-  // message fits, so nothing is lost by preferring it.
+  // Fields before any long-message fallback, but after a complete short quote.
   const factsLine = factsHandoffLine(thread, now);
   if (factsLine) return factsLine;
 
-  const summary = cleanBriefingText(briefingSummarySource(thread));
-  if (summary) {
-    const humanized = humanizeReportedSummary(subject, summary);
-    if (humanized) return truncateBriefingText(humanized, HANDOFF_SUMMARY_MAX);
-    return `${subject}: ${truncateBriefingText(summary, HANDOFF_SUMMARY_MAX)}`;
-  }
-
-  // Long message, no summary — the one branch that can still elide. Cut at the
-  // summary budget rather than the quote budget so the most possible survives.
-  if (message) return `${subject} wrote: "${truncateBriefingText(message, HANDOFF_SUMMARY_MAX)}"`;
+  // The customer text is source material, not model prose. Keep a bounded,
+  // postal-redacted quote when structured classification is unavailable.
+  if (message) return `${subject} wrote: "${truncateBriefingText(message, PHONE_LINE_MAX)}"`;
   return formatTicketLine(thread);
 }
 
@@ -541,29 +301,10 @@ export function formatBlockedTicketLine(thread: BriefingTicketRow, now: Date = n
 export function formatEscalatedTicketLine(thread: BriefingTicketRow, now: Date = new Date()): string {
   const factsLine = factsHandoffLine(thread, now);
   if (factsLine) return `${endClause(factsLine)} I flagged it for you.`;
-
-  const summary = cleanBriefingText(briefingSummarySource(thread));
-  const subject = handoffSubject(thread, summary);
-  if (summary) {
-    const humanized = humanizeReportedSummary(subject, summary);
-    // Capped like the blocked line above. The rewritten branch used to return
-    // uncapped, which was survivable while the input was a truncated episode
-    // summary and is not now: a request summary carrying a deadline, an address
-    // change and a refund fallback reaches 300 characters in one breath.
-    if (humanized) {
-      return `${endClause(truncateBriefingText(humanized, HANDOFF_SUMMARY_MAX))} I flagged it for you.`;
-    }
-    return `${subject}: ${truncateBriefingText(summary, HANDOFF_SUMMARY_MAX)}. I flagged it for you.`;
-  }
-  return `${subject} asked for a human. I flagged it for you.`;
+  return `${endClause(formatRequestDisplayLine(unavailableRequestDisplay(), null, now))} I flagged it for you.`;
 }
 
 export function formatTicketLine(thread: BriefingTicketRow, now: Date = new Date()): string {
-  // Fields first, prose second. A version-5 row with no ask named now renders
-  // from `aiTitle` instead of falling through. A row classified before
-  // requestFacts existed still does fall through, and must: it has no `order`
-  // field, and its `aiSummary` is a whole statement of the request, so a title
-  // line would be strictly less than the prose it replaced. Those age out.
   const facts = rowRequestFacts(thread);
   if (facts) {
     const person = briefingPersonName(
@@ -572,17 +313,9 @@ export function formatTicketLine(thread: BriefingTicketRow, now: Date = new Date
       thread.verifiedOrders ?? [],
     );
     const line = formatFactsBriefingLine(facts, person, now, rowAskLess(thread));
-    if (line) return line;
+    if (line) return redactPostalAddresses(line);
   }
-
-  return formatBriefingTicketLine(
-    thread.customer?.name ?? null,
-    thread.aiTitle ?? null,
-    briefingSummarySource(thread),
-    thread.tag,
-    thread.channelType ?? null,
-    thread.verifiedOrders ?? [],
-  );
+  return formatRequestDisplayLine(unavailableRequestDisplay(), null, now);
 }
 
 async function isPlanExecutionResolved(
@@ -778,13 +511,8 @@ async function loadOperatorWaitingItems(
       const thread = await db.thread.findFirst({
         where: { id: pendingPlan.threadId, organizationId },
         select: {
-          updatedAt: true,
-          aiTitle: true,
-          aiSummary: true,
-          tag: true,
           channelType: true,
           filterStatus: true,
-          classifierSignals: true,
           cachedPlan: true,
           cachedPlanMessageId: true,
           customer: { select: { name: true } },
@@ -800,14 +528,15 @@ async function loadOperatorWaitingItems(
         const currentPlan = getCurrentPlanForThread(thread, thread.messages);
         if (
           currentPlan
-          && classifyHomePlan(currentPlan, settings, { filterStatus: thread.filterStatus }).kind === 'quick_reply'
+          && decideAutonomy(currentPlan, settings, { filterStatus: thread.filterStatus }).kind === 'quick_reply'
         ) {
           continue;
         }
       }
       const dedupeKey = pendingPlan.planId
         ?? `${pendingPlan.threadId}:${pendingPlan.planHash ?? ''}:${pendingPlan.instructionHash ?? ''}`;
-      const requestFacts = thread ? rowRequestFacts(thread) : null;
+      const requestDisplay = pendingPlan.requestDisplay ?? unavailableRequestDisplay();
+      const requestFacts = requestDisplay.kind === 'classified' ? requestDisplay.facts : null;
       items.push({
         dedupeKey,
         threadId: pendingPlan.threadId,
@@ -816,14 +545,9 @@ async function loadOperatorWaitingItems(
         line: formatApprovalItemLine({
           customerName: thread?.customer?.name ?? pendingPlan.customerName ?? null,
           channelType: thread?.channelType ?? null,
-          aiTitle: thread?.aiTitle ?? null,
-          aiSummary: thread?.aiSummary ?? null,
-          tag: thread?.tag ?? null,
           rawToolCalls: pendingPlan.rawToolCalls,
-          instruction: pendingPlan.instruction,
           actionLabel: pendingPlan.actionLabel,
-          requestFacts,
-          noRequest: thread ? rowHasNoRequest(thread) : false,
+          requestDisplay,
           now,
         }),
       });
@@ -852,10 +576,7 @@ async function loadStaleThreadWaitingItems(
       cachedPlanMessageId: true,
       updatedAt: true,
       aiTitle: true,
-      aiSummary: true,
-      requestSummary: true,
       classifierSignals: true,
-      tag: true,
       channelType: true,
       filterStatus: true,
       customer: { select: { name: true } },
@@ -883,7 +604,7 @@ async function loadStaleThreadWaitingItems(
 
     // Safe replies belong to the autonomous recovery lane, not the merchant's
     // morning. Every other current plan remains an explicit approval or question.
-    if (classifyHomePlan(plan, settings, { filterStatus: thread.filterStatus }).kind === 'quick_reply') {
+    if (decideAutonomy(plan, settings, { filterStatus: thread.filterStatus }).kind === 'quick_reply') {
       continue;
     }
     if (cached.planId && await isPlanExecutionResolved(organizationId, cached.planId)) {
@@ -901,11 +622,7 @@ async function loadStaleThreadWaitingItems(
         customerName: thread.customer?.name ?? null,
         channelType: thread.channelType,
         aiTitle: thread.aiTitle,
-        aiSummary: thread.aiSummary,
-        requestSummary: thread.requestSummary,
-        tag: thread.tag,
         rawToolCalls: plan.rawToolCalls,
-        instruction: cached.instruction,
         verifiedOrders: verifiedByThread.get(thread.id) ?? [],
         requestFacts,
         noRequest: rowHasNoRequest(thread),
@@ -1025,11 +742,7 @@ export function formatApprovalItemLine(params: {
   customerName: string | null;
   channelType?: string | null;
   aiTitle?: string | null;
-  aiSummary: string | null;
-  requestSummary?: string | null;
-  tag: string | null;
   rawToolCalls: Array<{ id: string; name: string; input?: unknown }>;
-  instruction: string;
   actionLabel?: string;
   verifiedOrders?: readonly string[];
   /** The classifier's structured fields, when the thread has them. */
@@ -1037,6 +750,8 @@ export function formatApprovalItemLine(params: {
   /** `intents.no_request` — nothing has been asked yet on this thread. */
   noRequest?: boolean;
   now?: Date;
+  /** Immutable snapshot parked with the plan. Preferred for pending approvals. */
+  requestDisplay?: RequestDisplay;
 }): string {
   const subject = briefingPersonName(
     params.customerName,
@@ -1051,6 +766,14 @@ export function formatApprovalItemLine(params: {
     : lowerFirst(approvalActionHead(params.rawToolCalls) ?? params.actionLabel ?? 'reply');
   const ready = refundAmount ? `I've got ${refundAmount} ready.` : `${capitalize(action)}'s drafted.`;
 
+  if (params.requestDisplay) {
+    return `${endClause(formatRequestDisplayLine(
+      params.requestDisplay,
+      subject,
+      params.now ?? new Date(),
+    ))} ${ready}`;
+  }
+
   // The clause states what the customer wanted; `ready` states what a yes does.
   // Fields build the first half when the classifier wrote them, which is what
   // lets a deadline open the line instead of landing past the truncation.
@@ -1063,16 +786,9 @@ export function formatApprovalItemLine(params: {
       )
     : null;
   if (factsClause) {
-    return `${endClause(truncateBriefingText(factsClause, HANDOFF_SUMMARY_MAX))} ${ready}`;
+    return `${endClause(truncateBriefingText(redactPostalAddresses(factsClause), PHONE_LINE_MAX))} ${ready}`;
   }
-
-  const source = params.requestSummary?.trim() || params.aiSummary;
-  const summary = source?.trim();
-  const humanized = summary ? humanizeReportedSummary(subject, summary) : null;
-  if (humanized) return `${endClause(truncateBriefingText(humanized, HANDOFF_SUMMARY_MAX))} ${ready}`;
-
-  const topic = briefingTopic(params.aiTitle ?? null, source, params.tag);
-  return topic ? `${subject} — ${action} · ${topic}` : `${subject} — ${action}`;
+  return `${endClause(formatRequestDisplayLine(unavailableRequestDisplay(), null, params.now))} ${ready}`;
 }
 
 /**

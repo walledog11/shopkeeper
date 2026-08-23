@@ -56,7 +56,7 @@ export async function executeOperatorApprovedCachedPlan(params: {
     orgId: params.orgId,
     threadId: params.threadId,
     settings: resolveAgentSettings(org?.settings),
-    allowedKinds: ['quick_reply', 'needs_review', 'auto_execute'],
+    executionIntent: 'merchant_approved',
     failureRoute: FAILURE_ROUTE,
     approvedToolCalls: params.approvedToolCalls,
     ...(params.expectedIdentity ? { expectedIdentity: params.expectedIdentity } : {}),

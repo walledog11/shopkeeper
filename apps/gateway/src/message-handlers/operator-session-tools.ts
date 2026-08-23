@@ -1,9 +1,11 @@
 import { defineTool, stringArg, toolError, toolOk, type AgentToolDefinition } from '@shopkeeper/agent/tools';
 import { formatOperatorDispatchFailure, isPlanExecutionFailureMessage } from '@shopkeeper/agent/message-dispatch';
+import { ConflictError } from '@shopkeeper/agent/errors';
 import type { SupportContext } from '@shopkeeper/agent/context';
 import logger from '../logger.js';
 import {
   expectedPlanIdentity,
+  isPendingPlanInvalid,
   updateContext,
   normalizeApprovedToolCalls,
   selectPendingPlan,
@@ -74,6 +76,9 @@ export function buildOperatorSessionTools(
       const selected = selectPendingPlan(context.pendingPlans, input.plan_ref, context.pendingDigest);
       if ('error' in selected) return toolError(selected.error);
       const pendingPlan = selected.plan;
+      if (isPendingPlanInvalid(pendingPlan)) {
+        return toolError('Error: this draft failed validation and cannot be approved. Revise it, dismiss it, or take over in the dashboard.');
+      }
 
       // The operator turn holds the operator thread's lock; approval runs on the
       // ticket thread's lock — different thread ids, no deadlock. Guard the
@@ -122,8 +127,17 @@ export function buildOperatorSessionTools(
     execute: async (input: PlanRefInput) => {
       const selected = selectPendingPlan(context.pendingPlans, input.plan_ref, context.pendingDigest);
       if ('error' in selected) return toolError(selected.error);
-      await clearPendingPlan(organizationId, memberKey, selected.plan);
-      return toolOk('Plan dismissed.');
+      try {
+        const dismissed = await clearPendingPlan(organizationId, memberKey, selected.plan);
+        return dismissed
+          ? toolOk('Plan dismissed.')
+          : toolError('Error: that plan was already replaced or resolved.');
+      } catch (error) {
+        if (error instanceof ConflictError) {
+          return toolError("Error: that plan is already running or completed, so it can't be dismissed.");
+        }
+        throw error;
+      }
     },
   });
 

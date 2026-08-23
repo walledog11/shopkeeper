@@ -127,7 +127,7 @@ describe('generateThreadPlan auto-execute path', () => {
 
   it('auto-executes a warm cache hit when allowAutoExecute is true', async () => {
     mockMaybeAutoExecute.mockResolvedValueOnce({
-      classification: { kind: 'auto_execute' },
+      verdict: { kind: 'auto_execute' },
       result: { summary: 'Done', actionsPerformed: [] },
     });
     const result = await generateThreadPlan('org_1', 'thread_1', true);
@@ -145,7 +145,7 @@ describe('generateThreadPlan auto-execute path', () => {
 
   it('auto-executes a safe reply even when mutative auto-execute is disabled', async () => {
     mockMaybeAutoExecute.mockResolvedValueOnce({
-      classification: { kind: 'quick_reply' },
+      verdict: { kind: 'quick_reply' },
       result: { summary: 'Asked for the order number', actionsPerformed: [] },
     });
 

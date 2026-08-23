@@ -26,12 +26,20 @@ import {
   classifyPerson,
   customerFirstName,
   personObject,
+  personLabel,
   personSubject,
   type PersonName,
 } from '@shopkeeper/agent/person-name';
 import { getOperatorPlanQueueMax } from '../config/runtime-config.js';
 import { listVerifiedOrderNames } from '../storefront-chat-verified-orders.js';
 import { getConversationBurst } from './conversation-burst.js';
+import {
+  buildRequestDisplaySnapshot,
+  formatRequestDisplayLine,
+  redactPostalAddresses,
+  type RequestDisplay,
+  type SystemRequestKind,
+} from './request-display.js';
 
 export interface OperatorNotificationExclude {
   channel: OperatorBinding['channel'];
@@ -194,6 +202,21 @@ function formatHeaderLines(
   return [`${lead}.`, endSentence(summary)];
 }
 
+function formatRequestHeaderLines(
+  person: PersonName,
+  channelType: DbChannelType,
+  display: RequestDisplay,
+  stage: ConversationStage,
+): string[] {
+  // Reuse the established channel/stage sentence, but never its prose summary.
+  const lead = formatHeaderLines(person, channelType, '', stage)[0]!;
+  const request = formatRequestDisplayLine(display, personLabel(person));
+  return [
+    lead,
+    endSentence(request),
+  ];
+}
+
 function isSendStep(step: PlanStep): boolean {
   return step.tool === 'send_reply' || step.tool === 'send_email';
 }
@@ -210,7 +233,9 @@ function escalationReason(
     const input = toolCall.input;
     if (!input || typeof input !== 'object') continue;
     const reason = (input as Record<string, unknown>).reason;
-    if (typeof reason === 'string' && reason.trim()) return reason.trim();
+    if (typeof reason === 'string' && reason.trim()) {
+      return redactPostalAddresses(reason.trim(), rawToolCalls);
+    }
   }
   return null;
 }
@@ -239,7 +264,7 @@ export function parkedActionLabel(steps: PlanStep[], person: PersonName): string
 export function formatOperatorPlanMessage(
   customerName: string | null,
   channelType: DbChannelType,
-  summary: string,
+  requestDisplay: RequestDisplay,
   steps: PlanStep[],
   options?: {
     threadId?: string;
@@ -255,6 +280,7 @@ export function formatOperatorPlanMessage(
     // describes an anonymous visitor above a draft that quotes their address,
     // and the merchant has no way to tell a correct disclosure from a leak.
     verifiedOrders?: readonly string[];
+    validation?: AgentPlan['validation'];
   },
 ): string {
   const stage = options?.stage ?? FRESH_STAGE;
@@ -273,7 +299,22 @@ export function formatOperatorPlanMessage(
   // The actual draft the merchant is approving, so approval is not sight-unseen.
   const draftBody = options?.rawToolCalls ? firstDraftExcerpt(options.rawToolCalls) : null;
 
-  const lines: string[] = formatHeaderLines(person, channelType, summary, stage);
+  const lines: string[] = formatRequestHeaderLines(person, channelType, requestDisplay, stage);
+
+  if (options?.validation?.status === 'invalid') {
+    lines.push(
+      '',
+      "I couldn't produce a safe executable draft:",
+      ...options.validation.issues.map((issue) => (
+        `- ${redactPostalAddresses(issue.message, options.rawToolCalls ?? [])}`
+      )),
+    );
+    if (options?.threadId && options.dashboardUrl) {
+      lines.push('', `Open the thread to regenerate or take over: ${options.dashboardUrl}/dashboard/tickets?thread=${options.threadId}`);
+    }
+    lines.push('', "Nothing can run from this draft. Tell me what to change, or dismiss it.");
+    return lines.join('\n');
+  }
 
   // Directly under the header, because it qualifies the header: everything above
   // describes an anonymous storefront visitor, and this is the one fact that
@@ -308,13 +349,17 @@ export function formatOperatorPlanMessage(
     // wrote the card; say it as a sentence instead. parkedActionLabel already
     // renders the phrase that completes "I won't …", which completes "I'd …" too.
     const only = parkedActionLabel(approvableSteps, person);
-    lines.push('', only ? `I'd ${only}.` : `I'd ${lowerFirst(approvableSteps[0]!.label || approvableSteps[0]!.description)}.`);
+    const fallback = redactPostalAddresses(
+      approvableSteps[0]!.label || approvableSteps[0]!.description,
+      options?.rawToolCalls ?? [],
+    );
+    lines.push('', only ? `I'd ${only}.` : `I'd ${lowerFirst(fallback)}.`);
     if (draftBody) lines.push('', `The reply: "${draftBody}"`);
   } else if (approvableSteps.length > 0) {
     const stepLines = approvableSteps.map((step, index) => {
       if (step.tool === 'send_reply') return `${index + 1}. Reply to ${personObject(person)}`;
       if (step.tool === 'send_email') return `${index + 1}. Email ${personObject(person)}`;
-      return `${index + 1}. ${step.label || step.description}`;
+      return `${index + 1}. ${redactPostalAddresses(step.label || step.description, options?.rawToolCalls ?? [])}`;
     });
     lines.push('', "Here's what I'd do:", ...stepLines);
     if (draftBody) lines.push('', `The reply: "${draftBody}"`);
@@ -372,15 +417,21 @@ export function formatOperatorDraftSummary(
   customerName: string | null,
   plan: AgentPlan,
   surface: OperatorSurface = 'messaging',
+  requestDisplay?: RequestDisplay,
 ): string {
   const name = customerName ? customerName.split(' ')[0] : 'the customer';
   const actionableSteps = plan.steps.filter((step) => step.category !== 'read');
-  const stepList = actionableSteps.map((step) => step.label || step.description).join('; ');
+  const stepList = actionableSteps
+    .map((step) => redactPostalAddresses(step.label || step.description, plan.rawToolCalls))
+    .join('; ');
   const draftBody = firstDraftExcerpt(plan.rawToolCalls);
 
   const parts = [
     `Re-drafted the plan for ${name} (${actionableSteps.length} step${actionableSteps.length !== 1 ? 's' : ''}: ${stepList}).`,
   ];
+  if (requestDisplay) {
+    parts.push(`Request: ${endSentence(formatRequestDisplayLine(requestDisplay, name))}`);
+  }
   if (draftBody) parts.push(`Draft: "${draftBody}"`);
   parts.push(surface === 'desk'
     ? "It's parked for the merchant's approval — they can approve it on the plan itself or ask for more changes."
@@ -395,6 +446,7 @@ function formatAutoExecutionMessage(
   plan: AgentPlan,
   result: PrecomputedPlanResult,
 ): string {
+  const safeSummary = redactPostalAddresses(summary, plan.rawToolCalls);
   const firstName = customerFirstName(customerName);
   const noun = channelNoun(channelType);
   // Neutral possessive header: by the time this fans out, the agent's own reply
@@ -403,21 +455,27 @@ function formatAutoExecutionMessage(
     ? `${firstName}'s ${noun}.`
     : `${noun.charAt(0).toUpperCase()}${noun.slice(1)}.`;
   const actionableSteps = plan.steps.filter((step) => step.category !== 'read');
-  const stepLines = actionableSteps.map((step, index) => `${index + 1}. ${step.description || step.label}`);
+  const stepLines = actionableSteps.map((step, index) => (
+    `${index + 1}. ${redactPostalAddresses(step.description || step.label, plan.rawToolCalls)}`
+  ));
   const statusLine = result.autoExecutionStatus === 'error'
     ? 'I tried to handle this one myself but hit a problem:'
     : 'Handled this one myself:';
 
   const lines: (string | null)[] = [
     headline,
-    endSentence(summary),
+    endSentence(safeSummary),
     '',
     statusLine,
     ...stepLines,
     result.autoExecutionSummary ? '' : null,
-    result.autoExecutionSummary ?? null,
+    result.autoExecutionSummary
+      ? redactPostalAddresses(result.autoExecutionSummary, plan.rawToolCalls)
+      : null,
     result.autoExecutionError ? '' : null,
-    result.autoExecutionError ? `Error: ${result.autoExecutionError}` : null,
+    result.autoExecutionError
+      ? `Error: ${redactPostalAddresses(result.autoExecutionError, plan.rawToolCalls)}`
+      : null,
   ];
 
   return lines.filter((line): line is string => line !== null).join('\n');
@@ -502,10 +560,12 @@ function formatQuestionMessage(
   question: string,
   stage: ConversationStage,
 ): string {
+  const safeSummary = redactPostalAddresses(summary);
+  const safeQuestion = redactPostalAddresses(question);
   return [
-    ...formatHeaderLines(classifyPerson({ customerName, channelType }), channelType, summary, stage),
+    ...formatHeaderLines(classifyPerson({ customerName, channelType }), channelType, safeSummary, stage),
     '',
-    `${question} I'll draft the reply once I know.`,
+    `${safeQuestion} I'll draft the reply once I know.`,
   ].join('\n');
 }
 
@@ -557,10 +617,15 @@ export async function sendOperatorPlanNotification(
   threadId: string,
   customerName: string | null,
   channelType: DbChannelType,
-  requestSummary: string | null,
+  _requestSummary: string | null,
   plan: AgentPlan,
   instruction: string,
-  options?: { exclude?: OperatorNotificationExclude; identity?: PlanIdentity },
+  options?: {
+    exclude?: OperatorNotificationExclude;
+    identity?: PlanIdentity;
+    requestDisplay?: RequestDisplay;
+    systemRequest?: SystemRequestKind;
+  },
 ): Promise<void> {
   const bindings = await listOperatorBindings(organizationId);
 
@@ -569,9 +634,15 @@ export async function sendOperatorPlanNotification(
     return;
   }
 
-  const summary = requestSummary || instruction;
   const stage = await getConversationStage(threadId);
   const verifiedOrders = await listVerifiedOrderNames(organizationId, threadId, channelType);
+  const requestDisplay = options?.requestDisplay ?? await buildRequestDisplaySnapshot({
+    organizationId,
+    threadId,
+    sourceMessageId: options?.identity?.sourceMessageId,
+    rawToolCalls: plan.rawToolCalls,
+    ...(options?.systemRequest ? { systemEvent: options.systemRequest } : {}),
+  });
   const dashboardUrl = getGatewayDashboardUrl();
   const idempotencyKey = planNotificationIdempotencyKey(
     organizationId,
@@ -596,6 +667,8 @@ export async function sendOperatorPlanNotification(
     ...(options?.identity ?? {}),
     ...(customerName ? { customerName } : {}),
     ...(actionLabel ? { actionLabel } : {}),
+    ...(plan.validation ? { validation: plan.validation } : {}),
+    requestDisplay,
   };
 
   await notifyCriticalToAllOperators(
@@ -629,12 +702,13 @@ export async function sendOperatorPlanNotification(
       }
 
       return {
-        body: formatOperatorPlanMessage(customerName, channelType, summary, plan.steps, {
+        body: formatOperatorPlanMessage(customerName, channelType, requestDisplay, plan.steps, {
           threadId,
           dashboardUrl,
           rawToolCalls: plan.rawToolCalls,
           stage,
           ...(verifiedOrders.length > 0 ? { verifiedOrders } : {}),
+          ...(plan.validation ? { validation: plan.validation } : {}),
           ...(queueNotice ? { queueNotice } : {}),
         }),
         contextPatch: {},

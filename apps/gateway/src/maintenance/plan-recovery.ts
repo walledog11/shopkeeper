@@ -1,6 +1,6 @@
 import type { Queue } from 'bullmq';
 import { db, ThreadFilterStatus } from '@shopkeeper/db';
-import { classifyHomePlan } from '@shopkeeper/agent/plan-preview';
+import { decideAutonomy } from '@shopkeeper/agent/autonomy';
 import { getCurrentPlanForThread } from '@shopkeeper/agent/plan-cache-shape';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { SENDER_TYPE } from '@shopkeeper/agent/thread-constants';
@@ -67,14 +67,14 @@ export async function recoverMissingPlans(
 
     const currentPlan = getCurrentPlanForThread(thread, thread.messages);
     if (currentPlan) {
-      const classification = classifyHomePlan(
+      const verdict = decideAutonomy(
         currentPlan,
         resolveAgentSettings(thread.organization.settings),
         { filterStatus: ThreadFilterStatus.genuine },
       );
       // Approval actions and explicit merchant questions already have an owner.
       // Only a safe reply is stranded work the agent should finish itself.
-      if (classification.kind !== 'quick_reply') continue;
+      if (verdict.kind !== 'quick_reply') continue;
     }
 
     await enqueueAiSummaryJob(aiSummaryQueue, {

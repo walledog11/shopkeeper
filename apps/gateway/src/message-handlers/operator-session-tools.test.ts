@@ -10,7 +10,7 @@ import {
 import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import type { BaseAgentContext } from '@shopkeeper/agent/context';
-import { ConflictError } from '@shopkeeper/agent/errors';
+import { BadRequestError, ConflictError } from '@shopkeeper/agent/errors';
 
 const { mockExecuteOperatorAgentTurn, planAgentSpy, sendOperatorPlanNotificationSpy } = vi.hoisted(() => ({
   mockExecuteOperatorAgentTurn: vi.fn(),
@@ -71,6 +71,34 @@ afterEach(async () => {
 });
 
 describe('approve_pending_plan', () => {
+  it('keeps an invalid draft parked and executes nothing', async () => {
+    const memberKey = 'member:invalid';
+    await updateContext(org.id, memberKey, {
+      pendingPlan: {
+        threadId: 'ticket_thread_1',
+        instruction: 'promise a refund',
+        rawToolCalls: [{ id: 'tc1', name: 'send_reply', input: { text: 'Your refund is complete.' } }],
+        validation: {
+          status: 'invalid',
+          issues: [{
+            code: 'ungrounded_customer_reply',
+            message: 'The drafted reply claims an action that is not in the plan.',
+            toolCallId: 'tc1',
+            tool: 'send_reply',
+          }],
+        },
+      },
+    });
+    const tools = await buildTools(memberKey);
+
+    const result = await tools.approve_pending_plan.execute({}, baseCtx, settings, emptyDeps);
+
+    expect(result.status).toBe('error');
+    expect(result.message).toContain('failed validation');
+    expect(mockExecuteOperatorAgentTurn).not.toHaveBeenCalled();
+    expect((await getContext(org.id, memberKey)).pendingPlan?.validation?.status).toBe('invalid');
+  });
+
   it('executes the stored tool calls verbatim and clears the pending plan', async () => {
     const memberKey = 'member:approve';
     await updateContext(org.id, memberKey, {
@@ -141,6 +169,30 @@ describe('approve_pending_plan', () => {
     expect(result.status).toBe('error');
     expect((await getContext(org.id, 'device_a')).pendingPlan).toBeNull();
     expect((await getContext(org.id, 'device_b')).pendingPlan).toBeNull();
+  });
+
+  it('keeps a current stable plan parked when approval needs revision', async () => {
+    const pendingPlan = {
+      threadId: '00000000-0000-4000-8000-000000000041',
+      instruction: 'refund order #1001',
+      rawToolCalls: [{ id: 'tc1', name: 'create_refund', input: { amount: 5 } }],
+      planId: '00000000-0000-4000-8000-000000000042',
+      sourceMessageId: '00000000-0000-4000-8000-000000000043',
+      planHash: 'c'.repeat(64),
+      instructionHash: 'd'.repeat(64),
+    };
+    await updateContext(org.id, 'device_a', { pendingPlan });
+    await updateContext(org.id, 'device_b', { pendingPlan });
+    mockExecuteOperatorAgentTurn.mockRejectedValueOnce(
+      new BadRequestError('Changing action steps requires a revised customer reply.'),
+    );
+    const tools = await buildTools('device_a');
+
+    const result = await tools.approve_pending_plan.execute({}, baseCtx, settings, emptyDeps);
+
+    expect(result.status).toBe('error');
+    expect((await getContext(org.id, 'device_a')).pendingPlan).toMatchObject({ planId: pendingPlan.planId });
+    expect((await getContext(org.id, 'device_b')).pendingPlan).toMatchObject({ planId: pendingPlan.planId });
   });
 
   it('errors and runs nothing when no plan is pending', async () => {
@@ -230,6 +282,88 @@ describe('approve_pending_plan', () => {
 });
 
 describe('reject_pending_plan', () => {
+  it('durably clears a valid cached plan as well as the parked copy', async () => {
+    const memberKey = 'member:reject-valid';
+    const customer = await createTestCustomer(org.id, 'valid-dismiss@example.com');
+    const thread = await createTestThread(org.id, customer.id, 'email');
+    const message = await createTestMessage(thread.id, 'Please reply', SenderType.customer);
+    const cache = buildAgentPlanCacheRecord({
+      instruction: 'Reply',
+      lastCustomerMessageId: message.id,
+      settings,
+      plan: {
+        instruction: 'Reply',
+        steps: [{ id: 'send_1', tool: 'send_reply', label: 'Reply', description: 'Reply', category: 'communication', enabled: true }],
+        rawToolCalls: [{ id: 'send_1', name: 'send_reply', input: { text: 'Hello' } }],
+        validation: { status: 'valid', issues: [] },
+      },
+    });
+    await db.thread.update({
+      where: { id: thread.id },
+      data: { cachedPlan: cache as object, cachedPlanMessageId: message.id },
+    });
+    await updateContext(org.id, memberKey, {
+      pendingPlan: {
+        threadId: thread.id,
+        instruction: 'Reply',
+        rawToolCalls: cache.plan.rawToolCalls.map(({ id, name, input }) => ({ id, name, input })),
+        planId: cache.planId!,
+        validation: { status: 'valid', issues: [] },
+      },
+    });
+    const tools = await buildTools(memberKey);
+
+    const result = await tools.reject_pending_plan.execute({}, baseCtx, settings, emptyDeps);
+
+    expect(result).toEqual({ status: 'ok', message: 'Plan dismissed.' });
+    expect((await getContext(org.id, memberKey)).pendingPlan).toBeNull();
+    expect((await db.thread.findUnique({ where: { id: thread.id } }))?.cachedPlan).toBeNull();
+  });
+
+  it('durably clears the exact cached invalid plan as well as the parked copy', async () => {
+    const memberKey = 'member:reject-invalid';
+    const customer = await createTestCustomer(org.id, 'invalid-dismiss@example.com');
+    const thread = await createTestThread(org.id, customer.id, 'email');
+    const message = await createTestMessage(thread.id, 'Please reply', SenderType.customer);
+    const validation = {
+      status: 'invalid' as const,
+      issues: [{ code: 'invalid_tool_input' as const, message: 'The reply text cannot be blank.' }],
+    };
+    const cache = buildAgentPlanCacheRecord({
+      instruction: 'Reply',
+      lastCustomerMessageId: message.id,
+      settings,
+      plan: {
+        instruction: 'Reply',
+        steps: [],
+        rawToolCalls: [{ id: 'send_1', name: 'send_reply', input: { text: '' } }],
+        validation,
+      },
+    });
+    await db.thread.update({
+      where: { id: thread.id },
+      data: { cachedPlan: cache as object, cachedPlanMessageId: message.id },
+    });
+    await updateContext(org.id, memberKey, {
+      pendingPlan: {
+        threadId: thread.id,
+        instruction: 'Reply',
+        rawToolCalls: cache.plan.rawToolCalls.map(({ id, name, input }) => ({ id, name, input })),
+        planId: cache.planId!,
+        validation,
+      },
+    });
+    const tools = await buildTools(memberKey);
+
+    const result = await tools.reject_pending_plan.execute({}, baseCtx, settings, emptyDeps);
+
+    expect(result).toEqual({ status: 'ok', message: 'Plan dismissed.' });
+    expect((await getContext(org.id, memberKey)).pendingPlan).toBeNull();
+    const updated = await db.thread.findUnique({ where: { id: thread.id } });
+    expect(updated?.cachedPlan).toBeNull();
+    expect(updated?.cachedPlanMessageId).toBeNull();
+  });
+
   it('clears the pending plan', async () => {
     const memberKey = 'member:reject';
     await updateContext(org.id, memberKey, {

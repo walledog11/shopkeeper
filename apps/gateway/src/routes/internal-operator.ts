@@ -5,6 +5,7 @@ import logger from '../logger.js';
 import { runOperatorFreeFormTurn } from '../message-handlers/operator-free-form-turn.js';
 import {
   expectedPlanIdentity,
+  isPendingPlanInvalid,
   getContext,
   loadLivePendingPlans,
   normalizeApprovedToolCalls,
@@ -151,6 +152,12 @@ export function registerInternalOperatorRoutes(router: Router): void {
       if (decision === 'dismiss') {
         await clearPendingPlan(organizationId, memberKey, plan);
         return res.status(200).json({ summary: 'Plan dismissed.' });
+      }
+
+      if (isPendingPlanInvalid(plan)) {
+        return res.status(400).json({
+          error: 'This draft failed validation and cannot be approved. Revise it, dismiss it, or take over in the dashboard.',
+        });
       }
 
       const identity = expectedPlanIdentity(plan);

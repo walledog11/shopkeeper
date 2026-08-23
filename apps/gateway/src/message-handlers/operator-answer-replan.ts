@@ -22,6 +22,7 @@ import {
 } from './planning-notifications.js';
 import { appendPendingPlan, type PendingPlan, type ToolCall } from '../operator-context.js';
 import { getOperatorPlanQueueMax } from '../config/runtime-config.js';
+import { buildRequestDisplaySnapshot } from './request-display.js';
 
 // The transport the merchant is answering on already sees this exchange, so it is
 // dropped from the plan fan-out. The dashboard passes no delivery ref (it gets no
@@ -167,10 +168,17 @@ export async function applyOperatorAnswerReplan(
 
   const exclude = answeringChannelFromDeliveryRef(deliveryRef);
   const customerName = meta?.customer?.name ?? null;
+  const requestDisplay = await buildRequestDisplaySnapshot({
+    organizationId,
+    threadId,
+    sourceMessageId: cacheRecord.lastCustomerMessageId,
+    rawToolCalls: notifyPlan.rawToolCalls,
+  });
   const draftSummary = formatOperatorDraftSummary(
     customerName,
     notifyPlan,
     deliveryRef ? 'messaging' : 'desk',
+    requestDisplay,
   );
   // The answering device is excluded from the fan-out below, so this parks the
   // merchant's own copy —
@@ -191,6 +199,7 @@ export async function applyOperatorAnswerReplan(
     } : {}),
     ...(customerName ? { customerName } : {}),
     ...(actionLabel ? { actionLabel } : {}),
+    requestDisplay,
   };
 
   // Upsert by threadId: the revised draft replaces this thread's own queued entry
@@ -211,6 +220,7 @@ export async function applyOperatorAnswerReplan(
       baseInstruction,
       {
         ...(exclude ? { exclude } : {}),
+        requestDisplay,
         ...(cacheRecord.planId && cacheRecord.lastCustomerMessageId ? {
           identity: {
             planId: cacheRecord.planId,

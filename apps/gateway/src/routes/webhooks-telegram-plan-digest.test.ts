@@ -7,6 +7,10 @@ import {
   createTestMessage,
   createTestThread,
 } from '@shopkeeper/db/test-helpers';
+import { hashInstruction, hashPlan } from '@shopkeeper/agent/agent-actions';
+import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
+import { resolveAgentSettings } from '@shopkeeper/agent/settings';
+import type { AgentPlan, PlanValidation } from '@shopkeeper/agent/types';
 import { getContext, updateContext } from '../operator-context.js';
 import {
   SECRET,
@@ -46,16 +50,75 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
     return `member:${member.id}`;
   }
 
+  async function parkCurrentPlan(params: {
+    memberKey: string;
+    instruction: string;
+    rawToolCalls: AgentPlan['rawToolCalls'];
+    validation?: PlanValidation;
+    customerName?: string;
+    actionLabel?: string;
+  }) {
+    const customer = await createTestCustomer(
+      org.id,
+      `plan_${params.memberKey.replace(':', '_')}@test.com`,
+    );
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    const sourceMessage = await createTestMessage(thread.id, 'Please help with this request.');
+    const validation = params.validation ?? { status: 'valid' as const, issues: [] };
+    const plan: AgentPlan = {
+      instruction: params.instruction,
+      steps: params.rawToolCalls.map((toolCall, index) => ({
+        id: toolCall.id,
+        tool: toolCall.name,
+        label: `Step ${index + 1}`,
+        description: `Run ${toolCall.name}`,
+        category: toolCall.name === 'send_reply' ? 'communication' : 'action',
+        enabled: true,
+      })),
+      rawToolCalls: params.rawToolCalls,
+      validation,
+    };
+    const cache = buildAgentPlanCacheRecord({
+      instruction: params.instruction,
+      lastCustomerMessageId: sourceMessage.id,
+      settings: resolveAgentSettings(null),
+      plan,
+    });
+    const expectedIdentity = {
+      planId: cache.planId!,
+      sourceMessageId: sourceMessage.id,
+      planHash: hashPlan(cache.plan),
+      instructionHash: hashInstruction(params.instruction),
+    };
+    await db.thread.update({
+      where: { id: thread.id },
+      data: { cachedPlan: cache as object, cachedPlanMessageId: sourceMessage.id },
+    });
+    await updateContext(org.id, params.memberKey, {
+      pendingPlan: {
+        threadId: thread.id,
+        instruction: params.instruction,
+        rawToolCalls: params.rawToolCalls.map((toolCall) => ({
+          id: toolCall.id,
+          name: toolCall.name,
+          input: toolCall.input,
+        })),
+        validation,
+        ...expectedIdentity,
+        ...(params.customerName ? { customerName: params.customerName } : {}),
+        ...(params.actionLabel ? { actionLabel: params.actionLabel } : {}),
+      },
+    });
+    return { threadId: thread.id, expectedIdentity };
+  }
+
   it('"yes" runs the agent with rawToolCalls as approvedToolCalls', async () => {
     const chatId = '5555001';
     const memberKey = await bindMember(chatId);
-    const threadId = '00000000-0000-4000-8000-000000000001';
-    await updateContext(org.id, memberKey, {
-      pendingPlan: {
-        threadId,
-        instruction: 'refund #1',
-        rawToolCalls: [{ id: 'tc1', name: 'refundOrder', input: { amount: 5 } }],
-      },
+    const { threadId, expectedIdentity } = await parkCurrentPlan({
+      memberKey,
+      instruction: 'refund #1',
+      rawToolCalls: [{ id: 'tc1', name: 'refundOrder', input: { amount: 5 } }],
     });
 
     executeOperatorAgentTurnSpy.mockResolvedValueOnce({
@@ -80,6 +143,7 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
       instruction: 'refund #1',
       approvedToolCalls: [{ id: 'tc1', name: 'refundOrder', input: { amount: 5 } }],
       clerkUserId: `usr_${chatId}`,
+      expectedIdentity,
     });
     expect(lastReplyText()).toBe('Refunded.');
 
@@ -87,21 +151,43 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
     expect(ctx.pendingPlan).toBeNull();
   });
 
+  it.each(['yes', 'skip 1'])('%s cannot run a validation-failed draft', async (command) => {
+    const chatId = command === 'yes' ? '5555010' : '5555011';
+    const memberKey = await bindMember(chatId);
+    const { threadId } = await parkCurrentPlan({
+      memberKey,
+      instruction: 'Reply',
+      rawToolCalls: [{ id: 's1', name: 'send_reply', input: { text: '' } }],
+      validation: {
+        status: 'invalid',
+        issues: [{ code: 'invalid_tool_input', message: 'The reply text cannot be blank.' }],
+      },
+    });
+
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: command } });
+
+    await processPendingOperatorEvents(org.id);
+    await waitForReplies(1);
+    expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
+    expect(lastReplyText()).toContain('failed validation');
+    expect((await getContext(org.id, memberKey)).pendingPlans.at(-1)?.threadId).toBe(threadId);
+  });
+
   it('"skip 1" drops the first actionable tool call', async () => {
     const chatId = '5555002';
     const memberKey = await bindMember(chatId);
-    const threadId = '00000000-0000-4000-8000-000000000002';
-    await updateContext(org.id, memberKey, {
-      pendingPlan: {
-        threadId,
-        instruction: 'do things',
-        rawToolCalls: [
-          { id: 'r1', name: 'get_shopify_orders' }, // read, retained
-          { id: 'r2', name: 'get_order_tracking' }, // canonical read, retained
-          { id: 'a1', name: 'refund_order' }, // actionable[0] → skipped
-          { id: 'a2', name: 'cancel_order' }, // actionable[1] → retained
-        ],
-      },
+    const { threadId } = await parkCurrentPlan({
+      memberKey,
+      instruction: 'do things',
+      rawToolCalls: [
+        { id: 'r1', name: 'get_shopify_orders', input: {} }, // read, retained
+        { id: 'r2', name: 'get_order_tracking', input: {} }, // canonical read, retained
+        { id: 'a1', name: 'refund_order', input: {} }, // actionable[0] → skipped
+        { id: 'a2', name: 'cancel_order', input: {} }, // actionable[1] → retained
+      ],
     });
 
     await request(app)
@@ -121,27 +207,16 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
     expect(refreshSkippedPlanTerminalSendSpy).not.toHaveBeenCalled();
   });
 
-  it('"skip 1" re-drafts terminal send when a send_reply is present', async () => {
+  it('"skip 1" requires revision when a terminal send would change', async () => {
     const chatId = '5555004';
     const memberKey = await bindMember(chatId);
-    const threadId = '00000000-0000-4000-8000-000000000003';
-    await updateContext(org.id, memberKey, {
-      pendingPlan: {
-        threadId,
-        instruction: 'update address',
-        rawToolCalls: [
-          { id: 'a1', name: 'edit_shopify_order', input: { quantity: 1 } },
-          { id: 'a2', name: 'update_shopify_order_address', input: { address1: '1 Main St' } },
-          { id: 's1', name: 'send_reply', input: { text: 'Added item and updated address.' } },
-        ],
-      },
-    });
-
-    refreshSkippedPlanTerminalSendSpy.mockResolvedValueOnce({
-      status: 'ok',
-      toolCalls: [
+    const { threadId } = await parkCurrentPlan({
+      memberKey,
+      instruction: 'update address',
+      rawToolCalls: [
+        { id: 'a1', name: 'edit_shopify_order', input: { quantity: 1 } },
         { id: 'a2', name: 'update_shopify_order_address', input: { address1: '1 Main St' } },
-        { id: 's2', name: 'send_reply', input: { text: 'Your address has been updated.' } },
+        { id: 's1', name: 'send_reply', input: { text: 'Added item and updated address.' } },
       ],
     });
 
@@ -152,14 +227,12 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
 
     await processPendingOperatorEvents(org.id);
     await waitForReplies(1);
-    expect(refreshSkippedPlanTerminalSendSpy).toHaveBeenCalledOnce();
-    expect(executeOperatorAgentTurnSpy).toHaveBeenCalledOnce();
-    expect(executeOperatorAgentTurnSpy.mock.calls[0]?.[0]).toMatchObject({
-      approvedToolCalls: [
-        { id: 'a2', name: 'update_shopify_order_address', input: { address1: '1 Main St' } },
-        { id: 's2', name: 'send_reply', input: { text: 'Your address has been updated.' } },
-      ],
-    });
+    expect(refreshSkippedPlanTerminalSendSpy).not.toHaveBeenCalled();
+    expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
+    expect(lastReplyText()).toContain("I've run nothing");
+
+    const context = await getContext(org.id, memberKey);
+    expect(context.pendingPlans.at(-1)?.threadId).toBe(threadId);
   });
 
   // A failed redraft used to fall through to the remaining calls, so the refund
@@ -167,17 +240,14 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
   it('"skip 1" runs nothing when the terminal send cannot be redrafted', async () => {
     const chatId = '5555005';
     const memberKey = await bindMember(chatId);
-    const threadId = '00000000-0000-4000-8000-000000000004';
-    await updateContext(org.id, memberKey, {
-      pendingPlan: {
-        threadId,
-        instruction: 'refund #1024',
-        rawToolCalls: [
-          { id: 'a1', name: 'edit_shopify_order', input: { quantity: 1 } },
-          { id: 'a2', name: 'create_refund', input: { amount: 40 } },
-          { id: 's1', name: 'send_reply', input: { text: 'Edited the order and refunded you.' } },
-        ],
-      },
+    const { threadId } = await parkCurrentPlan({
+      memberKey,
+      instruction: 'refund #1024',
+      rawToolCalls: [
+        { id: 'a1', name: 'edit_shopify_order', input: { quantity: 1 } },
+        { id: 'a2', name: 'create_refund', input: { amount: 40 } },
+        { id: 's1', name: 'send_reply', input: { text: 'Edited the order and refunded you.' } },
+      ],
     });
 
     refreshSkippedPlanTerminalSendSpy.mockResolvedValueOnce({ status: 'redraft_failed' });
@@ -190,7 +260,7 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
     await processPendingOperatorEvents(org.id);
     await waitForReplies(1);
 
-    expect(refreshSkippedPlanTerminalSendSpy).toHaveBeenCalledOnce();
+    expect(refreshSkippedPlanTerminalSendSpy).not.toHaveBeenCalled();
     expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
     expect(lastReplyText()).toContain("I've run nothing");
 
@@ -203,8 +273,10 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
   it('"no" clears pendingPlan without calling the agent', async () => {
     const chatId = '5555003';
     const memberKey = await bindMember(chatId);
-    await updateContext(org.id, memberKey, {
-      pendingPlan: { threadId: 't', instruction: 'i', rawToolCalls: [] },
+    await parkCurrentPlan({
+      memberKey,
+      instruction: 'i',
+      rawToolCalls: [],
     });
     await request(app)
       .post('/webhooks/telegram')
@@ -222,14 +294,12 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
   it('"no" names the dropped action when the plan parked a label', async () => {
     const chatId = '5555005';
     const memberKey = await bindMember(chatId);
-    await updateContext(org.id, memberKey, {
-      pendingPlan: {
-        threadId: 't',
-        instruction: 'refund #1',
-        rawToolCalls: [],
-        customerName: 'Sarah Chen',
-        actionLabel: 'reply to Sarah',
-      },
+    await parkCurrentPlan({
+      memberKey,
+      instruction: 'refund #1',
+      rawToolCalls: [],
+      customerName: 'Sarah Chen',
+      actionLabel: 'reply to Sarah',
     });
     await request(app)
       .post('/webhooks/telegram')

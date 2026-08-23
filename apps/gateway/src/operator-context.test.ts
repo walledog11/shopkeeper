@@ -3,6 +3,7 @@ import { db } from '@shopkeeper/db';
 import {
   createTestOrg,
   createTestCustomer,
+  createTestMessage,
   createTestThread,
   cleanupTestData,
 } from '@shopkeeper/db/test-helpers';
@@ -19,6 +20,10 @@ import {
   type PendingDigest,
   type PendingQuestion,
 } from './operator-context.js';
+import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
+import { hashInstruction, hashPlan } from '@shopkeeper/agent/agent-actions';
+import { resolveAgentSettings } from '@shopkeeper/agent/settings';
+import type { AgentPlan } from '@shopkeeper/agent/types';
 
 function planFor(threadId: string, planId: string, overrides: Partial<PendingPlan> = {}): PendingPlan {
   return {
@@ -77,11 +82,66 @@ describe('updateContext + getContext round-trip', () => {
       rawToolCalls: [{ id: 'tc1', name: 'refundOrder' }],
       customerName: 'Sarah Chen',
       actionLabel: 'reply to Sarah',
+      validation: {
+        status: 'invalid',
+        issues: [{
+          code: 'ungrounded_customer_reply',
+          message: 'The drafted reply contains an unsupported promise.',
+          toolCallId: 'tc1',
+          tool: 'send_reply',
+        }],
+      },
+      requestDisplay: {
+        version: 1,
+        kind: 'classified',
+        sourceMessageId: 'message-1',
+        facts: {
+          ask: 'refund',
+          subject: 'linen napkins',
+          order: '#1024',
+          deadline: null,
+          deadlineText: null,
+          alternative: null,
+        },
+        noRequest: false,
+        topic: 'Refund request',
+      },
     };
 
     await updateContext(org.id, '7000002', { pendingPlan: plan });
 
     expect((await getContext(org.id, '7000002')).pendingPlan).toEqual(plan);
+  });
+
+  it('fails closed on malformed invalid validation metadata without losing the pending plan', async () => {
+    await db.operatorContext.create({
+      data: {
+        organizationId: org.id,
+        memberKey: 'malformed-validation',
+        pendingPlans: [{
+          threadId: 'thread_1',
+          instruction: 'reply',
+          rawToolCalls: [{ id: 'tc_1', name: 'send_reply' }],
+          validation: {
+            status: 'invalid',
+            issues: [{ code: 'made_up_code', message: 'bad metadata' }],
+          },
+        }],
+      },
+    });
+
+    expect((await getContext(org.id, 'malformed-validation')).pendingPlan).toEqual({
+      threadId: 'thread_1',
+      instruction: 'reply',
+      rawToolCalls: [{ id: 'tc_1', name: 'send_reply' }],
+      validation: {
+        status: 'invalid',
+        issues: [{
+          code: 'invalid_tool_input',
+          message: 'Stored draft validation metadata is malformed.',
+        }],
+      },
+    });
   });
 
   it('persists pendingDigest', async () => {
@@ -378,17 +438,68 @@ describe('selectPendingPlan', () => {
 });
 
 describe('loadLivePendingPlans', () => {
+  async function currentPendingPlan(params: {
+    thread: Awaited<ReturnType<typeof createTestThread>>;
+    instruction?: string;
+    system?: boolean;
+  }): Promise<PendingPlan> {
+    const instruction = params.instruction ?? 'reply to the customer';
+    const message = await createTestMessage(params.thread.id, 'Please help with this order');
+    const plan: AgentPlan = {
+      instruction,
+      steps: [{
+        id: 'send_1',
+        tool: 'send_reply',
+        label: 'Reply',
+        description: 'Reply to customer',
+        category: 'communication',
+        enabled: true,
+      }],
+      rawToolCalls: [{ id: 'send_1', name: 'send_reply', input: { text: 'I can help.' } }],
+      validation: { status: 'valid', issues: [] },
+    };
+    const cache = buildAgentPlanCacheRecord({
+      instruction,
+      lastCustomerMessageId: message.id,
+      settings: resolveAgentSettings(null),
+      plan,
+    });
+    await db.thread.update({
+      where: { id: params.thread.id },
+      data: { cachedPlan: cache as object, cachedPlanMessageId: message.id },
+    });
+    return {
+      threadId: params.thread.id,
+      instruction,
+      rawToolCalls: plan.rawToolCalls.map((toolCall) => ({
+        id: toolCall.id,
+        name: toolCall.name,
+        input: toolCall.input,
+      })),
+      planId: cache.planId!,
+      sourceMessageId: message.id,
+      planHash: hashPlan(cache.plan),
+      instructionHash: hashInstruction(instruction),
+      ...(params.system ? {
+        requestDisplay: { version: 1, kind: 'system', event: 'return_arrival' },
+      } : {}),
+    };
+  }
+
   it('prunes a queued plan whose execution already reached a terminal outcome', async () => {
     const customer = await createTestCustomer(org.id, 'cust@example.com', { name: 'Sarah' });
     const thread = await createTestThread(org.id, customer.id, 'email');
-    const terminalPlanId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const liveCustomer = await createTestCustomer(org.id, 'live@example.com', { name: 'Live' });
+    const liveThread = await createTestThread(org.id, liveCustomer.id, 'email');
+    const terminal = await currentPendingPlan({ thread });
+    const live = await currentPendingPlan({ thread: liveThread, system: true });
     await db.planExecution.create({
       data: {
-        planId: terminalPlanId,
+        planId: terminal.planId!,
         organizationId: org.id,
         threadId: thread.id,
-        planHash: 'plan-hash',
-        instructionHash: 'instruction-hash',
+        planHash: terminal.planHash!,
+        instructionHash: terminal.instructionHash!,
         status: 'committed',
         mode: 'human_approved',
         completedAt: new Date(),
@@ -397,13 +508,39 @@ describe('loadLivePendingPlans', () => {
       },
     });
 
-    await appendPendingPlan(org.id, 'q7', planFor(thread.id, terminalPlanId), 3);
-    await appendPendingPlan(org.id, 'q7', planFor('thread-live', 'plan-live'), 3);
+    await appendPendingPlan(org.id, 'q7', terminal, 3);
+    await appendPendingPlan(org.id, 'q7', live, 3);
 
     const pruned = await loadLivePendingPlans(org.id, 'q7', await getContext(org.id, 'q7'));
-    expect(pruned.pendingPlans.map((plan) => plan.planId)).toEqual(['plan-live']);
+    expect(pruned.pendingPlans.map((plan) => plan.planId)).toEqual([live.planId]);
+    expect(pruned.pendingPlans[0]?.requestDisplay?.kind).toBe('system');
     // The stale entry is also removed from the stored queue.
-    expect((await getContext(org.id, 'q7')).pendingPlans.map((plan) => plan.planId)).toEqual(['plan-live']);
+    expect((await getContext(org.id, 'q7')).pendingPlans.map((plan) => plan.planId)).toEqual([live.planId]);
+  });
+
+  it('prunes identity-less and version-old parked entries before offering approval', async () => {
+    const identitylessCustomer = await createTestCustomer(org.id, 'identityless@example.com');
+    const identitylessThread = await createTestThread(org.id, identitylessCustomer.id, 'email');
+    const oldVersionCustomer = await createTestCustomer(org.id, 'old-version@example.com');
+    const oldVersionThread = await createTestThread(org.id, oldVersionCustomer.id, 'email');
+    const current = await currentPendingPlan({ thread: oldVersionThread });
+    const row = await db.thread.findUniqueOrThrow({ where: { id: oldVersionThread.id } });
+    await db.thread.update({
+      where: { id: oldVersionThread.id },
+      data: { cachedPlan: { ...(row.cachedPlan as object), version: 6 } },
+    });
+    await appendPendingPlan(org.id, 'legacy-q', {
+      threadId: identitylessThread.id,
+      instruction: current.instruction,
+      rawToolCalls: current.rawToolCalls,
+      // Simulates metadata from an older writer that the current parser drops.
+      legacyVersion: 1,
+    } as PendingPlan, 3);
+    await appendPendingPlan(org.id, 'legacy-q', current, 3);
+
+    const loaded = await loadLivePendingPlans(org.id, 'legacy-q', await getContext(org.id, 'legacy-q'));
+    expect(loaded.pendingPlans).toEqual([]);
+    expect((await getContext(org.id, 'legacy-q')).pendingPlans).toEqual([]);
   });
 });
 

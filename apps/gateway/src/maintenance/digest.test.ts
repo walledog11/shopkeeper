@@ -414,7 +414,7 @@ describe('buildOrgDigest — inbox scope', () => {
       where: { id: thread.id },
       data: {
         escalatedAt: NOW,
-        aiSummary: 'Customer asks to speak to a person about a delayed order.',
+        classifierSignals: factsSignals({ ask: 'order_status', subject: 'the delayed order' }),
       },
     });
 
@@ -581,7 +581,8 @@ describe('buildOrgDigest — inbox scope', () => {
       data: {
         filterStatus: ThreadFilterStatus.questionable,
         filterDecidedAt: NOW,
-        aiSummary: 'Someone pitched an SEO service and asked whether the store is interested.',
+        aiTitle: 'SEO service proposal',
+        classifierSignals: factsSignals({ ask: 'other', subject: 'an SEO service proposal' }),
       },
     });
 
@@ -629,6 +630,7 @@ describe('buildOrgDigest — inbox scope', () => {
         cachedPlan: refundPlanCache('Refund the damaged mug', waitingMessage.id),
         cachedPlanMessageId: waitingMessage.id,
         updatedAt: new Date(NOW.getTime() - 4 * HOUR),
+        classifierSignals: factsSignals({ ask: 'refund', subject: 'the damaged mug' }),
       },
     });
 

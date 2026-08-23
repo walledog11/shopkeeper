@@ -109,7 +109,7 @@ export async function pushReturnArrivalApprovalPlan(
     thread.aiSummary,
     plan,
     instruction,
-    { identity: generated.identity },
+    { identity: generated.identity, systemRequest: 'return_arrival' },
   );
   return 'plan_pushed';
 }

@@ -1,4 +1,4 @@
-import { classifyHomePlan } from '@shopkeeper/agent/plan-preview';
+import { decideAutonomy } from '@shopkeeper/agent/autonomy';
 import {
   getLastConversationMessage,
   readAgentPlanCacheRecordShape,
@@ -47,7 +47,7 @@ export function hasMerchantWorkCachedPlan(
 ): boolean {
   const cached = readAgentPlanCacheRecordShape(thread.cachedPlan);
   if (!cached || cached.plan.steps.length === 0) return false;
-  const kind = classifyHomePlan(cached.plan, settings, { filterStatus: thread.filterStatus }).kind;
+  const kind = decideAutonomy(cached.plan, settings, { filterStatus: thread.filterStatus }).kind;
   return kind !== 'quick_reply';
 }
 
