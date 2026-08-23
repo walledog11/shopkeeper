@@ -43,6 +43,7 @@ function makeThread(overrides: Partial<{
     requestSummary: overrides.requestSummary ?? null,
     filterReason: overrides.filterReason ?? null,
     escalatedAt: overrides.escalatedAt ?? null,
+    requestSourceMessageId: null,
     customer: { name: overrides.customerName === undefined ? 'Jane' : overrides.customerName },
     cachedPlan: null,
     cachedPlanMessageId: null,
@@ -423,6 +424,39 @@ describe('buildOrgDigest — inbox scope', () => {
     expect(digest.message).toContain('flagged it for you');
     expect(digest.pendingDigest.items.filter((item) => item.threadId === thread.id)).toHaveLength(1);
     expect(digest.pendingDigest.items.find((item) => item.threadId === thread.id)?.kind).toBe('decision');
+  });
+
+  // Regression: the 2026-08-23 production briefing asked the merchant what to
+  // do immediately after saying the request details were unavailable. The
+  // thread was a v4 escalation, so it had no RequestFacts, but its aligned
+  // request-source message still contained everything the merchant needed.
+  it('renders the request-source message for a pre-v5 escalation instead of asking blind', async () => {
+    org = await createTestOrg();
+    const customer = await createTestCustomer(org.id, 'legacy-escalation@example.com', { name: 'Maya' });
+    const thread = await createTestThread(org.id, customer.id, 'email');
+    const requestText = 'Can you move order #1043 to 14 Alder Road before Friday?';
+    const sourceMessage = await createTestMessage(thread.id, requestText);
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        escalatedAt: NOW,
+        requestSourceMessageId: sourceMessage.id,
+        classifierSignals: {
+          version: 4,
+          language: 'en',
+          intents: { mutative_request: true },
+        },
+      },
+    });
+
+    const digest = (await buildOrgDigest(org.id, NOW))!;
+    expect.soft(digest.message).toContain(requestText);
+    expect.soft(digest.message).not.toContain('Request details unavailable');
+    expect.soft(digest.message).not.toMatch(
+      /Request details unavailable[\s\S]*What do you want to do\?/,
+    );
+    expect(digest.pendingDigest.items.find((item) => item.threadId === thread.id)?.kind)
+      .toBe('decision');
   });
 
   // Legacy rows still enter recovery, but a missing plan never becomes inferred

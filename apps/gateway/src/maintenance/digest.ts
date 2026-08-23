@@ -63,10 +63,15 @@ export interface DigestThreadRow {
   filterDecidedAt: Date | null;
   aiTitle: string | null;
   escalatedAt: Date | null;
+  requestSourceMessageId: string | null;
   customer: { name: string | null };
   // Orders a storefront shopper proved control of, joined on after the thread
   // query. Empty on every other channel.
   verifiedOrders?: readonly string[];
+  // Exact customer message named by requestSourceMessageId. This is not the
+  // latest-message lifecycle row below and is used only as a legacy rendering
+  // fallback when the thread predates structured RequestFacts.
+  pendingMessage?: string | null;
   // Lifecycle-state inputs. `messages` is the newest non-note message only, in
   // the same descending shape `loadStaleThreadWaitingItems` passes to
   // plan-cache helpers — those read the last conversational sender from the
@@ -348,6 +353,7 @@ export async function buildOrgDigest(
         filterDecidedAt: true,
         aiTitle: true,
         escalatedAt: true,
+        requestSourceMessageId: true,
         customer: { select: { name: true } },
         cachedPlan: true,
         cachedPlanMessageId: true,
@@ -373,22 +379,45 @@ export async function buildOrgDigest(
 
   if (openThreads.length === 0 && waitingItems.length === 0 && !includeEmptyInbox) return null;
 
-  // Verification state for this briefing's storefront tickets, in one query
-  // rather than one per thread. Every thread id goes in: only a storefront
-  // session can hold a verification row, so the join filters the channel itself
-  // and the digest does not have to know about channel constants to ask. Without
-  // this the briefing calls a shopper who proved control of an order a
-  // "Storefront visitor", contradicting the operator card on the same thread.
-  const verifiedByThread = await listVerifiedOrderNamesByThread(
-    organizationId,
-    openThreads.map((thread) => thread.id),
-  );
-  const threads: DigestThreadRow[] = verifiedByThread.size === 0
-    ? openThreads
-    : openThreads.map((thread) => {
-      const verifiedOrders = verifiedByThread.get(thread.id);
-      return verifiedOrders ? { ...thread, verifiedOrders } : thread;
-    });
+  // Verification state and legacy request-source text are both joined in one
+  // batch per relation. The source lookup is scoped by organization, customer
+  // sender, and owning thread so a stale/corrupt pointer cannot disclose text
+  // from another conversation.
+  const requestSourceIds = [...new Set(openThreads
+    .map((thread) => thread.requestSourceMessageId)
+    .filter((id): id is string => id != null))];
+  const [verifiedByThread, requestSourceMessages] = await Promise.all([
+    listVerifiedOrderNamesByThread(
+      organizationId,
+      openThreads.map((thread) => thread.id),
+    ),
+    requestSourceIds.length === 0
+      ? Promise.resolve([])
+      : db.message.findMany({
+        where: {
+          organizationId,
+          id: { in: requestSourceIds },
+          deletedAt: null,
+          senderType: SENDER_TYPE.CUSTOMER,
+        },
+        select: { id: true, threadId: true, contentText: true },
+      }),
+  ]);
+  const requestSourceById = new Map(requestSourceMessages.map((message) => [message.id, message]));
+  const threads: DigestThreadRow[] = openThreads.map((thread) => {
+    const verifiedOrders = verifiedByThread.get(thread.id);
+    const sourceMessage = thread.requestSourceMessageId
+      ? requestSourceById.get(thread.requestSourceMessageId)
+      : undefined;
+    const pendingMessage = sourceMessage?.threadId === thread.id
+      ? sourceMessage.contentText
+      : null;
+    return {
+      ...thread,
+      ...(verifiedOrders ? { verifiedOrders } : {}),
+      pendingMessage,
+    };
+  });
 
   const buckets = bucketDigestThreads(threads, now, since);
   const waitingThreadIds = new Set(waitingItems.map((item) => item.threadId));

@@ -187,7 +187,7 @@ export interface BriefingTicketRow {
   aiTitle?: string | null;
   channelType?: string | null;
   customer: { name: string | null };
-  /** Text of the newest customer message, for the sections that quote it. */
+  /** Source customer text for the sections that quote rather than paraphrase it. */
   pendingMessage?: string | null;
   /** Orders this storefront shopper proved control of. Empty for every other channel. */
   verifiedOrders?: readonly string[];
@@ -269,9 +269,20 @@ function factsHandoffLine(thread: BriefingTicketRow, now: Date): string | null {
   return line ? truncateBriefingText(line, PHONE_LINE_MAX) : null;
 }
 
+/** Source-aligned customer text for legacy rows that predate RequestFacts. */
+function sourceHandoffLine(thread: BriefingTicketRow): string | null {
+  const message = cleanBriefingText(thread.pendingMessage);
+  if (!message) return null;
+  const subject = handoffSubject(thread, message);
+  const complete = message.length <= HANDOFF_VERBATIM_MAX;
+  const verb = complete && message.includes('?') ? 'asked' : 'wrote';
+  const quote = complete ? message : truncateBriefingText(message, PHONE_LINE_MAX);
+  return `${subject} ${verb}: "${quote}"`;
+}
+
 export function formatBlockedTicketLine(thread: BriefingTicketRow, now: Date = new Date()): string {
   const message = cleanBriefingText(thread.pendingMessage);
-  const subject = handoffSubject(thread, message);
+  const sourceLine = sourceHandoffLine(thread);
 
   // Short enough to print whole. Covers the one-word case the merchant is meant
   // to judge for themselves: if a bare "yo" ever reaches a handoff, it arrives as
@@ -282,7 +293,7 @@ export function formatBlockedTicketLine(thread: BriefingTicketRow, now: Date = n
     // closes on a statement. Saying "wrote" of it is the tell that no one read
     // it. "wrote" is still the fallback, because calling a complaint a question
     // puts words in the customer's mouth.
-    return `${subject} ${message.includes('?') ? 'asked' : 'wrote'}: "${message}"`;
+    return sourceLine!;
   }
 
   // Fields before any long-message fallback, but after a complete short quote.
@@ -291,7 +302,7 @@ export function formatBlockedTicketLine(thread: BriefingTicketRow, now: Date = n
 
   // The customer text is source material, not model prose. Keep a bounded,
   // contact-redacted quote when structured classification is unavailable.
-  if (message) return `${subject} wrote: "${truncateBriefingText(message, PHONE_LINE_MAX)}"`;
+  if (sourceLine) return sourceLine;
   return formatTicketLine(thread);
 }
 
@@ -299,6 +310,11 @@ export function formatBlockedTicketLine(thread: BriefingTicketRow, now: Date = n
 export function formatEscalatedTicketLine(thread: BriefingTicketRow, now: Date = new Date()): string {
   const factsLine = factsHandoffLine(thread, now);
   if (factsLine) return `${endClause(factsLine)} I flagged it for you.`;
+  const sourceLine = sourceHandoffLine(thread);
+  if (sourceLine) {
+    const sourceClause = /[.!?…]"$/.test(sourceLine) ? sourceLine : `${sourceLine}.`;
+    return `${sourceClause} I flagged it for you.`;
+  }
   return `${endClause(formatRequestDisplayLine(unavailableRequestDisplay(), null, now))} I flagged it for you.`;
 }
 
