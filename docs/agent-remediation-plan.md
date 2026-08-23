@@ -80,7 +80,7 @@ Efficiency work may proceed only when it does not compete with Milestone 1 or ch
 
 **Outcome:** every briefing item that asks for approval or judgment contains enough grounded context to act. If context truly cannot be recovered, the briefing asks the merchant to open the thread; it does not ask for a decision.
 
-**Progress:** the pre-v5 escalation regression fixture and source-message fallback are implemented in the working tree. The focused regression, both digest test files (71 tests), and the full gateway integration suite (845 passed, 1 skipped) pass.
+**Progress:** the pre-v5 source-message fallback and the non-actionable thread-review path are implemented. Review-required items preserve their thread/plan identity, suppress shared approval and decision closers, fail closed on approval commands, and remain openable from the briefing. Focused coverage passes (124 tests), as do the full gateway unit suite (379 tests) and integration suite (853 passed, 1 skipped).
 
 ### Work
 
@@ -100,7 +100,7 @@ Efficiency work may proceed only when it does not compete with Milestone 1 or ch
 - [x] Database-backed regression fixture added for a v4 escalated thread with a request-source message.
 - [x] The regression fixture passes with an actionable source-grounded briefing line.
 - [ ] Fixtures cover v5 facts, v4 source fallback, missing classifier data, missing source text, malformed JSON, approval, decision, flagged sender, and multiple-item closers.
-- [ ] Invariant test: no rendered item containing “details unavailable” can use an approval/decision question.
+- [x] Invariant test: no rendered item containing “details unavailable” can use an approval/decision question.
 - [ ] Production inventory is recorded without customer content or identifiers.
 - [ ] A scheduled briefing canary exercises both current and legacy persisted shapes.
 - [ ] Rollback retains the source-text fallback and does not mutate or discard pending state.

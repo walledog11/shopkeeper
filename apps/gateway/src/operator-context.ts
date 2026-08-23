@@ -68,6 +68,8 @@ export interface PendingDigestItem {
   kind: 'approval' | 'decision' | 'flagged';
   /** Set for `approval`, linking the ordinal to its entry in `pendingPlans`. */
   planId?: string;
+  /** The request was not shown, so approval/decision commands must fail closed. */
+  needsThreadReview?: boolean;
 }
 
 export interface PendingDigest {
@@ -94,6 +96,16 @@ export function briefingOrdinal(digest: PendingDigest | null, threadId: string):
   return index < 0 ? null : index + 1;
 }
 
+export function pendingPlanNeedsThreadReview(
+  plan: PendingPlan,
+  digest: PendingDigest | null | undefined,
+): boolean {
+  return digest?.items.some((item) => (
+    item.needsThreadReview === true
+    && ((plan.planId && item.planId === plan.planId) || item.threadId === plan.threadId)
+  )) === true;
+}
+
 function readPendingDigestItems(value: unknown, threadIds: string[]): PendingDigestItem[] {
   if (!Array.isArray(value)) {
     // Pre-merge row: the only numbered list it ever had was the flagged one.
@@ -106,6 +118,7 @@ function readPendingDigestItems(value: unknown, threadIds: string[]): PendingDig
       threadId: entry.threadId,
       kind: entry.kind as PendingDigestItem['kind'],
       ...(typeof entry.planId === 'string' ? { planId: entry.planId } : {}),
+      ...(entry.needsThreadReview === true ? { needsThreadReview: true } : {}),
     }];
   });
 }
@@ -470,8 +483,16 @@ export function selectPendingPlan(
   if (plans.length === 0) {
     return { error: 'Error: no plan is awaiting the merchant\'s approval.' };
   }
+  const selectable = (plan: PendingPlan): SelectPendingPlanResult => {
+    if (pendingPlanNeedsThreadReview(plan, digest)) {
+      return {
+        error: 'The request details were unavailable in the briefing. Open the thread before approving this plan.',
+      };
+    }
+    return { plan };
+  };
   if (plans.length === 1) {
-    return { plan: plans[0]! };
+    return selectable(plans[0]!);
   }
 
   const trimmed = ref?.trim();
@@ -497,7 +518,7 @@ export function selectPendingPlan(
       }
       const byOrdinal = plans.find((plan) => plan.planId && plan.planId === item.planId)
         ?? plans.find((plan) => plan.threadId === item.threadId);
-      if (byOrdinal) return { plan: byOrdinal };
+      if (byOrdinal) return selectable(byOrdinal);
       return { error: `The plan for number ${ordinal} is no longer pending — it may already have run.` };
     }
     if (digest && digest.items.length > 0) {
@@ -510,11 +531,11 @@ export function selectPendingPlan(
   }
 
   const byPlanId = plans.filter((plan) => plan.planId === trimmed);
-  if (byPlanId.length === 1) return { plan: byPlanId[0]! };
+  if (byPlanId.length === 1) return selectable(byPlanId[0]!);
 
   const needle = trimmed.toLowerCase();
   const byName = plans.filter((plan) => plan.customerName?.toLowerCase().includes(needle));
-  if (byName.length === 1) return { plan: byName[0]! };
+  if (byName.length === 1) return selectable(byName[0]!);
 
   return { error: ambiguous };
 }

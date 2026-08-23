@@ -12,6 +12,7 @@ import { listVerifiedOrderNamesByThread } from '../storefront-chat-verified-orde
 import {
   countWord,
   formatEscalatedTicketLine,
+  formatFlaggedTicketLine,
   formatHandledSection,
   formatNeedsYouAsk,
   formatNeedsYouProse,
@@ -19,18 +20,13 @@ import {
   type BriefingItem,
   loadHandledRollup,
   loadWaitingOnYouItems,
-  rowAskLess,
+  hasHandoffRequestContext,
   rowHasNoRequest,
   rowRequestFacts,
   finalizeDigestSend,
   resolveHandledWindowStart,
-  truncateBriefingText,
 } from './digest-briefing.js';
-import { byDeadlineFirst, formatFactsBriefingLine } from './briefing-fields.js';
-import {
-  formatRequestDisplayLine,
-  unavailableRequestDisplay,
-} from '../message-handlers/request-display.js';
+import { byDeadlineFirst } from './briefing-fields.js';
 import { loadDigestShopifyGarnish } from './digest-shopify-garnish.js';
 import { loadAttributionLine } from '../message-handlers/conversation-attribution.js';
 import {
@@ -45,7 +41,6 @@ const FOUR_HOURS_MS = 4 * ONE_HOUR_MS;
 const TWENTY_FOUR_HOURS_MS = 24 * ONE_HOUR_MS;
 
 export const DIGEST_QUESTIONABLE_LIMIT = 10;
-const DIGEST_STRUCTURED_LINE_MAX = 140;
 const WEEKLY_SUMMARY_MIN_TICKETS = 3;
 const DIGEST_INTERVALS: Record<string, number> = {
   every_4h: 4,
@@ -439,27 +434,25 @@ export async function buildOrgDigest(
       threadId: item.threadId,
       kind: 'approval',
       ...(item.planId ? { planId: item.planId } : {}),
+      ...(item.needsThreadReview ? { needsThreadReview: true } : {}),
       line: item.line,
     })),
     ...byDeadlineFirst(escalated, rowRequestFacts, now)
       .map((thread): BriefingItem => ({
         threadId: thread.id,
         kind: 'decision',
+        ...(!hasHandoffRequestContext(thread, now) ? { needsThreadReview: true } : {}),
         line: formatEscalatedTicketLine(thread),
       })),
     ...byDeadlineFirst(flagged, rowRequestFacts, now).map((thread): BriefingItem => {
-      const name = thread.customer.name ?? 'Someone new';
-      const facts = rowRequestFacts(thread);
-      const factsLine = facts ? formatFactsBriefingLine(facts, name, now, rowAskLess(thread)) : null;
       return {
         threadId: thread.id,
         kind: 'flagged',
+        ...(!hasHandoffRequestContext(thread, now) ? { needsThreadReview: true } : {}),
         // No per-item "Real customer?": the group lead already says these are
         // the ones the agent is unsure about, and repeating the question on
         // every line is the tell that a template wrote it.
-        line: factsLine
-          ? `${truncateBriefingText(factsLine, DIGEST_STRUCTURED_LINE_MAX)}.`
-          : `${formatRequestDisplayLine(unavailableRequestDisplay(), null, now)}.`,
+        line: formatFlaggedTicketLine(thread, now),
       };
     }),
   ];
@@ -485,7 +478,12 @@ export async function buildOrgDigest(
       },
     ),
     pendingDigest: {
-      items: needsYou.map(({ threadId, kind, planId }) => ({ threadId, kind, ...(planId ? { planId } : {}) })),
+      items: needsYou.map(({ threadId, kind, planId, needsThreadReview }) => ({
+        threadId,
+        kind,
+        ...(planId ? { planId } : {}),
+        ...(needsThreadReview ? { needsThreadReview: true } : {}),
+      })),
       // The flagged subset stays in briefing order so anything still reading
       // `threadIds` sees the same tickets, just not the same ordinals.
       threadIds: flagged.map((thread) => thread.id),

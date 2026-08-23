@@ -430,6 +430,27 @@ describe('handoff and approval lines — fields before prose', () => {
       now: NOW,
     })).toBe("Request details unavailable — open the thread for the original message. Reply's drafted.");
   });
+
+  it('suppresses every shared decision closer when one item needs thread review', () => {
+    const items = [
+      {
+        threadId: 'ready',
+        kind: 'approval' as const,
+        line: "Dana: refund. Reply's drafted.",
+      },
+      {
+        threadId: 'review',
+        kind: 'decision' as const,
+        needsThreadReview: true,
+        line: 'Request details unavailable — open the thread for the original message.',
+      },
+    ];
+    const prose = formatNeedsYouProse(items)!;
+
+    expect(prose).toContain('One action is waiting for your approval.');
+    expect(prose).toContain('One needs you to open the thread first.');
+    expect(formatNeedsYouAsk(items)).toBeNull();
+  });
 });
 
 describe('loadWaitingOnYouItems', () => {
@@ -480,7 +501,27 @@ describe('loadWaitingOnYouItems', () => {
     // to lead, which put a tool label in the most scannable position of a line
     // the merchant reads seven of.
     expect(items[0]?.line).toBe("Sarah: refund — damaged order. I've got $12 ready.");
+    expect(items[0]?.needsThreadReview).toBe(false);
 
+  });
+
+  it('keeps a context-free approval parked but marks it for thread review', async () => {
+    const customer = await createTestCustomer(org.id, 'review-approval@example.com', { name: 'Inez' });
+    const thread = await createTestThread(org.id, customer.id, 'email');
+    const planId = 'abababab-abab-4bab-8bab-abababababab';
+    await updateContext(org.id, 'review-approval', {
+      pendingPlan: {
+        threadId: thread.id,
+        instruction: 'Reply to the customer',
+        planId,
+        rawToolCalls: [{ id: 'tc1', name: 'send_reply', input: { text: 'On it.' } }],
+      },
+    });
+
+    const items = await loadWaitingOnYouItems(org.id, NOW);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ threadId: thread.id, planId, needsThreadReview: true });
+    expect(items[0]?.line).toContain('Request details unavailable — open the thread');
   });
 
   it('lists several waiting items without numbering them', async () => {

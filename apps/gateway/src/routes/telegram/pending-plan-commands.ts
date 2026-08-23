@@ -6,6 +6,7 @@ import {
   isPendingPlanInvalid,
   mostRecentPendingPlan,
   normalizeApprovedToolCalls,
+  pendingPlanNeedsThreadReview,
   type OperatorContext,
   type PendingPlan,
   type ToolCall,
@@ -41,6 +42,10 @@ export async function handlePendingPlanCommand(
   const { chatId, senderRef: memberKey, reply, presence } = message;
   const pendingPlan = mostRecentPendingPlan(context.pendingPlans);
   if (!pendingPlan) return false;
+  if (pendingPlanNeedsThreadReview(pendingPlan, context.pendingDigest)) {
+    await reply('The request details were unavailable in the briefing. Open the thread before deciding what to do with this plan.');
+    return true;
+  }
   // Everything but the most-recent plan stays parked; name it in the reply.
   const remaining = context.pendingPlans.slice(0, -1);
 
