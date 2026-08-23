@@ -5,7 +5,12 @@ import {
 } from '@shopkeeper/db';
 import { isSpendCapError } from '@shopkeeper/db';
 import type Anthropic from '@anthropic-ai/sdk';
-import { anthropic, buildCachedSystemPrompt, buildSplitCachedSystemPrompt } from '@shopkeeper/agent/ai';
+import {
+  anthropic,
+  buildCachedSystemPrompt,
+  buildSplitCachedSystemPrompt,
+  isDeterministicE2EAIEnabled,
+} from '@shopkeeper/agent/ai';
 import { enforceSpendCap, recordSpend } from '@shopkeeper/agent/spend';
 import { readModelUsage } from '@shopkeeper/agent/usage';
 import {
@@ -15,6 +20,7 @@ import {
 import {
   CLASSIFIER_TAGS,
   CLASSIFIER_TEXT_LIMITS,
+  fallbackTitleFromSummary,
   isClassifierTag,
   normalizeClassifierLanguage,
   emptyIntents,
@@ -254,19 +260,6 @@ function isFilterStatus(value: string): value is DbThreadFilterStatus {
   return VALID_FILTER_STATUSES.has(value);
 }
 
-// Safety net only — the classifier is asked for "title" directly. If a response
-// omits it, derive a clean subject line from the summary rather than throwing
-// away an otherwise-valid summary/tag/classification.
-function fallbackTitleFromSummary(summary: string): string {
-  const stripped = summary
-    .replace(/^\s*(the\s+)?customer\s+(is\s+|was\s+|has\s+|have\s+|had\s+|been\s+)*/i, '')
-    .replace(/[.?!]+$/, '')
-    .trim();
-  const base = stripped || summary.trim();
-  if (!base) return 'New message';
-  const titled = base[0].toUpperCase() + base.slice(1);
-  return titled.length > 70 ? `${titled.slice(0, 69)}…` : titled;
-}
 
 // intents/language are additive (Phase 1). Parse them leniently: absent or
 // malformed signals default to empty/'' rather than throwing, so a classifier
@@ -344,10 +337,6 @@ export function parseClassifierJson(raw: string): ClassificationResult {
     requestDisposition: parseRequestDisposition(parsed.requestDisposition),
     requestFacts: parseRequestFacts(parsed.requestFacts),
   };
-}
-
-function isDeterministicE2EAIEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env.NODE_ENV === 'test' && env.E2E_TEST_RUN === 'true' && env.E2E_AI_MODE === 'deterministic';
 }
 
 function deterministicE2EClassification(subject: string, body: string): ClassificationResult | null {

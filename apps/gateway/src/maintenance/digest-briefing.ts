@@ -10,6 +10,7 @@ import { Prisma } from '@prisma/client';
 import { parseClassifierSignals, type RequestFacts } from '@shopkeeper/agent/classifier-signals';
 import { classifyPerson, customerFirstName, personLabel } from '@shopkeeper/agent/person-name';
 import { formatFactsBriefingLine, type AskLessContext } from './briefing-fields.js';
+import { lowerFirst } from '../lib/sentence-case.js';
 import { listVerifiedOrderNamesByThread } from '../storefront-chat-verified-orders.js';
 import { parseStoredPendingPlan } from '../operator-context.js';
 import {
@@ -690,9 +691,6 @@ export interface BriefingItem {
 }
 
 
-function lowerFirst(text: string): string {
-  return text.charAt(0).toLowerCase() + text.slice(1);
-}
 
 /**
  * One sentence per line. On a phone, two sentences sharing a line wrap into a

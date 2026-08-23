@@ -4,6 +4,7 @@ import { CHANNEL } from '../constants.js';
 import logger from '../logger.js';
 import { getGatewayDashboardUrl } from '../config/env.js';
 import { formatChannelLabel } from '../lib/channel-format.js';
+import { lowerFirst } from '../lib/sentence-case.js';
 import {
   autoExecutionNotificationIdempotencyKey,
   planNotificationIdempotencyKey,
@@ -161,9 +162,6 @@ function channelRepliedPhrase(channelType: DbChannelType): string {
   return `on ${formatChannelLabel(channelType)}`;
 }
 
-function lowerFirst(text: string): string {
-  return /^[A-Z][a-z]/.test(text) ? text.charAt(0).toLowerCase() + text.slice(1) : text;
-}
 
 // Summaries are model-written and arrive with or without a final stop; without
 // one they run into whatever follows.
