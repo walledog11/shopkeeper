@@ -15,30 +15,36 @@ function facts(overrides: Partial<RequestFacts> = {}): RequestFacts {
 }
 
 describe('formatDeadlineLead', () => {
-  it('names the weekday inside a week', () => {
-    expect(formatDeadlineLead(facts({ deadline: '2026-08-23' }), NOW)).toBe('By Sunday');
+  it('names an unambiguous calendar date inside a week', () => {
+    expect(formatDeadlineLead(facts({ deadline: '2026-08-23' }), NOW))
+      .toBe('Customer deadline: Sun, Aug 23, 2026');
   });
 
-  it('switches to a date past a week out', () => {
-    expect(formatDeadlineLead(facts({ deadline: '2026-09-04' }), NOW)).toBe('By Sep 4');
+  it('keeps the calendar date explicit past a week out', () => {
+    expect(formatDeadlineLead(facts({ deadline: '2026-09-04' }), NOW))
+      .toBe('Customer deadline: Fri, Sep 4, 2026');
   });
 
-  it('reads today and tomorrow as words', () => {
-    expect(formatDeadlineLead(facts({ deadline: '2026-08-21' }), NOW)).toBe('Due today');
-    expect(formatDeadlineLead(facts({ deadline: '2026-08-22' }), NOW)).toBe('Due tomorrow');
+  it('keeps today and tomorrow while also printing their dates', () => {
+    expect(formatDeadlineLead(facts({ deadline: '2026-08-21' }), NOW))
+      .toBe('Customer deadline: today (Fri, Aug 21, 2026)');
+    expect(formatDeadlineLead(facts({ deadline: '2026-08-22' }), NOW))
+      .toBe('Customer deadline: tomorrow (Sat, Aug 22, 2026)');
   });
 
   // A date the merchant has already missed is the most urgent line on the page.
   it('surfaces a passed deadline rather than dropping it', () => {
-    expect(formatDeadlineLead(facts({ deadline: '2026-08-20' }), NOW)).toBe('Overdue since yesterday');
-    expect(formatDeadlineLead(facts({ deadline: '2026-08-18' }), NOW)).toBe('Overdue by 3 days');
+    expect(formatDeadlineLead(facts({ deadline: '2026-08-20' }), NOW))
+      .toBe('Customer deadline passed: Thu, Aug 20, 2026');
+    expect(formatDeadlineLead(facts({ deadline: '2026-08-18' }), NOW))
+      .toBe('Customer deadline passed: Tue, Aug 18, 2026');
   });
 
   // The customer's words are printed as they were written or not at all — there
   // is no rewording step, so there is nothing to repair afterwards.
   it('falls back to the verbatim phrase when no date resolved', () => {
     expect(formatDeadlineLead(facts({ deadlineText: 'before the weekend' }), NOW))
-      .toBe('Before the weekend');
+      .toBe('Customer timing: before the weekend');
   });
 
   it('is null when the customer named no timing', () => {
@@ -80,7 +86,7 @@ describe('formatFactsBriefingLine', () => {
       'Dana',
       NOW,
     );
-    expect(line).toBe('By Sunday — Dana · #1024: refund or exchange — the olive linen napkins');
+    expect(line).toBe('Customer deadline: Sun, Aug 23, 2026 — Dana · #1024: refund or exchange — the olive linen napkins');
   });
 
   it('drops the lead segment when there is no deadline', () => {

@@ -482,7 +482,7 @@ describe('buildOrgDigest — inbox scope', () => {
     const digest = (await buildOrgDigest(org.id, NOW))!;
 
     expect(digest.message).toContain(
-      'By Friday — Dana Reyes · #1024: refund or exchange — the olive linen napkins.',
+      'Customer deadline: Fri, May 1, 2026 — Dana Reyes · #1024: refund or exchange — the olive linen napkins.',
     );
   });
 

@@ -113,14 +113,14 @@ Answer §1's "superseded" questions from the prior audit rather than re-measurin
 
 Execute as written in the Agent Pipeline Audit. Two notes only:
 
-**4.4 implementation completed 2026-08-22.** The operator card now consumes immutable `RequestDisplay`, pre-v5 fixtures were migrated intentionally, and the prose/tense fallback is deleted. The live provider-send leg is complete; recipient phone confirmation and a clean conclusive real-model workflow remain. Both earlier judgment calls are settled:
+**4.4 implementation completed 2026-08-22.** The operator card now consumes immutable `RequestDisplay`, pre-v5 fixtures were migrated intentionally, and the prose/tense fallback is deleted. Production iMessage delivery was confirmed; verification of the corrected phone copy and a clean conclusive real-model workflow remain. Both earlier judgment calls are settled:
 
 - *Pre-v5 threads:* do **not** render them from `aiTitle`. The test fixtures were migrated to v5/structured-unavailable states and the prose fallback was removed; legacy actionable cache/pending state is pruned.
 - *`ask: "none"`:* rendered from fields. `no_request: true` prints a stalled-conversation line; a classifier miss prints person · order · `aiTitle`. The larger half of this was never a decision at all — the existing-customer email bypass was writing `emptyRequestFacts()` for every repeat customer and `skipSummary` meant nothing filled them in later. That was a bug and it is fixed.
 
-The renderer decisions are closed: `classifyPerson` splits verified and unverified visitor wording, and phone notifications redact full postal addresses by default while the authenticated dashboard retains the complete address.
+The renderer decisions are closed: `classifyPerson` splits verified and unverified visitor wording. The first live phone receipt reversed the earlier postal-redaction decision: authenticated operator cards now retain the complete actionable address, while unrelated contact-detail protections remain. Resolved deadlines identify themselves and include a full calendar date, for example `Customer deadline: Fri, Aug 28, 2026`, rather than the ambiguous `By Friday`.
 
-**Phase 4 gate evidence, 2026-08-22:** exact SHA `4cd07169b57d1c13ed024536418ab649abfa0409` passed 44/44 dashboard fixtures and gateway clear-fraud 1/1 for $0.5108 and 86 calls. [The workflow](https://github.com/walledog11/shopkeeper/actions/runs/32618869853) remained red only because ANSI bytes preceded the gateway summary marker expected at byte zero; the validator is fixed and a fresh paid run is deliberately not automatic. The structured/redacted operator card was also accepted once by the production iMessage provider after its pre-send assertions passed. Phase 4 waits for recipient confirmation that the phone copy arrived/read correctly and a newly authorized clean conclusive workflow result.
+**Phase 4 gate evidence, 2026-08-22:** exact SHA `4cd07169b57d1c13ed024536418ab649abfa0409` passed 44/44 dashboard fixtures and gateway clear-fraud 1/1 for $0.5108 and 86 calls. [The workflow](https://github.com/walledog11/shopkeeper/actions/runs/32618869853) remained red only because ANSI bytes preceded the gateway summary marker expected at byte zero; the validator is fixed and a fresh paid run is deliberately not automatic. The production iMessage provider delivered the structured card and the recipient confirmed receipt. That live review found the address masking and relative deadline unusable; both renderer decisions are corrected, and Phase 4 now waits for verification of the corrected phone copy plus a newly authorized clean conclusive workflow result.
 
 **Scheduling recommendation: move Phase 6 of this document to just before 5.2.** See Phase 6.
 
@@ -204,7 +204,7 @@ When execution halts with all completed steps committed and the halting step `fa
 
 **Depends on:** internal audit Phase 4 complete (the classifier's structured output and the field renderer are the surface preferences will be displayed through).
 
-**Sharpened 2026-08-22:** that dependency is on the *operator card*, not only the briefing — a merchant confirms a proposed preference from Telegram/iMessage (8.2), and `record_preference` is an operator-turn tool. The card now consumes immutable structured `RequestDisplay`, the digest cleanup and provider-send verification are complete, and paid model behavior passed; Phase 8 still waits for recipient phone confirmation and Phase 4's clean conclusive workflow result.
+**Sharpened 2026-08-22:** that dependency is on the *operator card*, not only the briefing — a merchant confirms a proposed preference from Telegram/iMessage (8.2), and `record_preference` is an operator-turn tool. The card now consumes immutable structured `RequestDisplay`, the digest cleanup and provider delivery verification are complete, and paid model behavior passed; Phase 8 still waits for verification of the corrected phone copy and Phase 4's clean conclusive workflow result.
 
 **Why:** this is the wedge. Rep teams need macros because reps need consistency; a solo operator's differentiator is that the agent absorbs *their* judgment. Today there is no mechanism to learn that a merchant always comps shipping past day 10, or never argues over $15. Without it the product is a macro engine with better prose. It is also a hard dependency for Phase 9.3.
 
@@ -326,7 +326,7 @@ Tools: `create_discount` (mandatory `endsAt`), `list_active_discounts`, `end_dis
 
 ## Phase 11 — Deferred from v1
 
-Re-open after the remaining Phase 4 phone confirmation and clean conclusive model gate. The structured fixture migration, prose-fallback deletion, and provider-send verification are complete.
+Re-open after the corrected Phase 4 phone-copy verification and clean conclusive model gate. The structured fixture migration, prose-fallback deletion, and provider-delivery verification are complete.
 
 - Unify the two classification paths: email is classified pre-persistence, all other channels persist-then-classify. Same contract, two orderings.
 - Rename `email-classification.ts` → `message-classification.ts`.
@@ -360,7 +360,7 @@ Re-open after the remaining Phase 4 phone confirmation and clean conclusive mode
 | 1 | Typed signals | internal audit | — | **closed** — `plan-signals.ts`; no `.includes(` over warning text remains |
 | 2 | Validate, don't repair | internal audit | 1 | **implementation complete; paid behavior passed; clean conclusive workflow remains** |
 | 3 | One autonomy function | internal audit | 1 | **implementation complete; paid behavior passed; clean conclusive workflow remains** |
-| 4 | Structured rendering | internal audit | — | **implementation complete; provider send passed; phone confirmation + clean conclusive workflow remain** |
+| 4 | Structured rendering | internal audit | — | **live feedback corrections implemented; corrected phone verification + clean conclusive workflow remain** |
 | 6 | Tool consolidation | this doc | 1–3 | **slot before 5.2** |
 | 5 | Cost & housekeeping | internal audit | 6 recommended | 5.1 before 5.2; 5.2 takes §1.1 |
 | 7 | Bounded replan | this doc | 2, 3 | required before 10 |

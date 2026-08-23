@@ -153,6 +153,42 @@ describe('parkedActionLabel', () => {
 });
 
 describe('formatOperatorPlanMessage', () => {
+  it('shows the full address and an explicit customer deadline on the approval card', () => {
+    const address = '123 Main Street, Apt 4B, Beverly Hills CA 90210';
+    const message = formatOperatorPlanMessage(
+      'Dana Ruiz',
+      ChannelType.email,
+      {
+        version: 1,
+        kind: 'classified',
+        sourceMessageId: 'fixture-message',
+        facts: {
+          ask: 'address_change',
+          subject: `delivery to ${address}`,
+          order: '#1043',
+          deadline: '2026-08-28',
+          deadlineText: 'before Friday',
+          alternative: null,
+        },
+        noRequest: false,
+        topic: 'Address change',
+      },
+      [
+        { category: 'write', tool: 'update_shipping_address', description: `Update to ${address}`, label: 'Update shipping address', enabled: true },
+        { category: 'write', tool: 'send_email', description: 'Confirm the change', label: 'Reply', enabled: true },
+      ],
+      {
+        now: new Date('2026-08-22T12:00:00Z'),
+        rawToolCalls: [{ name: 'send_email', input: { body: `I can update order #1043 to ${address}.` } }],
+      },
+    );
+
+    expect(message).toContain('Customer deadline: Fri, Aug 28, 2026 — Dana · #1043: address change');
+    expect(message).toContain(address);
+    expect(message).not.toContain('By Friday');
+    expect(message).not.toContain('[address redacted]');
+  });
+
   it('shows validation failures without approval language', () => {
     const message = formatOperatorPlanMessage(
       'Jane Doe',
@@ -514,7 +550,7 @@ describe('formatOperatorPlanMessage', () => {
 });
 
 describe('formatOperatorDraftSummary', () => {
-  it('uses the structured request snapshot and redacts addresses in steps and drafts', () => {
+  it('uses the structured request snapshot and preserves actionable addresses', () => {
     const address = '88 Market Street, San Francisco, CA 94105';
     const summary = formatOperatorDraftSummary(
       'Jane Doe',
@@ -536,10 +572,8 @@ describe('formatOperatorDraftSummary', () => {
     );
 
     expect(summary).toContain('Request: Jane — Address change requested.');
-    expect(summary).toContain('[address redacted]');
-    expect(summary).not.toContain(address);
-    expect(summary).not.toContain('88 Market Street');
-    expect(summary).not.toContain('94105');
+    expect(summary).toContain(address);
+    expect(summary).not.toContain('[address redacted]');
   });
 });
 
@@ -833,7 +867,7 @@ describe('sendOperatorQuestionNotification', () => {
     ).rejects.toThrow(OperatorNotifyError);
   });
 
-  it('redacts obvious street and postal details from lock-screen question copy', async () => {
+  it('keeps actionable street and postal details in operator question copy', async () => {
     listOperatorBindingsSpy.mockResolvedValue([TELEGRAM_BINDING]);
     notifyOperatorSpy.mockResolvedValue({ channel: 'telegram', chatId: 'chat_1' });
 
@@ -848,9 +882,9 @@ describe('sendOperatorQuestionNotification', () => {
     );
 
     const [, , body] = notifyOperatorSpy.mock.calls[0] ?? [];
-    expect(body).toContain('[address redacted]');
-    expect(body).not.toContain('123 Main Street');
-    expect(body).not.toContain('90210');
+    expect(body).toContain('123 Main Street');
+    expect(body).toContain('90210');
+    expect(body).not.toContain('[address redacted]');
   });
 
   it('clears only its own thread\'s queued plan, leaving other threads\' plans', async () => {
@@ -884,7 +918,7 @@ describe('sendOperatorQuestionNotification', () => {
 });
 
 describe('sendOperatorAutoExecutionNotification', () => {
-  it('redacts structured address values across all phone-facing auto-execution copy', async () => {
+  it('keeps structured address values across operator auto-execution copy', async () => {
     listOperatorBindingsSpy.mockResolvedValue([TELEGRAM_BINDING]);
     notifyOperatorSpy.mockResolvedValue({ channel: 'telegram', chatId: 'chat_1' });
     const address = '88 Market Street, San Francisco, CA 94105';
@@ -920,10 +954,8 @@ describe('sendOperatorAutoExecutionNotification', () => {
     );
 
     const [, , body] = notifyOperatorSpy.mock.calls[0] ?? [];
-    expect(body).toContain('[address redacted]');
-    expect(body).not.toContain(address);
-    expect(body).not.toContain('88 Market Street');
-    expect(body).not.toContain('94105');
+    expect(body).toContain(address);
+    expect(body).not.toContain('[address redacted]');
   });
 
   it('swallows notification failures without rethrowing', async () => {

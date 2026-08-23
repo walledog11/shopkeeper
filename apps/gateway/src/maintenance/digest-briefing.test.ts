@@ -229,7 +229,7 @@ describe('formatBlockedTicketLine', () => {
         requestFacts: { ask: 'address_change', order: '#1043', deadline: '2026-05-01' },
       },
     }), NOW);
-    expect(section).toBe('By Friday — Dana · #1043: address change');
+    expect(section).toBe('Customer deadline: Fri, May 1, 2026 — Dana · #1043: address change');
     expect(section).not.toContain('…');
   });
 
@@ -263,15 +263,15 @@ describe('formatBlockedTicketLine', () => {
     expect(section).toContain('Priya asked: "Do these come in a darker olive? The photos look lighter than the swatch."');
   });
 
-  it('redacts contact details out of the quote', () => {
+  it('redacts contact details but keeps an actionable postal address in the quote', () => {
     const section = formatBlockedTicketLine(({
       customer: { name: 'Ada' },
       pendingMessage: 'Reach me at ada@example.com or 14 Alder Road about the mug',
     }));
     expect(section).toContain('their email');
     expect(section).not.toContain('ada@example.com');
-    expect(section).not.toContain('14 Alder Road');
-    expect(section).toContain('[address redacted]');
+    expect(section).toContain('14 Alder Road');
+    expect(section).not.toContain('[address redacted]');
   });
 
   // The only branch left that can elide: too long to quote, and no summary was
@@ -316,7 +316,7 @@ describe('formatTicketLine — fields before prose', () => {
         deadlineText: 'before the dinner party',
       }),
       NOW,
-    )).toBe('By Friday — Dana · #1024: refund or exchange — the olive linen napkins');
+    )).toBe('Customer deadline: Fri, May 1, 2026 — Dana · #1024: refund or exchange — the olive linen napkins');
   });
 
   it('renders without a deadline when the customer named no timing', () => {
@@ -375,7 +375,7 @@ describe('handoff and approval lines — fields before prose', () => {
     deadline: '2026-05-01',
     deadlineText: 'before the dinner party',
   } satisfies RequestFacts;
-  const LINE = 'By Friday — Dana · #1024: refund or exchange — the olive linen napkins';
+  const LINE = 'Customer deadline: Fri, May 1, 2026 — Dana · #1024: refund or exchange — the olive linen napkins';
 
   const factsRow = (overrides: Record<string, unknown> = {}) => ({
     aiTitle: 'Napkin Order Question',

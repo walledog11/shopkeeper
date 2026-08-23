@@ -26,7 +26,7 @@ const ASK_LABELS: Record<RequestAsk, string> = {
   none: '',
 };
 
-const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const DAY_MS = 86_400_000;
@@ -48,23 +48,23 @@ export function daysUntilDeadline(deadline: string | null, now: Date): number | 
 }
 
 /**
- * The deadline as the merchant would say it. Built from the date, never by
- * rewording what the customer wrote — `deadlineText` is used verbatim or not at
- * all, so there is no phrasing to repair afterwards.
+ * An explicit customer deadline for operator-facing copy. Relative weekday-only
+ * labels such as "By Friday" lose both their subject and calendar context on a
+ * phone, so every resolved deadline includes the full date.
  */
 export function formatDeadlineLead(facts: RequestFacts, now: Date): string | null {
   const days = daysUntilDeadline(facts.deadline, now);
   if (days === null) {
     const text = facts.deadlineText?.trim();
-    return text ? capitalizeFirst(text) : null;
+    return text ? `Customer timing: ${text}` : null;
   }
-  if (days < 0) return days === -1 ? 'Overdue since yesterday' : `Overdue by ${days * -1} days`;
-  if (days === 0) return 'Due today';
-  if (days === 1) return 'Due tomorrow';
 
   const date = new Date(`${facts.deadline}T00:00:00Z`);
-  if (days < 7) return `By ${WEEKDAYS[date.getUTCDay()]}`;
-  return `By ${MONTHS[date.getUTCMonth()]} ${date.getUTCDate()}`;
+  const calendarDate = `${WEEKDAYS[date.getUTCDay()]}, ${MONTHS[date.getUTCMonth()]} ${date.getUTCDate()}, ${date.getUTCFullYear()}`;
+  if (days < 0) return `Customer deadline passed: ${calendarDate}`;
+  if (days === 0) return `Customer deadline: today (${calendarDate})`;
+  if (days === 1) return `Customer deadline: tomorrow (${calendarDate})`;
+  return `Customer deadline: ${calendarDate}`;
 }
 
 function capitalizeFirst(text: string): string {
@@ -141,7 +141,7 @@ function askLessLine(parts: BriefingLineParts, askLess: AskLessContext | undefin
 }
 
 /**
- * `By Friday — Dana · #1024: refund or exchange — the olive linen napkins`
+ * `Customer deadline: Fri, Aug 28, 2026 — Dana · #1024: refund or exchange`
  *
  * Null when neither the fields nor `askLess` carry anything worth a line, so
  * the caller keeps its prose fallback for the rows that have nothing at all.

@@ -4,7 +4,6 @@ import { buildDigestLedgerSection } from './digest-triage.js';
 import type { OperatorContext, ToolCall } from '../operator-context.js';
 import {
   formatRequestDisplayLine,
-  redactPostalAddresses,
   unavailableRequestDisplay,
 } from './request-display.js';
 
@@ -54,7 +53,7 @@ function planStepLines(rawToolCalls: ToolCall[]): string[] {
 export function firstDraftExcerpt(rawToolCalls: readonly { name: string; input?: unknown }[]): string | null {
   for (const toolCall of rawToolCalls) {
     const body = extractSendDraftBody(toolCall);
-    if (body) return truncate(redactPostalAddresses(body, rawToolCalls), DRAFT_EXCERPT_LIMIT);
+    if (body) return truncate(body, DRAFT_EXCERPT_LIMIT);
   }
   return null;
 }

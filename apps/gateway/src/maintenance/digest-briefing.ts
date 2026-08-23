@@ -14,7 +14,6 @@ import { listVerifiedOrderNamesByThread } from '../storefront-chat-verified-orde
 import { parseStoredPendingPlan } from '../operator-context.js';
 import {
   formatRequestDisplayLine,
-  redactPostalAddresses,
   unavailableRequestDisplay,
   type RequestDisplay,
 } from '../message-handlers/request-display.js';
@@ -200,9 +199,7 @@ const HANDOFF_VERBATIM_MAX = 120;
 const PHONE_LINE_MAX = 240;
 
 function cleanBriefingText(text: string | null | undefined): string {
-  return redactPostalAddresses(
-    redactBriefingContacts((text ?? '').replace(/\s+/g, ' ').trim()),
-  );
+  return redactBriefingContacts((text ?? '').replace(/\s+/g, ' ').trim());
 }
 
 /**
@@ -248,7 +245,7 @@ export function rowHasNoRequest(thread: { classifierSignals?: unknown }): boolea
  */
 function askLessTopic(aiTitle: string | null | undefined): string | null {
   const title = aiTitle?.trim();
-  return title ? redactPostalAddresses(redactBriefingContacts(title)) : null;
+  return title ? redactBriefingContacts(title) : null;
 }
 
 export function rowAskLess(thread: BriefingTicketRow): AskLessContext {
@@ -268,7 +265,7 @@ function factsHandoffLine(thread: BriefingTicketRow, now: Date): string | null {
     now,
     rowAskLess(thread),
   );
-  return line ? truncateBriefingText(redactPostalAddresses(line), PHONE_LINE_MAX) : null;
+  return line ? truncateBriefingText(line, PHONE_LINE_MAX) : null;
 }
 
 export function formatBlockedTicketLine(thread: BriefingTicketRow, now: Date = new Date()): string {
@@ -292,7 +289,7 @@ export function formatBlockedTicketLine(thread: BriefingTicketRow, now: Date = n
   if (factsLine) return factsLine;
 
   // The customer text is source material, not model prose. Keep a bounded,
-  // postal-redacted quote when structured classification is unavailable.
+  // contact-redacted quote when structured classification is unavailable.
   if (message) return `${subject} wrote: "${truncateBriefingText(message, PHONE_LINE_MAX)}"`;
   return formatTicketLine(thread);
 }
@@ -313,7 +310,7 @@ export function formatTicketLine(thread: BriefingTicketRow, now: Date = new Date
       thread.verifiedOrders ?? [],
     );
     const line = formatFactsBriefingLine(facts, person, now, rowAskLess(thread));
-    if (line) return redactPostalAddresses(line);
+    if (line) return line;
   }
   return formatRequestDisplayLine(unavailableRequestDisplay(), null, now);
 }
@@ -786,7 +783,7 @@ export function formatApprovalItemLine(params: {
       )
     : null;
   if (factsClause) {
-    return `${endClause(truncateBriefingText(redactPostalAddresses(factsClause), PHONE_LINE_MAX))} ${ready}`;
+    return `${endClause(truncateBriefingText(factsClause, PHONE_LINE_MAX))} ${ready}`;
   }
   return `${endClause(formatRequestDisplayLine(unavailableRequestDisplay(), null, params.now))} ${ready}`;
 }

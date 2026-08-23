@@ -29,7 +29,6 @@ import {
 import { byDeadlineFirst, formatFactsBriefingLine } from './briefing-fields.js';
 import {
   formatRequestDisplayLine,
-  redactPostalAddresses,
   unavailableRequestDisplay,
 } from '../message-handlers/request-display.js';
 import { loadDigestShopifyGarnish } from './digest-shopify-garnish.js';
@@ -430,7 +429,7 @@ export async function buildOrgDigest(
         // the ones the agent is unsure about, and repeating the question on
         // every line is the tell that a template wrote it.
         line: factsLine
-          ? `${truncateBriefingText(redactPostalAddresses(factsLine), DIGEST_STRUCTURED_LINE_MAX)}.`
+          ? `${truncateBriefingText(factsLine, DIGEST_STRUCTURED_LINE_MAX)}.`
           : `${formatRequestDisplayLine(unavailableRequestDisplay(), null, now)}.`,
       };
     }),
