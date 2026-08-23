@@ -15,6 +15,7 @@ import { listVerifiedOrderNamesByThread } from '../storefront-chat-verified-orde
 import { parseStoredPendingPlan } from '../operator-context.js';
 import {
   formatRequestDisplayLine,
+  requestDisplayHasContext,
   unavailableRequestDisplay,
   type RequestDisplay,
 } from '../message-handlers/request-display.js';
@@ -40,6 +41,8 @@ export interface WaitingItem {
   planId?: string;
   /** What the briefing orders on. Null when the classifier read no facts. */
   requestFacts: RequestFacts | null;
+  /** False keeps the plan parked but prevents a blind approval prompt. */
+  needsThreadReview: boolean;
 }
 
 const COUNT_WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
@@ -198,6 +201,7 @@ export interface BriefingTicketRow {
 /** A short customer message is more useful to a human handoff than a paraphrase. */
 const HANDOFF_VERBATIM_MAX = 120;
 const PHONE_LINE_MAX = 240;
+const FLAGGED_STRUCTURED_LINE_MAX = 140;
 
 function cleanBriefingText(text: string | null | undefined): string {
   return redactBriefingContacts((text ?? '').replace(/\s+/g, ' ').trim());
@@ -280,6 +284,14 @@ function sourceHandoffLine(thread: BriefingTicketRow): string | null {
   return `${subject} ${verb}: "${quote}"`;
 }
 
+/** True only when the briefing can show source-grounded request context. */
+export function hasHandoffRequestContext(
+  thread: BriefingTicketRow,
+  now: Date = new Date(),
+): boolean {
+  return factsHandoffLine(thread, now) !== null || sourceHandoffLine(thread) !== null;
+}
+
 export function formatBlockedTicketLine(thread: BriefingTicketRow, now: Date = new Date()): string {
   const message = cleanBriefingText(thread.pendingMessage);
   const sourceLine = sourceHandoffLine(thread);
@@ -316,6 +328,25 @@ export function formatEscalatedTicketLine(thread: BriefingTicketRow, now: Date =
     return `${sourceClause} I flagged it for you.`;
   }
   return `${endClause(formatRequestDisplayLine(unavailableRequestDisplay(), null, now))} I flagged it for you.`;
+}
+
+/** Questionable-sender line with the same facts -> source -> review fallback. */
+export function formatFlaggedTicketLine(thread: BriefingTicketRow, now: Date = new Date()): string {
+  const facts = rowRequestFacts(thread);
+  const factsLine = facts
+    ? formatFactsBriefingLine(
+        facts,
+        thread.customer.name ?? 'Someone new',
+        now,
+        rowAskLess(thread),
+      )
+    : null;
+  if (factsLine) return endClause(truncateBriefingText(factsLine, FLAGGED_STRUCTURED_LINE_MAX));
+  const sourceLine = sourceHandoffLine(thread);
+  if (sourceLine) {
+    return /[.!?…]"$/.test(sourceLine) ? sourceLine : `${sourceLine}.`;
+  }
+  return endClause(formatRequestDisplayLine(unavailableRequestDisplay(), null, now));
 }
 
 export function formatTicketLine(thread: BriefingTicketRow, now: Date = new Date()): string {
@@ -556,6 +587,7 @@ async function loadOperatorWaitingItems(
         threadId: pendingPlan.threadId,
         ...(pendingPlan.planId ? { planId: pendingPlan.planId } : {}),
         requestFacts,
+        needsThreadReview: !requestDisplayHasContext(requestDisplay, now),
         line: formatApprovalItemLine({
           customerName: thread?.customer?.name ?? pendingPlan.customerName ?? null,
           channelType: thread?.channelType ?? null,
@@ -627,11 +659,15 @@ async function loadStaleThreadWaitingItems(
 
     const dedupeKey = cached.planId ?? `thread:${thread.id}:${cached.instruction}`;
     const requestFacts = rowRequestFacts(thread);
+    const requestContext = requestFacts
+      ? formatFactsBriefingLine(requestFacts, null, now, rowAskLess(thread))
+      : null;
     items.push({
       dedupeKey,
       threadId: thread.id,
       ...(cached.planId ? { planId: cached.planId } : {}),
       requestFacts,
+      needsThreadReview: requestContext === null,
       line: formatApprovalItemLine({
         customerName: thread.customer?.name ?? null,
         channelType: thread.channelType,
@@ -702,6 +738,8 @@ export interface BriefingItem {
   threadId: string;
   kind: 'approval' | 'decision' | 'flagged';
   planId?: string;
+  /** Keep the underlying action identity while requiring the thread be opened. */
+  needsThreadReview?: boolean;
   /** Rendered without its number; the list owns the numbering. */
   line: string;
 }
@@ -834,6 +872,12 @@ function groupLead(kind: BriefingItem['kind'], count: number): string {
   return count === 1 ? 'One sender looks questionable.' : `${capitalize(countWord(count))} senders look questionable.`;
 }
 
+function threadReviewLead(count: number): string {
+  return count === 1
+    ? 'One needs you to open the thread first.'
+    : `${capitalize(countWord(count))} need you to open their threads first.`;
+}
+
 const KIND_ORDER: BriefingItem['kind'][] = ['approval', 'decision', 'flagged'];
 
 export function formatNeedsYouProse(items: BriefingItem[]): string | null {
@@ -856,7 +900,7 @@ export function formatNeedsYouProse(items: BriefingItem[]): string | null {
 
   const blocks: string[] = [];
   for (const kind of KIND_ORDER) {
-    const group = items.filter((item) => item.kind === kind);
+    const group = items.filter((item) => item.kind === kind && item.needsThreadReview !== true);
     if (group.length === 0) continue;
     if (blocks.length > 0) blocks.push('');
     blocks.push(groupLead(kind, group.length), '');
@@ -865,6 +909,12 @@ export function formatNeedsYouProse(items: BriefingItem[]): string | null {
     // it, "I've got $34 ready." and the next customer's name are consecutive
     // lines with nothing to separate them.
     blocks.push(group.map((item) => oneSentencePerLine(item.line)).join('\n\n'));
+  }
+  const threadReviews = items.filter((item) => item.needsThreadReview === true);
+  if (threadReviews.length > 0) {
+    if (blocks.length > 0) blocks.push('');
+    blocks.push(threadReviewLead(threadReviews.length), '');
+    blocks.push(threadReviews.map((item) => oneSentencePerLine(item.line)).join('\n\n'));
   }
   return blocks.join('\n');
 }
@@ -875,6 +925,9 @@ export function formatNeedsYouProse(items: BriefingItem[]): string | null {
  */
 export function formatNeedsYouAsk(items: BriefingItem[]): string | null {
   if (items.length === 0 || items.length > BRIEFING_RECITE_MAX) return null;
+  // A shared closer is ambiguous when any listed request cannot be shown. The
+  // open-thread notice is the only action requested for that briefing.
+  if (items.some((item) => item.needsThreadReview === true)) return null;
   const readyOnly = items.every((item) => item.kind === 'approval');
   if (readyOnly) {
     return 'Should I go ahead?';

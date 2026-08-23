@@ -255,6 +255,21 @@ describe('formatDigestMessage', () => {
     expect(msg.trimEnd().endsWith('Should I go ahead?')).toBe(true);
   });
 
+  it('asks for thread review without an approval or decision question', () => {
+    const msg = formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE), null, {
+      needsYou: [item({
+        kind: 'approval',
+        planId: 'plan-review',
+        needsThreadReview: true,
+        line: "Request details unavailable — open the thread for the original message. Reply's drafted.",
+      })],
+    });
+
+    expect(msg).toContain('One needs you to open the thread first.');
+    expect(msg).not.toContain('waiting for your approval');
+    expect(msg).not.toMatch(/Should I go ahead\?|What do you want to do\?|Tell me what you want to do/);
+  });
+
   it('reports completed work without narrating quiet threads', () => {
     const buckets = bucketDigestThreads([makeThread({ filterStatus: 'filtered' })], NOW, FILED_SINCE);
     const msg = formatDigestMessage(buckets, null, {
@@ -457,6 +472,51 @@ describe('buildOrgDigest — inbox scope', () => {
     );
     expect(digest.pendingDigest.items.find((item) => item.threadId === thread.id)?.kind)
       .toBe('decision');
+    expect(digest.pendingDigest.items.find((item) => item.threadId === thread.id)?.needsThreadReview)
+      .toBeUndefined();
+  });
+
+  it('parks a context-free escalation for thread review without asking for a decision', async () => {
+    org = await createTestOrg();
+    const customer = await createTestCustomer(org.id, 'review-escalation@example.com', { name: 'Maya' });
+    const thread = await createTestThread(org.id, customer.id, 'email');
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        escalatedAt: NOW,
+        classifierSignals: { version: 4, language: 'en', intents: { mutative_request: true } },
+      },
+    });
+
+    const digest = (await buildOrgDigest(org.id, NOW))!;
+    const pending = digest.pendingDigest.items.find((item) => item.threadId === thread.id);
+    expect(pending).toMatchObject({ kind: 'decision', needsThreadReview: true });
+    expect(digest.message).toContain('Request details unavailable — open the thread');
+    expect(digest.message).toContain('One needs you to open the thread first.');
+    expect(digest.message).not.toMatch(/Should I go ahead\?|What do you want to do\?|Tell me what you want to do/);
+  });
+
+  it('uses source text for a legacy flagged sender instead of requiring blind judgment', async () => {
+    org = await createTestOrg();
+    const customer = await createTestCustomer(org.id, 'legacy-flagged@example.com', { name: 'Nia' });
+    const thread = await createTestThread(org.id, customer.id, 'email');
+    const requestText = 'Is order #2088 still arriving tomorrow?';
+    const sourceMessage = await createTestMessage(thread.id, requestText);
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        filterStatus: ThreadFilterStatus.questionable,
+        filterDecidedAt: NOW,
+        requestSourceMessageId: sourceMessage.id,
+        classifierSignals: { version: 4, language: 'en', intents: { order_status: true } },
+      },
+    });
+
+    const digest = (await buildOrgDigest(org.id, NOW))!;
+    const pending = digest.pendingDigest.items.find((item) => item.threadId === thread.id);
+    expect(digest.message).toContain(requestText);
+    expect(pending).toMatchObject({ kind: 'flagged' });
+    expect(pending?.needsThreadReview).toBeUndefined();
   });
 
   // Legacy rows still enter recovery, but a missing plan never becomes inferred

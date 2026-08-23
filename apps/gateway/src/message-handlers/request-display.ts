@@ -52,6 +52,23 @@ export function unavailableRequestDisplay(): RequestDisplay {
   return { version: REQUEST_DISPLAY_VERSION, kind: 'unavailable' };
 }
 
+/**
+ * Whether an immutable request snapshot contains enough grounded context for a
+ * merchant decision. A syntactically valid `classified` snapshot may still be
+ * empty, so checking only its discriminator would keep a blind approval live.
+ */
+export function requestDisplayHasContext(
+  display: RequestDisplay | undefined,
+  now = new Date(),
+): boolean {
+  if (!display || display.kind === 'unavailable') return false;
+  if (display.kind === 'system') return true;
+  return formatFactsBriefingLine(display.facts, null, now, {
+    noRequest: display.noRequest,
+    topic: display.topic,
+  }) !== null;
+}
+
 export async function buildRequestDisplaySnapshot(params: {
   organizationId: string;
   threadId: string;

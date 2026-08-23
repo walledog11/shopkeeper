@@ -150,6 +150,39 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
     expect(ctx.pendingPlan).toBeNull();
   });
 
+  it('does not run or discard a plan that requires thread review', async () => {
+    const chatId = '5555012';
+    const memberKey = await bindMember(chatId);
+    const { threadId, expectedIdentity } = await parkCurrentPlan({
+      memberKey,
+      instruction: 'refund #10',
+      rawToolCalls: [{ id: 'tc1', name: 'refundOrder', input: { amount: 5 } }],
+    });
+    await updateContext(org.id, memberKey, {
+      pendingDigest: {
+        items: [{
+          threadId,
+          kind: 'approval',
+          planId: expectedIdentity.planId,
+          needsThreadReview: true,
+        }],
+        threadIds: [],
+        sentAt: new Date().toISOString(),
+      },
+    });
+
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'yes' } });
+    await processPendingOperatorEvents(org.id);
+    await waitForReplies(1);
+
+    expect(lastReplyText()).toContain('Open the thread before deciding');
+    expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
+    expect((await getContext(org.id, memberKey)).pendingPlan).toMatchObject({ planId: expectedIdentity.planId });
+  });
+
   it.each(['yes', 'skip 1'])('%s cannot run a validation-failed draft', async (command) => {
     const chatId = command === 'yes' ? '5555010' : '5555011';
     const memberKey = await bindMember(chatId);
@@ -307,7 +340,7 @@ describe('POST /webhooks/telegram — digest commands', () => {
         sentAt: new Date().toISOString(),
       },
     });
-    return { chatId, threadId: thread.id };
+    return { chatId, threadId: thread.id, memberKey: `member:${member.id}` };
   }
 
   it('"review" lists flagged threads', async () => {
@@ -380,6 +413,42 @@ describe('POST /webhooks/telegram — digest commands', () => {
     await processPendingOperatorEvents(org.id);
     await waitForReplies(1);
     expect(lastReplyText()).toMatch(/There's no 5 on that list/);
+  });
+
+  it('opens a thread-review item but refuses a blind action command', async () => {
+    const { chatId, threadId, memberKey } = await setupDigest({
+      customerName: 'Inez',
+      aiSummary: 'Original request needs review',
+    });
+    await updateContext(org.id, memberKey, {
+      pendingDigest: {
+        items: [{
+          threadId,
+          kind: 'approval',
+          planId: 'plan-review',
+          needsThreadReview: true,
+        }],
+        threadIds: [],
+        sentAt: new Date().toISOString(),
+      },
+    });
+
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'spam 1' } });
+    await processPendingOperatorEvents(org.id);
+    await waitForReplies(1);
+    expect(lastReplyText()).toBe('Open number 1 before deciding what to do with it.');
+
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { message_id: 2, chat: { id: Number(chatId), type: 'private' }, text: 'open 1' } });
+    await processPendingOperatorEvents(org.id);
+    await waitForReplies(2);
+    expect(lastReplyText()).toContain('1. Inez');
+    expect(lastReplyText()).toContain('Original request needs review');
   });
 });
 

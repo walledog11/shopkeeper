@@ -147,7 +147,7 @@ describe('updateContext + getContext round-trip', () => {
   it('persists pendingDigest', async () => {
     const digest: PendingDigest = {
       items: [
-        { threadId: 't1', kind: 'approval', planId: 'p1' },
+        { threadId: 't1', kind: 'approval', planId: 'p1', needsThreadReview: true },
         { threadId: 't2', kind: 'flagged' },
       ],
       threadIds: ['t2'],
@@ -418,6 +418,21 @@ describe('selectPendingPlan', () => {
 
   it('returns the only plan and ignores the ref', () => {
     expect(selectPendingPlan([a], 'whatever')).toEqual({ plan: a });
+  });
+
+  it('refuses to approve a plan whose briefing requires thread review', () => {
+    const result = selectPendingPlan([a], undefined, {
+      items: [{
+        threadId: a.threadId,
+        kind: 'approval',
+        planId: a.planId,
+        needsThreadReview: true,
+      }],
+      threadIds: [],
+      sentAt: '2026-08-23T12:00:00.000Z',
+    });
+
+    expect(result).toEqual({ error: expect.stringContaining('Open the thread') });
   });
 
   it('asks which one when several are pending and no ref is given', () => {
