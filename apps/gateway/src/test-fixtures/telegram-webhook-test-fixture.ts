@@ -9,8 +9,6 @@ import {
   cleanupTestData,
 } from '@shopkeeper/db/test-helpers';
 import { updateContext, getContext } from '../operator-context.js';
-import type { TerminalSendRefresh } from '@shopkeeper/agent/planner-skip-reply';
-import type { RawToolCall } from '@shopkeeper/agent/types';
 import {
   clearMockLogger,
   createRegisteredWebhookRouterApp,
@@ -26,7 +24,6 @@ const {
   sendChatActionSpy,
   setMessageReactionSpy,
   executeOperatorAgentTurnSpy,
-  refreshSkippedPlanTerminalSendSpy,
   queueAddSpy,
   queueGetJobSpy,
 } = vi.hoisted(() => ({
@@ -46,12 +43,6 @@ const {
     threadId: '00000000-0000-4000-8000-000000000001',
     actionsPerformed: [],
   }),
-  refreshSkippedPlanTerminalSendSpy: vi.fn(async (
-    _organizationId: string,
-    _threadId: string,
-    _instruction: string,
-    approvedToolCalls: RawToolCall[],
-  ): Promise<TerminalSendRefresh> => ({ status: 'ok', toolCalls: approvedToolCalls })),
   queueAddSpy: vi.fn().mockResolvedValue({ id: 'test-job-id' }),
   queueGetJobSpy: vi.fn().mockResolvedValue(null),
 }));
@@ -113,10 +104,6 @@ vi.mock('../message-handlers/execute-operator-agent-turn.js', () => ({
   executeOperatorApprovedCachedPlan: executeOperatorAgentTurnSpy,
 }));
 
-vi.mock('../message-handlers/skipped-plan-terminal-send.js', () => ({
-  refreshSkippedPlanTerminalSend: refreshSkippedPlanTerminalSendSpy,
-}));
-
 import { registerTelegramWebhookRoutes } from '../routes/webhooks-telegram.js';
 import { processOperatorEventById } from '../workers/operator-event.js';
 
@@ -126,7 +113,6 @@ export const app = createRegisteredWebhookRouterApp(registerTelegramWebhookRoute
 export const telegramFixture = {
   app,
   executeOperatorAgentTurnSpy,
-  refreshSkippedPlanTerminalSendSpy,
   incrStore,
   mockLogger,
   sendChatActionSpy,
@@ -192,13 +178,6 @@ beforeEach(async () => {
   executeOperatorAgentTurnSpy.mockClear();
   queueAddSpy.mockClear().mockResolvedValue({ id: 'test-job-id' });
   queueGetJobSpy.mockClear().mockResolvedValue(null);
-  refreshSkippedPlanTerminalSendSpy.mockClear();
-  refreshSkippedPlanTerminalSendSpy.mockImplementation(async (
-    _organizationId: string,
-    _threadId: string,
-    _instruction: string,
-    approvedToolCalls: RawToolCall[],
-  ): Promise<TerminalSendRefresh> => ({ status: 'ok', toolCalls: approvedToolCalls }));
   executeOperatorAgentTurnSpy.mockResolvedValue({
     summary: 'Done.',
     threadId: '00000000-0000-4000-8000-000000000001',

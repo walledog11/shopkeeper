@@ -24,7 +24,6 @@ import {
 const {
   app,
   executeOperatorAgentTurnSpy,
-  refreshSkippedPlanTerminalSendSpy,
   incrStore,
   mockLogger,
   sendChatActionSpy,
@@ -204,7 +203,6 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
     };
     const ids = call.approvedToolCalls.map((tc) => tc.id);
     expect(ids).toEqual(['r1', 'r2', 'a2']);
-    expect(refreshSkippedPlanTerminalSendSpy).not.toHaveBeenCalled();
   });
 
   it('"skip 1" requires revision when a terminal send would change', async () => {
@@ -227,44 +225,9 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
 
     await processPendingOperatorEvents(org.id);
     await waitForReplies(1);
-    expect(refreshSkippedPlanTerminalSendSpy).not.toHaveBeenCalled();
     expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
     expect(lastReplyText()).toContain("I've run nothing");
 
-    const context = await getContext(org.id, memberKey);
-    expect(context.pendingPlans.at(-1)?.threadId).toBe(threadId);
-  });
-
-  // A failed redraft used to fall through to the remaining calls, so the refund
-  // executed and the customer was never told.
-  it('"skip 1" runs nothing when the terminal send cannot be redrafted', async () => {
-    const chatId = '5555005';
-    const memberKey = await bindMember(chatId);
-    const { threadId } = await parkCurrentPlan({
-      memberKey,
-      instruction: 'refund #1024',
-      rawToolCalls: [
-        { id: 'a1', name: 'edit_shopify_order', input: { quantity: 1 } },
-        { id: 'a2', name: 'create_refund', input: { amount: 40 } },
-        { id: 's1', name: 'send_reply', input: { text: 'Edited the order and refunded you.' } },
-      ],
-    });
-
-    refreshSkippedPlanTerminalSendSpy.mockResolvedValueOnce({ status: 'redraft_failed' });
-
-    await request(app)
-      .post('/webhooks/telegram')
-      .set('x-telegram-bot-api-secret-token', SECRET)
-      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'skip 1' } });
-
-    await processPendingOperatorEvents(org.id);
-    await waitForReplies(1);
-
-    expect(refreshSkippedPlanTerminalSendSpy).not.toHaveBeenCalled();
-    expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
-    expect(lastReplyText()).toContain("I've run nothing");
-
-    // The plan stays pending so the merchant can still approve or dismiss it.
     const context = await getContext(org.id, memberKey);
     expect(context.pendingPlans.at(-1)?.threadId).toBe(threadId);
   });
