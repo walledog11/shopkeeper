@@ -21,7 +21,7 @@ There are now **two** plans in play. They are not alternatives.
 
 ### Rules for the executing agent
 
-1. **Finish the internal audit's Phases 1–5 before starting Phase 6.** Do not interleave. The one exception is Phase A below, which is read-only and runs in parallel today.
+1. **Finish the internal audit's Phases 1–4 before capability expansion.** Phase A is read-only and may run in parallel. Phase 6 may run immediately before internal-audit task 5.2, after Phases 2 and 3 are complete; the remaining Phase 5 housekeeping does not block it.
 2. **Verify before you build.** Locate code by symbol name, never by line number — line numbers in *this* document's source material are unverified and some were already proven stale. If the code contradicts this plan, **stop and report**. Do not silently adapt.
 3. **Everything goes through a pull request.** `evals.yml` triggers on `pull_request`. A change pushed straight to `master` is never gated. Any task here that says "eval must pass" is a no-op if the work does not land as a PR.
 4. **One phase per session.** Use `git worktree` for any parallel session. Never two sessions against one working tree.
@@ -31,7 +31,7 @@ There are now **two** plans in play. They are not alternatives.
 
 > One reasoning core, one memory, one tool registry. Execution policy varies by *who is talking*, and only by that. Customer-facing input is attacker-controlled and stays behind capture-mode planning with deterministic adjudication. Merchant-facing input is authenticated and may run an iterative live-execution loop.
 
-The internal audit's Phase 3 — collapsing four autonomy call sites into one `decideAutonomy` function — is what makes the first half of that charter real. Right now the final gate on whether the agent may act without a human is `lower.includes("no relevant kb articles found")`. **No capability in Phases 8–10 may be built on top of that.** That is the load-bearing reason for the sequencing in this document.
+The internal audit's Phase 1 removed the warning-text substring gate, and Phase 3 implemented the single typed `decideAutonomy` owner while retaining execution-time policy as an authoritative temporal backstop. Local deterministic, unit, integration, typecheck, lint, build, and structure gates pass; only the paid real-model gate remains open. **No capability in Phases 8–10 may bypass that owner or begin before the required preceding gates.**
 
 ---
 
@@ -60,7 +60,7 @@ That rate is the tuning signal for the intent→tools map, and given classifier 
 
 | v1 task | Until |
 |---|---|
-| **v1 1.3 — unify the two classification paths; rename `email-classification.ts`** | After internal audit 4.4 closes. `CLASSIFIER_VERSION` is at 5; the pre-v5 question is now settled (age out, 2026-08-22) but 4.4 itself is still open. Do not rename or reorder it mid-migration. Re-open as Phase 11 — noting that the *third* email classification path, the existing-customer bypass, was removed on 2026-08-22, so Phase 11 now unifies two orderings rather than three. |
+| **v1 1.3 — unify the two classification paths; rename `email-classification.ts`** | Deferred to Phase 11 after the remaining Phase 4 phone gate. `CLASSIFIER_VERSION` is 5, the structured fixture migration is complete, and the existing-customer bypass was removed on 2026-08-22, so Phase 11 now unifies two orderings rather than three. |
 
 ### Superseded by prior work — check before re-running
 
@@ -70,7 +70,9 @@ Note also that the internal audit's numbers supersede the third-party summary's 
 
 ---
 
-## Phase A — Measurement (run in parallel, today)
+## Phase A — Measurement
+
+**Status:** complete 2026-08-22. See `docs/agent-phase-a-measurement-2026-08-22.md`. The requested resolution-rate table is not reconstructable from current historical data; the report records the missing immutable attribution needed to make it measurable.
 
 Read-only. Touches nothing the remediation work touches. Can run in a separate worktree while Claude Code continues on internal audit phases.
 
@@ -85,7 +87,11 @@ Using the classifier's existing support tag and disposition, over the last 30 da
 
 **Also report:** what fraction of organizations have `autoExecuteMode` live. Default is off. If most merchants never turn it on, the mutation and routing apparatus only ever produces approve/reject cards, and "autonomous" is not currently true in production — which changes what Phases 9 and 10 are actually worth.
 
-**Decision rule:** if WISMO-class tickets are high-volume and low-autonomous-resolution, **promote Phase 9 (lost package) ahead of Phase 8 (preference memory)**, and implement 9.3's remedy policy from static org settings, backfilling preference-driven policy when Phase 8 lands.
+**Original decision rule:** if WISMO-class tickets were high-volume and low-autonomous-resolution, promote Phase 9 ahead of Phase 8. **Not applied:** A.1 was not reconstructable from current historical data, so Phase 9 remains behind Phase 8.
+
+### A.1a — Instrument the missing attribution
+
+- [ ] Persist immutable customer-episode/source-message, plan verdict, execution outcome, and merchant-touch attribution so A.1 can be rerun without reconstructing history from mutable thread fields.
 
 ### A.2 — Verify partial refund exists
 
@@ -99,20 +105,22 @@ Answer §1's "superseded" questions from the prior audit rather than re-measurin
 
 **Acceptance for Phase A:** one committed report under `docs/`. No production code changed.
 
+**Decision outcome:** do not apply the WISMO reordering trigger from the current cohort. Production has 0/17 active organization rows with `autoExecuteMode = "live"`, and the 30-day cohort is small, internal/test-heavy, and incomplete on classifier history. Partial refunds are confirmed absent by design and remain a separate capability PR. Low-risk Haiku is off; approved support turns re-executed reads in 2/13 observed executions; real per-model cache-hit rate remains unmeasured because the usage detail is not durable.
+
 ---
 
 ## Internal audit Phases 0–5 — not restated here
 
 Execute as written in the Agent Pipeline Audit. Two notes only:
 
-**4.4 is no longer blocked on a decision — it is blocked on time.** Both of its judgment calls were settled on 2026-08-22 and the code landed:
+**4.4 implementation completed 2026-08-22.** The operator card now consumes immutable `RequestDisplay`, pre-v5 fixtures were migrated intentionally, and the prose/tense fallback is deleted. The paid real-model and live-phone gates remain. Both earlier judgment calls are settled:
 
-- *Pre-v5 threads:* let them age out. Do **not** render them from `aiTitle`. A version-4 row has no `order` field and an `aiSummary` that states the whole request, so a title line is strictly less than the prose it would replace; `digest-briefing.test.ts` guards this and caught the first attempt. Prod has no merchants, so the population is test threads.
+- *Pre-v5 threads:* do **not** render them from `aiTitle`. The test fixtures were migrated to v5/structured-unavailable states and the prose fallback was removed; legacy actionable cache/pending state is pruned.
 - *`ask: "none"`:* rendered from fields. `no_request: true` prints a stalled-conversation line; a classifier miss prints person · order · `aiTitle`. The larger half of this was never a decision at all — the existing-customer email bypass was writing `emptyRequestFacts()` for every repeat customer and `skipSummary` meant nothing filled them in later. That was a bug and it is fixed.
 
-The ~1,500-line deletion is downstream of nothing but those threads aging out. **Of the two renderer decisions this note paired with it, one is closed** (verified vs. unverified visitor wording — `classifyPerson` splits them) and one is still open: unredacted postal addresses in `redactBriefingContacts`.
+The renderer decisions are closed: `classifyPerson` splits verified and unverified visitor wording, and phone notifications redact full postal addresses by default while the authenticated dashboard retains the complete address.
 
-**Read the audit's 4.6 before scheduling any Phase 4 session.** It was re-scoped on 2026-08-22 and now records that `planning-notifications.ts` — the operator card — was never converted to structured rendering at all. That has a direct consequence for Phase 8 below.
+**Phase 4's remaining gates are external to local repository verification, not architectural:** run the paid model suite with a real key, then verify the structured operator copy and redaction on a live phone round-trip.
 
 **Scheduling recommendation: move Phase 6 of this document to just before 5.2.** See Phase 6.
 
@@ -129,7 +137,13 @@ The ~1,500-line deletion is downstream of nothing but those threads aging out. *
 
 `get_shopify_orders`, `get_order_by_name`, `get_order_fulfillment_status`, `get_order_tracking`. Fulfillment status and tracking are fields on the order object; three round trips reconstruct one record against a 10-iteration cap. Separately, `buildContext` already prefetches recent orders when the customer is linked.
 
-**Do:** one `get_order` tool with a discriminated lookup (`{ by: 'name' | 'id' | 'customer', value, limit? }`) returning order, fulfillment status, and tracking in one response. Include a `fields` parameter so a trimmed payload is possible.
+**Do:** preserve three security states explicitly:
+
+1. Normal authenticated support may consolidate its reads into one `get_order` tool with a discriminated lookup (`{ by: 'name' | 'id' | 'customer', value, limit? }`) and a trimmed `fields` projection.
+2. Anonymous storefront guests keep the deliberately guest-only `get_order_fulfillment_status` surface, which returns no identifying order, customer, item, amount, or address data.
+3. Verified-order storefront sessions keep their order-scoped `get_order_by_name` / `get_order_tracking` capability, or move to a separate verified-order projection that cannot perform customer-wide lookup.
+
+Do not expose `{ by: 'customer' }` to either storefront state. Before retiring names, add acceptance coverage for `VERIFIED_TOOL_NAMES`, `ORDER_SCOPED_TOOL_SET`, static scope enforcement, and the guest/verified policy matrix. A future consolidation across these boundaries is a separate security-reviewed change.
 
 The prompt currently restates the `get_order_tracking` rule three times (internal audit 5.5). Those three restatements delete with this task — fold the guidance into the single tool's description.
 
@@ -190,7 +204,7 @@ When execution halts with all completed steps committed and the halting step `fa
 
 **Depends on:** internal audit Phase 4 complete (the classifier's structured output and the field renderer are the surface preferences will be displayed through).
 
-**Sharpened 2026-08-22:** that dependency is on the *operator card*, not the briefing — a merchant confirms a proposed preference from Telegram/iMessage (8.2), and `record_preference` is an operator-turn tool. `planning-notifications.ts` was found to read no `requestFacts` or `classifierSignals` whatsoever, so the surface 8.2 and 8.4 render through is still prose end to end. Phase 4 is not "complete" for Phase 8's purposes until the card is converted, whatever the briefing-side items say.
+**Sharpened 2026-08-22:** that dependency is on the *operator card*, not only the briefing — a merchant confirms a proposed preference from Telegram/iMessage (8.2), and `record_preference` is an operator-turn tool. The card now consumes immutable structured `RequestDisplay`, and the digest cleanup is complete; Phase 8 still waits for Phase 4's paid real-model and live-phone gates.
 
 **Why:** this is the wedge. Rep teams need macros because reps need consistency; a solo operator's differentiator is that the agent absorbs *their* judgment. Today there is no mechanism to learn that a merchant always comps shipping past day 10, or never argues over $15. Without it the product is a macro engine with better prose. It is also a hard dependency for Phase 9.3.
 
@@ -230,29 +244,31 @@ The operator agent knows about pending plans and nothing else — no visibility 
 
 ---
 
-## Phase 9 — Lost package resolution
+## Phase 9 — Multi-carrier shipment resolution
 
-**Depends on:** Phase 8 (remedy policy is a preference question) — unless Phase A.1 promotes this ahead, in which case implement remedy policy from static org settings and backfill later.
+**Depends on:** Phase 8 for remedy policy. Phase A.1 did not produce decision-grade evidence to promote this phase.
 
-**Why:** WISMO is typically 40–60% of ecommerce ticket volume. Today the ceiling is "here's your tracking link," which the order confirmation email already delivered.
+**Why:** the existing USPS path is implemented and tested to return live scan events, classify exceptions and five-day stalls, scan hourly, deduplicate shipment watches, and create approval plans. It is not proof of production activation: the monitor defaults off behind `DELIVERY_EXCEPTION_MONITOR_ENABLED`, and USPS credentials may be absent. The remaining product gap is broader carrier coverage and a remedy recommendation that goes beyond a tracking update.
 
-### 9.1 — Carrier capability type
+### 9.1 — Extract USPS as provider one, then add exactly one second provider
 
-Available capability types are hard-coded to Shopify, thread I/O, KB, and stats. Add `carrier`.
+Available capability types are hard-coded to Shopify, thread I/O, KB, and stats, while USPS access currently lives inside the Shopify tracking implementation. Add `carrier` without regressing the working USPS path.
 
 Implement one provider behind an interface. **AfterShip** if you want exception classification (stalled, misrouted, delivery-attempted, returned-to-sender) done for you; **EasyPost** for raw events you classify yourself. AfterShip is the faster path; the interface keeps it reversible. Org-scoped credentials, same authorization pattern as Shopify. **Verify the current API surface against live provider docs — do not code from memory.**
 
-### 9.2 — Tracking tool
+### 9.2 — Normalize the existing tracking tool
 
-`get_shipment_status` — full event history, normalized exception classification, days-since-last-scan. Lands in the order-status intent bucket from 5.2.
+Evolve or replace `get_order_tracking` with `get_shipment_status`: full event history, normalized exception classification, and days-since-last-scan across supported carriers. Preserve historical tool-name rendering and the verified-order scope check. It lands in the order-status intent bucket from 5.2.
 
 **Acceptance:** fixture — package with no scan for 6 days produces a reply naming the stall, not a link.
 
-### 9.3 — Proactive stall detection
+### 9.3 — Extend proactive detection into remedy selection
 
-An hourly shipment-exception monitor already exists in `apps/gateway/src/maintenance/workers.ts`. **Extend it; do not build new.**
+An hourly USPS shipment-exception monitor already detects exceptions and five-day stalls, deduplicates them, and creates approval plans. **Extend it; do not build new.**
 
-Detect no scan in N days, exception status, or delivered-but-disputed. On detection, create an **approval plan** — the existing pattern — proposing a remedy (reship / refund / wait-and-notify) informed by Phase 8 preferences. Merchant approves from Telegram/iMessage via the existing pending-plan mechanism.
+For proactive carrier evidence, keep stall, exception, and returned-to-sender detection and make the existing approval plan propose a remedy (reship / refund / wait-and-notify) informed by Phase 8 preferences. Merchant approval continues through the existing pending-plan mechanism.
+
+Treat delivered-but-disputed as a reactive resolution flow: a carrier feed can establish “delivered,” but only inbound customer evidence establishes the dispute. Reuse normalized shipment status when a customer reports non-receipt; do not pretend the carrier monitor can infer the complaint.
 
 Deduplicate per shipment. Do not build this as a reactive tool the customer triggers — proactive detection is the differentiated behavior and it reuses machinery you already have.
 
@@ -310,7 +326,7 @@ Tools: `create_discount` (mandatory `endsAt`), `list_active_discounts`, `end_dis
 
 ## Phase 11 — Deferred from v1
 
-Re-open only after internal audit 4.4 closes. The pre-v5 question is settled (age out, 2026-08-22); 4.4 now waits on those threads actually aging out.
+Re-open after the remaining Phase 4 live-phone gate. The structured fixture migration and prose-fallback deletion are complete.
 
 - Unify the two classification paths: email is classified pre-persistence, all other channels persist-then-classify. Same contract, two orderings.
 - Rename `email-classification.ts` → `message-classification.ts`.
@@ -339,18 +355,18 @@ Re-open only after internal audit 4.4 closes. The pre-v5 question is settled (ag
 
 | # | Phase | Owner | Blocked by | Notes |
 |---|---|---|---|---|
-| A | Measurement | this doc | — | read-only, parallel, today |
+| A | Measurement | this doc | — | **complete** — A.1 attribution blocked; A.2/A.3 recorded in the Phase A report |
 | 0 | Live bugs | internal audit | — | closed |
 | 1 | Typed signals | internal audit | — | **closed** — `plan-signals.ts`; no `.includes(` over warning text remains |
-| 2 | Validate, don't repair | internal audit | 1 | |
-| 3 | One autonomy function | internal audit | 1 | **gate for everything in Phases 8–10** |
-| 4 | Structured rendering | internal audit | — | in progress; 4.4 waits on pre-v5 threads aging out. **4.6 re-scoped: the operator card was never converted** |
+| 2 | Validate, don't repair | internal audit | 1 | **implementation complete 2026-08-22; model eval gate remains** |
+| 3 | One autonomy function | internal audit | 1 | **implementation complete 2026-08-22; model eval gate remains** |
+| 4 | Structured rendering | internal audit | — | **implementation complete 2026-08-22; model eval + live phone gates remain** |
 | 6 | Tool consolidation | this doc | 1–3 | **slot before 5.2** |
 | 5 | Cost & housekeeping | internal audit | 6 recommended | 5.1 before 5.2; 5.2 takes §1.1 |
 | 7 | Bounded replan | this doc | 2, 3 | required before 10 |
 | 8 | Preference memory | this doc | 4 | the moat; blocks 9.3 |
-| 9 | Lost package | this doc | 5.2, 8 | promote per A.1 |
+| 9 | Multi-carrier shipment resolution | this doc | 5.2 for tool bucketing/9.2; 8 for remedy policy | A.1 did not authorize promotion |
 | 10 | Shop management | this doc | 6, 7, 3 | 10.1 is a migration |
 | 11 | Classification unification | this doc | 4.4 | deferred from v1 |
 
-**Reordering trigger:** if A.1 shows WISMO is high-volume and low-autonomous-resolution, Phase 9 moves ahead of Phase 8 and takes its remedy policy from static org settings until Phase 8 lands.
+**Current ordering:** Phase 9 remains behind Phase 8. Reconsider only after A.1a makes the attribution table decision-grade.
