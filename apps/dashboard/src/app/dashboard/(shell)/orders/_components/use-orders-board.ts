@@ -19,11 +19,10 @@ import {
   beginLoadingOrderColumn,
   createOrdersPaginationState,
   failLoadingOrderColumn,
+  isOrdersBoardInitialLoading,
   mergeInitialBoardResponse,
   ordersInColumn,
 } from "./orders-board-state"
-
-const BOARD_COLUMN_IDS: BoardColumnId[] = ["needs_fulfillment", "unpaid", "fulfilled"]
 
 export function useOrdersBoard(
   enabled: boolean,
@@ -42,6 +41,7 @@ export function useOrdersBoard(
     {
       onSuccess: applyBoardResponse,
       revalidateOnFocus: false,
+      shouldRetryOnError: false,
     },
   )
 
@@ -69,7 +69,7 @@ export function useOrdersBoard(
         entries,
         error: entries.length === 0 ? error : null,
         hasMore: Boolean(column.nextPageInfo),
-        isLoading: enabled && isLoading && column.pages.length === 0,
+        isLoading: enabled && isLoading && !error && column.pages.length === 0,
         isLoadingMore: column.isLoadingMore,
         loadMoreError: column.loadMoreError,
         onLoadMore: () => { void loadMore(columnId) },
@@ -91,9 +91,7 @@ export function useOrdersBoard(
     pagination,
   ])
 
-  const isInitialLoading = enabled
-    && isLoading
-    && BOARD_COLUMN_IDS.every(columnId => pagination[columnId].pages.length === 0)
+  const isInitialLoading = isOrdersBoardInitialLoading(enabled, isLoading, error, pagination)
 
   return {
     columns,

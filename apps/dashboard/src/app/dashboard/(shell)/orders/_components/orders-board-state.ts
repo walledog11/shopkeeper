@@ -89,3 +89,16 @@ export function failLoadingOrderColumn(
 export function ordersInColumn(state: OrdersPaginationState, columnId: OrderBoardColumnId): OrderRow[] {
   return dedupeOrders(state[columnId].pages.flat())
 }
+
+/** True only for the first paint — not for SWR error retries, which also set isLoading. */
+export function isOrdersBoardInitialLoading(
+  enabled: boolean,
+  isLoading: boolean,
+  error: unknown,
+  pagination: OrdersPaginationState,
+): boolean {
+  return enabled
+    && isLoading
+    && !error
+    && ORDER_BOARD_COLUMN_IDS.every(columnId => pagination[columnId].pages.length === 0)
+}

@@ -5,8 +5,9 @@ import { needsYouCardShellClassName } from "@/app/dashboard/_components/home/nee
 import { GlassToolbarSkeleton } from "./GlassToolbarSkeleton"
 import { MemoryLibrarySkeleton } from "./MemoryLibrarySkeleton"
 import { Pulse } from "./Pulse"
-import { dashboardChromeMaxWidthClass } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
+import { dashboardChromeColumnClassName, dashboardChromeMaxWidthClass } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
 import { cn } from "@/lib/ui/cn"
+import { GLASS_CARD_SURFACE } from "@/lib/ui/glass-card-styles"
 
 function PageShell({
   children,
@@ -93,19 +94,26 @@ const ORDER_COLUMN_KEYS = ["orders-col-1", "orders-col-2", "orders-col-3"]
 export function OrdersPageSkeleton() {
   return (
     <PageShell>
-      <GlassToolbarSkeleton withTabs />
-      <div className="custom-scrollbar flex-1 overflow-y-auto">
-        <div className="w-full space-y-5 px-6 py-6">
-          <Pulse className="h-16 w-full rounded-2xl border border-border bg-card" />
-          <div className="grid gap-6 lg:grid-cols-3">
-            {ORDER_COLUMN_KEYS.map(key => (
-              <div key={key} className="space-y-2.5" aria-hidden>
-                <Pulse className="mb-3 h-4 w-28 rounded-md" />
-                <Pulse className="h-28 rounded-2xl border border-border bg-card" />
-                <Pulse className="h-28 rounded-2xl border border-border bg-card" />
-                <Pulse className="h-28 rounded-2xl border border-border bg-card" />
-              </div>
-            ))}
+      <div
+        className={cn(
+          dashboardChromeColumnClassName(),
+          "flex min-h-0 flex-1 flex-col",
+        )}
+      >
+        <GlassToolbarSkeleton withTabs wrapperClassName="relative z-20 shrink-0 pb-3 pt-3" />
+        <div className="custom-scrollbar flex-1 overflow-y-auto">
+          <div className="w-full space-y-5 py-6">
+            <Pulse className="h-16 w-full rounded-2xl border border-border bg-card" />
+            <div className="grid gap-6 lg:grid-cols-3">
+              {ORDER_COLUMN_KEYS.map(key => (
+                <div key={key} className="space-y-2.5" aria-hidden>
+                  <Pulse className="mb-3 h-4 w-28 rounded-md" />
+                  <Pulse className="h-28 rounded-2xl border border-border bg-card" />
+                  <Pulse className="h-28 rounded-2xl border border-border bg-card" />
+                  <Pulse className="h-28 rounded-2xl border border-border bg-card" />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -116,10 +124,16 @@ export function OrdersPageSkeleton() {
 export function KbPageSkeleton() {
   return (
     <PageShell>
-      <GlassToolbarSkeleton withAction />
-      <div className="custom-scrollbar flex-1 overflow-y-auto">
-        <div className="px-4 py-6 pb-16 sm:px-6 lg:px-8">
-          <MemoryLibrarySkeleton />
+      <div className={cn(dashboardChromeColumnClassName(), "flex min-h-0 flex-1 flex-col")}>
+        <GlassToolbarSkeleton
+          withAction
+          wrapperClassName="relative z-20 shrink-0 pb-3 pt-3"
+          shellClassName={cn("rounded-[22px] px-2.5 py-2", GLASS_CARD_SURFACE)}
+        />
+        <div className="custom-scrollbar flex-1 overflow-y-auto">
+          <div className="py-6 pb-16">
+            <MemoryLibrarySkeleton />
+          </div>
         </div>
       </div>
     </PageShell>
@@ -132,7 +146,7 @@ export function IntegrationsPageSkeleton() {
   return (
     <PageShell>
       <div className="flex-1 overflow-y-auto">
-        <div className="w-full space-y-6 px-6 py-6">
+        <div className={cn(dashboardChromeColumnClassName(), "space-y-6 py-6")}>
           <div className="grid gap-8 lg:grid-cols-2 items-start">
             {INTEGRATION_SECTION_KEYS.map(sectionKey => (
               <section key={sectionKey} className="space-y-4" aria-hidden>
@@ -140,9 +154,9 @@ export function IntegrationsPageSkeleton() {
                   <Pulse className="h-4 w-32 rounded-md" />
                   <Pulse className="h-3 w-full max-w-sm rounded-md bg-foreground/[0.05]" />
                 </div>
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-4">
+                <div className="grid items-stretch auto-rows-fr grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-4">
                   {["card-a", "card-b", "card-c", "card-d"].map(cardKey => (
-                    <div key={`${sectionKey}-${cardKey}`} className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5">
+                    <div key={`${sectionKey}-${cardKey}`} className="flex h-full flex-col gap-4 rounded-2xl border border-white/70 bg-white/65 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.86),0_1px_2px_rgba(43,33,24,0.05),0_10px_28px_-10px_rgba(43,33,24,0.16),0_24px_56px_-18px_rgba(43,33,24,0.18)] backdrop-blur-2xl backdrop-saturate-150 supports-[backdrop-filter]:bg-white/40">
                       <div className="flex items-center gap-3">
                         <Pulse className="size-8 rounded-lg shrink-0" />
                         <Pulse className="h-5 w-28" />

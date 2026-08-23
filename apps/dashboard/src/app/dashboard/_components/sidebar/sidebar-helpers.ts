@@ -29,11 +29,19 @@ export const topBarIconButtonClass =
 /** Shared width for desktop chrome so the top bar and main column feel like one layout. */
 export const dashboardChromeMaxWidthClass = "max-w-6xl";
 
+/** Centered column that lines up with the desktop top bar. */
+export function dashboardChromeColumnClassName(className?: string) {
+  return cn(
+    "mx-auto w-full px-5 md:px-6 lg:px-8",
+    dashboardChromeMaxWidthClass,
+    className,
+  );
+}
+
 /** Centered page column — matches desktop top bar width and padding. */
 export function dashboardPageShellClassName(className?: string) {
   return cn(
-    "flex flex-col min-h-full w-full mx-auto px-5 md:px-6 lg:px-8 pt-3 pb-4 gap-3",
-    dashboardChromeMaxWidthClass,
+    dashboardChromeColumnClassName("flex flex-col min-h-full pt-3 pb-4 gap-3"),
     className,
   );
 }

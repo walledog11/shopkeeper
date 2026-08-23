@@ -54,7 +54,7 @@ export default function IntegrationCard({
     && !(availability.state === "private-beta" && model.isConnected)
 
   return (
-    <>
+    <div className="h-full">
       <div id={definition.id} className={CARD_SHELL}>
         <IntegrationCardHeader config={definition} />
         <p className={CARD_DESCRIPTION}>{definition.description}</p>
@@ -112,6 +112,6 @@ export default function IntegrationCard({
           />
         </IntegrationConfigureDialog>
       ) : null}
-    </>
+    </div>
   )
 }

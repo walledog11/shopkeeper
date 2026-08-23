@@ -6,12 +6,19 @@ interface GlassToolbarSkeletonProps {
   withTabs?: boolean
   /** Show an action button on the right (kb page). */
   withAction?: boolean
+  shellClassName?: string
+  wrapperClassName?: string
 }
 
-export function GlassToolbarSkeleton({ withTabs = false, withAction = false }: GlassToolbarSkeletonProps) {
+export function GlassToolbarSkeleton({
+  withTabs = false,
+  withAction = false,
+  shellClassName = GLASS_SHELL_CLASS,
+  wrapperClassName = "relative z-20 shrink-0 px-3 pb-3 pt-3",
+}: GlassToolbarSkeletonProps) {
   return (
-    <div className="relative z-20 shrink-0 px-3 pb-3 pt-3">
-      <div className={GLASS_SHELL_CLASS}>
+    <div className={wrapperClassName}>
+      <div className={shellClassName}>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center md:flex-row md:items-center">
           <div className={`flex h-9 min-w-0 items-center gap-2 rounded-full px-3.5 sm:flex-1 md:flex-1 ${GLASS_CONTROL_CLASS}`}>
             <Pulse className="size-3.5 shrink-0 rounded-full" />

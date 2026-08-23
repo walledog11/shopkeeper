@@ -6,7 +6,9 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { useSWRConfig } from "swr"
 import { Search, ShoppingBag, X } from "lucide-react"
 import { OrdersPageSkeleton } from "@/app/dashboard/_components/skeletons"
+import { dashboardChromeColumnClassName } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
 import { isShopifyIntegrationActive, isShopifyOrdersUnavailable } from "@/lib/integrations/shopify-connection"
+import { cn } from "@/lib/ui/cn"
 import { INTEGRATIONS_SWR_KEY, useIntegrations } from "@/hooks/useIntegrations"
 import { useCursorListState } from "@/lib/api/use-cursor-list-state"
 import CustomersPanel from "./customers/CustomersPanel"
@@ -123,88 +125,90 @@ export default function OrdersPageClient() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-background">
-      <div className="relative z-20 shrink-0 px-3 pb-3 pt-3">
-        <div className={GLASS_SHELL_CLASS}>
-          <div className="flex flex-col gap-2 md:flex-row md:items-center">
-            <div className={`flex h-9 min-w-0 items-center gap-2 rounded-full px-3.5 md:flex-1 ${GLASS_CONTROL_CLASS}`}>
-              <Search className="size-3.5 shrink-0 text-faint" />
-              <input
-                aria-label={shopTab === "customers" ? "Search customers" : "Search orders"}
-                placeholder={shopTab === "customers" ? "Search customers by name or email…" : "Search by order number or customer email…"}
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                className="min-w-0 flex-1 bg-transparent text-sm text-strong outline-none placeholder:text-faint"
-              />
-              {searchInput && (
-                <button type="button" onClick={() => setSearchInput("")} aria-label="Clear search" className="text-faint transition-colors hover:text-muted-foreground">
-                  <X className="size-3.5" />
-                </button>
-              )}
-            </div>
-
-            <div role="tablist" aria-label="Shop sections" className={`flex h-9 items-center gap-1 rounded-full px-1 md:shrink-0 ${GLASS_CONTROL_CLASS}`}>
-              {([
-                { id: "orders", label: "Orders" },
-                { id: "customers", label: "Customers" },
-              ] as const).map((tab) => {
-                const active = shopTab === tab.id
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    onClick={() => setShopTab(tab.id)}
-                    className={`h-7 flex-1 rounded-full px-3 text-xs font-semibold transition-colors md:flex-none ${
-                      active ? "bg-foreground/[0.12] text-foreground" : "text-muted-foreground hover:bg-foreground/[0.06] hover:text-strong"
-                    }`}
-                  >
-                    {tab.label}
+      <div className={cn(dashboardChromeColumnClassName(), "flex min-h-0 flex-1 flex-col")}>
+        <div className="relative z-20 shrink-0 pb-3 pt-3">
+          <div className={GLASS_SHELL_CLASS}>
+            <div className="flex flex-col gap-2 md:flex-row md:items-center">
+              <div className={`flex h-9 min-w-0 items-center gap-2 rounded-full px-3.5 md:flex-1 ${GLASS_CONTROL_CLASS}`}>
+                <Search className="size-3.5 shrink-0 text-faint" />
+                <input
+                  aria-label={shopTab === "customers" ? "Search customers" : "Search orders"}
+                  placeholder={shopTab === "customers" ? "Search customers by name or email…" : "Search by order number or customer email…"}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  className="min-w-0 flex-1 bg-transparent text-sm text-strong outline-none placeholder:text-faint"
+                />
+                {searchInput && (
+                  <button type="button" onClick={() => setSearchInput("")} aria-label="Clear search" className="text-faint transition-colors hover:text-muted-foreground">
+                    <X className="size-3.5" />
                   </button>
-                )
-              })}
+                )}
+              </div>
+
+              <div role="tablist" aria-label="Shop sections" className={`flex h-9 items-center gap-1 rounded-full px-1 md:shrink-0 ${GLASS_CONTROL_CLASS}`}>
+                {([
+                  { id: "orders", label: "Orders" },
+                  { id: "customers", label: "Customers" },
+                ] as const).map((tab) => {
+                  const active = shopTab === tab.id
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setShopTab(tab.id)}
+                      className={`h-7 flex-1 rounded-full px-3 text-xs font-semibold transition-colors md:flex-none ${
+                        active ? "bg-foreground/[0.12] text-foreground" : "text-muted-foreground hover:bg-foreground/[0.06] hover:text-strong"
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="custom-scrollbar flex-1 overflow-y-auto">
-        <div className="w-full space-y-5 px-6 py-6">
-          {shopTab === "customers" ? (
-            <CustomersPanel query={debouncedSearch} />
-          ) : searchActive ? (
-            <>
-              <p className="text-xs font-medium text-faint">
-                {search.isLoading ? "Searching…" : `${searchOrders.length} result${searchOrders.length !== 1 ? "s" : ""}`}
-              </p>
-              <OrdersSearchResults
-                orders={searchOrders}
-                shop={shop}
-                hasMore={Boolean(search.nextPageInfo)}
-                isLoading={search.isLoading}
-                isLoadingMore={search.isLoadingMore}
-                error={search.error}
-                loadMoreError={search.loadMoreError}
-                onLoadMore={search.loadMore}
-                onRetry={() => { void search.mutate() }}
-              />
-            </>
-          ) : boardInitialLoading ? (
-            <div className="grid gap-6 lg:grid-cols-3" aria-busy="true" aria-label="Loading orders">
-              {ORDER_BOARD_COLUMNS.map(column => (
-                <div key={column.id} className="space-y-2.5">
-                  <div className="mb-3 h-4 w-28 animate-pulse rounded-md bg-foreground/[0.07]" />
-                  <div className="h-36 animate-pulse rounded-2xl border border-border bg-card" />
-                  <div className="h-36 animate-pulse rounded-2xl border border-border bg-card" />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <>
-              <NeedsYouSection enabled={boardEnabled} shop={shop} />
-              <OrdersBoard columns={columns} shop={shop} />
-            </>
-          )}
+        <div className="custom-scrollbar flex-1 overflow-y-auto">
+          <div className="w-full space-y-5 py-6">
+            {shopTab === "customers" ? (
+              <CustomersPanel query={debouncedSearch} />
+            ) : searchActive ? (
+              <>
+                <p className="text-xs font-medium text-faint">
+                  {search.isLoading ? "Searching…" : `${searchOrders.length} result${searchOrders.length !== 1 ? "s" : ""}`}
+                </p>
+                <OrdersSearchResults
+                  orders={searchOrders}
+                  shop={shop}
+                  hasMore={Boolean(search.nextPageInfo)}
+                  isLoading={search.isLoading}
+                  isLoadingMore={search.isLoadingMore}
+                  error={search.error}
+                  loadMoreError={search.loadMoreError}
+                  onLoadMore={search.loadMore}
+                  onRetry={() => { void search.mutate() }}
+                />
+              </>
+            ) : boardInitialLoading ? (
+              <div className="grid gap-6 lg:grid-cols-3" aria-busy="true" aria-label="Loading orders">
+                {ORDER_BOARD_COLUMNS.map(column => (
+                  <div key={column.id} className="space-y-2.5">
+                    <div className="mb-3 h-4 w-28 animate-pulse rounded-md bg-foreground/[0.07]" />
+                    <div className="h-36 animate-pulse rounded-2xl border border-border bg-card" />
+                    <div className="h-36 animate-pulse rounded-2xl border border-border bg-card" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <>
+                <NeedsYouSection enabled={boardEnabled} shop={shop} />
+                <OrdersBoard columns={columns} shop={shop} />
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -49,7 +49,7 @@ export default function ImessageCard({
     : config.description
 
   return (
-    <>
+    <div className="h-full">
       <div id={config.id} className={CARD_SHELL}>
         <IntegrationCardHeader config={config} />
         <p className={CARD_DESCRIPTION}>{config.description}</p>
@@ -82,6 +82,6 @@ export default function ImessageCard({
       >
         <ImessageBindingSection handle={handle} />
       </IntegrationConfigureDialog>
-    </>
+    </div>
   )
 }

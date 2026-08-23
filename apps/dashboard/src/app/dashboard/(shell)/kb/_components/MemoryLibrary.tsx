@@ -3,7 +3,14 @@
 import Link from "next/link"
 import { LazyMotion, domAnimation, m, useReducedMotion } from "motion/react"
 import { formatDate } from "@/lib/format/date"
+import { cn } from "@/lib/ui/cn"
+import { GLASS_CARD_SURFACE } from "@/lib/ui/glass-card-styles"
 import type { MemoryBook, MemoryBookPage } from "./memory-books"
+
+const MEMORY_CARD_SHELL = cn(
+  "flex w-full flex-col rounded-3xl px-5 py-5 font-sans",
+  GLASS_CARD_SURFACE,
+)
 
 function latestUpdate(book: MemoryBook): string | null {
   const latest = book.pages.reduce<string | null>((current, page) => {
@@ -31,25 +38,31 @@ function SourceCard({
       type="button"
       onClick={onOpen}
       aria-expanded={active}
-      className={`group flex w-full flex-col gap-3 rounded-3xl border bg-card px-5 py-5 text-left font-sans shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/25 ${
-        active ? "border-foreground/30" : "border-border hover:border-foreground/[0.16]"
-      }`}
+      className={cn(
+        MEMORY_CARD_SHELL,
+        "group h-full gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/25",
+        active && "border-foreground/25 hover:border-foreground/30",
+      )}
     >
       <span className="block text-xl font-semibold leading-snug tracking-tight text-foreground">
         {source.title}
       </span>
-      <span className="block text-sm leading-relaxed text-muted-foreground line-clamp-3">
+      <span className="block min-h-[3lh] text-sm leading-relaxed text-muted-foreground line-clamp-3">
         {source.description}
       </span>
 
-      <span className="block border-t border-border pt-3">
-        {recentTitles.length > 0 ? (
-          <span className="block space-y-1.5">
-            {recentTitles.map((title, index) => <span key={`${title}:${index}`} className="block truncate text-xs text-faint">{title}</span>)}
-          </span>
-        ) : (
-          <span className="block text-xs text-faint">Nothing saved yet</span>
-        )}
+      <span className="mt-auto block border-t border-border pt-3">
+        <span className="flex min-h-[calc(3lh+0.75rem)] flex-col gap-1.5">
+          {recentTitles.length > 0 ? (
+            Array.from({ length: 3 }, (_, index) => (
+              <span key={`${recentTitles[index] ?? "empty"}:${index}`} className="block truncate text-xs text-faint">
+                {recentTitles[index] ?? "\u00a0"}
+              </span>
+            ))
+          ) : (
+            <span className="block text-xs text-faint">Nothing saved yet</span>
+          )}
+        </span>
       </span>
 
       <span className="flex items-center justify-between gap-3 text-xs">
@@ -79,12 +92,15 @@ function EntryCard({ page, onOpen }: { page: MemoryBookPage; onOpen: (() => void
     <button
       type="button"
       onClick={onOpen}
-      className="group flex w-full flex-col rounded-3xl border border-border bg-card px-5 py-5 text-left font-sans shadow-sm transition-colors hover:border-foreground/[0.16] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/25"
+      className={cn(
+        MEMORY_CARD_SHELL,
+        "group text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/25",
+      )}
     >
       {content}
     </button>
   ) : (
-    <article className="flex w-full flex-col rounded-3xl border border-border bg-card px-5 py-5 font-sans shadow-sm">{content}</article>
+    <article className={MEMORY_CARD_SHELL}>{content}</article>
   )
 }
 
@@ -170,7 +186,7 @@ export function MemoryLibrary({
     <section aria-label="Memory" className="w-full font-sans">
       {populatedSources.length > 0 ? (
         <LazyMotion features={domAnimation}>
-          <div className="grid grid-cols-1 gap-x-6 gap-y-9 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          <div className="grid grid-cols-1 items-start gap-x-6 gap-y-9 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {populatedSources.map(source => {
               const active = selectedSource?.id === source.id
               return (
@@ -178,7 +194,7 @@ export function MemoryLibrary({
                   key={source.id}
                   layout="position"
                   transition={reduceMotion ? { duration: 0 } : { layout: { duration: 0.28, ease: [0.22, 1, 0.36, 1] } }}
-                  className="min-w-0 will-change-transform"
+                  className="flex min-w-0 flex-col will-change-transform"
                 >
                   <SourceCard
                     source={source}

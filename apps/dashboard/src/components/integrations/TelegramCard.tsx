@@ -112,7 +112,7 @@ export default function TelegramCard({
     : config.description
 
   return (
-    <>
+    <div className="h-full">
       <div id="telegram" className={CARD_SHELL}>
         <IntegrationCardHeader config={config} />
         <p className={CARD_DESCRIPTION}>{config.description}</p>
@@ -175,6 +175,6 @@ export default function TelegramCard({
           />
         )}
       </IntegrationConfigureDialog>
-    </>
+    </div>
   )
 }

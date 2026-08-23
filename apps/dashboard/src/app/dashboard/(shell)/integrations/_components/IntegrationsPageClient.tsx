@@ -33,11 +33,12 @@ import { useIntegrationsOAuth } from "@/components/integrations/useIntegrationsO
 import { CARD_ACTIONS, CARD_DESCRIPTION, CARD_SHELL } from "@/components/integrations/integration-card-styles"
 import TelegramCard from "@/components/integrations/TelegramCard"
 import ImessageCard from "@/components/integrations/ImessageCard"
+import { dashboardChromeColumnClassName } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
 import { getShopifyDisconnectMessage, resolveShopifyConnectionState } from "@/lib/integrations/shopify-connection"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { Integration } from "@/types"
 
-const INTEGRATION_CARD_GRID = "grid items-stretch gap-4 grid-cols-[repeat(auto-fill,minmax(340px,1fr))]"
+const INTEGRATION_CARD_GRID = "grid items-stretch gap-4 auto-rows-fr grid-cols-[repeat(auto-fill,minmax(340px,1fr))]"
 
 function renderIntegrationSkeletonSection(
   sectionKind: IntegrationChannelKind,
@@ -51,7 +52,7 @@ function renderIntegrationSkeletonSection(
         <h2 className="text-sm font-semibold text-strong">{title}</h2>
         <p className="mt-1 text-xs text-faint">{description}</p>
       </div>
-      <div className={cn(INTEGRATION_CARD_GRID, "w-fit max-w-full")}>
+      <div className={cn(INTEGRATION_CARD_GRID, "w-full")}>
         {Array.from({ length: count }).map((_, index) => (
           <div key={index} className={CARD_SHELL}>
             <div className="flex items-center gap-3">
@@ -320,7 +321,7 @@ function IntegrationsPageContent({
           <h2 className="text-sm font-semibold text-strong">{title}</h2>
           <p className="mt-1 text-xs text-faint">{description}</p>
         </div>
-        <div className={cn(INTEGRATION_CARD_GRID, "w-fit max-w-full")}>
+        <div className={cn(INTEGRATION_CARD_GRID, "w-full")}>
           {sectionModels.map(renderIntegrationCard)}
         </div>
       </section>
@@ -330,7 +331,7 @@ function IntegrationsPageContent({
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto">
-        <div className="w-full space-y-6 px-6 py-6">
+        <div className={cn(dashboardChromeColumnClassName(), "space-y-6 py-6")}>
           {!isAdmin ? (
             <div className="flex items-center gap-3 rounded-lg border border-foreground/[0.10] bg-foreground/[0.03] px-4 py-3 text-sm text-muted-foreground">
               <Info className="size-4 shrink-0" />

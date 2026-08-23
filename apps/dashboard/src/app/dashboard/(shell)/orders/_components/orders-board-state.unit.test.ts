@@ -5,6 +5,7 @@ import {
   beginLoadingOrderColumn,
   createOrdersPaginationState,
   failLoadingOrderColumn,
+  isOrdersBoardInitialLoading,
   mergeInitialBoardResponse,
   ordersInColumn,
 } from "./orders-board-state"
@@ -60,6 +61,13 @@ describe("orders board pagination state", () => {
 
     state = beginLoadingOrderColumn(state, "unpaid")
     expect(state.unpaid.loadMoreError).toBeNull()
+  })
+
+  it("does not treat a failed board retry as the first paint", () => {
+    const empty = createOrdersPaginationState()
+    expect(isOrdersBoardInitialLoading(true, true, null, empty)).toBe(true)
+    expect(isOrdersBoardInitialLoading(true, true, new Error("Unable to load orders."), empty)).toBe(false)
+    expect(isOrdersBoardInitialLoading(true, false, new Error("Unable to load orders."), empty)).toBe(false)
   })
 
   it("revalidates the initial page without discarding loaded pages or their cursor", () => {

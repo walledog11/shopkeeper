@@ -1,3 +1,5 @@
+import { cn } from "@/lib/ui/cn"
+import { GLASS_CARD_SURFACE } from "@/lib/ui/glass-card-styles"
 import { Pulse } from "./Pulse"
 
 const CARD_KEYS = ["memory-skeleton-1", "memory-skeleton-2", "memory-skeleton-3", "memory-skeleton-4", "memory-skeleton-5", "memory-skeleton-6"]
@@ -9,7 +11,7 @@ export function MemoryLibrarySkeleton() {
         {CARD_KEYS.map(key => (
           <div
             key={key}
-            className="flex animate-pulse flex-col gap-3 rounded-3xl border border-border bg-card px-5 py-5 shadow-sm"
+            className={cn("flex animate-pulse flex-col gap-3 rounded-3xl px-5 py-5", GLASS_CARD_SURFACE)}
           >
             <Pulse className="h-6 w-[72%] rounded-lg" />
             <div className="space-y-2">

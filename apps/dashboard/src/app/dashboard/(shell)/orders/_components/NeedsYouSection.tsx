@@ -34,7 +34,7 @@ function useOrderAttention(enabled: boolean) {
   return useSWR<OrderAttentionResponse>(
     enabled ? "/api/orders/attention" : null,
     (url) => requestJson<OrderAttentionResponse>(url, { cache: "no-store" }),
-    { revalidateOnFocus: true, dedupingInterval: 5_000 },
+    { revalidateOnFocus: true, dedupingInterval: 5_000, shouldRetryOnError: false },
   )
 }
 
