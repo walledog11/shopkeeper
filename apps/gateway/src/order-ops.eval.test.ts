@@ -1,6 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers';
+import { anthropic } from '@shopkeeper/agent/ai';
+import { modelSpendBudgetFromEnv } from '@shopkeeper/agent/model-cost';
 import { runOrderOps } from '@shopkeeper/agent/order-ops';
+import { readModelUsage } from '@shopkeeper/agent/usage';
 import { allowTestNetworkHosts } from '../../../scripts/test-network-guard.mjs';
 import type { OrderForReview, OrderOpsContext, OrderOpsResult } from '@shopkeeper/agent/order-ops';
 
@@ -356,13 +359,59 @@ describe.sequential('order-ops fraud-review evals', () => {
     return;
   }
 
+  const budget = modelSpendBudgetFromEnv();
+  if (process.env.REQUIRE_MODEL_EVALS === '1' && !budget) {
+    throw new Error('Paid eval workflows must set EVAL_MAX_USD and EVAL_MAX_MODEL_CALLS');
+  }
+
+  let restoreModelClient: (() => void) | null = null;
+  beforeAll(() => {
+    if (!budget) return;
+    type CreateFn = typeof anthropic.messages.create;
+    const messages = anthropic.messages;
+    const originalCreate = messages.create;
+    const wrappedCreate = (async (body: unknown, options: unknown) => {
+      const model = body && typeof body === 'object' && 'model' in body && typeof body.model === 'string'
+        ? body.model
+        : null;
+      if (!model) throw new Error('Budgeted model call did not declare a model');
+      budget.beforeCall(model);
+      const response = await (originalCreate as CreateFn).call(messages, body as never, options as never);
+      budget.record(model, readModelUsage(response as { usage?: unknown }));
+      budget.assertWithinLimit();
+      return response;
+    }) as CreateFn;
+    messages.create = wrappedCreate;
+    restoreModelClient = () => {
+      if (messages.create === wrappedCreate) messages.create = originalCreate;
+    };
+  });
+
+  afterAll(() => {
+    restoreModelClient?.();
+    if (!budget) return;
+    const spend = budget.snapshot();
+    console.log(
+      `[order-ops-eval:budget] spent=$${spend.spentUsd.toFixed(4)}/$${spend.maxUsd.toFixed(2)} calls=${spend.calls}/${spend.maxCalls}`,
+    );
+    console.log(
+      `[order-ops-eval:usage] in=${spend.usage.inputTokens} out=${spend.usage.outputTokens} `
+      + `cacheWrite=${spend.usage.cacheCreationInputTokens} cacheWrite1h=${spend.usage.cacheCreation1hInputTokens} `
+      + `cacheRead=${spend.usage.cacheReadInputTokens}`,
+    );
+    budget.assertWithinLimit();
+  });
+
   beforeEach(() => {
     allowTestNetworkHosts('api.anthropic.com');
   });
 
   it(`${CLEAR_FRAUD.id} — ${CLEAR_FRAUD.description}`, async () => {
     const retryOnFailure = process.env.EVAL_RETRY_HARD === '1';
-    const repeats = 1;
+    const parsedRepeats = Number(process.env.EVAL_REPEATS);
+    const repeats = Number.isFinite(parsedRepeats) && parsedRepeats >= 1
+      ? Math.floor(parsedRepeats)
+      : 1;
     let flagged = 0;
     let lastReason: string | null = null;
     for (let i = 0; i < repeats; i += 1) {
@@ -376,7 +425,7 @@ describe.sequential('order-ops fraud-review evals', () => {
       `[order-ops-eval] ${CLEAR_FRAUD.id}: flagged ${flagged}/${repeats} (reason e.g. ${JSON.stringify(lastReason)})`,
     );
     if (flagged === repeats) {
-      console.log('[order-ops-eval:gates] clear-fraud 1/1');
+      console.log(`[order-ops-eval:gates] clear-fraud ${flagged}/${repeats}`);
       return;
     }
     if (!retryOnFailure) {
@@ -396,20 +445,29 @@ describe.sequential('order-ops fraud-review evals', () => {
 
   for (const fixture of ADVISORY_FIXTURES) {
     it(`${fixture.id} — ${fixture.description} [advisory]`, async () => {
-      const { result } = await runOrderOpsFixture(fixture);
-      const matched = result.flagged === fixture.expectFlag;
-      const toolTrace = result.actionsPerformed.map(a => ({
+      const parsedRepeats = Number(process.env.EVAL_REPEATS);
+      const repeats = Number.isFinite(parsedRepeats) && parsedRepeats >= 1
+        ? Math.floor(parsedRepeats)
+        : 1;
+      let matches = 0;
+      let lastResult: OrderOpsResult | null = null;
+      for (let index = 0; index < repeats; index += 1) {
+        const { result } = await runOrderOpsFixture(fixture);
+        lastResult = result;
+        if (result.flagged === fixture.expectFlag) matches += 1;
+      }
+      const toolTrace = (lastResult?.actionsPerformed ?? []).map(a => ({
         tool: a.tool,
         status: a.status,
         result: a.result.slice(0, 80),
       }));
       console.log(
-        `[order-ops-eval] ${fixture.id}: flagged=${result.flagged} expected=${fixture.expectFlag} `
-        + `match=${matched} reason=${JSON.stringify(result.flagReason)} `
+        `[order-ops-eval] ${fixture.id}: matches=${matches}/${repeats} expectedFlag=${fixture.expectFlag} `
+        + `lastFlagged=${lastResult?.flagged} reason=${JSON.stringify(lastResult?.flagReason)} `
         + `tools=${JSON.stringify(toolTrace)}`,
       );
       // Advisory: record only. Judgment on borderline fraud patterns is not a gate.
-      expect(result).toBeDefined();
+      expect(lastResult).toBeDefined();
     }, 240_000);
   }
 });

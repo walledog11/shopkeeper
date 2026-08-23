@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { allowTestNetworkHosts } from "../../../../../../scripts/test-network-guard.mjs"
+import { modelSpendBudgetFromEnv } from "@shopkeeper/agent/model-cost"
 import { runFixture } from "./runner"
 import { evalsEnabled } from "./selection"
 import type { EvalResult, Fixture } from "./types"
@@ -81,11 +82,13 @@ describe.sequential("AI context budget quality/cost comparison", () => {
 
   it("preserves the expected plan while reducing prompt tokens on a long thread", async () => {
     allowTestNetworkHosts("api.anthropic.com")
+    const budget = modelSpendBudgetFromEnv()
 
     process.env.AGENT_CONTEXT_BUDGET_MODE = "off"
-    const legacy = await runFixture(LONG_CONTEXT_FIXTURE)
+    const legacy = await runFixture(LONG_CONTEXT_FIXTURE, budget)
     process.env.AGENT_CONTEXT_BUDGET_MODE = "enforce"
-    const bounded = await runFixture(LONG_CONTEXT_FIXTURE)
+    const bounded = await runFixture(LONG_CONTEXT_FIXTURE, budget)
+    budget?.assertWithinLimit()
 
     const legacyPromptTokens = promptTokens(legacy)
     const boundedPromptTokens = promptTokens(bounded)

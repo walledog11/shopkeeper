@@ -12,6 +12,7 @@ import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { appendFileSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { allowTestNetworkHosts } from "../../../../../../scripts/test-network-guard.mjs";
+import { modelSpendBudgetFromEnv } from "@shopkeeper/agent/model-cost";
 import {
   runFixtureRepeated,
   probeSystemPromptCacheRead,
@@ -28,9 +29,12 @@ import {
   compareToBaseline,
   regressionThreshold,
   evalRepeats,
+  hardFailureConfirmations,
+  selectBaselineFixtures,
 } from "./runner";
 import type { Fixture, FixtureRunSummary } from "./types";
 import { validateFixtures } from "./fixture-validator";
+import { readCachedPassingSummary, writePassingSummary } from "./result-cache";
 import {
   evalsEnabled,
   requestedEvalSuite,
@@ -100,15 +104,38 @@ describe.sequential("agent evals", () => {
   writeFileSync(EVAL_REPORT_PATH, "");
 
   const repeats = evalRepeats();
+  const confirmations = hardFailureConfirmations();
+  const budget = modelSpendBudgetFromEnv();
+  if (process.env.REQUIRE_MODEL_EVALS === "1" && !budget) {
+    throw new Error("Paid eval workflows must set EVAL_MAX_USD and EVAL_MAX_MODEL_CALLS");
+  }
   const collected: FixtureRunSummary[] = [];
+  const executed: FixtureRunSummary[] = [];
 
   for (const fixture of fixtures) {
     it(
       `${fixture.id} — ${fixture.description}`,
       async () => {
-        let summary = await runFixtureRepeated(fixture, repeats);
-        if (suite === "core" && !fixture.advisory && summary.passes !== summary.repeats) {
-          const retries = await runFixtureRepeated(fixture, 2);
+        const cached = readCachedPassingSummary(fixture, repeats);
+        if (cached) {
+          collected.push(cached);
+          writeEvalReportLine(`[eval] ${fixture.id} reused exact-commit passing evidence ${cached.passes}/${cached.repeats}`);
+          return;
+        }
+
+        let summary = await runFixtureRepeated(fixture, repeats, budget);
+        executed.push(summary);
+        const retryableModelFailure = summary.results.every(
+          result => result.pass || result.failureKind === "model_behavior",
+        );
+        if (
+          confirmations > 0
+          && !fixture.advisory
+          && summary.passes !== summary.repeats
+          && retryableModelFailure
+        ) {
+          const retries = await runFixtureRepeated(fixture, confirmations, budget);
+          executed.push(retries);
           summary = {
             id: fixture.id,
             repeats: retries.repeats,
@@ -118,6 +145,7 @@ describe.sequential("agent evals", () => {
           };
         }
         collected.push(summary);
+        writePassingSummary(fixture, repeats, summary);
         // In update mode, persist after each fixture so an interrupted capture keeps
         // what already ran instead of losing everything when the final afterAll never fires.
         if (shouldUpdateBaseline()) writeBaseline(summarizeResults(collected));
@@ -160,8 +188,15 @@ describe.sequential("agent evals", () => {
     const summary = summarizeResults(collected);
     writeEvalReportLine(formatGateSummary(summarizeGates(collected, fixtures)));
     writeEvalReportLine(formatSummary(summary));
-    writeEvalReportLine(formatUsageBreakdown(collected));
-    writeEvalReportLine(formatModelUsageBreakdown(collected));
+    writeEvalReportLine(formatUsageBreakdown(executed));
+    writeEvalReportLine(formatModelUsageBreakdown(executed));
+    if (budget) {
+      const spend = budget.snapshot();
+      writeEvalReportLine(
+        `[eval:budget] spent=$${spend.spentUsd.toFixed(4)}/$${spend.maxUsd.toFixed(2)} calls=${spend.calls}/${spend.maxCalls}`,
+      );
+      budget.assertWithinLimit();
+    }
 
     if (shouldUpdateBaseline()) {
       writeBaseline(summary);
@@ -188,8 +223,22 @@ describe.sequential("agent evals", () => {
       writeEvalReportLine(formatUsageDelta(summary.usage, baseline.usage));
     }
 
+    const hardIds = new Set(fixtures.filter(fixture => !fixture.advisory).map(fixture => fixture.id));
+    const hardSummary = summarizeResults(collected.filter(item => hardIds.has(item.id)));
+    const hardBaseline = selectBaselineFixtures(baseline, hardIds);
+    if (hardSummary.repeats !== hardBaseline.repeats) {
+      writeEvalReportLine(
+        `[eval:baseline] WARN incomparable repeat counts (${hardSummary.repeats} current vs ${hardBaseline.repeats} baseline); drift comparison skipped`,
+      );
+      return;
+    }
+
     const threshold = regressionThreshold();
-    const { aggregate, categories, fixtures: fixtureRegressions } = compareToBaseline(summary, baseline, threshold);
+    const { aggregate, categories, fixtures: fixtureRegressions } = compareToBaseline(
+      hardSummary,
+      hardBaseline,
+      threshold,
+    );
     for (const msg of [...categories, ...fixtureRegressions]) {
       writeEvalReportLine(`[eval:baseline] WARN ${msg}`);
     }
@@ -199,7 +248,7 @@ describe.sequential("agent evals", () => {
     }
   });
 
-  if (!requestedIds) {
+  if (!requestedIds && process.env.EVAL_CACHE_PROBE === "1") {
     it(
       "prompt caching: an identical cached system prompt reads from cache on repeat",
       async () => {

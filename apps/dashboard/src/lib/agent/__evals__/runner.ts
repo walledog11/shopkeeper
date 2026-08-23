@@ -1,7 +1,12 @@
 import { cleanupTestData } from "@shopkeeper/db/test-helpers"
 import { anthropic } from "@shopkeeper/agent/ai"
+import {
+  ModelSpendBudgetExceededError,
+  type ModelSpendBudget,
+} from "@shopkeeper/agent/model-cost"
 import { planAgent } from "@shopkeeper/agent/planner"
 import { resolveAgentSettings } from "@shopkeeper/agent/settings"
+import { readModelUsage } from "@shopkeeper/agent/usage"
 import { vi } from "vitest"
 import { judgeReply } from "./judge"
 import {
@@ -30,8 +35,10 @@ export {
   evalRepeats,
   formatGateSummary,
   formatSummary,
+  hardFailureConfirmations,
   loadBaseline,
   regressionThreshold,
+  selectBaselineFixtures,
   shouldUpdateBaseline,
   summarizeGates,
   summarizeResults,
@@ -90,10 +97,11 @@ function buildSimulatedToolResults(fixture: Fixture): Map<string, string> {
 export async function runFixtureRepeated(
   fixture: Fixture,
   repeats: number,
+  budget?: ModelSpendBudget | null,
 ): Promise<FixtureRunSummary> {
   const results: EvalResult[] = []
   for (let index = 0; index < repeats; index += 1) {
-    results.push(await runFixture(fixture))
+    results.push(await runFixture(fixture, budget))
   }
   const passes = results.filter(result => result.pass).length
   return {
@@ -134,8 +142,12 @@ function recordJudgeUsage(usage: EvalUsage, judged: {
   usage.judgeUsage.cacheCreationInputTokens += judged.usage.cacheCreationInputTokens
 }
 
-export async function runFixture(fixture: Fixture): Promise<EvalResult> {
+export async function runFixture(
+  fixture: Fixture,
+  budget?: ModelSpendBudget | null,
+): Promise<EvalResult> {
   const failures: string[] = []
+  let failureKind: EvalResult["failureKind"] = "none"
   const usage = createEvalUsage()
   let currentPhase: PhaseUsage | null = null
   const startedAt = Date.now()
@@ -151,6 +163,14 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
     const messages = anthropic.messages
     const originalCreate = messages.create
     const wrappedCreate = (async (body: unknown, options: unknown) => {
+      const requestedModel = body && typeof body === "object" && "model" in body
+        && typeof body.model === "string"
+        ? body.model
+        : null
+      if (!requestedModel && budget) {
+        throw new Error("Budgeted model call did not declare a model")
+      }
+      if (requestedModel) budget?.beforeCall(requestedModel)
       const response = await (originalCreate as CreateFn).call(
         messages,
         body as never,
@@ -159,6 +179,10 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
       if (currentPhase === usage.plannerUsage) usage.plannerModelCalls += 1
       const model = "model" in response && typeof response.model === "string" ? response.model : undefined
       recordEvalUsage(usage, response, currentPhase, model)
+      if (budget && requestedModel) {
+        budget.record(requestedModel, readModelUsage(response as { usage?: unknown }))
+        budget.assertWithinLimit()
+      }
       return response
     }) as CreateFn
     messages.create = wrappedCreate
@@ -175,6 +199,7 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
 
     const planCheck = collectPlanExpectationFailures(fixture, plan)
     failures.push(...planCheck.failures)
+    if (planCheck.failures.length > 0) failureKind = "model_behavior"
     const rubricChecks = fixture.expectedRubric && planCheck.replyText.length > 0
       ? isJudgeEnabled()
         ? fixture.expectedRubric.checks
@@ -197,6 +222,7 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
         const required = checkById.get(result.checkId)?.required !== false
         if (required) {
           failures.push(`rubric "${result.checkId}" failed: ${result.reasoning}`)
+          failureKind = "model_behavior"
         } else {
           console.log(
             `[eval] ${fixture.id} informational rubric "${result.checkId}" failed: ${result.reasoning}`,
@@ -225,10 +251,12 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
         failures.push(
           `expected AgentAction rows [${expectedActions.map(formatAgentAction).join(", ")}] not found as ordered subsequence; observed: [${observed.map(formatAgentAction).join(", ")}]`,
         )
+        failureKind = "model_behavior"
       }
     }
   } catch (error) {
     failures.push(`runner threw: ${error instanceof Error ? error.message : String(error)}`)
+    failureKind = error instanceof ModelSpendBudgetExceededError ? "budget" : "infrastructure"
   } finally {
     simulatedToolResults.current = null
     restoreModelClient?.()
@@ -238,6 +266,7 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
   return {
     id: fixture.id,
     pass: failures.length === 0,
+    failureKind,
     failures,
     usage,
     latencyMs: Date.now() - startedAt,

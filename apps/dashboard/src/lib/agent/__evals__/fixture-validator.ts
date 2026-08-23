@@ -146,6 +146,9 @@ export function validateFixtures(fixtures: readonly unknown[], filenames?: reado
     if (typeof fixture.description !== "string" || fixture.description.trim() === "") local.push("description is required")
     if (typeof fixture.instruction !== "string" || fixture.instruction.trim() === "") local.push("instruction is required")
     if (!SUITES.has(fixture.suite)) local.push("suite must be core or extended")
+    if (fixture.suite === "core" && fixture.advisory === true) {
+      local.push("core fixtures are release-hard and cannot be advisory; move advisory coverage to extended")
+    }
     const setup = isRecord(fixture.setup) ? fixture.setup : null
     const expectedPlan = isRecord(fixture.expectedPlan) ? fixture.expectedPlan : null
     if (!setup) local.push("setup is required")

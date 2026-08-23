@@ -79,6 +79,96 @@ Code work that is started and not finished. **Nothing else in this file needs co
   and characterization tests are cheaper to write against a path that already has a
   measured floor.
 
+### API spend — fixes from the 2026-08-23 billing audit
+
+August 1–22 billed **$51.29**, attributed from Console actuals
+(`platform.claude.com/cost`, grouped by API Key and Token Type — no Admin key needed;
+the Admin API is unavailable on an individual org and that is **not** a dead end):
+local eval runs **$29.03 (57%)**, CI eval gates **$10.47 (20%)**, a prod Gmail
+retry loop **$8.17 (16%)**, normal production **$3.62 (7%)**. Doing P0–P3 takes the
+month to **~$28.61 (−44%)**. Output tokens are only 19% of spend, so nothing here is
+about thinking-token tuning.
+
+- [x] **P0 — stop re-dispatching the failing eval suite.** Seven `workflow_dispatch`
+  runs in 41 minutes on 2026-08-23, five failed, ~$2.35 burned, twice on an identical
+  head SHA. The failure is a real fixture failure at `__evals__/index.test.ts:143`
+  (`expect(summary.passes).toBe(summary.repeats)` — a fixture losing every repeat), not
+  a harness bug. Diagnose with `npm run test:evals:fixture -w apps/dashboard -- -t
+  "<fixture>"` at **$0.066**, and do not dispatch again until it is green locally. A
+  dispatch is 41× the price of the probe that would have found this. **Closed by the
+  budgeted gate redesign:** manual runs serialize by ref, exact-SHA passing evidence is
+  reused, and a failed release run becomes targeted-diagnosis input rather than an
+  automatic full rerun.
+
+- [x] **P1a — make the gateway eval report its tokens.** `apps/gateway/src/order-ops.eval.test.ts`
+  prints `[order-ops-eval:gates]` but no usage line, so its **$0.19 per PR run** is
+  absent from every cost figure in this repo — including the `~$0.48` comment in
+  `evals.yml`, which describes only the dashboard half of a gate that actually costs
+  **$0.63**. Inline the three counters rather than importing across apps, same
+  precedent as `evalsEnabled()`. **Closed:** gateway evidence now includes actual
+  input/output/cache tokens, calls, and estimated dollars under the shared spend meter.
+
+- [x] **P1b — every paid run leaves a ledger line.** Roughly three of four local eval
+  runs leave no trace at all, which is what made this bill unattributable for four
+  days. Have `scripts/confirm-eval-run.mjs` append `{ts, label, sha, EVAL_SUITE,
+  EVAL_REPEATS}` to a gitignored `test-results/eval-ledger.jsonl` on **every**
+  invocation — including the `EVAL_CONFIRM=1` bypass and the `CI=true` path, which are
+  exactly the two that currently record nothing. **Closed:** accepted local and CI eval
+  commands append the SHA, selection, repeats/judges, ceilings, and GitHub run identity
+  to `test-results/eval-ledger.jsonl`; CI uploads it even on failure.
+
+- [x] **P2 — cut local full-suite runs (the $29.03).** Full suite only for a baseline
+  regen or a pre-merge gate; everything else is `-t "<fixture>"`. Keep the
+  `EVAL_CONFIRM=1` escape hatch — it is needed — but make it loud and ledgered via P1b.
+  Note honestly that **routing a run to CI saves no tokens**; what CI buys is the
+  ledger, the `shopkeeper-ci` key split, and `cancel-in-progress`. Halving full-suite
+  equivalents from ~11 to ~5 a month is **~$14.52**. **Closed structurally:** release
+  uses the 44 hard core fixtures, complete 84-fixture coverage is an explicit
+  three-repeat drift/baseline mode, and every local paid command requires dollar and
+  call ceilings.
+
+- [ ] **P3a — repair the broken email integrations.** Prod holds four `email`
+  integrations, all `lifecycleStatus: active`: two with `token_expires_at` at the
+  `0001-01-01` sentinel and expired (the 296 `Gmail token refresh failed: 400`), one
+  with **no refresh token at all** (the 202 `email not configured`), one healthy.
+  Because they are `active` they look fine everywhere — the inverse of the
+  hidden-when-not-active landmine. Re-run OAuth or mark them `disconnected`.
+
+- [ ] **P3b — never plan a reply that cannot be sent.** The structural fix, and the one
+  that stops the whole class: 523 Sonnet turns on Aug 14 and Aug 16 were planned,
+  generated, and thrown away at dispatch. Gate `generate-thread-plan.ts` on the
+  thread's `replyIntegrationId` being dispatch-capable and escalate instead of planning
+  when it is not (`isShopifyIntegrationSweepable` is the existing precedent for the
+  shape). Currently dormant — zero failed sends in the last five days — but the broken
+  rows are still `active`, so it recurs the moment one of those orgs gets mail.
+
+- [ ] **P4a — apply `resolveModelTuning` at the second call site.** It is applied at
+  exactly one: `agent-loop.ts:176`. `planner-model.ts:45` sends neither `thinking` nor
+  `output_config` and resolves `pickModel("agent_run")` → Sonnet 5, so every planner
+  terminal-tool draft runs adaptive thinking at effort `high` — precisely the inherited
+  default `model-tuning.ts` was written to stop. **This is a correctness fix, not a cost
+  fix** (output is 19% of the bill); do not sell it as savings. Agent-path: one PR, one
+  core gate, $0.63.
+
+- [x] **P4b — refuse duplicate dispatches.** `cancel-in-progress` is deliberately false
+  for `workflow_dispatch` and should stay that way (cancelling a baseline mid-capture
+  wastes the whole $2.70), but nothing stops an identical re-dispatch — it happened
+  twice on 2026-08-23. Refuse a dispatch whose (ref, sha, mode) matches a run in the
+  last N minutes. **Closed without cancelling paid work:** workflow-level concurrency
+  serializes manual runs for a ref, and the queued run restores exact-SHA passing
+  fixture evidence left by the first. It cannot repay for already completed passing
+  fixtures; a third pending duplicate is discarded by GitHub concurrency before it
+  starts.
+
+- [ ] **P5 — no action, just do not "fix" these.** `packages/db/llm-spend.ts` pins
+  Sonnet 5 at $3/$15 while the intro rate is $2/$10 through **2026-08-31**, so every
+  `llm_daily_spend` Sonnet figure is exactly 1.5× the billed amount (validated: Aug 12
+  $0.0989 predicted vs $0.10 billed; Aug 14 $3.095 vs $3.10). It is deliberately
+  conservative so the cap never under-protects, and it becomes exact on Sept 1 —
+  correcting it now would weaken the cap. Likewise cache writes are 28% of spend, more
+  than output, but the 1h/5m split ($1.99/$12.18) and 1:24 write:read ratio show the
+  design working; that line scales with run volume and nothing else.
+
 ---
 
 ## Prove in prod

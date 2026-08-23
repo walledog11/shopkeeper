@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { AgentPlan } from "@/types";
 import { collectPlanExpectationFailures } from "./assertions";
-import { formatGateSummary, formatUsageDelta, mutativeIntentActionFailures, summarizeGates } from "./runner";
-import type { Fixture, FixtureRunSummary, PhaseUsage } from "./types";
+import {
+  formatGateSummary,
+  formatUsageDelta,
+  hardFailureConfirmations,
+  mutativeIntentActionFailures,
+  selectBaselineFixtures,
+  summarizeGates,
+  summarizeResults,
+} from "./runner";
+import type { EvalBaseline, Fixture, FixtureRunSummary, PhaseUsage } from "./types";
 
 describe("summarizeGates", () => {
   const summaries: FixtureRunSummary[] = [
@@ -25,6 +33,30 @@ describe("summarizeGates", () => {
   it("formats a CI-parseable gate summary line", () => {
     const line = formatGateSummary(summarizeGates(summaries, fixtures));
     expect(line).toBe("[eval:gates] hard-gated 4/6 (66.7%) | advisory 0/3 (0.0%)");
+  });
+});
+
+describe("release gate controls", () => {
+  it("uses two confirmations for the compatibility retry flag", () => {
+    const previousConfirmations = process.env.EVAL_CONFIRM_HARD_FAILURES;
+    const previousRetry = process.env.EVAL_RETRY_HARD;
+    delete process.env.EVAL_CONFIRM_HARD_FAILURES;
+    process.env.EVAL_RETRY_HARD = "1";
+    expect(hardFailureConfirmations()).toBe(2);
+    if (previousConfirmations === undefined) delete process.env.EVAL_CONFIRM_HARD_FAILURES;
+    else process.env.EVAL_CONFIRM_HARD_FAILURES = previousConfirmations;
+    if (previousRetry === undefined) delete process.env.EVAL_RETRY_HARD;
+    else process.env.EVAL_RETRY_HARD = previousRetry;
+  });
+
+  it("projects a mixed baseline onto hard-gated fixture IDs", () => {
+    const baseline = summarizeResults([
+      { id: "hard-a", repeats: 3, passes: 3, passRate: 1, results: [] },
+      { id: "soft-a", repeats: 3, passes: 0, passRate: 0, results: [] },
+    ]) as EvalBaseline;
+    const hard = selectBaselineFixtures(baseline, new Set(["hard-a"]));
+    expect(hard).toMatchObject({ total: 3, passed: 3, passRate: 1 });
+    expect(hard.fixtures).toEqual({ "hard-a": { repeats: 3, passes: 3, passRate: 1 } });
   });
 });
 

@@ -38,6 +38,10 @@
       "types": "./dist/usage.d.ts",
       "default": "./dist/usage.js"
     },
+    "./model-cost": {
+      "types": "./dist/model-cost.d.ts",
+      "default": "./dist/model-cost.js"
+    },
     "./logger": {
       "types": "./dist/logger.d.ts",
       "default": "./dist/logger.js"

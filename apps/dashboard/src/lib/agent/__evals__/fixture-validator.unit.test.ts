@@ -75,6 +75,13 @@ describe("validateFixtures", () => {
     ])).not.toThrow()
   })
 
+  it("keeps the core release profile hard-gated", () => {
+    expect(() => validateFixtures([fixture({ advisory: true })])).toThrow(
+      /core fixtures are release-hard and cannot be advisory/,
+    )
+    expect(() => validateFixtures([fixture({ suite: "extended", advisory: true })])).not.toThrow()
+  })
+
   it("validates explicit plan-validity expectations", () => {
     const contradictory = fixture({
       expectedPlan: {

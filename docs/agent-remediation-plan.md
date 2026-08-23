@@ -23,7 +23,7 @@ There are now **two** plans in play. They are not alternatives.
 
 1. **Finish the internal audit's Phases 1–4 before capability expansion.** Phase A is read-only and may run in parallel. Phase 6 may run immediately before internal-audit task 5.2, after Phases 2 and 3 are complete; the remaining Phase 5 housekeeping does not block it.
 2. **Verify before you build.** Locate code by symbol name, never by line number — line numbers in *this* document's source material are unverified and some were already proven stale. If the code contradicts this plan, **stop and report**. Do not silently adapt.
-3. **Everything goes through a pull request.** `evals.yml` triggers on `pull_request`. A change pushed straight to `master` is never gated. Any task here that says "eval must pass" is a no-op if the work does not land as a PR.
+3. **Everything goes through deterministic CI, then an explicitly budgeted release gate.** `evals.yml` runs only free preflight checks on `pull_request`; paid model calls require `workflow_dispatch mode=release` with dollar and call ceilings. The dashboard and gateway run independently and produce one conclusive result for the exact SHA. See `docs/agent-eval-gates.md`.
 4. **One phase per session.** Use `git worktree` for any parallel session. Never two sessions against one working tree.
 5. **The classifier is non-deterministic.** The internal audit recorded two runs of an identical ticket producing materially different summaries. Any behavior routed off classifier output needs a working fallback path, and any before/after comparison needs more than one run.
 

@@ -127,6 +127,8 @@ export interface Fixture {
   instruction: string;
   expectedPlan: ExpectedPlan;
   expectedRubric?: ExpectedRubric;
+  // `core` is the paid release profile and is always hard-gated. `extended`
+  // belongs to the complete drift profile and may be hard or advisory.
   suite: "core" | "extended";
   // Advisory fixtures track a pass-rate but never hard-fail the per-fixture gate, even at 0/N.
   // Use for irreducibly model-judgment cases whose safety property is guaranteed elsewhere.
@@ -159,6 +161,7 @@ export interface EvalUsage {
 export interface EvalResult {
   id: string;
   pass: boolean;
+  failureKind: "none" | "model_behavior" | "infrastructure" | "budget";
   failures: string[];
   usage: EvalUsage;
   latencyMs: number;

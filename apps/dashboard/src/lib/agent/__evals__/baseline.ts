@@ -137,6 +137,14 @@ export function evalRepeats(): number {
   return Math.floor(parsed)
 }
 
+export function hardFailureConfirmations(): number {
+  const configured = process.env.EVAL_CONFIRM_HARD_FAILURES
+  if (configured === undefined && process.env.EVAL_RETRY_HARD === "1") return 2
+  const parsed = Number(configured)
+  if (!Number.isFinite(parsed) || parsed < 0) return 0
+  return Math.floor(parsed)
+}
+
 export function writeBaseline(summary: EvalBaseline): void {
   writeFileSync(BASELINE_PATH, `${JSON.stringify(summary, null, 2)}\n`)
 }
@@ -144,6 +152,27 @@ export function writeBaseline(summary: EvalBaseline): void {
 export function loadBaseline(): EvalBaseline | null {
   if (!existsSync(BASELINE_PATH)) return null
   return JSON.parse(readFileSync(BASELINE_PATH, "utf8")) as EvalBaseline
+}
+
+export function selectBaselineFixtures(
+  baseline: EvalBaseline,
+  fixtureIds: ReadonlySet<string>,
+): EvalBaseline {
+  const fixtureEntries = Object.entries(baseline.fixtures)
+    .filter(([id]) => fixtureIds.has(id))
+  const summaries: FixtureRunSummary[] = fixtureEntries.map(([id, score]) => ({
+    id,
+    repeats: score.repeats,
+    passes: score.passes,
+    passRate: score.passRate,
+    results: [],
+  }))
+  const selected = summarizeResults(summaries)
+  return {
+    ...selected,
+    generatedAt: baseline.generatedAt,
+    usage: undefined,
+  }
 }
 
 export function compareToBaseline(

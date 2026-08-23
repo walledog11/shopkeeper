@@ -212,7 +212,7 @@ It also fixes the product problem the live probe exposed: with `deadline` as a f
 
 Six phases. Phase 0 is independent of the rest and goes first: those are live bugs, and none of the architecture work touches them.
 
-Estimates are engineering days for one person, and they are estimates. "Gate" means the eval suite must run on the PR — `evals.yml` triggers on `pull_request`, so a change pushed straight to `master` is never gated.
+Estimates are engineering days for one person, and they are estimates. As of 2026-08-22, "Gate" means the free deterministic preflight passes on the PR and one explicitly budgeted `workflow_dispatch mode=release` certifies the exact release SHA. Pull requests no longer make paid calls automatically. The complete 84-fixture, three-repeat semantic run is a separate drift measurement rather than an implicit release retry loop; see `docs/agent-eval-gates.md`.
 
 | Phase | Theme | Est. | Net LOC | Gate | Status |
 |---|---|---:|---:|---|---|
@@ -279,7 +279,7 @@ Smallest change with the largest safety return. Phase 3 depends on it.
 - [x] **3.3** Remove the `plan.routing` mutable-field chaining; the verdict carries the merchant question. *(Current v7 writers persist typed `routingEvidence` only; compatibility-only legacy readers still accept the old field read-only.)*
 - [x] **3.4** Evaluate planning-time policy once inside `decideAutonomy`. Preserve authoritative execution-time policy validation against current settings, authentication state, and verified-order scope; the executor is a temporal safety backstop, not a second autonomy owner. *(Callers now provide `executionIntent`, not policy-defining allowed-kind arrays.)*
 - [x] **3.5** Delete `computeLegacyRouting` + `logRoutingShadow` (prior work order item 9). *(The no-signals decision is explicit: missing or source-unaligned classifier evidence fails closed to review.)*
-- [ ] **3.6 Gate.** Full suite, not the core gate.
+- [ ] **3.6 Gate.** Run the budgeted release profile (44 hard core fixtures plus the independent gateway hard case). The complete 84-fixture, three-repeat profile remains the non-release drift measurement; advisory results cannot fail release.
 
 **Done when:** "why did the agent send that?" is answerable by reading one function. **Met:** `decideAutonomy` owns the verdict and supplies closed reason codes; runtime policy remains a temporal enforcement check, not an alternate autonomy classifier.
 
