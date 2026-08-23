@@ -83,7 +83,7 @@ describe('sendScheduledDigests — first-night briefing', () => {
       data: { settings: armedSettings() },
     });
 
-    await sendScheduledDigests();
+    await sendScheduledDigests({ organizationIds: [org.id] });
 
     const messages = myMessages();
     expect(messages).toHaveLength(1);
@@ -100,10 +100,35 @@ describe('sendScheduledDigests — first-night briefing', () => {
       data: { settings: armedSettings({ firstBriefingPending: false }) },
     });
 
-    await sendScheduledDigests();
+    await sendScheduledDigests({ organizationIds: [org.id] });
 
     // Empty inbox and no pending flag → nothing to send.
     expect(myMessages()).toHaveLength(0);
+  });
+
+  it('does not touch another organization during a scoped sweep', async () => {
+    const otherOrg = await createTestOrg();
+    const otherChatId = `chat-${otherOrg.id}`;
+
+    try {
+      await bindTelegram(org.id, chatId);
+      await bindTelegram(otherOrg.id, otherChatId);
+      await db.organization.update({
+        where: { id: org.id },
+        data: { settings: armedSettings({ firstBriefingPending: false }) },
+      });
+      await db.organization.update({
+        where: { id: otherOrg.id },
+        data: { settings: armedSettings() },
+      });
+
+      await sendScheduledDigests({ organizationIds: [org.id] });
+
+      expect(sendMessageSpy.mock.calls.some((call) => call[0] === otherChatId)).toBe(false);
+      expect((await readSettings(otherOrg.id)).firstBriefingPending).toBe(true);
+    } finally {
+      await cleanupTestData(otherOrg.id);
+    }
   });
 
   it('prepends the first-rundown preamble when the inbox has tickets', async () => {
@@ -119,7 +144,7 @@ describe('sendScheduledDigests — first-night briefing', () => {
       data: { settings: armedSettings() },
     });
 
-    await sendScheduledDigests();
+    await sendScheduledDigests({ organizationIds: [org.id] });
 
     const messages = myMessages();
     expect(messages).toHaveLength(1);
@@ -162,8 +187,8 @@ describe('sendScheduledDigests — one send per window', () => {
       data: { settings: armedSettings() },
     });
 
-    await sendScheduledDigests();
-    await sendScheduledDigests();
+    await sendScheduledDigests({ organizationIds: [org.id] });
+    await sendScheduledDigests({ organizationIds: [org.id] });
 
     expect(myMessages()).toHaveLength(1);
     expect((await readSettings(org.id)).lastDigestWindow).toEqual(expect.any(String));
@@ -177,7 +202,7 @@ describe('sendScheduledDigests — one send per window', () => {
       data: { settings: armedSettings() },
     });
 
-    await sendScheduledDigests();
+    await sendScheduledDigests({ organizationIds: [org.id] });
 
     // Same local hour, next day: a new window, so yesterday's claim does not
     // hold it. (Also a new dedupe key, which is the point of keying on the
@@ -185,7 +210,7 @@ describe('sendScheduledDigests — one send per window', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
       vi.setSystemTime(new Date(Date.now() + 24 * 60 * 60 * 1000));
-      await sendScheduledDigests();
+      await sendScheduledDigests({ organizationIds: [org.id] });
     } finally {
       vi.useRealTimers();
     }
@@ -204,12 +229,12 @@ describe('sendScheduledDigests — one send per window', () => {
 
     // The send was attempted and refused by the transport, so the window is
     // still unspent.
-    await sendScheduledDigests();
+    await sendScheduledDigests({ organizationIds: [org.id] });
     expect(myMessages()).toHaveLength(1);
     expect((await readSettings(org.id)).lastDigestWindow).toBeUndefined();
 
     // A missing briefing is worse than a duplicate one, so the retry still sends.
-    await sendScheduledDigests();
+    await sendScheduledDigests({ organizationIds: [org.id] });
     expect(myMessages()).toHaveLength(2);
     expect((await readSettings(org.id)).lastDigestWindow).toEqual(expect.any(String));
   });

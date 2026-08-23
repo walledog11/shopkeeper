@@ -518,11 +518,21 @@ export async function buildFirstNightMessage(
   return lines.join('\n');
 }
 
-export async function sendScheduledDigests(): Promise<void> {
+export interface SendScheduledDigestsOptions {
+  /** Restrict a sweep to known organizations, primarily for isolated integration runs. */
+  organizationIds?: readonly string[];
+}
+
+export async function sendScheduledDigests(
+  options: SendScheduledDigestsOptions = {},
+): Promise<void> {
   const now = new Date();
   const nowMs = now.getTime();
   const orgs = await db.organization.findMany({
     where: {
+      ...(options.organizationIds === undefined
+        ? {}
+        : { id: { in: [...options.organizationIds] } }),
       members: {
         some: {
           OR: [{ telegramChats: { some: {} } }, { imessageBindings: { some: {} } }],
@@ -615,7 +625,7 @@ export const registerDigestMaintenanceJob: MaintenanceJobRegistration = async (c
   const queue = createMaintenanceQueue(context, QUEUE.DIGEST);
   await scheduleRepeatableJob(queue, JOB.DIGEST, JOB.DIGEST_ID, ONE_HOUR_MS);
 
-  const worker = createMaintenanceWorker(context, QUEUE.DIGEST, sendScheduledDigests, {
+  const worker = createMaintenanceWorker(context, QUEUE.DIGEST, () => sendScheduledDigests(), {
     label: 'Digest',
     failureQueue: QUEUE.DIGEST,
   });
