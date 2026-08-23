@@ -2,12 +2,11 @@ import { Card } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { InboxStreamLoading } from "@/app/dashboard/(shell)/tickets/_components/stream/InboxStreamLoading"
 import { needsYouCardShellClassName } from "@/app/dashboard/_components/home/needs-you-card-styles"
-import { GlassToolbarSkeleton } from "./GlassToolbarSkeleton"
 import { MemoryLibrarySkeleton } from "./MemoryLibrarySkeleton"
 import { Pulse } from "./Pulse"
-import { dashboardChromeColumnClassName, dashboardChromeMaxWidthClass } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
+import { dashboardChromeColumnClassName, dashboardChromeMaxWidthClass, desktopTopBarScrollClearanceClass } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
+import { SearchFilterBarSkeleton } from "@/components/ui/search-filter-bar"
 import { cn } from "@/lib/ui/cn"
-import { GLASS_CARD_SURFACE } from "@/lib/ui/glass-card-styles"
 
 function PageShell({
   children,
@@ -24,7 +23,8 @@ export function HomePageSkeleton() {
     <PageShell className="@container h-full flex flex-col overflow-hidden bg-background">
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <div className={cn(
-          "flex flex-col min-h-full w-full mx-auto px-5 md:px-6 lg:px-8 pt-3 pb-4 gap-3",
+          "flex flex-col min-h-full w-full mx-auto px-5 md:px-6 lg:px-8 pt-2 pb-4 gap-3",
+          desktopTopBarScrollClearanceClass,
           dashboardChromeMaxWidthClass,
         )}>
           <Pulse className="h-11 w-full rounded-md border border-foreground/[0.07] bg-foreground/[0.02]" />
@@ -78,10 +78,10 @@ export function TicketsPageSkeleton() {
     <PageShell>
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <div className={cn(
-          "flex flex-col min-h-full w-full mx-auto px-5 md:px-6 lg:px-8 pt-3 pb-4 gap-3",
+          "flex flex-col min-h-full w-full mx-auto px-5 md:px-6 lg:px-8 pt-3 pb-4 gap-3 md:pt-16",
           dashboardChromeMaxWidthClass,
         )}>
-          <Pulse className="h-10 w-full rounded-full border border-border bg-card" />
+          <SearchFilterBarSkeleton pills={1} />
           <InboxStreamLoading />
         </div>
       </div>
@@ -100,7 +100,9 @@ export function OrdersPageSkeleton() {
           "flex min-h-0 flex-1 flex-col",
         )}
       >
-        <GlassToolbarSkeleton withTabs wrapperClassName="relative z-20 shrink-0 pb-3 pt-3" />
+        <div className={cn("relative z-20 shrink-0 pb-3 pt-3", desktopTopBarScrollClearanceClass)}>
+          <SearchFilterBarSkeleton pills={2} />
+        </div>
         <div className="custom-scrollbar flex-1 overflow-y-auto">
           <div className="w-full space-y-5 py-6">
             <Pulse className="h-16 w-full rounded-2xl border border-border bg-card" />
@@ -125,11 +127,9 @@ export function KbPageSkeleton() {
   return (
     <PageShell>
       <div className={cn(dashboardChromeColumnClassName(), "flex min-h-0 flex-1 flex-col")}>
-        <GlassToolbarSkeleton
-          withAction
-          wrapperClassName="relative z-20 shrink-0 pb-3 pt-3"
-          shellClassName={cn("rounded-[22px] px-2.5 py-2", GLASS_CARD_SURFACE)}
-        />
+        <div className={cn("relative z-20 shrink-0 pb-3 pt-3", desktopTopBarScrollClearanceClass)}>
+          <SearchFilterBarSkeleton trailing />
+        </div>
         <div className="custom-scrollbar flex-1 overflow-y-auto">
           <div className="py-6 pb-16">
             <MemoryLibrarySkeleton />
@@ -146,7 +146,7 @@ export function IntegrationsPageSkeleton() {
   return (
     <PageShell>
       <div className="flex-1 overflow-y-auto">
-        <div className={cn(dashboardChromeColumnClassName(), "space-y-6 py-6")}>
+        <div className={cn(dashboardChromeColumnClassName(), "space-y-6 py-6 md:pt-16")}>
           <div className="grid gap-8 lg:grid-cols-2 items-start">
             {INTEGRATION_SECTION_KEYS.map(sectionKey => (
               <section key={sectionKey} className="space-y-4" aria-hidden>
@@ -181,11 +181,11 @@ export function IntegrationsPageSkeleton() {
 export function ReviewPageSkeleton() {
   return (
     <PageShell>
-      <div className="custom-scrollbar flex-1 overflow-y-auto px-4 pb-6 sm:px-6">
+      <div className="custom-scrollbar flex-1 overflow-y-auto px-4 pb-6 sm:px-6 md:pt-16">
         <div className="mx-auto w-full max-w-3xl">
-          <div className="flex flex-wrap gap-1.5 py-4">
+          <div className="flex flex-wrap gap-2.5 py-4">
             {[0, 1, 2, 3].map(index => (
-              <Pulse key={`review-filter-${index}`} className="h-7 w-16 rounded-full" />
+              <Pulse key={`review-filter-${index}`} className="h-10 w-24 rounded-full bg-white" />
             ))}
           </div>
           <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4">
@@ -205,7 +205,7 @@ export function SettingsPageSkeleton() {
   return (
     <PageShell>
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 pb-20 sm:px-6 lg:px-8">
+        <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 pb-20 sm:px-6 md:pt-16 lg:px-8">
           <div>
             <Pulse className="h-6 w-28 rounded-md" />
             <Pulse className="mt-2 h-4 w-full max-w-md rounded-md bg-foreground/[0.05]" />
@@ -236,7 +236,7 @@ const AGENT_SECTION_KEYS = ["agent-identity", "agent-autonomy", "agent-duty", "a
 export function AgentConfigurePageSkeleton() {
   return (
     <PageShell>
-      <div className="custom-scrollbar flex-1 overflow-y-auto px-4 py-6 sm:px-6">
+      <div className="custom-scrollbar flex-1 overflow-y-auto px-4 py-6 sm:px-6 md:pt-16">
         <div className="mx-auto w-full max-w-3xl space-y-6 pb-20">
           <div>
             <Pulse className="h-6 w-36 rounded-md" />
@@ -261,7 +261,7 @@ const TEAM_MEMBER_ROW_KEYS = ["member-skeleton-1", "member-skeleton-2", "member-
 export function TeamPageSkeleton() {
   return (
     <PageShell className="h-full overflow-y-auto bg-background">
-      <div className="mx-auto max-w-3xl space-y-6 px-4 py-5 pb-10 md:px-8 md:py-7" aria-busy="true" aria-label="Loading team">
+      <div className="mx-auto max-w-3xl space-y-6 px-4 py-5 pb-10 md:px-8 md:pt-16" aria-busy="true" aria-label="Loading team">
         <div className="flex items-center justify-end">
           <Pulse className="h-9 w-32 rounded-md" />
         </div>

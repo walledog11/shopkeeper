@@ -68,7 +68,7 @@ function SettingsPageContent({ orgName, version }: Props) {
   return (
     <div className="flex size-full min-w-0 flex-col overflow-hidden bg-background">
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 pb-20 sm:px-6 lg:px-8">
+        <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 pb-20 sm:px-6 md:pt-16 lg:px-8">
           <div>
             <h1 className="text-xl font-semibold tracking-tight text-foreground">Settings</h1>
             <p className="mt-0.5 text-sm text-faint">

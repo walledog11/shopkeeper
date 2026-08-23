@@ -68,6 +68,24 @@ body:has(.dashboard-shell) [role="button"]:not([data-slot="button"]):focus-visib
   to { background-position: 200% 0; }
 }
 
+/* Frosted nav pills — explicit blur + opacity so they never collapse to solid white. */
+.dashboard-glass-pill {
+  background: rgba(255, 255, 255, 0.88);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  backdrop-filter: blur(28px) saturate(180%);
+}
+
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .dashboard-glass-pill {
+    background: rgba(255, 255, 255, 0.78);
+  }
+
+  .dashboard-glass-pill:hover,
+  .dashboard-glass-pill:focus-within {
+    background: rgba(255, 255, 255, 0.88);
+  }
+}
+
 /* Custom Scrollbar */
 @layer utilities {
 .custom-scrollbar {

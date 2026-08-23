@@ -13,3 +13,9 @@ export const GLASS_CARD_SURFACE = cn(
   "hover:border-white/85",
   GLASS_CARD_SHADOW_HOVER,
 )
+
+/** Compact frosted-glass chrome for floating nav pills — no hover lift. */
+export const GLASS_PILL_SURFACE = cn(
+  "dashboard-glass-pill border border-white/50",
+  "shadow-[inset_0_1px_0_rgba(255,255,255,0.75),0_1px_2px_rgba(43,33,24,0.04),0_8px_24px_-10px_rgba(43,33,24,0.12)]",
+)

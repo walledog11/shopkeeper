@@ -1,12 +1,13 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useSWRConfig } from "swr"
-import { Search, ShoppingBag, X } from "lucide-react"
+import { ShoppingBag } from "lucide-react"
 import { OrdersPageSkeleton } from "@/app/dashboard/_components/skeletons"
-import { dashboardChromeColumnClassName } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
+import { dashboardChromeColumnClassName, desktopTopBarScrollClearanceClass } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
+import { SearchFilterBar } from "@/components/ui/search-filter-bar"
 import { isShopifyIntegrationActive, isShopifyOrdersUnavailable } from "@/lib/integrations/shopify-connection"
 import { cn } from "@/lib/ui/cn"
 import { INTEGRATIONS_SWR_KEY, useIntegrations } from "@/hooks/useIntegrations"
@@ -18,12 +19,6 @@ import { OrdersSearchResults } from "./OrdersSearchResults"
 import { dedupeOrders, ORDER_BOARD_COLUMNS, type OrderRow } from "./orders-board-model"
 import { fetchOrdersPage, fetchOrdersSearch, type OrdersResponse } from "./order-requests"
 import { useOrdersBoard } from "./use-orders-board"
-
-const GLASS_SHELL_CLASS =
-  "space-y-2 rounded-[22px] border border-foreground/[0.08] bg-card/60 px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_18px_50px_rgba(43,33,24,0.13)] backdrop-blur-2xl backdrop-saturate-150 supports-[backdrop-filter]:bg-card/45"
-
-const GLASS_CONTROL_CLASS =
-  "border border-foreground/[0.08] bg-background/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.38)] backdrop-blur-md backdrop-saturate-150 supports-[backdrop-filter]:bg-background/28"
 
 type ShopTab = "orders" | "customers"
 
@@ -126,49 +121,19 @@ export default function OrdersPageClient() {
   return (
     <div className="flex h-full flex-col overflow-hidden bg-background">
       <div className={cn(dashboardChromeColumnClassName(), "flex min-h-0 flex-1 flex-col")}>
-        <div className="relative z-20 shrink-0 pb-3 pt-3">
-          <div className={GLASS_SHELL_CLASS}>
-            <div className="flex flex-col gap-2 md:flex-row md:items-center">
-              <div className={`flex h-9 min-w-0 items-center gap-2 rounded-full px-3.5 md:flex-1 ${GLASS_CONTROL_CLASS}`}>
-                <Search className="size-3.5 shrink-0 text-faint" />
-                <input
-                  aria-label={shopTab === "customers" ? "Search customers" : "Search orders"}
-                  placeholder={shopTab === "customers" ? "Search customers by name or email…" : "Search by order number or customer email…"}
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  className="min-w-0 flex-1 bg-transparent text-sm text-strong outline-none placeholder:text-faint"
-                />
-                {searchInput && (
-                  <button type="button" onClick={() => setSearchInput("")} aria-label="Clear search" className="text-faint transition-colors hover:text-muted-foreground">
-                    <X className="size-3.5" />
-                  </button>
-                )}
-              </div>
-
-              <div role="tablist" aria-label="Shop sections" className={`flex h-9 items-center gap-1 rounded-full px-1 md:shrink-0 ${GLASS_CONTROL_CLASS}`}>
-                {([
-                  { id: "orders", label: "Orders" },
-                  { id: "customers", label: "Customers" },
-                ] as const).map((tab) => {
-                  const active = shopTab === tab.id
-                  return (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      role="tab"
-                      aria-selected={active}
-                      onClick={() => setShopTab(tab.id)}
-                      className={`h-7 flex-1 rounded-full px-3 text-xs font-semibold transition-colors md:flex-none ${
-                        active ? "bg-foreground/[0.12] text-foreground" : "text-muted-foreground hover:bg-foreground/[0.06] hover:text-strong"
-                      }`}
-                    >
-                      {tab.label}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
+        <div className={cn("relative z-20 shrink-0 pb-3 pt-3", desktopTopBarScrollClearanceClass)}>
+          <SearchFilterBar
+            value={searchInput}
+            onValueChange={setSearchInput}
+            placeholder={shopTab === "customers" ? "Search customers by name or email…" : "Search by order number or customer email…"}
+            aria-label={shopTab === "customers" ? "Search customers" : "Search orders"}
+            onClear={() => setSearchInput("")}
+            filterGroup={{ role: "tablist", "aria-label": "Shop sections" }}
+            filters={[
+              { id: "orders", label: "Orders", pressed: shopTab === "orders", onClick: () => setShopTab("orders") },
+              { id: "customers", label: "Customers", pressed: shopTab === "customers", onClick: () => setShopTab("customers") },
+            ]}
+          />
         </div>
 
         <div className="custom-scrollbar flex-1 overflow-y-auto">

@@ -5,9 +5,9 @@ import type { AutonomyTier } from "@shopkeeper/agent/settings";
 import { MobileChromeProvider } from "./mobile-chrome/MobileChromeContext";
 import { MobileChromeSync } from "./mobile-chrome/MobileChromeSync";
 import { MobileHubHeader } from "./mobile-chrome/MobileHubHeader";
+import { MainContentScrim } from "./right-rail/MainContentScrim";
 import { DesktopTopBar } from "./sidebar/DesktopTopBar";
 import { useNavAuth } from "./sidebar/useNavAuth";
-import { MainContentScrim } from "./right-rail/MainContentScrim";
 
 function DashboardSidebarContent({
   children,
@@ -43,7 +43,7 @@ function DashboardSidebarContent({
         </div>
       )}
 
-      <div className="flex flex-1 min-h-0 w-full overflow-x-hidden flex-col bg-background">
+      <div className="relative flex flex-1 min-h-0 w-full flex-col overflow-x-hidden bg-background">
         <DesktopTopBar
           onSwitching={setIsSwitching}
           navAuth={navAuth}
@@ -56,7 +56,7 @@ function DashboardSidebarContent({
               navAuth={navAuth}
             />
 
-            <div className="dashboard-content relative z-0 flex-1 min-h-0 overflow-hidden flex flex-col">
+            <div className="dashboard-content relative z-0 flex min-h-0 flex-1 flex-col overflow-hidden">
               {children}
               <MainContentScrim />
             </div>

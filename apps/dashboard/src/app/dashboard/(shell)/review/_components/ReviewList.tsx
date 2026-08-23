@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Loader2 } from "lucide-react"
 import { DashboardDetailDialog } from "@/app/dashboard/_components/board/DashboardDetailDialog"
 import { dashboardPageShellClassName } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
+import { FilterPill } from "@/components/ui/search-filter-bar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { boardCardShellClassName } from "@/lib/ui/board-card-styles"
 import { cn } from "@/lib/ui/cn"
@@ -49,25 +50,18 @@ export function ReviewList({
       <div className="custom-scrollbar flex-1 overflow-y-auto">
         <div className={dashboardPageShellClassName()}>
           <div
-            className="grid w-full grid-cols-2 gap-1.5 sm:grid-cols-5"
+            className="flex flex-wrap items-center gap-2.5"
             role="group"
             aria-label="Filter the audit trail"
           >
             {REVIEW_FILTERS.map(filter => (
-              <button
+              <FilterPill
                 key={filter.id}
-                type="button"
-                aria-pressed={filter.id === activeFilter}
+                pressed={filter.id === activeFilter}
                 onClick={() => onFilterChange(filter.id)}
-                className={cn(
-                  "min-w-0 rounded-2xl border px-2 py-2.5 text-center text-xs font-semibold transition-colors sm:px-3",
-                  filter.id === activeFilter
-                    ? "border-foreground/[0.18] bg-foreground/[0.08] text-strong"
-                    : "border-border text-muted-foreground hover:border-foreground/[0.16] hover:text-strong",
-                )}
               >
                 {filter.label}
-              </button>
+              </FilterPill>
             ))}
           </div>
 

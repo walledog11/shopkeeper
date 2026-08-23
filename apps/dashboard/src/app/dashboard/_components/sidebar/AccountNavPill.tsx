@@ -40,7 +40,7 @@ export function AccountNavPill({
       className={cn(
         "flex items-center outline-none text-left transition-colors min-w-0",
         showAvatarOnly
-          ? "h-12 px-3 rounded-xl hover:bg-sidebar-accent/50"
+          ? "h-12 w-full justify-center px-3 rounded-xl hover:bg-white/50"
           : "w-full gap-2.5 rounded-lg px-3 py-2.5 hover:bg-foreground/[0.05]",
       )}
     >

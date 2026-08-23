@@ -9,6 +9,7 @@ import AgentChatClient from "@/components/agent/AgentChatClient"
 import { cn } from "@/lib/ui/cn"
 import { matchConciergeNavigationIntent } from "@/lib/agent/concierge-navigation"
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
+import { GLASS_PILL_SURFACE } from "@/lib/ui/glass-card-styles"
 import { useAgentPanel } from "../agent-panel/AgentPanelContext"
 import {
   desktopTopBarUtilityPillClass,
@@ -16,8 +17,7 @@ import {
   topBarIconButtonClass,
 } from "../sidebar/sidebar-helpers"
 
-const headerSearchShellBase =
-  "rounded-xl border border-border/80 bg-sidebar/95 backdrop-blur-md supports-[backdrop-filter]:bg-sidebar/85"
+const headerSearchShellBase = cn("rounded-xl", GLASS_PILL_SURFACE)
 
 const headerSearchExpandedShellClass = cn(
   headerSearchShellBase,
@@ -143,7 +143,7 @@ export function HeaderSearch({ variant = "topBar" }: HeaderSearchProps) {
           )}
         </AnimatePresence>
 
-        <header
+        <div
           data-dashboard-header-search
           className={cn(
             isExpanded ? headerSearchExpandedShellClass : desktopTopBarUtilityPillClass,
@@ -182,7 +182,7 @@ export function HeaderSearch({ variant = "topBar" }: HeaderSearchProps) {
               </kbd>
             </div>
           )}
-        </header>
+        </div>
       </div>
     </LazyMotion>
   )

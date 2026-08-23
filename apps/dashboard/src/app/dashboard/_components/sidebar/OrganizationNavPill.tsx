@@ -64,7 +64,7 @@ export function OrganizationNavPill({
       className={cn(
         "flex items-center outline-none text-left transition-colors min-w-0",
         isTopBar
-          ? "gap-1.5 h-12 max-w-[14rem] px-4 rounded-xl hover:bg-sidebar-accent/50"
+          ? "gap-1.5 h-12 w-full max-w-[14rem] px-4 rounded-xl hover:bg-white/50"
           : isEmbedded
             ? "h-12 w-full gap-1.5 px-4 rounded-xl hover:bg-sidebar-accent/50"
             : "w-full gap-2 rounded-lg px-3 py-2.5 hover:bg-foreground/[0.05]",

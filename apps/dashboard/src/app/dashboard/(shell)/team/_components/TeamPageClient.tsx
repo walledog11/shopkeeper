@@ -161,7 +161,7 @@ function TeamPageContent(props: Props) {
 
   return (
     <div className="h-full overflow-y-auto bg-background">
-      <div className="max-w-3xl mx-auto px-4 md:px-8 py-5 md:py-7 space-y-6 pb-10">
+      <div className="mx-auto max-w-3xl space-y-6 px-4 py-5 pb-10 md:px-8 md:pt-16">
 
         {isAdmin && (
           <div className="flex items-center justify-end">

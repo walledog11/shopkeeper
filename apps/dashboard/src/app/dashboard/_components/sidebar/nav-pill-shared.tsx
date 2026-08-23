@@ -35,8 +35,8 @@ export function NavPillShell({
   if (variant !== "topBar") return dropdown;
 
   return (
-    <header {...{ [HEADER_ATTR[headerId]]: "" }} className={cn(desktopTopBarUtilityPillClass, "shrink-0")}>
+    <div {...{ [HEADER_ATTR[headerId]]: "" }} className={cn(desktopTopBarUtilityPillClass, "shrink-0")}>
       {dropdown}
-    </header>
+    </div>
   );
 }
