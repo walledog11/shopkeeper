@@ -110,7 +110,17 @@ if (estimatedCalls > maxCalls) {
   throw new Error(`Estimated ${estimatedCalls} calls exceeds the approved ${maxCalls}-call ceiling`);
 }
 
-const gatewayUsd = gatewayEstimate === 0 ? 0 : Math.max(gatewayEstimate * 1.5, maxUsd * 0.15);
+// The release gateway is one hard case with at most one confirmation retry. A
+// percentage of the total ceiling substantially over-reserved it and starved
+// the 48-fixture dashboard job: run 32627931331 spent $0.0088 in the gateway
+// while the dashboard crossed its $0.6375 sub-limit at $0.6633, still below the
+// $0.75 total authorization. Keep $0.05 for the bounded gateway path and leave
+// $0.70 for the larger release suite. Drift/baseline retain proportional room.
+const gatewayUsd = gatewayEstimate === 0
+  ? 0
+  : mode === 'release'
+    ? Math.max(gatewayEstimate * 1.5, 0.05)
+    : Math.max(gatewayEstimate * 1.5, maxUsd * 0.15);
 const dashboardMaxUsd = maxUsd - gatewayUsd;
 if (dashboardMaxUsd <= dashboardEstimate) {
   throw new Error(`Dashboard allocation $${dashboardMaxUsd.toFixed(2)} does not cover its $${dashboardEstimate.toFixed(2)} estimate`);
