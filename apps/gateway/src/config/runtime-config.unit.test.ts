@@ -10,7 +10,6 @@ import {
   getTelegramConfig,
   isGmailNativeInboundEnabled,
   isOrderRiskMonitorEnabled,
-  isDeliveryExceptionMonitorEnabled,
   isReturnLifecycleMonitorEnabled,
   getGatewayRuntimeFlags,
   shouldRunGatewayServer,
@@ -203,34 +202,16 @@ describe('isReturnLifecycleMonitorEnabled', () => {
   });
 });
 
-describe('isDeliveryExceptionMonitorEnabled', () => {
-  it('defaults to disabled when unset', () => {
-    expect(isDeliveryExceptionMonitorEnabled()).toBe(false);
-  });
-
-  it('enables only for explicit truthy values', () => {
-    vi.stubEnv('DELIVERY_EXCEPTION_MONITOR_ENABLED', '1');
-    expect(isDeliveryExceptionMonitorEnabled()).toBe(true);
-  });
-
-  it('rejects invalid boolean strings', () => {
-    vi.stubEnv('DELIVERY_EXCEPTION_MONITOR_ENABLED', 'maybe');
-    expect(() => isDeliveryExceptionMonitorEnabled()).toThrow(/DELIVERY_EXCEPTION_MONITOR_ENABLED/);
-  });
-});
-
 describe('getGatewayRuntimeFlags', () => {
   it('returns the monitor rollout flags together', () => {
     vi.stubEnv('ORDER_RISK_MONITOR_ENABLED', '1');
     vi.stubEnv('RETURN_LIFECYCLE_MONITOR_ENABLED', '0');
-    vi.stubEnv('DELIVERY_EXCEPTION_MONITOR_ENABLED', 'true');
     vi.stubEnv('POST_RESOLUTION_FOLLOWUP_MONITOR_ENABLED', 'false');
 
     expect(getGatewayRuntimeFlags()).toEqual({
       monitors: {
         orderRisk: true,
         returnLifecycle: false,
-        deliveryException: true,
         postResolutionFollowUp: false,
       },
     });

@@ -139,7 +139,7 @@ The renderer decisions are closed: `classifyPerson` splits verified and unverifi
 
 **Deferred 2026-08-23.** This section's premise is wrong about one of its four tools, which is enough to change the shape of the work, so per rule 2 it is reported rather than adapted around.
 
-*"Fulfillment status and tracking are fields on the order object"* holds for two of the four and not for the others. `get_shopify_orders` and `get_order_by_name` genuinely are one endpoint — both call `orders.json` through the same `orderFields()` projection (`packages/agent/src/shopify/orders.ts`), differing only in query parameter, and those two do consolidate. `get_order_fulfillment_status` is the same endpoint under a deliberately narrower field allowlist plus an email-match guard: a security projection, which is why this section already says to keep it for guests. But `get_order_tracking` calls a **different** endpoint, `orders/{id}/fulfillments.json`, and then the **live USPS API** (`packages/agent/src/shopify/tracking.ts`). It is not a projection on the order record, and folding it in behind an `include` flag would turn a call the model visibly did not make into a field it silently omitted — a worse failure mode than the one being fixed.
+*"Fulfillment status and tracking are fields on the order object"* holds for two of the four and not for the others. `get_shopify_orders` and `get_order_by_name` genuinely are one endpoint — both call `orders.json` through the same `orderFields()` projection (`packages/agent/src/shopify/orders.ts`), differing only in query parameter, and those two do consolidate. `get_order_fulfillment_status` is the same endpoint under a deliberately narrower field allowlist plus an email-match guard: a security projection, which is why this section already says to keep it for guests. But `get_order_tracking` calls a **different** endpoint, `orders/{id}/fulfillments.json` (`packages/agent/src/shopify/tracking.ts`) — and, when this was written, the live USPS API after it. It is not a projection on the order record, and folding it in behind an `include` flag would turn a call the model visibly did not make into a field it silently omitted — a worse failure mode than the one being fixed. *(The USPS half was removed later the same day; the endpoint argument stands on its own, since `fulfillments.json` was never part of the order record either.)*
 
 The second constraint is one this section half-anticipates in its point 3: `get_order_by_name` and `get_order_tracking` are the *entire* verified-storefront capability (`VERIFIED_ORDER_TOOL_NAMES` in `packages/agent/src/guest-policy.ts`), so neither can be retired. They would have to survive as storefront-only tools excluded from the support set the way `get_order_fulfillment_status` already is (`planner.ts`, via `isGuestOnlyTool`). That is buildable, but it buys support **one** fewer schema in exchange for a new exclusion mechanism plus the full guest/verified policy-matrix coverage this section demands — and `buildContext` already prefetches recent orders for a linked customer, so the round-trip saving is smaller than the "three round trips" framing implies.
 
@@ -262,13 +262,17 @@ The operator agent knows about pending plans and nothing else — no visibility 
 
 **Depends on:** Phase 8 for remedy policy. Phase A.1 did not produce decision-grade evidence to promote this phase.
 
-**Why:** the existing USPS path is implemented and tested to return live scan events, classify exceptions and five-day stalls, scan hourly, deduplicate shipment watches, and create approval plans. It is not proof of production activation: the monitor defaults off behind `DELIVERY_EXCEPTION_MONITOR_ENABLED`, and USPS credentials may be absent. The remaining product gap is broader carrier coverage and a remedy recommendation that goes beyond a tracking update.
+**Why — restated 2026-08-22, because the premise changed.** This section used to open by saying the USPS path was "implemented and tested" and that the gap was *broader* carrier coverage. **The USPS API does not work, and the client was removed.** There is now no carrier provider at all, so this phase is not an expansion from one carrier to several; it is the first working one.
 
-### 9.1 — Extract USPS as provider one, then add exactly one second provider
+What survived the removal, and why it was kept: the shipment-watch dedupe, `classifyShipmentAlert` (stall and exception classification, provider-agnostic by shape), thread resolution, and the approval-plan push. What went: the USPS OAuth client, the tracking fetch, and the USPS-only carrier filter on the shipment list. `runDeliveryExceptionMonitor` now takes a `CarrierTrackingProvider` whose production default is `null`; with no provider it refuses to scan and the hourly job is not scheduled, so the monitor cannot sit in the queue looking alive. That null is the seam 9.1 fills.
 
-Available capability types are hard-coded to Shopify, thread I/O, KB, and stats, while USPS access currently lives inside the Shopify tracking implementation. Add `carrier` without regressing the working USPS path.
+`get_order_tracking` still works — it returns what Shopify's fulfillment record holds (tracking number, carrier, shipment status, tracking URL) and no longer promises scan events.
 
-Implement one provider behind an interface. **AfterShip** if you want exception classification (stalled, misrouted, delivery-attempted, returned-to-sender) done for you; **EasyPost** for raw events you classify yourself. AfterShip is the faster path; the interface keeps it reversible. Org-scoped credentials, same authorization pattern as Shopify. **Verify the current API surface against live provider docs — do not code from memory.**
+### 9.1 — Implement the first carrier provider
+
+~~Extract USPS as provider one, then add exactly one second provider.~~ **Rewritten 2026-08-22:** there is nothing to extract. Available capability types are hard-coded to Shopify, thread I/O, KB, and stats; add `carrier`, and implement one provider against the `CarrierTrackingProvider` shape already declared in `apps/gateway/src/maintenance/delivery-exception-monitor.ts`. There is no working USPS path left to regress, which makes this simpler than the extraction it replaces.
+
+Implement one provider behind that interface. **AfterShip** if you want exception classification (stalled, misrouted, delivery-attempted, returned-to-sender) done for you; **EasyPost** for raw events you classify yourself. AfterShip is the faster path; the interface keeps it reversible. Org-scoped credentials, same authorization pattern as Shopify. **Verify the current API surface against live provider docs — do not code from memory.**
 
 ### 9.2 — Normalize the existing tracking tool
 
@@ -278,7 +282,7 @@ Evolve or replace `get_order_tracking` with `get_shipment_status`: full event hi
 
 ### 9.3 — Extend proactive detection into remedy selection
 
-An hourly USPS shipment-exception monitor already detects exceptions and five-day stalls, deduplicates them, and creates approval plans. **Extend it; do not build new.**
+The hourly shipment-exception monitor still holds its detection, dedupe, and approval-plan machinery; only its carrier lookup is gone. **Extend it once 9.1 gives it a provider; do not build new.**
 
 For proactive carrier evidence, keep stall, exception, and returned-to-sender detection and make the existing approval plan propose a remedy (reship / refund / wait-and-notify) informed by Phase 8 preferences. Merchant approval continues through the existing pending-plan mechanism.
 

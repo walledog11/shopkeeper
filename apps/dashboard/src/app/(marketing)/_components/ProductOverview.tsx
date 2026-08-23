@@ -309,22 +309,9 @@ export function ProactiveOperations() {
       <SectionHeading
         label="after the immediate reply"
         title="Keep an eye on the work that should not be forgotten."
-        body="Optional monitoring and briefings surface follow-up work after the core request is understood."
+        body="Optional briefings surface follow-up work after the core request is understood."
       />
-      <div className="grid gap-4 md:grid-cols-2">
-        <PaperCard>
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="text-[27px] font-bold leading-none [font-family:var(--m-hand)]">
-              Delivery monitoring
-            </h3>
-            <span className="rounded-full bg-stone-900/5 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-stone-500">
-              Optional
-            </span>
-          </div>
-          <p className="mt-4 text-sm leading-relaxed text-stone-600">
-            Detect a supported USPS delivery exception, prepare a customer heads-up, and wait for approval before it sends.
-          </p>
-        </PaperCard>
+      <div className="grid gap-4">
         <PaperCard>
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-[27px] font-bold leading-none [font-family:var(--m-hand)]">

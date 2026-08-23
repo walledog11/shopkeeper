@@ -90,13 +90,15 @@ describe('POST /api/integrations/instagram/auth', () => {
     expect(createSessionCookies).not.toHaveBeenCalled();
   });
 
-  it('blocks workspaces outside the Instagram rollout cohort', async () => {
+  it('starts Instagram OAuth for any workspace', async () => {
+    vi.stubEnv('INSTAGRAM_INTEGRATION_ENABLED', 'false');
     vi.stubEnv('INSTAGRAM_BETA_ORG_IDS', 'org_beta');
 
-    const response = await POST(new Request('http://localhost', { method: 'POST' }));
+    const response = await POST(new Request('http://localhost/api/integrations/instagram/auth', {
+      method: 'POST',
+    }));
 
-    expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toEqual({ error: 'instagram_not_available' });
-    expect(createSessionCookies).not.toHaveBeenCalled();
+    expect(response.status).toBe(303);
+    expect(createSessionCookies).toHaveBeenCalledOnce();
   });
 });

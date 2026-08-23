@@ -7,7 +7,7 @@ import { toolError, toolNotFound, toolOk, type ToolResult } from "../tools/resul
 import { formatShopifyToolError, shopifyRestJson, type ShopifyContext } from "./client.js";
 import { serializeOrder } from "./serializers.js";
 import type { ShopifyFulfillment, ShopifyOrder } from "./types.js";
-import { isUspsCarrier, readFulfillmentTrackingNumbers } from "./tracking.js";
+import { readFulfillmentTrackingNumbers } from "./tracking.js";
 import { optionalString, requireNonEmptyString, requireNumericId } from "./validation.js";
 
 function orderFields(): string {
@@ -185,7 +185,11 @@ function readCustomerEmail(order: ShippedOrderRow): string | null {
   return email || null;
 }
 
-export function extractUspsShipmentsFromOrders(orders: ShippedOrderRow[]): ShippedOrderShipment[] {
+// Every shipment on a recently shipped order, whatever carrier moved it. This
+// used to filter to USPS because USPS was the only carrier the monitor could
+// look up; with that client gone the filter would only narrow what the next
+// provider is handed.
+export function extractShipmentsFromOrders(orders: ShippedOrderRow[]): ShippedOrderShipment[] {
   const shipments: ShippedOrderShipment[] = [];
   const seen = new Set<string>();
 
@@ -195,7 +199,6 @@ export function extractUspsShipmentsFromOrders(orders: ShippedOrderRow[]): Shipp
     const customerName = readCustomerName(order);
 
     for (const fulfillment of order.fulfillments ?? []) {
-      if (!isUspsCarrier(fulfillment.tracking_company)) continue;
       for (const trackingNumber of readFulfillmentTrackingNumbers(fulfillment)) {
         const key = `${orderId}:${trackingNumber}`;
         if (seen.has(key)) continue;
@@ -229,5 +232,5 @@ export async function listRecentShippedOrderShipments(
     timeoutMs: 10_000,
   });
 
-  return extractUspsShipmentsFromOrders(data.orders ?? []);
+  return extractShipmentsFromOrders(data.orders ?? []);
 }

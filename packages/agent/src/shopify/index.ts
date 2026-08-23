@@ -19,7 +19,7 @@ export {
   getShopifyOrders,
   listRecentUnfulfilledOrderIds,
   listRecentShippedOrderShipments,
-  extractUspsShipmentsFromOrders,
+  extractShipmentsFromOrders,
   type ShippedOrderShipment,
 } from "./orders.js";
 export {
@@ -78,8 +78,6 @@ export {
   type ShipmentTrackingSnapshot,
 } from "./shipment-alerts.js";
 export {
-  fetchUspsTrackingSnapshot,
   getOrderTracking,
-  isUspsCarrier,
   readFulfillmentTrackingNumbers,
 } from "./tracking.js";

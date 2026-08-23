@@ -219,11 +219,13 @@ describe("integration presentation", () => {
       },
       isAdmin: true,
     })
-    expect(models.find((model) => model.definition.id === "instagram")?.availability.state).toBe("private-beta")
+    expect(models.find((model) => model.definition.id === "instagram")?.availability.state).toBe("available")
     expect(models.find((model) => model.definition.id === "tiktok-shop")?.availability.state).toBe("coming-soon")
     expect(models.find((model) => model.definition.id === "whatsapp")?.availability.state).toBe("coming-soon")
     expect(models.find((model) => model.definition.id === "telegram")?.visible).toBe(false)
-    expect(getIntegrationDefinition("instagram").description).not.toContain("private beta")
+    expect(getIntegrationDefinition("instagram").description).toBe(
+      "Receive and reply to customer DMs from an Instagram Professional account.",
+    )
   })
 
   it.each([

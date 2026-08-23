@@ -12,7 +12,7 @@ This runbook covers the repo-side production deployment path for the dashboard o
 - Gateway `REDIS_URL` points at its dedicated Redis: Railway private networking uses `redis://...redis.railway.internal`; managed Redis over the public internet uses the TLS form `rediss://...`. Do not point it at Upstash.
 - A new production-only `INTERNAL_API_SECRET` has been generated.
 - Production env vars from [`checklist.md`](checklist.md) are populated in Vercel and Railway.
-- V1 launch env covers email and Shopify. Meta, Twilio, and USPS vars are optional until those channels are reintroduced.
+- V1 launch env covers email and Shopify. Meta and Twilio vars are optional until those channels are reintroduced. There are no carrier-tracking vars: the USPS client was removed on 2026-08-22 and no provider has replaced it.
 - Clerk lifecycle webhook endpoint is configured to `https://<dashboard>/api/webhooks/clerk`, and the dashboard has `CLERK_WEBHOOK_SECRET`.
 - Separate staging and production PostHog projects are available before product analytics is enabled.
 

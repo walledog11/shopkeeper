@@ -290,17 +290,9 @@ export function isGmailNativeInboundEnabled(): boolean {
 }
 
 export function isInstagramIntegrationEnabledForOrg(
-  clerkOrganizationId: string | null | undefined,
+  _clerkOrganizationId?: string | null,
 ): boolean {
-  const enabledByDefault = process.env.NODE_ENV !== "production";
-  if (!parseBooleanEnv("INSTAGRAM_INTEGRATION_ENABLED", enabledByDefault)) return false;
-
-  const allowlist = (readEnv("INSTAGRAM_BETA_ORG_IDS") ?? "")
-    .split(",")
-    .map(value => value.trim())
-    .filter(Boolean);
-  return allowlist.length === 0
-    || (typeof clerkOrganizationId === "string" && allowlist.includes(clerkOrganizationId));
+  return true
 }
 
 export function getDashboardOpsAlertConfig(): DashboardOpsAlertConfig {

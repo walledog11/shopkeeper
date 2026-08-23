@@ -8,10 +8,10 @@ import {
 } from '@shopkeeper/db';
 import {
   classifyShipmentAlert,
-  fetchUspsTrackingSnapshot,
   listRecentShippedOrderShipments,
   ShopifyRequestError,
   type ShopifyContext,
+  type ShipmentTrackingSnapshot,
 } from '@shopkeeper/agent/shopify';
 import { isShopifyIntegrationSweepable } from '@shopkeeper/agent/shopify/integration-health';
 import logger from '../logger.js';
@@ -23,8 +23,6 @@ import {
   scheduleRepeatableJob,
   type MaintenanceJobRegistration,
 } from './registration.js';
-import { isDeliveryExceptionMonitorEnabled } from '../config/runtime-config.js';
-import { isOrgDeliveryExceptionWatchEnabled } from './delivery-exception-config.js';
 import {
   pushDeliveryExceptionApprovalPlan,
   resolveDeliveryExceptionThread,
@@ -33,11 +31,27 @@ import {
 export { deliveryExceptionIdempotencyKey } from './delivery-exception-plan.js';
 
 const SHIPMENTS_PER_ORG = 25;
-const USPS_LOOKUP_DELAY_MS = 150;
+const CARRIER_LOOKUP_DELAY_MS = 150;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+// Where a carrier lookup goes. It is null because the USPS client this monitor
+// was built on has been removed — the API does not work — and nothing has
+// replaced it yet. A typed absence rather than a silent one: the scan refuses
+// to run and the hourly job is not scheduled, so the monitor cannot look alive
+// in the queue while being incapable of detecting anything.
+//
+// Capability-plan Phase 9.1 fills this in with one provider behind this shape.
+// Everything downstream of it — the watch dedupe, the stall/exception
+// classifier, thread resolution, the approval plan — is carrier-agnostic and
+// was left in place for that.
+export type CarrierTrackingProvider = (
+  trackingNumber: string,
+) => Promise<ShipmentTrackingSnapshot | null>;
+
+export const carrierTrackingProvider: CarrierTrackingProvider | null = null;
 
 async function handleDetectedIssue(params: {
   organizationId: string;
@@ -76,12 +90,18 @@ async function handleDetectedIssue(params: {
   return false;
 }
 
-export async function runDeliveryExceptionMonitor(): Promise<{
+export async function runDeliveryExceptionMonitor(
+  provider: CarrierTrackingProvider | null = carrierTrackingProvider,
+): Promise<{
   orgsScanned: number;
   shipmentsChecked: number;
   issuesNotified: number;
 }> {
-  if (!isDeliveryExceptionMonitorEnabled()) {
+  if (!provider) {
+    logger.warn(
+      {},
+      '[DeliveryExceptionMonitor] no carrier tracking provider configured; nothing to scan',
+    );
     return { orgsScanned: 0, shipmentsChecked: 0, issuesNotified: 0 };
   }
 
@@ -93,7 +113,6 @@ export async function runDeliveryExceptionMonitor(): Promise<{
       accessToken: true,
       tokenExpiresAt: true,
       metadata: true,
-      organization: { select: { settings: true } },
     },
   });
 
@@ -104,7 +123,6 @@ export async function runDeliveryExceptionMonitor(): Promise<{
   for (const integration of integrations) {
     if (!integration.accessToken || !integration.externalAccountId) continue;
     if (!isShopifyIntegrationSweepable(integration)) continue;
-    if (!isOrgDeliveryExceptionWatchEnabled(integration.organization.settings)) continue;
     orgsScanned += 1;
 
     const ctx: ShopifyContext = {
@@ -136,8 +154,8 @@ export async function runDeliveryExceptionMonitor(): Promise<{
         continue;
       }
 
-      const snapshot = await fetchUspsTrackingSnapshot(shipment.trackingNumber);
-      await sleep(USPS_LOOKUP_DELAY_MS);
+      const snapshot = await provider(shipment.trackingNumber);
+      await sleep(CARRIER_LOOKUP_DELAY_MS);
       if (!snapshot) continue;
 
       shipmentsChecked += 1;
@@ -197,10 +215,18 @@ export async function runDeliveryExceptionMonitor(): Promise<{
 }
 
 export const registerDeliveryExceptionMaintenanceJob: MaintenanceJobRegistration = async (context) => {
+  if (!carrierTrackingProvider) {
+    logger.warn(
+      {},
+      '[DeliveryExceptionMonitor] not scheduling the hourly scan: no carrier tracking provider',
+    );
+    return { workers: [], queues: [] };
+  }
+
   const queue = createMaintenanceQueue(context, QUEUE.DELIVERY_EXCEPTION);
   await scheduleRepeatableJob(queue, JOB.DELIVERY_EXCEPTION_SCAN, JOB.DELIVERY_EXCEPTION_ID, ONE_HOUR_MS);
 
-  const worker = createMaintenanceWorker(context, QUEUE.DELIVERY_EXCEPTION, runDeliveryExceptionMonitor, {
+  const worker = createMaintenanceWorker(context, QUEUE.DELIVERY_EXCEPTION, () => runDeliveryExceptionMonitor(), {
     label: 'DeliveryException',
     failureQueue: QUEUE.DELIVERY_EXCEPTION,
   });

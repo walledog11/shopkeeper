@@ -2,26 +2,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   findMany,
-  isEnabled,
   getShipmentWatch,
   recordShipmentWatch,
   markShipmentWatchPlanPushed,
   markShipmentWatchSkipped,
   listRecentShippedOrderShipments,
-  fetchUspsTrackingSnapshot,
   classifyShipmentAlert,
   pushDeliveryExceptionApprovalPlan,
   resolveDeliveryExceptionThread,
   logger,
 } = vi.hoisted(() => ({
   findMany: vi.fn(),
-  isEnabled: vi.fn(),
   getShipmentWatch: vi.fn(),
   recordShipmentWatch: vi.fn(),
   markShipmentWatchPlanPushed: vi.fn(),
   markShipmentWatchSkipped: vi.fn(),
   listRecentShippedOrderShipments: vi.fn(),
-  fetchUspsTrackingSnapshot: vi.fn(),
   classifyShipmentAlert: vi.fn(),
   pushDeliveryExceptionApprovalPlan: vi.fn(),
   resolveDeliveryExceptionThread: vi.fn(),
@@ -39,7 +35,6 @@ vi.mock('@shopkeeper/db', () => ({
 
 vi.mock('@shopkeeper/agent/shopify', () => ({
   listRecentShippedOrderShipments,
-  fetchUspsTrackingSnapshot,
   classifyShipmentAlert,
   ShopifyRequestError: class ShopifyRequestError extends Error {
     status?: number;
@@ -50,14 +45,6 @@ vi.mock('@shopkeeper/agent/shopify', () => ({
   },
 }));
 
-vi.mock('../config/runtime-config.js', () => ({
-  isDeliveryExceptionMonitorEnabled: isEnabled,
-}));
-
-vi.mock('./delivery-exception-config.js', () => ({
-  isOrgDeliveryExceptionWatchEnabled: () => true,
-}));
-
 vi.mock('../logger.js', () => ({ default: logger }));
 
 vi.mock('./delivery-exception-plan.js', () => ({
@@ -65,24 +52,30 @@ vi.mock('./delivery-exception-plan.js', () => ({
   resolveDeliveryExceptionThread,
 }));
 
-import { runDeliveryExceptionMonitor } from './delivery-exception-monitor.js';
+import {
+  carrierTrackingProvider,
+  runDeliveryExceptionMonitor,
+} from './delivery-exception-monitor.js';
+
+// The USPS client the monitor was built on is gone, so production has no
+// provider to hand it. The loop below is exercised through the injected seam
+// Phase 9.1 will fill; `parks without a carrier provider` pins the default.
+const trackShipment = vi.fn();
 
 describe('runDeliveryExceptionMonitor', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     findMany.mockReset();
-    isEnabled.mockReset();
     getShipmentWatch.mockReset();
     recordShipmentWatch.mockReset();
     markShipmentWatchPlanPushed.mockReset();
     markShipmentWatchSkipped.mockReset();
     listRecentShippedOrderShipments.mockReset();
-    fetchUspsTrackingSnapshot.mockReset();
+    trackShipment.mockReset();
     classifyShipmentAlert.mockReset();
     pushDeliveryExceptionApprovalPlan.mockReset();
     resolveDeliveryExceptionThread.mockReset();
     logger.warn.mockReset();
-    isEnabled.mockReturnValue(true);
     getShipmentWatch.mockResolvedValue(null);
     resolveDeliveryExceptionThread.mockResolvedValue('thread-1');
     recordShipmentWatch.mockResolvedValue('watch-1');
@@ -101,8 +94,10 @@ describe('runDeliveryExceptionMonitor', () => {
     vi.useRealTimers();
   });
 
-  it('does no I/O when the global flag is disabled', async () => {
-    isEnabled.mockReturnValue(false);
+  // The reason this monitor cannot fire in production, asserted rather than
+  // described in a comment: there is no carrier to ask.
+  it('parks without a carrier provider', async () => {
+    expect(carrierTrackingProvider).toBeNull();
 
     await expect(runDeliveryExceptionMonitor()).resolves.toEqual({
       orgsScanned: 0,
@@ -110,6 +105,10 @@ describe('runDeliveryExceptionMonitor', () => {
       issuesNotified: 0,
     });
     expect(findMany).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      {},
+      expect.stringContaining('no carrier tracking provider'),
+    );
   });
 
   it('skips simulated and expired integrations without listing shipments', async () => {
@@ -132,7 +131,7 @@ describe('runDeliveryExceptionMonitor', () => {
       },
     ]);
 
-    const runPromise = runDeliveryExceptionMonitor();
+    const runPromise = runDeliveryExceptionMonitor(trackShipment);
     await vi.runAllTimersAsync();
     await expect(runPromise).resolves.toEqual({
       orgsScanned: 0,
@@ -153,17 +152,17 @@ describe('runDeliveryExceptionMonitor', () => {
       trackingCompany: 'USPS',
     }]);
 
-    const runPromise = runDeliveryExceptionMonitor();
+    const runPromise = runDeliveryExceptionMonitor(trackShipment);
     await vi.runAllTimersAsync();
     await expect(runPromise).resolves.toEqual({
       orgsScanned: 1,
       shipmentsChecked: 0,
       issuesNotified: 0,
     });
-    expect(fetchUspsTrackingSnapshot).not.toHaveBeenCalled();
+    expect(trackShipment).not.toHaveBeenCalled();
   });
 
-  it('pushes an approval plan when USPS reports an exception', async () => {
+  it('pushes an approval plan when the carrier reports an exception', async () => {
     listRecentShippedOrderShipments.mockResolvedValue([{
       orderId: '1001',
       customerShopifyId: '55',
@@ -172,7 +171,7 @@ describe('runDeliveryExceptionMonitor', () => {
       trackingNumber: '9400',
       trackingCompany: 'USPS',
     }]);
-    fetchUspsTrackingSnapshot.mockResolvedValue({
+    trackShipment.mockResolvedValue({
       status: 'Alert',
       statusSummary: 'Return to Sender',
       events: [],
@@ -180,7 +179,7 @@ describe('runDeliveryExceptionMonitor', () => {
     classifyShipmentAlert.mockReturnValue('exception');
     pushDeliveryExceptionApprovalPlan.mockResolvedValue('plan_pushed');
 
-    const runPromise = runDeliveryExceptionMonitor();
+    const runPromise = runDeliveryExceptionMonitor(trackShipment);
     await vi.runAllTimersAsync();
     await expect(runPromise).resolves.toEqual({
       orgsScanned: 1,

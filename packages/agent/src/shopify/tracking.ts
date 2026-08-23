@@ -1,22 +1,8 @@
 import type { GetOrderTrackingInput } from "../tools/index.js";
 import { formatShopifyToolError, shopifyRestJson, type ShopifyContext } from "./client.js";
-import type { ShipmentTrackingSnapshot } from "./shipment-alerts.js";
 import { toolError, toolNotFound, toolOk, type ToolResult } from "../tools/result.js";
 import type { ShopifyFulfillment } from "./types.js";
 import { requireNumericId } from "./validation.js";
-
-type USPSAccessToken = {
-  token: string;
-  expiresAt: number;
-};
-
-type USPSEvent = {
-  eventType?: string;
-  eventTimestamp?: string;
-  eventCity?: string;
-  eventState?: string;
-  eventZIP?: string;
-};
 
 type TrackingShipment = {
   fulfillment_status: string;
@@ -26,29 +12,6 @@ type TrackingShipment = {
   tracking_url: string | null;
   note?: string;
 };
-
-let uspsAccessToken: USPSAccessToken | null = null;
-const USPS_REQUEST_TIMEOUT_MS = 15_000;
-
-class USPSRequestTimeoutError extends Error {
-  constructor(cause: unknown) {
-    super(`USPS request timed out after ${USPS_REQUEST_TIMEOUT_MS}ms`, { cause });
-    this.name = "USPSRequestTimeoutError";
-  }
-}
-
-function isUSPSCarrier(carrier: string | null | undefined): boolean {
-  const normalized = carrier?.toLowerCase() ?? "";
-  return (
-    normalized.includes("usps") ||
-    normalized.includes("united states postal service") ||
-    normalized.includes("u.s. postal service")
-  );
-}
-
-export function isUspsCarrier(carrier: string | null | undefined): boolean {
-  return isUSPSCarrier(carrier);
-}
 
 export function readFulfillmentTrackingNumbers(fulfillment: ShopifyFulfillment): string[] {
   return fulfillmentTrackingNumbers(fulfillment);
@@ -64,109 +27,6 @@ function fulfillmentTrackingUrls(fulfillment: ShopifyFulfillment): string[] {
   const trackingUrls = fulfillment.tracking_urls?.filter(Boolean) ?? [];
   if (trackingUrls.length > 0) return trackingUrls;
   return fulfillment.tracking_url ? [fulfillment.tracking_url] : [];
-}
-
-async function fetchJson(url: string, init: RequestInit): Promise<unknown> {
-  let res: Response;
-  try {
-    const deadline = AbortSignal.timeout(USPS_REQUEST_TIMEOUT_MS);
-    res = await fetch(url, {
-      ...init,
-      signal: init.signal ? AbortSignal.any([init.signal, deadline]) : deadline,
-    });
-  } catch (error) {
-    if (
-      error instanceof Error
-      && (error.name === "AbortError" || error.name === "TimeoutError")
-    ) {
-      throw new USPSRequestTimeoutError(error);
-    }
-    throw error;
-  }
-  const text = await res.text();
-  let payload: unknown = null;
-  if (text) {
-    try {
-      payload = JSON.parse(text);
-    } catch {
-      payload = text;
-    }
-  }
-
-  if (!res.ok) {
-    throw new Error(typeof payload === "string" ? payload : JSON.stringify(payload));
-  }
-
-  return payload;
-}
-
-async function getUspsAccessToken(): Promise<string | null> {
-  const clientId = process.env.USPS_CLIENT_ID;
-  const clientSecret = process.env.USPS_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) return null;
-
-  if (uspsAccessToken && uspsAccessToken.expiresAt > Date.now() + 60_000) {
-    return uspsAccessToken.token;
-  }
-
-  const tokenData = await fetchJson("https://apis.usps.com/oauth2/v3/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      grant_type: "client_credentials",
-      client_id: clientId,
-      client_secret: clientSecret,
-    }),
-  }) as { access_token?: string; expires_in?: number };
-
-  if (!tokenData.access_token) return null;
-
-  uspsAccessToken = {
-    token: tokenData.access_token,
-    expiresAt: Date.now() + (tokenData.expires_in ?? 300) * 1000,
-  };
-
-  return uspsAccessToken.token;
-}
-
-function mapUspsTrackingSnapshot(trackData: {
-  statusCategory?: string;
-  status?: string;
-  statusSummary?: string;
-  trackingEvents?: USPSEvent[];
-}): ShipmentTrackingSnapshot {
-  return {
-    status: trackData.statusCategory ?? trackData.status ?? null,
-    statusSummary: trackData.statusSummary ?? null,
-    events: (trackData.trackingEvents ?? []).slice(0, 10).map((event) => ({
-      message: event.eventType ?? null,
-      datetime: event.eventTimestamp ?? null,
-    })),
-  };
-}
-
-export async function fetchUspsTrackingSnapshot(
-  trackingNumber: string,
-): Promise<ShipmentTrackingSnapshot | null> {
-  try {
-    const accessToken = await getUspsAccessToken();
-    if (!accessToken) return null;
-
-    const trackData = await fetchJson(
-      `https://apis.usps.com/tracking/v3/tracking/${encodeURIComponent(trackingNumber)}?expand=DETAIL`,
-      { headers: { Authorization: `Bearer ${accessToken}` } },
-    ) as {
-      statusCategory?: string;
-      status?: string;
-      statusSummary?: string;
-      trackingEvents?: USPSEvent[];
-    };
-
-    return mapUspsTrackingSnapshot(trackData);
-  } catch {
-    return null;
-  }
 }
 
 export async function getOrderTracking(
@@ -209,66 +69,10 @@ export async function getOrderTracking(
       }));
     });
 
-    const uspsShipment = shipments.find(
-      (shipment) => shipment.tracking_number && isUSPSCarrier(shipment.tracking_company)
-    );
-
-    if (!uspsShipment?.tracking_number) {
-      return toolOk(JSON.stringify({
-        shipments,
-        note: "Live tracking events are only available for USPS shipments. Use each carrier tracking URL for carrier updates.",
-      }));
-    }
-
-    let accessToken: string | null;
-    try {
-      accessToken = await getUspsAccessToken();
-    } catch {
-      return toolOk(JSON.stringify({
-        shipments,
-        note: "Live tracking unavailable - USPS authentication failed.",
-      }));
-    }
-
-    if (!accessToken) {
-      return toolOk(JSON.stringify({
-        shipments,
-        note: "Live tracking unavailable - USPS API is not configured.",
-      }));
-    }
-
-    try {
-      const trackData = await fetchJson(
-        `https://apis.usps.com/tracking/v3/tracking/${encodeURIComponent(uspsShipment.tracking_number)}?expand=DETAIL`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      ) as {
-        statusCategory?: string;
-        status?: string;
-        statusSummary?: string;
-        trackingEvents?: USPSEvent[];
-      };
-
-      const liveTracking = mapUspsTrackingSnapshot(trackData);
-
-      return toolOk(JSON.stringify({
-        shipments,
-        live_usps_tracking: {
-          tracking_number: uspsShipment.tracking_number,
-          status: liveTracking.status ?? uspsShipment.shipment_status ?? uspsShipment.fulfillment_status,
-          status_summary: liveTracking.statusSummary,
-          events: (trackData.trackingEvents ?? []).slice(0, 10).map((event) => ({
-            message: event.eventType ?? null,
-            datetime: event.eventTimestamp ?? null,
-            location: [event.eventCity, event.eventState, event.eventZIP].filter(Boolean).join(", ") || null,
-          })),
-        },
-      }));
-    } catch {
-      return toolOk(JSON.stringify({
-        shipments,
-        note: "Live tracking lookup failed - USPS data unavailable.",
-      }));
-    }
+    return toolOk(JSON.stringify({
+      shipments,
+      note: "This is Shopify's fulfillment record. There are no live carrier scan events here - open each tracking_url for the carrier's own updates.",
+    }));
   } catch (err) {
     return toolError(formatShopifyToolError("could not fetch fulfillments", err));
   }

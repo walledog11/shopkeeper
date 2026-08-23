@@ -129,7 +129,6 @@ Optional:
 - `INSTAGRAM_WEBHOOK_APP_SECRET` only when the dashboard's local-development webhook proxy is used;
   set it to the parent Meta app secret that signs webhook deliveries.
 - `TELEGRAM_BOT_USERNAME` for the operator-channel deep link in the dashboard.
-- `USPS_CLIENT_ID`, `USPS_CLIENT_SECRET` if direct USPS tracking is ever reintroduced.
 
 ### Gateway Required At Production Boot
 

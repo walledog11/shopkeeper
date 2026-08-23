@@ -66,6 +66,7 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toMatch(/not fulfilled/i);
     expect(prompt).toContain('get_order_tracking');
     expect(prompt).toMatch(/fulfilled or partially fulfilled/i);
+    expect(prompt).toMatch(/cannot retrieve carrier scan history, delivery events, or delivery exceptions/i);
     expect(prompt).toMatch(/Fulfillment by itself is not a reason to fetch tracking/i);
   });
 
@@ -360,6 +361,8 @@ describe('AGENT_TOOLS', () => {
     expect(getOrders?.description).toContain('get_order_tracking');
 
     expect(getTracking?.description).toMatch(/fulfilled or partially fulfilled/i);
+    expect(getTracking?.description).toMatch(/does not return carrier scan events/i);
+    expect(getTracking?.description).toMatch(/tracking URL/i);
     expect(getTracking?.description).toMatch(/Fulfillment by itself is not a reason/i);
     expect(getTracking?.description).toMatch(/unfulfilled orders/i);
   });

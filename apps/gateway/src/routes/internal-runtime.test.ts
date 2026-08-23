@@ -23,7 +23,6 @@ describe('GET /internal/runtime-flags', () => {
   beforeEach(() => {
     vi.stubEnv('ORDER_RISK_MONITOR_ENABLED', '1');
     vi.stubEnv('RETURN_LIFECYCLE_MONITOR_ENABLED', '0');
-    vi.stubEnv('DELIVERY_EXCEPTION_MONITOR_ENABLED', 'true');
     vi.stubEnv('POST_RESOLUTION_FOLLOWUP_MONITOR_ENABLED', 'false');
   });
 
@@ -46,7 +45,6 @@ describe('GET /internal/runtime-flags', () => {
       monitors: {
         orderRisk: true,
         returnLifecycle: false,
-        deliveryException: true,
         postResolutionFollowUp: false,
       },
     });

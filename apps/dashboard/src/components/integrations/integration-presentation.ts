@@ -23,7 +23,6 @@ export interface IntegrationDeploymentFlags {
 
 export type IntegrationAvailability =
   | { state: "available"; label: null }
-  | { state: "private-beta"; label: "Private beta" }
   | { state: "coming-soon"; label: "Coming soon" }
   | { state: "not-configured"; label: "Connect" }
 
@@ -77,9 +76,6 @@ function availabilityFor(
       ? { state: "available", label: null }
       : { state: "not-configured", label: "Connect" }
   }
-  if (definition.kind === "oauth" && definition.availabilityFlag === "instagram" && !flags.instagramIntegrationEnabled) {
-    return { state: "private-beta", label: "Private beta" }
-  }
   if (definition.kind === "oauth" && definition.availabilityFlag === "tiktok-shop" && !flags.tiktokShopConfigured) {
     return { state: "coming-soon", label: "Coming soon" }
   }
@@ -87,9 +83,6 @@ function availabilityFor(
 }
 
 function descriptionFor(definition: IntegrationDefinition, availability: IntegrationAvailability): string {
-  if (definition.id === "instagram" && availability.state === "private-beta") {
-    return "Instagram DM connections are currently limited to the private beta."
-  }
   if (definition.id === "tiktok-shop" && availability.state === "coming-soon") {
     return "Buyer messages from your TikTok Shop, answered in the same inbox. Not open yet — we will turn it on for you when it is."
   }

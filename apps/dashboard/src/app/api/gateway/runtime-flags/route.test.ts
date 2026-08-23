@@ -40,7 +40,6 @@ describe("GET /api/gateway/runtime-flags", () => {
       monitors: {
         orderRisk: true,
         returnLifecycle: false,
-        deliveryException: true,
         postResolutionFollowUp: false,
       },
     }), { status: 200 }));
@@ -53,7 +52,6 @@ describe("GET /api/gateway/runtime-flags", () => {
       monitors: {
         orderRisk: true,
         returnLifecycle: false,
-        deliveryException: true,
         postResolutionFollowUp: false,
       },
     });

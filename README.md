@@ -264,7 +264,6 @@ Optional dashboard variables:
 - `INSTAGRAM_WEBHOOK_APP_SECRET` — parent Meta app signing secret, only needed when using the local dashboard webhook proxy
 - `TELEGRAM_BOT_USERNAME` — internal test-transport deep link
 - `IMESSAGE_LINE_HANDLE` — platform iMessage handle merchants text to bind (dashboard); enables Integrations + onboarding connect UX
-- `USPS_CLIENT_ID`, `USPS_CLIENT_SECRET` — direct USPS tracking lookup
 
 ### Gateway (Railway)
 Required at production boot:

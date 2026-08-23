@@ -51,16 +51,12 @@ export default function IntegrationCard({
     )
   }
   const availabilityBlocksCard = availability.state !== "available"
-    && !(availability.state === "private-beta" && model.isConnected)
 
   return (
     <div className="h-full">
       <div id={definition.id} className={CARD_SHELL}>
         <IntegrationCardHeader config={definition} />
         <p className={CARD_DESCRIPTION}>{definition.description}</p>
-        {model.isConnected && model.selectedConnection?.isDefaultEmail ? (
-          <p className="text-xs font-medium text-emerald-600/90">Default for new emails</p>
-        ) : null}
 
         <div className={CARD_ACTIONS}>
           {availabilityBlocksCard ? (

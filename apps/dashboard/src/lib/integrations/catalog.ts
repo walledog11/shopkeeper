@@ -35,7 +35,7 @@ export interface OAuthIntegrationDefinition extends IntegrationDefinitionBase {
     successCopy: string
     reauthorizePath?: (integration: Integration) => string | null
   }
-  availabilityFlag?: "instagram" | "tiktok-shop"
+  availabilityFlag?: "tiktok-shop"
   matches: (integration: Integration) => boolean
 }
 
@@ -175,7 +175,6 @@ export const INTEGRATION_DEFINITIONS: IntegrationDefinition[] = [
       analyticsPlatform: "ig_dm",
       successCopy: "Instagram connected.",
     },
-    availabilityFlag: "instagram",
     matches: (integration) => integration.platform === "ig_dm",
   },
   {

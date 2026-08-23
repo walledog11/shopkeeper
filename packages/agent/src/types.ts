@@ -89,10 +89,6 @@ export interface OrgSettings {
   // Omit or null to disable low-stock lines.
   lowStockThreshold?: number | null;
 
-  // Proactive shipping monitor — watch USPS tracking for stalled shipments and
-  // delivery exceptions. Requires DELIVERY_EXCEPTION_MONITOR_ENABLED on the gateway.
-  deliveryExceptionWatchEnabled?: boolean;
-
   // Post-resolution follow-up (B5) — nudge the operator to check in a few days
   // after a refund/exchange ticket closes. Requires
   // POST_RESOLUTION_FOLLOWUP_MONITOR_ENABLED on the gateway.

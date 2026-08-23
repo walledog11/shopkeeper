@@ -72,7 +72,7 @@ describe("getOrderTracking", () => {
       expect.objectContaining({ tracking_number: "1Z-ONE", tracking_url: "https://ups.example/one" }),
       expect.objectContaining({ tracking_number: "1Z-TWO", tracking_url: "https://ups.example/one" }),
     ]);
-    expect(payload.note).toContain("only available for USPS");
+    expect(payload.note).toContain("tracking_url");
   });
 
   it("preserves a fulfillment with no tracking number", async () => {
@@ -93,93 +93,25 @@ describe("getOrderTracking", () => {
     });
   });
 
-  it("reports missing USPS credentials without attempting authentication", async () => {
+  // The USPS client this tool used to call is gone. One Shopify request, and no
+  // second hop to a carrier — a USPS shipment is now read exactly like a UPS one.
+  it("makes exactly one request and never calls a carrier API", async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
       fulfillments: [fulfillment()],
     }));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await getOrderTracking({ order_id: "123" }, ctx);
-
-    expect(JSON.parse(result.message).note).toContain("USPS API is not configured");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("handles USPS authentication and tracking failures as non-fatal fallbacks", async () => {
-    vi.stubEnv("USPS_CLIENT_ID", "client");
-    vi.stubEnv("USPS_CLIENT_SECRET", "secret");
-    const authFailure = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ fulfillments: [fulfillment()] }))
-      .mockResolvedValueOnce(jsonResponse({ error: "invalid_client" }, 401));
-    vi.stubGlobal("fetch", authFailure);
-
-    const authResult = await getOrderTracking({ order_id: "123" }, ctx);
-    expect(JSON.parse(authResult.message).note).toContain("USPS authentication failed");
-
-    const trackingFailure = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ fulfillments: [fulfillment()] }))
-      .mockResolvedValueOnce(jsonResponse({ access_token: "usps-token", expires_in: 0 }))
-      .mockResolvedValueOnce(jsonResponse({ error: "unavailable" }, 503));
-    vi.stubGlobal("fetch", trackingFailure);
-
-    const trackingResult = await getOrderTracking({ order_id: "124" }, ctx);
-    expect(JSON.parse(trackingResult.message).note).toContain("USPS data unavailable");
-  });
-
-  it("maps USPS events and reuses a valid access token", async () => {
-    vi.stubEnv("USPS_CLIENT_ID", "cache-client");
-    vi.stubEnv("USPS_CLIENT_SECRET", "cache-secret");
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ fulfillments: [fulfillment()] }))
-      .mockResolvedValueOnce(jsonResponse({ access_token: "cached-token", expires_in: 300 }))
-      .mockResolvedValueOnce(jsonResponse({
-        statusCategory: "In Transit",
-        statusSummary: "Moving through network",
-        trackingEvents: [{
-          eventType: "Arrived at facility",
-          eventTimestamp: "2026-06-27T10:00:00Z",
-          eventCity: "Los Angeles",
-          eventState: "CA",
-          eventZIP: "90001",
-        }],
-      }))
-      .mockResolvedValueOnce(jsonResponse({ fulfillments: [fulfillment({ tracking_number: "94002" })] }))
-      .mockResolvedValueOnce(jsonResponse({ status: "Delivered", trackingEvents: [] }));
-    vi.stubGlobal("fetch", fetchMock);
-
-    const first = await getOrderTracking({ order_id: "123" }, ctx);
-    const second = await getOrderTracking({ order_id: "124" }, ctx);
-
-    expect(JSON.parse(first.message).live_usps_tracking).toMatchObject({
-      status: "In Transit",
-      events: [{
-        message: "Arrived at facility",
-        datetime: "2026-06-27T10:00:00Z",
-        location: "Los Angeles, CA, 90001",
-      }],
-    });
-    expect(JSON.parse(second.message).live_usps_tracking.status).toBe("Delivered");
-    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/oauth2/v3/token"))).toHaveLength(1);
-    expect(fetchMock.mock.calls.at(-1)?.[1]).toMatchObject({
-      headers: { Authorization: "Bearer cached-token" },
-      signal: expect.any(AbortSignal),
-    });
-  });
-
-  it("bounds USPS calls and degrades a deadline to a non-fatal tracking fallback", async () => {
-    vi.stubEnv("USPS_CLIENT_ID", "timeout-client");
-    vi.stubEnv("USPS_CLIENT_SECRET", "timeout-secret");
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ fulfillments: [fulfillment()] }))
-      .mockRejectedValueOnce(new DOMException("timed out", "TimeoutError"));
-    vi.stubGlobal("fetch", fetchMock);
-
-    const result = await getOrderTracking({ order_id: "125" }, ctx);
+    const payload = JSON.parse(result.message);
 
     expect(result.status).toBe("ok");
-    expect(JSON.parse(result.message).note).toMatch(/USPS (authentication failed|data unavailable)/);
-    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
-      signal: expect.any(AbortSignal),
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("test-store.myshopify.com");
+    expect(payload).not.toHaveProperty("live_usps_tracking");
+    expect(payload.shipments[0]).toMatchObject({
+      tracking_number: "9400111899223856928499",
+      tracking_company: "USPS",
+      shipment_status: "in_transit",
     });
   });
 

@@ -98,7 +98,7 @@ export const ORDER_TOOL_DEFINITIONS = [
   defineTool({
     name: "get_order_tracking",
     description:
-      "Fetch live fulfillment and tracking details for a Shopify order. Returns tracking number, carrier, shipment status, estimated delivery date, and the full scan event timeline (including exceptions like return to sender, delivery attempt failed, weather delay, etc.). Use this only when the order is fulfilled or partially fulfilled AND someone explicitly needs tracking details such as a tracking number, carrier scan, delivery event, or delivery exception. Fulfillment by itself is not a reason to call this tool. Do not use it for unfulfilled orders or basic status checks that can be answered from get_shopify_orders.",
+      "Fetch the fulfillment and tracking details Shopify holds for an order: tracking number, carrier, shipment status, and the carrier's tracking URL. It does not return carrier scan events - if someone needs the movement history, the tracking URL is where it lives. Use this only when the order is fulfilled or partially fulfilled AND someone explicitly needs tracking details such as a tracking number or carrier link. Fulfillment by itself is not a reason to call this tool. Do not use it for unfulfilled orders or basic status checks that can be answered from get_shopify_orders.",
     fields: {
       order_id: stringArg("Shopify order ID (numeric, e.g. '5678901234'). Use the id field from the orders context or from get_order_by_name.", { required: true }),
     },
