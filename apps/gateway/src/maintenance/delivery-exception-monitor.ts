@@ -15,14 +15,6 @@ import {
 } from '@shopkeeper/agent/shopify';
 import { isShopifyIntegrationSweepable } from '@shopkeeper/agent/shopify/integration-health';
 import logger from '../logger.js';
-import { JOB, QUEUE } from '../constants.js';
-import {
-  createMaintenanceQueue,
-  createMaintenanceWorker,
-  ONE_HOUR_MS,
-  scheduleRepeatableJob,
-  type MaintenanceJobRegistration,
-} from './registration.js';
 import {
   pushDeliveryExceptionApprovalPlan,
   resolveDeliveryExceptionThread,
@@ -213,23 +205,3 @@ export async function runDeliveryExceptionMonitor(
     issuesNotified,
   };
 }
-
-export const registerDeliveryExceptionMaintenanceJob: MaintenanceJobRegistration = async (context) => {
-  if (!carrierTrackingProvider) {
-    logger.warn(
-      {},
-      '[DeliveryExceptionMonitor] not scheduling the hourly scan: no carrier tracking provider',
-    );
-    return { workers: [], queues: [] };
-  }
-
-  const queue = createMaintenanceQueue(context, QUEUE.DELIVERY_EXCEPTION);
-  await scheduleRepeatableJob(queue, JOB.DELIVERY_EXCEPTION_SCAN, JOB.DELIVERY_EXCEPTION_ID, ONE_HOUR_MS);
-
-  const worker = createMaintenanceWorker(context, QUEUE.DELIVERY_EXCEPTION, () => runDeliveryExceptionMonitor(), {
-    label: 'DeliveryException',
-    failureQueue: QUEUE.DELIVERY_EXCEPTION,
-  });
-
-  return { workers: [worker], queues: [queue] };
-};
