@@ -23,6 +23,11 @@ import { DEFAULT_MAX_ITERATIONS } from "./run-policy.js";
 import { resolveAgentSettings } from "./settings.js";
 import { enforceSpendCap } from "./spend.js";
 import { selectAgentTools } from "./tools/registry/index.js";
+import {
+  NAMESPACE_MISS_TOOL_NAME,
+  namespaceMissReason as resolveNamespaceMissReason,
+  selectPlanningTools,
+} from "./planner-tool-selection.js";
 import type { AgentPlan, OrgSettings, PlanRoutingEvidence, ProducedPlanSignalCode } from "./types.js";
 import { createModelUsageMetrics, hashInstructionForLog } from "./usage.js";
 import {
@@ -65,12 +70,21 @@ export async function planAgent(
   // would be refused for, so the shopper is never promised a lookup that cannot
   // happen.
   const storefrontTools = storefrontToolNames(ctx);
-  let tools = storefrontTools
+  let availableTools = storefrontTools
     ? selectAgentTools(settings, storefrontTools)
     : selectAgentTools(settings).filter((tool) => !isGuestOnlyTool(tool.name));
   if (merchantAnswerReplan) {
-    tools = tools.filter(tool => tool.name !== "ask_operator");
+    availableTools = availableTools.filter(tool => tool.name !== "ask_operator");
   }
+  const toolSelection = selectPlanningTools({
+    availableTools,
+    classifierSignals: ctx.classifierSignals,
+    requestSourceMessageId: ctx.thread.requestSourceMessageId,
+    latestCustomerMessageId: ctx.thread.latestCustomerMessageId,
+    operatorMode,
+    storefrontMode: Boolean(storefrontTools),
+    merchantAnswerReplan,
+  });
 
   await enforceSpendCap(ctx.orgId, resolvedSettings);
 
@@ -80,8 +94,11 @@ export async function planAgent(
     purpose: "agent_plan",
     channelType: ctx.thread.channelType,
     messageCount: baseMessages.length,
-    toolCount: tools.length,
-    tools: tools.map(tool => tool.name),
+    toolCount: toolSelection.tools.length,
+    tools: toolSelection.tools.map(tool => tool.name),
+    toolSelectionBucket: toolSelection.bucket,
+    toolSelectionReason: toolSelection.reason,
+    toolSelectionNarrowed: toolSelection.narrowed,
     instructionLength: instruction.length,
     modelInstructionLength: modelInstruction.length,
     contextBudgetMode,
@@ -95,7 +112,7 @@ export async function planAgent(
   // turns to this array in place, so handing the same one to a re-plan would
   // replay the discarded attempt's half-finished turns into the next model and
   // the API rejects the sequence ("tool_use ids without tool_result blocks").
-  const runLoop = (model: string) => runAgentLoop({
+  const runLoop = (model: string, tools = toolSelection.tools) => runAgentLoop({
     ctx,
     mode: "capture",
     messages: [...baseMessages],
@@ -107,10 +124,37 @@ export async function planAgent(
     settings,
     usageTotals,
     captureReprompt: !operatorMode,
+    captureStopToolNames: tools.some((tool) => tool.name === NAMESPACE_MISS_TOOL_NAME)
+      ? [NAMESPACE_MISS_TOOL_NAME]
+      : undefined,
   });
 
   const tier = decidePlannerTier(ctx, { operatorMode });
   let loop = await runLoop(tier.useLowTier ? pickModel("agent_plan_low_risk") : pickModel("agent_run"));
+  let namespaceMiss = false;
+  let namespaceMissReason: ReturnType<typeof resolveNamespaceMissReason> = null;
+
+  const widenNamespace = async (reason: NonNullable<typeof namespaceMissReason>) => {
+    namespaceMiss = true;
+    namespaceMissReason = reason;
+    logger.info({
+      orgId: ctx.orgId,
+      threadId: ctx.thread.id,
+      purpose: "agent_plan",
+      toolSelectionBucket: toolSelection.bucket,
+      namespaceMiss: true,
+      namespaceMissReason,
+      instructionHash,
+    }, "[agent:plan] namespace miss — re-planning with full tool registry");
+    return runLoop(pickModel("agent_run"), availableTools);
+  };
+
+  const initialNamespaceMiss = toolSelection.narrowed
+    ? resolveNamespaceMissReason(loop.rawToolCalls)
+    : null;
+  if (initialNamespaceMiss) {
+    loop = await widenNamespace(initialNamespaceMiss);
+  }
 
   // The cheap tier is trusted to reply, ask, or escalate — nothing else. If it
   // proposed real work, throw the plan away and re-plan on the judgment tier
@@ -118,7 +162,7 @@ export async function planAgent(
   // nothing was executed, so the discarded plan has no side effects; the cost of
   // being wrong is one wasted Haiku call.
   let tierDowngraded = tier.useLowTier;
-  if (tier.useLowTier && !isLowRiskPlanOutcome(loop.rawToolCalls)) {
+  if (!namespaceMiss && tier.useLowTier && !isLowRiskPlanOutcome(loop.rawToolCalls)) {
     logger.info({
       orgId: ctx.orgId,
       threadId: ctx.thread.id,
@@ -128,7 +172,14 @@ export async function planAgent(
     }, "[agent:plan] low-tier plan proposed non-trivial work — re-planning on judgment tier");
     tierDowngraded = false;
     loop = await runLoop(pickModel("agent_run"));
+    const judgmentNamespaceMiss = toolSelection.narrowed
+      ? resolveNamespaceMissReason(loop.rawToolCalls)
+      : null;
+    if (judgmentNamespaceMiss) {
+      loop = await widenNamespace(judgmentNamespaceMiss);
+    }
   }
+  if (namespaceMiss) tierDowngraded = false;
 
   // Validate the model's captured proposal exactly as authored. An invalid plan
   // stays intact so the merchant can see what failed and routing cannot hide the
@@ -211,6 +262,13 @@ export async function planAgent(
     // being downgraded, and watch plannerTierDowngraded against reply quality.
     plannerTierReason: tier.reason,
     plannerTierDowngraded: tierDowngraded,
+    toolSelectionBucket: toolSelection.bucket,
+    toolSelectionReason: toolSelection.reason,
+    toolSelectionNarrowed: toolSelection.narrowed,
+    toolSelectionInitialCount: toolSelection.tools.length,
+    toolSelectionExpandedCount: namespaceMiss ? availableTools.length : null,
+    namespaceMiss,
+    namespaceMissReason,
     readToolCalls: loop.readBlocks.map(block => block.name),
     rawToolCallCount: rawToolCalls.length,
     rawToolCalls: rawToolCalls.map(toolCall => toolCall.name),

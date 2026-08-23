@@ -1,7 +1,7 @@
 # Shopkeeper — Capability Expansion Plan (v2)
 
 **Status:** spec for execution
-**Last reconciled against the tree:** 2026-08-22
+**Last reconciled against the tree:** 2026-08-23
 **Position:** downstream of the internal audit of 2026-08-21 ("Agent Pipeline Audit"). That document owns Phases 0–5. This one owns Phases A and 6–10.
 **Intended consumer:** Claude Code, one phase per session
 **Supersedes:** v1 of this document, which was written from a third-party architecture summary before the internal audit existed. Several v1 tasks were wrong and are formally retracted in §1.
@@ -55,6 +55,8 @@ Recorded explicitly so no session has to guess.
 - Expose `namespace_miss` rate as a metric.
 
 That rate is the tuning signal for the intent→tools map, and given classifier non-determinism it is also the thing that tells you whether 5.2 is safe to leave on. Also: escalate, ask-merchant, and `send_reply` must be present in **every** customer-facing bucket. The agent must never be unable to escalate or reply.
+
+**Implemented locally 2026-08-23; paid gate pending.** `planner-tool-selection.ts` uses aligned classifier intents, fails open to the full set for missing/stale/ambiguous classifications, and leaves operator/storefront/merchant-answer paths unchanged. Narrowed buckets carry the three required control tools. A planning-only typed widening signal plus empty/incomplete-plan detection permits one clean judgment-tier retry against the full set. Structured completion logs expose the original bucket and a `namespaceMiss` boolean/reason for rate aggregation. Deterministic schema measurements show −67% for order-status and −81% for policy buckets, including the widening tool. The internal-audit 5.2 checkbox remains open until the exact-SHA release workflow passes.
 
 ### Deferred
 
@@ -380,7 +382,7 @@ Tools: `create_discount` (mandatory `endsAt`), `list_active_discounts`, `end_dis
 | 3 | One autonomy function | internal audit | 1 | **complete** — implementation and paid behavior gate passed |
 | 4 | Structured rendering | internal audit | — | **complete** — live delivery/review and feedback corrections passed |
 | 6 | Tool consolidation | this doc | 1–3 | **6.2/6.3 complete 2026-08-23; 6.1 deferred** — premise wrong on tracking, revisit with 5.2 |
-| 5 | Cost & housekeeping | internal audit | 6 recommended | 5.1 before 5.2; 5.2 takes §1.1 |
+| 5 | Cost & housekeeping | internal audit | 6 recommended | **5.2 implemented locally; exact-SHA paid gate pending.** Includes §1.1 typed namespace-miss fallback; 5.3 remains open. |
 | 7 | Bounded replan | this doc | 2, 3 | required before 10 |
 | 8 | Preference memory | this doc | 4 | **unblocked** — Phase 4 complete; the moat; blocks 9.3 |
 | 9 | Multi-carrier shipment resolution | this doc | 5.2 for tool bucketing/9.2; 8 for remedy policy | A.1 did not authorize promotion |

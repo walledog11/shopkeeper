@@ -91,6 +91,10 @@ export interface RunAgentLoopParams {
   // Support planning sets this; operator planning does not (no customer to
   // reply to).
   captureReprompt?: boolean;
+  // Planning-only control tools can end a narrowed attempt without becoming an
+  // executable plan. The planner consumes the signal and retries from a clean
+  // transcript with a wider registry.
+  captureStopToolNames?: readonly string[];
 }
 
 // Executes reads for real (preserving the structured ToolStatus that plan
@@ -106,6 +110,7 @@ async function handleCaptureBlocks(
     readBlocks: Anthropic.ToolUseBlock[];
     readResults: Map<string, string>;
     readStatus: Map<string, ToolStatus>;
+    captureStopToolNames?: readonly string[];
   },
 ): Promise<boolean> {
   const reads = blocks.filter((b) => TOOL_CATEGORIES[b.name] === "read");
@@ -124,7 +129,9 @@ async function handleCaptureBlocks(
     state.rawToolCalls.push({ id: b.id, name: b.name, input: b.input });
   }
 
-  const terminalReached = blocks.some((b) => TERMINAL_TOOL_NAMES.has(b.name));
+  const terminalReached = blocks.some((b) => (
+    TERMINAL_TOOL_NAMES.has(b.name) || state.captureStopToolNames?.includes(b.name)
+  ));
 
   // Only feed results back when the loop will continue; a terminal ends the turn.
   if (!terminalReached) {
@@ -243,6 +250,7 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
         readBlocks,
         readResults,
         readStatus,
+        captureStopToolNames: params.captureStopToolNames,
       });
       if (terminalReached) return done("terminal_captured", finalText, i + 1);
       return iterate(i + 1);

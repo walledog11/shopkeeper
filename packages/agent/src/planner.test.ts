@@ -114,6 +114,10 @@ function completeLogPayload(logger: AgentLogger) {
     rawToolCallCount: number;
     visibleStepCount: number;
     routingDecision: string | null;
+    toolSelectionBucket: string;
+    toolSelectionNarrowed: boolean;
+    namespaceMiss: boolean;
+    namespaceMissReason: string | null;
   };
 }
 
@@ -175,7 +179,7 @@ describe("planAgent capture loop", () => {
     });
   });
 
-  it("offers the full enabled registry, including send_reply, on the planning call", async () => {
+  it("offers the full enabled registry when classifier signals are unavailable", async () => {
     installAgentLogger(makeLogger());
     mockCreate.mockResolvedValueOnce(singleToolUse("send_reply", { text: "Your order is on the way." }));
 
@@ -185,6 +189,105 @@ describe("planAgent capture loop", () => {
     expect(firstCallTools).toContain("search_kb");
     expect(firstCallTools).toContain("create_refund");
     expect(firstCallTools).toContain("send_reply");
+    expect(firstCallTools).not.toContain("request_wider_tool_set");
+  });
+
+  it("narrows an aligned order-status plan and keeps all control tools", async () => {
+    const injectedLogger = makeLogger();
+    installAgentLogger(injectedLogger);
+    mockCreate.mockResolvedValueOnce(singleToolUse("send_reply", { text: "Your order is on the way." }));
+
+    await planAgent(makeCtx({
+      classifierSignals: {
+        ...classifierSignalsFor({ order_status: true }),
+        requestFacts: { ...emptyRequestFacts(), ask: "order_status" },
+      },
+      thread: {
+        ...makeCtx().thread,
+        requestSourceMessageId: "message_1",
+        latestCustomerMessageId: "message_1",
+      },
+    }), "Where is my order?");
+
+    const firstCallTools = toolNamesForCall(0);
+    expect(firstCallTools).toEqual(expect.arrayContaining([
+      "get_shopify_orders",
+      "get_order_by_name",
+      "get_order_tracking",
+      "send_reply",
+      "escalate_to_human",
+      "ask_operator",
+      "request_wider_tool_set",
+    ]));
+    expect(firstCallTools).not.toContain("create_refund");
+    expect(completeLogPayload(injectedLogger)).toMatchObject({
+      toolSelectionBucket: "order_status",
+      toolSelectionNarrowed: true,
+      namespaceMiss: false,
+    });
+  });
+
+  it("widens once from a clean transcript when the model signals a namespace miss", async () => {
+    const injectedLogger = makeLogger();
+    installAgentLogger(injectedLogger);
+    const snapshots: unknown[] = [];
+    const responses = [
+      singleToolUse(
+        "request_wider_tool_set",
+        { capability: "update customer email" },
+        "tu_widen",
+      ),
+      singleToolUse("send_reply", { text: "I can help with that." }, "tu_reply"),
+    ];
+    let callIndex = 0;
+    mockCreate.mockImplementation(async (params: { messages: unknown }) => {
+      snapshots.push(structuredClone(params.messages));
+      return responses[Math.min(callIndex++, responses.length - 1)];
+    });
+
+    const plan = await planAgent(makeCtx({
+      classifierSignals: {
+        ...classifierSignalsFor({ order_status: true }),
+        requestFacts: { ...emptyRequestFacts(), ask: "order_status" },
+      },
+    }), "Help with the latest request");
+
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+    expect(toolNamesForCall(0)).toContain("request_wider_tool_set");
+    expect(toolNamesForCall(0)).not.toContain("update_shopify_customer_info");
+    expect(toolNamesForCall(1)).not.toContain("request_wider_tool_set");
+    expect(toolNamesForCall(1)).toContain("update_shopify_customer_info");
+    expect(snapshots[1]).toEqual(snapshots[0]);
+    expect(plan.rawToolCalls.map((call) => call.name)).toEqual(["send_reply"]);
+    expect(completeLogPayload(injectedLogger)).toMatchObject({
+      toolSelectionBucket: "order_status",
+      namespaceMiss: true,
+      namespaceMissReason: "model_signal",
+    });
+  });
+
+  it("widens once after an empty narrowed plan", async () => {
+    const injectedLogger = makeLogger();
+    installAgentLogger(injectedLogger);
+    mockCreate
+      .mockResolvedValueOnce(endTurn("I need another capability."))
+      .mockResolvedValueOnce(endTurn("I still need another capability."))
+      .mockResolvedValueOnce(singleToolUse("send_reply", { text: "I can help with that." }, "tu_reply"));
+
+    await planAgent(makeCtx({
+      classifierSignals: {
+        ...classifierSignalsFor({ policy_question: true }),
+        requestFacts: { ...emptyRequestFacts(), ask: "policy_question" },
+      },
+    }), "Help with the latest request");
+
+    expect(mockCreate).toHaveBeenCalledTimes(3);
+    expect(toolNamesForCall(2)).not.toContain("request_wider_tool_set");
+    expect(toolNamesForCall(2)).toContain("create_refund");
+    expect(completeLogPayload(injectedLogger)).toMatchObject({
+      namespaceMiss: true,
+      namespaceMissReason: "empty_plan",
+    });
   });
 
   it("uses a 4096 max_tokens budget on planning calls", async () => {
