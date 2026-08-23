@@ -142,6 +142,15 @@ describe('postal redaction', () => {
     expect(redacted).toContain('[address redacted]');
   });
 
+  it('preserves the separator after collapsing adjacent redaction markers', () => {
+    const redacted = redactPostalAddresses(
+      'I can update it to 123 Main Street, Apartment 4, Toronto ON M5V 2T6 and confirm.',
+      calls,
+    );
+    expect(redacted).toContain('[address redacted], Toronto');
+    expect(redacted).not.toContain('[address redacted]Toronto');
+  });
+
   it('redacts address fields structurally in tool input display copies', () => {
     expect(redactToolInputForDisplay(calls[0]!.input)).toEqual({
       address1: '[address redacted]',

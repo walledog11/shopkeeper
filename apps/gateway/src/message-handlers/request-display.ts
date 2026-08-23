@@ -136,7 +136,13 @@ export function redactPostalAddresses(
   return redacted
     .replace(STREET_ADDRESS, REDACTED_ADDRESS)
     .replace(POSTAL_CODE, REDACTED_ADDRESS)
-    .replace(new RegExp(`(?:${escapeRegExp(REDACTED_ADDRESS)}[\\s,;]*){2,}`, 'gi'), REDACTED_ADDRESS);
+    .replace(
+      new RegExp(
+        `${escapeRegExp(REDACTED_ADDRESS)}(?:[\\s,;]*${escapeRegExp(REDACTED_ADDRESS)})+`,
+        'gi',
+      ),
+      REDACTED_ADDRESS,
+    );
 }
 
 export function redactToolInputForDisplay(value: unknown): unknown {
