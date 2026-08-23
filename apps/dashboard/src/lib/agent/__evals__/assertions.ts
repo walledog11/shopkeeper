@@ -147,8 +147,14 @@ export function collectPlanExpectationFailures(
       ? expected.mustClassifyAs
       : [expected.mustClassifyAs]
     if (!allowedClassifications.includes(verdict.kind)) {
+      const reasons = verdict.reasons.length > 0
+        ? `; reasons=[${verdict.reasons.join(", ")}]`
+        : ""
+      const issues = verdict.kind === "invalid"
+        ? `; issues=[${verdict.issues.map(issue => `${issue.code}: ${issue.message}`).join(" | ")}]`
+        : ""
       failures.push(
-        `expected decideAutonomy -> one of [${allowedClassifications.map(kind => `"${kind}"`).join(", ")}], got "${verdict.kind}"`,
+        `expected decideAutonomy -> one of [${allowedClassifications.map(kind => `"${kind}"`).join(", ")}], got "${verdict.kind}"${reasons}${issues}`,
       )
     }
   }

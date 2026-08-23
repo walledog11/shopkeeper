@@ -16,10 +16,24 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'Full drift run or three-run baseline regeneration'
+        description: 'Targeted diagnosis, full drift run, or three-run baseline regeneration'
         type: choice
-        options: [full, baseline]
+        options: [targeted, full, baseline]
         default: full
+      fixtures:
+        description: 'Comma-separated fixture IDs (required for targeted mode)'
+        type: string
+        default: ''
+      repeats:
+        description: 'Targeted repeats per fixture'
+        type: choice
+        options: ['1', '2', '3']
+        default: '1'
+      judges:
+        description: 'Enable semantic judges for targeted mode'
+        type: choice
+        options: ['off', 'on']
+        default: 'off'
 
 # `pull_request` fires on `synchronize`, so without this every push to an open PR
 # starts another ~$0.48 gate and lets the superseded one run to completion —
@@ -36,6 +50,56 @@ permissions:
   contents: write
 
 jobs:
+  targeted-dashboard:
+    name: Targeted dashboard eval diagnosis
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'targeted'
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      EVAL_SUITE: full
+      EVAL_FIXTURE: ${{ inputs.fixtures }}
+      EVAL_REPEATS: ${{ inputs.repeats }}
+      RUN_JUDGE_EVALS: ${{ inputs.judges == 'on' && '1' || '0' }}
+      REQUIRE_MODEL_EVALS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Require fixture selection and model credentials
+        run: |
+          if [ -z "${EVAL_FIXTURE//[[:space:],]/}" ]; then
+            echo "Targeted mode requires at least one fixture ID."
+            exit 1
+          fi
+          if [ -z "$ANTHROPIC_API_KEY" ] || [ "$ANTHROPIC_API_KEY" = "test-anthropic-key" ]; then
+            echo "ANTHROPIC_API_KEY must be configured with a real key."
+            exit 1
+          fi
+      - name: Install dependencies
+        run: npm ci
+      - name: Start test services
+        run: npm run test:services:up
+      - name: Bootstrap test database
+        run: node ./scripts/test-bootstrap.mjs
+      - name: Run selected dashboard fixtures
+        run: |
+          set -o pipefail
+          npm run test:evals:fixture -w apps/dashboard 2>&1 | tee eval-output.log
+      - name: Targeted eval summary
+        if: always()
+        run: |
+          {
+            echo "## Targeted dashboard eval results"
+            echo '```'
+            grep -E '^(\[eval(:summary|:gates|:cache|:usage)?\]|  [-~])' eval-output.log || echo "(targeted summary absent)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Stop test services
+        if: always()
+        run: npm run test:services:down
+
   core-dashboard:
     name: Core dashboard eval gates
     if: github.event_name == 'pull_request'
