@@ -1,6 +1,6 @@
 {
   "id": "ask-operator-bulk-discount-gap",
-  "description": "Customer asks whether the store offers student discounts on bulk orders. There is no discount-policy KB article and no order context, so the agent has no fact to answer with and no reason to escalate - a one-line merchant answer ('yes, 10% over $500' or 'no, we don't') would finish the ticket. It must ask_operator (ask the merchant), not fabricate a policy, deflect the customer to another channel, or hard-escalate. classifyHomePlan should surface this as needs_merchant_input. (Converted from the retired advisory kb-policy-no-article fixture, whose send_reply assertion no longer matches the post-ask_operator behavior.)",
+  "description": "Customer asks whether the store offers student discounts on bulk orders. There is no discount-policy KB article and no order context, so the agent has no fact to answer with and no reason to escalate - a one-line merchant answer ('yes, 10% over $500' or 'no, we don't') would finish the ticket. It must ask_operator (ask the merchant), not fabricate a policy, deflect the customer to another channel, or hard-escalate. decideAutonomy should surface this as needs_merchant_input. (Converted from the retired advisory kb-policy-no-article fixture, whose send_reply assertion no longer matches the post-ask_operator behavior.)",
   "setup": {
     "classifierIntents": {
       "policy_question": true

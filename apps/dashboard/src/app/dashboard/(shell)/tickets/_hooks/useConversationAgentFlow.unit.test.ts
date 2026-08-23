@@ -8,11 +8,13 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import type { AgentRequestResult } from "./conversation-agent-requests"
 
 const requestMocks = vi.hoisted(() => ({
+  dismissAgentPlan: vi.fn().mockResolvedValue(undefined),
   executeApprovedAgentPlan: vi.fn(),
 }))
 
 vi.mock("./conversation-agent-requests", async (importOriginal) => ({
   ...await importOriginal<typeof import("./conversation-agent-requests")>(),
+  dismissAgentPlan: requestMocks.dismissAgentPlan,
   executeApprovedAgentPlan: requestMocks.executeApprovedAgentPlan,
 }))
 
@@ -81,6 +83,24 @@ describe("resolvePendingPlan", () => {
     }
 
     expect(resolvePendingPlan(plan, "new instruction")).toBeNull()
+  })
+
+  it("keeps a zero-step invalid proposal visible", () => {
+    const plan: AgentPlan = {
+      instruction: "original",
+      rawToolCalls: [],
+      steps: [],
+      validation: {
+        status: "invalid",
+        issues: [{ code: "invalid_tool_input", message: "A tool input is invalid." }],
+      },
+    }
+
+    expect(resolvePendingPlan(plan, "new instruction")).toMatchObject({
+      instruction: "new instruction",
+      validation: { status: "invalid" },
+    })
+    expect(planRequiresApproval(plan)).toBe(true)
   })
 })
 
@@ -225,7 +245,7 @@ describe("useConversationAgentFlow execution state", () => {
     expect(current.value?.planExecutionOutcome).toBe("partial")
     expect(current.value?.pendingPlan).toEqual(plan)
 
-    act(() => current.value?.handlePlanDismiss())
+    await act(async () => current.value?.handlePlanDismiss())
     expect(current.value?.pendingPlan).toBeNull()
 
     requestMocks.executeApprovedAgentPlan.mockResolvedValue({

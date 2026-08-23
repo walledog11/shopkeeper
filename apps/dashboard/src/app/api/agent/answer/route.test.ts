@@ -4,6 +4,7 @@ const {
   buildContext,
   clearPlan,
   createMessage,
+  decideAutonomy,
   findThread,
   getLatest,
   getOrg,
@@ -15,6 +16,7 @@ const {
   buildContext: vi.fn(),
   clearPlan: vi.fn(),
   createMessage: vi.fn(),
+  decideAutonomy: vi.fn(),
   findThread: vi.fn(),
   getLatest: vi.fn(),
   getOrg: vi.fn(),
@@ -57,12 +59,8 @@ vi.mock('@shopkeeper/agent/plan-cache-shape', () => ({
   extractCachedQuestion: vi.fn(() => 'What is the international shipping price?'),
   getPendingCustomerMessageId: vi.fn((messages: unknown[]) => messages.length ? 'message-1' : null),
 }));
-vi.mock('@shopkeeper/agent/plan-preview', () => ({
-  classifyHomePlan: vi.fn(() => ({
-    kind: 'approval_required',
-    question: null,
-    replyText: 'Shipping is $15.',
-  })),
+vi.mock('@shopkeeper/agent/autonomy', () => ({
+  decideAutonomy,
 }));
 vi.mock('@shopkeeper/agent/settings', () => ({
   resolveAgentSettings: vi.fn(() => ({ autonomyLevel: 'draft' })),
@@ -109,6 +107,13 @@ describe('POST /api/agent/answer', () => {
     threadUpdate.mockResolvedValue({});
     buildContext.mockResolvedValue({ thread: { id: 'thread-1' } });
     planAgent.mockResolvedValue({ instruction: 'reply', steps: [], rawToolCalls: [] });
+    decideAutonomy.mockReturnValue({
+      kind: 'quick_reply',
+      reasons: ['safe_quick_reply'],
+      toolCalls: [],
+      replyText: 'Shipping is $15.',
+      sendReplyToolCall: { id: 'reply-1', name: 'send_reply', input: { text: 'Shipping is $15.' } },
+    });
   });
 
   it('records an answer and clears a stale plan when the customer is already answered', async () => {
@@ -150,6 +155,28 @@ describe('POST /api/agent/answer', () => {
       where: { id: '11111111-1111-4111-8111-111111111111' },
       data: expect.objectContaining({ cachedPlanMessageId: 'message-1' }),
     }));
+    await expect(response.json()).resolves.toEqual({
+      kind: 'quick_reply',
+      question: null,
+      replyText: 'Shipping is $15.',
+    });
+  });
+
+  it('returns a follow-up merchant question without inventing reply text', async () => {
+    getLatest.mockResolvedValue({ id: 'message-1', senderType: 'customer' });
+    decideAutonomy.mockReturnValueOnce({
+      kind: 'needs_merchant_input',
+      reasons: ['explicit_merchant_question'],
+      question: 'Do we ship to military addresses?',
+    });
+
+    const response = await POST(request());
+
+    await expect(response.json()).resolves.toEqual({
+      kind: 'needs_merchant_input',
+      question: 'Do we ship to military addresses?',
+      replyText: null,
+    });
   });
 
   it('validates the answer before any persistence', async () => {

@@ -6,6 +6,7 @@ import { planReplyText } from "@shopkeeper/agent/plan-preview"
 import type { AgentPlan, AgentTurn, PlanExecutionOutcome, RawToolCall, Ticket } from "@/types"
 import {
   askAgentPrivately,
+  dismissAgentPlan,
   executeApprovedAgentPlan,
   fetchAgentPlan,
   planRequestErrorTurn,
@@ -53,7 +54,9 @@ export function getAgentCommandState(
 }
 
 export function resolvePendingPlan(plan: AgentPlan, instruction: string): AgentPlan | null {
-  return plan.steps.length > 0 ? { ...plan, instruction } : null
+  return plan.steps.length > 0 || plan.validation?.status === "invalid"
+    ? { ...plan, instruction }
+    : null
 }
 
 const PRIVATE_ASK_RE =
@@ -69,7 +72,8 @@ export function shouldUsePrivateComposerAsk(instruction: string): boolean {
 }
 
 export function planRequiresApproval(plan: AgentPlan): boolean {
-  return plan.steps.some(step => step.category === "action" || step.category === "communication" || step.category === "internal")
+  return plan.validation?.status === "invalid"
+    || plan.steps.some(step => step.category === "action" || step.category === "communication" || step.category === "internal")
 }
 
 interface PendingPlanState {
@@ -246,22 +250,44 @@ export function useConversationAgentFlow({
     await executeApprovedPlan(pendingPlan, approvedToolCalls)
   }
 
-  const handlePlanDismiss = () => {
-    if (!planExecutionOutcome && pendingPlan?.planId) {
+  const handlePlanDismiss = async () => {
+    if (!pendingPlan) return
+    const dismissedPlan = pendingPlan
+    if (dismissedPlan.planId) {
+      try {
+        await dismissAgentPlan(ticket.id, dismissedPlan.planId)
+      } catch (error) {
+        onAgentTurnAdd(createAgentTurn(planRequestErrorTurn(dismissedPlan.instruction, error)))
+        return
+      }
+    }
+    if (!planExecutionOutcome && dismissedPlan.planId) {
       void captureClientProductEvent({
         event: "agent_plan_decided",
         decision: "dismissed",
-        planId: pendingPlan.planId,
+        planId: dismissedPlan.planId,
       })
     }
     setPendingPlan(null)
+    await onPlanCacheUpdated?.()
   }
 
-  const handlePlanEdit = () => {
+  const handlePlanEdit = async () => {
     if (!pendingPlan) return
-    const text = planReplyText(pendingPlan)
+    const editedPlan = pendingPlan
+    if (editedPlan.planId) {
+      try {
+        await dismissAgentPlan(ticket.id, editedPlan.planId)
+      } catch (error) {
+        onAgentTurnAdd(createAgentTurn(planRequestErrorTurn(editedPlan.instruction, error)))
+        return
+      }
+    }
+    const text = editedPlan.validation?.status === "invalid" ? null : planReplyText(editedPlan)
+    if (editedPlan.validation?.status === "invalid") onReplyChange("")
     if (text) onReplyChange(text)
     setPendingPlan(null)
+    await onPlanCacheUpdated?.()
   }
 
   const handlePlanRegenerate = async () => {

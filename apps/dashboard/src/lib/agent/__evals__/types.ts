@@ -7,6 +7,8 @@ import type {
   VerifiedOrderRef,
 } from "@shopkeeper/agent/context";
 import type { ClassifierIntents } from "@shopkeeper/agent/classifier-signals";
+import type { AutonomyKind } from "@shopkeeper/agent/autonomy";
+import type { PlanValidationIssueCode } from "@shopkeeper/agent/types";
 
 export type ClassifierIntentKey = keyof ClassifierIntents;
 
@@ -77,11 +79,7 @@ export interface ExpectedAgentAction {
   mode: AgentActionMode;
 }
 
-export type ExpectedPlanClassification =
-  | "quick_reply"
-  | "needs_review"
-  | "auto_execute"
-  | "needs_merchant_input";
+export type ExpectedPlanClassification = AutonomyKind;
 
 export interface ExpectedPlan {
   mustCallTools?: string[];
@@ -90,6 +88,10 @@ export interface ExpectedPlan {
   mustNotCallTools?: string[];
   mustEscalate?: boolean;
   mustClassifyAs?: ExpectedPlanClassification | ExpectedPlanClassification[];
+  /** Require an explicitly valid planner proposal, rather than a legacy plan with no validation result. */
+  mustBeValid?: boolean;
+  /** Require an invalid proposal containing each listed validation issue code. */
+  mustBeInvalidWith?: PlanValidationIssueCode[];
   /** When true, fail if customer has actionable mutative intent and plan includes send_reply without an action tool or escalate_to_human. */
   mustIncludeActionWhenMutativeIntent?: boolean;
   replyMustInclude?: string[];

@@ -113,6 +113,8 @@ interface ActionPlanControlsProps {
     primaryNeedsCaution: boolean
     showEditTakeover: boolean
     warningsReviewed: boolean
+    planInvalid: boolean
+    invalidIssues: string[]
   }
 }
 
@@ -170,6 +172,48 @@ function ActionPlanControls({
             Dismiss
           </button>
         )}
+      </div>
+    )
+  }
+
+  if (status.planInvalid) {
+    return (
+      <div
+        className="mt-4 rounded-2xl border border-red-600/30 bg-red-600/[0.06] px-4 py-3"
+        data-testid="action-plan-invalid"
+        role="alert"
+      >
+        <p className="text-sm font-semibold text-strong">This draft cannot be approved</p>
+        <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+          Regenerate it, edit and send it yourself, or dismiss it. None of its stored actions can run.
+        </p>
+        {status.invalidIssues.length > 0 && (
+          <ul className="mt-2 list-disc space-y-1 pl-4 text-xs leading-relaxed text-muted-foreground">
+            {status.invalidIssues.map((issue, index) => <li key={`${index}:${issue}`}>{issue}</li>)}
+          </ul>
+        )}
+        <div className="mt-3 flex gap-2">
+          {onEdit && (
+            <button
+              type="button"
+              data-testid="action-plan-edit"
+              onClick={onEdit}
+              className={cn(needsYouSecondaryButtonClassName, "flex-1")}
+            >
+              Edit &amp; send myself
+            </button>
+          )}
+          {onDismiss && (
+            <button
+              type="button"
+              data-testid="action-plan-dismiss-invalid"
+              onClick={onDismiss}
+              className={cn(needsYouSecondaryButtonClassName, "flex-1")}
+            >
+              Dismiss
+            </button>
+          )}
+        </div>
       </div>
     )
   }
@@ -270,13 +314,14 @@ export default function ActionPlanCard({
     onCancelReview,
     primaryLabel,
     primaryNeedsCaution,
+    planInvalid,
     replyText,
     shopifyActionSteps,
     showReplyHero,
     state,
     toggleStep,
   } = review
-  const showEditTakeover = Boolean(onEdit && showReplyHero)
+  const showEditTakeover = Boolean(onEdit && (showReplyHero || planInvalid))
 
   const handleBodyTransitionEnd = (event: React.TransitionEvent<HTMLDivElement>) => {
     if (event.target !== event.currentTarget || event.propertyName !== "grid-template-rows") return
@@ -315,7 +360,7 @@ export default function ActionPlanCard({
               (state.collapsed && !isMobileSticky) || (state.compactHeader && !isMobileSticky) ? "opacity-0" : "opacity-100"
             }`}
           >
-            <ActionPlanBody
+            {!planInvalid && <ActionPlanBody
               actionSteps={actionSteps}
               blockingSignals={blockingSignals}
               customerName={customerName}
@@ -327,7 +372,7 @@ export default function ActionPlanCard({
               shopifyActionSteps={shopifyActionSteps}
               showReplyHero={showReplyHero}
               toggleStep={toggleStep}
-            />
+            />}
 
             <ActionPlanControls
               onApproveClick={onApproveClick}
@@ -345,6 +390,10 @@ export default function ActionPlanCard({
                 primaryNeedsCaution,
                 showEditTakeover,
                 warningsReviewed: state.warningsReviewed,
+                planInvalid,
+                invalidIssues: plan.validation?.status === "invalid"
+                  ? plan.validation.issues.map(issue => issue.message)
+                  : [],
               }}
             />
           </div>

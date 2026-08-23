@@ -221,4 +221,46 @@ describe("getHomeSummary", () => {
     expect(summary.repeatCustomers).toHaveLength(HOME_REPEAT_CUSTOMER_LIMIT)
     expect(summary.repeatCustomers.every(customer => customer.ticketCount === 3)).toBe(true)
   })
+
+  it("surfaces a zero-step invalid plan as fix-only merchant work", async () => {
+    const thread = await createThread({ createdAt: TODAY, updatedAt: TODAY })
+    const message = await addMessage(thread.id, SenderType.customer, TODAY)
+    const settings = resolveAgentSettings(null)
+    const invalidPlan: AgentPlan = {
+      instruction: "Reply",
+      steps: [],
+      rawToolCalls: [{ id: "send_1", name: "send_reply", input: { text: "" } }],
+      validation: {
+        status: "invalid",
+        issues: [{
+          code: "invalid_tool_input",
+          message: "The reply text cannot be blank.",
+          toolCallId: "send_1",
+          tool: "send_reply",
+        }],
+      },
+    }
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        cachedPlanMessageId: message.id,
+        cachedPlan: buildAgentPlanCacheRecord({
+          instruction: "Reply",
+          lastCustomerMessageId: message.id,
+          settings,
+          plan: invalidPlan,
+        }) as unknown as Parameters<typeof db.thread.update>[0]["data"]["cachedPlan"],
+      },
+    })
+
+    const summary = await getHomeSummary(org.id, null, NOW)
+
+    expect(summary.needsAttention).toEqual([
+      expect.objectContaining({
+        threadId: thread.id,
+        kind: "invalid",
+        validationIssues: ["The reply text cannot be blank."],
+      }),
+    ])
+  })
 })

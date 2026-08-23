@@ -186,6 +186,7 @@ const KIND_TOPIC_LABELS: Record<HomeNeedsAttentionItem["kind"], string> = {
   quick_reply: "Reply",
   needs_review: "Review",
   needs_merchant_input: "Question",
+  invalid: "Fix draft",
 }
 
 export type TicketCardMetaStatusTone = "send" | "caution" | "neutral" | "danger"

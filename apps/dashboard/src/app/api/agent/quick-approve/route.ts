@@ -47,7 +47,7 @@ export const POST = withOrgRoute(
       orgId: org.id,
       threadId,
       settings,
-      allowedKinds: ["quick_reply", "needs_review"],
+      executionIntent: "merchant_approved",
       failureRoute: "/api/agent/quick-approve",
       ...(approver ? { approver } : {}),
     });
@@ -56,7 +56,7 @@ export const POST = withOrgRoute(
     logger.info({
       orgId: org.id,
       threadId,
-      mode: executed.classification.kind,
+      mode: executed.verdict.kind,
       instructionLength: executed.instruction.length,
       instructionHash,
     }, "[agent:quick-approve] POST");

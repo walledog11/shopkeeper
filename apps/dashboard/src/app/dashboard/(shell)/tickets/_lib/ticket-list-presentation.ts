@@ -2,11 +2,10 @@ import {
   getCurrentPlanForThread,
   type PlanThreadMessage,
 } from "@shopkeeper/agent/plan-cache-shape"
+import { decideAutonomy, type AutonomyKind } from "@shopkeeper/agent/autonomy"
 import {
   buildPlanPreview,
-  classifyHomePlan,
   planReplyText,
-  type HomePlanKind,
 } from "@shopkeeper/agent/plan-preview"
 import { SENDER_TYPE } from "@shopkeeper/agent/thread-constants"
 import { getChannelInfo } from "@/lib/messaging/channels"
@@ -179,15 +178,16 @@ function resolveTier(
   activeTab: "open" | "closed",
   questionable: boolean,
   hasPlan: boolean,
-  classificationKind: HomePlanKind | null,
+  verdictKind: AutonomyKind | null,
   awaitingReply: boolean,
   escalated: boolean,
 ): TicketTriageTier {
   if (status === "closed" || activeTab === "closed") return "closed"
   if (escalated) return "escalated"
-  if (classificationKind === "needs_merchant_input") return "answer"
+  if (verdictKind === "escalate") return "escalated"
+  if (verdictKind === "needs_merchant_input") return "answer"
   if (questionable) return hasPlan ? "review" : "noise"
-  if (hasPlan) return classificationKind === "quick_reply" ? "ready" : "review"
+  if (hasPlan) return verdictKind === "quick_reply" ? "ready" : "review"
   if (awaitingReply) return "working"
   return "waiting_customer"
 }
@@ -221,7 +221,7 @@ export function buildTicketListPresentation(
   const awaitingReply = latestNonNoteMessage(thread.messages)?.senderType === SENDER_TYPE.CUSTOMER
     && thread.status === "open"
 
-  const classification = plan ? classifyHomePlan(plan, orgSettings, {
+  const verdict = plan ? decideAutonomy(plan, orgSettings, {
     filterStatus: thread.filterStatus,
   }) : null
   let tier = resolveTier(
@@ -229,7 +229,7 @@ export function buildTicketListPresentation(
     activeTab,
     questionable,
     hasPlan,
-    classification?.kind ?? null,
+    verdict?.kind ?? null,
     awaitingReply,
     Boolean(thread.escalatedAt),
   )

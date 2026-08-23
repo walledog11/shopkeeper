@@ -7,11 +7,11 @@ import {
   maybeAutoExecuteCurrentCachedHomePlan as coreMaybeAutoExecuteCurrentCachedHomePlan,
   type PlanExecutionDeps,
   type ApproverIdentity,
+  type ExecutionIntent,
   type ExpectedPlanIdentity,
 } from "@shopkeeper/agent/plan-execution";
 import { buildDashboardTurnDeps } from "@/lib/agent/api/turn-deps";
 import { recordShadowDecision, resolveShadowDecisionOnApproval } from "@/lib/agent/api/autonomy-shadow";
-import type { HomePlanKind } from "@shopkeeper/agent/plan-preview";
 import type { AgentFailureAlertRoute } from "@/lib/server/agent-failure-alerts";
 import type { OrgSettings } from "@/types";
 import type { RawToolCall } from "@shopkeeper/agent/types";
@@ -36,7 +36,7 @@ export function executeCurrentCachedHomePlan(params: {
   orgId: string;
   threadId: string;
   settings: OrgSettings;
-  allowedKinds: HomePlanKind[];
+  executionIntent: ExecutionIntent;
   failureRoute: AgentFailureAlertRoute;
   approver?: ApproverIdentity;
   approvedToolCalls?: RawToolCall[];

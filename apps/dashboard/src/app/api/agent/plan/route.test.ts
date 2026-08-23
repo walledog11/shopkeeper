@@ -35,7 +35,7 @@ vi.mock('@shopkeeper/agent/settings', () => ({
   resolveAgentSettings: vi.fn().mockReturnValue({}),
 }));
 
-import { POST } from './route';
+import { DELETE, POST } from './route';
 import { auth } from '@clerk/nextjs/server';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
@@ -287,5 +287,48 @@ describe('POST /api/agent/plan', () => {
     const res = await POST(req);
     expect(res.status).toBe(200);
     expect(mockPlanAgent).toHaveBeenCalledOnce();
+  });
+});
+
+describe('DELETE /api/agent/plan', () => {
+  it('dismisses only the reviewed cached plan', async () => {
+    const customer = await createTestCustomer(org.id, 'dismiss@test.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    const message = await createTestMessage(thread.id, 'Please help');
+    const cache = buildAgentPlanCacheRecord({
+      instruction: 'Reply',
+      lastCustomerMessageId: message.id,
+      settings: {},
+      plan: {
+        instruction: 'Reply',
+        steps: [{ id: 'send_1', tool: 'send_reply', label: 'Reply', description: 'Reply', category: 'communication', enabled: true }],
+        rawToolCalls: [{ id: 'send_1', name: 'send_reply', input: { text: 'Hello' } }],
+      },
+    });
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        cachedPlanMessageId: message.id,
+        cachedPlan: cache as unknown as Parameters<typeof db.thread.update>[0]['data']['cachedPlan'],
+      },
+    });
+
+    const stale = await DELETE(new Request('http://localhost:3000/api/agent/plan', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId: thread.id, planId: 'stale-plan' }),
+    }));
+    expect(stale.status).toBe(409);
+    expect((await db.thread.findUnique({ where: { id: thread.id } }))?.cachedPlan).not.toBeNull();
+
+    const dismissed = await DELETE(new Request('http://localhost:3000/api/agent/plan', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId: thread.id, planId: cache.planId }),
+    }));
+    expect(dismissed.status).toBe(200);
+    const updated = await db.thread.findUnique({ where: { id: thread.id } });
+    expect(updated?.cachedPlan).toBeNull();
+    expect(updated?.cachedPlanMessageId).toBeNull();
   });
 });

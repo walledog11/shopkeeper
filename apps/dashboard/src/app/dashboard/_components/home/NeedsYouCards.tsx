@@ -33,6 +33,33 @@ export function NeedsYouCard({
   const [approvalError, setApprovalError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
 
+  if (item.kind === "invalid") {
+    return (
+      <NeedsYouCardShell>
+        <NeedsYouCardHeader>
+          <NeedsYouCardHeaderRow item={item} />
+        </NeedsYouCardHeader>
+        <NeedsYouCardBody>
+          <div className="rounded-2xl border border-red-600/30 bg-red-600/[0.06] px-4 py-3" role="alert">
+            <p className="text-sm font-semibold text-strong">This draft cannot be approved</p>
+            <ul className="mt-2 list-disc space-y-1 pl-4 text-xs leading-relaxed text-muted-foreground">
+              {(item.validationIssues?.length ? item.validationIssues : ["The draft failed validation."])
+                .map((issue, index) => <li key={`${index}:${issue}`}>{issue}</li>)}
+            </ul>
+          </div>
+        </NeedsYouCardBody>
+        <NeedsYouCardFooter>
+          <Link
+            href={`/dashboard/tickets?thread=${item.threadId}`}
+            className={needsYouSecondaryButtonClassName}
+          >
+            Fix in ticket
+          </Link>
+        </NeedsYouCardFooter>
+      </NeedsYouCardShell>
+    )
+  }
+
   if (item.kind === "needs_merchant_input") {
     return (
       <NeedsYouCardShell>

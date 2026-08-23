@@ -69,6 +69,29 @@ async function createThreadWithCachedPlan(plan: AgentPlan, instruction = 'Handle
 }
 
 describe('POST /api/agent', () => {
+  it('rejects a matching approval for an invalid cached plan', async () => {
+    const approvedToolCalls = [{ id: 'send_1', name: 'send_reply', input: { text: 'Your refund is complete.' } }];
+    const plan: AgentPlan = {
+      instruction: 'Handle this',
+      steps: [{ id: 'send_1', tool: 'send_reply', label: 'Notify customer', description: 'Reply', category: 'communication', enabled: true }],
+      rawToolCalls: approvedToolCalls,
+      validation: {
+        status: 'invalid',
+        issues: [{ code: 'ungrounded_customer_reply', message: 'The reply contains an unsupported claim.' }],
+      },
+    };
+    const thread = await createThreadWithCachedPlan(plan);
+
+    const res = await POST(new Request('http://localhost:3000/api/agent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId: thread.id, instruction: 'Handle this', approvedToolCalls }),
+    }));
+
+    expect(res.status).toBe(400);
+    expect(mockExecuteAgentTurn).not.toHaveBeenCalled();
+  });
+
   it('rejects execution without approved tool calls', async () => {
     const plan: AgentPlan = {
       instruction: 'Handle this',

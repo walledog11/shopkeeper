@@ -1,5 +1,5 @@
 import { hasActionableMutativeIntent } from "@shopkeeper/agent/intent"
-import { classifyHomePlan } from "@shopkeeper/agent/plan-preview"
+import { decideAutonomy } from "@shopkeeper/agent/autonomy"
 import { TOOL_CATEGORIES } from "@shopkeeper/agent/tools"
 import type { AgentPlan } from "@/types"
 import type {
@@ -85,6 +85,22 @@ export function collectPlanExpectationFailures(
     : ""
   const expected = fixture.expectedPlan
 
+  if (expected.mustBeValid === true && plan.validation?.status !== "valid") {
+    failures.push(`expected an explicitly valid plan; got ${plan.validation?.status ?? "legacy/unknown"}`)
+  }
+  if (expected.mustBeInvalidWith) {
+    if (plan.validation?.status !== "invalid") {
+      failures.push(`expected an invalid plan; got ${plan.validation?.status ?? "legacy/unknown"}`)
+    } else {
+      const observedCodes = new Set(plan.validation.issues.map(issue => issue.code))
+      for (const code of expected.mustBeInvalidWith) {
+        if (!observedCodes.has(code)) {
+          failures.push(`expected invalid plan issue "${code}"; got [${[...observedCodes].join(", ")}]`)
+        }
+      }
+    }
+  }
+
   for (const tool of expected.mustCallTools ?? []) {
     if (!calledToolSet.has(tool)) {
       failures.push(`expected tool "${tool}" to be called; called: [${calledToolDetails}]`)
@@ -126,13 +142,13 @@ export function collectPlanExpectationFailures(
     rawToolCalls: plan.rawToolCalls,
   }))
   if (expected.mustClassifyAs) {
-    const classification = classifyHomePlan(plan, fixture.setup.orgSettings ?? null)
+    const verdict = decideAutonomy(plan, fixture.setup.orgSettings ?? null)
     const allowedClassifications = Array.isArray(expected.mustClassifyAs)
       ? expected.mustClassifyAs
       : [expected.mustClassifyAs]
-    if (!allowedClassifications.includes(classification.kind)) {
+    if (!allowedClassifications.includes(verdict.kind)) {
       failures.push(
-        `expected classifyHomePlan -> one of [${allowedClassifications.map(kind => `"${kind}"`).join(", ")}], got "${classification.kind}"`,
+        `expected decideAutonomy -> one of [${allowedClassifications.map(kind => `"${kind}"`).join(", ")}], got "${verdict.kind}"`,
       )
     }
   }

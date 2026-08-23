@@ -10,8 +10,8 @@ import {
   readAgentPlanCache,
 } from "@shopkeeper/agent/plan-cache";
 import { getPendingCustomerMessageId } from "@shopkeeper/agent/plan-cache-shape";
-import { clearThreadPlanCache } from "@shopkeeper/agent/plan-execution";
-import { parseAgentPlanBody } from "@/lib/agent/api/validation";
+import { clearThreadPlanCache, dismissCurrentCachedPlan } from "@shopkeeper/agent/plan-execution";
+import { parseAgentPlanBody, parseAgentPlanDismissBody } from "@/lib/agent/api/validation";
 import { buildContext, hashInstructionForLog, planAgent } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@shopkeeper/agent/settings";
 import {
@@ -126,7 +126,7 @@ export const POST = withOrgRoute(
       throw new ConflictError("A newer customer message arrived while this plan was being generated. Regenerate the plan.");
     }
 
-    if (cacheRecord.planId && plan.steps.length > 0) {
+    if (cacheRecord.planId && (plan.steps.length > 0 || plan.validation?.status === 'invalid')) {
       void captureAgentPlanGenerated({
         cacheHit: false,
         channel: thread.channelType,
@@ -150,5 +150,26 @@ export const POST = withOrgRoute(
     return NextResponse.json(cacheRecord.planId
       ? { ...plan, planId: cacheRecord.planId }
       : plan);
+  },
+);
+
+export const DELETE = withOrgRoute(
+  {
+    context: "Agent plan DELETE",
+    errorMessage: "Failed to dismiss plan",
+    requireBillingWriteAllowed: true,
+    rateLimit: { key: "agent:plan-dismiss", limit: 30, windowSecs: 60 },
+  },
+  async ({ org, request }) => {
+    const { threadId, planId } = parseAgentPlanDismissBody(await readRequiredJsonObject(request));
+    const cleared = await dismissCurrentCachedPlan({
+      orgId: org.id,
+      threadId,
+      expectedPlanId: planId,
+    });
+    if (!cleared) {
+      throw new ConflictError("This plan is no longer current. Review the latest plan before dismissing it.");
+    }
+    return NextResponse.json({ ok: true });
   },
 );
