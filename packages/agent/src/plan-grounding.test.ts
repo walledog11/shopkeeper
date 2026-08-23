@@ -89,6 +89,19 @@ describe("plan grounding", () => {
     ])).toEqual([]);
   });
 
+  it("does not treat an explicitly negated refund as a second claimed operation", () => {
+    for (const text of [
+      "I've issued a $15 store credit gift card — no refund needed.",
+      "I've issued a $15 store credit gift card without a refund.",
+      "I've issued a $15 store credit gift card; a refund was not required.",
+    ]) {
+      expect(detectUngroundedReplyText([
+        { id: "credit", name: "create_gift_card", input: {} },
+        { id: "reply", name: "send_reply", input: { text } },
+      ])).toEqual([]);
+    }
+  });
+
   it("requires every independently claimed operation in a compound sentence", () => {
     expect(detectUngroundedReplyText([
       { id: "refund", name: "create_refund", input: {} },

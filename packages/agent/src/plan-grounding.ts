@@ -44,11 +44,25 @@ const SPECIFIC_CLAIM_ACTIONS: readonly [RegExp, ReadonlySet<string>][] = [
 ];
 const GENERIC_ORDER_ACTIONS = new Set(["fulfill_order", "create_shopify_order", "edit_shopify_order"]);
 
+function withoutNegatedOperationMentions(text: string): string {
+  return text
+    .replace(
+      /\bno\s+(?:cash\s+)?refunds?\b(?:\s+(?:was|were|is|are|has been|have been))?(?:\s+(?:needed|required|issued|processed))?/gi,
+      "",
+    )
+    .replace(/\bwithout\s+(?:a\s+)?refund\b/gi, "")
+    .replace(
+      /\brefunds?\s+(?:was|were|is|are)\s+not\s+(?:needed|required|issued|processed)\b/gi,
+      "",
+    );
+}
+
 function hasGroundingAction(text: string, rawToolCalls: readonly RawToolCall[]): boolean {
   // Specific operation cues win over the generic noun “order”. Thus an order
   // edit cannot ground “I refunded the order”, while cancel_order grounds “I
   // canceled the order” even though both sentences also contain “order”.
-  const specific = SPECIFIC_CLAIM_ACTIONS.filter(([cue]) => cue.test(text));
+  const claimText = withoutNegatedOperationMentions(text);
+  const specific = SPECIFIC_CLAIM_ACTIONS.filter(([cue]) => cue.test(claimText));
   if (specific.length > 0) {
     return specific.every(([, allowed]) => rawToolCalls.some((call) => allowed.has(call.name)));
   }
