@@ -263,9 +263,10 @@ jobs:
           npm run test:evals -w apps/gateway -- -t 'clear-fraud-multi-signal' 2>&1 | tee gateway-eval.log
       - name: Require conclusive gateway and budget summaries
         run: |
-          grep -qE '^\[order-ops-eval:gates\] clear-fraud (1/1|retries 2/2)' gateway-eval.log
-          grep -qE '^\[order-ops-eval:budget\] spent=\$[0-9]' gateway-eval.log
-          grep -qE '^\[order-ops-eval:usage\] in=[0-9]' gateway-eval.log
+          test -s gateway-eval.log
+          grep -qE '\[order-ops-eval:gates\] clear-fraud (1/1|retries 2/2)' gateway-eval.log
+          grep -qE '\[order-ops-eval:budget\] spent=\$[0-9]' gateway-eval.log
+          grep -qE '\[order-ops-eval:usage\] in=[0-9]' gateway-eval.log
       - name: Upload complete gateway evidence
         if: always()
         uses: actions/upload-artifact@v4

@@ -218,9 +218,9 @@ Estimates are engineering days for one person, and they are estimates. As of 202
 |---|---|---:|---:|---|---|
 | 0 | Live bugs | ~1.5 d | ~0 | none owed | **Closed** — 0.1 (#54), 0.3 (#55); 0.2 was already fixed, 0.4 dropped |
 | 1 | Typed signals (A) | ~1 d | −40 | No | **Closed** — 1.1–1.5 |
-| 2 | Validate, don't repair (C) | ~2 d | −150 | Yes | **Implementation complete 2026-08-22** — model eval gate remains |
-| 3 | One autonomy function (B) | ~3 d | −400 | Yes | **Implementation complete 2026-08-22** — model eval gate remains |
-| 4 | Structured rendering (D) | 8–10 d | −1,500 | Yes + phone | **Implementation complete 2026-08-22** — model eval + live phone gates remain |
+| 2 | Validate, don't repair (C) | ~2 d | −150 | Yes | **Implementation complete 2026-08-22** — model behavior passed; clean conclusive workflow remains |
+| 3 | One autonomy function (B) | ~3 d | −400 | Yes | **Implementation complete 2026-08-22** — model behavior passed; clean conclusive workflow remains |
+| 4 | Structured rendering (D) | 8–10 d | −1,500 | Yes + phone | **Implementation complete 2026-08-22** — provider send passed; phone confirmation + clean conclusive model workflow remain |
 | 5 | Cost & housekeeping | ~3 d | −350 (unmeasured) | 5.2 only | Open — 5.1 closed, 5.1a struck; 5.2 and 5.3 re-sized after re-verification. Nothing here gates Phase 3 |
 
 ---
@@ -266,7 +266,9 @@ Smallest change with the largest safety return. Phase 3 depends on it.
 - [x] **2.4a** Make invalid plans non-executable on every path, including one-tap and operator-channel approval. A merchant may regenerate, revise, dismiss, or take over; approval must never replay the invalid calls verbatim. *(Core rejects before identity/ledger/tool selection; dashboard and operator channels remove approval controls. Dismissal clears the exact cached plan identity.)*
 - [ ] **2.5 Gate.** This changes what reaches the customer on plans the model got wrong — exactly what the fixtures grade.
 
-**Done when:** `planner.ts` contains one validation call, not six mutation passes. **Met.** Unit, typecheck, lint, and database-backed integration suites pass; 2.5 stays open only because this workspace has no real model key for the paid eval gate.
+**2026-08-22 release evidence:** the exact-SHA paid run on `4cd07169b57d1c13ed024536418ab649abfa0409` passed all 44 dashboard fixtures and the independent gateway hard case. It used 86 model calls and $0.5108 of the approved 120-call/$0.75 ceiling. The workflow's final result was a false negative: the gateway summary validator anchored its `grep` at byte zero, but Vitest prefixed the passing gate and budget lines with ANSI color bytes. The artifact records `clear-fraud 1/1`, `$0.0082`, and two calls. The validator is fixed on the PR; 2.5 remains unchecked until one newly authorized run produces the required clean conclusive result. [Run evidence](https://github.com/walledog11/shopkeeper/actions/runs/32618869853).
+
+**Done when:** `planner.ts` contains one validation call, not six mutation passes. **Met.** Unit, typecheck, lint, and database-backed integration suites pass; only the clean conclusive workflow result above remains for 2.5.
 
 **Execution-boundary details landed with this phase:** validation runs against the model's original calls before any deterministic escalation materialization; operation-aware grounding requires the matching refund/return/cancel action and checks every claim in a compound sentence; invalid proposals and their original calls are preserved. Current v7 cache identity is required for actionability, legacy entries are pruned from operator queues, approval and dismissal serialize on the thread row, and a dismissal cannot report success after a plan has been claimed. Partial approvals also preserve the customer-facing send/action set atomically: changing an action requires a revised reply rather than sending copy that describes work no longer approved. Retryable `BadRequest` failures remain parked; only terminal/claimed conflicts resolve the plan across devices.
 
@@ -281,9 +283,11 @@ Smallest change with the largest safety return. Phase 3 depends on it.
 - [x] **3.5** Delete `computeLegacyRouting` + `logRoutingShadow` (prior work order item 9). *(The no-signals decision is explicit: missing or source-unaligned classifier evidence fails closed to review.)*
 - [ ] **3.6 Gate.** Run the budgeted release profile (44 hard core fixtures plus the independent gateway hard case). The complete 84-fixture, three-repeat profile remains the non-release drift measurement; advisory results cannot fail release.
 
+The 2026-08-22 paid behavior evidence passed 44/44 dashboard fixtures and gateway clear-fraud 1/1 on exact SHA `4cd07169b57d1c13ed024536418ab649abfa0409`. Keep 3.6 open for the clean conclusive rerun described under 2.5; do not spend automatically to turn the parser false negative green.
+
 **Done when:** "why did the agent send that?" is answerable by reading one function. **Met:** `decideAutonomy` owns the verdict and supplies closed reason codes; runtime policy remains a temporal enforcement check, not an alternate autonomy classifier.
 
-**Local gate status (2026-08-22):** agent passed 806 unit + 70 integration tests; gateway passed 379 unit + 840 integration tests (1 skipped); dashboard passed 750 unit + 660 integration tests (3 skipped). All three pass typecheck and lint; the agent package build, repository structure checks, and `git diff --check` also pass. 3.6 remains unchecked only because the paid model suite requires a real `ANTHROPIC_API_KEY`, which is absent from this workspace.
+**Local and release status (2026-08-22):** the full repository suites, package typechecks, lint, builds, structure checks, and `git diff --check` pass. The paid run described above also passed every behavior assertion; 3.6 remains unchecked only because its ANSI-sensitive summary parser made the workflow result non-conclusive, and paid runs are not retriggered automatically.
 
 ---
 
@@ -309,6 +313,8 @@ The real project, and the one that needs product judgment rather than only engin
 - [x] **4.6** ~~Rewrite the notification tests against fields. They currently assert exact English strings, which is why they pass while the output is wrong.~~ **Completed 2026-08-22 as a fixture migration, not a ban on exact renderer assertions.** Operator-card, draft-summary, pending-ledger, digest, proactive-system, stale-cache, and postal-redaction fixtures now exercise `RequestDisplay`/v5 fields; legitimate source-verbatim and renderer golden assertions remain.
   The defect it closed was fixture-level: the tests exercised prose while production briefing lines preferred fields, and the operator card itself had not consumed fields. `RequestDisplay` now carries the immutable, source-aligned display snapshot through cards, re-drafts, parked state, ledgers, and digests.
 - [ ] **4.7 Gate**, plus a live phone round-trip: operator copy is verified by phone, not by evals.
+
+**Live-phone provider leg completed 2026-08-22.** A structured address-change card was rendered through the production configuration and accepted once by the existing iMessage provider binding. Pre-send assertions verified that the street, unit, and ZIP were absent, `[address redacted]` remained, the separator before the coarse city/state was intact, and order `#1043` plus the Friday deadline remained visible. The dry run exposed and fixed an adjacent-redaction-marker punctuation bug before the real send. The local Railway runner could not reach Railway's private Redis hostname for post-send idempotency bookkeeping, but provider acceptance returned before shutdown and the card was not resent. Keep 4.7 unchecked until the recipient confirms the card arrived/read correctly and the model workflow returns a clean conclusive result.
 
 **Done when:** `digest-briefing.ts` contains no regex over model-written prose. **Met 2026-08-22.**
 
@@ -397,8 +403,8 @@ Phase 5 and stopped there, which left most of the plan carried on the old footin
 - *Phase 1* — holds exactly. Nine `ProducedPlanSignalCode`s plus `legacy_warning`, and
   `warningBlocksQuickReply` / `isShopifyCustomerWarning` / `planWarningTiers` return zero
   hits repo-wide.
-- *Phases 2 and 3* — implementation complete 2026-08-22; database-backed and full repository suites pass. Only the real-model eval gate remains open.
-- *Phase 4* — 4.1–4.6 hold. Operator cards, draft summaries, pending-plan ledgers, and digests consume structured `RequestDisplay`; the prose fallback and its fixtures are gone. 4.7 still requires the real-model eval and live-phone gates.
+- *Phases 2 and 3* — implementation complete 2026-08-22; database-backed and full repository suites pass. Paid behavior evidence passed, but the clean conclusive workflow remains open after the ANSI-summary parser false negative.
+- *Phase 4* — 4.1–4.6 and the live provider-send leg hold. Operator cards, draft summaries, pending-plan ledgers, and digests consume structured `RequestDisplay`; the prose fallback and its fixtures are gone. 4.7 waits for recipient phone confirmation and the clean conclusive model workflow.
 
 **`byDeadlineFirst` was initially built and tested without a production call site.** That gap was subsequently closed on 2026-08-22; all three digest groups now call it.
 
