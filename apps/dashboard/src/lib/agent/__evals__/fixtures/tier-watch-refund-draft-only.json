@@ -20,7 +20,7 @@
     "messages": [
       {
         "senderType": "customer",
-        "contentText": "Hi, the tee I got was the wrong size and I don't want a replacement. Please refund me for order #4001."
+        "contentText": "Hi, the tee I got was the wrong size and I don't want a replacement. Please issue a full $42 refund for order #4001."
       }
     ],
     "recentOrders": [
@@ -46,7 +46,7 @@
       }
     ]
   },
-  "instruction": "Reply to the customer and process their refund request.",
+  "instruction": "Reply to the customer and process their explicit full-refund request.",
   "expectedPlan": {
     "mustClassifyAs": [
       "needs_review",

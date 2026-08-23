@@ -24,9 +24,18 @@ export interface UngroundedPlanClaim {
 }
 
 const SPECIFIC_CLAIM_ACTIONS: readonly [RegExp, ReadonlySet<string>][] = [
-  [/\b(?:refunds?|refunded|refunding)\b/i, new Set(["create_refund"])],
+  // Cancelling a paid Shopify order also handles its payment reversal, so a
+  // cancellation may ground the refund side effect without a second refund
+  // call (which the planner is explicitly forbidden to make).
+  [/\b(?:refunds?|refunded|refunding)\b/i, new Set(["create_refund", "cancel_order"])],
   [/\b(?:gift cards?|store credit)\b/i, new Set(["create_gift_card", "issue_store_credit"])],
-  [/\b(?:returns?|returned|returning|labels?)\b/i, new Set(["create_return", "attach_return_label", "create_exchange"])],
+  // Bare "returned" / "returning" frequently describes money going back to
+  // a card. Require an RMA noun or a merchandise object before treating it as
+  // a product-return operation.
+  [
+    /\breturns?\b|\b(?:returned|returning)\b[^.!?]{0,24}\b(?:item|product|order|package|purchase|merchandise)\b|\b(?:item|product|order|package|purchase|merchandise)\b[^.!?]{0,24}\breturned\b|\blabels?\b/i,
+    new Set(["create_return", "attach_return_label", "create_exchange"]),
+  ],
   [/\b(?:exchanges?|exchanged|exchanging|replacements?)\b/i, new Set(["create_exchange", "create_shopify_order"])],
   [/\bcancell?(?:ations?|ed|ing)?\b/i, new Set(["cancel_order"])],
   [/\baddress(?:es)?\b/i, new Set(["update_shopify_order_address", "update_shopify_customer_info"])],

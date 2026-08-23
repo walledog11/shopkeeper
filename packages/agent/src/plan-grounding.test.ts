@@ -67,23 +67,45 @@ describe("plan grounding", () => {
     }
   });
 
-  it("requires every claimed operation in a compound sentence", () => {
+  it("recognizes cancellation's refund side effect without requiring a duplicate refund", () => {
+    expect(detectUngroundedReplyText([
+      { id: "cancel", name: "cancel_order", input: {} },
+      {
+        id: "reply",
+        name: "send_reply",
+        input: { text: "I've canceled the order and refunded the payment." },
+      },
+    ])).toEqual([]);
+  });
+
+  it("does not mistake money returning to a card for a product-return operation", () => {
     expect(detectUngroundedReplyText([
       { id: "refund", name: "create_refund", input: {} },
       {
         id: "reply",
         name: "send_reply",
-        input: { text: "I've refunded and canceled the order." },
+        input: { text: "I've issued the refund; the funds will be returned to your card." },
+      },
+    ])).toEqual([]);
+  });
+
+  it("requires every independently claimed operation in a compound sentence", () => {
+    expect(detectUngroundedReplyText([
+      { id: "refund", name: "create_refund", input: {} },
+      {
+        id: "reply",
+        name: "send_reply",
+        input: { text: "I've refunded the order and opened a return." },
       },
     ])).toEqual([expect.objectContaining({ toolCallId: "reply" })]);
 
     expect(detectUngroundedReplyText([
       { id: "refund", name: "create_refund", input: {} },
-      { id: "cancel", name: "cancel_order", input: {} },
+      { id: "return", name: "create_return", input: {} },
       {
         id: "reply",
         name: "send_reply",
-        input: { text: "I've refunded and canceled the order." },
+        input: { text: "I've refunded the order and opened a return." },
       },
     ])).toEqual([]);
   });

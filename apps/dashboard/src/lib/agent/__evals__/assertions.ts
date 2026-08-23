@@ -154,7 +154,7 @@ export function collectPlanExpectationFailures(
         ? `; issues=[${verdict.issues.map(issue => `${issue.code}: ${issue.message}`).join(" | ")}]`
         : ""
       failures.push(
-        `expected decideAutonomy -> one of [${allowedClassifications.map(kind => `"${kind}"`).join(", ")}], got "${verdict.kind}"${reasons}${issues}`,
+        `expected decideAutonomy -> one of [${allowedClassifications.map(kind => `"${kind}"`).join(", ")}], got "${verdict.kind}"${reasons}${issues}; called: [${calledToolDetails}]`,
       )
     }
   }
