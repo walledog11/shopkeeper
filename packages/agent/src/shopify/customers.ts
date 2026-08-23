@@ -1,16 +1,39 @@
 import type {
   AddShopifyCustomerNoteInput,
-  GetShopifyCustomerInput,
-  SearchShopifyCustomersInput,
+  FindCustomerInput,
   UpdateShopifyCustomerInfoInput,
 } from "../tools/index.js";
+
+// Local to this module now. find_customer is the only customer read the tool
+// registry exposes, so these two shapes describe its branches rather than a
+// contract anything outside this file depends on.
+interface SearchShopifyCustomersInput {
+  query: string;
+  limit?: number;
+}
+
+interface GetShopifyCustomerInput {
+  customer_id: string;
+}
 import { formatShopifyToolError, shopifyRestJson, type ShopifyContext } from "./client.js";
 import { toolError, toolNotFound, toolOk, type ToolResult } from "../tools/result.js";
 import { customerName, serializeCustomer } from "./serializers.js";
 import type { ShopifyCustomer } from "./types.js";
 import { clampLimit, optionalString, requireNonEmptyString, requireNumericId } from "./validation.js";
 
-export async function searchShopifyCustomers(
+// The one customer read the registry exposes. Both branches are the
+// implementations the two retired tools already used, unchanged: consolidating
+// the tool surface is not a reason to re-derive the Shopify calls underneath it.
+export async function findCustomer(
+  input: FindCustomerInput,
+  ctx: ShopifyContext
+): Promise<ToolResult> {
+  return input.by === "id"
+    ? getShopifyCustomer({ customer_id: input.value }, ctx)
+    : searchShopifyCustomers({ query: input.value, limit: input.limit }, ctx);
+}
+
+async function searchShopifyCustomers(
   input: SearchShopifyCustomersInput,
   ctx: ShopifyContext
 ): Promise<ToolResult> {
@@ -41,7 +64,7 @@ export async function searchShopifyCustomers(
   }
 }
 
-export async function getShopifyCustomer(
+async function getShopifyCustomer(
   input: GetShopifyCustomerInput,
   ctx: ShopifyContext
 ): Promise<ToolResult> {

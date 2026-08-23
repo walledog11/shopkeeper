@@ -1,6 +1,6 @@
 {
   "id": "operator-status-by-customer-name",
-  "description": "Operator in the Concierge channel asks about a customer's order status by name, with no customer linked to the thread. The agent should call search_shopify_customers first to resolve the customer.",
+  "description": "Operator in the Concierge channel asks about a customer's order status by name, with no customer linked to the thread. The agent should call find_customer with by='query' first to resolve the customer.",
   "setup": {
     "channelType": "dashboard_agent",
     "tag": "Concierge",
@@ -22,7 +22,7 @@
   "instruction": "Can you check Jane Doe's order status?",
   "expectedPlan": {
     "mustCallTools": [
-      "search_shopify_customers"
+      "find_customer"
     ],
     "mustNotCallTools": [
       "create_refund",

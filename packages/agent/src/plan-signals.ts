@@ -41,6 +41,9 @@ export const PLAN_SIGNAL_MESSAGES: Record<ProducedPlanSignalCode, string> = {
 // Reads that make an unlinked Shopify customer consequential: the plan leaned on
 // customer or order data to write its reply.
 const CUSTOMER_OR_ORDER_READ_TOOLS = new Set([
+  "find_customer",
+  // Retired, and kept here on purpose: a plan cached before find_customer
+  // landed still names them, and this set only reads what a plan already did.
   "search_shopify_customers",
   "get_shopify_customer",
   "get_shopify_orders",

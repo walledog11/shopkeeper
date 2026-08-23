@@ -20,7 +20,7 @@ import { buildOrderRiskPrompt } from "./prompt.js";
 import type { OrderOpsContext } from "./context.js";
 
 const MAX_ITERATIONS = 4;
-const READ_TOOL_NAMES = ["get_shopify_customer", "get_order_tracking"] as const;
+const READ_TOOL_NAMES = ["find_customer", "get_order_tracking"] as const;
 
 interface FlagOrderInput {
   reason: string;

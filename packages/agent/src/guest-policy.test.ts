@@ -18,6 +18,7 @@ const FORBIDDEN_FOR_GUESTS = [
   "get_order_by_name",
   "get_order_tracking",
   // Customer reads.
+  "find_customer",
   "search_shopify_customers",
   "get_shopify_customer",
   // Mutations, in full.

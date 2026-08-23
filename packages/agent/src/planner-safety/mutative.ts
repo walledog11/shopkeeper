@@ -7,9 +7,16 @@ import type { ToolStatus } from "../tools/result.js"
 const ORDER_LOOKUP_TOOLS = new Set([
   "get_order_by_name",
   "get_shopify_orders",
+  "find_customer",
   "get_shopify_customer",
   "search_shopify_customers",
 ])
+
+// find_customer answers both "who is this" and "what is on their record", and
+// only the first can come back ambiguous. The result shape is the discriminator
+// — a by='query' lookup returns the match list, a by='id' lookup returns one
+// object — so this reads the result rather than re-reading the call's arguments.
+const CUSTOMER_SEARCH_TOOLS = new Set(["find_customer", "search_shopify_customers"])
 
 export function hasCriticalPlanningReadErrorsForBlocks(
   readBlocks: readonly Anthropic.ToolUseBlock[],
@@ -25,7 +32,7 @@ export function hasAmbiguousCustomerSearchResult(
   readResultsMap: ReadonlyMap<string, string>,
 ): boolean {
   for (const block of readBlocks) {
-    if (block.name !== "search_shopify_customers") continue
+    if (!CUSTOMER_SEARCH_TOOLS.has(block.name)) continue
     const raw = readResultsMap.get(block.id)
     if (!raw) continue
     try {

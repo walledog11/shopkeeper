@@ -51,6 +51,7 @@ export const TOOL_NAMES = [
   'create_shopify_order',
   'edit_shopify_order',
   'escalate_to_human',
+  'find_customer',
   'get_order_by_name',
   'get_order_tracking',
   'get_shopify_customer',

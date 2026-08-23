@@ -1,0 +1,69 @@
+{
+  "id": "adjacent-cancel-vs-refund",
+  "description": "Adjacent-pair selection: cancel vs refund. The customer asks for a refund, but nothing on the order has shipped, so the whole order can simply be stopped. cancel_order owns an unfulfilled order the customer no longer wants; create_refund would move money on an order Shopify is about to settle itself, and reaching for both is the duplicate-compensation failure.",
+  "setup": {
+    "classifierIntents": {
+      "mutative_request": true
+    },
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Priya Raman",
+    "customerPlatformId": "priya@example.com",
+    "shopifyCustomerId": "10000007030",
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
+    "orgSettings": {
+      "blockCancellations": false
+    },
+    "messages": [
+      {
+        "senderType": "customer",
+        "contentText": "Can I get a refund on order #7030? I ordered it three days ago and it still hasn't gone out, and I've found the same thing locally."
+      }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000007030",
+        "name": "#7030",
+        "created_at": "2026-07-08T13:05:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": null,
+        "total_price": "62.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_7030",
+            "title": "Cast Iron Skillet",
+            "quantity": 1,
+            "variant_id": "710000007030",
+            "fulfillable_quantity": 1,
+            "current_quantity": 1,
+            "fulfillment_status": null
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Reply to the customer and handle their request.",
+  "expectedPlan": {
+    "mustCallTools": [
+      "cancel_order"
+    ],
+    "mustNotCallTools": [
+      "create_refund",
+      "create_return",
+      "create_exchange"
+    ],
+    "mustCallToolsWithInput": [
+      {
+        "tool": "cancel_order",
+        "inputEquals": {
+          "order_id": "9000007030"
+        }
+      }
+    ]
+  },
+  "suite": "core"
+}

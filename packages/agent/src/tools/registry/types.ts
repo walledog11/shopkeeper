@@ -10,13 +10,14 @@ export interface SearchShopifyProductsInput {
   limit?: number;
 }
 
-export interface SearchShopifyCustomersInput {
-  query: string;
+// One lookup, discriminated by how the caller knows the customer. `query`
+// resolves a name or email to an ID and returns the thin match list; `id`
+// returns the full profile. Two tools for two ways of naming the same record
+// meant the model chose between them before it could ask anything.
+export interface FindCustomerInput {
+  by: "query" | "id";
+  value: string;
   limit?: number;
-}
-
-export interface GetShopifyCustomerInput {
-  customer_id: string;
 }
 
 export interface UpdateShopifyCustomerInfoInput {
@@ -233,8 +234,7 @@ export interface ShopifyToolContext {
 
 export interface ToolExecutionDeps {
   searchShopifyProducts(input: SearchShopifyProductsInput, ctx: ShopifyToolContext): Promise<ToolResult>;
-  searchShopifyCustomers(input: SearchShopifyCustomersInput, ctx: ShopifyToolContext): Promise<ToolResult>;
-  getShopifyCustomer(input: GetShopifyCustomerInput, ctx: ShopifyToolContext): Promise<ToolResult>;
+  findCustomer(input: FindCustomerInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   updateShopifyCustomerInfo(input: UpdateShopifyCustomerInfoInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   getShopifyOrders(input: GetShopifyOrdersInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   updateShopifyOrderAddress(input: UpdateShopifyOrderAddressInput, ctx: ShopifyToolContext): Promise<ToolResult>;

@@ -31,7 +31,7 @@ ${shopifyNote}
 
 ## Instructions
 - Assess whether this order shows a genuine fraud-risk pattern that warrants a human's attention.
-- You may call get_shopify_customer to check the customer's history when it would change your decision.
+- You may call find_customer with by='id' to check the customer's history when it would change your decision.
 - If the order looks risky enough to hold, call flag_order with a concise reason naming the signals.
 - If the order looks normal, do NOT flag it - respond with a one-sentence "no action" summary and stop.
 - Do not contact the customer, change the order, issue refunds, or take any other action. Your only action tool is flag_order.

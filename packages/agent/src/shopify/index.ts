@@ -10,8 +10,7 @@ export {
 export { searchShopifyProducts } from "./products.js";
 export {
   addShopifyCustomerNote,
-  getShopifyCustomer,
-  searchShopifyCustomers,
+  findCustomer,
   updateShopifyCustomerInfo,
 } from "./customers.js";
 export {
