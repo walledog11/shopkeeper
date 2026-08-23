@@ -1,21 +1,12 @@
 import { NextResponse } from 'next/server';
 import { db, SenderType } from '@shopkeeper/db';
 import { generateText } from '@shopkeeper/agent/ai';
+import { fallbackTitleFromSummary } from '@shopkeeper/agent/classifier-signals';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import { ApiError } from '@/lib/api/errors';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
 import { parseAiSummaryBody } from '@/app/api/ai/summary/_lib/validation';
 
-function fallbackTitleFromSummary(summary: string): string {
-  const stripped = summary
-    .replace(/^\s*(the\s+)?customer\s+(is\s+|are\s+|was\s+|were\s+|has\s+|have\s+|had\s+|been\s+)*/i, '')
-    .replace(/[.?!]+$/, '')
-    .trim();
-  const base = stripped || summary.trim();
-  if (!base) return 'New message';
-  const titled = base[0].toUpperCase() + base.slice(1);
-  return titled.length > 70 ? `${titled.slice(0, 67)}...` : titled;
-}
 
 function parseSummaryRefreshResponse(raw: string): { title: string; summary: string } {
   const cleaned = raw

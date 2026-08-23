@@ -151,6 +151,28 @@ export function isClassifierTag(value: unknown): value is ClassifierTag {
   return typeof value === "string" && CLASSIFIER_TAG_SET.has(value);
 }
 
+// Safety net only — the classifier is asked for `title` directly. If a response
+// omits it, derive a subject line from the summary rather than throwing away an
+// otherwise-valid summary/tag/classification.
+//
+// One implementation. The gateway classifier and the dashboard's summary-refresh
+// route each carried their own and had drifted apart: different lead-in verbs
+// stripped, and a three-character "..." against a one-character "…", so the same
+// summary produced two different titles depending on which surface asked.
+const TITLE_LEAD_IN =
+  /^\s*(the\s+)?customer\s+(is\s+|are\s+|was\s+|were\s+|has\s+|have\s+|had\s+|been\s+)*/i;
+const FALLBACK_TITLE_MAX = 70;
+
+export function fallbackTitleFromSummary(summary: string): string {
+  const stripped = summary.replace(TITLE_LEAD_IN, "").replace(/[.?!]+$/, "").trim();
+  const base = stripped || summary.trim();
+  if (!base) return "New message";
+  const titled = base[0].toUpperCase() + base.slice(1);
+  return titled.length > FALLBACK_TITLE_MAX
+    ? `${titled.slice(0, FALLBACK_TITLE_MAX - 1)}…`
+    : titled;
+}
+
 export function normalizeClassifierLanguage(value: unknown): string {
   if (typeof value !== "string") return "";
   const normalized = value.trim().toLowerCase();

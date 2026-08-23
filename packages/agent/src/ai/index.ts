@@ -85,6 +85,10 @@ export async function generateText(
   return textBlock?.text ?? "";
 }
 
+// The one owner of "is this a deterministic E2E run?" — the gateway classifier
+// had a second copy that guarded on `NODE_ENV === "test"` instead. Production is
+// the boundary that matters, and `with-test-env.mjs` pins NODE_ENV to `test`
+// anyway, so the two never disagreed in any harness that sets E2E_AI_MODE.
 export function isDeterministicE2EAIEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.NODE_ENV !== "production" && env.E2E_TEST_RUN === "true" && env.E2E_AI_MODE === "deterministic";
 }
