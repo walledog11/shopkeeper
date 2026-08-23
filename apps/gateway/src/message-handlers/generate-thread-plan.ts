@@ -18,7 +18,9 @@ import {
 import { getPendingCustomerMessageId } from '@shopkeeper/agent/plan-cache-shape';
 import { shouldSkipAutoPlan } from '@shopkeeper/agent/sender-trust';
 import { hashInstruction, hashPlan } from '@shopkeeper/agent/agent-actions';
+import { CHANNEL_TYPE } from '@shopkeeper/agent/thread-constants';
 import type { AgentPlan as PackageAgentPlan, OrgSettings } from '@shopkeeper/agent/types';
+import { getEmailProvider } from '@shopkeeper/email/providers';
 import type { AgentPlan } from '../types.js';
 import { toGatewayAgentPlan } from './agent-plan-adapter.js';
 import { gatewayThreadSink } from './agent-thread-sink.js';
@@ -30,6 +32,53 @@ import logger from '../logger.js';
 import { removePendingPlanForThread } from '../operator-context.js';
 
 const FAILURE_ROUTE = 'gateway:auto-plan';
+const EMAIL_REPLY_ROUTE_MISSING = 'email_reply_route_missing';
+const EMAIL_REPLY_INTEGRATION_INACTIVE = 'email_reply_integration_inactive';
+const EMAIL_REPLY_PROVIDER_INCOMPLETE = 'email_reply_provider_incomplete';
+
+type EmailReplyBlock = {
+  code:
+    | typeof EMAIL_REPLY_ROUTE_MISSING
+    | typeof EMAIL_REPLY_INTEGRATION_INACTIVE
+    | typeof EMAIL_REPLY_PROVIDER_INCOMPLETE;
+  reason: string;
+};
+
+function emailReplyBlock(thread: Awaited<ReturnType<typeof requireOrgThread>>): EmailReplyBlock | null {
+  if (thread.channelType !== CHANNEL_TYPE.EMAIL) return null;
+
+  const integration = thread.replyIntegration;
+  if (!thread.replyIntegrationId || !integration || integration.id !== thread.replyIntegrationId) {
+    return {
+      code: EMAIL_REPLY_ROUTE_MISSING,
+      reason: 'This email conversation has no connected reply integration. Reconnect email before replying.',
+    };
+  }
+  if (integration.platform !== CHANNEL_TYPE.EMAIL || integration.lifecycleStatus !== 'active') {
+    return {
+      code: EMAIL_REPLY_INTEGRATION_INACTIVE,
+      reason: 'This email conversation\'s reply integration is disconnected. Reconnect email before replying.',
+    };
+  }
+
+  if (getEmailProvider(integration) === 'gmail') {
+    const expiresAtMs = integration.tokenExpiresAt?.getTime() ?? null;
+    const explicitlyInvalid = expiresAtMs !== null && expiresAtMs <= 0;
+    const accessTokenNeedsRefresh = expiresAtMs !== null && expiresAtMs <= Date.now();
+    const canRefreshOrSend = Boolean(
+      integration.refreshToken
+      && (integration.accessToken || accessTokenNeedsRefresh),
+    );
+    if (explicitlyInvalid || !canRefreshOrSend) {
+      return {
+        code: EMAIL_REPLY_PROVIDER_INCOMPLETE,
+        reason: 'This email conversation\'s Gmail connection needs reauthorization before a reply can be sent.',
+      };
+    }
+  }
+
+  return null;
+}
 
 // A plan whose terminal tool is `ask_operator` resolves to needs_merchant_input;
 // surface its question so the operator-notification path can push it instead of a
@@ -123,8 +172,39 @@ export async function generateThreadPlan(
 
   const org = await db.organization.findUnique({
     where: { id: organizationId },
-    select: { settings: true },
+    select: { name: true, settings: true },
   });
+
+  const replyBlock = emailReplyBlock(thread);
+  if (replyBlock) {
+    if (thread.cachedPlan || thread.cachedPlanMessageId) {
+      await clearThreadPlanCache({ orgId: organizationId, threadId });
+    }
+    if (!thread.escalatedAt) {
+      const escalation = await gatewayThreadSink.escalateToHuman(
+        { reason: replyBlock.reason },
+        {
+          orgId: organizationId,
+          orgName: org?.name ?? 'Workspace',
+          threadId,
+        },
+      );
+      if (escalation.status === 'error') {
+        throw new Error(`Could not escalate thread with an unavailable reply integration: ${escalation.message}`);
+      }
+    }
+    logger.warn(
+      {
+        organizationId,
+        threadId,
+        replyIntegrationId: thread.replyIntegrationId,
+        reasonCode: replyBlock.code,
+      },
+      '[gateway:auto-plan] Refusing to plan for an unavailable email reply integration',
+    );
+    return { plan: null, instruction };
+  }
+
   const settings = resolveAgentSettings(org?.settings as Partial<OrgSettings> | null);
 
   // P5-04: an escalated ticket is flagged for a human. Keep planning and
