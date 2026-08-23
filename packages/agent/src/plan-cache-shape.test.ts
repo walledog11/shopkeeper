@@ -78,6 +78,8 @@ describe("getCurrentPlanForThread", () => {
     )).toEqual({
       ...PLAN,
       planId: expect.any(String),
+      validation: { status: "valid", issues: [] },
+      routingEvidence: { classifierState: "not_applicable", codes: [] },
     })
   })
 
@@ -97,6 +99,38 @@ describe("getCurrentPlanForThread", () => {
       { id: "cust_2", senderType: "customer" },
     ])).toBeNull()
   })
+
+  it("keeps legacy cache records readable but never current/actionable", () => {
+    const thread = threadWithPlan("cust_1")
+    thread.cachedPlan = { ...thread.cachedPlan, version: 6 }
+    expect(readAgentPlanCacheRecordShape(thread.cachedPlan)?.version).toBe(6)
+    expect(getCurrentPlanForThread(
+      thread,
+      [{ id: "cust_1", senderType: "customer" }],
+    )).toBeNull()
+  })
+
+  it("returns a current zero-step invalid plan so the merchant can resolve it", () => {
+    const thread = threadWithPlan("cust_1")
+    const cached = readAgentPlanCacheRecordShape(thread.cachedPlan)!
+    thread.cachedPlan = {
+      ...cached,
+      plan: {
+        ...cached.plan,
+        steps: [],
+        rawToolCalls: [],
+        validation: {
+          status: "invalid",
+          issues: [{ code: "invalid_tool_input", message: "Invalid input." }],
+        },
+      },
+    }
+
+    expect(getCurrentPlanForThread(
+      thread,
+      [{ id: "cust_1", senderType: "customer" }],
+    )?.validation?.status).toBe("invalid")
+  })
 })
 
 describe("readAgentPlanCacheRecordShape", () => {
@@ -109,9 +143,17 @@ describe("readAgentPlanCacheRecordShape", () => {
     })
     const previous = { ...current, version: 1 }
 
-    expect(readAgentPlanCacheRecordShape(current)?.plan).toEqual(PLAN)
+    expect(readAgentPlanCacheRecordShape(current)?.plan).toEqual({
+      ...PLAN,
+      validation: { status: "valid", issues: [] },
+      routingEvidence: { classifierState: "not_applicable", codes: [] },
+    })
     expect(readAgentPlanCacheRecordShape(previous)?.version).toBe(1)
-    expect(readAgentPlanCacheRecordShape(previous)?.plan).toEqual(PLAN)
+    expect(readAgentPlanCacheRecordShape(previous)?.plan).toEqual({
+      ...PLAN,
+      validation: { status: "valid", issues: [] },
+      routingEvidence: { classifierState: "not_applicable", codes: [] },
+    })
   })
 
   it("keeps dashboard approval records separate from agent plan cache records", () => {
@@ -124,6 +166,21 @@ describe("readAgentPlanCacheRecordShape", () => {
       plan: PLAN,
       createdAt: "2026-06-01T12:00:00.000Z",
     })).toBeNull()
+  })
+
+  it("writes typed evidence and strips the deprecated routing verdict", () => {
+    const cached = buildAgentPlanCacheRecord({
+      instruction: PLAN.instruction,
+      lastCustomerMessageId: "cust_1",
+      settings: resolveAgentSettings(null),
+      plan: {
+        ...PLAN,
+        routing: { decision: "auto_execute", signals: ["legacy"] },
+      },
+    })
+    expect(cached.version).toBe(7)
+    expect(cached.plan.routing).toBeUndefined()
+    expect(cached.plan.routingEvidence).toEqual({ classifierState: "not_applicable", codes: [] })
   })
 
   it("rejects invalid JSON shapes", () => {
@@ -151,6 +208,22 @@ describe("readAgentPlanCacheRecordShape", () => {
       },
     })).toBeNull()
   })
+
+  it("requires explicit validation on current records but reads v5 records", () => {
+    const current = buildAgentPlanCacheRecord({
+      instruction: "Handle address change",
+      lastCustomerMessageId: "cust_1",
+      settings: resolveAgentSettings(null),
+      plan: PLAN,
+    })
+    const withoutValidation = {
+      ...current,
+      plan: { ...current.plan, validation: undefined },
+    }
+
+    expect(readAgentPlanCacheRecordShape(withoutValidation)).toBeNull()
+    expect(readAgentPlanCacheRecordShape({ ...withoutValidation, version: 5 })).not.toBeNull()
+  })
 })
 
 describe("isAgentPlanCacheHit", () => {
@@ -172,5 +245,29 @@ describe("isAgentPlanCacheHit", () => {
       lastCustomerMessageId: "cust_1",
       settings,
     })).toBe(false)
+  })
+
+  it("hits a current zero-step invalid plan", () => {
+    const settings = resolveAgentSettings(null)
+    const cache = buildAgentPlanCacheRecord({
+      instruction: "Handle address change",
+      lastCustomerMessageId: "cust_1",
+      settings,
+      plan: {
+        ...PLAN,
+        steps: [],
+        validation: {
+          status: "invalid",
+          issues: [{ code: "invalid_tool_input", message: "Invalid input." }],
+        },
+      },
+    })
+
+    expect(isAgentPlanCacheHit({
+      cache,
+      instruction: "Handle address change",
+      lastCustomerMessageId: "cust_1",
+      settings,
+    })).toBe(true)
   })
 })

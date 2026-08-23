@@ -1,6 +1,6 @@
 {
   "id": "ask-operator-global-shipping-gap",
-  "description": "Customer asks whether the store ships globally. There is no shipping-coverage KB article, so the agent must ask_operator instead of drafting a customer reply or deflecting to managed channels. classifyHomePlan should surface this as needs_merchant_input.",
+  "description": "Customer asks whether the store ships globally. There is no shipping-coverage KB article, so the agent must ask_operator instead of drafting a customer reply or deflecting to managed channels. decideAutonomy should surface this as needs_merchant_input.",
   "setup": {
     "classifierIntents": {
       "policy_question": true

@@ -117,6 +117,14 @@ export function parseAgentQuickApproveBody(body: unknown) {
   };
 }
 
+export function parseAgentPlanDismissBody(body: unknown) {
+  const candidate = requireObject(body);
+  return {
+    threadId: requireNonEmptyString(candidate.threadId, "threadId"),
+    planId: requireNonEmptyString(candidate.planId, "planId"),
+  };
+}
+
 export function parseAgentAnswerBody(body: unknown) {
   const candidate = requireObject(body);
   const answer = requireNonEmptyString(candidate.answer, "answer").trim();

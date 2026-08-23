@@ -197,6 +197,18 @@ export async function fetchAgentPlan(
   )
 }
 
+export async function dismissAgentPlan(threadId: string, planId: string): Promise<void> {
+  await requestJson(
+    "/api/agent/plan",
+    {
+      method: "DELETE",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ threadId, planId }),
+    },
+    "Could not dismiss this plan.",
+  )
+}
+
 export async function regenerateAgentPlan(
   threadId: string,
   instruction: string,

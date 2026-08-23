@@ -7,7 +7,7 @@
 // the cheap tier can write it.
 //
 // The decision has to be made BEFORE the loop runs, so it cannot use
-// `classifyHomePlan` — that reads the planner's output. It uses the classifier
+// `decideAutonomy` — that reads the planner's output. It uses the classifier
 // signals the inbound Haiku pass already wrote to `Thread.classifierSignals`,
 // which cost nothing extra because that call happens on every ticket regardless.
 //

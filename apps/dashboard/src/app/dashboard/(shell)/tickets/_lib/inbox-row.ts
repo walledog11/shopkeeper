@@ -1,8 +1,7 @@
 import { getCurrentPlanForThread } from "@shopkeeper/agent/plan-cache-shape"
+import { decideAutonomy } from "@shopkeeper/agent/autonomy"
 import {
   buildPlanPreview,
-  classifyHomePlan,
-  isEscalationOnlyPlan,
   merchantRoutingQuestionFromCustomerMessage,
 } from "@shopkeeper/agent/plan-preview"
 import { SENDER_TYPE } from "@shopkeeper/agent/thread-constants"
@@ -111,9 +110,9 @@ function resolveMerchantQuestion(
   const plan = getCurrentPlanForThread(ticket, planMessages(ticket))
   if (!plan) return null
 
-  const classification = classifyHomePlan(plan, orgSettings, { filterStatus: ticket.filterStatus })
-  if (classification.kind !== "needs_merchant_input") return null
-  if (classification.question) return classification.question
+  const verdict = decideAutonomy(plan, orgSettings, { filterStatus: ticket.filterStatus })
+  if (verdict.kind !== "needs_merchant_input") return null
+  if (verdict.question) return verdict.question
 
   return merchantRoutingQuestionFromCustomerMessage(latestCustomerMessage(ticket)?.text)
 }
@@ -127,10 +126,11 @@ function rowDecision(ticket: Ticket, orgSettings?: Partial<OrgSettings> | null):
   const plan = getCurrentPlanForThread(ticket, planMessages(ticket))
   if (ticket.filterStatus === "questionable" && !plan) return "trust"
 
-  if (isEscalationOnlyPlan(plan) || ticket.escalatedAt) return "review"
+  if (ticket.escalatedAt) return "review"
   if (!plan) return null
 
-  const { kind } = classifyHomePlan(plan, orgSettings, { filterStatus: ticket.filterStatus })
+  const { kind } = decideAutonomy(plan, orgSettings, { filterStatus: ticket.filterStatus })
+  if (kind === "escalate") return "review"
   if (kind === "needs_merchant_input") return "answer"
 
   // Unrecognized senders can still ask a real question, but routine deflection

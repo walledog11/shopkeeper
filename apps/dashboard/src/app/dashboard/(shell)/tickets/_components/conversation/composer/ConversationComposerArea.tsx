@@ -2,7 +2,8 @@
 
 import { useCallback, useMemo, useState, type Ref } from "react"
 import { AnimatePresence, LazyMotion, domAnimation, m } from "motion/react"
-import { classifyHomePlan, planReplyText } from "@shopkeeper/agent/plan-preview"
+import { decideAutonomy } from "@shopkeeper/agent/autonomy"
+import { planReplyText } from "@shopkeeper/agent/plan-preview"
 import { useMediaQuery } from "@/hooks/useMediaQuery"
 import Composer from "./Composer"
 import MobileFloatingReplyComposer from "./MobileFloatingReplyComposer"
@@ -20,8 +21,8 @@ interface Props {
   onChange: (text: string) => void
   onClearAgentMode: () => void
   onPlanApprove: (approvedToolCalls: RawToolCall[]) => Promise<void>
-  onPlanEdit?: () => void
-  onPlanDismiss?: () => void
+  onPlanEdit?: () => void | Promise<void>
+  onPlanDismiss?: () => void | Promise<void>
   onFocusShopifyLink?: () => void
   onPlanRegenerate: () => void
   onSend: (isNote: boolean) => void
@@ -76,8 +77,8 @@ export default function ConversationComposerArea({
   const isMobile = useMediaQuery("(max-width: 767px)") === true
   const merchantQuestion = useMemo(() => {
     if (!pendingPlan) return null
-    const classification = classifyHomePlan(pendingPlan, null)
-    return classification.kind === "needs_merchant_input" ? classification.question : null
+    const verdict = decideAutonomy(pendingPlan, null)
+    return verdict.kind === "needs_merchant_input" ? verdict.question : null
   }, [pendingPlan])
   const [mobileManualEditState, setMobileManualEditState] = useState<MobileManualEditState>(() => ({
     pendingPlan,
@@ -98,13 +99,15 @@ export default function ConversationComposerArea({
 
   const handleMobilePlanEdit = useCallback(() => {
     if (!pendingPlan) return
-    const text = planReplyText(pendingPlan)
+    const invalid = pendingPlan.validation?.status === "invalid"
+    const text = invalid ? null : planReplyText(pendingPlan)
+    if (invalid) onChange("")
     if (text) onChange(text)
     setMobileManualEdit(true)
   }, [pendingPlan, onChange, setMobileManualEdit])
 
-  const handleMobileSend = useCallback((isNote: boolean) => {
-    onPlanDismiss?.()
+  const handleMobileSend = useCallback(async (isNote: boolean) => {
+    await onPlanDismiss?.()
     setMobileManualEdit(false)
     onSend(isNote)
   }, [onPlanDismiss, onSend, setMobileManualEdit])

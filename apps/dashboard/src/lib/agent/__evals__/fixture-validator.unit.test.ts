@@ -69,6 +69,30 @@ describe("validateFixtures", () => {
     expect(() => validateFixtures([invalid])).toThrow(/mode is invalid/)
   })
 
+  it("accepts the shared escalate autonomy verdict", () => {
+    expect(() => validateFixtures([
+      fixture({ expectedPlan: { mustEscalate: true, mustClassifyAs: "escalate" } }),
+    ])).not.toThrow()
+  })
+
+  it("validates explicit plan-validity expectations", () => {
+    const contradictory = fixture({
+      expectedPlan: {
+        mustBeValid: true,
+        mustBeInvalidWith: ["invalid_tool_input"],
+        expectedAgentActions: [{ tool: "send_reply", status: "success", mode: "human_approved" }],
+      },
+    })
+    const unknownIssue = fixture({
+      id: "unknown-issue",
+      expectedPlan: { mustBeInvalidWith: ["invented_issue" as never] },
+    })
+
+    expect(() => validateFixtures([contradictory])).toThrow(/cannot require both/)
+    expect(() => validateFixtures([contradictory])).toThrow(/cannot expect executed AgentAction rows/)
+    expect(() => validateFixtures([unknownIssue])).toThrow(/has invalid value "invented_issue"/)
+  })
+
   it("validates classifier intents against the production vocabulary", () => {
     const invalid = fixture({
       setup: {
@@ -118,6 +142,29 @@ describe("validateFixtures", () => {
 })
 
 describe("typed input matchers", () => {
+  it("asserts valid and invalid planner proposals explicitly", () => {
+    const invalidPlan: AgentPlan = {
+      instruction: "test",
+      steps: [],
+      rawToolCalls: [{ id: "1", name: "send_reply", input: { text: "" } }],
+      validation: {
+        status: "invalid",
+        issues: [{ code: "invalid_tool_input", message: "Reply text is blank.", toolCallId: "1" }],
+      },
+    }
+    const expectedInvalid = fixture({
+      expectedPlan: { mustBeInvalidWith: ["invalid_tool_input", "duplicate_tool_call_id"] },
+    })
+
+    expect(collectPlanExpectationFailures(expectedInvalid, invalidPlan).failures).toEqual([
+      'expected invalid plan issue "duplicate_tool_call_id"; got [invalid_tool_input]',
+    ])
+    expect(collectPlanExpectationFailures(
+      fixture({ expectedPlan: { mustBeValid: true } }),
+      invalidPlan,
+    ).failures).toEqual(["expected an explicitly valid plan; got invalid"])
+  })
+
   it("does not let exact string 20 match 120", () => {
     const exactFixture = fixture({
       expectedPlan: {

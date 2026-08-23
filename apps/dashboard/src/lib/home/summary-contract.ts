@@ -8,7 +8,7 @@ export const HOME_REPEAT_CUSTOMER_LIMIT = 4
 
 export interface HomeNeedsAttentionItem {
   threadId: string
-  kind: "quick_reply" | "needs_review" | "needs_merchant_input"
+  kind: "quick_reply" | "needs_review" | "needs_merchant_input" | "invalid"
   customerName: string | null
   customerMessage: string
   channelName: string
@@ -28,6 +28,8 @@ export interface HomeNeedsAttentionItem {
   isEscalationOnly: boolean
   /** Why the agent escalated — from escalate_to_human or routing signals. */
   escalationReason: string | null
+  /** Validation failures shown instead of approval controls for an invalid draft. */
+  validationIssues?: string[]
 }
 
 export interface HomeClearedTopic {

@@ -34,6 +34,7 @@ import {
   updateThreadTag,
 } from "../tools/thread"
 import type { AgentPlan, OrgSettings } from "@/types"
+import { isInvalidPlan } from "@shopkeeper/agent/plan-validation"
 import type { ExpectedAgentAction, Fixture } from "./types"
 
 const SENDER_TYPE_MAP: Record<string, DbSenderType> = {
@@ -162,6 +163,9 @@ export async function executeRunForFixture(params: {
   settings: OrgSettings
 }): Promise<void> {
   const { ctx, fixture, plan, mode, settings } = params
+  if (isInvalidPlan(plan)) {
+    throw new Error("Eval runtime refused to execute an invalid agent plan")
+  }
   const approvedToolCalls = mode === "read_only" || plan.rawToolCalls.length === 0
     ? undefined
     : plan.rawToolCalls

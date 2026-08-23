@@ -1,11 +1,7 @@
 export {
   sendReplyHasText,
   shouldBlockCreateRefundForAlreadyRefundedOrder,
-  stripCreateRefundForAlreadyRefundedOrders,
-  stripEmptySendReplyToolCalls,
 } from "./refunds.js"
-
-export { stripInternalNotesWithoutActions } from "./internal-notes.js"
 
 export {
   hasAmbiguousCustomerSearchResult,

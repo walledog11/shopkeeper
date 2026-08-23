@@ -265,6 +265,13 @@ describe("agent tool registry", () => {
 
     expect(() => definition.parse({ text: "hello", order_id: "2001" })).toThrow(/input.order_id is not allowed/);
   });
+
+  it("rejects blank customer-facing messaging fields in schema and parser", () => {
+    const reply = definitionFor("send_reply");
+
+    expect(reply.inputSchema.properties?.text).toMatchObject({ minLength: 1 });
+    expect(() => reply.parse({ text: "   " })).toThrow(/must not be blank/);
+  });
 });
 
 describe("agent tool execution routing", () => {

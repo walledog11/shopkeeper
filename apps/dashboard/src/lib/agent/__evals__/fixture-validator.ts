@@ -20,7 +20,15 @@ const CHANNELS = new Set([
 ])
 const SENDERS = new Set(["customer", "agent", "ai", "note"])
 const FINANCIAL_TOOLS = new Set(["create_refund", "create_gift_card"])
-const PLAN_CLASSIFICATIONS = new Set(["quick_reply", "needs_review", "auto_execute", "needs_merchant_input"])
+const PLAN_CLASSIFICATIONS = new Set(["quick_reply", "needs_review", "auto_execute", "needs_merchant_input", "escalate", "invalid"])
+const PLAN_VALIDATION_ISSUES = new Set([
+  "invalid_tool_input",
+  "duplicate_tool_call_id",
+  "already_refunded_action",
+  "orphan_internal_note",
+  "ungrounded_escalation_reason",
+  "ungrounded_customer_reply",
+])
 const ACTION_STATUSES = new Set(["success", "error", "policy_block", "escalated", "unknown"])
 const ACTION_MODES = new Set(["human_approved", "auto_executed", "read_only"])
 const AUTH_STATES = new Set(["guest", "verified"])
@@ -215,6 +223,26 @@ export function validateFixtures(fixtures: readonly unknown[], filenames?: reado
         : [fixture.expectedPlan.mustClassifyAs]
     for (const classification of classifications) {
       if (!PLAN_CLASSIFICATIONS.has(classification)) local.push(`expectedPlan.mustClassifyAs has invalid value ${JSON.stringify(classification)}`)
+    }
+    if (fixture.expectedPlan.mustBeValid !== undefined && typeof fixture.expectedPlan.mustBeValid !== "boolean") {
+      local.push("expectedPlan.mustBeValid must be boolean")
+    }
+    if (fixture.expectedPlan.mustBeValid === true && fixture.expectedPlan.mustBeInvalidWith !== undefined) {
+      local.push("expectedPlan cannot require both a valid and invalid plan")
+    }
+    if (fixture.expectedPlan.mustBeInvalidWith !== undefined) {
+      if (!Array.isArray(fixture.expectedPlan.mustBeInvalidWith) || fixture.expectedPlan.mustBeInvalidWith.length === 0) {
+        local.push("expectedPlan.mustBeInvalidWith must be a non-empty array")
+      } else {
+        for (const issue of fixture.expectedPlan.mustBeInvalidWith) {
+          if (!PLAN_VALIDATION_ISSUES.has(issue)) {
+            local.push(`expectedPlan.mustBeInvalidWith has invalid value ${JSON.stringify(issue)}`)
+          }
+        }
+      }
+      if ((fixture.expectedPlan.expectedAgentActions?.length ?? 0) > 0) {
+        local.push("an invalid plan cannot expect executed AgentAction rows")
+      }
     }
     for (const [actionIndex, action] of (fixture.expectedPlan.expectedAgentActions ?? []).entries()) {
       assertToolName(action.tool, `expectedPlan.expectedAgentActions[${actionIndex}].tool`, local)

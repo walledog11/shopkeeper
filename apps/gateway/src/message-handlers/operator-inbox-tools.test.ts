@@ -12,6 +12,7 @@ import type { BaseAgentContext } from '@shopkeeper/agent/context';
 import type { OrgSettings } from '@shopkeeper/agent/types';
 import { executeToolWithStatus } from '@shopkeeper/agent/executor';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
+import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { buildOperatorInboxTools } from './operator-inbox-tools.js';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
@@ -194,12 +195,10 @@ describe('get_ticket', () => {
     const customer = await createTestCustomer(org.id, 'plan@example.com', { name: 'Planned Pat' });
     const thread = await createTestThread(org.id, customer.id, 'email');
     const customerMessage = await createTestMessage(thread.id, 'Can I get a refund?', 'customer');
-    const cachedPlan = {
-      version: 5,
-      planId: 'plan-1',
+    const cachedPlan = buildAgentPlanCacheRecord({
       instruction: 'Refund request',
       lastCustomerMessageId: customerMessage.id,
-      settingsFingerprint: 'fp',
+      settings: resolveAgentSettings(null),
       plan: {
         instruction: 'Refund request',
         steps: [{
@@ -212,7 +211,7 @@ describe('get_ticket', () => {
         }],
         rawToolCalls: [{ id: 'tc1', name: 'send_reply', input: { text: 'On its way.' } }],
       },
-    };
+    });
     await db.thread.update({
       where: { id: thread.id },
       data: { cachedPlan, cachedPlanMessageId: customerMessage.id },

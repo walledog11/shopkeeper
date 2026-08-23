@@ -20,5 +20,11 @@ export function toGatewayAgentPlan(plan: PackageAgentPlan | null): GatewayAgentP
       name: toolCall.name,
       input: toolCall.input,
     })),
+    ...(plan.signals ? { signals: plan.signals.map((signal) => ({ ...signal })) } : {}),
+    ...(plan.validation ? {
+      validation: plan.validation.status === 'valid'
+        ? { status: 'valid', issues: [] }
+        : { status: 'invalid', issues: plan.validation.issues.map((issue) => ({ ...issue })) },
+    } : {}),
   };
 }

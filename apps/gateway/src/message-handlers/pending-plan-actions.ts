@@ -1,8 +1,11 @@
 import type { RawToolCall } from '@shopkeeper/agent/types';
 import { isPlanExecutionFailureMessage } from '@shopkeeper/agent/message-dispatch';
 import { resolvePendingPlanContexts, type PendingPlan } from '../operator-context.js';
-import type { ExpectedPlanIdentity } from '@shopkeeper/agent/plan-execution';
-import { BadRequestError, ConflictError } from '@shopkeeper/agent/errors';
+import {
+  dismissCurrentCachedPlan,
+  type ExpectedPlanIdentity,
+} from '@shopkeeper/agent/plan-execution';
+import { ConflictError } from '@shopkeeper/agent/errors';
 import { getPlanExecution } from '@shopkeeper/agent/execution-ledger';
 import { executeOperatorApprovedCachedPlan } from './execute-operator-agent-turn.js';
 
@@ -42,7 +45,6 @@ export async function runApprovedPendingPlan(params: {
     if (
       planId
       && (error instanceof ConflictError
-        || error instanceof BadRequestError
         || (execution && execution.status !== 'pending'))
     ) {
       await resolvePendingPlanContexts(params.organizationId, params.memberKey, params.pendingPlan);
@@ -61,6 +63,15 @@ export async function clearPendingPlan(
   organizationId: string,
   memberKey: string,
   expected: PendingPlan,
-): Promise<void> {
+): Promise<boolean> {
+  let dismissedCurrentPlan = true;
+  if (expected.planId) {
+    dismissedCurrentPlan = await dismissCurrentCachedPlan({
+      orgId: organizationId,
+      threadId: expected.threadId,
+      expectedPlanId: expected.planId,
+    });
+  }
   await resolvePendingPlanContexts(organizationId, memberKey, expected);
+  return dismissedCurrentPlan;
 }

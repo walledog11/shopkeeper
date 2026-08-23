@@ -127,6 +127,34 @@ export interface PlanStep {
 
 export type RoutingDecision = 'auto_execute' | 'needs_review' | 'escalate'
 
+export type ClassifierAlignmentState = 'aligned' | 'missing' | 'unaligned' | 'not_applicable'
+
+export type PlanRoutingEvidenceCode =
+  | 'classifier_unavailable'
+  | 'classifier_unaligned'
+  | 'fraud_risk'
+  | 'forwarded_prompt_injection'
+  | 'contradictory_request'
+  | 'out_of_scope_commercial_request'
+  | 'fulfilled_cancellation_request'
+  | 'fulfilled_address_change_request'
+  | 'already_refunded_request'
+  | 'non_paid_refund_request'
+  | 'compensation_exception'
+  | 'ambiguous_customer'
+  | 'critical_planning_read_failure'
+  | 'compensation_over_cap'
+  | 'policy_gap'
+  | 'kb_gap'
+  | 'circular_channel_deflection'
+
+export interface PlanRoutingEvidence {
+  classifierState: ClassifierAlignmentState
+  codes: PlanRoutingEvidenceCode[]
+  question?: string | null
+  escalationReason?: string | null
+}
+
 /** Conditions the planner can raise about a plan. One code per distinct condition. */
 export type ProducedPlanSignalCode =
   | 'shopify_customer_unresolved'
@@ -138,6 +166,15 @@ export type ProducedPlanSignalCode =
   | 'kb_no_match'
   | 'mutative_intent_no_action'
   | 'circular_channel_deflection'
+  | PlanValidationIssueCode
+
+export type PlanValidationIssueCode =
+  | 'invalid_tool_input'
+  | 'duplicate_tool_call_id'
+  | 'already_refunded_action'
+  | 'orphan_internal_note'
+  | 'ungrounded_escalation_reason'
+  | 'ungrounded_customer_reply'
 
 /** `legacy_warning` is only ever read off a plan cached before signals existed. */
 export type PlanSignalCode = ProducedPlanSignalCode | 'legacy_warning'
@@ -152,6 +189,17 @@ export interface PlanSignal {
   message: string
 }
 
+export interface PlanValidationIssue {
+  code: PlanValidationIssueCode
+  message: string
+  toolCallId?: string
+  tool?: string
+}
+
+export type PlanValidation =
+  | { status: 'valid'; issues: [] }
+  | { status: 'invalid'; issues: PlanValidationIssue[] }
+
 export interface AgentPlan {
   /** Stable internal analytics identifier for this cached plan version. */
   planId?: string
@@ -160,15 +208,18 @@ export interface AgentPlan {
   rawToolCalls: RawToolCall[] // all tool calls including reads
   readResults?: Record<string, string> // tool_use.id → raw result string, for read-only tools
   signals?: PlanSignal[]
+  /** Explicit result of validating the model's captured proposal without editing it. */
+  validation?: PlanValidation
+  /** Typed facts used to derive autonomy. Current plans persist evidence, never a verdict. */
+  routingEvidence?: PlanRoutingEvidence
   /**
    * @deprecated Derived from `signals` so plans cached by an earlier release stay
    * readable. Read `signals` instead — this is display text with no code attached.
    */
   warnings?: string[]
   /**
-   * Phase 3 routing disposition: how the guards classified this plan without
-   * mutating its tool calls. `classifyHomePlan` consumes this; `question` is the
-   * merchant-facing prompt for a `needs_review` policy gap.
+   * @deprecated Legacy v1-v6 cache compatibility only. Current plans persist
+   * `routingEvidence` and derive their verdict with `decideAutonomy`.
    */
   routing?: {
     decision: RoutingDecision

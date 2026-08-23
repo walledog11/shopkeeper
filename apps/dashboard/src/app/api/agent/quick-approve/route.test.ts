@@ -105,6 +105,26 @@ async function createThreadWithCachedPlan(
 }
 
 describe("POST /api/agent/quick-approve", () => {
+  it("rejects an invalid reply-shaped cached plan", async () => {
+    const invalidPlan: AgentPlan = {
+      ...quickReplyPlan,
+      validation: {
+        status: "invalid",
+        issues: [{ code: "ungrounded_customer_reply", message: "The reply contains an unsupported claim." }],
+      },
+    };
+    const { thread } = await createThreadWithCachedPlan(invalidPlan);
+
+    const res = await POST(new Request("http://localhost:3000/api/agent/quick-approve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ threadId: thread.id }),
+    }));
+
+    expect(res.status).toBe(400);
+    expect(mockExecuteAgentTurn).not.toHaveBeenCalled();
+  });
+
   it("executes the current quick reply using only the send_reply tool call", async () => {
     const { thread } = await createThreadWithCachedPlan(quickReplyPlan);
 
@@ -155,7 +175,11 @@ describe("POST /api/agent/quick-approve", () => {
         category: "action",
         enabled: true,
       }],
-      rawToolCalls: [{ id: "refund_1", name: "create_refund", input: { order_id: "gid://shopify/Order/1" } }],
+      rawToolCalls: [{
+        id: "refund_1",
+        name: "create_refund",
+        input: { order_id: "gid://shopify/Order/1", amount: "20.00" },
+      }],
     };
     const { thread } = await createThreadWithCachedPlan(actionPlan);
 
@@ -168,12 +192,16 @@ describe("POST /api/agent/quick-approve", () => {
     expect(res.status).toBe(200);
     expect(mockExecuteAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
       threadId: thread.id,
-      approvedToolCalls: [{ id: "refund_1", name: "create_refund", input: { order_id: "gid://shopify/Order/1" } }],
+      approvedToolCalls: [{
+        id: "refund_1",
+        name: "create_refund",
+        input: { order_id: "gid://shopify/Order/1", amount: "20.00" },
+      }],
       auditMode: "human_approved",
     }), expect.anything());
   });
 
-  it("rejects auto-execute plans (server-side auto-execute runs in the gateway worker, not this route)", async () => {
+  it("executes an auto_execute verdict when the merchant explicitly approves it", async () => {
     const plan: AgentPlan = {
       instruction: "Handle this",
       steps: [{
@@ -208,8 +236,12 @@ describe("POST /api/agent/quick-approve", () => {
       body: JSON.stringify({ threadId: thread.id }),
     }));
 
-    expect(res.status).toBe(400);
-    expect(mockExecuteAgentTurn).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(mockExecuteAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      threadId: thread.id,
+      approvedToolCalls: plan.rawToolCalls,
+      auditMode: "human_approved",
+    }), expect.anything());
   });
 
   it("rejects tampered cached plans", async () => {

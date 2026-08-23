@@ -101,6 +101,7 @@ export function useActionPlanReviewState({
   const replyText = planReplyText(plan)
   const showReplyHero = Boolean(replyText && replyStep)
   const recipient = planRecipientDisplay(customerName)
+  const planInvalid = plan.validation?.status === "invalid"
   const { blocking: blockingSignals, advisory: advisorySignals } = planSignalTiers(plan)
   const hasBlockingSignals = blockingSignals.length > 0
   const needsWarningReview = hasBlockingSignals && !state.warningsReviewed
@@ -113,7 +114,7 @@ export function useActionPlanReviewState({
   const headerLabel = showReplyHero
     ? `${AGENT_DISPLAY_NAME} drafted a reply${recipient.headerTo ? ` to ${recipient.headerTo}` : ""}`
     : `${AGENT_DISPLAY_NAME} proposes`
-  const primaryLabel = isRunning || executionOutcome
+  const primaryLabel = planInvalid || isRunning || executionOutcome
     ? null
     : state.confirming
       ? (showReplyHero ? "Confirm & send" : "Confirm")
@@ -144,6 +145,7 @@ export function useActionPlanReviewState({
   }
 
   const onApproveClick = () => {
+    if (planInvalid) return
     if (needsWarningReview) {
       dispatch({ type: "setWarningsReviewed", value: true })
       return
@@ -178,6 +180,7 @@ export function useActionPlanReviewState({
     onApproveClick,
     onCancelReview,
     primaryLabel,
+    planInvalid,
     primaryNeedsCaution: needsWarningReview || state.confirming || consequential,
     replyText,
     shopifyActionSteps,

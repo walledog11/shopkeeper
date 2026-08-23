@@ -8,7 +8,7 @@ import { extractCachedQuestion, getPendingCustomerMessageId } from "@shopkeeper/
 import { clearThreadPlanCache } from "@shopkeeper/agent/plan-execution";
 import { buildMerchantAnswerPlanningInstruction } from "@shopkeeper/agent/kb-learned";
 import { saveMerchantAnswerToKb } from "@shopkeeper/agent/merchant-answer-kb";
-import { classifyHomePlan } from "@shopkeeper/agent/plan-preview";
+import { decideAutonomy } from "@shopkeeper/agent/autonomy";
 import { parseAgentAnswerBody } from "@/lib/agent/api/validation";
 import { buildContext, hashInstructionForLog, planAgent } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@shopkeeper/agent/settings";
@@ -106,21 +106,23 @@ export const POST = withOrgRoute(
       },
     });
 
-    const classification = classifyHomePlan(plan, settings);
+    const verdict = decideAutonomy(plan, settings);
 
     logger.info({
       orgId: org.id,
       threadId,
       durationMs: Date.now() - startedAt,
       saveToKb,
-      kind: classification.kind,
+      kind: verdict.kind,
       instructionHash: hashInstructionForLog(planningInstruction),
     }, "[agent:answer] re-planned");
 
     return NextResponse.json({
-      kind: classification.kind,
-      question: classification.question,
-      replyText: classification.replyText,
+      kind: verdict.kind,
+      question: verdict.kind === "needs_merchant_input" ? verdict.question : null,
+      replyText: verdict.kind === "quick_reply" || verdict.kind === "auto_execute"
+        ? verdict.replyText
+        : null,
     });
   },
 );

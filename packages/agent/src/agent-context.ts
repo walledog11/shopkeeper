@@ -137,6 +137,10 @@ export interface SupportContext extends BaseAgentContext {
     tag: string | null;
     aiSummary: string | null;
     shopifyCustomerId: string | null;
+    /** Message the persisted classifier evidence describes. */
+    requestSourceMessageId?: string | null;
+    /** Current newest customer message, used to reject stale classifier evidence. */
+    latestCustomerMessageId?: string | null;
   };
   customer: {
     id: string;

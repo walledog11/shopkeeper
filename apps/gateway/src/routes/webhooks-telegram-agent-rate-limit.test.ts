@@ -70,9 +70,36 @@ describe('POST /webhooks/telegram — help & summary', () => {
     const memberKey = await bindMember(chatId);
     const customer = await createTestCustomer(org.id, `cust_${chatId}@test.com`, { name: 'Dana' });
     const flagged = await createTestThread(org.id, customer.id, ChannelType.email);
+    const sourceMessage = await createTestMessage(flagged.id, 'Do you offer wholesale pricing?');
     await db.thread.update({
       where: { id: flagged.id },
-      data: { filterStatus: 'questionable', aiSummary: 'Wholesale pricing question' },
+      data: {
+        filterStatus: 'questionable',
+        aiTitle: 'Wholesale pricing question',
+        requestSourceMessageId: sourceMessage.id,
+        classifierSignals: {
+          version: 5,
+          language: 'en',
+          intents: {
+            mutative_request: false,
+            policy_question: true,
+            order_status: false,
+            fraud_signals: false,
+            contradiction: false,
+            out_of_scope_commercial: false,
+            forwarded_injection: false,
+            no_request: false,
+          },
+          requestFacts: {
+            ask: 'policy_question',
+            subject: 'wholesale pricing',
+            order: null,
+            deadline: null,
+            deadlineText: null,
+            alternative: null,
+          },
+        },
+      },
     });
 
     await request(app)
@@ -89,7 +116,7 @@ describe('POST /webhooks/telegram — help & summary', () => {
     // A flagged ticket is work: it is in the one numbered list with everything
     // else, not in a block of its own with its own question.
     expect(text).toContain('One sender looks questionable.');
-    expect(text).toContain('Dana wrote in.\nWholesale pricing question.');
+    expect(text).toContain('Dana: policy question — wholesale pricing.');
 
     const ctx = await getContext(org.id, memberKey);
     expect(ctx.pendingDigest?.threadIds).toEqual([flagged.id]);

@@ -8,9 +8,6 @@ import {
   shouldBlockCreateRefundForAlreadyRefundedOrder,
   shouldEscalateFulfilledAddressChangeRequest,
   shouldEscalateFulfilledCancelRequest,
-  stripCreateRefundForAlreadyRefundedOrders,
-  stripEmptySendReplyToolCalls,
-  stripInternalNotesWithoutActions,
 } from "./planner-safety/index.js";
 import type { AgentContext } from "./agent-context.js";
 import type { RawToolCall } from "./types.js";
@@ -120,8 +117,8 @@ describe("shouldEscalateFulfilledAddressChangeRequest", () => {
   });
 });
 
-describe("stripCreateRefundForAlreadyRefundedOrders", () => {
-  it("removes create_refund when the referenced order is already refunded", () => {
+describe("shouldBlockCreateRefundForAlreadyRefundedOrder", () => {
+  it("detects create_refund when the referenced order is already refunded", () => {
     const ctx = makeCtx({
       recentMessages: [{ senderType: "customer", contentText: "Can I get a refund for order #1020?" }],
       recentOrders: [{
@@ -141,41 +138,18 @@ describe("stripCreateRefundForAlreadyRefundedOrders", () => {
     ];
 
     expect(shouldBlockCreateRefundForAlreadyRefundedOrder(ctx, "Reply to the customer.", calls)).toBe(true);
-    expect(stripCreateRefundForAlreadyRefundedOrders(ctx, "Reply to the customer.", calls).map((call) => call.name)).toEqual([
-      "send_reply",
-    ]);
   });
 });
 
-describe("stripEmptySendReplyToolCalls", () => {
-  it("removes send_reply calls with missing or blank text", () => {
+describe("sendReplyHasText", () => {
+  it("detects missing or blank reply text", () => {
     const calls: RawToolCall[] = [
       { id: "tu_empty", name: "send_reply", input: { text: "   " } },
       { id: "tu_ok", name: "send_reply", input: { text: "Standard shipping takes 3-5 business days." } },
     ];
 
     expect(sendReplyHasText(calls[1])).toBe(true);
-    expect(stripEmptySendReplyToolCalls(calls).map((call) => call.id)).toEqual(["tu_ok"]);
-  });
-});
-
-describe("stripInternalNotesWithoutActions", () => {
-  it("removes a note from a reply-only plan", () => {
-    const calls: RawToolCall[] = [
-      { id: "tu_reply", name: "send_reply", input: { text: "I can't share that data." } },
-      { id: "tu_note", name: "add_internal_note", input: { text: "Customer requested private data." } },
-    ];
-
-    expect(stripInternalNotesWithoutActions(calls).map(call => call.name)).toEqual(["send_reply"]);
-  });
-
-  it("keeps a note that documents an action", () => {
-    const calls: RawToolCall[] = [
-      { id: "tu_refund", name: "create_refund", input: { order_id: "1", amount: "10.00" } },
-      { id: "tu_note", name: "add_internal_note", input: { text: "Refunded the order." } },
-    ];
-
-    expect(stripInternalNotesWithoutActions(calls)).toEqual(calls);
+    expect(sendReplyHasText(calls[0])).toBe(false);
   });
 });
 

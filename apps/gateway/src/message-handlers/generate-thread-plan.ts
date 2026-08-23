@@ -2,7 +2,7 @@ import { db } from '@shopkeeper/db';
 import { requireOrgThread, getLatestConversationMessage } from '@shopkeeper/agent/thread-auth';
 import { buildContext } from '@shopkeeper/agent/build-context';
 import { planAgent } from '@shopkeeper/agent/planner';
-import { classifyHomePlan } from '@shopkeeper/agent/plan-preview';
+import { decideAutonomy } from '@shopkeeper/agent/autonomy';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import {
   buildAgentPlanCacheRecord,
@@ -31,13 +31,13 @@ import { removePendingPlanForThread } from '../operator-context.js';
 
 const FAILURE_ROUTE = 'gateway:auto-plan';
 
-// A plan whose terminal tool is `ask_operator` classifies as needs_merchant_input;
+// A plan whose terminal tool is `ask_operator` resolves to needs_merchant_input;
 // surface its question so the operator-notification path can push it instead of a
 // plan-approval prompt. Null for every other plan shape.
 function merchantQuestionFor(plan: PackageAgentPlan | null, settings: OrgSettings): string | null {
   if (!plan) return null;
-  const classification = classifyHomePlan(plan, settings);
-  return classification.kind === 'needs_merchant_input' ? classification.question : null;
+  const verdict = decideAutonomy(plan, settings);
+  return verdict.kind === 'needs_merchant_input' ? verdict.question : null;
 }
 
 export interface GeneratedThreadPlan {
@@ -139,7 +139,7 @@ export async function generateThreadPlan(
     lastCustomerMessageId: pendingCustomerMessageId,
     settings,
   })) {
-    if (cached?.planId && cached.plan.steps.length > 0) {
+    if (cached?.planId && (cached.plan.steps.length > 0 || cached.plan.validation?.status === 'invalid')) {
       void captureAgentPlanGenerated({
         cacheHit: true,
         channel: thread.channelType,
@@ -192,7 +192,7 @@ export async function generateThreadPlan(
   // Live inbox: a fresh plan is cached — push so the "Needs you" card appears.
   await publishThreadEvent(organizationId, threadId);
 
-  if (cacheRecord.planId && plan.steps.length > 0) {
+  if (cacheRecord.planId && (plan.steps.length > 0 || plan.validation?.status === 'invalid')) {
     void captureAgentPlanGenerated({
       cacheHit: false,
       channel: thread.channelType,
@@ -249,7 +249,7 @@ async function buildAutoExecutionResult(
   const failed = findFailedToolResult(executed.result);
   return {
     autoExecuted: true,
-    autoExecutionKind: executed.classification.kind === 'quick_reply' ? 'safe_reply' : 'action',
+    autoExecutionKind: executed.verdict.kind === 'quick_reply' ? 'safe_reply' : 'action',
     autoExecutionStatus: failed ? 'error' : 'success',
     autoExecutionSummary: executed.result.summary,
     autoExecutionActions: executed.result.actionsPerformed,

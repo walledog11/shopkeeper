@@ -64,6 +64,42 @@ afterEach(() => {
 });
 
 describe('ActionPlanCard', () => {
+  it('renders invalid drafts without step toggles or an approval control', () => {
+    const onDismiss = vi.fn();
+    const plan: AgentPlan = {
+      instruction: 'Reply to the customer',
+      validation: {
+        status: 'invalid',
+        issues: [{
+          code: 'ungrounded_customer_reply',
+          message: 'The drafted reply contains an unsupported promise.',
+          toolCallId: 'reply-1',
+          tool: 'send_reply',
+        }],
+      },
+      steps: [{
+        id: 'reply-1',
+        tool: 'send_reply',
+        label: 'Send reply',
+        description: '"Your refund is complete."',
+        category: 'communication',
+        enabled: true,
+      }],
+      rawToolCalls: [{ id: 'reply-1', name: 'send_reply', input: { text: 'Your refund is complete.' } }],
+    };
+    const view = render(plan, { onDismiss });
+
+    expect(view.container.querySelector('[data-testid="action-plan-invalid"]')?.textContent)
+      .toContain('This draft cannot be approved');
+    expect(view.container.textContent).toContain('unsupported promise');
+    expect(view.container.querySelector('[data-testid="action-plan-run"]')).toBeNull();
+    expect(view.container.querySelector('[data-testid="action-plan-step-toggle"]')).toBeNull();
+
+    click(view.container.querySelector('[data-testid="action-plan-dismiss-invalid"]'));
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+    expect(view.onApprove).not.toHaveBeenCalled();
+  });
+
   it('renders and sends the approved reply tool call', () => {
     const plan: AgentPlan = {
       instruction: 'Reply to the customer',

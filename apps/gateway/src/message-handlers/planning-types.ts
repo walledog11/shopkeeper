@@ -41,7 +41,7 @@ export interface PrecomputedPlanResult {
   plan: AgentPlan;
   instruction: string;
   identity?: PlanIdentity;
-  // Set when the plan's terminal tool is `ask_operator` (classifyHomePlan →
+  // Set when the plan's terminal tool is `ask_operator` (decideAutonomy →
   // needs_merchant_input): the clarifying question to push to the operator.
   merchantQuestion?: string | null;
   autoExecuted?: boolean;

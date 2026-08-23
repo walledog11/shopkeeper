@@ -1,13 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
-import { ChannelType, SpendCapError, db, usdToNanoDollars } from '@shopkeeper/db';
+import { ChannelType, SenderType, SpendCapError, db, usdToNanoDollars } from '@shopkeeper/db';
 import {
   createTestOrg,
   createTestCustomer,
+  createTestMessage,
   createTestThread,
   cleanupTestData,
 } from '@shopkeeper/db/test-helpers';
+import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
+import { hashInstruction, hashPlan } from '@shopkeeper/agent/agent-actions';
+import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 
 const { sendMessageSpy, executeAgentTurnSpy } = vi.hoisted(() => ({
   sendMessageSpy: vi.fn().mockResolvedValue(true),
@@ -53,6 +57,66 @@ const app = createApp();
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 const originalSecret = process.env.INTERNAL_API_SECRET;
 const originalDashboardUrl = process.env.DASHBOARD_URL;
+
+async function parkCurrentPlan(params: {
+  clerkUserId?: string;
+  customerEmail: string;
+  instruction?: string;
+  rawToolCalls?: Array<{ id: string; name: string; input: unknown }>;
+  validation?: {
+    status: 'invalid';
+    issues: Array<{
+      code: 'invalid_tool_input';
+      message: string;
+    }>;
+  };
+}) {
+  const instruction = params.instruction ?? 'refund #1002';
+  const rawToolCalls = params.rawToolCalls ?? [{
+    id: 'send_1',
+    name: 'send_reply',
+    input: { text: 'I can help with that refund.' },
+  }];
+  const customer = await createTestCustomer(org.id, params.customerEmail);
+  const ticket = await createTestThread(org.id, customer.id, ChannelType.email);
+  const message = await createTestMessage(ticket.id, 'Please help with my order.', SenderType.customer);
+  const validation = params.validation ?? { status: 'valid' as const, issues: [] as [] };
+  const cache = buildAgentPlanCacheRecord({
+    instruction,
+    lastCustomerMessageId: message.id,
+    settings: resolveAgentSettings(null),
+    plan: {
+      instruction,
+      steps: rawToolCalls.map((call, index) => ({
+        id: `step-${index + 1}`,
+        tool: call.name,
+        label: call.name === 'send_reply' ? 'Send reply' : 'Run action',
+        description: call.name === 'send_reply' ? 'Reply to the customer' : 'Run the approved action',
+        category: call.name === 'send_reply' ? 'communication' : 'action',
+        enabled: true,
+      })),
+      rawToolCalls,
+      validation,
+    },
+  });
+  await db.thread.update({
+    where: { id: ticket.id },
+    data: { cachedPlan: cache as object, cachedPlanMessageId: message.id },
+  });
+  const memberKey = await resolveOperatorMemberKey(org.id, params.clerkUserId ?? 'usr_desk');
+  const pendingPlan = {
+    threadId: ticket.id,
+    instruction: cache.instruction,
+    rawToolCalls,
+    planId: cache.planId!,
+    sourceMessageId: message.id,
+    planHash: hashPlan(cache.plan),
+    instructionHash: hashInstruction(cache.instruction),
+    validation,
+  };
+  await updateContext(org.id, memberKey, { pendingPlan });
+  return { memberKey, ticket, message, cache, pendingPlan };
+}
 
 beforeEach(async () => {
   process.env.INTERNAL_API_SECRET = SECRET;
@@ -296,12 +360,7 @@ describe('POST /internal/operator/turn', () => {
   });
 
   it('reports a still-parked plan so the panel can offer approval', async () => {
-    const customer = await createTestCustomer(org.id, 'ticket@example.com');
-    const ticket = await createTestThread(org.id, customer.id, ChannelType.email);
-    const memberKey = await resolveOperatorMemberKey(org.id, 'usr_desk');
-    await updateContext(org.id, memberKey, {
-      pendingPlan: { threadId: ticket.id, instruction: 'refund #1002', rawToolCalls: [] },
-    });
+    await parkCurrentPlan({ customerEmail: 'ticket@example.com' });
 
     const res = await request(app)
       .post('/internal/operator/turn')
@@ -330,16 +389,6 @@ describe('POST /internal/operator/turn', () => {
 // A button press is a decision already made — it resolves the plan without a
 // model call, the way the messaging channels' keyword fast path does.
 describe('POST /internal/operator/plan-decision', () => {
-  async function parkPlan(planId: string) {
-    const customer = await createTestCustomer(org.id, `${planId}@example.com`);
-    const ticket = await createTestThread(org.id, customer.id, ChannelType.email);
-    const memberKey = await resolveOperatorMemberKey(org.id, 'usr_desk');
-    await updateContext(org.id, memberKey, {
-      pendingPlan: { threadId: ticket.id, instruction: 'refund #1002', rawToolCalls: [], planId },
-    });
-    return { memberKey, ticket };
-  }
-
   it('returns 401 when x-internal-secret is missing', async () => {
     const res = await request(app)
       .post('/internal/operator/plan-decision')
@@ -358,7 +407,7 @@ describe('POST /internal/operator/plan-decision', () => {
   });
 
   it('dismisses the named plan and leaves the queue empty', async () => {
-    const { memberKey } = await parkPlan('plan-dismiss-1');
+    const { memberKey, cache } = await parkCurrentPlan({ customerEmail: 'plan-dismiss-1@example.com' });
 
     const res = await request(app)
       .post('/internal/operator/plan-decision')
@@ -366,7 +415,7 @@ describe('POST /internal/operator/plan-decision', () => {
       .send({
         organizationId: org.id,
         clerkUserId: 'usr_desk',
-        planId: 'plan-dismiss-1',
+        planId: cache.planId,
         decision: 'dismiss',
       });
 
@@ -379,7 +428,7 @@ describe('POST /internal/operator/plan-decision', () => {
   // Addressed by planId, not by position: a plan someone resolved on their phone
   // must not let a stale panel act on whatever is sitting in that slot now.
   it('returns 409 when the plan is no longer queued', async () => {
-    const { memberKey } = await parkPlan('plan-live-1');
+    const { memberKey } = await parkCurrentPlan({ customerEmail: 'plan-live-1@example.com' });
 
     const res = await request(app)
       .post('/internal/operator/plan-decision')
@@ -387,11 +436,64 @@ describe('POST /internal/operator/plan-decision', () => {
       .send({
         organizationId: org.id,
         clerkUserId: 'usr_desk',
-        planId: 'plan-already-gone',
+        planId: '00000000-0000-0000-0000-000000000001',
         decision: 'approve',
       });
 
     expect(res.status).toBe(409);
     expect((await getContext(org.id, memberKey)).pendingPlans).toHaveLength(1);
+  });
+
+  it('rejects an invalid current plan before the approval executor', async () => {
+    const customer = await createTestCustomer(org.id, 'invalid-plan-decision@example.com');
+    const ticket = await createTestThread(org.id, customer.id, ChannelType.email);
+    const message = await createTestMessage(ticket.id, 'Please reply', SenderType.customer);
+    const validation = {
+      status: 'invalid' as const,
+      issues: [{ code: 'invalid_tool_input' as const, message: 'The reply text cannot be blank.' }],
+    };
+    const cache = buildAgentPlanCacheRecord({
+      instruction: 'Reply',
+      lastCustomerMessageId: message.id,
+      settings: resolveAgentSettings(null),
+      plan: {
+        instruction: 'Reply',
+        steps: [],
+        rawToolCalls: [{ id: 'send_1', name: 'send_reply', input: { text: '' } }],
+        validation,
+      },
+    });
+    await db.thread.update({
+      where: { id: ticket.id },
+      data: { cachedPlan: cache as object, cachedPlanMessageId: message.id },
+    });
+    const memberKey = await resolveOperatorMemberKey(org.id, 'usr_desk');
+    await updateContext(org.id, memberKey, {
+      pendingPlan: {
+        threadId: ticket.id,
+        instruction: 'Reply',
+        rawToolCalls: [{ id: 'send_1', name: 'send_reply', input: { text: '' } }],
+        planId: cache.planId!,
+        sourceMessageId: message.id,
+        planHash: hashPlan(cache.plan),
+        instructionHash: hashInstruction(cache.instruction),
+        validation,
+      },
+    });
+
+    const res = await request(app)
+      .post('/internal/operator/plan-decision')
+      .set('x-internal-secret', SECRET)
+      .send({
+        organizationId: org.id,
+        clerkUserId: 'usr_desk',
+        planId: cache.planId,
+        decision: 'approve',
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('failed validation');
+    expect((await getContext(org.id, memberKey)).pendingPlans).toHaveLength(1);
+    expect(executeAgentTurnSpy).not.toHaveBeenCalled();
   });
 });

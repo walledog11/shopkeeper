@@ -1,4 +1,5 @@
 import type { DbChannelType } from '@shopkeeper/db';
+import type { PlanSignal, PlanValidation } from '@shopkeeper/agent/types';
 
 declare module 'http' {
   interface IncomingMessage {
@@ -17,6 +18,8 @@ export interface PlanStep {
 export interface AgentPlan {
   steps: PlanStep[];
   rawToolCalls: Array<{ id: string; name: string; [key: string]: unknown }>;
+  signals?: PlanSignal[];
+  validation?: PlanValidation;
 }
 
 export interface ShopifyOrderPayload {

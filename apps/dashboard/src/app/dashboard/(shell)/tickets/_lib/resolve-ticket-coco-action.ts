@@ -5,7 +5,7 @@ import {
   readAgentPlanCacheRecordShape,
   type PlanThreadMessage,
 } from "@shopkeeper/agent/plan-cache-shape"
-import { classifyHomePlan } from "@shopkeeper/agent/plan-preview"
+import { decideAutonomy } from "@shopkeeper/agent/autonomy"
 import { planSignalTiers } from "@shopkeeper/agent/plan-signals"
 import type { AgentPlan, OrgSettings, Thread } from "@/types"
 import { REPLAN_CUSTOMER_REPLY_INSTRUCTION } from "@/lib/agent/replan-instruction"
@@ -145,10 +145,19 @@ export function resolveTicketCocoAction(input: ResolveTicketCocoActionInput): Ti
 
     if (replyActionsBlocked(input)) return null
 
-    const classification = classifyHomePlan(currentPlan, input.orgSettings, {
+    const verdict = decideAutonomy(currentPlan, input.orgSettings, {
       filterStatus: input.filterStatus,
     })
-    if (classification.kind === "quick_reply") {
+    if (verdict.kind === "invalid") {
+      return {
+        id: "fix-invalid-draft",
+        label: "Fix draft",
+        shortLabel: "Fix",
+        variant: "caution",
+        handler: "focus-plan",
+      }
+    }
+    if (verdict.kind === "quick_reply") {
       return {
         id: "send-reply",
         label: "Send reply",

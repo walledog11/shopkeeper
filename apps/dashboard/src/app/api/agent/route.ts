@@ -71,7 +71,7 @@ export const POST = withOrgRoute(
       orgId: org.id,
       threadId,
       settings,
-      allowedKinds: ["quick_reply", "needs_review", "auto_execute"],
+      executionIntent: "merchant_approved",
       failureRoute: "/api/agent",
       approvedToolCalls,
       expectedIdentity: { instructionHash: hashInstruction(instruction) },

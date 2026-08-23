@@ -149,7 +149,7 @@ describe("classification expectations", () => {
         merchantInputPlan,
       ).failures,
     ).toEqual([
-      'expected classifyHomePlan -> one of ["quick_reply", "needs_review"], got "needs_merchant_input"',
+      'expected decideAutonomy -> one of ["quick_reply", "needs_review"], got "needs_merchant_input"',
     ]);
   });
 });

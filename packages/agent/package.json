@@ -78,6 +78,14 @@
       "types": "./dist/plan-signals.d.ts",
       "default": "./dist/plan-signals.js"
     },
+    "./plan-validation": {
+      "types": "./dist/plan-validation.d.ts",
+      "default": "./dist/plan-validation.js"
+    },
+    "./autonomy": {
+      "types": "./dist/autonomy.d.ts",
+      "default": "./dist/autonomy.js"
+    },
     "./agent-actions": {
       "types": "./dist/agent-actions.d.ts",
       "default": "./dist/agent-actions.js"

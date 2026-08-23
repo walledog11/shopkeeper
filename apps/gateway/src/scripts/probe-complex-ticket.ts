@@ -34,11 +34,9 @@ const TICKET = [
 async function main() {
   const { db } = await import('@shopkeeper/db');
   const { generateThreadIntelligence } = await import('../message-handlers/intelligence.js');
-  const {
-    formatEscalatedTicketLine,
-    formatBriefingTicketLine,
-  } = await import('../maintenance/digest-briefing.js');
+  const { formatEscalatedTicketLine } = await import('../maintenance/digest-briefing.js');
   const { formatOperatorPlanMessage } = await import('../message-handlers/planning-notifications.js');
+  const { readRequestDisplay } = await import('../message-handlers/request-display.js');
 
   const org = await db.organization.create({
     data: { name: 'Probe Shop', clerkOrgId: `probe_${Date.now()}`, settings: {} },
@@ -90,24 +88,30 @@ async function main() {
       aiSummary: updated.aiSummary,
       requestSummary: updated.requestSummary,
       tag: updated.tag,
+      classifierSignals: updated.classifierSignals,
     };
 
     say('\n=== BRIEFING LINE (escalated) — AFTER the fix ===');
     say(formatEscalatedTicketLine(row));
 
-    say('\n=== BRIEFING LINE — what it would have said BEFORE (episode summary) ===');
-    say(formatEscalatedTicketLine({ ...row, requestSummary: null }));
-
-    say('\n=== INBOX LINE ===');
-    say(formatBriefingTicketLine(
-      customer.name, updated.aiTitle, updated.requestSummary, updated.tag, 'email',
-    ));
-
-    say('\n=== OPERATOR CARD header, from requestSummary ===');
+    say('\n=== OPERATOR CARD header, from structured request facts ===');
+    const signals = updated.classifierSignals as {
+      requestFacts?: unknown;
+      intents?: { no_request?: boolean };
+    } | null;
+    const requestDisplay = readRequestDisplay({
+      version: 1,
+      kind: 'classified',
+      sourceMessageId: 'probe-message',
+      facts: signals?.requestFacts,
+      noRequest: signals?.intents?.no_request === true,
+      topic: updated.aiTitle,
+    });
+    if (!requestDisplay) throw new Error('request display unavailable');
     say(formatOperatorPlanMessage(
       customer.name,
       'email',
-      updated.requestSummary ?? updated.aiSummary ?? '',
+      requestDisplay,
       [
         { id: 's1', tool: 'send_reply', label: 'Reply to customer', description: 'Reply', category: 'communication', enabled: true },
       ] as never,

@@ -12,13 +12,21 @@ function cacheRecord(plan: AgentPlan, messageId = customerMessageId) {
     instruction: plan.instruction,
     lastCustomerMessageId: messageId,
     settingsFingerprint: "test",
-    plan,
+    plan: {
+      ...plan,
+      validation: plan.validation ?? { status: "valid" as const, issues: [] },
+      routingEvidence: plan.routingEvidence ?? {
+        classifierState: "not_applicable" as const,
+        codes: [],
+      },
+    },
   }
 }
 
 function quickReplyPlan(): AgentPlan {
   return {
     instruction: "Reply with shipping policy",
+    validation: { status: "valid", issues: [] },
     rawToolCalls: [{ id: "reply-1", name: "send_reply", input: { text: "We ship in 2-3 days." } }],
     steps: [{
       id: "reply-1",
@@ -34,6 +42,7 @@ function quickReplyPlan(): AgentPlan {
 function refundPlan(): AgentPlan {
   return {
     instruction: "Issue refund",
+    validation: { status: "valid", issues: [] },
     rawToolCalls: [
       { id: "refund-1", name: "create_refund", input: { amount: "24.00" } },
       { id: "reply-1", name: "send_reply", input: { text: "Refund processed." } },
@@ -108,6 +117,33 @@ describe("resolveTicketCocoAction", () => {
     })
   })
 
+  it("returns fix draft and never quick-approves invalid plans", () => {
+    const invalidPlan: AgentPlan = {
+      ...quickReplyPlan(),
+      validation: {
+        status: "invalid",
+        issues: [{
+          code: "ungrounded_customer_reply",
+          message: "The drafted reply contains an unsupported promise.",
+          toolCallId: "reply-1",
+          tool: "send_reply",
+        }],
+      },
+    }
+
+    expect(resolveTicketCocoAction({
+      ...baseInput,
+      thread: {
+        cachedPlan: cacheRecord(invalidPlan),
+        cachedPlanMessageId: customerMessageId,
+      },
+    })).toMatchObject({
+      label: "Fix draft",
+      handler: "focus-plan",
+      variant: "caution",
+    })
+  })
+
   it("returns link customer when a plan needs Shopify context", () => {
     const orderToolCalls = [
       { id: "lookup-1", name: "get_shopify_orders", input: {} },
@@ -115,6 +151,7 @@ describe("resolveTicketCocoAction", () => {
     ]
     const orderPlan: AgentPlan = {
       instruction: "Look up order and reply",
+      validation: { status: "valid", issues: [] },
       signals: buildPlanSignals(["shopify_customer_unresolved"], orderToolCalls),
       rawToolCalls: orderToolCalls,
       steps: [

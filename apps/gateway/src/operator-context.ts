@@ -10,10 +10,13 @@
 
 import { db, Prisma } from '@shopkeeper/db';
 import type { Prisma as PrismaTypes } from '@prisma/client';
-import type { RawToolCall } from '@shopkeeper/agent/types';
+import type { PlanValidation, PlanValidationIssue, RawToolCall } from '@shopkeeper/agent/types';
 import type { ExpectedPlanIdentity } from '@shopkeeper/agent/plan-execution';
 import { getPlanExecution } from '@shopkeeper/agent/execution-ledger';
+import { AGENT_PLAN_CACHE_VERSION, readAgentPlanCacheRecordShape } from '@shopkeeper/agent/plan-cache-shape';
+import { hashInstruction, hashPlan } from '@shopkeeper/agent/agent-actions';
 import { isRecord } from './lib/typing.js';
+import { readRequestDisplay, type RequestDisplay } from './message-handlers/request-display.js';
 
 export interface ToolCall {
   id: string;
@@ -36,6 +39,14 @@ export interface PendingPlan {
   // without re-querying. Never used to decide what executes.
   customerName?: string;
   actionLabel?: string;
+  /** Display/control metadata only. Invalid calls are never executable. */
+  validation?: PlanValidation;
+  /** Immutable request copy used by every operator rendering surface. */
+  requestDisplay?: RequestDisplay;
+}
+
+export function isPendingPlanInvalid(plan: Pick<PendingPlan, 'validation'>): boolean {
+  return plan.validation?.status === 'invalid';
 }
 
 /**
@@ -144,6 +155,55 @@ function readToolCall(value: unknown): ToolCall | null {
   return { ...value, id: value.id, name: value.name };
 }
 
+const PLAN_VALIDATION_CODES = new Set<PlanValidationIssue['code']>([
+  'invalid_tool_input',
+  'duplicate_tool_call_id',
+  'already_refunded_action',
+  'orphan_internal_note',
+  'ungrounded_escalation_reason',
+  'ungrounded_customer_reply',
+]);
+
+function readPlanValidationIssue(value: unknown): PlanValidationIssue | null {
+  if (
+    !isRecord(value)
+    || typeof value.code !== 'string'
+    || !PLAN_VALIDATION_CODES.has(value.code as PlanValidationIssue['code'])
+    || typeof value.message !== 'string'
+  ) {
+    return null;
+  }
+  return {
+    code: value.code as PlanValidationIssue['code'],
+    message: value.message,
+    ...(typeof value.toolCallId === 'string' ? { toolCallId: value.toolCallId } : {}),
+    ...(typeof value.tool === 'string' ? { tool: value.tool } : {}),
+  };
+}
+
+function readPlanValidation(value: unknown): PlanValidation | undefined {
+  if (!isRecord(value)) return undefined;
+  if (value.status === 'valid' && Array.isArray(value.issues) && value.issues.length === 0) {
+    return { status: 'valid', issues: [] };
+  }
+  if (value.status !== 'invalid') return undefined;
+  if (!Array.isArray(value.issues)) {
+    return {
+      status: 'invalid',
+      issues: [{ code: 'invalid_tool_input', message: 'Stored draft validation metadata is malformed.' }],
+    };
+  }
+  const issues = value.issues
+    .map(readPlanValidationIssue)
+    .filter((issue): issue is PlanValidationIssue => issue !== null);
+  return issues.length > 0 && issues.length === value.issues.length
+    ? { status: 'invalid', issues }
+    : {
+        status: 'invalid',
+        issues: [{ code: 'invalid_tool_input', message: 'Stored draft validation metadata is malformed.' }],
+      };
+}
+
 function readPendingPlan(value: unknown): PendingPlan | null {
   if (
     !isRecord(value) ||
@@ -154,6 +214,8 @@ function readPendingPlan(value: unknown): PendingPlan | null {
     return null;
   }
 
+  const validation = readPlanValidation(value.validation);
+  const requestDisplay = readRequestDisplay(value.requestDisplay);
   return {
     threadId: value.threadId,
     instruction: value.instruction,
@@ -163,6 +225,8 @@ function readPendingPlan(value: unknown): PendingPlan | null {
     ...(typeof value.instructionHash === 'string' ? { instructionHash: value.instructionHash } : {}),
     ...(typeof value.customerName === 'string' ? { customerName: value.customerName } : {}),
     ...(typeof value.actionLabel === 'string' ? { actionLabel: value.actionLabel } : {}),
+    ...(validation ? { validation } : {}),
+    ...(requestDisplay ? { requestDisplay } : {}),
     rawToolCalls: value.rawToolCalls
       .map(readToolCall)
       .filter((toolCall): toolCall is ToolCall => toolCall !== null),
@@ -455,11 +519,68 @@ export function selectPendingPlan(
   return { error: ambiguous };
 }
 
-// Drop queue entries whose plan already reached a terminal execution outcome
-// (committed/failed/unknown) elsewhere — e.g. approved on the dashboard — so the
-// operator turn never shows or acts on a dead plan. Each stale entry is removed
-// atomically; `pending`/`claimed` executions stay (still actionable / in flight).
-// Called once per turn before the ledger and control tools read the context.
+async function pendingPlanMatchesCurrentCache(
+  organizationId: string,
+  plan: PendingPlan,
+): Promise<boolean> {
+  // Identity-less queue entries predate durable approval and cannot describe a
+  // current cache unambiguously. Do not offer them and wait for an approval to
+  // discover that they are stale.
+  if (!plan.planId || !plan.sourceMessageId || !plan.planHash || !plan.instructionHash) {
+    return false;
+  }
+  const thread = await db.thread.findFirst({
+    where: { id: plan.threadId, organizationId },
+    select: { cachedPlan: true, cachedPlanMessageId: true },
+  });
+  const cached = readAgentPlanCacheRecordShape(thread?.cachedPlan);
+  return Boolean(
+    cached
+    && cached.version === AGENT_PLAN_CACHE_VERSION
+    && cached.planId === plan.planId
+    && cached.lastCustomerMessageId === plan.sourceMessageId
+    && thread?.cachedPlanMessageId === plan.sourceMessageId
+    && hashPlan(cached.plan) === plan.planHash
+    && hashInstruction(cached.instruction) === plan.instructionHash
+  );
+}
+
+async function resolveStalePendingPlanContext(
+  organizationId: string,
+  memberKey: string,
+  plan: PendingPlan,
+): Promise<void> {
+  if (plan.planId) {
+    await resolvePendingPlanContexts(organizationId, memberKey, plan);
+    return;
+  }
+
+  // Legacy entries can carry fields that the current parser deliberately drops.
+  // Full-object equality would leave those rows parked forever. Remove only
+  // identity-incomplete entries for this thread, so a concurrently parked v7
+  // replacement (which has all four identity fields) survives the cleanup.
+  const threadMatch = JSON.stringify([{ threadId: plan.threadId }]);
+  await db.$executeRaw`
+    UPDATE operator_contexts
+    SET pending_plans = COALESCE((
+          SELECT jsonb_agg(element)
+          FROM jsonb_array_elements(COALESCE(pending_plans, '[]'::jsonb)) AS element
+          WHERE element->>'threadId' IS DISTINCT FROM ${plan.threadId}
+             OR (
+               element->>'planId' IS NOT NULL
+               AND element->>'sourceMessageId' IS NOT NULL
+               AND element->>'planHash' IS NOT NULL
+               AND element->>'instructionHash' IS NOT NULL
+             )
+        ), '[]'::jsonb)
+    WHERE organization_id = ${organizationId}::uuid AND member_key = ${memberKey}
+      AND pending_plans @> ${threadMatch}::jsonb`;
+}
+
+// Drop queue entries whose plan is terminal or no longer matches the exact
+// current cache. This also removes pre-v7 and identity-less rows on first use;
+// proactive/system plans survive when their v7 cache identity is genuinely
+// current, rather than via a display-origin exception.
 export async function loadLivePendingPlans(
   organizationId: string,
   memberKey: string,
@@ -469,12 +590,14 @@ export async function loadLivePendingPlans(
 
   const live: PendingPlan[] = [];
   for (const plan of context.pendingPlans) {
-    if (plan.planId) {
-      const execution = await getPlanExecution(organizationId, plan.planId).catch(() => null);
-      if (execution && execution.status !== 'pending' && execution.status !== 'claimed') {
-        await resolvePendingPlanContexts(organizationId, memberKey, plan).catch(() => undefined);
-        continue;
-      }
+    const execution = plan.planId
+      ? await getPlanExecution(organizationId, plan.planId).catch(() => null)
+      : null;
+    const terminal = execution && execution.status !== 'pending' && execution.status !== 'claimed';
+    const current = terminal ? false : await pendingPlanMatchesCurrentCache(organizationId, plan);
+    if (terminal || !current) {
+      await resolveStalePendingPlanContext(organizationId, memberKey, plan).catch(() => undefined);
+      continue;
     }
     live.push(plan);
   }

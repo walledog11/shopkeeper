@@ -9,6 +9,8 @@ const customerMessageId = "msg-customer-1"
 function quickReplyPlan(): AgentPlan {
   return {
     instruction: "ignored-on-plan-object",
+    validation: { status: "valid", issues: [] },
+    routingEvidence: { classifierState: "not_applicable", codes: [] },
     steps: [{
       id: "send_1",
       tool: "send_reply",

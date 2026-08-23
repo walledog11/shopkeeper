@@ -8,6 +8,7 @@ type FieldDefinition =
       description: string;
       required?: boolean;
       enum?: readonly string[];
+      nonBlank?: boolean;
     }
   | {
       kind: "number";
@@ -54,7 +55,7 @@ export class ToolInputValidationError extends Error {
 
 export function stringArg(
   description: string,
-  options: { required?: boolean; enum?: readonly string[] } = {},
+  options: { required?: boolean; enum?: readonly string[]; nonBlank?: boolean } = {},
 ): FieldDefinition {
   return { kind: "string", description, ...options };
 }
@@ -104,6 +105,7 @@ function fieldSchema(field: FieldDefinition): Record<string, unknown> {
     type: field.kind,
     description: field.description,
     ...(field.kind === "string" && field.enum ? { enum: field.enum } : {}),
+    ...(field.kind === "string" && field.nonBlank ? { minLength: 1 } : {}),
   };
 }
 
@@ -160,6 +162,9 @@ function parseField(field: FieldDefinition, value: unknown, path: string): unkno
     }
     if (field.enum && !field.enum.includes(value)) {
       throw validationMessage(path, `must be one of: ${field.enum.join(", ")}.`);
+    }
+    if (field.nonBlank && value.trim().length === 0) {
+      throw validationMessage(path, "must not be blank.");
     }
     return value;
   }

@@ -16,7 +16,7 @@ This file used to claim "every claim carries a `file:line`" as though that were 
 
 The problems are on either side of it.
 
-**Nothing owns the autonomy decision.** It is spread across four call sites in two packages, evaluated in two different orders, and its final gate was, until Phase 1, a substring match on English prose.
+**At the audited commit, nothing owned the autonomy decision.** It was spread across four call sites in two packages, evaluated in two different orders, and its final gate had been a substring match on English prose. **Phase 3 closed this on 2026-08-22:** `decideAutonomy(plan, settings, context)` is now the single planning/preview decision owner; the executor retains only its authoritative temporal policy backstop.
 
 **The output layer is bigger than the agent that feeds it.** 2,790 source LOC and 2,289 test LOC of hand-written English generation, against a 118-line agent loop.
 
@@ -55,6 +55,8 @@ And the warning text is known to be wrong: the 2026-08-20 run recorded `No match
 
 ### 2.2 The autonomy decision has no owner
 
+*Historical finding, closed by Phase 3. The table below describes the audited architecture, not the current v7 plan path.*
+
 The same question — "may this run without a human?" — is answered in four places:
 
 | Where | When | What it decides |
@@ -69,6 +71,8 @@ They are chained through a mutable field: `routePlan` writes `plan.routing`, and
 Nothing guarantees the four agree. There is no single function you can read to learn what the agent is allowed to do.
 
 ### 2.3 Six sequential repair passes over the model's output
+
+*Historical finding, closed by Phase 2. The editors/strip passes are gone. Valid plans may still undergo one explicit system-authored escalation materialization; invalid model output is preserved and cannot execute.*
 
 `packages/agent/src/planner.ts:135-192`, in order:
 
@@ -87,9 +91,9 @@ This is the same pattern CLAUDE.md already names for prompts — *"a prompt grow
 
 ### 2.4 The output layer is bigger than the agent
 
-Measured at the audit's own commit (`0f396f50~1`), with the tree as of 2026-08-22 beside it:
+Historical measurement at the audit's own commit (`0f396f50~1`), with the pre-remediation verification snapshot from 2026-08-22 beside it. These are pinned comparison numbers, not current-worktree totals:
 
-| File | Source (then → now) | Tests (then → now) |
+| File | Source (audit → verification snapshot) | Tests (audit → verification snapshot) |
 |---|---:|---:|
 | `digest-briefing.ts` | 1,068 → 1,100 | 655 → 789 |
 | `digest.ts` | 758 → 762 | 675 → 712 |
@@ -168,7 +172,7 @@ type PlanSignal = {
 ### B. One autonomy function
 
 ```ts
-decideAutonomy(plan, signals, settings, context) → Verdict
+decideAutonomy(plan, settings, context) → AutonomyVerdict
 ```
 
 One place, one return type. `routePlan` and `classifyHomePlan` collapse into it. The executor enforces the verdict rather than re-deriving policy; static policy is evaluated once. The chained mutable `plan.routing` field disappears.
@@ -177,7 +181,7 @@ This is the change that makes the system explainable — you can answer "why did
 
 ### C. Validate plans, don't repair them
 
-Replace the six repair passes with one validation pass returning `valid | invalid(signals)`. Move what the strip-passes enforce into tool schemas where possible (an empty `send_reply.text` should fail schema validation, not be silently dropped later). A plan that fails validation goes to the merchant with the reason — it does not get edited and shipped.
+Replace the six repair passes with one validation pass returning `valid | invalid(issues)`. Move what the strip-passes enforce into tool schemas where possible (an empty `send_reply.text` should fail schema validation, not be silently dropped later). A plan that fails validation goes to the merchant with the validation issues — it does not get edited and shipped.
 
 Keep `groundEscalationReasons` / `groundReplyText` as *detectors*, not editors: an ungrounded claim marks the plan invalid instead of having the sentence excised.
 
@@ -214,9 +218,9 @@ Estimates are engineering days for one person, and they are estimates. "Gate" me
 |---|---|---:|---:|---|---|
 | 0 | Live bugs | ~1.5 d | ~0 | none owed | **Closed** — 0.1 (#54), 0.3 (#55); 0.2 was already fixed, 0.4 dropped |
 | 1 | Typed signals (A) | ~1 d | −40 | No | **Closed** — 1.1–1.5 |
-| 2 | Validate, don't repair (C) | ~2 d | −150 | Yes | Open |
-| 3 | One autonomy function (B) | ~3 d | −400 | Yes | Open — absorbs the 0.4 regex deletion |
-| 4 | Structured rendering (D) | 8–10 d | −1,500 | Yes + phone | **In progress** — 4.1–4.3 (#56, #57), 4.5, and 4.4's ask-less renderer done; 4.4 now waits only on pre-v5 threads aging out |
+| 2 | Validate, don't repair (C) | ~2 d | −150 | Yes | **Implementation complete 2026-08-22** — model eval gate remains |
+| 3 | One autonomy function (B) | ~3 d | −400 | Yes | **Implementation complete 2026-08-22** — model eval gate remains |
+| 4 | Structured rendering (D) | 8–10 d | −1,500 | Yes + phone | **Implementation complete 2026-08-22** — model eval + live phone gates remain |
 | 5 | Cost & housekeeping | ~3 d | −350 (unmeasured) | 5.2 only | Open — 5.1 closed, 5.1a struck; 5.2 and 5.3 re-sized after re-verification. Nothing here gates Phase 3 |
 
 ---
@@ -255,26 +259,31 @@ Smallest change with the largest safety return. Phase 3 depends on it.
 
 ### Phase 2 — Validate, don't repair
 
-- [ ] **2.1** Move what the strip-passes enforce into tool schemas where the schema can express it — an empty `send_reply.text` should fail validation, not be silently dropped three passes later.
-- [ ] **2.2** Convert `groundEscalationReasons` and `groundReplyText` from editors to detectors: emit a `blocking` signal instead of rewriting the text.
-- [ ] **2.3** Collapse the remaining strip-passes into one validation pass returning `valid | invalid(signals)`.
-- [ ] **2.4** Route `invalid` plans to the merchant with the reason. Nothing is edited and shipped.
+- [x] **2.1** Move what the strip-passes enforce into tool schemas where the schema can express it — an empty `send_reply.text` should fail validation, not be silently dropped three passes later. *(Messaging schemas reject trimmed-empty text at runtime as well as in JSON Schema.)*
+- [x] **2.2** Convert `groundEscalationReasons` and `groundReplyText` from editors to detectors: emit validation issues instead of rewriting the text. *(The editors and fallback copy are deleted; display signals are derived from the issues.)*
+- [x] **2.3** Collapse the remaining strip-passes into one validation pass returning `valid | invalid(issues)`. *(`planner.ts` calls `validatePlan` exactly once on the original captured calls, before routing materialization.)*
+- [x] **2.4** Persist explicit plan validity with the validation reasons. Route `invalid` plans to the merchant with those reasons. Nothing is edited and shipped. *(Current cache v7, gateway pending-plan persistence, ticket card, and home card all carry the discriminated result; zero-step invalid plans remain visible.)*
+- [x] **2.4a** Make invalid plans non-executable on every path, including one-tap and operator-channel approval. A merchant may regenerate, revise, dismiss, or take over; approval must never replay the invalid calls verbatim. *(Core rejects before identity/ledger/tool selection; dashboard and operator channels remove approval controls. Dismissal clears the exact cached plan identity.)*
 - [ ] **2.5 Gate.** This changes what reaches the customer on plans the model got wrong — exactly what the fixtures grade.
 
-**Done when:** `planner.ts` contains one validation call, not six mutation passes.
+**Done when:** `planner.ts` contains one validation call, not six mutation passes. **Met.** Unit, typecheck, lint, and database-backed integration suites pass; 2.5 stays open only because this workspace has no real model key for the paid eval gate.
+
+**Execution-boundary details landed with this phase:** validation runs against the model's original calls before any deterministic escalation materialization; operation-aware grounding requires the matching refund/return/cancel action and checks every claim in a compound sentence; invalid proposals and their original calls are preserved. Current v7 cache identity is required for actionability, legacy entries are pruned from operator queues, approval and dismissal serialize on the thread row, and a dismissal cannot report success after a plan has been claimed. Partial approvals also preserve the customer-facing send/action set atomically: changing an action requires a revised reply rather than sending copy that describes work no longer approved. Retryable `BadRequest` failures remain parked; only terminal/claimed conflicts resolve the plan across devices.
 
 ---
 
 ### Phase 3 — One autonomy function
 
-- [ ] **3.1** Write `decideAutonomy(plan, signals, settings, context) → Verdict` with a single return type covering escalate / needs_merchant_input / needs_review / quick_reply / auto_execute.
-- [ ] **3.2** Move `routePlan`'s decision and `classifyHomePlan`'s classification into it. Delete both.
-- [ ] **3.3** Remove the `plan.routing` mutable-field chaining; the verdict carries the merchant question.
-- [ ] **3.4** Evaluate static policy once. The executor enforces the verdict rather than re-deriving it.
-- [ ] **3.5** Delete `computeLegacyRouting` + `logRoutingShadow` (prior work order item 9). **The ~340 LOC figure this item carried is not supported** — the two functions are ~72 lines together (`planner-routing.ts:130-172` and `:179-209`). Any larger number has to come from helpers only they reach, and nothing here established which. Measure before quoting a size. Decide the no-signals fallback explicitly first: missing signals is a real state (classifier outage, `channels.ts:296-311` fast path).
+- [x] **3.1** Write `decideAutonomy(plan, settings, context) → AutonomyVerdict` with a single return type covering invalid / escalate / needs_merchant_input / needs_review / quick_reply / auto_execute. *(Signals and routing evidence live on the plan; the closed verdict also carries exact executable calls, approval eligibility, and closed reason codes.)*
+- [x] **3.2** Move `routePlan`'s decision and `classifyHomePlan`'s classification into it. Delete both. *(Dashboard, gateway, recovery, digest, eval, and execution consumers now call the shared verdict.)*
+- [x] **3.3** Remove the `plan.routing` mutable-field chaining; the verdict carries the merchant question. *(Current v7 writers persist typed `routingEvidence` only; compatibility-only legacy readers still accept the old field read-only.)*
+- [x] **3.4** Evaluate planning-time policy once inside `decideAutonomy`. Preserve authoritative execution-time policy validation against current settings, authentication state, and verified-order scope; the executor is a temporal safety backstop, not a second autonomy owner. *(Callers now provide `executionIntent`, not policy-defining allowed-kind arrays.)*
+- [x] **3.5** Delete `computeLegacyRouting` + `logRoutingShadow` (prior work order item 9). *(The no-signals decision is explicit: missing or source-unaligned classifier evidence fails closed to review.)*
 - [ ] **3.6 Gate.** Full suite, not the core gate.
 
-**Done when:** "why did the agent send that?" is answerable by reading one function.
+**Done when:** "why did the agent send that?" is answerable by reading one function. **Met:** `decideAutonomy` owns the verdict and supplies closed reason codes; runtime policy remains a temporal enforcement check, not an alternate autonomy classifier.
+
+**Local gate status (2026-08-22):** agent passed 806 unit + 70 integration tests; gateway passed 379 unit + 840 integration tests (1 skipped); dashboard passed 750 unit + 660 integration tests (3 skipped). All three pass typecheck and lint; the agent package build, repository structure checks, and `git diff --check` also pass. 3.6 remains unchecked only because the paid model suite requires a real `ANTHROPIC_API_KEY`, which is absent from this workspace.
 
 ---
 
@@ -285,7 +294,7 @@ The real project, and the one that needs product judgment rather than only engin
 - [x] **4.1** Design the field schema. Start from what the briefing and the operator card actually need to say, not from what the classifier currently emits. *(PR #56. `RequestFacts { ask, subject, order, deadline, deadlineText, alternative }` in `packages/agent/src/classifier-signals.ts`; `ask` is a closed vocabulary so consumers branch on a value, never on prose.)*
 - [x] **4.2** Move the classifier to schema-enforced structured output (`output_config` + `json_schema`) — this also closes prior work order item 5, which flagged that the one call on every inbound message's critical path asks for JSON in prose. `voice-synthesis.ts:129-134` already demonstrates the pattern in this codebase. *(PR #56. `CLASSIFIER_OUTPUT_SCHEMA` covers every field the prompt asks for, not just the new ones. `CLASSIFIER_VERSION` → 5. A `Today:` line goes in the user message — not the system prompt — so "by Friday" can resolve to a date without moving the cached prefix.)*
 - [x] **4.3** Write the renderer: compose sentences from fields, with explicit field priority so the load-bearing fact leads. *(PR #56 built `briefing-fields.ts` — deadline → who → ask — and wired `formatTicketLine`. `byDeadlineFirst` was built and left uncalled for a day — the line-level lead landed in #56 and the list-level ordering only on 2026-08-22. See the Decisions note below. PR #57 wired the four remaining lines: `formatEscalatedTicketLine`, `formatBlockedTicketLine`, `formatApprovalItemLine` (both call sites; the operator select never read `classifierSignals` at all) and the flagged line in `digest.ts`. Deadlines render from the date, never by rewording the customer: `deadlineText` prints verbatim or not at all, so there is nothing to repair afterwards.)*
-- [ ] **4.4** Delete the tense engine (`humanizeReportedSummary`, `REPORTED_VERB_PAST`, `REPORTED_SPEECH`, `SUMMARY_PREAMBLE`), `tidyPunctuation`, and the truncation cascade. **No longer blocked on 4.3 — blocked on two decisions instead**, and the second is the larger one:
+- [x] **4.4** Delete the tense engine (`humanizeReportedSummary`, `REPORTED_VERB_PAST`, `REPORTED_SPEECH`, `SUMMARY_PREAMBLE`), `tidyPunctuation`, and the truncation cascade. *(Completed 2026-08-22: those symbols are gone; structured facts/`RequestDisplay` own phone lines, source-verbatim short quotes remain bounded and postal-redacted, and the old multi-budget cascade collapsed to a general phone-line bound.)* The implementation resolved two historical blockers:
   - *Pre-v5 threads.* Every line prefers fields, but the prose path is still the fallback for threads classified before version 5, so deleting it strands them. Backfill `requestFacts` onto open pre-v5 threads, or keep the fallback until they age out. v5 shipped 2026-08-21 in #56 and prod has no merchants, so the stranded population is test threads — "let them age out" is close to free.
   - *`ask: "none"`.* `formatFactsBriefingLine` returns null when `!parts.ask && !parts.deadline` (`briefing-fields.ts:121`), and `ask: "none"` is a legitimate **v5** output. This item read that as a rendering decision — what should an ask-less line say — because the existing-customer email fast path skipped the classifier and wrote `requestFacts: emptyRequestFacts()`, so **every repeat customer emailing in got `ask: "none"`** permanently: a precomputed result also sets `skipSummary` (`inbound-persistence.ts:339`), so nothing filled the fields in later. **That was a bug, not a decision, and it is fixed** — the fast path now classifies and overrides only the spam verdict, so the fields land and the placeholder survives only for a failed classification.
 
@@ -293,20 +302,15 @@ The real project, and the one that needs product judgment rather than only engin
 
     **The genuine ask-less case is now rendered from fields** (`askLessLine` in `briefing-fields.ts`). Two states share `ask: "none"` and want opposite lines, and `no_request` — a field, not a reading of the summary — is what separates them: `no_request: true` prints "Dana wrote in — nothing asked yet"; a classifier miss prints person · order · `aiTitle`. `aiTitle` is three to six words by construction and prints verbatim, which is what lets it stand in for the prose path instead of extending it. Deliberately not "said hello": `no_request` also covers "yo" and "Test", and naming a greeting nobody wrote is the same defect as re-tensing their sentence.
 
-  So one blocker is left, and it is the cheap one: **pre-v5 threads**. They keep the prose path on purpose. A version-4 row has no `order` field and an `aiSummary` that states the whole request, so a title line is strictly *less* than the prose it would replace — `digest-briefing.test.ts` guards this deliberately, and the first attempt at rendering those from `aiTitle` broke it in exactly that way. Let them age out; prod has no merchants, so the population is test threads. **This is where the ~1,500-line deletion actually lands, and nothing but time is now in front of it.**
+  The pre-v5 population was test data, and tests do not age out. The fixtures were migrated intentionally to v5/structured unavailable states; production current-plan and pending-plan readers now reject or prune legacy actionable state instead of routing it through prose repair.
 
   One thing that fell out of the wiring: `rowRequestFacts` documented itself as returning null for pre-version-5 threads and did not. `parseClassifierSignals` fills `requestFacts` with `emptyRequestFacts()` whatever version wrote the row, so a v4 thread came back with empty facts, not null. It was invisible while an unnamed ask rendered no line — the row reached prose either way — and became a wrong line the moment one rendered. The check now reads the version it always claimed to read.
 - [x] **4.5** Collapse the remaining naming copies — `anonymousNoun`, `namelessNoun`, `customer-name.ts` — onto the one helper. *(`packages/agent/src/person-name.ts`: `classifyPerson` answers who this is once, and `personLabel` / `personSubject` / `personObject` render it in the three registers English needs — a list row, the start of a sentence, after a preposition. The six copies are gone, `customerFirstName`'s two implementations with them. It also closes the §2.5 bug at its remaining end: the operator card never read verification, so it opened "Someone on your storefront replied" one line above its own "They confirmed the email on #1024" — it now says "The customer", and drops the order number because the next line already prints it. The dashboard's `getCustomerName` stays: it derives a row label from a `platformId`, which is a different question, and now shares only the constant.)*
-- [ ] **4.6** ~~Rewrite the notification tests against fields. They currently assert exact English strings, which is why they pass while the output is wrong.~~ **Misdescribed, and it hides a bigger gap.** Counted 2026-08-22: 115 assertions across the two files, and most are not the problem — they are verbatim customer quotes (`Bo wrote: "The sweater arrived ripped along the seam."`) or lines already composed from fields. Both are legitimate golden assertions on a renderer, and they work: five of them caught a wrong change during 4.4's ask-less wiring, three of those correctly.
-
-  The *fixtures* are the problem. `digest-briefing.test.ts` mentions `classifierSignals` 6 times across 46 `it()` blocks; `planning-notifications.test.ts` mentions it — and `requestFacts` — **zero times across 37**. So the notification tests almost entirely grade the prose path while production takes the field path. Same defect class 5.1a was wrongly accused of, one layer over, and here it is real.
-
-  **And for the operator card the fixtures are right, because the code reads no fields at all.** `planning-notifications.ts` (689 LOC) contains no reference to `requestFacts` or `classifierSignals`. 4.3 records "the four remaining lines" as wired, and all four are in `digest-briefing.ts` / `digest.ts` — the briefing. **The operator card — the surface the merchant actually approves plans from, and the one 4.7 insists on verifying by phone — was never converted.** It composes from `aiSummary` / `requestSummary` prose end to end. It did get 4.5's naming helper, which is probably what made it look done.
-
-  So the real remaining work is: give the operator card the 4.3 treatment, then migrate the fixtures on both files to v5 signals, then the assertions that survive are the ones worth keeping. Sizing this needs a read of `formatOperatorPlanMessage` and `formatOperatorDraftSummary`, not an estimate carried forward from here.
+- [x] **4.6** ~~Rewrite the notification tests against fields. They currently assert exact English strings, which is why they pass while the output is wrong.~~ **Completed 2026-08-22 as a fixture migration, not a ban on exact renderer assertions.** Operator-card, draft-summary, pending-ledger, digest, proactive-system, stale-cache, and postal-redaction fixtures now exercise `RequestDisplay`/v5 fields; legitimate source-verbatim and renderer golden assertions remain.
+  The defect it closed was fixture-level: the tests exercised prose while production briefing lines preferred fields, and the operator card itself had not consumed fields. `RequestDisplay` now carries the immutable, source-aligned display snapshot through cards, re-drafts, parked state, ledgers, and digests.
 - [ ] **4.7 Gate**, plus a live phone round-trip: operator copy is verified by phone, not by evals.
 
-**Done when:** `digest-briefing.ts` contains no regex over model-written prose.
+**Done when:** `digest-briefing.ts` contains no regex over model-written prose. **Met 2026-08-22.**
 
 **Decisions:**
 - ~~What does a briefing line lead with when a ticket has several asks?~~ **Decided 2026-08-21: the deadline.** Implemented in `formatDeadlineLead` and wired into all five renderers.
@@ -318,7 +322,7 @@ The real project, and the one that needs product judgment rather than only engin
 
   The flagged group is ordered *after* `DIGEST_QUESTIONABLE_LIMIT` cuts it, so the deadline decides which of the ten leads, never which ten there are.
 - ~~Should an unverified storefront visitor and a verified one read differently, and how?~~ **Decided 2026-08-22, in code.** `classifyPerson` splits `visitor` from `verified` (`person-name.ts`), and the three renderers print the split: a visitor is "Someone on your storefront" as a sentence subject and "the visitor" after a preposition; a verified shopper is "The customer on #1024", scoped to the orders they proved and never to an account.
-- [ ] Postal addresses currently reach the merchant's phone unredacted — `redactBriefingContacts` handles emails and links only. Redact, or keep? **Still open.**
+- [x] Redact full postal addresses from phone notifications by default. *(Cards, drafts, plan steps, escalation reasons, questions, auto-execution notices, ledgers, and digest/source-verbatim lines redact structured tool-input address values plus recognizable street/postal text. Address-change requests never fall back to a raw quote.)* The merchant can open the authenticated dashboard for the complete address; lock-screen copy does not need it.
 
 ---
 
@@ -393,16 +397,10 @@ Phase 5 and stopped there, which left most of the plan carried on the old footin
 - *Phase 1* — holds exactly. Nine `ProducedPlanSignalCode`s plus `legacy_warning`, and
   `warningBlocksQuickReply` / `isShopifyCustomerWarning` / `planWarningTiers` return zero
   hits repo-wide.
-- *Phases 2 and 3* — open, no factual claims beyond 3.5, which held on the first sweep.
-- *Phase 4* — 4.1, 4.2 and 4.6 hold (`CLASSIFIER_VERSION = 5`, `CLASSIFIER_OUTPUT_SCHEMA`
-  wired at `email-classification.ts:410`; 118 exact-English assertions across the two
-  notification test files, which is what 4.6 exists to fix). **4.3 did not.**
+- *Phases 2 and 3* — implementation complete 2026-08-22; database-backed and full repository suites pass. Only the real-model eval gate remains open.
+- *Phase 4* — 4.1–4.6 hold. Operator cards, draft summaries, pending-plan ledgers, and digests consume structured `RequestDisplay`; the prose fallback and its fixtures are gone. 4.7 still requires the real-model eval and live-phone gates.
 
-**`byDeadlineFirst` is built, tested, and never called.** It was recorded twice as shipped
-— once in 4.3's note and once as a closed decision — and it has no production call site.
-The line-level lead shipped; the list-level ordering did not. This is the tenth correction,
-and the only one so far where the audit claimed *code* was doing something it does not do,
-rather than miscounting something it does.
+**`byDeadlineFirst` was initially built and tested without a production call site.** That gap was subsequently closed on 2026-08-22; all three digest groups now call it.
 
 It also names the gap that let it through, and the first explanation of that gap — that
 `knip` counts unused exports against a 139-of-151 warning baseline rather than failing on

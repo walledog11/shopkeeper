@@ -1,12 +1,10 @@
 import { db, SenderType } from "@shopkeeper/db"
 import type { ChannelType, OrgSettings } from "@/types"
 import { getCurrentPlanForThread } from "@shopkeeper/agent/plan-cache-shape"
+import { decideAutonomy } from "@shopkeeper/agent/autonomy"
 import {
   buildPlanPreview,
   buildHomeActionDisplay,
-  classifyHomePlan,
-  isEscalationOnlyPlan,
-  planEscalationReason,
   planReplyText,
 } from "@shopkeeper/agent/plan-preview"
 import {
@@ -74,12 +72,13 @@ export async function loadNeedsAttention(
     if (!plan) return []
 
     const copy = buildPlanPreview(plan, thread.aiSummary, latestMessage.contentText)
-    const classification = classifyHomePlan(plan, settings, {
+    const verdict = decideAutonomy(plan, settings, {
       filterStatus: thread.filterStatus,
     })
     const kind: HomeNeedsAttentionItem["kind"] =
-      classification.kind === "quick_reply" ? "quick_reply"
-        : classification.kind === "needs_merchant_input" ? "needs_merchant_input"
+      verdict.kind === "quick_reply" ? "quick_reply"
+        : verdict.kind === "needs_merchant_input" ? "needs_merchant_input"
+          : verdict.kind === "invalid" ? "invalid"
           : "needs_review"
 
     return [{
@@ -100,12 +99,15 @@ export async function loadNeedsAttention(
       actionText: copy.actionText,
       actionDisplay: buildHomeActionDisplay(plan),
       replyText: planReplyText(plan),
-      question: classification.question,
+      question: verdict.kind === "needs_merchant_input" ? verdict.question : null,
       orderRef: copy.orderRef,
       tag: thread.tag,
       isVip: vipCustomerIds.has(thread.customerId),
-      isEscalationOnly: isEscalationOnlyPlan(plan),
-      escalationReason: planEscalationReason(plan),
+      isEscalationOnly: verdict.kind === "escalate" && !planReplyText(plan),
+      escalationReason: verdict.kind === "escalate" ? verdict.escalationReason : null,
+      validationIssues: plan.validation?.status === "invalid"
+        ? plan.validation.issues.map(issue => issue.message)
+        : [],
     }]
   })
 }

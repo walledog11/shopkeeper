@@ -217,7 +217,7 @@ export async function pushDeliveryExceptionApprovalPlan(
     thread.aiSummary,
     plan,
     instruction,
-    { identity: generated.identity },
+    { identity: generated.identity, systemRequest: 'delivery_exception' },
   );
   return 'plan_pushed';
 }

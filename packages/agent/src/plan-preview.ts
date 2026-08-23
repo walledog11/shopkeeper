@@ -1,8 +1,6 @@
-import type { AgentPlan, OrgSettings, PlanStep, RawToolCall } from "./types.js"
-import { resolveAgentSettings, TIERS_THAT_AUTO_EXECUTE, type AutonomyTier } from "./settings.js"
-import { planHasSignal, planSignalTiers, planSignals } from "./plan-signals.js"
-import { isQuestionableSender } from "./sender-trust.js"
-import { PLAN_STEP_LABELS, TOOL_CATEGORIES } from "./tools/registry/index.js"
+import type { AgentPlan, PlanStep, RawToolCall } from "./types.js"
+import { planSignals } from "./plan-signals.js"
+import { PLAN_STEP_LABELS } from "./tools/registry/index.js"
 
 export function merchantRoutingQuestionFromCustomerMessage(
   latestCustomerMessage: string | null | undefined,
@@ -12,40 +10,6 @@ export function merchantRoutingQuestionFromCustomerMessage(
   const quoted = latest.length > 120 ? `${latest.slice(0, 119)}…` : latest
   return `What should I tell the customer about: "${quoted}"?`
 }
-
-export function planHasUngroundedKbReply(plan: AgentPlan): boolean {
-  if (!planHasSignal(plan, "kb_no_match")) return false
-  if (plan.rawToolCalls.some(toolCall => (
-    toolCall.name === "ask_operator" || toolCall.name === "escalate_to_human"
-  ))) {
-    return false
-  }
-  if (plan.rawToolCalls.some(toolCall => TOOL_CATEGORIES[toolCall.name] === "action")) {
-    return false
-  }
-  return plan.rawToolCalls.some(toolCall => toolCall.name === "send_reply")
-}
-import { checkStaticToolPolicy } from "./tools/static-policy.js"
-
-export type HomePlanKind = "quick_reply" | "needs_review" | "auto_execute" | "needs_merchant_input"
-
-export interface HomePlanClassification {
-  kind: HomePlanKind
-  replyText: string | null
-  sendReplyToolCall: RawToolCall | null
-  // Set only for `needs_merchant_input` — the clarifying question for the merchant.
-  question: string | null
-}
-
-const QUICK_REPLY_READ_TOOLS = new Set([
-  "search_kb",
-  "search_shopify_products",
-  "search_shopify_customers",
-  "get_shopify_customer",
-  "get_shopify_orders",
-  "get_order_by_name",
-  "get_order_tracking",
-])
 
 const ACTION_TOOL_PRIORITY = [
   "create_refund",
@@ -94,13 +58,6 @@ function replyTextFromToolCall(toolCall: RawToolCall | null): string | null {
   return typeof text === "string" && text.trim() ? text.trim() : null
 }
 
-function questionFromToolCall(toolCall: RawToolCall | null): string | null {
-  const input = toolCall?.input
-  if (!input || typeof input !== "object" || Array.isArray(input)) return null
-  const question = (input as { question?: unknown }).question
-  return typeof question === "string" && question.trim() ? question.trim() : null
-}
-
 export function planReplyText(plan: AgentPlan | null): string | null {
   if (!plan) return null
   for (const name of REPLY_TOOL_NAMES) {
@@ -137,144 +94,13 @@ export function planEscalationReason(plan: AgentPlan | null): string | null {
   const routingReason = plan.routing?.decision === "escalate"
     ? plan.routing.signals?.join(", ")
     : null
-  return routingReason?.trim() || null
+  return plan.routingEvidence?.escalationReason?.trim() || routingReason?.trim() || null
 }
 
 /** Escalation with no customer-facing send_reply / send_email draft. */
 export function isEscalationOnlyPlan(plan: AgentPlan | null): boolean {
   if (!planHasEscalation(plan)) return false
   return !planReplyText(plan)
-}
-
-const NEEDS_REVIEW: HomePlanClassification = {
-  kind: "needs_review",
-  replyText: null,
-  sendReplyToolCall: null,
-  question: null,
-}
-
-function detectQuickReply(plan: AgentPlan): HomePlanClassification {
-  if (plan.steps.length !== 1 || plan.steps[0].tool !== "send_reply") {
-    return NEEDS_REVIEW
-  }
-
-  const sendReplyCalls = plan.rawToolCalls.filter(toolCall => toolCall.name === "send_reply")
-  if (sendReplyCalls.length !== 1 || sendReplyCalls[0].id !== plan.steps[0].id) {
-    return NEEDS_REVIEW
-  }
-
-  const sendReplyToolCall = sendReplyCalls[0]
-  const rawCallsAreSafe = plan.rawToolCalls.every(toolCall => (
-    toolCall.id === sendReplyToolCall.id
-      ? toolCall.name === "send_reply"
-      : QUICK_REPLY_READ_TOOLS.has(toolCall.name)
-  ))
-  const replyText = replyTextFromToolCall(sendReplyToolCall)
-
-  if (!rawCallsAreSafe || !replyText) {
-    return NEEDS_REVIEW
-  }
-
-  return { kind: "quick_reply", replyText, sendReplyToolCall, question: null }
-}
-
-export interface ClassifyHomePlanOptions {
-  filterStatus?: string | null
-}
-
-function applyQuestionableSenderPolicy(
-  classification: HomePlanClassification,
-  filterStatus?: string | null,
-): HomePlanClassification {
-  if (
-    isQuestionableSender(filterStatus)
-    && (classification.kind === "quick_reply" || classification.kind === "auto_execute")
-  ) {
-    return NEEDS_REVIEW
-  }
-  return classification
-}
-
-export function classifyHomePlan(
-  plan: AgentPlan | null,
-  settings?: Partial<OrgSettings> | OrgSettings | null,
-  options?: ClassifyHomePlanOptions,
-): HomePlanClassification {
-  if (!plan) {
-    return applyQuestionableSenderPolicy(NEEDS_REVIEW, options?.filterStatus)
-  }
-
-  // An ask_operator plan parks the ticket for the merchant — a state distinct
-  // from a customer-facing reply. The agent chose to ask, so surface it before
-  // the signal / quick-reply / questionable-sender checks (which are about
-  // customer-facing sends). Mirrors how escalate short-circuits in the planner.
-  const askOperatorCall = plan.rawToolCalls.find((toolCall) => toolCall.name === "ask_operator") ?? null
-  if (askOperatorCall) {
-    return {
-      kind: "needs_merchant_input",
-      replyText: null,
-      sendReplyToolCall: null,
-      question: questionFromToolCall(askOperatorCall),
-    }
-  }
-
-  // Phase 3: a policy-gap `needs_review` no longer injects a synthetic
-  // ask_operator call — the routing decision carries the merchant question.
-  const routingQuestion = plan.routing?.question?.trim()
-  if (routingQuestion) {
-    return {
-      kind: "needs_merchant_input",
-      replyText: null,
-      sendReplyToolCall: null,
-      question: routingQuestion,
-    }
-  }
-
-  if (planHasUngroundedKbReply(plan)) {
-    return {
-      kind: "needs_merchant_input",
-      replyText: null,
-      sendReplyToolCall: null,
-      question: null,
-    }
-  }
-
-  if (planSignalTiers(plan).blocking.length > 0) {
-    return applyQuestionableSenderPolicy(NEEDS_REVIEW, options?.filterStatus)
-  }
-
-  const resolved = resolveAgentSettings(settings ?? null)
-  const tier: AutonomyTier = resolved.autonomyTier ?? "guarded"
-
-  const mutativeCalls = plan.rawToolCalls.filter(tc => TOOL_CATEGORIES[tc.name] === "action")
-
-  if (mutativeCalls.length > 0) {
-    if (!TIERS_THAT_AUTO_EXECUTE.has(tier)) {
-      return applyQuestionableSenderPolicy(NEEDS_REVIEW, options?.filterStatus)
-    }
-    const policyClean = mutativeCalls.every(tc => !checkStaticToolPolicy(tc.name, tc.input, resolved).blocked)
-    if (!policyClean) {
-      return applyQuestionableSenderPolicy(NEEDS_REVIEW, options?.filterStatus)
-    }
-    const sendReplyToolCall = plan.rawToolCalls.find(tc => tc.name === "send_reply") ?? null
-    const replyText = replyTextFromToolCall(sendReplyToolCall)
-    if (!sendReplyToolCall || !replyText) {
-      return applyQuestionableSenderPolicy(NEEDS_REVIEW, options?.filterStatus)
-    }
-    return applyQuestionableSenderPolicy(
-      { kind: "auto_execute", replyText, sendReplyToolCall, question: null },
-      options?.filterStatus,
-    )
-  }
-
-  const quickReply = detectQuickReply(plan)
-  if (
-    quickReply.kind === "quick_reply"
-    && (tier === "watch" || resolved.toolsEnabled.communication === false)
-  ) {
-    return applyQuestionableSenderPolicy(NEEDS_REVIEW, options?.filterStatus)
-  }
-  return applyQuestionableSenderPolicy(quickReply, options?.filterStatus)
 }
 
 function findActionStep(plan: AgentPlan): PlanStep | null {

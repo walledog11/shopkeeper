@@ -151,7 +151,7 @@ async function main(): Promise<void> {
       orgId: organization.id,
       threadId: thread.id,
       settings: orgSettings,
-      allowedKinds: ['quick_reply', 'needs_review', 'auto_execute'],
+      executionIntent: 'merchant_approved',
       failureRoute: '/api/agent',
       approvedToolCalls: plan.rawToolCalls,
       approver: {

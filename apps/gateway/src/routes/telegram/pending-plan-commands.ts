@@ -3,6 +3,7 @@ import logger from '../../logger.js';
 import {
   extractOrderNumber,
   expectedPlanIdentity,
+  isPendingPlanInvalid,
   mostRecentPendingPlan,
   normalizeApprovedToolCalls,
   type OperatorContext,
@@ -11,7 +12,7 @@ import {
 } from '../../operator-context.js';
 import { runApprovedPendingPlan, clearPendingPlan } from '../../message-handlers/pending-plan-actions.js';
 import { formatOperatorDispatchFailure, isPlanExecutionFailureMessage } from '@shopkeeper/agent/message-dispatch';
-import { refreshSkippedPlanTerminalSend } from '../../message-handlers/skipped-plan-terminal-send.js';
+import { ConflictError } from '@shopkeeper/agent/errors';
 import { findTerminalSendTool } from '@shopkeeper/agent/planner-skip-reply';
 import type { PendingPlanCommand } from './command-parser.js';
 import type { OperatorMessageContext } from '../operator-message.js';
@@ -45,10 +46,27 @@ export async function handlePendingPlanCommand(
 
   const { threadId, instruction, rawToolCalls } = pendingPlan;
   if (command.type === 'plan-dismiss') {
-    await clearPendingPlan(organizationId, memberKey, pendingPlan);
+    try {
+      const dismissed = await clearPendingPlan(organizationId, memberKey, pendingPlan);
+      if (!dismissed) {
+        await reply(`That plan was already replaced or resolved.${stillWaitingSuffix(remaining)}`);
+        return true;
+      }
+    } catch (error) {
+      if (error instanceof ConflictError) {
+        await reply("That plan is already running or completed, so it can't be dismissed.");
+        return true;
+      }
+      throw error;
+    }
     // Older parked plans carry no actionLabel.
     const dismissed = pendingPlan.actionLabel ? `Dismissed — I won't ${pendingPlan.actionLabel}.` : 'Plan dismissed.';
     await reply(`${dismissed}${stillWaitingSuffix(remaining)}`);
+    return true;
+  }
+
+  if (isPendingPlanInvalid(pendingPlan)) {
+    await reply("This draft failed validation, so I can't run or partially run it. Tell me what to change, or reply no to dismiss it.");
     return true;
   }
 
@@ -62,24 +80,16 @@ export async function handlePendingPlanCommand(
       : rawToolCalls;
   }
 
-  let approvedRawToolCalls = normalizeApprovedToolCalls(approvedToolCalls);
+  const approvedRawToolCalls = normalizeApprovedToolCalls(approvedToolCalls);
   if (command.type === 'plan-skip' && skippedActionableTool && findTerminalSendTool(approvedRawToolCalls)) {
-    const refreshed = await refreshSkippedPlanTerminalSend(
-      organizationId,
-      threadId,
-      instruction,
-      approvedRawToolCalls,
+    // A redrafted terminal reply is a new proposal and cannot satisfy the
+    // cached plan's exact-call membership guard. Keep the original plan parked
+    // and send the merchant through the normal revise/re-plan path.
+    logger.info({ chatId, threadId }, '[Operator] Skip requires a revised terminal reply — plan not run');
+    await reply(
+      "Skipping that step would change the customer reply, so I've run nothing. Tell me what to change and I'll draft a new plan, or reply no to dismiss this one.",
     );
-    // Running the remaining calls without a redrafted send means the actions
-    // land and the customer is never told. Leave the plan pending instead.
-    if (refreshed.status === 'redraft_failed') {
-      logger.warn({ chatId, threadId }, '[Operator] Skip redraft failed — plan not run');
-      await reply(
-        "I couldn't rewrite the reply to cover only the remaining steps, so I've run nothing — otherwise those actions would have gone through without telling the customer.\nThe plan is still waiting: reply yes to run it as first proposed, or no to dismiss it.",
-      );
-      return true;
-    }
-    approvedRawToolCalls = refreshed.toolCalls;
+    return true;
   }
 
   logger.info({ chatId, threadId, toolCallCount: approvedRawToolCalls.length }, '[Operator] Approving plan');

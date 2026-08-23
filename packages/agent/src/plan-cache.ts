@@ -22,13 +22,23 @@ export function buildAgentPlanCacheRecord(params: {
   settings: unknown;
   plan: AgentPlan;
 }): AgentPlanCacheRecord {
+  const currentPlan: AgentPlan = { ...params.plan };
+  delete currentPlan.routing;
+  const plan: AgentPlan = {
+    ...currentPlan,
+    validation: params.plan.validation ?? { status: "valid", issues: [] },
+    routingEvidence: params.plan.routingEvidence ?? {
+      classifierState: "not_applicable",
+      codes: [],
+    },
+  };
   return {
     version: AGENT_PLAN_CACHE_VERSION,
     planId: randomUUID(),
     instruction: params.instruction,
     lastCustomerMessageId: params.lastCustomerMessageId,
     settingsFingerprint: fingerprintSettings(params.settings),
-    plan: params.plan,
+    plan,
   };
 }
 
@@ -50,7 +60,10 @@ export function isAgentPlanCacheHit(params: {
     && params.cache.instruction === params.instruction
     && params.cache.lastCustomerMessageId === params.lastCustomerMessageId
     && params.cache.settingsFingerprint === fingerprintSettings(params.settings)
-    && params.cache.plan.steps.length > 0;
+    && (
+      params.cache.plan.steps.length > 0
+      || params.cache.plan.validation?.status === "invalid"
+    );
 }
 
 // Commit a generated plan only while its source customer message is still the

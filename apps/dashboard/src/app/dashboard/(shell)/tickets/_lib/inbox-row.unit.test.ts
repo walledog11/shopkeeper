@@ -71,6 +71,8 @@ function withPlan(steps: StepSeed[], rawToolCalls: ToolCallSeed[] = [], warnings
       settingsFingerprint: "test",
       plan: {
         instruction: "reply to the customer",
+        validation: { status: "valid", issues: [] },
+        routingEvidence: { classifierState: "not_applicable", codes: [] },
         steps: steps.map(step => ({ ...step, enabled: true })),
         warnings,
         rawToolCalls: rawToolCalls.map((call, index) => ({ id: call.id ?? `call-${index}`, ...call })),
