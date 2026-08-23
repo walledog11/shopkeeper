@@ -77,9 +77,9 @@ const groups = [
     // Grounding rewrites agent-authored prose after planning. No eval fixture
     // asserts on escalation reason text and judge.ts grades only replyText, so
     // this ratchet is the only automated cover these functions have.
-    name: 'agent planner routing',
+    name: 'agent plan grounding',
     report: 'packages/agent/coverage/coverage-summary.json',
-    matches: (file) => file.endsWith('/src/planner-routing.ts'),
+    matches: (file) => file.endsWith('/src/plan-grounding.ts'),
   },
   {
     name: 'gateway webhook validation',
