@@ -22,13 +22,11 @@ import {
   searchFilterSurfaceClassName,
 } from "./search-filter-bar-styles"
 
-export { searchFilterControlClassName, searchFilterSurfaceClassName }
-
-export interface FilterPillProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface FilterPillProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   pressed?: boolean
 }
 
-export const FilterPill = forwardRef<HTMLButtonElement, FilterPillProps>(
+const FilterPill = forwardRef<HTMLButtonElement, FilterPillProps>(
   function FilterPill(
     {
       pressed,
@@ -119,7 +117,7 @@ interface SearchFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "
   onClear?: () => void
 }
 
-export function SearchField({
+function SearchField({
   value,
   onValueChange,
   loading = false,

@@ -6,7 +6,7 @@ import type {
   SendEmailInput,
   UpdateThreadStatusInput,
   UpdateThreadTagInput,
-} from "./tools/tool-inputs.js";
+} from "./tools/registry/index.js";
 
 // Module-supplied I/O sink for the thread-coupled tools. Support wires this to
 // the dashboard messaging stack (Postmark/IG/email); a thread-less module leaves

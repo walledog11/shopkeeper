@@ -88,11 +88,11 @@ export function buildWalkthroughContextPrefix(item: WalkthroughItem): string {
 export const WALKTHROUGH_CLOSING =
   "That's everything that needed you. I'm here if you want to dig into anything else."
 
-export function walkthroughApprovedLine(item: WalkthroughItem): string {
+function walkthroughApprovedLine(item: WalkthroughItem): string {
   return `Done \u2014 sent to ${customerLabel(item)}.`
 }
 
-export function walkthroughSkippedLine(item: WalkthroughItem): string {
+function walkthroughSkippedLine(item: WalkthroughItem): string {
   return `Skipped ${customerLabel(item)} for now.`
 }
 

@@ -4,10 +4,8 @@ import { withOrgRoute } from "@/lib/api/route";
 import { parseAgentQuickApproveBody } from "@/lib/agent/api/validation";
 import { hashInstructionForLog } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@shopkeeper/agent/settings";
-import {
-  executeCurrentCachedHomePlan,
-  findFailedToolResult,
-} from "@/lib/agent/api/plan-execution";
+import { executeCurrentCachedHomePlan } from "@/lib/agent/api/plan-execution";
+import { findFailedToolResult } from "@shopkeeper/agent/plan-execution";
 import { resolveSessionApprover } from "@/lib/agent/api/approver";
 import {
   recordAgentFailure,

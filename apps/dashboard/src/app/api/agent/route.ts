@@ -12,8 +12,8 @@ import { getRedis } from "@/lib/server/redis";
 import { hashInstruction } from "@shopkeeper/agent/agent-actions";
 import {
   executeCurrentCachedHomePlan,
-  getExecutablePlanToolCalls,
 } from "@/lib/agent/api/plan-execution";
+import { getExecutablePlanToolCalls } from "@shopkeeper/agent/plan-execution";
 import { resolveSessionApprover } from "@/lib/agent/api/approver";
 import { captureAgentPlanDecided } from "@/lib/server/product-analytics";
 import type { OrgSettings } from "@/types";

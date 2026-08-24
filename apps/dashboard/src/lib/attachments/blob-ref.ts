@@ -1,4 +1,4 @@
-export const BLOB_ATTACHMENT_PREFIX = 'blob:';
+import { BLOB_ATTACHMENT_PREFIX } from '@shopkeeper/agent/attachment-ref';
 
 const VERCEL_BLOB_HOST_SUFFIX = '.blob.vercel-storage.com';
 

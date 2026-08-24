@@ -3,12 +3,12 @@ import { fileURLToPath } from 'node:url';
 
 const KNIP_BIN = fileURLToPath(new URL('../node_modules/knip/bin/knip.js', import.meta.url));
 const WARNING_BASELINE = {
-  // Ratcheted 151 -> 149 after deleting the Internal notes tab and Telegram UI.
-  exports: 149,
-  // Ratcheted 121 -> 116 when find_customer replaced the two customer reads and
-  // their input shapes stopped being a tool contract. A deletion that does not
-  // move the ceiling down leaves the ceiling paying for surface nobody has.
-  types: 116,
+  // Ratcheted 149 -> 81 after removing dead exports, unused shadcn subcomponents,
+  // and internal-only digest helpers.
+  exports: 81,
+  // Ratcheted 116 -> 90 after deleting duplicate tool-inputs re-exports and
+  // trimming stale dashboard type surfaces.
+  types: 90,
 };
 
 const result = spawnSync(process.execPath, [KNIP_BIN, '--reporter', 'json'], {

@@ -13,13 +13,13 @@ import {
 import type { Integration } from "@/types"
 import type { PillState } from "./StatusPill"
 
-export function isTokenExpired(integration: Integration) {
+function isTokenExpired(integration: Integration) {
   if (!integration.tokenExpiresAt) return false
   if (integration.platform === "email") return isEmailAuthReauthorizationRequired(integration)
   return new Date(integration.tokenExpiresAt).getTime() < Date.now()
 }
 
-export function isTokenExpiringSoon(integration: Integration) {
+function isTokenExpiringSoon(integration: Integration) {
   if (!integration.tokenExpiresAt) return false
   if (integration.platform === "email") return false
   const msLeft = new Date(integration.tokenExpiresAt).getTime() - Date.now()

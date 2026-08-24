@@ -49,7 +49,7 @@ function logGarnishFailure(
   );
 }
 
-export async function loadSalesPulseLine(
+async function loadSalesPulseLine(
   organizationId: string,
   settings: Record<string, unknown>,
   now: Date,
@@ -82,7 +82,7 @@ export async function loadSalesPulseLine(
   }
 }
 
-export async function loadLowStockLine(
+async function loadLowStockLine(
   organizationId: string,
   settings: Record<string, unknown>,
 ): Promise<string | null> {

@@ -22,6 +22,10 @@
       "types": "./dist/agent-context.d.ts",
       "default": "./dist/agent-context.js"
     },
+    "./attachment-ref": {
+      "types": "./dist/attachment-ref.d.ts",
+      "default": "./dist/attachment-ref.js"
+    },
     "./thread-constants": {
       "types": "./dist/thread-constants.d.ts",
       "default": "./dist/thread-constants.js"

@@ -108,8 +108,8 @@ import { registerTelegramWebhookRoutes } from '../routes/webhooks-telegram.js';
 import { processOperatorEventById } from '../workers/operator-event.js';
 
 export const SECRET = process.env.TELEGRAM_WEBHOOK_SECRET!;
-export let org!: Awaited<ReturnType<typeof createTestOrg>>;
-export const app = createRegisteredWebhookRouterApp(registerTelegramWebhookRoutes);
+let org!: Awaited<ReturnType<typeof createTestOrg>>;
+const app = createRegisteredWebhookRouterApp(registerTelegramWebhookRoutes);
 export const telegramFixture = {
   app,
   executeOperatorAgentTurnSpy,
