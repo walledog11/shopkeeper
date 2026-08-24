@@ -208,7 +208,3 @@ export function formatTicketAge(iso: string): string {
     ...(sameYear ? {} : { year: "numeric" }),
   });
 }
-
-export function timeAgo(iso: string): string {
-  return formatShortRelativeTime(iso);
-}

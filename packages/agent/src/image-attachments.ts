@@ -5,11 +5,11 @@ import type {
 } from "./agent-context.js";
 import logger from "./logger.js";
 
-const PRIVATE_BLOB_REF_PREFIX = "blob:";
+import { BLOB_ATTACHMENT_PREFIX } from "./attachment-ref.js";
 const IMAGE_EXTENSION_RE = /\.(?:gif|jpe?g|png|webp)(?:[?#].*)?$/i;
 const IMAGE_LOAD_TIMEOUT_MS = 5_000;
 
-export const AGENT_IMAGE_LIMITS = {
+const AGENT_IMAGE_LIMITS = {
   maxImages: 3,
   maxImageBytes: 5 * 1024 * 1024,
   maxTotalBytes: 10 * 1024 * 1024,
@@ -62,9 +62,9 @@ function parseWorkspacePrivateImagePath(
   reference: string,
   organizationId: string,
 ): string | null {
-  if (!reference.startsWith(PRIVATE_BLOB_REF_PREFIX)) return null;
+  if (!reference.startsWith(BLOB_ATTACHMENT_PREFIX)) return null;
 
-  const pathname = reference.slice(PRIVATE_BLOB_REF_PREFIX.length);
+  const pathname = reference.slice(BLOB_ATTACHMENT_PREFIX.length);
   const prefix = `attachments/${organizationId}/`;
   if (!pathname.startsWith(prefix) || !looksLikeImageReference(pathname)) return null;
 

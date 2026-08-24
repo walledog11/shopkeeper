@@ -3,6 +3,7 @@
 import Image from "next/image"
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react"
 import { Card } from "@/components/ui/card"
+import { boardCardFooterClassName } from "@/lib/ui/board-card-styles"
 import { cn } from "@/lib/ui/cn"
 import { getChannelInfoByName } from "@/lib/messaging/channels"
 import { timeAgoCard } from "@/lib/messaging/customer-display"
@@ -102,7 +103,8 @@ export function NeedsYouCardFooter({
   return (
     <div
       className={cn(
-        "relative z-10 mt-auto rounded-b-3xl border-t border-border/50 bg-muted/30 px-5 py-4 sm:px-6",
+        "relative z-10 mt-auto px-5 py-4 sm:px-6",
+        boardCardFooterClassName,
         className,
       )}
     >

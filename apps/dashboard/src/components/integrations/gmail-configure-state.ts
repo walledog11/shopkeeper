@@ -70,7 +70,7 @@ export function deriveGmailConfigureScene(
   return "ready"
 }
 
-export function gmailReceivingSummary(
+function gmailReceivingSummary(
   integration: Integration,
   lastActivity: string | null,
   gmailNativeInboundEnabled: boolean,

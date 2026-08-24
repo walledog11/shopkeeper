@@ -21,8 +21,8 @@ import {
 } from '../message-handlers/request-display.js';
 
 export const DIGEST_CURSOR_KEY = 'lastSuccessfulDigestAt';
-export const WAITING_PLAN_MIN_AGE_MS = 3 * 3_600_000;
-export const DEFAULT_HANDLED_LOOKBACK_MS = 24 * 3_600_000;
+const WAITING_PLAN_MIN_AGE_MS = 3 * 3_600_000;
+const DEFAULT_HANDLED_LOOKBACK_MS = 24 * 3_600_000;
 const NOTABLE_HANDLED_LIMIT = 5;
 
 export interface HandledRollup {
@@ -51,7 +51,7 @@ export function countWord(count: number): string {
   return COUNT_WORDS[count] ?? String(count);
 }
 
-export function capitalize(text: string): string {
+function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
@@ -112,7 +112,7 @@ export function truncateBriefingText(text: string, maxLen: number): string {
 
 // An address or link in a briefing line is noise the merchant cannot act on,
 // and iMessage renders it as a tappable link mid-sentence.
-export function redactBriefingContacts(text: string): string {
+function redactBriefingContacts(text: string): string {
   return text
     .replace(/[^\s<>()]+@[^\s<>()]+\.[a-z]{2,}/gi, 'their email')
     .replace(/https?:\/\/\S+/gi, 'a link');
@@ -170,20 +170,6 @@ function approvalActionHead(
       : capitalize(PLAN_STEP_LABELS[primary.name] ?? primary.name.replace(/_/g, ' '));
   const rest = actionable.length - 1;
   return rest > 0 ? `${label} + ${countWord(rest)} more` : label;
-}
-
-// How long the merchant has left this sitting. The header already frames the
-// list as waiting on them, so the parenthetical only carries the duration —
-// which is the one thing that tells them which of these to open first.
-export function formatWaitingAge(now: Date, since: Date | null): string | null {
-  if (!since) return null;
-  const ms = now.getTime() - since.getTime();
-  if (!Number.isFinite(ms) || ms < 0) return null;
-  const hours = Math.floor(ms / 3_600_000);
-  if (hours < 1) return 'waiting under an hour';
-  if (hours < 24) return `waiting ${hours} hour${hours === 1 ? '' : 's'}`;
-  const days = Math.floor(hours / 24);
-  return `waiting ${days} day${days === 1 ? '' : 's'}`;
 }
 
 export interface BriefingTicketRow {
@@ -253,7 +239,7 @@ function askLessTopic(aiTitle: string | null | undefined): string | null {
   return title ? redactBriefingContacts(title) : null;
 }
 
-export function rowAskLess(thread: BriefingTicketRow): AskLessContext {
+function rowAskLess(thread: BriefingTicketRow): AskLessContext {
   return { noRequest: rowHasNoRequest(thread), topic: askLessTopic(thread.aiTitle) };
 }
 

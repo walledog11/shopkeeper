@@ -33,11 +33,3 @@ export const boardCardFooterClassName =
 
 export const boardSecondaryButtonClassName =
   "inline-flex w-full items-center justify-center rounded-2xl border border-border bg-transparent py-3.5 text-base font-semibold text-muted-foreground transition-colors hover:bg-foreground/[0.04] disabled:opacity-40"
-
-export const boardPrimaryButtonClassName =
-  "inline-flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-base font-semibold transition-all disabled:opacity-40 disabled:hover:translate-y-0 bg-gradient-to-b from-foreground to-foreground/90 text-background shadow-md shadow-foreground/10 hover:-translate-y-0.5 hover:from-foreground hover:to-foreground/85"
-
-export const boardListShellClassName = cn(
-  "overflow-hidden rounded-3xl border border-border bg-card",
-  boardCardShadowClassName("default"),
-)

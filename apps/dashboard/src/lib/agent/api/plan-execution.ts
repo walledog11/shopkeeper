@@ -1,7 +1,6 @@
 // Host wrapper — core auto-execute orchestration moved to @shopkeeper/agent/plan-execution
 // (Track 4.1). The dashboard injects its turn seams (Upstash lock, io-sink context,
-// ops-alert runAgent) plus the real AutonomyShadowDecision recorder. The pure
-// helpers move with the core and are re-exported for unchanged call sites.
+// ops-alert runAgent) plus the real AutonomyShadowDecision recorder.
 import {
   executeCurrentCachedHomePlan as coreExecuteCurrentCachedHomePlan,
   maybeAutoExecuteCurrentCachedHomePlan as coreMaybeAutoExecuteCurrentCachedHomePlan,
@@ -15,15 +14,6 @@ import { recordShadowDecision, resolveShadowDecisionOnApproval } from "@/lib/age
 import type { AgentFailureAlertRoute } from "@/lib/server/agent-failure-alerts";
 import type { OrgSettings } from "@/types";
 import type { RawToolCall } from "@shopkeeper/agent/types";
-
-export {
-  consumeThreadCachedPlan,
-  clearThreadPlanCache,
-  formatApproverId,
-  getExecutablePlanToolCalls,
-  findFailedToolResult,
-} from "@shopkeeper/agent/plan-execution";
-export type { ApproverIdentity } from "@shopkeeper/agent/plan-execution";
 
 function dashboardPlanExecutionDeps(): PlanExecutionDeps {
   return {

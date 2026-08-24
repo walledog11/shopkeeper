@@ -1,10 +1,9 @@
 import { del, put } from '@vercel/blob';
 import { randomUUID } from 'crypto';
+import { BLOB_ATTACHMENT_PREFIX } from '@shopkeeper/agent/attachment-ref';
 import { getInboundAttachmentLimits } from '../config/runtime-config.js';
 import logger from '../logger.js';
 import { decodedByteLength } from './attachment-budget.js';
-
-export const BLOB_ATTACHMENT_PREFIX = 'blob:';
 
 // Keep the inbound contract broad enough for merchant support workflows
 // (including HEIC, Office documents and archives), but reject files that are

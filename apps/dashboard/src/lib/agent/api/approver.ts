@@ -1,6 +1,6 @@
 import { auth, clerkClient } from "@clerk/nextjs/server";
 import logger from "@/lib/server/logger";
-import type { ApproverIdentity } from "@/lib/agent/api/plan-execution";
+import type { ApproverIdentity } from "@shopkeeper/agent/plan-execution";
 
 function bestDisplayName(user: {
   firstName?: string | null;
@@ -18,19 +18,6 @@ function bestDisplayName(user: {
 
 export async function resolveSessionApprover(): Promise<ApproverIdentity | undefined> {
   const { userId } = await auth();
-  if (!userId) return undefined;
-
-  try {
-    const client = await clerkClient();
-    const user = await client.users.getUser(userId);
-    return { clerkUserId: userId, displayName: bestDisplayName(user) };
-  } catch (err) {
-    logger.warn({ err, userId }, "[agent] failed to resolve approver display name");
-    return { clerkUserId: userId, displayName: null };
-  }
-}
-
-export async function resolveClerkUserApprover(userId: string | null | undefined): Promise<ApproverIdentity | undefined> {
   if (!userId) return undefined;
 
   try {

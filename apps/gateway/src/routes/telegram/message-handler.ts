@@ -1,5 +1,4 @@
 import { db } from '@shopkeeper/db';
-import logger from '../../logger.js';
 import { buildOrgDigest } from '../../maintenance/digest.js';
 import { getContext, loadLivePendingPlans, updateContext } from '../../operator-context.js';
 import { resolveOperatorMemberKey } from '../../operator-identity.js';
@@ -12,10 +11,9 @@ import {
 import { handleDigestCommand } from './digest-commands.js';
 import { HELP_TEXT } from './format.js';
 import { handlePendingPlanCommand } from './pending-plan-commands.js';
-import { handleStartBinding } from './start-binding.js';
 import { withOperatorPresence } from './presence.js';
 import { buildMirroredReply } from '../../operator-thread-mirror.js';
-import type { TelegramMessageContext, TelegramReply } from './types.js';
+import type { TelegramReply } from './types.js';
 import type { OperatorMessageContext } from '../operator-message.js';
 
 export const TELEGRAM_UNBOUND_REPLY =
@@ -120,31 +118,4 @@ export async function runTelegramOperatorTurn(params: TelegramOperatorTurnParams
   // pending-state ledger and drives approve/reject/revise/answer via control tools,
   // or handles a fresh instruction normally.
   await executeFreeFormInstruction(organizationId, clerkUserId, baseMessage, context);
-}
-
-export async function handleTelegramMessage(
-  message: TelegramMessageContext & { body: string },
-): Promise<void> {
-  const { chatId, body, reply, messageId } = message;
-  const command = parseTelegramCommand(body);
-  if (command.type === 'start') {
-    await handleStartBinding(chatId, command.token, message.metadata, reply);
-    return;
-  }
-
-  const member = await resolveBoundTelegramMember(chatId);
-  if (!member) {
-    logger.warn({ chatId }, '[Telegram] Unbound sender');
-    await reply(TELEGRAM_UNBOUND_REPLY);
-    return;
-  }
-
-  await runTelegramOperatorTurn({
-    organizationId: member.organizationId,
-    clerkUserId: member.clerkUserId,
-    chatId,
-    body,
-    messageId,
-    reply,
-  });
 }

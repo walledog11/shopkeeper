@@ -40,7 +40,7 @@ import {
 const FOUR_HOURS_MS = 4 * ONE_HOUR_MS;
 const TWENTY_FOUR_HOURS_MS = 24 * ONE_HOUR_MS;
 
-export const DIGEST_QUESTIONABLE_LIMIT = 10;
+const DIGEST_QUESTIONABLE_LIMIT = 10;
 const WEEKLY_SUMMARY_MIN_TICKETS = 3;
 const DIGEST_INTERVALS: Record<string, number> = {
   every_4h: 4,
@@ -520,7 +520,7 @@ export function buildDigestOpener(
 // The welcome briefing sent when the first scheduled digest lands on an empty
 // inbox: introduce the morning ritual and show what the agent has already
 // learned from the merchant's Shopify store instead of skipping the send.
-export async function buildFirstNightMessage(
+async function buildFirstNightMessage(
   organizationId: string,
   storeName: string | null,
   agentName: string,
@@ -684,7 +684,7 @@ function resolveTz(settings: Record<string, unknown>): string {
 
 const WEEKDAY_INDEX: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
 
-export const DIGEST_WINDOW_SETTING = 'lastDigestWindow';
+const DIGEST_WINDOW_SETTING = 'lastDigestWindow';
 
 /**
  * The send window a moment belongs to, in the merchant's own timezone — local
@@ -758,7 +758,7 @@ function localHourAndDay(timeZone: string, now: Date): { hour: number; day: numb
   }
 }
 
-export function shouldSendDigest(
+function shouldSendDigest(
   settings: Record<string, unknown>,
   nowMs: number,
 ): boolean {

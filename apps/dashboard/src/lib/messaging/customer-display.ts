@@ -18,21 +18,6 @@ export function customerDisplayLabel(
   return realCustomerName(customer) ?? getCustomerName(customer)
 }
 
-export function customerInitials(name: string): string {
-  const trimmed = name.trim()
-  if (!trimmed) return "?"
-  const at = trimmed.indexOf("@")
-  const base = at > 0 ? trimmed.slice(0, at) : trimmed
-  // Strip punctuation per word, or a name like "Sarah (P7 canary)" initials as "S(".
-  const parts = base
-    .split(/\s+/)
-    .map(part => part.replace(/[^\p{L}\p{N}]/gu, ""))
-    .filter(Boolean)
-  if (parts.length === 0) return "?"
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-}
-
 export function timeAgoShort(date: Date, now: Date): string {
   const minutes = Math.floor((now.getTime() - date.getTime()) / 60_000)
   if (minutes < 1) return "just now"
