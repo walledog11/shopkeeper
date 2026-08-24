@@ -12,7 +12,7 @@ export function useShopifyCustomer(thread: Thread, enabled: boolean) {
         channelType: thread.channelType,
         customerPlatformId: thread.customer?.platformId,
         shopifyCustomerId: thread.shopifyCustomerId,
-        orderLimit: 1,
+        orderLimit: 5,
       })
     : null
 

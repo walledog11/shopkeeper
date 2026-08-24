@@ -256,7 +256,7 @@ export function InboxPageLayout({
           // restated after it, or the panel lands in normal flow below the page.
           className={cn(
             needsYouCardShellClassName("shell"),
-            "fixed left-0 top-0 flex h-[100dvh] max-h-[100dvh] w-full max-w-full translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden border-border bg-card p-0 pt-[env(safe-area-inset-top)] sm:left-1/2 sm:top-1/2 sm:h-auto sm:max-h-[86vh] sm:w-[calc(100%-2rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:pt-0 sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl",
+            "fixed left-0 top-0 z-[80] flex h-[100dvh] max-h-[100dvh] w-full max-w-full translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden border-border bg-card p-0 pt-[env(safe-area-inset-top)] sm:left-1/2 sm:top-1/2 sm:z-50 sm:h-auto sm:max-h-[86vh] sm:w-[calc(100%-2rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-3xl sm:pt-0 sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl",
           )}
         >
           <DialogTitle className="sr-only">Conversation</DialogTitle>

@@ -10,9 +10,13 @@ const CARD_KEYS = [
   "inbox-skeleton-3",
 ]
 
-export function InboxStreamLoading() {
+export function InboxStreamLoading({
+  label = "Loading conversations",
+}: {
+  label?: string
+}) {
   return (
-    <div aria-busy="true" aria-label="Loading conversations" className="flex flex-col gap-3">
+    <div aria-busy="true" aria-label={label} className="flex flex-col gap-3">
       {CARD_KEYS.map(key => (
         <NeedsYouCardShell key={key}>
           <NeedsYouCardHeader>

@@ -1,6 +1,14 @@
 "use client"
 
 import { RefreshCw, UserPlus } from "lucide-react"
+import { cn } from "@/lib/ui/cn"
+import {
+  contextGhostButtonClassName,
+  contextInputClassName,
+  contextLabelClassName,
+  contextPrimaryButtonClassName,
+  contextTanPanelClassName,
+} from "./context-panel-styles"
 
 export interface CreateCustomerDraft {
   first_name: string
@@ -28,21 +36,23 @@ export function ShopifyCustomerCreate({
   const isDisabled = isCreating || (!draft.first_name && !draft.last_name && !draft.email)
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-faint">New Shopify customer</p>
-        <button type="button" onClick={onBack} className="text-xs text-faint hover:text-strong transition-colors">Back</button>
+    <div className={cn(contextTanPanelClassName, "space-y-3")}>
+      <div className="flex items-center justify-between gap-3">
+        <p className={contextLabelClassName}>New customer</p>
+        <button type="button" onClick={onBack} className={contextGhostButtonClassName}>
+          Back
+        </button>
       </div>
-      <div className="space-y-1.5">
-        {(['first_name', 'last_name', 'email'] as const).map(field => (
+      <div className="space-y-2">
+        {(["first_name", "last_name", "email"] as const).map(field => (
           <input
             key={field}
-            type={field === 'email' ? 'email' : 'text'}
-            placeholder={field === 'first_name' ? 'First name' : field === 'last_name' ? 'Last name' : 'Email'}
-            aria-label={field === 'first_name' ? 'First name' : field === 'last_name' ? 'Last name' : 'Email'}
+            type={field === "email" ? "email" : "text"}
+            placeholder={field === "first_name" ? "First name" : field === "last_name" ? "Last name" : "Email"}
+            aria-label={field === "first_name" ? "First name" : field === "last_name" ? "Last name" : "Email"}
             value={draft[field]}
             onChange={e => onDraftChange({ ...draft, [field]: e.target.value })}
-            className="w-full text-xs text-strong rounded-md border border-foreground/[0.12] bg-foreground/[0.06] px-2.5 py-1.5 focus:outline-none focus:border-foreground/[0.25] placeholder:text-faint"
+            className={cn(contextInputClassName, "h-10")}
           />
         ))}
       </div>
@@ -51,9 +61,9 @@ export function ShopifyCustomerCreate({
         type="button"
         onClick={onCreate}
         disabled={isDisabled}
-        className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-[#ffffff] bg-[#96BF48] hover:bg-[#7da33a] disabled:opacity-50 rounded-md py-1.5 transition-colors"
+        className={cn(contextPrimaryButtonClassName, "w-full")}
       >
-        {isCreating ? <RefreshCw className="size-3 animate-spin" /> : <UserPlus className="size-3" />}
+        {isCreating ? <RefreshCw className="size-3.5 animate-spin" /> : <UserPlus className="size-3.5" />}
         Create & link
       </button>
     </div>

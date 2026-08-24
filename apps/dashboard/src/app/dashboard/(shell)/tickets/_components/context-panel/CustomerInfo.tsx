@@ -2,8 +2,16 @@
 
 import { useState } from "react"
 import { Check, RefreshCw } from "lucide-react"
+import { cn } from "@/lib/ui/cn"
 import { formatMoney, formatMonthYear } from "./formatters"
 import type { ShopifyCustomer } from "@/types/shopify"
+import {
+  contextGhostButtonClassName,
+  contextInputClassName,
+  contextLabelClassName,
+  contextPrimaryButtonClassName,
+  contextTanPanelClassName,
+} from "./context-panel-styles"
 
 interface EditState {
   first_name: string
@@ -23,6 +31,7 @@ interface CustomerInfoProps {
   isEditing: boolean
   onEditingChange: (editing: boolean) => void
   onSaved: (updated: Partial<ShopifyCustomer>) => void
+  showStats?: boolean
 }
 
 function makeCustomerDraft(customer: ShopifyCustomer): EditState {
@@ -42,7 +51,7 @@ function makeCustomerDraft(customer: ShopifyCustomer): EditState {
   }
 }
 
-export function CustomerInfo({ customer, isEditing, onEditingChange, onSaved }: CustomerInfoProps) {
+export function CustomerInfo({ customer, isEditing, onEditingChange, onSaved, showStats = true }: CustomerInfoProps) {
   if (isEditing) {
     return (
       <CustomerInfoEditor
@@ -54,6 +63,8 @@ export function CustomerInfo({ customer, isEditing, onEditingChange, onSaved }: 
     )
   }
 
+  if (!showStats) return null
+
   const stats = [
     { label: "Orders", value: String(customer.orders_count) },
     { label: "Spent", value: formatMoney(customer.total_spent, customer.currency) },
@@ -61,11 +72,14 @@ export function CustomerInfo({ customer, isEditing, onEditingChange, onSaved }: 
   ]
 
   return (
-    <div className="grid grid-cols-3 divide-x divide-foreground/[0.08] overflow-hidden rounded-lg border border-foreground/[0.08]">
+    <div className="grid grid-cols-3 gap-2">
       {stats.map(stat => (
-        <div key={stat.label} className="min-w-0 px-2 py-2 text-center">
-          <span className="block truncate text-[13px] font-semibold leading-4 text-strong tabular-nums">{stat.value}</span>
-          <span className="mt-1 block text-[10px] font-medium uppercase tracking-wide text-faint">{stat.label}</span>
+        <div
+          key={stat.label}
+          className="min-w-0 rounded-2xl bg-[#f5ebe0] px-2 py-2.5 text-center"
+        >
+          <span className="block truncate text-[13px] font-semibold leading-4 text-[#1a1a1a] tabular-nums">{stat.value}</span>
+          <span className="mt-1 block text-[10px] font-semibold uppercase tracking-[0.12em] text-[#6b5d4f]">{stat.label}</span>
         </div>
       ))}
     </div>
@@ -128,11 +142,9 @@ function CustomerInfoEditor({
     }
   }
 
-  const inputCls = "w-full text-xs text-strong bg-foreground/[0.05] border border-foreground/[0.12] rounded px-2 py-1.5 focus:outline-none focus:border-foreground/[0.25]"
-  const labelCls = "block text-xs text-faint mb-0.5"
   const field = (label: string, key: keyof EditState, textarea?: boolean) => (
       <div key={key}>
-        <label htmlFor={`shopify-customer-${customer.id}-${key}`} className={labelCls}>{label}</label>
+        <label htmlFor={`shopify-customer-${customer.id}-${key}`} className={cn(contextLabelClassName, "mb-1.5 block")}>{label}</label>
         {textarea ? (
           <textarea
             aria-label={label}
@@ -140,7 +152,7 @@ function CustomerInfoEditor({
             value={draft[key]}
             onChange={e => setDraft(d => ({ ...d, [key]: e.target.value }))}
             rows={3}
-            className={`${inputCls} resize-none`}
+            className={cn(contextInputClassName, "resize-none py-2.5")}
           />
         ) : (
           <input
@@ -149,7 +161,7 @@ function CustomerInfoEditor({
             type={key === 'email' ? 'email' : key === 'phone' ? 'tel' : 'text'}
             value={draft[key]}
             onChange={e => setDraft(d => ({ ...d, [key]: e.target.value }))}
-            className={inputCls}
+            className={cn(contextInputClassName, "h-10")}
           />
         )}
       </div>
@@ -157,14 +169,16 @@ function CustomerInfoEditor({
 
   return (
     <div className="space-y-2.5">
-      <div className="rounded-md border border-foreground/[0.07] bg-foreground/[0.03] p-2.5 space-y-2">
-        <div className="flex items-center justify-between pb-1 border-b border-foreground/[0.07]">
-          <span className="text-xs text-faint font-medium">Edit customer</span>
-          <div className="flex items-center gap-2">
+      <div className={cn(contextTanPanelClassName, "space-y-3")}>
+        <div className="flex items-center justify-between gap-3">
+          <span className={contextLabelClassName}>
+            Edit customer
+          </span>
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => { onEditingChange(false); setSaveError(null) }}
-              className="text-xs text-faint hover:text-muted-foreground transition-colors"
+              className={contextGhostButtonClassName}
             >
               Cancel
             </button>
@@ -172,9 +186,9 @@ function CustomerInfoEditor({
               type="button"
               onClick={handleSave}
               disabled={isSaving}
-              className="flex items-center gap-1 text-xs font-semibold text-[#ffffff] bg-[#96BF48] hover:bg-[#7da33a] disabled:opacity-50 rounded px-2 py-0.5 transition-colors"
+              className={contextPrimaryButtonClassName}
             >
-              {isSaving ? <RefreshCw className="size-2.5 animate-spin" /> : <Check className="size-2.5" />}
+              {isSaving ? <RefreshCw className="size-3 animate-spin" /> : <Check className="size-3" />}
               Save
             </button>
           </div>
@@ -196,7 +210,7 @@ function CustomerInfoEditor({
         </div>
         {field('Notes', 'note', true)}
       </div>
-      {saveError && <p className="text-xs text-red-500">{saveError}</p>}
+      {saveError && <p className="text-xs text-red-600">{saveError}</p>}
     </div>
   )
 }

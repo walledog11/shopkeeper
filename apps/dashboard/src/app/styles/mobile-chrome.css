@@ -10,8 +10,10 @@
 
   html[data-mobile-chrome="detail"] [data-dashboard-nav-progress],
   html[data-mobile-chrome="detail"] [data-dashboard-notification-bar],
+  html[data-mobile-chrome="detail"] [data-dashboard-mobile-hub],
   html[data-mobile-chrome="immersive"] [data-dashboard-nav-progress],
-  html[data-mobile-chrome="immersive"] [data-dashboard-notification-bar] {
+  html[data-mobile-chrome="immersive"] [data-dashboard-notification-bar],
+  html[data-mobile-chrome="immersive"] [data-dashboard-mobile-hub] {
     display: none !important;
   }
 

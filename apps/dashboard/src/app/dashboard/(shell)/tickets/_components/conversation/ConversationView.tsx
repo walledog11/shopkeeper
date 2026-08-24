@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState, type ComponentProps, type CSSProperties, type RefObject } from "react"
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
-import { NeedsYouCardBody } from "@/app/dashboard/_components/home/needs-you-card-ui"
+import { NeedsYouCardBody, NeedsYouCardHeader } from "@/app/dashboard/_components/home/needs-you-card-ui"
 import { cn } from "@/lib/ui/cn"
 import { useFillerPhrase } from "@/hooks/useFillerPhrase"
 import { useIsMobile } from "@/hooks/useMobile"
@@ -11,6 +11,7 @@ import { useConversationAgentFlow } from "../../_hooks/useConversationAgentFlow"
 import { buildTicketCardMeta } from "../../_lib/inbox-row"
 import ConversationHeader from "./ConversationHeader"
 import ConversationContextBar from "./ConversationContextBar"
+import type { ConversationContextSection } from "./conversation-context-panels"
 import ChatTimeline from "./timeline/ChatTimeline"
 import NotesTimeline from "./timeline/NotesTimeline"
 import ConversationComposerArea from "./composer/ConversationComposerArea"
@@ -99,7 +100,7 @@ export default function ConversationView({
     agentRunning: isAgentRunning,
   } = status
   const [viewTab, setViewTab] = useState<'chat' | 'notes'>('chat')
-  const [contextExpanded, setContextExpanded] = useState(false)
+  const [openContextSection, setOpenContextSection] = useState<ConversationContextSection | null>(null)
   const isMobile = useIsMobile()
   const conversationRef = useRef<HTMLDivElement>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
@@ -109,7 +110,7 @@ export default function ConversationView({
   const keyboardLayoutOpen = keyboardInset > 0
 
   const handleFocusShopifyLink = useCallback(() => {
-    setContextExpanded(true)
+    setOpenContextSection("customer")
     requestAnimationFrame(() => requestShopifyLinkFocus())
   }, [])
 
@@ -244,26 +245,32 @@ export default function ConversationView({
       }`}
       style={conversationStyle}
     >
-      <ConversationHeader
-        activeTab={activeTab}
-        cocoAction={headerCocoAction}
-        meta={headerMeta}
-        onCocoAction={() => { void handleCocoAction() }}
-        onBack={onBack}
-        onResolve={onResolve}
-        onReopen={onReopen}
-        onOpenContext={thread ? () => setContextExpanded(true) : undefined}
-        embedded={embedded}
-      />
-      {thread && onLinkShopifyCustomer && (
-        <ConversationContextBar
-          thread={thread}
-          hasShopify={hasShopify}
-          onLinkShopifyCustomer={onLinkShopifyCustomer}
-          expanded={contextExpanded}
-          onExpandedChange={setContextExpanded}
-        />
-      )}
+      <NeedsYouCardHeader className="shrink-0 pb-3.5 sm:pb-4">
+        <div className="flex flex-col gap-2">
+          <ConversationHeader
+            activeTab={activeTab}
+            cocoAction={headerCocoAction}
+            meta={headerMeta}
+            onCocoAction={() => { void handleCocoAction() }}
+            onBack={onBack}
+            onResolve={onResolve}
+            onReopen={onReopen}
+            onOpenContext={thread ? () => setOpenContextSection("customer") : undefined}
+            embedded={embedded}
+            flush
+          />
+          {thread && onLinkShopifyCustomer && (
+            <ConversationContextBar
+              thread={thread}
+              hasShopify={hasShopify}
+              onLinkShopifyCustomer={onLinkShopifyCustomer}
+              openSection={openContextSection}
+              onOpenSectionChange={setOpenContextSection}
+              flush
+            />
+          )}
+        </div>
+      </NeedsYouCardHeader>
 
       {activeTab === 'closed' && (
         <ConversationTabs noteCount={noteCount} value={viewTab} onValueChange={setViewTab} />

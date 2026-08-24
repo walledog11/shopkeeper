@@ -53,7 +53,7 @@ export const shopNavItem: NavItem = {
   name: "Shop",
   href: "/dashboard/orders",
   icon: Box,
-  description: "Orders and customers from Shopify",
+  description: "Orders that need a look",
 };
 
 export const topBarShopItems: NavItem[] = [shopNavItem];

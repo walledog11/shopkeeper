@@ -64,6 +64,7 @@ export function MobileHubHeader({
   return (
     <div
       ref={headerRef}
+      data-dashboard-mobile-hub
       className="sticky top-0 z-[70] md:hidden w-full shrink-0 bg-transparent pt-2 pb-2"
     >
       <div className={cn("mx-auto w-full px-5", dashboardChromeMaxWidthClass)}>

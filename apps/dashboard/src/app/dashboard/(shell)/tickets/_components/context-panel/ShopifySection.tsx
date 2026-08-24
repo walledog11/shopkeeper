@@ -15,6 +15,13 @@ import { SHOPIFY_LINK_FOCUS_EVENT } from "@/lib/messaging/shopify-link-focus"
 import type { ReactNode } from "react"
 import type { Thread } from "@/types"
 import type { ShopifyCustomer, ShopifyCustomerSearchResult } from "@/types/shopify"
+import {
+  contextGhostButtonClassName,
+  contextIconButtonClassName,
+  contextLabelClassName,
+  contextTanPanelClassName,
+} from "./context-panel-styles"
+import { cn } from "@/lib/ui/cn"
 
 type ShopifyMode = 'view' | 'search' | 'create'
 
@@ -22,6 +29,10 @@ interface ShopifySectionProps {
   thread: Thread
   shopify: ShopifyCustomerState
   onLinkShopifyCustomer: (id: string | null) => Promise<void>
+  hideHeader?: boolean
+  hideStats?: boolean
+  leading?: ReactNode
+  children?: ReactNode
 }
 
 interface ShopifySectionState {
@@ -91,11 +102,39 @@ function shopifySectionReducer(state: ShopifySectionState, action: ShopifySectio
   }
 }
 
-export function ShopifySection({ thread, shopify, onLinkShopifyCustomer }: ShopifySectionProps) {
-  return <ShopifySectionContent key={thread.id} thread={thread} shopify={shopify} onLinkShopifyCustomer={onLinkShopifyCustomer} />
+export function ShopifySection({
+  thread,
+  shopify,
+  onLinkShopifyCustomer,
+  hideHeader = false,
+  hideStats = false,
+  leading,
+  children,
+}: ShopifySectionProps) {
+  return (
+    <ShopifySectionContent
+      key={thread.id}
+      thread={thread}
+      shopify={shopify}
+      onLinkShopifyCustomer={onLinkShopifyCustomer}
+      hideHeader={hideHeader}
+      hideStats={hideStats}
+      leading={leading}
+    >
+      {children}
+    </ShopifySectionContent>
+  )
 }
 
-function ShopifySectionContent({ thread, shopify, onLinkShopifyCustomer }: ShopifySectionProps) {
+function ShopifySectionContent({
+  thread,
+  shopify,
+  onLinkShopifyCustomer,
+  hideHeader = false,
+  hideStats = false,
+  leading,
+  children,
+}: ShopifySectionProps) {
   const isEmailThread = thread.channelType === 'email'
   const isLinked = !!thread.shopifyCustomerId
   const canLoadCustomer = isEmailThread || isLinked
@@ -219,31 +258,32 @@ function ShopifySectionContent({ thread, shopify, onLinkShopifyCustomer }: Shopi
     }
   }
 
-  const header = (
-    <SectionHeader
-      title="Customer"
-      action={
-        data?.customer ? (
-          <div className="flex items-center ">
-            {!isEditingCustomer && mode === 'view' && (
-              <button
-                type="button"
-                onClick={() => dispatch({ type: "editing", editing: true })}
-                className="flex size-6 items-center justify-center rounded text-faint transition-colors hover:bg-foreground/[0.05] hover:text-strong"
-                aria-label="Edit customer"
-                title="Edit customer"
-              >
-                <Pencil className="size-3" />
-              </button>
-            )}
-            {dropdownItems.length > 0 && <ManageDropdown items={dropdownItems} />}
-          </div>
-        ) : dropdownItems.length > 0 ? (
-          <ManageDropdown items={dropdownItems} />
-        ) : undefined
-      }
-    />
-  )
+  const headerAction = mode === "search" || mode === "create" ? (
+    <button
+      type="button"
+      onClick={exitSearch}
+      className={cn(contextGhostButtonClassName, "hover:bg-[#f5ebe0]")}
+    >
+      Cancel
+    </button>
+  ) : data?.customer ? (
+    <div className="flex items-center">
+      {!isEditingCustomer && mode === "view" && (
+        <button
+          type="button"
+          onClick={() => dispatch({ type: "editing", editing: true })}
+          className={contextIconButtonClassName}
+          aria-label="Edit customer"
+          title="Edit customer"
+        >
+          <Pencil className="size-3" />
+        </button>
+      )}
+      {dropdownItems.length > 0 && <ManageDropdown items={dropdownItems} />}
+    </div>
+  ) : dropdownItems.length > 0 ? (
+    <ManageDropdown items={dropdownItems} />
+  ) : undefined
 
   let body: ReactNode
 
@@ -273,7 +313,6 @@ function ShopifySectionContent({ thread, shopify, onLinkShopifyCustomer }: Shopi
         }}
         onQueryChange={(nextQuery) => dispatch({ type: "query", query: nextQuery })}
         onClear={clearSearch}
-        onCancel={exitSearch}
         onCreate={() => dispatch({ type: "mode", mode: 'create' })}
         onLink={customer => { void handleLink(customer) }}
       />
@@ -306,6 +345,7 @@ function ShopifySectionContent({ thread, shopify, onLinkShopifyCustomer }: Shopi
           isEditing={isEditingCustomer}
           onEditingChange={(editing) => dispatch({ type: "editing", editing })}
           onSaved={handleCustomerSaved}
+          showStats={!hideStats}
         />
         {linkError && <p className="mt-2 text-xs text-red-600">{linkError}</p>}
       </>
@@ -324,7 +364,6 @@ function ShopifySectionContent({ thread, shopify, onLinkShopifyCustomer }: Shopi
         }}
         onQueryChange={(nextQuery) => dispatch({ type: "query", query: nextQuery })}
         onClear={clearSearch}
-        onCancel={exitSearch}
         onCreate={() => dispatch({ type: "mode", mode: 'create' })}
         onLink={customer => { void handleLink(customer) }}
       />
@@ -332,8 +371,18 @@ function ShopifySectionContent({ thread, shopify, onLinkShopifyCustomer }: Shopi
   }
 
   return (
-    <section ref={sectionRef}>
-      {header}
+    <section ref={sectionRef} className="flex flex-col gap-3">
+      {hideHeader ? (
+        leading || headerAction ? (
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">{leading}</div>
+            {headerAction}
+          </div>
+        ) : null
+      ) : (
+        <SectionHeader title="Customer" action={headerAction} />
+      )}
+      {isEditingCustomer || mode === "search" || mode === "create" ? null : children}
       {body}
     </section>
   )
@@ -348,19 +397,18 @@ interface ShopifyFallbackProps {
 }
 
 function ShopifyFallback({ title, detail, searchLabel, onSearch, onRetry }: ShopifyFallbackProps) {
-  const btn = "inline-flex items-center gap-1.5 rounded-md border border-foreground/[0.12] bg-foreground/[0.05] px-2.5 py-1.5 text-xs font-medium text-strong transition-colors hover:border-foreground/20 hover:bg-foreground/[0.09]"
   return (
-    <div className="rounded-lg border border-dashed border-foreground/[0.12] bg-foreground/[0.02] px-3 py-3.5 text-center">
-      <p className="text-xs font-medium text-muted-foreground">{title}</p>
-      {detail && <p className="mt-0.5 truncate text-xs text-faint">{detail}</p>}
-      <div className="mt-2.5 flex items-center justify-center gap-2">
+    <div className={cn(contextTanPanelClassName, "text-center")}>
+      <p className={contextLabelClassName}>{title}</p>
+      {detail && <p className="mt-1 truncate text-xs text-[#6b5d4f]">{detail}</p>}
+      <div className="mt-3 flex items-center justify-center gap-1.5">
         {onRetry && (
-          <button type="button" onClick={onRetry} className={btn}>
-            <RefreshCw className="size-3" /> Try again
+          <button type="button" onClick={onRetry} className={cn(contextGhostButtonClassName, "inline-flex items-center gap-1.5 bg-white hover:bg-white/70")}>
+            <RefreshCw className="size-3.5" /> Try again
           </button>
         )}
-        <button type="button" onClick={onSearch} className={btn}>
-          <Search className="size-3" /> {searchLabel}
+        <button type="button" onClick={onSearch} className={cn(contextGhostButtonClassName, "inline-flex items-center gap-1.5 bg-white hover:bg-white/70")}>
+          <Search className="size-3.5" /> {searchLabel}
         </button>
       </div>
     </div>

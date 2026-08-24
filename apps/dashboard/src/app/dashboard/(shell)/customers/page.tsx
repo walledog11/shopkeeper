@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
 
 export default function CustomersPage() {
-  redirect("/dashboard/orders?tab=customers")
+  redirect("/dashboard/orders")
 }

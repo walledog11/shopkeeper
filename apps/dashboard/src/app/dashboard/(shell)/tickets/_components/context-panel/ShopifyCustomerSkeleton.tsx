@@ -1,19 +1,14 @@
+import { cn } from "@/lib/ui/cn"
+import { contextTanPanelClassName } from "./context-panel-styles"
+
 export function ShopifyCustomerSkeleton() {
   return (
-    <div className="space-y-2 animate-pulse">
-      <div className="rounded-md border border-foreground/[0.07] bg-foreground/[0.03] p-2.5 space-y-1.5">
-        <div className="h-2 w-16 bg-foreground/[0.08] rounded" />
-        <div className="h-2.5 w-28 bg-foreground/[0.08] rounded" />
-        <div className="h-2 w-32 bg-foreground/[0.05] rounded" />
-        <div className="h-2 w-20 bg-foreground/[0.05] rounded" />
+    <div className="animate-pulse space-y-2">
+      <div className={cn(contextTanPanelClassName, "space-y-2")}>
+        <div className="h-3 w-20 rounded-2xl bg-white/70" />
+        <div className="h-10 rounded-2xl bg-white/80" />
+        <div className="h-10 rounded-2xl bg-white/60" />
       </div>
-      {["shopify-customer-skeleton-1", "shopify-customer-skeleton-2"].map(key => (
-        <div key={key} className="rounded-md border border-foreground/[0.07] bg-foreground/[0.03] p-2.5 space-y-1">
-          <div className="h-2.5 w-20 bg-foreground/[0.08] rounded" />
-          <div className="h-2 w-32 bg-foreground/[0.05] rounded" />
-          <div className="h-2 w-16 bg-foreground/[0.05] rounded" />
-        </div>
-      ))}
     </div>
   )
 }

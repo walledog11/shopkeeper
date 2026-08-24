@@ -228,8 +228,20 @@ const ORDER_PILL_CLASS_NAME = "bg-[#f5ebe0] text-[#1a1a1a]"
 
 const META_PILL_HEIGHT_CLASS = "h-9 sm:h-10"
 const META_CHANNEL_PILL_CLASS = "h-9 w-9 shrink-0 sm:h-10 sm:w-10"
+const META_HUG_PILL_CLASS = "shrink-0 px-2.5 sm:px-3"
+const META_FILL_PILL_CLASS = "min-w-0 flex-1 justify-center px-2"
 
-export function TicketCardMetaRow({ meta }: { meta: TicketCardMeta }) {
+export function TicketCardMetaRow({
+  meta,
+  leading,
+  trailing,
+  onCustomerClick,
+}: {
+  meta: TicketCardMeta
+  leading?: ReactNode
+  trailing?: ReactNode
+  onCustomerClick?: () => void
+}) {
   const channel = getChannelInfoByName(meta.channelName)
   const orderRef = meta.orderRef?.trim() || null
   const categoryLabel = categoryLabelFromMeta(meta)
@@ -260,16 +272,16 @@ export function TicketCardMetaRow({ meta }: { meta: TicketCardMeta }) {
     </div>
   )
 
-  const customerPill = (
-    <MetaPill className={cn("min-w-0 flex-1 gap-1.5 px-2.5 sm:px-3", META_PILL_HEIGHT_CLASS)}>
+  const customerInner = (
+    <>
       {customerLabel && (
         isEmail ? (
-          <span className="min-w-0 truncate text-xs font-semibold leading-tight text-[#1a1a1a] sm:text-sm">
+          <span className="min-w-0 truncate text-center text-xs font-semibold leading-tight text-[#1a1a1a] sm:text-left sm:text-sm">
             <span>{localPart}</span>
             <span className="font-medium text-[#6b5d4f]">@{emailDomain}</span>
           </span>
         ) : (
-          <span className="truncate text-xs font-semibold leading-tight text-[#1a1a1a] sm:text-sm">
+          <span className="truncate text-center text-xs font-semibold leading-tight text-[#1a1a1a] sm:text-left sm:text-sm">
             {customerLabel}
           </span>
         )
@@ -279,75 +291,108 @@ export function TicketCardMetaRow({ meta }: { meta: TicketCardMeta }) {
           VIP
         </span>
       )}
+    </>
+  )
+
+  const customerPill = onCustomerClick ? (
+    <button
+      type="button"
+      onClick={onCustomerClick}
+      className={cn(
+        needsYouMetaPillShellClassName,
+        "min-w-0 flex-1 cursor-pointer gap-1.5 bg-white px-2.5 justify-center sm:justify-start sm:px-3",
+        META_PILL_HEIGHT_CLASS,
+      )}
+    >
+      {customerInner}
+    </button>
+  ) : (
+    <MetaPill className={cn("min-w-0 flex-1 justify-center gap-1.5 px-2.5 sm:justify-start sm:px-3", META_PILL_HEIGHT_CLASS)}>
+      {customerInner}
     </MetaPill>
   )
 
-  const orderPill = orderRef ? (
-    <MetaPill className={cn("shrink-0 px-2.5 sm:px-3", META_PILL_HEIGHT_CLASS, ORDER_PILL_CLASS_NAME)}>
-      <span className="whitespace-nowrap text-[11px] font-bold leading-none tabular-nums sm:text-xs">
+  const tailLabelClass = (fill: boolean, tabular = false) => cn(
+    "text-[11px] font-bold leading-none sm:text-xs",
+    tabular && "tabular-nums",
+    fill ? "min-w-0 truncate text-center" : "whitespace-nowrap",
+  )
+
+  const renderOrderPill = (fill = false) => orderRef ? (
+    <MetaPill className={cn(fill ? META_FILL_PILL_CLASS : META_HUG_PILL_CLASS, META_PILL_HEIGHT_CLASS, ORDER_PILL_CLASS_NAME)}>
+      <span className={tailLabelClass(fill, true)}>
         {orderRef}
       </span>
     </MetaPill>
   ) : null
 
-  const statusPill = meta.statusLabel ? (
+  const renderStatusPill = (fill = false) => meta.statusLabel ? (
     <MetaPill className={cn(
-      "shrink-0 px-2.5 sm:px-3",
+      fill ? META_FILL_PILL_CLASS : META_HUG_PILL_CLASS,
       META_PILL_HEIGHT_CLASS,
       META_STATUS_PILL_CLASS[meta.statusTone ?? "neutral"],
     )}
     >
-      <span className="whitespace-nowrap text-[11px] font-bold leading-none sm:text-xs">
+      <span className={tailLabelClass(fill)}>
         {meta.statusLabel}
       </span>
     </MetaPill>
   ) : null
 
-  const topicPill = !meta.statusLabel && categoryLabel ? (
-    <MetaPill className={cn("shrink-0 px-2.5 sm:px-3", META_PILL_HEIGHT_CLASS, getTagStyle(meta.tag).className)}>
-      <span className="whitespace-nowrap text-[11px] font-bold leading-none sm:text-xs">
+  const renderTopicPill = (fill = false) => !meta.statusLabel && categoryLabel ? (
+    <MetaPill className={cn(fill ? META_FILL_PILL_CLASS : META_HUG_PILL_CLASS, META_PILL_HEIGHT_CLASS, getTagStyle(meta.tag).className)}>
+      <span className={tailLabelClass(fill)}>
         {categoryLabel}
       </span>
     </MetaPill>
   ) : null
 
-  const datePill = (
-    <MetaPill className={cn("shrink-0 px-2.5 sm:px-3", META_PILL_HEIGHT_CLASS)}>
+  const renderDatePill = (fill = false) => (
+    <MetaPill className={cn(fill ? META_FILL_PILL_CLASS : META_HUG_PILL_CLASS, META_PILL_HEIGHT_CLASS)}>
       <time
         dateTime={meta.lastMessageAt}
-        className="text-[11px] font-semibold tabular-nums tracking-tight text-[#1a1a1a] sm:text-xs"
+        className={cn(
+          tailLabelClass(fill, true),
+          "font-semibold tracking-tight text-[#1a1a1a]",
+        )}
       >
         {dateLabel}
       </time>
     </MetaPill>
   )
 
-  const metaTailPills = orderPill || statusPill || topicPill ? (
-    <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto sm:gap-2">
-      {orderPill}
-      {statusPill}
-      {topicPill}
-    </div>
-  ) : null
+  const orderPill = renderOrderPill()
+  const statusPill = renderStatusPill()
+  const topicPill = renderTopicPill()
+  const datePill = renderDatePill()
+  const filledTail = [renderOrderPill(true), renderStatusPill(true), renderTopicPill(true), renderDatePill(true)]
+  const hasTailPills = Boolean(orderPill || statusPill || topicPill || datePill)
 
   return (
     <>
       <div className="hidden w-full min-w-0 items-center gap-2 sm:flex">
+        {leading}
         {channelPill}
         {customerPill}
         {orderPill}
         {statusPill}
         {topicPill}
         {datePill}
+        {trailing}
       </div>
 
       <div className="flex w-full min-w-0 flex-col gap-2 sm:hidden">
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex w-full min-w-0 items-center gap-1.5">
+          {leading}
           {channelPill}
           {customerPill}
-          {datePill}
+          {trailing}
         </div>
-        {metaTailPills}
+        {hasTailPills ? (
+          <div className="flex w-full min-w-0 items-center gap-1.5">
+            {filledTail}
+          </div>
+        ) : null}
       </div>
     </>
   )

@@ -39,7 +39,7 @@ export default function Composer(props: ComposerProps) {
 
   return (
     <NeedsYouCardFooter className="pointer-events-auto shrink-0 p-0">
-      <div className="px-5 py-4 sm:px-6">
+      <div className="px-4 py-3 sm:px-6 sm:py-4">
         {igWindowExpired && (
           <div className="mb-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-700">
             Instagram only allows replies within 24 hours of the customer&apos;s last message. Wait
@@ -47,7 +47,7 @@ export default function Composer(props: ComposerProps) {
           </div>
         )}
 
-        <div className={`flex items-end gap-2 rounded-[24px] border px-2 py-1.5 shadow-sm transition-colors ${barTone}`}>
+        <div className={`flex min-w-0 items-end gap-1.5 rounded-[24px] border px-1.5 py-1.5 shadow-sm transition-colors sm:gap-2 sm:px-2 ${barTone}`}>
           {isAgentMode ? (
             <span className="mb-1 inline-flex shrink-0 items-center gap-1 self-center rounded-full bg-foreground/[0.07] px-2.5 py-[5px] text-xs font-semibold text-strong">
               <Bot className="size-3" />

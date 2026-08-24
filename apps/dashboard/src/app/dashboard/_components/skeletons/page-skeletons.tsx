@@ -89,34 +89,16 @@ export function TicketsPageSkeleton() {
   )
 }
 
-const ORDER_COLUMN_KEYS = ["orders-col-1", "orders-col-2", "orders-col-3"]
-
 export function OrdersPageSkeleton() {
   return (
     <PageShell>
-      <div
-        className={cn(
-          dashboardChromeColumnClassName(),
-          "flex min-h-0 flex-1 flex-col",
-        )}
-      >
-        <div className={cn("relative z-20 shrink-0 pb-3 pt-3", desktopTopBarScrollClearanceClass)}>
-          <SearchFilterBarSkeleton pills={2} />
-        </div>
-        <div className="custom-scrollbar flex-1 overflow-y-auto">
-          <div className="w-full space-y-5 py-6">
-            <Pulse className="h-16 w-full rounded-2xl border border-border bg-card" />
-            <div className="grid gap-6 lg:grid-cols-3">
-              {ORDER_COLUMN_KEYS.map(key => (
-                <div key={key} className="space-y-2.5" aria-hidden>
-                  <Pulse className="mb-3 h-4 w-28 rounded-md" />
-                  <Pulse className="h-28 rounded-2xl border border-border bg-card" />
-                  <Pulse className="h-28 rounded-2xl border border-border bg-card" />
-                  <Pulse className="h-28 rounded-2xl border border-border bg-card" />
-                </div>
-              ))}
-            </div>
-          </div>
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        <div className={cn(
+          "flex min-h-full w-full flex-col gap-3 px-5 pb-4 pt-3 md:px-6 lg:px-8 md:pt-16 mx-auto",
+          dashboardChromeMaxWidthClass,
+        )}>
+          <SearchFilterBarSkeleton />
+          <InboxStreamLoading />
         </div>
       </div>
     </PageShell>

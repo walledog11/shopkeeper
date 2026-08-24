@@ -3,6 +3,13 @@
 import { useEffect, useRef, useState } from "react"
 import { MoreHorizontal } from "lucide-react"
 import type { ReactNode } from "react"
+import { cn } from "@/lib/ui/cn"
+import {
+  contextIconButtonClassName,
+  contextMenuClassName,
+  contextMenuDangerClassName,
+  contextMenuItemClassName,
+} from "./context-panel-styles"
 
 export interface ManageDropdownItem {
   label: string
@@ -25,13 +32,13 @@ export function ManageDropdown({ items }: ManageDropdownProps) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
+      if (e.key === "Escape") setOpen(false)
     }
-    document.addEventListener('mousedown', handlePointerDown)
-    document.addEventListener('keydown', handleKeyDown)
+    document.addEventListener("mousedown", handlePointerDown)
+    document.addEventListener("keydown", handleKeyDown)
     return () => {
-      document.removeEventListener('mousedown', handlePointerDown)
-      document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener("mousedown", handlePointerDown)
+      document.removeEventListener("keydown", handleKeyDown)
     }
   }, [open])
 
@@ -40,7 +47,7 @@ export function ManageDropdown({ items }: ManageDropdownProps) {
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="flex size-6 items-center justify-center rounded text-faint hover:bg-foreground/[0.05] hover:text-strong transition-colors"
+        className={cn(contextIconButtonClassName, open && "bg-[#f5ebe0] text-[#1a1a1a]")}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Manage customer"
@@ -49,18 +56,14 @@ export function ManageDropdown({ items }: ManageDropdownProps) {
         <MoreHorizontal className="size-3.5" />
       </button>
       {open && (
-        <div role="menu" className="absolute right-0 top-7 z-10 w-44 rounded-md border border-foreground/[0.09] bg-popover shadow-md py-1">
+        <div role="menu" className={contextMenuClassName}>
           {items.map(item => (
             <button
               type="button"
               key={item.label}
               onClick={() => { void item.onClick(); setOpen(false) }}
               role="menuitem"
-              className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors ${
-                item.danger
-                  ? 'text-muted-foreground hover:text-red-600 hover:bg-red-600/[0.08]'
-                  : 'text-muted-foreground hover:bg-foreground/[0.05]'
-              }`}
+              className={item.danger ? contextMenuDangerClassName : contextMenuItemClassName}
             >
               {item.icon}
               {item.label}

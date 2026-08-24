@@ -1,7 +1,13 @@
 "use client"
 
 import { RefreshCw, Search, UserPlus, X } from "lucide-react"
+import { cn } from "@/lib/ui/cn"
 import type { ShopifyCustomerSearchResult } from "@/types/shopify"
+import {
+  contextInputClassName,
+  contextResultRowClassName,
+  contextTanPanelClassName,
+} from "./context-panel-styles"
 
 interface ShopifyCustomerSearchProps {
   query: string
@@ -15,7 +21,6 @@ interface ShopifyCustomerSearchProps {
   }
   onQueryChange: (query: string) => void
   onClear: () => void
-  onCancel: () => void
   onCreate: () => void
   onLink: (customer: ShopifyCustomerSearchResult) => void
 }
@@ -26,40 +31,35 @@ export function ShopifyCustomerSearch({
   status,
   onQueryChange,
   onClear,
-  onCancel,
   onCreate,
   onLink,
 }: ShopifyCustomerSearchProps) {
   const { searching, linkingId, linkError, searchError, createAllowed } = status
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-faint">Search Shopify customers to link.</p>
-        <button type="button" onClick={onCancel} className="text-xs text-faint hover:text-strong transition-colors">Cancel</button>
-      </div>
-
+    <div className={cn(contextTanPanelClassName, "space-y-3")}>
       <div className="relative">
-        <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3 text-faint pointer-events-none" />
-        <input aria-label="Name or email…"
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-[#6b5d4f]" />
+        <input
+          aria-label="Name or email"
           type="text"
           placeholder="Name or email…"
           value={query}
           onChange={e => onQueryChange(e.target.value)}
-          className="w-full pl-6 pr-7 py-1.5 text-xs text-strong rounded-md border border-foreground/[0.12] bg-foreground/[0.06] focus:outline-none focus:border-foreground/[0.25] placeholder:text-faint"
+          className={cn(contextInputClassName, "h-10 pl-9 pr-9")}
         />
-        <span className="absolute right-2 top-1/2 -translate-y-1/2">
+        <span className="absolute right-3 top-1/2 -translate-y-1/2">
           {searching
-            ? <RefreshCw className="size-3 text-faint animate-spin" />
+            ? <RefreshCw className="size-3.5 animate-spin text-[#6b5d4f]" />
             : query
               ? (
                 <button
                   type="button"
                   onClick={onClear}
-                  className="text-faint hover:text-muted-foreground"
+                  className="text-[#6b5d4f] transition-colors hover:text-[#1a1a1a]"
                   aria-label="Clear customer search"
                 >
-                  <X className="size-3" />
+                  <X className="size-3.5" />
                 </button>
               )
               : null}
@@ -70,30 +70,29 @@ export function ShopifyCustomerSearch({
       {searchError && <p className="text-xs text-red-600">Unable to search customers.</p>}
 
       {customers?.length === 0 && (
-        <p className="text-xs text-muted-foreground">No customers found.</p>
+        <p className="text-xs text-[#6b5d4f]">No customers found.</p>
       )}
 
       {customers && customers.length > 0 && (
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           {customers.map(customer => {
-            const fullName = [customer.first_name, customer.last_name].filter(Boolean).join(' ') || '-'
+            const fullName = [customer.first_name, customer.last_name].filter(Boolean).join(" ") || "—"
             return (
               <button
                 type="button"
                 key={customer.id}
                 onClick={() => onLink(customer)}
                 disabled={linkingId !== null}
-                className="w-full flex items-center justify-between gap-2 rounded-md border border-foreground/[0.07] bg-foreground/[0.03] hover:bg-foreground/[0.07] hover:border-foreground/[0.12] disabled:opacity-60 px-2.5 py-1.5 transition-colors text-left group"
+                className={contextResultRowClassName}
               >
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold text-strong truncate">{fullName}</p>
-                  <p className="text-xs text-faint truncate">{customer.email || 'No email'}</p>
+                  <p className="truncate text-xs font-semibold text-[#1a1a1a]">{fullName}</p>
+                  <p className="truncate text-xs text-[#6b5d4f]">{customer.email || "No email"}</p>
                 </div>
-                <div className="shrink-0 flex size-5 items-center justify-center text-faint group-hover:text-[#96BF48] transition-colors" aria-hidden="true">
+                <div className="flex size-8 shrink-0 items-center justify-center text-[#6b5d4f]" aria-hidden="true">
                   {linkingId === customer.id
-                    ? <RefreshCw className="size-3 animate-spin" />
-                    : <UserPlus className="size-3" />
-                  }
+                    ? <RefreshCw className="size-3.5 animate-spin" />
+                    : <UserPlus className="size-3.5" />}
                 </div>
               </button>
             )
@@ -105,9 +104,10 @@ export function ShopifyCustomerSearch({
         <button
           type="button"
           onClick={onCreate}
-          className="w-full flex items-center justify-center gap-1.5 text-xs text-faint hover:text-muted-foreground border border-dashed border-foreground/[0.12] hover:border-foreground/[0.25] rounded-md py-2 transition-colors"
+          className="flex h-10 w-full items-center justify-center gap-1.5 rounded-2xl bg-white text-xs font-semibold text-[#1a1a1a] transition-colors hover:bg-white/70"
         >
-          <UserPlus className="size-3" /> Create new customer
+          <UserPlus className="size-3.5" />
+          Create new customer
         </button>
       )}
     </div>

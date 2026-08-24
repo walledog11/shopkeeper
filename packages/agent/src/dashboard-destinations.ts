@@ -72,8 +72,8 @@ export const DASHBOARD_DESTINATIONS: readonly DashboardDestination[] = [
     id: "orders",
     href: "/dashboard/orders",
     label: "Shop",
-    description: "Orders and customers from Shopify",
-    keywords: ["orders", "shop", "customers", "shopify"],
+    description: "Orders that need a look",
+    keywords: ["orders", "shop", "shopify"],
   },
   {
     id: "workspace_settings",

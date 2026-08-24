@@ -1,10 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { fetchCustomersPage } from "./(shell)/orders/_components/customers/customer-requests"
-import {
-  fetchOrdersColumnPage,
-  fetchOrdersPage,
-  startOrderSupportThread,
-} from "./(shell)/orders/_components/order-requests"
+import { fetchOrdersPage } from "./(shell)/orders/_components/order-requests"
 import {
   deleteTeamMember,
   revokeTeamInvitation,
@@ -30,36 +25,15 @@ describe("team deletion requests", () => {
 })
 
 describe("pagination requests", () => {
-  it("rejects order and customer page failures", async () => {
+  it("rejects order page failures", async () => {
     stubApiError("Next page failed")
 
     await expect(fetchOrdersPage("orders_cursor")).rejects.toThrow("Next page failed")
-    await expect(fetchOrdersColumnPage("unpaid", "orders_cursor")).rejects.toThrow("Next page failed")
-    await expect(fetchCustomersPage("customers_cursor")).rejects.toThrow("Next page failed")
   })
 
   it("rejects malformed success pages instead of appending them", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({ error: "not a page" })))
 
     await expect(fetchOrdersPage("orders_cursor")).rejects.toThrow("Unable to load more orders.")
-    await expect(fetchOrdersColumnPage("fulfilled", "orders_cursor")).rejects.toThrow("Unable to load more orders.")
-    await expect(fetchCustomersPage("customers_cursor")).rejects.toThrow("Unable to load more customers.")
-  })
-})
-
-describe("order support-thread requests", () => {
-  it("rejects API failures and missing thread ids", async () => {
-    stubApiError("Thread creation failed")
-    const input = {
-      shopifyCustomerId: "customer_1",
-      customerEmail: "customer@example.com",
-      customerName: "Customer",
-      orderName: "#1001",
-    }
-
-    await expect(startOrderSupportThread(input)).rejects.toThrow("Thread creation failed")
-
-    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ ok: true })))
-    await expect(startOrderSupportThread(input)).rejects.toThrow("Failed to start support thread.")
   })
 })

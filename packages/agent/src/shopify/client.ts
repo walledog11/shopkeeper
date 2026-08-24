@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { handleShopifySimulatorRest } from "./simulator-store.js";
 
 export const SHOPIFY_API_VERSION = "2026-04";
 
@@ -246,6 +247,17 @@ export async function shopifyRest<T>(
   path: string,
   options: ShopifyRequestOptions = {}
 ): Promise<ShopifyResponse<T>> {
+  const simulated = handleShopifySimulatorRest(ctx, path, options);
+  if (simulated) {
+    if (!simulated.ok) {
+      throw new ShopifyRequestError("Shopify API request failed.", {
+        status: simulated.status,
+        payload: simulated.payload,
+      });
+    }
+    return { data: simulated.data as T, headers: simulated.headers };
+  }
+
   const shop = normalizeShopifyShop(ctx.shop);
   const url = buildShopifyAdminUrl(ctx, path, options.query);
   const method = options.method ?? "GET";
