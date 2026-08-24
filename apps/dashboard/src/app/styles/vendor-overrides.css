@@ -53,25 +53,32 @@
   gap: 0.75rem;
 }
 
-/* Account settings — embed UserProfile in the dashboard card, not a modal */
+/* Account settings — flatten UserProfile into the dashboard card */
 .account-clerk-root,
 .account-clerk-root .cl-rootBox,
 .account-clerk-root .cl-cardBox,
 .account-clerk-root .cl-card,
+.account-clerk-root .cl-main,
 .account-clerk-root .cl-scrollBox,
-.account-clerk-root .cl-pageScrollBox {
+.account-clerk-root .cl-pageScrollBox,
+.account-clerk-root .cl-actionCard {
   width: 100% !important;
   max-width: 100% !important;
   min-width: 0 !important;
   box-sizing: border-box;
   font-family: var(--font-sans) !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
 }
 
 .account-clerk-root .cl-cardBox {
   display: flex !important;
   flex-direction: column !important;
-  box-shadow: none !important;
   height: auto !important;
+  overflow: visible !important;
 }
 
 .account-clerk-root .cl-scrollBox,
@@ -83,12 +90,14 @@
 
 .account-clerk-root .cl-footer,
 .account-clerk-root .cl-footerPages,
+.account-clerk-root .cl-navbar,
+.account-clerk-root .cl-navbarButtons,
 .account-clerk-root .cl-navbarMobileMenuRow,
 .account-clerk-root .cl-navbarMobileMenuButton {
   display: none !important;
 }
 
-/* Clerk's Account heading lives in the profile navbar, not always as .cl-navbarHeader. */
+/* Hide Clerk's overview "Account" chrome. Keep back + title on edit pages. */
 .account-clerk-root .cl-navbarHeader,
 .account-clerk-root .cl-navbarHeader *,
 .account-clerk-root .cl-navbar > h1,
@@ -96,64 +105,221 @@
 .account-clerk-root .cl-navbar .cl-header,
 .account-clerk-root .cl-navbar .cl-headerTitle,
 .account-clerk-root .cl-navbar .cl-headerSubtitle,
-.account-clerk-root .cl-header,
-.account-clerk-root .cl-headerTitle,
+.account-clerk-root .cl-profilePage:has(.cl-profileSection) > .cl-header,
+.account-clerk-root .cl-page:has(.cl-profileSection) > .cl-header,
 .account-clerk-root [data-localization-key="userProfile.navbar.title"],
 .account-clerk-root [data-localization-key="userProfile.navbar.description"] {
   display: none !important;
-}
-
-.account-clerk-root .cl-navbar {
-  display: flex !important;
-  width: 100% !important;
-  border: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-}
-
-.account-clerk-root .cl-navbarButtons {
-  display: flex !important;
-  flex-direction: row !important;
-  flex-wrap: wrap !important;
-  gap: 0.25rem !important;
-  padding: 0 0 1rem !important;
 }
 
 .account-clerk-root .cl-page,
 .account-clerk-root .cl-profilePage,
 .account-clerk-root .cl-profilePageContent {
   padding: 0 !important;
-  gap: 0 !important;
+  background: transparent !important;
+}
+
+.account-clerk-root .cl-page:has(.cl-profileSection),
+.account-clerk-root .cl-profilePage:has(.cl-profileSection),
+.account-clerk-root .cl-profilePageContent:has(.cl-profileSection) {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 1rem !important;
+}
+
+.account-clerk-root .cl-page:not(:has(.cl-profileSection)),
+.account-clerk-root .cl-profilePage:not(:has(.cl-profileSection)) {
+  border: 1px solid rgb(255 255 255 / 0.7) !important;
+  border-radius: 1rem !important;
+  background: rgb(255 255 255 / 0.65) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
+    0 1px 2px rgba(43, 33, 24, 0.05),
+    0 10px 28px -10px rgba(43, 33, 24, 0.16),
+    0 24px 56px -18px rgba(43, 33, 24, 0.18) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(1.5) !important;
+  backdrop-filter: blur(40px) saturate(1.5) !important;
+  padding: 1.25rem !important;
+  gap: 1.25rem !important;
 }
 
 .account-clerk-root .cl-profileSection {
-  align-items: center !important;
-  gap: 1.5rem !important;
-  padding-top: 1.25rem !important;
-  padding-bottom: 1.25rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+  gap: 0.75rem !important;
+  margin: 0 !important;
+  padding: 1.25rem !important;
+  border: 1px solid rgb(255 255 255 / 0.7) !important;
+  border-radius: 1rem !important;
+  background: rgb(255 255 255 / 0.65) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
+    0 1px 2px rgba(43, 33, 24, 0.05),
+    0 10px 28px -10px rgba(43, 33, 24, 0.16),
+    0 24px 56px -18px rgba(43, 33, 24, 0.18) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(1.5) !important;
+  backdrop-filter: blur(40px) saturate(1.5) !important;
 }
 
-.account-clerk-root .cl-profileSection:first-child,
-.account-clerk-root .cl-header + .cl-profileSection {
-  border-top-width: 0 !important;
-  padding-top: 0 !important;
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .account-clerk-root .cl-page:not(:has(.cl-profileSection)),
+  .account-clerk-root .cl-profilePage:not(:has(.cl-profileSection)),
+  .account-clerk-root .cl-profileSection {
+    background: rgb(255 255 255 / 0.4) !important;
+  }
 }
 
-.account-clerk-root .cl-profileSection:last-child {
-  padding-bottom: 0 !important;
+.account-clerk-root .cl-profileSection:hover {
+  border-color: rgb(255 255 255 / 0.85) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 2px 4px rgba(43, 33, 24, 0.06),
+    0 16px 36px -12px rgba(43, 33, 24, 0.20),
+    0 32px 64px -20px rgba(43, 33, 24, 0.22) !important;
 }
 
 .account-clerk-root .cl-profileSectionHeader {
-  align-self: center !important;
-  margin-top: 0 !important;
+  order: -1 !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
   transform: none !important;
+  align-self: stretch !important;
 }
 
-.account-clerk-root .cl-profileSectionItem,
-.account-clerk-root .cl-profileSectionItemList {
-  align-items: center !important;
+.account-clerk-root .cl-profileSectionHeader,
+.account-clerk-root .cl-profileSectionHeader *,
+.account-clerk-root .cl-profileSectionTitle,
+.account-clerk-root .cl-profileSectionTitleText {
+  overflow: visible !important;
+  line-height: 1.25 !important;
+  text-align: left !important;
+  justify-content: flex-start !important;
+}
+
+.account-clerk-root .cl-profileSectionContent {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  gap: 0.75rem !important;
+}
+
+.account-clerk-root .cl-profileSectionContent > * {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  gap: 0.75rem !important;
+}
+
+.account-clerk-root .cl-profileSectionItemList,
+.account-clerk-root .cl-profileSectionSubtitle {
+  min-width: 0 !important;
+  width: 100% !important;
 }
 
 .account-clerk-root .cl-profileSectionItemList {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
   gap: 0.5rem !important;
+  padding: 0 !important;
+}
+
+.account-clerk-root .cl-profileSectionItem {
+  display: flex !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 0.75rem !important;
+  padding: 0 !important;
+}
+
+/* Profile: identity on its own row so the name is never squeezed by the action. */
+.account-clerk-root .cl-profileSectionItem:has(.cl-profileSectionPrimaryButton) {
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+}
+
+.account-clerk-root .cl-userPreview {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  width: 100% !important;
+  flex: 1 1 auto !important;
+}
+
+.account-clerk-root .cl-userPreviewTextContainer,
+.account-clerk-root .cl-userPreviewMainIdentifier,
+.account-clerk-root .cl-userPreviewMainIdentifierText {
+  overflow: visible !important;
+  text-overflow: unset !important;
+  white-space: normal !important;
+  max-width: none !important;
+}
+
+.account-clerk-root .cl-profileSectionPrimaryButton {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  align-self: stretch !important;
+  flex-shrink: 0 !important;
+  gap: 0.5rem !important;
+  height: auto !important;
+  min-height: 2.5rem !important;
+  width: 100% !important;
+  max-width: none !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  padding: 0.625rem 1rem !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 1rem !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--muted-foreground) !important;
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+  line-height: 1.25 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  white-space: nowrap !important;
+}
+
+.account-clerk-root .cl-profileSectionPrimaryButton:hover {
+  background: color-mix(in srgb, var(--foreground) 4%, transparent) !important;
+  color: var(--text-strong) !important;
+}
+
+.account-clerk-root .cl-profileSectionPrimaryButton:focus-visible {
+  outline: none !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--foreground) 12%, transparent) !important;
+}
+
+.account-clerk-root .cl-profileSectionPrimaryButton svg,
+.account-clerk-root .cl-profileSectionPrimaryButton .cl-buttonIcon {
+  position: static !important;
+  margin: 0 !important;
+  width: 1rem !important;
+  height: 1rem !important;
+  flex-shrink: 0;
+}
+
+@media (min-width: 640px) {
+  .account-clerk-root .cl-profileSectionItem:has(.cl-profileSectionPrimaryButton),
+  .account-clerk-root .cl-profileSectionItemList {
+    align-items: flex-start !important;
+  }
+
+  .account-clerk-root .cl-profileSectionPrimaryButton {
+    width: auto !important;
+    min-width: 12.5rem !important;
+    align-self: flex-start !important;
+  }
 }

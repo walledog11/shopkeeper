@@ -1,3 +1,4 @@
+import { boardSecondaryButtonClassName } from "@/lib/ui/board-card-styles"
 import { cn } from "@/lib/ui/cn"
 
 export const GLASS_CARD_SHADOW =
@@ -12,6 +13,20 @@ export const GLASS_CARD_SURFACE = cn(
   "transition-[box-shadow,border-color] duration-200",
   "hover:border-white/85",
   GLASS_CARD_SHADOW_HOVER,
+)
+
+/** Settings tiles — same frost and depth as integration / memory cards. */
+export const GLASS_SETTINGS_TILE = cn("rounded-2xl px-5 py-5", GLASS_CARD_SURFACE)
+
+/** Row actions on account tiles — same rounded-2xl language as inbox / needs-you buttons. */
+export const GLASS_SETTINGS_ACTION = cn(
+  boardSecondaryButtonClassName,
+  "h-auto min-h-10 w-full px-4 py-2.5 text-sm whitespace-nowrap sm:w-auto sm:min-w-[12.5rem]",
+)
+
+export const GLASS_SETTINGS_ACTION_DANGER = cn(
+  GLASS_SETTINGS_ACTION,
+  "border-red-500/30 bg-red-500/[0.06] text-red-600 hover:bg-red-500/[0.12] hover:text-red-700",
 )
 
 /** Compact frosted-glass chrome for floating nav pills — no hover lift. */

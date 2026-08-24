@@ -1,3 +1,5 @@
+import { GLASS_SETTINGS_ACTION } from "@/lib/ui/glass-card-styles";
+
 type ClerkElementOverrides = Record<string, string | Record<string, string>>;
 type AuthClerkVariant = "paper" | "ink";
 
@@ -127,33 +129,33 @@ export function getUserProfileClerkAppearance(): {
   return {
     variables: {
       ...paperVariables,
-      colorBackground: "#fbf8f1",
+      colorBackground: "transparent",
     },
     elements: {
       ...sharedPaperElements,
-      rootBox: "w-full max-w-full min-w-0",
+      rootBox: "w-full max-w-full min-w-0 bg-transparent",
       cardBox:
-        "w-full max-w-full min-w-0 overflow-hidden bg-transparent shadow-none",
-      card: "w-full max-w-full min-w-0 border-0 bg-transparent p-0 shadow-none",
-      navbar:
-        "w-full border-0 bg-transparent p-0 shadow-none",
+        "w-full max-w-full min-w-0 overflow-visible rounded-none border-0 bg-transparent shadow-none",
+      card: "w-full max-w-full min-w-0 rounded-none border-0 bg-transparent p-0 shadow-none",
+      navbar: { display: "none" },
       navbarHeader: { display: "none" },
-      navbarButtons: "flex flex-row flex-wrap gap-1 p-0",
-      navbarButton:
-        "rounded-full px-3 py-1.5 text-xs font-semibold text-muted-foreground",
+      navbarButtons: { display: "none" },
       navbarMobileMenuRow: { display: "none" },
       navbarMobileMenuButton: { display: "none" },
-      scrollBox: "bg-transparent",
-      pageScrollBox: "bg-transparent",
-      headerTitle: { display: "none" },
-      headerSubtitle: { display: "none" },
+      scrollBox: "bg-transparent shadow-none",
+      pageScrollBox: "bg-transparent shadow-none",
+      headerTitle: "text-lg font-semibold tracking-tight text-strong",
+      headerSubtitle: "text-sm text-muted-foreground",
       profilePageContent: "p-0",
-      profileSection: "items-center",
-      profileSectionHeader: "self-center",
-      profileSectionTitleText: "text-sm font-semibold text-strong",
-      profileSectionContent: "text-sm text-muted-foreground",
-      profileSectionPrimaryButton:
-        "text-xs font-semibold text-muted-foreground hover:text-strong",
+      profileSection: "w-full rounded-2xl",
+      profileSectionHeader: "w-full text-left",
+      profileSectionTitleText: "text-left text-sm font-semibold text-strong",
+      profileSectionContent: "min-w-0 w-full text-sm text-muted-foreground",
+      profileSectionPrimaryButton: GLASS_SETTINGS_ACTION,
+      userPreview: "min-w-0 w-full max-w-full",
+      userPreviewMainIdentifier: "overflow-visible whitespace-normal",
+      userPreviewMainIdentifierText: "overflow-visible whitespace-normal",
+      actionCard: "rounded-none border-0 bg-transparent p-0 shadow-none",
       accordionTriggerButton: "text-sm font-medium text-strong",
       formButtonPrimary:
         "!bg-[#2b2118] !text-[#f6f2eb] inline-flex h-9 items-center justify-center gap-1.5 rounded-full text-sm font-semibold leading-none shadow-[inset_0_1px_0_rgba(255,245,235,0.14),0_8px_24px_-8px_rgba(12,8,5,0.4)] hover:!bg-[#1a120c]",

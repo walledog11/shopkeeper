@@ -2,25 +2,43 @@
 
 import { UserProfile, useClerk, useUser } from "@clerk/nextjs"
 import { LogOut } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
 import { getUserProfileClerkAppearance } from "@/app/(auth)/_components/clerk-appearance"
 import { AccountSettingsSkeleton } from "@/app/dashboard/_components/skeletons/AccountSettingsSkeleton"
+import { isClerkAccountOverviewHash } from "./account-settings-helpers"
+import { AccountSecuritySection } from "./AccountSecuritySection"
 
 export default function AccountSettingsSection() {
   const { signOut } = useClerk()
   const { isLoaded } = useUser()
-  const appearance = getUserProfileClerkAppearance()
+  const appearance = useMemo(() => getUserProfileClerkAppearance(), [])
+  const [editingPassword, setEditingPassword] = useState(false)
+  const isOverview = useClerkAccountOverview()
 
   if (!isLoaded) {
     return <AccountSettingsSkeleton />
   }
 
   return (
-    <div className="space-y-6">
-      <div id="account" className="account-clerk-root min-w-0 scroll-mt-6">
-        <div className="overflow-hidden rounded-xl border border-border bg-card p-5 sm:p-6">
-          <UserProfile routing="hash" appearance={appearance} />
-        </div>
-      </div>
+    <div className="flex flex-col gap-4">
+      {editingPassword ? (
+        <AccountSecuritySection
+          editorOpen
+          onEditorOpenChange={setEditingPassword}
+        />
+      ) : (
+        <>
+          <div id="account" className="account-clerk-root min-w-0 scroll-mt-6">
+            <UserProfile routing="hash" appearance={appearance} />
+          </div>
+          {isOverview ? (
+            <AccountSecuritySection
+              editorOpen={false}
+              onEditorOpenChange={setEditingPassword}
+            />
+          ) : null}
+        </>
+      )}
       <button
         type="button"
         onClick={() => void signOut({ redirectUrl: "/login" })}
@@ -31,4 +49,19 @@ export default function AccountSettingsSection() {
       </button>
     </div>
   )
+}
+
+function useClerkAccountOverview() {
+  const [isOverview, setIsOverview] = useState(true)
+
+  useEffect(() => {
+    const sync = () => {
+      setIsOverview(isClerkAccountOverviewHash(window.location.hash))
+    }
+    sync()
+    window.addEventListener("hashchange", sync)
+    return () => window.removeEventListener("hashchange", sync)
+  }, [])
+
+  return isOverview
 }

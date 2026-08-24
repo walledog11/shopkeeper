@@ -1,32 +1,23 @@
 import { Pulse } from "./Pulse"
+import { GLASS_SETTINGS_TILE } from "@/lib/ui/glass-card-styles"
+import { cn } from "@/lib/ui/cn"
 
 export function AccountSettingsSkeleton({
   profileOnly = false,
 }: {
   profileOnly?: boolean
 }) {
+  const tileCount = profileOnly ? 3 : 7
+
   return (
-    <div className={profileOnly ? undefined : "space-y-6"}>
-      <div className="overflow-hidden rounded-xl border border-border bg-card p-5 sm:p-6">
-        <div className="space-y-4">
-          <Pulse className="h-5 w-28 rounded-md" />
-          <Pulse className="h-20 w-full rounded-lg" />
-          <Pulse className="h-20 w-full rounded-lg" />
-          <Pulse className="h-20 w-full rounded-lg" />
+    <div className="flex flex-col gap-4">
+      {Array.from({ length: tileCount }, (_, index) => (
+        <div key={index} className={cn(GLASS_SETTINGS_TILE, "space-y-2")}>
+          <Pulse className="h-4 w-28 rounded-md" />
+          <Pulse className="h-4 w-2/3 rounded-md bg-foreground/[0.05]" />
         </div>
-      </div>
-      {profileOnly ? null : (
-        <>
-          <div className="overflow-hidden rounded-xl border border-border bg-card p-5 sm:p-6">
-            <div className="space-y-4">
-              <Pulse className="h-5 w-28 rounded-md" />
-              <Pulse className="h-20 w-full rounded-lg" />
-              <Pulse className="h-20 w-full rounded-lg" />
-            </div>
-          </div>
-          <Pulse className="h-12 w-full rounded-2xl" />
-        </>
-      )}
+      ))}
+      {profileOnly ? null : <Pulse className="h-12 w-full rounded-2xl" />}
     </div>
   )
 }
