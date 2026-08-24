@@ -199,9 +199,6 @@ export default function ApprovalsAndControlsPage() {
               </div>
             ))}
           </div>
-          <p className="mt-4 text-center text-sm leading-relaxed text-stone-600">
-            Broad and Full auto are not part of the merchant-facing launch choice. Automatic mutation requires separate rollout configuration.
-          </p>
         </section>
 
         <section aria-labelledby="boundaries-heading" className="mx-auto max-w-6xl px-6 py-14">

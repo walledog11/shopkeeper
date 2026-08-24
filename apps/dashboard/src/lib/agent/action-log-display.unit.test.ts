@@ -20,7 +20,6 @@ function entry(overrides: Partial<ActionLogEntry> = {}): ActionLogEntry {
     actions: [],
     mode: "auto_executed",
     approver: null,
-    feedback: null,
     ...overrides,
   }
 }

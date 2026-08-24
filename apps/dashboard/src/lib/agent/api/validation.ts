@@ -268,17 +268,3 @@ export function parseActionLogCursorQuery(request: Request): { cursor: AgentActi
 
   return { cursor, filters };
 }
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-export function parseAgentActionFeedbackBody(body: unknown): { turnId: string; feedback: "good" | null } {
-  const candidate = requireObject(body);
-  const turnId = requireNonEmptyString(candidate.turnId, "turnId");
-  if (!UUID_RE.test(turnId)) {
-    invalidField("turnId", "turnId must be a UUID");
-  }
-  if (candidate.feedback !== null && candidate.feedback !== "good") {
-    invalidField("feedback", 'feedback must be "good" or null');
-  }
-  return { turnId, feedback: candidate.feedback as "good" | null };
-}

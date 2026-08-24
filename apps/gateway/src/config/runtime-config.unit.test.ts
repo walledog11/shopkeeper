@@ -206,13 +206,10 @@ describe('getGatewayRuntimeFlags', () => {
   it('returns the monitor rollout flags together', () => {
     vi.stubEnv('ORDER_RISK_MONITOR_ENABLED', '1');
     vi.stubEnv('RETURN_LIFECYCLE_MONITOR_ENABLED', '0');
-    vi.stubEnv('POST_RESOLUTION_FOLLOWUP_MONITOR_ENABLED', 'false');
-
     expect(getGatewayRuntimeFlags()).toEqual({
       monitors: {
         orderRisk: true,
         returnLifecycle: false,
-        postResolutionFollowUp: false,
       },
     });
   });

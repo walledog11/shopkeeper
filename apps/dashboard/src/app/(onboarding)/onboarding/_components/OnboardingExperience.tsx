@@ -14,7 +14,6 @@ import {
 import type { OAuthOutcome } from "@/lib/integrations/oauth-contract";
 
 export interface OnboardingChannelConfig {
-  telegramBotUsername: string | null;
   imessageHandle: string | null;
   shopifySimulatorEnabled: boolean;
 }
@@ -105,9 +104,6 @@ function OnboardingExperienceView({
             <StepConnect
               imessageStatus={messaging.imessageStatus}
               onRefreshImessage={messaging.refreshImessage}
-              onRefreshTelegram={messaging.refreshTelegram}
-              telegramBotUsername={channels.telegramBotUsername}
-              telegramStatus={messaging.telegramStatus}
               imessageHandle={channels.imessageHandle}
             />
           )}

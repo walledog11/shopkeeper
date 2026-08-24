@@ -86,7 +86,6 @@ interface RawActionRow {
   approverId: string | null;
   instruction: string | null;
   summary: string | null;
-  feedback: string | null;
   executedAt: Date;
   thread: {
     id: string;
@@ -109,7 +108,6 @@ const ACTION_LOG_SELECT = {
   approverId: true,
   instruction: true,
   summary: true,
-  feedback: true,
   executedAt: true,
   thread: {
     select: {
@@ -185,7 +183,6 @@ function buildEntryFromRows(turnId: string, rows: RawActionRow[]): ActionLogEntr
     actions,
     mode: isValidMode(first.mode) ? first.mode : null,
     approver: parseApprover(first.approverId),
-    feedback: first.feedback === "good" ? "good" : null,
   };
 }
 

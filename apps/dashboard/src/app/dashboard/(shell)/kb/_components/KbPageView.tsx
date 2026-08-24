@@ -44,7 +44,7 @@ export function KbPageView({ state }: { state: KbPageState }) {
               <button
                 type="button"
                 onClick={beginAddContext}
-                className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-foreground px-4 text-xs font-semibold text-background"
+                className="inline-flex h-12 shrink-0 items-center gap-1.5 rounded-xl bg-foreground px-4 text-sm font-semibold text-background"
               >
                 <Plus className="size-3.5" />
                 Add note

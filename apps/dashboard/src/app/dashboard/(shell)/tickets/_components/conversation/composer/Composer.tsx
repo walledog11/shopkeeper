@@ -1,6 +1,6 @@
 "use client"
 
-import { ArrowUp, Bot, Loader2, StickyNote } from "lucide-react"
+import { ArrowUp, Bot, Loader2 } from "lucide-react"
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { NeedsYouCardFooter } from "@/app/dashboard/_components/home/needs-you-card-ui"
 import { useComposerState } from "./composer-state"
@@ -11,31 +11,19 @@ export default function Composer(props: ComposerProps) {
     error,
     isAgentMode = false,
     isSending,
-    noteCount,
     onClearAgentMode,
     onSend,
     value,
   } = props
   const {
-    handleViewTabSelect,
     igWindowExpired,
     isEmailLike,
-    isNoteTab,
     onChange,
     placeholder,
-    rememberTextareaFocus,
     senderEmail,
     sendDisabled,
     textareaRef,
   } = useComposerState(props)
-
-  const barTone = isNoteTab
-    ? "border-amber-500/35 bg-amber-500/[0.06] focus-within:border-amber-500/55"
-    : "border-border bg-card focus-within:border-foreground/30"
-
-  const sendTone = isNoteTab
-    ? "bg-amber-500 text-background hover:bg-amber-600"
-    : "bg-foreground text-background hover:bg-foreground/90"
 
   return (
     <NeedsYouCardFooter className="pointer-events-auto shrink-0 p-0">
@@ -47,34 +35,13 @@ export default function Composer(props: ComposerProps) {
           </div>
         )}
 
-        <div className={`flex min-w-0 items-end gap-1.5 rounded-[24px] border px-1.5 py-1.5 shadow-sm transition-colors sm:gap-2 sm:px-2 ${barTone}`}>
+        <div className="flex min-w-0 items-end gap-1.5 rounded-[24px] border border-border bg-card px-1.5 py-1.5 shadow-sm transition-colors focus-within:border-foreground/30 sm:gap-2 sm:px-2">
           {isAgentMode ? (
             <span className="mb-1 inline-flex shrink-0 items-center gap-1 self-center rounded-full bg-foreground/[0.07] px-2.5 py-[5px] text-xs font-semibold text-strong">
               <Bot className="size-3" />
               @{AGENT_DISPLAY_NAME.toLowerCase()}
             </span>
-          ) : (
-            <button
-              type="button"
-              aria-label={isNoteTab ? "Switch to reply" : "Switch to internal note"}
-              aria-pressed={isNoteTab}
-              title={isNoteTab ? "Internal note — only your team sees this" : "Add an internal note"}
-              onPointerDown={rememberTextareaFocus}
-              onClick={() => handleViewTabSelect(isNoteTab ? "chat" : "notes")}
-              className={`relative flex size-9 shrink-0 items-center justify-center rounded-full transition-colors ${
-                isNoteTab
-                  ? "bg-amber-500/20 text-amber-700"
-                  : "text-faint hover:bg-foreground/[0.06] hover:text-strong"
-              }`}
-            >
-              <StickyNote className="size-4" />
-              {!isNoteTab && noteCount > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-foreground px-1 text-[10px] font-bold text-background tabular-nums">
-                  {noteCount}
-                </span>
-              )}
-            </button>
-          )}
+          ) : null}
 
           <textarea
             aria-label="Reply composer"
@@ -85,7 +52,7 @@ export default function Composer(props: ComposerProps) {
             onKeyDown={e => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault()
-                if (!sendDisabled) onSend(isNoteTab)
+                if (!sendDisabled) onSend(false)
                 return
               }
               if (e.key === "Backspace" && value === "" && isAgentMode && onClearAgentMode) {
@@ -103,9 +70,9 @@ export default function Composer(props: ComposerProps) {
             type="button"
             data-testid="reply-composer-send"
             disabled={sendDisabled}
-            onClick={() => onSend(isNoteTab)}
-            aria-label={isAgentMode ? `Ask ${AGENT_DISPLAY_NAME}` : isNoteTab ? "Save note" : "Send reply"}
-            className={`flex size-9 shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${sendTone}`}
+            onClick={() => onSend(false)}
+            aria-label={isAgentMode ? `Ask ${AGENT_DISPLAY_NAME}` : "Send reply"}
+            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-colors hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {isSending ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
           </button>
@@ -115,8 +82,6 @@ export default function Composer(props: ComposerProps) {
           <span className="min-w-0 truncate text-[11px] text-faint">
             {error ? (
               <span className="font-medium text-red-500">{error}</span>
-            ) : isNoteTab ? (
-              "Private to your team"
             ) : isAgentMode ? (
               `${AGENT_DISPLAY_NAME} replies here — only you see this`
             ) : isEmailLike && senderEmail ? (

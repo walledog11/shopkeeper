@@ -19,7 +19,6 @@ const FLAGS = {
   gmailNativeInboundEnabled: true,
   instagramIntegrationEnabled: true,
   tiktokShopConfigured: true,
-  telegramBotUsername: null,
   imessageHandle: null,
 };
 

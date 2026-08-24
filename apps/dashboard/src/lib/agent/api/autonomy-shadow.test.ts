@@ -16,7 +16,7 @@ vi.mock("@/lib/server/logger", () => ({
   default: { info: vi.fn(), error: vi.fn() },
 }));
 
-const broadSettings = { autonomyTier: "broad" } as OrgSettings;
+const trustedSettings = { autonomyTier: "trusted" } as OrgSettings;
 
 function refundCall(amount: number): RawToolCall {
   return { id: `refund-${amount}`, name: "create_refund", input: { order_id: "1", amount } };
@@ -50,13 +50,13 @@ describe("autonomy shadow decisions", () => {
     orgId = seed.orgId;
     const plan = planWith([refundCall(40)]);
 
-    await recordShadowDecision({ ...seed, settings: broadSettings, plan });
-    await recordShadowDecision({ ...seed, settings: broadSettings, plan }); // dedupe
+    await recordShadowDecision({ ...seed, settings: trustedSettings, plan });
+    await recordShadowDecision({ ...seed, settings: trustedSettings, plan }); // dedupe
 
     const rows = await db.autonomyShadowDecision.findMany({ where: { organizationId: orgId } });
     expect(rows).toHaveLength(1);
     expect(rows[0].humanDecision).toBe("pending");
-    expect(rows[0].tier).toBe("broad");
+    expect(rows[0].tier).toBe("trusted");
     expect(rows[0].proposedTools).toEqual(["create_refund"]);
     expect(rows[0].wouldAutoExecute).toBe(true);
   });
@@ -65,7 +65,7 @@ describe("autonomy shadow decisions", () => {
     const seed = await seedThread();
     orgId = seed.orgId;
     const calls = [refundCall(40)];
-    await recordShadowDecision({ ...seed, settings: broadSettings, plan: planWith(calls) });
+    await recordShadowDecision({ ...seed, settings: trustedSettings, plan: planWith(calls) });
 
     await resolveShadowDecisionOnApproval({ ...seed, approvedToolCalls: calls });
 
@@ -78,7 +78,7 @@ describe("autonomy shadow decisions", () => {
   it("marks an edit when the human approves a different mutation set", async () => {
     const seed = await seedThread();
     orgId = seed.orgId;
-    await recordShadowDecision({ ...seed, settings: broadSettings, plan: planWith([refundCall(40)]) });
+    await recordShadowDecision({ ...seed, settings: trustedSettings, plan: planWith([refundCall(40)]) });
 
     await resolveShadowDecisionOnApproval({ ...seed, approvedToolCalls: [refundCall(25)] });
 
@@ -90,7 +90,7 @@ describe("autonomy shadow decisions", () => {
   it("marks the dangerous rejection when the human executes no mutation", async () => {
     const seed = await seedThread();
     orgId = seed.orgId;
-    await recordShadowDecision({ ...seed, settings: broadSettings, plan: planWith([refundCall(40)]) });
+    await recordShadowDecision({ ...seed, settings: trustedSettings, plan: planWith([refundCall(40)]) });
 
     const replyOnly: RawToolCall = { id: "r1", name: "send_reply", input: { text: "hi" } };
     await resolveShadowDecisionOnApproval({ ...seed, approvedToolCalls: [replyOnly] });

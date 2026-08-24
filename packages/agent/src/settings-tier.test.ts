@@ -26,7 +26,7 @@ describe("resolveAgentSettings", () => {
     const resolved = resolveAgentSettings(null);
     expect(resolved.agentName).toBe(AGENT_SETTINGS_DEFAULTS.agentName);
     expect(resolved.maxIterations).toBe(AGENT_SETTINGS_DEFAULTS.maxIterations);
-    expect(resolved.replyLanguage).toBe(AGENT_SETTINGS_DEFAULTS.replyLanguage);
+    expect(resolved.brandVoice).toBe(AGENT_SETTINGS_DEFAULTS.brandVoice);
   });
 
   describe("per-tier defaults", () => {
@@ -34,8 +34,6 @@ describe("resolveAgentSettings", () => {
       { tier: "watch",   maxRefund: 0    },
       { tier: "guarded", maxRefund: 50   },
       { tier: "trusted", maxRefund: 100  },
-      { tier: "broad",   maxRefund: 250  },
-      { tier: "full",    maxRefund: 1000 },
     ];
 
     for (const { tier, maxRefund } of cases) {
@@ -93,6 +91,14 @@ describe("resolveAgentSettings", () => {
       internal: true,
       read: true,
     });
+  });
+
+  it("maps stored broad and full tiers to trusted", () => {
+    expect(resolveAgentSettings({ autonomyTier: "broad" }).autonomyTier).toBe("trusted");
+    expect(resolveAgentSettings({ autonomyTier: "full" }).autonomyTier).toBe("trusted");
+    expect(resolveAgentSettings({ autonomyTier: "full" }).maxRefundAmount).toBe(
+      TIER_DEFAULTS.trusted.maxRefundAmount,
+    );
   });
 
   it("falls back to guarded tier when autonomyTier is an unknown value", () => {

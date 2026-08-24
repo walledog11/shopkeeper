@@ -421,14 +421,9 @@ describe("decideAutonomy — tier × action matrix", () => {
     })
   })
 
-  describe("broad and full tiers (V1: route as trusted)", () => {
-    it("auto-executes a refund under cap on broad", () => {
-      expect(decideAutonomy(refundPlan(), settings({ autonomyTier: "broad", maxRefundAmount: 250 })).kind)
-        .toBe("auto_execute")
-    })
-
-    it("auto-executes a refund under cap on full", () => {
-      expect(decideAutonomy(refundPlan(), settings({ autonomyTier: "full", maxRefundAmount: 1000 })).kind)
+  describe("trusted tier auto-executes refunds under cap", () => {
+    it("auto-executes a refund under cap", () => {
+      expect(decideAutonomy(refundPlan(), settings({ autonomyTier: "trusted", maxRefundAmount: 250 })).kind)
         .toBe("auto_execute")
     })
   })

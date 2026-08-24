@@ -4,7 +4,6 @@ import { parseVoiceProposal } from "@shopkeeper/db"
 import { normalizeStoredOrgSettings, resolveAgentSettings } from "@shopkeeper/agent/settings"
 import { AgentConfigurePageSkeleton } from "@/app/dashboard/_components/skeletons"
 import { getOrCreateOrg } from "@/lib/server/org"
-import { fetchGatewayRuntimeFlags } from "@/lib/server/gateway-runtime-flags"
 import ConfigurePageClient from "./_components/ConfigurePageClient"
 
 export default async function AgentConfigurePage() {
@@ -16,9 +15,6 @@ export default async function AgentConfigurePage() {
     select: { platform: true },
   })
   const shopifyConnected = integrations.some(integration => integration.platform === ChannelType.shopify)
-  const runtimeFlags = await fetchGatewayRuntimeFlags()
-    .then(flags => flags.monitors)
-    .catch(() => null)
 
   return (
     <Suspense fallback={<AgentConfigurePageSkeleton />}>
@@ -29,7 +25,6 @@ export default async function AgentConfigurePage() {
         orgName={org.name}
         voiceProposal={parseVoiceProposal(org.voiceProposal)}
         shopifyConnected={shopifyConnected}
-        runtimeFlags={runtimeFlags}
       />
     </Suspense>
   )

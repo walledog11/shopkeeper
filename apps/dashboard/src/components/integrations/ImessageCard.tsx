@@ -23,8 +23,8 @@ interface ImessageBindStatus {
   handles: { senderId: string; displayLabel: string; connectedAt: string }[]
 }
 
-// iMessage is an operator channel like Telegram: there is one Shopkeeper-owned
-// platform line (configured via env), so there are no per-merchant credentials.
+// iMessage is an operator channel: there is one Shopkeeper-owned platform line
+// (configured via env), so there are no per-merchant credentials.
 // The merchant just links their iPhone by texting a connect code. `handle` is the
 // platform line the merchant texts; absent it, iMessage isn't available on this
 // deployment.

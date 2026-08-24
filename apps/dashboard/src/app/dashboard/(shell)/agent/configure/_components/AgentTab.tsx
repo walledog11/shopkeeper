@@ -2,13 +2,11 @@
 
 import { useOrganization } from "@clerk/nextjs"
 import type { OrgSettings, OrgSettingsPatch, VoiceProposal } from "@/types"
-import type { GatewayRuntimeFlags } from "@/lib/server/gateway-runtime-flags"
 import {
   AgentAdvancedSection,
   AgentAutonomySection,
   AgentIdentitySection,
   MorningBriefingSection,
-  ProactiveMonitoringSection,
   StickySaveBar,
   WhenOnDutySection,
 } from "./agent-tab-sections"
@@ -21,7 +19,6 @@ interface Props {
   orgName: string
   voiceProposal: VoiceProposal | null
   shopifyConnected: boolean
-  runtimeFlags: GatewayRuntimeFlags["monitors"] | null
 }
 
 export default function AgentTab(props: Props) {
@@ -39,7 +36,6 @@ export default function AgentTab(props: Props) {
       <AgentAutonomySection controller={controller} />
       <WhenOnDutySection controller={controller} />
       {shopifyConnected ? <MorningBriefingSection controller={controller} /> : null}
-      {shopifyConnected ? <ProactiveMonitoringSection controller={controller} runtimeFlags={props.runtimeFlags} /> : null}
       <AgentAdvancedSection controller={controller} />
 
       <StickySaveBar controller={controller} canSave={isAdmin} />

@@ -17,22 +17,17 @@ import {
 import {
   REVIEW_ICONS,
   REVIEW_TONE_CLASS,
-  ReviewFeedbackControls,
+  ReviewCorrectionLink,
   sourceLinkLabel,
 } from "./ReviewItemShared"
-import type { ReviewFeedback } from "./useReviewFeedback"
 
 export function ReviewRow({
   entry,
-  feedback,
   isNew,
-  onFeedbackChange,
   onOpen,
 }: {
   entry: ActionLogEntry
-  feedback: ReviewFeedback
   isNew: boolean
-  onFeedbackChange: (next: ReviewFeedback) => void
   onOpen: () => void
 }) {
   const channel = getActionLogChannelInfo(entry)
@@ -72,11 +67,6 @@ export function ReviewRow({
                 New
               </span>
             )}
-            {feedback === "good" && (
-              <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-800">
-                Good
-              </span>
-            )}
           </div>
           <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
             {primaryPreviewText(entry)}
@@ -96,12 +86,7 @@ export function ReviewRow({
         ) : (
           <span className="text-xs text-faint">No source link</span>
         )}
-        <ReviewFeedbackControls
-          entry={entry}
-          feedback={feedback}
-          onFeedbackChange={onFeedbackChange}
-          compact
-        />
+        <ReviewCorrectionLink entry={entry} compact />
       </div>
     </li>
   )

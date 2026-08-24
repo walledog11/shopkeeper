@@ -2,11 +2,6 @@ export const RETURN_TO = "/onboarding";
 export const STORAGE_KEY = "concierge-onboarding-v2";
 export type StepId = "intro" | "shopify" | "email" | "connect" | "plan";
 
-export interface TelegramStatus {
-  connected: boolean;
-  chats: { chatId: string; displayLabel: string | null }[];
-}
-
 export interface ImessageStatus {
   connected: boolean;
   handles: { senderId: string; displayLabel: string }[];

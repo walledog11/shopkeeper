@@ -9,18 +9,10 @@ const messages: Ticket["messages"] = [
 ]
 
 describe("partitionConversationMessages", () => {
-  it("splits chat and note messages and returns chat display state", () => {
-    const result = partitionConversationMessages(messages, "chat")
+  it("hides internal notes from the chat timeline", () => {
+    const result = partitionConversationMessages(messages)
 
     expect(result.chatMessages.map(message => message.id)).toEqual(["1", "3"])
-    expect(result.noteMessages.map(message => message.id)).toEqual(["2"])
     expect(result.displayMessages.map(message => message.id)).toEqual(["1", "3"])
-    expect(result.noteCount).toBe(1)
-  })
-
-  it("returns note display state for the notes tab", () => {
-    const result = partitionConversationMessages(messages, "notes")
-
-    expect(result.displayMessages.map(message => message.id)).toEqual(["2"])
   })
 })

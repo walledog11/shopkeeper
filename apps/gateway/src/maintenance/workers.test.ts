@@ -97,9 +97,9 @@ describe('createMaintenanceWorkers', () => {
 
     const resources = await createMaintenanceWorkers(workerConn, producerConn, workerOptions);
 
-    expect(maintenanceJobRegistrations).toHaveLength(15);
-    expect(resources.workers).toHaveLength(16);
-    expect(resources.queues).toHaveLength(27);
+    expect(maintenanceJobRegistrations).toHaveLength(14);
+    expect(resources.workers).toHaveLength(15);
+    expect(resources.queues).toHaveLength(26);
     expect(queueInstances.map((queue) => queue.name)).toEqual([
       QUEUE.TOKEN_HEALTH,
       QUEUE.EMAIL_TOKEN_HEALTH,
@@ -116,7 +116,6 @@ describe('createMaintenanceWorkers', () => {
       QUEUE.ORDER_RISK,
       QUEUE.ORDER_REVIEW,
       QUEUE.RETURN_LIFECYCLE,
-      QUEUE.POST_RESOLUTION_FOLLOWUP,
       QUEUE.OUTBOUND_SEND_SWEEP,
       QUEUE.OPERATOR_EVENT_SWEEP,
       QUEUE.UNKNOWN_OUTCOME_SWEEP,
@@ -141,7 +140,6 @@ describe('createMaintenanceWorkers', () => {
       QUEUE.VOICE_SYNTHESIS,
       QUEUE.ORDER_RISK,
       QUEUE.RETURN_LIFECYCLE,
-      QUEUE.POST_RESOLUTION_FOLLOWUP,
       QUEUE.OUTBOUND_SEND_SWEEP,
       QUEUE.OPERATOR_EVENT_SWEEP,
       QUEUE.UNKNOWN_OUTCOME_SWEEP,
@@ -229,11 +227,6 @@ describe('createMaintenanceWorkers', () => {
     expect(readRepeatJob(QUEUE.RETURN_LIFECYCLE)).toEqual({
       name: JOB.RETURN_LIFECYCLE_SCAN,
       jobId: JOB.RETURN_LIFECYCLE_ID,
-      every: ONE_HOUR_MS,
-    });
-    expect(readRepeatJob(QUEUE.POST_RESOLUTION_FOLLOWUP)).toEqual({
-      name: JOB.POST_RESOLUTION_FOLLOWUP_SCAN,
-      jobId: JOB.POST_RESOLUTION_FOLLOWUP_ID,
       every: ONE_HOUR_MS,
     });
     expect(readRepeatJob(QUEUE.OUTBOUND_SEND_SWEEP)).toEqual({

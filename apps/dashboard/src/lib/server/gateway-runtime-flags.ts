@@ -5,7 +5,6 @@ export interface GatewayRuntimeFlags {
   monitors: {
     orderRisk: boolean;
     returnLifecycle: boolean;
-    postResolutionFollowUp: boolean;
   };
 }
 

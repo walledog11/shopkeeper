@@ -1,9 +1,9 @@
 "use client"
 
-import { AlertCircle, Bot, Check, RefreshCw, Smartphone, Users } from "lucide-react"
+import { AlertCircle, Bot, Check, RefreshCw, Smartphone } from "lucide-react"
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
-import type { AgentTurn, Ticket } from "@/types"
 import { TOOL_LABELS } from "@shopkeeper/agent/tools"
+import type { AgentTurn } from "@/types"
 
 interface Props {
   agentTurns: AgentTurn[]
@@ -12,74 +12,25 @@ interface Props {
   pendingInstruction: string | null
   planPhrase: string
   runPhrase: string
-  messages: Ticket["messages"]
 }
 
-export default function NotesTimeline({
+export default function AgentPrivateTurns({
   agentTurns,
   isAgentRunning,
   isPlanLoading,
   pendingInstruction,
   planPhrase,
   runPhrase,
-  messages,
 }: Props) {
-  if (messages.length === 0 && agentTurns.length === 0 && !isAgentRunning) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-center gap-3">
-        <div className="size-10 rounded-md bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
-          <Users className="size-4 text-violet-600" />
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-muted-foreground">No internal activity yet</p>
-          <p className="text-xs text-faint mt-1">
-            Type <span className="font-mono font-semibold text-violet-600">@{AGENT_DISPLAY_NAME.toLowerCase()}</span> to ask {AGENT_DISPLAY_NAME}, or add a note for your team.
-          </p>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <>
-      {messages.map((msg) => (
-        <div key={msg.id} className="w-full">
-          <div className="flex gap-3">
-            {msg.isAgentNote ? (
-              <div className="size-7 rounded-full bg-violet-500/15 flex items-center justify-center shrink-0 mt-0.5">
-                <Bot className="size-3.5 text-violet-600" />
-              </div>
-            ) : (
-              <div className="size-7 rounded-full bg-amber-600/20 flex items-center justify-center shrink-0 mt-0.5 text-xs font-bold text-amber-600">
-                {(msg.author ?? "Y")[0].toUpperCase()}
-              </div>
-            )}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-baseline gap-1.5 mb-1.5">
-                <span className={`text-[12px] font-semibold ${msg.isAgentNote ? "text-violet-600" : "text-muted-foreground"}`}>
-                  {msg.author ?? "You"}
-                </span>
-                <span className="text-xs text-faint">added a note</span>
-                <span className="text-xs text-faint ml-auto">{msg.time}</span>
-              </div>
-              <div className={msg.isAgentNote
-                ? "bg-violet-500/10 border border-violet-500/20 rounded-lg rounded-tl-sm px-3.5 py-2.5"
-                : "bg-amber-600/10 border border-amber-600/20 rounded-lg rounded-tl-sm px-3.5 py-2.5"
-              }>
-                <p className="text-[13px] text-strong leading-relaxed">{msg.text}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      ))}
-
       {agentTurns.map((turn, index) => (
         <div key={turn.id ?? `${turn.instruction}-${index}`} className="space-y-2">
           <div className="flex flex-col gap-1 items-end">
             {turn.senderPhone && (
               <div className="flex items-center gap-1 text-xs text-faint mr-1">
                 <Smartphone className="size-3" />
-                Via Telegram
+                From your phone
               </div>
             )}
             <div className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-foreground/[0.08] text-strong rounded-md rounded-tr-sm">
@@ -99,7 +50,7 @@ export default function NotesTimeline({
                 <>
                   {turn.actions.length > 0 && (
                     <div className="space-y-1">
-                      {turn.actions.map((action, actionIndex) => {
+                      {turn.actions.map((action) => {
                         const isError = action.status
                           ? (action.status === "error" || action.status === "policy_block" || action.status === "unknown")
                           : action.result.startsWith("Error:")

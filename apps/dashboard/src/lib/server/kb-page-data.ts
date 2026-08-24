@@ -1,6 +1,6 @@
 import { db, parseVoiceProposal } from '@shopkeeper/db';
 import { normalizeStoredOrgSettings } from '@shopkeeper/agent/settings';
-import type { KnowledgeBase, SampleReply, VoiceProposal } from '@/types';
+import type { KnowledgeBase, VoiceProposal } from '@/types';
 
 export interface KbPageData {
   knowledgeBases: KnowledgeBase[];
@@ -8,7 +8,6 @@ export interface KbPageData {
     name: string;
     aiContext: string;
     brandVoice: string;
-    sampleReplies: SampleReply[];
     voiceProposal: VoiceProposal | null;
   };
 }
@@ -69,7 +68,6 @@ export async function getKbPageData(org: {
       name: org.name,
       aiContext: settings.aiContext ?? '',
       brandVoice: settings.brandVoice ?? '',
-      sampleReplies: settings.sampleReplies ?? [],
       voiceProposal: parseVoiceProposal(org.voiceProposal),
     },
   };

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ComponentType } from "react";
-import { Check, Copy, ExternalLink, Loader2, Send, Smartphone } from "lucide-react";
+import { Check, Copy, Loader2, Smartphone } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import {
   channelBindingError,
@@ -7,17 +7,10 @@ import {
   useChannelBindingAttempt,
 } from "@/hooks/useChannelBindingAttempt";
 import { buildSmsDeepLink, formatHandleLabel } from "@/lib/imessage-connect";
-import {
-  startImessageBinding,
-  startTelegramBinding,
-} from "@/lib/integrations/channel-binding-client";
-import { openChannelBindingWindow } from "@/lib/integrations/open-channel-binding-window";
+import { startImessageBinding } from "@/lib/integrations/channel-binding-client";
 import { captureClientProductEvent } from "@/lib/product-events";
 import { cn } from "@/lib/ui/cn";
-import type {
-  ImessageStatus,
-  TelegramStatus,
-} from "./model";
+import type { ImessageStatus } from "./model";
 import { Accent, Headline, Lede } from "./primitives";
 
 type RefreshStatus = () => unknown | Promise<unknown>;
@@ -26,21 +19,13 @@ export function StepConnect({
   imessageHandle,
   imessageStatus,
   onRefreshImessage,
-  onRefreshTelegram,
-  telegramBotUsername,
-  telegramStatus,
 }: {
   imessageStatus: ImessageStatus | undefined;
-  telegramBotUsername: string | null;
   imessageHandle: string | null;
   onRefreshImessage: RefreshStatus;
-  onRefreshTelegram: RefreshStatus;
-  telegramStatus: TelegramStatus | undefined;
 }) {
   const imessageAvailable = Boolean(imessageHandle);
-  const telegramAvailable = Boolean(telegramBotUsername);
-
-  const anyConnected = Boolean(telegramStatus?.connected || imessageStatus?.connected);
+  const anyConnected = Boolean(imessageStatus?.connected);
 
   return (
     <div className="flex flex-col items-center">
@@ -49,25 +34,22 @@ export function StepConnect({
         <Accent>Approvals and your morning briefing, by text.</Accent>
       </Headline>
       <Lede>
-        Choose one place for approvals, questions, and your morning briefing. You can add the other later.
+        Link iMessage for approvals, questions, and your morning briefing.
       </Lede>
 
-      {!imessageAvailable && !telegramAvailable ? (
+      {!imessageAvailable ? (
         <div className="mt-6 w-full max-w-[560px] rounded-2xl border border-foreground/10 bg-foreground/[0.04] px-6 py-6 text-left text-[13px] leading-relaxed text-foreground/60">
           Messaging isn&apos;t set up on this deployment yet — you&apos;ll approve replies and read briefings
           right here in the dashboard for now.
         </div>
       ) : (
-        <div className="mt-6 grid w-full max-w-[560px] grid-cols-1 gap-4 text-left md:grid-cols-2">
+        <div className="mt-6 grid w-full max-w-[560px] grid-cols-1 gap-4 text-left">
           {imessageHandle && (
             <ImessageConnector
               handle={imessageHandle}
               onRefresh={onRefreshImessage}
               status={imessageStatus}
             />
-          )}
-          {telegramBotUsername && (
-            <TelegramConnector onRefresh={onRefreshTelegram} status={telegramStatus} />
           )}
         </div>
       )}
@@ -248,65 +230,6 @@ function ImessageConnector({ handle, onRefresh, status }: {
             onClick={() => { void binding.start(); }}
             minting={minting}
           />
-        </div>
-      )}
-    </ChannelShell>
-  );
-}
-
-function TelegramConnector({ onRefresh, status }: {
-  onRefresh: RefreshStatus;
-  status: TelegramStatus | undefined;
-}) {
-  const chats = status?.chats ?? [];
-  const connected = chats.length > 0;
-  const binding = useChannelBindingAttempt({
-    connectionCount: chats.length,
-    requestBinding: (signal) => startTelegramBinding({ signal }),
-    refreshStatus: onRefresh,
-    requestFailureMessage: "Couldn't start Telegram connect.",
-    refreshFailureMessage: "Couldn't verify the Telegram connection. Try again.",
-  });
-  const url = channelBindingValue(binding.state);
-  const minting = binding.state.status === "requesting";
-  const error = channelBindingError(binding.state);
-
-  function mint() {
-    void openChannelBindingWindow(binding.start);
-  }
-
-  return (
-    <ChannelShell icon={Send} name="Telegram" tagline="Approve and chat from anywhere" connected={connected}>
-      {error && <p className="mb-2 text-[12px] text-red-600">{error}</p>}
-
-      {connected ? (
-        <p className="text-[12.5px] text-foreground/70">
-          Linked{chats[chats.length - 1].displayLabel ? <> to <span className="font-medium text-foreground">{chats[chats.length - 1].displayLabel}</span></> : ""}.
-        </p>
-      ) : url ? (
-        <div className="flex flex-col items-center gap-3">
-          <QrFrame value={url} title="Telegram connect QR code" />
-          <p className="text-center text-[11.5px] leading-snug text-foreground/45">
-            Scan with your phone, or open Telegram and tap Start.
-          </p>
-          <a
-            href={url}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-foreground/10 bg-foreground/[0.06] px-3 text-[12.5px] font-medium text-foreground/85 transition-colors hover:bg-foreground/[0.10]"
-          >
-            <ExternalLink className="size-4" /> Open Telegram
-          </a>
-          <div className="w-full"><WaitingRow /></div>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-3">
-          <ol className="list-inside list-decimal space-y-1 text-[12.5px] leading-relaxed text-foreground/55">
-            <li>Tap the button below — opens the Shopkeeper bot</li>
-            <li>Tap Start in Telegram to link this device</li>
-            <li>Approve replies and get updates from there</li>
-          </ol>
-          <MintButton label="Link Telegram" onClick={mint} minting={minting} />
         </div>
       )}
     </ChannelShell>

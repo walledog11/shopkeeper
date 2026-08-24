@@ -1,4 +1,3 @@
-import { normalizeTelegramBotUsername } from "@/lib/integrations/telegram-visibility";
 import { normalizeImessageLineHandle } from "@/lib/integrations/imessage-visibility";
 import { isShopifySimulatorEnabled } from "@/lib/integrations/shopify-simulator";
 import {
@@ -34,7 +33,6 @@ export default async function OnboardingPage({
     ? resolveOnboardingStepIndex(resumeStep, 0, STEPS.map(s => s.id))
     : null;
 
-  const telegramBotUsername = normalizeTelegramBotUsername(process.env.TELEGRAM_BOT_USERNAME);
   const imessageHandle = normalizeImessageLineHandle(process.env.IMESSAGE_LINE_HANDLE);
   const shopifySimulatorEnabled = isShopifySimulatorEnabled();
   const oauthParams = new URLSearchParams();
@@ -46,7 +44,6 @@ export default async function OnboardingPage({
 
   return (
     <OnboardingExperience
-      telegramBotUsername={telegramBotUsername}
       imessageHandle={imessageHandle}
       shopifySimulatorEnabled={shopifySimulatorEnabled}
       pinnedStepIndex={pinnedStepIndex}

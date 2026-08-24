@@ -6,8 +6,8 @@ import { cn } from "@/lib/ui/cn"
 export default function ChannelConnectBanner({
   children,
   className,
-  href = "/dashboard/integrations#telegram",
-  actionLabel = "Connect Telegram",
+  href = "/dashboard/integrations#imessage",
+  actionLabel = "Connect iMessage",
   icon: Icon = MessageCircle,
 }: {
   children: ReactNode

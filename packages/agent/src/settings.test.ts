@@ -109,6 +109,37 @@ describe("organization settings contract", () => {
       });
     }
   });
+
+  it("discards deleted product settings from stored JSON but rejects them in new writes", () => {
+    expect(normalizeStoredOrgSettings({
+      brandVoice: "warm",
+      sampleReplies: [{ tag: "shipping", body: "Hang tight" }],
+      replyLanguage: "Spanish",
+      postResolutionFollowUpEnabled: true,
+      postResolutionFollowUpDays: 3,
+    })).toEqual({ brandVoice: "warm" });
+
+    expect(() => parseOrgSettingsPatch({
+      sampleReplies: [],
+      replyLanguage: "Spanish",
+      postResolutionFollowUpEnabled: true,
+    })).toThrow(OrgSettingsValidationError);
+    try {
+      parseOrgSettingsPatch({
+        sampleReplies: [],
+        replyLanguage: "Spanish",
+        postResolutionFollowUpEnabled: true,
+      });
+    } catch (error) {
+      expect((error as OrgSettingsValidationError).issues.map(issue => issue.path)).toEqual(
+        expect.arrayContaining([
+          "sampleReplies",
+          "replyLanguage",
+          "postResolutionFollowUpEnabled",
+        ]),
+      );
+    }
+  });
 });
 
 describe("business hours contract", () => {

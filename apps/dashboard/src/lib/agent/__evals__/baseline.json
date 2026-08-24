@@ -558,11 +558,6 @@
       "passes": 3,
       "passRate": 1
     },
-    "sample-reply-shipping-delay-imitation": {
-      "repeats": 3,
-      "passes": 3,
-      "passRate": 1
-    },
     "store-credit-goodwill-over-refund": {
       "repeats": 3,
       "passes": 3,
@@ -574,31 +569,6 @@
       "passRate": 1
     },
     "storefront-guest-product-search": {
-      "repeats": 3,
-      "passes": 3,
-      "passRate": 1
-    },
-    "tier-broad-refund-over-250-escalate": {
-      "repeats": 3,
-      "passes": 3,
-      "passRate": 1
-    },
-    "tier-broad-refund-under-250": {
-      "repeats": 3,
-      "passes": 3,
-      "passRate": 1
-    },
-    "tier-full-cancel-auto": {
-      "repeats": 3,
-      "passes": 3,
-      "passRate": 1
-    },
-    "tier-full-over-cap-still-escalates": {
-      "repeats": 3,
-      "passes": 3,
-      "passRate": 1
-    },
-    "tier-full-refund-in-policy-auto": {
       "repeats": 3,
       "passes": 3,
       "passRate": 1

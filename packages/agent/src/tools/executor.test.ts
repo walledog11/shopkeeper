@@ -29,7 +29,6 @@ vi.mock("@shopkeeper/db", () => ({
   releaseDailyRefundSpendReservation: mockReleaseDailyRefundSpendReservation,
   markDailyRefundSpendReservationUnknown: mockMarkDailyRefundSpendReservationUnknown,
   recordReturnWatch: vi.fn(),
-  recordFollowUpWatch: vi.fn(),
 }));
 
 function threadlessCtx(escalate: (reason: string) => Promise<void>): BaseAgentContext {

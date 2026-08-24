@@ -51,9 +51,7 @@ export function useOnboardingFlow(
     preferredEmail,
     refresh: refreshIntegrations,
     refreshImessage,
-    refreshTelegram,
     shopify: shopifyRow,
-    telegramStatus,
   } = integrationState;
   const savedEmail = (preferredEmail?.fromEmail ?? preferredEmail?.externalAccountId)?.trim();
   const { advance, back: draftBack, data, idx, update } = useOnboardingDraft({
@@ -182,8 +180,6 @@ export function useOnboardingFlow(
     messaging: {
       imessageStatus,
       refreshImessage,
-      refreshTelegram,
-      telegramStatus,
     },
     exit,
     kbSync,

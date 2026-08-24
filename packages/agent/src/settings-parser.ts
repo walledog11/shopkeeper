@@ -3,7 +3,6 @@ import type {
   BusinessHoursDay,
   OrgSettings,
   OrgSettingsPatch,
-  SampleReply,
 } from "./types.js";
 
 export interface OrgSettingsValidationIssue {
@@ -30,7 +29,6 @@ interface ParseContext {
 const SETTINGS_KEYS = [
   "aiContext",
   "brandVoice",
-  "sampleReplies",
   "autoPlanOnOpen",
   "autoExecuteMode",
   "defaultInstruction",
@@ -41,7 +39,6 @@ const SETTINGS_KEYS = [
   "blockCancellations",
   "blockCustomLineItems",
   "maxIterations",
-  "replyLanguage",
   "digestEnabled",
   "digestFrequency",
   "digestHour",
@@ -63,11 +60,16 @@ const SETTINGS_KEYS = [
   "lastSuccessfulDigestAt",
   "salesPulseEnabled",
   "lowStockThreshold",
-  "postResolutionFollowUpEnabled",
-  "postResolutionFollowUpDays",
 ] as const satisfies readonly (keyof OrgSettings)[];
 
-const OBSOLETE_STORED_SETTINGS_KEYS = ["maxDiscountPercent", "agentName"] as const;
+const OBSOLETE_STORED_SETTINGS_KEYS = [
+  "maxDiscountPercent",
+  "agentName",
+  "sampleReplies",
+  "replyLanguage",
+  "postResolutionFollowUpEnabled",
+  "postResolutionFollowUpDays",
+] as const;
 
 const BOOLEAN_FIELDS = [
   "autoPlanOnOpen",
@@ -78,14 +80,12 @@ const BOOLEAN_FIELDS = [
   "spamFilterEnabled",
   "firstBriefingPending",
   "salesPulseEnabled",
-  "postResolutionFollowUpEnabled",
 ] as const satisfies readonly (keyof OrgSettings)[];
 
 const STRING_FIELDS = [
   ["aiContext", 2000],
   ["brandVoice", 200],
   ["defaultInstruction", 2000],
-  ["replyLanguage", 100],
   ["autoAckMessage", 500],
   ["onboardingCompletedAt", 64],
   ["lastSuccessfulDigestAt", 64],
@@ -131,9 +131,9 @@ export const BUSINESS_HOURS_DAYS = [
   "sun",
 ] as const satisfies readonly BusinessHoursDay[];
 
-const SAMPLE_REPLY_KEYS = ["id", "body", "context", "tag"] as const satisfies readonly (keyof SampleReply)[];
 const AUTO_EXECUTE_MODES = ["off", "shadow", "live"] as const satisfies readonly AutoExecuteMode[];
-const AUTONOMY_TIERS = ["watch", "guarded", "trusted", "broad", "full"] as const satisfies readonly AutonomyTier[];
+const AUTONOMY_TIERS = ["watch", "guarded", "trusted"] as const satisfies readonly AutonomyTier[];
+const OBSOLETE_STORED_AUTONOMY_TIERS = ["broad", "full"] as const;
 const DIGEST_FREQUENCIES = [
   "daily",
   "twice_daily",
@@ -336,64 +336,22 @@ function readBusinessHoursDays(
   output.businessHoursDays = [...new Set(candidate)] as BusinessHoursDay[];
 }
 
-function readSampleString(
-  value: Record<string, unknown>,
-  key: keyof SampleReply,
-  maxLength: number,
-  path: string,
-  context: ParseContext,
-  required: boolean,
-): string | undefined {
-  const candidate = value[key];
-  if (candidate === undefined && !required) return undefined;
-  if (typeof candidate !== "string") {
-    addIssue(context, `${path}.${key}`, "Expected a string");
-    return undefined;
-  }
-  if (candidate.length > maxLength) {
-    addIssue(context, `${path}.${key}`, `Must be at most ${maxLength} characters`);
-    return undefined;
-  }
-  return candidate;
-}
-
-function readSampleReplies(
+function readAutonomyTier(
   value: Record<string, unknown>,
   output: Record<string, unknown>,
   context: ParseContext,
 ): void {
-  if (!hasOwn(value, "sampleReplies")) return;
-  const candidate = value.sampleReplies;
-  if (!Array.isArray(candidate)) {
-    addIssue(context, "sampleReplies", "Expected an array");
+  if (!hasOwn(value, "autonomyTier")) return;
+  const candidate = value.autonomyTier;
+  if (
+    context.mode === "stored"
+    && typeof candidate === "string"
+    && (OBSOLETE_STORED_AUTONOMY_TIERS as readonly string[]).includes(candidate)
+  ) {
+    output.autonomyTier = "trusted";
     return;
   }
-  if (candidate.length > 10) {
-    addIssue(context, "sampleReplies", "Must contain at most 10 replies");
-  }
-
-  const replies: SampleReply[] = [];
-  for (const [index, rawReply] of candidate.slice(0, 10).entries()) {
-    const path = `sampleReplies.${index}`;
-    if (!isPlainObject(rawReply)) {
-      addIssue(context, path, "Expected an object");
-      continue;
-    }
-    rejectUnknownKeys(rawReply, SAMPLE_REPLY_KEYS, path, context);
-    const issueCount = context.issues.length;
-    const id = readSampleString(rawReply, "id", 100, path, context, true);
-    const body = readSampleString(rawReply, "body", 300, path, context, true);
-    const sampleContext = readSampleString(rawReply, "context", 80, path, context, false);
-    const tag = readSampleString(rawReply, "tag", 40, path, context, false);
-    if (!id || body === undefined || context.issues.length > issueCount) continue;
-    replies.push({
-      id,
-      body,
-      ...(sampleContext !== undefined ? { context: sampleContext } : {}),
-      ...(tag !== undefined ? { tag } : {}),
-    });
-  }
-  output.sampleReplies = replies;
+  readEnum(value, "autonomyTier", AUTONOMY_TIERS, output, context);
 }
 
 function parseSettingsObject(value: unknown, mode: ParseMode): OrgSettingsPatch {
@@ -425,14 +383,12 @@ function parseSettingsObject(value: unknown, mode: ParseMode): OrgSettingsPatch 
 
   readNullableNonNegativeNumber(value, "lowStockThreshold", output, context);
   readInteger(value, "maxIterations", 1, 100, output, context);
-  readInteger(value, "postResolutionFollowUpDays", 1, 90, output, context);
   readEnum(value, "autoExecuteMode", AUTO_EXECUTE_MODES, output, context);
-  readEnum(value, "autonomyTier", AUTONOMY_TIERS, output, context);
+  readAutonomyTier(value, output, context);
   readEnum(value, "digestFrequency", DIGEST_FREQUENCIES, output, context);
   readEnum(value, "digestDays", DIGEST_DAYS, output, context);
   readToolsEnabled(value, output, context);
   readBusinessHoursDays(value, output, context);
-  readSampleReplies(value, output, context);
 
   if (
     context.mode === "stored"

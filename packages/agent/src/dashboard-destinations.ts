@@ -25,7 +25,7 @@ export const DASHBOARD_DESTINATIONS: readonly DashboardDestination[] = [
     id: "integrations",
     href: "/dashboard/integrations",
     label: "Integrations",
-    description: "Connect email, Instagram, Telegram, and other channels",
+    description: "Connect email, Instagram, iMessage, and other channels",
     keywords: [
       "integrations",
       "channels",
@@ -33,7 +33,6 @@ export const DASHBOARD_DESTINATIONS: readonly DashboardDestination[] = [
       "gmail",
       "instagram",
       "imessage",
-      "telegram",
       "connect",
       "add email",
       "forwarding",

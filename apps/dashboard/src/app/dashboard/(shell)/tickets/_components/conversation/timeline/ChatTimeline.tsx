@@ -4,15 +4,21 @@ import { isImageAttachmentUrl } from "@/lib/attachments/blob-ref"
 import { AlertTriangle, Loader2, MessageSquare } from "lucide-react"
 import Image from "next/image"
 import { NeedsYouBubble } from "@/app/dashboard/_components/home/needs-you-card-ui"
-import type { FailedMessage, Ticket } from "@/types"
+import type { AgentTurn, FailedMessage, Ticket } from "@/types"
+import AgentPrivateTurns from "./AgentPrivateTurns"
 
 interface Props {
+  agentTurns: AgentTurn[]
   failedMessages: FailedMessage[]
   isAgentRunning: boolean
+  isPlanLoading: boolean
   messages: Ticket["messages"]
   messagesEndRef: React.RefObject<HTMLDivElement | null>
   onRetry?: (id: string) => void
   onRetrySend?: (id: string) => void
+  pendingInstruction: string | null
+  planPhrase: string
+  runPhrase: string
 }
 
 function AttachmentList({ attachments }: { attachments: string[] }) {
@@ -32,14 +38,24 @@ function AttachmentList({ attachments }: { attachments: string[] }) {
 }
 
 export default function ChatTimeline({
+  agentTurns,
   failedMessages,
   isAgentRunning,
+  isPlanLoading,
   messages,
   messagesEndRef,
   onRetry,
   onRetrySend,
+  pendingInstruction,
+  planPhrase,
+  runPhrase,
 }: Props) {
-  if (messages.length === 0 && !isAgentRunning) {
+  if (
+    messages.length === 0
+    && agentTurns.length === 0
+    && !isAgentRunning
+    && !isPlanLoading
+  ) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center gap-3">
         <div className="size-10 rounded-2xl bg-foreground/[0.05] border border-border flex items-center justify-center">
@@ -168,6 +184,15 @@ export default function ChatTimeline({
           </div>
         </div>
       ))}
+
+      <AgentPrivateTurns
+        agentTurns={agentTurns}
+        isAgentRunning={isAgentRunning}
+        isPlanLoading={isPlanLoading}
+        pendingInstruction={pendingInstruction}
+        planPhrase={planPhrase}
+        runPhrase={runPhrase}
+      />
 
       <div ref={messagesEndRef} />
     </>

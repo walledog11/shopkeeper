@@ -669,7 +669,7 @@ describe("maybeAutoExecuteCurrentCachedHomePlan", () => {
   });
 
   it("holds an auto-executable plan when the mutative gate is closed", async () => {
-    const settings = resolveAgentSettings({ autonomyTier: "broad", autoExecuteMode: "live" });
+    const settings = resolveAgentSettings({ autonomyTier: "trusted", autoExecuteMode: "live" });
     const { org, thread } = await seedThreadWithPlan({ plan: mutativePlan(), settings });
 
     const result = await maybeAutoExecuteCurrentCachedHomePlan({
@@ -684,7 +684,7 @@ describe("maybeAutoExecuteCurrentCachedHomePlan", () => {
   });
 
   it("records what it would have done in shadow, and still routes to a human", async () => {
-    const settings = resolveAgentSettings({ autonomyTier: "broad", autoExecuteMode: "shadow" });
+    const settings = resolveAgentSettings({ autonomyTier: "trusted", autoExecuteMode: "shadow" });
     const { org, thread } = await seedThreadWithPlan({ plan: mutativePlan(), settings });
     const recordShadowDecision = vi.fn(async () => undefined);
 
@@ -702,7 +702,7 @@ describe("maybeAutoExecuteCurrentCachedHomePlan", () => {
   });
 
   it("holds an auto-executable plan when auto-execute is off", async () => {
-    const settings = resolveAgentSettings({ autonomyTier: "broad", autoExecuteMode: "off" });
+    const settings = resolveAgentSettings({ autonomyTier: "trusted", autoExecuteMode: "off" });
     const { org, thread } = await seedThreadWithPlan({ plan: mutativePlan(), settings });
 
     const result = await maybeAutoExecuteCurrentCachedHomePlan({
@@ -716,7 +716,7 @@ describe("maybeAutoExecuteCurrentCachedHomePlan", () => {
   });
 
   it("executes a mutative plan only when the tier and the gate both allow it", async () => {
-    const settings = resolveAgentSettings({ autonomyTier: "broad", autoExecuteMode: "live" });
+    const settings = resolveAgentSettings({ autonomyTier: "trusted", autoExecuteMode: "live" });
     const { org, thread } = await seedThreadWithPlan({ plan: mutativePlan(), settings });
     const runAgent = vi.fn(async () => okResult);
 

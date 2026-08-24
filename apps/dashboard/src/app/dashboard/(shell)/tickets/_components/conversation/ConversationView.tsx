@@ -3,7 +3,6 @@
 import { useCallback, useMemo, useRef, useState, type ComponentProps, type CSSProperties, type RefObject } from "react"
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { NeedsYouCardBody, NeedsYouCardHeader } from "@/app/dashboard/_components/home/needs-you-card-ui"
-import { cn } from "@/lib/ui/cn"
 import { useFillerPhrase } from "@/hooks/useFillerPhrase"
 import { useIsMobile } from "@/hooks/useMobile"
 import { requestShopifyLinkFocus } from "@/lib/messaging/shopify-link-focus"
@@ -13,9 +12,7 @@ import ConversationHeader from "./ConversationHeader"
 import ConversationContextBar from "./ConversationContextBar"
 import type { ConversationContextSection } from "./conversation-context-panels"
 import ChatTimeline from "./timeline/ChatTimeline"
-import NotesTimeline from "./timeline/NotesTimeline"
 import ConversationComposerArea from "./composer/ConversationComposerArea"
-import ConversationTabs from "./ConversationTabs"
 import { ComposerSkeleton, TimelineSkeleton } from "./ConversationSkeletons"
 import { partitionConversationMessages } from "./utils/conversationViewUtils"
 import { useConversationCocoAction } from "./useConversationCocoAction"
@@ -99,7 +96,6 @@ export default function ConversationView({
     sending: isSending,
     agentRunning: isAgentRunning,
   } = status
-  const [viewTab, setViewTab] = useState<'chat' | 'notes'>('chat')
   const [openContextSection, setOpenContextSection] = useState<ConversationContextSection | null>(null)
   const isMobile = useIsMobile()
   const conversationRef = useRef<HTMLDivElement>(null)
@@ -126,7 +122,7 @@ export default function ConversationView({
     void onTicketRefresh?.()
   }, [onTicketRefresh])
 
-  const { displayMessages, noteCount } = partitionConversationMessages(ticket.messages, viewTab)
+  const { displayMessages } = partitionConversationMessages(ticket.messages)
   const {
     agentInstruction,
     handlePlanApprove,
@@ -145,7 +141,6 @@ export default function ConversationView({
     requestRefreshDraft,
   } = useConversationAgentFlow({
     ticket,
-    viewTab,
     replyText,
     initialPlan,
     onReplyChange,
@@ -153,8 +148,6 @@ export default function ConversationView({
     onAgentTurnAdd,
     onAgentRunningChange,
     onAgentComplete,
-    onPrivateAnswerStart: () => setViewTab('notes'),
-    onNoteModeReset: () => setViewTab('chat'),
     onPlanCacheUpdated: onTicketRefresh,
   })
 
@@ -194,7 +187,6 @@ export default function ConversationView({
   )
 
   const focusPlanCard = useCallback(() => {
-    setViewTab("chat")
     requestAnimationFrame(() => {
       planCardRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })
     })
@@ -216,7 +208,6 @@ export default function ConversationView({
     shopifyCustomerId,
     threadContext,
     ticket,
-    viewTab,
   })
 
   useConversationViewportEffects({
@@ -230,7 +221,6 @@ export default function ConversationView({
     keyboardLayoutOpen,
     replyText,
     scrollTimelineToEnd,
-    viewTab,
     visualViewportHeight,
   })
 
@@ -272,10 +262,6 @@ export default function ConversationView({
         </div>
       </NeedsYouCardHeader>
 
-      {activeTab === 'closed' && (
-        <ConversationTabs noteCount={noteCount} value={viewTab} onValueChange={setViewTab} />
-      )}
-
       <ConversationTimelinePanel
         agentTurns={agentTurns}
         failedMessages={failedMessages}
@@ -290,7 +276,6 @@ export default function ConversationView({
           isAgentRunning,
           isPlanLoading,
           isThreadLoading,
-          viewTab,
         }}
         ticketId={ticket.id}
         timelineRef={timelineRef}
@@ -326,11 +311,9 @@ export default function ConversationView({
           handlePlanRegenerate,
           handleSend,
           onReplyChange,
-          setViewTab,
         }}
         isMobile={isMobile}
         isThreadLoading={isThreadLoading}
-        noteCount={noteCount}
         planCardRef={planCardRef}
         reply={{
           isSending,
@@ -338,7 +321,6 @@ export default function ConversationView({
           sendError,
           isAgentRunning,
         }}
-        viewTab={viewTab}
       />
     </div>
   )
@@ -374,11 +356,9 @@ interface ConversationOpenComposerProps {
     handlePlanRegenerate: ConversationComposerAreaProps["onPlanRegenerate"]
     handleSend: ConversationComposerAreaProps["onSend"]
     onReplyChange: Props["onReplyChange"]
-    setViewTab: ConversationComposerAreaProps["onViewTabChange"]
   }
   isMobile: boolean
   isThreadLoading: boolean
-  noteCount: number
   planCardRef: RefObject<HTMLDivElement | null>
   reply: {
     isAgentRunning: boolean
@@ -386,7 +366,6 @@ interface ConversationOpenComposerProps {
     replyText: string
     sendError: string | null
   }
-  viewTab: "chat" | "notes"
 }
 
 function ConversationOpenComposer({
@@ -399,10 +378,8 @@ function ConversationOpenComposer({
   handlers,
   isMobile,
   isThreadLoading,
-  noteCount,
   planCardRef,
   reply,
-  viewTab,
 }: ConversationOpenComposerProps) {
   if (activeTab !== "open") return null
   if (isThreadLoading) return <ComposerSkeleton />
@@ -417,7 +394,6 @@ function ConversationOpenComposer({
       isAgentMode={agent.isAgentMode}
       isPlanExecuting={agent.isPlanExecuting}
       isRegenerating={agent.isRegenerating}
-      noteCount={noteCount}
       onChange={text => handlers.onReplyChange(
         agent.isAgentMode ? `@${AGENT_DISPLAY_NAME.toLowerCase()} ` + text : text,
       )}
@@ -431,7 +407,6 @@ function ConversationOpenComposer({
       onFocusShopifyLink={handlers.handleFocusShopifyLink}
       onPlanRegenerate={handlers.handlePlanRegenerate}
       onSend={handlers.handleSend}
-      onViewTabChange={handlers.setViewTab}
       pendingPlan={agent.pendingPlan}
       planExecutionOutcome={agent.planExecutionOutcome}
       composer={{
@@ -444,7 +419,6 @@ function ConversationOpenComposer({
         shopifyCustomerId: customer.shopifyCustomerId,
         lastCustomerMessageAt: customer.lastCustomerMessageAt,
       }}
-      viewTab={viewTab}
     />
   )
 }
@@ -463,7 +437,6 @@ interface ConversationTimelinePanelProps {
     isAgentRunning: boolean
     isPlanLoading: boolean
     isThreadLoading: boolean
-    viewTab: "chat" | "notes"
   }
   ticketId: string
   timelineRef: RefObject<HTMLDivElement | null>
@@ -486,36 +459,28 @@ function ConversationTimelinePanel({
   return (
     <NeedsYouCardBody
       ref={timelineRef}
-      className={cn(
-        "mobile-ticket-timeline overflow-y-auto custom-scrollbar transition-colors",
-        status.viewTab === "notes" ? "bg-amber-500/[0.03]" : "",
-      )}
+      className="mobile-ticket-timeline overflow-y-auto custom-scrollbar transition-colors"
     >
       <div
-        data-testid={status.viewTab === "notes" ? "notes-timeline" : "chat-timeline"}
+        data-testid="chat-timeline"
         data-thread-id={ticketId}
         className="flex min-h-full flex-col gap-3"
       >
         {status.isThreadLoading ? (
           <TimelineSkeleton />
-        ) : status.viewTab === "notes" ? (
-          <NotesTimeline
-            agentTurns={agentTurns}
-            isAgentRunning={status.isAgentRunning}
-            isPlanLoading={status.isPlanLoading}
-            messages={messages}
-            pendingInstruction={pendingInstruction}
-            planPhrase={planPhrase}
-            runPhrase={runPhrase}
-          />
         ) : (
           <ChatTimeline
+            agentTurns={agentTurns}
             failedMessages={failedMessages}
             isAgentRunning={status.isAgentRunning}
+            isPlanLoading={status.isPlanLoading}
             messages={messages}
             messagesEndRef={messagesEndRef}
             onRetry={onRetry}
             onRetrySend={onRetrySend}
+            pendingInstruction={pendingInstruction}
+            planPhrase={planPhrase}
+            runPhrase={runPhrase}
           />
         )}
       </div>

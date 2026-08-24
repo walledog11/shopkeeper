@@ -34,7 +34,6 @@ export interface ResolveTicketCocoActionInput {
   agentBusy: boolean
   channelType?: string
   hasShopify: boolean
-  isNoteTab?: boolean
   lastCustomerMessageAt?: string | null
   messages: PlanThreadMessage[]
   orgSettings?: Partial<OrgSettings> | null
@@ -107,7 +106,7 @@ function reviewLabel(plan: AgentPlan): Pick<TicketCocoAction, "id" | "label" | "
 }
 
 function replyActionsBlocked(input: ResolveTicketCocoActionInput): boolean {
-  if (input.channelType !== "ig_dm" || input.isNoteTab) return false
+  if (input.channelType !== "ig_dm") return false
   const lastCustomerMessageAt = input.lastCustomerMessageAt
   if (!lastCustomerMessageAt) return true
   return Date.now() - new Date(lastCustomerMessageAt).getTime() > 24 * 60 * 60 * 1000

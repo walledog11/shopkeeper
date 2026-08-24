@@ -9,20 +9,12 @@ export interface AgentToolPermissions {
   read: boolean;          // get_shopify_customer, get_shopify_orders, get_order_by_name
 }
 
-export interface SampleReply {
-  id: string;        // uuid, generated client-side
-  body: string;      // ≤ 300 chars
-  context?: string;  // optional 1-line "when to use" hint, e.g. "shipping delay"
-  tag?: string;      // optional tag for matching against thread.tag
-}
-
 export type BusinessHoursDay = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 
 export interface OrgSettings {
   // AI draft / summary
   aiContext: string;   // optional store details (policies, products) fed into AI drafts; business name comes from org.name
   brandVoice: string;  // tone brief appended to AI system prompt
-  sampleReplies?: SampleReply[]; // merchant-supplied example replies the agent should imitate
 
   // Fixed product identity — always resolved to AGENT_DISPLAY_NAME; not merchant-configurable.
   agentName: string;
@@ -42,9 +34,6 @@ export interface OrgSettings {
   blockCancellations: boolean;
   blockCustomLineItems: boolean;
   maxIterations: number;
-
-  // Response
-  replyLanguage: string; // "auto" | ISO language name e.g. "English"
 
   // Operator digest (fanned out to bound Telegram/iMessage channels)
   digestEnabled: boolean;
@@ -68,7 +57,7 @@ export interface OrgSettings {
   spamFilterEnabled?: boolean;
 
   // Onboarding — chosen autonomy preset (see settings.ts mapping)
-  autonomyTier?: 'watch' | 'guarded' | 'trusted' | 'broad' | 'full';
+  autonomyTier?: 'watch' | 'guarded' | 'trusted';
 
   // Onboarding — set when merchant completes the v1 onboarding flow
   onboardingCompletedAt?: string;
@@ -88,15 +77,6 @@ export interface OrgSettings {
   // Digest garnish — alert when variant inventory is at or below this count.
   // Omit or null to disable low-stock lines.
   lowStockThreshold?: number | null;
-
-  // Post-resolution follow-up (B5) — nudge the operator to check in a few days
-  // after a refund/exchange ticket closes. Requires
-  // POST_RESOLUTION_FOLLOWUP_MONITOR_ENABLED on the gateway.
-  postResolutionFollowUpEnabled?: boolean;
-
-  // Days a resolved ticket must have been closed before the follow-up nudge
-  // fires. Omit for the default (5).
-  postResolutionFollowUpDays?: number | null;
 }
 
 export type OrgSettingsPatch = Omit<Partial<OrgSettings>, 'toolsEnabled'> & {
@@ -229,7 +209,7 @@ export interface AgentPlan {
 // as failed, while the UI must still say that at least one action committed.
 export type PlanExecutionOutcome = 'committed' | 'failed' | 'partial' | 'unknown'
 
-// Agent turn in the notes tab
+// Private @agent turns in the ticket conversation
 export interface AgentTurn {
   id?: string
   instruction: string

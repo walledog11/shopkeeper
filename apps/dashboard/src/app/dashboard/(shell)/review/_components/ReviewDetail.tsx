@@ -22,10 +22,9 @@ import {
 import {
   REVIEW_ICONS,
   REVIEW_TONE_CLASS,
-  ReviewFeedbackControls,
+  ReviewCorrectionLink,
   sourceLinkLabel,
 } from "./ReviewItemShared"
-import type { ReviewFeedback } from "./useReviewFeedback"
 
 function DetailSection({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -55,14 +54,10 @@ function statusClassName(status: ActionLogEntry["actions"][number]["status"]): s
 
 export function ReviewDetail({
   entry,
-  feedback,
   onClose,
-  onFeedbackChange,
 }: {
   entry: ActionLogEntry
-  feedback: ReviewFeedback
   onClose: () => void
-  onFeedbackChange: (next: ReviewFeedback) => void
 }) {
   const channel = getActionLogChannelInfo(entry)
   const headline = formatActionLogHeadline(entry)
@@ -177,11 +172,7 @@ export function ReviewDetail({
               {sourceLabel}
             </Link>
           )}
-          <ReviewFeedbackControls
-            entry={entry}
-            feedback={feedback}
-            onFeedbackChange={onFeedbackChange}
-          />
+          <ReviewCorrectionLink entry={entry} />
         </div>
         <button
           type="button"

@@ -3,14 +3,13 @@ import type { Integration } from "@/types"
 
 export type IntegrationChannelKind = "operator" | "support"
 export type WorkspaceConnectType = "email" | "ig" | "shopify" | "tiktok_shop"
-export type PersonalDeviceType = "imessage" | "telegram"
+export type PersonalDeviceType = "imessage"
 export type IntegrationId =
   | "email"
   | "gmail"
   | "imessage"
   | "instagram"
   | "shopify"
-  | "telegram"
   | "tiktok-shop"
   | "whatsapp"
 
@@ -89,7 +88,7 @@ export const INTEGRATION_CHANNEL_SECTIONS: {
   },
 ]
 
-const OPERATOR_CHANNEL_ORDER: IntegrationId[] = ["imessage", "telegram", "shopify", "whatsapp"]
+const OPERATOR_CHANNEL_ORDER: IntegrationId[] = ["imessage", "shopify", "whatsapp"]
 
 export function sortIntegrationDefinitionsByChannelKind(
   definitions: IntegrationDefinition[],
@@ -213,17 +212,6 @@ export const INTEGRATION_DEFINITIONS: IntegrationDefinition[] = [
       "Send instructions and approvals from your iPhone",
       "Receive order updates and ticket digests on iMessage",
     ],
-  },
-  {
-    kind: "personal-device",
-    id: "telegram",
-    name: "Telegram",
-    logo: "/logos/telegram.svg",
-    description: "Approve agent replies and receive ticket digests via the Shopkeeper Telegram bot.",
-    channelKind: "operator",
-    details: "device-binding",
-    device: "telegram",
-    permissions: [],
   },
   {
     kind: "forwarding-email",

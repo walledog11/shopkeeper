@@ -1,15 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { resolveAgentSettings, type AutonomyTier } from "../settings.js";
+import { resolveAgentSettings } from "../settings.js";
 import { checkStaticToolPolicy } from "./static-policy.js";
 
 describe("deterministic compensation policy matrix", () => {
   it.each([
     ["guarded", 50],
     ["trusted", 100],
-    ["broad", 250],
-    ["full", 1000],
   ] as const)("applies the %s tier boundary to refunds and gift cards", (tier, cap) => {
-    const settings = resolveAgentSettings({ autonomyTier: tier as AutonomyTier });
+    const settings = resolveAgentSettings({ autonomyTier: tier });
 
     expect(checkStaticToolPolicy(
       "create_refund",
@@ -50,7 +48,7 @@ describe("deterministic compensation policy matrix", () => {
   });
 
   it.each(["issue_discount", "issue_store_credit"])("always blocks retired tool %s", tool => {
-    const settings = resolveAgentSettings({ autonomyTier: "full" });
+    const settings = resolveAgentSettings({ autonomyTier: "trusted" });
     const args = tool === "issue_discount"
       ? { percentage: 5 }
       : { customer_id: "501", amount: "5.00" };

@@ -79,7 +79,7 @@ export const integrations: Category = {
       title: "Connecting iMessage",
       body: [
         {
-          text: "Link your iPhone to run your store by texting the Shopkeeper operator line — order lookups, daily digests, and one-tap plan approvals. iMessage is an operator channel like Telegram; customers never text this line. Shopkeeper provides the line; you do not need any Photon or Spectrum credentials.",
+          text: "Link your iPhone to run your store by texting the Shopkeeper operator line — order lookups, daily digests, and one-tap plan approvals. Customers never text this line. Shopkeeper provides the line; you do not need any Photon or Spectrum credentials.",
         },
         {
           heading: "What you'll need",

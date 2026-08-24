@@ -23,13 +23,27 @@ export function InboxControls({
       aria-label="Search conversations"
       loading={isSearchLoading}
       onClear={() => onSearchChange("")}
+      filterGroup={{
+        role: "tablist",
+        "aria-label": "Conversation status",
+        testId: "inbox-toggle-closed",
+      }}
       filters={[
         {
-          id: "closed",
-          label: "Closed",
+          id: "open",
+          label: "Open",
+          pressed: !includeClosed,
+          onClick: () => {
+            if (includeClosed) onToggleClosed()
+          },
+        },
+        {
+          id: "all",
+          label: "All",
           pressed: includeClosed,
-          onClick: onToggleClosed,
-          testId: "inbox-toggle-closed",
+          onClick: () => {
+            if (!includeClosed) onToggleClosed()
+          },
         },
       ]}
     />

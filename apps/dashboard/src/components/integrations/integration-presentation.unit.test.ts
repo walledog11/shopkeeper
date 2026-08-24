@@ -13,7 +13,6 @@ const FLAGS = {
   gmailNativeInboundEnabled: true,
   instagramIntegrationEnabled: true,
   tiktokShopConfigured: true,
-  telegramBotUsername: "ShopkeeperBot",
   imessageHandle: "+15555550100",
 }
 
@@ -202,7 +201,6 @@ describe("integration presentation", () => {
 
   it("keeps personal binding available to members while workspace mutations are disabled", () => {
     const models = deriveIntegrationCardModels({ integrations: [], flags: FLAGS, isAdmin: false })
-    expect(models.find((model) => model.definition.id === "telegram")?.canManageWorkspace).toBe(true)
     expect(models.find((model) => model.definition.id === "imessage")?.canManageWorkspace).toBe(true)
     expect(models.find((model) => model.definition.id === "gmail")?.canManageWorkspace).toBe(false)
   })
@@ -214,7 +212,6 @@ describe("integration presentation", () => {
         ...FLAGS,
         instagramIntegrationEnabled: false,
         tiktokShopConfigured: false,
-        telegramBotUsername: "@@  ",
         imessageHandle: "   ",
       },
       isAdmin: true,
@@ -222,7 +219,6 @@ describe("integration presentation", () => {
     expect(models.find((model) => model.definition.id === "instagram")?.availability.state).toBe("available")
     expect(models.find((model) => model.definition.id === "tiktok-shop")?.availability.state).toBe("coming-soon")
     expect(models.find((model) => model.definition.id === "whatsapp")?.availability.state).toBe("coming-soon")
-    expect(models.find((model) => model.definition.id === "telegram")?.visible).toBe(false)
     expect(getIntegrationDefinition("instagram").description).toBe(
       "Receive and reply to customer DMs from an Instagram Professional account.",
     )

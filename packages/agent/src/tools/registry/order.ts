@@ -1,4 +1,4 @@
-import { noShopify, cancelReasons, requireShopify, returnReasons, maybeRecordReturnWatch, maybeRecordFollowUpWatch } from "./helpers.js";
+import { noShopify, cancelReasons, requireShopify, returnReasons, maybeRecordReturnWatch } from "./helpers.js";
 import { arrayArg, booleanArg, defineTool, numberArg, stringArg } from "./schema.js";
 import { toolPolicyBlock } from "../result.js";
 import type {
@@ -136,7 +136,6 @@ export const ORDER_TOOL_DEFINITIONS = [
       if (!shopify) return noShopify;
 
       const result = await deps.createRefund(input, shopify);
-      await maybeRecordFollowUpWatch(ctx, result, "refund", input.order_id, deps);
       return result;
     },
   }),
@@ -287,7 +286,6 @@ export const ORDER_TOOL_DEFINITIONS = [
       if (!shopify) return noShopify;
       const result = await deps.createExchange(input, shopify);
       await maybeRecordReturnWatch(ctx, result, deps);
-      await maybeRecordFollowUpWatch(ctx, result, "exchange", input.order_id, deps);
       return result;
     },
   }),

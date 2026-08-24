@@ -137,15 +137,10 @@ export function isReturnLifecycleMonitorEnabled(): boolean {
   return parseBooleanEnv('RETURN_LIFECYCLE_MONITOR_ENABLED', false);
 }
 
-export function isPostResolutionFollowUpMonitorEnabled(): boolean {
-  return parseBooleanEnv('POST_RESOLUTION_FOLLOWUP_MONITOR_ENABLED', false);
-}
-
 export interface GatewayRuntimeFlags {
   monitors: {
     orderRisk: boolean;
     returnLifecycle: boolean;
-    postResolutionFollowUp: boolean;
   };
 }
 
@@ -154,7 +149,6 @@ export function getGatewayRuntimeFlags(): GatewayRuntimeFlags {
     monitors: {
       orderRisk: isOrderRiskMonitorEnabled(),
       returnLifecycle: isReturnLifecycleMonitorEnabled(),
-      postResolutionFollowUp: isPostResolutionFollowUpMonitorEnabled(),
     },
   };
 }

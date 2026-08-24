@@ -10,6 +10,7 @@ let container: HTMLDivElement
 let root: Root
 
 beforeEach(() => {
+  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   container = document.createElement("div")
   document.body.appendChild(container)
   root = createRoot(container)
@@ -21,9 +22,8 @@ afterEach(async () => {
 })
 
 describe("SearchFilterBar", () => {
-  it("renders a separate search field and filter pills", async () => {
+  it("renders a separate search field and filter menu trigger", async () => {
     const onValueChange = vi.fn()
-    const onToggle = vi.fn()
 
     await act(async () => {
       root.render(
@@ -32,29 +32,26 @@ describe("SearchFilterBar", () => {
           onValueChange={onValueChange}
           placeholder="Search conversations"
           aria-label="Search conversations"
+          filterGroup={{ "aria-label": "Conversation status", testId: "inbox-toggle-closed" }}
           filters={[
-            { id: "closed", label: "Closed", pressed: false, onClick: onToggle, testId: "inbox-toggle-closed" },
+            { id: "open", label: "Open", pressed: true, onClick: () => undefined },
+            { id: "all", label: "All", pressed: false, onClick: () => undefined },
           ]}
         />,
       )
     })
 
     const input = container.querySelector('input[type="search"]')
-    const pill = container.querySelector('[data-testid="inbox-toggle-closed"]')
+    const trigger = container.querySelector('[data-testid="inbox-toggle-closed"]')
     expect(input).toBeTruthy()
     expect(input?.getAttribute("placeholder")).toBe("Search conversations")
     expect(input?.getAttribute("aria-label")).toBe("Search conversations")
-    expect(pill?.textContent).toBe("Closed")
-    expect(pill?.getAttribute("aria-pressed")).toBe("false")
-    expect(pill?.parentElement).not.toBe(input?.parentElement)
-
-    await act(async () => {
-      (pill as HTMLButtonElement).click()
-    })
-    expect(onToggle).toHaveBeenCalledOnce()
+    expect(trigger?.textContent).toContain("Open")
+    expect(trigger?.querySelector("svg")).toBeTruthy()
+    expect(trigger?.parentElement).not.toBe(input?.parentElement)
   })
 
-  it("marks exclusive filters as tabs when grouped as a tablist", async () => {
+  it("shows the selected exclusive filter as the menu label", async () => {
     await act(async () => {
       root.render(
         <SearchFilterBar
@@ -71,11 +68,9 @@ describe("SearchFilterBar", () => {
       )
     })
 
-    const tablist = container.querySelector('[role="tablist"]')
-    const tabs = container.querySelectorAll('[role="tab"]')
-    expect(tablist?.getAttribute("aria-label")).toBe("Shop sections")
-    expect(tabs).toHaveLength(2)
-    expect(tabs[0]?.getAttribute("aria-selected")).toBe("true")
-    expect(tabs[1]?.getAttribute("aria-selected")).toBe("false")
+    const trigger = container.querySelector('[data-slot="dropdown-menu-trigger"]')
+    expect(trigger?.getAttribute("aria-label")).toBe("Shop sections")
+    expect(trigger?.textContent).toContain("Orders")
+    expect(trigger?.textContent).not.toContain("Customers")
   })
 })

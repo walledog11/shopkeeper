@@ -99,7 +99,6 @@ describe("agent action-log CSV", () => {
     ],
     mode: "auto_executed",
     approver: null,
-    feedback: null,
   };
 
   it("actionLogEntryToCsvRow escapes quotes inside cells", () => {

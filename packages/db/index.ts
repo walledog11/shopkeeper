@@ -327,17 +327,6 @@ export {
   type ShipmentWatchStatus,
 } from './shipment-watch.js';
 export {
-  isTerminalFollowUpWatchStatus,
-  listOpenFollowUpWatchCandidates,
-  markFollowUpWatchNotified,
-  markFollowUpWatchSkipped,
-  recordFollowUpWatch,
-  type FollowUpWatchCandidate,
-  type FollowUpWatchKind,
-  type FollowUpWatchStatus,
-  type RecordFollowUpWatchParams,
-} from './follow-up-watch.js';
-export {
   beginIntegrationDisconnect,
   claimIntegrationDisconnect,
   completeIntegrationDisconnect,

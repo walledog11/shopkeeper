@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Loader2 } from "lucide-react"
 import { DashboardDetailDialog } from "@/app/dashboard/_components/board/DashboardDetailDialog"
 import { dashboardPageShellClassName } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
-import { FilterPill } from "@/components/ui/search-filter-bar"
+import { FilterMenu } from "@/components/ui/search-filter-bar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { boardCardShellClassName } from "@/lib/ui/board-card-styles"
 import { cn } from "@/lib/ui/cn"
@@ -15,7 +15,6 @@ import {
 } from "./quality-panel-model"
 import { ReviewDetail } from "./ReviewDetail"
 import { ReviewRow } from "./ReviewRow"
-import { useReviewFeedback } from "./useReviewFeedback"
 
 export interface ReviewListState {
   entries: ActionLogEntry[]
@@ -39,7 +38,6 @@ export function ReviewList({
   onFilterChange: (filter: ReviewFilterId) => void
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const { changeFeedback, feedbackFor } = useReviewFeedback()
   const config = REVIEW_FILTERS.find(filter => filter.id === activeFilter) ?? REVIEW_FILTERS[0]
   const selectedEntry = selectedId
     ? state.entries.find(entry => entry.id === selectedId) ?? null
@@ -49,21 +47,16 @@ export function ReviewList({
     <>
       <div className="custom-scrollbar flex-1 overflow-y-auto">
         <div className={dashboardPageShellClassName()}>
-          <div
-            className="flex flex-wrap items-center gap-2.5"
-            role="group"
+          <FilterMenu
+            label={config.label}
             aria-label="Filter the audit trail"
-          >
-            {REVIEW_FILTERS.map(filter => (
-              <FilterPill
-                key={filter.id}
-                pressed={filter.id === activeFilter}
-                onClick={() => onFilterChange(filter.id)}
-              >
-                {filter.label}
-              </FilterPill>
-            ))}
-          </div>
+            items={REVIEW_FILTERS.map(filter => ({
+              id: filter.id,
+              label: filter.label,
+              selected: filter.id === activeFilter,
+              onSelect: () => onFilterChange(filter.id),
+            }))}
+          />
 
           {state.isLoading && state.entries.length === 0 ? (
             <div
@@ -100,9 +93,7 @@ export function ReviewList({
                   <ReviewRow
                     key={entry.id}
                     entry={entry}
-                    feedback={feedbackFor(entry)}
                     isNew={isNew(entry)}
-                    onFeedbackChange={next => changeFeedback(entry, next)}
                     onOpen={() => setSelectedId(entry.id)}
                   />
                 ))}
@@ -135,9 +126,7 @@ export function ReviewList({
         {selectedEntry ? (
           <ReviewDetail
             entry={selectedEntry}
-            feedback={feedbackFor(selectedEntry)}
             onClose={() => setSelectedId(null)}
-            onFeedbackChange={next => changeFeedback(selectedEntry, next)}
           />
         ) : null}
       </DashboardDetailDialog>

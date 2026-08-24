@@ -167,10 +167,8 @@ export function ReviewPageSkeleton() {
     <PageShell>
       <div className="custom-scrollbar flex-1 overflow-y-auto px-4 pb-6 sm:px-6">
         <div className="mx-auto w-full max-w-3xl">
-          <div className="flex flex-wrap gap-2.5 py-4">
-            {[0, 1, 2, 3].map(index => (
-              <Pulse key={`review-filter-${index}`} className="h-10 w-24 rounded-full bg-white" />
-            ))}
+          <div className="flex flex-wrap gap-3 py-4">
+            <Pulse className="h-12 w-36 rounded-xl bg-white" />
           </div>
           <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4">
             {[0, 1, 2, 3].map(index => (

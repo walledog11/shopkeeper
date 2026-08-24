@@ -31,7 +31,6 @@ function entry(overrides: Partial<ActionLogEntry> = {}): ActionLogEntry {
     actions: [action()],
     mode: "human_approved",
     approver: null,
-    feedback: null,
     ...overrides,
   }
 }

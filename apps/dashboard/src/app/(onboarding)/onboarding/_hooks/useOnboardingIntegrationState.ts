@@ -5,7 +5,7 @@ import useSWR from "swr";
 import { useIntegrations } from "@/hooks/useIntegrations";
 import { fetcher } from "@/lib/api/fetcher";
 import { isShopifyIntegrationActive } from "@/lib/integrations/shopify-connection";
-import type { ImessageStatus, TelegramStatus } from "../_components/model";
+import type { ImessageStatus } from "../_components/model";
 import { selectOnboardingIntegrations } from "../_lib/onboarding-integrations";
 import { useShopifyKnowledgeSync } from "./useShopifyKnowledgeSync";
 
@@ -16,10 +16,6 @@ export function useOnboardingIntegrationState(enabled: boolean) {
   });
   const selected = useMemo(() => selectOnboardingIntegrations(data ?? []), [data]);
 
-  const { data: telegramStatus, mutate: refreshTelegram } = useSWR<TelegramStatus>(
-    enabled ? "/api/integrations/telegram" : null,
-    fetcher,
-  );
   const { data: imessageStatus, mutate: refreshImessage } = useSWR<ImessageStatus>(
     enabled ? "/api/integrations/imessage/bind" : null,
     fetcher,
@@ -30,13 +26,11 @@ export function useOnboardingIntegrationState(enabled: boolean) {
 
   return {
     ...selected,
-    hasMessaging: Boolean(telegramStatus?.connected || imessageStatus?.connected),
+    hasMessaging: Boolean(imessageStatus?.connected),
     hasShopify,
     imessageStatus,
     kbSync,
     refresh,
     refreshImessage,
-    refreshTelegram,
-    telegramStatus,
   };
 }

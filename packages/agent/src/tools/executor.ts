@@ -3,7 +3,6 @@ import {
   commitDailyRefundSpendReservation,
   db,
   markDailyRefundSpendReservationUnknown,
-  recordFollowUpWatch,
   recordReturnWatch,
   releaseDailyRefundSpendReservation,
   reserveDailyRefundSpend,
@@ -175,7 +174,6 @@ const TOOL_EXECUTION_DEPS: ToolExecutionDeps = {
   },
   getSupportStats,
   recordReturnWatch,
-  recordFollowUpWatch,
 };
 
 type ReservationInput = Parameters<typeof reserveDailyRefundSpend>[0]["input"];

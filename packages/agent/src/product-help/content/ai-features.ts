@@ -19,7 +19,7 @@ export const aiFeatures: Category = {
             "Open the dashboard home — tickets with a ready draft are in the deck under the greeting.",
             "Read the draft reply and the actions listed with it.",
             "Approve & send to run the plan as written, or Edit & send myself to write your own reply instead.",
-            "Approvals also arrive on your phone if you have linked Telegram or iMessage.",
+            "Approvals also arrive on your phone if you have linked iMessage.",
           ],
         },
         {

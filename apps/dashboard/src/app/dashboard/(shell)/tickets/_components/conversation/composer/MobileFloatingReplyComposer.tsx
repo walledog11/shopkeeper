@@ -47,9 +47,6 @@ export default function MobileFloatingReplyComposer({
     error,
     onChange,
     onSend,
-    viewTab: "chat",
-    noteCount: 0,
-    onViewTabChange: () => {},
     isAgentMode: false,
   })
 

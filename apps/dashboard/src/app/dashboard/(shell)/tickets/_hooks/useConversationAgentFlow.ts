@@ -16,7 +16,6 @@ import { captureClientProductEvent } from "@/lib/product-events"
 
 interface UseConversationAgentFlowProps {
   ticket: Ticket
-  viewTab: "chat" | "notes"
   replyText: string
   initialPlan?: AgentPlan | null
   onReplyChange: (text: string) => void
@@ -24,8 +23,6 @@ interface UseConversationAgentFlowProps {
   onAgentTurnAdd: (turn: AgentTurn) => void
   onAgentRunningChange: (running: boolean) => void
   onAgentComplete: (turn: AgentTurn) => void
-  onPrivateAnswerStart?: () => void
-  onNoteModeReset: () => void
   onPlanCacheUpdated?: () => void | Promise<void>
 }
 
@@ -36,14 +33,10 @@ function createAgentTurn(turn: Omit<AgentTurn, "id">): AgentTurn {
   return { id: crypto.randomUUID(), ...turn }
 }
 
-export function getAgentCommandState(
-  replyText: string,
-  viewTab: "chat" | "notes",
-) {
+export function getAgentCommandState(replyText: string) {
   const triggerPrefix = `@${AGENT_DISPLAY_NAME.toLowerCase()}`
   const trimmedReply = replyText.trimStart()
-  const isSupportedComposerTab = viewTab === "chat" || viewTab === "notes"
-  const isAgentMode = isSupportedComposerTab && trimmedReply.toLowerCase().startsWith(triggerPrefix)
+  const isAgentMode = trimmedReply.toLowerCase().startsWith(triggerPrefix)
   const agentInstruction = isAgentMode ? trimmedReply.slice(triggerPrefix.length).replace(/^ /, "") : ""
 
   return {
@@ -105,7 +98,6 @@ function pendingPlanReducer(_state: PendingPlanState, action: PendingPlanAction)
 
 export function useConversationAgentFlow({
   ticket,
-  viewTab,
   replyText,
   initialPlan,
   onReplyChange,
@@ -113,8 +105,6 @@ export function useConversationAgentFlow({
   onAgentTurnAdd,
   onAgentRunningChange,
   onAgentComplete,
-  onPrivateAnswerStart,
-  onNoteModeReset,
   onPlanCacheUpdated,
 }: UseConversationAgentFlowProps) {
   const [pendingInstruction, setPendingInstruction] = useState<string | null>(null)
@@ -129,7 +119,7 @@ export function useConversationAgentFlow({
   const [planExecutionState, setPlanExecutionState] = useState<PlanExecutionState | null>(null)
   const successDismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const { agentInstruction, isAgentMode } = getAgentCommandState(replyText, viewTab)
+  const { agentInstruction, isAgentMode } = getAgentCommandState(replyText)
   const pendingPlan = pendingPlanState.ticketId === ticket.id && pendingPlanState.hasOverride
     ? pendingPlanState.plan
     : initialPlan ?? null
@@ -188,7 +178,6 @@ export function useConversationAgentFlow({
     onReplyChange("")
     setPendingInstruction(instruction)
     setIsPlanLoading(true)
-    onPrivateAnswerStart?.()
 
     try {
       const result = await askAgentPrivately(ticket.id, instruction)
@@ -239,10 +228,7 @@ export function useConversationAgentFlow({
       return
     }
 
-    onSend(viewTab === "notes" ? true : noteArg)
-    if (viewTab === "notes") {
-      onNoteModeReset()
-    }
+    onSend(noteArg)
   }
 
   const handlePlanApprove = async (approvedToolCalls: RawToolCall[]) => {

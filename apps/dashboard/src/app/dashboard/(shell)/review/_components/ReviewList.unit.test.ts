@@ -52,7 +52,6 @@ function entry(overrides: Partial<ActionLogEntry> = {}): ActionLogEntry {
     actions: [action()],
     mode: "auto_executed",
     approver: null,
-    feedback: null,
     ...overrides,
   }
 }
@@ -75,7 +74,6 @@ let container: HTMLDivElement | null = null
 
 beforeEach(() => {
   ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }))
 })
 
 afterEach(() => {
@@ -143,20 +141,19 @@ describe("ReviewList", () => {
     expect(readOnlyMentions).toHaveLength(1)
   })
 
-  it("reports filter changes and shows the active filter's empty state", () => {
-    const onFilterChange = vi.fn()
+  it("shows the active filter's empty state and current filter label", () => {
     const view = render(React.createElement(ReviewList, {
       state: listState(),
       activeFilter: "attention",
       isNew: () => false,
-      onFilterChange,
+      onFilterChange: vi.fn(),
     }))
 
     expect(view.textContent).toContain("Nothing needs review")
 
-    const storeChip = Array.from(view.querySelectorAll("button")).find(b => b.textContent === "Store actions")
-    click(storeChip as Element)
-    expect(onFilterChange).toHaveBeenCalledWith("store")
+    const trigger = view.querySelector('[data-slot="dropdown-menu-trigger"]')
+    expect(trigger?.getAttribute("aria-label")).toBe("Filter the audit trail")
+    expect(trigger?.textContent).toContain("Needs review")
   })
 
   it("opens the detail dialog from a row", () => {

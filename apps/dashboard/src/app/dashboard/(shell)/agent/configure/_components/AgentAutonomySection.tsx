@@ -15,7 +15,7 @@ export function AgentAutonomySection({ controller }: { controller: AgentTabContr
     selectTier,
   } = controller
 
-  const tierOptions = visibleAutonomyTiers(settingsState.autonomyTier)
+  const tierOptions = visibleAutonomyTiers()
   const refundOverride = explicitOverrideSet.has("maxRefundAmount") ? payload.maxRefundAmount : null
 
   return (
@@ -32,7 +32,6 @@ export function AgentAutonomySection({ controller }: { controller: AgentTabContr
         >
           {tierOptions.map((option) => {
             const selected = settingsState.autonomyTier === option.id
-            const disabled = option.comingSoon
             const tierActs = tierDefaultForPath(option.id, "toolsEnabled.action") !== false
             const cap = tierActs
               ? effectiveRefundCap({ autonomyTier: option.id, maxRefundAmount: refundOverride })
@@ -43,14 +42,12 @@ export function AgentAutonomySection({ controller }: { controller: AgentTabContr
                 type="button"
                 role="radio"
                 aria-checked={selected}
-                disabled={disabled}
                 onClick={() => selectTier(option.id)}
                 className={cn(
                   "min-h-[104px] rounded-xl border p-3 text-left transition-all",
                   selected
                     ? "border-foreground/[0.40] bg-foreground/[0.07]"
                     : "border-foreground/[0.10] bg-foreground/[0.025] hover:border-foreground/[0.22] hover:bg-foreground/[0.05]",
-                  disabled && "cursor-not-allowed opacity-45 hover:border-foreground/[0.10] hover:bg-foreground/[0.025]",
                 )}
               >
                 <div className="flex flex-wrap items-center gap-2">
@@ -61,20 +58,11 @@ export function AgentAutonomySection({ controller }: { controller: AgentTabContr
                       Recommended
                     </span>
                   ) : null}
-                  {option.comingSoon ? (
-                    <span className="rounded-sm border border-foreground/[0.12] bg-foreground/[0.05] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.06em] text-muted-foreground">
-                      Coming soon
-                    </span>
-                  ) : null}
                 </div>
                 <p className="mt-2 text-xs leading-relaxed text-faint">{option.blurb}</p>
-                {option.merchantFacing ? (
-                  <>
-                    <p className="mt-2 font-mono text-xs uppercase tracking-[0.06em] text-faint">Refund cap ${cap}</p>
-                    {cap !== option.cap ? (
-                      <p className="mt-0.5 text-[11px] leading-relaxed text-faint">Your limit · tier default ${option.cap}</p>
-                    ) : null}
-                  </>
+                <p className="mt-2 font-mono text-xs uppercase tracking-[0.06em] text-faint">Refund cap ${cap}</p>
+                {cap !== option.cap ? (
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-faint">Your limit · tier default ${option.cap}</p>
                 ) : null}
               </button>
             )

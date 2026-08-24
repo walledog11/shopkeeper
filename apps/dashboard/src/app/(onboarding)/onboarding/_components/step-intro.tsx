@@ -62,7 +62,7 @@ export function StepIntro({
 }
 
 // The one place green is allowed: authentic chat chrome. Cream text on a green
-// send bubble reads as the merchant's Telegram/Messages thread.
+// send bubble reads as the merchant's Messages thread.
 function ChatBubble({ side, children }: { side: "in" | "out"; children: React.ReactNode }) {
   if (side === "in") {
     return (

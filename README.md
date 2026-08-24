@@ -91,7 +91,7 @@ Triggered from the tickets page. When a ticket is opened:
 1. **Auto-plan** fires automatically if the last message is from the customer. Calls `/api/agent/plan`, which runs a 2–3 phase Claude tool-use call to generate a `PlanStep[]` without side effects. Plan is cached in `Thread.cachedPlan`.
 2. **ActionPlanCard** is shown floating above the composer. Agent reviews proposed steps, can toggle individual steps, approve, dismiss, or regenerate.
 3. **Approve** → `POST /api/agent` executes the approved tool calls, then runs the standard tool-use loop for follow-up steps.
-4. Agent can also be invoked manually: type `@{agentName}` in the Internal tab composer.
+4. Agent can also be invoked manually: type `@{agentName}` in the ticket composer.
 
 ### Operator Mode (dashboard_agent, sms_agent)
 Direct interface for the merchant/team. No customer in context — the agent takes instructions and acts on Shopify directly.
@@ -134,7 +134,7 @@ Configurable per org via Agent → Configure:
 - `aiContext` — optional store details (policies, products) prepended to system prompt; business name comes from `org.name`
 - `brandVoice` — tone brief appended to system prompt
 - `autoPlanOnOpen` — auto-generate plan when ticket opens (default: true)
-- `autonomyTier` — preset autonomy level (`watch`/`guarded`/`trusted`/`broad`/`full`); drives runtime defaults via `TIER_DEFAULTS`
+- `autonomyTier` — preset autonomy level (`watch`/`guarded`/`trusted`); drives runtime defaults via `TIER_DEFAULTS`
 - `defaultInstruction` — default agent instruction
 - `requireApprovalForActions` — show plan card before executing (default: true)
 - `toolsEnabled` — toggle tool categories: `action`, `communication`, `internal`, `read`
@@ -142,7 +142,6 @@ Configurable per org via Agent → Configure:
 - `blockCancellations` — prevent cancel_order calls
 - `blockCustomLineItems` — require variant_id on all create_shopify_order line items
 - `maxIterations` — max tool-use loop iterations per run (default: 10)
-- `replyLanguage` — force reply language ("auto" or ISO name like "Spanish")
 
 ### Agent Safety / Guardrails
 - 20,000 token budget per run; stops and reports if exceeded
@@ -154,7 +153,7 @@ Configurable per org via Agent → Configure:
 
 ### Tickets (Inbox)
 - Thread list with SWR 3s polling, status tabs (open/closed), channel filter, search
-- Conversation view with chat + internal notes tabs
+- Conversation view with chat timeline and composer
 - Presence tracking: heartbeat every 15s warns if multiple agents viewing same ticket
 - Failed message retry UI
 - Close/reopen thread, tag management
@@ -174,7 +173,6 @@ Configurable per org via Agent → Configure:
 
 ### Orders / Customers (Storefront)
 - `/dashboard/orders` — Shopify order browser with fulfillment/payment status filters, stat strip, search, pagination
-- `/dashboard/customers` — Shopify customer browser
 - Orders page has "New thread" action that finds/creates a support thread for a Shopify customer (`POST /api/threads/shopify`)
 
 ### Billing

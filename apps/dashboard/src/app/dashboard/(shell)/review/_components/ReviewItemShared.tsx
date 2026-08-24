@@ -7,7 +7,6 @@ import {
   NotebookText,
   PackageCheck,
   ThumbsDown,
-  ThumbsUp,
   Wrench,
 } from "lucide-react"
 import { correctReplyHref } from "@/lib/agent/action-log-display"
@@ -17,7 +16,6 @@ import {
   type ReviewIconKey,
   type ReviewItemTone,
 } from "./quality-panel-model"
-import type { ReviewFeedback } from "./useReviewFeedback"
 
 export const REVIEW_ICONS: Record<ReviewIconKey, ComponentType<{ className?: string }>> = {
   alert: AlertTriangle,
@@ -72,50 +70,26 @@ export function sourceLinkLabel(href: string | null): string | null {
   return "Open source"
 }
 
-export function ReviewFeedbackControls({
+export function ReviewCorrectionLink({
   entry,
-  feedback,
-  onFeedbackChange,
   compact = false,
 }: {
   entry: ActionLogEntry
-  feedback: ReviewFeedback
-  onFeedbackChange: (next: ReviewFeedback) => void
   compact?: boolean
 }) {
   const correctionHref = correctReplyHref(entry)
-  const showLooksGood = entry.mode === "auto_executed"
   const hasReplyOutput = entry.actions.some(
     (action, index) => toOutputBlock(action, index)?.tone === "reply",
   )
-  const showSoundsOff = hasReplyOutput && correctionHref !== null
-  if (!showLooksGood && !showSoundsOff) return null
+  if (!hasReplyOutput || correctionHref === null) return null
 
   return (
-    <div className={`flex items-center gap-3 ${compact ? "text-[11px]" : "text-xs"}`}>
-      {showLooksGood && (
-        <button
-          type="button"
-          onClick={() => onFeedbackChange(feedback === "good" ? null : "good")}
-          className={`inline-flex items-center gap-1 font-semibold transition-colors ${
-            feedback === "good"
-              ? "text-emerald-700"
-              : "text-faint hover:text-emerald-800"
-          }`}
-        >
-          <ThumbsUp className="size-3" />
-          {feedback === "good" ? "Looked good" : "Looks good"}
-        </button>
-      )}
-      {showSoundsOff && correctionHref && (
-        <Link
-          href={correctionHref}
-          className="inline-flex items-center gap-1 font-semibold text-faint transition-colors hover:text-amber-800"
-        >
-          <ThumbsDown className="size-3" />
-          Sounds off
-        </Link>
-      )}
-    </div>
+    <Link
+      href={correctionHref}
+      className={`inline-flex items-center gap-1 font-semibold text-faint transition-colors hover:text-amber-800 ${compact ? "text-[11px]" : "text-xs"}`}
+    >
+      <ThumbsDown className="size-3" />
+      Sounds off
+    </Link>
   )
 }

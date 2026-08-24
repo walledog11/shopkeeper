@@ -17,7 +17,6 @@ interface Props {
   isAgentMode: boolean
   isPlanExecuting: boolean
   isRegenerating: boolean
-  noteCount: number
   onChange: (text: string) => void
   onClearAgentMode: () => void
   onPlanApprove: (approvedToolCalls: RawToolCall[]) => Promise<void>
@@ -26,7 +25,6 @@ interface Props {
   onFocusShopifyLink?: () => void
   onPlanRegenerate: () => void
   onSend: (isNote: boolean) => void
-  onViewTabChange: (tab: "chat" | "notes") => void
   onAnswered: (result?: { saveToKb: boolean }) => void
   pendingPlan: AgentPlan | null
   planExecutionOutcome: PlanExecutionOutcome | null
@@ -41,12 +39,10 @@ interface Props {
     shopifyCustomerId?: string | null
     lastCustomerMessageAt: string | null
   }
-  viewTab: "chat" | "notes"
 }
 
 interface MobileManualEditState {
   pendingPlan: AgentPlan | null
-  viewTab: Props["viewTab"]
   enabled: boolean
 }
 
@@ -57,7 +53,6 @@ export default function ConversationComposerArea({
   isAgentMode,
   isPlanExecuting,
   isRegenerating,
-  noteCount,
   onChange,
   onClearAgentMode,
   onPlanApprove,
@@ -66,13 +61,11 @@ export default function ConversationComposerArea({
   onFocusShopifyLink,
   onPlanRegenerate,
   onSend,
-  onViewTabChange,
   onAnswered,
   pendingPlan,
   planExecutionOutcome,
   threadId,
   composer,
-  viewTab,
 }: Props) {
   const isMobile = useMediaQuery("(max-width: 767px)") === true
   const merchantQuestion = useMemo(() => {
@@ -82,20 +75,18 @@ export default function ConversationComposerArea({
   }, [pendingPlan])
   const [mobileManualEditState, setMobileManualEditState] = useState<MobileManualEditState>(() => ({
     pendingPlan,
-    viewTab,
     enabled: false,
   }))
   const mobileManualEdit = mobileManualEditState.enabled
     && mobileManualEditState.pendingPlan === pendingPlan
-    && mobileManualEditState.viewTab === viewTab
   const showMobileFloatingSurface =
-    isMobile && viewTab === "chat" && (Boolean(pendingPlan) || mobileManualEdit)
-  const showDesktopPlan = !isMobile && Boolean(pendingPlan) && viewTab === "chat"
+    isMobile && (Boolean(pendingPlan) || mobileManualEdit)
+  const showDesktopPlan = !isMobile && Boolean(pendingPlan)
   const showFullComposer = !showMobileFloatingSurface && !showDesktopPlan
 
   const setMobileManualEdit = useCallback((enabled: boolean) => {
-    setMobileManualEditState({ pendingPlan, viewTab, enabled })
-  }, [pendingPlan, viewTab])
+    setMobileManualEditState({ pendingPlan, enabled })
+  }, [pendingPlan])
 
   const handleMobilePlanEdit = useCallback(() => {
     if (!pendingPlan) return
@@ -118,9 +109,6 @@ export default function ConversationComposerArea({
     shopifyCustomerId: composer.shopifyCustomerId,
     customerPlatformId: composer.customerPlatformId,
     lastCustomerMessageAt: composer.lastCustomerMessageAt,
-    viewTab,
-    noteCount,
-    onViewTabChange,
     isSending: composer.isSending,
     onSend,
   }

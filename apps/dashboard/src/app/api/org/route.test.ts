@@ -103,7 +103,7 @@ describe('/api/org PATCH settings', () => {
     setAuth({ orgRole: 'org:member' });
 
     const res = await PATCH(patchReq({
-      settings: { maxRefundAmount: 5000, autonomyTier: 'full', autoExecuteMode: 'live' },
+      settings: { maxRefundAmount: 5000, autonomyTier: 'trusted', autoExecuteMode: 'live' },
     }));
 
     expect(res.status).toBe(403);
@@ -113,12 +113,12 @@ describe('/api/org PATCH settings', () => {
 
   it('lets an admin change the same settings', async () => {
     const res = await PATCH(patchReq({
-      settings: { maxRefundAmount: 5000, autonomyTier: 'full' },
+      settings: { maxRefundAmount: 5000, autonomyTier: 'trusted' },
     }));
 
     expect(res.status).toBe(200);
     const after = await db.organization.findUniqueOrThrow({ where: { id: org.id } });
-    expect(after.settings).toMatchObject({ maxRefundAmount: 5000, autonomyTier: 'full' });
+    expect(after.settings).toMatchObject({ maxRefundAmount: 5000, autonomyTier: 'trusted' });
   });
 
   it('captures onboarding completion once after its timestamp persists', async () => {

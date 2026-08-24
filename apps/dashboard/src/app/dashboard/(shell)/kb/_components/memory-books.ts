@@ -1,5 +1,5 @@
 import { isAgentLearnedKbArticle } from "@shopkeeper/agent/kb-learned"
-import type { KnowledgeBase, SampleReply } from "@/types"
+import type { KnowledgeBase } from "@/types"
 import type { ArticleWithBase } from "./kb-page-utils"
 import { memoryCardBody, memoryCardTitle } from "./memory-page-utils"
 
@@ -27,7 +27,6 @@ interface StoreProfile {
   name: string
   aiContext: string
   brandVoice: string
-  sampleReplies: SampleReply[]
 }
 
 const INTERNAL_LEARNED_BOOK_NAMES = new Set([
@@ -55,17 +54,6 @@ function recentFirst(pages: MemoryBookPage[]): MemoryBookPage[] {
     if (!right.updatedAt) return -1
     return +new Date(right.updatedAt) - +new Date(left.updatedAt)
   })
-}
-
-function sampleReplyPage(sample: SampleReply, index: number): MemoryBookPage {
-  const context = sample.context?.trim()
-  return {
-    id: `tone:sample:${sample.id}`,
-    title: context || `Sample reply ${index + 1}`,
-    body: sample.body,
-    articleId: null,
-    updatedAt: null,
-  }
 }
 
 export function buildMemoryBooks(
@@ -100,16 +88,13 @@ export function buildMemoryBooks(
       kind: "tone",
       title: "Tone & voice",
       description: "How the agent should sound when it speaks for you.",
-      pages: [
-        ...(storeProfile.brandVoice.trim() ? [{
-          id: "tone:brief",
-          title: "Voice brief",
-          body: storeProfile.brandVoice.trim(),
-          articleId: null,
-          updatedAt: null,
-        }] : []),
-        ...storeProfile.sampleReplies.filter(reply => reply.body.trim()).map(sampleReplyPage),
-      ],
+      pages: storeProfile.brandVoice.trim() ? [{
+        id: "tone:brief",
+        title: "Voice brief",
+        body: storeProfile.brandVoice.trim(),
+        articleId: null,
+        updatedAt: null,
+      }] : [],
       knowledgeBaseId: null,
       canAddNote: false,
     },

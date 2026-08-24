@@ -13,20 +13,15 @@ export function useComposerState({
   lastCustomerMessageAt,
   value,
   isAgentMode = false,
-  viewTab,
-  onViewTabChange,
   isSending,
   onChange,
 }: ComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const shouldRestoreTextareaFocusRef = useRef(false)
 
-  const isNoteTab = viewTab === "notes"
   const isEmailLike = channelType === "email" || channelType === "shopify"
   const igWindowExpired = isInstagramReplyWindowExpired({
     channelType,
     isAgentMode,
-    isNoteTab,
     lastCustomerMessageAt,
   })
 
@@ -70,31 +65,15 @@ export function useComposerState({
   const placeholder = buildComposerPlaceholder({
     customerName,
     isMobile,
-    isNoteTab,
   })
 
   const sendDisabled = !value.trim() || isSending || igWindowExpired
-  const rememberTextareaFocus = () => {
-    shouldRestoreTextareaFocusRef.current = document.activeElement === textareaRef.current
-  }
-  const handleViewTabSelect = (tab: "chat" | "notes") => {
-    onViewTabChange(tab)
-
-    if (shouldRestoreTextareaFocusRef.current) {
-      requestAnimationFrame(() => textareaRef.current?.focus({ preventScroll: true }))
-    }
-
-    shouldRestoreTextareaFocusRef.current = false
-  }
 
   return {
-    handleViewTabSelect,
     igWindowExpired,
     isEmailLike,
-    isNoteTab,
     onChange,
     placeholder,
-    rememberTextareaFocus,
     senderEmail,
     sendDisabled,
     textareaRef,

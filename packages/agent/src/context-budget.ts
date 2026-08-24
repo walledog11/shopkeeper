@@ -20,8 +20,6 @@ export const CONTEXT_BUDGETS = {
   operatorLedgerChars: 8_000,
   storeProfileChars: 6_000,
   brandVoiceChars: 3_000,
-  sampleReplyBodyChars: 1_000,
-  sampleReplyContextChars: 300,
   recentOrdersChars: 20_000,
 } as const;
 

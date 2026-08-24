@@ -36,7 +36,7 @@ export const settings: Category = {
             "Open Agent → Configure in the top navigation.",
             "Under Your store, set your business name, about-your-store details, and brand voice.",
             "Choose a trust level.",
-            "Expand Advanced for sample replies, reply language, and refund limit overrides.",
+            "Expand Advanced for refund limit overrides.",
           ],
         },
         {

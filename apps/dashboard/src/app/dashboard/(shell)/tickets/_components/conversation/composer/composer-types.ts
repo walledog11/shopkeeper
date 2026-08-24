@@ -12,9 +12,6 @@ export interface ComposerProps {
   lastCustomerMessageAt?: string | null
   value: string
   isAgentMode?: boolean
-  viewTab: "chat" | "notes"
-  noteCount: number
-  onViewTabChange: (tab: "chat" | "notes") => void
   isSending: boolean
   error: string | null
   onChange: (text: string) => void

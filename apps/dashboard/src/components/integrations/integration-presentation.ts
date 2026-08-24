@@ -7,7 +7,6 @@ import {
 } from "@/lib/integrations/catalog"
 import { isShopifyIntegrationLinked } from "@/lib/integrations/shopify-connection"
 import { normalizeImessageLineHandle } from "@/lib/integrations/imessage-visibility"
-import { normalizeTelegramBotUsername } from "@/lib/integrations/telegram-visibility"
 import type { Integration } from "@/types"
 import type { OAuthProvider } from "@/lib/integrations/oauth-contract"
 import { deriveIntegrationHealth, type IntegrationHealth } from "./integration-card-helpers"
@@ -17,7 +16,6 @@ export interface IntegrationDeploymentFlags {
   gmailNativeInboundEnabled: boolean
   instagramIntegrationEnabled: boolean
   tiktokShopConfigured: boolean
-  telegramBotUsername: string | null
   imessageHandle: string | null
 }
 
@@ -69,9 +67,7 @@ function availabilityFor(
     return { state: "coming-soon", label: definition.unavailableLabel }
   }
   if (definition.kind === "personal-device") {
-    const configured = definition.device === "telegram"
-      ? Boolean(normalizeTelegramBotUsername(flags.telegramBotUsername))
-      : Boolean(normalizeImessageLineHandle(flags.imessageHandle))
+    const configured = Boolean(normalizeImessageLineHandle(flags.imessageHandle))
     return configured
       ? { state: "available", label: null }
       : { state: "not-configured", label: "Connect" }

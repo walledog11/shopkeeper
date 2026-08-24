@@ -35,7 +35,6 @@ describe("buildMemoryBooks", () => {
       name: "Acme",
       aiContext: "We sell hiking boots.",
       brandVoice: "Warm and direct.",
-      sampleReplies: [{ id: "sample-1", body: "Happy to help!", context: "General" }],
     })
 
     expect(books.map(book => book.title)).toEqual([
@@ -47,11 +46,11 @@ describe("buildMemoryBooks", () => {
     ])
     expect(books.find(book => book.id === "agent-learned")?.pages.map(page => page.id)).toEqual(["article:learned"])
     expect(books.find(book => book.title === "Shipping")).toBeUndefined()
-    expect(books.find(book => book.id === "tone-and-voice")?.pages).toHaveLength(2)
+    expect(books.find(book => book.id === "tone-and-voice")?.pages).toHaveLength(1)
   })
 
   it("keeps empty foundational books visible", () => {
-    const books = buildMemoryBooks([], [], { name: "Acme", aiContext: "", brandVoice: "", sampleReplies: [] })
+    const books = buildMemoryBooks([], [], { name: "Acme", aiContext: "", brandVoice: "" })
     expect(books.map(book => book.id)).toEqual(["store-profile", "tone-and-voice", "agent-learned", "your-notes"])
   })
 })
@@ -63,7 +62,7 @@ describe("filterMemoryBooks", () => {
     ], [
       article({ id: "shipping", knowledgeBaseId: "notes-base", baseName: "Notes", baseSource: "user", title: "International shipping", body: "Ships to Canada" }),
       article({ id: "returns", knowledgeBaseId: "notes-base", baseName: "Notes", baseSource: "user", title: "Returns", body: "Thirty days" }),
-    ], { name: "Acme", aiContext: "", brandVoice: "", sampleReplies: [] })
+    ], { name: "Acme", aiContext: "", brandVoice: "" })
 
     const filtered = filterMemoryBooks(books, "Canada")
     expect(filtered).toHaveLength(1)

@@ -1,6 +1,5 @@
 import type {
   AgentToolPermissions,
-  SampleReply,
   OrgSettings,
   OrgSettingsPatch,
   ToolCategory,
@@ -34,7 +33,6 @@ export type ThreadRequestDisposition = DbThreadRequestDisposition;
 // `@/types` imports are unchanged.
 export type {
   AgentToolPermissions,
-  SampleReply,
   OrgSettings,
   OrgSettingsPatch,
   ToolCategory,
@@ -137,7 +135,6 @@ export interface ActionLogEntry {
   }>;
   mode: 'human_approved' | 'auto_executed' | 'read_only' | null;
   approver: { id: string; displayName: string | null } | null;
-  feedback: 'good' | null;
 }
 
 export interface Thread {

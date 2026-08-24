@@ -12,7 +12,6 @@ interface UseConversationViewportEffectsOptions {
   keyboardLayoutOpen: boolean
   replyText: string
   scrollTimelineToEnd: (behavior?: ScrollBehavior) => void
-  viewTab: "chat" | "notes"
   visualViewportHeight: number
 }
 
@@ -27,7 +26,6 @@ export function useConversationViewportEffects({
   keyboardLayoutOpen,
   replyText,
   scrollTimelineToEnd,
-  viewTab,
   visualViewportHeight,
 }: UseConversationViewportEffectsOptions) {
   useMobileChromeOverride(
@@ -79,7 +77,6 @@ export function useConversationViewportEffects({
     keyboardLayoutOpen,
     replyText,
     scrollTimelineToEnd,
-    viewTab,
     visualViewportHeight,
   ])
 }

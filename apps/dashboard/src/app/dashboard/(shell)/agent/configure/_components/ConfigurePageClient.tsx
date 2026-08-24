@@ -2,7 +2,6 @@
 
 import AgentTab from "./AgentTab"
 import type { OrgSettings, OrgSettingsPatch, VoiceProposal } from "@/types"
-import type { GatewayRuntimeFlags } from "@/lib/server/gateway-runtime-flags"
 import { dashboardPageShellClassName } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
 import { cn } from "@/lib/ui/cn"
 
@@ -13,7 +12,6 @@ interface Props {
   orgName: string
   voiceProposal: VoiceProposal | null
   shopifyConnected: boolean
-  runtimeFlags: GatewayRuntimeFlags["monitors"] | null
 }
 
 export default function ConfigurePageClient(props: Props) {
@@ -28,7 +26,6 @@ export default function ConfigurePageClient(props: Props) {
             orgName={props.orgName}
             voiceProposal={props.voiceProposal}
             shopifyConnected={props.shopifyConnected}
-            runtimeFlags={props.runtimeFlags}
           />
         </div>
       </div>

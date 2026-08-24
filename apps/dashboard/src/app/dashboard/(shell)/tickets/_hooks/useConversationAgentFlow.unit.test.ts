@@ -39,16 +39,16 @@ afterEach(() => {
 })
 
 describe("getAgentCommandState", () => {
-  it("detects agent mode in chat and notes", () => {
-    expect(getAgentCommandState("@shopkeeper refund this order", "notes")).toEqual({
+  it("detects agent mode from the @shopkeeper prefix", () => {
+    expect(getAgentCommandState("@shopkeeper refund this order")).toEqual({
       agentInstruction: "refund this order",
       isAgentMode: true,
       triggerPrefix: "@shopkeeper",
     })
 
-    expect(getAgentCommandState("@shopkeeper refund this order", "chat")).toEqual({
-      agentInstruction: "refund this order",
-      isAgentMode: true,
+    expect(getAgentCommandState("refund this order")).toEqual({
+      agentInstruction: "",
+      isAgentMode: false,
       triggerPrefix: "@shopkeeper",
     })
   })
@@ -191,7 +191,6 @@ describe("useConversationAgentFlow execution state", () => {
       onAgentTurnAdd: vi.fn(),
       onAgentRunningChange: vi.fn(),
       onAgentComplete: vi.fn(),
-      onNoteModeReset: vi.fn(),
     }
     const current: { value: ReturnType<typeof useConversationAgentFlow> | null } = { value: null }
     const capture = (value: ReturnType<typeof useConversationAgentFlow>) => {
@@ -209,7 +208,6 @@ describe("useConversationAgentFlow execution state", () => {
       const value = useConversationAgentFlow({
         ticket,
         initialPlan,
-        viewTab: "chat",
         replyText: "",
         ...callbacks,
       })

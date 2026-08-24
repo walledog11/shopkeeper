@@ -120,17 +120,6 @@ enum ShipmentWatchStatus {
   skipped
 }
 
-enum FollowUpWatchKind {
-  refund
-  exchange
-}
-
-enum FollowUpWatchStatus {
-  open
-  notified
-  skipped
-}
-
 enum StripeWebhookEventStatus {
   pending
   processing
@@ -203,7 +192,6 @@ model Organization {
   planExecutions          PlanExecution[]
   returnWatches           ReturnWatch[]
   shipmentWatches         ShipmentWatch[]
-  followUpWatches         FollowUpWatch[]
   stripeWebhookEvents     StripeWebhookEvent[]
   messages                Message[]
   storefrontChatSessions  StorefrontChatSession[]
@@ -519,7 +507,6 @@ model Thread {
   planExecutions   PlanExecution[]
   returnWatches    ReturnWatch[]
   shipmentWatches  ShipmentWatch[]
-  followUpWatches  FollowUpWatch[]
 
   storefrontChatSessions StorefrontChatSession[]
   storefrontChatEpisodes StorefrontChatSessionEpisode[]
@@ -799,7 +786,6 @@ model AgentAction {
   approvedAt       DateTime? @map("approved_at") @db.Timestamptz
   approvedPlanHash String?   @map("approved_plan_hash") @db.VarChar(64)
   instructionHash  String?   @map("instruction_hash") @db.VarChar(64)
-  feedback         String?   @db.VarChar(16)
   executedAt       DateTime  @default(now()) @map("executed_at") @db.Timestamptz
   durationMs       Int       @map("duration_ms")
 
@@ -871,29 +857,6 @@ model ShipmentWatch {
   @@index([organizationId, status])
   @@index([organizationId, orderId])
   @@map("shipment_watches")
-}
-
-// Durable resolution↔ticket association for the post-resolution follow-up
-// monitor (B5). Recorded when create_refund/create_exchange succeeds on a
-// support thread; the hourly sweep nudges the operator to check in once the
-// source ticket has been closed for the configured window.
-model FollowUpWatch {
-  id             String              @id @default(uuid()) @db.Uuid
-  organizationId String              @map("organization_id") @db.Uuid
-  threadId       String?             @map("thread_id") @db.Uuid
-  orderId        String              @map("order_id") @db.VarChar(32)
-  kind           FollowUpWatchKind
-  status         FollowUpWatchStatus @default(open)
-  notifiedAt     DateTime?           @map("notified_at") @db.Timestamptz
-  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt      DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  thread       Thread?      @relation(fields: [threadId], references: [id], onDelete: SetNull)
-
-  @@unique([organizationId, orderId])
-  @@index([organizationId, status])
-  @@map("follow_up_watches")
 }
 
 // Durable, cross-runtime identity and claim state for one reviewed agent plan.

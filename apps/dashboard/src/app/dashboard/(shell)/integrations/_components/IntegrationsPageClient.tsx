@@ -13,7 +13,6 @@ import {
   type IntegrationChannelKind,
 } from "@/lib/integrations/catalog"
 import { parseOAuthOutcome } from "@/lib/integrations/oauth-contract"
-import type { TelegramMemberStatus } from "@/lib/integrations/telegram-status"
 import {
   connectForwardingEmail,
   disconnectIntegration,
@@ -31,7 +30,6 @@ import {
 } from "@/components/integrations/integration-presentation"
 import { useIntegrationsOAuth } from "@/components/integrations/useIntegrationsOAuth"
 import { CARD_ACTIONS, CARD_DESCRIPTION, CARD_SHELL } from "@/components/integrations/integration-card-styles"
-import TelegramCard from "@/components/integrations/TelegramCard"
 import ImessageCard from "@/components/integrations/ImessageCard"
 import { dashboardChromeColumnClassName } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
 import { getShopifyDisconnectMessage, resolveShopifyConnectionState } from "@/lib/integrations/shopify-connection"
@@ -78,8 +76,6 @@ function renderIntegrationSkeletonSection(
 }
 
 interface IntegrationsPageProps {
-  telegramBotUsername: string | null
-  initialTelegramStatus: TelegramMemberStatus | null
   imessageHandle: string | null
   gmailNativeInboundEnabled: boolean
   instagramIntegrationEnabled: boolean
@@ -98,8 +94,6 @@ export default function IntegrationsPageClient(props: IntegrationsPageProps) {
 }
 
 function IntegrationsPageContent({
-  telegramBotUsername,
-  initialTelegramStatus,
   imessageHandle,
   gmailNativeInboundEnabled,
   instagramIntegrationEnabled,
@@ -155,18 +149,15 @@ function IntegrationsPageContent({
       gmailNativeInboundEnabled,
       instagramIntegrationEnabled,
       tiktokShopConfigured,
-      telegramBotUsername: telegramBotUsername ?? initialTelegramStatus?.botUsername ?? null,
       imessageHandle,
     },
     isAdmin,
   }), [
     gmailNativeInboundEnabled,
     imessageHandle,
-    initialTelegramStatus?.botUsername,
     instagramIntegrationEnabled,
     integrations,
     isAdmin,
-    telegramBotUsername,
     tiktokShopConfigured,
   ])
 
@@ -284,16 +275,6 @@ function IntegrationsPageContent({
 
   function renderIntegrationCard(model: IntegrationCardModel) {
     const { definition } = model
-    if (definition.kind === "personal-device" && definition.device === "telegram") {
-      return (
-        <TelegramCard
-          key={definition.id}
-          config={definition}
-          botUsername={telegramBotUsername}
-          initialStatus={initialTelegramStatus}
-        />
-      )
-    }
     if (definition.kind === "personal-device" && definition.device === "imessage") {
       return <ImessageCard key={definition.id} config={definition} handle={imessageHandle} />
     }
@@ -337,7 +318,7 @@ function IntegrationsPageContent({
           {!isAdmin ? (
             <div className="flex items-center gap-3 rounded-lg border border-foreground/[0.10] bg-foreground/[0.03] px-4 py-3 text-sm text-muted-foreground">
               <Info className="size-4 shrink-0" />
-              <span>Only workspace admins can connect or disconnect integrations. You can still link your own Telegram or iMessage.</span>
+              <span>Only workspace admins can connect or disconnect integrations. You can still link your own iMessage.</span>
             </div>
           ) : null}
 

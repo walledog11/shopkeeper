@@ -26,7 +26,7 @@ export function useKbPageState(initialKbData?: KbPageData) {
   })
   const knowledgeBases = useMemo(() => data?.knowledgeBases ?? [], [data])
   const storeProfile = useMemo(
-    () => data?.storeProfile ?? { name: "", aiContext: "", brandVoice: "", sampleReplies: [], voiceProposal: null },
+    () => data?.storeProfile ?? { name: "", aiContext: "", brandVoice: "", voiceProposal: null },
     [data?.storeProfile],
   )
   const hasShopifyConnection = knowledgeBases.some(kb => kb.source === "shopify")

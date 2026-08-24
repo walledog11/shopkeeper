@@ -1,4 +1,4 @@
-import type { OrgSettings, SampleReply } from "./types.js";
+import type { OrgSettings } from "./types.js";
 import { resolveAgentSettings } from "./settings.js";
 import { isOperatorChannel } from "./thread-constants.js";
 import { isStorefrontContext, isVerifiedContext } from "./guest-policy.js";
@@ -28,11 +28,9 @@ function promptKbArticles(ctx: AgentContext): AgentContext["kbArticles"] {
     : ctx.kbArticles;
 }
 
-function pickSampleReplies(all: SampleReply[], threadTag: string | null, n: number): SampleReply[] {
-  if (all.length === 0) return [];
-  const tagMatches = threadTag ? all.filter(r => r.tag && r.tag === threadTag) : [];
-  const rest = all.filter(r => !tagMatches.includes(r));
-  return [...tagMatches, ...rest].slice(0, n);
+function buildVoiceSection(s: OrgSettings): string {
+  if (!s.brandVoice?.trim()) return "";
+  return `\n\n## Voice\nMatch this tone in every customer-facing reply:\n${promptText(s.brandVoice, CONTEXT_BUDGETS.brandVoiceChars)}`;
 }
 
 function buildAboutStoreSection(orgName: string, aiContext: string | undefined): string | null {
@@ -47,21 +45,6 @@ function buildAboutStoreSection(orgName: string, aiContext: string | undefined):
 function buildStoreProfileSection(orgName: string, aiContext: string | undefined): string {
   const aboutStore = buildAboutStoreSection(orgName, aiContext);
   return aboutStore ? `\n\n## About this store\n${aboutStore}` : "";
-}
-
-function buildVoiceSection(s: OrgSettings, ctx: AgentContext): string {
-  const parts: string[] = [];
-  if (s.brandVoice?.trim()) {
-    parts.push(`## Voice\nMatch this tone in every customer-facing reply:\n${promptText(s.brandVoice, CONTEXT_BUDGETS.brandVoiceChars)}`);
-  }
-  const samples = pickSampleReplies(s.sampleReplies ?? [], ctx.thread.tag, 3);
-  if (samples.length > 0) {
-    const rendered = samples
-      .map((r, i) => `Example ${i + 1}${r.context ? ` (${promptText(r.context, CONTEXT_BUDGETS.sampleReplyContextChars)})` : ""}:\n${promptText(r.body, CONTEXT_BUDGETS.sampleReplyBodyChars)}`)
-      .join("\n\n");
-    parts.push(`## Sample replies (match this style)\n${rendered}`);
-  }
-  return parts.length > 0 ? "\n\n" + parts.join("\n\n") : "";
 }
 
 function buildGuardrailClauses(
@@ -101,12 +84,6 @@ function buildAutonomySection(s: ReturnType<typeof resolveAgentSettings>): strin
     case "trusted":
       body = `Auto-reply to information questions. Small refunds (≤ ${capLabel}), address changes before fulfillment, and shipping replies run automatically; cancellations, refunds above ${capLabel}, and order edits are held for the operator's approval. When the request is allowed, include the tool call that fulfills it as a plan step rather than just describing it. If a guardrail above forbids the action or the order's state makes it impossible, call escalate_to_human instead.`;
       break;
-    case "broad":
-      body = `Auto-reply to information questions. Exact full refunds and explicitly requested gift cards (≤ ${capLabel}), address changes before fulfillment, shipping replies, and bulk quotes run automatically; cancellations, compensation above ${capLabel}, and order edits are held for the operator's approval. When the request is allowed, include the tool call that fulfills it as a plan step rather than just describing it. If a guardrail above forbids the action or the order's state makes it impossible, call escalate_to_human instead.`;
-      break;
-    case "full":
-      body = `Anything within policy runs automatically - exact full refunds and explicitly requested gift cards up to ${capLabel}, cancellations, address changes before fulfillment, order edits, and bulk quotes. You do not hold in-policy actions for the operator's approval. The only things that surface are exceptions: compensation above ${capLabel} or another guardrail-blocked action, an order whose state makes the change impossible, or a request you are genuinely uncertain about - for those, call escalate_to_human instead of acting. When an action is in policy, include the tool call that fulfills it as a plan step rather than just describing it.`;
-      break;
     default:
       return "";
   }
@@ -126,13 +103,6 @@ function buildGuardrailSection(
 ): string {
   const clauses = buildGuardrailClauses(s, variant);
   return clauses.length > 0 ? "\n" + clauses.join("\n") : "";
-}
-
-function buildLanguageSection(s: ReturnType<typeof resolveAgentSettings>, variant: "support" | "operator"): string {
-  if (!s.replyLanguage || s.replyLanguage === "auto") return "";
-  return variant === "operator"
-    ? `\n- Always respond in ${s.replyLanguage}.`
-    : `\n- Always write customer-facing replies in ${s.replyLanguage}, regardless of the language the customer used.`;
 }
 
 // Structural defense against prompt injection: customer messages and any text a
@@ -315,7 +285,7 @@ export function buildSystemPromptParts(ctx: AgentContext, settings?: Partial<Org
         identity: `You are ${s.agentName}, an AI action assistant for ${ctx.orgName}. You are receiving instructions from a team member. They reach you from wherever they are — Telegram, iMessage, or the dashboard — and it is the same conversation either way.`,
         context: `## Integrations\n${shopifyNote}\n${shopifyCustomerNote}\n${OPERATOR_INTEGRATION_GUIDANCE}${linkedCustomerSection}${ordersSection}${buildStoreProfileSection(ctx.orgName, s.aiContext)}${pendingStateSection}`,
         instructions,
-        trailer: `${OPERATOR_UNTRUSTED_CONTENT_GUIDANCE}${buildGuardrailSection(s, "operator")}${buildLanguageSection(s, "operator")}`,
+        trailer: `${OPERATOR_UNTRUSTED_CONTENT_GUIDANCE}${buildGuardrailSection(s, "operator")}`,
       }),
     };
   }
@@ -380,7 +350,7 @@ ${identitySection}${ordersSection}${guestSection}
 
 ## Integrations
 ${shopifyNote}
-${shopifyCustomerNote}${buildGuardrailSection(s)}${buildLanguageSection(s, "support")}${buildAutonomySection(s)}${buildStoreProfileSection(ctx.orgName, s.aiContext)}${kbSection}${buildVoiceSection(s, ctx)}`;
+${shopifyCustomerNote}${buildGuardrailSection(s)}${buildAutonomySection(s)}${buildStoreProfileSection(ctx.orgName, s.aiContext)}${kbSection}${buildVoiceSection(s)}`;
 
   return { stable: SUPPORT_STABLE_PREFIX, volatile };
 }
@@ -397,9 +367,6 @@ export function buildComposerAskPrompt(ctx: AgentContext, settings?: Partial<Org
   const kbSection = kbArticles.length > 0
     ? kbArticles.map(a => `### ${a.title}\n${a.body}`).join("\n\n")
     : "No knowledge base articles are pre-loaded.";
-  const languageClause = s.replyLanguage && s.replyLanguage !== "auto"
-    ? `\n- If drafting customer-facing text, write it in ${s.replyLanguage}.`
-    : "";
 
   return `You are ${s.agentName}, a private assistant inside the support ticket composer for ${ctx.orgName}.
 
@@ -413,7 +380,7 @@ export function buildComposerAskPrompt(ctx: AgentContext, settings?: Partial<Org
 - Customer email/handle: ${ctx.customer.platformId}
 
 ## Customer's recent orders
-${ordersJson}${buildStoreProfileSection(ctx.orgName, s.aiContext)}${buildVoiceSection(s, ctx)}
+${ordersJson}${buildStoreProfileSection(ctx.orgName, s.aiContext)}${buildVoiceSection(s)}
 
 ## Knowledge base
 ${kbSection}
@@ -432,5 +399,5 @@ ${kbSection}
 - Lead with the practical answer, then include only the details needed to make a decision. Prefer 2-4 sentences.
 - Avoid numbered lists for simple uncertainty. Say "I'd check…" or "I'd confirm…" instead.
 - Do not end by asking a broad follow-up question unless it is necessary to answer the operator's request.
-- Be concise, factual, and specific.${languageClause}`;
+- Be concise, factual, and specific.`;
 }

@@ -10,9 +10,8 @@ interface Props {
 
 /**
  * One nudge slot for the highest-value channel the merchant is still missing.
- * Customer channels come first — they are what feeds the inbox. Telegram is only
- * offered when no operator channel is bound at all, since iMessage covers the
- * same job and a second phone channel is pure redundancy.
+ * Customer channels come first — they are what feeds the inbox. iMessage is
+ * offered when no operator channel is bound at all.
  */
 export default function HomeChannelNudge({
   hasPhoneBound,

@@ -45,7 +45,6 @@ export const AGENT_DISPLAY_NAME = "Shopkeeper";
 export const AGENT_SETTINGS_DEFAULTS: OrgSettings = {
   aiContext: "",
   brandVoice: "",
-  sampleReplies: [],
   agentName: AGENT_DISPLAY_NAME,
   autoPlanOnOpen: true,
   defaultInstruction: "",
@@ -61,7 +60,6 @@ export const AGENT_SETTINGS_DEFAULTS: OrgSettings = {
   blockCancellations: false,
   blockCustomLineItems: false,
   maxIterations: 10,
-  replyLanguage: "auto",
   digestEnabled: false,
   digestFrequency: "daily",
   digestHour: 8,
@@ -94,20 +92,12 @@ export const TIER_DEFAULTS: Record<AutonomyTier, Partial<OrgSettings>> = {
   trusted: {
     maxRefundAmount: 100,
   },
-  broad: {
-    maxRefundAmount: 250,
-  },
-  full: {
-    maxRefundAmount: 1000,
-  },
 };
 
 // Tiers whose plans the classifier may surface as auto_execute, subject to
 // per-call caps and other static policy checks.
 export const TIERS_THAT_AUTO_EXECUTE: ReadonlySet<AutonomyTier> = new Set<AutonomyTier>([
   "trusted",
-  "broad",
-  "full",
 ]);
 
 export function normalizeStoredOrgSettings(value: unknown): OrgSettingsPatch {

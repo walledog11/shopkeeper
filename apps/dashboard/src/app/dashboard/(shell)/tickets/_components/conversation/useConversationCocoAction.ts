@@ -24,7 +24,6 @@ interface UseConversationCocoActionProps {
   shopifyCustomerId?: string | null
   threadContext?: Pick<Thread, "cachedPlan" | "cachedPlanMessageId"> | null
   ticket: Ticket
-  viewTab: "chat" | "notes"
 }
 
 export function useConversationCocoAction({
@@ -43,7 +42,6 @@ export function useConversationCocoAction({
   shopifyCustomerId,
   threadContext,
   ticket,
-  viewTab,
 }: UseConversationCocoActionProps) {
   const planMessages = useMemo(
     () => planMessagesFromTicketMessages(ticket.messages),
@@ -55,7 +53,6 @@ export function useConversationCocoAction({
     agentBusy,
     channelType: ticket.channelType,
     hasShopify,
-    isNoteTab: viewTab === "notes",
     lastCustomerMessageAt: ticket.lastCustomerMessageAt,
     messages: planMessages,
     orgSettings,
@@ -73,7 +70,6 @@ export function useConversationCocoAction({
     ticket.channelType,
     ticket.filterStatus,
     ticket.lastCustomerMessageAt,
-    viewTab,
   ])
 
   const headerCocoAction = useMemo(() => {

@@ -159,14 +159,12 @@ describe('buildSystemPrompt', () => {
     }), {
       aiContext: 'c'.repeat(10_000),
       brandVoice: 'v'.repeat(10_000),
-      sampleReplies: [{ id: 'sample-1', body: 'r'.repeat(5_000) }],
     });
 
     expect(prompt).not.toContain('kb-3-');
     expect(prompt).not.toContain('s'.repeat(CONTEXT_BUDGETS.priorSummaryChars + 1));
     expect(prompt).not.toContain('c'.repeat(CONTEXT_BUDGETS.storeProfileChars + 1));
     expect(prompt).not.toContain('v'.repeat(CONTEXT_BUDGETS.brandVoiceChars + 1));
-    expect(prompt).not.toContain('r'.repeat(CONTEXT_BUDGETS.sampleReplyBodyChars + 1));
   });
 });
 

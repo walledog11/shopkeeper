@@ -15,7 +15,6 @@ const FLAGS = {
   gmailNativeInboundEnabled: false,
   instagramIntegrationEnabled: true,
   tiktokShopConfigured: true,
-  telegramBotUsername: "ShopkeeperBot",
   imessageHandle: "+15555550100",
 }
 

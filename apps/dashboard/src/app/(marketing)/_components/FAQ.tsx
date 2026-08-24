@@ -11,7 +11,7 @@ const faqs = [
   },
   {
     q: "How does it learn my voice?",
-    a: "You can add sample replies, and Shopkeeper learns from edits you approve. After enough examples it can propose an updated voice brief, which changes only after you review and approve it.",
+    a: "Shopkeeper learns from edits you approve. After enough examples it can propose an updated voice brief, which changes only after you review and approve it.",
   },
   {
     q: "Can I export my data?",
