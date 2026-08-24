@@ -1,6 +1,7 @@
 "use client"
 
-import { SelectField } from "./settings-form-fields"
+import { settingsSelectClassName } from "./settings-form-styles"
+import { SolidSettingsTile as SettingsTile } from "@/app/dashboard/(shell)/settings/_components/SettingsTile"
 import type { AgentTabController } from "./useAgentTabState"
 
 const REPLY_LANGUAGE_OPTIONS = [
@@ -21,21 +22,22 @@ export function AgentResponseSection({ controller }: { controller: AgentTabContr
   const { settingsState, dispatch } = controller
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h3 className="text-sm font-semibold text-strong">Reply language</h3>
-        <p className="text-xs text-faint mt-0.5 leading-relaxed">
-          Choose a fixed language or leave on auto-detect.
-        </p>
+    <SettingsTile label="Reply language">
+      <div className="space-y-3">
+        <p>Choose a fixed language or leave on auto-detect. Auto-detect matches the language the customer wrote in.</p>
+        <select
+          aria-label="Reply language"
+          value={settingsState.replyLanguage}
+          onChange={(event) => dispatch({ type: "set", patch: { replyLanguage: event.target.value } })}
+          className={settingsSelectClassName("w-full sm:w-56")}
+        >
+          {REPLY_LANGUAGE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
       </div>
-      <SelectField
-        label="Reply language"
-        ariaLabel="Reply language"
-        value={settingsState.replyLanguage}
-        onChange={value => dispatch({ type: "set", patch: { replyLanguage: value } })}
-        options={REPLY_LANGUAGE_OPTIONS}
-        description="Auto-detect matches the language the customer wrote in."
-      />
-    </div>
+    </SettingsTile>
   )
 }

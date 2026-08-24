@@ -1,5 +1,5 @@
 import { Pulse } from "./Pulse"
-import { GLASS_SETTINGS_TILE } from "@/lib/ui/glass-card-styles"
+import { SOLID_SETTINGS_TILE } from "@/lib/ui/glass-card-styles"
 import { cn } from "@/lib/ui/cn"
 
 export function AccountSettingsSkeleton({
@@ -12,7 +12,7 @@ export function AccountSettingsSkeleton({
   return (
     <div className="flex flex-col gap-4">
       {Array.from({ length: tileCount }, (_, index) => (
-        <div key={index} className={cn(GLASS_SETTINGS_TILE, "space-y-2")}>
+        <div key={index} className={cn(SOLID_SETTINGS_TILE, "space-y-2")}>
           <Pulse className="h-4 w-28 rounded-md" />
           <Pulse className="h-4 w-2/3 rounded-md bg-foreground/[0.05]" />
         </div>

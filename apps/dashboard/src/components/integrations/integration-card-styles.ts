@@ -1,11 +1,11 @@
 import { cn } from "@/lib/ui/cn"
-import { GLASS_CARD_SURFACE } from "@/lib/ui/glass-card-styles"
+import { SOLID_CARD_SURFACE } from "@/lib/ui/glass-card-styles"
 
 const CARD_BUTTON_FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
 
 export const CARD_SHELL = cn(
   "group flex h-full flex-col rounded-2xl px-5 pt-5 pb-5 scroll-mt-6",
-  GLASS_CARD_SURFACE,
+  SOLID_CARD_SURFACE,
 )
 
 export const LOGO_INLINE = "size-8 shrink-0"

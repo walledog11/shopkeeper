@@ -80,7 +80,7 @@ function SettingsPageContent({ orgName, version }: Props) {
   return (
     <div className="flex size-full min-w-0 flex-col overflow-hidden bg-background">
       <div className="flex-1 overflow-y-auto">
-        <div className={cn(dashboardPageShellClassName(), "gap-6 pb-20")}>
+        <div className={cn(dashboardPageShellClassName(), "gap-4 pb-20")}>
           <BillingTab />
           <WorkspaceTab orgName={orgName} version={version} />
         </div>

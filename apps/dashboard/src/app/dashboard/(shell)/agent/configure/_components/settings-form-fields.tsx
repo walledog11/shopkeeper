@@ -203,7 +203,6 @@ export function CharacterCountTextarea({
         maxLength={maxLength}
         className={textareaClassName}
       />
-      <p className="text-xs text-faint text-right">{value.length}/{maxLength}</p>
     </div>
   )
 }

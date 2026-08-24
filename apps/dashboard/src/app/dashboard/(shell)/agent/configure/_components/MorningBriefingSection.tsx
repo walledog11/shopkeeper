@@ -1,7 +1,8 @@
 "use client"
 
+import { Switch } from "@/components/ui/switch"
 import { NumberInput } from "./settings-form-fields"
-import { SectionCard, ToggleRow } from "@/components/settings-form/shared"
+import { SolidSettingsTile as SettingsTile } from "@/app/dashboard/(shell)/settings/_components/SettingsTile"
 import type { AgentTabController } from "./useAgentTabState"
 
 export function MorningBriefingSection({
@@ -19,28 +20,29 @@ export function MorningBriefingSection({
   const lowStockEnabled = lowStockThresholdInput.trim() !== ""
 
   return (
-    <SectionCard
-      title="Morning briefing extras"
-      description="Optional Shopify lines added to the operator digest you get on Telegram or iMessage."
-      variant="board"
-    >
-      <div className="space-y-6">
-        <ToggleRow
-          label="Sales pulse"
-          description="Adds orders and revenue since your last briefing, with a prior-week comparison when available."
-          checked={settingsState.salesPulseEnabled !== false}
-          onChange={(value) => {
-            dispatch({
-              type: "set",
-              patch: { salesPulseEnabled: value },
-            })
-          }}
-        />
+    <>
+      <SettingsTile
+        label="Sales pulse"
+        action={
+          <Switch
+            checked={settingsState.salesPulseEnabled !== false}
+            onChange={(value) => {
+              dispatch({
+                type: "set",
+                patch: { salesPulseEnabled: value },
+              })
+            }}
+            ariaLabel="Sales pulse"
+          />
+        }
+      >
+        Adds orders and revenue since your last briefing, with a prior-week comparison when available.
+      </SettingsTile>
 
-        <div className="space-y-4 border-t border-foreground/[0.08] pt-6">
-          <ToggleRow
-            label="Low-stock alerts"
-            description="Adds a line when variant inventory is at or below your threshold. Leave off if you do not want inventory called out in the digest."
+      <SettingsTile
+        label="Low-stock alerts"
+        action={
+          <Switch
             checked={lowStockEnabled}
             onChange={(value) => {
               if (value) {
@@ -49,9 +51,16 @@ export function MorningBriefingSection({
                 setLowStockThresholdInput("")
               }
             }}
+            ariaLabel="Low-stock alerts"
           />
-
-          {lowStockEnabled && (
+        }
+      >
+        <div className="space-y-3">
+          <p>
+            Adds a line when variant inventory is at or below your threshold. Leave off if you do not want
+            inventory called out in the digest.
+          </p>
+          {lowStockEnabled ? (
             <NumberInput
               label="Low-stock threshold"
               hint="units or fewer"
@@ -62,9 +71,9 @@ export function MorningBriefingSection({
               max={1000}
               inputWidthClassName="w-28"
             />
-          )}
+          ) : null}
         </div>
-      </div>
-    </SectionCard>
+      </SettingsTile>
+    </>
   )
 }

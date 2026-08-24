@@ -2,7 +2,7 @@
 
 import { useSession, useUser } from "@clerk/nextjs"
 import { ChevronLeft, Eye, EyeOff, Loader2, Trash2 } from "lucide-react"
-import { useEffect, useMemo, useState, type ReactNode } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -17,7 +17,7 @@ import { Switch } from "@/components/ui/switch"
 import {
   GLASS_SETTINGS_ACTION,
   GLASS_SETTINGS_ACTION_DANGER,
-  GLASS_SETTINGS_TILE,
+  SOLID_SETTINGS_TILE,
 } from "@/lib/ui/glass-card-styles"
 import { cn } from "@/lib/ui/cn"
 import {
@@ -26,9 +26,8 @@ import {
   passwordStatusLabel,
   passwordUpdateError,
 } from "./account-settings-helpers"
+import { SettingsTile, settingsFieldClassName } from "./SettingsTile"
 
-const fieldClassName =
-  "h-9 text-sm bg-foreground/[0.06] border-foreground/[0.12] text-strong placeholder:text-faint"
 const passwordFieldClassName =
   "h-11 rounded-xl border border-stone-900/12 bg-[#f6f2eb] text-[#2b2118] shadow-none placeholder:text-stone-400 focus-visible:border-[#2b2118]/25 focus-visible:ring-2 focus-visible:ring-[#2b2118]/8"
 
@@ -104,7 +103,7 @@ export function AccountSecuritySection({
 
   return (
     <div id="security" className="flex flex-col gap-4 scroll-mt-6">
-      <SecurityRow
+      <SettingsTile
         label="Password"
         action={
           <Button
@@ -118,13 +117,13 @@ export function AccountSecuritySection({
         }
       >
         {passwordStatusLabel(user.passwordEnabled)}
-      </SecurityRow>
+      </SettingsTile>
 
-      <SecurityRow label="Two-factor authentication">
+      <SettingsTile label="Two-factor authentication">
         {user.twoFactorEnabled ? "On" : "Off"}
-      </SecurityRow>
+      </SettingsTile>
 
-      <SecurityRow
+      <SettingsTile
         label="Active devices"
         action={
           otherSessions.length > 0 ? (
@@ -152,9 +151,9 @@ export function AccountSecuritySection({
             ))}
           </ul>
         )}
-      </SecurityRow>
+      </SettingsTile>
 
-      <SecurityRow
+      <SettingsTile
         label="Delete account"
         action={
           <Button
@@ -169,7 +168,7 @@ export function AccountSecuritySection({
         }
       >
         Permanently delete your Shopkeeper account and sign out of every workspace.
-      </SecurityRow>
+      </SettingsTile>
 
       <DeleteAccountDialog
         confirmValue={user.primaryEmailAddress?.emailAddress ?? user.id}
@@ -180,31 +179,6 @@ export function AccountSecuritySection({
           window.location.assign("/login")
         }}
       />
-    </div>
-  )
-}
-
-function SecurityRow({
-  action,
-  children,
-  label,
-}: {
-  action?: ReactNode
-  children?: ReactNode
-  label: string
-}) {
-  return (
-    <div
-      className={cn(
-        GLASS_SETTINGS_TILE,
-        "flex flex-col items-stretch gap-3",
-      )}
-    >
-      <p className="text-sm font-semibold text-strong">{label}</p>
-      {children ? (
-        <div className="min-w-0 text-sm text-muted-foreground">{children}</div>
-      ) : null}
-      {action ? <div className="w-full sm:w-auto">{action}</div> : null}
     </div>
   )
 }
@@ -275,7 +249,7 @@ function PasswordEditor({
   }) === null
 
   return (
-    <div className={GLASS_SETTINGS_TILE}>
+    <div className={SOLID_SETTINGS_TILE}>
       <button
         type="button"
         onClick={onClose}
@@ -470,7 +444,7 @@ function DeleteAccountDialog({
             onChange={(event) => setTyped(event.target.value)}
             placeholder={confirmValue}
             disabled={busy}
-            className={fieldClassName}
+            className={settingsFieldClassName}
           />
           {error ? <p className="text-xs text-red-600">{error}</p> : null}
         </div>

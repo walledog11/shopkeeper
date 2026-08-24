@@ -9,11 +9,12 @@ import {
   type AutonomyOverridePath,
 } from "./agent-tab-helpers"
 import { MoneyInput } from "./settings-form-fields"
-import { ToggleRow } from "@/components/settings-form/shared"
+import { Switch } from "@/components/ui/switch"
+import { SolidSettingsTile as SettingsTile } from "@/app/dashboard/(shell)/settings/_components/SettingsTile"
 import type { AgentTabController } from "./useAgentTabState"
 
 function tierLabel(tier: AutonomyTier): string {
-  return AUTONOMY_TIERS.find(option => option.id === tier)?.label ?? tier
+  return AUTONOMY_TIERS.find((option) => option.id === tier)?.label ?? tier
 }
 
 function formatOverrideValue(path: AutonomyOverridePath, value: unknown): string {
@@ -78,61 +79,64 @@ export function AgentAutonomyAdvancedSection({ controller }: { controller: Agent
   } = controller
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h3 className="text-sm font-semibold text-strong">Compensation limits</h3>
-        <p className="text-xs text-faint mt-0.5 leading-relaxed">
-          Override the caps that come with your trust level. Leave blank to use the tier default.
-        </p>
-      </div>
+    <>
+      <SettingsTile label="Compensation limits">
+        <div className="space-y-4">
+          <p>Override the caps that come with your trust level. Leave blank to use the tier default.</p>
+          <div className="space-y-1.5">
+            <MoneyInput
+              label="Largest single compensation"
+              hint="leave blank for no limit"
+              aria-label="Largest single compensation"
+              value={maxRefundInput}
+              onValueChange={(value) => {
+                markExplicit("maxRefundAmount")
+                setMaxRefundInput(value)
+              }}
+              placeholder="e.g. 50"
+              description="Caps each exact full refund or explicitly requested gift card."
+            />
+            <OverrideHint
+              path="maxRefundAmount"
+              tier={autonomyTier}
+              payload={payload}
+              explicitOverrideSet={explicitOverrideSet}
+              onReset={resetAutonomyOverride}
+            />
+          </div>
+          <MoneyInput
+            label="Daily compensation limit"
+            hint="leave blank for no limit"
+            aria-label="Daily compensation limit"
+            value={dailyRefundCapInput}
+            onValueChange={setDailyRefundCapInput}
+            placeholder="e.g. 200"
+            description="Total the agent can issue per day across exact full refunds and gift cards."
+          />
+        </div>
+      </SettingsTile>
 
-      <div className="space-y-1.5">
-        <MoneyInput
-          label="Largest single compensation"
-          hint="leave blank for no limit"
-          aria-label="Largest single compensation"
-          value={maxRefundInput}
-          onValueChange={value => {
-            markExplicit("maxRefundAmount")
-            setMaxRefundInput(value)
-          }}
-          placeholder="e.g. 50"
-          description="Caps each exact full refund or explicitly requested gift card."
-        />
-        <OverrideHint
-          path="maxRefundAmount"
-          tier={autonomyTier}
-          payload={payload}
-          explicitOverrideSet={explicitOverrideSet}
-          onReset={resetAutonomyOverride}
-        />
-      </div>
-
-      <MoneyInput
-        label="Daily compensation limit"
-        hint="leave blank for no limit"
-        aria-label="Daily compensation limit"
-        value={dailyRefundCapInput}
-        onValueChange={setDailyRefundCapInput}
-        placeholder="e.g. 200"
-        description="Total the agent can issue per day across exact full refunds and gift cards."
-      />
-
-      <div className="space-y-1 border-t border-foreground/[0.06] pt-5">
-        <ToggleRow
-          label="Block order cancellations"
-          description="Prevent the agent from cancelling orders. Cancellations will require manual handling."
-          checked={settingsState.blockCancellations}
-          onChange={v => setAutonomyOverride("blockCancellations", v)}
-        />
-        <OverrideHint
-          path="blockCancellations"
-          tier={autonomyTier}
-          payload={payload}
-          explicitOverrideSet={explicitOverrideSet}
-          onReset={resetAutonomyOverride}
-        />
-      </div>
-    </div>
+      <SettingsTile
+        label="Block order cancellations"
+        action={
+          <Switch
+            checked={settingsState.blockCancellations}
+            onChange={(value) => setAutonomyOverride("blockCancellations", value)}
+            ariaLabel="Block order cancellations"
+          />
+        }
+      >
+        <div className="space-y-1.5">
+          <p>Prevent the agent from cancelling orders. Cancellations will require manual handling.</p>
+          <OverrideHint
+            path="blockCancellations"
+            tier={autonomyTier}
+            payload={payload}
+            explicitOverrideSet={explicitOverrideSet}
+            onReset={resetAutonomyOverride}
+          />
+        </div>
+      </SettingsTile>
+    </>
   )
 }

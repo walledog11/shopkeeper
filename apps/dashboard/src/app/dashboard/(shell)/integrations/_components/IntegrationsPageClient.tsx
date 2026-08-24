@@ -333,7 +333,7 @@ function IntegrationsPageContent({
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto">
-        <div className={cn(dashboardChromeColumnClassName(), "space-y-6 py-6 md:pt-16")}>
+        <div className={cn(dashboardChromeColumnClassName(), "space-y-6 py-6 md:pt-0")}>
           {!isAdmin ? (
             <div className="flex items-center gap-3 rounded-lg border border-foreground/[0.10] bg-foreground/[0.03] px-4 py-3 text-sm text-muted-foreground">
               <Info className="size-4 shrink-0" />

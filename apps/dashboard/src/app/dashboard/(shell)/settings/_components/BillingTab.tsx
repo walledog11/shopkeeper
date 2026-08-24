@@ -5,16 +5,18 @@ import useSWR from "swr"
 import { useOrganization } from "@clerk/nextjs"
 import { fetcher } from "@/lib/api/fetcher"
 import { Button } from "@/components/ui/button"
-import { SettingsDisclosure } from "@/components/settings-form/shared"
 import { formatUnixDate } from "@/lib/format/date"
 import { CreditCard, Loader2, ExternalLink, CheckCircle2, AlertTriangle, XCircle, Clock } from "lucide-react"
-import { Pulse } from "@/app/dashboard/_components/skeletons"
+import { Pulse } from "@/app/dashboard/_components/skeletons/Pulse"
+import { GLASS_SETTINGS_ACTION, SOLID_SETTINGS_TILE } from "@/lib/ui/glass-card-styles"
+import { cn } from "@/lib/ui/cn"
+import { SettingsTile } from "./SettingsTile"
 
 interface BillingInfo {
-  status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'none'
+  status: "active" | "trialing" | "past_due" | "canceled" | "none"
   planName: string | null
   amount: number | null
-  interval: 'month' | 'year' | null
+  interval: "month" | "year" | null
   trialEnd: number | null
   nextInvoice: { date: number; amount: number } | null
   paymentMethod: { brand: string; last4: string } | null
@@ -22,11 +24,11 @@ interface BillingInfo {
 }
 
 const STATUS_CONFIG = {
-  active:   { label: 'Active',   icon: CheckCircle2,    className: 'text-green-600 bg-green-600/10 border-green-600/20' },
-  trialing: { label: 'Trial',    icon: Clock,           className: 'text-blue-600 bg-blue-600/10 border-blue-600/20' },
-  past_due: { label: 'Past due', icon: AlertTriangle,   className: 'text-amber-600 bg-amber-600/10 border-amber-600/20' },
-  canceled: { label: 'Canceled', icon: XCircle,         className: 'text-faint bg-foreground/[0.06] border-foreground/[0.10]' },
-  none:     { label: 'Free',     icon: CheckCircle2,    className: 'text-faint bg-foreground/[0.06] border-foreground/[0.10]' },
+  active: { label: "Active", icon: CheckCircle2, className: "text-green-600 bg-green-600/10 border-green-600/20" },
+  trialing: { label: "Trial", icon: Clock, className: "text-blue-600 bg-blue-600/10 border-blue-600/20" },
+  past_due: { label: "Past due", icon: AlertTriangle, className: "text-amber-600 bg-amber-600/10 border-amber-600/20" },
+  canceled: { label: "Canceled", icon: XCircle, className: "text-faint bg-foreground/[0.06] border-foreground/[0.10]" },
+  none: { label: "Free", icon: CheckCircle2, className: "text-faint bg-foreground/[0.06] border-foreground/[0.10]" },
 }
 
 function formatAmount(cents: number) {
@@ -36,28 +38,29 @@ function formatAmount(cents: number) {
 function CardBrandIcon({ brand }: { brand: string }) {
   const label = brand.charAt(0).toUpperCase() + brand.slice(1)
   return (
-    <span className="inline-flex items-center gap-1 rounded bg-foreground/[0.06] px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+    <span className="inline-flex items-center gap-1 rounded-md bg-foreground/[0.06] px-2 py-0.5 text-xs font-semibold text-muted-foreground">
       {label}
     </span>
   )
 }
 
 async function openBillingPortal() {
-  const res = await fetch('/api/billing/portal', { method: 'POST' })
+  const res = await fetch("/api/billing/portal", { method: "POST" })
   if (!res.ok) return
   const { url } = await res.json()
   window.location.href = url
 }
 
 const PLANS = [
-  { tier: 'starter', name: 'Starter', price: '$19', blurb: 'Unified inbox and AI drafts on every reply.' },
-  { tier: 'pro', name: 'Pro', price: '$49', blurb: 'Adds Shopify actions and approvals from your phone.' },
+  { tier: "starter", name: "Starter", price: "$19", blurb: "Unified inbox and AI drafts on every reply." },
+  { tier: "pro", name: "Pro", price: "$49", blurb: "Adds Shopify actions and approvals from your phone." },
 ] as const
 
-// The Stripe portal can only manage a subscription that already exists, so a
-// workspace with no plan needs checkout instead.
+const settingsPrimaryButtonClass =
+  "w-full bg-[#2b2118] text-[#f6f2eb] hover:bg-[#1a120c] sm:w-auto"
+
 function PlanPicker() {
-  const [tier, setTier] = useState<(typeof PLANS)[number]['tier']>('pro')
+  const [tier, setTier] = useState<(typeof PLANS)[number]["tier"]>("pro")
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -65,9 +68,9 @@ function PlanPicker() {
     setStarting(true)
     setError(null)
     try {
-      const res = await fetch('/api/billing/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/billing/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tier }),
       })
       const body = await res.json().catch(() => null)
@@ -75,108 +78,107 @@ function PlanPicker() {
         window.location.href = body.url
         return
       }
-      setError(body?.error ?? 'Could not start checkout. Try again in a moment.')
+      setError(body?.error ?? "Could not start checkout. Try again in a moment.")
     } catch {
-      setError('Could not start checkout. Try again in a moment.')
+      setError("Could not start checkout. Try again in a moment.")
     }
     setStarting(false)
   }
 
   return (
-    <div className="bg-card rounded-xl border border-border overflow-hidden">
-      <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-4 sm:gap-8 p-5 sm:p-6">
-        <div>
-          <h2 className="text-sm font-semibold text-strong">Choose a plan</h2>
-          <p className="text-xs text-faint mt-1 leading-relaxed">Every plan starts with 14 days free.</p>
-        </div>
-        <div className="space-y-4">
-          <div role="radiogroup" aria-label="Plan" className="space-y-2.5">
-            {PLANS.map(plan => {
-              const selected = plan.tier === tier
-              return (
-                <button
-                  key={plan.tier}
-                  type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  onClick={() => setTier(plan.tier)}
-                  className={`flex w-full items-start gap-3 rounded-lg border px-4 py-3 text-left transition-colors ${
-                    selected
-                      ? 'border-foreground/[0.28] bg-foreground/[0.04]'
-                      : 'border-foreground/[0.10] hover:bg-foreground/[0.02]'
-                  }`}
+    <SettingsTile
+      label="Choose a plan"
+      action={
+        <Button
+          type="button"
+          onClick={startCheckout}
+          disabled={starting}
+          className={settingsPrimaryButtonClass}
+        >
+          {starting ? <Loader2 className="size-4 animate-spin" /> : "Start free trial"}
+        </Button>
+      }
+    >
+      <div className="space-y-3">
+        <p>Every plan starts with 14 days free.</p>
+        <div role="radiogroup" aria-label="Plan" className="space-y-2">
+          {PLANS.map((plan) => {
+            const selected = plan.tier === tier
+            return (
+              <button
+                key={plan.tier}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() => setTier(plan.tier)}
+                className={cn(
+                  "flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left transition-colors",
+                  selected
+                    ? "border-foreground/[0.28] bg-foreground/[0.04]"
+                    : "border-foreground/[0.10] hover:bg-foreground/[0.02]",
+                )}
+              >
+                <span
+                  aria-hidden
+                  className={cn(
+                    "mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border",
+                    selected ? "border-foreground/60" : "border-foreground/25",
+                  )}
                 >
-                  <span
-                    aria-hidden
-                    className={`mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border ${
-                      selected ? 'border-foreground/60' : 'border-foreground/25'
-                    }`}
-                  >
-                    {selected && <span className="size-2 rounded-full bg-foreground/70" />}
+                  {selected ? <span className="size-2 rounded-full bg-foreground/70" /> : null}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-baseline gap-2">
+                    <span className="text-sm font-semibold text-strong">{plan.name}</span>
+                    <span className="text-xs text-faint">{plan.price}/mo</span>
                   </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-baseline gap-2">
-                      <span className="text-sm font-semibold text-strong">{plan.name}</span>
-                      <span className="text-xs text-faint">{plan.price}/mo</span>
-                    </span>
-                    <span className="mt-0.5 block text-xs leading-relaxed text-faint">{plan.blurb}</span>
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-
-          {error && (
-            <p className="flex items-start gap-2 text-xs text-red-600">
-              <AlertTriangle className="mt-px size-3.5 shrink-0" />
-              {error}
-            </p>
-          )}
-
-          <Button
-            size="sm"
-            onClick={startCheckout}
-            disabled={starting}
-            className="h-8 px-4 bg-foreground/[0.12] text-foreground hover:bg-foreground/[0.18] text-xs font-semibold disabled:opacity-40"
-          >
-            {starting ? <Loader2 className="size-3.5 animate-spin" /> : 'Start free trial'}
-          </Button>
+                  <span className="mt-0.5 block text-xs leading-relaxed">{plan.blurb}</span>
+                </span>
+              </button>
+            )
+          })}
         </div>
+        {error ? (
+          <p className="flex items-start gap-2 text-xs text-red-600">
+            <AlertTriangle className="mt-px size-3.5 shrink-0" />
+            {error}
+          </p>
+        ) : null}
       </div>
+    </SettingsTile>
+  )
+}
+
+function BillingSkeleton() {
+  return (
+    <div id="billing" className="flex flex-col gap-4 scroll-mt-6" aria-busy="true" aria-label="Loading billing">
+      {Array.from({ length: 3 }, (_, index) => (
+        <div key={index} className={cn(SOLID_SETTINGS_TILE, "space-y-2")}>
+          <Pulse className="h-4 w-28 rounded-md" />
+          <Pulse className="h-4 w-2/3 rounded-md bg-foreground/[0.05]" />
+        </div>
+      ))}
     </div>
   )
 }
 
 export default function BillingTab() {
-  const { data, isLoading, error } = useSWR<BillingInfo>('/api/billing', fetcher)
+  const { data, isLoading, error } = useSWR<BillingInfo>("/api/billing", fetcher)
   // Billing state stays readable for everyone; only admins can open the Stripe
   // portal, which is what the server enforces.
   const { membership } = useOrganization()
-  const isAdmin = membership?.role === 'org:admin'
+  const isAdmin = membership?.role === "org:admin"
 
   if (isLoading) {
-    return (
-      <div id="billing" className="scroll-mt-6 space-y-6" aria-busy="true" aria-label="Loading billing">
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
-          <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-[180px_1fr] sm:gap-8 sm:p-6">
-            <div className="space-y-2">
-              <Pulse className="h-4 w-16 rounded-md" />
-              <Pulse className="h-3 w-full rounded-md bg-foreground/[0.05]" />
-            </div>
-            <div className="space-y-4">
-              <Pulse className="h-5 w-24 rounded-md" />
-              <Pulse className="h-10 w-full rounded-lg" />
-              <Pulse className="h-24 w-full rounded-lg bg-foreground/[0.05]" />
-            </div>
-          </div>
-        </div>
-      </div>
-    )
+    return <BillingSkeleton />
   }
 
   if (error || !data) {
     return (
-      <div id="billing" className="flex items-center gap-2 rounded-xl border border-border bg-card px-5 py-6 text-sm text-red-600 sm:px-6">
+      <div
+        id="billing"
+        className={cn(SOLID_SETTINGS_TILE, "flex scroll-mt-6 items-center gap-2 text-sm text-red-600")}
+      >
         <AlertTriangle className="size-4 shrink-0" />
         Failed to load billing information.
       </div>
@@ -185,138 +187,126 @@ export default function BillingTab() {
 
   const statusCfg = STATUS_CONFIG[data.status] ?? STATUS_CONFIG.none
   const StatusIcon = statusCfg.icon
-  const isActive = data.status === 'active' || data.status === 'trialing'
+  const isActive = data.status === "active" || data.status === "trialing"
   const trialDaysLeft = data.trialEnd
     ? Math.max(0, Math.ceil((data.trialEnd * 1000 - Date.now()) / 86400000))
     : null
 
   return (
-    <div id="billing" className="scroll-mt-6 space-y-6">
-      <div className="bg-card rounded-xl border border-border overflow-hidden">
-        <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-4 sm:gap-8 p-5 sm:p-6">
-          <div>
-            <h2 className="text-sm font-semibold text-strong">Billing</h2>
-            <p className="text-xs text-faint mt-1 leading-relaxed">Plan, payment method, and invoices for this workspace.</p>
-          </div>
-          <div className="space-y-5">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-bold text-strong">
-                    {data.planName ?? (isActive ? 'Pro' : 'Free')}
-                  </p>
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${statusCfg.className}`}>
-                    <StatusIcon className="size-3" />
-                    {statusCfg.label}
-                  </span>
-                </div>
-                {data.amount !== null && data.interval && (
-                  <p className="text-xs text-faint">
-                    {formatAmount(data.amount)} / {data.interval}
-                  </p>
-                )}
-                {data.status === 'trialing' && trialDaysLeft !== null && (
-                  <p className="text-xs text-blue-600 font-medium">
-                    {trialDaysLeft} day{trialDaysLeft !== 1 ? 's' : ''} left in trial
-                  </p>
-                )}
-                {data.nextInvoice && isActive && (
-                  <p className="text-xs text-faint">
-                    Next invoice {formatAmount(data.nextInvoice.amount)} on {formatUnixDate(data.nextInvoice.date)}
-                  </p>
-                )}
-              </div>
-              {isAdmin && isActive && (
-                <Button
-                  size="sm"
-                  onClick={openBillingPortal}
-                  className="h-8 px-4 bg-foreground/[0.12] text-foreground hover:bg-foreground/[0.18] text-xs font-semibold shrink-0"
-                >
-                  Manage plan
-                </Button>
-              )}
-            </div>
-
-            <div className="flex items-center justify-between gap-4 border-t border-foreground/[0.06] pt-4">
-              {data.paymentMethod ? (
-                <div className="flex items-center gap-2.5">
-                  <CreditCard className="size-4 text-faint shrink-0" />
-                  <CardBrandIcon brand={data.paymentMethod.brand} />
-                  <span className="text-sm text-strong">ending in <span className="font-semibold text-strong">{data.paymentMethod.last4}</span></span>
-                </div>
-              ) : (
-                <p className="text-sm text-faint italic">No payment method on file</p>
-              )}
-              {isAdmin && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={openBillingPortal}
-                  className="h-8 px-3 text-xs font-semibold border-foreground/[0.10] text-muted-foreground hover:bg-foreground/[0.08] shrink-0"
-                >
-                  {data.paymentMethod ? 'Update card' : 'Add card'}
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {isAdmin && !isActive && <PlanPicker />}
-
-      <SettingsDisclosure
-        title="Invoice history"
-        description="Download receipts and past invoice PDFs."
+    <div id="billing" className="flex flex-col gap-4 scroll-mt-6">
+      <SettingsTile
+        label="Plan"
+        action={
+          isAdmin && isActive ? (
+            <Button type="button" variant="outline" onClick={openBillingPortal} className={GLASS_SETTINGS_ACTION}>
+              Manage plan
+            </Button>
+          ) : null
+        }
       >
-        {data.invoices.length === 0 ? (
-          <div className="py-4 text-center text-xs text-muted-foreground">No invoices yet.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-foreground/[0.08]">
-                  <th className="py-3 pr-5 text-left text-xs font-semibold uppercase tracking-wide text-faint">Date</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-faint">Amount</th>
-                  <th className="hidden px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-faint sm:table-cell">Status</th>
-                  <th className="py-3 pl-5 text-right text-xs font-semibold uppercase tracking-wide text-faint">PDF</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-foreground/[0.06]">
-                {data.invoices.map(inv => (
-                  <tr key={inv.id} className="transition-colors hover:bg-foreground/[0.02]">
-                    <td className="py-3.5 pr-5 text-muted-foreground">{formatUnixDate(inv.date)}</td>
-                    <td className="px-5 py-3.5 font-medium text-strong">{formatAmount(inv.amount)}</td>
-                    <td className="hidden px-5 py-3.5 sm:table-cell">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${
-                        inv.status === 'paid'
-                          ? 'text-green-600 bg-green-600/10 border-green-600/20'
-                          : 'text-faint bg-foreground/[0.06] border-foreground/[0.10]'
-                      }`}>
-                        {inv.status ?? '—'}
-                      </span>
-                    </td>
-                    <td className="py-3.5 pl-5 text-right">
-                      {inv.pdfUrl ? (
-                        <a
-                          href={inv.pdfUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground transition-colors hover:text-strong"
-                        >
-                          Download <ExternalLink className="size-3" />
-                        </a>
-                      ) : (
-                        <span className="text-xs text-faint">—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="space-y-1.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-semibold text-strong">
+              {data.planName ?? (isActive ? "Pro" : "Free")}
+            </p>
+            <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold ${statusCfg.className}`}>
+              <StatusIcon className="size-3" />
+              {statusCfg.label}
+            </span>
           </div>
-        )}
-      </SettingsDisclosure>
+          {data.amount !== null && data.interval ? (
+            <p>{formatAmount(data.amount)} / {data.interval}</p>
+          ) : null}
+          {data.status === "trialing" && trialDaysLeft !== null ? (
+            <p className="font-medium text-blue-600">
+              {trialDaysLeft} day{trialDaysLeft !== 1 ? "s" : ""} left in trial
+            </p>
+          ) : null}
+          {data.nextInvoice && isActive ? (
+            <p>
+              Next invoice {formatAmount(data.nextInvoice.amount)} on {formatUnixDate(data.nextInvoice.date)}
+            </p>
+          ) : null}
+        </div>
+      </SettingsTile>
 
+      <SettingsTile
+        label="Payment method"
+        action={
+          isAdmin ? (
+            <Button type="button" variant="outline" onClick={openBillingPortal} className={GLASS_SETTINGS_ACTION}>
+              {data.paymentMethod ? "Update card" : "Add card"}
+            </Button>
+          ) : null
+        }
+      >
+        {data.paymentMethod ? (
+          <div className="flex items-center gap-2.5">
+            <CreditCard className="size-4 shrink-0 text-faint" />
+            <CardBrandIcon brand={data.paymentMethod.brand} />
+            <span>
+              ending in <span className="font-semibold text-strong">{data.paymentMethod.last4}</span>
+            </span>
+          </div>
+        ) : (
+          "No payment method on file"
+        )}
+      </SettingsTile>
+
+      {isAdmin && !isActive ? <PlanPicker /> : null}
+
+      <SettingsTile label="Invoice history">
+        <div className="space-y-3">
+          <p>Download receipts and past invoice PDFs.</p>
+          {data.invoices.length === 0 ? (
+            <p>No invoices yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-foreground/[0.08]">
+                    <th className="py-3 pr-5 text-left text-xs font-semibold uppercase tracking-wide text-faint">Date</th>
+                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-faint">Amount</th>
+                    <th className="hidden px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-faint sm:table-cell">Status</th>
+                    <th className="py-3 pl-5 text-right text-xs font-semibold uppercase tracking-wide text-faint">PDF</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-foreground/[0.06]">
+                  {data.invoices.map((inv) => (
+                    <tr key={inv.id} className="transition-colors hover:bg-foreground/[0.02]">
+                      <td className="py-3.5 pr-5">{formatUnixDate(inv.date)}</td>
+                      <td className="px-5 py-3.5 font-medium text-strong">{formatAmount(inv.amount)}</td>
+                      <td className="hidden px-5 py-3.5 sm:table-cell">
+                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${
+                          inv.status === "paid"
+                            ? "border-green-600/20 bg-green-600/10 text-green-600"
+                            : "border-foreground/[0.10] bg-foreground/[0.06] text-faint"
+                        }`}>
+                          {inv.status ?? "—"}
+                        </span>
+                      </td>
+                      <td className="py-3.5 pl-5 text-right">
+                        {inv.pdfUrl ? (
+                          <a
+                            href={inv.pdfUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground transition-colors hover:text-strong"
+                          >
+                            Download <ExternalLink className="size-3" />
+                          </a>
+                        ) : (
+                          <span className="text-xs text-faint">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </SettingsTile>
     </div>
   )
 }

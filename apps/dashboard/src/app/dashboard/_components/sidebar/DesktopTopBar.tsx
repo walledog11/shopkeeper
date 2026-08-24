@@ -108,56 +108,61 @@ export function DesktopTopBar({
   const shopIsActive = isRouteActive(pathname, shopNavItem.href);
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-40 hidden md:block">
-      <div className={cn(
-        "mx-auto flex w-full items-center gap-3 px-5 pt-2 md:px-6 lg:px-8",
-        dashboardChromeMaxWidthClass,
-      )}>
-        <div className={cn(desktopTopBarUtilityPillClass, "pointer-events-auto shrink-0 px-3")}>
-          <Logo iconOnly inPill />
-        </div>
+    <div className="pointer-events-none relative z-40 hidden shrink-0 md:block mb-6">
+      <div aria-hidden className="pt-2">
+        <div className="h-12" />
+      </div>
+      <div className="absolute inset-x-0 top-0">
+        <div className={cn(
+          "mx-auto flex w-full items-center gap-3 px-5 pt-2 md:px-6 lg:px-8",
+          dashboardChromeMaxWidthClass,
+        )}>
+          <div className={cn(desktopTopBarUtilityPillClass, "pointer-events-auto shrink-0 px-3")}>
+            <Logo iconOnly inPill />
+          </div>
 
-        <nav
-          data-dashboard-desktop-header
-          aria-label="Dashboard"
-          className={cn(desktopTopBarPillClass, "pointer-events-auto gap-1 px-4 shrink-0")}
-        >
-          <Link
-            href={inboxNavItem.href}
-            onClick={(e) => handleNavClick(e, inboxIsActive)}
-            {...dashboardNavPrefetchHandlers(prefetchNav, inboxNavItem.href)}
-            className={topBarNavTriggerClass(inboxIsActive)}
+          <nav
+            data-dashboard-desktop-header
+            aria-label="Dashboard"
+            className={cn(desktopTopBarPillClass, "pointer-events-auto gap-1 px-4 shrink-0")}
           >
-            <span>{inboxNavItem.name}</span>
-          </Link>
+            <Link
+              href={inboxNavItem.href}
+              onClick={(e) => handleNavClick(e, inboxIsActive)}
+              {...dashboardNavPrefetchHandlers(prefetchNav, inboxNavItem.href)}
+              className={topBarNavTriggerClass(inboxIsActive)}
+            >
+              <span>{inboxNavItem.name}</span>
+            </Link>
 
-          <Link
-            href={shopNavItem.href}
-            onClick={(e) => handleNavClick(e, shopIsActive)}
-            {...dashboardNavPrefetchHandlers(prefetchNav, shopNavItem.href)}
-            className={topBarNavTriggerClass(shopIsActive)}
-          >
-            <span>{shopNavItem.name}</span>
-          </Link>
+            <Link
+              href={shopNavItem.href}
+              onClick={(e) => handleNavClick(e, shopIsActive)}
+              {...dashboardNavPrefetchHandlers(prefetchNav, shopNavItem.href)}
+              className={topBarNavTriggerClass(shopIsActive)}
+            >
+              <span>{shopNavItem.name}</span>
+            </Link>
 
-          {topBarDropdowns.map(({ label, items }) => (
-            <NavDropdown
-              key={label}
-              label={label}
-              items={items}
-              onNavigate={handleNavClick}
-              prefetchNav={prefetchNav}
-            />
-          ))}
-        </nav>
+            {topBarDropdowns.map(({ label, items }) => (
+              <NavDropdown
+                key={label}
+                label={label}
+                items={items}
+                onNavigate={handleNavClick}
+                prefetchNav={prefetchNav}
+              />
+            ))}
+          </nav>
 
-        <div className="pointer-events-auto min-w-0 flex-1">
-          <HeaderSearch />
-        </div>
+          <div className="pointer-events-auto min-w-0 flex-1">
+            <HeaderSearch />
+          </div>
 
-        <div className="pointer-events-auto flex shrink-0 items-center gap-3">
-          <OrganizationNavPill navAuth={navAuth} onSwitching={onSwitching} variant="topBar" />
-          <AccountNavPill navAuth={navAuth} variant="topBar" />
+          <div className="pointer-events-auto flex shrink-0 items-center gap-3">
+            <OrganizationNavPill navAuth={navAuth} onSwitching={onSwitching} variant="topBar" />
+            <AccountNavPill navAuth={navAuth} variant="topBar" />
+          </div>
         </div>
       </div>
     </div>

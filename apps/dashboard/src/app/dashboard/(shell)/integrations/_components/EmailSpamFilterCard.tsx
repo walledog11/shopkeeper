@@ -5,6 +5,7 @@ import { useOrganization } from "@clerk/nextjs"
 import { ToggleRow } from "@/components/settings-form/shared"
 import { useOrg } from "@/hooks/useOrg"
 import { patchSpamFilterEnabled } from "@/lib/org/org-requests"
+import { SOLID_SETTINGS_TILE } from "@/lib/ui/glass-card-styles"
 
 export function EmailSpamFilterCard() {
   const { membership } = useOrganization()
@@ -42,7 +43,7 @@ export function EmailSpamFilterCard() {
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card px-5 py-5">
+    <div className={SOLID_SETTINGS_TILE}>
       <ToggleRow
         label="Filter spam emails"
         description="When on, filtered emails are hidden from your inbox and purged after 7 days unless you recover them."

@@ -7,7 +7,7 @@ import ConciergeBriefing from "./ConciergeBriefing"
 import NeedsYou from "./NeedsYou"
 import ClearedOvernight from "./ClearedOvernight"
 import { HomePageSkeleton } from "@/app/dashboard/_components/skeletons"
-import { dashboardChromeMaxWidthClass, desktopTopBarScrollClearanceClass } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
+import { dashboardChromeMaxWidthClass } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
 import { cn } from "@/lib/ui/cn"
 import type { HomeChannelState, HomeSummary } from "@/lib/home/summary-contract"
 import { useHomeData } from "./useHomeData"
@@ -47,8 +47,7 @@ export default function DashboardHomeClient({
     <div className="@container h-full flex flex-col overflow-hidden bg-background">
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <div className={cn(
-          "flex flex-col min-h-full w-full mx-auto px-5 md:px-6 lg:px-8 pt-2 pb-4 gap-3",
-          desktopTopBarScrollClearanceClass,
+          "flex flex-col min-h-full w-full mx-auto px-5 md:px-6 lg:px-8 pt-2 pb-4 gap-3 md:pt-0",
           dashboardChromeMaxWidthClass,
         )}>
           <WorkflowSetupBanner

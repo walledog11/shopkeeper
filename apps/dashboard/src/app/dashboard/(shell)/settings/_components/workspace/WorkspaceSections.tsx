@@ -9,7 +9,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { SettingsDisclosure } from "@/components/settings-form/shared"
+import {
+  GLASS_SETTINGS_ACTION,
+  GLASS_SETTINGS_ACTION_DANGER,
+} from "@/lib/ui/glass-card-styles"
+import { SettingsTile, settingsFieldClassName } from "../SettingsTile"
 import type { WorkspaceTabProps, WorkspaceTabState } from "./useWorkspaceTabState"
 
 interface WorkspaceTabViewProps extends WorkspaceTabProps {
@@ -18,50 +22,52 @@ interface WorkspaceTabViewProps extends WorkspaceTabProps {
 
 export function WorkspaceTabView({ orgName, state }: WorkspaceTabViewProps) {
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-4">
       <DataPrivacySection state={state} />
       {/* Both danger-zone actions are admin-only server-side, so members are not
           shown a section where every button would come back 403. */}
-      {state.isAdmin && <DangerZone orgName={orgName} state={state} />}
+      {state.isAdmin ? <DangerZone orgName={orgName} state={state} /> : null}
+      <ClearTicketsDialog state={state} />
       <DeleteWorkspaceDialog orgName={orgName} state={state} />
     </div>
   )
 }
 
+function DataPrivacySection({ state }: { state: WorkspaceTabState }) {
+  return (
+    <>
+      <DataExportSection state={state} />
+      <GdprExportSection state={state} />
+    </>
+  )
+}
+
 function DataExportSection({ state }: { state: WorkspaceTabState }) {
-  const {
-    exportData,
-    exportError,
-    exporting,
-  } = state
+  const { exportData, exportError, exporting } = state
 
   return (
-    <div className="space-y-3">
-      <div>
-        <h3 className="text-sm font-semibold text-strong">Data export</h3>
-        <p className="mt-1 max-w-prose text-xs leading-relaxed text-faint">
-          Download a JSON snapshot of all customers, tickets, messages, and memory.
-        </p>
-      </div>
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-        <p className="text-xs text-faint max-w-md">
-          Useful for backups or migrating off Shopkeeper. Doesn&apos;t include integration tokens, billing data, or audit logs.
-        </p>
-        <div className="flex items-center gap-2 shrink-0">
-          {exportError && <p className="text-xs text-red-600">{exportError}</p>}
+    <SettingsTile
+      id="privacy"
+      label="Data export"
+      action={
+        <div className="flex w-full flex-col items-stretch gap-1 sm:items-start">
           <Button
+            type="button"
             variant="outline"
-            size="sm"
             onClick={exportData}
             disabled={exporting}
-            className="h-8 text-xs font-semibold border-foreground/[0.10] text-muted-foreground hover:bg-foreground/[0.08]"
+            className={GLASS_SETTINGS_ACTION}
           >
-            {exporting ? <Loader2 className="size-3 animate-spin" /> : <Download className="size-3" />}
+            {exporting ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
             Export JSON
           </Button>
+          {exportError ? <p className="text-xs text-red-600">{exportError}</p> : null}
         </div>
-      </div>
-    </div>
+      }
+    >
+      Download a JSON snapshot of all customers, tickets, messages, and memory. Useful for backups
+      or migrating off Shopkeeper. Doesn&apos;t include integration tokens, billing data, or audit logs.
+    </SettingsTile>
   )
 }
 
@@ -75,55 +81,38 @@ function GdprExportSection({ state }: { state: WorkspaceTabState }) {
   } = state
 
   return (
-    <div className="space-y-3 border-t border-foreground/[0.06] pt-5">
-      <div>
-        <h3 className="text-sm font-semibold text-strong">Customer data export</h3>
-        <p className="mt-1 max-w-prose text-xs leading-relaxed text-faint">
-          Download all support tickets and profile data for one customer as JSON.
-        </p>
-      </div>
+    <SettingsTile
+      label="Customer data export"
+      action={
+        <Button
+          type="button"
+          variant="outline"
+          onClick={exportGdprData}
+          disabled={gdprExporting || !gdprEmail.trim()}
+          className={GLASS_SETTINGS_ACTION}
+        >
+          {gdprExporting ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+          Export data
+        </Button>
+      }
+    >
       <div className="space-y-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <Input
-            aria-label="Customer email for data export"
-            type="email"
-            value={gdprEmail}
-            onChange={e => setGdprEmail(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && exportGdprData()}
-            placeholder="customer@example.com"
-            className="h-9 flex-1 min-w-48 text-sm bg-foreground/[0.06] border-foreground/[0.12] text-strong placeholder:text-faint"
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={exportGdprData}
-            disabled={gdprExporting || !gdprEmail.trim()}
-            className="h-8 text-xs font-semibold border-foreground/[0.10] text-muted-foreground hover:bg-foreground/[0.08] shrink-0"
-          >
-            {gdprExporting ? <Loader2 className="size-3 animate-spin" /> : <Download className="size-3" />}
-            Export data
-          </Button>
-        </div>
-        {gdprError && <p className="text-xs text-red-600">{gdprError}</p>}
-        <p className="text-xs text-faint">
+        <p>Download all support tickets and profile data for one customer as JSON.</p>
+        <Input
+          aria-label="Customer email for data export"
+          type="email"
+          value={gdprEmail}
+          onChange={(event) => setGdprEmail(event.target.value)}
+          onKeyDown={(event) => event.key === "Enter" && exportGdprData()}
+          placeholder="customer@example.com"
+          className={settingsFieldClassName}
+        />
+        {gdprError ? <p className="text-xs text-red-600">{gdprError}</p> : null}
+        <p className="text-xs">
           Message data is retained for 90 days, then archived. Archived threads are purged after another 90 days.
         </p>
       </div>
-    </div>
-  )
-}
-
-function DataPrivacySection({ state }: { state: WorkspaceTabState }) {
-  return (
-    <div id="privacy" className="scroll-mt-6">
-      <SettingsDisclosure
-        title="Data & privacy"
-        description="Exports for backups, GDPR requests, and compliance."
-      >
-        <DataExportSection state={state} />
-        <GdprExportSection state={state} />
-      </SettingsDisclosure>
-    </div>
+    </SettingsTile>
   )
 }
 
@@ -131,10 +120,6 @@ function DangerZone({ orgName, state }: { orgName: string; state: WorkspaceTabSt
   const {
     clearError,
     clearSuccess,
-    clearTickets,
-    clearing,
-    confirmClear,
-    isAdmin,
     isOnlyWorkspace,
     setConfirmClear,
     setDeleteConfirmName,
@@ -143,84 +128,112 @@ function DangerZone({ orgName, state }: { orgName: string; state: WorkspaceTabSt
   } = state
 
   return (
-    <div id="danger" className="scroll-mt-6 rounded-md border border-red-500/20 overflow-hidden">
-      <div className="px-6 py-4 bg-red-500/[0.06] border-b border-red-500/15">
-        <h2 className="text-sm font-semibold text-red-600">Danger Zone</h2>
-        <p className="text-xs text-faint mt-0.5">These actions are permanent and cannot be undone.</p>
-      </div>
-      <div className="p-5 sm:p-6 space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
-          <div>
-            <p className="text-sm font-semibold text-strong">Clear all ticket history</p>
-            <p className="text-xs text-faint mt-0.5">Permanently deletes all threads and messages for this workspace. This affects every member of the workspace.</p>
-            {clearError && <p className="text-xs text-red-600 mt-1">{clearError}</p>}
-            {clearSuccess && <p className="text-xs text-green-600 mt-1">All ticket history has been cleared.</p>}
-          </div>
-          {confirmClear ? (
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs text-faint">Are you sure?</span>
-              <Button
-                size="sm"
-                onClick={clearTickets}
-                disabled={clearing}
-                className="h-7 px-3 bg-red-600 hover:bg-red-700 text-[#ffffff] text-xs font-semibold"
-              >
-                {clearing ? <Loader2 className="size-3 animate-spin" /> : "Yes, clear"}
-              </Button>
-              <button type="button"
-                onClick={() => setConfirmClear(false)}
-                className="text-xs text-faint hover:text-strong transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setConfirmClear(true)}
-              className="h-7 px-3 text-xs font-semibold text-red-600 border-red-500/30 bg-red-500/[0.06] hover:bg-red-500/[0.12] hover:text-red-700 self-start shrink-0"
-            >
-              Clear history
-            </Button>
-          )}
+    <>
+      <SettingsTile
+        id="danger"
+        label="Clear all ticket history"
+        action={
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setConfirmClear(true)}
+            className={GLASS_SETTINGS_ACTION_DANGER}
+          >
+            Clear history
+          </Button>
+        }
+      >
+        <div className="space-y-1.5">
+          <p>Permanently deletes all threads and messages for this workspace. This affects every member of the workspace.</p>
+          {clearError ? <p className="text-xs text-red-600">{clearError}</p> : null}
+          {clearSuccess ? <p className="text-xs text-green-600">All ticket history has been cleared.</p> : null}
         </div>
+      </SettingsTile>
 
-        {isAdmin && (
-          <div className="pt-5 border-t border-red-500/15 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
-            <div>
-              <p className="text-sm font-semibold text-strong">Delete workspace</p>
-              <p className="text-xs text-faint mt-0.5">
-                Permanently delete <span className="text-muted-foreground font-medium">{orgName}</span> and all of its data — tickets, customers, integrations, memory, and billing. Every member will lose access.
-              </p>
-              {isOnlyWorkspace && (
-                <p className="text-xs text-amber-600/80 mt-1.5">
-                  This is your only workspace. Create another workspace first, or delete your account from{" "}
-                  <a href="/dashboard/account" className="font-semibold text-muted-foreground hover:text-strong">
-                    account settings
-                  </a>{" "}
-                  above.
-                </p>
-              )}
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setDeleteConfirmName("")
-                setDeleteError(null)
-                setDeleteOpen(true)
-              }}
-              disabled={isOnlyWorkspace}
-              className="h-7 px-3 text-xs font-semibold text-red-600 border-red-500/30 bg-red-500/[0.06] hover:bg-red-500/[0.12] hover:text-red-700 self-start shrink-0"
-            >
-              <Trash2 className="size-3" />
-              Delete workspace
-            </Button>
-          </div>
-        )}
-      </div>
-    </div>
+      <SettingsTile
+        label="Delete workspace"
+        action={
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setDeleteConfirmName("")
+              setDeleteError(null)
+              setDeleteOpen(true)
+            }}
+            disabled={isOnlyWorkspace}
+            className={GLASS_SETTINGS_ACTION_DANGER}
+          >
+            <Trash2 className="size-4" />
+            Delete workspace
+          </Button>
+        }
+      >
+        <div className="space-y-1.5">
+          <p>
+            Permanently delete <span className="font-medium text-strong">{orgName}</span> and all of its
+            data — tickets, customers, integrations, memory, and billing. Every member will lose access.
+          </p>
+          {isOnlyWorkspace ? (
+            <p className="text-xs text-amber-600/80">
+              This is your only workspace. Create another workspace first, or delete your account from{" "}
+              <a href="/dashboard/account" className="font-semibold text-muted-foreground hover:text-strong">
+                account settings
+              </a>
+              .
+            </p>
+          ) : null}
+        </div>
+      </SettingsTile>
+    </>
+  )
+}
+
+function ClearTicketsDialog({ state }: { state: WorkspaceTabState }) {
+  const {
+    clearTickets,
+    clearing,
+    confirmClear,
+    setConfirmClear,
+  } = state
+
+  return (
+    <Dialog
+      open={confirmClear}
+      onOpenChange={(open) => {
+        if (clearing) return
+        setConfirmClear(open)
+      }}
+    >
+      <DialogContent className="border-foreground/10">
+        <DialogHeader>
+          <DialogTitle className="text-foreground">Clear all ticket history?</DialogTitle>
+          <DialogDescription>
+            Permanently deletes all threads and messages for this workspace. This affects every
+            member of the workspace. This cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setConfirmClear(false)}
+            disabled={clearing}
+            className="border-foreground/[0.12] text-strong hover:bg-foreground/[0.06]"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={clearTickets}
+            disabled={clearing}
+            className="bg-red-600 text-[#ffffff] hover:bg-red-700"
+          >
+            {clearing ? <Loader2 className="size-4 animate-spin" /> : "Clear history"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -257,21 +270,22 @@ function DeleteWorkspaceDialog({ orgName, state }: { orgName: string; state: Wor
         </DialogHeader>
         <div className="space-y-2">
           <span className="block text-xs font-semibold text-muted-foreground">
-            Type <span className="text-strong font-mono">{orgName}</span> to confirm
+            Type <span className="font-mono text-strong">{orgName}</span> to confirm
           </span>
           <Input
             aria-label="Confirm workspace name"
             autoFocus
             value={deleteConfirmName}
-            onChange={(e) => setDeleteConfirmName(e.target.value)}
+            onChange={(event) => setDeleteConfirmName(event.target.value)}
             placeholder={orgName}
             disabled={deleting}
-            className="h-9 text-sm bg-foreground/[0.06] border-foreground/[0.12] text-strong placeholder:text-faint"
+            className={settingsFieldClassName}
           />
-          {deleteError && <p className="text-xs text-red-600">{deleteError}</p>}
+          {deleteError ? <p className="text-xs text-red-600">{deleteError}</p> : null}
         </div>
         <DialogFooter>
           <Button
+            type="button"
             variant="outline"
             onClick={() => setDeleteOpen(false)}
             disabled={deleting}
@@ -280,9 +294,10 @@ function DeleteWorkspaceDialog({ orgName, state }: { orgName: string; state: Wor
             Cancel
           </Button>
           <Button
+            type="button"
             onClick={deleteWorkspace}
             disabled={deleting || deleteConfirmName !== orgName}
-            className="bg-red-600 hover:bg-red-700 text-[#ffffff]"
+            className="bg-red-600 text-[#ffffff] hover:bg-red-700"
           >
             {deleting ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
             Delete forever

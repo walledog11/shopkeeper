@@ -20,7 +20,7 @@ export default function ConfigurePageClient(props: Props) {
   return (
     <div className="relative flex size-full min-w-0 flex-col overflow-hidden bg-background">
       <div className="custom-scrollbar flex-1 overflow-y-auto">
-        <div className={cn(dashboardPageShellClassName(), "pb-20")}>
+        <div className={cn(dashboardPageShellClassName(), "gap-4 pb-20")}>
           <AgentTab
             settings={props.settings}
             rawSettings={props.rawSettings}

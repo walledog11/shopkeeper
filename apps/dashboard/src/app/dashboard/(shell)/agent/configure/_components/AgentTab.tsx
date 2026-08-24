@@ -34,15 +34,13 @@ export default function AgentTab(props: Props) {
   const { shopifyConnected } = props
 
   return (
-    <div className="flex w-full flex-col gap-3">
-      <div className="space-y-3">
-        <AgentIdentitySection controller={controller} />
-        <AgentAutonomySection controller={controller} />
-        <WhenOnDutySection controller={controller} />
-        {shopifyConnected && <MorningBriefingSection controller={controller} />}
-        {shopifyConnected && <ProactiveMonitoringSection controller={controller} runtimeFlags={props.runtimeFlags} />}
-        <AgentAdvancedSection controller={controller} />
-      </div>
+    <div className="flex w-full flex-col gap-4">
+      <AgentIdentitySection controller={controller} />
+      <AgentAutonomySection controller={controller} />
+      <WhenOnDutySection controller={controller} />
+      {shopifyConnected ? <MorningBriefingSection controller={controller} /> : null}
+      {shopifyConnected ? <ProactiveMonitoringSection controller={controller} runtimeFlags={props.runtimeFlags} /> : null}
+      <AgentAdvancedSection controller={controller} />
 
       <StickySaveBar controller={controller} canSave={isAdmin} />
     </div>

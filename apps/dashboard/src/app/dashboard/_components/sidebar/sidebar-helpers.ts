@@ -38,9 +38,6 @@ export const topBarIconButtonClass = cn(
 /** Shared width for desktop chrome so the top bar and main column feel like one layout. */
 export const dashboardChromeMaxWidthClass = "max-w-6xl";
 
-/** Scroll-content padding so the first control clears the floating desktop pills. */
-export const desktopTopBarScrollClearanceClass = "md:pt-16";
-
 /** Centered column that lines up with the desktop top bar. */
 export function dashboardChromeColumnClassName(className?: string) {
   return cn(
@@ -53,7 +50,7 @@ export function dashboardChromeColumnClassName(className?: string) {
 /** Centered page column — matches desktop top bar width and padding. */
 export function dashboardPageShellClassName(className?: string) {
   return cn(
-    dashboardChromeColumnClassName(cn("flex flex-col min-h-full pt-3 pb-4 gap-3", desktopTopBarScrollClearanceClass)),
+    dashboardChromeColumnClassName("flex flex-col min-h-full pt-3 pb-4 gap-3 md:pt-0"),
     className,
   );
 }
