@@ -3,7 +3,8 @@ import { fileURLToPath } from 'node:url';
 
 const KNIP_BIN = fileURLToPath(new URL('../node_modules/knip/bin/knip.js', import.meta.url));
 const WARNING_BASELINE = {
-  exports: 151,
+  // Ratcheted 151 -> 149 after deleting the Internal notes tab and Telegram UI.
+  exports: 149,
   // Ratcheted 121 -> 116 when find_customer replaced the two customer reads and
   // their input shapes stopped being a tool contract. A deletion that does not
   // move the ceiling down leaves the ceiling paying for surface nobody has.

@@ -1,4 +1,4 @@
-export interface TelegramChatStatus {
+interface TelegramChatStatus {
   chatId: string
   connectedAt: string
   displayLabel: string | null
