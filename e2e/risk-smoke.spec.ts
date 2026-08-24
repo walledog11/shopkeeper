@@ -29,7 +29,7 @@ test('browser smoke creates KB article through authenticated app APIs', async ({
   const articleTitle = `Risk KB Article ${runId}`;
 
   await page.goto('/dashboard/kb');
-  await expect(page.getByRole('textbox', { name: 'Search memory' })).toBeVisible();
+  await expect(page.getByRole('searchbox', { name: 'Search memory' })).toBeVisible();
 
   const result = await page.evaluate(async ({ kbName, articleTitle }) => {
     const kbRes = await fetch('/api/kb/bases', {

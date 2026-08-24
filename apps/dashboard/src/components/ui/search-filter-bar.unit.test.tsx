@@ -43,6 +43,7 @@ describe("SearchFilterBar", () => {
     const pill = container.querySelector('[data-testid="inbox-toggle-closed"]')
     expect(input).toBeTruthy()
     expect(input?.getAttribute("placeholder")).toBe("Search conversations")
+    expect(input?.getAttribute("aria-label")).toBe("Search conversations")
     expect(pill?.textContent).toBe("Closed")
     expect(pill?.getAttribute("aria-pressed")).toBe("false")
     expect(pill?.parentElement).not.toBe(input?.parentElement)
