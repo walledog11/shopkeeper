@@ -64,11 +64,15 @@ export const gettingStarted: Category = {
         },
         {
           heading: "Integrations",
-          text: "Connect and manage your channels here. Each card shows connection status and lets you add or remove accounts.",
+          text: "Connect and manage your channels here. Each card shows connection status and lets you add or remove accounts. Once email is connected, inbound spam filtering lives on this page too.",
         },
         {
-          heading: "Settings",
-          text: "Settings holds your account, billing, and workspace admin. Agent settings live under Agent → Settings in the top navigation.",
+          heading: "Configure",
+          text: "Agent → Configure is how {agent} writes and how much it may do on its own: store identity, trust level, hours, and voice.",
+        },
+        {
+          heading: "Workspace settings",
+          text: "Workspace → Settings holds billing, data exports, and workspace admin. Your personal login is under Account — click your avatar.",
         },
       ],
     },

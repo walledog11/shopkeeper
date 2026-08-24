@@ -4,7 +4,8 @@ import { InboxStreamLoading } from "@/app/dashboard/(shell)/tickets/_components/
 import { needsYouCardShellClassName } from "@/app/dashboard/_components/home/needs-you-card-styles"
 import { MemoryLibrarySkeleton } from "./MemoryLibrarySkeleton"
 import { Pulse } from "./Pulse"
-import { dashboardChromeColumnClassName, dashboardChromeMaxWidthClass, desktopTopBarScrollClearanceClass } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
+import { AccountSettingsSkeleton } from "./AccountSettingsSkeleton"
+import { dashboardChromeColumnClassName, dashboardChromeMaxWidthClass, dashboardPageShellClassName, desktopTopBarScrollClearanceClass } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
 import { SearchFilterBarSkeleton } from "@/components/ui/search-filter-bar"
 import { cn } from "@/lib/ui/cn"
 
@@ -181,17 +182,25 @@ export function ReviewPageSkeleton() {
   )
 }
 
-const SETTINGS_SECTION_KEYS = ["settings-account", "settings-billing", "settings-workspace"]
+export function AccountPageSkeleton() {
+  return (
+    <PageShell>
+      <div className="flex-1 overflow-y-auto">
+        <div className={cn(dashboardPageShellClassName(), "gap-6 pb-20")}>
+          <AccountSettingsSkeleton />
+        </div>
+      </div>
+    </PageShell>
+  )
+}
+
+const SETTINGS_SECTION_KEYS = ["settings-billing", "settings-workspace"]
 
 export function SettingsPageSkeleton() {
   return (
     <PageShell>
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 pb-20 sm:px-6 md:pt-16 lg:px-8">
-          <div>
-            <Pulse className="h-6 w-28 rounded-md" />
-            <Pulse className="mt-2 h-4 w-full max-w-md rounded-md bg-foreground/[0.05]" />
-          </div>
+        <div className={cn(dashboardPageShellClassName(), "gap-6 pb-20")}>
           {SETTINGS_SECTION_KEYS.map(key => (
             <div key={key} className="overflow-hidden rounded-xl border border-border bg-card">
               <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-[180px_1fr] sm:gap-8 sm:p-6">

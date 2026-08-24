@@ -11,17 +11,35 @@ describe("matchConciergeNavigationIntent", () => {
     expect(matchConciergeNavigationIntent("change trust level")).toEqual({
       type: "navigate",
       href: "/dashboard/agent/configure",
-      label: "Agent settings",
+      label: "Agent configure",
     });
     expect(matchConciergeNavigationIntent("take me to agent settings")).toEqual({
       type: "navigate",
       href: "/dashboard/agent/configure",
-      label: "Agent settings",
+      label: "Agent configure",
+    });
+  });
+
+  it("matches account and workspace settings", () => {
+    expect(matchConciergeNavigationIntent("take me to account settings")).toEqual({
+      type: "navigate",
+      href: "/dashboard/account",
+      label: "Account settings",
+    });
+    expect(matchConciergeNavigationIntent("open workspace settings")).toEqual({
+      type: "navigate",
+      href: "/dashboard/settings",
+      label: "Workspace settings",
     });
   });
 
   it("matches integration setup requests", () => {
     expect(matchConciergeNavigationIntent("I want to add a new email integration")).toEqual({
+      type: "navigate",
+      href: "/dashboard/integrations",
+      label: "Integrations",
+    });
+    expect(matchConciergeNavigationIntent("configure email")).toEqual({
       type: "navigate",
       href: "/dashboard/integrations",
       label: "Integrations",
@@ -64,7 +82,7 @@ describe("extractConciergeNavigation", () => {
     expect(extractConciergeNavigation(actions)).toEqual({
       type: "navigate",
       href: "/dashboard/agent/configure",
-      label: "Agent settings",
+      label: "Agent configure",
     });
   });
 

@@ -196,7 +196,7 @@ function DangerZone({ orgName, state }: { orgName: string; state: WorkspaceTabSt
               {isOnlyWorkspace && (
                 <p className="text-xs text-amber-600/80 mt-1.5">
                   This is your only workspace. Create another workspace first, or delete your account from{" "}
-                  <a href="#account" className="font-semibold text-muted-foreground hover:text-strong">
+                  <a href="/dashboard/account" className="font-semibold text-muted-foreground hover:text-strong">
                     account settings
                   </a>{" "}
                   above.

@@ -1,4 +1,4 @@
-import { Inbox, Settings2, Box, Cable, BrainCircuit, IdCardLanyard, Home, ScanEye, SlidersHorizontal } from "lucide-react";
+import { Inbox, Settings2, Box, Cable, BrainCircuit, IdCardLanyard, Home, ScanEye, SlidersHorizontal, User } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export interface NavItem {
@@ -29,8 +29,7 @@ export const inboxNavItem: NavItem = {
 
 export const topBarAgentItems: NavItem[] = [
   {
-    name: "Settings",
-    mobileName: "Agent settings",
+    name: "Configure",
     href: "/dashboard/agent/configure",
     icon: SlidersHorizontal,
     description: "Store identity, trust level, and voice",
@@ -58,12 +57,20 @@ export const shopNavItem: NavItem = {
 
 export const topBarShopItems: NavItem[] = [shopNavItem];
 
-export const organizationSettingsNavItem: NavItem = {
+export const accountSettingsNavItem: NavItem = {
+  name: "Account",
+  mobileName: "Account settings",
+  href: "/dashboard/account",
+  icon: User,
+  description: "Profile, sign-in, and logout",
+};
+
+export const workspaceSettingsNavItem: NavItem = {
   name: "Settings",
-  mobileName: "Organization settings",
+  mobileName: "Workspace settings",
   href: "/dashboard/settings",
   icon: Settings2,
-  description: "Billing and organization admin",
+  description: "Billing and workspace admin",
 };
 
 export const integrationsNavItem: NavItem = {
@@ -83,6 +90,7 @@ export const teamNavItem: NavItem = {
 export const topBarWorkspaceItems: NavItem[] = [
   integrationsNavItem,
   teamNavItem,
+  workspaceSettingsNavItem,
 ];
 
 export const topBarDropdowns = [

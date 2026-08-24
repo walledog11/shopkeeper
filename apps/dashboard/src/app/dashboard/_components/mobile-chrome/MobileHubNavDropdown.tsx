@@ -5,9 +5,9 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, type MouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, LazyMotion, domAnimation, m, useReducedMotion } from "motion/react";
-import { ChevronDown, CircleHelp, LogOut, Plus, Settings2, User } from "lucide-react";
+import { ChevronDown, CircleHelp, LogOut, Plus, User } from "lucide-react";
 import { cn } from "@/lib/ui/cn";
-import { mobileNavSections, organizationSettingsNavItem } from "../nav-items";
+import { accountSettingsNavItem, mobileNavSections } from "../nav-items";
 import { usePanelBriefingData } from "../agent-panel/usePanelBriefingData";
 import { useHelp } from "../help/HelpContext";
 import { NavGroupList } from "../sidebar/NavGroupList";
@@ -19,8 +19,6 @@ import {
 } from "../sidebar/sidebar-helpers";
 import type { NavAuth } from "../sidebar/useNavAuth";
 import { resolveMobileRouteTitle } from "./resolveMobileRouteTitle";
-
-const ACCOUNT_SETTINGS_HREF = "/dashboard/settings#account";
 
 const belowNavPanelStyle = {
   top: "var(--dashboard-mobile-nav-offset, 0px)",
@@ -212,21 +210,13 @@ export function MobileHubNavDropdown({
                                 <Plus className="size-[18px] shrink-0 stroke-[1.5] text-sidebar-foreground/70" />
                                 <span className="flex-1 text-sm font-medium leading-tight">Add organization</span>
                               </Link>
-                              <Link
-                                href={organizationSettingsNavItem.href}
-                                onClick={close}
-                                className={mobileNavLinkClass(false)}
-                              >
-                                <Settings2 className="size-[18px] shrink-0 stroke-[1.5] text-sidebar-foreground/70" />
-                                <span className="flex-1 text-sm font-medium leading-tight">Organization settings</span>
-                              </Link>
                             </div>
                           </div>
 
                           <div className="mt-5">
                             <div className={mobileNavGroupCardClass}>
                               <Link
-                                href={ACCOUNT_SETTINGS_HREF}
+                                href={accountSettingsNavItem.href}
                                 onClick={close}
                                 className={mobileNavLinkClass(false)}
                               >

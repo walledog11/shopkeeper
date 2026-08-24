@@ -15,7 +15,6 @@ export default async function AgentConfigurePage() {
     where: { organizationId: org.id },
     select: { platform: true },
   })
-  const emailConnected = integrations.some(integration => integration.platform === ChannelType.email)
   const shopifyConnected = integrations.some(integration => integration.platform === ChannelType.shopify)
   const runtimeFlags = await fetchGatewayRuntimeFlags()
     .then(flags => flags.monitors)
@@ -29,7 +28,6 @@ export default async function AgentConfigurePage() {
         version={org.updatedAt.toISOString()}
         orgName={org.name}
         voiceProposal={parseVoiceProposal(org.voiceProposal)}
-        emailConnected={emailConnected}
         shopifyConnected={shopifyConnected}
         runtimeFlags={runtimeFlags}
       />

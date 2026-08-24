@@ -56,7 +56,14 @@ describe("help content", () => {
 
   it("does not document UI that no longer exists", () => {
     const text = allText()
-    for (const removed of ["Draft with Shopkeeper", "Shopkeeper Context", "Resolve button", "Closed tab"]) {
+    for (const removed of [
+      "Draft with Shopkeeper",
+      "Shopkeeper Context",
+      "Resolve button",
+      "Closed tab",
+      "Manage account",
+      "account portal",
+    ]) {
       expect(text).not.toContain(removed)
     }
   })

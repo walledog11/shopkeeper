@@ -52,3 +52,94 @@
 .auth-clerk-root .cl-socialButtons {
   gap: 0.75rem;
 }
+
+/* Account settings — embed UserProfile in the dashboard card, not a modal */
+.account-clerk-root,
+.account-clerk-root .cl-rootBox,
+.account-clerk-root .cl-cardBox,
+.account-clerk-root .cl-card,
+.account-clerk-root .cl-scrollBox,
+.account-clerk-root .cl-pageScrollBox {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box;
+  font-family: var(--font-sans) !important;
+}
+
+.account-clerk-root .cl-cardBox {
+  display: flex !important;
+  flex-direction: column !important;
+  box-shadow: none !important;
+  height: auto !important;
+}
+
+.account-clerk-root .cl-scrollBox,
+.account-clerk-root .cl-pageScrollBox {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.account-clerk-root .cl-footer,
+.account-clerk-root .cl-footerPages,
+.account-clerk-root .cl-navbar,
+.account-clerk-root .cl-navbarButtons,
+.account-clerk-root .cl-navbarMobileMenuRow,
+.account-clerk-root .cl-navbarMobileMenuButton {
+  display: none !important;
+}
+
+/* Clerk's Account heading lives in the profile navbar, not always as .cl-navbarHeader. */
+.account-clerk-root .cl-navbarHeader,
+.account-clerk-root .cl-navbarHeader *,
+.account-clerk-root .cl-navbar > h1,
+.account-clerk-root .cl-navbar > p,
+.account-clerk-root .cl-navbar .cl-header,
+.account-clerk-root .cl-navbar .cl-headerTitle,
+.account-clerk-root .cl-navbar .cl-headerSubtitle,
+.account-clerk-root .cl-header,
+.account-clerk-root .cl-headerTitle,
+.account-clerk-root [data-localization-key="userProfile.navbar.title"],
+.account-clerk-root [data-localization-key="userProfile.navbar.description"] {
+  display: none !important;
+}
+
+.account-clerk-root .cl-page,
+.account-clerk-root .cl-profilePage,
+.account-clerk-root .cl-profilePageContent {
+  padding: 0 !important;
+  gap: 0 !important;
+}
+
+.account-clerk-root .cl-profileSection {
+  align-items: center !important;
+  gap: 1.5rem !important;
+  padding-top: 1.25rem !important;
+  padding-bottom: 1.25rem !important;
+}
+
+.account-clerk-root .cl-profileSection:first-child,
+.account-clerk-root .cl-header + .cl-profileSection {
+  border-top-width: 0 !important;
+  padding-top: 0 !important;
+}
+
+.account-clerk-root .cl-profileSection:last-child {
+  padding-bottom: 0 !important;
+}
+
+.account-clerk-root .cl-profileSectionHeader {
+  align-self: center !important;
+  margin-top: 0 !important;
+  transform: none !important;
+}
+
+.account-clerk-root .cl-profileSectionItem,
+.account-clerk-root .cl-profileSectionItemList {
+  align-items: center !important;
+}
+
+.account-clerk-root .cl-profileSectionItemList {
+  gap: 0.5rem !important;
+}

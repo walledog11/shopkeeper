@@ -39,6 +39,7 @@ export function ToggleRow({
   onChange,
   badge,
   badgeColor,
+  disabled,
 }: {
   label: string
   description?: string
@@ -46,6 +47,7 @@ export function ToggleRow({
   onChange: (v: boolean) => void
   badge?: string
   badgeColor?: string
+  disabled?: boolean
 }) {
   return (
     <div className="flex items-start justify-between gap-4">
@@ -63,6 +65,7 @@ export function ToggleRow({
       <Switch
         checked={checked}
         onChange={onChange}
+        disabled={disabled}
         ariaLabel={checked ? "Disable setting" : "Enable setting"}
       />
     </div>

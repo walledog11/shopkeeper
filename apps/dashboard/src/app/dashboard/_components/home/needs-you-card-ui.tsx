@@ -365,7 +365,6 @@ export function TicketCardMetaRow({
   const statusPill = renderStatusPill()
   const topicPill = renderTopicPill()
   const datePill = renderDatePill()
-  const filledTail = [renderOrderPill(true), renderStatusPill(true), renderTopicPill(true), renderDatePill(true)]
   const hasTailPills = Boolean(orderPill || statusPill || topicPill || datePill)
 
   return (
@@ -390,7 +389,10 @@ export function TicketCardMetaRow({
         </div>
         {hasTailPills ? (
           <div className="flex w-full min-w-0 items-center gap-1.5">
-            {filledTail}
+            {renderOrderPill(true)}
+            {renderStatusPill(true)}
+            {renderTopicPill(true)}
+            {renderDatePill(true)}
           </div>
         ) : null}
       </div>

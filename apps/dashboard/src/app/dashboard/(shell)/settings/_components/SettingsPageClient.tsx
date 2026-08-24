@@ -3,10 +3,12 @@
 import { Suspense, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { SettingsPageSkeleton } from "@/app/dashboard/_components/skeletons"
-import AccountSettingsSection from "./AccountSettingsSection"
 import WorkspaceTab from "./workspace/WorkspaceTab"
 import BillingTab from "./BillingTab"
 import { AGENT_CONFIGURE_PATH } from "@/lib/agent/configure"
+import { accountSettingsNavItem } from "@/app/dashboard/_components/nav-items"
+import { dashboardPageShellClassName } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
+import { cn } from "@/lib/ui/cn"
 
 interface Props {
   orgName: string
@@ -37,7 +39,7 @@ function SettingsPageContent({ orgName, version }: Props) {
 
   useEffect(() => {
     if (rawTab === "account") {
-      replace("/dashboard/settings#account")
+      replace(accountSettingsNavItem.href)
       return
     }
     if (rawTab === "agent") {
@@ -59,23 +61,26 @@ function SettingsPageContent({ orgName, version }: Props) {
   }, [rawTab, replace])
 
   useEffect(() => {
+    if (window.location.hash === "#account") {
+      replace(accountSettingsNavItem.href)
+      return
+    }
     scrollToHash(window.location.hash)
-    const onHashChange = () => scrollToHash(window.location.hash)
+    const onHashChange = () => {
+      if (window.location.hash === "#account") {
+        replace(accountSettingsNavItem.href)
+        return
+      }
+      scrollToHash(window.location.hash)
+    }
     window.addEventListener("hashchange", onHashChange)
     return () => window.removeEventListener("hashchange", onHashChange)
-  }, [])
+  }, [replace])
 
   return (
     <div className="flex size-full min-w-0 flex-col overflow-hidden bg-background">
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 pb-20 sm:px-6 md:pt-16 lg:px-8">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">Settings</h1>
-            <p className="mt-0.5 text-sm text-faint">
-              Your account, billing, and workspace for {orgName}.
-            </p>
-          </div>
-          <AccountSettingsSection />
+        <div className={cn(dashboardPageShellClassName(), "gap-6 pb-20")}>
           <BillingTab />
           <WorkspaceTab orgName={orgName} version={version} />
         </div>

@@ -1,15 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronDown, Plus, Settings2 } from "lucide-react";
+import { ChevronDown, Plus } from "lucide-react";
 import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/ui/cn";
-import { organizationSettingsNavItem } from "../nav-items";
 import { NavPillShell } from "./nav-pill-shared";
 import {
   desktopTopBarDropdownMenuItemClass,
@@ -106,17 +104,10 @@ export function OrganizationNavPill({
           <span className="font-medium">Add organization</span>
         </Link>
       </DropdownMenuItem>
-      <DropdownMenuSeparator className="bg-border/80 my-1" />
-      <DropdownMenuItem asChild className={desktopTopBarDropdownMenuItemClass()}>
-        <Link href={organizationSettingsNavItem.href} onClick={() => onClose?.()}>
-          <Settings2 className="size-4 shrink-0 text-sidebar-foreground/50" />
-          <span className="font-medium">Organization settings</span>
-        </Link>
-      </DropdownMenuItem>
     </DropdownMenuContent>
   );
 
   return (
-    <NavPillShell variant={variant} headerId="organization-header" trigger={trigger} menu={menu} />
+    <NavPillShell variant={variant} trigger={trigger} menu={menu} />
   );
 }

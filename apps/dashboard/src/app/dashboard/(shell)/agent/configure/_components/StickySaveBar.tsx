@@ -20,7 +20,7 @@ export function StickySaveBar({
       <div className="flex items-center justify-between gap-3 rounded-[22px] border border-foreground/[0.10] bg-card/85 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.34),0_-18px_50px_rgba(0,0,0,0.35)] backdrop-blur-2xl backdrop-saturate-150 supports-[backdrop-filter]:bg-card/72">
         <div className="flex items-center gap-2 min-w-0">
           {!canSave ? (
-            <p className="text-xs text-amber-700 truncate">Only workspace admins can change agent settings.</p>
+            <p className="text-xs text-amber-700 truncate">Only workspace admins can change these settings.</p>
           ) : staleVersion ? (
             <p className="text-xs text-amber-700 truncate">Settings were updated in another tab. Reset to load the latest, then reapply your changes.</p>
           ) : error ? (

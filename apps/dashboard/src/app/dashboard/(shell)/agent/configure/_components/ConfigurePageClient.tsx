@@ -12,7 +12,6 @@ interface Props {
   version: string
   orgName: string
   voiceProposal: VoiceProposal | null
-  emailConnected: boolean
   shopifyConnected: boolean
   runtimeFlags: GatewayRuntimeFlags["monitors"] | null
 }
@@ -28,7 +27,6 @@ export default function ConfigurePageClient(props: Props) {
             version={props.version}
             orgName={props.orgName}
             voiceProposal={props.voiceProposal}
-            emailConnected={props.emailConnected}
             shopifyConnected={props.shopifyConnected}
             runtimeFlags={props.runtimeFlags}
           />

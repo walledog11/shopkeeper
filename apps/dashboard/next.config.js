@@ -65,7 +65,7 @@ const nextConfig = {
     root: repoRoot,
   },
   serverExternalPackages: ['stripe'],
-  transpilePackages: ['@shopkeeper/db'],
+  transpilePackages: ['@shopkeeper/db', '@clerk/ui'],
   images: {
     remotePatterns: [
       {

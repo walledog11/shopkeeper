@@ -2,8 +2,8 @@ import type { Category } from "./index.js"
 
 export const settings: Category = {
   id: "settings",
-  title: "Account & agent settings",
-  description: "Account, billing, workspace admin, and how {agent} works",
+  title: "Account, workspace, and agent",
+  description: "Your login, workspace admin, and how {agent} works",
   icon: "⚙️",
   articles: [
     {
@@ -16,7 +16,7 @@ export const settings: Category = {
         {
           heading: "How to update it",
           steps: [
-            "Open Agent → Settings in the top navigation.",
+            "Open Agent → Configure in the top navigation.",
             "Find the business name field under Your store.",
             "Save your changes.",
           ],
@@ -28,14 +28,14 @@ export const settings: Category = {
       title: "Store context and brand voice",
       body: [
         {
-          text: "Agent → Settings is where you configure how {agent} represents your store and writes replies.",
+          text: "Agent → Configure is where you set how {agent} represents your store and writes replies.",
         },
         {
           heading: "Where to find them",
           steps: [
-            "Open Agent → Settings in the top navigation.",
+            "Open Agent → Configure in the top navigation.",
             "Under Your store, set your business name, about-your-store details, and brand voice.",
-            "Choose a trust level and whether plans generate automatically when you open tickets.",
+            "Choose a trust level.",
             "Expand Advanced for sample replies, reply language, and refund limit overrides.",
           ],
         },
@@ -69,18 +69,17 @@ export const settings: Category = {
     },
     {
       id: "account-admin",
-      title: "Settings",
+      title: "Account and workspace settings",
       body: [
         {
-          text: "Settings holds your personal account, billing, data exports, and workspace admin actions.",
+          text: "Your personal login lives under Account. Billing, data exports, and workspace admin live under Workspace → Settings.",
         },
         {
-          heading: "What lives there",
+          heading: "What lives where",
           steps: [
-            "Open Settings under Workspace in the top navigation.",
-            "Account settings are at the top — billing follows below.",
-            "Expand Data & privacy for backups or GDPR exports.",
-            "Use the danger zone at the bottom to clear ticket history or delete the workspace.",
+            "Click your avatar to open Account and update your profile, sign-in methods, or log out.",
+            "Open Workspace → Settings for billing, data exports, and GDPR requests.",
+            "Use the danger zone at the bottom of Workspace → Settings to clear ticket history or delete the workspace.",
           ],
         },
       ],

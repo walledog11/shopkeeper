@@ -178,6 +178,7 @@ describe("agent tab helpers", () => {
 
     expect(patch.settings.maxRefundAmount).toBe(150);
     expect(patch.settings.toolsEnabled).toEqual({ action: true });
+    expect(patch.settings.spamFilterEnabled).toBeUndefined();
     expect(patch.settingsUnset).toContain("toolsEnabled.communication");
     expect(patch.settingsUnset).not.toContain("maxRefundAmount");
   });

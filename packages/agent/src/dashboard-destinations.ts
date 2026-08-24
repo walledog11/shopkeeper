@@ -42,16 +42,17 @@ export const DASHBOARD_DESTINATIONS: readonly DashboardDestination[] = [
   {
     id: "agent_settings",
     href: "/dashboard/agent/configure",
-    label: "Agent settings",
+    label: "Agent configure",
     description: "Store identity, trust level, brand voice, and autonomy",
     keywords: [
       "agent settings",
+      "agent configure",
+      "configure agent",
       "trust level",
       "trust",
       "autonomy",
       "voice",
       "brand",
-      "configure agent",
     ],
   },
   {
@@ -78,9 +79,16 @@ export const DASHBOARD_DESTINATIONS: readonly DashboardDestination[] = [
   {
     id: "workspace_settings",
     href: "/dashboard/settings",
-    label: "Organization settings",
-    description: "Billing and organization admin",
+    label: "Workspace settings",
+    description: "Billing and workspace admin",
     keywords: ["organization settings", "workspace settings", "billing", "admin", "subscription", "plan"],
+  },
+  {
+    id: "account_settings",
+    href: "/dashboard/account",
+    label: "Account settings",
+    description: "Profile, sign-in, and logout",
+    keywords: ["account settings", "profile", "sign in"],
   },
   {
     id: "team",

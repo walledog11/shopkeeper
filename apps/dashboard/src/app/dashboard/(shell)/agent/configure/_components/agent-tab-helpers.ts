@@ -142,6 +142,7 @@ export function buildAgentSettingsPatch(
   }
 
   delete serialized.agentName
+  delete serialized.spamFilterEnabled
 
   return {
     settings: serialized as OrgSettingsPatch,

@@ -1,4 +1,4 @@
-type ClerkElementOverrides = Record<string, string>;
+type ClerkElementOverrides = Record<string, string | Record<string, string>>;
 type AuthClerkVariant = "paper" | "ink";
 
 const paperVariables = {
@@ -113,6 +113,46 @@ export function getAuthClerkAppearance(
     elements: {
       ...elements,
       ...overrides,
+    },
+  };
+}
+
+export function getUserProfileClerkAppearance(): {
+  variables: typeof paperVariables;
+  elements: ClerkElementOverrides;
+} {
+  const sharedPaperElements: ClerkElementOverrides = { ...paperElements };
+  delete sharedPaperElements.badge;
+
+  return {
+    variables: {
+      ...paperVariables,
+      colorBackground: "#fbf8f1",
+    },
+    elements: {
+      ...sharedPaperElements,
+      rootBox: "w-full max-w-full min-w-0",
+      cardBox:
+        "w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-border bg-card shadow-none",
+      card: "w-full max-w-full min-w-0 border-0 bg-transparent p-0 shadow-none",
+      navbar: { display: "none" },
+      navbarHeader: { display: "none" },
+      navbarButtons: { display: "none" },
+      navbarMobileMenuButton: { display: "none" },
+      scrollBox: "bg-transparent",
+      pageScrollBox: "bg-transparent",
+      headerTitle: { display: "none" },
+      headerSubtitle: { display: "none" },
+      profilePageContent: "p-0",
+      profileSection: "items-center",
+      profileSectionHeader: "self-center",
+      profileSectionTitleText: "text-sm font-semibold text-strong",
+      profileSectionContent: "text-sm text-muted-foreground",
+      profileSectionPrimaryButton:
+        "text-xs font-semibold text-muted-foreground hover:text-strong",
+      accordionTriggerButton: "text-sm font-medium text-strong",
+      formButtonPrimary:
+        "!bg-[#2b2118] !text-[#f6f2eb] inline-flex h-9 items-center justify-center gap-1.5 rounded-full text-sm font-semibold leading-none shadow-[inset_0_1px_0_rgba(255,245,235,0.14),0_8px_24px_-8px_rgba(12,8,5,0.4)] hover:!bg-[#1a120c]",
     },
   };
 }

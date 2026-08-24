@@ -20,7 +20,6 @@ interface Props {
   version: string
   orgName: string
   voiceProposal: VoiceProposal | null
-  emailConnected: boolean
   shopifyConnected: boolean
   runtimeFlags: GatewayRuntimeFlags["monitors"] | null
 }
@@ -32,14 +31,14 @@ export default function AgentTab(props: Props) {
   // page; the save bar tells them why they can't apply a change.
   const { membership } = useOrganization()
   const isAdmin = membership?.role === "org:admin"
-  const { emailConnected, shopifyConnected } = props
+  const { shopifyConnected } = props
 
   return (
     <div className="flex w-full flex-col gap-3">
       <div className="space-y-3">
         <AgentIdentitySection controller={controller} />
         <AgentAutonomySection controller={controller} />
-        <WhenOnDutySection controller={controller} emailConnected={emailConnected} />
+        <WhenOnDutySection controller={controller} />
         {shopifyConnected && <MorningBriefingSection controller={controller} />}
         {shopifyConnected && <ProactiveMonitoringSection controller={controller} runtimeFlags={props.runtimeFlags} />}
         <AgentAdvancedSection controller={controller} />

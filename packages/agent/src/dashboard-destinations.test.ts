@@ -8,7 +8,9 @@ import {
 describe("dashboard destinations", () => {
   it("resolves known destination ids", () => {
     expect(getDashboardDestination("integrations")?.href).toBe("/dashboard/integrations");
-    expect(getDashboardDestination("agent_settings")?.label).toBe("Agent settings");
+    expect(getDashboardDestination("agent_settings")?.label).toBe("Agent configure");
+    expect(getDashboardDestination("workspace_settings")?.href).toBe("/dashboard/settings");
+    expect(getDashboardDestination("account_settings")?.href).toBe("/dashboard/account");
     expect(getDashboardDestination("missing")).toBeNull();
   });
 

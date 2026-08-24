@@ -37,6 +37,7 @@ import { dashboardChromeColumnClassName } from "@/app/dashboard/_components/side
 import { getShopifyDisconnectMessage, resolveShopifyConnectionState } from "@/lib/integrations/shopify-connection"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { Integration } from "@/types"
+import { EmailSpamFilterCard } from "./EmailSpamFilterCard"
 
 const INTEGRATION_CARD_GRID = "grid items-stretch gap-4 auto-rows-fr grid-cols-[repeat(auto-fill,minmax(340px,1fr))]"
 
@@ -187,6 +188,7 @@ function IntegrationsPageContent({
     }),
   }), [visibleModels])
   const attention = useMemo(() => integrationAttentionSummary(models), [models])
+  const emailConnected = integrations.some((integration) => integration.platform === "email")
 
   useEffect(() => {
     if (!loaded) return
@@ -344,6 +346,16 @@ function IntegrationsPageContent({
               <AlertTriangle className="size-4 shrink-0" />
               <span>{attention.copy}</span>
             </div>
+          ) : null}
+
+          {loaded && emailConnected ? (
+            <section className="space-y-4">
+              <div>
+                <h2 className="text-sm font-semibold text-strong">Inbound email</h2>
+                <p className="mt-1 text-xs text-faint">How customer mail is filtered before it becomes a ticket.</p>
+              </div>
+              <EmailSpamFilterCard />
+            </section>
           ) : null}
 
           {loaded ? (
