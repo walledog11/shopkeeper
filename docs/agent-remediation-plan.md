@@ -4,7 +4,7 @@
 
 **Last reconciled:** 2026-08-23
 
-**Current milestone:** 1 — actionable merchant briefings
+**Current milestone:** 2 — classification lifecycle and compatibility
 
 This is the single source of truth for agent remediation and capability work. `AGENT_AUDIT.md` is historical evidence, not a second work order.
 
@@ -56,31 +56,31 @@ A green component test, paid eval, or one live message is not sufficient by itse
 
 These foundations remain valid. Their prior evidence is summarized in [AGENT_AUDIT.md](../AGENT_AUDIT.md), [agent-eval-gates.md](agent-eval-gates.md), and [agent-phase-a-measurement-2026-08-22.md](agent-phase-a-measurement-2026-08-22.md).
 
-### Reopened foundation
+### Resolved foundation gap
 
-Structured rendering is **not complete**. The 2026-08-23 morning briefing proved that a live v4 escalation can be classified as a merchant decision while rendering only “Request details unavailable.” The thread still had a request-source message and conversation history.
+The 2026-08-23 morning briefing proved that a live v4 escalation could be classified as a merchant decision while rendering only “Request details unavailable,” even though the thread still had a request-source message and conversation history.
 
-The failure was a rollout error: legacy plan-cache pruning did not cover `Thread.escalatedAt`, deterministic tests encoded the unavailable fallback, model evals did not exercise the digest, and the phone canary used only new v5 state.
+The rollout gap is closed by the source-aligned legacy fallback and non-actionable thread-review path recorded under Milestone 1. Its causes were legacy plan-cache pruning that did not cover `Thread.escalatedAt`, deterministic tests that encoded the unavailable fallback, model evals that did not exercise the digest, and a phone canary that used only new v5 state.
 
 ## Execution order
 
 | # | Milestone | Status | Depends on |
 |---|---|---|---|
-| 1 | Actionable merchant briefings | **Active** | — |
-| 2 | Classification lifecycle and compatibility | Pending | 1 |
+| 1 | Actionable merchant briefings | **Complete** | — |
+| 2 | Classification lifecycle and compatibility | **Active** | 1 |
 | 3 | Immutable outcome attribution | Pending | 1 |
 | 4 | Bounded replanning after definite failure | Pending | completed safety foundations |
 | 5 | Merchant preference memory | Blocked | 1, 3 |
 | 6 | Shipment resolution and attachment vision | Blocked | 3; preference policy for proactive remedies |
 | 7 | Shop-management capabilities | Blocked | 4 and value-at-risk guard |
 
-Efficiency work may proceed only when it does not compete with Milestone 1 or change its persisted-data surface.
+Efficiency work may proceed only when it does not compete with the active milestone or change its persisted-data surface.
 
 ## Milestone 1 — Actionable merchant briefings
 
 **Outcome:** every briefing item that asks for approval or judgment contains enough grounded context to act. If context truly cannot be recovered, the briefing asks the merchant to open the thread; it does not ask for a decision.
 
-**Progress:** the pre-v5 source-message fallback and the non-actionable thread-review path are implemented for decisions, flagged senders, and approvals. Review-required items preserve their thread/plan identity, suppress shared approval and decision closers, fail closed on approval commands, and remain openable from the briefing. The fixture matrix, privacy-safe production inventory, live scheduled-path mixed-shape canary, and rollback fixture are recorded in [agent-m1-briefing-evidence-2026-08-23.md](agent-m1-briefing-evidence-2026-08-23.md).
+**Status:** complete. The pre-v5 source-message fallback and the non-actionable thread-review path are implemented for decisions, flagged senders, and approvals. Review-required items preserve their thread/plan identity, suppress shared approval and decision closers, fail closed on approval commands, and remain openable from the briefing. The fixture matrix, privacy-safe production inventory, live scheduled-path mixed-shape canary, rollback fixture, and legacy-row disposition are recorded in [agent-m1-briefing-evidence-2026-08-23.md](agent-m1-briefing-evidence-2026-08-23.md).
 
 ### Work
 
@@ -108,6 +108,8 @@ Efficiency work may proceed only when it does not compete with Milestone 1 or ch
 ## Milestone 2 — Classification lifecycle and compatibility
 
 **Outcome:** all inbound channels produce the same versioned request contract, and future schema changes have an explicit migration lifecycle.
+
+**Progress:** active. A database-backed characterization suite now compares the email pre-persistence and customer-channel post-persistence orderings, including source alignment, stale-write rejection, and a multi-message email burst. It records the remaining lifecycle asymmetry: the first email is classified inline and the settled burst is classified again after a follow-up. Contract unification remains next.
 
 ### Work
 

@@ -39,6 +39,18 @@ pointer. They are candidates for conservative pointer backfill or
 reclassification, not permission to infer historical facts. No candidate lacks
 customer text entirely.
 
+### Legacy-row disposition
+
+No speculative backfill was performed. The 45 candidates without an aligned
+request-source pointer cannot be tied to a particular request episode from the
+inventory alone. They therefore remain on the explicit, non-actionable
+thread-review path until a fresh classification establishes request identity or
+the merchant opens the thread. This satisfies the Milestone 1 failure behavior:
+the briefing preserves and exposes the work without asking for a blind decision.
+Classifier-version migration and any conservative reclassification of those
+rows now belong to Milestone 2's inventory, dual-read/backfill, and canary
+lifecycle.
+
 The classifier/source/escalation/plan matrix was:
 
 | Classifier | Source | Escalated | Pending plan | Count |
