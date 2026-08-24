@@ -1,11 +1,6 @@
 "use client"
 
-import {
-  UserProfileAccountPanel,
-  UserProfileProvider,
-  UserProfileSecurityPanel,
-} from "@clerk/ui/experimental"
-import { useClerk, useUser } from "@clerk/nextjs"
+import { UserProfile, useClerk, useUser } from "@clerk/nextjs"
 import { LogOut } from "lucide-react"
 import { getUserProfileClerkAppearance } from "@/app/(auth)/_components/clerk-appearance"
 import { AccountSettingsSkeleton } from "@/app/dashboard/_components/skeletons/AccountSettingsSkeleton"
@@ -21,15 +16,10 @@ export default function AccountSettingsSection() {
 
   return (
     <div className="space-y-6">
-      <div id="account" className="account-clerk-root min-w-0 space-y-6 scroll-mt-6">
-        <UserProfileProvider appearance={appearance}>
-          <div className="overflow-hidden rounded-xl border border-border bg-card p-5 sm:p-6">
-            <UserProfileAccountPanel />
-          </div>
-          <div className="overflow-hidden rounded-xl border border-border bg-card p-5 sm:p-6">
-            <UserProfileSecurityPanel />
-          </div>
-        </UserProfileProvider>
+      <div id="account" className="account-clerk-root min-w-0 scroll-mt-6">
+        <div className="overflow-hidden rounded-xl border border-border bg-card p-5 sm:p-6">
+          <UserProfile routing="hash" appearance={appearance} />
+        </div>
       </div>
       <button
         type="button"

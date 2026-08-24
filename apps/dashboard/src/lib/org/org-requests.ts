@@ -1,4 +1,4 @@
-export interface OrgSettingsPatchResult {
+interface OrgSettingsPatchResult {
   version: string
   settings?: Record<string, unknown>
   name?: string

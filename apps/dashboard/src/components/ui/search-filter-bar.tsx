@@ -45,7 +45,7 @@ export function FilterPill({
   )
 }
 
-export interface SearchFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "onChange" | "value" | "size"> {
+interface SearchFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "onChange" | "value" | "size"> {
   value: string
   onValueChange: (value: string) => void
   loading?: boolean
@@ -102,7 +102,7 @@ export function SearchField({
   )
 }
 
-export interface SearchFilterItem {
+interface SearchFilterItem {
   id: string
   label: ReactNode
   pressed?: boolean

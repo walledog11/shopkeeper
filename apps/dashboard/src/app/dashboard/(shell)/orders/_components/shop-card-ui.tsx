@@ -22,7 +22,7 @@ function MetaPill({ className, children }: { className?: string; children: React
   )
 }
 
-export interface ShopCardMeta {
+interface ShopCardMeta {
   customerName: string | null
   orderRef: string | null
   lastMessageAt: string

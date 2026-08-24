@@ -133,11 +133,15 @@ export function getUserProfileClerkAppearance(): {
       ...sharedPaperElements,
       rootBox: "w-full max-w-full min-w-0",
       cardBox:
-        "w-full max-w-full min-w-0 overflow-hidden rounded-xl border border-border bg-card shadow-none",
+        "w-full max-w-full min-w-0 overflow-hidden bg-transparent shadow-none",
       card: "w-full max-w-full min-w-0 border-0 bg-transparent p-0 shadow-none",
-      navbar: { display: "none" },
+      navbar:
+        "w-full border-0 bg-transparent p-0 shadow-none",
       navbarHeader: { display: "none" },
-      navbarButtons: { display: "none" },
+      navbarButtons: "flex flex-row flex-wrap gap-1 p-0",
+      navbarButton:
+        "rounded-full px-3 py-1.5 text-xs font-semibold text-muted-foreground",
+      navbarMobileMenuRow: { display: "none" },
       navbarMobileMenuButton: { display: "none" },
       scrollBox: "bg-transparent",
       pageScrollBox: "bg-transparent",
