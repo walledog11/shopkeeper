@@ -13,7 +13,7 @@ export const THREAD_TOOL_DEFINITIONS = [
   defineTool({
     name: "add_internal_note",
     description:
-      "Add an internal note to the support thread. Notes are visible only to agents, not the customer. Always call this to document what you did.",
+      "Add an internal note to the support thread. Notes are visible only to agents, not the customer. Call this only to document a store action this plan takes; a plan with no action step must not include a note.",
     fields: {
       text: stringArg("Note content.", { required: true }),
     },
