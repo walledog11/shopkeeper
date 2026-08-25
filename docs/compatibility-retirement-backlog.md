@@ -4,7 +4,7 @@ Evidence-gated removal of compatibility surfaces identified in the 2026-07-10
 codebase audit (in git history). One candidate per pull request; never
 batch unrelated retirements.
 
-Last reviewed: 2026-08-06.
+Last reviewed: 2026-08-25.
 
 ## Completed
 
@@ -16,6 +16,7 @@ Last reviewed: 2026-08-06.
 | Legacy operator tool-call inline-input normalization | Agent core | Same audit reports zero `legacyToolCalls`; `normalizeApprovedToolCalls` now maps `input` only | 2026-07-30 |
 | Legacy iMessage purge module | Operator / iMessage | `npm run audit:legacy-imessage-threads` reports zero active/soft-deleted `channel_type = imessage` rows; operator iMessage (`sms_agent` + bindings) unchanged | 2026-07-30 |
 | `operator_contexts.pending_plan` column | Operator channels | Dual-read retired 2026-07-30; audit showed zero live rows in the column; migration `20260806120000_drop_operator_pending_plan_column` | 2026-08-06 |
+| `AGENT_CONTEXT_BUDGET_MODE` and the legacy unbounded context branch | Agent core | Both hosts held `shadow`, which `6c6d79a5` aliased to `enforce`, so production was already on the bounded path; full 3-repeat eval baseline run on bounded context showed no regression attributable to the change. Flag, branch, gateway startup requirement, production env contract entry, P2-02 canary, and mode-comparison eval removed in `d0f76f2a`. Evidence: [agent-m2-evidence-2026-08-25.md](agent-m2-evidence-2026-08-25.md) | 2026-08-25 |
 
 ## Deferred — do not rename or remove without explicit migration / product sign-off
 

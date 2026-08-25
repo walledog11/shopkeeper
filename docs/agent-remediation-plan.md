@@ -2,7 +2,7 @@
 
 **Status:** canonical execution plan
 
-**Last reconciled:** 2026-08-23
+**Last reconciled:** 2026-08-25
 
 **Current milestone:** 2 — classification lifecycle and compatibility
 
@@ -62,6 +62,15 @@ The 2026-08-23 morning briefing proved that a live v4 escalation could be classi
 
 The rollout gap is closed by the source-aligned legacy fallback and non-actionable thread-review path recorded under Milestone 1. Its causes were legacy plan-cache pruning that did not cover `Thread.escalatedAt`, deterministic tests that encoded the unavailable fallback, model evals that did not exercise the digest, and a phone canary that used only new v5 state.
 
+### Open foundation defects
+
+Found by the 2026-08-25 paid eval runs. Both predate the work that surfaced them, both are `core` hard-gated fixtures, and together they mean **the paid release gate is red on `master`**. Detail and reproduction in [agent-m2-evidence-2026-08-25.md](agent-m2-evidence-2026-08-25.md).
+
+- **An escalation verdict does not always reach the plan.** `already_refunded_request` is in `ESCALATION_EVIDENCE` and its guard fires deterministically, so `decideAutonomy` returns `escalate` every run — but materialization at `planner.ts:234` is conditional on `validation.status === "valid"` and a non-empty `routingEvidence.escalationReason`. When it does not fire, the verdict says escalate while the plan the merchant sees says reply. This is the one-decision-one-owner invariant failing inside a foundation already marked complete, on a money-touching case. Determine which condition fails; prefer structural enforcement over the prompt prohibition `57234d00` added.
+- **A forbidden internal note on a prompt-injection attempt.** Containment held in every run — no data leaked, no forbidden data tools called. Strictness failure only.
+
+Neither is caused by the bounded-context retirement or the tool-selection fix; the evidence report records why each is inert for these fixtures.
+
 ## Execution order
 
 | # | Milestone | Status | Depends on |
@@ -109,7 +118,11 @@ Efficiency work may proceed only when it does not compete with the active milest
 
 **Outcome:** all inbound channels produce the same versioned request contract, and future schema changes have an explicit migration lifecycle.
 
-**Progress:** active. A database-backed characterization suite now compares the email pre-persistence and customer-channel post-persistence orderings, including source alignment, stale-write rejection, and a multi-message email burst. It records the remaining lifecycle asymmetry: the first email is classified inline and the settled burst is classified again after a follow-up. Contract unification remains next.
+**Progress:** active. A database-backed characterization suite compares the email pre-persistence and customer-channel post-persistence orderings, including source alignment, stale-write rejection, and a multi-message email burst. It records the remaining lifecycle asymmetry: the first email is classified inline and the settled burst is classified again after a follow-up.
+
+The `AGENT_CONTEXT_BUDGET_MODE` bullet is closed. Production had been running the flag as `shadow`, which took the legacy unbounded branch until `6c6d79a5` aliased it to `enforce`; the rollout is now finished deliberately and the flag, its legacy branch, its canary, and its comparison eval are removed. Evidence, including the paid eval results and the two drifts they exposed, is in [agent-m2-evidence-2026-08-25.md](agent-m2-evidence-2026-08-25.md).
+
+Contract unification is next and nothing has been written for it yet. The divergence between the two paths is wider than ordering, and the write-site split is the part that matters: email request fields are written in `inbound-persistence.ts` under `precomputed`, every other channel's in `intelligence.ts`, which is why the staleness guard exists on only one of them. The others are schema enforcement (the email path uses `output_config` json_schema, the post-persistence path parses free text), `verifiedOrderNames` reaching only the post-persistence prompt, differing `max_tokens`, and burst framing reaching only the post-persistence input.
 
 ### Work
 
@@ -118,7 +131,7 @@ Efficiency work may proceed only when it does not compete with the active milest
 - Verify multi-message email bursts classify once per request episode.
 - Define supported classifier versions and a retirement procedure: inventory → dual-read/backfill → canary → retirement.
 - Add production metrics for classifier version, failure, stale-write rejection, and source alignment.
-- Decide the `AGENT_CONTEXT_BUDGET_MODE` rollout from measured DB/character cost, then remove the unused branch.
+- ~~Decide the `AGENT_CONTEXT_BUDGET_MODE` rollout, then remove the unused branch.~~ Done 2026-08-25.
 
 ### Acceptance
 
