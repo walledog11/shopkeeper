@@ -6,6 +6,8 @@
 // brandVoice update stored on `organizations.voice_proposal`; the dashboard
 // renders it for approval. Both apps share the shape and thresholds here.
 
+import { isRecord } from "./guards.js";
+
 // Max length of a synthesized brief — must match the brandVoice settings field
 // (Settings → Agent caps brand voice at 200 chars) so an approved proposal
 // drops straight into that field.
@@ -31,9 +33,6 @@ export interface VoiceProposal {
   createdAt: string;    // ISO timestamp
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
 
 // Collapse whitespace + case so trivial reformatting doesn't read as an edit.
 function normalizeReply(text: string): string {

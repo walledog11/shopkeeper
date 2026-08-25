@@ -6,7 +6,7 @@ import React, { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import HelpArticle from "./HelpArticle"
-import { ALL_CATEGORIES, withAgentName, type Article } from "./content/index"
+import { ALL_CATEGORIES, withAgentName, type Article } from "@shopkeeper/agent/product-help"
 
 function allText(): string {
   return ALL_CATEGORIES.flatMap(category => [

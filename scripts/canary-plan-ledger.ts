@@ -1,38 +1,132 @@
 import { randomUUID } from 'node:crypto';
 import type { AgentPlan } from '@shopkeeper/agent/types';
-import { loadGatewayEnv } from '../config/load-env.js';
+import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
+import { resolveAgentSettings } from '@shopkeeper/agent/settings';
+import { AGENT_NOTE_PREFIX } from '@shopkeeper/agent/thread-constants';
+import { agentTurnMessageFilter } from '@shopkeeper/agent/turns';
+import { isRecord } from '@shopkeeper/agent/guards';
 
-loadGatewayEnv();
+type Surface = 'dashboard' | 'gateway';
+type ExpectedMode = 'shadow' | 'enforce';
 
+const SURFACE = readArg('--surface=') as Surface | null;
 const EXECUTE = process.argv.includes('--execute');
 const ORGANIZATION_ID = readArg('--org-id=');
-const EXPECTED_MODE = readArg('--expected-mode=') ?? 'shadow';
+const EXPECTED_MODE = (readArg('--expected-mode=') ?? 'shadow') as ExpectedMode;
+
+const SURFACE_CONFIG: Record<Surface, {
+  host: Surface;
+  customerName: string;
+  platformIdPrefix: string;
+  subjectPrefix: string;
+  filterReason: string;
+  messageContent: string;
+  toolNotePrefix: string;
+  instruction: string;
+  failureRoute: string;
+  approverClerkId: string;
+}> = {
+  dashboard: {
+    host: 'dashboard',
+    customerName: 'Dashboard ledger canary',
+    platformIdPrefix: 'dashboard-ledger-canary',
+    subjectPrefix: '[CANARY P1-02 dashboard ledger]',
+    filterReason: 'Controlled dashboard-host ledger canary',
+    messageContent: 'Controlled dashboard ledger canary: record an internal audit note only.',
+    toolNotePrefix: '[CANARY P1-02 dashboard ledger]',
+    instruction: 'Record the controlled dashboard ledger canary as an internal note.',
+    failureRoute: '/api/agent',
+    approverClerkId: 'canary_dashboard_ledger',
+  },
+  gateway: {
+    host: 'gateway',
+    customerName: 'Gateway ledger canary',
+    platformIdPrefix: 'gateway-ledger-canary',
+    subjectPrefix: '[CANARY P1-02 gateway ledger]',
+    filterReason: 'Controlled gateway-host ledger canary',
+    messageContent: 'Controlled gateway ledger canary: record an internal audit note only.',
+    toolNotePrefix: '[CANARY P1-02 gateway ledger]',
+    instruction: 'Record the controlled gateway ledger canary as an internal note.',
+    failureRoute: 'canary:gateway-ledger',
+    approverClerkId: 'canary_gateway_ledger',
+  },
+};
 
 function readArg(prefix: string): string | null {
   const raw = process.argv.find((arg) => arg.startsWith(prefix))?.slice(prefix.length).trim();
   return raw || null;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+function usage(): string {
+  return 'Usage: npx tsx scripts/canary-plan-ledger.ts --surface=dashboard|gateway '
+    + '--org-id=<uuid> [--expected-mode=shadow|enforce] [--execute]';
+}
+
+async function bootstrap(surface: Surface): Promise<void> {
+  if (surface === 'gateway') {
+    const { loadGatewayEnv } = await import('../apps/gateway/src/config/load-env.js');
+    loadGatewayEnv();
+  }
+}
+
+async function executeApprovedPlan(
+  surface: Surface,
+  params: {
+    orgId: string;
+    threadId: string;
+    settings: ReturnType<typeof resolveAgentSettings>;
+    approvedToolCalls: AgentPlan['rawToolCalls'];
+    failureRoute: string;
+    approverClerkId: string;
+    expectedIdentity: { planId: string | null; sourceMessageId: string };
+  },
+) {
+  const baseParams = {
+    orgId: params.orgId,
+    threadId: params.threadId,
+    settings: params.settings,
+    executionIntent: 'merchant_approved' as const,
+    failureRoute: params.failureRoute,
+    approvedToolCalls: params.approvedToolCalls,
+    approver: {
+      clerkUserId: params.approverClerkId,
+      displayName: 'Rollout Canary',
+    },
+    expectedIdentity: params.expectedIdentity,
+  };
+
+  if (surface === 'dashboard') {
+    const { executeCurrentCachedHomePlan } = await import(
+      '../apps/dashboard/src/lib/agent/api/plan-execution.js'
+    );
+    return executeCurrentCachedHomePlan(baseParams);
+  }
+
+  const { executeCurrentCachedHomePlan } = await import('@shopkeeper/agent/plan-execution');
+  const { buildGatewayPlanExecutionDeps } = await import(
+    '../apps/gateway/src/message-handlers/agent-turn-deps.js'
+  );
+  return executeCurrentCachedHomePlan(baseParams, buildGatewayPlanExecutionDeps());
+}
+
+async function cleanup(surface: Surface): Promise<void> {
+  if (surface === 'gateway') {
+    const { closeGatewayRedisConnections } = await import('../apps/gateway/src/clients/redis-client.js');
+    await closeGatewayRedisConnections().catch(() => {});
+  }
 }
 
 async function main(): Promise<void> {
+  if (!SURFACE || (SURFACE !== 'dashboard' && SURFACE !== 'gateway')) {
+    throw new Error(usage());
+  }
   if (!ORGANIZATION_ID || (EXPECTED_MODE !== 'shadow' && EXPECTED_MODE !== 'enforce')) {
-    throw new Error(
-      'Usage: npx tsx apps/gateway/src/scripts/canary-gateway-ledger.ts '
-      + '--org-id=<uuid> [--expected-mode=shadow|enforce] [--execute]',
-    );
+    throw new Error(usage());
   }
 
+  await bootstrap(SURFACE);
+  const config = SURFACE_CONFIG[SURFACE];
   const { db, SenderType } = await import('@shopkeeper/db');
-  const { buildAgentPlanCacheRecord } = await import('@shopkeeper/agent/plan-cache');
-  const { executeCurrentCachedHomePlan } = await import('@shopkeeper/agent/plan-execution');
-  const { resolveAgentSettings } = await import('@shopkeeper/agent/settings');
-  const { AGENT_NOTE_PREFIX } = await import('@shopkeeper/agent/thread-constants');
-  const { agentTurnMessageFilter } = await import('@shopkeeper/agent/turns');
-  const { buildGatewayPlanExecutionDeps } = await import('../message-handlers/agent-turn-deps.js');
-  const { closeGatewayRedisConnections } = await import('../clients/redis-client.js');
 
   try {
     const organization = await db.organization.findUniqueOrThrow({
@@ -62,10 +156,14 @@ async function main(): Promise<void> {
         expectedPlanExecutionLedger: EXPECTED_MODE,
       },
       action: 'add_internal_note',
+      surface: SURFACE,
     }, null, 2));
 
     if (!EXECUTE) {
-      console.log(`Inspect-only. Re-run with --execute to create one controlled gateway-host ${EXPECTED_MODE} ledger observation.`);
+      console.log(
+        `Inspect-only. Re-run with --execute to create one controlled ${SURFACE}-host `
+        + `${EXPECTED_MODE} ledger observation.`,
+      );
       return;
     }
     if (
@@ -89,8 +187,8 @@ async function main(): Promise<void> {
     const customer = await db.customer.create({
       data: {
         organizationId: organization.id,
-        platformId: `gateway-ledger-canary-${runId}@example.invalid`,
-        name: 'Gateway ledger canary',
+        platformId: `${config.platformIdPrefix}-${runId}@example.invalid`,
+        name: config.customerName,
       },
     });
     const thread = await db.thread.create({
@@ -99,10 +197,10 @@ async function main(): Promise<void> {
         customerId: customer.id,
         channelType: 'email',
         status: 'open',
-        subject: `[CANARY P1-02 gateway ledger] ${runId}`,
+        subject: `${config.subjectPrefix} ${runId}`,
         filterStatus: 'genuine',
         filterDecidedAt: new Date(),
-        filterReason: 'Controlled gateway-host ledger canary',
+        filterReason: config.filterReason,
       },
     });
     const message = await db.message.create({
@@ -110,7 +208,7 @@ async function main(): Promise<void> {
         organizationId: organization.id,
         threadId: thread.id,
         senderType: SenderType.customer,
-        contentText: 'Controlled gateway ledger canary: record an internal audit note only.',
+        contentText: config.messageContent,
         externalMessageId: `canary:p1-02:${runId}:source`,
       },
     });
@@ -125,10 +223,10 @@ async function main(): Promise<void> {
     const toolCall = {
       id: `canary_${runId}`,
       name: 'add_internal_note',
-      input: { text: `[CANARY P1-02 gateway ledger] ${runId}` },
+      input: { text: `${config.toolNotePrefix} ${runId}` },
     };
     const plan: AgentPlan = {
-      instruction: 'Record the controlled gateway ledger canary as an internal note.',
+      instruction: config.instruction,
       steps: [{
         id: toolCall.id,
         tool: toolCall.name,
@@ -153,25 +251,21 @@ async function main(): Promise<void> {
       },
     });
 
-    const result = await executeCurrentCachedHomePlan({
+    const result = await executeApprovedPlan(SURFACE, {
       orgId: organization.id,
       threadId: thread.id,
       settings: orgSettings,
-      executionIntent: 'merchant_approved',
-      failureRoute: 'canary:gateway-ledger',
       approvedToolCalls: plan.rawToolCalls,
-      approver: {
-        clerkUserId: 'canary_gateway_ledger',
-        displayName: 'Rollout Canary',
-      },
+      failureRoute: config.failureRoute,
+      approverClerkId: config.approverClerkId,
       expectedIdentity: {
         planId: cache.planId,
         sourceMessageId: message.id,
       },
-    }, buildGatewayPlanExecutionDeps());
+    });
 
     if (!result.execution.id) {
-      throw new Error('P1-02 gateway canary failed: ledger did not return an execution ID.');
+      throw new Error(`P1-02 ${SURFACE} canary failed: ledger did not return an execution ID.`);
     }
     const [execution, internalNoteCount, auditNoteCount] = await Promise.all([
       db.planExecution.findUniqueOrThrow({
@@ -220,7 +314,7 @@ async function main(): Promise<void> {
     const evidence = {
       phase: 'evidence',
       runId,
-      host: 'gateway',
+      host: config.host,
       organizationId: organization.id,
       customerId: customer.id,
       threadId: thread.id,
@@ -261,14 +355,16 @@ async function main(): Promise<void> {
       && auditNoteCount === 1
       && result.execution.status === 'committed';
     if (!passed) {
-      throw new Error('P1-02 gateway canary failed: ledger, action, or internal-note evidence did not agree.');
+      throw new Error(`P1-02 ${SURFACE} canary failed: ledger, action, or internal-note evidence did not agree.`);
     }
 
     console.log(
-      `P1-02 gateway canary passed: one internal-only approved action produced one linked ${EXPECTED_MODE} ledger execution.`,
+      `P1-02 ${SURFACE} canary passed: one internal-only approved action produced one linked `
+      + `${EXPECTED_MODE} ledger execution.`,
     );
   } finally {
-    await closeGatewayRedisConnections().catch(() => {});
+    await cleanup(SURFACE);
+    const { db } = await import('@shopkeeper/db');
     await db.$disconnect().catch(() => {});
   }
 }

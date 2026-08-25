@@ -1,10 +1,8 @@
 import { db } from '@shopkeeper/db';
 
+import { isRecord } from './lib/guards.mjs';
 const strict = process.argv.includes('--strict');
 
-function isRecord(value) {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
 
 function readInstagramMetadata(metadata) {
   if (!isRecord(metadata) || !isRecord(metadata.instagram)) return {};

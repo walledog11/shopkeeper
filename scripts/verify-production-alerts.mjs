@@ -167,7 +167,7 @@ function printProviderSendSteps({ dryRun }) {
   console.log('[verify-production-alerts] provider_send');
   console.log(`  1. Set PROVIDER_SEND_ALERT_THRESHOLD=${threshold} and OPS_ALERT_WINDOW_SECS=60 on the dashboard.`);
   console.log('  2. Load production dashboard env locally (Upstash Redis + alert env vars).');
-  console.log(`  3. Run: cd apps/dashboard && npx tsx src/scripts/emit-controlled-ops-alert.ts provider_send ${orgId}`);
+  console.log(`  3. Run: npx tsx --tsconfig apps/dashboard/tsconfig.json scripts/emit-controlled-ops-alert.ts --app=dashboard provider_send ${orgId}`);
   console.log('  Expected log tags: category=provider_send service=dashboard provider=postmark channel=email');
   logSearchHint('provider_send', 'dashboard');
 
@@ -182,7 +182,7 @@ function printQueueHealthSteps({ dryRun }) {
   console.log('[verify-production-alerts] queue_health');
   console.log('  Option A (natural): lower QUEUE_ALERT_FAILED_THRESHOLD=1 and wait for maintenance worker if queues are unhealthy.');
   console.log('  Option B (controlled): load production gateway env locally, then run:');
-  console.log('    cd apps/gateway && npx tsx src/scripts/emit-controlled-ops-alert.ts queue_health');
+  console.log('    npx tsx scripts/emit-controlled-ops-alert.ts --app=gateway queue_health');
   console.log('  Expected log tags: category=queue_health service=gateway queue=inbound');
   logSearchHint('queue_health', 'gateway');
 

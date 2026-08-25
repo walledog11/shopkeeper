@@ -1,3 +1,4 @@
+import { isRecord } from "@shopkeeper/agent/guards";
 import type {
   TikTokShopApiConfig,
   TikTokShopHttpMethod,
@@ -297,9 +298,6 @@ async function readJsonOrText(res: Response): Promise<unknown> {
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
-}
 
 function readObject(value: unknown, ...keys: string[]): Record<string, unknown> | null {
   if (!isRecord(value)) return null;

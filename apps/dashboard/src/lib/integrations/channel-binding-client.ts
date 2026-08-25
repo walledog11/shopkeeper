@@ -1,5 +1,6 @@
 import { ApiRequestError, requestJson } from "@/lib/api/fetcher";
 
+import { isRecord } from "@shopkeeper/agent/guards";
 export interface ChannelBindingAttempt {
   value: string;
   expiresAt: number;
@@ -17,9 +18,6 @@ export class ChannelBindingContractError extends Error {
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
 
 function parseAttempt(
   payload: unknown,

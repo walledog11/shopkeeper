@@ -139,7 +139,7 @@ export function isValidBusinessHoursWindow(start: number, end: number): boolean 
   return start !== end;
 }
 
-function offsetToIanaFallback(offset: number): string {
+export function offsetToIanaFallback(offset: number): string {
   const rounded = Math.max(-12, Math.min(14, Math.round(offset)));
   if (rounded === 0) return "UTC";
   return `Etc/GMT${rounded > 0 ? "-" : "+"}${Math.abs(rounded)}`;

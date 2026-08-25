@@ -1,5 +1,6 @@
 import type { EmailIntegrationProvider } from './email-integration';
 
+import { isRecord } from "@shopkeeper/agent/guards";
 type ClientIdEnv = 'GOOGLE_CLIENT_ID';
 type ClientSecretEnv = 'GOOGLE_CLIENT_SECRET';
 type EmailOAuthProvider = Extract<EmailIntegrationProvider, 'gmail'>;
@@ -17,9 +18,6 @@ export interface EmailOAuthProviderConfig {
   userinfoUrl: string;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
 
 export const GMAIL_EMAIL_OAUTH: EmailOAuthProviderConfig = {
   authorizationParams: {

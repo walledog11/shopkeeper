@@ -2,6 +2,7 @@ import {
   parseGatewayProductionConfig,
   type GatewayRuntimeRole,
 } from '../../../../scripts/lib/production-config-schema.mjs';
+import { parseBooleanEnvValue } from '@shopkeeper/agent/env';
 
 export type { GatewayRuntimeRole } from '../../../../scripts/lib/production-config-schema.mjs';
 
@@ -20,20 +21,7 @@ function parsePositiveIntEnv(name: string, fallback: number): number {
 }
 
 function parseBooleanEnv(name: string, fallback: boolean): boolean {
-  const rawValue = process.env[name];
-  if (!rawValue) {
-    return fallback;
-  }
-
-  const normalizedValue = rawValue.trim().toLowerCase();
-  if (['1', 'true', 'yes', 'on'].includes(normalizedValue)) {
-    return true;
-  }
-  if (['0', 'false', 'no', 'off'].includes(normalizedValue)) {
-    return false;
-  }
-
-  throw new Error(`[Gateway] ${name} must be a boolean`);
+  return parseBooleanEnvValue(process.env[name], fallback, name, 'Gateway');
 }
 
 export function getGatewayRuntimeRole(): GatewayRuntimeRole {

@@ -2,6 +2,7 @@ import { isAgentToolName } from "@shopkeeper/agent/tools"
 import { INTENT_KEYS } from "@shopkeeper/agent/classifier-signals"
 import type { Fixture, ToolInputExpectation } from "./types"
 
+import { isRecord } from "@shopkeeper/agent/guards";
 const SUITES = new Set(["core", "extended"])
 // Must track `enum ChannelType` in packages/db/prisma/schema.prisma: a fixture's
 // channelType goes straight into db.thread.create, so anything this set blesses
@@ -34,9 +35,6 @@ const ACTION_MODES = new Set(["human_approved", "auto_executed", "read_only"])
 const AUTH_STATES = new Set(["guest", "verified"])
 const CLASSIFIER_INTENTS = new Set<string>(INTENT_KEYS)
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-}
 
 function sortedValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortedValue)

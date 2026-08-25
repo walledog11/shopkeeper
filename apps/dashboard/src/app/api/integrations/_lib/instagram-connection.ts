@@ -1,6 +1,7 @@
 import { ChannelType, db, Prisma } from '@shopkeeper/db';
 import type { Integration, Prisma as PrismaTypes } from '@prisma/client';
 
+import { isRecord } from "@shopkeeper/agent/guards";
 export class InstagramAccountInUseError extends Error {
   constructor() {
     super('Instagram account is already connected to another workspace');
@@ -36,9 +37,6 @@ export interface PersistInstagramConnectionResult {
   replacedIntegration: Pick<Integration, 'accessToken' | 'externalAccountId' | 'id'> | null;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function instagramLoginMetadata(
   current: unknown,

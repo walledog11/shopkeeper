@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
+import { isRecord } from '@shopkeeper/agent/guards';
 import logger from '@/lib/server/logger';
 import { rateLimit } from '@/lib/server/rate-limit';
-
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -24,9 +24,6 @@ export interface SanitizedCspViolation {
   violatedDirective: string | null;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
 
 function stringField(record: Record<string, unknown>, ...names: string[]): string | null {
   for (const name of names) {

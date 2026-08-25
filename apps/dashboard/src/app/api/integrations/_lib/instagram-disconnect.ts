@@ -1,3 +1,4 @@
+import { isRecord } from "@shopkeeper/agent/guards";
 import {
   unsubscribeInstagramMessages,
   type InstagramProviderError,
@@ -22,9 +23,6 @@ export type InstagramCleanupResult =
       reason: 'missing_access_token' | 'provider_unsubscribe_failed' | 'unexpected_failure';
     };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function isInstagramLoginIntegration(integration: InstagramDisconnectIntegration): boolean {
   return integration.platform === 'ig_dm'

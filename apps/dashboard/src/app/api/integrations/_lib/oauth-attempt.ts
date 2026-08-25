@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { isRecord } from "@shopkeeper/agent/guards";
 import {
   isOAuthFlowMode,
   isOAuthProvider,
@@ -41,9 +42,6 @@ function signatureFor(encoded: string): Buffer {
     .digest();
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function parseExtra(value: unknown): Record<string, string> | null {
   if (!isRecord(value)) return null;

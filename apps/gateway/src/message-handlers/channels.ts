@@ -2,6 +2,7 @@ import type { Job, Queue } from 'bullmq';
 import { db } from '@shopkeeper/db';
 import { shopifyRestJson } from '@shopkeeper/agent/shopify';
 import { fetchInstagramMessagingUserProfile } from '../clients/instagram-graph.js';
+import { isRecord } from '../lib/typing.js';
 import {
   downloadInstagramAttachment,
   isSupportedInstagramBinaryAttachment,
@@ -52,9 +53,6 @@ async function lookupShopifyCustomerName(organizationId: string, email: string):
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function isInstagramInboundAttachment(value: unknown): value is InstagramInboundAttachment {
   return isRecord(value)

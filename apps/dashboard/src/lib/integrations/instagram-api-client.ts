@@ -1,3 +1,4 @@
+import { isRecord } from "@shopkeeper/agent/guards";
 export const INSTAGRAM_GRAPH_VERSION = 'v25.0';
 export const INSTAGRAM_REQUIRED_SCOPES = [
   'instagram_business_basic',
@@ -67,9 +68,6 @@ interface ProviderErrorDescriptor {
   subcode: number | null;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function readString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value : null;

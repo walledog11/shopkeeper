@@ -1,6 +1,6 @@
 import { getSupportStats, type SupportStatsSummary } from '@shopkeeper/agent/support-stats';
 import { canonicalInboxThreadWhere } from '@shopkeeper/agent/inbox-filter';
-import { resolveAgentSettings } from '@shopkeeper/agent/settings';
+import { resolveAgentSettings, offsetToIanaFallback } from '@shopkeeper/agent/settings';
 import { SENDER_TYPE } from '@shopkeeper/agent/thread-constants';
 import { db, ThreadFilterStatus, type DbThreadFilterStatus } from '@shopkeeper/db';
 import { JOB, QUEUE } from '../constants.js';
@@ -214,10 +214,6 @@ export interface DigestMessageExtras {
  * prompted it, because "yes" still approves it from the operator ledger and a
  * briefing that hides what "yes" would do is worse than a noisy one.
  */
-function hasNoRequest(thread: DigestThreadRow): boolean {
-  return rowHasNoRequest(thread);
-}
-
 // Just the disclosure that the agent binned things on the merchant's behalf.
 // The 7-day retention window is deliberately not mentioned: there is no
 // un-filter path on the operator channel (REVIEW relists *flagged*, not
@@ -417,13 +413,13 @@ export async function buildOrgDigest(
   const buckets = bucketDigestThreads(threads, now, since);
   const waitingThreadIds = new Set(waitingItems.map((item) => item.threadId));
 
-  const flaggedCandidates = buckets.questionable.filter((thread) => !hasNoRequest(thread));
+  const flaggedCandidates = buckets.questionable.filter((thread) => !rowHasNoRequest(thread));
   // Ordered after the limit, not before: the cut is about how much of the
   // briefing these are worth, and reordering it would change which ten the
   // merchant sees rather than which one they see first.
   const flagged = flaggedCandidates.slice(0, DIGEST_QUESTIONABLE_LIMIT);
   const escalated = buckets.genuine
-    .filter((thread) => thread.escalatedAt && !waitingThreadIds.has(thread.id) && !hasNoRequest(thread));
+    .filter((thread) => thread.escalatedAt && !waitingThreadIds.has(thread.id) && !rowHasNoRequest(thread));
   // Soonest deadline first, within each group. Across groups is not a choice
   // this can make: `formatNeedsYouProse` renders by kind, so only the order
   // inside one group ever reaches the merchant. Sorting here rather than at
@@ -665,12 +661,6 @@ function normalizeHour(value: unknown, fallback: number): number {
     return fallback;
   }
   return ((Math.round(value) % 24) + 24) % 24;
-}
-
-function offsetToIanaFallback(offset: number): string {
-  const rounded = Math.max(-12, Math.min(14, Math.round(offset)));
-  if (rounded === 0) return 'UTC';
-  return `Etc/GMT${rounded > 0 ? '-' : '+'}${Math.abs(rounded)}`;
 }
 
 function resolveTz(settings: Record<string, unknown>): string {

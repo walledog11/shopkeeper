@@ -1,13 +1,11 @@
 import type { GmailWatchErrorCategory } from './errors.js';
 import type { GmailWatchRequest } from './client.js';
 
+import { isRecord } from '../guards.js';
 const GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 
 export const GMAIL_HISTORY_ID_PATTERN = /^\d+$/;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
 
 export function getGmailMetadata(metadata: unknown): Record<string, unknown> | null {
   if (!isRecord(metadata) || !isRecord(metadata.gmail)) return null;

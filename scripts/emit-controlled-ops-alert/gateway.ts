@@ -1,10 +1,10 @@
-import { loadGatewayEnv } from '../config/load-env.js';
-import { getGatewayOpsAlertConfig } from '../config/runtime-config.js';
-import { getOpsAlertCounterClient } from '../ops-alert-counter.js';
-import { emitOpsAlert } from '../ops-alerts.js';
-import { recordProviderSendFailure } from '../provider-send-alerts.js';
-import { recordWebhookSignatureFailure } from '../routes/webhooks-signature-alerts.js';
-import { closeGatewayRedisConnections } from '../clients/redis-client.js';
+import { loadGatewayEnv } from '../../apps/gateway/src/config/load-env.js';
+import { getGatewayOpsAlertConfig } from '../../apps/gateway/src/config/runtime-config.js';
+import { getOpsAlertCounterClient } from '../../apps/gateway/src/ops-alert-counter.js';
+import { emitOpsAlert } from '../../apps/gateway/src/ops-alerts.js';
+import { recordProviderSendFailure } from '../../apps/gateway/src/provider-send-alerts.js';
+import { recordWebhookSignatureFailure } from '../../apps/gateway/src/routes/webhooks-signature-alerts.js';
+import { closeGatewayRedisConnections } from '../../apps/gateway/src/clients/redis-client.js';
 
 loadGatewayEnv();
 
@@ -14,7 +14,9 @@ type ControlledCategory = typeof VALID_CATEGORIES[number];
 function parseCategory(raw: string | undefined): ControlledCategory {
   const value = raw?.trim();
   if (!value || !VALID_CATEGORIES.includes(value as ControlledCategory)) {
-    throw new Error(`Usage: npx tsx src/scripts/emit-controlled-ops-alert.ts <${VALID_CATEGORIES.join('|')}> [test-org-id]`);
+    throw new Error(
+      `Usage: npx tsx scripts/emit-controlled-ops-alert.ts --app=gateway <${VALID_CATEGORIES.join('|')}> [test-org-id]`,
+    );
   }
   return value as ControlledCategory;
 }
@@ -95,8 +97,8 @@ async function emitProviderSendAlert(orgId: string): Promise<void> {
   console.log(JSON.stringify({ category: 'provider_send', emitted: result.emitted, window: result.window }, null, 2));
 }
 
-async function main(): Promise<void> {
-  const category = parseCategory(process.argv[2]);
+export async function runGatewayEmitControlledOpsAlert(argv: string[]): Promise<void> {
+  const category = parseCategory(argv[0]);
 
   try {
     if (category === 'queue_health') {
@@ -105,7 +107,7 @@ async function main(): Promise<void> {
     }
 
     if (category === 'provider_send') {
-      await emitProviderSendAlert(parseOrgId(process.argv[3] ?? process.env.VERIFY_ALERT_ORG_ID));
+      await emitProviderSendAlert(parseOrgId(argv[1] ?? process.env.VERIFY_ALERT_ORG_ID));
       return;
     }
 
@@ -114,8 +116,3 @@ async function main(): Promise<void> {
     await closeGatewayRedisConnections();
   }
 }
-
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});

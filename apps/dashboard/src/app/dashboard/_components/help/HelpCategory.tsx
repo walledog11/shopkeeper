@@ -2,7 +2,7 @@
 
 import { ChevronRight } from "lucide-react"
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
-import { withAgentName, type Category, type Article } from "./content/index"
+import { withAgentName, type Category, type Article } from "@shopkeeper/agent/product-help"
 
 interface Props {
   category: Category

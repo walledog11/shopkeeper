@@ -1,5 +1,6 @@
 import { fetchProviderWithDeadline } from '@/lib/server/provider-fetch';
 
+import { isRecord } from "@shopkeeper/agent/guards";
 const META_GRAPH_BASE_URL = 'https://graph.facebook.com/v22.0';
 
 interface MetaErrorPayload {
@@ -23,9 +24,6 @@ export interface MetaInstagramPage {
   };
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function readString(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;

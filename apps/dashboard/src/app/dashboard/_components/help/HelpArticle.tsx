@@ -1,7 +1,7 @@
 "use client"
 
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
-import { withAgentName, type Article } from "./content/index"
+import { withAgentName, type Article } from "@shopkeeper/agent/product-help"
 
 export default function HelpArticle({ article }: { article: Article }) {
   const named = (text: string) => withAgentName(text, AGENT_DISPLAY_NAME)

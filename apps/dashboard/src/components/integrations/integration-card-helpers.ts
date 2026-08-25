@@ -1,3 +1,4 @@
+import { isRecord } from "@shopkeeper/agent/guards";
 import {
   getEmailAuthReauthorizationReason,
   getGmailInboundStatus,
@@ -28,9 +29,6 @@ function isTokenExpiringSoon(integration: Integration) {
 
 type InstagramHealthStatus = "healthy" | "degraded" | "reconnect_required"
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-}
 
 function getInstagramHealth(integration: Integration): {
   errorCategory: string | null

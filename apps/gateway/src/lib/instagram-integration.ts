@@ -1,5 +1,6 @@
 import { db } from '@shopkeeper/db';
 
+import { isRecord } from './typing.js';
 export interface ActiveInstagramIntegration {
   id: string;
   organizationId: string;
@@ -14,9 +15,6 @@ export class AmbiguousInstagramIntegrationError extends Error {
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function isInstagramLoginMetadata(metadata: unknown): boolean {
   if (!isRecord(metadata) || !isRecord(metadata.instagram)) return false;

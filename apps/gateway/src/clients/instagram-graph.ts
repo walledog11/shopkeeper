@@ -1,3 +1,4 @@
+import { isRecord } from '../lib/typing.js';
 export const INSTAGRAM_GRAPH_VERSION = 'v25.0';
 
 const INSTAGRAM_GRAPH_ORIGIN = 'https://graph.instagram.com';
@@ -55,9 +56,6 @@ interface ProviderErrorDescriptor {
   subcode: number | null;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function readString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value : null;

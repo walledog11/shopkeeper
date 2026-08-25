@@ -13,6 +13,7 @@ import { formatFactsBriefingLine, type AskLessContext } from './briefing-fields.
 import { lowerFirst } from '../lib/sentence-case.js';
 import { listVerifiedOrderNamesByThread } from '../storefront-chat-verified-orders.js';
 import { parseStoredPendingPlan } from '../operator-context.js';
+import { isRecord } from '../lib/typing.js';
 import {
   formatRequestDisplayLine,
   requestDisplayHasContext,
@@ -89,9 +90,6 @@ export async function finalizeDigestSend(
   });
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
 
 function extractRefundAmount(input: unknown): string | null {
   if (!isRecord(input)) return null;

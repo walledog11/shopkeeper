@@ -2,6 +2,7 @@ import { db, EmailProvider, Prisma } from '@shopkeeper/db';
 import { getEmailProvider } from '@shopkeeper/email/providers';
 import type { Prisma as PrismaTypes } from '@prisma/client';
 
+import { isRecord } from "@shopkeeper/agent/guards";
 export type EmailIntegrationProvider = 'gmail' | 'postmark';
 
 export type UpsertEmailIntegrationArgs = {
@@ -27,9 +28,6 @@ export type UpsertEmailIntegrationArgs = {
     }
 );
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
 
 function mergeEmailMetadata(
   existingMetadata: unknown,

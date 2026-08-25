@@ -11,7 +11,7 @@
     "dev": "concurrently --kill-others-on-fail --names \"server,worker\" --prefix-colors \"bgBlue.bold,bgMagenta.bold\" \"tsx watch src/index.ts\" \"tsx watch src/worker.ts\"",
     "dev:tunnel": "concurrently --kill-others-on-fail --names \"server,worker,tunnel\" --prefix-colors \"bgBlue.bold,bgMagenta.bold,bgGreen.bold\" \"tsx watch src/index.ts\" \"tsx watch src/worker.ts\" \"npm run tunnel\"",
     "dev:e2e": "concurrently --kill-others-on-fail --names \"server,worker\" --prefix-colors \"bgBlue.bold,bgMagenta.bold\" \"tsx src/index.ts\" \"tsx src/worker.ts\"",
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
     "lint": "cd ../.. && eslint apps/gateway/src apps/gateway/vitest.config.ts apps/gateway/vitest.integration.config.ts apps/gateway/vitest.unit.config.ts --max-warnings 0",
     "start": "node dist/start.js",

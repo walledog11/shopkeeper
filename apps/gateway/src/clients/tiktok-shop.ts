@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'crypto';
+import { isRecord } from '../lib/typing.js';
 import type {
   TikTokShopApiConfig,
   TikTokShopHttpMethod,
@@ -237,9 +238,6 @@ async function readJsonOrText(response: Response): Promise<unknown> {
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
 
 function readObject(value: unknown, ...keys: string[]): Record<string, unknown> | null {
   if (!isRecord(value)) return null;

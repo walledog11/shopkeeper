@@ -6,6 +6,7 @@ import {
   type IntegrationPlatform,
   type OnboardingStep,
 } from '@shopkeeper/analytics';
+import { isRecord } from '@shopkeeper/agent/guards';
 import { db } from '@shopkeeper/db';
 import { BadRequestError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
@@ -30,9 +31,6 @@ type RestrictedProductEvent =
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
 
 function hasExactKeys(
   value: Record<string, unknown>,

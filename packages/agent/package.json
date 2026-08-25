@@ -233,6 +233,14 @@
     "./dashboard-destinations": {
       "types": "./dist/dashboard-destinations.d.ts",
       "default": "./dist/dashboard-destinations.js"
+    },
+    "./guards": {
+      "types": "./dist/guards.d.ts",
+      "default": "./dist/guards.js"
+    },
+    "./env": {
+      "types": "./dist/env.d.ts",
+      "default": "./dist/env.js"
     }
   },
   "scripts": {

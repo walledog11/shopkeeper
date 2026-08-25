@@ -4,6 +4,7 @@ import {
   readEnv,
   requireEnv,
 } from "./helpers";
+import { parseBooleanEnvValue } from "@shopkeeper/agent/env";
 import { parseProductAnalyticsConfig } from '@shopkeeper/analytics';
 
 export function getDashboardAppUrl(): string {
@@ -231,20 +232,7 @@ function parsePositiveIntEnv(name: string, fallback: number): number {
 }
 
 function parseBooleanEnv(name: string, fallback: boolean): boolean {
-  const rawValue = readEnv(name);
-  if (!rawValue) {
-    return fallback;
-  }
-
-  const normalizedValue = rawValue.toLowerCase();
-  if (["1", "true", "yes", "on"].includes(normalizedValue)) {
-    return true;
-  }
-  if (["0", "false", "no", "off"].includes(normalizedValue)) {
-    return false;
-  }
-
-  throw new Error(`[Dashboard] ${name} must be a boolean`);
+  return parseBooleanEnvValue(readEnv(name), fallback, name, "Dashboard");
 }
 
 export function isGmailNativeInboundEnabled(): boolean {

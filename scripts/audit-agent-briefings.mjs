@@ -1,3 +1,4 @@
+import { isRecord } from './lib/guards.mjs';
 // Milestone 1 production compatibility inventory (READ-ONLY).
 //
 // Reports aggregate persisted shapes used by actionable merchant briefings.
@@ -13,9 +14,6 @@ loadLocalEnv();
 
 const { db } = await import('@shopkeeper/db');
 
-function isRecord(value) {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
 
 function pendingThreadIds(contexts) {
   const ids = new Set();

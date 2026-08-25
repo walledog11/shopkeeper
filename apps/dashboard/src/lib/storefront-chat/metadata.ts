@@ -1,10 +1,8 @@
 import type { Prisma } from "@prisma/client";
 import { isStorefrontChatEnabledForIntegration } from "./enabled";
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === "object" && !Array.isArray(value);
-}
 
+import { isRecord } from "@shopkeeper/agent/guards";
 export function readStorefrontChatEnabled(metadata: unknown): boolean {
   return isStorefrontChatEnabledForIntegration(metadata);
 }

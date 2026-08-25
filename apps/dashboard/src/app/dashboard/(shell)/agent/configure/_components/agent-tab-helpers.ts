@@ -1,3 +1,4 @@
+import { isRecord } from "@shopkeeper/agent/guards";
 import {
   AGENT_DISPLAY_NAME,
   AGENT_SETTINGS_DEFAULTS,
@@ -37,9 +38,6 @@ export function agentSettingsReducer(state: OrgSettings, action: AgentSettingsAc
   return { ...state, ...action.patch, agentName: AGENT_DISPLAY_NAME }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-}
 
 function hasSettingsPath(settings: SettingsLike, path: AutonomyOverridePath): boolean {
   const [first, second] = path.split(".")

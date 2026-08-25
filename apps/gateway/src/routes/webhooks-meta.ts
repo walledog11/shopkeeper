@@ -4,6 +4,7 @@ import { getInstagramWebhookConfig } from '../config/runtime-config.js';
 import logger from '../logger.js';
 import { JOB } from '../constants.js';
 import { rateLimit } from '../rate-limit.js';
+import { isRecord } from '../lib/typing.js';
 import type {
   InstagramInboundAttachment,
   InstagramInboundJobData,
@@ -24,9 +25,6 @@ interface NormalizedInstagramMessage {
   attachments: InstagramInboundAttachment[];
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function readNonEmptyString(value: unknown): string | null {
   if (typeof value !== 'string' || value.trim().length === 0) return null;

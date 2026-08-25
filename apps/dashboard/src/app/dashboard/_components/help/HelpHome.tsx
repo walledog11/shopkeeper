@@ -1,7 +1,7 @@
 "use client"
 
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
-import { withAgentName, type Category } from "./content/index"
+import { withAgentName, type Category } from "@shopkeeper/agent/product-help"
 
 interface Props {
   categories: Category[]

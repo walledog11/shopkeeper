@@ -5,6 +5,7 @@ import { db, Prisma } from '@shopkeeper/db';
 import type { Prisma as PrismaTypes } from '@prisma/client';
 import logger from '@/lib/server/logger';
 import { timingSafeIncludes } from '@/lib/security/timing-safe';
+import { isRecord } from "@shopkeeper/agent/guards";
 import {
   isSameShopifyStore,
   normalizeShopifyShopDomain,
@@ -264,9 +265,6 @@ function isJsonObject(value: unknown): value is Record<string, PrismaTypes.Input
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
 
 async function resolveShopifyAuthorizedShop({
   accessToken,

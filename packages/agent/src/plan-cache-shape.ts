@@ -1,6 +1,6 @@
 import { SENDER_TYPE } from "./thread-constants.js"
 import type { AgentPlan, ClassifierAlignmentState, PlanRoutingEvidence, PlanRoutingEvidenceCode, PlanSignal, PlanStep, PlanValidation, PlanValidationIssue, PlanValidationIssueCode, RawToolCall, ToolCategory } from "./types.js"
-
+import { isRecord } from "./guards.js"
 export type PlanThreadMessage = {
   id: string
   senderType: string
@@ -48,9 +48,6 @@ const PLAN_ROUTING_EVIDENCE_CODES: PlanRoutingEvidenceCode[] = [
   "circular_channel_deflection",
 ]
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
-}
 
 function isToolCategory(value: unknown): value is ToolCategory {
   return typeof value === "string" && TOOL_CATEGORIES.includes(value as ToolCategory)

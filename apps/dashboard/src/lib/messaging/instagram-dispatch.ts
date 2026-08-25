@@ -1,5 +1,6 @@
 import { db, SenderType } from "@shopkeeper/db"
 import { CHANNEL_TYPE } from "@shopkeeper/agent/thread-constants"
+import { isRecord } from "@shopkeeper/agent/guards"
 import {
   INSTAGRAM_REQUIRED_SCOPES,
   sendInstagramTextMessage,
@@ -23,9 +24,6 @@ const LEGACY_CONVERSATION = "This legacy Instagram conversation is read-only"
 const EXPIRED_CONNECTION = "Instagram connection expired — reconnect Instagram to reply"
 const MISSING_PERMISSION = "Instagram messaging permission is missing — reconnect Instagram"
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-}
 
 function instagramMetadata(metadata: unknown): Record<string, unknown> | null {
   if (!isRecord(metadata) || !isRecord(metadata.instagram)) return null

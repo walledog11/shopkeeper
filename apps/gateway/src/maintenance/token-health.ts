@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import { db } from '@shopkeeper/db';
+import { isRecord } from '../lib/typing.js';
 import {
   fetchConnectedInstagramAccount,
   fetchInstagramMessageSubscription,
@@ -44,9 +45,6 @@ interface InstagramHealthError {
   subcode: number | null;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function readTimestamp(value: unknown): number | null {
   if (typeof value !== 'string' || value.length === 0) return null;

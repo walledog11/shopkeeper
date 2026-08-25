@@ -1,3 +1,4 @@
+import { isRecord } from "@shopkeeper/agent/guards";
 export const ORDER_BOARD_COLUMN_IDS = [
   "needs_fulfillment",
   "unpaid",
@@ -136,9 +137,6 @@ export function parseOrderBoardRequestParams(
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null
-}
 
 function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === "string"

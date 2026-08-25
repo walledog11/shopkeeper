@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { ChevronLeft } from "lucide-react";
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings";
-import { ALL_CATEGORIES, withAgentName, type Article, type Category } from "../help/content/index";
+import { ALL_CATEGORIES, withAgentName, type Article, type Category } from "@shopkeeper/agent/product-help";
 import HelpArticle from "../help/HelpArticle";
 import HelpCategory from "../help/HelpCategory";
 import HelpHome from "../help/HelpHome";

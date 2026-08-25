@@ -6,6 +6,7 @@ import {
   type RefreshedToken,
   type TokenRefreshResult,
 } from '../token.js';
+import { isRecord } from '../guards.js';
 import { EmailNotConfiguredError } from '../types.js';
 import { decodeGmailBase64Url } from './base64url.js';
 import { GmailApiError, type GmailApiErrorKind } from './errors.js';
@@ -120,9 +121,6 @@ interface RequestOptions {
   staleHistoryOnNotFound?: boolean;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
 
 // AbortSignal.timeout rejects fetch with a DOMException named 'TimeoutError';
 // a manual abort surfaces as 'AbortError'. The only signal here is the deadline.

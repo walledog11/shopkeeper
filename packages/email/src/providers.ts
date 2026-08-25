@@ -1,6 +1,7 @@
 import type { EmailProvider } from './types.js';
 import { getGmailMetadata } from './gmail/metadata.js';
 
+import { isRecord } from './guards.js';
 const EXPLICIT_EXPIRED_TOKEN_MS = 0;
 export const GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 
@@ -18,9 +19,6 @@ export type GmailAccountType = 'personal' | 'workspace';
 
 const PERSONAL_GMAIL_DOMAINS = new Set(['gmail.com', 'googlemail.com']);
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
 
 export function getEmailProvider(integration: {
   emailProvider?: EmailProvider | null;

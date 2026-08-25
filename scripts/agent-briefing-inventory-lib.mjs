@@ -1,6 +1,4 @@
-function isRecord(value) {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
+import { isRecord } from './lib/guards.mjs';
 
 export function classifierState(value) {
   if (value == null) return 'missing';

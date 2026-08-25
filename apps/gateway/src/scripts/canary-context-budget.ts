@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { loadGatewayEnv } from '../config/load-env.js';
 
+import { isRecord } from '../lib/typing.js';
 loadGatewayEnv();
 
 const EXECUTE = process.argv.includes('--execute');
@@ -17,9 +18,6 @@ function readArg(prefix: string): string | null {
   return raw || null;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
-}
 
 async function main(): Promise<void> {
   if (!ORGANIZATION_ID || (EXPECTED_MODE !== 'shadow' && EXPECTED_MODE !== 'enforce')) {

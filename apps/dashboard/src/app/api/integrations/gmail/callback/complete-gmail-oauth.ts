@@ -3,6 +3,7 @@ import { resolveGmailAccountType } from '@shopkeeper/email/providers';
 import type { IntegrationFailureCategory } from '@shopkeeper/analytics';
 import { isGmailNativeInboundEnabled } from '@/lib/env';
 import logger from '@/lib/server/logger';
+import { isRecord } from "@shopkeeper/agent/guards";
 import {
   fetchProviderWithDeadline,
   isProviderRequestTimeoutError,
@@ -201,9 +202,6 @@ async function readJson(response: Response): Promise<unknown> {
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
 
 function readNonEmptyString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
