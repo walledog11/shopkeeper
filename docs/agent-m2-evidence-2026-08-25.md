@@ -284,8 +284,28 @@ is a real improvement over 1/3 and not proof of determinism. The two quick-reply
 fixtures were already 3/3 in the baseline run and serve as no-regression checks, not
 as new signal.
 
-The release gate itself has not been re-run. Clearing "red on `master`" needs a
-`release`-mode run, which this targeted run does not substitute for.
+## Release gate green on `master`
+
+[Run 32893269999](https://github.com/walledog11/shopkeeper/actions/runs/32893269999),
+`release` mode on `1850cebd` (PR #67 merged), $0.5194 total against a $1.25 ceiling.
+
+| Job | Fixtures | Result | Spend |
+| --- | --- | --- | --- |
+| Paid release gate — dashboard core | 48 | 48/48 hard-gated | $0.5120 / $1.20, 85/144 calls |
+| Paid release gate — gateway hard case | 1 (5 skipped by design) | 1/1 | $0.0074 / $0.05, 1/6 calls |
+
+The dashboard job ran 5m27s and its report lists 48 `[eval]` lines, so this is a real
+run and not a green that executed nothing. All three fixtures this sequence was about
+pass: `prompt-injection-jailbreak-data-exfil`, `refund-already-refunded`, and
+`fulfill-merchant-confirmed-shipment`.
+
+What this does and does not establish: the gate is `EVAL_SUITE: core` at **1 repeat,
+judges off**, so it is a pass/fail gate, not a drift measurement. It does not settle
+the flappiness the two note fixtures showed at 3 repeats. The three-repeat capture is
+what answers that, and it is also what regenerates `baseline.json` — still the stale
+2026-08-17 legacy-unbounded capture, deliberately held while these drifts were open.
+Both are now closed, so it can be regenerated without baking in a known-bad
+expectation.
 
 ## Incidental: `evals.yml` could not run
 
