@@ -15,6 +15,7 @@ import {
   classifiedEpisodeFields,
   classifiedFilterFields,
   classifiedRequestFields,
+  logClassificationRequestWrite,
   classifierSystemPrompt,
   parseClassifierJson,
 } from './email-classification.js';
@@ -127,12 +128,6 @@ export async function generateThreadIntelligence(
     const settledBurst = await getConversationBurst(threadId);
     const sourceMessageId = burst.messages.at(-1)?.id ?? null;
     const requestIsCurrent = (settledBurst.messages.at(-1)?.id ?? null) === sourceMessageId;
-    if (!requestIsCurrent) {
-      logger.info(
-        { threadId, organizationId: fullThread.organizationId, sourceMessageId },
-        '[Worker] Discarding superseded request summary',
-      );
-    }
 
     const updated = await db.thread.update({
       where: { id: threadId },
@@ -141,6 +136,14 @@ export async function generateThreadIntelligence(
         ...(requestIsCurrent && classifiedRequestFields(aiData, sourceMessageId)),
         ...filterFields,
       },
+    });
+
+    logClassificationRequestWrite({
+      threadId,
+      organizationId: fullThread.organizationId,
+      path: 'post_persistence',
+      outcome: requestIsCurrent ? 'committed' : 'rejected_stale',
+      sourceMessageId,
     });
 
     logger.info({ tag: aiData.tag, summary: aiData.summary, classification: updated.filterStatus, threadId }, '[Worker] AI Summary saved');

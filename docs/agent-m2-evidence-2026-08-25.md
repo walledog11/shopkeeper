@@ -461,6 +461,33 @@ burst. Same decision, two situations. Forcing one mechanism onto both would have
 been a false symmetry, so the projections are shared and the guards are not, with
 comments at each site saying which is which.
 
+### Stale-write telemetry
+
+The reachability work above could only be answered from rows because the guard
+itself reported nothing. The pre-persistence guard is a `tx.thread.updateMany`
+whose zero `count` nobody read, so a rejected classification write left no trace;
+the post-persistence guard logged one, under a different message and a different
+field shape. One decision, two observability stories, one of them absent.
+
+Both now call `logClassificationRequestWrite`, which emits a typed
+`outcome: 'committed' | 'rejected_stale'` alongside the path, the classifier
+version, and the source message id. Counting rejected writes in production is one
+query rather than two log shapes nothing keeps in step, and the outcome is a code
+— the message string stays display-only.
+
+Two ordering details are load-bearing:
+
+- The pre-persistence outcome is carried out of the inbound transaction and
+  logged after it commits. Logged inside, a rollback — which a duplicate provider
+  message causes by design — would report a commit that never happened.
+- The post-persistence event moved to after its `thread.update` for the same
+  reason, replacing the old pre-write `Discarding superseded request summary`
+  line. Nothing referenced that string.
+
+Both outcomes are asserted by the existing characterization tests, which already
+produced exactly one committed and one rejected write per path; neither needed a
+new fixture.
+
 ### Drift guard
 
 A unit test requires the three projections to consume every persisted

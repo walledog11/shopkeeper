@@ -15,7 +15,9 @@ import {
   classifiedEpisodeFields,
   classifiedFilterFields,
   classifiedRequestFields,
+  logClassificationRequestWrite,
   type ClassificationResult,
+  type ClassificationWriteOutcome,
 } from './email-classification.js';
 import {
   resolveInboundEpisode,
@@ -187,6 +189,7 @@ export async function processInboundMessage(
     rolledOverFromThreadId: string | null;
     rolloverReason: string | null;
     message: Awaited<ReturnType<typeof createMessage>>;
+    requestWriteOutcome: ClassificationWriteOutcome | null;
   };
   try {
     outcome = await db.$transaction(async (tx) => {
@@ -233,6 +236,7 @@ export async function processInboundMessage(
           ...(providerSentAt && { sentAt: providerSentAt }),
         },
       });
+      let requestWriteOutcome: ClassificationWriteOutcome | null = null;
       // A note is not a conversation turn: it neither invalidates a pending
       // plan nor advances the thread's last-message cursor.
       if (!synthetic) {
@@ -257,7 +261,7 @@ export async function processInboundMessage(
         // owner, or an out-of-order message describes the thread's current
         // request with an older one. The guard reads lastMessageAt before the
         // write below bumps it, so "is this the newest message" is asked once.
-        await tx.thread.updateMany({
+        const guarded = await tx.thread.updateMany({
           where: {
             id: episode.thread.id,
             organizationId,
@@ -269,6 +273,11 @@ export async function processInboundMessage(
             ...(precomputed && classifiedRequestFields(precomputed, created.id)),
           },
         });
+        // Carried out of the transaction rather than logged here: a rollback
+        // would otherwise report a commit that never happened.
+        if (precomputed) {
+          requestWriteOutcome = guarded.count > 0 ? 'committed' : 'rejected_stale';
+        }
       }
       if (routeReceivedAt) {
         await tx.thread.updateMany({
@@ -286,7 +295,7 @@ export async function processInboundMessage(
           },
         });
       }
-      return { ...episode, message: created };
+      return { ...episode, message: created, requestWriteOutcome };
     });
   } catch (error) {
     if (providerMessageId && (error as { code?: string }).code === 'P2002') {
@@ -301,6 +310,16 @@ export async function processInboundMessage(
 
   const { message, isNew } = outcome;
   const thread = outcome.thread;
+
+  if (outcome.requestWriteOutcome) {
+    logClassificationRequestWrite({
+      threadId: thread.id,
+      organizationId,
+      path: 'pre_persistence',
+      outcome: outcome.requestWriteOutcome,
+      sourceMessageId: message.id,
+    });
+  }
 
   if (outcome.rolledOverFromThreadId) {
     logger.info(

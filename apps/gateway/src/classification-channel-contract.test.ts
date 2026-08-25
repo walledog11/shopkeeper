@@ -6,7 +6,8 @@ import { processInboundMessage } from './message-handlers/inbound-persistence.js
 import type { ClassificationResult } from './message-handlers/email-classification.js';
 import type { RequestFacts } from '@shopkeeper/agent/classifier-signals';
 import type { AiSummaryJobData } from './types.js';
-import { org } from './test-fixtures/worker-test-setup.js';
+import { CLASSIFIER_VERSION } from './message-handlers/email-classification.js';
+import { getWorkerTestState, org } from './test-fixtures/worker-test-setup.js';
 import {
   classifierResponse,
   getCapturedHandlers,
@@ -93,6 +94,14 @@ async function persistedRequestContract(threadId: string) {
     sourceAligned: source?.threadId === threadId && source.senderType === 'customer',
     sourceText: source?.contentText ?? null,
   };
+}
+
+// The stale-write metric. Both guards report through one event, so a rejected
+// write is countable in production instead of being a silent no-op.
+function classificationWriteEvents() {
+  return getWorkerTestState().mockLogger.info.mock.calls
+    .filter((call) => call[1] === '[Worker] Classification request write')
+    .map((call) => call[0]);
 }
 
 function runSummaryJob(data: AiSummaryJobData) {
@@ -213,6 +222,15 @@ describe('inbound classification channel contract', () => {
       sourceAligned: true,
       sourceText: REQUEST_TEXT,
     });
+
+    expect(classificationWriteEvents()).toEqual([
+      expect.objectContaining({
+        path: 'post_persistence',
+        outcome: 'rejected_stale',
+        classifierVersion: CLASSIFIER_VERSION,
+      }),
+      expect.objectContaining({ path: 'post_persistence', outcome: 'committed' }),
+    ]);
   });
 
   // The pre-persistence counterpart to the compare-and-set above. lastMessageAt
@@ -280,6 +298,17 @@ describe('inbound classification channel contract', () => {
     expect(await persistedRequestContract(first!.thread.id)).toMatchObject({
       sourceText: 'Newer request: cancel order #1024.',
     });
+
+    // The rejection is reported, not silent: before this the guard was an
+    // updateMany whose zero count nothing read.
+    expect(classificationWriteEvents()).toEqual([
+      expect.objectContaining({
+        path: 'pre_persistence',
+        outcome: 'committed',
+        classifierVersion: CLASSIFIER_VERSION,
+      }),
+      expect.objectContaining({ path: 'pre_persistence', outcome: 'rejected_stale' }),
+    ]);
   });
 
   it('classifies a follow-up email as one settled burst after the initial inline decision', async () => {

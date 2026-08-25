@@ -140,7 +140,7 @@ Full evidence, reachability analysis, and completion-gate status are in [agent-m
 - ~~Preserve the staleness guard: never save fields for a request superseded while classification was running.~~ Done 2026-08-25 in `933019d5`.
 - Verify multi-message email bursts classify once per request episode. *Open: the suite pins the current behavior, which is one inline call plus one on the settled burst.*
 - Define supported classifier versions and a retirement procedure: inventory → dual-read/backfill → canary → retirement.
-- Add production metrics for classifier version, failure, stale-write rejection, and source alignment.
+- Add production metrics for classifier version, failure, stale-write rejection, and source alignment. *Partly done 2026-08-25: both guards now emit one `Classification request write` event carrying a typed `outcome`, the path, the classifier version, and the source message id, so a rejected write is countable instead of a silent `updateMany`. Open: classification failure and spend-cap skip are still two unstructured log lines with no shared code.*
 - ~~Decide the `AGENT_CONTEXT_BUDGET_MODE` rollout, then remove the unused branch.~~ Done 2026-08-25.
 
 ### Acceptance

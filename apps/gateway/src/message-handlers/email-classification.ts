@@ -110,6 +110,28 @@ export function classifiedRequestFields(
   };
 }
 
+export type ClassificationWriteOutcome = 'committed' | 'rejected_stale';
+
+// Both paths guard the request half against a newer message, by different
+// mechanisms for the same reason. One event records the outcome either way, so
+// counting rejected writes in production is one query rather than two log
+// shapes nothing keeps in step. The outcome is a code; the message is display.
+//
+// Emit after the write is durable, never from inside the inbound transaction —
+// a rolled-back transaction would otherwise report a commit that never happened.
+export function logClassificationRequestWrite(fields: {
+  threadId: string;
+  organizationId: string;
+  path: 'pre_persistence' | 'post_persistence';
+  outcome: ClassificationWriteOutcome;
+  sourceMessageId: string | null;
+}): void {
+  logger.info(
+    { ...fields, classifierVersion: CLASSIFIER_VERSION },
+    '[Worker] Classification request write',
+  );
+}
+
 // Null when this channel takes no filter verdict at all. Callers still gate on
 // filterDecidedAt: this owns the channel rule, not the write-once lock.
 export function classifiedFilterFields(result: ClassificationResult, channelType: string) {
