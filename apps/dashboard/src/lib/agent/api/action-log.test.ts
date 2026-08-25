@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { randomUUID } from "node:crypto";
 import { ChannelType, db } from "@shopkeeper/db";
 import {
   cleanupTestData,
   createTestCustomer,
+  createTestMessage,
   createTestOrg,
   createTestThread,
 } from "@shopkeeper/db/test-helpers";
@@ -35,6 +37,7 @@ async function seedTurn(params: {
   summary: string;
   actions: ActionEntry[];
   mode?: "human_approved" | "auto_executed" | "read_only";
+  executionId?: string | null;
 }) {
   await recordAgentActionsBatch({
     orgId: params.orgId,
@@ -44,6 +47,7 @@ async function seedTurn(params: {
     actions: params.actions,
     instruction: params.instruction,
     summary: params.summary,
+    ...(params.executionId ? { executionId: params.executionId } : {}),
   });
 }
 
@@ -88,6 +92,73 @@ describe("action-log reader (AgentAction-sourced)", () => {
       mode: "human_approved",
     });
     expect(entries[0].actions.map((a) => a.tool)).toEqual(["create_refund", "update_thread_status"]);
+  });
+
+  it("attaches request episode outcome when the turn has an execution id", async () => {
+    org = await createTestOrg();
+    const customer = await createTestCustomer(org.id, "ada@example.com", { name: "Ada" });
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    const message = await createTestMessage(thread.id, "Do you ship to Canada?");
+    const planId = randomUUID();
+    const now = new Date();
+    const execution = await db.planExecution.create({
+      data: {
+        planId,
+        organizationId: org.id,
+        threadId: thread.id,
+        sourceMessageId: message.id,
+        planHash: "a".repeat(64),
+        instructionHash: "b".repeat(64),
+        status: "committed",
+        claimToken: randomUUID(),
+        claimedAt: now,
+        completedAt: now,
+      },
+    });
+    await db.requestEpisodeOutcome.create({
+      data: {
+        id: randomUUID(),
+        organizationId: org.id,
+        threadId: thread.id,
+        customerId: customer.id,
+        sourceMessageId: message.id,
+        planId,
+        channelType: "email",
+        requestTag: "General",
+        planVerdict: "needs_review",
+        planHash: "a".repeat(64),
+        instructionHash: "b".repeat(64),
+        planExecutionId: execution.id,
+        executionStatus: "committed",
+        terminalResolution: "merchant_approved",
+        terminalAt: new Date(),
+        replyProvenance: "agent_approved",
+        merchantTouched: true,
+      },
+    });
+
+    await seedTurn({
+      orgId: org.id,
+      threadId: thread.id,
+      customerId: customer.id,
+      executionId: execution.id,
+      instruction: "Reply with shipping policy",
+      summary: "Replied to the customer.",
+      actions: [
+        { tool: "send_reply", result: "We ship to Canada.", durationMs: 40, status: "success" },
+      ],
+    });
+
+    const { entries } = await listAgentActionLogEntries({ orgId: org.id });
+    expect(entries).toHaveLength(1);
+    expect(entries[0].requestOutcome).toMatchObject({
+      planId,
+      sourceMessageId: message.id,
+      planVerdict: "needs_review",
+      terminalResolution: "merchant_approved",
+      replyProvenance: "agent_approved",
+      requestTag: "General",
+    });
   });
 
   it("keeps threadless order-operation actions in the read model", async () => {

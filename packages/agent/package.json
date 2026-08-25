@@ -238,6 +238,14 @@
       "types": "./dist/guards.d.ts",
       "default": "./dist/guards.js"
     },
+    "./request-outcome": {
+      "types": "./dist/request-outcome.d.ts",
+      "default": "./dist/request-outcome.js"
+    },
+    "./request-outcome-report": {
+      "types": "./dist/request-outcome-report.d.ts",
+      "default": "./dist/request-outcome-report.js"
+    },
     "./env": {
       "types": "./dist/env.d.ts",
       "default": "./dist/env.js"

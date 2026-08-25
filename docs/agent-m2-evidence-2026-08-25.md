@@ -591,9 +591,7 @@ because no fixture runs the classifier. It does **not** have:
   gate item, but a canary that only ever runs afterwards is a detector, not a
   gate. Any future change to a model call on this path should run it first.
 
-Milestone 2 is therefore not complete. Its remaining bullets are the version
-lifecycle: supported-version definition, the retirement procedure, and production
-metrics.
+Milestone 2 is **closed** (2026-08-25, pre-user). Contract unification, deterministic coverage, production canary, and the release gate satisfy the engineering bar. Version-lifecycle ceremony (inventory, retirement procedure, version-upgrade test) is deferred to first customer launch and recorded in the plan's **Deferred to first customer launch** list — not open Milestone 2 work.
 
 ### Open questions this work could not settle
 

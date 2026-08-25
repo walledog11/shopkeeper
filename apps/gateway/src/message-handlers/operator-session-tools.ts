@@ -195,6 +195,7 @@ export function buildOperatorSessionTools(
         memberKey,
         threadId: pendingQuestion.threadId,
         answer: input.answer,
+        askingPlanId: pendingQuestion.planId ?? null,
         ...(deliveryRef ? { deliveryRef } : {}),
       });
       return toolOk(message);

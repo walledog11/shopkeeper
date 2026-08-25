@@ -5,10 +5,14 @@ import { planAgent } from '@shopkeeper/agent/planner';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { buildMerchantAnswerPlanningInstruction } from '@shopkeeper/agent/kb-learned';
 import { saveMerchantAnswerToKb } from '@shopkeeper/agent/merchant-answer-kb';
-import { buildAgentPlanCacheRecord, commitThreadPlanCacheIfCurrent } from '@shopkeeper/agent/plan-cache';
+import { buildAgentPlanCacheRecord, commitThreadPlanCacheIfCurrent, readAgentPlanCache } from '@shopkeeper/agent/plan-cache';
 import { hashInstruction, hashPlan } from '@shopkeeper/agent/agent-actions';
 import { extractCachedQuestion, getPendingCustomerMessageId } from '@shopkeeper/agent/plan-cache-shape';
 import { clearThreadPlanCache } from '@shopkeeper/agent/plan-execution';
+import {
+  captureCommittedPlanOutcome,
+  recordRequestEpisodeMerchantInputAnswered,
+} from '@shopkeeper/agent/request-outcome';
 import type { AgentPlan, OrgSettings } from '@shopkeeper/agent/types';
 import { classifyPerson } from '@shopkeeper/agent/person-name';
 import logger from '../logger.js';
@@ -54,6 +58,8 @@ export interface OperatorAnswerReplanParams {
   answer: string;
   /** `telegram:<chatId>` / `imessage:<senderId>`; absent on the dashboard. */
   deliveryRef?: string;
+  /** Plan that asked the merchant, when known before the cached plan is replaced. */
+  askingPlanId?: string | null;
 }
 
 // Ingests a merchant's answer/guidance for a thread and re-drafts its plan:
@@ -82,6 +88,16 @@ export async function applyOperatorAnswerReplan(
     }),
   ]);
   const question = extractCachedQuestion(thread.cachedPlan);
+  const askingPlanId = params.askingPlanId
+    ?? readAgentPlanCache(thread.cachedPlan)?.planId
+    ?? null;
+
+  if (askingPlanId) {
+    await recordRequestEpisodeMerchantInputAnswered({
+      orgId: organizationId,
+      planId: askingPlanId,
+    });
+  }
 
   await createMessage({
     threadId,
@@ -148,6 +164,26 @@ export async function applyOperatorAnswerReplan(
       cache: cacheRecord,
     });
     if (!committed) throw new Error('Customer message changed while re-planning');
+    if (cacheRecord.planId) {
+      await captureCommittedPlanOutcome({
+        orgId: organizationId,
+        thread: {
+          id: thread.id,
+          customerId: thread.customerId,
+          channelType: thread.channelType,
+          tag: thread.tag,
+          requestDisposition: thread.requestDisposition,
+          classifierSignals: thread.classifierSignals,
+          filterStatus: thread.filterStatus,
+          escalatedAt: thread.escalatedAt,
+        },
+        sourceMessageId: pendingCustomerMessageId,
+        planId: cacheRecord.planId,
+        instruction: baseInstruction,
+        plan: replanned,
+        settings,
+      });
+    }
     return { plan: replanned, cacheRecord };
   };
 

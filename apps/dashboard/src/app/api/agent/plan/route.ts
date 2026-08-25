@@ -18,6 +18,7 @@ import {
   captureAgentPlanDecided,
   captureAgentPlanGenerated,
 } from "@/lib/server/product-analytics";
+import { captureCommittedPlanOutcome } from "@shopkeeper/agent/request-outcome";
 import type { OrgSettings } from "@/types";
 import logger from "@/lib/server/logger";
 
@@ -126,6 +127,27 @@ export const POST = withOrgRoute(
     });
     if (!committed) {
       throw new ConflictError("A newer customer message arrived while this plan was being generated. Regenerate the plan.");
+    }
+
+    if (cacheRecord.planId) {
+      await captureCommittedPlanOutcome({
+        orgId: org.id,
+        thread: {
+          id: thread.id,
+          customerId: thread.customerId,
+          channelType: thread.channelType,
+          tag: thread.tag,
+          requestDisposition: thread.requestDisposition,
+          classifierSignals: thread.classifierSignals,
+          filterStatus: thread.filterStatus,
+          escalatedAt: thread.escalatedAt,
+        },
+        sourceMessageId: pendingCustomerMessageId,
+        planId: cacheRecord.planId,
+        instruction,
+        plan,
+        settings,
+      });
     }
 
     if (cacheRecord.planId && (plan.steps.length > 0 || plan.validation?.status === 'invalid')) {

@@ -126,6 +126,8 @@ function readPendingDigestItems(value: unknown, threadIds: string[]): PendingDig
 export interface PendingQuestion {
   threadId: string;
   question: string;
+  planId?: string;
+  sourceMessageId?: string;
 }
 
 export interface OperatorContext {
@@ -292,6 +294,8 @@ function readPendingQuestion(value: unknown): PendingQuestion | null {
   return {
     threadId: value.threadId,
     question: value.question,
+    ...(typeof value.planId === 'string' ? { planId: value.planId } : {}),
+    ...(typeof value.sourceMessageId === 'string' ? { sourceMessageId: value.sourceMessageId } : {}),
   };
 }
 

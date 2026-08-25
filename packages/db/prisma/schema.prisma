@@ -88,6 +88,25 @@ enum PlanExecutionStatus {
   unknown
 }
 
+// Terminal resolution for one plan attempt on a customer request episode.
+enum RequestEpisodeTerminalResolution {
+  unresolved
+  auto_resolved
+  merchant_approved
+  merchant_input
+  escalated
+  failed
+  invalid_plan
+  superseded
+  dismissed
+}
+
+enum RequestEpisodeReplyProvenance {
+  agent_automatic
+  agent_approved
+  manual
+}
+
 enum RefundSpendReservationStatus {
   reserved
   committed
@@ -199,6 +218,7 @@ model Organization {
   storefrontChatVerifications StorefrontChatVerification[]
   storefrontChatSessionEpisodes StorefrontChatSessionEpisode[]
   conversationAttributions ConversationAttribution[]
+  requestEpisodeOutcomes RequestEpisodeOutcome[]
 
   @@index([clerkOrgId])
   @@index([lifecycleStatus])
@@ -445,6 +465,7 @@ model Customer {
   threads                Thread[]
   storefrontChatSessions StorefrontChatSession[]
   conversationAttributions ConversationAttribution[]
+  requestEpisodeOutcomes RequestEpisodeOutcome[]
 
   // platformId is unique per org, not globally — two orgs can share the same customer email
   @@unique([organizationId, platformId])
@@ -511,6 +532,7 @@ model Thread {
   storefrontChatSessions StorefrontChatSession[]
   storefrontChatEpisodes StorefrontChatSessionEpisode[]
   conversationAttributions ConversationAttribution[]
+  requestEpisodeOutcomes RequestEpisodeOutcome[]
 
   @@unique([organizationId, operatorKey])
   @@unique([organizationId, id], map: "threads_organization_id_id_key")
@@ -561,6 +583,7 @@ model Message {
   organization         Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   integration          Integration?    @relation(fields: [integrationId], references: [id], onDelete: SetNull)
   sourcePlanExecutions PlanExecution[] @relation("PlanExecutionSourceMessage")
+  requestEpisodeOutcomes RequestEpisodeOutcome[]
 
   @@unique([organizationId, id], map: "messages_organization_id_id_key")
   @@unique([organizationId, id, threadId], map: "messages_organization_id_id_thread_id_key")
@@ -888,6 +911,7 @@ model PlanExecution {
   thread        Thread?       @relation(fields: [threadId], references: [id], onDelete: SetNull)
   sourceMessage Message?      @relation("PlanExecutionSourceMessage", fields: [sourceMessageId], references: [id], onDelete: SetNull)
   actions       AgentAction[]
+  requestEpisodeOutcomes RequestEpisodeOutcome[]
 
   @@unique([organizationId, planId])
   @@unique([organizationId, id], map: "plan_executions_organization_id_id_key")
@@ -895,6 +919,60 @@ model PlanExecution {
   @@index([organizationId, threadId, createdAt])
   @@index([sourceMessageId])
   @@map("plan_executions")
+}
+
+// Immutable attribution for one plan attempt on a customer request episode.
+// `sourceMessageId` is the episode identity; `planId` distinguishes replaced
+// plans on the same burst. Rows are append-only: terminal fields are set once.
+model RequestEpisodeOutcome {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  threadId       String? @map("thread_id") @db.Uuid
+  customerId     String? @map("customer_id") @db.Uuid
+  sourceMessageId String @map("source_message_id") @db.Uuid
+  planId         String @map("plan_id") @db.Uuid
+  channelType    ChannelType @map("channel_type")
+
+  classifierVersion  Int? @map("classifier_version")
+  requestTag         String? @map("request_tag") @db.VarChar(64)
+  requestDisposition ThreadRequestDisposition? @map("request_disposition")
+  requestAsk         String? @map("request_ask") @db.VarChar(32)
+  classifierIntents  Json? @map("classifier_intents") @db.JsonB
+
+  planVerdict     String @map("plan_verdict") @db.VarChar(32)
+  planHash        String @map("plan_hash") @db.VarChar(64)
+  instructionHash String @map("instruction_hash") @db.VarChar(64)
+  namespaceMiss   Boolean @default(false) @map("namespace_miss")
+
+  planExecutionId String? @map("plan_execution_id") @db.Uuid
+  executionStatus PlanExecutionStatus? @map("execution_status")
+
+  approvalRequestedAt      DateTime? @map("approval_requested_at") @db.Timestamptz
+  approvalGrantedAt        DateTime? @map("approval_granted_at") @db.Timestamptz
+  merchantInputRequestedAt DateTime? @map("merchant_input_requested_at") @db.Timestamptz
+  merchantInputAnsweredAt  DateTime? @map("merchant_input_answered_at") @db.Timestamptz
+  escalatedAt              DateTime? @map("escalated_at") @db.Timestamptz
+  replyProvenance          RequestEpisodeReplyProvenance? @map("reply_provenance")
+  merchantTouched          Boolean @default(false) @map("merchant_touched")
+
+  terminalResolution RequestEpisodeTerminalResolution @default(unresolved) @map("terminal_resolution")
+  terminalAt         DateTime? @map("terminal_at") @db.Timestamptz
+  supersededByPlanId String? @map("superseded_by_plan_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  thread        Thread?        @relation(fields: [threadId], references: [id], onDelete: SetNull)
+  customer      Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  sourceMessage Message?       @relation(fields: [sourceMessageId], references: [id], onDelete: SetNull)
+  planExecution PlanExecution? @relation(fields: [planExecutionId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, planId], map: "request_episode_outcomes_organization_id_plan_id_key")
+  @@index([organizationId, sourceMessageId])
+  @@index([organizationId, threadId, createdAt(sort: Desc)])
+  @@index([organizationId, terminalResolution, createdAt(sort: Desc)])
+  @@index([organizationId, requestTag, createdAt(sort: Desc)])
+  @@map("request_episode_outcomes")
 }
 
 // Shadow/canary record for the autonomy raise. One row per plan ("turn") that

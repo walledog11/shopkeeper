@@ -19,6 +19,7 @@ import {
   type PlanExecutionIdentity,
 } from "./execution-ledger.js";
 import { isInvalidPlan } from "./plan-validation.js";
+import { recordRequestEpisodeDismissed, recordRequestEpisodeExecution } from "./request-outcome.js";
 
 export type PlanExecutionDeps = ExecuteAgentTurnDeps;
 
@@ -265,6 +266,12 @@ export async function dismissCurrentCachedPlan(params: {
       where: { id: params.threadId, organizationId: params.orgId },
       data: { cachedPlan: Prisma.DbNull, cachedPlanMessageId: null },
     });
+    if (cleared.count === 1) {
+      await recordRequestEpisodeDismissed({
+        orgId: params.orgId,
+        planId: params.expectedPlanId,
+      });
+    }
     return cleared.count === 1;
   });
 }
@@ -365,6 +372,7 @@ export async function executeCurrentCachedHomePlan(params: {
   }
 
   let result: AgentResult;
+  let terminalExecutionStatus: "committed" | "failed" | "unknown" = "committed";
   try {
     result = await executeAgentTurn({
       orgId: params.orgId,
@@ -378,11 +386,12 @@ export async function executeCurrentCachedHomePlan(params: {
       ...(executionId ? { executionId } : {}),
       ...(approval ? { approval } : {}),
     }, deps);
+    terminalExecutionStatus = terminalStatusForResult(result);
     if (executionId && claimToken) {
       await completePlanExecution({
         executionId,
         claimToken,
-        status: terminalStatusForResult(result),
+        status: terminalExecutionStatus,
         error: findFailedToolResult(result)?.result ?? null,
       });
     }
@@ -391,12 +400,23 @@ export async function executeCurrentCachedHomePlan(params: {
     // P3 reconciliation can prove otherwise, preserve the ambiguity as unknown
     // and never make the reviewed plan claimable again.
     if (executionId && claimToken) {
+      terminalExecutionStatus = "unknown";
       await completePlanExecution({
         executionId,
         claimToken,
-        status: "unknown",
+        status: terminalExecutionStatus,
         error: executionError(error),
       }).catch(() => undefined);
+    }
+    if (current.planId) {
+      await recordRequestEpisodeExecution({
+        orgId: params.orgId,
+        planId: current.planId,
+        planExecutionId: executionId ?? null,
+        executionStatus: "unknown",
+        executionIntent: params.executionIntent,
+        planVerdict: current.verdict.kind,
+      });
     }
     throw error;
   } finally {
@@ -404,6 +424,17 @@ export async function executeCurrentCachedHomePlan(params: {
       orgId: params.orgId,
       threadId: params.threadId,
       lastCustomerMessageId: current.lastCustomerMessageId,
+    });
+  }
+
+  if (current.planId) {
+    await recordRequestEpisodeExecution({
+      orgId: params.orgId,
+      planId: current.planId,
+      planExecutionId: executionId ?? null,
+      executionStatus: terminalExecutionStatus,
+      executionIntent: params.executionIntent,
+      planVerdict: current.verdict.kind,
     });
   }
 

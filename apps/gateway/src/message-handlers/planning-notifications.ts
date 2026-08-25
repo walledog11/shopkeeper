@@ -574,6 +574,10 @@ export async function sendOperatorQuestionNotification(
   requestSummary: string | null,
   question: string,
   instruction: string,
+  options?: {
+    planId?: string | null;
+    sourceMessageId?: string | null;
+  },
 ): Promise<void> {
   const bindings = await listOperatorBindings(organizationId);
 
@@ -597,7 +601,12 @@ export async function sendOperatorQuestionNotification(
     async () => ({
       body: message,
       contextPatch: {
-        pendingQuestion: { threadId, question },
+        pendingQuestion: {
+          threadId,
+          question,
+          ...(options?.planId ? { planId: options.planId } : {}),
+          ...(options?.sourceMessageId ? { sourceMessageId: options.sourceMessageId } : {}),
+        },
       },
       idempotencyKey,
     }),

@@ -135,6 +135,15 @@ export interface ActionLogEntry {
   }>;
   mode: 'human_approved' | 'auto_executed' | 'read_only' | null;
   approver: { id: string; displayName: string | null } | null;
+  requestOutcome?: {
+    planId: string;
+    sourceMessageId: string;
+    planVerdict: string;
+    terminalResolution: string;
+    replyProvenance: 'agent_automatic' | 'agent_approved' | 'manual' | null;
+    requestTag: string | null;
+    merchantInputAnsweredAt: string | null;
+  } | null;
 }
 
 export interface Thread {

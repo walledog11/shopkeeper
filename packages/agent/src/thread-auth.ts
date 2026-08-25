@@ -20,6 +20,8 @@ export async function requireOrgThread(threadId: string, orgId: string) {
       requestSummary: true,
       requestSourceMessageId: true,
       requestDisposition: true,
+      tag: true,
+      classifierSignals: true,
       filterStatus: true,
       escalatedAt: true,
       cachedPlanMessageId: true,

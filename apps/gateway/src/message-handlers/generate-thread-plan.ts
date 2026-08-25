@@ -30,6 +30,7 @@ import { publishThreadEvent } from '../realtime/publish.js';
 import { captureAgentPlanGenerated } from '../product-analytics.js';
 import logger from '../logger.js';
 import { removePendingPlanForThread } from '../operator-context.js';
+import { captureCommittedPlanOutcome } from '@shopkeeper/agent/request-outcome';
 
 const FAILURE_ROUTE = 'gateway:auto-plan';
 const EMAIL_REPLY_ROUTE_MISSING = 'email_reply_route_missing';
@@ -267,6 +268,28 @@ export async function generateThreadPlan(
       '[gateway:auto-plan] Discarded stale generated plan',
     );
     return { plan: null, instruction };
+  }
+
+  if (cacheRecord.planId) {
+    await captureCommittedPlanOutcome({
+      orgId: organizationId,
+      thread: {
+        id: thread.id,
+        customerId: thread.customerId,
+        channelType: thread.channelType,
+        tag: thread.tag,
+        requestDisposition: thread.requestDisposition,
+        classifierSignals: thread.classifierSignals,
+        filterStatus: thread.filterStatus,
+        escalatedAt: thread.escalatedAt,
+      },
+      sourceMessageId: pendingCustomerMessageId,
+      planId: cacheRecord.planId,
+      instruction,
+      plan,
+      settings,
+      allowMutativeAutoExecute: allowAutoExecute,
+    });
   }
 
   // Live inbox: a fresh plan is cached — push so the "Needs you" card appears.

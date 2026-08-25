@@ -297,6 +297,10 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
       decision.requestSummary,
       planResult.merchantQuestion,
       planResult.instruction,
+      planResult.identity ? {
+        planId: planResult.identity.planId,
+        sourceMessageId: planResult.identity.sourceMessageId,
+      } : undefined,
     );
     return;
   }

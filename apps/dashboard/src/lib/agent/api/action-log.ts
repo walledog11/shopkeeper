@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { db, Prisma as PrismaRuntime } from "@shopkeeper/db";
 import { TOOL_LABELS } from "@shopkeeper/agent/tools";
 import { OPERATOR_CHANNEL_TYPES } from "@shopkeeper/agent/thread-constants";
+import { loadRequestOutcomesForExecutionIds, type RequestOutcomeActionLogSnapshot } from "@shopkeeper/agent/request-outcome";
 import type { ActionLogFilters } from "@/lib/agent/api/validation";
 import type { ActionLogEntry } from "@/types";
 
@@ -77,6 +78,7 @@ interface RawActionRow {
   id: string;
   turnId: string;
   threadId: string | null;
+  executionId: string | null;
   tool: string;
   input: Prisma.JsonValue;
   output: string | null;
@@ -99,6 +101,7 @@ const ACTION_LOG_SELECT = {
   id: true,
   turnId: true,
   threadId: true,
+  executionId: true,
   tool: true,
   input: true,
   output: true,
@@ -156,7 +159,26 @@ function parseApprover(raw: string | null): ActionLogEntry["approver"] {
   return { id: raw.slice(0, idx), displayName: raw.slice(idx + 1) || null };
 }
 
-function buildEntryFromRows(turnId: string, rows: RawActionRow[]): ActionLogEntry | null {
+function toRequestOutcomeField(
+  snapshot: RequestOutcomeActionLogSnapshot | undefined,
+): ActionLogEntry["requestOutcome"] {
+  if (!snapshot) return null;
+  return {
+    planId: snapshot.planId,
+    sourceMessageId: snapshot.sourceMessageId,
+    planVerdict: snapshot.planVerdict,
+    terminalResolution: snapshot.terminalResolution,
+    replyProvenance: snapshot.replyProvenance,
+    requestTag: snapshot.requestTag,
+    merchantInputAnsweredAt: snapshot.merchantInputAnsweredAt?.toISOString() ?? null,
+  };
+}
+
+function buildEntryFromRows(
+  turnId: string,
+  rows: RawActionRow[],
+  outcomesByExecutionId: Map<string, RequestOutcomeActionLogSnapshot>,
+): ActionLogEntry | null {
   if (rows.length === 0) return null;
   // Within a turn every row shares the turn-level fields; first row is canonical.
   const first = rows[0];
@@ -170,6 +192,7 @@ function buildEntryFromRows(turnId: string, rows: RawActionRow[]): ActionLogEntr
   }));
   const summary = first.summary?.trim()
     || actions.map((action) => TOOL_LABELS[action.tool] ?? action.tool).join(" · ");
+  const linkedExecutionId = rows.find((row) => row.executionId)?.executionId ?? null;
 
   return {
     id: turnId,
@@ -183,6 +206,9 @@ function buildEntryFromRows(turnId: string, rows: RawActionRow[]): ActionLogEntr
     actions,
     mode: isValidMode(first.mode) ? first.mode : null,
     approver: parseApprover(first.approverId),
+    requestOutcome: linkedExecutionId
+      ? toRequestOutcomeField(outcomesByExecutionId.get(linkedExecutionId))
+      : null,
   };
 }
 
@@ -235,9 +261,14 @@ async function fetchTurnsPage(params: {
     else byTurn.set(row.turnId, [row]);
   }
 
+  const executionIds = rows
+    .map((row) => row.executionId)
+    .filter((value): value is string => Boolean(value));
+  const outcomesByExecutionId = await loadRequestOutcomesForExecutionIds(orgId, executionIds);
+
   const entries: ActionLogEntry[] = [];
   for (const turnId of turnIds) {
-    const entry = buildEntryFromRows(turnId, byTurn.get(turnId) ?? []);
+    const entry = buildEntryFromRows(turnId, byTurn.get(turnId) ?? [], outcomesByExecutionId);
     if (entry) entries.push(entry);
   }
 

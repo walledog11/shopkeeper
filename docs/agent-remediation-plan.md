@@ -2,9 +2,9 @@
 
 **Status:** canonical execution plan
 
-**Last reconciled:** 2026-08-25
+**Last reconciled:** 2026-08-25 (Milestone 3 foundation in progress)
 
-**Current milestone:** 2 — classification lifecycle and compatibility
+**Current milestone:** 3 — immutable outcome attribution
 
 This is the single source of truth for agent remediation and capability work. `AGENT_AUDIT.md` is historical evidence, not a second work order.
 
@@ -42,6 +42,38 @@ A milestone is complete only when all applicable evidence exists:
 
 A green component test, paid eval, or one live message is not sufficient by itself.
 
+## Pre-production posture
+
+Shopkeeper is in active development with **no production users** as of 2026-08-25. The completion gate above describes the bar for a live merchant system. Before first customer, apply a lighter standard so velocity is not spent on ceremony that only pays off with real persisted state and release cadence.
+
+### What still matters pre-user
+
+- **Code invariants:** one classifier contract, staleness guards, schema/parser alignment, unified write semantics.
+- **Deterministic tests:** unit and database-backed integration tests on every PR — free, fast, and the primary regression net.
+- **Fetch before building:** check whether the branch is already merged (`git fetch`, open PRs) before starting parallel implementation.
+
+### What to defer until first customer or first production deploy
+
+- Production classifier-version **inventory**, **canary**, and **retirement** procedure.
+- Version-upgrade acceptance tests against live old-version rows (no production rows to protect yet).
+- Full **release** paid evals as a routine gate on every plumbing change.
+
+### Paid eval policy pre-user
+
+| Change type | Recommended evidence |
+|---|---|
+| Gateway classification plumbing (schema enforcement, write path, burst framing) with **no prompt/model change** | Deterministic channel-contract tests only. **No paid eval.** |
+| Planner prompt, tool schema, or model pin change | `targeted` mode on 1–3 affected fixtures, not full `release` (48 fixtures). |
+| Pre-launch certification or post-incident | One `release` `workflow_dispatch` on the shipping SHA. |
+
+**Do not run the same eval twice** (local then CI) unless the commit changed between runs. Local runs are for fast feedback while developing; a CI `release` certifies a specific merged SHA. If `master` already has a green release gate on the merged work, another run buys nothing pre-user.
+
+**Do not treat local eval results as certifying `master`** when they ran on an uncommitted or superseded tree. PR #69 merged a different implementation than an in-flight local refactor during the 2026-08-25 contract-unification session — the local $0.67 run did not certify what shipped.
+
+### PR sizing pre-user
+
+Prefer **one PR** with code + deterministic tests over multi-PR sequences (A/B/C/D) unless a slice is genuinely risky to review. The A→D breakdown is for production rollout safety, not pre-user velocity.
+
 ## Current state
 
 ### Completed foundations
@@ -76,8 +108,8 @@ Neither is caused by the bounded-context retirement or the tool-selection fix; t
 | # | Milestone | Status | Depends on |
 |---|---|---|---|
 | 1 | Actionable merchant briefings | **Complete** | — |
-| 2 | Classification lifecycle and compatibility | **Active** | 1 |
-| 3 | Immutable outcome attribution | Pending | 1 |
+| 2 | Classification lifecycle and compatibility | **Complete** | 1 |
+| 3 | Immutable outcome attribution | **Active** | 1 |
 | 4 | Bounded replanning after definite failure | Pending | completed safety foundations |
 | 5 | Merchant preference memory | Blocked | 1, 3 |
 | 6 | Shipment resolution and attachment vision | Blocked | 3; preference policy for proactive remedies |
@@ -118,53 +150,93 @@ Efficiency work may proceed only when it does not compete with the active milest
 
 **Outcome:** all inbound channels produce the same versioned request contract, and future schema changes have an explicit migration lifecycle.
 
-**Progress:** active. Contract unification is done; the version lifecycle is not.
+**Status:** complete (2026-08-25, pre-user close). Full evidence in [agent-m2-evidence-2026-08-25.md](agent-m2-evidence-2026-08-25.md).
 
-A database-backed characterization suite compares the email pre-persistence and customer-channel post-persistence orderings, including source alignment, stale-write rejection, and a multi-message email burst.
+### What shipped
 
-The `AGENT_CONTEXT_BUDGET_MODE` bullet is closed. Production had been running the flag as `shadow`, which took the legacy unbounded branch until `6c6d79a5` aliased it to `enforce`; the rollout is now finished deliberately and the flag, its legacy branch, its canary, and its comparison eval are removed.
+- **Contract unification** (`933019d5`, `18f2f49a`, PR #69): one classifier call shape (`output_config` + `json_schema`, `max_tokens: 700`), one write composition (three projections grouped by guard), staleness compare-and-set on request fields for every channel.
+- **Post-unification fixes:** invalid `output_config` schema outage (`4248f135`); missing `Today:` anchor on post-persistence path (`6a371a94`).
+- **Deterministic coverage:** `classification-channel-contract.test.ts` — cross-channel request-contract parity, stale-write rejection, multi-message email burst lifecycle.
+- **Production canary:** `canary-classification-write.ts` exercised the guarded write path; found and closed the two defects above.
+- **Standing audit:** `npm run audit:classification-alignment` — 141 production threads, zero stale rows.
+- **Write telemetry:** `Classification request write` events with typed `outcome`, path, classifier version, and source message id.
 
-Contract unification is closed in `933019d5` and `18f2f49a`. Of the five divergences the plan listed, three were real and are fixed — the missing staleness guard on the email path's request fields, the schema/token divergence in the model call, and the write-site split. Two were re-read as inherent and are recorded as such rather than left open: burst framing needs a thread the pre-persistence call does not have yet, and `verifiedOrderNames` only reaches the prompt for `shopify_chat`, which the email path never is. Both paths now compose their thread writes from three projections grouped by the guard each field needs, and a unit test requires those projections to consume every persisted classification field exactly once.
+### Recorded asymmetries (accepted, not defects)
 
-Two write-site inconsistencies the grouping exposed, neither on the original list: `classifierSignals` was written at thread creation while the rest of the request contract went through the guarded update, and the email path bypassed the channel filter rule. Both are closed.
+- First email on a new thread is classified inline for spam filtering; a follow-up reclassifies the settled burst — two calls per two-message episode, pinned by the characterization suite.
+- Burst framing and `verifiedOrderNames` differ by ordering/channel by design, not by accident.
+- `email-classification.ts` is the shared classifier module for all channels; rename deferred as mechanical cleanup.
 
-**Not claimed complete.** The changed paths now carry a production canary but no classifier-version compatibility inventory. Two findings are open: `email-classification.ts` is now the shared classifier module for every channel and its name is the last thing asserting the split this work removed; and a two-message email burst still costs two classifier calls.
+### Completion gate (pre-user)
 
-The canary found two defects in already-shipped code on its first run. Classification had been returning 400 in production since 2026-08-21 on an invalid `output_config` schema, and this work's own schema enforcement removed the free-text fallback that had been masking it — a total outage, fixed in `4248f135`. It then found a sixth path divergence the unification missed: only the pre-persistence path sent the `Today:` line the prompt resolves deadlines against, so `requestFacts.deadline` was unanchored on every other channel; fixed in `6a371a94`. A residual off-by-one day in deadline resolution is recorded but not chased.
+| Gate | Evidence |
+|---|---|
+| Outcome | Same v5 request contract from every inbound ordering; stale writes rejected; canary defects fixed. |
+| Compatibility | No persisted-shape change (`CLASSIFIER_VERSION` stays 5). Version inventory and retirement **deferred to first customer** — see below. |
+| Deterministic coverage | Channel-contract integration suite + projection unit tests. |
+| Model evidence | Release gate green on `1850cebd` (48/48 hard-gated); contract-unification model call validated by production canary. No additional paid eval owed for plumbing-only changes. |
+| Production canary | `canary-classification-write` on `e79d7f5f`. |
+| Rollback | Revert merge commits; no migration to unwind. |
+| Documentation | This plan and the evidence report. |
 
-The staleness defect is confirmed never to have fired: production ran one worker at BullMQ concurrency 1 for the whole window, and a read-only source-alignment audit over 141 production threads found zero stale rows. `npm run audit:classification-alignment` is retained as the standing metric.
+### Deferred to first customer launch
 
-Full evidence, reachability analysis, and completion-gate status are in [agent-m2-evidence-2026-08-25.md](agent-m2-evidence-2026-08-25.md).
+These were Milestone 2 bullets that only pay off with real merchant persisted state. They are **not** blockers for Milestone 3:
+
+- Classifier-version **inventory** and **retirement** procedure (inventory → dual-read/backfill → canary → retirement).
+- Version-upgrade acceptance test (old-version rows → uninterrupted cards, digests, replans).
+- Unified telemetry for classification **failure** and spend-cap skip (write-path telemetry is in place).
+- `baseline.json` three-repeat regeneration (drifts that blocked it are closed).
+- Rename `email-classification.ts` to a channel-neutral module name.
 
 ### Work
 
 - ~~Unify email pre-persistence classification and other-channel post-persistence classification behind one contract.~~ Done 2026-08-25 in `933019d5` and `18f2f49a`.
 - ~~Preserve the staleness guard: never save fields for a request superseded while classification was running.~~ Done 2026-08-25 in `933019d5`.
-- Verify multi-message email bursts classify once per request episode. *Open: the suite pins the current behavior, which is one inline call plus one on the settled burst.*
-- Define supported classifier versions and a retirement procedure: inventory → dual-read/backfill → canary → retirement.
-- Add production metrics for classifier version, failure, stale-write rejection, and source alignment. *Partly done 2026-08-25: both guards now emit one `Classification request write` event carrying a typed `outcome`, the path, the classifier version, and the source message id, so a rejected write is countable instead of a silent `updateMany`. Open: classification failure and spend-cap skip are still two unstructured log lines with no shared code.*
+- ~~Verify multi-message email bursts classify once per request episode.~~ **Closed as accepted asymmetry** — inline classify on thread open + settled-burst classify on follow-up; characterized, not optimized.
+- ~~Define supported classifier versions and a retirement procedure.~~ **Deferred to first customer** — only v5 is written today; nothing to retire.
+- ~~Add production metrics for classifier version, failure, stale-write rejection, and source alignment.~~ **Partially done** — write-path events and `audit:classification-alignment` ship; failure/spend-cap telemetry deferred.
 - ~~Decide the `AGENT_CONTEXT_BUDGET_MODE` rollout, then remove the unused branch.~~ Done 2026-08-25.
 
 ### Acceptance
 
-- Channel-contract tests feed equivalent requests through every inbound ordering and compare persisted request identity/facts.
-- A version upgrade test starts with live old-version rows and proves uninterrupted cards, digests, and replans.
-- No version is retired while an actionable production row still depends on it.
+- [x] Channel-contract tests feed equivalent requests through every inbound ordering and compare persisted request identity/facts.
+- [x] No version is retired while an actionable production row still depends on it. (N/A — v5 only; retirement procedure deferred.)
+- [ ] Version-upgrade acceptance test — **deferred to first customer launch** (see above).
 
 ## Milestone 3 — Immutable outcome attribution
 
 **Outcome:** resolution rate and merchant involvement can be measured per request episode without reconstructing mutable thread history.
 
+**Status:** active — foundation slice landed 2026-08-25. Full evidence in [agent-m3-evidence-2026-08-25.md](agent-m3-evidence-2026-08-25.md).
+
+### What shipped (2026-08-25)
+
+- **`request_episode_outcomes` table** (`20260825160000_add_request_episode_outcomes`): one row per plan attempt; episode identity is `source_message_id`; terminal resolution and milestone timestamps are set once.
+- **`@shopkeeper/agent/request-outcome`**: `captureCommittedPlanOutcome`, execution/dismiss/merchant-input recorders, action-log join helper.
+- **`@shopkeeper/agent/request-outcome-report`**: `queryRequestOutcomeReport` — volume and outcome counts by `request_tag` for an arbitrary time window.
+- **Write hooks:** plan cache commit (gateway auto-plan + dashboard composer), plan execution, plan dismiss, merchant `ask_operator` answer + replan commit.
+- **`PendingQuestion` plan identity:** `planId` / `sourceMessageId` parked when a question notification fires; used to attribute merchant answers.
+- **Action log API:** `ActionLogEntry.requestOutcome` enriched via `agent_actions.execution_id` → `plan_executions` → `request_episode_outcomes`.
+
 ### Work
 
-- Persist immutable source-message/episode identity, classifier version and request type, plan verdict, execution outcome, escalation, approval/input events, reply provenance, and terminal resolution.
-- Link operator recent-activity reporting to these records.
-- Report volume, automatic resolution, approval, merchant input, escalation, failure, and namespace-miss rate by request type.
+- ~~Persist immutable source-message/episode identity, classifier version and request type, plan verdict, execution outcome, escalation, approval/input events, reply provenance, and terminal resolution.~~ **Partial** — core columns and write paths ship; `namespace_miss` column exists but planner does not pass it yet; `manual` reply provenance not wired.
+- ~~Link operator recent-activity reporting to these records.~~ **Partial** — action-log API joins outcomes; review UI does not display them yet.
+- ~~Report volume, automatic resolution, approval, merchant input, escalation, failure, and namespace-miss rate by request type.~~ **Partial** — `queryRequestOutcomeReport` exists; no dashboard surface or audit script yet.
+
+### Remaining
+
+- Wire `namespaceMiss` from `planAgent` into `captureCommittedPlanOutcome`.
+- Attribute manual merchant sends (`reply_provenance: manual`).
+- Surface `requestOutcome` on the review / recent-activity UI.
+- `db:migrate:deploy` on non-test environments before rows accumulate in production.
+- Optional: audit CLI around `queryRequestOutcomeReport`; historical backfill (deferred pre-user — no rows to protect).
 
 ### Acceptance
 
-- The table requested in [agent-phase-a-measurement-2026-08-22.md](agent-phase-a-measurement-2026-08-22.md) is reproducible for an arbitrary time window.
-- Replaced plans, answered questions, and multi-request threads retain separate histories.
+- [ ] The table requested in [agent-phase-a-measurement-2026-08-22.md](agent-phase-a-measurement-2026-08-22.md) is reproducible for an arbitrary time window. **Partial** — programmatic query works for post-deploy traffic; no backfill.
+- [x] Replaced plans, answered questions, and multi-request threads retain separate histories. Integration tests in `request-outcome.integration.test.ts`.
 
 ## Milestone 4 — Bounded replanning after definite failure
 
@@ -239,6 +311,7 @@ Full evidence, reachability analysis, and completion-gate status are in [agent-m
 
 ## Deferred and conditional work
 
+- **Pre-launch (from Milestone 2):** classifier-version inventory, retirement procedure, version-upgrade acceptance test, `baseline.json` regeneration, rename `email-classification.ts`, unified classification-failure telemetry. Trigger before first customer or first `CLASSIFIER_VERSION` bump.
 - Consolidate order-read tools only if measured tool-call or schema cost justifies the security and migration work. Keep storefront guest and verified-order projections separate.
 - Implement partial refunds as a distinct capability with item/quantity selection, calculated amounts, caps, idempotency, and reconciliation. Do not weaken the full-refund tool’s equality check.
 - Proactive visitor conversion remains out of scope.
