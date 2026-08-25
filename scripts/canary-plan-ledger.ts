@@ -7,12 +7,12 @@ import { agentTurnMessageFilter } from '@shopkeeper/agent/turns';
 import { isRecord } from '@shopkeeper/agent/guards';
 
 type Surface = 'dashboard' | 'gateway';
-type ExpectedMode = 'shadow' | 'enforce';
+type ExpectedMode = 'enforce';
 
 const SURFACE = readArg('--surface=') as Surface | null;
 const EXECUTE = process.argv.includes('--execute');
 const ORGANIZATION_ID = readArg('--org-id=');
-const EXPECTED_MODE = (readArg('--expected-mode=') ?? 'shadow') as ExpectedMode;
+const EXPECTED_MODE = (readArg('--expected-mode=') ?? 'enforce') as ExpectedMode;
 
 const SURFACE_CONFIG: Record<Surface, {
   host: Surface;
@@ -59,7 +59,7 @@ function readArg(prefix: string): string | null {
 
 function usage(): string {
   return 'Usage: npx tsx scripts/canary-plan-ledger.ts --surface=dashboard|gateway '
-    + '--org-id=<uuid> [--expected-mode=shadow|enforce] [--execute]';
+    + '--org-id=<uuid> [--expected-mode=enforce] [--execute]';
 }
 
 async function bootstrap(surface: Surface): Promise<void> {
@@ -120,7 +120,7 @@ async function main(): Promise<void> {
   if (!SURFACE || (SURFACE !== 'dashboard' && SURFACE !== 'gateway')) {
     throw new Error(usage());
   }
-  if (!ORGANIZATION_ID || (EXPECTED_MODE !== 'shadow' && EXPECTED_MODE !== 'enforce')) {
+  if (!ORGANIZATION_ID || EXPECTED_MODE !== 'enforce') {
     throw new Error(usage());
   }
 
@@ -162,7 +162,7 @@ async function main(): Promise<void> {
     if (!EXECUTE) {
       console.log(
         `Inspect-only. Re-run with --execute to create one controlled ${SURFACE}-host `
-        + `${EXPECTED_MODE} ledger observation.`,
+        + 'enforce ledger execution.',
       );
       return;
     }
@@ -332,15 +332,10 @@ async function main(): Promise<void> {
     console.log(JSON.stringify(evidence, null, 2));
 
     const action = execution.actions[0];
-    const ledgerStatePassed = EXPECTED_MODE === 'shadow'
-      ? execution.status === 'pending'
-        && execution.observationCount === 1
-        && execution.claimedAt === null
-        && execution.completedAt === null
-      : execution.status === 'committed'
-        && execution.observationCount === 0
-        && execution.claimedAt !== null
-        && execution.completedAt !== null;
+    const ledgerStatePassed = execution.status === 'committed'
+      && execution.observationCount === 0
+      && execution.claimedAt !== null
+      && execution.completedAt !== null;
     const passed = ledgerStatePassed
       && execution.mode === 'human_approved'
       && execution.lastError === null
@@ -360,7 +355,7 @@ async function main(): Promise<void> {
 
     console.log(
       `P1-02 ${SURFACE} canary passed: one internal-only approved action produced one linked `
-      + `${EXPECTED_MODE} ledger execution.`,
+      + 'enforce ledger execution.',
     );
   } finally {
     await cleanup(SURFACE);

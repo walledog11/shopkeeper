@@ -102,6 +102,9 @@ export const TIERS_THAT_AUTO_EXECUTE: ReadonlySet<AutonomyTier> = new Set<Autono
 
 export function normalizeStoredOrgSettings(value: unknown): OrgSettingsPatch {
   const normalized = parseStoredOrgSettingsPatch(value);
+  if ((normalized as { autoExecuteMode?: string }).autoExecuteMode === "shadow") {
+    delete normalized.autoExecuteMode;
+  }
   const start = normalized.businessHoursStart ?? AGENT_SETTINGS_DEFAULTS.businessHoursStart;
   const end = normalized.businessHoursEnd ?? AGENT_SETTINGS_DEFAULTS.businessHoursEnd;
   if (normalized.businessHoursEnabled === true && !isValidBusinessHoursWindow(start, end)) {

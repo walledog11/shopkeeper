@@ -20,10 +20,10 @@ function readArg(prefix: string): string | null {
 
 
 async function main(): Promise<void> {
-  if (!ORGANIZATION_ID || (EXPECTED_MODE !== 'shadow' && EXPECTED_MODE !== 'enforce')) {
+  if (!ORGANIZATION_ID || EXPECTED_MODE !== 'enforce') {
     throw new Error(
       'Usage: npx tsx apps/gateway/src/scripts/canary-context-budget.ts '
-      + '--org-id=<uuid> --expected-mode=shadow|enforce [--execute]',
+      + '--org-id=<uuid> --expected-mode=enforce [--execute]',
     );
   }
 
@@ -79,8 +79,8 @@ async function main(): Promise<void> {
     if (settings.autoExecuteMode !== undefined && settings.autoExecuteMode !== 'off') {
       throw new Error(`Execute mode requires autoExecuteMode=off; received ${String(settings.autoExecuteMode)}`);
     }
-    if (process.env.PLAN_EXECUTION_LEDGER_MODE !== 'shadow') {
-      throw new Error('Execute mode requires PLAN_EXECUTION_LEDGER_MODE=shadow.');
+    if (process.env.PLAN_EXECUTION_LEDGER_MODE !== 'enforce') {
+      throw new Error('Execute mode requires PLAN_EXECUTION_LEDGER_MODE=enforce.');
     }
     if (actualMode !== EXPECTED_MODE) {
       throw new Error(`Expected AGENT_CONTEXT_BUDGET_MODE=${EXPECTED_MODE}; received ${String(actualMode)}`);

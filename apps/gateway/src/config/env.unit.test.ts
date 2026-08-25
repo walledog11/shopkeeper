@@ -23,8 +23,8 @@ function stubProductionGatewayEnv() {
   vi.stubEnv('POSTMARK_INBOUND_USERNAME', 'postmark-inbound-user');
   vi.stubEnv('POSTMARK_INBOUND_PASSWORD', 'postmark-inbound-pass');
   vi.stubEnv('PRODUCT_ANALYTICS_ENABLED', 'false');
-  vi.stubEnv('PLAN_EXECUTION_LEDGER_MODE', 'shadow');
-  vi.stubEnv('AGENT_CONTEXT_BUDGET_MODE', 'shadow');
+  vi.stubEnv('PLAN_EXECUTION_LEDGER_MODE', 'enforce');
+  vi.stubEnv('AGENT_CONTEXT_BUDGET_MODE', 'enforce');
 }
 
 afterEach(() => {

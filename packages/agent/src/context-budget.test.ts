@@ -79,9 +79,9 @@ describe("context budgets", () => {
 
   it("parses rollout mode and rejects configuration typos", () => {
     expect(resolveContextBudgetMode(undefined)).toBe("off");
-    expect(resolveContextBudgetMode("shadow")).toBe("shadow");
     expect(resolveContextBudgetMode("enforce")).toBe("enforce");
-    expect(() => resolveContextBudgetMode("enabled")).toThrow(/off, shadow, or enforce/);
+    expect(resolveContextBudgetMode("shadow")).toBe("enforce");
+    expect(() => resolveContextBudgetMode("enabled")).toThrow(/off or enforce/);
   });
 
   it("uses an explicit marker without exceeding the requested length", () => {

@@ -131,7 +131,7 @@ export const BUSINESS_HOURS_DAYS = [
   "sun",
 ] as const satisfies readonly BusinessHoursDay[];
 
-const AUTO_EXECUTE_MODES = ["off", "shadow", "live"] as const satisfies readonly AutoExecuteMode[];
+const AUTO_EXECUTE_MODES = ["off", "live"] as const satisfies readonly AutoExecuteMode[];
 const AUTONOMY_TIERS = ["watch", "guarded", "trusted"] as const satisfies readonly AutonomyTier[];
 const OBSOLETE_STORED_AUTONOMY_TIERS = ["broad", "full"] as const;
 const DIGEST_FREQUENCIES = [

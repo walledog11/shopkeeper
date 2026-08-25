@@ -97,10 +97,6 @@ describe("plan execution ledger", () => {
           actionsPerformed: [{ tool: "send_reply", result: "Sent", status: "success" }],
         };
       },
-      shadow: {
-        recordShadowDecision: async () => {},
-        resolveShadowDecisionOnApproval: async () => {},
-      },
     };
 
     const executed = await maybeAutoExecuteCurrentCachedHomePlan({
@@ -357,10 +353,6 @@ describe("plan execution ledger", () => {
           summary: "Sent",
           actionsPerformed: [{ tool: "send_reply", result: "Sent", status: "success" }],
         };
-      },
-      shadow: {
-        recordShadowDecision: async () => {},
-        resolveShadowDecisionOnApproval: async () => {},
       },
     };
     const execute = () => executeCurrentCachedHomePlan({

@@ -69,11 +69,11 @@ async function main(): Promise<void> {
     if (settings.autoExecuteMode !== undefined && settings.autoExecuteMode !== 'off') {
       throw new Error(`Execute mode requires autoExecuteMode=off; received ${String(settings.autoExecuteMode)}`);
     }
-    if (process.env.PLAN_EXECUTION_LEDGER_MODE !== 'shadow') {
-      throw new Error('Execute mode requires PLAN_EXECUTION_LEDGER_MODE=shadow.');
+    if (process.env.PLAN_EXECUTION_LEDGER_MODE !== 'enforce') {
+      throw new Error('Execute mode requires PLAN_EXECUTION_LEDGER_MODE=enforce.');
     }
-    if (process.env.AGENT_CONTEXT_BUDGET_MODE !== 'shadow') {
-      throw new Error('Execute mode requires AGENT_CONTEXT_BUDGET_MODE=shadow.');
+    if (process.env.AGENT_CONTEXT_BUDGET_MODE !== 'enforce') {
+      throw new Error('Execute mode requires AGENT_CONTEXT_BUDGET_MODE=enforce.');
     }
 
     const runId = randomUUID();

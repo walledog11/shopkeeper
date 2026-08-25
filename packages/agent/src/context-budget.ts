@@ -23,7 +23,7 @@ export const CONTEXT_BUDGETS = {
   recentOrdersChars: 20_000,
 } as const;
 
-export type ContextBudgetMode = "off" | "shadow" | "enforce";
+export type ContextBudgetMode = "off" | "enforce";
 
 export interface ContextBudgetStats {
   beforeCount: number;
@@ -40,8 +40,9 @@ export function resolveContextBudgetMode(
   value: string | undefined = process.env.AGENT_CONTEXT_BUDGET_MODE,
 ): ContextBudgetMode {
   if (value === undefined || value.trim() === "") return "off";
-  if (value === "off" || value === "shadow" || value === "enforce") return value;
-  throw new Error("AGENT_CONTEXT_BUDGET_MODE must be off, shadow, or enforce");
+  if (value === "off") return "off";
+  if (value === "enforce" || value === "shadow") return "enforce";
+  throw new Error("AGENT_CONTEXT_BUDGET_MODE must be off or enforce");
 }
 
 export function truncateContextText(value: string | null | undefined, maxChars: number): string {

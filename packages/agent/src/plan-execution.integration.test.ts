@@ -135,10 +135,6 @@ function makeDeps(overrides: Partial<PlanExecutionDeps> = {}): PlanExecutionDeps
       kbArticles: [],
     } satisfies AgentContext),
     runAgent: async () => okResult,
-    shadow: {
-      recordShadowDecision: async () => undefined,
-      resolveShadowDecisionOnApproval: async () => undefined,
-    },
     ...overrides,
   };
 }
@@ -238,19 +234,18 @@ describe("plan execution helpers", () => {
     expect(formatApproverId({ clerkUserId: "user_1", displayName: null })).toBe("user_1");
   });
 
-  it("defaults the ledger to enforce and honours only the two documented downgrades", () => {
+  it("defaults the ledger to enforce and honours only the documented downgrade", () => {
     expect(resolvePlanExecutionLedgerMode("off")).toBe("off");
-    expect(resolvePlanExecutionLedgerMode("shadow")).toBe("shadow");
     expect(resolvePlanExecutionLedgerMode("enforce")).toBe("enforce");
     expect(resolvePlanExecutionLedgerMode(undefined)).toBe("enforce");
-    // A typo must not silently disable the durable claim.
+    // Legacy rollout values and typos must not disable the durable claim.
+    expect(resolvePlanExecutionLedgerMode("shadow")).toBe("enforce");
     expect(resolvePlanExecutionLedgerMode("Off")).toBe("enforce");
     expect(resolvePlanExecutionLedgerMode("disabled")).toBe("enforce");
   });
 
   it("treats only live auto-execute as enabled", () => {
     expect(isAutoExecuteEnabled(resolveAgentSettings({ autoExecuteMode: "live" }))).toBe(true);
-    expect(isAutoExecuteEnabled(resolveAgentSettings({ autoExecuteMode: "shadow" }))).toBe(false);
     expect(isAutoExecuteEnabled(resolveAgentSettings({ autoExecuteMode: "off" }))).toBe(false);
   });
 
@@ -493,36 +488,6 @@ describe("executeCurrentCachedHomePlan execution", () => {
     await expect(executeCurrentCachedHomePlan(params, unreachableDeps())).rejects.toThrow();
   });
 
-  it("resolves the shadow decision when a human approved, not when the system did", async () => {
-    const resolveShadowDecisionOnApproval = vi.fn(async () => undefined);
-    const first = await seedThreadWithPlan();
-
-    await executeCurrentCachedHomePlan({
-      orgId: first.org.id,
-      threadId: first.thread.id,
-      settings: first.settings,
-      executionIntent: "merchant_approved",
-      failureRoute: "test",
-    }, makeDeps({
-      shadow: { recordShadowDecision: async () => undefined, resolveShadowDecisionOnApproval },
-    }));
-    expect(resolveShadowDecisionOnApproval).toHaveBeenCalledOnce();
-
-    resolveShadowDecisionOnApproval.mockClear();
-    const second = await seedThreadWithPlan();
-
-    await executeCurrentCachedHomePlan({
-      orgId: second.org.id,
-      threadId: second.thread.id,
-      settings: second.settings,
-      executionIntent: "automatic",
-      failureRoute: "test",
-    }, makeDeps({
-      shadow: { recordShadowDecision: async () => undefined, resolveShadowDecisionOnApproval },
-    }));
-    expect(resolveShadowDecisionOnApproval).not.toHaveBeenCalled();
-  });
-
   it("clears the cache even when the turn throws, so a failed plan is not replayable", async () => {
     const { org, thread, settings } = await seedThreadWithPlan();
 
@@ -574,21 +539,6 @@ describe("executeCurrentCachedHomePlan execution", () => {
 
     expect(executed.execution.id).toBeNull();
     expect(executed.result).toEqual(okResult);
-  });
-
-  it("observes but does not claim when the ledger is in shadow", async () => {
-    vi.stubEnv("PLAN_EXECUTION_LEDGER_MODE", "shadow");
-    const { org, thread, settings } = await seedThreadWithPlan();
-
-    const executed = await executeCurrentCachedHomePlan({
-      orgId: org.id,
-      threadId: thread.id,
-      settings,
-      executionIntent: "merchant_approved",
-      failureRoute: "test",
-    }, makeDeps());
-
-    expect(executed.execution.id).not.toBeNull();
   });
 });
 
@@ -681,24 +631,6 @@ describe("maybeAutoExecuteCurrentCachedHomePlan", () => {
     }, unreachableDeps());
 
     expect(result).toBeNull();
-  });
-
-  it("records what it would have done in shadow, and still routes to a human", async () => {
-    const settings = resolveAgentSettings({ autonomyTier: "trusted", autoExecuteMode: "shadow" });
-    const { org, thread } = await seedThreadWithPlan({ plan: mutativePlan(), settings });
-    const recordShadowDecision = vi.fn(async () => undefined);
-
-    const result = await maybeAutoExecuteCurrentCachedHomePlan({
-      orgId: org.id,
-      threadId: thread.id,
-      settings,
-      failureRoute: "test",
-    }, makeDeps({
-      shadow: { recordShadowDecision, resolveShadowDecisionOnApproval: async () => undefined },
-    }));
-
-    expect(result).toBeNull();
-    expect(recordShadowDecision).toHaveBeenCalledOnce();
   });
 
   it("holds an auto-executable plan when auto-execute is off", async () => {

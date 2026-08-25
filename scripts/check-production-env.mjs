@@ -283,16 +283,16 @@ export function validateProductionEnv(target, options = {}) {
     ? gatewayConfig.planExecutionLedgerMode
     : readEnv(env, 'PLAN_EXECUTION_LEDGER_MODE');
   if (target !== 'gateway' && planExecutionLedgerMode
-    && !['off', 'shadow', 'enforce'].includes(planExecutionLedgerMode)) {
-    errors.push('PLAN_EXECUTION_LEDGER_MODE must be one of: off, shadow, enforce');
+    && !['off', 'enforce'].includes(planExecutionLedgerMode)) {
+    errors.push('PLAN_EXECUTION_LEDGER_MODE must be one of: off, enforce');
   }
 
   const agentContextBudgetMode = target === 'gateway' && gatewayConfig
     ? gatewayConfig.agentContextBudgetMode
     : readEnv(env, 'AGENT_CONTEXT_BUDGET_MODE');
   if (target !== 'gateway' && agentContextBudgetMode
-    && !['off', 'shadow', 'enforce'].includes(agentContextBudgetMode)) {
-    errors.push('AGENT_CONTEXT_BUDGET_MODE must be one of: off, shadow, enforce');
+    && !['off', 'enforce'].includes(agentContextBudgetMode)) {
+    errors.push('AGENT_CONTEXT_BUDGET_MODE must be one of: off, enforce');
   }
 
   const gmailNativeInbound = target === 'gateway' && gatewayConfig

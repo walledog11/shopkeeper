@@ -24,11 +24,11 @@ export const GATEWAY_PRODUCTION_CONFIG_SCHEMA = Object.freeze({
   PRODUCT_ANALYTICS_ENABLED: { type: 'boolean', defaultValue: false },
   PLAN_EXECUTION_LEDGER_MODE: {
     type: 'enum',
-    values: ['off', 'shadow', 'enforce'],
+    values: ['off', 'enforce'],
   },
   AGENT_CONTEXT_BUDGET_MODE: {
     type: 'enum',
-    values: ['off', 'shadow', 'enforce'],
+    values: ['off', 'enforce'],
   },
   GMAIL_NATIVE_INBOUND: { type: 'boolean', defaultValue: false },
   GATEWAY_ENABLE_MAINTENANCE_WORKERS: { type: 'boolean', defaultValue: true },

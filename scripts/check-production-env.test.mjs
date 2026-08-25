@@ -38,8 +38,8 @@ function createDashboardLaunchEnv(overrides = {}) {
     IMESSAGE_LINE_HANDLE: '+15551234567',
     INSTAGRAM_INTEGRATION_ENABLED: 'false',
     PRODUCT_ANALYTICS_ENABLED: 'false',
-    PLAN_EXECUTION_LEDGER_MODE: 'shadow',
-    AGENT_CONTEXT_BUDGET_MODE: 'shadow',
+    PLAN_EXECUTION_LEDGER_MODE: 'enforce',
+    AGENT_CONTEXT_BUDGET_MODE: 'enforce',
     ...overrides,
   };
 }
@@ -68,8 +68,8 @@ function createGatewayLaunchEnv(overrides = {}) {
     SPECTRUM_PROJECT_SECRET: 'project_secret_1',
     SPECTRUM_WEBHOOK_SECRET: 'webhook_secret_1',
     PRODUCT_ANALYTICS_ENABLED: 'false',
-    PLAN_EXECUTION_LEDGER_MODE: 'shadow',
-    AGENT_CONTEXT_BUDGET_MODE: 'shadow',
+    PLAN_EXECUTION_LEDGER_MODE: 'enforce',
+    AGENT_CONTEXT_BUDGET_MODE: 'enforce',
     ...overrides,
   };
 }
@@ -429,7 +429,7 @@ test('production contracts require an explicit plan execution ledger rollout mod
   );
   assert.equal(
     gateway.errors.includes(
-      'PLAN_EXECUTION_LEDGER_MODE must be one of: off, shadow, enforce',
+      'PLAN_EXECUTION_LEDGER_MODE must be one of: off, enforce',
     ),
     true,
   );
@@ -453,7 +453,7 @@ test('production contracts require a valid AI context budget rollout mode', () =
   );
   assert.equal(
     gateway.errors.includes(
-      'AGENT_CONTEXT_BUDGET_MODE must be one of: off, shadow, enforce',
+      'AGENT_CONTEXT_BUDGET_MODE must be one of: off, enforce',
     ),
     true,
   );
@@ -510,8 +510,8 @@ test('env file parser trims comments and quoted values the same way prod env fil
       'SPECTRUM_PROJECT_SECRET=project_secret_1',
       'SPECTRUM_WEBHOOK_SECRET=webhook_secret_1',
       'PRODUCT_ANALYTICS_ENABLED=false',
-      'PLAN_EXECUTION_LEDGER_MODE=shadow',
-      'AGENT_CONTEXT_BUDGET_MODE=shadow',
+      'PLAN_EXECUTION_LEDGER_MODE=enforce',
+      'AGENT_CONTEXT_BUDGET_MODE=enforce',
       '',
     ].join('\n')
   );

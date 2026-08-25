@@ -16,23 +16,12 @@ import type { AgentPlan, OrgSettings, PlanExecutionOutcome, RawToolCall } from "
 import {
   claimCurrentPlanExecution,
   completePlanExecution,
-  observePlanExecution,
   type PlanExecutionIdentity,
 } from "./execution-ledger.js";
 import logger from "./logger.js";
 import { isInvalidPlan } from "./plan-validation.js";
 
-// Host-injected shadow recorder (Track 4.1). The dashboard wires this to the
-// real AutonomyShadowDecision rig; the gateway worker supplies a no-op (the rig
-// is a dashboard-rollout-only system per the trim list).
-export interface ShadowRecorder {
-  recordShadowDecision(p: { orgId: string; threadId: string; settings: OrgSettings; plan: AgentPlan }): Promise<void>;
-  resolveShadowDecisionOnApproval(p: { orgId: string; threadId: string; approvedToolCalls: RawToolCall[] }): Promise<void>;
-}
-
-export interface PlanExecutionDeps extends ExecuteAgentTurnDeps {
-  shadow: ShadowRecorder;
-}
+export type PlanExecutionDeps = ExecuteAgentTurnDeps;
 
 export interface ApproverIdentity {
   clerkUserId: string;
@@ -69,13 +58,13 @@ export interface ExpectedPlanIdentity {
   instructionHash?: string | null;
 }
 
-export type PlanExecutionLedgerMode = "off" | "shadow" | "enforce";
+export type PlanExecutionLedgerMode = "off" | "enforce";
 export type ExecutionIntent = "automatic" | "merchant_approved";
 
 export function resolvePlanExecutionLedgerMode(
   value: string | undefined = process.env.PLAN_EXECUTION_LEDGER_MODE,
 ): PlanExecutionLedgerMode {
-  return value === "off" || value === "shadow" ? value : "enforce";
+  return value === "off" ? "off" : "enforce";
 }
 
 const EXECUTABLE_CATEGORIES = new Set(["action", "communication", "internal"]);
@@ -374,21 +363,6 @@ export async function executeCurrentCachedHomePlan(params: {
     }
     executionId = claim.execution.id;
     claimToken = claim.claimToken;
-  } else if (ledgerMode === "shadow") {
-    try {
-      const observed = await observePlanExecution(identity);
-      executionId = observed.id;
-      if (observed.observationCount > 1) {
-        logger.warn({
-          orgId: params.orgId,
-          threadId: params.threadId,
-          planId: current.planId,
-          observationCount: observed.observationCount,
-        }, "[plan-execution] shadow observed repeated execution of one plan");
-      }
-    } catch (error) {
-      logger.error({ err: error, orgId: params.orgId, threadId: params.threadId }, "[plan-execution] shadow observation failed");
-    }
   }
 
   let result: AgentResult;
@@ -431,14 +405,6 @@ export async function executeCurrentCachedHomePlan(params: {
       orgId: params.orgId,
       threadId: params.threadId,
       lastCustomerMessageId: current.lastCustomerMessageId,
-    });
-  }
-
-  if (auditMode === "human_approved") {
-    await deps.shadow.resolveShadowDecisionOnApproval({
-      orgId: params.orgId,
-      threadId: params.threadId,
-      approvedToolCalls,
     });
   }
 
@@ -490,19 +456,7 @@ export async function maybeAutoExecuteCurrentCachedHomePlan(params: {
     return null;
   }
 
-  const mode = resolveAutoExecuteMode(params.settings);
-  if (mode === "off") {
-    return null;
-  }
-
-  if (mode === "shadow") {
-    // Record what we would have auto-executed; still route to human approval.
-    await deps.shadow.recordShadowDecision({
-      orgId: params.orgId,
-      threadId: params.threadId,
-      settings: params.settings,
-      plan: current.plan,
-    });
+  if (!isAutoExecuteEnabled(params.settings)) {
     return null;
   }
 

@@ -21,7 +21,7 @@ export interface OrgSettings {
 
   // Default behavior
   autoPlanOnOpen: boolean;
-  autoExecuteMode?: 'off' | 'shadow' | 'live'; // off = approval-only; shadow = record counterfactuals, still approval-only; live = auto-fire
+  autoExecuteMode?: 'off' | 'live'; // off = approval-only; live = auto-fire
   defaultInstruction: string;
 
   // Tool permissions
