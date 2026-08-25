@@ -20,12 +20,14 @@
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
     "dev": "tsc --watch --preserveWatchOutput",
     "test:unit": "vitest run --config vitest.config.ts",
+    "test:coverage": "node ../../scripts/with-test-env.mjs vitest run --coverage --config vitest.config.ts",
     "lint": "cd ../.. && eslint packages/integrations/src packages/integrations/vitest.config.ts --max-warnings 0"
   },
   "dependencies": {
     "@shopkeeper/agent": "*"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.3",
     "typescript": "latest",
     "vitest": "^4.1.3"
   }
