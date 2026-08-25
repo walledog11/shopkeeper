@@ -104,6 +104,17 @@ function classificationWriteEvents() {
     .map((call) => call[0]);
 }
 
+// The user content each path actually sent to the model. The prompt resolves
+// `deadline` against a "Today" line, so a path that omits one leaves the model
+// guessing the year — production returned 2024-01-05 and then 2025-01-10 for
+// "before Friday" on 2026-08-25, because only the email path sent it.
+function classifierUserContents(): string[] {
+  return getMockAnthropicCreate().mock.calls.map((call) => {
+    const messages = (call[0] as { messages: Array<{ content: unknown }> }).messages;
+    return String(messages[0]?.content ?? '');
+  });
+}
+
 function runSummaryJob(data: AiSummaryJobData) {
   return getCapturedHandlers().get('ai-summary')!({
     id: `classification-contract-${data.sourceMessageId}`,
@@ -169,6 +180,16 @@ describe('inbound classification channel contract', () => {
       sourceAligned: true,
       sourceText: REQUEST_TEXT,
     });
+
+    // Both paths, not just the email one. This is the divergence the contract
+    // unification missed: it compared the guard, the schema, the token budget,
+    // and the write projections, and never compared the message input.
+    const contents = classifierUserContents();
+    expect(contents).toHaveLength(2);
+    const today = new Date().toISOString().slice(0, 10);
+    for (const content of contents) {
+      expect(content.startsWith(`Today: ${today}\n\n`)).toBe(true);
+    }
   });
 
   it('rejects a post-persistence classification when a newer request arrives in flight', async () => {

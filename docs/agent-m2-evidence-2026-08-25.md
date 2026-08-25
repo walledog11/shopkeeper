@@ -322,6 +322,7 @@ the code, three were real and two were not.
 | Write-site split | Real — closed in `18f2f49a` |
 | Burst framing reaching only post-persistence | Inherent, not a divergence |
 | `verifiedOrderNames` reaching only post-persistence | Inherent, not a divergence |
+| The `Today:` date anchor reaching only pre-persistence | **Missed entirely — found by the canary, closed in `6a371a94`** |
 
 The two inherent ones are recorded rather than left open because an execution plan
 that lists unclosable items reads as unfinished forever. Burst framing needs a
@@ -501,20 +502,94 @@ Typecheck, lint, unit (376 gateway) and integration (843 gateway, 653 dashboard,
 touched, and fixtures set `classifierIntents` directly in setup rather than
 running the classifier, so no assertion can move.
 
+### Production canary — run 2026-08-25, and what it caught
+
+The canary this work owed. `npm run canary:classification` drives a two-message
+email sequence onto the production inbound queue: the opening message takes the
+pre-persistence path, the reply takes the post-persistence one. It polls the
+persisted contract rather than the logs, so durable state is the evidence.
+
+It failed on its first run, and both failures were in the code this milestone
+changed.
+
+**1. The schema had never worked.** Every classification in production had been
+returning 400 since `0f396f50` (2026-08-21):
+
+```
+output_config.format.schema: Invalid schema:
+Enum value 'refund' does not match declared type '['string', 'null']'
+```
+
+`requestFacts.alternative` paired a union `type` with an `enum`, which the
+Messages API refuses. Confirmed against the live API: that spelling is rejected
+and reproduces the production error verbatim, while `anyOf`, a bare `enum`, and
+dropping the enum are all accepted. Fixed with `anyOf` in `4248f135`.
+
+The blast radius grew in two stages, and the second is this milestone's doing.
+From 08-21 only the pre-persistence path was schema-enforced, so it failed,
+logged `Classifier failed — deferring to SUMMARIZE_THREAD`, and fell through to
+a free-text parse that worked. `933019d5` made the post-persistence path
+schema-enforced too and removed that fallback, turning a silent degradation into
+a total outage. **This evidence report called schema enforcement a live
+behavior change and shipped it without exercising it once.** Every test here
+mocks Anthropic, so a server-side rejection is structurally invisible locally; a
+unit test now walks the schema for that one pairing, and reintroducing the old
+line fails it.
+
+**2. A sixth divergence, in the input.** With the schema fixed, the canary
+returned `deadlineText: "before Friday"` beside `deadline: "2024-01-05"`, and
+`"2025-01-10"` on the next run — a fresh guess each time, which is what an
+unanchored model looks like. `CLASSIFIER_SYSTEM_PROMPT` resolves `deadline`
+"against the "Today" line in the message"; `email-classification.ts` always sent
+one and `intelligence.ts` never did. The unification compared the guard, the
+schema, the token budget, and the write projections, and never compared the
+message input — the one the prompt itself names as a precondition. Closed in
+`6a371a94` by `classifierUserInput`, with a contract test asserting both paths
+send the anchor.
+
+**Result after both fixes.** Both paths classified correctly: `version: 5`,
+populated `requestFacts`, `requestSourceMessageId` moving from the opening
+message to the reply, `requestDisposition` `informational` then
+`merchant_action`. First evidence either path has worked in production since
+08-21. The four synthetic customers were deleted afterwards.
+
+**Residual, not chased.** On 2026-08-25 (a Tuesday) "before Friday" resolved to
+`2026-08-29`, a Saturday; Friday was `2026-08-28`. Off by one day against off by
+twenty months before the anchor, so the fix is real, but the field the briefing
+line leads with is still not exactly right. Tuning it is a prompt change needing
+its own verification loop.
+
+### Incidental: the queue alert was bundling two causes
+
+`npm run audit:classification-recovery` against production, 2026-08-25T21:51Z:
+27 failed `ai-summary` jobs, of which **2** came from the classifier schema —
+both this canary's own first run — and **25** from
+`Your credit balance is too low to access the Anthropic API`, dating to
+**2026-08-19**. The oldest failure is six days older than the schema outage.
+
+Nothing is owed for recovery: `threadsMissingContract` is 0, and the two schema
+failures reference threads deleted in canary cleanup. But the alert that
+surfaced this has been firing on a mixed population for days, and a credit
+exhaustion on 08-19 went unnoticed. That is a separate finding and belongs to
+whoever owns spend alerting, not to this milestone.
+
 ### Completion-gate status — partial, and deliberately not claimed complete
 
 Against the plan's seven-item gate, this work has outcome, deterministic coverage,
-model evidence (none owed), and rollback (revert the two commits; no flag, no
-migration, no persisted-shape change). It does **not** have:
+model evidence (none owed), rollback (revert the commits; no flag, no migration,
+no persisted-shape change), and — after `4248f135` and `6a371a94` — a production
+canary. "Model evidence: none owed" was true of the eval fixtures and false of
+the model call itself: the paid gate could not have caught either canary defect,
+because no fixture runs the classifier. It does **not** have:
 
 - **Compatibility inventory.** No production count of threads by classifier
   version was taken for this change. It writes no new column and changes no
   persisted shape, so nothing needs migrating, but the inventory the milestone
   asks for is still owed by the version-lifecycle bullet.
-- **Production canary.** The changed paths — every inbound classification on every
-  channel — have not been exercised in production against this build. Two of the
-  changes are live behavior changes (schema enforcement and the token budget on
-  the post-persistence classifier), so this is the gap that matters most.
+- **A canary that runs before the merge, not after.** The one above found two
+  defects in shipped code, one of them an outage this work caused. It closes the
+  gate item, but a canary that only ever runs afterwards is a detector, not a
+  gate. Any future change to a model call on this path should run it first.
 
 Milestone 2 is therefore not complete. Its remaining bullets are the version
 lifecycle: supported-version definition, the retirement procedure, and production
