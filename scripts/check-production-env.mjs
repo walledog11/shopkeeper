@@ -283,7 +283,7 @@ export function validateProductionEnv(target, options = {}) {
     ? gatewayConfig.planExecutionLedgerMode
     : readEnv(env, 'PLAN_EXECUTION_LEDGER_MODE');
   if (target !== 'gateway' && planExecutionLedgerMode
-    && !['off', 'enforce'].includes(planExecutionLedgerMode)) {
+    && !['off', 'enforce', 'shadow'].includes(planExecutionLedgerMode)) {
     errors.push('PLAN_EXECUTION_LEDGER_MODE must be one of: off, enforce');
   }
 
@@ -291,7 +291,7 @@ export function validateProductionEnv(target, options = {}) {
     ? gatewayConfig.agentContextBudgetMode
     : readEnv(env, 'AGENT_CONTEXT_BUDGET_MODE');
   if (target !== 'gateway' && agentContextBudgetMode
-    && !['off', 'enforce'].includes(agentContextBudgetMode)) {
+    && !['off', 'enforce', 'shadow'].includes(agentContextBudgetMode)) {
     errors.push('AGENT_CONTEXT_BUDGET_MODE must be one of: off, enforce');
   }
 

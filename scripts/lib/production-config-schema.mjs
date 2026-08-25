@@ -25,10 +25,12 @@ export const GATEWAY_PRODUCTION_CONFIG_SCHEMA = Object.freeze({
   PLAN_EXECUTION_LEDGER_MODE: {
     type: 'enum',
     values: ['off', 'enforce'],
+    legacyAliases: { shadow: 'enforce' },
   },
   AGENT_CONTEXT_BUDGET_MODE: {
     type: 'enum',
     values: ['off', 'enforce'],
+    legacyAliases: { shadow: 'enforce' },
   },
   GMAIL_NATIVE_INBOUND: { type: 'boolean', defaultValue: false },
   GATEWAY_ENABLE_MAINTENANCE_WORKERS: { type: 'boolean', defaultValue: true },
@@ -87,10 +89,11 @@ function parseSchemaField(env, name, fallback) {
   }
 
   const normalized = field.normalize === 'lowercase' ? rawValue.toLowerCase() : rawValue;
-  if (!field.values.includes(normalized)) {
+  const resolved = field.legacyAliases?.[normalized] ?? normalized;
+  if (!field.values.includes(resolved)) {
     throw new Error(`${name} must be one of: ${field.values.join(', ')}`);
   }
-  return normalized;
+  return resolved;
 }
 
 export function parseGatewayProductionConfig(env = process.env) {

@@ -459,6 +459,26 @@ test('production contracts require a valid AI context budget rollout mode', () =
   );
 });
 
+test('production contracts accept legacy shadow rollout modes as enforce', () => {
+  const gateway = validateProductionEnv('gateway', {
+    scope: 'launch',
+    env: createGatewayLaunchEnv({
+      PLAN_EXECUTION_LEDGER_MODE: 'shadow',
+      AGENT_CONTEXT_BUDGET_MODE: 'shadow',
+    }),
+  });
+  const dashboard = validateProductionEnv('dashboard', {
+    scope: 'launch',
+    env: createDashboardLaunchEnv({
+      PLAN_EXECUTION_LEDGER_MODE: 'shadow',
+      AGENT_CONTEXT_BUDGET_MODE: 'shadow',
+    }),
+  });
+
+  assert.deepEqual(gateway.errors, []);
+  assert.deepEqual(dashboard.errors, []);
+});
+
 test('enabled product analytics requires a token and HTTPS host', () => {
   const result = validateProductionEnv('gateway', {
     scope: 'launch',
