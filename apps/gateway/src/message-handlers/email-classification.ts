@@ -289,7 +289,10 @@ const CHANNELS_CAPPED_AT_QUESTIONABLE: ReadonlySet<string> = new Set<string>([
  * prompt: "never bin a shopper" is a guarantee, and a guarantee that depends on
  * the model reaching for one word over another is not one.
  */
-export function resolveFilterDecision(
+// Not exported: the channel rule is reached only through classifiedFilterFields,
+// which is what keeps "never bin a shopper" a single owner rather than a
+// convention every write site is trusted to remember.
+function resolveFilterDecision(
   channelType: string,
   verdict: DbThreadFilterStatus,
 ): DbThreadFilterStatus | null {
