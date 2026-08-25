@@ -161,26 +161,17 @@ export function decideAutonomy(
   settings?: Partial<OrgSettings> | OrgSettings | null,
   context: AutonomyContext = {},
 ): AutonomyVerdict {
-  if (plan.validation?.status === "invalid") {
-    return {
-      kind: "invalid",
-      reasons: plan.validation.issues.map((issue) => issue.code),
-      issues: plan.validation.issues,
-    };
-  }
-
   const evidence = routingEvidence(plan, context);
-  const calls = executableCalls(plan);
-  const resolved = resolveAgentSettings(settings ?? null);
-  const staticPolicyBlocked = calls.some(
-    (call) => checkStaticToolPolicy(call.name, call.input, resolved).blocked,
-  );
   const explicitEscalation = plan.rawToolCalls.find((call) => call.name === "escalate_to_human") ?? null;
   const escalationCodes = evidence.codes.filter((code) => ESCALATION_EVIDENCE.has(code));
-  // Structural evidence is itself the policy decision. In particular, an
-  // over-cap compensation proposal must become an escalation, rather than
-  // letting the same static-policy block demote it to a non-approvable card.
-  // The planner materializes the safe escalation call after this verdict.
+  // Structural evidence is itself the policy decision, and it is derived from
+  // the merchant's own data rather than from the model's proposal — so it is
+  // decided ahead of plan validity. Ordering it after would let a model escape
+  // the escalation its evidence already demands by writing a plan bad enough to
+  // be invalid: worse output, weaker routing. In particular, an over-cap
+  // compensation proposal must become an escalation, rather than letting the
+  // same static-policy block demote it to a non-approvable card. The planner
+  // materializes the safe escalation call after this verdict.
   if (escalationCodes.length > 0) {
     return {
       kind: "escalate",
@@ -189,6 +180,20 @@ export function decideAutonomy(
       toolCalls: explicitEscalation ? [explicitEscalation] : [],
     };
   }
+
+  if (plan.validation?.status === "invalid") {
+    return {
+      kind: "invalid",
+      reasons: plan.validation.issues.map((issue) => issue.code),
+      issues: plan.validation.issues,
+    };
+  }
+
+  const calls = executableCalls(plan);
+  const resolved = resolveAgentSettings(settings ?? null);
+  const staticPolicyBlocked = calls.some(
+    (call) => checkStaticToolPolicy(call.name, call.input, resolved).blocked,
+  );
   if (explicitEscalation) {
     if (staticPolicyBlocked) {
       return {

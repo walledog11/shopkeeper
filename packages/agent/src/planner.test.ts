@@ -96,6 +96,14 @@ function singleToolUse(name: string, input: Record<string, unknown>, id = "tu_1"
   };
 }
 
+function toolUses(calls: { id: string; name: string; input: Record<string, unknown> }[]) {
+  return {
+    stop_reason: "tool_use",
+    content: calls.map(call => ({ type: "tool_use", ...call })),
+    usage: { input_tokens: 10, output_tokens: 5 },
+  };
+}
+
 function endTurn(text = "Working on it.") {
   return {
     stop_reason: "end_turn",
@@ -118,12 +126,26 @@ function completeLogPayload(logger: AgentLogger) {
     toolSelectionNarrowed: boolean;
     namespaceMiss: boolean;
     namespaceMissReason: string | null;
+    validationStatus: string;
+    supersededValidationIssueCodes: string[] | null;
   };
 }
 
 function toolNamesForCall(index: number): string[] {
   return mockCreate.mock.calls[index]![0].tools.map((tool: { name: string }) => tool.name);
 }
+
+const REFUNDED_ORDER_1020 = {
+  id: "9000001020",
+  name: "#1020",
+  created_at: "2026-05-08T09:00:00-07:00",
+  financial_status: "refunded",
+  fulfillment_status: "fulfilled",
+  total_price: "38.00",
+  currency: "USD",
+  items: [],
+  shipping_address: null,
+};
 
 const FULFILLED_ORDER_4003 = {
   id: "9000004003",
@@ -491,6 +513,42 @@ describe("planAgent routing", () => {
     expect(plan.routing).toBeUndefined();
     expect(plan.routingEvidence?.codes).toContain("out_of_scope_commercial_request");
     expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual(["escalate_to_human"]);
+  });
+
+  // Regression for the `refund-already-refunded` eval fixture: the model wrote a
+  // note plus a reply, which is invalid as an orphan note, and validity used to
+  // gate the whole routing block — so the escalate verdict never reached the
+  // plan and the merchant saw a reply on an order already refunded in full.
+  it("materializes the escalation when the invalid draft would have suppressed it", async () => {
+    const injectedLogger = makeLogger();
+    installAgentLogger(injectedLogger);
+    mockCreate.mockResolvedValueOnce(toolUses([
+      { id: "tu_note", name: "add_internal_note", input: { text: "Customer asked about a prior refund." } },
+      { id: "tu_reply", name: "send_reply", input: { text: "That order was already refunded." } },
+    ]));
+
+    const plan = await planAgent(
+      makeCtx({
+        recentMessages: [{
+          senderType: "customer",
+          contentText: "Can I get a refund for order #1020? It never worked out.",
+        }],
+        recentOrders: [REFUNDED_ORDER_1020],
+        classifierSignals: classifierSignalsFor({ mutative_request: true }),
+      }),
+      "Reply to the customer about their refund request.",
+      AGENT_SETTINGS_DEFAULTS,
+    );
+
+    expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual(["escalate_to_human"]);
+    expect(plan.routingEvidence?.codes).toContain("already_refunded_request");
+    // The plan the merchant approves is system-authored, so it validates.
+    expect(plan.validation).toEqual({ status: "valid", issues: [] });
+    expect(completeLogPayload(injectedLogger)).toMatchObject({
+      routingDecision: "escalate",
+      validationStatus: "valid",
+      supersededValidationIssueCodes: ["orphan_internal_note"],
+    });
   });
 
   it("preserves an invalid proposal and does not let routing hide it", async () => {

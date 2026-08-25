@@ -187,8 +187,11 @@ export async function planAgent(
 
   // Validate the model's captured proposal exactly as authored. An invalid plan
   // stays intact so the merchant can see what failed and routing cannot hide the
-  // error by rewriting it into a different, executable plan.
-  const validation = validatePlan({ ctx, instruction, rawToolCalls: loop.rawToolCalls });
+  // error by rewriting it into a different, executable plan. The one exception
+  // is structural escalation evidence, which is derived from the merchant's data
+  // and discards the proposal wholesale rather than repairing it.
+  const authoredValidation = validatePlan({ ctx, instruction, rawToolCalls: loop.rawToolCalls });
+  let validation = authoredValidation;
   let rawToolCalls = [...loop.rawToolCalls];
 
   const signalCodes: ProducedPlanSignalCode[] = [];
@@ -208,7 +211,7 @@ export async function planAgent(
     codes: [],
   };
   let routingDecision: ReturnType<typeof decideAutonomy>["kind"] | null = null;
-  if (!operatorMode && validation.status === "valid") {
+  if (!operatorMode) {
     const built = buildPlanRoutingEvidence({
       ctx,
       instruction,
@@ -227,16 +230,24 @@ export async function planAgent(
       steps: originalSteps,
       rawToolCalls,
       signals: originalSignals,
-      validation,
+      validation: authoredValidation,
       routingEvidence,
     }, resolvedSettings);
     routingDecision = verdict.kind;
+    // `escalationReason` is set only by structural evidence, so this rewrites
+    // the plan for a system-derived escalation and leaves a model-authored one
+    // (`explicit_escalation`) exactly as proposed.
     if (verdict.kind === "escalate" && routingEvidence.escalationReason) {
       rawToolCalls = applyEscalationRouting(
         rawToolCalls,
         verdict.escalationReason ?? "Needs human review.",
         { keepReply: isStorefrontContext(ctx) },
       );
+      // The merchant approves the plan that ships, and execution refuses an
+      // invalid one — so validity has to describe the materialized calls, not
+      // the discarded proposal. A kept storefront reply is re-checked here
+      // rather than inherited.
+      validation = validatePlan({ ctx, instruction, rawToolCalls });
     }
   }
 
@@ -283,6 +294,11 @@ export async function planAgent(
     validationStatus: validation.status,
     validationIssueCodes: validation.issues.map(issue => issue.code),
     validationIssueCounts,
+    // Keeps a discarded invalid proposal diagnosable once routing has replaced
+    // it with a system-authored escalation.
+    supersededValidationIssueCodes: validation === authoredValidation
+      ? null
+      : authoredValidation.issues.map(issue => issue.code),
     instructionHash,
   }, "[agent:plan] complete");
 
