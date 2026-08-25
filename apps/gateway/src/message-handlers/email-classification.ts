@@ -15,7 +15,6 @@ import { enforceSpendCap, recordSpend } from '@shopkeeper/agent/spend';
 import { readModelUsage } from '@shopkeeper/agent/usage';
 import {
   buildBoundedEmailClassifierInput,
-  resolveContextBudgetMode,
 } from '@shopkeeper/agent/context-budget';
 import {
   CLASSIFIER_TAGS,
@@ -377,26 +376,16 @@ export async function classifyAndSummarizeNewEmail(
   try {
     // Gateway uses default cap (per-org override applies on dashboard agent runs).
     await enforceSpendCap(organizationId, null);
-    const contextBudgetMode = resolveContextBudgetMode();
     const boundedInput = buildBoundedEmailClassifierInput(subject, body);
-    const legacyInput = `Subject: ${subject}\n\nBody: ${body}`;
-    const bodyInput = contextBudgetMode === 'enforce'
-      ? boundedInput
-      : legacyInput;
     // "by Friday" is only a date relative to something. Kept in the user message
     // rather than the system prompt so the cached prefix stays byte-stable.
-    const classifierInput = `Today: ${new Date().toISOString().slice(0, 10)}\n\n${bodyInput}`;
+    const classifierInput = `Today: ${new Date().toISOString().slice(0, 10)}\n\n${boundedInput}`;
 
-    if (contextBudgetMode !== 'off') {
-      logger.info({
-        organizationId,
-        purpose: 'email_classification',
-        mode: contextBudgetMode,
-        inputCharsBefore: legacyInput.length,
-        inputCharsAfter: boundedInput.length,
-        truncated: boundedInput !== legacyInput,
-      }, '[Worker] AI input budget');
-    }
+    logger.info({
+      organizationId,
+      purpose: 'email_classification',
+      inputChars: boundedInput.length,
+    }, '[Worker] AI input budget');
 
     const response = await anthropic.messages.create({
       model: MODEL.CLAUDE,

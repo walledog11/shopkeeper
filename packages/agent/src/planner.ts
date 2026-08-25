@@ -32,7 +32,6 @@ import type { AgentPlan, OrgSettings, PlanRoutingEvidence, ProducedPlanSignalCod
 import { createModelUsageMetrics, hashInstructionForLog } from "./usage.js";
 import {
   CONTEXT_BUDGETS,
-  resolveContextBudgetMode,
   truncateContextText,
 } from "./context-budget.js";
 
@@ -48,10 +47,7 @@ export async function planAgent(
   const startedAt = Date.now();
   const usageTotals = createModelUsageMetrics();
   const instructionHash = hashInstructionForLog(instruction);
-  const contextBudgetMode = resolveContextBudgetMode();
-  const modelInstruction = contextBudgetMode === "enforce"
-    ? truncateContextText(instruction, CONTEXT_BUDGETS.instructionChars)
-    : instruction;
+  const modelInstruction = truncateContextText(instruction, CONTEXT_BUDGETS.instructionChars);
   const operatorMode = isOperatorChannel(ctx.thread.channelType);
   const historyWindow = operatorMode ? ctx.recentMessages.slice(-4) : ctx.recentMessages;
   const baseMessages = buildMessageHistory(historyWindow, modelInstruction, {
@@ -101,7 +97,6 @@ export async function planAgent(
     toolSelectionNarrowed: toolSelection.narrowed,
     instructionLength: instruction.length,
     modelInstructionLength: modelInstruction.length,
-    contextBudgetMode,
     instructionHash,
   }, "[agent:plan] start");
 

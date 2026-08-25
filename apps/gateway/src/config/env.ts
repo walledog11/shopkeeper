@@ -82,10 +82,6 @@ export function validateGatewayEnv(): void {
     throw new Error('[Gateway] Missing required environment variable: PLAN_EXECUTION_LEDGER_MODE');
   }
 
-  if (process.env.NODE_ENV === 'production' && !hasEnv('AGENT_CONTEXT_BUDGET_MODE')) {
-    throw new Error('[Gateway] Missing required environment variable: AGENT_CONTEXT_BUDGET_MODE');
-  }
-
   parseProductAnalyticsConfig();
 
   const redisUrl = requireEnv('REDIS_URL');

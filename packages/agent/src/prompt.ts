@@ -6,15 +6,11 @@ import type { AgentContext } from "./agent-context.js";
 import {
   CONTEXT_BUDGETS,
   budgetKbArticles,
-  resolveContextBudgetMode,
   truncateContextText,
 } from "./context-budget.js";
 
 function promptText(value: string | null | undefined, maxChars: number): string {
-  const text = value?.trim() ?? "";
-  return resolveContextBudgetMode() === "enforce"
-    ? truncateContextText(text, maxChars)
-    : text;
+  return truncateContextText(value?.trim() ?? "", maxChars);
 }
 
 function recentOrdersJson(ctx: AgentContext): string {
@@ -23,9 +19,7 @@ function recentOrdersJson(ctx: AgentContext): string {
 }
 
 function promptKbArticles(ctx: AgentContext): AgentContext["kbArticles"] {
-  return resolveContextBudgetMode() === "enforce"
-    ? budgetKbArticles(ctx.kbArticles).articles
-    : ctx.kbArticles;
+  return budgetKbArticles(ctx.kbArticles).articles;
 }
 
 function buildVoiceSection(s: OrgSettings): string {

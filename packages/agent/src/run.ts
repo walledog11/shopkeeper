@@ -32,7 +32,6 @@ import {
 } from "./run-execution.js";
 import {
   CONTEXT_BUDGETS,
-  resolveContextBudgetMode,
   truncateContextText,
 } from "./context-budget.js";
 
@@ -168,10 +167,7 @@ export async function runAgent(
     : readOnly
       ? ctx.recentMessages.slice(-4)
       : ctx.recentMessages;
-  const contextBudgetMode = resolveContextBudgetMode();
-  const boundedInstruction = contextBudgetMode === "enforce"
-    ? truncateContextText(instruction, CONTEXT_BUDGETS.instructionChars)
-    : instruction;
+  const boundedInstruction = truncateContextText(instruction, CONTEXT_BUDGETS.instructionChars);
   const messageInstruction = readOnly
     ? `Private question from the support operator. Do not contact the customer.\n\n${boundedInstruction}`
     : boundedInstruction;
