@@ -68,6 +68,7 @@
     "audit:escalation-backfill": "node ./scripts/audit-escalation-backfill.mjs",
     "audit:operator-context-compatibility": "node ./scripts/audit-operator-context-compatibility.mjs",
     "audit:agent-briefings": "node ./scripts/audit-agent-briefings.mjs",
+    "audit:classification-alignment": "node ./scripts/audit-classification-alignment.mjs",
     "audit:legacy-imessage-threads": "node ./scripts/audit-legacy-imessage-threads.mjs",
     "cleanup:duplicate-integrations": "node ./scripts/cleanup-duplicate-integrations.mjs",
     "audit:bullmq-compatibility-names": "node ./scripts/audit-bullmq-compatibility-names.mjs",

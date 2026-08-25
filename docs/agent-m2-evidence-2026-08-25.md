@@ -350,8 +350,56 @@ post-persistence path. One worker at BullMQ's default concurrency of 1 serialize
 inbound jobs. This was a landmine, not an active bug.
 
 It widens the moment either of two things is true: a second caller passes
-`precomputed`, or the gateway runs more than one replica. **The replica count is
-an open question this work could not answer from the repository** — see below.
+`precomputed`, or the gateway runs more than one replica. The replica count is
+settled below; it was one.
+
+### Reachability settled — the defect never fired in production
+
+Closed 2026-08-25, after the guard landed. Two independent lines of evidence.
+
+**Infrastructure.** Railway runs two services off the same start command, split by
+`GATEWAY_RUNTIME_ROLE`: `shopkeeper` is `server`, `Gateway Worker` is `worker`. So
+one process consumes the queues. Every deployment of both services since
+2026-04-12 — 759 and 755 respectively — carries `multiRegionConfig
+{"us-west2": {"numReplicas": 1}}`, which covers the whole defect window
+(`a3132387` 2026-08-14 → `933019d5` 2026-08-25). No `concurrency` option is passed
+to any BullMQ worker, so the default of 1 stands. Two first-emails could not
+classify concurrently.
+
+**This evidence has one hole, and it is why the row check below exists.**
+`GATEWAY_RUNTIME_ROLE` has `defaultValue: 'all'`
+(`scripts/lib/production-config-schema.mjs:18`), so an *unset* variable runs a
+worker on the server service too. Railway's CLI exposes no variable history, and
+log retention does not reach back into the defect window — `railway logs` on an
+2026-08-14 deployment returns zero lines. The current value is `server`; that it
+was `server` for the whole window is not provable from outside the repository.
+
+**The rows.** Chasing that negative is a dead end, so the question was answered
+where it actually mattered: are there production rows whose request fields
+describe an older message than the newest customer message on the thread — the
+only outcome the unguarded write could produce. `npm run
+audit:classification-alignment` (read-only, no identifiers, no message text)
+against production at `2026-08-25T21:10:26Z`:
+
+```
+scope     { threadCount: 141, organizationCount: 5 }
+alignment { aligned: 11, no_request_fields: 130 }
+stale     { total: 0, createdBeforeGuard: 0, createdAfterGuard: 0 }
+```
+
+Zero stale rows. No backfill is owed and Milestone 2 gains no remediation item.
+
+**What bounds this.** Only 11 of the 141 threads carry request fields at all — the
+contract landed 2026-08-14, so everything older has none — and the defective path
+is email-only, which is 9 of those 11. The row check is therefore a small sample
+that agrees with the infrastructure evidence rather than a large one that stands
+alone. Both point the same way, and the guard has since made the question moot.
+
+The script splits stale rows by whether the thread predates the guard deploy
+(`7430ee77`, 2026-08-25T20:48:32Z), so a `createdAfterGuard` row would be a live
+defect rather than residue. That makes it a standing check rather than a one-off,
+but it is pull-based: the metrics bullet still owes emitted telemetry for
+classifier version, classification failure, and stale-write rejection.
 
 ### The call shape
 
@@ -447,11 +495,6 @@ metrics.
 
 ### Open questions this work could not settle
 
-- **How many gateway replicas does Railway run?** It decides whether the staleness
-  defect was reachable in production or purely latent. At one replica with BullMQ
-  concurrency 1, inbound jobs serialize and two first-emails cannot classify
-  concurrently. At more than one, they can. Answerable from the Railway service
-  config, not from this repository.
 - **`email-classification.ts` is no longer an email module.** It owns
   `CLASSIFIER_SYSTEM_PROMPT`, `CLASSIFIER_OUTPUT_SCHEMA`, `CLASSIFIER_MAX_TOKENS`,
   `classifierSystemPrompt`, `parseClassifierJson`, `resolveFilterDecision`,

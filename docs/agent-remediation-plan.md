@@ -128,7 +128,9 @@ Contract unification is closed in `933019d5` and `18f2f49a`. Of the five diverge
 
 Two write-site inconsistencies the grouping exposed, neither on the original list: `classifierSignals` was written at thread creation while the rest of the request contract went through the guarded update, and the email path bypassed the channel filter rule. Both are closed.
 
-**Not claimed complete.** The changed paths carry no production canary and no compatibility inventory, and two of the changes are live behavior changes. Three findings are open: the gateway's Railway replica count decides whether the staleness defect was ever reachable in production; `email-classification.ts` is now the shared classifier module for every channel and its name is the last thing asserting the split this work removed; and a two-message email burst still costs two classifier calls.
+**Not claimed complete.** The changed paths carry no production canary and no classifier-version compatibility inventory, and two of the changes are live behavior changes. Two findings are open: `email-classification.ts` is now the shared classifier module for every channel and its name is the last thing asserting the split this work removed; and a two-message email burst still costs two classifier calls.
+
+The staleness defect is confirmed never to have fired: production ran one worker at BullMQ concurrency 1 for the whole window, and a read-only source-alignment audit over 141 production threads found zero stale rows. `npm run audit:classification-alignment` is retained as the standing metric.
 
 Full evidence, reachability analysis, and completion-gate status are in [agent-m2-evidence-2026-08-25.md](agent-m2-evidence-2026-08-25.md).
 
