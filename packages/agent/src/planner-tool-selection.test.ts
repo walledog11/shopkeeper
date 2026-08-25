@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { emptyIntents, emptyRequestFacts, type ClassifierSignals } from "./classifier-signals.js";
 import {
   NAMESPACE_MISS_TOOL_NAME,
+  NARROWING_EXEMPT_TOOL_NAMES,
   namespaceMissReason,
   selectPlanningTools,
 } from "./planner-tool-selection.js";
@@ -170,5 +171,64 @@ describe("namespaceMissReason", () => {
       { name: "send_reply" },
     ])).toBeNull();
     expect(namespaceMissReason([{ name: "escalate_to_human" }])).toBeNull();
+  });
+});
+
+// A tool the buckets never name is unreachable whenever narrowing applies, and
+// nothing else notices: the plan is merely worse, never an error. fulfill_order
+// was orphaned this way and a merchant instruction to fulfill an order silently
+// became a "hasn't shipped yet" reply. Every active tool must be reachable from
+// some intent, or be named as deliberately exempt.
+describe("merchant-authored instructions are not narrowed by customer intent", () => {
+  // The regression this closes: a customer asked "any update on order #3031?"
+  // (order_status) while the merchant instructed "I dropped this at UPS, mark it
+  // fulfilled". Narrowing read the customer's intent, hid fulfill_order, and the
+  // agent replied that the order had not shipped — contradicting the merchant.
+  it("offers merchant-only order tools when the merchant authored the instruction", () => {
+    const narrowed = select({ classifierSignals: signals({ order_status: true }) });
+    expect(names(narrowed)).not.toContain("fulfill_order");
+
+    const selection = select({
+      classifierSignals: signals({ order_status: true }),
+      merchantInstruction: true,
+    });
+    expect(selection.narrowed).toBe(false);
+    expect(selection.reason).toBe("merchant_instruction");
+    expect(names(selection)).toContain("fulfill_order");
+  });
+
+  it("still narrows when the instruction came from the customer's message", () => {
+    const selection = select({
+      classifierSignals: signals({ order_status: true }),
+      merchantInstruction: false,
+    });
+    expect(selection.narrowed).toBe(true);
+    expect(selection.bucket).toBe("order_status");
+  });
+});
+
+describe("intent narrowing reaches every active tool", () => {
+  it("leaves no active tool unreachable by omission", () => {
+    const exempt = new Set<string>(NARROWING_EXEMPT_TOOL_NAMES);
+    const reachable = new Set<string>();
+    const intentKeys = Object.keys(emptyIntents()) as (keyof ClassifierSignals["intents"])[];
+    for (const intent of intentKeys) {
+      for (const tool of selectPlanningTools({
+        availableTools: AGENT_TOOLS,
+        classifierSignals: signals({ [intent]: true }),
+        requestSourceMessageId: "message_1",
+        latestCustomerMessageId: "message_1",
+        operatorMode: false,
+        storefrontMode: false,
+        merchantAnswerReplan: false,
+      }).tools) {
+        reachable.add(tool.name);
+      }
+    }
+    const orphaned = AGENT_TOOLS
+      .map(tool => tool.name)
+      .filter(name => !reachable.has(name) && !exempt.has(name))
+      .sort();
+    expect(orphaned).toEqual([]);
   });
 });

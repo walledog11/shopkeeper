@@ -54,6 +54,7 @@
     ]
   },
   "instruction": "I dropped this one at UPS this morning, tracking 1Z999AA10123456784. Mark it fulfilled and let her know it's on the way.",
+  "merchantInstruction": true,
   "expectedPlan": {
     "mustCallTools": [
       "fulfill_order",

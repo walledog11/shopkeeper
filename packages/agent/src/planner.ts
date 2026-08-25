@@ -39,10 +39,18 @@ import {
 // for real, mutative + terminal tools are recorded instead of executed, and the
 // loop ends when the model proposes a terminal tool. No side effects. Phase 3
 // routing classifies the finalized plan afterwards without editing its tool calls.
+export interface PlanAgentOptions {
+  // Set by callers whose instruction the merchant typed, rather than one
+  // derived from the customer's own message. Intent narrowing is inferred from
+  // what the customer said, so it must not gate a tool the merchant named.
+  merchantInstruction?: boolean;
+}
+
 export async function planAgent(
   ctx: AgentContext,
   instruction: string,
   settings?: OrgSettings,
+  options?: PlanAgentOptions,
 ): Promise<AgentPlan> {
   const startedAt = Date.now();
   const usageTotals = createModelUsageMetrics();
@@ -80,6 +88,7 @@ export async function planAgent(
     operatorMode,
     storefrontMode: Boolean(storefrontTools),
     merchantAnswerReplan,
+    merchantInstruction: options?.merchantInstruction === true,
   });
 
   await enforceSpendCap(ctx.orgId, resolvedSettings);
