@@ -222,7 +222,14 @@ export const CLASSIFIER_OUTPUT_SCHEMA = {
         order: NULLABLE_STRING,
         deadline: NULLABLE_STRING,
         deadlineText: NULLABLE_STRING,
-        alternative: { type: ['string', 'null'], enum: [...REQUEST_ASKS, null] },
+        // anyOf, not `type: ['string','null']` with an enum beside it: the
+        // Messages API rejects that pairing outright ("Enum value 'refund' does
+        // not match declared type '['string','null']'"), which took every
+        // classification with it. NULLABLE_STRING above is safe because it
+        // carries no enum.
+        alternative: {
+          anyOf: [{ type: 'string', enum: [...REQUEST_ASKS] }, { type: 'null' }],
+        },
       },
       required: ['ask', 'subject', 'order', 'deadline', 'deadlineText', 'alternative'],
     },

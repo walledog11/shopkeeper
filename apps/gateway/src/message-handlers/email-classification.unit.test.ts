@@ -186,6 +186,28 @@ describe('CLASSIFIER_OUTPUT_SCHEMA', () => {
       .toContain('refund');
     expect(CLASSIFIER_OUTPUT_SCHEMA.additionalProperties).toBe(false);
   });
+
+  // The Messages API validates this schema server-side and rejects the whole
+  // request when a node pairs a union `type` with an `enum`. Every test here
+  // mocks Anthropic, so that 400 is invisible locally — it took four days and a
+  // production canary to surface, and it had disabled classification the whole
+  // time. This walks the schema for that one pairing so the next occurrence
+  // fails here instead.
+  it('never pairs a union type with an enum', () => {
+    const offenders: string[] = [];
+    const walk = (node: unknown, path: string): void => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) {
+        node.forEach((entry, index) => { walk(entry, `${path}[${index}]`); });
+        return;
+      }
+      const record = node as Record<string, unknown>;
+      if (Array.isArray(record.type) && record.enum !== undefined) offenders.push(path);
+      for (const [key, value] of Object.entries(record)) walk(value, `${path}.${key}`);
+    };
+    walk(CLASSIFIER_OUTPUT_SCHEMA, 'schema');
+    expect(offenders).toEqual([]);
+  });
 });
 
 describe('CLASSIFIER_SYSTEM_PROMPT attachment safety', () => {
