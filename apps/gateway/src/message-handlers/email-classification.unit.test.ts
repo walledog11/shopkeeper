@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   parseClassifierJson,
   classifierSignals,
+  classifiedEpisodeFields,
+  classifiedFilterFields,
+  classifiedRequestFields,
   emptyIntents,
   CLASSIFIER_SYSTEM_PROMPT,
   CLASSIFIER_VERSION,
@@ -253,5 +256,54 @@ describe('classifierSystemPrompt', () => {
 
   it('ignores verified orders on every other channel', () => {
     expect(promptText(classifierSystemPrompt('email', ['#1024']))).toBe(CLASSIFIER_SYSTEM_PROMPT);
+  });
+});
+
+describe('thread write contract', () => {
+  const result = parseClassifierJson(fullResponse());
+
+  // The drift guard Milestone 2 actually needs. Both inbound paths compose
+  // their thread writes from these three projections, so a field added to
+  // ClassificationResult and persisted by only one of them shows up here as an
+  // unconsumed key rather than as two channels disagreeing in production.
+  it('consumes every persisted classification field exactly once', () => {
+    const consumed = [
+      ...Object.keys(classifiedEpisodeFields(result)),
+      ...Object.keys(classifiedRequestFields(result, 'message-1')),
+      ...Object.keys(classifiedFilterFields(result, 'email') ?? {}),
+    ];
+    expect(new Set(consumed).size).toBe(consumed.length);
+    expect(consumed.sort()).toEqual([
+      'aiSummary',
+      'aiTitle',
+      'classifierSignals',
+      'filterDecidedAt',
+      'filterReason',
+      'filterStatus',
+      'requestDisposition',
+      'requestSourceMessageId',
+      'requestSummary',
+      'tag',
+    ]);
+  });
+
+  it('routes the filter verdict through the channel rule, not the raw model word', () => {
+    const filtered = parseClassifierJson(fullResponse({ classification: 'filtered' }));
+    // Email is the only channel allowed to reach `filtered`.
+    expect(classifiedFilterFields(filtered, 'email')?.filterStatus).toBe('filtered');
+    // A shopper is capped at questionable, never binned.
+    expect(classifiedFilterFields(filtered, 'shopify_chat')?.filterStatus).toBe('questionable');
+    // A channel that takes no verdict writes nothing at all.
+    expect(classifiedFilterFields(filtered, 'sms_agent')).toBeNull();
+  });
+
+  it('carries the request source message id so the request half can be aligned', () => {
+    expect(classifiedRequestFields(result, 'message-1')).toMatchObject({
+      requestSourceMessageId: 'message-1',
+      classifierSignals: classifierSignals(result),
+    });
+    // A burst with no unanswered customer message still writes a null source
+    // rather than silently keeping a stale one.
+    expect(classifiedRequestFields(result, null).requestSourceMessageId).toBeNull();
   });
 });

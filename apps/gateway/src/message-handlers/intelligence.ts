@@ -12,10 +12,11 @@ import {
 import {
   CLASSIFIER_MAX_TOKENS,
   CLASSIFIER_OUTPUT_SCHEMA,
-  classifierSignals,
+  classifiedEpisodeFields,
+  classifiedFilterFields,
+  classifiedRequestFields,
   classifierSystemPrompt,
   parseClassifierJson,
-  resolveFilterDecision,
 } from './email-classification.js';
 import { listVerifiedOrderNames } from '../storefront-chat-verified-orders.js';
 import { getConversationBurst } from './conversation-burst.js';
@@ -110,11 +111,11 @@ export async function generateThreadIntelligence(
 
     // filterDecidedAt is the lock: once any path commits a decision, subsequent
     // summaries refresh aiSummary/tag but don't reclassify. Which channels are
-    // filtered at all, and how far the verdict may go on each, is
-    // `resolveFilterDecision` — null means this channel is not filtered and the
+    // filtered at all, and how far the verdict may go on each, lives in
+    // `classifiedFilterFields` — null means this channel is not filtered and the
     // thread keeps the genuine default.
-    const filterDecision = fullThread.filterDecidedAt === null
-      ? resolveFilterDecision(fullThread.channelType, aiData.filterStatus)
+    const filterFields = fullThread.filterDecidedAt === null
+      ? classifiedFilterFields(aiData, fullThread.channelType)
       : null;
 
     // Compare-and-set on the request half only. The episode summary describes
@@ -136,20 +137,9 @@ export async function generateThreadIntelligence(
     const updated = await db.thread.update({
       where: { id: threadId },
       data: {
-        aiTitle: aiData.title,
-        aiSummary: aiData.summary,
-        tag: aiData.tag,
-        ...(requestIsCurrent && {
-          classifierSignals: classifierSignals(aiData),
-          requestSummary: aiData.requestSummary || null,
-          requestDisposition: aiData.requestDisposition,
-          requestSourceMessageId: sourceMessageId,
-        }),
-        ...(filterDecision && {
-          filterStatus: filterDecision,
-          filterReason: aiData.filterReason,
-          filterDecidedAt: new Date(),
-        }),
+        ...classifiedEpisodeFields(aiData),
+        ...(requestIsCurrent && classifiedRequestFields(aiData, sourceMessageId)),
+        ...filterFields,
       },
     });
 

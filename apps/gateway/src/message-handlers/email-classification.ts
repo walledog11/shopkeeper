@@ -79,6 +79,49 @@ export function classifierSignals(result: ClassificationResult) {
   };
 }
 
+// What a classification result writes onto a Thread, decided once so the
+// pre-persistence and post-persistence paths cannot drift on the field list.
+//
+// Grouped by the guard each field needs rather than by which path writes it.
+// Episode fields describe everything said so far and stay true however the
+// conversation moves on, so they are always safe to write. Request fields
+// belong to one request and must not outlive it, so both paths put them behind
+// a currency check — newest-message in the inbound transaction, settled-burst
+// compare-and-set after persistence. The filter verdict is written once and
+// then locked by filterDecidedAt.
+
+export function classifiedEpisodeFields(result: ClassificationResult) {
+  return {
+    aiTitle: result.title,
+    aiSummary: result.summary,
+    tag: result.tag,
+  };
+}
+
+export function classifiedRequestFields(
+  result: ClassificationResult,
+  sourceMessageId: string | null,
+) {
+  return {
+    classifierSignals: classifierSignals(result),
+    requestSummary: result.requestSummary || null,
+    requestDisposition: result.requestDisposition,
+    requestSourceMessageId: sourceMessageId,
+  };
+}
+
+// Null when this channel takes no filter verdict at all. Callers still gate on
+// filterDecidedAt: this owns the channel rule, not the write-once lock.
+export function classifiedFilterFields(result: ClassificationResult, channelType: string) {
+  const status = resolveFilterDecision(channelType, result.filterStatus);
+  if (!status) return null;
+  return {
+    filterStatus: status,
+    filterReason: result.filterReason,
+    filterDecidedAt: new Date(),
+  };
+}
+
 export const CLASSIFIER_SYSTEM_PROMPT = `You are an AI assistant for a customer support team.
 Read the customer message and produce these fields in strict JSON:
 - "title": a short subject line (3 to 6 words, at most 120 characters) naming the topic, like an email subject line. Use Title Case, no trailing period, and never begin with "Customer" or "The customer". If the message is vague or unclear, say so plainly (e.g., "Unclear one-word message", "Vague inquiry about an offer"). Examples: "Damaged sweater return", "Where is order #1452", "Question about an exclusive offer".

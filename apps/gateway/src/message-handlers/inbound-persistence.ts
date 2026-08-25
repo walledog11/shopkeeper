@@ -11,7 +11,12 @@ import { JOB } from '../constants.js';
 import { captureInboundMessageProcessed } from '../product-analytics.js';
 import { publishThreadEvent } from '../realtime/publish.js';
 import { removePendingPlanForThread } from '../operator-context.js';
-import { classifierSignals, type ClassificationResult } from './email-classification.js';
+import {
+  classifiedEpisodeFields,
+  classifiedFilterFields,
+  classifiedRequestFields,
+  type ClassificationResult,
+} from './email-classification.js';
 import {
   resolveInboundEpisode,
   type ResolveInboundEpisodeResult,
@@ -199,13 +204,8 @@ export async function processInboundMessage(
           ...(initialTag && { tag: initialTag }),
           ...(providerSentAt && { lastMessageAt: providerSentAt }),
           ...(precomputed && {
-            aiTitle: precomputed.title,
-            aiSummary: precomputed.summary,
-            tag: precomputed.tag,
-            filterStatus: precomputed.filterStatus,
-            filterReason: precomputed.filterReason,
-            filterDecidedAt: new Date(),
-            classifierSignals: classifierSignals(precomputed),
+            ...classifiedEpisodeFields(precomputed),
+            ...classifiedFilterFields(precomputed, channelType),
           }),
           ...(!precomputed && lockAsGenuine && {
             filterReason: 'Spam filter disabled',
@@ -266,11 +266,7 @@ export async function processInboundMessage(
           data: {
             lastMessageAt: created.sentAt,
             lastMessageSenderType: created.senderType,
-            ...(precomputed && {
-              requestSummary: precomputed.requestSummary || null,
-              requestDisposition: precomputed.requestDisposition,
-              requestSourceMessageId: created.id,
-            }),
+            ...(precomputed && classifiedRequestFields(precomputed, created.id)),
           },
         });
       }
