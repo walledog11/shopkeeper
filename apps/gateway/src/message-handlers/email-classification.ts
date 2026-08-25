@@ -63,6 +63,11 @@ export interface ClassificationResult {
 // 4 added requestSummary/requestDisposition. 5 added requestFacts.
 export const CLASSIFIER_VERSION = 5;
 
+// One budget for both classification paths. They emit the same schema, so a
+// smaller allowance on one of them only buys a truncated object that
+// parseClassifierJson then has to reject.
+export const CLASSIFIER_MAX_TOKENS = 700;
+
 // Shape persisted to Thread.classifierSignals (JSONB). Kept minimal — a version
 // tag plus the signal groups.
 export function classifierSignals(result: ClassificationResult) {
@@ -71,6 +76,49 @@ export function classifierSignals(result: ClassificationResult) {
     language: result.language,
     intents: result.intents,
     requestFacts: result.requestFacts,
+  };
+}
+
+// What a classification result writes onto a Thread, decided once so the
+// pre-persistence and post-persistence paths cannot drift on the field list.
+//
+// Grouped by the guard each field needs rather than by which path writes it.
+// Episode fields describe everything said so far and stay true however the
+// conversation moves on, so they are always safe to write. Request fields
+// belong to one request and must not outlive it, so both paths put them behind
+// a currency check — newest-message in the inbound transaction, settled-burst
+// compare-and-set after persistence. The filter verdict is written once and
+// then locked by filterDecidedAt.
+
+export function classifiedEpisodeFields(result: ClassificationResult) {
+  return {
+    aiTitle: result.title,
+    aiSummary: result.summary,
+    tag: result.tag,
+  };
+}
+
+export function classifiedRequestFields(
+  result: ClassificationResult,
+  sourceMessageId: string | null,
+) {
+  return {
+    classifierSignals: classifierSignals(result),
+    requestSummary: result.requestSummary || null,
+    requestDisposition: result.requestDisposition,
+    requestSourceMessageId: sourceMessageId,
+  };
+}
+
+// Null when this channel takes no filter verdict at all. Callers still gate on
+// filterDecidedAt: this owns the channel rule, not the write-once lock.
+export function classifiedFilterFields(result: ClassificationResult, channelType: string) {
+  const status = resolveFilterDecision(channelType, result.filterStatus);
+  if (!status) return null;
+  return {
+    filterStatus: status,
+    filterReason: result.filterReason,
+    filterDecidedAt: new Date(),
   };
 }
 
@@ -241,7 +289,10 @@ const CHANNELS_CAPPED_AT_QUESTIONABLE: ReadonlySet<string> = new Set<string>([
  * prompt: "never bin a shopper" is a guarantee, and a guarantee that depends on
  * the model reaching for one word over another is not one.
  */
-export function resolveFilterDecision(
+// Not exported: the channel rule is reached only through classifiedFilterFields,
+// which is what keeps "never bin a shopper" a single owner rather than a
+// convention every write site is trusted to remember.
+function resolveFilterDecision(
   channelType: string,
   verdict: DbThreadFilterStatus,
 ): DbThreadFilterStatus | null {
@@ -389,7 +440,7 @@ export async function classifyAndSummarizeNewEmail(
 
     const response = await anthropic.messages.create({
       model: MODEL.CLAUDE,
-      max_tokens: 700,
+      max_tokens: CLASSIFIER_MAX_TOKENS,
       system: classifierSystemPrompt(CHANNEL.EMAIL),
       output_config: {
         format: {

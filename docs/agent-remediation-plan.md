@@ -118,17 +118,25 @@ Efficiency work may proceed only when it does not compete with the active milest
 
 **Outcome:** all inbound channels produce the same versioned request contract, and future schema changes have an explicit migration lifecycle.
 
-**Progress:** active. A database-backed characterization suite compares the email pre-persistence and customer-channel post-persistence orderings, including source alignment, stale-write rejection, and a multi-message email burst. It records the remaining lifecycle asymmetry: the first email is classified inline and the settled burst is classified again after a follow-up.
+**Progress:** active. Contract unification is done; the version lifecycle is not.
 
-The `AGENT_CONTEXT_BUDGET_MODE` bullet is closed. Production had been running the flag as `shadow`, which took the legacy unbounded branch until `6c6d79a5` aliased it to `enforce`; the rollout is now finished deliberately and the flag, its legacy branch, its canary, and its comparison eval are removed. Evidence, including the paid eval results and the two drifts they exposed, is in [agent-m2-evidence-2026-08-25.md](agent-m2-evidence-2026-08-25.md).
+A database-backed characterization suite compares the email pre-persistence and customer-channel post-persistence orderings, including source alignment, stale-write rejection, and a multi-message email burst.
 
-Contract unification is next and nothing has been written for it yet. The divergence between the two paths is wider than ordering, and the write-site split is the part that matters: email request fields are written in `inbound-persistence.ts` under `precomputed`, every other channel's in `intelligence.ts`, which is why the staleness guard exists on only one of them. The others are schema enforcement (the email path uses `output_config` json_schema, the post-persistence path parses free text), `verifiedOrderNames` reaching only the post-persistence prompt, differing `max_tokens`, and burst framing reaching only the post-persistence input.
+The `AGENT_CONTEXT_BUDGET_MODE` bullet is closed. Production had been running the flag as `shadow`, which took the legacy unbounded branch until `6c6d79a5` aliased it to `enforce`; the rollout is now finished deliberately and the flag, its legacy branch, its canary, and its comparison eval are removed.
+
+Contract unification is closed in `933019d5` and `18f2f49a`. Of the five divergences the plan listed, three were real and are fixed — the missing staleness guard on the email path's request fields, the schema/token divergence in the model call, and the write-site split. Two were re-read as inherent and are recorded as such rather than left open: burst framing needs a thread the pre-persistence call does not have yet, and `verifiedOrderNames` only reaches the prompt for `shopify_chat`, which the email path never is. Both paths now compose their thread writes from three projections grouped by the guard each field needs, and a unit test requires those projections to consume every persisted classification field exactly once.
+
+Two write-site inconsistencies the grouping exposed, neither on the original list: `classifierSignals` was written at thread creation while the rest of the request contract went through the guarded update, and the email path bypassed the channel filter rule. Both are closed.
+
+**Not claimed complete.** The changed paths carry no production canary and no compatibility inventory, and two of the changes are live behavior changes. Three findings are open: the gateway's Railway replica count decides whether the staleness defect was ever reachable in production; `email-classification.ts` is now the shared classifier module for every channel and its name is the last thing asserting the split this work removed; and a two-message email burst still costs two classifier calls.
+
+Full evidence, reachability analysis, and completion-gate status are in [agent-m2-evidence-2026-08-25.md](agent-m2-evidence-2026-08-25.md).
 
 ### Work
 
-- Unify email pre-persistence classification and other-channel post-persistence classification behind one contract.
-- Preserve the staleness guard: never save fields for a request superseded while classification was running.
-- Verify multi-message email bursts classify once per request episode.
+- ~~Unify email pre-persistence classification and other-channel post-persistence classification behind one contract.~~ Done 2026-08-25 in `933019d5` and `18f2f49a`.
+- ~~Preserve the staleness guard: never save fields for a request superseded while classification was running.~~ Done 2026-08-25 in `933019d5`.
+- Verify multi-message email bursts classify once per request episode. *Open: the suite pins the current behavior, which is one inline call plus one on the settled burst.*
 - Define supported classifier versions and a retirement procedure: inventory → dual-read/backfill → canary → retirement.
 - Add production metrics for classifier version, failure, stale-write rejection, and source alignment.
 - ~~Decide the `AGENT_CONTEXT_BUDGET_MODE` rollout, then remove the unused branch.~~ Done 2026-08-25.

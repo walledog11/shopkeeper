@@ -307,6 +307,165 @@ what answers that, and it is also what regenerates `baseline.json` — still the
 Both are now closed, so it can be regenerated without baking in a known-bad
 expectation.
 
+## Classification contract unification
+
+**Landed:** `933019d5` and `18f2f49a` (PR #69).
+
+The Milestone 2 work bullet proper. The plan listed five divergences between the
+email pre-persistence path and the other-channel post-persistence path. Reading
+the code, three were real and two were not.
+
+| Divergence | Verdict |
+| --- | --- |
+| Staleness guard on the request fields | Real — closed in `933019d5` |
+| Schema enforcement and token budget | Real — closed in `933019d5` |
+| Write-site split | Real — closed in `18f2f49a` |
+| Burst framing reaching only post-persistence | Inherent, not a divergence |
+| `verifiedOrderNames` reaching only post-persistence | Inherent, not a divergence |
+
+The two inherent ones are recorded rather than left open because an execution plan
+that lists unclosable items reads as unfinished forever. Burst framing needs a
+thread the pre-persistence call does not have yet — it classifies the single new
+email that opens the thread. `verifiedOrderNames` is consumed by
+`classifierSystemPrompt` only for `shopify_chat`, which the email path never is,
+so passing it would change nothing.
+
+### The staleness guard
+
+`lastMessageAt` was written through a guard refusing to move backwards
+(`lastMessageAt: { lte: created.sentAt }`) while the request fields beside it, in
+the same transaction, took an unguarded `thread.update`. An out-of-order message
+therefore described the thread's current request with an older one while
+`lastMessageAt` correctly held the newer. `intelligence.ts` compare-and-sets the
+same decision against the settled burst; this path had nothing.
+
+Written test-first: the test was added as a characterization test, confirmed the
+unguarded behavior, and was then flipped to assert the guarded one. That ordering
+is what established the defect was real rather than theoretical.
+
+**Reachability was narrow, and the test and comments say so rather than
+overstating it.** `channels.ts` sets `precomputed` only when the email opens a
+thread (`!hasOpenThread`), so a reply on an open thread already took the guarded
+post-persistence path. One worker at BullMQ's default concurrency of 1 serializes
+inbound jobs. This was a landmine, not an active bug.
+
+It widens the moment either of two things is true: a second caller passes
+`precomputed`, or the gateway runs more than one replica. **The replica count is
+an open question this work could not answer from the repository** — see below.
+
+### The call shape
+
+The post-persistence path parsed free text (`parseClassifierJson` over
+`block.text`) where the email path enforced `output_config` with
+`CLASSIFIER_OUTPUT_SCHEMA`, and ran `max_tokens: 400` against the email path's 700
+for the same output contract. Both now share the schema and a
+`CLASSIFIER_MAX_TOKENS` constant.
+
+Both are production behavior changes, not refactors: the post-persistence
+classifier is now schema-enforced, and can no longer truncate mid-object at 400
+tokens and lose an otherwise-valid classification to `parseClassifierJson`.
+
+### The shared writer
+
+Each path hand-listed the thread columns a `ClassificationResult` lands on.
+Nothing kept the two lists agreeing — which is the drift this milestone exists to
+prevent, sitting in the milestone's own subject matter.
+
+Both now compose from `classifiedEpisodeFields`, `classifiedRequestFields`, and
+`classifiedFilterFields`, **grouped by the guard each field needs rather than by
+which path writes it**:
+
+- **Episode fields** (`aiTitle`, `aiSummary`, `tag`) describe everything said so
+  far and stay true however the conversation moves on. Always safe to write.
+- **Request fields** (`classifierSignals`, `requestSummary`, `requestDisposition`,
+  `requestSourceMessageId`) belong to one request and must not outlive it. Behind
+  a currency check on both paths.
+- **Filter fields** (`filterStatus`, `filterReason`, `filterDecidedAt`) are
+  written once and then locked by `filterDecidedAt`.
+
+### Two inconsistencies the grouping exposed
+
+Neither was on the plan's list. Both became visible only once the fields were
+sorted by the guard they need.
+
+- **`classifierSignals` was written at thread creation** while the rest of the
+  request contract went through the guarded update — one classification split
+  across two writes with different guarantees. It now travels with the fields it
+  belongs to. Safe on the pre-persistence path because the thread row is created
+  before the message row, so `lastMessageAt <= created.sentAt` holds and the guard
+  passes; the existing characterization test asserting `version: 5` on the email
+  thread is what proves it still fires.
+- **The email path wrote `precomputed.filterStatus` raw** where the
+  post-persistence path resolved it through `resolveFilterDecision`. This is
+  behavior-preserving today — email is the only member of
+  `CHANNELS_FILTERED_AS_SPAM`, so the rule is identity for it, and email is the
+  only channel that sets `precomputed`. It is still worth closing: the rule's own
+  comment calls "never bin a shopper" a guarantee, and a guarantee with one bypass
+  is not one. A future channel classifying pre-persistence would have inherited
+  the bypass.
+
+### Why the two guards stay different
+
+Inside the inbound transaction the question is "is this the newest message". After
+persistence, the message being classified is already reflected in `lastMessageAt`,
+so the same question has to be asked as a compare-and-set against the settled
+burst. Same decision, two situations. Forcing one mechanism onto both would have
+been a false symmetry, so the projections are shared and the guards are not, with
+comments at each site saying which is which.
+
+### Drift guard
+
+A unit test requires the three projections to consume every persisted
+classification field exactly once. A field added to `ClassificationResult` later
+and written by only one path fails there rather than in production.
+
+### Verification
+
+Typecheck, lint, unit (376 gateway) and integration (843 gateway, 653 dashboard,
+67 agent) suites green. Not eval-gated: no path in `evals.yml`'s filter is
+touched, and fixtures set `classifierIntents` directly in setup rather than
+running the classifier, so no assertion can move.
+
+### Completion-gate status — partial, and deliberately not claimed complete
+
+Against the plan's seven-item gate, this work has outcome, deterministic coverage,
+model evidence (none owed), and rollback (revert the two commits; no flag, no
+migration, no persisted-shape change). It does **not** have:
+
+- **Compatibility inventory.** No production count of threads by classifier
+  version was taken for this change. It writes no new column and changes no
+  persisted shape, so nothing needs migrating, but the inventory the milestone
+  asks for is still owed by the version-lifecycle bullet.
+- **Production canary.** The changed paths — every inbound classification on every
+  channel — have not been exercised in production against this build. Two of the
+  changes are live behavior changes (schema enforcement and the token budget on
+  the post-persistence classifier), so this is the gap that matters most.
+
+Milestone 2 is therefore not complete. Its remaining bullets are the version
+lifecycle: supported-version definition, the retirement procedure, and production
+metrics.
+
+### Open questions this work could not settle
+
+- **How many gateway replicas does Railway run?** It decides whether the staleness
+  defect was reachable in production or purely latent. At one replica with BullMQ
+  concurrency 1, inbound jobs serialize and two first-emails cannot classify
+  concurrently. At more than one, they can. Answerable from the Railway service
+  config, not from this repository.
+- **`email-classification.ts` is no longer an email module.** It owns
+  `CLASSIFIER_SYSTEM_PROMPT`, `CLASSIFIER_OUTPUT_SCHEMA`, `CLASSIFIER_MAX_TOKENS`,
+  `classifierSystemPrompt`, `parseClassifierJson`, `resolveFilterDecision`,
+  `classifierSignals`, and now the three thread-write projections — every one of
+  them shared by all channels. `intelligence.ts` imports eight symbols from a file
+  named for the one path it is not. The name is the last thing still asserting the
+  split this milestone just removed. Renaming it is a mechanical follow-up, kept
+  out of this diff so the behavior change stays reviewable.
+- **A two-message email burst still costs two classifier calls** — one inline on
+  the first email, one on the settled burst after the follow-up. The
+  characterization suite pins this as the remaining lifecycle asymmetry. It is
+  correct but not free, and the "classify once per request episode" work bullet
+  stays open because of it.
+
 ## Incidental: `evals.yml` could not run
 
 `1788bc85` extracted `@shopkeeper/integrations`; `ada0c3f3` wired it into the

@@ -3,6 +3,8 @@ import type { Queue } from 'bullmq';
 import { describe, expect, it, vi } from 'vitest';
 import { ChannelType, db } from '@shopkeeper/db';
 import { processInboundMessage } from './message-handlers/inbound-persistence.js';
+import type { ClassificationResult } from './message-handlers/email-classification.js';
+import type { RequestFacts } from '@shopkeeper/agent/classifier-signals';
 import type { AiSummaryJobData } from './types.js';
 import { org } from './test-fixtures/worker-test-setup.js';
 import {
@@ -14,7 +16,7 @@ import {
 
 const REQUEST_TEXT = 'Please cancel order #1024 before Friday.';
 const REQUEST_SUMMARY = 'Customer asks to cancel order #1024 before Friday.';
-const REQUEST_FACTS = {
+const REQUEST_FACTS: RequestFacts = {
   ask: 'cancel',
   subject: null,
   order: '#1024',
@@ -33,6 +35,30 @@ function classificationResponse(facts: Record<string, unknown> = REQUEST_FACTS) 
     intents: { mutative_request: true },
     requestFacts: facts,
   });
+}
+
+function classificationResult(): ClassificationResult {
+  return {
+    title: 'Cancel order #1024',
+    summary: REQUEST_SUMMARY,
+    tag: 'Order Status',
+    filterStatus: 'genuine',
+    filterReason: '',
+    intents: {
+      mutative_request: true,
+      policy_question: false,
+      order_status: false,
+      fraud_signals: false,
+      contradiction: false,
+      out_of_scope_commercial: false,
+      forwarded_injection: false,
+      no_request: false,
+    },
+    language: 'en',
+    requestSummary: REQUEST_SUMMARY,
+    requestDisposition: 'merchant_action',
+    requestFacts: REQUEST_FACTS,
+  };
 }
 
 function queueSpy() {
@@ -186,6 +212,73 @@ describe('inbound classification channel contract', () => {
       requestDisposition: 'merchant_action',
       sourceAligned: true,
       sourceText: REQUEST_TEXT,
+    });
+  });
+
+  // The pre-persistence counterpart to the compare-and-set above. lastMessageAt
+  // has always refused to move backwards; the request fields beside it used to
+  // be written by an unguarded update, so an out-of-order message described the
+  // thread's current request with an older one while lastMessageAt correctly
+  // held the newer.
+  //
+  // Reachability was narrow — channels.ts sets `precomputed` only when the email
+  // opens a thread (`!hasOpenThread`), and one worker at BullMQ's default
+  // concurrency of 1 serializes — so this was a landmine rather than an active
+  // bug. It widens the moment a second caller passes `precomputed` or the
+  // gateway runs more than one replica. This drives processInboundMessage
+  // directly to pin the write's own contract, independent of how a caller
+  // reaches it.
+  it('refuses to overwrite email request fields with an out-of-order message', async () => {
+    const newer = new Date('2026-08-25T12:00:00.000Z');
+    const older = new Date('2026-08-25T11:00:00.000Z');
+    const { queue } = queueSpy();
+
+    const first = await processInboundMessage(
+      org.id,
+      'classification-contract-race@example.com',
+      ChannelType.email,
+      'Newer request: cancel order #1024.',
+      queue,
+      {
+        customerName: 'Test Customer',
+        isRealCustomerMessage: true,
+        externalMessageId: 'classification-contract-race-newer',
+        receivedAt: newer,
+        precomputed: {
+          ...classificationResult(),
+          requestSummary: 'Newer request: cancel order #1024.',
+        },
+      },
+    );
+
+    await processInboundMessage(
+      org.id,
+      'classification-contract-race@example.com',
+      ChannelType.email,
+      'Older request: where is order #1024?',
+      queue,
+      {
+        customerName: 'Test Customer',
+        isRealCustomerMessage: true,
+        externalMessageId: 'classification-contract-race-older',
+        receivedAt: older,
+        precomputed: {
+          ...classificationResult(),
+          requestSummary: 'Older request: where is order #1024?',
+        },
+      },
+    );
+
+    const thread = await db.thread.findUniqueOrThrow({
+      where: { id: first!.thread.id },
+      select: { lastMessageAt: true, requestSummary: true },
+    });
+
+    // One guard, one answer: both halves held the newer message.
+    expect(thread.lastMessageAt).toEqual(newer);
+    expect(thread.requestSummary).toBe('Newer request: cancel order #1024.');
+    expect(await persistedRequestContract(first!.thread.id)).toMatchObject({
+      sourceText: 'Newer request: cancel order #1024.',
     });
   });
 
