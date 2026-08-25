@@ -39,7 +39,6 @@ function createDashboardLaunchEnv(overrides = {}) {
     INSTAGRAM_INTEGRATION_ENABLED: 'false',
     PRODUCT_ANALYTICS_ENABLED: 'false',
     PLAN_EXECUTION_LEDGER_MODE: 'enforce',
-    AGENT_CONTEXT_BUDGET_MODE: 'enforce',
     ...overrides,
   };
 }
@@ -69,7 +68,6 @@ function createGatewayLaunchEnv(overrides = {}) {
     SPECTRUM_WEBHOOK_SECRET: 'webhook_secret_1',
     PRODUCT_ANALYTICS_ENABLED: 'false',
     PLAN_EXECUTION_LEDGER_MODE: 'enforce',
-    AGENT_CONTEXT_BUDGET_MODE: 'enforce',
     ...overrides,
   };
 }
@@ -435,44 +433,14 @@ test('production contracts require an explicit plan execution ledger rollout mod
   );
 });
 
-test('production contracts require a valid AI context budget rollout mode', () => {
-  const dashboard = validateProductionEnv('dashboard', {
-    scope: 'launch',
-    env: createDashboardLaunchEnv({ AGENT_CONTEXT_BUDGET_MODE: '' }),
-  });
+test('production contracts accept a legacy shadow plan-ledger mode as enforce', () => {
   const gateway = validateProductionEnv('gateway', {
     scope: 'launch',
-    env: createGatewayLaunchEnv({ AGENT_CONTEXT_BUDGET_MODE: 'enabled' }),
-  });
-
-  assert.equal(
-    dashboard.errors.includes(
-      'Missing required environment variable: AGENT_CONTEXT_BUDGET_MODE',
-    ),
-    true,
-  );
-  assert.equal(
-    gateway.errors.includes(
-      'AGENT_CONTEXT_BUDGET_MODE must be one of: off, enforce',
-    ),
-    true,
-  );
-});
-
-test('production contracts accept legacy shadow rollout modes as enforce', () => {
-  const gateway = validateProductionEnv('gateway', {
-    scope: 'launch',
-    env: createGatewayLaunchEnv({
-      PLAN_EXECUTION_LEDGER_MODE: 'shadow',
-      AGENT_CONTEXT_BUDGET_MODE: 'shadow',
-    }),
+    env: createGatewayLaunchEnv({ PLAN_EXECUTION_LEDGER_MODE: 'shadow' }),
   });
   const dashboard = validateProductionEnv('dashboard', {
     scope: 'launch',
-    env: createDashboardLaunchEnv({
-      PLAN_EXECUTION_LEDGER_MODE: 'shadow',
-      AGENT_CONTEXT_BUDGET_MODE: 'shadow',
-    }),
+    env: createDashboardLaunchEnv({ PLAN_EXECUTION_LEDGER_MODE: 'shadow' }),
   });
 
   assert.deepEqual(gateway.errors, []);
@@ -531,7 +499,6 @@ test('env file parser trims comments and quoted values the same way prod env fil
       'SPECTRUM_WEBHOOK_SECRET=webhook_secret_1',
       'PRODUCT_ANALYTICS_ENABLED=false',
       'PLAN_EXECUTION_LEDGER_MODE=enforce',
-      'AGENT_CONTEXT_BUDGET_MODE=enforce',
       '',
     ].join('\n')
   );

@@ -27,11 +27,6 @@ export const GATEWAY_PRODUCTION_CONFIG_SCHEMA = Object.freeze({
     values: ['off', 'enforce'],
     legacyAliases: { shadow: 'enforce' },
   },
-  AGENT_CONTEXT_BUDGET_MODE: {
-    type: 'enum',
-    values: ['off', 'enforce'],
-    legacyAliases: { shadow: 'enforce' },
-  },
   GMAIL_NATIVE_INBOUND: { type: 'boolean', defaultValue: false },
   GATEWAY_ENABLE_MAINTENANCE_WORKERS: { type: 'boolean', defaultValue: true },
   GATEWAY_BULLMQ_DRAIN_DELAY_SECONDS: { type: 'positiveInteger' },
@@ -117,7 +112,6 @@ export function parseGatewayProductionConfig(env = process.env) {
     runtimeRole: parseSchemaField(env, 'GATEWAY_RUNTIME_ROLE'),
     productAnalyticsEnabled: parseSchemaField(env, 'PRODUCT_ANALYTICS_ENABLED'),
     planExecutionLedgerMode: parseSchemaField(env, 'PLAN_EXECUTION_LEDGER_MODE'),
-    agentContextBudgetMode: parseSchemaField(env, 'AGENT_CONTEXT_BUDGET_MODE'),
     gmailNativeInbound: parseSchemaField(env, 'GMAIL_NATIVE_INBOUND'),
     workerRedis: {
       drainDelaySeconds: parseSchemaField(

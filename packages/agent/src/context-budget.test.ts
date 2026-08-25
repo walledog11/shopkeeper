@@ -5,7 +5,6 @@ import {
   budgetRecentMessages,
   buildBoundedClassifierConversation,
   buildBoundedEmailClassifierInput,
-  resolveContextBudgetMode,
   truncateContextText,
 } from "./context-budget.js";
 
@@ -75,13 +74,6 @@ describe("context budgets", () => {
     expect(input.length).toBeLessThanOrEqual(CONTEXT_BUDGETS.classifierInputChars);
     expect(input).toContain("Subject:");
     expect(input).toContain("Body:");
-  });
-
-  it("parses rollout mode and rejects configuration typos", () => {
-    expect(resolveContextBudgetMode(undefined)).toBe("off");
-    expect(resolveContextBudgetMode("enforce")).toBe("enforce");
-    expect(resolveContextBudgetMode("shadow")).toBe("enforce");
-    expect(() => resolveContextBudgetMode("enabled")).toThrow(/off or enforce/);
   });
 
   it("uses an explicit marker without exceeding the requested length", () => {

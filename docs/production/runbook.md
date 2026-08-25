@@ -1098,45 +1098,22 @@ For dashboard email sends, repeat with the dashboard helper:
 
 After each category, record the log entry timestamp, alert recipient, tags/extras checked, and any side-effect notes in [`alerting-evidence.md`](alerting-evidence.md).
 
-### Bounded AI context rollout (P2-02)
+### Bounded AI context (P2-02, retired)
 
-`AGENT_CONTEXT_BUDGET_MODE=off|shadow|enforce` controls bounded recent-message,
-prior-summary, KB, store-profile, sample-reply, order, operator-ledger, and
-instruction context. Keep the dashboard, public gateway, and worker aligned.
+Bounded recent-message, prior-summary, KB, store-profile, sample-reply, order,
+operator-ledger, and instruction context is unconditional. `AGENT_CONTEXT_BUDGET_MODE`
+and its legacy unbounded branch were removed once production had moved onto the
+bounded path; the flag, the `canary:context-budget` script, and the mode-comparison
+eval no longer exist. Rollback is a revert of that change, not an environment edit.
 
-**Context correction, 2026-08-12:** token bounding is not a conversation
-boundary. The current `enforce` path still combines a whole-thread prior summary
-with recent messages and must not be presented as the fix for stale context.
-Rollout of this flag as a context-quality improvement is paused until the episode,
-request-summary, and relevance-gated memory phases in
-[`conversation-context-and-cross-channel-memory-plan.md`](../conversation-context-and-cross-channel-memory-plan.md)
-land. The flag may still be used as a cost-control canary, but its output must be
-judged as legacy continuous-thread context.
+The 2026-08-12 context correction still stands: token bounding is not a
+conversation boundary. Bounded context combines a whole-thread prior summary with
+recent messages and must not be presented as the fix for stale context. Episode
+behavior has its own rollout control in
+[`conversation-context-and-cross-channel-memory-plan.md`](../conversation-context-and-cross-channel-memory-plan.md).
 
-1. Run the long-thread quality/cost comparison with a real Anthropic test key:
-
-   ```bash
-   RUN_JUDGE_EVALS=0 npm run test:integration -w apps/dashboard -- --run src/lib/agent/__evals__/context-budget.eval.test.ts
-   ```
-
-   Both legacy and bounded runs must pass, and bounded prompt tokens must be at
-   least 20% lower for the long-thread fixture. Then run the full eval suite with
-   `AGENT_CONTEXT_BUDGET_MODE=enforce`; its committed baseline gate must remain
-   green.
-2. Deploy all three hosts with `AGENT_CONTEXT_BUDGET_MODE=shadow`. Review
-   `[agent:context] budget` and `[Worker] AI input budget` telemetry by purpose;
-   logs contain counts/character totals only, never prompt text.
-3. After the context plan lands, canary one long-lived visitor with two separate
-   episodes in `enforce`. Confirm the second episode contains only its raw
-   messages, its request summary is sourced from the newest unanswered customer
-   burst, irrelevant prior episodes are absent, and an explicitly related prior
-   episode or open obligation is included with provenance. Then confirm
-   `[Worker] AI model usage` shows the expected input-token drop.
-4. Keep `enforce` through the normal observation window before removing the
-   legacy unbounded branch. Rolling `AGENT_CONTEXT_BUDGET_MODE` back to `off`
-   changes token bounding only; it must not rejoin conversation episodes or
-   restore whole-thread planning. Episode behavior has its own rollout control in
-   the context plan, and additive identity/request data remains stored either way.
+Budget telemetry remains: `[agent:context] budget` and `[Worker] AI input budget`
+carry counts and character totals only, never prompt text.
 
 ### CSP report-only observation and enforcement (P8-03)
 

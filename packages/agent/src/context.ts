@@ -9,9 +9,7 @@ import {
   CONTEXT_BUDGETS,
   budgetKbArticles,
   budgetRecentMessages,
-  resolveContextBudgetMode,
   truncateContextText,
-  type ContextBudgetMode,
 } from "./context-budget.js";
 import type { ToolResult } from "./tools/result.js";
 import type {
@@ -85,9 +83,6 @@ export interface BuildContextOptions {
   // Operator/read-only callers only use the last few messages, so they can cap
   // the fetch here instead of loading 50 rows and slicing after. Defaults to 50.
   messageWindow?: number;
-  // Rollout rail for bounded prompt context. Shadow mode computes and logs the
-  // bounded shape while preserving the legacy context; enforce uses it.
-  contextBudgetMode?: ContextBudgetMode;
   // Operator channel only: host-rendered pending-state ledger. Copied verbatim
   // onto the context and surfaced in the operator prompt; opaque to the core.
   operatorLedger?: string;
@@ -126,11 +121,8 @@ export async function buildContext(
   sink: ThreadSink,
   options?: BuildContextOptions,
 ): Promise<AgentContext> {
-  const contextBudgetMode = options?.contextBudgetMode ?? resolveContextBudgetMode();
-  const legacyMessageWindow = options?.messageWindow ?? 50;
-  const fetchedMessageWindow = contextBudgetMode === "enforce"
-    ? Math.min(legacyMessageWindow, CONTEXT_BUDGETS.recentMessageCount)
-    : legacyMessageWindow;
+  const requestedMessageWindow = options?.messageWindow ?? 50;
+  const fetchedMessageWindow = Math.min(requestedMessageWindow, CONTEXT_BUDGETS.recentMessageCount);
   const effectiveKbArticlesPromise = (async () => {
     const overrides = await db.kbArticle.findMany({
       where: { organizationId: orgId, tags: { has: MEMORY_OVERRIDE_TAG } },
@@ -320,9 +312,7 @@ export async function buildContext(
     ? mergePinnedKbArticles(options.pinKbArticles, loadedKbArticles)
     : loadedKbArticles;
   const budgetedKb = budgetKbArticles(mergedKbArticles);
-  const kbArticles = contextBudgetMode === "enforce"
-    ? budgetedKb.articles
-    : mergedKbArticles;
+  const kbArticles = budgetedKb.articles;
 
   const threadIo = {
     threadId: thread.id,
@@ -339,23 +329,18 @@ export async function buildContext(
     attachmentRefs: message.attachments,
   }));
   const budgetedMessages = budgetRecentMessages(rawRecentMessages, {
-    maxCount: Math.min(legacyMessageWindow, CONTEXT_BUDGETS.recentMessageCount),
+    maxCount: fetchedMessageWindow,
   });
-  const contextMessages = contextBudgetMode === "enforce"
-    ? budgetedMessages.messages
-    : rawRecentMessages;
+  const contextMessages = budgetedMessages.messages;
   const recentMessages = thread.channelType === "ig_dm"
     ? await hydrateAgentMessageImages(orgId, contextMessages)
     : contextMessages.map(({ senderType, contentText }) => ({ senderType, contentText }));
-  if (contextBudgetMode !== "off") {
-    logger.info({
-      orgId,
-      threadId,
-      mode: contextBudgetMode,
-      recentMessages: budgetedMessages.stats,
-      kbArticles: budgetedKb.stats,
-    }, "[agent:context] budget");
-  }
+  logger.info({
+    orgId,
+    threadId,
+    recentMessages: budgetedMessages.stats,
+    kbArticles: budgetedKb.stats,
+  }, "[agent:context] budget");
 
   const base: BaseAgentContext = {
     orgId,
@@ -392,7 +377,7 @@ export async function buildContext(
       status: thread.status,
       channelType: thread.channelType,
       tag: thread.tag,
-      aiSummary: contextBudgetMode === "enforce" && thread.aiSummary
+      aiSummary: thread.aiSummary
         ? truncateContextText(thread.aiSummary, CONTEXT_BUDGETS.priorSummaryChars)
         : thread.aiSummary,
       shopifyCustomerId,
@@ -412,9 +397,10 @@ export async function buildContext(
     classifierSignals: parseClassifierSignals(thread.classifierSignals),
     ...(options?.operatorLedger
       ? {
-          operatorLedger: contextBudgetMode === "enforce"
-            ? truncateContextText(options.operatorLedger, CONTEXT_BUDGETS.operatorLedgerChars)
-            : options.operatorLedger,
+          operatorLedger: truncateContextText(
+            options.operatorLedger,
+            CONTEXT_BUDGETS.operatorLedgerChars,
+          ),
         }
       : {}),
     ...(options?.operatorDeskMode ? { operatorDeskMode: true } : {}),

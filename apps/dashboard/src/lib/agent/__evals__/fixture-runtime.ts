@@ -16,7 +16,6 @@ import {
   CONTEXT_BUDGETS,
   budgetKbArticles,
   budgetRecentMessages,
-  resolveContextBudgetMode,
   truncateContextText,
 } from "@shopkeeper/agent/context-budget"
 import {
@@ -52,7 +51,6 @@ function buildContext(
 ): AgentContext {
   const { setup } = fixture
   const toolContext = { threadId, orgId, orgName: "Test Store" }
-  const contextBudgetMode = resolveContextBudgetMode()
   const recentMessages = setup.messages.map(message => ({
     senderType: message.senderType,
     contentText: message.contentText,
@@ -68,9 +66,9 @@ function buildContext(
       status: "open",
       channelType: setup.channelType,
       tag: setup.tag ?? "Support",
-      aiSummary: contextBudgetMode === "enforce" && setup.aiSummary
+      aiSummary: setup.aiSummary
         ? truncateContextText(setup.aiSummary, CONTEXT_BUDGETS.priorSummaryChars)
-        : setup.aiSummary ?? null,
+        : null,
       shopifyCustomerId: setup.shopifyCustomerId ?? null,
     },
     // Built here rather than in the fixture so the JSON only has to name the
@@ -93,16 +91,12 @@ function buildContext(
       name: setup.customerName ?? null,
       platformId: setup.customerPlatformId ?? "customer@test.com",
     },
-    recentMessages: contextBudgetMode === "enforce"
-      ? budgetRecentMessages(recentMessages).messages
-      : recentMessages,
+    recentMessages: budgetRecentMessages(recentMessages).messages,
     openThreadCount: setup.openThreadCount ?? 1,
     shopify: setup.shopify ?? null,
     recentOrders: setup.recentOrders ?? [],
     linkedShopifyCustomerName: setup.linkedShopifyCustomerName ?? null,
-    kbArticles: contextBudgetMode === "enforce"
-      ? budgetKbArticles(kbArticles).articles
-      : kbArticles,
+    kbArticles: budgetKbArticles(kbArticles).articles,
     escalate: reason => escalateToHuman({ reason }, toolContext).then(() => {}),
     io: {
       addInternalNote: input => addInternalNote(input, toolContext),

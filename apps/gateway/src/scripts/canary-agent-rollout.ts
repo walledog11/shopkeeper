@@ -48,7 +48,6 @@ async function main(): Promise<void> {
       organization: { id: organization.id, name: organization.name },
       counts: organization._count,
       modes: {
-        agentContextBudget: process.env.AGENT_CONTEXT_BUDGET_MODE ?? null,
         autoExecute: settings.autoExecuteMode ?? 'off(default)',
         planExecutionLedger: process.env.PLAN_EXECUTION_LEDGER_MODE ?? null,
       },
@@ -71,9 +70,6 @@ async function main(): Promise<void> {
     }
     if (process.env.PLAN_EXECUTION_LEDGER_MODE !== 'enforce') {
       throw new Error('Execute mode requires PLAN_EXECUTION_LEDGER_MODE=enforce.');
-    }
-    if (process.env.AGENT_CONTEXT_BUDGET_MODE !== 'enforce') {
-      throw new Error('Execute mode requires AGENT_CONTEXT_BUDGET_MODE=enforce.');
     }
 
     const runId = randomUUID();

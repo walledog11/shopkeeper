@@ -146,7 +146,6 @@ describe('buildSystemPrompt', () => {
   });
 
   it('defensively bounds dynamic system-prompt fields in enforce mode', () => {
-    vi.stubEnv('AGENT_CONTEXT_BUDGET_MODE', 'enforce');
     const prompt = buildSystemPrompt(makeCtx({
       kbArticles: Array.from({ length: 5 }, (_, index) => ({
         title: `Article ${index}`,

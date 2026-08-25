@@ -46,7 +46,6 @@ import logger from "../logger.js";
 import {
   CONTEXT_BUDGETS,
   budgetKbArticles,
-  resolveContextBudgetMode,
 } from "../context-budget.js";
 export type { StaticPolicyResult } from "./static-policy.js";
 
@@ -150,18 +149,12 @@ const TOOL_EXECUTION_DEPS: ToolExecutionDeps = {
         maxTotalChars: CONTEXT_BUDGETS.searchedKbTotalChars,
       },
     );
-    const contextBudgetMode = resolveContextBudgetMode();
-    if (contextBudgetMode !== "off") {
-      logger.info({
-        orgId,
-        purpose: "search_kb",
-        mode: contextBudgetMode,
-        kbArticles: budgetedArticles.stats,
-      }, "[agent:context] budget");
-    }
-    return contextBudgetMode === "enforce"
-      ? budgetedArticles.articles
-      : effectiveArticles.slice(0, CONTEXT_BUDGETS.searchedKbArticleCount);
+    logger.info({
+      orgId,
+      purpose: "search_kb",
+      kbArticles: budgetedArticles.stats,
+    }, "[agent:context] budget");
+    return budgetedArticles.articles;
   },
   recordKnowledgeBaseCitations(orgId: string, threadId: string, articleIds: readonly string[]): Promise<unknown> {
     return db.kbCitation.createMany({

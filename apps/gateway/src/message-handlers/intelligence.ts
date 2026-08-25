@@ -8,7 +8,6 @@ import { anthropic } from '@shopkeeper/agent/ai';
 import {
   CONTEXT_BUDGETS,
   buildBoundedClassifierConversation,
-  resolveContextBudgetMode,
 } from '@shopkeeper/agent/context-budget';
 import {
   classifierSignals,
@@ -32,37 +31,25 @@ export async function generateThreadIntelligence(
     }
 
     logger.info({ threadId }, '[Worker] Generating AI Summary');
-    const contextBudgetMode = resolveContextBudgetMode();
     const fullThread = await db.thread.findUnique({
       where: { id: threadId },
       include: {
-        messages: contextBudgetMode === 'enforce'
-          ? {
-              where: { senderType: { not: SenderType.note } },
-              orderBy: { sentAt: 'desc' },
-              take: CONTEXT_BUDGETS.classifierMessageCount,
-            }
-          : {
-              where: { senderType: { not: SenderType.note } },
-              orderBy: { sentAt: 'asc' },
-            },
+        messages: {
+          where: { senderType: { not: SenderType.note } },
+          orderBy: { sentAt: 'desc' },
+          take: CONTEXT_BUDGETS.classifierMessageCount,
+        },
       },
     });
 
     if (!fullThread) return null;
 
-    const chronologicalMessages = contextBudgetMode === 'enforce'
-      ? [...fullThread.messages].reverse()
-      : fullThread.messages;
+    const chronologicalMessages = [...fullThread.messages].reverse();
     const boundedConversation = buildBoundedClassifierConversation(
       chronologicalMessages,
       fullThread.aiSummary,
     );
-    const episodeText = contextBudgetMode === 'enforce'
-      ? boundedConversation.text
-      : chronologicalMessages
-      .map((m) => `${m.senderType.toUpperCase()}: ${m.contentText}`)
-      .join('\n');
+    const episodeText = boundedConversation.text;
 
     // The burst is named for the model rather than left to be inferred from the
     // transcript's tail: "what are they asking now" and "what has this
@@ -75,15 +62,12 @@ export async function generateThreadIntelligence(
         : '(no unanswered customer message)'
     }`;
 
-    if (contextBudgetMode !== 'off') {
-      logger.info({
-        threadId,
-        organizationId: fullThread.organizationId,
-        purpose: 'thread_intelligence',
-        mode: contextBudgetMode,
-        context: boundedConversation.stats,
-      }, '[Worker] AI input budget');
-    }
+    logger.info({
+      threadId,
+      organizationId: fullThread.organizationId,
+      purpose: 'thread_intelligence',
+      context: boundedConversation.stats,
+    }, '[Worker] AI input budget');
 
     await enforceSpendCap(fullThread.organizationId, null);
 

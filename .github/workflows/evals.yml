@@ -69,6 +69,7 @@ jobs:
           npm run build -w packages/email
           npm run build -w packages/agent
           npm run build -w packages/analytics
+          npm run build -w packages/integrations
       - name: Validate shared cost accounting and fixture controls
         run: |
           npm run test:unit -w packages/agent
