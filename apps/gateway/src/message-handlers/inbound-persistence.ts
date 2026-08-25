@@ -236,29 +236,27 @@ export async function processInboundMessage(
       // A note is not a conversation turn: it neither invalidates a pending
       // plan nor advances the thread's last-message cursor.
       if (!synthetic) {
+        // Unconditional: any new customer message invalidates a cached plan,
+        // including one that arrives out of order.
         await tx.thread.update({
           where: { id: episode.thread.id },
           data: {
             cachedPlanMessageId: null,
             cachedPlan: Prisma.DbNull,
-            // The email path classifies pre-persistence and then runs the
-            // summary job with skipSummary, so this is the only place its
-            // request fields are ever written — without it, email threads would
-            // carry a null disposition forever and every gate downstream would
-            // have to treat "unknown" as "allowed".
-            //
-            // The classifier saw this message alone, so on the rare second
-            // unanswered email the summary narrows to the newest one rather
-            // than covering the whole burst. requestSourceMessageId still points
-            // at the newest customer message, which is what compare-and-set
-            // reads, so the narrowing costs detail and never correctness.
-            ...(precomputed && {
-              requestSummary: precomputed.requestSummary || null,
-              requestDisposition: precomputed.requestDisposition,
-              requestSourceMessageId: created.id,
-            }),
           },
         });
+        // The email path classifies pre-persistence and then runs the summary
+        // job with skipSummary, so this is the only place its request fields are
+        // ever written — without it, email threads would carry a null
+        // disposition forever and every gate downstream would have to treat
+        // "unknown" as "allowed".
+        //
+        // They ride the same guard as lastMessageAt rather than a bare update
+        // beside it. intelligence.ts compare-and-sets the request half against
+        // the settled burst; this path is the same decision and needs the same
+        // owner, or an out-of-order message describes the thread's current
+        // request with an older one. The guard reads lastMessageAt before the
+        // write below bumps it, so "is this the newest message" is asked once.
         await tx.thread.updateMany({
           where: {
             id: episode.thread.id,
@@ -268,6 +266,11 @@ export async function processInboundMessage(
           data: {
             lastMessageAt: created.sentAt,
             lastMessageSenderType: created.senderType,
+            ...(precomputed && {
+              requestSummary: precomputed.requestSummary || null,
+              requestDisposition: precomputed.requestDisposition,
+              requestSourceMessageId: created.id,
+            }),
           },
         });
       }

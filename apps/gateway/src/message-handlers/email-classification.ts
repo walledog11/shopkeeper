@@ -63,6 +63,11 @@ export interface ClassificationResult {
 // 4 added requestSummary/requestDisposition. 5 added requestFacts.
 export const CLASSIFIER_VERSION = 5;
 
+// One budget for both classification paths. They emit the same schema, so a
+// smaller allowance on one of them only buys a truncated object that
+// parseClassifierJson then has to reject.
+export const CLASSIFIER_MAX_TOKENS = 700;
+
 // Shape persisted to Thread.classifierSignals (JSONB). Kept minimal — a version
 // tag plus the signal groups.
 export function classifierSignals(result: ClassificationResult) {
@@ -389,7 +394,7 @@ export async function classifyAndSummarizeNewEmail(
 
     const response = await anthropic.messages.create({
       model: MODEL.CLAUDE,
-      max_tokens: 700,
+      max_tokens: CLASSIFIER_MAX_TOKENS,
       system: classifierSystemPrompt(CHANNEL.EMAIL),
       output_config: {
         format: {

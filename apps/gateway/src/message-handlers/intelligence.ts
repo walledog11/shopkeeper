@@ -10,6 +10,8 @@ import {
   buildBoundedClassifierConversation,
 } from '@shopkeeper/agent/context-budget';
 import {
+  CLASSIFIER_MAX_TOKENS,
+  CLASSIFIER_OUTPUT_SCHEMA,
   classifierSignals,
   classifierSystemPrompt,
   parseClassifierJson,
@@ -79,8 +81,14 @@ export async function generateThreadIntelligence(
 
     const aiResponse = await anthropic.messages.create({
       model: MODEL.CLAUDE,
-      max_tokens: 400,
+      max_tokens: CLASSIFIER_MAX_TOKENS,
       system: classifierSystemPrompt(fullThread.channelType, verifiedOrderNames),
+      output_config: {
+        format: {
+          type: 'json_schema',
+          schema: CLASSIFIER_OUTPUT_SCHEMA,
+        },
+      },
       messages: [{ role: 'user', content: conversationText }],
     });
     const usage = readModelUsage(aiResponse);
