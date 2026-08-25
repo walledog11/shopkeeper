@@ -9,6 +9,7 @@ async function main() {
   await runCommand('npm', ['run', 'build', '-w', 'packages/email'], { cwd: REPO_ROOT });
   await runCommand('npm', ['run', 'build', '-w', 'packages/agent'], { cwd: REPO_ROOT });
   await runCommand('npm', ['run', 'build', '-w', 'packages/analytics'], { cwd: REPO_ROOT });
+  await runCommand('npm', ['run', 'build', '-w', 'packages/integrations'], { cwd: REPO_ROOT });
 
   try {
     await waitForAllTestServices(process.env);

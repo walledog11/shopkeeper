@@ -28,6 +28,8 @@ const repoNodeTsFiles = [
   "packages/agent/vitest.unit.config.ts",
   "packages/analytics/src/**/*.ts",
   "packages/analytics/vitest.config.ts",
+  "packages/integrations/src/**/*.ts",
+  "packages/integrations/vitest.config.ts",
   "packages/email/src/**/*.ts",
   "packages/email/vitest.config.ts",
   "packages/db/*.ts",

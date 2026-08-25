@@ -48,6 +48,9 @@
     },
     "packages/analytics": {
       "project": ["src/**/*.ts"]
+    },
+    "packages/integrations": {
+      "project": ["src/**/*.ts"]
     }
   }
 }

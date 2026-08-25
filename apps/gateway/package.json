@@ -35,6 +35,7 @@
     "@shopkeeper/analytics": "*",
     "@shopkeeper/db": "*",
     "@shopkeeper/email": "*",
+    "@shopkeeper/integrations": "*",
     "@vercel/blob": "2.3.3",
     "bullmq": "5.76.6",
     "dotenv": "^16.4.5",

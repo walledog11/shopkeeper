@@ -1,0 +1,32 @@
+{
+  "name": "@shopkeeper/integrations",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    "./instagram": {
+      "types": "./dist/instagram/index.d.ts",
+      "default": "./dist/instagram/index.js"
+    },
+    "./tiktok": {
+      "types": "./dist/tiktok/index.d.ts",
+      "default": "./dist/tiktok/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "test:unit": "vitest run --config vitest.config.ts",
+    "lint": "cd ../.. && eslint packages/integrations/src packages/integrations/vitest.config.ts --max-warnings 0"
+  },
+  "dependencies": {
+    "@shopkeeper/agent": "*"
+  },
+  "devDependencies": {
+    "typescript": "latest",
+    "vitest": "^4.1.3"
+  }
+}
