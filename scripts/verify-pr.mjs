@@ -7,6 +7,7 @@ const STAGES = {
     ['npm', ['run', 'lint:knip']],
     ['npx', ['turbo', 'run', 'lint']],
     ['npm', ['run', 'typecheck']],
+    ['node', ['--test', 'scripts/check-production-env.test.mjs']],
   ],
   unit: [
     ['npm', ['run', 'test:unit']],

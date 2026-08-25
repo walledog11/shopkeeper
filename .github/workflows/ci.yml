@@ -78,7 +78,9 @@ jobs:
             apps/dashboard/coverage/
             apps/gateway/coverage/
             packages/agent/coverage/
+            packages/analytics/coverage/
             packages/email/coverage/
+            packages/integrations/coverage/
           retention-days: 7
 
   build:

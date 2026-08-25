@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { listCoverageWorkspaceTargets } from './lib/coverage-workspaces.mjs';
 
 const REPO_ROOT = process.cwd();
 const failures = [];
@@ -120,7 +121,11 @@ assertExactlyOneOwner(e2eTests, (file) => {
 
 const rootPackage = readJson(join(REPO_ROOT, 'package.json'));
 const coverageScript = rootPackage.scripts?.['test:coverage'] ?? '';
-for (const workspace of ['apps/dashboard', 'apps/gateway', 'packages/agent', 'packages/email']) {
+const coverageWorkspaces = listCoverageWorkspaceTargets(coverageScript);
+if (coverageWorkspaces.length === 0) {
+  failures.push('Root test:coverage does not declare any `-w <workspace>` targets.');
+}
+for (const workspace of coverageWorkspaces) {
   if (!coverageScript.includes(`-w ${workspace}`)) {
     failures.push(`Root test:coverage does not include ${workspace}.`);
   }
@@ -134,6 +139,9 @@ for (const requiredScript of ['lint:knip', 'typecheck']) {
     failures.push(`verify:pr must explicitly run ${requiredScript}.`);
   }
 }
+if (!verifyPrSource.includes('scripts/check-production-env.test.mjs')) {
+  failures.push('verify:pr static stage must run production env contract tests.');
+}
 
 const ciSource = readFileSync(join(REPO_ROOT, '.github/workflows/ci.yml'), 'utf8');
 for (const stage of ['static', 'unit', 'coverage', 'build', 'e2e']) {
@@ -141,7 +149,7 @@ for (const stage of ['static', 'unit', 'coverage', 'build', 'e2e']) {
     failures.push(`CI must invoke the canonical verify:pr ${stage} stage.`);
   }
 }
-for (const workspace of ['apps/dashboard', 'apps/gateway', 'packages/agent', 'packages/email']) {
+for (const workspace of coverageWorkspaces) {
   if (!ciSource.includes(`${workspace}/coverage/`)) {
     failures.push(`CI coverage artifact does not include ${workspace}.`);
   }
