@@ -3,8 +3,12 @@ import { Queue } from 'bullmq';
 import { Redis as IORedis } from 'ioredis';
 import { CHANNEL, JOB, PROCESSING_QUEUE_DEFAULTS, QUEUE } from '../constants.js';
 import { toGatewayBullMqConnection } from '../clients/redis-client.js';
-import { loadGatewayEnv } from '../config/load-env.js';
 import type { InboundJobData } from '../types.js';
+// The repository-level loader, not loadGatewayEnv: this targets production and
+// SHOPKEEPER_DB_TARGET=prod is what selects it, the same way the other canaries
+// and audits do.
+// @ts-expect-error no declaration file for the repository-level env loader
+import { loadLocalEnv } from '../../../../scripts/load-local-env.mjs';
 
 // Milestone 2 production canary for the classification write contract.
 //
@@ -29,7 +33,7 @@ import type { InboundJobData } from '../types.js';
 // mail, so an auto-executed reply would go nowhere. `cleanup` deletes the
 // synthetic customer, and Customer -> Thread -> Message cascades.
 
-loadGatewayEnv();
+loadLocalEnv();
 
 const CANARY_SENDER_DOMAIN = 'example.com';
 const CANARY_SENDER_PREFIX = 'shopkeeper-classification-canary';
