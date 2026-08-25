@@ -40,7 +40,7 @@ It is intentionally narrower than [`checklist.md`](checklist.md). This document 
 - Build command:
 
 ```bash
-npx prisma generate --schema=packages/db/prisma/schema.prisma && npm run build -w packages/db && npx turbo run build --filter=shopkeeper-dashboard
+npx prisma generate --schema=packages/db/prisma/schema.prisma && npm run build -w packages/db && npm run build -w packages/agent && npm run build -w packages/integrations && npx turbo run build --filter=shopkeeper-dashboard
 ```
 
 - Output directory: `apps/dashboard/.next`
@@ -58,7 +58,10 @@ npm run start -w apps/gateway
 
 ```bash
 npm run build -w packages/db
+npm run build -w packages/email
 npm run build -w packages/agent
+npm run build -w packages/analytics
+npm run build -w packages/integrations
 npm run build -w apps/gateway
 ```
 

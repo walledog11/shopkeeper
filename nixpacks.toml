@@ -10,6 +10,7 @@ cmds = [
   "npm run build -w packages/email",
   "npm run build -w packages/agent",
   "npm run build -w packages/analytics",
+  "npm run build -w packages/integrations",
   "npm run build -w apps/gateway",
 ]
 
