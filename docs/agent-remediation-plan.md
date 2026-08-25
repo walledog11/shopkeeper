@@ -122,12 +122,18 @@ Efficiency work may proceed only when it does not compete with the active milest
 
 The `AGENT_CONTEXT_BUDGET_MODE` bullet is closed. Production had been running the flag as `shadow`, which took the legacy unbounded branch until `6c6d79a5` aliased it to `enforce`; the rollout is now finished deliberately and the flag, its legacy branch, its canary, and its comparison eval are removed. Evidence, including the paid eval results and the two drifts they exposed, is in [agent-m2-evidence-2026-08-25.md](agent-m2-evidence-2026-08-25.md).
 
-Contract unification is next and nothing has been written for it yet. The divergence between the two paths is wider than ordering, and the write-site split is the part that matters: email request fields are written in `inbound-persistence.ts` under `precomputed`, every other channel's in `intelligence.ts`, which is why the staleness guard exists on only one of them. The others are schema enforcement (the email path uses `output_config` json_schema, the post-persistence path parses free text), `verifiedOrderNames` reaching only the post-persistence prompt, differing `max_tokens`, and burst framing reaching only the post-persistence input.
+Contract unification is under way. Of the five divergences originally listed, two are closed in `933019d5`, two were re-read as inherent rather than open, and the write-site split remains.
+
+- **Staleness guard — closed.** `lastMessageAt` was written through a guard refusing to move backwards while the request fields beside it took an unguarded update, so an out-of-order message could describe the thread's current request with an older one while `lastMessageAt` correctly held the newer. The request fields now ride that same guard. Reachability was narrow — `channels.ts` sets `precomputed` only when the email opens a thread, and one worker at BullMQ's default concurrency of 1 serializes — so this was a landmine, not an active bug, and the regression test records it that way. It widens the moment a second caller passes `precomputed` or the gateway runs more than one replica.
+- **Call shape — closed.** The post-persistence path parsed free text where the email path enforced `output_config` json_schema, and ran a 400-token budget against 700 for the same output contract. Both now share `CLASSIFIER_OUTPUT_SCHEMA` and `CLASSIFIER_MAX_TOKENS`. Both are production behavior changes: the post-persistence classifier is schema-enforced and can no longer truncate mid-object at 400 tokens.
+- **Burst framing — inherent, not a divergence.** The pre-persistence call classifies a single new email that opens a thread; there is no burst to frame yet. The characterization suite already records this as a lifecycle asymmetry.
+- **`verifiedOrderNames` — inherent, not a divergence.** `classifierSystemPrompt` consumes it only for `shopify_chat`, which the email path never is.
+- **Write-site split — open.** Email request fields are still written in `inbound-persistence.ts` under `precomputed`, every other channel's in `intelligence.ts`. Unifying the guard removed the asymmetry the split caused; collapsing to one writer is the remaining work.
 
 ### Work
 
-- Unify email pre-persistence classification and other-channel post-persistence classification behind one contract.
-- Preserve the staleness guard: never save fields for a request superseded while classification was running.
+- Unify email pre-persistence classification and other-channel post-persistence classification behind one contract. *Guard and call shape done 2026-08-25; one shared writer remains.*
+- ~~Preserve the staleness guard: never save fields for a request superseded while classification was running.~~ Done 2026-08-25 in `933019d5`.
 - Verify multi-message email bursts classify once per request episode.
 - Define supported classifier versions and a retirement procedure: inventory → dual-read/backfill → canary → retirement.
 - Add production metrics for classifier version, failure, stale-write rejection, and source alignment.
