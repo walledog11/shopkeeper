@@ -124,10 +124,10 @@ The six deliberate exclusions — `fulfill_order`, `create_shopify_order`,
 coverage test fails when a registry tool has neither a bucket nor an exemption. It
 caught `send_email` immediately, which nothing had flagged.
 
-## Open defect: an escalation verdict that never reaches the plan
+## Defect: an escalation verdict that never reached the plan
 
-Belongs to the completed `decideAutonomy` foundation, not to Milestone 2. Not
-fixed; recorded here because it is localized and load-bearing.
+Belongs to the completed `decideAutonomy` foundation, not to Milestone 2. Fixed
+below; paid confirmation outstanding.
 
 `refund-already-refunded` expects `escalate_to_human` and forbids `send_reply`.
 `57234d00` added a matching prohibition to `SUPPORT_INSTRUCTIONS` ("For a prior
@@ -157,10 +157,47 @@ escalate while the plan's `rawToolCalls` — what the eval asserts on and what t
 merchant sees — still say `[add_internal_note, send_reply]`. One decision with two
 answers, pointing the wrong way on a money-touching case.
 
-Next step is to determine which of the two conditions fails: `validation.status ===
-"valid"` gates the whole routing block, and `routingEvidence.escalationReason` gates
-the rewrite. A prompt prohibition obeyed two times in three is the symptom; the
-structural enforcement is the fix.
+### Resolution
+
+The failing condition is `validation.status === "valid"`, and it was settled without
+a model call. `refundTargetsAlreadyFullyRefunded` reads only `ctx` and `instruction`,
+so it returns the same answer on all three repeats; a condition constant across runs
+cannot produce a 2/3. `routingEvidence.escalationReason` is likewise never the
+constraint — every one of the twelve `ESCALATION_EVIDENCE` codes has a non-`undefined`
+entry in `ESCALATION_REASONS`. What varies with the model is validity, and the failing
+draft is exactly the shape that trips a rule: `[add_internal_note, send_reply]` has no
+`action`-category tool, so `plan-validation.ts` records `orphan_internal_note`, the
+plan is invalid, and the entire routing block is skipped.
+
+A `planAgent` regression test in `planner.test.ts` drives that draft through the
+mocked model and reproduces the eval failure verbatim — `['add_internal_note',
+'send_reply']` against an expected `['escalate_to_human']` — with no paid call.
+
+The fix reorders ownership rather than widening the prompt:
+
+- `decideAutonomy` decides structural escalation evidence **ahead of** plan validity.
+  Evidence is derived from the merchant's own orders, not from the model's proposal,
+  so ordering it after validity let a model escape the escalation its evidence already
+  demanded by writing a plan bad enough to be invalid — worse output, weaker routing,
+  on the money-touching path. Invalidity still outranks a *model-authored*
+  `escalate_to_human`, which is unchanged.
+- The planner builds routing evidence unconditionally and re-validates after
+  materialization. The merchant approves the plan that ships and `plan-execution.ts`
+  refuses an invalid one, so `plan.validation` has to describe the materialized calls
+  rather than the discarded proposal. A storefront reply kept by `keepReply` is
+  re-checked rather than inherited, so an ungrounded reply still cannot ship. The
+  discarded proposal's issue codes are logged as `supersededValidationIssueCodes`.
+- Materialization stays scoped to structural evidence via the existing
+  `routingEvidence.escalationReason` condition, which is what keeps a model-authored
+  escalation plan intact instead of rewriting it.
+
+An invalid proposal with no escalation evidence is still preserved verbatim; the
+existing planner test asserting that is unchanged and passes.
+
+Verified: typecheck, lint, and the full unit (1,959) and integration (1,562) suites
+green. Paid confirmation that `refund-already-refunded` reaches 3/3 is outstanding —
+no fixture uses `mustBeInvalidWith`, so no fixture asserts on a preserved invalid
+plan and the change cannot silently move one.
 
 ## Open defect: forbidden internal note on a prompt-injection attempt
 

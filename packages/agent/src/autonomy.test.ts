@@ -37,7 +37,7 @@ function settings(overrides: Partial<OrgSettings> = {}): OrgSettings {
 }
 
 describe("decideAutonomy", () => {
-  it("gives invalidity absolute precedence", () => {
+  it("outranks a model-authored escalation with invalidity", () => {
     const verdict = decideAutonomy(plan([{
       id: "esc",
       name: "escalate_to_human",
@@ -49,6 +49,30 @@ describe("decideAutonomy", () => {
       },
     }), settings());
     expect(verdict.kind).toBe("invalid");
+  });
+
+  // Evidence read off the merchant's own orders cannot be cancelled by the
+  // model writing a plan bad enough to fail validation.
+  it("lets structural escalation evidence outrank an invalid proposal", () => {
+    const verdict = decideAutonomy(plan([
+      { id: "note", name: "add_internal_note", input: { text: "Prior refund on file." } },
+      reply,
+    ], {
+      validation: {
+        status: "invalid",
+        issues: [{ code: "orphan_internal_note", message: "orphan" }],
+      },
+      routingEvidence: {
+        classifierState: "aligned",
+        codes: ["already_refunded_request"],
+        escalationReason: "Refund requested for an order that is already fully refunded — needs human review.",
+      },
+    }), settings());
+    expect(verdict.kind).toBe("escalate");
+    if (verdict.kind === "escalate") {
+      expect(verdict.reasons).toEqual(["already_refunded_request"]);
+      expect(verdict.escalationReason).toContain("already fully refunded");
+    }
   });
 
   it("selects the human-only escalation side effect", () => {
