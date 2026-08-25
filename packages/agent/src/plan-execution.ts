@@ -18,7 +18,6 @@ import {
   completePlanExecution,
   type PlanExecutionIdentity,
 } from "./execution-ledger.js";
-import logger from "./logger.js";
 import { isInvalidPlan } from "./plan-validation.js";
 
 export type PlanExecutionDeps = ExecuteAgentTurnDeps;
