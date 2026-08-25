@@ -15,6 +15,7 @@ import {
   classifiedEpisodeFields,
   classifiedFilterFields,
   classifiedRequestFields,
+  classifierUserInput,
   logClassificationRequestWrite,
   classifierSystemPrompt,
   parseClassifierJson,
@@ -91,7 +92,7 @@ export async function generateThreadIntelligence(
           schema: CLASSIFIER_OUTPUT_SCHEMA,
         },
       },
-      messages: [{ role: 'user', content: conversationText }],
+      messages: [{ role: 'user', content: classifierUserInput(conversationText) }],
     });
     const usage = readModelUsage(aiResponse);
     await recordSpend(fullThread.organizationId, usage, MODEL.CLAUDE);

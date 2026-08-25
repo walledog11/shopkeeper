@@ -110,6 +110,16 @@ export function classifiedRequestFields(
   };
 }
 
+// The system prompt resolves `deadline` "against the "Today" line in the
+// message", so a caller that omits it leaves the model with nothing to anchor
+// "before Friday" to. The email path always sent one and the post-persistence
+// path never did, which is why a canary on 2026-08-25 came back with
+// deadline 2024-01-05 beside a correct deadlineText. Shared so the prompt's
+// stated precondition has one owner instead of a per-caller habit.
+export function classifierUserInput(body: string, now = new Date()): string {
+  return `Today: ${now.toISOString().slice(0, 10)}\n\n${body}`;
+}
+
 export type ClassificationWriteOutcome = 'committed' | 'rejected_stale';
 
 // Both paths guard the request half against a newer message, by different
@@ -459,7 +469,7 @@ export async function classifyAndSummarizeNewEmail(
     const boundedInput = buildBoundedEmailClassifierInput(subject, body);
     // "by Friday" is only a date relative to something. Kept in the user message
     // rather than the system prompt so the cached prefix stays byte-stable.
-    const classifierInput = `Today: ${new Date().toISOString().slice(0, 10)}\n\n${boundedInput}`;
+    const classifierInput = classifierUserInput(boundedInput);
 
     logger.info({
       organizationId,
