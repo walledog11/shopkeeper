@@ -59,6 +59,7 @@
     "recover:gmail-history": "tsx ./scripts/recover-gmail-history.ts",
     "canary:agent-rollout": "tsx ./apps/gateway/src/scripts/canary-agent-rollout.ts",
     "canary:agent-briefings": "tsx ./apps/gateway/src/scripts/canary-agent-briefing.ts",
+    "canary:classification": "tsx ./apps/gateway/src/scripts/canary-classification-write.ts",
     "canary:dashboard-ledger": "tsx --tsconfig apps/dashboard/tsconfig.json ./scripts/canary-plan-ledger.ts --surface=dashboard",
     "canary:gateway-ledger": "tsx ./scripts/canary-plan-ledger.ts --surface=gateway",
     "canary:lock-renewal": "tsx ./apps/gateway/src/scripts/canary-lock-renewal.ts",
