@@ -194,7 +194,9 @@ export async function runFixture(
     simulatedToolResults.current = simulated.size > 0 ? simulated : null
     const resolvedSettings = resolveAgentSettings(fixture.setup.orgSettings ?? null)
     currentPhase = usage.plannerUsage
-    const plan = await planAgent(environment.ctx, fixture.instruction, resolvedSettings)
+    const plan = await planAgent(environment.ctx, fixture.instruction, resolvedSettings, {
+      merchantInstruction: fixture.merchantInstruction === true,
+    })
     currentPhase = null
 
     const planCheck = collectPlanExpectationFailures(fixture, plan)

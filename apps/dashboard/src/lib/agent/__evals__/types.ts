@@ -125,6 +125,10 @@ export interface Fixture {
   description: string;
   setup: ThreadSetup;
   instruction: string;
+  // The instruction is one the merchant typed rather than one derived from the
+  // customer's message, so intent narrowing must not gate it. Mirrors what the
+  // ticket-composer route sets in production.
+  merchantInstruction?: boolean;
   expectedPlan: ExpectedPlan;
   expectedRubric?: ExpectedRubric;
   // `core` is the paid release profile and is always hard-gated. `extended`

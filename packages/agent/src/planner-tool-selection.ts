@@ -35,6 +35,7 @@ type PlanningToolSelectionReason =
   | "operator"
   | "storefront_policy"
   | "merchant_answer_replan"
+  | "merchant_instruction"
   | "no_classifier_signals"
   | "classifier_unaligned"
   | "unclassified_request"
@@ -57,6 +58,11 @@ interface SelectPlanningToolsInput {
   operatorMode: boolean;
   storefrontMode: boolean;
   merchantAnswerReplan: boolean;
+  // The instruction was authored by the merchant, not derived from the
+  // customer's message. Intent narrowing reads intents the classifier took from
+  // what the *customer* said, so applying it here would let a status question
+  // hide a tool the merchant explicitly asked for.
+  merchantInstruction?: boolean;
 }
 
 const CONTROL_TOOL_NAMES = [
@@ -91,6 +97,31 @@ const BROAD_ORDER_MUTATION_TOOL_NAMES = [
   "create_exchange",
   "create_gift_card",
   "attach_return_label",
+] as const;
+
+// Tools no customer intent may unlock. They stay reachable through the
+// merchant-authored fail-opens above and through the namespace-miss retry, which
+// is the designed escape when a request genuinely needs one of them.
+//
+// The list is explicit so the coverage test can tell a deliberate exclusion from
+// an accidental one. A tool added to the registry with neither a bucket nor an
+// entry here is unreachable by omission and fails that test — which is how
+// fulfill_order's absence should have surfaced instead of showing up as a
+// merchant instruction silently answered with "hasn't shipped yet".
+export const NARROWING_EXEMPT_TOOL_NAMES = [
+  // Merchant-initiated order operations. A customer asking for a refund or a
+  // cancellation must never widen into creating or fulfilling an order.
+  "fulfill_order",
+  "create_shopify_order",
+  // Customer-record writes. Reachable after a namespace-miss retry; see
+  // planner.test.ts, which pins them out of the first call and into the second.
+  "update_shopify_customer_info",
+  "add_shopify_customer_note",
+  // Operator/insights reporting; operator turns take the operatorMode fail-open.
+  "get_support_stats",
+  // Proactive outbound to an arbitrary address. A customer-request turn answers
+  // in the thread with send_reply; reaching out is an operator action.
+  "send_email",
 ] as const;
 
 const RISK_INTENTS = [
@@ -147,6 +178,9 @@ export function selectPlanningTools(input: SelectPlanningToolsInput): PlanningTo
   if (input.storefrontMode) return fullSelection(input.availableTools, "storefront_policy");
   if (input.merchantAnswerReplan) {
     return fullSelection(input.availableTools, "merchant_answer_replan");
+  }
+  if (input.merchantInstruction) {
+    return fullSelection(input.availableTools, "merchant_instruction");
   }
   if (!input.classifierSignals) {
     return fullSelection(input.availableTools, "no_classifier_signals");

@@ -107,7 +107,9 @@ export const POST = withOrgRoute(
 
     // Cache miss — generate via LLM
     const ctx = await buildContext(threadId, org.id);
-    const plan = await planAgent(ctx, instruction, settings);
+    // Every caller of this route is a merchant action in the ticket composer —
+    // the customer-derived auto-plan runs in the gateway, not here.
+    const plan = await planAgent(ctx, instruction, settings, { merchantInstruction: true });
     const cacheRecord = buildAgentPlanCacheRecord({
       instruction,
       lastCustomerMessageId: pendingCustomerMessageId,
