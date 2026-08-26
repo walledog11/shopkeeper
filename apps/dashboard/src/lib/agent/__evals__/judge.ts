@@ -16,6 +16,7 @@ Judge strictly on the rubric description. Do not penalize stylistic choices that
 
 export interface JudgeContext {
   orgSettings?: Partial<OrgSettings> | null;
+  merchantPreferences?: Array<{ category: string; guidance: string }>;
   recentMessages?: { senderType: string; contentText: string | null }[];
 }
 
@@ -48,6 +49,14 @@ function renderContext(context: JudgeContext): string {
   const brandVoice = context.orgSettings?.brandVoice ?? null;
   if (brandVoice) {
     lines.push(`Brand voice: ${brandVoice}`);
+  }
+
+  const preferences = context.merchantPreferences ?? [];
+  if (preferences.length > 0) {
+    lines.push("Merchant preferences:");
+    for (const preference of preferences) {
+      lines.push(`- ${preference.category}: ${preference.guidance}`);
+    }
   }
 
   if (context.recentMessages && context.recentMessages.length > 0) {

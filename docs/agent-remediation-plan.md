@@ -2,9 +2,9 @@
 
 **Status:** canonical execution plan
 
-**Last reconciled:** 2026-08-25 (Milestone 4 complete, pre-user)
+**Last reconciled:** 2026-08-25 (Milestone 5 complete, pre-user)
 
-**Current milestone:** 5 — merchant preference memory
+**Current milestone:** 6 — shipment resolution and attachment vision
 
 This is the single source of truth for agent remediation and capability work. `AGENT_AUDIT.md` is historical evidence, not a second work order.
 
@@ -111,8 +111,8 @@ Neither is caused by the bounded-context retirement or the tool-selection fix; t
 | 2 | Classification lifecycle and compatibility | **Complete** | 1 |
 | 3 | Immutable outcome attribution | **Complete** | 1 |
 | 4 | Bounded replanning after definite failure | **Complete** | completed safety foundations |
-| 5 | Merchant preference memory | **Active** | 1, 3 |
-| 6 | Shipment resolution and attachment vision | Blocked | 3; preference policy for proactive remedies |
+| 5 | Merchant preference memory | **Complete** | 1, 3 |
+| 6 | Shipment resolution and attachment vision | **Active** | 3; preference policy for proactive remedies |
 | 7 | Shop-management capabilities | Blocked | 4 and value-at-risk guard |
 
 Efficiency work may proceed only when it does not compete with the active milestone or change its persisted-data surface.
@@ -301,7 +301,7 @@ These were Milestone 2 bullets that only pay off with real merchant persisted st
 
 **Outcome:** Shopkeeper can apply explicit merchant judgment consistently without allowing preferences to override safety policy.
 
-**Status:** active — next milestone after M4 pre-user close (2026-08-25).
+**Status:** complete (2026-08-25, pre-user close). Evidence in [agent-m5-evidence-2026-08-25.md](agent-m5-evidence-2026-08-25.md).
 
 ### Work
 
@@ -313,9 +313,9 @@ These were Milestone 2 bullets that only pay off with real merchant persisted st
 
 ### Acceptance
 
-- An active preference changes a draft.
-- A preference attempting to exceed a hard cap still blocks or escalates structurally.
-- Proposed preferences cannot affect planning before confirmation.
+- [x] An active preference changes a draft. Targeted eval `merchant-preference-store-credit-over-refund`; unit/integration prompt injection.
+- [x] A preference attempting to exceed a hard cap still blocks or escalates structurally. Integration test + targeted eval `merchant-preference-over-cap-still-escalates`.
+- [x] Proposed preferences cannot affect planning before confirmation. Integration tests load only `active` rows.
 
 ## Milestone 6 — Shipment resolution and attachment vision
 

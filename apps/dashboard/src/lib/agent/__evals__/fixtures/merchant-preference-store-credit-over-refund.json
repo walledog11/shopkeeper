@@ -1,0 +1,98 @@
+{
+  "id": "merchant-preference-store-credit-over-refund",
+  "description": "Active merchant preference prefers store credit for minor delivered-item damage. Customer asks for fixed-value store credit; agent should draft create_gift_card instead of create_refund or escalation.",
+  "setup": {
+    "classifierIntents": {
+      "mutative_request": true
+    },
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Nina Ortiz",
+    "customerPlatformId": "nina@example.com",
+    "shopifyCustomerId": "10000008080",
+    "shopify": {
+      "shop": "test-store.myshopify.com",
+      "accessToken": "shpat_test_fixture"
+    },
+    "orgSettings": {
+      "autonomyTier": "guarded",
+      "maxRefundAmount": 100
+    },
+    "merchantPreferences": [
+      {
+        "category": "compensation",
+        "guidance": "When a customer reports minor product damage on a delivered order, prefer offering store credit with create_gift_card instead of create_refund unless they explicitly insist on getting their money back."
+      }
+    ],
+    "messages": [
+      {
+        "senderType": "customer",
+        "contentText": "One candle in order #8080 arrived cracked. Can you put $15 on my account for my next order?"
+      }
+    ],
+    "simulateToolResults": [
+      {
+        "tool": "create_gift_card",
+        "result": "Created a $15.00 gift card and Shopify emailed it to the resolved customer."
+      },
+      {
+        "tool": "send_reply",
+        "result": "Reply sent to customer via email."
+      }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000008080",
+        "name": "#8080",
+        "created_at": "2026-06-28T10:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": "fulfilled",
+        "total_price": "45.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_8080",
+            "title": "Candle Trio Set",
+            "quantity": 1,
+            "variant_id": "710000008080",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Reply to the customer about the cracked candle.",
+  "expectedPlan": {
+    "mustCallTools": [
+      "create_gift_card",
+      "send_reply"
+    ],
+    "mustNotCallTools": [
+      "create_refund",
+      "escalate_to_human"
+    ],
+    "mustCallToolsWithInput": [
+      {
+        "tool": "create_gift_card",
+        "inputEquals": {
+          "customer_id": "10000008080"
+        },
+        "moneyEquals": {
+          "amount": "15.00"
+        }
+      }
+    ]
+  },
+  "expectedRubric": {
+    "checks": [
+      {
+        "id": "prefers_store_credit",
+        "description": "The draft follows the active merchant preference to prefer store credit over a refund for minor delivered-item damage, unless the customer explicitly insisted on cash back.",
+        "required": false
+      }
+    ]
+  },
+  "suite": "extended"
+}

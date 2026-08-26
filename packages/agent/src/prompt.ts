@@ -8,6 +8,7 @@ import {
   budgetKbArticles,
   truncateContextText,
 } from "./context-budget.js";
+import { buildMerchantPreferencesPromptSection } from "./merchant-preferences.js";
 
 function promptText(value: string | null | undefined, maxChars: number): string {
   return truncateContextText(value?.trim() ?? "", maxChars);
@@ -20,6 +21,10 @@ function recentOrdersJson(ctx: AgentContext): string {
 
 function promptKbArticles(ctx: AgentContext): AgentContext["kbArticles"] {
   return budgetKbArticles(ctx.kbArticles).articles;
+}
+
+function buildMerchantPreferencesSection(ctx: AgentContext): string {
+  return buildMerchantPreferencesPromptSection(ctx.merchantPreferences ?? []);
 }
 
 function buildVoiceSection(s: OrgSettings): string {
@@ -279,7 +284,7 @@ export function buildSystemPromptParts(ctx: AgentContext, settings?: Partial<Org
         identity: `You are ${s.agentName}, an AI action assistant for ${ctx.orgName}. You are receiving instructions from a team member. They reach you from wherever they are — Telegram, iMessage, or the dashboard — and it is the same conversation either way.`,
         context: `## Integrations\n${shopifyNote}\n${shopifyCustomerNote}\n${OPERATOR_INTEGRATION_GUIDANCE}${linkedCustomerSection}${ordersSection}${buildStoreProfileSection(ctx.orgName, s.aiContext)}${pendingStateSection}`,
         instructions,
-        trailer: `${OPERATOR_UNTRUSTED_CONTENT_GUIDANCE}${buildGuardrailSection(s, "operator")}`,
+        trailer: `${OPERATOR_UNTRUSTED_CONTENT_GUIDANCE}${buildGuardrailSection(s, "operator")}${buildMerchantPreferencesSection(ctx)}`,
       }),
     };
   }
@@ -344,7 +349,7 @@ ${identitySection}${ordersSection}${guestSection}
 
 ## Integrations
 ${shopifyNote}
-${shopifyCustomerNote}${buildGuardrailSection(s)}${buildAutonomySection(s)}${buildStoreProfileSection(ctx.orgName, s.aiContext)}${kbSection}${buildVoiceSection(s)}`;
+${shopifyCustomerNote}${buildGuardrailSection(s)}${buildAutonomySection(s)}${buildStoreProfileSection(ctx.orgName, s.aiContext)}${kbSection}${buildVoiceSection(s)}${buildMerchantPreferencesSection(ctx)}`;
 
   return { stable: SUPPORT_STABLE_PREFIX, volatile };
 }
@@ -374,7 +379,7 @@ export function buildComposerAskPrompt(ctx: AgentContext, settings?: Partial<Org
 - Customer email/handle: ${ctx.customer.platformId}
 
 ## Customer's recent orders
-${ordersJson}${buildStoreProfileSection(ctx.orgName, s.aiContext)}${buildVoiceSection(s)}
+${ordersJson}${buildStoreProfileSection(ctx.orgName, s.aiContext)}${buildVoiceSection(s)}${buildMerchantPreferencesSection(ctx)}
 
 ## Knowledge base
 ${kbSection}

@@ -122,6 +122,7 @@ async function main() {
         recentOrders: [],
         linkedShopifyCustomerName: null,
         kbArticles: [],
+        merchantPreferences: [],
         operatorLedger: ledger,
     };
     const result = await runAgent(

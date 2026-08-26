@@ -26,6 +26,7 @@ function context(overrides: Partial<AgentContext> = {}): AgentContext {
     recentOrders: [],
     linkedShopifyCustomerName: null,
     kbArticles: [],
+    merchantPreferences: [],
     classifierSignals: {
       version: 2,
       language: "en",

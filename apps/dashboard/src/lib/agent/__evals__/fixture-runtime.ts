@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto"
 import {
   createTestCustomer,
   createTestMessage,
@@ -97,6 +98,11 @@ function buildContext(
     recentOrders: setup.recentOrders ?? [],
     linkedShopifyCustomerName: setup.linkedShopifyCustomerName ?? null,
     kbArticles: budgetKbArticles(kbArticles).articles,
+    merchantPreferences: (setup.merchantPreferences ?? []).map((preference) => ({
+      id: preference.id ?? randomUUID(),
+      category: preference.category,
+      guidance: preference.guidance,
+    })),
     escalate: reason => escalateToHuman({ reason }, toolContext).then(() => {}),
     io: {
       addInternalNote: input => addInternalNote(input, toolContext),

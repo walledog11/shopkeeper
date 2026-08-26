@@ -22,6 +22,7 @@ const CATEGORY_PREFIXES = [
   "gift-card",
   "kb",
   "memory",
+  "merchant-preference",
   "multi-step",
   "no-tool",
   "operator",

@@ -20,6 +20,7 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
     recentOrders: [],
     linkedShopifyCustomerName: null,
     kbArticles: [],
+    merchantPreferences: [],
     thread: {
       id: 'thread_test',
       status: 'open',
@@ -143,6 +144,20 @@ describe('buildSystemPrompt', () => {
 
     expect(prompt).toContain('## About this store\nTest Store');
     expect(prompt).not.toContain('## About this store\nTest Store\n\nTest Store');
+  });
+
+  it('includes active merchant preferences with scope guardrails', () => {
+    const prompt = buildSystemPrompt(makeCtx({
+      merchantPreferences: [{
+        id: 'pref_1',
+        category: 'compensation',
+        guidance: 'Offer store credit instead of refunds for minor defects.',
+      }],
+    }));
+
+    expect(prompt).toContain('## Merchant preferences');
+    expect(prompt).toContain('Offer store credit instead of refunds for minor defects.');
+    expect(prompt).toContain('never override guardrails');
   });
 
   it('defensively bounds dynamic system-prompt fields in enforce mode', () => {

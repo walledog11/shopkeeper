@@ -2,6 +2,7 @@
 
 import AgentTab from "./AgentTab"
 import type { OrgSettings, OrgSettingsPatch, VoiceProposal } from "@/types"
+import type { MerchantPreferenceRecord } from "@shopkeeper/db"
 import { dashboardPageShellClassName } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
 import { cn } from "@/lib/ui/cn"
 
@@ -12,6 +13,10 @@ interface Props {
   orgName: string
   voiceProposal: VoiceProposal | null
   shopifyConnected: boolean
+  merchantPreferences: {
+    active: MerchantPreferenceRecord[]
+    proposed: MerchantPreferenceRecord[]
+  }
 }
 
 export default function ConfigurePageClient(props: Props) {
@@ -26,6 +31,7 @@ export default function ConfigurePageClient(props: Props) {
             orgName={props.orgName}
             voiceProposal={props.voiceProposal}
             shopifyConnected={props.shopifyConnected}
+            merchantPreferences={props.merchantPreferences}
           />
         </div>
       </div>

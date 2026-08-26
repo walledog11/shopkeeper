@@ -4,6 +4,7 @@ export function buildHomeSummaryView(summary: HomeSummary) {
   return {
     ...summary.metrics,
     needsYouItems: summary.needsAttention,
+    proposedPreferences: summary.proposedPreferences,
     clearedTopics: summary.overnight.topics,
     briefingChannels: summary.overnight.channelNames,
     repeatCustomers: summary.repeatCustomers,

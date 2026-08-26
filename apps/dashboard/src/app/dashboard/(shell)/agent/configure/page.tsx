@@ -4,6 +4,7 @@ import { parseVoiceProposal } from "@shopkeeper/db"
 import { normalizeStoredOrgSettings, resolveAgentSettings } from "@shopkeeper/agent/settings"
 import { AgentConfigurePageSkeleton } from "@/app/dashboard/_components/skeletons"
 import { getOrCreateOrg } from "@/lib/server/org"
+import { getMerchantPreferencesPageData } from "@/lib/server/merchant-preferences-data"
 import ConfigurePageClient from "./_components/ConfigurePageClient"
 
 export default async function AgentConfigurePage() {
@@ -15,6 +16,7 @@ export default async function AgentConfigurePage() {
     select: { platform: true },
   })
   const shopifyConnected = integrations.some(integration => integration.platform === ChannelType.shopify)
+  const merchantPreferences = await getMerchantPreferencesPageData(org.id)
 
   return (
     <Suspense fallback={<AgentConfigurePageSkeleton />}>
@@ -25,6 +27,7 @@ export default async function AgentConfigurePage() {
         orgName={org.name}
         voiceProposal={parseVoiceProposal(org.voiceProposal)}
         shopifyConnected={shopifyConnected}
+        merchantPreferences={merchantPreferences}
       />
     </Suspense>
   )

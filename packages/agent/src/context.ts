@@ -3,6 +3,10 @@ import { parseClassifierSignals } from "./classifier-signals.js";
 import { shopifyRestJson, type ShopifyContext } from "./shopify/client.js";
 import { CHANNEL_TYPE, isOperatorChannel } from "./thread-constants.js";
 import { MEMORY_OVERRIDE_TAG, memoryOverrideTargetIds } from "./kb-memory.js";
+import {
+  budgetMerchantPreferences,
+  loadActiveMerchantPreferences,
+} from "./merchant-preferences.js";
 import { hydrateAgentMessageImages } from "./image-attachments.js";
 import logger from "./logger.js";
 import {
@@ -139,8 +143,9 @@ export async function buildContext(
       select: { title: true, body: true, tags: true },
     });
   })();
+  const activeMerchantPreferencesPromise = loadActiveMerchantPreferences(orgId);
 
-  const [thread, org, shopifyIntegration, allKbArticles] = await Promise.all([
+  const [thread, org, shopifyIntegration, allKbArticles, activeMerchantPreferences] = await Promise.all([
     db.thread.findUnique({
       where: { id: threadId },
       include: {
@@ -157,6 +162,7 @@ export async function buildContext(
     db.organization.findUnique({ where: { id: orgId } }),
     db.integration.findFirst({ where: { organizationId: orgId, platform: "shopify" } }),
     effectiveKbArticlesPromise,
+    activeMerchantPreferencesPromise,
   ]);
 
   if (!thread || thread.organizationId !== orgId) {
@@ -313,6 +319,8 @@ export async function buildContext(
     : loadedKbArticles;
   const budgetedKb = budgetKbArticles(mergedKbArticles);
   const kbArticles = budgetedKb.articles;
+  const budgetedPreferences = budgetMerchantPreferences(activeMerchantPreferences);
+  const merchantPreferences = budgetedPreferences.preferences;
 
   const threadIo = {
     threadId: thread.id,
@@ -340,6 +348,7 @@ export async function buildContext(
     threadId,
     recentMessages: budgetedMessages.stats,
     kbArticles: budgetedKb.stats,
+    merchantPreferences: budgetedPreferences.stats,
   }, "[agent:context] budget");
 
   const base: BaseAgentContext = {
@@ -394,6 +403,7 @@ export async function buildContext(
     ...(recentOrdersFetchFailed ? { recentOrdersFetchFailed: true } : {}),
     linkedShopifyCustomerName: isOperator ? shopifyCustomerName : null,
     kbArticles: kbArticles.map(a => ({ title: a.title, body: a.body })),
+    merchantPreferences,
     classifierSignals: parseClassifierSignals(thread.classifierSignals),
     ...(options?.operatorLedger
       ? {

@@ -307,6 +307,24 @@ export {
 } from './voice.js';
 export type { VoiceProposal } from './voice.js';
 export {
+  MERCHANT_PREFERENCE_ACTIVE_LIMIT,
+  MERCHANT_PREFERENCE_CATEGORIES,
+  MERCHANT_PREFERENCE_CATEGORY_LABELS,
+  MERCHANT_PREFERENCE_GUIDANCE_MAX_CHARS,
+  MERCHANT_PREFERENCE_PROPOSED_RATIONALE_MAX_CHARS,
+  isMerchantPreferenceCategory,
+  isObservedMerchantPreferenceProposalsEnabled,
+  normalizeMerchantPreferenceGuidance,
+  normalizeMerchantPreferenceRationale,
+  parseMerchantPreferenceCreateBody,
+  parseMerchantPreferencePatchBody,
+  serializeMerchantPreference,
+} from './merchant-preferences.js';
+export type {
+  MerchantPreferenceCategory,
+  MerchantPreferenceRecord,
+} from './merchant-preferences.js';
+export {
   ensureReturnWatchFromClosure,
   listOpenReturnWatches,
   markReturnWatchPlanPushed,

@@ -6,6 +6,13 @@ export const HOME_NEEDS_ATTENTION_LIMIT = 5
 export const HOME_OVERNIGHT_TOPIC_LIMIT = 4
 export const HOME_REPEAT_CUSTOMER_LIMIT = 4
 
+export interface HomeProposedPreferenceItem {
+  id: string
+  category: "compensation" | "returns" | "shipping" | "policy" | "general"
+  guidance: string
+  proposedRationale: string | null
+}
+
 export interface HomeNeedsAttentionItem {
   threadId: string
   kind: "quick_reply" | "needs_review" | "needs_merchant_input" | "invalid"
@@ -66,6 +73,7 @@ export interface HomeSummary {
     totalRepliesByDay: number[]
   }
   needsAttention: HomeNeedsAttentionItem[]
+  proposedPreferences: HomeProposedPreferenceItem[]
   overnight: {
     topics: HomeClearedTopic[]
     channelNames: string[]
@@ -124,6 +132,7 @@ export function createEmptyHomeSummary(now = new Date()): HomeSummary {
       totalRepliesByDay: [...emptySeries],
     },
     needsAttention: [],
+    proposedPreferences: [],
     overnight: {
       topics: [],
       channelNames: [],

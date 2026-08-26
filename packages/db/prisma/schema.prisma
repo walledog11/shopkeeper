@@ -165,6 +165,26 @@ enum IntegrationLifecycleStatus {
   cleanup_failed
 }
 
+enum MerchantPreferenceCategory {
+  compensation
+  returns
+  shipping
+  policy
+  general
+}
+
+enum MerchantPreferenceSource {
+  explicit
+  observed
+}
+
+enum MerchantPreferenceStatus {
+  active
+  proposed
+  archived
+  rejected
+}
+
 // --- MODELS ---
 
 // One Organization = one Shopify business using the app.
@@ -219,6 +239,7 @@ model Organization {
   storefrontChatSessionEpisodes StorefrontChatSessionEpisode[]
   conversationAttributions ConversationAttribution[]
   requestEpisodeOutcomes RequestEpisodeOutcome[]
+  merchantPreferences    MerchantPreference[]
 
   @@index([clerkOrgId])
   @@index([lifecycleStatus])
@@ -973,6 +994,31 @@ model RequestEpisodeOutcome {
   @@index([organizationId, terminalResolution, createdAt(sort: Desc)])
   @@index([organizationId, requestTag, createdAt(sort: Desc)])
   @@map("request_episode_outcomes")
+}
+
+// Org-scoped merchant judgment captured explicitly or proposed from observed
+// behavior. Only `active` rows reach planning; `proposed` rows require confirmation.
+model MerchantPreference {
+  id             String                     @id @default(uuid()) @db.Uuid
+  organizationId String                     @map("organization_id") @db.Uuid
+  category       MerchantPreferenceCategory
+  guidance       String                     @db.Text
+  source         MerchantPreferenceSource
+  status         MerchantPreferenceStatus   @default(active)
+  confirmedAt    DateTime?                  @map("confirmed_at") @db.Timestamptz
+  confirmedByClerkUserId String?            @map("confirmed_by_clerk_user_id") @db.VarChar(255)
+  proposedRationale String?                 @map("proposed_rationale") @db.Text
+  observedAt     DateTime?                  @map("observed_at") @db.Timestamptz
+  lastUsedAt     DateTime?                  @map("last_used_at") @db.Timestamptz
+  useCount       Int                        @default(0) @map("use_count")
+  createdAt      DateTime                   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime                   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([organizationId, status, category])
+  @@map("merchant_preferences")
 }
 
 // Shadow/canary record for the autonomy raise. One row per plan ("turn") that

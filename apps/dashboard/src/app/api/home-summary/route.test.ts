@@ -45,6 +45,7 @@ describe("GET /api/home-summary", () => {
       metrics: { openCount: number }
       series: { days: string[] }
       needsAttention: unknown[]
+      proposedPreferences: unknown[]
       overnight: { topics: unknown[] }
       repeatCustomers: unknown[]
     }
@@ -54,6 +55,7 @@ describe("GET /api/home-summary", () => {
     expect(body.metrics.openCount).toBe(0)
     expect(body.series.days).toHaveLength(7)
     expect(body.needsAttention).toEqual([])
+    expect(body.proposedPreferences).toEqual([])
     expect(body.overnight.topics).toEqual([])
     expect(body.repeatCustomers).toEqual([])
   })

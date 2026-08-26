@@ -1,6 +1,10 @@
 import { getSupportStats, type SupportStatsSummary } from '@shopkeeper/agent/support-stats';
 import { canonicalInboxThreadWhere } from '@shopkeeper/agent/inbox-filter';
 import { resolveAgentSettings, offsetToIanaFallback } from '@shopkeeper/agent/settings';
+import {
+  formatProposedMerchantPreferencesBriefingLine,
+  loadProposedMerchantPreferences,
+} from '@shopkeeper/agent/merchant-preferences';
 import { SENDER_TYPE } from '@shopkeeper/agent/thread-constants';
 import { db, ThreadFilterStatus, type DbThreadFilterStatus } from '@shopkeeper/db';
 import { JOB, QUEUE } from '../constants.js';
@@ -189,6 +193,8 @@ export interface DigestMessageExtras {
   needsYou?: BriefingItem[];
   /** What the agent did without them, as a sentence for the closing tail. */
   handledSection?: string | null;
+  /** Proposed merchant preferences awaiting confirmation in Agent settings. */
+  preferenceBriefingLine?: string | null;
   garnishLines?: string[];
 }
 
@@ -269,6 +275,7 @@ export function formatDigestMessage(
   // absent rather than summarized as a vague "ticking along" count.
   const tail: string[] = [];
   if (extras?.handledSection) tail.push(extras.handledSection);
+  if (extras?.preferenceBriefingLine) tail.push(extras.preferenceBriefingLine);
   if (filteredCount > 0) tail.push(spamSentence(filteredCount));
   if (tail.length > 0) {
     if (lines.length > 0) lines.push('');
@@ -326,7 +333,7 @@ export async function buildOrgDigest(
   options: { opener?: string | null; includeEmptyInbox?: boolean } = {},
 ): Promise<OrgDigest | null> {
   const since = resolveHandledWindowStart(settings, now);
-  const [openThreads, weeklyStats, handledRollup, waitingItems, garnishLines, attributionLine] = await Promise.all([
+  const [openThreads, weeklyStats, handledRollup, waitingItems, garnishLines, attributionLine, proposedPreferences] = await Promise.all([
     db.thread.findMany({
       where: {
         ...canonicalInboxThreadWhere(organizationId),
@@ -363,9 +370,11 @@ export async function buildOrgDigest(
     loadWaitingOnYouItems(organizationId, now),
     loadDigestShopifyGarnish(organizationId, settings, now),
     loadAttributionLine(organizationId, since),
+    loadProposedMerchantPreferences(organizationId),
   ]);
 
   const handledSection = formatHandledSection(handledRollup);
+  const preferenceBriefingLine = formatProposedMerchantPreferencesBriefingLine(proposedPreferences);
   const includeEmptyInbox = options.includeEmptyInbox ?? true;
 
   if (openThreads.length === 0 && waitingItems.length === 0 && !includeEmptyInbox) return null;
@@ -467,6 +476,7 @@ export async function buildOrgDigest(
         opener: options.opener ?? null,
         needsYou,
         handledSection,
+        preferenceBriefingLine,
         // Sits with the sales pulse: same register, same place in the message.
         // It is DB-derived rather than fetched, so it is appended here instead
         // of inside the Shopify garnish loader.

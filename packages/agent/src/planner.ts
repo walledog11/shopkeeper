@@ -15,6 +15,7 @@ import {
 import { applyEscalationRouting } from "./escalation-materialization.js";
 import { buildPlanRoutingEvidence } from "./planner-evidence.js";
 import { decideAutonomy } from "./autonomy.js";
+import { recordMerchantPreferenceUsage } from "./merchant-preferences.js";
 import { validatePlan } from "./plan-validation.js";
 import { buildPlanSignals } from "./plan-signals.js";
 import { buildPlanSteps } from "./planner-steps.js";
@@ -108,6 +109,19 @@ export async function planAgent(
     modelInstructionLength: modelInstruction.length,
     instructionHash,
   }, "[agent:plan] start");
+
+  if (ctx.merchantPreferences?.length) {
+    void recordMerchantPreferenceUsage(
+      ctx.orgId,
+      ctx.merchantPreferences.map((preference) => preference.id),
+    ).catch((error) => {
+      logger.warn({
+        orgId: ctx.orgId,
+        threadId: ctx.thread.id,
+        err: error,
+      }, "[agent:plan] merchant preference usage write failed");
+    });
+  }
 
   const maxIterations = resolvedSettings.maxIterations > 0
     ? resolvedSettings.maxIterations

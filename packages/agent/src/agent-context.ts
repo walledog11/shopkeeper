@@ -1,4 +1,5 @@
 import type { ClassifierSignals } from "./classifier-signals.js";
+import type { MerchantPreferenceSummary } from "./merchant-preferences.js";
 import type { ToolResult } from "./tools/result.js";
 import type {
   AddInternalNoteInput,
@@ -152,6 +153,7 @@ export interface SupportContext extends BaseAgentContext {
   recentOrdersFetchFailed?: boolean;
   linkedShopifyCustomerName: string | null;
   kbArticles: { title: string; body: string }[];
+  merchantPreferences: MerchantPreferenceSummary[];
   // Operator channel only: a host-rendered, opaque snapshot of what is awaiting the
   // merchant's decision (pending plan incl. draft bodies, pending question, digest
   // age). The core treats it as a string and drops it into the operator prompt's

@@ -62,6 +62,7 @@ describe("planning signals", () => {
       recentOrders: [],
       linkedShopifyCustomerName: null,
       kbArticles: [],
+    merchantPreferences: [],
       thread: {
         id: "thread_test",
         status: "open",

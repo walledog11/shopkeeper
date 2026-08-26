@@ -12,6 +12,7 @@ import { isEmailIntegrationConfigured } from "@/lib/integrations/onboarding-setu
 import { getChannelInfo } from "@/lib/messaging/channels"
 import { getCustomerName } from "@/lib/messaging/customer-name"
 import { loadNeedsAttention } from "@/lib/server/home-needs-attention"
+import { getMerchantPreferencesPageData } from "@/lib/server/merchant-preferences-data"
 import { getHomeSummaryWindows, loadHomeSummaryRows } from "@/lib/server/home-summary-queries"
 import { isShopifyIntegrationOperational } from "@/lib/server/shopify-integration"
 
@@ -111,10 +112,12 @@ export async function getHomeSummary(
   const [
     { metricRows, dailyRows, topicRows, channelRows, repeatRows },
     needsAttention,
+    merchantPreferences,
     ordersToShip,
   ] = await Promise.all([
     loadHomeSummaryRows(organizationId, now, windows),
     loadNeedsAttention(organizationId, settings, now),
+    getMerchantPreferencesPageData(organizationId),
     loadOrdersToShip(organizationId),
   ])
 
@@ -171,6 +174,12 @@ export async function getHomeSummary(
       totalRepliesByDay: days.map(day => numberFromDb(byDay.get(day)?.total_replies ?? 0)),
     },
     needsAttention,
+    proposedPreferences: merchantPreferences.proposed.map((preference) => ({
+      id: preference.id,
+      category: preference.category,
+      guidance: preference.guidance,
+      proposedRationale: preference.proposedRationale,
+    })),
     overnight: {
       topics,
       channelNames: channelRows.map(row => getChannelInfo(row.channel_type).name),

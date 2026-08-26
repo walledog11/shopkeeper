@@ -178,6 +178,7 @@ function makeDeps(overrides: Partial<PlanExecutionDeps> = {}): PlanExecutionDeps
       recentOrders: [],
       linkedShopifyCustomerName: null,
       kbArticles: [],
+    merchantPreferences: [],
     } satisfies AgentContext),
     runAgent: async () => okResult,
     ...overrides,

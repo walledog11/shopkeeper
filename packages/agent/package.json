@@ -250,6 +250,14 @@
       "types": "./dist/request-outcome-report.d.ts",
       "default": "./dist/request-outcome-report.js"
     },
+    "./merchant-preferences": {
+      "types": "./dist/merchant-preferences.d.ts",
+      "default": "./dist/merchant-preferences.js"
+    },
+    "./merchant-preference-capture": {
+      "types": "./dist/merchant-preference-capture.d.ts",
+      "default": "./dist/merchant-preference-capture.js"
+    },
     "./env": {
       "types": "./dist/env.d.ts",
       "default": "./dist/env.js"

@@ -53,6 +53,11 @@ export interface ThreadSetup {
   shopifyCustomerId?: string | null;
   openThreadCount?: number;
   orgSettings?: Partial<OrgSettings>;
+  merchantPreferences?: Array<{
+    id?: string;
+    category: "compensation" | "returns" | "shipping" | "policy" | "general";
+    guidance: string;
+  }>;
   simulateToolResults?: SimulatedToolResult[];
   /**
    * Intents the inbound classifier would have written for this ticket's customer

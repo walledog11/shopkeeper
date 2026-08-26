@@ -20,6 +20,9 @@ export const CONTEXT_BUDGETS = {
   operatorLedgerChars: 8_000,
   storeProfileChars: 6_000,
   brandVoiceChars: 3_000,
+  merchantPreferenceCount: 10,
+  merchantPreferenceGuidanceChars: 500,
+  merchantPreferenceTotalChars: 4_000,
   recentOrdersChars: 20_000,
 } as const;
 

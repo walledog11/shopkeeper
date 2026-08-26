@@ -26,6 +26,7 @@ import {
 } from './planning-notifications.js';
 import { appendPendingPlan, type PendingPlan, type ToolCall } from '../operator-context.js';
 import { getOperatorPlanQueueMax } from '../config/runtime-config.js';
+import { captureObservedMerchantPreferenceProposal } from '@shopkeeper/agent/merchant-preference-capture';
 import { buildRequestDisplaySnapshot } from './request-display.js';
 
 // The transport the merchant is answering on already sees this exchange, so it is
@@ -115,6 +116,17 @@ export async function applyOperatorAnswerReplan(
     threadTag: meta?.tag,
     channelType: meta?.channelType ?? thread.channelType,
     threadSummary: meta?.aiSummary,
+  });
+
+  void captureObservedMerchantPreferenceProposal({
+    organizationId,
+    guidance: answer,
+    hasPendingQuestion: Boolean(question),
+  }).catch((error) => {
+    logger.warn(
+      { err: (error as Error).message, organizationId, threadId },
+      '[Operator] Observed merchant preference capture failed',
+    );
   });
 
   const pendingCustomerMessageId = latestConversation

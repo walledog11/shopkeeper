@@ -10,7 +10,10 @@ import {
   StickySaveBar,
   WhenOnDutySection,
 } from "./agent-tab-sections"
+import { MerchantPreferencesSection } from "./MerchantPreferencesSection"
+import { useMerchantPreferencesState } from "./useMerchantPreferencesState"
 import { useAgentTabState } from "./useAgentTabState"
+import type { MerchantPreferenceRecord } from "@shopkeeper/db"
 
 interface Props {
   settings: OrgSettings
@@ -19,10 +22,15 @@ interface Props {
   orgName: string
   voiceProposal: VoiceProposal | null
   shopifyConnected: boolean
+  merchantPreferences: {
+    active: MerchantPreferenceRecord[]
+    proposed: MerchantPreferenceRecord[]
+  }
 }
 
 export default function AgentTab(props: Props) {
   const controller = useAgentTabState(props)
+  const preferencesController = useMerchantPreferencesState(props.merchantPreferences)
   // These settings decide how much the agent may do on its own and how much it
   // may refund, so saving them is admin-only server-side. Members can read the
   // page; the save bar tells them why they can't apply a change.
@@ -33,6 +41,7 @@ export default function AgentTab(props: Props) {
   return (
     <div className="flex w-full flex-col gap-4">
       <AgentIdentitySection controller={controller} />
+      <MerchantPreferencesSection controller={preferencesController} canEdit={isAdmin} />
       <AgentAutonomySection controller={controller} />
       <WhenOnDutySection controller={controller} />
       {shopifyConnected ? <MorningBriefingSection controller={controller} /> : null}

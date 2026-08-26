@@ -5,6 +5,7 @@ import WorkflowSetupBanner from "./WorkflowSetupBanner"
 import HomeChannelNudge from "./HomeChannelNudge"
 import ConciergeBriefing from "./ConciergeBriefing"
 import NeedsYou from "./NeedsYou"
+import { ProposedPreferenceCards } from "./ProposedPreferenceCards"
 import ClearedOvernight from "./ClearedOvernight"
 import { HomePageSkeleton } from "@/app/dashboard/_components/skeletons"
 import { dashboardChromeMaxWidthClass } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
@@ -38,6 +39,7 @@ export default function DashboardHomeClient({
     if (process.env.NODE_ENV === "development") return SAMPLE_NEEDS_YOU_ITEMS
     return data.needsYouItems
   }, [data.needsYouItems])
+  const proposedPreferences = data.proposedPreferences ?? []
 
   if (data.isSummaryPending) {
     return <HomePageSkeleton />
@@ -76,6 +78,13 @@ export default function DashboardHomeClient({
               vipsInQueue={data.vipsInQueue}
               ordersToShip={data.ordersToShip}
             />
+
+            {proposedPreferences.length > 0 ? (
+              <ProposedPreferenceCards
+                items={proposedPreferences}
+                onUpdated={data.refreshHomeSummary}
+              />
+            ) : null}
 
             <NeedsYou
               items={needsYouItems}

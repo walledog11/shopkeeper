@@ -214,6 +214,7 @@ export async function runFixture(
         replyText: planCheck.replyText,
         context: {
           orgSettings: resolvedSettings,
+          merchantPreferences: environment.ctx.merchantPreferences,
           recentMessages: environment.ctx.recentMessages,
         },
       })

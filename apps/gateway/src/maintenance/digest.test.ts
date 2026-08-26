@@ -283,6 +283,13 @@ describe('formatDigestMessage', () => {
     expect(msg).not.toContain('ticking along');
   });
 
+  it('includes proposed merchant preferences in the closing tail', () => {
+    const msg = formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE), null, {
+      preferenceBriefingLine: 'I noticed a reusable judgment when you revised a plan: "Always offer store credit." Open Agent settings to confirm or dismiss this preference before I use it.',
+    });
+    expect(msg).toContain('Open Agent settings to confirm or dismiss this preference');
+  });
+
   it('signs off rather than trailing away when nothing needs them', () => {
     const msg = formatDigestMessage(bucketDigestThreads([], NOW, FILED_SINCE), null, {
       handledSection: 'Since your last briefing I replied to Bob.',
