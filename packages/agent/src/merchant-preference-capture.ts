@@ -1,7 +1,5 @@
 import { randomUUID } from "node:crypto";
 import {
-  MERCHANT_PREFERENCE_GUIDANCE_MAX_CHARS,
-  MERCHANT_PREFERENCE_PROPOSED_RATIONALE_MAX_CHARS,
   type MerchantPreferenceCategory,
   isObservedMerchantPreferenceProposalsEnabled,
   normalizeMerchantPreferenceGuidance,
