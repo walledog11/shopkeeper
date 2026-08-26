@@ -123,8 +123,8 @@ cd apps/dashboard && node ../../scripts/with-test-env.mjs npx vitest run src/lib
 - **Manual reply provenance** — merchant-composed sends (`reply_provenance: manual`) not tied to episode rows
 - **Namespace-miss capture** — planner logs `namespaceMiss` but does not pass it to `captureCommittedPlanOutcome` yet
 - **Review UI** — surface `requestOutcome` on recent-activity / review pages
-- **Audit script** — CLI wrapper around `queryRequestOutcomeReport` (optional convenience)
-- **Production deploy** — `npm run db:migrate:deploy` on Railway/Vercel Postgres
+- **Audit script** — `npm run audit:request-outcomes` (`scripts/audit-request-outcomes.mjs`) wraps `queryRequestOutcomeReport` for one org (`--org=<uuid>`) or every org with rows in the window (`--days=30` default). Use `SHOPKEEPER_DB_TARGET=prod` for production.
+- **Production deploy** — applied 2026-08-25 via `railway run npm run db:migrate:deploy` on Neon (`proud-dream` / production). Pending migrations were `20260824150000_drop_deleted_product_leftovers` and `20260825160000_add_request_episode_outcomes`; `prisma migrate status` reports database up to date (77/77).
 - **Backfill** — optional; pre-user posture says no production rows to protect; new traffic only
 
 ## Rollback

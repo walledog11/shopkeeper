@@ -230,8 +230,8 @@ These were Milestone 2 bullets that only pay off with real merchant persisted st
 - Wire `namespaceMiss` from `planAgent` into `captureCommittedPlanOutcome`.
 - Attribute manual merchant sends (`reply_provenance: manual`).
 - Surface `requestOutcome` on the review / recent-activity UI.
-- `db:migrate:deploy` on non-test environments before rows accumulate in production.
-- Optional: audit CLI around `queryRequestOutcomeReport`; historical backfill (deferred pre-user — no rows to protect).
+- ~~`db:migrate:deploy` on non-test environments before rows accumulate in production.~~ **Done 2026-08-25** — see [agent-m3-evidence-2026-08-25.md](agent-m3-evidence-2026-08-25.md).
+- ~~Optional: audit CLI around `queryRequestOutcomeReport`; historical backfill (deferred pre-user — no rows to protect).~~ **Audit CLI shipped** — `npm run audit:request-outcomes`; backfill still deferred pre-user.
 
 ### Acceptance
 

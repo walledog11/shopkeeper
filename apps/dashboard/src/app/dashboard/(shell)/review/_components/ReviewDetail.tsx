@@ -5,6 +5,8 @@ import { ArrowUpRight, Clock3 } from "lucide-react"
 import {
   actionLogEntryHref,
   formatActionLogHeadline,
+  formatPlanVerdictLabel,
+  formatRequestOutcomeDisplay,
 } from "@/lib/agent/action-log-display"
 import { getActionLogChannelInfo } from "@/lib/messaging/channels"
 import type { ActionLogEntry } from "@/types"
@@ -71,6 +73,9 @@ export function ReviewDetail({
   const Icon = REVIEW_ICONS[chrome.icon]
   const tone = REVIEW_TONE_CLASS[chrome.tone]
   const modeNote = reviewModeNote(entry)
+  const requestOutcome = entry.requestOutcome
+    ? formatRequestOutcomeDisplay(entry.requestOutcome)
+    : null
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -98,6 +103,7 @@ export function ReviewDetail({
               {modeNote && <span>{modeNote}</span>}
               {entry.approver && <span>Approved by {entry.approver.displayName ?? entry.approver.id}</span>}
               {entry.threadTag && <span>{entry.threadTag}</span>}
+              {requestOutcome && <span>{requestOutcome.label}</span>}
             </div>
           </div>
         </div>
@@ -109,6 +115,50 @@ export function ReviewDetail({
             <p className="rounded-lg border border-border bg-foreground/[0.03] p-3 text-sm leading-relaxed text-strong">
               {entry.summary}
             </p>
+          </DetailSection>
+        )}
+        {requestOutcome && entry.requestOutcome && (
+          <DetailSection title="Request outcome">
+            <dl className="grid gap-3 rounded-lg border border-border bg-foreground/[0.03] p-3 text-sm">
+              <div className="grid gap-1">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-faint">Request type</dt>
+                <dd className="text-strong">{entry.requestOutcome.requestTag?.trim() || "Untagged request"}</dd>
+              </div>
+              <div className="grid gap-1">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-faint">Plan verdict</dt>
+                <dd className="text-strong">{formatPlanVerdictLabel(entry.requestOutcome.planVerdict)}</dd>
+              </div>
+              <div className="grid gap-1">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-faint">Resolution</dt>
+                <dd className="text-strong">{requestOutcome.label}</dd>
+              </div>
+              {entry.requestOutcome.replyProvenance && (
+                <div className="grid gap-1">
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-faint">Reply</dt>
+                  <dd className="text-strong">
+                    {entry.requestOutcome.replyProvenance === "agent_automatic"
+                      ? "Agent sent automatically"
+                      : entry.requestOutcome.replyProvenance === "agent_approved"
+                        ? "You approved the send"
+                        : "You replied manually"}
+                  </dd>
+                </div>
+              )}
+              {entry.requestOutcome.merchantInputAnsweredAt && (
+                <div className="grid gap-1">
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-faint">Your answer</dt>
+                  <dd className="text-strong">
+                    {new Date(entry.requestOutcome.merchantInputAnsweredAt).toLocaleString()}
+                  </dd>
+                </div>
+              )}
+              <div className="grid gap-1">
+                <dt className="text-xs font-semibold uppercase tracking-wide text-faint">Episode</dt>
+                <dd className="break-all font-mono text-xs text-muted-foreground">
+                  {entry.requestOutcome.sourceMessageId}
+                </dd>
+              </div>
+            </dl>
           </DetailSection>
         )}
         <DetailSection title="Output">

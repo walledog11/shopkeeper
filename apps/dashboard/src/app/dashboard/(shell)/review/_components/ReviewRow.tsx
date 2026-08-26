@@ -3,6 +3,7 @@ import { ExternalLink } from "lucide-react"
 import {
   actionLogEntryHref,
   formatActionLogHeadline,
+  formatRequestOutcomeSummary,
 } from "@/lib/agent/action-log-display"
 import { formatRelativeTime } from "@/lib/format/date"
 import { getActionLogChannelInfo } from "@/lib/messaging/channels"
@@ -38,6 +39,9 @@ export function ReviewRow({
   const Icon = REVIEW_ICONS[chrome.icon]
   const tone = REVIEW_TONE_CLASS[chrome.tone]
   const modeNote = reviewModeNote(entry)
+  const requestOutcomeSummary = entry.requestOutcome
+    ? formatRequestOutcomeSummary(entry.requestOutcome)
+    : null
 
   return (
     <li className={cn(boardCardShellClassName(), "list-none")}>
@@ -62,6 +66,9 @@ export function ReviewRow({
             </span>
             <span className="text-xs text-faint">{channel.name}</span>
             {modeNote && <span className="text-xs text-faint">· {modeNote}</span>}
+            {requestOutcomeSummary && (
+              <span className="text-xs text-faint">· {requestOutcomeSummary}</span>
+            )}
             {isNew && (
               <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-800">
                 New

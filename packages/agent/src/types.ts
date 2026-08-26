@@ -188,6 +188,8 @@ export interface AgentPlan {
   validation?: PlanValidation
   /** Typed facts used to derive autonomy. Current plans persist evidence, never a verdict. */
   routingEvidence?: PlanRoutingEvidence
+  /** True when the planner widened tool selection after a namespace-miss retry. */
+  namespaceMiss?: boolean
   /**
    * @deprecated Derived from `signals` so plans cached by an earlier release stay
    * readable. Read `signals` instead — this is display text with no code attached.

@@ -316,5 +316,6 @@ export async function planAgent(
     // readable. Drops out with the last consumer of `AgentPlan.warnings`.
     warnings: signals.length > 0 ? signals.map(signal => signal.message) : undefined,
     routingEvidence,
+    namespaceMiss: namespaceMiss || undefined,
   };
 }

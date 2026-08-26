@@ -70,6 +70,7 @@
     "audit:operator-context-compatibility": "node ./scripts/audit-operator-context-compatibility.mjs",
     "audit:agent-briefings": "node ./scripts/audit-agent-briefings.mjs",
     "audit:classification-alignment": "node ./scripts/audit-classification-alignment.mjs",
+    "audit:request-outcomes": "node ./scripts/audit-request-outcomes.mjs",
     "audit:classification-recovery": "tsx ./apps/gateway/src/scripts/audit-classification-recovery.ts",
     "audit:legacy-imessage-threads": "node ./scripts/audit-legacy-imessage-threads.mjs",
     "cleanup:duplicate-integrations": "node ./scripts/cleanup-duplicate-integrations.mjs",

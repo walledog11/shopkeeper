@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest"
 import {
   actionLogEntryHref,
   formatActionLogHeadline,
+  formatPlanVerdictLabel,
+  formatRequestOutcomeDisplay,
+  formatRequestOutcomeSummary,
   orderNameFromSummary,
   parseOrderRiskInstruction,
 } from "./action-log-display"
@@ -66,5 +69,51 @@ describe("action log display", () => {
     })
 
     expect(actionLogEntryHref(row)).toBe("/dashboard?openAgent=1&session=session-9")
+  })
+
+  it("formats request outcome labels for review surfaces", () => {
+    const approved = formatRequestOutcomeDisplay({
+      planId: "plan-1",
+      sourceMessageId: "message-1",
+      planVerdict: "needs_review",
+      terminalResolution: "merchant_approved",
+      replyProvenance: "agent_approved",
+      requestTag: "Returns",
+      merchantInputAnsweredAt: null,
+    })
+    expect(approved.label).toBe("You approved")
+    expect(approved.description).toContain("Returns")
+    expect(formatPlanVerdictLabel("needs_review")).toBe("Needed approval")
+    expect(formatRequestOutcomeSummary({
+      planId: "plan-1",
+      sourceMessageId: "message-1",
+      planVerdict: "quick_reply",
+      terminalResolution: "auto_resolved",
+      replyProvenance: "agent_automatic",
+      requestTag: "Order Status",
+      merchantInputAnsweredAt: null,
+    })).toBe("Order Status · Auto-resolved")
+  })
+
+  it("distinguishes manual merchant replies from approved agent sends", () => {
+    const manual = formatRequestOutcomeDisplay({
+      planId: "plan-2",
+      sourceMessageId: "message-2",
+      planVerdict: "manual",
+      terminalResolution: "merchant_approved",
+      replyProvenance: "manual",
+      requestTag: "Support",
+      merchantInputAnsweredAt: null,
+    })
+    expect(manual.label).toBe("You replied manually")
+    expect(formatRequestOutcomeSummary({
+      planId: "plan-2",
+      sourceMessageId: "message-2",
+      planVerdict: "manual",
+      terminalResolution: "merchant_approved",
+      replyProvenance: "manual",
+      requestTag: "Support",
+      merchantInputAnsweredAt: null,
+    })).toBe("Support · You replied manually")
   })
 })

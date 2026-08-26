@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { SENDER_TYPE } from "./thread-constants.js";
 import type {
   ChannelType,
   PlanExecutionStatus,
@@ -26,6 +27,20 @@ export interface RequestEpisodeThreadSnapshot {
   filterStatus?: string | null;
   escalatedAt?: Date | null;
 }
+
+const MANUAL_REPLY_PLAN_SNAPSHOT: AgentPlan = {
+  instruction: "",
+  steps: [],
+  rawToolCalls: [],
+  routingEvidence: { classifierState: "not_applicable", codes: [] },
+};
+
+const RESOLVED_EPISODE_TERMINALS: RequestEpisodeTerminalResolution[] = [
+  "auto_resolved",
+  "merchant_approved",
+  "merchant_input",
+  "escalated",
+];
 
 export interface CaptureCommittedPlanOutcomeParams {
   orgId: string;
@@ -153,7 +168,7 @@ export async function captureCommittedPlanOutcome(
     plan: params.plan,
     planVerdict: verdict.kind,
     classifierSignals,
-    namespaceMiss: params.namespaceMiss ?? false,
+    namespaceMiss: params.namespaceMiss ?? params.plan.namespaceMiss ?? false,
   });
 }
 
@@ -288,6 +303,178 @@ export async function recordRequestEpisodeMerchantInputAnswered(params: {
       merchantInputAnsweredAt: answeredAt,
       merchantTouched: true,
     },
+  });
+}
+
+export async function resolveManualReplySourceMessageId(params: {
+  orgId: string;
+  threadId: string;
+  outgoingMessageId?: string;
+}): Promise<string | null> {
+  const thread = await db.thread.findFirst({
+    where: {
+      id: params.threadId,
+      organizationId: params.orgId,
+    },
+    select: {
+      requestSourceMessageId: true,
+      cachedPlanMessageId: true,
+      messages: {
+        where: { senderType: { not: SENDER_TYPE.NOTE } },
+        orderBy: { sentAt: "desc" },
+        take: 1,
+        select: { id: true, senderType: true },
+      },
+    },
+  });
+  if (!thread) return null;
+
+  if (thread.cachedPlanMessageId) {
+    return thread.cachedPlanMessageId;
+  }
+  if (thread.requestSourceMessageId) {
+    return thread.requestSourceMessageId;
+  }
+
+  const latestConversation = thread.messages[0];
+  if (latestConversation?.senderType === SENDER_TYPE.CUSTOMER) {
+    return latestConversation.id;
+  }
+
+  if (!params.outgoingMessageId) return null;
+
+  const outgoing = await db.message.findFirst({
+    where: {
+      id: params.outgoingMessageId,
+      threadId: params.threadId,
+      organizationId: params.orgId,
+    },
+    select: { sentAt: true },
+  });
+  if (!outgoing) return null;
+
+  const priorCustomer = await db.message.findFirst({
+    where: {
+      threadId: params.threadId,
+      organizationId: params.orgId,
+      senderType: SENDER_TYPE.CUSTOMER,
+      sentAt: { lte: outgoing.sentAt },
+    },
+    orderBy: { sentAt: "desc" },
+    select: { id: true },
+  });
+  return priorCustomer?.id ?? null;
+}
+
+export async function loadRequestEpisodeThreadSnapshot(params: {
+  orgId: string;
+  threadId: string;
+}): Promise<RequestEpisodeThreadSnapshot | null> {
+  const thread = await db.thread.findFirst({
+    where: {
+      id: params.threadId,
+      organizationId: params.orgId,
+    },
+    select: {
+      id: true,
+      customerId: true,
+      channelType: true,
+      tag: true,
+      requestDisposition: true,
+      classifierSignals: true,
+      filterStatus: true,
+      escalatedAt: true,
+    },
+  });
+  if (!thread) return null;
+  return thread;
+}
+
+export async function recordRequestEpisodeManualReply(params: {
+  orgId: string;
+  thread: RequestEpisodeThreadSnapshot;
+  sourceMessageId: string;
+  repliedAt?: Date;
+}): Promise<void> {
+  const now = params.repliedAt ?? new Date();
+  const classifierSignals = parseClassifierSignals(params.thread.classifierSignals);
+
+  const updated = await db.requestEpisodeOutcome.updateMany({
+    where: {
+      organizationId: params.orgId,
+      sourceMessageId: params.sourceMessageId,
+      terminalResolution: "unresolved",
+    },
+    data: {
+      replyProvenance: "manual",
+      merchantTouched: true,
+      terminalResolution: "merchant_approved",
+      terminalAt: now,
+    },
+  });
+  if (updated.count > 0) return;
+
+  const alreadyResolved = await db.requestEpisodeOutcome.findFirst({
+    where: {
+      organizationId: params.orgId,
+      sourceMessageId: params.sourceMessageId,
+      OR: [
+        { terminalResolution: { in: RESOLVED_EPISODE_TERMINALS } },
+        { replyProvenance: "manual" },
+      ],
+    },
+    select: { id: true },
+  });
+  if (alreadyResolved) return;
+
+  const planId = randomUUID();
+  try {
+    await db.requestEpisodeOutcome.create({
+      data: {
+        id: randomUUID(),
+        organizationId: params.orgId,
+        threadId: params.thread.id,
+        customerId: params.thread.customerId,
+        sourceMessageId: params.sourceMessageId,
+        planId,
+        channelType: params.thread.channelType,
+        classifierVersion: classifierSignals?.version ?? null,
+        requestTag: params.thread.tag,
+        requestDisposition: params.thread.requestDisposition,
+        requestAsk: classifierSignals?.requestFacts.ask ?? null,
+        classifierIntents: classifierIntentsSnapshot(classifierSignals) ?? PrismaRuntime.DbNull,
+        planVerdict: "manual",
+        planHash: hashPlan(MANUAL_REPLY_PLAN_SNAPSHOT),
+        instructionHash: hashInstruction(""),
+        namespaceMiss: false,
+        replyProvenance: "manual",
+        merchantTouched: true,
+        terminalResolution: "merchant_approved",
+        terminalAt: now,
+      },
+    });
+  } catch (error) {
+    if (!isUniqueConflict(error)) throw error;
+  }
+}
+
+export async function recordManualMerchantReplyForThread(params: {
+  orgId: string;
+  threadId: string;
+  outgoingMessageId?: string;
+  repliedAt?: Date;
+}): Promise<void> {
+  const sourceMessageId = await resolveManualReplySourceMessageId(params);
+  if (!sourceMessageId) return;
+
+  const thread = await loadRequestEpisodeThreadSnapshot(params);
+  if (!thread) return;
+
+  await recordRequestEpisodeManualReply({
+    orgId: params.orgId,
+    thread,
+    sourceMessageId,
+    repliedAt: params.repliedAt,
   });
 }
 

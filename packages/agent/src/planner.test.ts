@@ -281,6 +281,7 @@ describe("planAgent capture loop", () => {
     expect(toolNamesForCall(1)).toContain("update_shopify_customer_info");
     expect(snapshots[1]).toEqual(snapshots[0]);
     expect(plan.rawToolCalls.map((call) => call.name)).toEqual(["send_reply"]);
+    expect(plan.namespaceMiss).toBe(true);
     expect(completeLogPayload(injectedLogger)).toMatchObject({
       toolSelectionBucket: "order_status",
       namespaceMiss: true,
@@ -296,13 +297,14 @@ describe("planAgent capture loop", () => {
       .mockResolvedValueOnce(endTurn("I still need another capability."))
       .mockResolvedValueOnce(singleToolUse("send_reply", { text: "I can help with that." }, "tu_reply"));
 
-    await planAgent(makeCtx({
+    const plan = await planAgent(makeCtx({
       classifierSignals: {
         ...classifierSignalsFor({ policy_question: true }),
         requestFacts: { ...emptyRequestFacts(), ask: "policy_question" },
       },
     }), "Help with the latest request");
 
+    expect(plan.namespaceMiss).toBe(true);
     expect(mockCreate).toHaveBeenCalledTimes(3);
     expect(toolNamesForCall(2)).not.toContain("request_wider_tool_set");
     expect(toolNamesForCall(2)).toContain("create_refund");

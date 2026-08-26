@@ -8,6 +8,7 @@ import {
   formatReplySubject,
   EmailNotConfiguredError,
 } from '@shopkeeper/email';
+import { recordManualMerchantReplyForThread } from '@shopkeeper/agent/request-outcome';
 import logger from '../logger.js';
 import { captureOutboundReplySent } from '../product-analytics.js';
 import type { OutboundEmailJobData } from '../types.js';
@@ -213,6 +214,19 @@ export async function handleOutboundEmailJob(
     organizationId,
     replySource: analyticsReplySource,
   });
+
+  if (analyticsReplySource === 'manual' && source !== 'auto_ack') {
+    void recordManualMerchantReplyForThread({
+      orgId: organizationId,
+      threadId: job.data.threadId,
+      outgoingMessageId: messageId,
+    }).catch((err) => {
+      logger.error(
+        { err, messageId, threadId: job.data.threadId, organizationId, traceId },
+        '[OutboundEmail] Failed to record manual reply outcome',
+      );
+    });
+  }
 }
 
 async function markClaimFailed(messageId: string, claimToken: string, error: string): Promise<void> {

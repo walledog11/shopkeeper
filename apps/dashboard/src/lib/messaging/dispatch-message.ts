@@ -1,5 +1,7 @@
 import { CHANNEL_TYPE, THREAD_STATUS } from "@shopkeeper/agent/thread-constants"
+import { recordManualMerchantReplyForThread } from "@shopkeeper/agent/request-outcome"
 import { db } from "@shopkeeper/db"
+import logger from "@/lib/server/logger"
 import { isOutboundEmailAsyncEnabled } from "@/lib/messaging/enqueue-outbound-email"
 import { createSentAgentMessage } from "./dispatch-message-common"
 import {
@@ -133,12 +135,25 @@ export async function dispatchMessage(
     providerResult.integrationId,
     providerResult.providerMessageId,
   )
+  const replySource = options.analyticsReplySource
+    ?? (source === "agent_send_reply" ? "agent_approved" : "manual")
+  if (replySource === "manual" && source !== "auto_ack") {
+    void recordManualMerchantReplyForThread({
+      orgId: thread.organizationId,
+      threadId: thread.id,
+      outgoingMessageId: message.id,
+    }).catch((err) => {
+      logger.error(
+        { err, threadId: thread.id, organizationId: thread.organizationId },
+        "[dispatch-message] Failed to record manual reply outcome",
+      );
+    });
+  }
   void captureDashboardOutboundReplySent({
     channel: thread.channelType,
     messageId: message.id,
     organizationId: org.id,
-    replySource: options.analyticsReplySource
-      ?? (source === "agent_send_reply" ? "agent_approved" : "manual"),
+    replySource,
   })
   return { ok: true, message }
 }
