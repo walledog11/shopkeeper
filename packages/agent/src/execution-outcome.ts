@@ -26,3 +26,26 @@ export function planExecutionOutcomeForActions(
 export function planExecutionOutcomeForResult(result: AgentResult): PlanExecutionOutcome {
   return planExecutionOutcomeForActions(result.actionsPerformed);
 }
+
+export function hasUnknownProviderOutcome(
+  actions: readonly Pick<ActionEntry, "status">[],
+): boolean {
+  return actions.some((action) => action.status === "unknown");
+}
+
+/** True when every failure is definite — no provider ambiguity. */
+export function isDefinitePlanExecutionFailure(outcome: PlanExecutionOutcome): boolean {
+  return outcome === "failed" || outcome === "partial";
+}
+
+export function isUnknownPlanExecution(outcome: PlanExecutionOutcome): boolean {
+  return outcome === "unknown";
+}
+
+export function ledgerStatusForPlanOutcome(
+  outcome: PlanExecutionOutcome,
+): "committed" | "failed" | "unknown" {
+  if (outcome === "unknown") return "unknown";
+  if (outcome === "committed") return "committed";
+  return "failed";
+}

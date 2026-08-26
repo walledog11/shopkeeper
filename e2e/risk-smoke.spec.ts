@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import dbHelpers from './db-helpers.cjs';
 
-const { ChannelType, SenderType, db, disconnectDb, getE2EOrg } = dbHelpers;
+const { ChannelType, SenderType, db, deleteTestCustomers, disconnectDb, getE2EOrg } = dbHelpers;
 
 const createdCustomerIds = new Set<string>();
 const createdKnowledgeBaseIds = new Set<string>();
@@ -12,7 +12,7 @@ test.afterAll(async () => {
     await db.knowledgeBase.deleteMany({ where: { id: { in: [...createdKnowledgeBaseIds] } } });
   }
   if (createdCustomerIds.size > 0) {
-    await db.customer.deleteMany({ where: { id: { in: [...createdCustomerIds] } } });
+    await deleteTestCustomers([...createdCustomerIds]);
   }
   const org = await getE2EOrg().catch(() => null);
   if (org) {

@@ -58,6 +58,8 @@ function quickReplyPlan(): AgentPlan {
       enabled: true,
     }],
     rawToolCalls: [sendReplyCall],
+    routingEvidence: { classifierState: "not_applicable", codes: [] },
+    validation: { status: "valid", issues: [] },
   };
 }
 
@@ -83,6 +85,49 @@ function mutativePlan(): AgentPlan {
       },
     ],
     rawToolCalls: [noteCall, sendReplyCall],
+    routingEvidence: { classifierState: "not_applicable", codes: [] },
+    validation: { status: "valid", issues: [] },
+  };
+}
+
+const refundCall: RawToolCall = {
+  id: "refund_1",
+  name: "create_refund",
+  input: { order_id: "gid://shopify/Order/1", amount: "10.00", currency: "USD" },
+};
+
+function threeStepPlan(): AgentPlan {
+  return {
+    instruction: "Note the request, issue the refund, and reply",
+    steps: [
+      {
+        id: "note_1",
+        tool: "add_shopify_customer_note",
+        label: "Add note",
+        description: "Note the request on the customer",
+        category: "action",
+        enabled: true,
+      },
+      {
+        id: "refund_1",
+        tool: "create_refund",
+        label: "Refund",
+        description: "Issue the refund",
+        category: "action",
+        enabled: true,
+      },
+      {
+        id: "send_1",
+        tool: "send_reply",
+        label: "Reply",
+        description: "Tell the customer",
+        category: "communication",
+        enabled: true,
+      },
+    ],
+    rawToolCalls: [noteCall, refundCall, sendReplyCall],
+    routingEvidence: { classifierState: "not_applicable", codes: [] },
+    validation: { status: "valid", issues: [] },
   };
 }
 
@@ -662,5 +707,77 @@ describe("maybeAutoExecuteCurrentCachedHomePlan", () => {
 
     expect(runAgent).toHaveBeenCalledOnce();
     expect(result?.approvedToolCalls.map((call) => call.id)).toEqual(["note_1", "send_1"]);
+  });
+});
+
+describe("bounded failure replan", () => {
+  it("replans once after a definite partial failure and completes remaining work", async () => {
+    const settings = resolveAgentSettings({ autonomyTier: "trusted", autoExecuteMode: "live" });
+    const { org, thread } = await seedThreadWithPlan({ plan: threeStepPlan(), settings });
+    const partialResult: AgentResult = {
+      summary: "Refund failed",
+      actionsPerformed: [
+        { tool: "add_shopify_customer_note", result: "Noted", status: "success" },
+        { tool: "create_refund", result: "Rejected", status: "error" },
+      ],
+    };
+    const runAgent = vi.fn()
+      .mockResolvedValueOnce(partialResult)
+      .mockResolvedValueOnce(okResult);
+    const mockPlanAgent = vi.fn(async () => quickReplyPlan());
+
+    const executed = await executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings,
+      executionIntent: "automatic",
+      failureRoute: "test",
+      allowMutativeAutoExecute: true,
+    }, makeDeps({ runAgent, planAgent: mockPlanAgent }));
+
+    expect(runAgent).toHaveBeenCalledTimes(2);
+    expect(mockPlanAgent).toHaveBeenCalledOnce();
+    expect(mockPlanAgent.mock.calls[0]?.[1]).toContain("A previously approved plan partially failed during execution.");
+    expect(executed.execution.status).toBe("committed");
+    expect(executed.failureReplanRecovery).toMatchObject({
+      context: expect.objectContaining({
+        failureTool: "create_refund",
+        failureReason: "Rejected",
+      }),
+    });
+    expect(executed.result.actionsPerformed.at(-1)).toMatchObject({ tool: "send_reply", status: "success" });
+
+    const threadAfter = await db.thread.findUniqueOrThrow({ where: { id: thread.id } });
+    expect(threadAfter.cachedPlan).toBeNull();
+  });
+
+  it("does not replan after an unknown provider outcome and escalates the thread", async () => {
+    const settings = resolveAgentSettings({ autonomyTier: "trusted", autoExecuteMode: "live" });
+    const { org, thread } = await seedThreadWithPlan({ plan: threeStepPlan(), settings });
+    const unknownResult: AgentResult = {
+      summary: "Unknown refund outcome",
+      actionsPerformed: [
+        { tool: "add_shopify_customer_note", result: "Noted", status: "success" },
+        { tool: "create_refund", result: "Unknown", status: "unknown" },
+      ],
+    };
+    const runAgent = vi.fn(async () => unknownResult);
+    const mockPlanAgent = vi.fn(async () => quickReplyPlan());
+
+    const executed = await executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings,
+      executionIntent: "automatic",
+      failureRoute: "test",
+      allowMutativeAutoExecute: true,
+    }, makeDeps({ runAgent, planAgent: mockPlanAgent }));
+
+    expect(runAgent).toHaveBeenCalledOnce();
+    expect(mockPlanAgent).not.toHaveBeenCalled();
+    expect(executed.execution.status).toBe("unknown");
+    const updated = await db.thread.findUniqueOrThrow({ where: { id: thread.id } });
+    expect(updated.escalatedAt).not.toBeNull();
+    expect(updated.cachedPlan).toBeNull();
   });
 });

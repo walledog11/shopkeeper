@@ -1,4 +1,5 @@
 import { buildContext } from '@shopkeeper/agent/build-context';
+import { planAgent } from '@shopkeeper/agent/planner';
 import { runAgent } from '@shopkeeper/agent/run';
 import type { ExecuteAgentTurnDeps, ExecuteTurnRunAgent } from '@shopkeeper/agent/turn';
 import type { PlanExecutionDeps } from '@shopkeeper/agent/plan-execution';
@@ -53,5 +54,8 @@ export function buildGatewayTurnDeps(): ExecuteAgentTurnDeps {
 }
 
 export function buildGatewayPlanExecutionDeps(): PlanExecutionDeps {
-  return buildGatewayTurnDeps();
+  return {
+    ...buildGatewayTurnDeps(),
+    planAgent,
+  };
 }

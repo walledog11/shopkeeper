@@ -101,6 +101,9 @@ export interface GeneratedThreadPlan {
   autoExecutionSummary?: string;
   autoExecutionActions?: AgentActionResult[];
   autoExecutionError?: string;
+  failureReplanRecovered?: boolean;
+  failureReplanFailureTool?: string;
+  failureReplanFailureReason?: string;
 }
 
 function planIdentity(params: {
@@ -349,13 +352,21 @@ async function buildAutoExecutionResult(
   // on work the agent already completed (or attempted and reported as failed).
   await removePendingPlanForThread(organizationId, threadId);
 
-  const failed = findFailedToolResult(executed.result);
+  const recovery = executed.failureReplanRecovery;
+  const failed = recovery ? null : findFailedToolResult(executed.result);
   return {
     autoExecuted: true,
     autoExecutionKind: executed.verdict.kind === 'quick_reply' ? 'safe_reply' : 'action',
     autoExecutionStatus: failed ? 'error' : 'success',
     autoExecutionSummary: executed.result.summary,
-    autoExecutionActions: executed.result.actionsPerformed,
+    autoExecutionActions: recovery
+      ? [...recovery.parentResult.actionsPerformed, ...executed.result.actionsPerformed]
+      : executed.result.actionsPerformed,
     ...(failed ? { autoExecutionError: failed.result } : {}),
+    ...(recovery ? {
+      failureReplanRecovered: true,
+      failureReplanFailureTool: recovery.context.failureTool,
+      failureReplanFailureReason: recovery.context.failureReason,
+    } : {}),
   };
 }

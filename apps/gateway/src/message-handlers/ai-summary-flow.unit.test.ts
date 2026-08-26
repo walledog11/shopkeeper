@@ -313,6 +313,24 @@ describe('processAiSummaryJob safe replies', () => {
     expect(mocks.autoAck).not.toHaveBeenCalled();
     expect(mocks.autoNotification).toHaveBeenCalledOnce();
   });
+
+  it('notifies once when a failure replan recovers with a safe reply', async () => {
+    mocks.precompute.mockResolvedValue({
+      plan: { steps: [{ tool: 'send_reply' }], rawToolCalls: [] },
+      instruction: 'Note, refund, and reply',
+      autoExecuted: true,
+      autoExecutionKind: 'safe_reply',
+      autoExecutionStatus: 'success',
+      failureReplanRecovered: true,
+      failureReplanFailureTool: 'create_refund',
+      failureReplanFailureReason: 'Rejected',
+    });
+
+    await processAiSummaryJob(JOB);
+
+    expect(mocks.autoNotification).toHaveBeenCalledOnce();
+    expect(mocks.planNotification).not.toHaveBeenCalled();
+  });
 });
 
 describe('mayParkMerchantWork', () => {

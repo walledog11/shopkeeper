@@ -4,13 +4,24 @@ import { BadRequestError, ConflictError } from "./errors.js";
 import { executeAgentTurn, type ExecuteAgentTurnDeps } from "./turn.js";
 import { getLatestConversationMessage, requireOrgThread } from "./thread-auth.js";
 import { isAgentPlanCacheHit, readAgentPlanCache } from "./plan-cache.js";
+import type { PlanFailureReplanContext } from "./plan-cache-shape.js";
 import { getPendingCustomerMessageId } from "./plan-cache-shape.js";
 import { hashInstruction, hashPlan, type AgentActionApproval } from "./agent-actions.js";
 import { decideAutonomy, type AutonomyVerdict } from "./autonomy.js";
 import { shouldBlockTrustedSendActions, shouldSkipAutoPlan } from "./sender-trust.js";
 import { resolveAutoExecuteMode } from "./settings.js";
 import { TOOL_CATEGORIES } from "./tools/registry/index.js";
-import { planExecutionOutcomeForResult } from "./execution-outcome.js";
+import {
+  isDefinitePlanExecutionFailure,
+  isUnknownPlanExecution,
+  ledgerStatusForPlanOutcome,
+  planExecutionOutcomeForResult,
+} from "./execution-outcome.js";
+import {
+  attemptFailureReplanAfterExecution,
+  escalateThreadForUnknownPlanExecution,
+  type PlanAgentFn,
+} from "./plan-failure-replan.js";
 import type { AgentResult } from "./agent-context.js";
 import type { AgentPlan, OrgSettings, PlanExecutionOutcome, RawToolCall } from "./types.js";
 import {
@@ -21,7 +32,9 @@ import {
 import { isInvalidPlan } from "./plan-validation.js";
 import { recordRequestEpisodeDismissed, recordRequestEpisodeExecution } from "./request-outcome.js";
 
-export type PlanExecutionDeps = ExecuteAgentTurnDeps;
+export type PlanExecutionDeps = ExecuteAgentTurnDeps & {
+  planAgent?: PlanAgentFn;
+};
 
 export interface ApproverIdentity {
   clerkUserId: string;
@@ -39,6 +52,13 @@ interface CurrentCachedPlan {
   planId: string | null;
   plan: AgentPlan | null;
   verdict: AutonomyVerdict;
+  failureReplan: PlanFailureReplanContext | null;
+}
+
+export interface FailureReplanRecovery {
+  parentResult: AgentResult;
+  parentPlan: AgentPlan;
+  context: PlanFailureReplanContext;
 }
 
 interface ExecutedCachedPlan extends CurrentCachedPlan {
@@ -49,6 +69,7 @@ interface ExecutedCachedPlan extends CurrentCachedPlan {
     status: PlanExecutionOutcome;
   };
   result: AgentResult;
+  failureReplanRecovery?: FailureReplanRecovery;
 }
 
 export interface ExpectedPlanIdentity {
@@ -140,8 +161,7 @@ function validateExpectedIdentity(
 }
 
 function terminalStatusForResult(result: AgentResult): "committed" | "failed" | "unknown" {
-  const outcome = planExecutionOutcomeForResult(result);
-  return outcome === "partial" ? "failed" : outcome;
+  return ledgerStatusForPlanOutcome(planExecutionOutcomeForResult(result));
 }
 
 function executionError(error: unknown): string {
@@ -193,6 +213,7 @@ async function loadCurrentCachedHomePlan(params: {
     planId: cachedPlan?.planId ?? null,
     plan,
     verdict,
+    failureReplan: cachedPlan?.failureReplan ?? null,
   };
 }
 
@@ -286,6 +307,8 @@ export async function executeCurrentCachedHomePlan(params: {
   approvedToolCalls?: RawToolCall[];
   expectedIdentity?: ExpectedPlanIdentity;
   allowMutativeAutoExecute?: boolean;
+  /** When false, suppresses the one bounded child replan after a definite failure. */
+  failureReplanAllowed?: boolean;
 }, deps: PlanExecutionDeps): Promise<ExecutedCachedPlan> {
   const thread = await requireOrgThread(params.threadId, params.orgId);
   if (shouldBlockTrustedSendActions(thread.filterStatus)) {
@@ -418,6 +441,11 @@ export async function executeCurrentCachedHomePlan(params: {
         planVerdict: current.verdict.kind,
       });
     }
+    await escalateThreadForUnknownPlanExecution({
+      orgId: params.orgId,
+      threadId: params.threadId,
+      reason: executionError(error),
+    });
     throw error;
   } finally {
     await consumeThreadCachedPlan({
@@ -436,6 +464,67 @@ export async function executeCurrentCachedHomePlan(params: {
       executionIntent: params.executionIntent,
       planVerdict: current.verdict.kind,
     });
+  }
+
+  const executionOutcome = planExecutionOutcomeForResult(result);
+  if (isUnknownPlanExecution(executionOutcome)) {
+    await escalateThreadForUnknownPlanExecution({
+      orgId: params.orgId,
+      threadId: params.threadId,
+      reason: findFailedToolResult(result)?.result ?? "Unknown provider outcome during plan execution.",
+    });
+    return {
+      ...current,
+      plan: current.plan,
+      approvedToolCalls,
+      execution: {
+        id: executionId ?? null,
+        status: executionOutcome,
+      },
+      result,
+    };
+  }
+
+  const failureReplanAllowed = params.failureReplanAllowed !== false
+    && !current.failureReplan
+    && Boolean(deps.planAgent);
+  if (
+    failureReplanAllowed
+    && isDefinitePlanExecutionFailure(executionOutcome)
+    && deps.planAgent
+  ) {
+    const childCache = await attemptFailureReplanAfterExecution({
+      orgId: params.orgId,
+      threadId: params.threadId,
+      settings: params.settings,
+      instruction: current.instruction,
+      sourceMessageId: current.lastCustomerMessageId,
+      parentPlanId: current.planId,
+      parentPlan: current.plan,
+      parentVerdict: verdict,
+      approvedToolCalls,
+      result,
+      allowMutativeAutoExecute: params.allowMutativeAutoExecute,
+      buildContext: deps.buildContext,
+      planAgent: deps.planAgent,
+    });
+    if (childCache) {
+      const childExecuted = await executeCurrentCachedHomePlan({
+        ...params,
+        failureReplanAllowed: false,
+      }, deps);
+      if (!childCache.failureReplan) {
+        return childExecuted;
+      }
+      return {
+        ...childExecuted,
+        failureReplanRecovery: {
+          parentResult: result,
+          parentPlan: current.plan,
+          context: childCache.failureReplan,
+        },
+      };
+    }
   }
 
   return {

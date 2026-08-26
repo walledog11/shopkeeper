@@ -50,4 +50,19 @@ export interface PrecomputedPlanResult {
   autoExecutionSummary?: string;
   autoExecutionActions?: AgentActionResult[];
   autoExecutionError?: string;
+  /** Parent step failed definitely and a child replan finished the remaining work. */
+  failureReplanRecovered?: boolean;
+  failureReplanFailureTool?: string;
+  failureReplanFailureReason?: string;
+}
+
+/** Whether auto-execution should fan out one operator notification. */
+export function shouldNotifyAutoExecution(
+  result: Pick<
+    PrecomputedPlanResult,
+    'autoExecutionKind' | 'autoExecutionStatus' | 'failureReplanRecovered'
+  >,
+): boolean {
+  if (result.failureReplanRecovered) return true;
+  return result.autoExecutionKind !== 'safe_reply' || result.autoExecutionStatus !== 'success';
 }

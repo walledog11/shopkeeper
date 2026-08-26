@@ -16,6 +16,7 @@ declare const helpers: {
   ) => Promise<unknown>;
   createTestOrg: () => Promise<{ id: string }>;
   db: PrismaClient;
+  deleteTestCustomers: (customerIds: string[]) => Promise<void>;
   disconnectDb: () => Promise<void>;
   ensureE2EEmailIntegration: (orgId: string) => Promise<{ externalAccountId: string }>;
   getE2EOrg: () => Promise<{ id: string }>;

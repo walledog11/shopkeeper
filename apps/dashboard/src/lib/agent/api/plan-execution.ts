@@ -7,11 +7,20 @@ import {
   type ApproverIdentity,
   type ExecutionIntent,
   type ExpectedPlanIdentity,
+  type PlanExecutionDeps,
 } from "@shopkeeper/agent/plan-execution";
+import { planAgent } from "@shopkeeper/agent/planner";
 import { buildDashboardTurnDeps } from "@/lib/agent/api/turn-deps";
 import type { AgentFailureAlertRoute } from "@/lib/server/agent-failure-alerts";
 import type { OrgSettings } from "@/types";
 import type { RawToolCall } from "@shopkeeper/agent/types";
+
+function buildDashboardPlanExecutionDeps(): PlanExecutionDeps {
+  return {
+    ...buildDashboardTurnDeps(),
+    planAgent,
+  };
+}
 
 export function executeCurrentCachedHomePlan(params: {
   orgId: string;
@@ -23,7 +32,7 @@ export function executeCurrentCachedHomePlan(params: {
   approvedToolCalls?: RawToolCall[];
   expectedIdentity?: ExpectedPlanIdentity;
 }) {
-  return coreExecuteCurrentCachedHomePlan(params, buildDashboardTurnDeps());
+  return coreExecuteCurrentCachedHomePlan(params, buildDashboardPlanExecutionDeps());
 }
 
 export function maybeAutoExecuteCurrentCachedHomePlan(params: {
@@ -32,5 +41,5 @@ export function maybeAutoExecuteCurrentCachedHomePlan(params: {
   settings: OrgSettings;
   failureRoute: AgentFailureAlertRoute;
 }) {
-  return coreMaybeAutoExecuteCurrentCachedHomePlan(params, buildDashboardTurnDeps());
+  return coreMaybeAutoExecuteCurrentCachedHomePlan(params, buildDashboardPlanExecutionDeps());
 }

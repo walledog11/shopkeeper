@@ -9,6 +9,15 @@ export type PlanThreadMessage = {
 export const AGENT_PLAN_CACHE_VERSION = 7
 export const SUPPORTED_AGENT_PLAN_CACHE_VERSIONS = [1, 2, 3, 4, 5, 6, AGENT_PLAN_CACHE_VERSION]
 
+export interface PlanFailureReplanContext {
+  parentPlanId: string;
+  parentPlanHash: string;
+  committedToolCallIds: string[];
+  committedActions: Array<{ tool: string; result: string }>;
+  failureTool: string;
+  failureReason: string;
+}
+
 export interface AgentPlanCacheRecordShape {
   version: number
   planId: string | null
@@ -16,6 +25,7 @@ export interface AgentPlanCacheRecordShape {
   lastCustomerMessageId: string | null
   settingsFingerprint: string
   plan: AgentPlan
+  failureReplan?: PlanFailureReplanContext
 }
 
 const TOOL_CATEGORIES: ToolCategory[] = ["action", "communication", "internal", "read"]
@@ -116,6 +126,26 @@ function isPlanRoutingEvidence(value: unknown): value is PlanRoutingEvidence {
   )
 }
 
+function isFailureReplanContext(value: unknown): value is PlanFailureReplanContext {
+  if (!isRecord(value)) return false
+  if (typeof value.parentPlanId !== "string" || typeof value.parentPlanHash !== "string") return false
+  if (typeof value.failureTool !== "string" || typeof value.failureReason !== "string") return false
+  if (!Array.isArray(value.committedToolCallIds) || !value.committedToolCallIds.every(id => typeof id === "string")) {
+    return false
+  }
+  if (
+    !Array.isArray(value.committedActions)
+    || !value.committedActions.every((entry) => (
+      isRecord(entry)
+      && typeof entry.tool === "string"
+      && typeof entry.result === "string"
+    ))
+  ) {
+    return false
+  }
+  return true
+}
+
 function isAgentPlan(value: unknown, requireCurrentFields: boolean): value is AgentPlan {
   if (!isRecord(value)) return false
   if (typeof value.instruction !== "string") return false
@@ -158,6 +188,9 @@ export function readAgentPlanCacheRecordShape(value: unknown): AgentPlanCacheRec
     lastCustomerMessageId: typeof value.lastCustomerMessageId === "string" ? value.lastCustomerMessageId : null,
     settingsFingerprint: value.settingsFingerprint,
     plan: value.plan,
+    ...(value.failureReplan !== undefined && isFailureReplanContext(value.failureReplan)
+      ? { failureReplan: value.failureReplan }
+      : {}),
   }
 }
 

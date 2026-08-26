@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { planExecutionOutcomeForActions } from "./execution-outcome.js";
+import {
+  isDefinitePlanExecutionFailure,
+  isUnknownPlanExecution,
+  ledgerStatusForPlanOutcome,
+  planExecutionOutcomeForActions,
+} from "./execution-outcome.js";
 
 describe("planExecutionOutcomeForActions", () => {
   it("distinguishes committed, failed, partial, and unknown outcomes", () => {
@@ -16,5 +21,12 @@ describe("planExecutionOutcomeForActions", () => {
       { status: "success" },
       { status: "unknown" },
     ])).toBe("unknown");
+  });
+
+  it("maps partial failures to the failed ledger status", () => {
+    expect(ledgerStatusForPlanOutcome("partial")).toBe("failed");
+    expect(isDefinitePlanExecutionFailure("partial")).toBe(true);
+    expect(isUnknownPlanExecution("unknown")).toBe(true);
+    expect(isDefinitePlanExecutionFailure("unknown")).toBe(false);
   });
 });

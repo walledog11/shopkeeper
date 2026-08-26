@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { Prisma, db } from "@shopkeeper/db";
 import type { AgentPlan } from "./types.js";
-import { AGENT_PLAN_CACHE_VERSION, readAgentPlanCacheRecordShape } from "./plan-cache-shape.js";
+import { AGENT_PLAN_CACHE_VERSION, readAgentPlanCacheRecordShape, type PlanFailureReplanContext } from "./plan-cache-shape.js";
 
 export interface AgentPlanCacheRecord {
   version: number;
@@ -10,6 +10,7 @@ export interface AgentPlanCacheRecord {
   lastCustomerMessageId: string | null;
   settingsFingerprint: string;
   plan: AgentPlan;
+  failureReplan?: PlanFailureReplanContext;
 }
 
 function fingerprintSettings(settings: unknown): string {

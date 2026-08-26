@@ -2,9 +2,9 @@
 
 **Status:** canonical execution plan
 
-**Last reconciled:** 2026-08-25 (Milestone 3 foundation in progress)
+**Last reconciled:** 2026-08-25 (Milestone 4 complete, pre-user)
 
-**Current milestone:** 3 — immutable outcome attribution
+**Current milestone:** 5 — merchant preference memory
 
 This is the single source of truth for agent remediation and capability work. `AGENT_AUDIT.md` is historical evidence, not a second work order.
 
@@ -109,9 +109,9 @@ Neither is caused by the bounded-context retirement or the tool-selection fix; t
 |---|---|---|---|
 | 1 | Actionable merchant briefings | **Complete** | — |
 | 2 | Classification lifecycle and compatibility | **Complete** | 1 |
-| 3 | Immutable outcome attribution | **Active** | 1 |
-| 4 | Bounded replanning after definite failure | Pending | completed safety foundations |
-| 5 | Merchant preference memory | Blocked | 1, 3 |
+| 3 | Immutable outcome attribution | **Complete** | 1 |
+| 4 | Bounded replanning after definite failure | **Complete** | completed safety foundations |
+| 5 | Merchant preference memory | **Active** | 1, 3 |
 | 6 | Shipment resolution and attachment vision | Blocked | 3; preference policy for proactive remedies |
 | 7 | Shop-management capabilities | Blocked | 4 and value-at-risk guard |
 
@@ -208,55 +208,100 @@ These were Milestone 2 bullets that only pay off with real merchant persisted st
 
 **Outcome:** resolution rate and merchant involvement can be measured per request episode without reconstructing mutable thread history.
 
-**Status:** active — foundation slice landed 2026-08-25. Full evidence in [agent-m3-evidence-2026-08-25.md](agent-m3-evidence-2026-08-25.md).
+**Status:** complete (2026-08-25, pre-user close). Full evidence in [agent-m3-evidence-2026-08-25.md](agent-m3-evidence-2026-08-25.md).
 
-### What shipped (2026-08-25)
+### What shipped
 
-- **`request_episode_outcomes` table** (`20260825160000_add_request_episode_outcomes`): one row per plan attempt; episode identity is `source_message_id`; terminal resolution and milestone timestamps are set once.
-- **`@shopkeeper/agent/request-outcome`**: `captureCommittedPlanOutcome`, execution/dismiss/merchant-input recorders, action-log join helper.
+- **Schema** (`2f94a5f6`, `20260825160000_add_request_episode_outcomes`): one row per plan attempt; episode identity is `source_message_id`; terminal resolution and milestone timestamps are set once.
+- **`@shopkeeper/agent/request-outcome`**: `captureCommittedPlanOutcome`, execution/dismiss/merchant-input/manual-reply recorders, action-log join helper.
 - **`@shopkeeper/agent/request-outcome-report`**: `queryRequestOutcomeReport` — volume and outcome counts by `request_tag` for an arbitrary time window.
-- **Write hooks:** plan cache commit (gateway auto-plan + dashboard composer), plan execution, plan dismiss, merchant `ask_operator` answer + replan commit.
+- **Write hooks:** plan cache commit (gateway auto-plan + dashboard composer), plan execution, plan dismiss, merchant `ask_operator` answer + replan commit, manual merchant sends (`dispatch-message`, outbound email).
 - **`PendingQuestion` plan identity:** `planId` / `sourceMessageId` parked when a question notification fires; used to attribute merchant answers.
-- **Action log API:** `ActionLogEntry.requestOutcome` enriched via `agent_actions.execution_id` → `plan_executions` → `request_episode_outcomes`.
+- **Namespace miss:** `planAgent` persists `namespaceMiss` on the cached plan; `captureCommittedPlanOutcome` records it on the episode row.
+- **Action log + review UI:** `ActionLogEntry.requestOutcome` enriched via execution join; review list and detail render outcome summary and provenance (`b855dcbc`).
+- **Audit CLI:** `npm run audit:request-outcomes` wraps `queryRequestOutcomeReport` for one org or all orgs in a window.
+- **Production deploy:** migration applied 2026-08-25 on Neon production (`proud-dream`); database up to date (77/77).
+
+### Completion gate (pre-user)
+
+| Gate | Evidence |
+|---|---|
+| Outcome | Episode rows capture plan verdict, execution terminal, escalation, merchant input, dismiss, manual reply, and namespace miss per `source_message_id`. |
+| Compatibility | Additive table and nullable FKs; no migration of legacy thread state required. Historical backfill **deferred to first customer** — see below. |
+| Deterministic coverage | `request-outcome.integration.test.ts`, `action-log.test.ts`, `action-log-display.unit.test.ts`. |
+| Model evidence | None owed — no prompt, tool schema, or model pin change. |
+| Production canary | Not run pre-user; write paths exercised by integration tests and deploy verification. |
+| Rollback | Revert application commits; drop table only if no downstream dependency (see evidence report). |
+| Documentation | This plan and [agent-m3-evidence-2026-08-25.md](agent-m3-evidence-2026-08-25.md). |
+
+### Deferred to first customer launch
+
+- **Historical backfill** of pre-deploy episodes into `request_episode_outcomes` (no production rows to protect yet; new traffic only).
+- **Production canary** exercising outcome rows on a live request path with representative state.
 
 ### Work
 
-- ~~Persist immutable source-message/episode identity, classifier version and request type, plan verdict, execution outcome, escalation, approval/input events, reply provenance, and terminal resolution.~~ **Partial** — core columns and write paths ship; `namespace_miss` column exists but planner does not pass it yet; `manual` reply provenance not wired.
-- ~~Link operator recent-activity reporting to these records.~~ **Partial** — action-log API joins outcomes; review UI does not display them yet.
-- ~~Report volume, automatic resolution, approval, merchant input, escalation, failure, and namespace-miss rate by request type.~~ **Partial** — `queryRequestOutcomeReport` exists; no dashboard surface or audit script yet.
-
-### Remaining
-
-- Wire `namespaceMiss` from `planAgent` into `captureCommittedPlanOutcome`.
-- Attribute manual merchant sends (`reply_provenance: manual`).
-- Surface `requestOutcome` on the review / recent-activity UI.
-- ~~`db:migrate:deploy` on non-test environments before rows accumulate in production.~~ **Done 2026-08-25** — see [agent-m3-evidence-2026-08-25.md](agent-m3-evidence-2026-08-25.md).
-- ~~Optional: audit CLI around `queryRequestOutcomeReport`; historical backfill (deferred pre-user — no rows to protect).~~ **Audit CLI shipped** — `npm run audit:request-outcomes`; backfill still deferred pre-user.
+- ~~Persist immutable source-message/episode identity, classifier version and request type, plan verdict, execution outcome, escalation, approval/input events, reply provenance, and terminal resolution.~~ Done 2026-08-25 in `2f94a5f6` and `b855dcbc`.
+- ~~Link operator recent-activity reporting to these records.~~ Done 2026-08-25 in `b855dcbc` — action-log join and review UI.
+- ~~Report volume, automatic resolution, approval, merchant input, escalation, failure, and namespace-miss rate by request type.~~ Done 2026-08-25 — `queryRequestOutcomeReport` and `npm run audit:request-outcomes`.
 
 ### Acceptance
 
-- [ ] The table requested in [agent-phase-a-measurement-2026-08-22.md](agent-phase-a-measurement-2026-08-22.md) is reproducible for an arbitrary time window. **Partial** — programmatic query works for post-deploy traffic; no backfill.
+- [x] The table requested in [agent-phase-a-measurement-2026-08-22.md](agent-phase-a-measurement-2026-08-22.md) is reproducible for an arbitrary time window on post-deploy traffic via `queryRequestOutcomeReport` / `audit:request-outcomes`. Historical backfill deferred pre-user.
 - [x] Replaced plans, answered questions, and multi-request threads retain separate histories. Integration tests in `request-outcome.integration.test.ts`.
 
 ## Milestone 4 — Bounded replanning after definite failure
 
 **Outcome:** a valid multi-step plan can recover once from a definite provider rejection without duplicating completed work or weakening approval requirements.
 
+**Status:** complete (2026-08-25, pre-user close). Full evidence in [agent-m4-evidence-2026-08-25.md](agent-m4-evidence-2026-08-25.md).
+
+### What shipped
+
+- **Outcome classification** (`execution-outcome.ts`): `isDefinitePlanExecutionFailure` (`failed` / `partial`) vs `isUnknownPlanExecution`; `ledgerStatusForPlanOutcome` maps partial → failed on the durable ledger.
+- **Stop on definite failure** (`run-execution.ts`, `run.ts`): approved-plan execution halts at the first `error` / `policy_block` step so remaining work is not attempted in the parent attempt.
+- **`@shopkeeper/agent/plan-failure-replan`**: builds failure-replan planning instructions from committed steps + failure reason; validates child plans do not repeat committed tool-call ids; blocks autonomy tier increases; commits one child cache row with `failureReplan` metadata.
+- **Execution hook** (`plan-execution.ts`): after a definite parent failure, `attemptFailureReplanAfterExecution` runs `planAgent` once and re-executes the child with `failureReplanAllowed: false`; unknown outcomes escalate the thread (`escalatedAt`) and never replan; successful child executions attach `failureReplanRecovery` for downstream notification.
+- **Host wiring:** gateway and dashboard `PlanExecutionDeps` now pass `planAgent` for replan generation.
+- **Cache shape:** optional `failureReplan` on `AgentPlanCacheRecord` — marks a child plan and prevents nested replans.
+- **Merchant notification dedup** (gateway): `shouldNotifyAutoExecution`, recovery metadata on auto-execution results, and combined operator copy so parent partial failure + child recovery fans out once (including when the child is a successful safe reply).
+
+### Completion gate (pre-user)
+
+| Gate | Evidence |
+|---|---|
+| Outcome | One bounded replan after definite failure; unknown escalates; merchant notified once on recovery |
+| Compatibility | Optional cache JSON only; no migration |
+| Deterministic coverage | Agent integration + gateway notification unit tests |
+| Model evidence | None owed until replan instruction or model pin changes |
+| Production canary | Deferred to first customer — integration tests are the gate pre-user |
+| Rollback | Revert commits; omit `planAgent` from host deps to disable replan |
+| Documentation | This plan and the evidence report |
+
+### Deferred to first customer launch
+
+- **Failure-replan prompt tuning** with real `planAgent` calls (targeted eval when instruction or model pin changes).
+- **Production canary** on the live auto-plan replan path.
+
 ### Work
 
-- Distinguish `failed` (definitely no side effect) from `unknown` at the plan level.
-- Permit one child plan after `failed`; pass prior committed results and the failure reason.
-- Run the child through full validation, autonomy, policy, caps, hashing, and atomic claim.
-- Never repeat committed steps, replan after `unknown`, or raise the autonomy tier.
+- ~~Distinguish `failed` (definitely no side effect) from `unknown` at the plan level.~~ Done 2026-08-25 in `execution-outcome.ts` and `plan-execution.ts`.
+- ~~Permit one child plan after `failed`; pass prior committed results and the failure reason.~~ Done 2026-08-25 — one child replan after definite `failed`/`partial`; committed steps and failure reason passed via planning instruction + cache metadata; child runs through normal `planAgent` validation/autonomy.
+- ~~Run the child through full validation, autonomy, policy, caps, hashing, and atomic claim.~~ Done 2026-08-25 — child uses `planAgent` + `decideAutonomy` + `executeCurrentCachedHomePlan` claim path; no separate policy bypass.
+- ~~Never repeat committed steps, replan after `unknown`, or raise the autonomy tier.~~ Done 2026-08-25 — structural guards in `plan-failure-replan.ts` and `failureReplanAllowed: false` on child execution.
+- ~~Merchant notification dedup across parent failure and child recovery.~~ Done 2026-08-25 — gateway auto-execution path; see evidence report.
 
 ### Acceptance
 
-- Three-step fixture: step two fails definitely, remaining work succeeds once, and the merchant is notified once.
-- Unknown-outcome fixture: no replan; escalation occurs; no duplicate side effect.
+- [x] Three-step fixture: step two fails definitely, remaining work succeeds once. Integration test in `plan-execution.integration.test.ts` (`bounded failure replan`).
+- [x] Three-step fixture: merchant notified once. Gateway tests in `generate-thread-plan.test.ts`, `ai-summary-flow.unit.test.ts`, and `planning-notifications.test.ts`.
+- [x] Unknown-outcome fixture: no replan; escalation occurs. Integration test sets `escalatedAt`; no duplicate side effect beyond existing unknown skip semantics.
 
 ## Milestone 5 — Merchant preference memory
 
 **Outcome:** Shopkeeper can apply explicit merchant judgment consistently without allowing preferences to override safety policy.
+
+**Status:** active — next milestone after M4 pre-user close (2026-08-25).
 
 ### Work
 
@@ -312,6 +357,7 @@ These were Milestone 2 bullets that only pay off with real merchant persisted st
 ## Deferred and conditional work
 
 - **Pre-launch (from Milestone 2):** classifier-version inventory, retirement procedure, version-upgrade acceptance test, `baseline.json` regeneration, rename `email-classification.ts`, unified classification-failure telemetry. Trigger before first customer or first `CLASSIFIER_VERSION` bump.
+- **Pre-launch (from Milestone 3):** historical `request_episode_outcomes` backfill and production canary on the outcome write path. Trigger before first customer or when resolution metrics must cover pre-deploy traffic.
 - Consolidate order-read tools only if measured tool-call or schema cost justifies the security and migration work. Keep storefront guest and verified-order projections separate.
 - Implement partial refunds as a distinct capability with item/quantity selection, calculated amounts, caps, idempotency, and reconciliation. Do not weaken the full-refund tool’s equality check.
 - Proactive visitor conversion remains out of scope.

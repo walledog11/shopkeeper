@@ -7,6 +7,7 @@ const {
   ChannelType,
   SenderType,
   db,
+  deleteTestCustomers,
   disconnectDb,
   ensureE2EEmailIntegration,
   getE2EOrg,
@@ -18,9 +19,7 @@ const { waitForOutboundRecord } = outboundHelpers;
 const customerIdsToCleanup: string[] = [];
 
 test.afterAll(async () => {
-  if (customerIdsToCleanup.length > 0) {
-    await db.customer.deleteMany({ where: { id: { in: customerIdsToCleanup } } });
-  }
+  await deleteTestCustomers(customerIdsToCleanup);
   await disconnectDb();
 });
 

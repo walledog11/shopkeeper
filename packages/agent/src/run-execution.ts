@@ -321,9 +321,20 @@ export async function executeAgentToolCall(
   };
 }
 
+function shouldStopApprovedExecution(
+  status: AgentActionStatus | undefined,
+  stopOnDefiniteFailure: boolean | undefined,
+): boolean {
+  if (status === "escalated") return true;
+  if (!stopOnDefiniteFailure) return false;
+  return status === "error" || status === "policy_block";
+}
+
 export async function executeAgentToolCalls(
   toolCalls: AgentToolCall[],
-  input: Parameters<typeof executeAgentToolCall>[1],
+  input: Parameters<typeof executeAgentToolCall>[1] & {
+    stopOnDefiniteFailure?: boolean;
+  },
 ) {
   if (canExecuteBatchInParallel(toolCalls.map((toolCall) => toolCall.name))) {
     return Promise.all(toolCalls.map(toolCall => executeAgentToolCall(toolCall, input)));
@@ -332,7 +343,9 @@ export async function executeAgentToolCalls(
   const results: Awaited<ReturnType<typeof executeAgentToolCall>>[] = [];
   for (const toolCall of toolCalls) {
     results.push(await executeAgentToolCall(toolCall, input));
-    if (input.actionsPerformed.at(-1)?.status === "escalated") break;
+    if (shouldStopApprovedExecution(input.actionsPerformed.at(-1)?.status, input.stopOnDefiniteFailure)) {
+      break;
+    }
   }
   return results;
 }

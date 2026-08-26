@@ -70,6 +70,9 @@ export async function precomputeThreadPlan(
       autoExecutionSummary,
       autoExecutionActions,
       autoExecutionError,
+      failureReplanRecovered,
+      failureReplanFailureTool,
+      failureReplanFailureReason,
     } = await generateThreadPlan(
       organizationId,
       threadId,
@@ -91,6 +94,9 @@ export async function precomputeThreadPlan(
         autoExecutionSummary,
         autoExecutionActions,
         autoExecutionError,
+        failureReplanRecovered,
+        failureReplanFailureTool,
+        failureReplanFailureReason,
       } : {}),
     };
   } catch (err) {

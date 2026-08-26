@@ -458,9 +458,11 @@ function formatAutoExecutionMessage(
   const stepLines = actionableSteps.map((step, index) => (
     `${index + 1}. ${step.description || step.label}`
   ));
-  const statusLine = result.autoExecutionStatus === 'error'
-    ? 'I tried to handle this one myself but hit a problem:'
-    : 'Handled this one myself:';
+  const statusLine = result.failureReplanRecovered
+    ? 'One step failed, then I finished the rest myself:'
+    : result.autoExecutionStatus === 'error'
+      ? 'I tried to handle this one myself but hit a problem:'
+      : 'Handled this one myself:';
 
   const lines: (string | null)[] = [
     headline,
@@ -468,6 +470,10 @@ function formatAutoExecutionMessage(
     '',
     statusLine,
     ...stepLines,
+    result.failureReplanRecovered && result.failureReplanFailureTool ? '' : null,
+    result.failureReplanRecovered && result.failureReplanFailureTool
+      ? `Problem step: ${result.failureReplanFailureTool}${result.failureReplanFailureReason ? ` — ${result.failureReplanFailureReason}` : ''}`
+      : null,
     result.autoExecutionSummary ? '' : null,
     result.autoExecutionSummary ?? null,
     result.autoExecutionError ? '' : null,

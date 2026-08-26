@@ -287,6 +287,24 @@ async function cleanupTestData(orgId) {
   return cleanupSharedTestData(orgId);
 }
 
+async function deleteTestCustomers(customerIds) {
+  if (customerIds.length === 0) return;
+  const threads = await db.thread.findMany({
+    where: { customerId: { in: customerIds } },
+    select: { id: true },
+  });
+  const threadIds = threads.map((thread) => thread.id);
+  await db.requestEpisodeOutcome.deleteMany({
+    where: {
+      OR: [
+        { customerId: { in: customerIds } },
+        ...(threadIds.length > 0 ? [{ threadId: { in: threadIds } }] : []),
+      ],
+    },
+  });
+  await db.customer.deleteMany({ where: { id: { in: customerIds } } });
+}
+
 async function disconnectDb() {
   await db.$disconnect();
   if (dbTestHelpersPromise) {
@@ -322,6 +340,7 @@ module.exports = {
   createTestIntegration,
   createTestOrg,
   db,
+  deleteTestCustomers,
   disconnectDb,
   ensureE2EEmailIntegration,
   getE2EOrg,

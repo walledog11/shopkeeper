@@ -116,7 +116,10 @@ export async function runAgent(
     supportThread,
     failureAlertPromises,
   });
-  const executeToolCalls = (toolCalls: { id: string; name: string; input: unknown }[]) =>
+  const executeToolCalls = (
+    toolCalls: { id: string; name: string; input: unknown }[],
+    executionOptions?: { stopOnDefiniteFailure?: boolean },
+  ) =>
     executeAgentToolCalls(toolCalls, {
       ctx,
       settings,
@@ -132,6 +135,9 @@ export async function runAgent(
       ...((options?.executionId ?? options?.turnId)
         ? { operationScopeId: options?.executionId ?? options?.turnId }
         : {}),
+      ...(executionOptions?.stopOnDefiniteFailure
+        ? { stopOnDefiniteFailure: true }
+        : {}),
     });
 
   if (!readOnly && approvedToolCalls && approvedToolCalls.length > 0) {
@@ -144,7 +150,7 @@ export async function runAgent(
       }, "approved_dashboard_actions_empty");
     }
 
-    await executeToolCalls(executableToolCalls);
+    await executeToolCalls(executableToolCalls, { stopOnDefiniteFailure: true });
 
     if (escalationReason) {
       return finish({

@@ -991,4 +991,43 @@ describe('sendOperatorAutoExecutionNotification', () => {
       '[Worker] Auto-execution notification failed',
     );
   });
+
+  it('describes failure-replan recovery in one auto-execution message', async () => {
+    listOperatorBindingsSpy.mockResolvedValue([TELEGRAM_BINDING]);
+    notifyOperatorSpy.mockResolvedValue({ channel: 'telegram', chatId: 'chat_1' });
+
+    await sendOperatorAutoExecutionNotification(
+      'org_1',
+      'thread_1',
+      'Jane Doe',
+      ChannelType.email,
+      'Refund order #1042',
+      {
+        plan: {
+          steps: [{
+            category: 'communication',
+            tool: 'send_reply',
+            description: 'Tell the customer what happened',
+            label: 'Reply',
+            enabled: true,
+          }],
+          rawToolCalls: [{ id: 'send_1', name: 'send_reply', input: { text: 'Done' } }],
+        },
+        instruction: 'Refund order #1042',
+        autoExecuted: true,
+        autoExecutionKind: 'safe_reply',
+        autoExecutionStatus: 'success',
+        autoExecutionSummary: 'Replied after the refund failed',
+        failureReplanRecovered: true,
+        failureReplanFailureTool: 'create_refund',
+        failureReplanFailureReason: 'Rejected',
+        autoExecutionActions: [],
+      },
+    );
+
+    const [, , body, , options] = notifyOperatorSpy.mock.calls[0] ?? [];
+    expect(body).toContain('One step failed, then I finished the rest myself:');
+    expect(body).toContain('Problem step: create_refund — Rejected');
+    expect(options?.idempotencyKey).toBeTruthy();
+  });
 });

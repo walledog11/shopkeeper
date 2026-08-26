@@ -190,6 +190,10 @@
       "types": "./dist/turn.d.ts",
       "default": "./dist/turn.js"
     },
+    "./plan-failure-replan": {
+      "types": "./dist/plan-failure-replan.d.ts",
+      "default": "./dist/plan-failure-replan.js"
+    },
     "./plan-execution": {
       "types": "./dist/plan-execution.d.ts",
       "default": "./dist/plan-execution.js"

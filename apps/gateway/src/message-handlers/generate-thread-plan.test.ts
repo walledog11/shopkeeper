@@ -352,6 +352,50 @@ describe('generateThreadPlan auto-execute path', () => {
     });
   });
 
+  it('marks failure-replan recovery so the merchant is notified once', async () => {
+    mockMaybeAutoExecute.mockResolvedValueOnce({
+      verdict: { kind: 'quick_reply' },
+      result: {
+        summary: 'Replied after the refund failed',
+        actionsPerformed: [{ tool: 'send_reply', result: 'sent', status: 'success' }],
+      },
+      failureReplanRecovery: {
+        parentResult: {
+          summary: 'Refund failed',
+          actionsPerformed: [
+            { tool: 'add_shopify_customer_note', result: 'Noted', status: 'success' },
+            { tool: 'create_refund', result: 'Rejected', status: 'error' },
+          ],
+        },
+        parentPlan: cachedPlan,
+        context: {
+          parentPlanId: 'plan_parent',
+          parentPlanHash: 'hash_parent',
+          committedToolCallIds: ['note_1'],
+          committedActions: [{ tool: 'add_shopify_customer_note', result: 'Noted' }],
+          failureTool: 'create_refund',
+          failureReason: 'Rejected',
+        },
+      },
+    });
+
+    const result = await generateThreadPlan('org_1', 'thread_1', true);
+
+    expect(result).toMatchObject({
+      autoExecuted: true,
+      autoExecutionKind: 'safe_reply',
+      autoExecutionStatus: 'success',
+      failureReplanRecovered: true,
+      failureReplanFailureTool: 'create_refund',
+      failureReplanFailureReason: 'Rejected',
+      autoExecutionActions: [
+        { tool: 'add_shopify_customer_note', result: 'Noted' },
+        { tool: 'create_refund', result: 'Rejected' },
+        { tool: 'send_reply', result: 'sent' },
+      ],
+    });
+  });
+
   it('skips auto-execute on an escalated thread even when allowAutoExecute is true (P5-04)', async () => {
     mockRequireOrgThread.mockResolvedValueOnce({
       id: 'thread_1',

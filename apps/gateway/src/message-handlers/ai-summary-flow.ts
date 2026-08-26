@@ -21,6 +21,7 @@ import {
   sendOperatorPlanNotification,
   sendOperatorQuestionNotification,
 } from './planning-notifications.js';
+import { shouldNotifyAutoExecution } from './planning-types.js';
 import type { AiSummaryJobData } from '../types.js';
 
 export const DEFAULT_PLAN_INSTRUCTION = "Handle this customer's latest request";
@@ -214,7 +215,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
       // Routine answers and clarification questions are useful immediately and
       // replace the generic acknowledgement. A failed send is different: the
       // merchant needs to know delivery did not happen.
-      if (planResult.autoExecutionStatus !== 'success') {
+      if (shouldNotifyAutoExecution(planResult)) {
         await sendOperatorAutoExecutionNotification(
           organizationId,
           threadId,
@@ -250,7 +251,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
   }
 
   if (planResult.autoExecuted) {
-    if (planResult.autoExecutionKind !== 'safe_reply' || planResult.autoExecutionStatus !== 'success') {
+    if (shouldNotifyAutoExecution(planResult)) {
       await sendOperatorAutoExecutionNotification(
         organizationId,
         threadId,
