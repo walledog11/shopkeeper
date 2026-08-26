@@ -70,6 +70,10 @@ vi.mock('../operator-context.js', () => ({
   removePendingPlanForThread: vi.fn(async () => {}),
 }));
 
+vi.mock('@shopkeeper/agent/request-outcome', () => ({
+  captureCommittedPlanOutcome: vi.fn(async () => {}),
+}));
+
 vi.mock('@shopkeeper/db', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@shopkeeper/db')>();
   return {
