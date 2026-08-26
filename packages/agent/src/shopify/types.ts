@@ -93,4 +93,5 @@ export interface ShopifyFulfillment {
   status: string;
   shipment_status?: string | null;
   created_at?: string;
+  updated_at?: string | null;
 }

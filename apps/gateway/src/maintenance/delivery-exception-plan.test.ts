@@ -55,6 +55,16 @@ describe('buildDeliveryExceptionInstruction', () => {
       issueSummary: null,
     })).toContain('stalled in transit');
   });
+
+  it('cites Shopify fulfillment limits for degraded USPS stalls', () => {
+    expect(buildDeliveryExceptionInstruction({
+      orderId: '1001',
+      trackingNumber: '9400',
+      issueType: 'stalled',
+      issueSummary: null,
+      trackingSource: 'shopify_degraded',
+    })).toContain('no carrier scan history');
+  });
 });
 
 describe('findOpenThreadForShopifyCustomer', () => {
@@ -141,5 +151,49 @@ describe('pushDeliveryExceptionApprovalPlan', () => {
     expect(outcome).toBe('notify_only');
     expect(generateThreadPlanSpy).not.toHaveBeenCalled();
     expect(sendOperatorPlanNotificationSpy).not.toHaveBeenCalled();
+  });
+
+  it('grounds a degraded six-day stall in Shopify fulfillment data for the planner', async () => {
+    const customer = await createTestCustomer(org.id, 'stall@example.com', { name: 'Sarah Jones' });
+    const thread = await createTestThread(org.id, customer.id, 'email', {
+      shopifyCustomerId: 'gid://shopify/Customer/88',
+    });
+    await createTestMessage(thread.id, 'Still waiting on this order.');
+
+    generateThreadPlanSpy.mockResolvedValue({
+      plan: {
+        instruction: 'heads-up',
+        steps: [{ id: '1', tool: 'send_reply', label: 'Reply', description: 'Reply', category: 'communication', enabled: true }],
+        rawToolCalls: [{ id: '1', name: 'send_reply', input: { message: 'We are monitoring the delay.' } }],
+      },
+      instruction: 'Delivery exception',
+      identity: {
+        planId: '11111111-1111-4111-8111-111111111111',
+        sourceMessageId: '22222222-2222-4222-8222-222222222222',
+        planHash: 'abc',
+        instructionHash: 'def',
+      },
+    });
+
+    const outcome = await pushDeliveryExceptionApprovalPlan(org.id, {
+      id: 'watch-stall',
+      threadId: thread.id,
+      orderId: '1001',
+      trackingNumber: '9400',
+      trackingCompany: 'USPS',
+      issueType: 'stalled',
+      issueSummary: 'Shopify fulfillment record via USPS: in transit (no carrier scan history)',
+      customerName: 'Sarah Jones',
+      trackingSource: 'shopify_degraded',
+    });
+
+    expect(outcome).toBe('plan_pushed');
+    expect(generateThreadPlanSpy).toHaveBeenCalledWith(org.id, thread.id, false, expect.objectContaining({
+      instruction: expect.stringMatching(/Shopify.*no carrier scan history/s),
+    }));
+
+    const notificationCall = sendOperatorPlanNotificationSpy.mock.calls[0];
+    expect(notificationCall?.[6]).toEqual(expect.stringMatching(/Shopify.*no carrier scan history/s));
+    expect(notificationCall?.[7]).toEqual(expect.objectContaining({ systemRequest: 'delivery_exception' }));
   });
 });

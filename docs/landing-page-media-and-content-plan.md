@@ -104,11 +104,10 @@ Use these qualifiers:
   update after enough examples, and changes only after merchant approval.
 - The morning briefing is optional and needs a configured operator channel.
   Sales-pulse and low-stock sections are optional.
-- **Do not claim delivery monitoring.** The USPS client it ran on was removed on
-  2026-08-22 and no carrier provider has replaced it, so nothing can currently
-  detect a stall or an exception. The watch, classifier, and approval-plan
-  machinery survive behind a null provider; the claim comes back when a provider
-  does (capability plan Phase 9.1), and it never includes opening carrier claims.
+- **Do not claim full carrier delivery monitoring.** USPS uses a degraded Shopify
+  fulfillment signal only (no carrier scan history). Non-USPS full-tier monitoring
+  ships when a validated aggregator is wired. Do not claim carrier-level exception
+  detail for USPS or opening carrier claims.
 - Shopkeeper uses available conversation, customer, and Shopify context. Do not
   imply perfect cross-channel identity resolution.
 - A merchant can elect to save an answer to a policy-gap question as reusable

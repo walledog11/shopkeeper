@@ -18,7 +18,29 @@ describe("extractShipmentsFromOrders", () => {
       customerEmail: null,
       trackingNumber: "9400",
       trackingCompany: "USPS",
+      shipmentStatus: null,
+      statusUpdatedAt: null,
+      fulfillmentCreatedAt: null,
     }]);
+  });
+
+  it("extracts fulfillment timestamps for degraded tracking", () => {
+    expect(extractShipmentsFromOrders([{
+      id: 1003,
+      customer: { id: 57 },
+      fulfillments: [{
+        status: "success",
+        tracking_company: "USPS",
+        tracking_number: "9400",
+        shipment_status: "in_transit",
+        created_at: "2026-07-08T10:00:00.000Z",
+        updated_at: "2026-07-10T10:00:00.000Z",
+      }],
+    }])).toEqual([expect.objectContaining({
+      shipmentStatus: "in_transit",
+      statusUpdatedAt: "2026-07-10T10:00:00.000Z",
+      fulfillmentCreatedAt: "2026-07-08T10:00:00.000Z",
+    })]);
   });
 
   // The USPS-only filter came out with the USPS client: whatever carrier moved

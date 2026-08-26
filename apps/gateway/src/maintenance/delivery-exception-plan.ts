@@ -25,18 +25,27 @@ export interface DeliveryExceptionWatch {
   issueType: ShipmentWatchIssueType;
   issueSummary: string | null;
   customerName: string | null;
+  trackingSource?: 'shopify_degraded' | 'carrier';
 }
 
 export function buildDeliveryExceptionInstruction(
-  watch: Pick<DeliveryExceptionWatch, 'orderId' | 'trackingNumber' | 'issueType' | 'issueSummary'>,
+  watch: Pick<DeliveryExceptionWatch, 'orderId' | 'trackingNumber' | 'issueType' | 'issueSummary' | 'trackingSource'>,
 ): string {
   const tracking = watch.trackingNumber || 'the shipment';
+  const degraded = watch.trackingSource === 'shopify_degraded';
   if (watch.issueType === 'stalled') {
+    if (degraded) {
+      return `Order ${watch.orderId} looks stalled in transit (${tracking} has had no Shopify fulfillment status update in over six days). This signal comes from Shopify's fulfillment record only — there is no carrier scan history. Draft a short proactive customer heads-up explaining the delay and what you're doing about it. Do not send until the operator approves.`;
+    }
     return `Order ${watch.orderId} looks stalled in transit (${tracking} has had no recent movement). Draft a short proactive customer heads-up explaining the delay and what you're doing about it. Do not send until the operator approves.`;
   }
   const detail = watch.issueSummary?.trim();
-  const suffix = detail ? ` Carrier status: ${detail}.` : '';
-  return `Order ${watch.orderId} has a delivery exception on ${tracking}.${suffix} Draft a short proactive customer heads-up with the latest status and next steps. Do not send until the operator approves.`;
+  const suffix = detail ? ` Shopify fulfillment status: ${detail}.` : '';
+  if (degraded) {
+    return `Order ${watch.orderId} has a delivery issue on ${tracking}.${suffix} This signal comes from Shopify's fulfillment record only — not live carrier scans. Draft a short proactive customer heads-up with the latest status and next steps. Do not send until the operator approves.`;
+  }
+  const carrierSuffix = detail ? ` Carrier status: ${detail}.` : '';
+  return `Order ${watch.orderId} has a delivery exception on ${tracking}.${carrierSuffix} Draft a short proactive customer heads-up with the latest status and next steps. Do not send until the operator approves.`;
 }
 
 export async function findOpenThreadForShopifyCustomer(
@@ -232,6 +241,7 @@ async function notifyDeliveryExceptionOnly(
     trackingNumber: watch.trackingNumber,
     issueKind: watch.issueType,
     statusSummary: watch.issueSummary,
+    trackingSource: watch.trackingSource,
   });
   const bindings = await listOperatorBindings(organizationId);
   const idempotencyKey = deliveryExceptionIdempotencyKey(

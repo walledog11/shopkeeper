@@ -163,6 +163,9 @@ export interface ShippedOrderShipment {
   customerEmail: string | null;
   trackingNumber: string;
   trackingCompany: string | null;
+  shipmentStatus: string | null;
+  statusUpdatedAt: string | null;
+  fulfillmentCreatedAt: string | null;
 }
 
 type ShippedOrderRow = ShopifyOrder & { fulfillments?: ShopifyFulfillment[] };
@@ -185,10 +188,9 @@ function readCustomerEmail(order: ShippedOrderRow): string | null {
   return email || null;
 }
 
-// Every shipment on a recently shipped order, whatever carrier moved it. This
-// used to filter to USPS because USPS was the only carrier the monitor could
-// look up; with that client gone the filter would only narrow what the next
-// provider is handed.
+// Every shipment on a recently shipped order, whatever carrier moved it.
+// USPS and other carriers without a live provider use Shopify fulfillment
+// fields for degraded proactive monitoring.
 export function extractShipmentsFromOrders(orders: ShippedOrderRow[]): ShippedOrderShipment[] {
   const shipments: ShippedOrderShipment[] = [];
   const seen = new Set<string>();
@@ -210,6 +212,9 @@ export function extractShipmentsFromOrders(orders: ShippedOrderRow[]): ShippedOr
           customerEmail: readCustomerEmail(order),
           trackingNumber,
           trackingCompany: fulfillment.tracking_company ?? null,
+          shipmentStatus: fulfillment.shipment_status ?? null,
+          statusUpdatedAt: fulfillment.updated_at ?? null,
+          fulfillmentCreatedAt: fulfillment.created_at ?? null,
         });
       }
     }

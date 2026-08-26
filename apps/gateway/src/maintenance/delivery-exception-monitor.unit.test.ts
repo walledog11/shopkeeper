@@ -10,6 +10,7 @@ const {
   classifyShipmentAlert,
   pushDeliveryExceptionApprovalPlan,
   resolveDeliveryExceptionThread,
+  isDeliveryExceptionMonitorEnabled,
   logger,
 } = vi.hoisted(() => ({
   findMany: vi.fn(),
@@ -21,6 +22,7 @@ const {
   classifyShipmentAlert: vi.fn(),
   pushDeliveryExceptionApprovalPlan: vi.fn(),
   resolveDeliveryExceptionThread: vi.fn(),
+  isDeliveryExceptionMonitorEnabled: vi.fn(),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
@@ -36,6 +38,8 @@ vi.mock('@shopkeeper/db', () => ({
 vi.mock('@shopkeeper/agent/shopify', () => ({
   listRecentShippedOrderShipments,
   classifyShipmentAlert,
+  createShipmentTrackingResolver: vi.fn(),
+  DEGRADED_STALL_AFTER_MS: 6 * 24 * 3_600_000,
   ShopifyRequestError: class ShopifyRequestError extends Error {
     status?: number;
     constructor(message: string, options: { status?: number } = {}) {
@@ -45,6 +49,10 @@ vi.mock('@shopkeeper/agent/shopify', () => ({
   },
 }));
 
+vi.mock('../config/runtime-config.js', () => ({
+  isDeliveryExceptionMonitorEnabled,
+}));
+
 vi.mock('../logger.js', () => ({ default: logger }));
 
 vi.mock('./delivery-exception-plan.js', () => ({
@@ -52,15 +60,9 @@ vi.mock('./delivery-exception-plan.js', () => ({
   resolveDeliveryExceptionThread,
 }));
 
-import {
-  carrierTrackingProvider,
-  runDeliveryExceptionMonitor,
-} from './delivery-exception-monitor.js';
+import { runDeliveryExceptionMonitor } from './delivery-exception-monitor.js';
 
-// The USPS client the monitor was built on is gone, so production has no
-// provider to hand it. The loop below is exercised through the injected seam
-// Phase 9.1 will fill; `parks without a carrier provider` pins the default.
-const trackShipment = vi.fn();
+const resolveTracking = vi.fn();
 
 describe('runDeliveryExceptionMonitor', () => {
   beforeEach(() => {
@@ -71,15 +73,17 @@ describe('runDeliveryExceptionMonitor', () => {
     markShipmentWatchPlanPushed.mockReset();
     markShipmentWatchSkipped.mockReset();
     listRecentShippedOrderShipments.mockReset();
-    trackShipment.mockReset();
+    resolveTracking.mockReset();
     classifyShipmentAlert.mockReset();
     pushDeliveryExceptionApprovalPlan.mockReset();
     resolveDeliveryExceptionThread.mockReset();
+    isDeliveryExceptionMonitorEnabled.mockReset();
     logger.warn.mockReset();
     getShipmentWatch.mockResolvedValue(null);
     resolveDeliveryExceptionThread.mockResolvedValue('thread-1');
     recordShipmentWatch.mockResolvedValue('watch-1');
     markShipmentWatchPlanPushed.mockResolvedValue(true);
+    isDeliveryExceptionMonitorEnabled.mockReturnValue(true);
     findMany.mockResolvedValue([
       {
         organizationId: 'org-a',
@@ -94,21 +98,15 @@ describe('runDeliveryExceptionMonitor', () => {
     vi.useRealTimers();
   });
 
-  // The reason this monitor cannot fire in production, asserted rather than
-  // described in a comment: there is no carrier to ask.
-  it('parks without a carrier provider', async () => {
-    expect(carrierTrackingProvider).toBeNull();
+  it('parks when the monitor rollout flag is disabled', async () => {
+    isDeliveryExceptionMonitorEnabled.mockReturnValue(false);
 
-    await expect(runDeliveryExceptionMonitor()).resolves.toEqual({
+    await expect(runDeliveryExceptionMonitor(resolveTracking)).resolves.toEqual({
       orgsScanned: 0,
       shipmentsChecked: 0,
       issuesNotified: 0,
     });
     expect(findMany).not.toHaveBeenCalled();
-    expect(logger.warn).toHaveBeenCalledWith(
-      {},
-      expect.stringContaining('no carrier tracking provider'),
-    );
   });
 
   it('skips simulated and expired integrations without listing shipments', async () => {
@@ -131,7 +129,7 @@ describe('runDeliveryExceptionMonitor', () => {
       },
     ]);
 
-    const runPromise = runDeliveryExceptionMonitor(trackShipment);
+    const runPromise = runDeliveryExceptionMonitor(resolveTracking);
     await vi.runAllTimersAsync();
     await expect(runPromise).resolves.toEqual({
       orgsScanned: 0,
@@ -150,19 +148,22 @@ describe('runDeliveryExceptionMonitor', () => {
       customerEmail: 'sarah@example.com',
       trackingNumber: '9400',
       trackingCompany: 'USPS',
+      shipmentStatus: 'in_transit',
+      statusUpdatedAt: '2026-07-10T10:00:00.000Z',
+      fulfillmentCreatedAt: '2026-07-08T10:00:00.000Z',
     }]);
 
-    const runPromise = runDeliveryExceptionMonitor(trackShipment);
+    const runPromise = runDeliveryExceptionMonitor(resolveTracking);
     await vi.runAllTimersAsync();
     await expect(runPromise).resolves.toEqual({
       orgsScanned: 1,
       shipmentsChecked: 0,
       issuesNotified: 0,
     });
-    expect(trackShipment).not.toHaveBeenCalled();
+    expect(resolveTracking).not.toHaveBeenCalled();
   });
 
-  it('pushes an approval plan when the carrier reports an exception', async () => {
+  it('pushes an approval plan when a degraded USPS shipment stalls', async () => {
     listRecentShippedOrderShipments.mockResolvedValue([{
       orderId: '1001',
       customerShopifyId: '55',
@@ -170,16 +171,23 @@ describe('runDeliveryExceptionMonitor', () => {
       customerEmail: 'sarah@example.com',
       trackingNumber: '9400',
       trackingCompany: 'USPS',
+      shipmentStatus: 'in_transit',
+      statusUpdatedAt: '2026-07-10T10:00:00.000Z',
+      fulfillmentCreatedAt: '2026-07-08T10:00:00.000Z',
     }]);
-    trackShipment.mockResolvedValue({
-      status: 'Alert',
-      statusSummary: 'Return to Sender',
-      events: [],
+    resolveTracking.mockResolvedValue({
+      snapshot: {
+        status: 'in_transit',
+        statusSummary: 'Shopify fulfillment record via USPS: in transit (no carrier scan history)',
+        events: [{ message: 'Last Shopify fulfillment update', datetime: '2026-07-10T10:00:00.000Z' }],
+      },
+      source: 'shopify_degraded',
+      tier: 'degraded',
     });
-    classifyShipmentAlert.mockReturnValue('exception');
+    classifyShipmentAlert.mockReturnValue('stalled');
     pushDeliveryExceptionApprovalPlan.mockResolvedValue('plan_pushed');
 
-    const runPromise = runDeliveryExceptionMonitor(trackShipment);
+    const runPromise = runDeliveryExceptionMonitor(resolveTracking);
     await vi.runAllTimersAsync();
     await expect(runPromise).resolves.toEqual({
       orgsScanned: 1,
@@ -191,7 +199,9 @@ describe('runDeliveryExceptionMonitor', () => {
       orderId: '1001',
       customerEmail: 'sarah@example.com',
     }));
-    expect(pushDeliveryExceptionApprovalPlan).toHaveBeenCalled();
+    expect(pushDeliveryExceptionApprovalPlan).toHaveBeenCalledWith('org-a', expect.objectContaining({
+      trackingSource: 'shopify_degraded',
+    }));
     expect(markShipmentWatchPlanPushed).toHaveBeenCalledWith('watch-1', 'org-a');
   });
 });

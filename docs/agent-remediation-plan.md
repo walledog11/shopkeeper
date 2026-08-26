@@ -2,9 +2,9 @@
 
 **Status:** canonical execution plan
 
-**Last reconciled:** 2026-08-25 (Milestone 5 complete, pre-user)
+**Last reconciled:** 2026-08-26 (Milestone 6 degraded tier complete; attachment vision next)
 
-**Current milestone:** 6 — shipment resolution and attachment vision
+**Current milestone:** 6 — shipment resolution and attachment vision (degraded tier closed)
 
 This is the single source of truth for agent remediation and capability work. `AGENT_AUDIT.md` is historical evidence, not a second work order.
 
@@ -321,19 +321,65 @@ These were Milestone 2 bullets that only pay off with real merchant persisted st
 
 **Outcome:** Shopkeeper can understand shipment evidence and damaged-item images, then recommend a policy-compliant remedy.
 
+**Status:** in progress (2026-08-26). **Degraded tier complete (pre-user close).** USPS carrier-API tracking is **degraded** to Shopify fulfillment fields; full scan history for non-USPS carriers ships behind one paid aggregator when validated. Evidence: [agent-m6-evidence-2026-08-26.md](agent-m6-evidence-2026-08-26.md).
+
+### What shipped (2026-08-26, PR A — degraded tier)
+
+- `@shopkeeper/agent/shopify/shipment-tracking` — tier routing, `buildShopifyDegradedTrackingSnapshot`, six-day stall window.
+- `listRecentShippedOrderShipments` now returns `shipmentStatus`, `statusUpdatedAt`, and `fulfillmentCreatedAt`.
+- Delivery-exception monitor re-enabled behind `DELIVERY_EXCEPTION_MONITOR_ENABLED`; hourly maintenance job registered.
+- Approval-plan and operator notification copy cites Shopify fulfillment limits for degraded USPS.
+
+### USPS policy decision (recorded 2026-08-26)
+
+Direct USPS Tracking API access and naive “any tracking number” aggregator lookup no longer work for Shopkeeper’s use case. USPS retired Web Tools in January 2026 and enforced **Package Tracking Access Controls** on April 1, 2026: programmatic access now requires Mailer ID authorization, and analytics platforms like Shopkeeper must sign a paid IP agreement (reports cite ~$599/month floor) or route through a signed licensee with per-merchant authorization.
+
+**Decision:** do not block Milestone 6 on USPS carrier API access. Ship a **two-tier tracking model**:
+
+| Tier | Carriers | Source | Proactive stall / exception |
+|---|---|---|---|
+| **Degraded** | USPS and any carrier without a live provider | Shopify fulfillment `shipment_status`, fulfillment `updated_at` / `created_at`, `tracking_company` | Coarse only — stall when status stays in an in-transit family with no Shopify update for ≥6 days; exception when Shopify surfaces failure/return statuses |
+| **Full** | UPS, FedEx, and others once a provider is validated | One paid aggregator behind `CarrierTrackingProvider` | Normalized scan events, exception markers, days since last scan |
+
+Degraded USPS must **never** claim carrier scan history, live carrier exceptions, or precision a full provider would give. Merchant-facing copy and approval plans must say the signal came from Shopify’s fulfillment record.
+
+Full USPS carrier API access (signed aggregator such as AfterShip, or a Shopkeeper USPS IP agreement) is **deferred** until merchant volume or a customer requirement justifies the cost and compliance overhead. See [Deferred and conditional work](#deferred-and-conditional-work).
+
 ### Work
 
-- Implement one carrier provider behind the existing provider interface; verify the current external API before coding.
-- Normalize shipment history, exception type, and days since last scan.
-- Restore proactive shipment detection only after a working provider exists.
+**Shipment monitoring (split by tier)**
+
+- ~~Add a composite lookup that routes USPS (and unknown carriers until a provider exists) through the **Shopify degraded** snapshot builder; route validated non-USPS carriers through `CarrierTrackingProvider`.~~ Done 2026-08-26 in `shipment-tracking.ts` and `delivery-exception-monitor.ts`.
+- ~~Map Shopify fulfillment fields into `ShipmentTrackingSnapshot` for the degraded path so existing `classifyShipmentAlert`, watch dedupe, and approval-plan machinery stay carrier-agnostic.~~ Done 2026-08-26.
+- ~~Extend `listRecentShippedOrderShipments` to return fulfillment timestamps and `shipment_status` needed for degraded stall detection.~~ Done 2026-08-26.
+- Implement one non-USPS carrier provider behind the existing interface only after API verification on real merchant tracking numbers (UPS/FedEx first).
+- ~~Re-register the delivery-exception maintenance job once the composite provider is wired.~~ Done 2026-08-26 — gated on `DELIVERY_EXCEPTION_MONITOR_ENABLED`.
 - Use confirmed merchant preferences for proactive remedy selection.
+
+**Attachment vision (unchanged scope)**
+
 - Hydrate bounded email and TikTok image attachments; treat image text as untrusted input.
 
 ### Acceptance
 
-- A six-day shipment stall produces a grounded status and remedy proposal.
-- Delivered-but-disputed remains reactive to customer evidence.
-- An emailed damage photo reaches the model; instruction-shaped image text cannot alter policy or tool access.
+- [x] A six-day **degraded** USPS stall (Shopify `shipment_status` unchanged for ≥6 days) produces a grounded status and remedy proposal that cites Shopify fulfillment data, not carrier scans. `delivery-exception-degraded.test.ts` + `delivery-exception-plan.test.ts`.
+- [ ] A **full-tier** non-USPS stall (when provider is configured) produces a grounded status and remedy proposal from normalized carrier events.
+- [x] Delivered-but-disputed remains reactive to customer evidence on every tier. Degraded snapshot returns null for `delivered`; proactive monitor skips.
+- [ ] An emailed damage photo reaches the model; instruction-shaped image text cannot alter policy or tool access.
+- [x] Degraded path has deterministic unit/integration coverage without a paid carrier API key. See [agent-m6-evidence-2026-08-26.md](agent-m6-evidence-2026-08-26.md).
+- [ ] Full-tier path has deterministic coverage when a provider is configured.
+
+### Completion gate (pre-user, degraded tier)
+
+| Gate | Evidence |
+|---|---|
+| Outcome | Degraded stall/exception uses Shopify fulfillment only; approval copy cites Shopify limits |
+| Compatibility | No migration; shipment watch rows only |
+| Deterministic coverage | Agent unit + gateway unit/integration including `delivery-exception-degraded.test.ts` |
+| Model evidence | None owed on this slice |
+| Production canary | Deferred pre-user — acceptance integration test |
+| Rollback | `DELIVERY_EXCEPTION_MONITOR_ENABLED=false` |
+| Documentation | This plan and the evidence report |
 
 ## Milestone 7 — Shop-management capabilities
 
@@ -356,6 +402,7 @@ These were Milestone 2 bullets that only pay off with real merchant persisted st
 
 ## Deferred and conditional work
 
+- **Full USPS carrier API (from Milestone 6):** signed third-party licensee (e.g. AfterShip) or Shopkeeper USPS IP agreement + merchant MID authorization in the USPS Business Portal. Trigger when degraded Shopify signals are insufficient for merchants or when USPS-heavy proactive monitoring is a launch requirement. Until then, USPS stays on the degraded tier only.
 - **Pre-launch (from Milestone 2):** classifier-version inventory, retirement procedure, version-upgrade acceptance test, `baseline.json` regeneration, rename `email-classification.ts`, unified classification-failure telemetry. Trigger before first customer or first `CLASSIFIER_VERSION` bump.
 - **Pre-launch (from Milestone 3):** historical `request_episode_outcomes` backfill and production canary on the outcome write path. Trigger before first customer or when resolution metrics must cover pre-deploy traffic.
 - Consolidate order-read tools only if measured tool-call or schema cost justifies the security and migration work. Keep storefront guest and verified-order projections separate.

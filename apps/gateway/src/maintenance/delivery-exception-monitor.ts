@@ -1,4 +1,11 @@
 import {
+  classifyShipmentAlert,
+  createShipmentTrackingResolver,
+  DEGRADED_STALL_AFTER_MS,
+  listRecentShippedOrderShipments,
+  ShopifyRequestError,
+} from '@shopkeeper/agent/shopify';
+import {
   db,
   getShipmentWatch,
   isTerminalShipmentWatchStatus,
@@ -6,15 +13,17 @@ import {
   markShipmentWatchSkipped,
   recordShipmentWatch,
 } from '@shopkeeper/db';
-import {
-  classifyShipmentAlert,
-  listRecentShippedOrderShipments,
-  ShopifyRequestError,
-  type ShopifyContext,
-  type ShipmentTrackingSnapshot,
-} from '@shopkeeper/agent/shopify';
 import { isShopifyIntegrationSweepable } from '@shopkeeper/agent/shopify/integration-health';
+import { isDeliveryExceptionMonitorEnabled } from '../config/runtime-config.js';
 import logger from '../logger.js';
+import { JOB, QUEUE } from '../constants.js';
+import {
+  createMaintenanceQueue,
+  createMaintenanceWorker,
+  ONE_HOUR_MS,
+  scheduleRepeatableJob,
+  type MaintenanceJobRegistration,
+} from './registration.js';
 import {
   pushDeliveryExceptionApprovalPlan,
   resolveDeliveryExceptionThread,
@@ -29,21 +38,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Where a carrier lookup goes. It is null because the USPS client this monitor
-// was built on has been removed — the API does not work — and nothing has
-// replaced it yet. A typed absence rather than a silent one: the scan refuses
-// to run and the hourly job is not scheduled, so the monitor cannot look alive
-// in the queue while being incapable of detecting anything.
-//
-// Capability-plan Phase 9.1 fills this in with one provider behind this shape.
-// Everything downstream of it — the watch dedupe, the stall/exception
-// classifier, thread resolution, the approval plan — is carrier-agnostic and
-// was left in place for that.
-export type CarrierTrackingProvider = (
-  trackingNumber: string,
-) => Promise<ShipmentTrackingSnapshot | null>;
-
-export const carrierTrackingProvider: CarrierTrackingProvider | null = null;
+export const resolveShipmentTrackingSnapshot = createShipmentTrackingResolver(null);
 
 async function handleDetectedIssue(params: {
   organizationId: string;
@@ -54,6 +49,7 @@ async function handleDetectedIssue(params: {
   trackingCompany: string | null;
   issueType: 'exception' | 'stalled';
   issueSummary: string | null;
+  trackingSource: 'shopify_degraded' | 'carrier';
   customerName: string | null;
 }): Promise<boolean> {
   const outcome = await pushDeliveryExceptionApprovalPlan(params.organizationId, {
@@ -65,6 +61,7 @@ async function handleDetectedIssue(params: {
     issueType: params.issueType,
     issueSummary: params.issueSummary,
     customerName: params.customerName,
+    trackingSource: params.trackingSource,
   });
 
   if (outcome === 'plan_pushed' || outcome === 'notify_only') {
@@ -83,17 +80,13 @@ async function handleDetectedIssue(params: {
 }
 
 export async function runDeliveryExceptionMonitor(
-  provider: CarrierTrackingProvider | null = carrierTrackingProvider,
+  trackingResolver: typeof resolveShipmentTrackingSnapshot = resolveShipmentTrackingSnapshot,
 ): Promise<{
   orgsScanned: number;
   shipmentsChecked: number;
   issuesNotified: number;
 }> {
-  if (!provider) {
-    logger.warn(
-      {},
-      '[DeliveryExceptionMonitor] no carrier tracking provider configured; nothing to scan',
-    );
+  if (!isDeliveryExceptionMonitorEnabled()) {
     return { orgsScanned: 0, shipmentsChecked: 0, issuesNotified: 0 };
   }
 
@@ -117,7 +110,7 @@ export async function runDeliveryExceptionMonitor(
     if (!isShopifyIntegrationSweepable(integration)) continue;
     orgsScanned += 1;
 
-    const ctx: ShopifyContext = {
+    const ctx = {
       shop: integration.externalAccountId,
       accessToken: integration.accessToken,
     };
@@ -146,12 +139,19 @@ export async function runDeliveryExceptionMonitor(
         continue;
       }
 
-      const snapshot = await provider(shipment.trackingNumber);
-      await sleep(CARRIER_LOOKUP_DELAY_MS);
-      if (!snapshot) continue;
+      const resolved = await trackingResolver(shipment);
+      if (resolved?.tier === 'full') {
+        await sleep(CARRIER_LOOKUP_DELAY_MS);
+      }
+      if (!resolved) continue;
 
+      const { snapshot, source: trackingSource } = resolved;
       shipmentsChecked += 1;
-      const issueType = classifyShipmentAlert(snapshot);
+      const issueType = classifyShipmentAlert(snapshot, {
+        stalledAfterMs: trackingSource === 'shopify_degraded'
+          ? DEGRADED_STALL_AFTER_MS
+          : undefined,
+      });
       if (!issueType) continue;
 
       const threadId = await resolveDeliveryExceptionThread({
@@ -180,6 +180,7 @@ export async function runDeliveryExceptionMonitor(
         trackingCompany: shipment.trackingCompany,
         issueType,
         issueSummary: snapshot.statusSummary,
+        trackingSource,
         customerName: shipment.customerName,
       });
       if (notified) {
@@ -190,6 +191,7 @@ export async function runDeliveryExceptionMonitor(
             orderId: shipment.orderId,
             trackingNumber: shipment.trackingNumber,
             issueType,
+            trackingSource,
             threadId,
             watchId,
           },
@@ -205,3 +207,15 @@ export async function runDeliveryExceptionMonitor(
     issuesNotified,
   };
 }
+
+export const registerDeliveryExceptionMaintenanceJob: MaintenanceJobRegistration = async (context) => {
+  const queue = createMaintenanceQueue(context, QUEUE.DELIVERY_EXCEPTION);
+  await scheduleRepeatableJob(queue, JOB.DELIVERY_EXCEPTION_SCAN, JOB.DELIVERY_EXCEPTION_ID, ONE_HOUR_MS);
+
+  const worker = createMaintenanceWorker(context, QUEUE.DELIVERY_EXCEPTION, runDeliveryExceptionMonitor, {
+    label: 'DeliveryException',
+    failureQueue: QUEUE.DELIVERY_EXCEPTION,
+  });
+
+  return { workers: [worker], queues: [queue] };
+};

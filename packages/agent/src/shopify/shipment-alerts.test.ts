@@ -28,6 +28,14 @@ describe("classifyShipmentAlert", () => {
     }, { now, stalledAfterMs: 5 * 24 * 3_600_000 })).toBe("stalled");
   });
 
+  it("flags Shopify failure statuses as exceptions", () => {
+    expect(classifyShipmentAlert({
+      status: "failure",
+      statusSummary: "Shopify fulfillment record via USPS: failure (no carrier scan history)",
+      events: [],
+    }, { now })).toBe("exception");
+  });
+
   it("ignores delivered shipments", () => {
     expect(classifyShipmentAlert({
       status: "Delivered",
@@ -38,6 +46,17 @@ describe("classifyShipmentAlert", () => {
 });
 
 describe("formatDeliveryExceptionNotification", () => {
+  it("describes degraded stalled shipments plainly", () => {
+    expect(formatDeliveryExceptionNotification({
+      customerName: "Sarah Jones",
+      orderId: "1001",
+      trackingNumber: "9400",
+      issueKind: "stalled",
+      statusSummary: null,
+      trackingSource: "shopify_degraded",
+    })).toContain("Shopify's fulfillment record");
+  });
+
   it("describes stalled shipments plainly", () => {
     expect(formatDeliveryExceptionNotification({
       customerName: "Sarah Jones",

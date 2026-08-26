@@ -26,7 +26,11 @@ const EXCEPTION_STATUS_MARKERS = [
 
 const IN_TRANSIT_MARKERS = [
   "in transit",
+  "in_transit",
   "out for delivery",
+  "out_for_delivery",
+  "attempted_delivery",
+  "confirmed",
   "accepted",
   "arrived",
   "departed",
@@ -63,6 +67,10 @@ export function classifyShipmentAlert(
     .filter(Boolean)
     .join(" ");
 
+  if (normalizeText(snapshot.status) === "failure") {
+    return "exception";
+  }
+
   if (containsMarker(statusText, EXCEPTION_STATUS_MARKERS)) {
     return "exception";
   }
@@ -96,13 +104,21 @@ export function formatDeliveryExceptionNotification(input: {
   trackingNumber: string | null;
   issueKind: ShipmentAlertKind;
   statusSummary: string | null;
+  trackingSource?: "shopify_degraded" | "carrier";
 }): string {
   const customer = input.customerName?.trim() || "A customer";
   const tracking = input.trackingNumber?.trim() || "their shipment";
   const detail = input.statusSummary?.trim();
+  const degraded = input.trackingSource === "shopify_degraded";
   if (input.issueKind === "stalled") {
+    if (degraded) {
+      return `${customer}'s order ${input.orderId} looks stalled based on Shopify's fulfillment record (${tracking} has had no Shopify status update in over six days; there is no carrier scan history). I can draft a proactive heads-up for your approval when the plan lands.`;
+    }
     return `${customer}'s order ${input.orderId} looks stalled (${tracking} has had no recent movement). I can draft a proactive heads-up for your approval when the plan lands.`;
   }
   const suffix = detail ? ` (${detail})` : "";
+  if (degraded) {
+    return `${customer}'s order ${input.orderId} has a delivery issue on ${tracking}${suffix}. This signal comes from Shopify's fulfillment record, not live carrier scans. I can draft a proactive heads-up for your approval when the plan lands.`;
+  }
   return `${customer}'s order ${input.orderId} has a delivery exception on ${tracking}${suffix}. I can draft a proactive heads-up for your approval when the plan lands.`;
 }

@@ -44,6 +44,7 @@ describe('GET /internal/runtime-flags', () => {
       monitors: {
         orderRisk: true,
         returnLifecycle: false,
+        deliveryException: false,
       },
     });
   });

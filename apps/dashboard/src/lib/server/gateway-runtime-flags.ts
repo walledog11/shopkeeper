@@ -5,6 +5,7 @@ export interface GatewayRuntimeFlags {
   monitors: {
     orderRisk: boolean;
     returnLifecycle: boolean;
+    deliveryException: boolean;
   };
 }
 
