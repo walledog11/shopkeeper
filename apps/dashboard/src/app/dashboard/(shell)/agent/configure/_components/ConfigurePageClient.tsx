@@ -2,7 +2,7 @@
 
 import AgentTab from "./AgentTab"
 import type { OrgSettings, OrgSettingsPatch, VoiceProposal } from "@/types"
-import type { MerchantPreferenceRecord } from "@shopkeeper/db"
+import type { MerchantPreferenceRecord } from "@shopkeeper/db/merchant-preferences"
 import { dashboardPageShellClassName } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
 import { cn } from "@/lib/ui/cn"
 

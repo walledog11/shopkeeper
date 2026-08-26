@@ -10,6 +10,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./merchant-preferences": {
+      "types": "./dist/merchant-preferences.d.ts",
+      "default": "./dist/merchant-preferences.js"
+    },
     "./test-helpers": {
       "types": "./dist/test-helpers.d.ts",
       "default": "./dist/test-helpers.js"

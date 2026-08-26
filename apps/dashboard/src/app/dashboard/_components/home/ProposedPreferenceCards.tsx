@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Check, Loader2, Sparkles, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { MERCHANT_PREFERENCE_CATEGORY_LABELS } from "@shopkeeper/db"
+import { MERCHANT_PREFERENCE_CATEGORY_LABELS } from "@shopkeeper/db/merchant-preferences"
 import type { HomeProposedPreferenceItem } from "@/lib/home/summary-contract"
 import {
   NeedsYouCardBody,

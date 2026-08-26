@@ -4,12 +4,12 @@ import { useState } from "react"
 import type {
   MerchantPreferenceCategory,
   MerchantPreferenceRecord,
-} from "@shopkeeper/db"
+} from "@shopkeeper/db/merchant-preferences"
 import {
   MERCHANT_PREFERENCE_CATEGORIES,
   MERCHANT_PREFERENCE_CATEGORY_LABELS,
   MERCHANT_PREFERENCE_GUIDANCE_MAX_CHARS,
-} from "@shopkeeper/db"
+} from "@shopkeeper/db/merchant-preferences"
 
 interface MerchantPreferencesState {
   active: MerchantPreferenceRecord[]

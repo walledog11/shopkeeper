@@ -13,7 +13,7 @@ import {
 import { MerchantPreferencesSection } from "./MerchantPreferencesSection"
 import { useMerchantPreferencesState } from "./useMerchantPreferencesState"
 import { useAgentTabState } from "./useAgentTabState"
-import type { MerchantPreferenceRecord } from "@shopkeeper/db"
+import type { MerchantPreferenceRecord } from "@shopkeeper/db/merchant-preferences"
 
 interface Props {
   settings: OrgSettings
