@@ -16,6 +16,9 @@ export function deliveryExceptionIdempotencyKey(
   return `delivery-exception:${organizationId}:${orderId}:${trackingNumber}`;
 }
 
+const MERCHANT_PREFERENCE_REMEDY_NOTE =
+  'Apply active merchant shipping and compensation preferences when choosing remedy wording; they never override caps, guardrails, or approval requirements.';
+
 export interface DeliveryExceptionWatch {
   id: string;
   threadId: string | null;
@@ -35,17 +38,17 @@ export function buildDeliveryExceptionInstruction(
   const degraded = watch.trackingSource === 'shopify_degraded';
   if (watch.issueType === 'stalled') {
     if (degraded) {
-      return `Order ${watch.orderId} looks stalled in transit (${tracking} has had no Shopify fulfillment status update in over six days). This signal comes from Shopify's fulfillment record only — there is no carrier scan history. Draft a short proactive customer heads-up explaining the delay and what you're doing about it. Do not send until the operator approves.`;
+      return `Order ${watch.orderId} looks stalled in transit (${tracking} has had no Shopify fulfillment status update in over six days). This signal comes from Shopify's fulfillment record only — there is no carrier scan history. Draft a short proactive customer heads-up explaining the delay and what you're doing about it. Do not send until the operator approves. ${MERCHANT_PREFERENCE_REMEDY_NOTE}`;
     }
-    return `Order ${watch.orderId} looks stalled in transit (${tracking} has had no recent movement). Draft a short proactive customer heads-up explaining the delay and what you're doing about it. Do not send until the operator approves.`;
+    return `Order ${watch.orderId} looks stalled in transit (${tracking} has had no recent movement). Draft a short proactive customer heads-up explaining the delay and what you're doing about it. Do not send until the operator approves. ${MERCHANT_PREFERENCE_REMEDY_NOTE}`;
   }
   const detail = watch.issueSummary?.trim();
   const suffix = detail ? ` Shopify fulfillment status: ${detail}.` : '';
   if (degraded) {
-    return `Order ${watch.orderId} has a delivery issue on ${tracking}.${suffix} This signal comes from Shopify's fulfillment record only — not live carrier scans. Draft a short proactive customer heads-up with the latest status and next steps. Do not send until the operator approves.`;
+    return `Order ${watch.orderId} has a delivery issue on ${tracking}.${suffix} This signal comes from Shopify's fulfillment record only — not live carrier scans. Draft a short proactive customer heads-up with the latest status and next steps. Do not send until the operator approves. ${MERCHANT_PREFERENCE_REMEDY_NOTE}`;
   }
   const carrierSuffix = detail ? ` Carrier status: ${detail}.` : '';
-  return `Order ${watch.orderId} has a delivery exception on ${tracking}.${carrierSuffix} Draft a short proactive customer heads-up with the latest status and next steps. Do not send until the operator approves.`;
+  return `Order ${watch.orderId} has a delivery exception on ${tracking}.${carrierSuffix} Draft a short proactive customer heads-up with the latest status and next steps. Do not send until the operator approves. ${MERCHANT_PREFERENCE_REMEDY_NOTE}`;
 }
 
 export async function findOpenThreadForShopifyCustomer(

@@ -65,6 +65,15 @@ describe('buildDeliveryExceptionInstruction', () => {
       trackingSource: 'shopify_degraded',
     })).toContain('no carrier scan history');
   });
+
+  it('reminds the planner to apply active merchant preferences for remedy wording', () => {
+    expect(buildDeliveryExceptionInstruction({
+      orderId: '1001',
+      trackingNumber: '9400',
+      issueType: 'stalled',
+      issueSummary: null,
+    })).toContain('merchant shipping and compensation preferences');
+  });
 });
 
 describe('findOpenThreadForShopifyCustomer', () => {

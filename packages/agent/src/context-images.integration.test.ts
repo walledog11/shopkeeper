@@ -45,7 +45,7 @@ afterEach(async () => {
   await Promise.all(orgIds.splice(0).map((orgId) => cleanupTestData(orgId)));
 });
 
-describe("buildContext Instagram images", () => {
+describe("buildContext customer image attachments", () => {
   it("carries a stored Instagram attachment into recent agent-message context", async () => {
     const org = await createTestOrg();
     orgIds.push(org.id);
@@ -83,11 +83,80 @@ describe("buildContext Instagram images", () => {
     }]);
   });
 
-  it("does not hydrate private attachments for non-Instagram threads", async () => {
+  it("carries a stored email attachment into recent agent-message context", async () => {
     const org = await createTestOrg();
     orgIds.push(org.id);
     const customer = await createTestCustomer(org.id, `${randomUUID()}@example.com`);
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    const message = await createTestMessage(thread.id, "My mug arrived damaged — see photo.");
+    const reference = `blob:attachments/${org.id}/image-id/email-damage.png`;
+    await db.message.update({
+      where: { id: message.id },
+      data: { attachments: [reference] },
+    });
+    getSpy.mockResolvedValueOnce({
+      statusCode: 200,
+      stream: new ReadableStream({
+        start(controller) {
+          controller.enqueue(PNG);
+          controller.close();
+        },
+      }),
+      blob: { contentType: "image/png", size: PNG.byteLength },
+    });
+
+    const context = await buildContext(thread.id, org.id, sink);
+
+    expect(context.recentMessages).toEqual([{
+      senderType: "customer",
+      contentText: "My mug arrived damaged — see photo.",
+      attachments: [{
+        type: "image",
+        reference,
+        status: "available",
+        mediaType: "image/png",
+        data: PNG.toString("base64"),
+      }],
+    }]);
+  });
+
+  it("carries a stored TikTok attachment into recent agent-message context", async () => {
+    const org = await createTestOrg();
+    orgIds.push(org.id);
+    const customer = await createTestCustomer(org.id, `tiktok_${randomUUID()}`);
+    const thread = await createTestThread(org.id, customer.id, ChannelType.tiktok);
+    const message = await createTestMessage(thread.id, "[TikTok image attachment]");
+    const reference = `blob:attachments/${org.id}/image-id/tiktok-image.jpg`;
+    await db.message.update({
+      where: { id: message.id },
+      data: { attachments: [reference] },
+    });
+    getSpy.mockResolvedValueOnce({
+      statusCode: 200,
+      stream: new ReadableStream({
+        start(controller) {
+          controller.enqueue(PNG);
+          controller.close();
+        },
+      }),
+      blob: { contentType: "image/png", size: PNG.byteLength },
+    });
+
+    const context = await buildContext(thread.id, org.id, sink);
+
+    expect(context.recentMessages[0]?.attachments?.[0]).toMatchObject({
+      type: "image",
+      reference,
+      status: "available",
+      mediaType: "image/png",
+    });
+  });
+
+  it("does not hydrate private attachments for channels without image vision", async () => {
+    const org = await createTestOrg();
+    orgIds.push(org.id);
+    const customer = await createTestCustomer(org.id, `guest_${randomUUID()}`);
+    const thread = await createTestThread(org.id, customer.id, ChannelType.shopify_chat);
     const message = await createTestMessage(thread.id, "See attachment");
     await db.message.update({
       where: { id: message.id },

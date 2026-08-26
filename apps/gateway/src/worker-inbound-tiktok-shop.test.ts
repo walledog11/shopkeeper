@@ -4,6 +4,7 @@ import { ChannelType, db } from '@shopkeeper/db';
 import { org } from './test-fixtures/worker-test-setup.js';
 import {
   getCapturedHandlers,
+  getMockFetch,
   makeTikTokShopJob,
 } from './test-fixtures/worker-test-helpers.js';
 
@@ -34,21 +35,30 @@ describe('Message worker — TikTok Shop branch', () => {
     expect(message?.externalMessageId).toBe('tiktok:shop_worker_001:message_worker_001');
   });
 
-  it('stores attachment-only buyer messages as attachment placeholders', async () => {
+  it('stores attachment-only buyer messages with TikTok image placeholders and private blobs', async () => {
     const handler = getCapturedHandlers().get('inbound-messages');
+    getMockFetch().mockResolvedValueOnce(new Response(Buffer.from('image bytes'), {
+      status: 200,
+      headers: { 'content-type': 'image/jpeg' },
+    }));
+
     await handler!(makeTikTokShopJob(org.id, {
       accountId: 'shop_attachment_001',
       buyerId: 'buyer_attachment_001',
       messageId: 'message_attachment_001',
       text: '',
-      attachments: [{ url: 'https://cdn.tiktok.test/photo.jpg' }],
+      attachments: [{ url: 'https://p16-oec-sg.ibyteimg.com/photo.jpg' }],
     }));
 
     const message = await db.message.findFirst({
       where: { organizationId: org.id, externalMessageId: 'tiktok:shop_attachment_001:message_attachment_001' },
     });
-    expect(message?.contentText).toBe('[Attachment]');
-    expect(message?.attachments).toEqual(['https://cdn.tiktok.test/photo.jpg']);
+    expect(message?.contentText).toBe('[TikTok image attachment]');
+    expect(message?.attachments).toHaveLength(1);
+    expect(message?.attachments?.[0]).toMatch(
+      new RegExp(`^blob:attachments/${org.id}/[0-9a-f-]+/tiktok-image.jpg$`),
+    );
+    expect(message?.attachments?.[0]).not.toContain('ibyteimg.com');
   });
 
   it('dedupes TikTok Shop webhook retries by provider message id', async () => {

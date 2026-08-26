@@ -369,6 +369,41 @@ describe("planAgent capture loop", () => {
     expect(serializedMessages).not.toContain("Visual content unavailable");
   });
 
+  it("passes hydrated email damage photos to the capture-mode planning model", async () => {
+    installAgentLogger(makeLogger());
+    mockCreate.mockResolvedValueOnce(singleToolUse("send_reply", { text: "Sorry about the damage." }));
+    const ctx = makeCtx({
+      thread: { ...makeCtx().thread, channelType: "email" },
+      recentMessages: [{
+        senderType: "customer",
+        contentText: "My mug arrived damaged — see photo.",
+        attachments: [{
+          type: "image",
+          reference: "blob:attachments/org_1/image-id/photo.png",
+          status: "available",
+          mediaType: "image/png",
+          data: "iVBORw0KGgo=",
+        }],
+      }],
+    });
+
+    await planAgent(ctx, "Handle this customer's latest request");
+
+    const firstCall = mockCreate.mock.calls[0]?.[0] as {
+      messages: Array<{ content: unknown }>;
+    };
+    const imageMessage = firstCall.messages.find((message) => Array.isArray(message.content));
+    expect(imageMessage?.content).toEqual(expect.arrayContaining([{
+      type: "image",
+      source: {
+        type: "base64",
+        media_type: "image/png",
+        data: "iVBORw0KGgo=",
+      },
+    }]));
+    expect(JSON.stringify(firstCall.messages)).toContain("available for visual inspection");
+  });
+
   it("captures a single send_reply as the plan and stops", async () => {
     const injectedLogger = makeLogger();
     installAgentLogger(injectedLogger);

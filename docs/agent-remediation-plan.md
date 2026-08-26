@@ -2,9 +2,9 @@
 
 **Status:** canonical execution plan
 
-**Last reconciled:** 2026-08-26 (Milestone 6 degraded tier complete; attachment vision next)
+**Last reconciled:** 2026-08-26 (Milestone 6 attachment vision + delivery preference wiring)
 
-**Current milestone:** 6 — shipment resolution and attachment vision (degraded tier closed)
+**Current milestone:** 6 — shipment resolution and attachment vision (full-tier carrier provider remains)
 
 This is the single source of truth for agent remediation and capability work. `AGENT_AUDIT.md` is historical evidence, not a second work order.
 
@@ -321,7 +321,7 @@ These were Milestone 2 bullets that only pay off with real merchant persisted st
 
 **Outcome:** Shopkeeper can understand shipment evidence and damaged-item images, then recommend a policy-compliant remedy.
 
-**Status:** in progress (2026-08-26). **Degraded tier complete (pre-user close).** USPS carrier-API tracking is **degraded** to Shopify fulfillment fields; full scan history for non-USPS carriers ships behind one paid aggregator when validated. Evidence: [agent-m6-evidence-2026-08-26.md](agent-m6-evidence-2026-08-26.md).
+**Status:** in progress (2026-08-26). **Degraded tier complete (pre-user close).** **Attachment vision complete (pre-user close)** for email and TikTok alongside existing Instagram hydration. USPS carrier-API tracking is **degraded** to Shopify fulfillment fields; full scan history for non-USPS carriers ships behind one paid aggregator when validated. Evidence: [agent-m6-evidence-2026-08-26.md](agent-m6-evidence-2026-08-26.md).
 
 ### What shipped (2026-08-26, PR A — degraded tier)
 
@@ -354,18 +354,18 @@ Full USPS carrier API access (signed aggregator such as AfterShip, or a Shopkeep
 - ~~Extend `listRecentShippedOrderShipments` to return fulfillment timestamps and `shipment_status` needed for degraded stall detection.~~ Done 2026-08-26.
 - Implement one non-USPS carrier provider behind the existing interface only after API verification on real merchant tracking numbers (UPS/FedEx first).
 - ~~Re-register the delivery-exception maintenance job once the composite provider is wired.~~ Done 2026-08-26 — gated on `DELIVERY_EXCEPTION_MONITOR_ENABLED`.
-- Use confirmed merchant preferences for proactive remedy selection.
+- ~~Use confirmed merchant preferences for proactive remedy selection.~~ Done 2026-08-26 — delivery-exception planner instructions cite active shipping/compensation preferences; preferences already inject via `buildContext`.
 
-**Attachment vision (unchanged scope)**
+**Attachment vision**
 
-- Hydrate bounded email and TikTok image attachments; treat image text as untrusted input.
+- ~~Hydrate bounded email and TikTok image attachments; treat image text as untrusted input.~~ Done 2026-08-26 — `shouldHydrateAgentMessageImages` for `email`, `tiktok`, and `ig_dm`; TikTok inbound images stored in private blob before planning.
 
 ### Acceptance
 
 - [x] A six-day **degraded** USPS stall (Shopify `shipment_status` unchanged for ≥6 days) produces a grounded status and remedy proposal that cites Shopify fulfillment data, not carrier scans. `delivery-exception-degraded.test.ts` + `delivery-exception-plan.test.ts`.
 - [ ] A **full-tier** non-USPS stall (when provider is configured) produces a grounded status and remedy proposal from normalized carrier events.
 - [x] Delivered-but-disputed remains reactive to customer evidence on every tier. Degraded snapshot returns null for `delivered`; proactive monitor skips.
-- [ ] An emailed damage photo reaches the model; instruction-shaped image text cannot alter policy or tool access.
+- [x] An emailed damage photo reaches the model; instruction-shaped image text cannot alter policy or tool access. `context-images.integration.test.ts`, `prompting.test.ts`, `planner.test.ts`.
 - [x] Degraded path has deterministic unit/integration coverage without a paid carrier API key. See [agent-m6-evidence-2026-08-26.md](agent-m6-evidence-2026-08-26.md).
 - [ ] Full-tier path has deterministic coverage when a provider is configured.
 

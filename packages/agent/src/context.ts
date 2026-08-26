@@ -7,7 +7,10 @@ import {
   budgetMerchantPreferences,
   loadActiveMerchantPreferences,
 } from "./merchant-preferences.js";
-import { hydrateAgentMessageImages } from "./image-attachments.js";
+import {
+  hydrateAgentMessageImages,
+  shouldHydrateAgentMessageImages,
+} from "./image-attachments.js";
 import logger from "./logger.js";
 import {
   CONTEXT_BUDGETS,
@@ -340,7 +343,7 @@ export async function buildContext(
     maxCount: fetchedMessageWindow,
   });
   const contextMessages = budgetedMessages.messages;
-  const recentMessages = thread.channelType === "ig_dm"
+  const recentMessages = shouldHydrateAgentMessageImages(thread.channelType)
     ? await hydrateAgentMessageImages(orgId, contextMessages)
     : contextMessages.map(({ senderType, contentText }) => ({ senderType, contentText }));
   logger.info({

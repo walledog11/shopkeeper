@@ -8,6 +8,7 @@ import {
   isSupportedInstagramBinaryAttachment,
 } from '../clients/instagram-media.js';
 import { normalizeTikTokShopWebhookPayload } from '../clients/tiktok-shop.js';
+import { downloadTikTokShopImage } from '../clients/tiktok-shop-media.js';
 import logger from '../logger.js';
 import { CHANNEL, STATUS } from '../constants.js';
 import { loadActiveInstagramIntegration } from '../lib/instagram-integration.js';
@@ -122,6 +123,7 @@ function formatInstagramMessage(
 }
 
 const MAX_STORED_INSTAGRAM_ATTACHMENTS = 5;
+const MAX_STORED_TIKTOK_IMAGE_ATTACHMENTS = 5;
 
 async function persistInstagramBinaryAttachments(
   organizationId: string,
@@ -145,6 +147,38 @@ async function persistInstagramBinaryAttachments(
     if (ref) refs.push(ref);
   }
   return refs;
+}
+
+async function persistTikTokShopImageAttachments(
+  organizationId: string,
+  attachmentUrls: readonly string[],
+): Promise<string[]> {
+  const refs: string[] = [];
+  for (const url of attachmentUrls) {
+    if (refs.length >= MAX_STORED_TIKTOK_IMAGE_ATTACHMENTS) break;
+    const downloaded = await downloadTikTokShopImage(url);
+    if (!downloaded) continue;
+    const ref = await uploadInboundAttachment(
+      organizationId,
+      downloaded.filename,
+      downloaded.contentType,
+      downloaded.base64Content,
+    );
+    if (ref) refs.push(ref);
+  }
+  return refs;
+}
+
+function formatTikTokShopMessage(
+  text: string,
+  storedAttachmentCount: number,
+): string {
+  const trimmed = text.trim();
+  const parts = trimmed && trimmed !== '[Attachment]' ? [trimmed] : [];
+  if (storedAttachmentCount > 0) {
+    parts.push('[TikTok image attachment]');
+  }
+  return parts.join('\n') || '[Attachment]';
 }
 
 export async function handleIgDmJob(job: Job<InboundJobData>, aiSummaryQueue: Queue): Promise<void> {
@@ -432,8 +466,14 @@ export async function handleTikTokShopJob(job: Job<InboundJobData>, aiSummaryQue
   const platformId = `tiktok:${message.accountId}:${buyerIdentity}`;
 
   try {
-    await processInboundMessage(organizationId, platformId, CHANNEL.TIKTOK, message.text, aiSummaryQueue, {
-      attachments: message.attachments,
+    const storedAttachmentRefs = await persistTikTokShopImageAttachments(
+      organizationId,
+      message.attachments,
+    );
+    const messageText = formatTikTokShopMessage(message.text, storedAttachmentRefs.length);
+
+    await processInboundMessage(organizationId, platformId, CHANNEL.TIKTOK, messageText, aiSummaryQueue, {
+      attachments: storedAttachmentRefs,
       customerName: message.customerName,
       externalMessageId: job.data.inboundMessageId ?? (
         message.messageId ? `tiktok:${message.accountId}:${message.messageId}` : null

@@ -18,7 +18,7 @@ vi.mock("./logger.js", () => ({
   },
 }));
 
-import { hydrateAgentMessageImages } from "./image-attachments.js";
+import { hydrateAgentMessageImages, shouldHydrateAgentMessageImages } from "./image-attachments.js";
 
 const ORG_ID = "00000000-0000-0000-0000-000000000001";
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01]);
@@ -45,6 +45,15 @@ beforeEach(() => {
   getSpy.mockReset();
   loggerSpy.info.mockReset();
   loggerSpy.warn.mockReset();
+});
+
+describe("shouldHydrateAgentMessageImages", () => {
+  it("hydrates Instagram, email, and TikTok customer attachments", () => {
+    expect(shouldHydrateAgentMessageImages("ig_dm")).toBe(true);
+    expect(shouldHydrateAgentMessageImages("email")).toBe(true);
+    expect(shouldHydrateAgentMessageImages("tiktok")).toBe(true);
+    expect(shouldHydrateAgentMessageImages("shopify_chat")).toBe(false);
+  });
 });
 
 describe("hydrateAgentMessageImages", () => {

@@ -6,6 +6,17 @@ import type {
 import logger from "./logger.js";
 
 import { BLOB_ATTACHMENT_PREFIX } from "./attachment-ref.js";
+import { CHANNEL_TYPE } from "./thread-constants.js";
+
+const IMAGE_HYDRATION_CHANNEL_TYPES = new Set<string>([
+  CHANNEL_TYPE.IG_DM,
+  CHANNEL_TYPE.EMAIL,
+  CHANNEL_TYPE.TIKTOK,
+]);
+
+export function shouldHydrateAgentMessageImages(channelType: string): boolean {
+  return IMAGE_HYDRATION_CHANNEL_TYPES.has(channelType);
+}
 const IMAGE_EXTENSION_RE = /\.(?:gif|jpe?g|png|webp)(?:[?#].*)?$/i;
 const IMAGE_LOAD_TIMEOUT_MS = 5_000;
 

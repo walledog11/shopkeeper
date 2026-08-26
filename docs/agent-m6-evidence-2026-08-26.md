@@ -1,9 +1,10 @@
 # Milestone 6 evidence — degraded tier — 2026-08-26
 
-Evidence for the **degraded USPS / Shopify fulfillment** slice of Milestone 6 in
+Evidence for Milestone 6 slices in
 [agent-remediation-plan.md](agent-remediation-plan.md). The degraded tier is
-**complete (pre-user close)** as of 2026-08-26. Attachment vision and full-tier
-carrier monitoring remain open.
+**complete (pre-user close)** as of 2026-08-26. Attachment vision for email and
+TikTok (alongside Instagram) is **complete (pre-user close)** as of 2026-08-26.
+Full-tier carrier monitoring remains open.
 
 ## Outcome target
 
@@ -89,6 +90,44 @@ cd apps/gateway && npm run test:integration -- src/maintenance/delivery-exceptio
 ## Still open (Milestone 6)
 
 - Full-tier UPS/FedEx provider behind `FullTierCarrierTrackingProvider` (after API verification).
-- Merchant preference wiring for proactive remedy selection on delivery exceptions.
-- Attachment vision — email and TikTok image hydration + injection safety tests.
 - Full-tier acceptance criterion (normalized carrier events when provider configured).
+
+## Attachment vision (2026-08-26)
+
+### What shipped
+
+- `@shopkeeper/agent/image-attachments` — `shouldHydrateAgentMessageImages` for `ig_dm`, `email`, and `tiktok`.
+- `buildContext` hydrates private blob attachments on all three channels (not only Instagram).
+- Gateway `tiktok-shop-media.ts` — bounded download from TikTok-owned HTTPS hosts into private blob via `uploadInboundAttachment`.
+- Gateway `channels.ts` — TikTok inbound stores images as `blob:attachments/...` with `[TikTok image attachment]` placeholder text.
+- Gateway `delivery-exception-plan.ts` — proactive planner instructions cite active merchant shipping/compensation preferences (preferences also inject via `buildContext`).
+
+### Deterministic coverage
+
+| Suite | What it proves |
+|---|---|
+| `packages/agent/src/image-attachments.test.ts` | Channel routing for hydration |
+| `packages/agent/src/context-images.integration.test.ts` | Email + TikTok + Instagram hydration through `buildContext` |
+| `packages/agent/src/prompting.test.ts` | Untrusted boundaries + image blocks for emailed damage photo |
+| `packages/agent/src/planner.test.ts` | Hydrated email images reach capture-mode planning |
+| `apps/gateway/src/clients/tiktok-shop-media.unit.test.ts` | TikTok CDN allowlist + bounded download |
+| `apps/gateway/src/worker-inbound-tiktok-shop.test.ts` | TikTok inbound persists private blob refs |
+
+Run:
+
+```bash
+cd packages/agent && npm run test:unit -- src/image-attachments.test.ts src/prompting.test.ts
+cd packages/agent && npm run test:unit -- src/planner.test.ts -t hydrated
+cd packages/agent && npm run test:integration -- src/context-images.integration.test.ts
+cd apps/gateway && npm run test:unit -- src/clients/tiktok-shop-media.unit.test.ts
+cd apps/gateway && npm run test:integration -- src/worker-inbound-tiktok-shop.test.ts
+```
+
+### Acceptance status (attachment vision)
+
+| Criterion | Status |
+|---|---|
+| Emailed damage photo reaches the model | **Met** — `context-images.integration.test.ts` + `planner.test.ts` |
+| Instruction-shaped text cannot bypass untrusted boundaries beside images | **Met** — `prompting.test.ts` defang + untrusted guidance |
+| TikTok images hydrate like Instagram | **Met** — inbound blob persistence + `buildContext` integration test |
+| Merchant preferences on proactive delivery remedies | **Met** — instruction text + existing `buildContext` preference injection |
