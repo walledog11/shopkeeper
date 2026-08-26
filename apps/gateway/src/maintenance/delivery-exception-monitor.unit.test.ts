@@ -101,7 +101,7 @@ describe('runDeliveryExceptionMonitor', () => {
   it('parks when the monitor rollout flag is disabled', async () => {
     isDeliveryExceptionMonitorEnabled.mockReturnValue(false);
 
-    await expect(runDeliveryExceptionMonitor(resolveTracking)).resolves.toEqual({
+    await expect(runDeliveryExceptionMonitor({ trackingResolver: resolveTracking })).resolves.toEqual({
       orgsScanned: 0,
       shipmentsChecked: 0,
       issuesNotified: 0,
@@ -129,7 +129,7 @@ describe('runDeliveryExceptionMonitor', () => {
       },
     ]);
 
-    const runPromise = runDeliveryExceptionMonitor(resolveTracking);
+    const runPromise = runDeliveryExceptionMonitor({ trackingResolver: resolveTracking });
     await vi.runAllTimersAsync();
     await expect(runPromise).resolves.toEqual({
       orgsScanned: 0,
@@ -153,7 +153,7 @@ describe('runDeliveryExceptionMonitor', () => {
       fulfillmentCreatedAt: '2026-07-08T10:00:00.000Z',
     }]);
 
-    const runPromise = runDeliveryExceptionMonitor(resolveTracking);
+    const runPromise = runDeliveryExceptionMonitor({ trackingResolver: resolveTracking });
     await vi.runAllTimersAsync();
     await expect(runPromise).resolves.toEqual({
       orgsScanned: 1,
@@ -187,7 +187,7 @@ describe('runDeliveryExceptionMonitor', () => {
     classifyShipmentAlert.mockReturnValue('stalled');
     pushDeliveryExceptionApprovalPlan.mockResolvedValue('plan_pushed');
 
-    const runPromise = runDeliveryExceptionMonitor(resolveTracking);
+    const runPromise = runDeliveryExceptionMonitor({ trackingResolver: resolveTracking });
     await vi.runAllTimersAsync();
     await expect(runPromise).resolves.toEqual({
       orgsScanned: 1,

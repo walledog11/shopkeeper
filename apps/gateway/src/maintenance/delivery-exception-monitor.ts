@@ -79,13 +79,18 @@ async function handleDetectedIssue(params: {
   return false;
 }
 
+export interface RunDeliveryExceptionMonitorOptions {
+  trackingResolver?: typeof resolveShipmentTrackingSnapshot;
+}
+
 export async function runDeliveryExceptionMonitor(
-  trackingResolver: typeof resolveShipmentTrackingSnapshot = resolveShipmentTrackingSnapshot,
+  options: RunDeliveryExceptionMonitorOptions = {},
 ): Promise<{
   orgsScanned: number;
   shipmentsChecked: number;
   issuesNotified: number;
 }> {
+  const trackingResolver = options.trackingResolver ?? resolveShipmentTrackingSnapshot;
   if (!isDeliveryExceptionMonitorEnabled()) {
     return { orgsScanned: 0, shipmentsChecked: 0, issuesNotified: 0 };
   }
@@ -212,7 +217,9 @@ export const registerDeliveryExceptionMaintenanceJob: MaintenanceJobRegistration
   const queue = createMaintenanceQueue(context, QUEUE.DELIVERY_EXCEPTION);
   await scheduleRepeatableJob(queue, JOB.DELIVERY_EXCEPTION_SCAN, JOB.DELIVERY_EXCEPTION_ID, ONE_HOUR_MS);
 
-  const worker = createMaintenanceWorker(context, QUEUE.DELIVERY_EXCEPTION, runDeliveryExceptionMonitor, {
+  const worker = createMaintenanceWorker(context, QUEUE.DELIVERY_EXCEPTION, async () => {
+    await runDeliveryExceptionMonitor();
+  }, {
     label: 'DeliveryException',
     failureQueue: QUEUE.DELIVERY_EXCEPTION,
   });
