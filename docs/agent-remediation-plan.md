@@ -2,7 +2,7 @@
 
 **Status:** canonical execution plan
 
-**Last reconciled:** 2026-08-26 (carrier tracking removed; deferred work converted to to-dos)
+**Last reconciled:** 2026-08-27 (claims verified against code; M2 legacy coverage reopened; eval-gate scope corrected)
 
 **Current milestone:** 7 — shop-management capabilities, gated on the value-at-risk guard
 
@@ -58,6 +58,12 @@ Shopkeeper is in active development with **no production users** as of 2026-08-2
   Integration/Coverage, and E2E in `ci.yml`. One unused export over the knip baseline skipped all
   three for two commits, which is why the broken tests above reached `master` unseen. Treat a knip
   baseline failure as a blocked pipeline, not a lint nit.
+- **A migration that ships behind its code is an outage, not a lag.** Milestone 5 shipped
+  `loadActiveMerchantPreferences` to production while its table did not exist; the `P2021` threw
+  out of `buildContext`, and every inbound message went unplanned until the migration landed a
+  day later. Third instance of the pattern. Before closing a milestone that adds a table, read
+  production `migrate status` — and give every fan-out load in `buildContext` its own catch, so
+  a missing dependency degrades one section of context instead of taking planning down.
 - **Fetch before building:** check whether the branch is already merged (`git fetch`, open PRs) before starting parallel implementation.
 
 ### Paid eval policy pre-user
@@ -98,7 +104,7 @@ The rollout gap is closed by the source-aligned legacy fallback and non-actionab
 
 ### Foundation defects found by the release gate
 
-Found by the 2026-08-25 paid eval runs. Both predate the work that surfaced them and both are `core` hard-gated fixtures. Both are closed, and **the paid release gate is green on `master`** as of `1850cebd` — 48/48 hard-gated, verified by a `release`-mode run rather than by the targeted runs that confirmed each fix. Detail and reproduction in [agent-m2-evidence-2026-08-25.md](agent-m2-evidence-2026-08-25.md).
+Found by the 2026-08-25 paid eval runs. Both predate the work that surfaced them and both are `core` hard-gated fixtures. Both are closed, and **the paid release gate ran green on `1850cebd`** — 48/48 hard-gated, verified by a `release`-mode run rather than by the targeted runs that confirmed each fix. Milestones 3, 5, and 6 all landed after that SHA, so it certifies those two fixes, not current `master`. Detail and reproduction in [agent-m2-evidence-2026-08-25.md](agent-m2-evidence-2026-08-25.md).
 
 - **An escalation verdict does not always reach the plan.** *Closed 2026-08-25 in `4ff4480f`; `refund-already-refunded` confirmed 3/3 at $0.06.* The failing condition was `validation.status === "valid"`, which gated the whole routing block: the model's `[add_internal_note, send_reply]` draft contains no `action` tool, so `orphan_internal_note` made it invalid and materialization never ran. `routingEvidence.escalationReason` was never the constraint — every `ESCALATION_EVIDENCE` code carries a reason string. Structural escalation evidence is now decided ahead of plan validity in `decideAutonomy`, so a plan bad enough to fail validation can no longer suppress the escalation the merchant's own order data demands, and the materialized plan is re-validated because that is the plan the merchant approves. A `planAgent` regression test reproduces the eval failure without a model call.
 - **A forbidden internal note on a prompt-injection attempt.** *Closed 2026-08-25 in `6e9f4412` (PR #67); `prompt-injection-jailbreak-data-exfil` confirmed 3/3 at $0.15, alongside the two other note-forbidding fixtures at 3/3.* Containment always held — no data leaked, no forbidden data tools called — but this was not only a strictness failure: `[send_reply, add_internal_note]` carries no `action` tool, so it was `orphan_internal_note`, invalid, and refused at execution. The merchant got a dead plan and the customer got no reply. The cause was `add_internal_note`'s tool description ordering the model to "Always call this to document what you did" (`7072cd14`, 2026-06-06), which the validation rule added in `d0812097` (2026-08-22) contradicts whenever a plan carries no action step. The description now states the precondition instead. This is also the upstream cause of the defect above — the draft that made plan validity decisive was solicited by the schema — so both fixes stand: one stops a bad draft from suppressing a demanded escalation, the other stops the schema from soliciting the bad draft. Unlike that fix, this one is not model-independent; it changes what the model reads.
@@ -110,7 +116,7 @@ Neither is caused by the bounded-context retirement or the tool-selection fix; t
 | # | Milestone | Status | Depends on |
 |---|---|---|---|
 | 1 | Actionable merchant briefings | **Complete** | — |
-| 2 | Classification lifecycle and compatibility | **Complete** | 1 |
+| 2 | Classification lifecycle and compatibility | **Complete**, less legacy-version coverage (to-do 6) | 1 |
 | 3 | Immutable outcome attribution | **Complete** | 1 |
 | 4 | Bounded replanning after definite failure | **Complete** | completed safety foundations |
 | 5 | Merchant preference memory | **Complete** | 1, 3 |
@@ -152,7 +158,9 @@ Efficiency work may proceed only when it does not compete with the active milest
 
 **Outcome:** all inbound channels produce the same versioned request contract, and future schema changes have an explicit migration lifecycle.
 
-**Status:** complete (2026-08-25, pre-user close). Full evidence in [agent-m2-evidence-2026-08-25.md](agent-m2-evidence-2026-08-25.md).
+**Status:** complete except legacy-version coverage (2026-08-25, pre-user close). Full evidence in
+[agent-m2-evidence-2026-08-25.md](agent-m2-evidence-2026-08-25.md). The version-upgrade acceptance
+test (to-do 6) covers persisted state that actually exists, not a hypothetical future bump.
 
 ### What shipped
 
@@ -174,7 +182,7 @@ Efficiency work may proceed only when it does not compete with the active milest
 | Gate | Evidence |
 |---|---|
 | Outcome | Same v5 request contract from every inbound ordering; stale writes rejected; canary defects fixed. |
-| Compatibility | No persisted-shape change (`CLASSIFIER_VERSION` stays 5). Version inventory and retirement **deferred to first customer** — see below. |
+| Compatibility | No persisted-shape change (`CLASSIFIER_VERSION` stays 5). Version inventory and retirement remain **open** — earlier versions were written to production; see to-do 6. |
 | Deterministic coverage | Channel-contract integration suite + projection unit tests. |
 | Model evidence | Release gate green on `1850cebd` (48/48 hard-gated); contract-unification model call validated by production canary. No additional paid eval owed for plumbing-only changes. |
 | Production canary | `canary-classification-write` on `e79d7f5f`. |
@@ -190,14 +198,18 @@ Tracked in [Open to-dos](#open-to-dos). None are blockers for another milestone.
 - ~~Unify email pre-persistence classification and other-channel post-persistence classification behind one contract.~~ Done 2026-08-25 in `933019d5` and `18f2f49a`.
 - ~~Preserve the staleness guard: never save fields for a request superseded while classification was running.~~ Done 2026-08-25 in `933019d5`.
 - ~~Verify multi-message email bursts classify once per request episode.~~ **Closed as accepted asymmetry** — inline classify on thread open + settled-burst classify on follow-up; characterized, not optimized.
-- ~~Define supported classifier versions and a retirement procedure.~~ **Deferred to first customer** — only v5 is written today; nothing to retire.
+- **Open.** Define supported classifier versions and a retirement procedure. Only v5 is written
+  today, but earlier versions reached production — `CLASSIFIER_VERSION` was `2` on 2026-07-07,
+  and the 2026-08-23 inventory still found two live v4 threads. Any row whose version is not 5
+  renders through `unavailableRequestDisplay()` and depends on the Milestone 1 source-text
+  fallback. To-do 6 is the coverage.
 - ~~Add production metrics for classifier version, failure, stale-write rejection, and source alignment.~~ **Partially done** — write-path events and `audit:classification-alignment` ship; failure/spend-cap telemetry deferred.
 - ~~Decide the `AGENT_CONTEXT_BUDGET_MODE` rollout, then remove the unused branch.~~ Done 2026-08-25.
 
 ### Acceptance
 
 - [x] Channel-contract tests feed equivalent requests through every inbound ordering and compare persisted request identity/facts.
-- [x] No version is retired while an actionable row still depends on it. (N/A — v5 is the only version written.)
+- [x] No version is retired while an actionable row still depends on it. (Vacuously true — no version has been retired; pre-v5 rows still render through the Milestone 1 source-text fallback.)
 - [ ] Version-upgrade acceptance test — seed old-version rows in the test database and assert cards, digests, and replans still render. See [Open to-dos](#open-to-dos).
 
 ## Milestone 3 — Immutable outcome attribution
@@ -223,7 +235,7 @@ Tracked in [Open to-dos](#open-to-dos). None are blockers for another milestone.
 | Gate | Evidence |
 |---|---|
 | Outcome | Episode rows capture plan verdict, execution terminal, escalation, merchant input, dismiss, manual reply, and namespace miss per `source_message_id`. |
-| Compatibility | Additive table and nullable FKs; no migration of legacy thread state required. Historical backfill **deferred to first customer** — see below. |
+| Compatibility | Additive table and nullable FKs; no migration of legacy thread state required. Historical backfill **removed 2026-08-26** — see [Removed capabilities](#removed-capabilities). |
 | Deterministic coverage | `request-outcome.integration.test.ts`, `action-log.test.ts`, `action-log-display.unit.test.ts`. |
 | Model evidence | None owed — no prompt, tool schema, or model pin change. |
 | Production canary | Not run pre-user; write paths exercised by integration tests and deploy verification. |
@@ -242,7 +254,7 @@ Tracked in [Open to-dos](#open-to-dos).
 
 ### Acceptance
 
-- [x] The table requested in [agent-phase-a-measurement-2026-08-22.md](agent-phase-a-measurement-2026-08-22.md) is reproducible for an arbitrary time window on post-deploy traffic via `queryRequestOutcomeReport` / `audit:request-outcomes`. Historical backfill deferred pre-user.
+- [x] The table requested in [agent-phase-a-measurement-2026-08-22.md](agent-phase-a-measurement-2026-08-22.md) is reproducible for an arbitrary time window on post-deploy traffic via `queryRequestOutcomeReport` / `audit:request-outcomes`. Historical backfill removed 2026-08-26.
 - [x] Replaced plans, answered questions, and multi-request threads retain separate histories. Integration tests in `request-outcome.integration.test.ts`.
 
 ## Milestone 4 — Bounded replanning after definite failure
@@ -321,6 +333,13 @@ Tracked in [Open to-dos](#open-to-dos).
 
 **Status:** complete (2026-08-25, pre-user close). Evidence in [agent-m5-evidence-2026-08-25.md](agent-m5-evidence-2026-08-25.md).
 
+**Rollout note (2026-08-27).** The capability is unchanged and the milestone stays complete, but
+the deploy shipped code ahead of `20260825200000_add_merchant_preferences`, so
+`loadActiveMerchantPreferences` raised `P2021` inside an uncaught `Promise.all` in
+`buildContext` and production generated no plans at all until the migration landed 2026-08-26.
+Fixed in `f47b5f85`: the load degrades to an empty list and logs at warn. Preferences are
+guidance only, so the fallback loses guidance without loosening any policy.
+
 ### Work
 
 - Store org-scoped, categorized preferences with source, status, confirmation, and usage metadata.
@@ -368,7 +387,7 @@ claims scan history.
 | Outcome | Damage photos reach the model on email, TikTok, and Instagram; image text is untrusted |
 | Compatibility | No persisted-shape change |
 | Deterministic coverage | Agent unit + integration; see the evidence report |
-| Model evidence | Attachment hydration changed the prompt surface; covered by the green release gate on `1850cebd` |
+| Model evidence | None owed: hydration changed the model's input, but no eval fixture carries an image attachment, so no assertion can move. The `1850cebd` gate predates this work and does not cover it. |
 | Production canary | Deferred pre-user — acceptance integration test |
 | Rollback | Revert commits |
 | Documentation | This plan and the evidence report |
@@ -409,9 +428,9 @@ canary, or a monitoring period; if an item cannot be stated as code, it is not o
 | 3 | Flash sales via expiring automatic discounts | `packages/agent/src/shopify/` | Milestone 7; never direct price mutation |
 | 4 | Enumerated-variant price changes with original values recorded | `packages/agent/src/shopify/` | Milestone 7; bulk wildcard repricing impossible by schema |
 | 5 | OAuth scope migration + graceful degradation for missing scopes | `apps/dashboard/src/app/api/integrations/` | Milestone 7 prerequisite; merchants without new scopes keep working and get an explanation |
-| 6 | Version-upgrade acceptance test | `apps/gateway/src/**/*.integration.test.ts` | Seed v4 rows in the test DB; assert cards, digests, and replans render |
-| 7 | Classification failure + spend-cap-skip telemetry | `packages/agent/src/email-classification.ts` | Write-path telemetry already ships; failure path does not |
-| 8 | Rename `email-classification.ts` to a channel-neutral name | `packages/agent/src/` | Mechanical; it is the shared classifier for every channel |
+| 6 | Version-upgrade acceptance test | `apps/gateway/src/**/*.integration.test.ts` | Seed v4 rows in the test DB; assert cards, digests, and replans render. Not hypothetical: the 2026-08-23 inventory found two live v4 threads, and non-v5 rows fall to `unavailableRequestDisplay()` |
+| 7 | Classification failure + spend-cap-skip telemetry | `apps/gateway/src/message-handlers/email-classification.ts` | Write-path telemetry already ships; failure path does not |
+| 8 | Rename `email-classification.ts` to a channel-neutral name | `apps/gateway/src/message-handlers/` | Mechanical; it is the shared classifier for every channel |
 | 9 | Partial refunds as a distinct capability | `packages/agent/src/tools/registry/order.ts` | Item/quantity selection, calculated amounts, caps, idempotency, reconciliation. Do not weaken the full-refund tool's equality check |
 | 10 | Regenerate `baseline.json` at three repeats | `apps/dashboard/src/lib/agent/__evals__/` | Still the 2026-08-17 capture. Costs a paid run — spend it immediately before a change that needs the comparison, not as housekeeping |
 
@@ -438,9 +457,6 @@ new gate, not the resumption of a parked item.
   tier.
 - **Historical `request_episode_outcomes` backfill.** There is no pre-deploy traffic worth
   recovering; outcome reporting covers post-deploy requests only.
-- **Classifier-version inventory and retirement procedure.** v5 is the only version ever written,
-  so there is nothing to inventory or retire. To-do 6 covers the code that would make a future
-  bump safe.
 
 What survives: the agent still answers "where is my order" from Shopify order and fulfillment data
 through `get_order_tracking`. It makes no carrier call, and its tool description states that it
