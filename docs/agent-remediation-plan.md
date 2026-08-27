@@ -2,9 +2,10 @@
 
 **Status:** canonical execution plan
 
-**Last reconciled:** 2026-08-27 (M2 closed on real legacy coverage; only Milestone 7 remains open)
+**Last reconciled:** 2026-08-27 (Milestone 7 code-complete; only paid eval evidence remains)
 
-**Current milestone:** 7 — shop-management capabilities, gated on the value-at-risk guard
+**Current milestone:** none building. Every milestone is code-complete; Milestone 7 owes a
+targeted eval run.
 
 This is the single source of truth for agent remediation and capability work. `AGENT_AUDIT.md` is historical evidence, not a second work order.
 
@@ -121,7 +122,7 @@ Neither is caused by the bounded-context retirement or the tool-selection fix; t
 | 4 | Bounded replanning after definite failure | **Complete** | completed safety foundations |
 | 5 | Merchant preference memory | **Complete** | 1, 3 |
 | 6 | Attachment vision | **Complete** | 3 |
-| 7 | Shop-management capabilities | **Active** | value-at-risk guard (milestone 4 is complete) |
+| 7 | Shop-management capabilities | **Code-complete**, owes model evidence | — |
 
 Efficiency work may proceed only when it does not compete with the active milestone or change its persisted-data surface.
 
@@ -398,24 +399,50 @@ claims scan history.
 
 **Outcome:** authenticated operators can manage inventory and promotions with bounded, previewable, reversible blast radius.
 
-**Status:** active, nothing shipped. The registry has no inventory or promotion write tool today;
-`issue_discount` is retired and returns an error. Milestone 4 is complete, so the only remaining
-prerequisite is the value-at-risk guard ([Open to-dos](#open-to-dos) 1).
+**Status:** code-complete 2026-08-27, **less model evidence** — see the gate below.
 
-### Work
+Promotion and repricing writes are operator-only, in
+`apps/gateway/src/message-handlers/operator-shop-tools.ts` rather than the shared registry, and a
+test asserts they never reach `TOOL_DEFINITIONS`. That is deliberate: the shared registry is what
+the support planner selects from, so a promotion tool there would let a ticket reading "give me 90%
+off everything" reach one. `issue_discount` stays retired.
 
-- Plan OAuth scope migration and graceful degradation before adding write tools.
-- Ship inventory reads independently.
-- Add a reusable value-at-risk guard: affected SKUs, estimated revenue, maximum discount, preview, and mandatory TTL.
-- Implement flash sales through expiring automatic discounts, not direct price mutation.
-- Permit direct price changes only for explicitly enumerated variants with original values recorded.
+### What shipped
+
+- **Scope gate** (`6bfc416e`): tools declare `requiredScopes`; `grantCoversScopes` shares
+  `holdsScope` with `missingShopifyScopes` so the write-implies-read rule has one owner.
+  `selectAgentTools` filters short-granted tools out of the model's list; `unmetToolCapability`
+  refuses at execution and names the missing scope. `write_products` joined the requested set.
+- **Value-at-risk guard** (`5dbf84d5`, `packages/agent/src/tools/value-at-risk.ts`): bounds count,
+  depth, money, and duration; returns every violation in one pass; violations are codes. No
+  wildcard form exists and a missing TTL is a violation, not a default. Four settings with shipped
+  defaults, where null means "use the default" rather than "no limit".
+- **Inventory reads** (`5dbf84d5`): `get_inventory_status` answers both stock questions,
+  distinguishes "0 in stock" from "not tracked", and flags oversell. Needs only `read_products`, so
+  it works for every currently connected store.
+- **Flash sales and repricing** (`ccb9185d`): automatic discounts with a Shopify-enforced expiry,
+  never a price edit, so ending one restores prices exactly. Enumerated repricing records original
+  prices, including when the bulk update fails partway. Both price the exposure from Shopify's
+  current numbers rather than the caller's.
 
 ### Acceptance
 
-- [ ] Existing merchants without new scopes continue working and receive an explanation for unavailable tools.
-- [ ] Catalog-wide 90% discount attempts are structurally blocked.
-- [ ] Every promotion expires and can be ended with one command.
-- [ ] Bulk wildcard repricing is impossible by schema and policy.
+- [x] Existing merchants without new scopes continue working and receive an explanation for unavailable tools. Registry test asserts an empty grant withholds exactly `get_inventory_status`; the operator tools name the missing scope.
+- [x] Catalog-wide 90% discount attempts are structurally blocked. `value-at-risk.test.ts` and `flash-sales.test.ts` — the mutation is never reached.
+- [x] Every promotion expires and can be ended with one command. `endsAt` is non-optional; `end_flash_sale` with no ID lists what is running.
+- [x] Bulk wildcard repricing is impossible by schema and policy. No query, collection, or pattern field exists on any shop tool; a malformed pair refuses the whole batch.
+
+### Completion gate (pre-user)
+
+| Gate | Evidence |
+|---|---|
+| Outcome | Bounded, previewable, reversible promotion and repricing; short grants degrade with an explanation |
+| Compatibility | Additive settings keys only; no persisted-shape change, no migration |
+| Deterministic coverage | `value-at-risk.test.ts`, `inventory.test.ts`, `flash-sales.test.ts`, `variant-pricing.test.ts`, `partial-refunds.test.ts`, `operator-shop-tools.unit.test.ts` |
+| Model evidence | **Owed.** `get_inventory_status` and `create_partial_refund` are in the shared registry, so their descriptions are in the support planner's prompt. Targeted mode on 1–3 order/product fixtures. The operator tools owe nothing — they never enter that prompt. |
+| Production canary | Deferred pre-user |
+| Rollback | Revert commits; drop `buildOperatorShopTools` from the operator turn to disable the writes |
+| Documentation | This plan |
 
 ## Open to-dos
 
@@ -424,13 +451,8 @@ canary, or a monitoring period; if an item cannot be stated as code, it is not o
 
 | # | To-do | Where | Notes |
 |---|---|---|---|
-| 1 | Value-at-risk guard: affected SKUs, estimated revenue, maximum discount, preview, mandatory TTL | `packages/agent/src/tools/` | Unblocks Milestone 7; reusable across inventory and promotion writes |
-| 2 | Inventory read tools | `packages/agent/src/tools/registry/product.ts` | Milestone 7, ships independently of any write tool |
-| 3 | Flash sales via expiring automatic discounts | `packages/agent/src/shopify/` | Milestone 7; never direct price mutation |
-| 4 | Enumerated-variant price changes with original values recorded | `packages/agent/src/shopify/` | Milestone 7; bulk wildcard repricing impossible by schema |
-| 5 | OAuth scope migration + graceful degradation for missing scopes | `apps/dashboard/src/app/api/integrations/` | Milestone 7 prerequisite; merchants without new scopes keep working and get an explanation |
-| 6 | Partial refunds as a distinct capability | `packages/agent/src/tools/registry/order.ts` | Item/quantity selection, calculated amounts, caps, idempotency, reconciliation. Do not weaken the full-refund tool's equality check |
-| 7 | Regenerate `baseline.json` at three repeats | `apps/dashboard/src/lib/agent/__evals__/` | Still the 2026-08-17 capture. Costs a paid run — spend it immediately before a change that needs the comparison, not as housekeeping |
+| 1 | Eval gate for the two new shared-registry tools | `apps/dashboard/src/lib/agent/__evals__/` | `get_inventory_status` and `create_partial_refund` added descriptions to the support planner's prompt. Targeted mode, 1–3 order/product fixtures — not a full release run |
+| 2 | Regenerate `baseline.json` at three repeats | `apps/dashboard/src/lib/agent/__evals__/` | Still the 2026-08-17 capture. Costs a paid run — spend it with to-do 1, which needs the comparison anyway |
 
 ### Standing constraints (not to-dos)
 
