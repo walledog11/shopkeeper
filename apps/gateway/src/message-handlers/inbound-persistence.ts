@@ -18,7 +18,7 @@ import {
   logClassificationRequestWrite,
   type ClassificationResult,
   type ClassificationWriteOutcome,
-} from './email-classification.js';
+} from './classification.js';
 import {
   resolveInboundEpisode,
   type ResolveInboundEpisodeResult,

@@ -27,7 +27,7 @@ import {
   emptyIntents,
   stripQuotedReply,
   type ClassificationResult,
-} from './email-classification.js';
+} from './classification.js';
 import { processInboundMessage } from './inbound-persistence.js';
 import { recordConversationAttributionSafely } from './conversation-attribution.js';
 

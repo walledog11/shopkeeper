@@ -78,7 +78,7 @@ function buildContext(
     ...(setup.classifierIntents
       ? {
           classifierSignals: {
-            // Keep aligned with email-classification.ts. Routing is tolerant of
+            // Keep aligned with classification.ts. Routing is tolerant of
             // old versions, but evals should model the shape production writes.
             version: 5,
             language: "en",

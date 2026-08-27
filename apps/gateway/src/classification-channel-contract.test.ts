@@ -3,10 +3,10 @@ import type { Queue } from 'bullmq';
 import { describe, expect, it, vi } from 'vitest';
 import { ChannelType, db } from '@shopkeeper/db';
 import { processInboundMessage } from './message-handlers/inbound-persistence.js';
-import type { ClassificationResult } from './message-handlers/email-classification.js';
+import type { ClassificationResult } from './message-handlers/classification.js';
 import type { RequestFacts } from '@shopkeeper/agent/classifier-signals';
 import type { AiSummaryJobData } from './types.js';
-import { CLASSIFIER_VERSION } from './message-handlers/email-classification.js';
+import { CLASSIFIER_VERSION } from './message-handlers/classification.js';
 import { getWorkerTestState, org } from './test-fixtures/worker-test-setup.js';
 import {
   classifierResponse,

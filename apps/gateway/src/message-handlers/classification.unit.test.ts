@@ -11,7 +11,7 @@ import {
   CLASSIFIER_OUTPUT_SCHEMA,
   classifierSystemPrompt,
   logClassificationAttemptUnresolved,
-} from './email-classification.js';
+} from './classification.js';
 import logger from '../logger.js';
 
 function fullResponse(overrides: Record<string, unknown> = {}): string {

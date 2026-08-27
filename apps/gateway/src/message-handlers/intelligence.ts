@@ -20,7 +20,7 @@ import {
   logClassificationRequestWrite,
   classifierSystemPrompt,
   parseClassifierJson,
-} from './email-classification.js';
+} from './classification.js';
 import { listVerifiedOrderNames } from '../storefront-chat-verified-orders.js';
 import { getConversationBurst } from './conversation-burst.js';
 

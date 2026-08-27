@@ -1,5 +1,5 @@
 // Canonical classifier-signal contract. The gateway thread classifier (Phase 1,
-// `email-classification.ts`) writes this shape to `Thread.classifierSignals` as
+// `classification.ts`) writes this shape to `Thread.classifierSignals` as
 // JSON; core reads it back here so routing (Phase 2+) can consume structured
 // intents instead of English-only regex over customer prose. Single home for the
 // intent vocabulary — the gateway imports the type from here rather than
@@ -221,7 +221,7 @@ export interface ClassifierSignals {
 
 // Lenient parse: any persisted object is read as "the classifier ran"; missing
 // or malformed intent booleans default to false rather than throwing, mirroring
-// the write-side tolerance in email-classification.ts.
+// the write-side tolerance in classification.ts.
 export function parseClassifierSignals(raw: unknown): ClassifierSignals | null {
   if (!raw || typeof raw !== "object") return null;
   const source = raw as Record<string, unknown>;
