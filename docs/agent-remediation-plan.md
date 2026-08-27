@@ -2,10 +2,12 @@
 
 **Status:** canonical execution plan
 
-**Last reconciled:** 2026-08-27 (Milestone 7 complete; its targeted eval ran green)
+**Last reconciled:** 2026-08-27 (Milestone 7 complete and merged in `4d69d40c`, PR #71)
 
-**Current milestone:** none building. Every milestone is complete. The one open item is the
-`baseline.json` recapture, which is measurement, not remediation.
+**Current milestone:** none building. Every milestone is complete. Two open items remain, both
+process rather than product: the `baseline.json` recapture, and branch protection on `master`.
+Neither blocks a milestone. See [Retiring this document](#retiring-this-document) for what has to
+be true before this file can be deleted.
 
 This is the single source of truth for agent remediation and capability work. `AGENT_AUDIT.md` is historical evidence, not a second work order.
 
@@ -74,6 +76,15 @@ Shopkeeper is in active development with **no production users** as of 2026-08-2
   production `migrate status` — and give every fan-out load in `buildContext` its own catch, so
   a missing dependency degrades one section of context instead of taking planning down.
 - **Fetch before building:** check whether the branch is already merged (`git fetch`, open PRs) before starting parallel implementation.
+- **A direct push to `master` is an ungated agent change.** `evals.yml` triggers only on
+  `pull_request`, so nothing pushed straight to `master` is ever gated — and `master` is not
+  protected, so nothing stops it. Ten of Milestone 7's twelve commits landed that way, including
+  `0780cb34`, which added a refund tool to the **shared** registry. That is the direct cause of the
+  `refund-partial` contradiction below: a core hard-gated fixture sat asserting against the shipped
+  product for a day, and no CI run existed that could have said so. This is the same accounting as
+  the 2026-08 backlog (31 of 34 agent-path commits ungated); the difference is that this time the
+  drift was found before the paid run rather than by it. The structural fix is branch protection on
+  `master` or a `master`-push trigger for the free preflight — see [Open to-dos](#open-to-dos).
 
 ### Paid eval policy pre-user
 
@@ -486,23 +497,25 @@ runs — a stale assertion spends the budget proving something reading would hav
 | Production canary | Deferred pre-user |
 | Rollback | Revert commits; drop `buildOperatorShopTools` from the operator turn to disable the writes |
 | Documentation | This plan |
+| Landed | PR #71, merge `4d69d40c`. CI 9 pass / 11 skipping / 0 fail; every paid eval lane skipped, so the PR billed nothing. |
 
 ## Open to-dos
 
 Nothing here waits on a first customer, a production canary, or a monitoring period.
 
-All the code is written and the Milestone 7 eval gate is discharged. One measurement item remains.
-Do not re-add a code item without checking it is genuinely unwritten — the last audit found four
-plan claims that had drifted from the code.
+All the milestone code is written and every milestone gate is discharged. What remains is process,
+not product. Do not re-add a code item without checking it is genuinely unwritten — the last audit
+found four plan claims that had drifted from the code.
 
-The two rows were previously recorded as the same run. They are not: a targeted run names its
+Rows 1 and 2 were previously recorded as the same run. They are not: a targeted run names its
 fixtures and skips baseline comparison outright (`EVAL_FIXTURE` → `selectFixtures`), so it cannot
-produce a capture. To-do 1 was closed without touching to-do 2.
+produce a capture no matter how many repeats it does. To-do 1 was closed without touching to-do 2.
 
 | # | To-do | Where | Notes |
 |---|---|---|---|
-| ~~1~~ | ~~Eval gate for the two new shared-registry tools~~ | — | **Done 2026-08-27** on `36896c72`. 9/9 hard-gated at three repeats, $0.21. Required reconciling `refund-partial` first — see Milestone 7 |
-| 2 | Regenerate `baseline.json` at three repeats | `apps/dashboard/src/lib/agent/__evals__/` | Still the 2026-08-17 capture. `test:evals:baseline:overwrite`, ~$2.55 / 252 calls over all 84 fixtures — its own authorisation, not a by-product of a targeted run |
+| ~~1~~ | ~~Eval gate for the two new shared-registry tools~~ | — | **Done 2026-08-27** on `36896c72`, merged in `4d69d40c`. 9/9 hard-gated at three repeats, $0.21. Required reconciling `refund-partial` first — see Milestone 7 |
+| 2 | Regenerate `baseline.json` at three repeats | `apps/dashboard/src/lib/agent/__evals__/` | Still the 2026-08-17 capture, and `master` has moved a great deal since — every drift comparison against it is decreasingly meaningful, and `drift` mode is the only thing that reads it. `test:evals:baseline:overwrite`, ~$2.55 / 252 calls over all 84 fixtures. Its own authorisation, not a by-product of a targeted run |
+| 3 | Gate `master` | `.github/workflows/`, repo settings | `evals.yml` triggers only on `pull_request` and `master` is unprotected, so a direct push is an ungated agent change. Either protect `master` or add a `push: branches: [master]` trigger for the **free** preflight. Free to do; the cost is only in what it prevents |
 
 ### Standing constraints (not to-dos)
 
@@ -538,3 +551,39 @@ cannot retrieve scan history, delivery events, or delivery exceptions.
 - If implementation contradicts the plan, stop and reconcile the plan before adapting the code.
 - Keep detailed investigations in dated reports or git history; do not append them to this execution plan.
 - One active canonical plan means no other document may declare an agent milestone complete or change its dependency order.
+
+## Retiring this document
+
+Every milestone is complete, so this file has stopped being a work order. It has **not** stopped
+being load-bearing, and finishing the open to-dos is not sufficient to delete it. Deleting it while
+the conditions below are unmet loses design law that exists nowhere else and breaks eleven inbound
+links.
+
+Two distinct questions, often conflated:
+
+**1. When does it stop being a plan?** When to-dos 2 and 3 are discharged. At that point no row in
+this file describes work anyone still has to do.
+
+**2. When can the file be deleted?** Only when everything below has a new home. Retirement is a
+migration, not a deletion.
+
+| What only lives here | Why it cannot just be dropped | Where it should go |
+|---|---|---|
+| [Non-negotiable invariants](#non-negotiable-invariants) | Design law for anything touching agent writes. `CLAUDE.md` carries the shop-management and order-ops subsets, not the full set — capture-mode planning, the single `decideAutonomy` owner, "never replan after unknown", "never remove support for persisted data on fixture evidence" appear only here | `CLAUDE.md` agent-change invariants |
+| [Removed capabilities](#removed-capabilities) | The record that carrier tracking, delivery-exception monitoring, and the outcome backfill were **deleted**, not parked. Without it the next reader treats `ShipmentWatch` as unfinished work and rebuilds a capability that was removed for external reasons that still hold | `docs/compatibility-retirement-backlog.md`, or a short `docs/removed-capabilities.md` |
+| [Completion gate](#completion-gate-for-every-milestone) and [Pre-production posture](#pre-production-posture) | The bar for "complete", and the explicit statement that it is relaxed pre-user. Deleting this silently restores the strict bar, or silently abandons it — neither is a decision anyone made | `docs/agent-eval-gates.md` already owns the paid-eval half; it should own the rest |
+| [What still matters pre-user](#what-still-matters-pre-user) | Five incident-derived rules — full-suite-not-targeted, red-static-hides-everything, migration-behind-code, direct-push-is-ungated. Each is a paid lesson with a named incident | `CLAUDE.md` coding/debugging sections |
+| The "one active canonical plan" rule above | It is what stops two documents carrying contradictory completion claims. If this file goes without a successor, nothing holds that role and `AGENT_AUDIT.md` drifts back into being a second work order — the exact problem its own header says this file was created to fix | Whichever document inherits the invariants |
+
+**Inbound links that must be repointed first** (11 across 7 files): `AGENT_AUDIT.md:7` names this the
+canonical plan and `:9` explains the split; the six milestone evidence reports each open by citing
+it, and `agent-m6-evidence-2026-08-26.md:14` deep-links `#removed-capabilities`,
+`agent-m1-briefing-evidence-2026-08-23.md:4` deep-links `#milestone-1--actionable-merchant-briefings`.
+The evidence reports are dated records and should not be rewritten to erase the reference — repoint
+them at the successor, or leave them citing a file that still exists.
+
+**The cheap alternative, and the recommendation:** leave the file in place and change its status
+line to `historical record — no open work`, exactly as `AGENT_AUDIT.md` was handled. A completed
+plan is not clutter; it is the only place the reasoning behind these decisions is written down, and
+git history preserves the file but not its discoverability. Delete it only if it starts attracting
+contradictory edits — the failure mode it was created to solve.
