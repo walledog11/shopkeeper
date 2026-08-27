@@ -33,6 +33,25 @@ export {
   type LowStockVariant,
 } from "./low-stock.js";
 export {
+  AUTOMATIC_DISCOUNT_CREATE_MUTATION,
+  AUTOMATIC_DISCOUNT_DELETE_MUTATION,
+  AUTOMATIC_DISCOUNTS_QUERY,
+  createFlashSale,
+  endFlashSale,
+  listFlashSales,
+  loadVariantsAtRisk,
+  readFlashSales,
+  type FlashSaleSummary,
+} from "./flash-sales.js";
+export {
+  VARIANT_PRICE_UPDATE_MUTATION,
+  VARIANT_PRODUCT_QUERY,
+  deepestMarkdownPercent,
+  formatOriginalPrices,
+  setVariantPrices,
+  type RecordedPriceChange,
+} from "./variant-pricing.js";
+export {
   INVENTORY_STATUS_QUERY,
   formatInventoryStatusLine,
   getInventoryStatus,

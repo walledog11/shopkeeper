@@ -348,6 +348,8 @@ describe('POST /internal/operator/turn', () => {
     expect(Object.keys(params.moduleTools).sort()).toEqual([
       'answer_operator_question',
       'approve_pending_plan',
+      'create_flash_sale',
+      'end_flash_sale',
       'get_ticket',
       'list_active_tickets',
       'mark_ticket_spam',
@@ -356,6 +358,7 @@ describe('POST /internal/operator/turn', () => {
       'revise_pending_plan',
       'search_product_help',
       'send_ticket_reply',
+      'set_variant_prices',
     ]);
   });
 

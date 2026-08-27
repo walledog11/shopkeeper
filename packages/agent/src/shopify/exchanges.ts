@@ -18,12 +18,15 @@ interface VariantPricesData {
   } | null)[];
 }
 
+// Shared with the value-at-risk guard, which needs stock on hand to bound how
+// many units a markdown can touch. Exchanges ignore that field.
 export const VARIANT_PRICES_QUERY = `query variantPrices($ids: [ID!]!) {
   nodes(ids: $ids) {
     ... on ProductVariant {
       id
       title
       price
+      inventoryQuantity
       product { title }
     }
   }

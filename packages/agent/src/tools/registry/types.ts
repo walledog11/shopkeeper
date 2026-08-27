@@ -201,6 +201,31 @@ export interface GetInventoryStatusInput {
   low_stock_threshold?: number;
 }
 
+/**
+ * A sale over named variants. There is no query, collection, or "all products"
+ * form: the set is enumerated or the sale does not exist.
+ */
+export interface CreateFlashSaleInput {
+  variant_ids: string[];
+  discount_percentage: number;
+  duration_hours: number;
+  name?: string;
+}
+
+/** Omitting the id lists what is running, so ending one is always one call. */
+export interface EndFlashSaleInput {
+  flash_sale_id?: string;
+}
+
+/**
+ * Enumerated repricing. Each variant is named with its own new price; there is
+ * no pattern, percentage-across-a-collection, or wildcard form to express.
+ */
+export interface SetVariantPricesInput {
+  prices: { variant_id: string; price: number }[];
+  revisit_in_hours?: number;
+}
+
 export interface SearchKbInput {
   query: string;
 }

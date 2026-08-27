@@ -26,6 +26,8 @@ import {
 import { CREATED_ORDER_LOOKUP_QUERY } from "./order-creation.js";
 import { PRODUCT_SEARCH_QUERY } from "./products.js";
 import { INVENTORY_STATUS_QUERY } from "./inventory.js";
+import { AUTOMATIC_DISCOUNTS_QUERY } from "./flash-sales.js";
+import { VARIANT_PRODUCT_QUERY } from "./variant-pricing.js";
 import {
   CUSTOMER_STORE_CREDIT_TRANSACTIONS_QUERY,
   GIFT_CARDS_BY_CODE_QUERY,
@@ -105,5 +107,13 @@ export const SHOPIFY_QUERY_DOCUMENTS: Record<string, ShopifyQueryDocument> = {
   inventoryStatus: {
     document: INVENTORY_STATUS_QUERY,
     variables: { query: "shopkeeper-validation", first: 1 },
+  },
+  flashSales: {
+    document: AUTOMATIC_DISCOUNTS_QUERY,
+    variables: { first: 1 },
+  },
+  variantProducts: {
+    document: VARIANT_PRODUCT_QUERY,
+    variables: { ids: ["gid://shopify/ProductVariant/1"] },
   },
 };
