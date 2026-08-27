@@ -16,6 +16,7 @@ import {
   classifiedFilterFields,
   classifiedRequestFields,
   classifierUserInput,
+  logClassificationAttemptUnresolved,
   logClassificationRequestWrite,
   classifierSystemPrompt,
   parseClassifierJson,
@@ -27,6 +28,9 @@ export async function generateThreadIntelligence(
   threadId: string,
   opts?: { skipSummary?: boolean },
 ) {
+  // Hoisted so the catch can attribute a failure that happened before, or
+  // during, the thread read that would have told us the org.
+  let organizationId: string | null = null;
   try {
     // skipSummary path: email worker already classified pre-persistence; the
     // thread row is fully populated. Return it as-is so downstream plan
@@ -48,6 +52,7 @@ export async function generateThreadIntelligence(
     });
 
     if (!fullThread) return null;
+    organizationId = fullThread.organizationId;
 
     const chronologicalMessages = [...fullThread.messages].reverse();
     const boundedConversation = buildBoundedClassifierConversation(
@@ -154,13 +159,19 @@ export async function generateThreadIntelligence(
 
     return updated;
   } catch (aiError) {
-    if (isSpendCapError(aiError)) {
+    const spendCapped = isSpendCapError(aiError);
+    logClassificationAttemptUnresolved({
+      threadId,
+      organizationId,
+      path: 'post_persistence',
+      outcome: spendCapped ? 'skipped_spend_cap' : 'failed',
+      err: aiError,
+    });
+    if (spendCapped) {
       // Daily cap reached — leave the thread without a fresh aiSummary/tag.
       // The next call after midnight UTC will refresh it.
-      logger.warn({ threadId }, '[Worker] AI summary skipped — daily LLM spend cap reached');
       return db.thread.findUnique({ where: { id: threadId } });
     }
-    logger.error({ err: aiError, threadId }, '[Worker] Failed to generate AI summary');
     throw aiError;
   }
 }

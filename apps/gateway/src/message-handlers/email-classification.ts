@@ -142,6 +142,35 @@ export function logClassificationRequestWrite(fields: {
   );
 }
 
+export type ClassificationAttemptOutcome = 'failed' | 'skipped_spend_cap';
+
+// The write event above fires only once a verdict exists, so an attempt that
+// never reached one is invisible to it: a spend-capped day and an outage both
+// read as silence. This is the other half — one event per attempt that produced
+// no verdict, in the same typed shape, so failure rate and cap-skip rate are the
+// same query as commit rate rather than two log shapes nothing keeps in step.
+//
+// threadId is null on the pre-persistence path, where no thread exists yet.
+// Severity differs because the operator response differs — a cap is a budget
+// decision, a failure is a defect — but the event name does not, and the
+// outcome is a code rather than the difference between two sentences.
+export function logClassificationAttemptUnresolved(fields: {
+  threadId: string | null;
+  organizationId: string | null;
+  path: 'pre_persistence' | 'post_persistence';
+  outcome: ClassificationAttemptOutcome;
+  err?: unknown;
+}): void {
+  const { err, ...rest } = fields;
+  const payload = { ...rest, classifierVersion: CLASSIFIER_VERSION };
+  const message = '[Worker] Classification attempt unresolved';
+  if (fields.outcome === 'skipped_spend_cap') {
+    logger.warn(payload, message);
+    return;
+  }
+  logger.error({ ...payload, err }, message);
+}
+
 // Null when this channel takes no filter verdict at all. Callers still gate on
 // filterDecidedAt: this owns the channel rule, not the write-once lock.
 export function classifiedFilterFields(result: ClassificationResult, channelType: string) {
@@ -504,11 +533,15 @@ export async function classifyAndSummarizeNewEmail(
     if (!block || block.type !== 'text') throw new Error('Unexpected AI response type');
     return parseClassifierJson(block.text);
   } catch (error) {
-    if (isSpendCapError(error)) {
-      logger.warn({ organizationId }, '[Worker] Classifier skipped — daily LLM spend cap reached');
-    } else {
-      logger.error({ err: error }, '[Worker] Classifier failed — deferring to SUMMARIZE_THREAD');
-    }
+    // Null defers to SUMMARIZE_THREAD either way; the outcome code is what
+    // separates a budget stop from a defect for anyone counting them.
+    logClassificationAttemptUnresolved({
+      threadId: null,
+      organizationId,
+      path: 'pre_persistence',
+      outcome: isSpendCapError(error) ? 'skipped_spend_cap' : 'failed',
+      err: error,
+    });
     return null;
   }
 }

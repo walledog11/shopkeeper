@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   parseClassifierJson,
   classifierSignals,
@@ -10,7 +10,9 @@ import {
   CLASSIFIER_VERSION,
   CLASSIFIER_OUTPUT_SCHEMA,
   classifierSystemPrompt,
+  logClassificationAttemptUnresolved,
 } from './email-classification.js';
+import logger from '../logger.js';
 
 function fullResponse(overrides: Record<string, unknown> = {}): string {
   return JSON.stringify({
@@ -327,5 +329,73 @@ describe('thread write contract', () => {
     // A burst with no unanswered customer message still writes a null source
     // rather than silently keeping a stale one.
     expect(classifiedRequestFields(result, null).requestSourceMessageId).toBeNull();
+  });
+});
+
+describe('logClassificationAttemptUnresolved', () => {
+  // mockRestore wipes mock.calls, so snapshot them before restoring.
+  function capture(fields: Parameters<typeof logClassificationAttemptUnresolved>[0]) {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => logger);
+    const error = vi.spyOn(logger, 'error').mockImplementation(() => logger);
+    try {
+      logClassificationAttemptUnresolved(fields);
+      return { warn: [...warn.mock.calls], error: [...error.mock.calls] };
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
+    }
+  }
+
+  it('reports a spend-cap stop at warn, carrying the outcome as a code', () => {
+    const { warn, error } = capture({
+      threadId: 'thread_1',
+      organizationId: 'org_1',
+      path: 'post_persistence',
+      outcome: 'skipped_spend_cap',
+    });
+
+    expect(error).toHaveLength(0);
+    const [payload, message] = warn[0]!;
+    expect(message).toBe('[Worker] Classification attempt unresolved');
+    expect(payload).toMatchObject({
+      threadId: 'thread_1',
+      organizationId: 'org_1',
+      path: 'post_persistence',
+      outcome: 'skipped_spend_cap',
+      classifierVersion: CLASSIFIER_VERSION,
+    });
+  });
+
+  it('reports a defect at error under the same event name', () => {
+    const boom = new Error('upstream 500');
+    const { warn, error } = capture({
+      threadId: null,
+      organizationId: 'org_1',
+      path: 'pre_persistence',
+      outcome: 'failed',
+      err: boom,
+    });
+
+    expect(warn).toHaveLength(0);
+    const [payload, message] = error[0]!;
+    expect(message).toBe('[Worker] Classification attempt unresolved');
+    expect(payload).toMatchObject({
+      threadId: null,
+      path: 'pre_persistence',
+      outcome: 'failed',
+      err: boom,
+    });
+  });
+
+  it('never leaks the error object onto the spend-cap event', () => {
+    const { warn } = capture({
+      threadId: 'thread_1',
+      organizationId: 'org_1',
+      path: 'pre_persistence',
+      outcome: 'skipped_spend_cap',
+      err: new Error('cap'),
+    });
+
+    expect(warn[0]![0]).not.toHaveProperty('err');
   });
 });
