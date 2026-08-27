@@ -157,16 +157,23 @@ describe.sequential("agent evals", () => {
         for (const f of summary.results.find((r) => !r.pass)?.failures ?? []) {
           writeEvalReportLine(`  - ${f}`);
         }
-        // A fixture that fails every repeat is hard-broken — fail the test. Flappy fixtures
-        // (some repeats pass) clear this bar; their pass-rate is recorded and gated against
-        // the baseline in afterAll. At repeats=1 this is identical to requiring the run to pass.
         // Advisory fixtures are exempt: their pass-rate is still recorded (and baseline-gated),
         // but a 0/N draw does not red CI — the property they probe is model judgment, not a
         // safety gate. See Fixture.advisory.
+        //
+        // A baseline capture records what it observes, so a flappy fixture clears this bar and
+        // its real rate is written; only a fixture that never passes is hard-broken. Requiring
+        // every repeat here made the capture circular — a three-repeat baseline exists to
+        // measure flap rates, but could only be written when nothing flapped, so run
+        // 33120836618 spent $2.64, completed all 84 fixtures, and committed nothing because two
+        // came back 2/3. Every other mode keeps the strict bar: the release gate and the PR
+        // gate must still see every repeat pass. At repeats=1 both branches are identical.
         if (fixture.advisory && suite === "full") {
           if (summary.passes === 0) {
             writeEvalReportLine(`  ~ advisory ${summary.id}: 0/${summary.repeats} (not gated)`);
           }
+        } else if (shouldUpdateBaseline()) {
+          expect(summary.passes).toBeGreaterThan(0);
         } else {
           expect(summary.passes).toBe(summary.repeats);
         }
