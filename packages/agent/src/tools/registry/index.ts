@@ -24,6 +24,7 @@ export type {
   CreateExchangeInput,
   CreateFlashSaleInput,
   CreateGiftCardInput,
+  CreatePartialRefundInput,
   CreateRefundInput,
   CreateReturnInput,
   CreateShopifyOrderInput,

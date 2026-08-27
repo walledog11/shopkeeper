@@ -44,6 +44,7 @@ const VALID_TOOL_INPUTS: Record<ToolName, unknown> = {
   get_order_fulfillment_status: { order_number: "#1234", email: "jane@test.com" },
   get_order_tracking: { order_id: "2001" },
   create_refund: { order_id: "2001", amount: "19.99", reason: "Damaged item" },
+  create_partial_refund: { order_id: "2001", items: [{ line_item_id: "9001", quantity: 1 }], reason: "One arrived torn" },
   cancel_order: { order_id: "2001", reason: "customer", restock: true },
   create_shopify_order: {
     email: "jane@example.com",
@@ -86,6 +87,7 @@ const SHOPIFY_TOOL_ROUTES = [
   ["get_order_fulfillment_status", "getOrderFulfillmentStatus"],
   ["get_order_tracking", "getOrderTracking"],
   ["create_refund", "createRefund"],
+  ["create_partial_refund", "createPartialRefund"],
   ["cancel_order", "cancelOrder"],
   ["create_shopify_order", "createShopifyOrder"],
   ["edit_shopify_order", "editShopifyOrder"],
@@ -169,6 +171,7 @@ function makeDeps(): ToolExecutionDeps {
     getOrderFulfillmentStatus: vi.fn().mockResolvedValue(toolOk("getOrderFulfillmentStatus")),
     getOrderTracking: vi.fn().mockResolvedValue(toolOk("getOrderTracking")),
     createRefund: vi.fn().mockResolvedValue({ ...toolOk("createRefund"), refundedCents: 1234 }),
+    createPartialRefund: vi.fn().mockResolvedValue({ ...toolOk("createPartialRefund"), refundedCents: 500 }),
     cancelOrder: vi.fn().mockResolvedValue(toolOk("cancelOrder")),
     createShopifyOrder: vi.fn().mockResolvedValue(toolOk("createShopifyOrder")),
     editShopifyOrder: vi.fn().mockResolvedValue(toolOk("editShopifyOrder")),

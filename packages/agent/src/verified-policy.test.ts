@@ -29,6 +29,7 @@ const FORBIDDEN_WHEN_VERIFIED = [
   "get_shopify_customer",
   // Mutations, in full — the same list a guest is refused.
   "create_refund",
+  "create_partial_refund",
   "cancel_order",
   "create_shopify_order",
   "edit_shopify_order",

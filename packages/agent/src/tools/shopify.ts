@@ -4,6 +4,7 @@ export {
   createExchange,
   createGiftCard,
   createRefund,
+  createPartialRefund,
   createReturn,
   issueDiscount,
   issueStoreCredit,

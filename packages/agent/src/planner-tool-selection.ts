@@ -93,6 +93,7 @@ const MUTATION_COMMON_TOOL_NAMES = [
 const BROAD_ORDER_MUTATION_TOOL_NAMES = [
   "update_shopify_order_address",
   "create_refund",
+  "create_partial_refund",
   "cancel_order",
   "edit_shopify_order",
   "create_return",

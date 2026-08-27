@@ -6,6 +6,7 @@ import type {
   CancelOrderInput,
   CreateExchangeInput,
   CreateGiftCardInput,
+  CreatePartialRefundInput,
   CreateRefundInput,
   CreateReturnInput,
   CreateShopifyOrderInput,
@@ -137,6 +138,40 @@ export const ORDER_TOOL_DEFINITIONS = [
 
       const result = await deps.createRefund(input, shopify);
       return result;
+    },
+  }),
+  defineTool({
+    name: "create_partial_refund",
+    description:
+      "Use when the customer or merchant asks for money back on specific items rather than the whole order — one item out of three, two of five units, a single damaged piece. Name each line item and how many units come back; Shopify prices the refund and its figure is the one that is applied, so do not calculate or state an amount yourself. Shipping is not refunded. If the whole order is coming back use create_refund instead. If the goods are being physically returned use create_return.",
+    fields: {
+      order_id: stringArg("Shopify order ID (numeric).", { required: true }),
+      items: arrayArg(
+        "The line items to refund and how many units of each.",
+        {
+          line_item_id: stringArg("Shopify line item ID from the order.", { required: true }),
+          quantity: numberArg("How many units of this line item to refund.", { required: true }),
+        },
+        { required: true, minItems: 1 },
+      ),
+      reason: stringArg("Reason for the refund (e.g. 'One napkin arrived torn')."),
+    },
+    category: "action",
+    group: "order",
+    capabilities: ["shopify"],
+    label: "Issued partial refund",
+    planStepLabel: "Issue partial refund",
+    policy: {
+      // Deliberately not `refundAmountLimits`: that check reads `input.amount`,
+      // and this tool has none. The per-call cap is applied inside the
+      // implementation to Shopify's calculated figure, which is the only amount
+      // that exists before the refund is committed.
+      dailyRefundSpendLimit: true,
+    },
+    execute: async (input: CreatePartialRefundInput, ctx, settings, deps) => {
+      const shopify = requireShopify(ctx);
+      if (!shopify) return noShopify;
+      return deps.createPartialRefund(input, shopify, settings);
     },
   }),
   defineTool({

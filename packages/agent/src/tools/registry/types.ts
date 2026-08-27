@@ -65,6 +65,17 @@ export interface CreateRefundInput {
   reason?: string;
 }
 
+/**
+ * Item and quantity selection only. There is deliberately no amount field: the
+ * model chooses what comes back, Shopify prices it, and the cap applies to
+ * Shopify's figure.
+ */
+export interface CreatePartialRefundInput {
+  order_id: string;
+  items: { line_item_id: string; quantity: number }[];
+  reason?: string;
+}
+
 export interface CancelOrderInput {
   order_id: string;
   reason?: "customer" | "fraud" | "inventory" | "declined" | "other";
@@ -282,6 +293,11 @@ export interface ToolExecutionDeps {
   getOrderFulfillmentStatus(input: GetOrderFulfillmentStatusInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   getOrderTracking(input: GetOrderTrackingInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   createRefund(input: CreateRefundInput, ctx: ShopifyToolContext): Promise<RefundToolResult>;
+  createPartialRefund(
+    input: CreatePartialRefundInput,
+    ctx: ShopifyToolContext,
+    settings: OrgSettings,
+  ): Promise<RefundToolResult>;
   cancelOrder(input: CancelOrderInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   createShopifyOrder(
     input: CreateShopifyOrderInput,

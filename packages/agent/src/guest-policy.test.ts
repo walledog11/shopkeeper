@@ -23,6 +23,7 @@ const FORBIDDEN_FOR_GUESTS = [
   "get_shopify_customer",
   // Mutations, in full.
   "create_refund",
+  "create_partial_refund",
   "cancel_order",
   "create_shopify_order",
   "edit_shopify_order",

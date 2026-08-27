@@ -21,6 +21,7 @@ import {
   getOrderFulfillmentStatus,
   getOrderTracking,
   createRefund,
+  createPartialRefund,
   createReturn,
   createExchange,
   cancelOrder,
@@ -99,6 +100,7 @@ async function enforceToolPolicy(
 const TOOL_EXECUTION_DEPS: ToolExecutionDeps = {
   searchShopifyProducts,
   getInventoryStatus,
+  createPartialRefund,
   findCustomer,
   updateShopifyCustomerInfo,
   getShopifyOrders,
