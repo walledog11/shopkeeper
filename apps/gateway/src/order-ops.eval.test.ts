@@ -86,7 +86,7 @@ async function buildEvalContext(
     orgId,
     orgName: 'Eval Store',
     recentMessages: [],
-    shopify: { shop: 'order-ops-eval.myshopify.com', accessToken: 'eval-token' },
+    shopify: { shop: 'order-ops-eval.myshopify.com', accessToken: 'eval-token', grantedScopes: [] },
     escalate: async (reason: string) => {
       escalations.push(reason);
     },

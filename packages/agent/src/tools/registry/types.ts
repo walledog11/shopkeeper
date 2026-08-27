@@ -2,6 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import type { RecordReturnWatchParams } from "@shopkeeper/db";
 import type { BaseAgentContext } from "../../agent-context.js";
 import type { OrgSettings, ToolCategory } from "../../types.js";
+import type { ShopifyOAuthScope } from "../../shopify/integration-health.js";
 import type { ToolResult } from "../result.js";
 import type { SupportStatsSummary } from "../support-stats-types.js";
 
@@ -292,6 +293,12 @@ export interface AgentToolDefinition<TInput = unknown, TName extends string = st
   };
   policy: ToolPolicyMetadata;
   availability: ToolAvailability;
+  /**
+   * Shopify OAuth scopes this tool cannot run without. Empty for every tool
+   * that shipped before the gate existed, so an existing merchant's grant keeps
+   * covering everything it covered before.
+   */
+  requiredScopes: readonly ShopifyOAuthScope[];
   execute(
     input: TInput,
     ctx: BaseAgentContext,

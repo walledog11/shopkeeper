@@ -114,6 +114,11 @@ export interface BaseAgentContext {
     // Host-generated identity for one tool call. Mutations that support
     // provider idempotency derive their stable provider key from this value.
     operationId?: string;
+    // The OAuth grant this token was issued with. A token keeps its grant, so an
+    // install that predates a capability expansion is short of the scopes that
+    // expansion added; tools declaring those scopes are withheld rather than
+    // failing at the provider. Empty when no grant was ever recorded.
+    grantedScopes: readonly string[];
   } | null;
   // Module-supplied escalation/flag sink. Support routes a thread to a human;
   // a thread-less module records a finding. Every module must declare its path.

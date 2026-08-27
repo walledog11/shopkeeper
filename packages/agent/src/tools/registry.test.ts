@@ -8,13 +8,18 @@ import {
   TOOL_DEFINITIONS,
   TOOL_GROUPS,
   TOOL_LABELS,
+  TOOL_REQUIRED_SCOPES,
   READ_TOOL_NAMES,
   ToolInputValidationError,
   getToolDefinition,
+  selectAgentTools,
   toolNamesForGroups,
+  toolScopesGranted,
+  unmetToolCapability,
   type ToolExecutionDeps,
   type ToolName,
 } from "./registry/index.js";
+import { defineTool, stringArg } from "./registry/schema.js";
 
 const VALID_TOOL_INPUTS: Record<ToolName, unknown> = {
   search_kb: { query: "returns policy" },
@@ -400,5 +405,82 @@ describe("agent tool execution routing", () => {
 
     expect(result.status).toBe("escalated");
     expect(ctx.askOperator).toHaveBeenCalledWith("Do we ship to Canada?");
+  });
+});
+
+describe("Shopify scope gating", () => {
+  // The graceful-degradation guarantee: a merchant whose token predates every
+  // scoped capability keeps the entire tool set they had before the gate existed.
+  it("withholds nothing from a store that recorded no grant at all", () => {
+    const withEmptyGrant = selectAgentTools(undefined, null, []).map((tool) => tool.name);
+    const withNoCheck = selectAgentTools(undefined, null, null).map((tool) => tool.name);
+
+    expect(withEmptyGrant).toEqual(withNoCheck);
+    expect(withEmptyGrant.length).toBeGreaterThan(0);
+  });
+
+  it("requires no scope from any tool that shipped before the gate", () => {
+    const scoped = TOOL_DEFINITIONS
+      .filter((definition) => TOOL_REQUIRED_SCOPES[definition.name].length > 0)
+      .map((definition) => definition.name);
+
+    // Tools added later may declare scopes; this asserts the default is empty,
+    // so adding the gate changed nothing for an existing install.
+    expect(scoped).toEqual([]);
+  });
+
+  it("reads a tool's requirement through the shared grant rule", () => {
+    expect(toolScopesGranted("search_shopify_products", [])).toBe(true);
+  });
+
+  describe("a tool that does declare scopes", () => {
+    const scopedTool = defineTool({
+      name: "scoped_probe",
+      description: "Probe tool for the scope gate.",
+      fields: { value: stringArg("v") },
+      category: "action",
+      group: "product",
+      capabilities: ["shopify"],
+      label: "Probed",
+      planStepLabel: "Probe",
+      requiredScopes: ["write_products"],
+      execute: async () => toolOk("ok"),
+    });
+
+    function shopifyCtx(grantedScopes: readonly string[]): BaseAgentContext {
+      return {
+        orgId: "org_1",
+        orgName: "Test",
+        recentMessages: [],
+        shopify: { shop: "t.myshopify.com", accessToken: "token", grantedScopes },
+        escalate: async () => {},
+      };
+    }
+
+    it("runs when the grant covers it", () => {
+      expect(unmetToolCapability(scopedTool, shopifyCtx(["write_products"]))).toBeNull();
+    });
+
+    it("refuses with the scope named and a way out", () => {
+      const refusal = unmetToolCapability(scopedTool, shopifyCtx(["read_products"]));
+
+      expect(refusal?.message).toContain("write_products");
+      expect(refusal?.message).toContain("Reconnect Shopify");
+    });
+
+    // No connection at all is the capability gate's answer, not the scope
+    // gate's, so the merchant is told what is actually wrong.
+    it("reports a missing connection rather than a missing scope", () => {
+      const refusal = unmetToolCapability(scopedTool, {
+        orgId: "org_1",
+        orgName: "Test",
+        recentMessages: [],
+        shopify: null,
+        escalate: async () => {},
+      });
+
+      expect(refusal?.message).toContain("no Shopify integration connected");
+      expect(refusal?.message).not.toContain("write_products");
+    });
   });
 });

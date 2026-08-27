@@ -8,6 +8,7 @@ import { KNOWLEDGE_TOOL_DEFINITIONS } from "./knowledge.js";
 import { MESSAGING_TOOL_DEFINITIONS } from "./messaging.js";
 import { ORDER_TOOL_DEFINITIONS } from "./order.js";
 import { PRODUCT_TOOL_DEFINITIONS } from "./product.js";
+import { grantCoversScopes } from "../../shopify/integration-health.js";
 import { ToolInputValidationError } from "./schema.js";
 import { STATS_TOOL_DEFINITIONS } from "./stats.js";
 import { THREAD_TOOL_DEFINITIONS } from "./thread.js";
@@ -93,6 +94,15 @@ export const TOOL_CAPABILITIES: Record<string, readonly ToolCapability[]> = Obje
   TOOL_DEFINITIONS.map((definition) => [definition.name, definition.capabilities])
 );
 
+export const TOOL_REQUIRED_SCOPES: Record<string, readonly string[]> = Object.fromEntries(
+  TOOL_DEFINITIONS.map((definition) => [definition.name, definition.requiredScopes])
+);
+
+/** Whether a store's grant covers everything a tool needs. */
+export function toolScopesGranted(name: string, grantedScopes: readonly string[]): boolean {
+  return grantCoversScopes(grantedScopes, TOOL_REQUIRED_SCOPES[name] ?? []);
+}
+
 export const TOOL_GROUPS: Record<ToolGroup, readonly string[]> = TOOL_GROUP_ORDER.reduce(
   (groups, group) => ({
     ...groups,
@@ -144,9 +154,19 @@ export function toolNamesForGroups(...groups: ToolGroup[]): string[] {
   return groups.flatMap((group) => [...TOOL_GROUPS[group]]);
 }
 
+/**
+ * The tools a run may use.
+ *
+ * `grantedScopes` is the store's live OAuth grant, or null when there is no
+ * Shopify connection to check against — the `shopify` capability already gates
+ * that case. Filtering here rather than only at execution means the model never
+ * drafts a step the merchant's grant cannot support, so a store on an older
+ * grant keeps working instead of being offered actions that would be refused.
+ */
 export function selectAgentTools(
   settings?: OrgSettings,
   allowedToolNames?: readonly string[] | null,
+  grantedScopes?: readonly string[] | null,
 ): Anthropic.Tool[] {
   const s = resolveAgentSettings(settings);
   const allowed = allowedToolNames ? new Set(allowedToolNames) : null;
@@ -154,6 +174,7 @@ export function selectAgentTools(
     const category = TOOL_CATEGORIES[tool.name];
     if (category && !s.toolsEnabled[category]) return false;
     if (allowed && !allowed.has(tool.name)) return false;
+    if (grantedScopes && !toolScopesGranted(tool.name, grantedScopes)) return false;
     return true;
   });
 }

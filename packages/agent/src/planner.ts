@@ -75,9 +75,11 @@ export async function planAgent(
   // would be refused for, so the shopper is never promised a lookup that cannot
   // happen.
   const storefrontTools = storefrontToolNames(ctx);
+  const grantedScopes = ctx.shopify?.grantedScopes ?? null;
   let availableTools = storefrontTools
-    ? selectAgentTools(settings, storefrontTools)
-    : selectAgentTools(settings).filter((tool) => !isGuestOnlyTool(tool.name));
+    ? selectAgentTools(settings, storefrontTools, grantedScopes)
+    : selectAgentTools(settings, null, grantedScopes)
+        .filter((tool) => !isGuestOnlyTool(tool.name));
   if (merchantAnswerReplan) {
     availableTools = availableTools.filter(tool => tool.name !== "ask_operator");
   }

@@ -12,6 +12,7 @@ export {
   getShopifyConnectionState,
   isShopifyIntegrationOperational,
   missingShopifyScopes,
+  recordedShopifyScopes,
   type ShopifyConnectionState,
 } from '@shopkeeper/agent/shopify/integration-health';
 

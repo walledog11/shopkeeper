@@ -3,10 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   SHOPIFY_OAUTH_SCOPES,
   getShopifyConnectionState,
+  grantCoversScopes,
   isShopifyIntegrationOperational,
   isShopifyIntegrationSweepable,
   isSimulatedShopifyIntegration,
   missingShopifyScopes,
+  recordedShopifyScopes,
+  unmetScopes,
 } from "./integration-health.js";
 
 const HOUR_MS = 3_600_000;
@@ -138,11 +141,13 @@ describe("missingShopifyScopes", () => {
     expect(missingShopifyScopes(withoutDiscounts)).toEqual(["write_discounts"]);
   });
 
+  // The reads left over are the ones with no matching write in the requested
+  // set. `read_products` dropped off this list when `write_products` joined it
+  // for enumerated-variant repricing, because a write grant implies its read.
   it("accepts a write grant in place of the implied read", () => {
     const impliedReads = SHOPIFY_OAUTH_SCOPES.filter((scope) => !scope.startsWith("read_"));
 
     expect(missingShopifyScopes(impliedReads)).toEqual([
-      "read_products",
       "read_content",
       "read_store_credit_accounts",
     ]);
@@ -150,5 +155,51 @@ describe("missingShopifyScopes", () => {
 
   it("ignores case and surrounding whitespace in the granted list", () => {
     expect(missingShopifyScopes(SHOPIFY_OAUTH_SCOPES.map((scope) => ` ${scope.toUpperCase()} `))).toEqual([]);
+  });
+});
+
+describe("grantCoversScopes", () => {
+  it("covers a capability that asks for nothing", () => {
+    expect(grantCoversScopes([], [])).toBe(true);
+  });
+
+  it("withholds a capability from a grant that predates it", () => {
+    const older = SHOPIFY_OAUTH_SCOPES.filter((scope) => scope !== "write_products");
+    expect(grantCoversScopes(older, ["write_products"])).toBe(false);
+    expect(unmetScopes(older, ["write_products"])).toEqual(["write_products"]);
+  });
+
+  it("accepts an implied read from the matching write grant", () => {
+    expect(grantCoversScopes(["write_products"], ["read_products"])).toBe(true);
+    expect(unmetScopes(["write_products"], ["read_products"])).toEqual([]);
+  });
+
+  // The implication runs one way only: holding a read never confers the write.
+  it("does not let a read grant stand in for a write", () => {
+    expect(grantCoversScopes(["read_products"], ["write_products"])).toBe(false);
+  });
+
+  it("ignores casing and padding the provider may return", () => {
+    expect(grantCoversScopes([" WRITE_PRODUCTS "], ["write_products"])).toBe(true);
+  });
+
+  it("needs every required scope, not just one", () => {
+    expect(grantCoversScopes(["write_discounts"], ["write_discounts", "write_products"]))
+      .toBe(false);
+    expect(unmetScopes(["write_discounts"], ["write_discounts", "write_products"]))
+      .toEqual(["write_products"]);
+  });
+});
+
+describe("recordedShopifyScopes", () => {
+  it("distinguishes an unrecorded grant from an empty one", () => {
+    expect(recordedShopifyScopes(null)).toBeNull();
+    expect(recordedShopifyScopes({})).toBeNull();
+    expect(recordedShopifyScopes({ oauthScopes: [] })).toEqual([]);
+  });
+
+  it("keeps only string entries", () => {
+    expect(recordedShopifyScopes({ oauthScopes: ["read_orders", 7, null] }))
+      .toEqual(["read_orders"]);
   });
 });

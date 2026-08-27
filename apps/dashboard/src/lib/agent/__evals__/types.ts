@@ -49,7 +49,9 @@ export interface ThreadSetup {
   kbArticles?: FixtureKbArticle[];
   recentOrders?: ShopifyOrderSummary[];
   linkedShopifyCustomerName?: string | null;
-  shopify?: { shop: string; accessToken: string } | null;
+  // Omitted means a fully connected store: the runtime grants every scope the
+  // tools expect. Set it explicitly to exercise a short grant.
+  shopify?: { shop: string; accessToken: string; grantedScopes?: readonly string[] } | null;
   shopifyCustomerId?: string | null;
   openThreadCount?: number;
   orgSettings?: Partial<OrgSettings>;

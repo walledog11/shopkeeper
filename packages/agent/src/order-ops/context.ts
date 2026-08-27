@@ -1,5 +1,6 @@
 import { db } from "@shopkeeper/db";
 import { shopifyRestJson, type ShopifyContext } from "../shopify/index.js";
+import { recordedShopifyScopes } from "../shopify/integration-health.js";
 import type { BaseAgentContext } from "../agent-context.js";
 
 // Order-ops (module #2): a thread-less agent context. Unlike SupportContext this
@@ -160,7 +161,10 @@ export async function buildOrderOpsContext(
     orgId,
     orgName: org.name ?? "Support",
     recentMessages: [],
-    shopify: shopifyCtx,
+    shopify: {
+      ...shopifyCtx,
+      grantedScopes: recordedShopifyScopes(shopifyIntegration.metadata) ?? [],
+    },
     // Seam 2: the injected flag sink. runOrderOps routes flag_order through
     // ctx.escalate; the host (gateway worker) decides what a flag does (record
     // a finding now, Telegram-notify later) without the core importing it.

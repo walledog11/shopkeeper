@@ -190,11 +190,12 @@ export async function runAgent(
   // stricter of the two in every case.
   const storefrontTools = storefrontToolNames(ctx);
   const storefrontMode = storefrontTools !== null;
+  const grantedScopes = ctx.shopify?.grantedScopes ?? null;
   const selectedCoreTools = readOnly
     ? selectAgentTools(settings, storefrontMode
         ? READ_TOOL_NAMES.filter((name) => isStorefrontAllowedTool(ctx, name))
-        : READ_TOOL_NAMES).filter((tool) => storefrontMode || !isGuestOnlyTool(tool.name))
-    : selectAgentTools(settings, storefrontTools).filter((tool) => (
+        : READ_TOOL_NAMES, grantedScopes).filter((tool) => storefrontMode || !isGuestOnlyTool(tool.name))
+    : selectAgentTools(settings, storefrontTools, grantedScopes).filter((tool) => (
         (storefrontMode || !isGuestOnlyTool(tool.name))
         && (!gatewayOperatorMode || !OPERATOR_HIDDEN_TOOL_NAMES.has(tool.name))
       ));

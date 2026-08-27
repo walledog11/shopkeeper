@@ -1,5 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { ToolCategory } from "../../types.js";
+import type { ShopifyOAuthScope } from "../../shopify/integration-health.js";
 import type { AgentToolDefinition, ToolCapability, ToolGroup, ToolParser, ToolPolicyMetadata } from "./types.js";
 
 type FieldDefinition =
@@ -40,6 +41,8 @@ interface DefineToolOptions<TInput, TName extends string> {
   label: string;
   planStepLabel: string;
   availability?: "active" | "retired";
+  /** Shopify OAuth scopes without which this tool cannot run. */
+  requiredScopes?: readonly ShopifyOAuthScope[];
   policy?: Partial<Omit<ToolPolicyMetadata, "categoryPermission">> & {
     categoryPermission?: boolean;
   };
@@ -206,6 +209,7 @@ export function defineTool<const TName extends string, TInput>(
       ...definition.policy,
     },
     availability: definition.availability ?? "active",
+    requiredScopes: definition.requiredScopes ?? [],
     execute: definition.execute,
   };
 }

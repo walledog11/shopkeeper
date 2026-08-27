@@ -2,16 +2,10 @@ import { db } from '@shopkeeper/db';
 import {
   getShopifyConnectionState,
   missingShopifyScopes,
+  recordedShopifyScopes,
   refreshShopifyIntegrationHealthIfDue,
 } from '@/lib/server/shopify-integration';
 import type { Integration } from '@/types';
-
-function recordedShopifyScopes(metadata: unknown): string[] | null {
-  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
-  const scopes = (metadata as Record<string, unknown>).oauthScopes;
-  if (!Array.isArray(scopes)) return null;
-  return scopes.filter((scope): scope is string => typeof scope === 'string');
-}
 
 export function serializeIntegrationRecord<T extends {
   accessToken?: string | null;

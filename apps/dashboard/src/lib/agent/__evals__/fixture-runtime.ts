@@ -13,6 +13,7 @@ import {
 } from "@shopkeeper/db"
 import type { AgentContext, AgentActionMode } from "@shopkeeper/agent/context"
 import { emptyIntents, emptyRequestFacts } from "@shopkeeper/agent/classifier-signals"
+import { SHOPIFY_OAUTH_SCOPES } from "@shopkeeper/agent/shopify/integration-health"
 import {
   CONTEXT_BUDGETS,
   budgetKbArticles,
@@ -94,7 +95,12 @@ function buildContext(
     },
     recentMessages: budgetRecentMessages(recentMessages).messages,
     openThreadCount: setup.openThreadCount ?? 1,
-    shopify: setup.shopify ?? null,
+    shopify: setup.shopify
+      ? {
+          ...setup.shopify,
+          grantedScopes: setup.shopify.grantedScopes ?? [...SHOPIFY_OAUTH_SCOPES],
+        }
+      : null,
     recentOrders: setup.recentOrders ?? [],
     linkedShopifyCustomerName: setup.linkedShopifyCustomerName ?? null,
     kbArticles: budgetKbArticles(kbArticles).articles,

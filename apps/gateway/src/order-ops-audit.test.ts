@@ -107,7 +107,7 @@ describe('order-ops finding persistence', () => {
       orgId: org.id,
       orgName: 'Audit Store',
       recentMessages: [],
-      shopify: { shop: 'order-ops-audit.myshopify.com', accessToken: 'audit-token' },
+      shopify: { shop: 'order-ops-audit.myshopify.com', accessToken: 'audit-token', grantedScopes: [] },
       escalate: async (r: string) => {
         escalations.push(r);
       },
@@ -141,7 +141,7 @@ describe('order-ops finding persistence', () => {
       orgId: org.id,
       orgName: 'Audit Store',
       recentMessages: [],
-      shopify: { shop: 'order-ops-audit.myshopify.com', accessToken: 'audit-token' },
+      shopify: { shop: 'order-ops-audit.myshopify.com', accessToken: 'audit-token', grantedScopes: [] },
       escalate: async () => {},
       order: { ...makeOrder(), riskSignals: [] },
     };

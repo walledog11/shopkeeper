@@ -1,6 +1,7 @@
 import { db } from "@shopkeeper/db";
 import { parseClassifierSignals } from "./classifier-signals.js";
 import { shopifyRestJson, type ShopifyContext } from "./shopify/client.js";
+import { recordedShopifyScopes } from "./shopify/integration-health.js";
 import { CHANNEL_TYPE, isOperatorChannel } from "./thread-constants.js";
 import { MEMORY_OVERRIDE_TAG, memoryOverrideTargetIds } from "./kb-memory.js";
 import {
@@ -363,7 +364,11 @@ export async function buildContext(
     recentMessages,
     shopify:
       shopifyIntegration?.accessToken
-        ? { shop: shopifyIntegration.externalAccountId, accessToken: shopifyIntegration.accessToken }
+        ? {
+            shop: shopifyIntegration.externalAccountId,
+            accessToken: shopifyIntegration.accessToken,
+            grantedScopes: recordedShopifyScopes(shopifyIntegration.metadata) ?? [],
+          }
         : null,
     // The merchant is already the human in an operator conversation. Keep a
     // defensive no-side-effect sink even though operator turns hide the
