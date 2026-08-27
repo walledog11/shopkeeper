@@ -2,10 +2,10 @@
 
 **Status:** canonical execution plan
 
-**Last reconciled:** 2026-08-27 (Milestone 7 code-complete; only paid eval evidence remains)
+**Last reconciled:** 2026-08-27 (Milestone 7 complete; its targeted eval ran green)
 
-**Current milestone:** none building. Every milestone is code-complete; Milestone 7 owes a
-targeted eval run.
+**Current milestone:** none building. Every milestone is complete. The one open item is the
+`baseline.json` recapture, which is measurement, not remediation.
 
 This is the single source of truth for agent remediation and capability work. `AGENT_AUDIT.md` is historical evidence, not a second work order.
 
@@ -132,7 +132,7 @@ Neither is caused by the bounded-context retirement or the tool-selection fix; t
 | 4 | Bounded replanning after definite failure | **Complete** | completed safety foundations |
 | 5 | Merchant preference memory | **Complete** | 1, 3 |
 | 6 | Attachment vision | **Complete** | 3 |
-| 7 | Shop-management capabilities | **Code-complete**, owes model evidence | — |
+| 7 | Shop-management capabilities | **Complete** | — |
 
 No milestone is building. Efficiency work may proceed freely, subject to the invariants above;
 when a milestone is active again, it must not compete with it or change its persisted-data surface.
@@ -410,7 +410,8 @@ claims scan history.
 
 **Outcome:** authenticated operators can manage inventory and promotions with bounded, previewable, reversible blast radius.
 
-**Status:** code-complete 2026-08-27, **less model evidence** — see the gate below.
+**Status:** complete (2026-08-27, pre-user close). The targeted eval ran green on `36896c72`:
+9/9 hard-gated at three repeats, $0.21 of an authorised $0.60.
 
 Promotion and repricing writes are operator-only, in
 `apps/gateway/src/message-handlers/operator-shop-tools.ts` rather than the shared registry, and a
@@ -442,6 +443,37 @@ off everything" reach one. `issue_discount` stays retired.
 - [x] Catalog-wide 90% discount attempts are structurally blocked. `value-at-risk.test.ts` and `flash-sales.test.ts` — the mutation is never reached.
 - [x] Every promotion expires and can be ended with one command. `endsAt` is non-optional; `end_flash_sale` with no ID lists what is running.
 - [x] Bulk wildcard repricing is impossible by schema and policy. No query, collection, or pattern field exists on any shop tool; a malformed pair refuses the whole batch.
+- [x] The two shared-registry tools do not disturb the support planner's existing selections.
+  Targeted eval on `36896c72`, three repeats each: `refund-partial` 3/3, `routing-product-search`
+  3/3 (`get_inventory_status` does not steal `search_shopify_products` on an availability
+  question), `adjacent-edit-order-vs-cancel` 3/3 (the item-scoped refund tool does not steal a
+  pre-fulfillment edit).
+
+### The fixture this milestone contradicted
+
+Adding a capability to the shared registry can invalidate a fixture without touching it, and the
+selection is what makes that reachable rather than theoretical. `create_partial_refund` shipped in
+`0780cb34` and no fixture changed. `refund-partial` — core, hard-gated — still asserted
+`mustEscalate` on the grounds that "partial refunds are merchant-only", and its scenario, one
+cracked candle out of a two-item order, is verbatim the case the new tool's description claims.
+Because the tool sits in `BROAD_ORDER_MUTATION_TOOL_NAMES`, the fixture's own `mutative_request`
+intent put it in front of the model. The fixture was asserting against the product.
+
+It was reconciled in `36896c72` before the gate ran: the plan now expects
+`create_partial_refund` + `send_reply`, and `escalate_to_human` moved to `mustNotCallTools`. At the
+default guarded tier this is still a card the merchant approves, not an autonomous refund. The
+rubric check was replaced rather than dropped — `partial_refund_not_promised` guarded a promise the
+agent can no longer make, and `refund_amount_not_stated` guards the property that replaced it: the
+model names units, `refunds/calculate.json` prices them, so a reply stating a figure is asserting a
+number it did not compute. The judge passed it 3/3.
+
+The neighbours were checked rather than assumed: `refund-no-amount` cannot reach the tool (no order
+in context) and `adjacent-refund-vs-return` is single-item with two explicit redirects in the
+description. One fixture was wrong, not a class of them.
+
+**Standing consequence.** A tool added to the shared registry is added to every support fixture's
+option set. Grep the fixtures whose scenario the new tool's own description claims, before the gate
+runs — a stale assertion spends the budget proving something reading would have shown for free.
 
 ### Completion gate (pre-user)
 
@@ -450,7 +482,7 @@ off everything" reach one. `issue_discount` stays retired.
 | Outcome | Bounded, previewable, reversible promotion and repricing; short grants degrade with an explanation |
 | Compatibility | Additive settings keys only; no persisted-shape change, no migration |
 | Deterministic coverage | `value-at-risk.test.ts`, `inventory.test.ts`, `flash-sales.test.ts`, `variant-pricing.test.ts`, `partial-refunds.test.ts`, `operator-shop-tools.unit.test.ts` |
-| Model evidence | **Owed.** `get_inventory_status` and `create_partial_refund` are in the shared registry, so their descriptions are in the support planner's prompt. Targeted mode on 1–3 order/product fixtures. The operator tools owe nothing — they never enter that prompt. |
+| Model evidence | **Paid, green.** Targeted mode on `36896c72`, 3 fixtures × 3 repeats, 9/9 hard-gated, $0.2063 of $0.60 and 24 of 60 calls. Ledger: `test:evals:fixture` on that SHA. The operator tools owe nothing — they never enter that prompt. |
 | Production canary | Deferred pre-user |
 | Rollback | Revert commits; drop `buildOperatorShopTools` from the operator turn to disable the writes |
 | Documentation | This plan |
@@ -459,15 +491,18 @@ off everything" reach one. `issue_discount` stays retired.
 
 Nothing here waits on a first customer, a production canary, or a monitoring period.
 
-The list used to say "every item here is code to write". That is no longer true and the change is
-the point: all the code is written, and what remains is one paid eval run buying the model evidence
-Milestone 7 owes. Both rows are that same run. Do not re-add a code item without checking it is
-genuinely unwritten — the last audit found four plan claims that had drifted from the code.
+All the code is written and the Milestone 7 eval gate is discharged. One measurement item remains.
+Do not re-add a code item without checking it is genuinely unwritten — the last audit found four
+plan claims that had drifted from the code.
+
+The two rows were previously recorded as the same run. They are not: a targeted run names its
+fixtures and skips baseline comparison outright (`EVAL_FIXTURE` → `selectFixtures`), so it cannot
+produce a capture. To-do 1 was closed without touching to-do 2.
 
 | # | To-do | Where | Notes |
 |---|---|---|---|
-| 1 | Eval gate for the two new shared-registry tools | `apps/dashboard/src/lib/agent/__evals__/` | `get_inventory_status` and `create_partial_refund` added descriptions to the support planner's prompt. Targeted mode, 1–3 order/product fixtures — not a full release run |
-| 2 | Regenerate `baseline.json` at three repeats | `apps/dashboard/src/lib/agent/__evals__/` | Still the 2026-08-17 capture. Costs a paid run — spend it with to-do 1, which needs the comparison anyway |
+| ~~1~~ | ~~Eval gate for the two new shared-registry tools~~ | — | **Done 2026-08-27** on `36896c72`. 9/9 hard-gated at three repeats, $0.21. Required reconciling `refund-partial` first — see Milestone 7 |
+| 2 | Regenerate `baseline.json` at three repeats | `apps/dashboard/src/lib/agent/__evals__/` | Still the 2026-08-17 capture. `test:evals:baseline:overwrite`, ~$2.55 / 252 calls over all 84 fixtures — its own authorisation, not a by-product of a targeted run |
 
 ### Standing constraints (not to-dos)
 
