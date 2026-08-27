@@ -28,6 +28,14 @@ This is the single source of truth for agent remediation and capability work. `A
 - Never auto-promote an inferred merchant preference.
 - Never ask the merchant to approve or decide an item whose request cannot be shown.
 - Never remove support for persisted data based only on fixture migration or code age.
+- Shop-management writes are operator-only. Promotion and repricing tools live in the gateway's
+  operator module tools, never the shared registry, so a customer conversation has no promotion
+  tool to reach for. The value-at-risk guard is the second line, not the only one.
+- A promotion is an expiring automatic discount, never a price edit. Ending one restores prices
+  because none were changed.
+- Every write that moves money names what it touches. No tool takes a query, a collection, or a
+  wildcard, and no refund tool lets the model name the amount: Shopify prices the selection and the
+  cap applies to Shopify's figure.
 
 ## Completion gate for every milestone
 
@@ -94,6 +102,8 @@ Prefer **one PR** with code + deterministic tests over multi-PR sequences (A/B/C
 - Person naming, sentence helpers, customer lookup, and adjacent mutation descriptions were consolidated.
 - Intent-driven tool selection ships with a typed one-retry namespace-miss fallback.
 - Paid evals are manual, budgeted, artifact-producing, and separated from deterministic CI.
+- Tools declare the Shopify scopes they need; a short grant withholds the tool with an explanation
+  rather than failing at the provider.
 
 These foundations remain valid. Their prior evidence is summarized in [AGENT_AUDIT.md](../AGENT_AUDIT.md), [agent-eval-gates.md](agent-eval-gates.md), and [agent-phase-a-measurement-2026-08-22.md](agent-phase-a-measurement-2026-08-22.md).
 
@@ -124,7 +134,8 @@ Neither is caused by the bounded-context retirement or the tool-selection fix; t
 | 6 | Attachment vision | **Complete** | 3 |
 | 7 | Shop-management capabilities | **Code-complete**, owes model evidence | — |
 
-Efficiency work may proceed only when it does not compete with the active milestone or change its persisted-data surface.
+No milestone is building. Efficiency work may proceed freely, subject to the invariants above;
+when a milestone is active again, it must not compete with it or change its persisted-data surface.
 
 ## Milestone 1 — Actionable merchant briefings
 
@@ -446,8 +457,12 @@ off everything" reach one. `issue_discount` stays retired.
 
 ## Open to-dos
 
-Every item here is code to write. Nothing on this list waits on a first customer, a production
-canary, or a monitoring period; if an item cannot be stated as code, it is not on the list.
+Nothing here waits on a first customer, a production canary, or a monitoring period.
+
+The list used to say "every item here is code to write". That is no longer true and the change is
+the point: all the code is written, and what remains is one paid eval run buying the model evidence
+Milestone 7 owes. Both rows are that same run. Do not re-add a code item without checking it is
+genuinely unwritten — the last audit found four plan claims that had drifted from the code.
 
 | # | To-do | Where | Notes |
 |---|---|---|---|

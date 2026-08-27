@@ -12,7 +12,7 @@
 
 **Architecture:** The agent core lives in `packages/agent/` (`@shopkeeper/agent`) and is consumed by both apps. The gateway runs durable inbound, planning, and module work in-process; the dashboard owns interactive UI and provider-coupled delivery. Host-specific locks, logging, alerts, and delivery are injected at the package boundary. More execution continues to move into the gateway worker. Read this before assuming a support-only framing when touching agent architecture.
 
-**Modules:** Support is v1 (built). Order-ops (module #2) is code-complete and monitoring-only behind `ORDER_RISK_MONITOR_ENABLED` — flag-and-notify only, no autonomy tiers, no plan surface. Open rollout gates are in `docs/to-do-list.md`.
+**Modules:** Support is v1 (built). Order-ops (module #2) is code-complete and monitoring-only behind `ORDER_RISK_MONITOR_ENABLED` — flag-and-notify only, no autonomy tiers, no plan surface. Shop management (inventory, promotions, repricing) is code-complete and **operator-only** — its write tools live in `apps/gateway/src/message-handlers/operator-shop-tools.ts`, never the shared registry. Open rollout gates are in `docs/to-do-list.md`.
 
 **Channel priority — do not propose WhatsApp as the next channel** (decision 2026-08-07). WhatsApp is a *merchant-control* channel, not a customer-origin one (`docs/product-truth.md` §2 and its guardrails), so building it adds a third way for the merchant to reach the agent alongside Telegram and iMessage — it does not add a way for customers to reach the merchant. It is also a weak wedge in the US market Shopkeeper targets, where WhatsApp penetration is low. Treat it as built-when-a-merchant-asks, never as the default next thing. It stays on the roadmap and is not a removal candidate.
 
@@ -66,6 +66,7 @@ Canonical location for all agent logic; both apps import it via subpath exports.
 - `plan-preview.ts` — classifies plans as `quick_reply` vs `needs_review` for the dashboard home
 - `tools/registry/` — all tool definitions (Anthropic format), `TOOL_CATEGORIES`, `PLAN_STEP_LABELS`, `TOOL_LABELS`, input types
 - `tools/executor.ts` — tool dispatch + policy enforcement (`maxRefundAmount`, `blockCancellations`, etc.)
+- `tools/value-at-risk.ts` — blast-radius guard for shop-management writes: bounds affected variants, discount depth, revenue at risk, and duration; returns typed violation codes and a preview
 - `shopify/*.ts` — Shopify API implementations
 - `settings.ts` — defaults + resolver. Settings live in `Organization.settings` JSON.
 - `thread-auth.ts`, `plan-cache.ts`, `plan-cache-shape.ts`, `turns.ts`, `turn.ts`, `plan-execution.ts` — route-facing helpers
@@ -81,11 +82,12 @@ Not a copy of the core — these inject dashboard infrastructure into it:
 Modes:
 - **Support** — ticket threads. Auto-plan on open if last message is from the customer; plan cached in `Thread.cachedPlan`. `ActionPlanCard` → approve → `POST /api/agent`. Manual invoke via `@{agentName}` in the ticket composer.
 - **Operator** — `/dashboard/agent` (Concierge: each session opens a new `dashboard_agent` thread and closes the previous), and Telegram/iMessage via `sms_agent`: one durable operator thread per binding; pending approvals are agent state + control tools (approve/reject/revise/answer the pending plan), with a keyword fast path for literal yes/no/help.
+- **Shop management** — operator turns only, via gateway `moduleTools` (`operator-shop-tools.ts`): flash sales, ending them, and enumerated repricing. Every write goes through the value-at-risk guard and declares its Shopify scope. A support thread cannot reach these.
 - **Composer-ask** — read-only Q&A inside the support composer (`POST /api/agent/ask`). Calls `runAgent(..., { readOnly: true })`, which filters tools to `read` category and never mutates anything.
 
 Read tool list and exact behavior from `packages/agent/src/tools/registry/` — do not infer.
 
-`Organization.settings` keys: `agentName`, `aiContext`, `brandVoice`, `autoPlanOnOpen`, `defaultInstruction`, `requireApprovalForActions`, `autonomyTier` (watch/guarded/trusted; stored `broad`/`full` map to trusted), `autoExecuteMode` (off/shadow/live; legacy boolean `autoExecuteEnabled` is migrated), `toolsEnabled` (action/communication/internal/read), `maxRefundAmount`, `blockCancellations`, `blockCustomLineItems`, `maxIterations` (default 10).
+`Organization.settings` keys: `agentName`, `aiContext`, `brandVoice`, `autoPlanOnOpen`, `defaultInstruction`, `requireApprovalForActions`, `autonomyTier` (watch/guarded/trusted; stored `broad`/`full` map to trusted), `autoExecuteMode` (off/shadow/live; legacy boolean `autoExecuteEnabled` is migrated), `toolsEnabled` (action/communication/internal/read), `maxRefundAmount`, `blockCancellations`, `blockCustomLineItems`, `maxIterations` (default 10), and the shop-management bounds `maxPromotionVariants` / `maxPromotionDiscountPercent` / `maxPromotionValueAtRiskCents` / `maxPromotionTtlHours` (null means "use the shipped default", never "no limit").
 
 ### Agent-change invariants
 Standing rules for any change to agent behavior (promoted from the 2026-07 behavior plan):
@@ -98,6 +100,7 @@ Standing rules for any change to agent behavior (promoted from the 2026-07 behav
 - Proactive/mutative monitors are flag-gated and notify-only until their rollout gate lands; enabling a flag never bypasses a gate.
 - Keep the agent core host-agnostic and thread-optional. Add narrow injected seams only for real host differences. New modules reuse the existing run, spend, policy, observability, and tool contracts — no speculative plugin framework.
 - Read-only and flag-only modules may ship behind a feature flag. External writes require reviewable shadow evidence and an explicit rollout gate **distinct from** the monitor flag.
+- **Shop-management writes stay operator-only.** A promotion or reprice tool in the shared registry is reachable from a customer ticket, which is how "give me 90% off everything" becomes a plan step. They ship as gateway `moduleTools`, and a test asserts they never appear in `TOOL_DEFINITIONS`. Promotions are expiring automatic discounts, never price edits; every write names its variants individually; no refund tool lets the model name the amount.
 - **Order-ops** stays flag-and-notify-only: `runOrderOps` selects read tools plus `flag_order` only. It sits outside autonomy tiers (`flag_order` sets `policy.categoryPermission: false`). Before any mutating order action: shadow period, P1 execution-claim rollout verified, per-module cap enforcement proven, and a separate rollout gate from `ORDER_RISK_MONITOR_ENABLED`.
 
 ## Other entry points

@@ -7,7 +7,7 @@ of its own fix: the moment an item reads as evidence rather than as an instructi
 it back. Evidence checklists, failure drills, and standing procedure live in the linked
 docs.
 
-Last reviewed: 2026-08-22.
+Last reviewed: 2026-08-27.
 
 Work is grouped by **what kind of action it needs**, not by when it was filed. Only the
 two items under Ship need code.
@@ -27,11 +27,21 @@ and never from `/health`, which is liveness-only and cannot report a commit at a
   version, but `5ee51baa` changed `extensions/shopkeeper-chat/assets/shopkeeper-chat.js`
   and its locale string. Theme app extension assets reach merchants only in a released
   app version, so the handoff-notice fix — the notice promising a reply that had already
-  arrived — is live on both app surfaces and in nobody's storefront. No scope changed:
-  `shopify app deploy`, then confirm `-28` becomes the active row. Do this before the
-  merchant rollout below, which would otherwise put a real merchant on the stale copy.
-  `-26` is the one-step rollback target; derive that from the CLI rather than from here,
-  per [production/shopify-app-config-reference.md](production/shopify-app-config-reference.md).
+  arrived — is live on both app surfaces and in nobody's storefront. `shopify app deploy`,
+  then confirm `-28` becomes the active row. Do this before the merchant rollout below,
+  which would otherwise put a real merchant on the stale copy. `-26` is the one-step
+  rollback target; derive that from the CLI rather than from here, per
+  [production/shopify-app-config-reference.md](production/shopify-app-config-reference.md).
+
+  **A scope changed, so this release is no longer cosmetic.** `write_products` joined
+  `access_scopes` for enumerated repricing (`set_variant_prices`). Under managed
+  installation the Partner Dashboard configuration decides what a merchant grants, so
+  until this ships no merchant can hold the scope and the tool refuses with "reconnect
+  Shopify" — which would not have helped them, because there was nothing to reconnect
+  *to*. Expect every already-connected merchant to show the Shopify card as
+  needs-attention until they re-authorize; that is the intended degradation, not a fault.
+  Flash sales need only `write_discounts`, which is already granted, so they work
+  without this.
 
 - [ ] **Restore the production Postmark forwarding integration after a credential
   canary.** Verify the dashboard's configured `POSTMARK_API_KEY` can send from
@@ -240,9 +250,9 @@ channel, so it adds a third route alongside Telegram and iMessage rather than an
 customer reach, and US penetration is low in the target market. Do not propose it as the
 next channel to build. [product-truth.md](product-truth.md) §2.
 
-**The eval release gate is manual and CI can run it.** Baseline is current — 250/252
-across 84 fixtures at 3 repeats, captured 2026-08-17 — and `ANTHROPIC_API_KEY` is a repo
-secret. Pull requests run only the free deterministic preflight. Before releasing an
+**The eval release gate is manual and CI can run it.** The committed baseline is the
+2026-08-17 capture (250/252 across 84 fixtures at 3 repeats) and is **stale**: Milestones
+2 through 7 all landed after it. `ANTHROPIC_API_KEY` is a repo secret. Pull requests run only the free deterministic preflight. Before releasing an
 agent-path change that can move an assertion, explicitly dispatch `evals.yml` in
 `release` mode for the exact release SHA with dollar and model-call ceilings. The trigger
 question is **"can this change move an assertion?"** — not "did it touch a gated path."

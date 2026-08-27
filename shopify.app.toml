@@ -15,7 +15,7 @@ compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact
 uri = "https://clerk-production-e37f.up.railway.app/webhooks/shopify"
 
 [access_scopes]
-scopes = "read_customers,write_customers,write_discounts,write_gift_cards,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders,write_order_edits,read_orders,write_orders,read_products,read_returns,write_returns,read_content,write_store_credit_account_transactions,read_store_credit_accounts,write_app_proxy"
+scopes = "read_customers,write_customers,write_discounts,write_gift_cards,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders,write_order_edits,read_orders,write_orders,read_products,write_products,read_returns,write_returns,read_content,write_store_credit_account_transactions,read_store_credit_accounts,write_app_proxy"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 
