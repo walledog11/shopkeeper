@@ -489,7 +489,7 @@ describe('sendEmail async outbound (OUTBOUND_EMAIL_ASYNC)', () => {
 
     expect(result.status).toBe('error');
     const saved = await db.message.findFirst({
-      where: { contentText: 'Will fail to queue.', senderType: SenderType.agent },
+      where: { organizationId: org.id, contentText: 'Will fail to queue.', senderType: SenderType.agent },
     });
     expect(saved?.sendStatus).toBe('failed');
     expect(saved?.sendError).toBe('Could not queue email send');
@@ -511,7 +511,7 @@ describe('sendEmail async outbound (OUTBOUND_EMAIL_ASYNC)', () => {
 
     expect(result.status).toBe('error');
     const saved = await db.message.findFirst({
-      where: { contentText: 'Queue result is unclear.', senderType: SenderType.agent },
+      where: { organizationId: org.id, contentText: 'Queue result is unclear.', senderType: SenderType.agent },
     });
     expect(saved?.sendStatus).toBe('unknown');
     expect(saved?.sendError).toBe('Email queue admission outcome unknown');
