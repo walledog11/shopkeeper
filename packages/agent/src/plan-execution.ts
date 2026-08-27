@@ -7,7 +7,8 @@ import { isAgentPlanCacheHit, readAgentPlanCache } from "./plan-cache.js";
 import type { PlanFailureReplanContext } from "./plan-cache-shape.js";
 import { getPendingCustomerMessageId } from "./plan-cache-shape.js";
 import { hashInstruction, hashPlan, type AgentActionApproval } from "./agent-actions.js";
-import { decideAutonomy, type AutonomyVerdict } from "./autonomy.js";
+import { allowsAutomaticExecution, decideAutonomy, type AutonomyVerdict } from "./autonomy.js";
+import logger from "./logger.js";
 import { shouldBlockTrustedSendActions, shouldSkipAutoPlan } from "./sender-trust.js";
 import { resolveAutoExecuteMode } from "./settings.js";
 import { TOOL_CATEGORIES } from "./tools/registry/index.js";
@@ -61,6 +62,17 @@ export interface FailureReplanRecovery {
   context: PlanFailureReplanContext;
 }
 
+/**
+ * A child plan was drafted after a definite parent failure but cannot run on
+ * its own authority, so it waits on the thread for the merchant to approve it.
+ */
+export interface FailureReplanAwaitingApproval {
+  planId: string | null;
+  sourceMessageId: string | null;
+  plan: AgentPlan;
+  context: PlanFailureReplanContext;
+}
+
 interface ExecutedCachedPlan extends CurrentCachedPlan {
   plan: AgentPlan;
   approvedToolCalls: RawToolCall[];
@@ -70,6 +82,7 @@ interface ExecutedCachedPlan extends CurrentCachedPlan {
   };
   result: AgentResult;
   failureReplanRecovery?: FailureReplanRecovery;
+  failureReplanAwaitingApproval?: FailureReplanAwaitingApproval;
 }
 
 export interface ExpectedPlanIdentity {
@@ -328,7 +341,7 @@ export async function executeCurrentCachedHomePlan(params: {
   }
 
   const verdict = current.verdict;
-  const automaticAllowed = verdict.kind === "quick_reply" || verdict.kind === "auto_execute";
+  const automaticAllowed = allowsAutomaticExecution(verdict);
   const merchantAllowed = automaticAllowed
     || verdict.kind === "escalate"
     || (verdict.kind === "needs_review" && verdict.approvalAllowed);
@@ -493,37 +506,74 @@ export async function executeCurrentCachedHomePlan(params: {
     && isDefinitePlanExecutionFailure(executionOutcome)
     && deps.planAgent
   ) {
-    const childCache = await attemptFailureReplanAfterExecution({
-      orgId: params.orgId,
-      threadId: params.threadId,
-      settings: params.settings,
-      instruction: current.instruction,
-      sourceMessageId: current.lastCustomerMessageId,
-      parentPlanId: current.planId,
-      parentPlan: current.plan,
-      parentVerdict: verdict,
-      approvedToolCalls,
-      result,
-      allowMutativeAutoExecute: params.allowMutativeAutoExecute,
-      buildContext: deps.buildContext,
-      planAgent: deps.planAgent,
-    });
-    if (childCache) {
-      const childExecuted = await executeCurrentCachedHomePlan({
-        ...params,
-        failureReplanAllowed: false,
-      }, deps);
-      if (!childCache.failureReplan) {
-        return childExecuted;
+    // The parent's side effects are already committed. Nothing below may throw
+    // them away, so a replan that fails for any reason degrades to reporting
+    // the parent result rather than surfacing an error to the approver.
+    try {
+      const attempt = await attemptFailureReplanAfterExecution({
+        orgId: params.orgId,
+        threadId: params.threadId,
+        settings: params.settings,
+        instruction: current.instruction,
+        sourceMessageId: current.lastCustomerMessageId,
+        parentPlanId: current.planId,
+        parentPlan: current.plan,
+        approvedToolCalls,
+        result,
+        allowMutativeAutoExecute: params.allowMutativeAutoExecute,
+        buildContext: deps.buildContext,
+        planAgent: deps.planAgent,
+      });
+
+      if (attempt?.status === "executable") {
+        // The child shares none of the parent's tool calls or plan identity, so
+        // the parent's approval envelope — approvedToolCalls, expectedIdentity,
+        // approver — cannot travel with it. Everything it inherits is listed
+        // here; it runs on the authority its own verdict grants, which is why
+        // the intent is automatic.
+        const childExecuted = await executeCurrentCachedHomePlan({
+          orgId: params.orgId,
+          threadId: params.threadId,
+          settings: params.settings,
+          executionIntent: "automatic",
+          failureRoute: params.failureRoute,
+          ...(params.allowMutativeAutoExecute !== undefined
+            ? { allowMutativeAutoExecute: params.allowMutativeAutoExecute }
+            : {}),
+          failureReplanAllowed: false,
+        }, deps);
+        return {
+          ...childExecuted,
+          failureReplanRecovery: {
+            parentResult: result,
+            parentPlan: current.plan,
+            context: attempt.context,
+          },
+        };
       }
-      return {
-        ...childExecuted,
-        failureReplanRecovery: {
-          parentResult: result,
-          parentPlan: current.plan,
-          context: childCache.failureReplan,
-        },
-      };
+
+      if (attempt?.status === "awaiting_approval") {
+        return {
+          ...current,
+          plan: current.plan,
+          approvedToolCalls,
+          execution: { id: executionId ?? null, status: executionOutcome },
+          result,
+          failureReplanAwaitingApproval: {
+            planId: attempt.cache.planId,
+            sourceMessageId: attempt.cache.lastCustomerMessageId,
+            plan: attempt.cache.plan,
+            context: attempt.context,
+          },
+        };
+      }
+    } catch (replanError) {
+      logger.warn({
+        orgId: params.orgId,
+        threadId: params.threadId,
+        planId: current.planId,
+        error: executionError(replanError),
+      }, "[agent] failure replan did not complete; reporting the parent result");
     }
   }
 

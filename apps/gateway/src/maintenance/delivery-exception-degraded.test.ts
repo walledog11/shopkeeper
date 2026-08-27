@@ -45,6 +45,17 @@ import { runDeliveryExceptionMonitor } from './delivery-exception-monitor.js';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 
+const ACCEPTANCE_SHOP = 'acceptance.myshopify.com';
+
+// The monitor sweeps every org with a Shopify integration, so a blanket
+// mockResolvedValue would hand this shipment to whatever orgs other suites
+// left in the database and inflate the counts. Answer only for this shop.
+function onlyForAcceptanceShop(statusUpdatedAt: string) {
+  return async (ctx: { shop: string }) => (
+    ctx.shop === ACCEPTANCE_SHOP ? [degradedUspsShipment(statusUpdatedAt)] : []
+  );
+}
+
 function degradedUspsShipment(statusUpdatedAt: string) {
   return {
     orderId: '1001',
@@ -82,7 +93,7 @@ beforeEach(async () => {
 
   await createTestIntegration(org.id, {
     platform: ChannelType.shopify,
-    externalAccountId: 'acceptance.myshopify.com',
+    externalAccountId: ACCEPTANCE_SHOP,
     accessToken: 'test-token',
   });
 
@@ -100,13 +111,13 @@ afterEach(async () => {
 describe('degraded USPS stall acceptance', () => {
   it('routes a six-day Shopify fulfillment stall through approval planning without carrier scans', async () => {
     const statusUpdatedAt = new Date(Date.now() - 7 * 24 * 3_600_000).toISOString();
-    listRecentShippedOrderShipments.mockResolvedValue([degradedUspsShipment(statusUpdatedAt)]);
+    listRecentShippedOrderShipments.mockImplementation(onlyForAcceptanceShop(statusUpdatedAt));
 
-    await expect(runDeliveryExceptionMonitor()).resolves.toEqual({
-      orgsScanned: 1,
-      shipmentsChecked: 1,
-      issuesNotified: 1,
-    });
+    // orgsScanned counts every sweepable org in the database, so it belongs to
+    // whatever else the suite left behind, not to this acceptance.
+    const scan = await runDeliveryExceptionMonitor();
+    expect(scan.shipmentsChecked).toBe(1);
+    expect(scan.issuesNotified).toBe(1);
 
     const instruction = generateThreadPlanSpy.mock.calls[0]?.[3]?.instruction as string;
     expect(instruction).toContain('stalled in transit');
@@ -121,13 +132,11 @@ describe('degraded USPS stall acceptance', () => {
 
   it('does not flag a degraded USPS shipment that updated within the six-day window', async () => {
     const statusUpdatedAt = new Date(Date.now() - 2 * 24 * 3_600_000).toISOString();
-    listRecentShippedOrderShipments.mockResolvedValue([degradedUspsShipment(statusUpdatedAt)]);
+    listRecentShippedOrderShipments.mockImplementation(onlyForAcceptanceShop(statusUpdatedAt));
 
-    await expect(runDeliveryExceptionMonitor()).resolves.toEqual({
-      orgsScanned: 1,
-      shipmentsChecked: 1,
-      issuesNotified: 0,
-    });
+    const scan = await runDeliveryExceptionMonitor();
+    expect(scan.shipmentsChecked).toBe(1);
+    expect(scan.issuesNotified).toBe(0);
     expect(generateThreadPlanSpy).not.toHaveBeenCalled();
     await expect(getShipmentWatch(org.id, '9400')).resolves.toBeNull();
   });

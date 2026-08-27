@@ -460,9 +460,14 @@ function formatAutoExecutionMessage(
   ));
   const statusLine = result.failureReplanRecovered
     ? 'One step failed, then I finished the rest myself:'
-    : result.autoExecutionStatus === 'error'
-      ? 'I tried to handle this one myself but hit a problem:'
-      : 'Handled this one myself:';
+    : result.failureReplanAwaitingApproval
+      ? 'One step failed. I drafted a follow-up but it needs your approval:'
+      : result.autoExecutionStatus === 'error'
+        ? 'I tried to handle this one myself but hit a problem:'
+        : 'Handled this one myself:';
+  const failureStep = result.failureReplanRecovered || result.failureReplanAwaitingApproval
+    ? result.failureReplanFailureTool ?? null
+    : null;
 
   const lines: (string | null)[] = [
     headline,
@@ -470,9 +475,9 @@ function formatAutoExecutionMessage(
     '',
     statusLine,
     ...stepLines,
-    result.failureReplanRecovered && result.failureReplanFailureTool ? '' : null,
-    result.failureReplanRecovered && result.failureReplanFailureTool
-      ? `Problem step: ${result.failureReplanFailureTool}${result.failureReplanFailureReason ? ` — ${result.failureReplanFailureReason}` : ''}`
+    failureStep ? '' : null,
+    failureStep
+      ? `Problem step: ${failureStep}${result.failureReplanFailureReason ? ` — ${result.failureReplanFailureReason}` : ''}`
       : null,
     result.autoExecutionSummary ? '' : null,
     result.autoExecutionSummary ?? null,

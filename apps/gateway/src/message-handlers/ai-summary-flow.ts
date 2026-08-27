@@ -261,6 +261,21 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
         planResult,
       );
     }
+    // The report above says a step failed and a follow-up needs approval. The
+    // card carrying that follow-up has to reach the same channels, or the
+    // merchant is told to approve something they cannot see.
+    if (planResult.failureReplanAwaitingApproval && planResult.plan) {
+      await sendOperatorPlanNotification(
+        organizationId,
+        threadId,
+        customerName,
+        channelType,
+        updatedThread?.requestSummary ?? null,
+        planResult.plan,
+        planResult.instruction,
+        planResult.identity ? { identity: planResult.identity } : undefined,
+      );
+    }
     return;
   }
 

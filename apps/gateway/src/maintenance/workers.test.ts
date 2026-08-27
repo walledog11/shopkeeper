@@ -268,7 +268,7 @@ describe('createMaintenanceWorkers', () => {
     );
 
     const repeatableAdds = queueInstances.flatMap((queue) => queue.add.mock.calls);
-    expect(repeatableAdds).toHaveLength(15);
+    expect(repeatableAdds).toHaveLength(16);
 
     for (const addCall of repeatableAdds) {
       expect(addCall[2]).toEqual(expect.objectContaining(PROCESSING_QUEUE_DEFAULTS));

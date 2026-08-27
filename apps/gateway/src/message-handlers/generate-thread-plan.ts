@@ -102,6 +102,7 @@ export interface GeneratedThreadPlan {
   autoExecutionActions?: AgentActionResult[];
   autoExecutionError?: string;
   failureReplanRecovered?: boolean;
+  failureReplanAwaitingApproval?: boolean;
   failureReplanFailureTool?: string;
   failureReplanFailureReason?: string;
 }
@@ -353,6 +354,7 @@ async function buildAutoExecutionResult(
   await removePendingPlanForThread(organizationId, threadId);
 
   const recovery = executed.failureReplanRecovery;
+  const awaitingApproval = executed.failureReplanAwaitingApproval;
   const failed = recovery ? null : findFailedToolResult(executed.result);
   return {
     autoExecuted: true,
@@ -367,6 +369,20 @@ async function buildAutoExecutionResult(
       failureReplanRecovered: true,
       failureReplanFailureTool: recovery.context.failureTool,
       failureReplanFailureReason: recovery.context.failureReason,
+    } : {}),
+    ...(awaitingApproval ? {
+      failureReplanAwaitingApproval: true,
+      failureReplanFailureTool: awaitingApproval.context.failureTool,
+      failureReplanFailureReason: awaitingApproval.context.failureReason,
+      // The child is the thread's current plan now, so the card the merchant
+      // approves must be the child's, not the parent's that just failed.
+      plan: toGatewayAgentPlan(awaitingApproval.plan),
+      identity: planIdentity({
+        planId: awaitingApproval.planId,
+        sourceMessageId: awaitingApproval.sourceMessageId,
+        instruction: executed.instruction,
+        plan: awaitingApproval.plan,
+      }),
     } : {}),
   };
 }

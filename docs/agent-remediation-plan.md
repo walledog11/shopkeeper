@@ -50,6 +50,14 @@ Shopkeeper is in active development with **no production users** as of 2026-08-2
 
 - **Code invariants:** one classifier contract, staleness guards, schema/parser alignment, unified write semantics.
 - **Deterministic tests:** unit and database-backed integration tests on every PR — free, fast, and the primary regression net.
+- **Run the whole suite, not the files you touched.** Milestones 4 and 6 both closed on targeted
+  green runs. A full `npm run test:integration` would have caught a stale job count and an
+  acceptance test that only passes on an empty database; the M4 defect needed a path the shipped
+  fixtures never called. Targeted runs are for the edit loop, never for the close.
+- **A red static stage hides everything behind it.** `Static Verification` gates Build,
+  Integration/Coverage, and E2E in `ci.yml`. One unused export over the knip baseline skipped all
+  three for two commits, which is why the broken tests above reached `master` unseen. Treat a knip
+  baseline failure as a blocked pipeline, not a lint nit.
 - **Fetch before building:** check whether the branch is already merged (`git fetch`, open PRs) before starting parallel implementation.
 
 ### What to defer until first customer or first production deploy
@@ -254,7 +262,26 @@ These were Milestone 2 bullets that only pay off with real merchant persisted st
 
 **Outcome:** a valid multi-step plan can recover once from a definite provider rejection without duplicating completed work or weakening approval requirements.
 
-**Status:** complete (2026-08-25, pre-user close). Full evidence in [agent-m4-evidence-2026-08-25.md](agent-m4-evidence-2026-08-25.md).
+**Status:** complete (2026-08-25, pre-user close; corrected 2026-08-26). Full evidence in [agent-m4-evidence-2026-08-25.md](agent-m4-evidence-2026-08-25.md).
+
+**Correction (2026-08-26).** The milestone was closed on coverage that only exercised
+`executionIntent: "automatic"`. On both merchant-approval routes the replan threw instead of
+recovering: the recursive child call re-passed the parent's `params`, so the parent's
+`approvedToolCalls` were validated against the child plan, which shares none of them
+(`BadRequestError: Approved tool calls must come from the current reviewed plan`). The parent's
+side effects were already committed, so the approver got an error after a half-executed plan and
+an unconsumed child plan stayed cached. `/api/agent`, `/api/agent/quick-approve`, and the gateway
+operator approve path were all affected.
+
+Three things changed. The child no longer inherits the parent's approval envelope —
+`approvedToolCalls`, `expectedIdentity`, and `approver` are dropped, and the child runs with
+`executionIntent: "automatic"`. Whether it may run at all is now its own verdict's answer, read
+through the single `allowsAutomaticExecution` owner rather than a parent-versus-child rank
+comparison that permitted a child *less* restrictive than its parent. A child that cannot clear
+autonomy on its own is committed to the cache and returned as `failureReplanAwaitingApproval`, so
+the merchant is told the step failed and gets the follow-up card on every bound operator channel
+instead of an exception. The replan block is wrapped so no replan failure can discard the parent's
+committed result. The dead `isFailureReplanPlanningInstruction` prose matcher is gone.
 
 ### What shipped
 
@@ -294,6 +321,11 @@ These were Milestone 2 bullets that only pay off with real merchant persisted st
 ### Acceptance
 
 - [x] Three-step fixture: step two fails definitely, remaining work succeeds once. Integration test in `plan-execution.integration.test.ts` (`bounded failure replan`).
+- [x] Recovery holds on **every** approval path, not just `automatic`: fixtures cover the explicit
+  `approvedToolCalls` set the dashboard card posts and the quick-approve shape that posts none.
+- [x] A child that cannot run on its own authority is cached for approval rather than executed or
+  thrown: fixture asserts the parent result survives, the child is the thread's cached plan, and
+  its `failureReplan` marker blocks a nested replan.
 - [x] Three-step fixture: merchant notified once. Gateway tests in `generate-thread-plan.test.ts`, `ai-summary-flow.unit.test.ts`, and `planning-notifications.test.ts`.
 - [x] Unknown-outcome fixture: no replan; escalation occurs. Integration test sets `escalatedAt`; no duplicate side effect beyond existing unknown skip semantics.
 
@@ -375,7 +407,7 @@ Full USPS carrier API access (signed aggregator such as AfterShip, or a Shopkeep
 |---|---|
 | Outcome | Degraded stall/exception uses Shopify fulfillment only; approval copy cites Shopify limits |
 | Compatibility | No migration; shipment watch rows only |
-| Deterministic coverage | Agent unit + gateway unit/integration including `delivery-exception-degraded.test.ts` |
+| Deterministic coverage | Agent unit + gateway unit/integration including `delivery-exception-degraded.test.ts`. Corrected 2026-08-26: the acceptance test asserted the monitor's whole-database counters and its shipment mock answered for every org, so it passed alone and failed in a full run. It now answers only for its own shop domain. `workers.test.ts` still expected 15 repeatable jobs after this milestone registered a 16th. |
 | Model evidence | None owed on this slice |
 | Production canary | Deferred pre-user — acceptance integration test |
 | Rollback | `DELIVERY_EXCEPTION_MONITOR_ENABLED=false` |

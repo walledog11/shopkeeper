@@ -1,7 +1,7 @@
 import { db } from "@shopkeeper/db";
 import type { ActionEntry, AgentResult } from "./agent-context.js";
 import { hashPlan } from "./agent-actions.js";
-import { decideAutonomy, type AutonomyKind, type AutonomyVerdict } from "./autonomy.js";
+import { allowsAutomaticExecution, decideAutonomy, type AutonomyVerdict } from "./autonomy.js";
 import type { ExecuteAgentTurnDeps } from "./turn.js";
 import {
   buildAgentPlanCacheRecord,
@@ -21,35 +21,19 @@ import type { planAgent } from "./planner.js";
 
 export type PlanAgentFn = typeof planAgent;
 
-const FAILURE_REPLAN_MARKER = /A previously approved plan (?:partially )?failed during execution\./i;
-
-export function isFailureReplanPlanningInstruction(instruction: string): boolean {
-  return FAILURE_REPLAN_MARKER.test(instruction);
-}
-
-export function autonomyRank(kind: AutonomyKind): number {
-  switch (kind) {
-    case "quick_reply":
-      return 0;
-    case "auto_execute":
-      return 1;
-    case "needs_review":
-      return 2;
-    case "needs_merchant_input":
-      return 3;
-    case "escalate":
-      return 4;
-    case "invalid":
-      return 5;
-  }
-}
-
-export function failureReplanAutonomyAllowed(
-  parentVerdict: AutonomyVerdict,
-  childVerdict: AutonomyVerdict,
-): boolean {
-  return autonomyRank(childVerdict.kind) <= autonomyRank(parentVerdict.kind);
-}
+/**
+ * A committed child plan, and whether it may run on its own authority.
+ *
+ * `awaiting_approval` is not a failure: the child is cached and the merchant
+ * approves it through the normal card path. The parent's committed work is
+ * reported either way.
+ */
+export type FailureReplanAttempt = {
+  status: "executable" | "awaiting_approval";
+  cache: AgentPlanCacheRecord;
+  context: PlanFailureReplanContext;
+  childVerdict: AutonomyVerdict;
+};
 
 export function collectCommittedActions(actions: readonly ActionEntry[]): ActionEntry[] {
   return actions.filter((action) => (
@@ -201,13 +185,12 @@ export async function attemptFailureReplanAfterExecution(params: {
   sourceMessageId: string;
   parentPlanId: string;
   parentPlan: AgentPlan;
-  parentVerdict: AutonomyVerdict;
   approvedToolCalls: RawToolCall[];
   result: AgentResult;
   allowMutativeAutoExecute?: boolean;
   buildContext: ExecuteAgentTurnDeps["buildContext"];
   planAgent: PlanAgentFn;
-}): Promise<AgentPlanCacheRecord | null> {
+}): Promise<FailureReplanAttempt | null> {
   const executionOutcome = planExecutionOutcomeForResult(params.result);
   if (!canAttemptFailureReplan({
     executionOutcome,
@@ -243,14 +226,13 @@ export async function attemptFailureReplanAfterExecution(params: {
     return null;
   }
 
+  // The child stands on its own authority. It never inherits the approval the
+  // merchant gave the parent, whose tool calls it does not share.
   const childVerdict = decideAutonomy(childPlan, params.settings, {
     filterStatus: thread.filterStatus,
     threadEscalated: Boolean(thread.escalatedAt),
     allowMutativeAutoExecute: params.allowMutativeAutoExecute,
   });
-  if (!failureReplanAutonomyAllowed(params.parentVerdict, childVerdict)) {
-    return null;
-  }
 
   const cache = {
     ...buildAgentPlanCacheRecord({
@@ -293,5 +275,10 @@ export async function attemptFailureReplanAfterExecution(params: {
     namespaceMiss: childPlan.namespaceMiss,
   });
 
-  return cache;
+  return {
+    status: allowsAutomaticExecution(childVerdict) ? "executable" : "awaiting_approval",
+    cache,
+    context: failureReplan,
+    childVerdict,
+  };
 }

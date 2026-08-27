@@ -52,6 +52,8 @@ export interface PrecomputedPlanResult {
   autoExecutionError?: string;
   /** Parent step failed definitely and a child replan finished the remaining work. */
   failureReplanRecovered?: boolean;
+  /** Parent step failed definitely and the child replan needs merchant approval. */
+  failureReplanAwaitingApproval?: boolean;
   failureReplanFailureTool?: string;
   failureReplanFailureReason?: string;
 }

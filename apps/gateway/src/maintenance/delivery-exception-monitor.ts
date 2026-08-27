@@ -38,7 +38,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export const resolveShipmentTrackingSnapshot = createShipmentTrackingResolver(null);
+const resolveShipmentTrackingSnapshot = createShipmentTrackingResolver(null);
 
 async function handleDetectedIssue(params: {
   organizationId: string;
@@ -80,7 +80,7 @@ async function handleDetectedIssue(params: {
 }
 
 export interface RunDeliveryExceptionMonitorOptions {
-  trackingResolver?: typeof resolveShipmentTrackingSnapshot;
+  trackingResolver?: ReturnType<typeof createShipmentTrackingResolver>;
 }
 
 export async function runDeliveryExceptionMonitor(

@@ -81,6 +81,15 @@ export type AutonomyVerdict =
       sendReplyToolCall: RawToolCall
     });
 
+/**
+ * The single answer to "may this plan run without a human?". Both the execution
+ * approval-path guard and the failure-replan child gate read it, so the two
+ * cannot drift into disagreeing about the same verdict.
+ */
+export function allowsAutomaticExecution(verdict: AutonomyVerdict): boolean {
+  return verdict.kind === "quick_reply" || verdict.kind === "auto_execute";
+}
+
 const QUICK_REPLY_READ_TOOLS = new Set([
   "search_kb",
   "search_shopify_products",

@@ -9,7 +9,7 @@ import {
   createTestThread,
 } from "@shopkeeper/db/test-helpers";
 import { BadRequestError, ConflictError } from "./errors.js";
-import { buildAgentPlanCacheRecord, commitThreadPlanCacheIfCurrent } from "./plan-cache.js";
+import { buildAgentPlanCacheRecord, commitThreadPlanCacheIfCurrent, readAgentPlanCache } from "./plan-cache.js";
 import {
   executeCurrentCachedHomePlan,
   dismissCurrentCachedPlan,
@@ -750,6 +750,128 @@ describe("bounded failure replan", () => {
 
     const threadAfter = await db.thread.findUniqueOrThrow({ where: { id: thread.id } });
     expect(threadAfter.cachedPlan).toBeNull();
+  });
+
+  // The dashboard ticket card posts the reviewed tool calls back to /api/agent.
+  // The child shares none of them, so the parent's approval envelope must not
+  // travel into the child execution.
+  it("recovers when the approver posted an explicit approved tool-call set", async () => {
+    const settings = resolveAgentSettings({ autonomyTier: "trusted", autoExecuteMode: "live" });
+    const plan = threeStepPlan();
+    const { org, thread } = await seedThreadWithPlan({ plan, settings });
+    const partialResult: AgentResult = {
+      summary: "Refund failed",
+      actionsPerformed: [
+        { tool: "add_shopify_customer_note", result: "Noted", status: "success" },
+        { tool: "create_refund", result: "Rejected", status: "error" },
+      ],
+    };
+    const runAgent = vi.fn()
+      .mockResolvedValueOnce(partialResult)
+      .mockResolvedValueOnce(okResult);
+    const mockPlanAgent = vi.fn(async () => quickReplyPlan());
+
+    const executed = await executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+      approvedToolCalls: [noteCall, refundCall, sendReplyCall],
+      expectedIdentity: { instructionHash: hashInstruction(plan.instruction) },
+      allowMutativeAutoExecute: true,
+    }, makeDeps({ runAgent, planAgent: mockPlanAgent }));
+
+    expect(runAgent).toHaveBeenCalledTimes(2);
+    expect(executed.execution.status).toBe("committed");
+    expect(executed.failureReplanRecovery).toMatchObject({
+      context: expect.objectContaining({ failureTool: "create_refund" }),
+    });
+  });
+
+  it("recovers on the quick-approve path, which posts no approved tool calls", async () => {
+    const settings = resolveAgentSettings({ autonomyTier: "trusted", autoExecuteMode: "live" });
+    const { org, thread } = await seedThreadWithPlan({ plan: threeStepPlan(), settings });
+    const partialResult: AgentResult = {
+      summary: "Refund failed",
+      actionsPerformed: [
+        { tool: "add_shopify_customer_note", result: "Noted", status: "success" },
+        { tool: "create_refund", result: "Rejected", status: "error" },
+      ],
+    };
+    const runAgent = vi.fn()
+      .mockResolvedValueOnce(partialResult)
+      .mockResolvedValueOnce(okResult);
+    const mockPlanAgent = vi.fn(async () => quickReplyPlan());
+
+    const executed = await executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+      allowMutativeAutoExecute: true,
+    }, makeDeps({ runAgent, planAgent: mockPlanAgent }));
+
+    expect(runAgent).toHaveBeenCalledTimes(2);
+    expect(executed.failureReplanRecovery).toBeDefined();
+  });
+
+  it("caches a child that cannot run on its own authority instead of executing it", async () => {
+    const settings = resolveAgentSettings({ autonomyTier: "guarded", requireApprovalForActions: true });
+    const { org, thread, message } = await seedThreadWithPlan({ plan: threeStepPlan(), settings });
+    const retryRefund: RawToolCall = {
+      id: "child_refund_1",
+      name: "create_refund",
+      input: { order_id: "gid://shopify/Order/1", amount: "10.00", currency: "USD" },
+    };
+    const childNeedingApproval: AgentPlan = {
+      instruction: "Note the request, issue the refund, and reply",
+      steps: [{
+        id: retryRefund.id,
+        tool: retryRefund.name,
+        label: "Refund",
+        description: "Retry the refund",
+        category: "action",
+        enabled: true,
+      }],
+      rawToolCalls: [retryRefund],
+      routingEvidence: { classifierState: "not_applicable", codes: [] },
+      validation: { status: "valid", issues: [] },
+    };
+    const partialResult: AgentResult = {
+      summary: "Refund failed",
+      actionsPerformed: [
+        { tool: "add_shopify_customer_note", result: "Noted", status: "success" },
+        { tool: "create_refund", result: "Rejected", status: "error" },
+      ],
+    };
+    const runAgent = vi.fn().mockResolvedValueOnce(partialResult);
+    const mockPlanAgent = vi.fn(async () => childNeedingApproval);
+
+    const executed = await executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+      approvedToolCalls: [noteCall, refundCall, sendReplyCall],
+    }, makeDeps({ runAgent, planAgent: mockPlanAgent }));
+
+    // The child never ran, and the parent's committed work is still reported.
+    expect(runAgent).toHaveBeenCalledOnce();
+    expect(executed.failureReplanRecovery).toBeUndefined();
+    expect(executed.result.actionsPerformed).toHaveLength(2);
+    expect(executed.failureReplanAwaitingApproval).toMatchObject({
+      context: expect.objectContaining({ failureTool: "create_refund" }),
+    });
+
+    // It is waiting on the thread for the merchant, marked so it cannot replan again.
+    const threadAfter = await db.thread.findUniqueOrThrow({ where: { id: thread.id } });
+    const cached = readAgentPlanCache(threadAfter.cachedPlan);
+    expect(cached?.plan.rawToolCalls.map((call) => call.id)).toEqual(["child_refund_1"]);
+    expect(cached?.failureReplan?.failureTool).toBe("create_refund");
+    expect(threadAfter.cachedPlanMessageId).toBe(message.id);
   });
 
   it("does not replan after an unknown provider outcome and escalates the thread", async () => {

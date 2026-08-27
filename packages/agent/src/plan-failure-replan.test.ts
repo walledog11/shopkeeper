@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { ActionEntry } from "./agent-context.js";
+import { allowsAutomaticExecution } from "./autonomy.js";
 import {
-  autonomyRank,
   buildFailureReplanPlanningInstruction,
   canAttemptFailureReplan,
   childPlanRepeatsCommittedSteps,
   committedToolCallIdsForExecution,
-  failureReplanAutonomyAllowed,
   remainingToolCallsAfterFailure,
 } from "./plan-failure-replan.js";
 import type { AgentPlan, RawToolCall } from "./types.js";
@@ -71,16 +70,20 @@ describe("plan failure replan helpers", () => {
     expect(childPlanRepeatsCommittedSteps(childPlan, ["note_1"])).toBe(true);
   });
 
-  it("does not allow raising the autonomy tier on a failure replan", () => {
-    expect(failureReplanAutonomyAllowed(
-      { kind: "auto_execute", reasons: [], toolCalls: [], replyText: "ok", sendReplyToolCall: sendCall },
+  it("lets only the child's own verdict decide whether it runs without a human", () => {
+    expect(allowsAutomaticExecution(
       { kind: "auto_execute", reasons: [], toolCalls: [], replyText: "ok", sendReplyToolCall: sendCall },
     )).toBe(true);
-    expect(failureReplanAutonomyAllowed(
-      { kind: "auto_execute", reasons: [], toolCalls: [], replyText: "ok", sendReplyToolCall: sendCall },
+    expect(allowsAutomaticExecution(
+      { kind: "quick_reply", reasons: [], toolCalls: [], replyText: "ok", sendReplyToolCall: sendCall },
+    )).toBe(true);
+    // A child needing review is cached for approval, never run on the parent's.
+    expect(allowsAutomaticExecution(
       { kind: "needs_review", reasons: [], approvalAllowed: true, toolCalls: [sendCall] },
     )).toBe(false);
-    expect(autonomyRank("quick_reply")).toBeLessThan(autonomyRank("needs_review"));
+    expect(allowsAutomaticExecution(
+      { kind: "escalate", reasons: [], escalationReason: "needs a human", toolCalls: [] },
+    )).toBe(false);
   });
 
   it("builds a planning instruction with completed steps and the failure reason", () => {

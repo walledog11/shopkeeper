@@ -71,6 +71,7 @@ export async function precomputeThreadPlan(
       autoExecutionActions,
       autoExecutionError,
       failureReplanRecovered,
+      failureReplanAwaitingApproval,
       failureReplanFailureTool,
       failureReplanFailureReason,
     } = await generateThreadPlan(
@@ -95,6 +96,7 @@ export async function precomputeThreadPlan(
         autoExecutionActions,
         autoExecutionError,
         failureReplanRecovered,
+        failureReplanAwaitingApproval,
         failureReplanFailureTool,
         failureReplanFailureReason,
       } : {}),
