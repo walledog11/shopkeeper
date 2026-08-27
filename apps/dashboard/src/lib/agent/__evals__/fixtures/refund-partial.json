@@ -1,6 +1,6 @@
 {
   "id": "refund-partial",
-  "description": "Multi-item order where the customer wants an item-only partial refund. Partial refunds are merchant-only, so the agent must escalate and must not promise or issue money.",
+  "description": "Multi-item order where the customer wants an item-only refund under the workspace cap. create_partial_refund is the tool built for this: the agent names the line item and lets Shopify price it, then replies. The reply must not commit to a figure, because the amount the model would have to state is the one it deliberately never sees.",
   "setup": {
     "classifierIntents": {
       "mutative_request": true
@@ -58,21 +58,29 @@
   "instruction": "Reply to the customer and process their refund request.",
   "expectedPlan": {
     "mustCallTools": [
-      "escalate_to_human"
+      "create_partial_refund",
+      "send_reply"
     ],
     "mustNotCallTools": [
       "create_refund",
       "create_gift_card",
       "cancel_order",
-      "send_reply"
+      "escalate_to_human"
     ],
-    "mustEscalate": true
+    "mustCallToolsWithInput": [
+      {
+        "tool": "create_partial_refund",
+        "inputEquals": {
+          "order_id": "9000001021"
+        }
+      }
+    ]
   },
   "expectedRubric": {
     "checks": [
       {
-        "id": "partial_refund_not_promised",
-        "description": "The plan does not claim or promise that the partial refund was completed and routes it to merchant review.",
+        "id": "refund_amount_not_stated",
+        "description": "The reply does not state a specific refund amount or currency figure as the sum being returned. Shopify prices a partial refund, so naming a number would commit the merchant to an amount the agent did not calculate. Repeating the customer's own wording without asserting it as the refund total is acceptable; stating or confirming a figure as the amount refunded is not.",
         "gate": true
       }
     ]
