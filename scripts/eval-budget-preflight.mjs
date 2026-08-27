@@ -98,10 +98,23 @@ const dashboardEstimate = (
   fixtures.length * repeats * agentCostPerRun
   + judgedFixtures.length * repeats * judgeCostPerRun
 ) * 1.2;
-const gatewayEstimate = mode === 'targeted' ? 0 : mode === 'release' ? 0.03 : 0.15;
+// The gateway suite is the five `order-ops.eval.test.ts` fixtures at ~2 model
+// calls each, and `drift`/`baseline` force `repeats=3`. Both gateway terms were
+// once constants sized for a single repeat, so a baseline allocated 24 calls
+// against a ~30-call need and died `24 / 24` after four of the five fixtures —
+// run 33120836618, which had authorised 700. The dollar side already scaled off
+// maxUsd; only the call side did not. Scale both off `repeats` so a mode that
+// runs the suite three times reserves three times the calls.
+const GATEWAY_FIXTURES = 5;
+const GATEWAY_CALLS_PER_RUN = 2;
+const gatewayCallEstimate = mode === 'targeted'
+  ? 0
+  : mode === 'release'
+    ? 3
+    : GATEWAY_FIXTURES * GATEWAY_CALLS_PER_RUN * repeats;
+const gatewayEstimate = mode === 'targeted' ? 0 : mode === 'release' ? 0.03 : 0.05 * repeats;
 const estimatedUsd = dashboardEstimate + gatewayEstimate;
-const estimatedCalls = Math.ceil(fixtures.length * repeats * 1.75)
-  + (mode === 'targeted' ? 0 : mode === 'release' ? 3 : 18);
+const estimatedCalls = Math.ceil(fixtures.length * repeats * 1.75) + gatewayCallEstimate;
 
 if (estimatedUsd > maxUsd) {
   throw new Error(`Estimated $${estimatedUsd.toFixed(2)} exceeds the approved $${maxUsd.toFixed(2)} ceiling`);
@@ -125,7 +138,11 @@ const dashboardMaxUsd = maxUsd - gatewayUsd;
 if (dashboardMaxUsd <= dashboardEstimate) {
   throw new Error(`Dashboard allocation $${dashboardMaxUsd.toFixed(2)} does not cover its $${dashboardEstimate.toFixed(2)} estimate`);
 }
-const gatewayMaxCalls = mode === 'targeted' ? 0 : mode === 'release' ? 6 : 24;
+const gatewayMaxCalls = mode === 'targeted'
+  ? 0
+  : mode === 'release'
+    ? 6
+    : Math.ceil(gatewayCallEstimate * 1.5);
 const dashboardMaxCalls = maxCalls - gatewayMaxCalls;
 if (dashboardMaxCalls <= 0) throw new Error('Call ceiling leaves no dashboard allocation');
 
