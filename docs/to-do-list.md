@@ -23,14 +23,6 @@ version. Read the deployed commit off the deployment record itself — Vercel's
 `railway deployment list --json`. Never infer it from a timestamp sitting near a commit,
 and never from `/health`, which is liveness-only and cannot report a commit at all.
 
-- [ ] **Apply two migrations to production.**
-  `20260821120000_add_conversation_attribution` and
-  `20260821130000_add_verification_candidate_email_hash`. Both are additive and
-  nullable, so both are safe to apply ahead of the code that writes them — and that
-  ordering is deliberate for this channel: storefront-chat migrations have twice
-  shipped *behind* their code, and the second took the channel down on silent `P2022`
-  500s. Confirm with `migrate status` against production, not against a local database.
-
 - [ ] **Release `shopkeeper-production-28`.** `-27` (2026-08-19) is still the `★ active`
   version, but `5ee51baa` changed `extensions/shopkeeper-chat/assets/shopkeeper-chat.js`
   and its locale string. Theme app extension assets reach merchants only in a released

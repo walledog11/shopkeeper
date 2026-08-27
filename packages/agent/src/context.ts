@@ -146,7 +146,10 @@ export async function buildContext(
       select: { title: true, body: true, tags: true },
     });
   })();
-  const activeMerchantPreferencesPromise = loadActiveMerchantPreferences(orgId);
+  const activeMerchantPreferencesPromise = loadActiveMerchantPreferences(orgId).catch((error) => {
+    logger.warn({ orgId, threadId, err: error }, "[agent:context] merchant preference load failed");
+    return [];
+  });
 
   const [thread, org, shopifyIntegration, allKbArticles, activeMerchantPreferences] = await Promise.all([
     db.thread.findUnique({
