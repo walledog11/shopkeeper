@@ -16,6 +16,7 @@ export {
   findCustomer,
   getShopifyOrders,
   searchShopifyProducts,
+  getInventoryStatus,
   updateShopifyCustomerInfo,
   updateShopifyOrderAddress,
   addShopifyCustomerNote,

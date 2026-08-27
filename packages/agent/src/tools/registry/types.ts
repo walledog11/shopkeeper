@@ -189,6 +189,18 @@ export interface GetOrderTrackingInput {
   order_id: string;
 }
 
+/**
+ * Two questions with one answer shape. With `query`, stock for what matches it;
+ * without, everything at or below the low-stock threshold. Omitting `query` is
+ * the merchant asking "what am I running out of", not a wildcard over the
+ * catalog — the result is bounded either way.
+ */
+export interface GetInventoryStatusInput {
+  query?: string;
+  limit?: number;
+  low_stock_threshold?: number;
+}
+
 export interface SearchKbInput {
   query: string;
 }
@@ -235,6 +247,7 @@ export interface ShopifyToolContext {
 
 export interface ToolExecutionDeps {
   searchShopifyProducts(input: SearchShopifyProductsInput, ctx: ShopifyToolContext): Promise<ToolResult>;
+  getInventoryStatus(input: GetInventoryStatusInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   findCustomer(input: FindCustomerInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   updateShopifyCustomerInfo(input: UpdateShopifyCustomerInfoInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   getShopifyOrders(input: GetShopifyOrdersInput, ctx: ShopifyToolContext): Promise<ToolResult>;

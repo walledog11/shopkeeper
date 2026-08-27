@@ -33,6 +33,13 @@ export {
   type LowStockVariant,
 } from "./low-stock.js";
 export {
+  INVENTORY_STATUS_QUERY,
+  formatInventoryStatusLine,
+  getInventoryStatus,
+  readInventoryStatus,
+  type InventoryVariantStatus,
+} from "./inventory.js";
+export {
   fetchOrderReturnStatuses,
   formatReturnClosedNotification,
   safeFetchOrderReturnStatuses,

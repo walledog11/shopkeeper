@@ -85,6 +85,8 @@ const ORDER_READ_TOOL_NAMES = [
 const MUTATION_COMMON_TOOL_NAMES = [
   "search_kb",
   "search_shopify_products",
+  // An exchange or a replacement is only offerable if the thing is in stock.
+  "get_inventory_status",
   ...ORDER_READ_TOOL_NAMES,
 ] as const;
 

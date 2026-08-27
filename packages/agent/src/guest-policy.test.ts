@@ -38,6 +38,8 @@ const FORBIDDEN_FOR_GUESTS = [
   "add_shopify_customer_note",
   // Not an order read, still not a guest's business.
   "send_email",
+  // Stock position is the shop's business, not the shopper's question.
+  "get_inventory_status",
   "get_support_stats",
 ] as const;
 

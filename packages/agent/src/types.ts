@@ -35,6 +35,15 @@ export interface OrgSettings {
   blockCustomLineItems: boolean;
   maxIterations: number;
 
+  // Shop-management blast radius. A refund risks one order; a promotion risks
+  // every unit that sells while it is live, so it is bounded in breadth, depth,
+  // money, and time. Null means "use the shipped default", never "no limit" —
+  // there is no unlimited setting for these.
+  maxPromotionVariants: number | null;
+  maxPromotionDiscountPercent: number | null;
+  maxPromotionValueAtRiskCents: number | null;
+  maxPromotionTtlHours: number | null;
+
   // Operator digest (fanned out to bound Telegram/iMessage channels)
   digestEnabled: boolean;
   digestFrequency: 'daily' | 'twice_daily' | 'every_4h' | 'every_6h' | 'every_8h' | 'every_12h';

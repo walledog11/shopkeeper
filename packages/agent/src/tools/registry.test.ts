@@ -24,6 +24,7 @@ import { defineTool, stringArg } from "./registry/schema.js";
 const VALID_TOOL_INPUTS: Record<ToolName, unknown> = {
   search_kb: { query: "returns policy" },
   search_shopify_products: { query: "pencil half zip", limit: 3 },
+  get_inventory_status: { query: "olive linen napkins", limit: 3 },
   find_customer: { by: "query", value: "jane@example.com", limit: 2 },
   search_shopify_customers: { query: "jane@example.com", limit: 2 },
   get_shopify_customer: { customer_id: "1001" },
@@ -75,6 +76,7 @@ const VALID_TOOL_INPUTS: Record<ToolName, unknown> = {
 
 const SHOPIFY_TOOL_ROUTES = [
   ["search_shopify_products", "searchShopifyProducts"],
+  ["get_inventory_status", "getInventoryStatus"],
   ["find_customer", "findCustomer"],
   ["update_shopify_customer_info", "updateShopifyCustomerInfo"],
   ["get_shopify_orders", "getShopifyOrders"],
@@ -157,6 +159,7 @@ function makeSupportCtx(): BaseAgentContext {
 function makeDeps(): ToolExecutionDeps {
   return {
     searchShopifyProducts: vi.fn().mockResolvedValue(toolOk("searchShopifyProducts")),
+    getInventoryStatus: vi.fn().mockResolvedValue(toolOk("getInventoryStatus")),
     findCustomer: vi.fn().mockResolvedValue(toolOk("findCustomer")),
     updateShopifyCustomerInfo: vi.fn().mockResolvedValue(toolOk("updateShopifyCustomerInfo")),
     getShopifyOrders: vi.fn().mockResolvedValue(toolOk("getShopifyOrders")),
@@ -224,6 +227,7 @@ describe("agent tool registry", () => {
   it("keeps the existing group selector ordering", () => {
     expect(toolNamesForGroups("product", "messaging")).toEqual([
       "search_shopify_products",
+      "get_inventory_status",
       "send_reply",
       "send_email",
     ]);
@@ -240,7 +244,12 @@ describe("agent tool registry", () => {
   // They enforce "at least one of" inside execute instead, so there is no single
   // key whose absence should throw. Kept as an explicit set so the invariant
   // still holds for every other tool.
-  const ALTERNATIVE_IDENTIFIER_TOOLS = new Set(["get_order_fulfillment_status"]);
+  // `get_inventory_status` joins them for a different reason: omitting `query`
+  // is a second question ("what am I running out of"), not a missing argument.
+  const ALTERNATIVE_IDENTIFIER_TOOLS = new Set([
+    "get_order_fulfillment_status",
+    "get_inventory_status",
+  ]);
 
   it.each(TOOL_DEFINITIONS.map((definition) => [definition.name, definition] as const))(
     "rejects missing required input for %s",
@@ -411,26 +420,37 @@ describe("agent tool execution routing", () => {
 describe("Shopify scope gating", () => {
   // The graceful-degradation guarantee: a merchant whose token predates every
   // scoped capability keeps the entire tool set they had before the gate existed.
-  it("withholds nothing from a store that recorded no grant at all", () => {
-    const withEmptyGrant = selectAgentTools(undefined, null, []).map((tool) => tool.name);
-    const withNoCheck = selectAgentTools(undefined, null, null).map((tool) => tool.name);
+  // A store connected before the gate holds `read_products`, so it keeps every
+  // tool. Only a grant genuinely missing a scope loses the tool that needs it.
+  it("keeps the whole tool set for a store holding the long-standing scopes", () => {
+    const complete = selectAgentTools(undefined, null, ["read_products"]).map((t) => t.name);
+    const unchecked = selectAgentTools(undefined, null, null).map((t) => t.name);
 
-    expect(withEmptyGrant).toEqual(withNoCheck);
-    expect(withEmptyGrant.length).toBeGreaterThan(0);
+    expect(complete).toEqual(unchecked);
   });
 
-  it("requires no scope from any tool that shipped before the gate", () => {
-    const scoped = TOOL_DEFINITIONS
-      .filter((definition) => TOOL_REQUIRED_SCOPES[definition.name].length > 0)
-      .map((definition) => definition.name);
+  it("withholds only the tool whose scope is missing", () => {
+    const short = selectAgentTools(undefined, null, []).map((tool) => tool.name);
+    const unchecked = selectAgentTools(undefined, null, null).map((tool) => tool.name);
 
-    // Tools added later may declare scopes; this asserts the default is empty,
-    // so adding the gate changed nothing for an existing install.
-    expect(scoped).toEqual([]);
+    expect(unchecked).toContain("get_inventory_status");
+    expect(unchecked.filter((name) => !short.includes(name))).toEqual(["get_inventory_status"]);
+  });
+
+  // Every scope a tool declares must be one a connected store already holds, or
+  // the capability silently disappears for merchants who never re-authorize.
+  // `read_products` has been in the requested set since long before this gate.
+  it("declares only scopes an existing grant already covers", () => {
+    const scoped = TOOL_DEFINITIONS.flatMap((definition) => TOOL_REQUIRED_SCOPES[definition.name]);
+
+    expect(scoped.length).toBeGreaterThan(0);
+    expect([...new Set(scoped)]).toEqual(["read_products"]);
   });
 
   it("reads a tool's requirement through the shared grant rule", () => {
     expect(toolScopesGranted("search_shopify_products", [])).toBe(true);
+    expect(toolScopesGranted("get_inventory_status", [])).toBe(false);
+    expect(toolScopesGranted("get_inventory_status", ["write_products"])).toBe(true);
   });
 
   describe("a tool that does declare scopes", () => {

@@ -484,6 +484,7 @@ describe('TOOL_GROUPS', () => {
   it('flattens groups into an allow-list for selectAgentTools', () => {
     expect(toolNamesForGroups('product', 'messaging')).toEqual([
       'search_shopify_products',
+      'get_inventory_status',
       'send_reply',
       'send_email',
     ]);

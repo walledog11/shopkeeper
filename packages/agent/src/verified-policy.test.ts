@@ -45,6 +45,9 @@ const FORBIDDEN_WHEN_VERIFIED = [
   // Unverified address, merchant's business — unchanged from guest.
   "send_email",
   "get_support_stats",
+  // Stock position is the merchant's business too: how thin a line is running
+  // is a fact about the shop, not an answer to the shopper's question.
+  "get_inventory_status",
 ] as const;
 
 const TIERS: AutonomyTier[] = ["watch", "guarded", "trusted", "broad", "full"];

@@ -31,6 +31,7 @@ export type {
   EscalateToHumanInput,
   FindCustomerInput,
   FulfillOrderInput,
+  GetInventoryStatusInput,
   GetOrderByNameInput,
   GetOrderFulfillmentStatusInput,
   GetOrderTrackingInput,
