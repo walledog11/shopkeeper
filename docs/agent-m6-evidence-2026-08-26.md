@@ -6,6 +6,13 @@ Evidence for Milestone 6 slices in
 TikTok (alongside Instagram) is **complete (pre-user close)** as of 2026-08-26.
 Full-tier carrier monitoring remains open.
 
+> **Superseded in part, 2026-08-26.** Everything below about shipment and carrier
+> tracking — the degraded tier, the full-tier provider seam, the delivery-exception
+> monitor, and the `ShipmentWatch` table — describes code that has since been
+> **deleted from the product**. It is kept as the dated record of what shipped and
+> why, not as a description of the current system. The attachment-vision sections
+> remain accurate. See [Removed capabilities](agent-remediation-plan.md#removed-capabilities).
+
 ## Outcome target
 
 USPS and carriers without a validated aggregator use Shopify fulfillment fields

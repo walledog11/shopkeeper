@@ -125,15 +125,10 @@ export function isReturnLifecycleMonitorEnabled(): boolean {
   return parseBooleanEnv('RETURN_LIFECYCLE_MONITOR_ENABLED', false);
 }
 
-export function isDeliveryExceptionMonitorEnabled(): boolean {
-  return parseBooleanEnv('DELIVERY_EXCEPTION_MONITOR_ENABLED', false);
-}
-
 export interface GatewayRuntimeFlags {
   monitors: {
     orderRisk: boolean;
     returnLifecycle: boolean;
-    deliveryException: boolean;
   };
 }
 
@@ -142,7 +137,6 @@ export function getGatewayRuntimeFlags(): GatewayRuntimeFlags {
     monitors: {
       orderRisk: isOrderRiskMonitorEnabled(),
       returnLifecycle: isReturnLifecycleMonitorEnabled(),
-      deliveryException: isDeliveryExceptionMonitorEnabled(),
     },
   };
 }

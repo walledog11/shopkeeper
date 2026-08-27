@@ -104,10 +104,11 @@ Use these qualifiers:
   update after enough examples, and changes only after merchant approval.
 - The morning briefing is optional and needs a configured operator channel.
   Sales-pulse and low-stock sections are optional.
-- **Do not claim full carrier delivery monitoring.** USPS uses a degraded Shopify
-  fulfillment signal only (no carrier scan history). Non-USPS full-tier monitoring
-  ships when a validated aggregator is wired. Do not claim carrier-level exception
-  detail for USPS or opening carrier claims.
+- **Do not claim delivery or carrier monitoring of any kind.** Carrier tracking was
+  removed on 2026-08-26 for every carrier. Shopkeeper answers "where is my order"
+  from Shopify order and fulfillment data when a customer asks; it makes no carrier
+  call, has no scan history, and detects no stalls or exceptions on its own. Do not
+  claim proactive delivery alerts, carrier-level exception detail, or carrier claims.
 - Shopkeeper uses available conversation, customer, and Shopify context. Do not
   imply perfect cross-channel identity resolution.
 - A merchant can elect to save an answer to a policy-gap question as reusable
@@ -149,7 +150,7 @@ Each section must answer a buyer question and lead naturally to the next one.
 | 5 | Controls | Three states—routine/safe, consequential/exceptional, outside policy—paired with an approval card and matching action-log row. |
 | 6 | Four surfaces | Customer channel → Shopkeeper context/plan → merchant control when needed → Shopify execution, with dashboard below for review/audit. |
 | 7 | Context and rules | Order, customer, product, inventory, policy, instructions, and approved voice sources in one annotated product view. |
-| 8 | Proactive work | One real briefing or delivery-exception view. Clearly label optional modules and approval states. |
+| 8 | Proactive work | One real morning briefing. Clearly label optional modules and approval states. |
 | 9 | Setup | Three actual screens: connect Shopify, add policies and autonomy limits, connect channels. |
 | 10 | Integrations | Compact role grid that distinguishes intake, control, execution, and review. |
 | 11 | Trust | Verified facts about data handling, isolation, access, exports, limits, and audit behavior. Link to Security. |

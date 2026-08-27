@@ -40,7 +40,6 @@ describe("GET /api/gateway/runtime-flags", () => {
       monitors: {
         orderRisk: true,
         returnLifecycle: false,
-        deliveryException: false,
       },
     }), { status: 200 }));
 
@@ -52,7 +51,6 @@ describe("GET /api/gateway/runtime-flags", () => {
       monitors: {
         orderRisk: true,
         returnLifecycle: false,
-        deliveryException: false,
       },
     });
     expect(mockFetch).toHaveBeenCalledWith(

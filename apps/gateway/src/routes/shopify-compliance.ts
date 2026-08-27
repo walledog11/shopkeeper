@@ -229,7 +229,6 @@ async function deleteSelectedCustomerData(
       where: { organizationId, orderId: { in: customerOrderIds } },
     });
     await tx.returnWatch.deleteMany({ where: watchWhere });
-    await tx.shipmentWatch.deleteMany({ where: watchWhere });
     await tx.voiceEdit.deleteMany({ where: threadWhere });
     await tx.kbCitation.deleteMany({ where: threadWhere });
     await tx.autonomyShadowDecision.deleteMany({ where: threadWhere });

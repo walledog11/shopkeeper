@@ -113,12 +113,11 @@ async function loadSweepContext(): Promise<{
   );
 
   const openWatchThreadIds = new Set<string>();
-  const [returnWatches, shipmentWatches] = await Promise.all([
-    db.returnWatch.findMany({ where: { status: 'open' }, select: { threadId: true } }),
-    db.shipmentWatch.findMany({ where: { status: 'open' }, select: { threadId: true } }),
-  ]);
+  const returnWatches = await db.returnWatch.findMany({
+    where: { status: 'open' },
+    select: { threadId: true },
+  });
   for (const row of returnWatches) if (row.threadId) openWatchThreadIds.add(row.threadId);
-  for (const row of shipmentWatches) if (row.threadId) openWatchThreadIds.add(row.threadId);
 
   const orgs = await db.organization.findMany({ select: { id: true, settings: true } });
   const settingsByOrg = new Map(

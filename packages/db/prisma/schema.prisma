@@ -128,17 +128,6 @@ enum ReturnWatchStatus {
   skipped
 }
 
-enum ShipmentWatchIssueType {
-  exception
-  stalled
-}
-
-enum ShipmentWatchStatus {
-  open
-  plan_pushed
-  skipped
-}
-
 enum StripeWebhookEventStatus {
   pending
   processing
@@ -230,7 +219,6 @@ model Organization {
   shadowDecisions         AutonomyShadowDecision[]
   planExecutions          PlanExecution[]
   returnWatches           ReturnWatch[]
-  shipmentWatches         ShipmentWatch[]
   stripeWebhookEvents     StripeWebhookEvent[]
   messages                Message[]
   storefrontChatSessions  StorefrontChatSession[]
@@ -548,7 +536,6 @@ model Thread {
   shadowDecisions  AutonomyShadowDecision[]
   planExecutions   PlanExecution[]
   returnWatches    ReturnWatch[]
-  shipmentWatches  ShipmentWatch[]
 
   storefrontChatSessions StorefrontChatSession[]
   storefrontChatEpisodes StorefrontChatSessionEpisode[]
@@ -876,31 +863,6 @@ model ReturnWatch {
   @@index([organizationId, status])
   @@index([organizationId, orderId])
   @@map("return_watches")
-}
-
-// Durable shipment↔ticket association for the delivery-exception monitor (B4).
-model ShipmentWatch {
-  id               String                 @id @default(uuid()) @db.Uuid
-  organizationId   String                 @map("organization_id") @db.Uuid
-  threadId         String?                @map("thread_id") @db.Uuid
-  orderId          String                 @map("order_id") @db.VarChar(32)
-  trackingNumber   String                 @map("tracking_number") @db.VarChar(64)
-  trackingCompany  String?                @map("tracking_company") @db.VarChar(64)
-  issueType        ShipmentWatchIssueType @map("issue_type")
-  issueSummary     String?                @map("issue_summary") @db.VarChar(255)
-  status           ShipmentWatchStatus    @default(open)
-  detectedAt       DateTime?              @map("detected_at") @db.Timestamptz
-  planPushedAt     DateTime?              @map("plan_pushed_at") @db.Timestamptz
-  createdAt        DateTime               @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt        DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  thread       Thread?      @relation(fields: [threadId], references: [id], onDelete: SetNull)
-
-  @@unique([organizationId, trackingNumber])
-  @@index([organizationId, status])
-  @@index([organizationId, orderId])
-  @@map("shipment_watches")
 }
 
 // Durable, cross-runtime identity and claim state for one reviewed agent plan.

@@ -11,7 +11,6 @@ import {
   isGmailNativeInboundEnabled,
   isOrderRiskMonitorEnabled,
   isReturnLifecycleMonitorEnabled,
-  isDeliveryExceptionMonitorEnabled,
   getGatewayRuntimeFlags,
   shouldRunGatewayServer,
   shouldRunGatewayWorker,
@@ -203,43 +202,14 @@ describe('isReturnLifecycleMonitorEnabled', () => {
   });
 });
 
-describe('isDeliveryExceptionMonitorEnabled', () => {
-  it('defaults to disabled when unset', () => {
-    expect(isDeliveryExceptionMonitorEnabled()).toBe(false);
-  });
-
-  it('enables only for explicit truthy values', () => {
-    vi.stubEnv('DELIVERY_EXCEPTION_MONITOR_ENABLED', '1');
-    expect(isDeliveryExceptionMonitorEnabled()).toBe(true);
-
-    vi.stubEnv('DELIVERY_EXCEPTION_MONITOR_ENABLED', 'true');
-    expect(isDeliveryExceptionMonitorEnabled()).toBe(true);
-  });
-
-  it('treats falsey string values as disabled', () => {
-    vi.stubEnv('DELIVERY_EXCEPTION_MONITOR_ENABLED', 'false');
-    expect(isDeliveryExceptionMonitorEnabled()).toBe(false);
-
-    vi.stubEnv('DELIVERY_EXCEPTION_MONITOR_ENABLED', '0');
-    expect(isDeliveryExceptionMonitorEnabled()).toBe(false);
-  });
-
-  it('rejects invalid boolean strings', () => {
-    vi.stubEnv('DELIVERY_EXCEPTION_MONITOR_ENABLED', 'maybe');
-    expect(() => isDeliveryExceptionMonitorEnabled()).toThrow(/DELIVERY_EXCEPTION_MONITOR_ENABLED/);
-  });
-});
-
 describe('getGatewayRuntimeFlags', () => {
   it('returns the monitor rollout flags together', () => {
     vi.stubEnv('ORDER_RISK_MONITOR_ENABLED', '1');
     vi.stubEnv('RETURN_LIFECYCLE_MONITOR_ENABLED', '0');
-    vi.stubEnv('DELIVERY_EXCEPTION_MONITOR_ENABLED', '1');
     expect(getGatewayRuntimeFlags()).toEqual({
       monitors: {
         orderRisk: true,
         returnLifecycle: false,
-        deliveryException: true,
       },
     });
   });

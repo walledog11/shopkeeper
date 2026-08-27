@@ -18,9 +18,6 @@ export {
   getOrderFulfillmentStatus,
   getShopifyOrders,
   listRecentUnfulfilledOrderIds,
-  listRecentShippedOrderShipments,
-  extractShipmentsFromOrders,
-  type ShippedOrderShipment,
 } from "./orders.js";
 export {
   formatSalesPulseLine,
@@ -72,25 +69,5 @@ export {
   type ShopifyQueryDocument,
 } from "./query-documents.js";
 export {
-  classifyShipmentAlert,
-  formatDeliveryExceptionNotification,
-  type ShipmentAlertKind,
-  type ShipmentTrackingSnapshot,
-} from "./shipment-alerts.js";
-export {
-  buildShopifyDegradedTrackingSnapshot,
-  createShipmentTrackingResolver,
-  DEGRADED_STALL_AFTER_MS,
-  isFullTierCarrier,
-  isUspsCarrier,
-  resolveShipmentTracking,
-  resolveShipmentTrackingTier,
-  type FullTierCarrierTrackingProvider,
-  type ResolvedShipmentTracking,
-  type ShipmentTrackingSource,
-  type ShipmentTrackingTier,
-} from "./shipment-tracking.js";
-export {
   getOrderTracking,
-  readFulfillmentTrackingNumbers,
 } from "./tracking.js";

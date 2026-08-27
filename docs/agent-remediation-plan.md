@@ -2,9 +2,9 @@
 
 **Status:** canonical execution plan
 
-**Last reconciled:** 2026-08-26 (Milestone 6 attachment vision + delivery preference wiring)
+**Last reconciled:** 2026-08-26 (carrier tracking removed; deferred work converted to to-dos)
 
-**Current milestone:** 6 — shipment resolution and attachment vision (full-tier carrier provider remains)
+**Current milestone:** 7 — shop-management capabilities, gated on the value-at-risk guard
 
 This is the single source of truth for agent remediation and capability work. `AGENT_AUDIT.md` is historical evidence, not a second work order.
 
@@ -60,12 +60,6 @@ Shopkeeper is in active development with **no production users** as of 2026-08-2
   baseline failure as a blocked pipeline, not a lint nit.
 - **Fetch before building:** check whether the branch is already merged (`git fetch`, open PRs) before starting parallel implementation.
 
-### What to defer until first customer or first production deploy
-
-- Production classifier-version **inventory**, **canary**, and **retirement** procedure.
-- Version-upgrade acceptance tests against live old-version rows (no production rows to protect yet).
-- Full **release** paid evals as a routine gate on every plumbing change.
-
 ### Paid eval policy pre-user
 
 | Change type | Recommended evidence |
@@ -120,8 +114,8 @@ Neither is caused by the bounded-context retirement or the tool-selection fix; t
 | 3 | Immutable outcome attribution | **Complete** | 1 |
 | 4 | Bounded replanning after definite failure | **Complete** | completed safety foundations |
 | 5 | Merchant preference memory | **Complete** | 1, 3 |
-| 6 | Shipment resolution and attachment vision | **Active** | 3; preference policy for proactive remedies |
-| 7 | Shop-management capabilities | Blocked | 4 and value-at-risk guard |
+| 6 | Attachment vision | **Complete** | 3 |
+| 7 | Shop-management capabilities | **Active** | value-at-risk guard (milestone 4 is complete) |
 
 Efficiency work may proceed only when it does not compete with the active milestone or change its persisted-data surface.
 
@@ -187,15 +181,9 @@ Efficiency work may proceed only when it does not compete with the active milest
 | Rollback | Revert merge commits; no migration to unwind. |
 | Documentation | This plan and the evidence report. |
 
-### Deferred to first customer launch
+### Open to-dos carried out of this milestone
 
-These were Milestone 2 bullets that only pay off with real merchant persisted state. They are **not** blockers for Milestone 3:
-
-- Classifier-version **inventory** and **retirement** procedure (inventory → dual-read/backfill → canary → retirement).
-- Version-upgrade acceptance test (old-version rows → uninterrupted cards, digests, replans).
-- Unified telemetry for classification **failure** and spend-cap skip (write-path telemetry is in place).
-- `baseline.json` three-repeat regeneration (drifts that blocked it are closed).
-- Rename `email-classification.ts` to a channel-neutral module name.
+Tracked in [Open to-dos](#open-to-dos). None are blockers for another milestone.
 
 ### Work
 
@@ -209,8 +197,8 @@ These were Milestone 2 bullets that only pay off with real merchant persisted st
 ### Acceptance
 
 - [x] Channel-contract tests feed equivalent requests through every inbound ordering and compare persisted request identity/facts.
-- [x] No version is retired while an actionable production row still depends on it. (N/A — v5 only; retirement procedure deferred.)
-- [ ] Version-upgrade acceptance test — **deferred to first customer launch** (see above).
+- [x] No version is retired while an actionable row still depends on it. (N/A — v5 is the only version written.)
+- [ ] Version-upgrade acceptance test — seed old-version rows in the test database and assert cards, digests, and replans still render. See [Open to-dos](#open-to-dos).
 
 ## Milestone 3 — Immutable outcome attribution
 
@@ -242,10 +230,9 @@ These were Milestone 2 bullets that only pay off with real merchant persisted st
 | Rollback | Revert application commits; drop table only if no downstream dependency (see evidence report). |
 | Documentation | This plan and [agent-m3-evidence-2026-08-25.md](agent-m3-evidence-2026-08-25.md). |
 
-### Deferred to first customer launch
+### Open to-dos carried out of this milestone
 
-- **Historical backfill** of pre-deploy episodes into `request_episode_outcomes` (no production rows to protect yet; new traffic only).
-- **Production canary** exercising outcome rows on a live request path with representative state.
+Tracked in [Open to-dos](#open-to-dos).
 
 ### Work
 
@@ -305,10 +292,9 @@ committed result. The dead `isFailureReplanPlanningInstruction` prose matcher is
 | Rollback | Revert commits; omit `planAgent` from host deps to disable replan |
 | Documentation | This plan and the evidence report |
 
-### Deferred to first customer launch
+### Open to-dos carried out of this milestone
 
-- **Failure-replan prompt tuning** with real `planAgent` calls (targeted eval when instruction or model pin changes).
-- **Production canary** on the live auto-plan replan path.
+Tracked in [Open to-dos](#open-to-dos).
 
 ### Work
 
@@ -349,73 +335,52 @@ committed result. The dead `isFailureReplanPlanningInstruction` prose matcher is
 - [x] A preference attempting to exceed a hard cap still blocks or escalates structurally. Integration test + targeted eval `merchant-preference-over-cap-still-escalates`.
 - [x] Proposed preferences cannot affect planning before confirmation. Integration tests load only `active` rows.
 
-## Milestone 6 — Shipment resolution and attachment vision
+## Milestone 6 — Attachment vision
 
-**Outcome:** Shopkeeper can understand shipment evidence and damaged-item images, then recommend a policy-compliant remedy.
+**Outcome:** Shopkeeper can understand damaged-item images a customer sends and recommend a
+policy-compliant remedy from what it sees.
 
-**Status:** in progress (2026-08-26). **Degraded tier complete (pre-user close).** **Attachment vision complete (pre-user close)** for email and TikTok alongside existing Instagram hydration. USPS carrier-API tracking is **degraded** to Shopify fulfillment fields; full scan history for non-USPS carriers ships behind one paid aggregator when validated. Evidence: [agent-m6-evidence-2026-08-26.md](agent-m6-evidence-2026-08-26.md).
+**Status:** complete (2026-08-26, pre-user close). Evidence:
+[agent-m6-evidence-2026-08-26.md](agent-m6-evidence-2026-08-26.md).
 
-### What shipped (2026-08-26, PR A — degraded tier)
-
-- `@shopkeeper/agent/shopify/shipment-tracking` — tier routing, `buildShopifyDegradedTrackingSnapshot`, six-day stall window.
-- `listRecentShippedOrderShipments` now returns `shipmentStatus`, `statusUpdatedAt`, and `fulfillmentCreatedAt`.
-- Delivery-exception monitor re-enabled behind `DELIVERY_EXCEPTION_MONITOR_ENABLED`; hourly maintenance job registered.
-- Approval-plan and operator notification copy cites Shopify fulfillment limits for degraded USPS.
-
-### USPS policy decision (recorded 2026-08-26)
-
-Direct USPS Tracking API access and naive “any tracking number” aggregator lookup no longer work for Shopkeeper’s use case. USPS retired Web Tools in January 2026 and enforced **Package Tracking Access Controls** on April 1, 2026: programmatic access now requires Mailer ID authorization, and analytics platforms like Shopkeeper must sign a paid IP agreement (reports cite ~$599/month floor) or route through a signed licensee with per-merchant authorization.
-
-**Decision:** do not block Milestone 6 on USPS carrier API access. Ship a **two-tier tracking model**:
-
-| Tier | Carriers | Source | Proactive stall / exception |
-|---|---|---|---|
-| **Degraded** | USPS and any carrier without a live provider | Shopify fulfillment `shipment_status`, fulfillment `updated_at` / `created_at`, `tracking_company` | Coarse only — stall when status stays in an in-transit family with no Shopify update for ≥6 days; exception when Shopify surfaces failure/return statuses |
-| **Full** | UPS, FedEx, and others once a provider is validated | One paid aggregator behind `CarrierTrackingProvider` | Normalized scan events, exception markers, days since last scan |
-
-Degraded USPS must **never** claim carrier scan history, live carrier exceptions, or precision a full provider would give. Merchant-facing copy and approval plans must say the signal came from Shopify’s fulfillment record.
-
-Full USPS carrier API access (signed aggregator such as AfterShip, or a Shopkeeper USPS IP agreement) is **deferred** until merchant volume or a customer requirement justifies the cost and compliance overhead. See [Deferred and conditional work](#deferred-and-conditional-work).
+Shipment and carrier tracking were **removed from this milestone and from the product** on
+2026-08-26. USPS programmatic access is closed by Package Tracking Access Controls, and paid
+aggregators for UPS/FedEx/DHL were judged not worth the cost and compliance overhead for a
+solo-merchant product. The degraded Shopify-fulfillment tier, the full-tier provider seam, the
+delivery-exception monitor, and the `ShipmentWatch` table went with them — see
+[Removed capabilities](#removed-capabilities). The agent still answers "where is my order" from
+Shopify order and fulfillment data via `get_order_tracking`; it makes no carrier call and never
+claims scan history.
 
 ### Work
-
-**Shipment monitoring (split by tier)**
-
-- ~~Add a composite lookup that routes USPS (and unknown carriers until a provider exists) through the **Shopify degraded** snapshot builder; route validated non-USPS carriers through `CarrierTrackingProvider`.~~ Done 2026-08-26 in `shipment-tracking.ts` and `delivery-exception-monitor.ts`.
-- ~~Map Shopify fulfillment fields into `ShipmentTrackingSnapshot` for the degraded path so existing `classifyShipmentAlert`, watch dedupe, and approval-plan machinery stay carrier-agnostic.~~ Done 2026-08-26.
-- ~~Extend `listRecentShippedOrderShipments` to return fulfillment timestamps and `shipment_status` needed for degraded stall detection.~~ Done 2026-08-26.
-- Implement one non-USPS carrier provider behind the existing interface only after API verification on real merchant tracking numbers (UPS/FedEx first).
-- ~~Re-register the delivery-exception maintenance job once the composite provider is wired.~~ Done 2026-08-26 — gated on `DELIVERY_EXCEPTION_MONITOR_ENABLED`.
-- ~~Use confirmed merchant preferences for proactive remedy selection.~~ Done 2026-08-26 — delivery-exception planner instructions cite active shipping/compensation preferences; preferences already inject via `buildContext`.
-
-**Attachment vision**
 
 - ~~Hydrate bounded email and TikTok image attachments; treat image text as untrusted input.~~ Done 2026-08-26 — `shouldHydrateAgentMessageImages` for `email`, `tiktok`, and `ig_dm`; TikTok inbound images stored in private blob before planning.
 
 ### Acceptance
 
-- [x] A six-day **degraded** USPS stall (Shopify `shipment_status` unchanged for ≥6 days) produces a grounded status and remedy proposal that cites Shopify fulfillment data, not carrier scans. `delivery-exception-degraded.test.ts` + `delivery-exception-plan.test.ts`.
-- [ ] A **full-tier** non-USPS stall (when provider is configured) produces a grounded status and remedy proposal from normalized carrier events.
-- [x] Delivered-but-disputed remains reactive to customer evidence on every tier. Degraded snapshot returns null for `delivered`; proactive monitor skips.
 - [x] An emailed damage photo reaches the model; instruction-shaped image text cannot alter policy or tool access. `context-images.integration.test.ts`, `prompting.test.ts`, `planner.test.ts`.
-- [x] Degraded path has deterministic unit/integration coverage without a paid carrier API key. See [agent-m6-evidence-2026-08-26.md](agent-m6-evidence-2026-08-26.md).
-- [ ] Full-tier path has deterministic coverage when a provider is configured.
+- [x] Delivered-but-disputed remains reactive to customer evidence. The agent responds to what the customer reports and sends, not to a proactive carrier signal.
 
-### Completion gate (pre-user, degraded tier)
+### Completion gate (pre-user)
 
 | Gate | Evidence |
 |---|---|
-| Outcome | Degraded stall/exception uses Shopify fulfillment only; approval copy cites Shopify limits |
-| Compatibility | No migration; shipment watch rows only |
-| Deterministic coverage | Agent unit + gateway unit/integration including `delivery-exception-degraded.test.ts`. Corrected 2026-08-26: the acceptance test asserted the monitor's whole-database counters and its shipment mock answered for every org, so it passed alone and failed in a full run. It now answers only for its own shop domain. `workers.test.ts` still expected 15 repeatable jobs after this milestone registered a 16th. |
-| Model evidence | None owed on this slice |
+| Outcome | Damage photos reach the model on email, TikTok, and Instagram; image text is untrusted |
+| Compatibility | No persisted-shape change |
+| Deterministic coverage | Agent unit + integration; see the evidence report |
+| Model evidence | Attachment hydration changed the prompt surface; covered by the green release gate on `1850cebd` |
 | Production canary | Deferred pre-user — acceptance integration test |
-| Rollback | `DELIVERY_EXCEPTION_MONITOR_ENABLED=false` |
+| Rollback | Revert commits |
 | Documentation | This plan and the evidence report |
+
 
 ## Milestone 7 — Shop-management capabilities
 
 **Outcome:** authenticated operators can manage inventory and promotions with bounded, previewable, reversible blast radius.
+
+**Status:** active, nothing shipped. The registry has no inventory or promotion write tool today;
+`issue_discount` is retired and returns an error. Milestone 4 is complete, so the only remaining
+prerequisite is the value-at-risk guard ([Open to-dos](#open-to-dos) 1).
 
 ### Work
 
@@ -427,20 +392,59 @@ Full USPS carrier API access (signed aggregator such as AfterShip, or a Shopkeep
 
 ### Acceptance
 
-- Existing merchants without new scopes continue working and receive an explanation for unavailable tools.
-- Catalog-wide 90% discount attempts are structurally blocked.
-- Every promotion expires and can be ended with one command.
-- Bulk wildcard repricing is impossible by schema and policy.
+- [ ] Existing merchants without new scopes continue working and receive an explanation for unavailable tools.
+- [ ] Catalog-wide 90% discount attempts are structurally blocked.
+- [ ] Every promotion expires and can be ended with one command.
+- [ ] Bulk wildcard repricing is impossible by schema and policy.
 
-## Deferred and conditional work
+## Open to-dos
 
-- **Full USPS carrier API (from Milestone 6):** signed third-party licensee (e.g. AfterShip) or Shopkeeper USPS IP agreement + merchant MID authorization in the USPS Business Portal. Trigger when degraded Shopify signals are insufficient for merchants or when USPS-heavy proactive monitoring is a launch requirement. Until then, USPS stays on the degraded tier only.
-- **Pre-launch (from Milestone 2):** classifier-version inventory, retirement procedure, version-upgrade acceptance test, `baseline.json` regeneration, rename `email-classification.ts`, unified classification-failure telemetry. Trigger before first customer or first `CLASSIFIER_VERSION` bump.
-- **Pre-launch (from Milestone 3):** historical `request_episode_outcomes` backfill and production canary on the outcome write path. Trigger before first customer or when resolution metrics must cover pre-deploy traffic.
-- Consolidate order-read tools only if measured tool-call or schema cost justifies the security and migration work. Keep storefront guest and verified-order projections separate.
-- Implement partial refunds as a distinct capability with item/quantity selection, calculated amounts, caps, idempotency, and reconciliation. Do not weaken the full-refund tool’s equality check.
-- Proactive visitor conversion remains out of scope.
+Every item here is code to write. Nothing on this list waits on a first customer, a production
+canary, or a monitoring period; if an item cannot be stated as code, it is not on the list.
+
+| # | To-do | Where | Notes |
+|---|---|---|---|
+| 1 | Value-at-risk guard: affected SKUs, estimated revenue, maximum discount, preview, mandatory TTL | `packages/agent/src/tools/` | Unblocks Milestone 7; reusable across inventory and promotion writes |
+| 2 | Inventory read tools | `packages/agent/src/tools/registry/product.ts` | Milestone 7, ships independently of any write tool |
+| 3 | Flash sales via expiring automatic discounts | `packages/agent/src/shopify/` | Milestone 7; never direct price mutation |
+| 4 | Enumerated-variant price changes with original values recorded | `packages/agent/src/shopify/` | Milestone 7; bulk wildcard repricing impossible by schema |
+| 5 | OAuth scope migration + graceful degradation for missing scopes | `apps/dashboard/src/app/api/integrations/` | Milestone 7 prerequisite; merchants without new scopes keep working and get an explanation |
+| 6 | Version-upgrade acceptance test | `apps/gateway/src/**/*.integration.test.ts` | Seed v4 rows in the test DB; assert cards, digests, and replans render |
+| 7 | Classification failure + spend-cap-skip telemetry | `packages/agent/src/email-classification.ts` | Write-path telemetry already ships; failure path does not |
+| 8 | Rename `email-classification.ts` to a channel-neutral name | `packages/agent/src/` | Mechanical; it is the shared classifier for every channel |
+| 9 | Partial refunds as a distinct capability | `packages/agent/src/tools/registry/order.ts` | Item/quantity selection, calculated amounts, caps, idempotency, reconciliation. Do not weaken the full-refund tool's equality check |
+| 10 | Regenerate `baseline.json` at three repeats | `apps/dashboard/src/lib/agent/__evals__/` | Still the 2026-08-17 capture. Costs a paid run — spend it immediately before a change that needs the comparison, not as housekeeping |
+
+### Standing constraints (not to-dos)
+
 - Customer and operator execution policies remain separate.
+- Storefront guest and verified-order projections remain separate.
+- Proactive visitor conversion is out of scope.
+
+### Removed capabilities
+
+Deleted from the product on 2026-08-26, not deferred. Restoring any of them is new work with a
+new gate, not the resumption of a parked item.
+
+- **Carrier shipment tracking, both tiers.** USPS access is closed by Package Tracking Access
+  Controls; UPS/FedEx/DHL full-tier access needed a paid aggregator that was not worth its cost and
+  compliance overhead here. Removed: `shipment-tracking.ts`, `shipment-alerts.ts`,
+  `listRecentShippedOrderShipments`, `extractShipmentsFromOrders`, and the
+  `FullTierCarrierTrackingProvider` seam.
+- **Proactive delivery-exception monitoring.** The gateway `delivery-exception-monitor` and
+  `delivery-exception-plan`, the hourly job, `DELIVERY_EXCEPTION_MONITOR_ENABLED`, and the
+  `ShipmentWatch` table plus its two enums (dropped in
+  `20260826120000_drop_shipment_watches`). Stall and exception detection no longer exist on any
+  tier.
+- **Historical `request_episode_outcomes` backfill.** There is no pre-deploy traffic worth
+  recovering; outcome reporting covers post-deploy requests only.
+- **Classifier-version inventory and retirement procedure.** v5 is the only version ever written,
+  so there is nothing to inventory or retire. To-do 6 covers the code that would make a future
+  bump safe.
+
+What survives: the agent still answers "where is my order" from Shopify order and fulfillment data
+through `get_order_tracking`. It makes no carrier call, and its tool description states that it
+cannot retrieve scan history, delivery events, or delivery exceptions.
 
 ## Maintaining this plan
 

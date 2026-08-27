@@ -334,17 +334,6 @@ export {
   type ReturnWatchTool,
 } from './return-watch.js';
 export {
-  getShipmentWatch,
-  isTerminalShipmentWatchStatus,
-  markShipmentWatchPlanPushed,
-  markShipmentWatchSkipped,
-  recordShipmentWatch,
-  type RecordShipmentWatchParams,
-  type ShipmentWatchHandle,
-  type ShipmentWatchIssueType,
-  type ShipmentWatchStatus,
-} from './shipment-watch.js';
-export {
   beginIntegrationDisconnect,
   claimIntegrationDisconnect,
   completeIntegrationDisconnect,

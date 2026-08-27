@@ -13,10 +13,6 @@ type TrackingShipment = {
   note?: string;
 };
 
-export function readFulfillmentTrackingNumbers(fulfillment: ShopifyFulfillment): string[] {
-  return fulfillmentTrackingNumbers(fulfillment);
-}
-
 function fulfillmentTrackingNumbers(fulfillment: ShopifyFulfillment): string[] {
   const trackingNumbers = fulfillment.tracking_numbers?.filter(Boolean) ?? [];
   if (trackingNumbers.length > 0) return trackingNumbers;
