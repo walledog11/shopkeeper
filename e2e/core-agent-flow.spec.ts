@@ -126,7 +126,18 @@ test('receive inbound email, view ticket, and send a recorded manual reply', asy
   await expect(mobileConversation).toBeVisible();
   await expect(page.getByTestId('chat-timeline')).toHaveAttribute('data-thread-id', thread.id);
   await expect(page.locator('html')).toHaveAttribute('data-mobile-chrome', 'detail');
-  await expect(page.locator('[data-dashboard-mobile-header]')).toBeVisible();
+  // The global hub header is deliberately gone on a ticket. 996b31e4 moved ticket
+  // context into the conversation's own header and added [data-dashboard-mobile-hub]
+  // to the detail/immersive hide list in mobile-chrome.css; the conversation's back
+  // control is what carries mobile navigation now. This asserted the hub was still
+  // visible until then, and went red on the first nightly after that commit.
+  await expect(page.locator('[data-dashboard-mobile-header]')).toBeHidden();
+  // The tickets route renders ConversationView with `embedded`, so the leading
+  // control is labelled "Close conversation" rather than "Back". TicketCardMetaRow
+  // also renders `leading` twice — once in a `hidden sm:flex` row, once in a
+  // `sm:hidden` one — so both copies are in the DOM at 390px; `:visible` picks the
+  // one the merchant can actually tap.
+  await expect(mobileConversation.locator('button[aria-label="Close conversation"]:visible')).toHaveCount(1);
 
   await mobileComposer.focus();
 
@@ -143,7 +154,10 @@ test('receive inbound email, view ticket, and send a recorded manual reply', asy
 
   await expect(mobileConversation).toHaveAttribute('data-keyboard-open', 'true');
   await expect(page.locator('html')).toHaveAttribute('data-mobile-chrome', 'immersive');
-  await expect(page.locator('[data-dashboard-mobile-header]')).toBeVisible();
+  // Same rule covers immersive: the keyboard being up hides the hub too, and only
+  // the hub — the conversation keeps its own header so the ticket stays navigable.
+  await expect(page.locator('[data-dashboard-mobile-header]')).toBeHidden();
+  await expect(mobileConversation.locator('button[aria-label="Close conversation"]:visible')).toHaveCount(1);
 });
 
 test('approve a seeded AI plan and record the outbound email reply', async ({ page }) => {
