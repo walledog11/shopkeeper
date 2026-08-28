@@ -1,4 +1,3 @@
-import type { Prisma } from '@prisma/client';
 import { db } from './client.js';
 
 export const NOTES_KB_SINGLETON_KEY = 'user:notes' as const;

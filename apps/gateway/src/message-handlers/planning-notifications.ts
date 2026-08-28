@@ -8,8 +8,4 @@ export {
   sendOperatorPlanNotification,
   sendOperatorQuestionNotification,
 } from './planning-notifications/index.js';
-export type {
-  ConversationStage,
-  OperatorNotificationExclude,
-  QueueNotice,
-} from './planning-notifications/index.js';
+export type { OperatorNotificationExclude } from './planning-notifications/types.js';
