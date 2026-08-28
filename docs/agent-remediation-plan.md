@@ -4,10 +4,12 @@
 
 **Last reconciled:** 2026-08-27 (Milestone 7 complete and merged in `4d69d40c`, PR #71)
 
-**Current milestone:** none building. Every milestone is complete. Two open items remain, both
-process rather than product: the `baseline.json` recapture, and branch protection on `master`.
-Neither blocks a milestone. See [Retiring this document](#retiring-this-document) for what has to
-be true before this file can be deleted.
+**Current milestone:** none building. Every milestone is complete, and the `baseline.json`
+recapture is [deliberately deferred](#why-the-baseline-is-deferred) rather than owed. Two open
+items remain, both process rather than product and neither blocking: branch protection on
+`master`, and reading the failing repeats of two flapping fixtures — which is free. See
+[Retiring this document](#retiring-this-document) for what has to be true before this file can be
+deleted.
 
 This is the single source of truth for agent remediation and capability work. `AGENT_AUDIT.md` is historical evidence, not a second work order.
 
@@ -97,6 +99,38 @@ Shopkeeper is in active development with **no production users** as of 2026-08-2
 **Do not run the same eval twice** (local then CI) unless the commit changed between runs. Local runs are for fast feedback while developing; a CI `release` certifies a specific merged SHA. If `master` already has a green release gate on the merged work, another run buys nothing pre-user.
 
 **Do not treat local eval results as certifying `master`** when they ran on an uncommitted or superseded tree. PR #69 merged a different implementation than an in-flight local refactor during the 2026-08-25 contract-unification session — the local $0.67 run did not certify what shipped.
+
+**Canary one fixture before dispatching anything over a dollar.** A single-fixture
+`targeted` run costs about **$0.02** and takes under a minute. A full capture costs about
+**$2.80** and takes forty. Spending the two cents first converts a class of expensive silent
+failures — an exhausted account, a revoked key, a provider outage, an unmigrated test database —
+into a cheap loud one. On 2026-08-27 the second baseline attempt spent **$1.95** to discover the
+Anthropic balance had run dry; the preceding targeted run had passed two hours earlier, so the
+canary would have caught it. Its tell is worth recognising directly: fixtures failing in
+alphabetical order with `calls=0`, because a model regression does not respect sort order but an
+account running dry mid-run does.
+
+**Re-running a failed capture is a new authorisation, not a retry.** Before spending again, the
+reason the last one failed must be *fixed*, not merely *hoped past*. Re-run the failing fixtures
+alone first (~$0.18) — on 2026-08-27 that proved two of three flappers reproduced, so a blind
+retry would have failed identically.
+
+### What a paid run actually costs
+
+Measured, so the trade-off can be made without re-deriving it. Cost per fixture-run is
+**~$0.011**, stable across the 2026-08-17 baseline ($2.77 / 252 runs) and the 2026-08-27
+capture ($2.64 / 252). Targeted runs cost more per run — $0.015–$0.023 — because a short run
+amortises less prompt cache.
+
+| Run | Fixture-runs | Cost |
+|---|---:|---:|
+| One fixture, 1 repeat (canary) | 1 | ~$0.02 |
+| Targeted, 3 fixtures × 3 repeats | 9 | ~$0.20 |
+| `release` gate, 48 fixtures × 1 | 48 | ~$0.51 |
+| Full `baseline`, 84 × 3, judges on | 252 | ~$2.80 |
+
+The shape to keep in mind: diagnosis is nearly free and captures are not. A session that runs a
+dozen targeted probes spends less than one capture.
 
 ### PR sizing pre-user
 
@@ -538,17 +572,26 @@ which is why nothing had caught them.
   and 3 repeats — the previous test covered only `release`, which is how a constant survived in a
   file whose whole job is arithmetic.
 
-**Two fixtures still flap and are not explained.** `adjacent-cancel-vs-refund` (core) and
+**Two fixtures flapped, and both turned out to be bugs.** `adjacent-cancel-vs-refund` (core) and
 `tier-guarded-store-credit-approval` reproduced at 2/3 in a targeted re-run;
-`tier-watch-refund-draft-only` was one-off noise. They are not recorded as regressions: the
-baseline they would be compared against is from 2026-08-17, four milestones stale, and at three
-samples the gap between 3/3 and 2/3 is weak evidence in either direction. Recording their real
-rate is the point of the recapture — it is the prerequisite for telling variance from regression
-rather than guessing.
+`tier-watch-refund-draft-only` was one-off noise. This section previously said their rate could
+only be settled by a recapture. That was wrong, and cheaply so: reading the failing repeats in the
+logs already paid for diagnosed both without a model call. See
+[Neither flapper was variance](#neither-flapper-was-variance).
 
 **Habit this bought.** Before re-running a failed multi-dollar capture, re-run the failing fixtures
 alone at the same repeat count (~$0.18). That is what proved two of three reproduced, which meant a
-blind retry would have failed identically.
+blind retry would have failed identically. Promoted to a standing rule under
+[Paid eval policy pre-user](#paid-eval-policy-pre-user), along with the one-fixture canary the
+second attempt should have run.
+
+The second attempt (33129019610) then spent **$1.95 and also committed nothing** — but for an
+external reason: the Anthropic account ran out of credit partway through, and nineteen fixtures
+reported 0/3 with `calls=0`. That surfaced a hole the relaxed capture bar had opened, since a
+capture writes after every fixture and would have recorded an outage as a pass-rate; had the
+balance died on one repeat of three rather than all of them, it would have written 2/3 and called
+it flappiness. Closed in `19b3ee70`: `infrastructure` and `budget` results are refused before the
+write, in every mode.
 
 ### Completion gate (pre-user)
 
@@ -575,12 +618,90 @@ Rows 1 and 2 were previously recorded as the same run. They are not: a targeted 
 fixtures and skips baseline comparison outright (`EVAL_FIXTURE` → `selectFixtures`), so it cannot
 produce a capture no matter how many repeats it does. To-do 1 was closed without touching to-do 2.
 
+**Neither remaining row costs money**, which is the point of the ordering. To-do 3 is a repo
+setting and a workflow trigger. To-do 4 is reading two failing plans — the same free move that
+turned `refund-partial`'s flap from "variance" into a shipped prompt contradiction. Do both
+before anything reaches for a paid run.
+
 | # | To-do | Where | Notes |
 |---|---|---|---|
 | ~~1~~ | ~~Eval gate for the two new shared-registry tools~~ | — | **Done 2026-08-27** on `36896c72`, merged in `4d69d40c`. 9/9 hard-gated at three repeats, $0.21. Required reconciling `refund-partial` first — see Milestone 7 |
-| 2 | Regenerate `baseline.json` at three repeats | `apps/dashboard/src/lib/agent/__evals__/` | Still the 2026-08-17 capture, and `master` has moved a great deal since — every drift comparison against it is decreasingly meaningful, and `drift` mode is the only thing that reads it. **Run it in CI** (`gh workflow run evals.yml -f mode=baseline`), which commits the regenerated file and covers the gateway suite; the local `test:evals:baseline:overwrite` does neither. Preflight estimate **$3.48 / 459 calls**, not the ~$2.55 this row used to claim: baseline mode forces `judges=on` and the local script's figure excludes the 21 judged fixtures. Its own authorisation, not a by-product of a targeted run |
+| ~~2~~ | ~~Regenerate `baseline.json` at three repeats~~ | — | **Deferred 2026-08-27, deliberately.** See [Why the baseline is deferred](#why-the-baseline-is-deferred). Not blocked — the harness bugs that stopped it are fixed — but nothing currently reads what it would produce |
 | 3 | Gate `master` | `.github/workflows/`, repo settings | `evals.yml` triggers only on `pull_request` and `master` is unprotected, so a direct push is an ungated agent change. Either protect `master` or add a `push: branches: [master]` trigger for the **free** preflight. Free to do; the cost is only in what it prevents |
-| 4 | Explain or accept two flapping fixtures | `apps/dashboard/src/lib/agent/__evals__/fixtures/` | `adjacent-cancel-vs-refund` (core) and `tier-guarded-store-credit-approval` reproduce at 2/3. `refund-partial` flapped for a findable reason — a prompt contradiction — so these deserve the same read of their failing repeat before being written off as variance. Not a blocker: the recapture records their rate either way |
+| 4 | Fix the grounding prose matcher | `packages/agent/src/plan-grounding.ts` | **Diagnosed free 2026-08-27** — see [Neither flapper was variance](#neither-flapper-was-variance). `withoutNegatedOperationMentions` scrubs three negation phrasings and not "instead of a refund", so a store-credit reply that mentions the refund it is replacing is marked `ungrounded_customer_reply` and the plan is invalidated. Real defect: an invalid plan cannot execute, so the customer gets no reply |
+| 5 | Decide whether the compensation cap governs `cancel_order` | `packages/agent/src/prompt.ts` | Also diagnosed free. The prompt caps "compensation" and enumerates two forms, neither of which is a cancellation; the model sometimes applies the cap to a cancellation's refund anyway and escalates. Needs a stated answer either way, not a fixture assertion that assumes one |
+
+### Neither flapper was variance
+
+Both were diagnosed from the logs of the runs already paid for — **no new model call**. That is
+the argument for reading a failing repeat before buying a rerun: this plan had been about to spend
+~$2.80 recording two "flap rates" that are both deterministic bugs firing on a phrasing coin-flip.
+
+**`tier-guarded-store-credit-approval` — a prose matcher invalidating a correct plan.**
+`plan-grounding.ts` decides whether a reply's claims are grounded by running regexes over the
+reply text. `withoutNegatedOperationMentions` strips three negation phrasings — "no refund was
+needed", "without a refund", "refund was not issued" — and the model wrote a fourth:
+
+> "I've issued a $15 store credit (gift card) to your account for order #10101 **instead of a
+> refund**, as requested."
+
+`/\b(?:refunds?|refunded|refunding)\b/` matches inside "instead of a refund", demands
+`create_refund` or `cancel_order`, finds only `create_gift_card`, and raises
+`ungrounded_customer_reply`. The plan is then **invalid**, so it cannot execute and the customer
+gets no reply — the same failure mode as the `orphan_internal_note` defect recorded above. In a
+fixture themed *store credit over refund*, "instead of a refund" is the most natural sentence the
+model can write, which is precisely why it flaps rather than fails outright.
+
+This is the design law in [Architecture](#architecture) being violated by the validator that
+enforces plan safety: control flow reading English, and three `.replace()` carve-outs that are
+themselves the "growth by special case" signal. Adding a fourth phrase is not the fix. The
+grounding question — *does this plan perform what the reply claims?* — is answerable from the
+typed tool calls the reply is supposed to describe, not from re-parsing the prose.
+
+**`adjacent-cancel-vs-refund` — an unanswered question about what the cap governs.** The fixture
+sets no `maxRefundAmount`, so it inherits the guarded-tier default of $50; the order is $62. On
+the failing repeat the model escalated:
+
+> "Customer requests full refund/cancellation on unfulfilled order #7030 totaling $62.00, which
+> **exceeds the $50 single-compensation cap**."
+
+The prompt says the cap covers "an exact full refund or an explicitly requested fixed-value gift
+card", and separately says an unfulfilled cancellation should call `cancel_order` because Shopify
+refunds the payment itself. It never says whether that Shopify-side refund counts against the cap.
+Both readings are defensible, so the model picks one per run. The fixture asserts `cancel_order`
+without the prompt ever having settled the question — the same shape as the partial-refund
+contradiction, an under-specified boundary in the compensation tree rather than a wrong model.
+
+### Why the baseline is deferred
+
+`baseline.json` stays the 2026-08-17 capture. This is a decision, not an unfinished task — the
+two harness bugs that blocked it are fixed and a capture would now succeed. It is deferred
+because **nothing currently consumes what it would produce.**
+
+It has exactly two readers:
+
+- **`drift` mode**, via `loadBaseline` in `runner.ts` — compares the current three-repeat
+  hard-gated subset against the same subset of the baseline. Nobody is running `drift`. A fresh
+  baseline is comparison data for a comparison no one makes.
+- **`eval-budget-preflight.mjs`**, which derives cost-per-run from the recorded usage. This
+  reader is served fine by the stale file: the measured rate is **$0.011 per fixture-run** in the
+  2026-08-17 capture and **$0.0105** in the 2026-08-27 attempt, so its estimates stay accurate.
+
+Against that, a capture costs ~$2.80 and forty minutes. Two attempts on 2026-08-27 spent **$4.66
+and committed nothing** — the first bought two real harness bugs, the second bought only the
+discovery that the API account had run dry.
+
+**Recapture when there is a reader.** Concretely: before a `drift` run, before first customer as
+part of launch certification, or when a change lands that plausibly moves many fixtures at once
+and the question "is this variance or regression?" needs an answer better than a guess. Until
+then the stale baseline costs nothing and a fresh one buys nothing.
+
+**What was thought to be lost by waiting turned out not to be.** The argument for recapturing was
+that the two flapping fixtures had no recorded rate, so 2/3 could not be told apart from variance.
+Reading their failing repeats settled it for free: both are deterministic bugs, not variance, and
+recording a "rate" for either would have been recording a bug as a statistic. See
+[Neither flapper was variance](#neither-flapper-was-variance). Fix to-dos 4 and 5 first; a capture
+taken before them would bake their misbehaviour into the comparison point.
 
 ### Standing constraints (not to-dos)
 
