@@ -1,7 +1,7 @@
 # Milestone 6 evidence — degraded tier — 2026-08-26
 
 Evidence for Milestone 6 slices in
-[agent-remediation-plan.md](agent-remediation-plan.md). The degraded tier is
+[AGENT_AUDIT.md](../AGENT_AUDIT.md). The degraded tier is
 **complete (pre-user close)** as of 2026-08-26. Attachment vision for email and
 TikTok (alongside Instagram) is **complete (pre-user close)** as of 2026-08-26.
 Full-tier carrier monitoring remains open.
@@ -11,7 +11,7 @@ Full-tier carrier monitoring remains open.
 > monitor, and the `ShipmentWatch` table — describes code that has since been
 > **deleted from the product**. It is kept as the dated record of what shipped and
 > why, not as a description of the current system. The attachment-vision sections
-> remain accurate. See [Removed capabilities](agent-remediation-plan.md#removed-capabilities).
+> remain accurate. See [Removed capabilities](../AGENT_AUDIT.md#3-removed-capabilities).
 
 ## Outcome target
 
@@ -92,7 +92,7 @@ cd apps/gateway && npm run test:integration -- src/maintenance/delivery-exceptio
 | Model evidence | None owed — no planner prompt, tool schema, or model pin change on this slice |
 | Production canary | Deferred pre-user — acceptance integration test substitutes |
 | Rollback | `DELIVERY_EXCEPTION_MONITOR_ENABLED=false` or revert monitor registration |
-| Documentation | This report and [agent-remediation-plan.md](agent-remediation-plan.md) |
+| Documentation | This report and [AGENT_AUDIT.md](../AGENT_AUDIT.md) |
 
 ## Still open (Milestone 6)
 

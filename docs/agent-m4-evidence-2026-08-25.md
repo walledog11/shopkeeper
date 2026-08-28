@@ -1,7 +1,7 @@
 # Milestone 4 evidence — 2026-08-25
 
 Evidence for the **bounded replanning after definite failure** milestone in
-[agent-remediation-plan.md](agent-remediation-plan.md). Milestone 4 is **complete
+[AGENT_AUDIT.md](../AGENT_AUDIT.md). Milestone 4 is **complete
 (pre-user close)** as of 2026-08-25.
 
 ## Outcome target

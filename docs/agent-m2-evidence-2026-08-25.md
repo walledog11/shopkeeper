@@ -1,7 +1,7 @@
 # Milestone 2 evidence — 2026-08-25
 
 Evidence for the `AGENT_CONTEXT_BUDGET_MODE` bullet of Milestone 2 in
-[agent-remediation-plan.md](agent-remediation-plan.md), plus defects the work
+[AGENT_AUDIT.md](../AGENT_AUDIT.md), plus defects the work
 surfaced that belong to other milestones.
 
 ## Bounded agent context — rollout finished and flag retired

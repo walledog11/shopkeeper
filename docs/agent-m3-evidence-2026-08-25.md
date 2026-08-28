@@ -1,7 +1,7 @@
 # Milestone 3 evidence — 2026-08-25
 
 Evidence for the **immutable outcome attribution** milestone in
-[agent-remediation-plan.md](agent-remediation-plan.md). Milestone 3 is **complete**
+[AGENT_AUDIT.md](../AGENT_AUDIT.md). Milestone 3 is **complete**
 (2026-08-25, pre-user close).
 
 ## Outcome target
@@ -142,7 +142,7 @@ cd apps/dashboard && node ../../scripts/with-test-env.mjs npx vitest run src/lib
 | Model evidence | None owed — no prompt, tool schema, or model pin change. |
 | Production canary | Not run pre-user; deploy + integration tests are the gate. |
 | Rollback | Revert commits; drop table only if no downstream dependency (see below). |
-| Documentation | This report and [agent-remediation-plan.md](agent-remediation-plan.md). |
+| Documentation | This report and [AGENT_AUDIT.md](../AGENT_AUDIT.md). |
 
 ## Acceptance status
 

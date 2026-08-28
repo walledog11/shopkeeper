@@ -1,7 +1,7 @@
 # Milestone 1 briefing evidence — 2026-08-23
 
 This report records deterministic and production evidence for
-[Milestone 1](agent-remediation-plan.md#milestone-1--actionable-merchant-briefings).
+[the remediation record](../AGENT_AUDIT.md#2-the-remediation-programme) (Milestone 1).
 It contains aggregate counts only. No organization, customer, thread, message,
 or plan identifiers are recorded.
 
