@@ -1,16 +1,16 @@
 # Shopkeeper — Agent Reliability and Capability Plan
 
-**Status:** canonical execution plan
+**Status:** historical record — no open work. Two pull requests carry the last of it and are
+awaiting merge (#72, #73); nothing in this file describes work still to be started.
 
 **Last reconciled:** 2026-08-27 (Milestone 7 complete and merged in `4d69d40c`, PR #71;
-`master` gated for the free preflight)
+`master` gated for the free preflight; to-dos 3, 4 and 5 discharged)
 
-**Current milestone:** none building. Every milestone is complete, and the `baseline.json`
-recapture is [deliberately deferred](#why-the-baseline-is-deferred) rather than owed. One open
-item remains and it is not blocking: the unanswered question of what the compensation cap governs,
-diagnosed for free from a run already paid for. See
-[Retiring this document](#retiring-this-document) for what has to be true before this file can be
-deleted.
+**Current milestone:** none building. Every milestone is complete, every to-do is discharged, and
+the `baseline.json` recapture is [deliberately deferred](#why-the-baseline-is-deferred) rather
+than owed. This file is kept, not deleted: see
+[Retiring this document](#retiring-this-document) for what would have to move first, and why
+leaving it in place is the recommendation.
 
 This is the single source of truth for agent remediation and capability work. `AGENT_AUDIT.md` is historical evidence, not a second work order.
 
@@ -617,19 +617,18 @@ write, in every mode.
 
 Nothing here waits on a first customer, a production canary, or a monitoring period.
 
-All the milestone code is written and every milestone gate is discharged. What remains is one
-question the baseline attempt surfaced, diagnosed without a model call. Do not re-add a code item
-without checking it is genuinely unwritten — the last audit found four plan claims that had
-drifted from the code.
+All the milestone code is written, every milestone gate is discharged, and every row below is
+closed or deliberately deferred. Do not re-add a code item without checking it is genuinely
+unwritten — the last audit found four plan claims that had drifted from the code.
 
 Rows 1 and 2 were previously recorded as the same run. They are not: a targeted run names its
 fixtures and skips baseline comparison outright (`EVAL_FIXTURE` → `selectFixtures`), so it cannot
 produce a capture no matter how many repeats it does. To-do 1 was closed without touching to-do 2.
 
-**The remaining row cost nothing to find**, which is the point of the ordering: it came out of
-reading the failing repeats of a run already paid for — the same free move that turned
-`refund-partial`'s flap from "variance" into a shipped prompt contradiction. To-do 4 closed the
-same way, and its eventual paid run cost $0.17 because the diagnosis was already done.
+**Neither of the last two rows cost anything to find**, which is the point of the ordering: both
+came out of reading the failing repeats of runs already paid for — the same free move that turned
+`refund-partial`'s flap from "variance" into a shipped prompt contradiction. Because the diagnosis
+was done first, closing them cost $0.17 and $0.07 rather than a capture apiece.
 
 | # | To-do | Where | Notes |
 |---|---|---|---|
@@ -637,7 +636,7 @@ same way, and its eventual paid run cost $0.17 because the diagnosis was already
 | ~~2~~ | ~~Regenerate `baseline.json` at three repeats~~ | — | **Deferred 2026-08-27, deliberately.** See [Why the baseline is deferred](#why-the-baseline-is-deferred). Not blocked — the harness bugs that stopped it are fixed — but nothing currently reads what it would produce |
 | ~~3~~ | ~~Gate `master`~~ | `.github/workflows/evals.yml` | **Done 2026-08-27.** Added `push: branches: [master]` with the same paths filter, so a direct push to `master` runs the free `deterministic-preflight`. All seven paid jobs stay guarded on `workflow_dispatch` and are unreachable from a push; `cancel-in-progress` now excludes only `workflow_dispatch`, so a paid run still cannot be cancelled. `master` is left unprotected on purpose — the check reports, it does not block |
 | ~~4~~ | ~~Fix the grounding prose matcher~~ | `packages/agent/src/plan-grounding.ts` | **Done 2026-08-27** on `c8d33d37` (PR #72). `f69ab6e0` drops the three deleted-phrase rules for a claim-span bound; `c8d33d37` closes a regression that rewrite introduced — one match per pattern lost any second claim joined by punctuation rather than `and`, so a reply could promise a cancellation the plan never ran. **Paid, green:** targeted on `c8d33d37`, 3 fixtures × 3 repeats, 9/9 hard-gated, $0.1133 of $0.60 and 22 of 60 calls (run 33133538357), after a $0.0534 one-fixture canary (33133359265). `tier-guarded-store-credit-approval` is 3/3, up from the 2/3 it flapped at in 33120836618 |
-| 5 | Decide whether the compensation cap governs `cancel_order` | `packages/agent/src/prompt.ts` | Also diagnosed free. The prompt caps "compensation" and enumerates two forms, neither of which is a cancellation; the model sometimes applies the cap to a cancellation's refund anyway and escalates. Needs a stated answer either way, not a fixture assertion that assumes one |
+| ~~5~~ | ~~Decide whether the compensation cap governs `cancel_order`~~ | `packages/agent/src/prompt.ts` | **Answered 2026-08-27: it does not.** `cancel_order`'s policy is `{ cancellationDisabled: true }` — neither `refundAmountLimits` nor `dailyRefundSpendLimit` — so the cap was never consulted for a cancellation and the model's escalation cited a limit that would not have fired. The code was ratified rather than changed: a cap on compensation caps giving money away, while cancelling an unfulfilled order undoes a sale and leaves the merchant whole; `blockCancellations` is the control for cancellations. One sentence added to the cap clause in both variants (`6f19dee8`, PR #73). **Paid, green:** targeted, 3 × 3, 9/9 hard-gated, $0.0665 of $0.40 (run 33134367150) — `adjacent-cancel-vs-refund` 3/3 against the 2/3 it flapped at, with `refund-over-cap-escalate` and `store-credit-over-cap-escalate` 3/3 proving the cap still bites |
 
 ### Neither flapper was variance
 
@@ -765,8 +764,9 @@ links.
 
 Two distinct questions, often conflated:
 
-**1. When does it stop being a plan?** When to-do 5 is discharged (to-do 2 is deferred by
-decision, not owed). At that point no row in this file describes work anyone still has to do.
+**1. When does it stop being a plan?** It already has, as of 2026-08-27 — every row is closed or
+deferred by decision, and the status line above says so. What is left is landing PRs #72 and #73,
+not deciding anything.
 
 **2. When can the file be deleted?** Only when everything below has a new home. Retirement is a
 migration, not a deletion.
