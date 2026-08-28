@@ -95,8 +95,8 @@ redirect host cannot drift without failing boot.
 
 ### Access scopes
 
-15 scopes, from `SHOPIFY_OAUTH_SCOPES` in
-`packages/agent/src/shopify/integration-health.ts:50-66`:
+15 scopes as of 2026-08-07, from `SHOPIFY_OAUTH_SCOPES` in
+`packages/agent/src/shopify/integration-health.ts`:
 
 ```
 read_customers, write_customers, read_orders, write_orders, write_order_edits,
@@ -104,6 +104,12 @@ read_merchant_managed_fulfillment_orders, write_merchant_managed_fulfillment_ord
 read_returns, write_returns, read_products, read_content, write_gift_cards,
 write_discounts, read_store_credit_accounts, write_store_credit_account_transactions
 ```
+
+**That count is the 2026-08-07 prediction, kept so the divergence table below still
+lines up. It is not current.** `SHOPIFY_OAUTH_SCOPES` holds **16** today —
+`write_products` joined it for enumerated repricing — and `shopify.app.toml` declares
+**17**, adding `write_app_proxy`, which the code list deliberately does not check. Read
+the constant, not this block; the line range it used to cite has moved too.
 
 This list is what the app *requests* and what `missingShopifyScopes()` checks a
 connected store against. It is not proof of what the Dashboard grants.

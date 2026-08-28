@@ -269,9 +269,10 @@ the CLI generated it from the live app, so nothing needed authoring and the
 earlier hand-written draft was deleted as a hazard. Scopes matched the
 code-derived prediction exactly.
 
-*(The export was deleted 2026-08-27 once the live `shopify.app.toml` had
-diverged from it; the findings below are what it settled **in August 2026** and
-several no longer describe the app. Read `shopify.app.toml` for current state.)*
+*(The export file was deleted 2026-08-27 once the live `shopify.app.toml` had diverged
+from it. Read the snapshot at
+`git show dab6aa1b:docs/production/shopify-app-config-export-2026-08-07.toml`, and
+`shopify.app.toml` for current state.)*
 
 It also corrected two assumptions:
 
@@ -286,6 +287,14 @@ It also corrected two assumptions:
   registered per-shop against the REST Admin API on every OAuth callback, and app
   config declared no subscriptions at all — so the TOML had to *not* declare them
   or every order event would double-deliver.
+
+**The first bullet was closed, not just inverted — verified 2026-08-27.** The three
+handlers exist in `apps/gateway/src/routes/shopify-compliance.ts`, `shopify.app.toml`
+declares all three under `compliance_topics` against the gateway address, and the
+`shopify_privacy_requests` table backs the durable data-request workflow. The order it
+prescribed was followed: handlers first, then the declaration. What is left is
+exercising Shopify's compliance checks against production — a verification, tracked in
+[to-do-list.md](../to-do-list.md), not the gap this bullet describes.
 
 **That second bullet was deliberately inverted on 2026-08-09 (`e7d881c9`).** The
 TOML now declares all five topics at app level against the gateway address, and

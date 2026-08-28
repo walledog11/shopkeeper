@@ -285,20 +285,15 @@ body, raw MIME, provider ID, or token. A separate read-only `sendAs` check found
 one configured sender and confirmed `support@palettegarments.com` is not present
 or verified, so changing Shopkeeper's `fromEmail` would be premature.
 
-- [ ] Configure delivery for `support@palettegarments.com`.
-- [ ] Verify it as an authorized Gmail **Send mail as** address.
-- [ ] Prove inbound delivery and alias sending in Gmail first.
-- [ ] Save the alias in Shopkeeper.
-- [x] Confirm message `32588b09-0a00-4e10-93b0-a5813b1d39ad` arrived once in
-  the connected Gmail mailbox.
-- [ ] Send unique plain-text and HTML-plus-safe-attachment canaries externally.
-- [ ] Reply from the dashboard alias and send one customer follow-up.
-- [ ] Confirm one ticket/message, attachment persistence, alias sender,
-  Gmail threading, one continuing Shopkeeper thread, and no duplicate jobs.
-- [ ] Review logs for identifiers/categories only, with no content or tokens.
+Only one box here was ever ticked — message
+`32588b09-0a00-4e10-93b0-a5813b1d39ad` arrived exactly once in the connected Gmail
+mailbox. The rest of the alias checklist was **moved to
+[to-do-list.md](../to-do-list.md)** on 2026-08-27, under Prove in prod → Channels and
+providers, with its restore instruction intact. It sat unchecked here for a month while
+this file was filed as closed evidence, which is the wrong place for open work.
 
-If alias behavior fails, restore Palette's original Gmail address immediately.
-The reliability release can remain deployed.
+Nothing about the alias is blocked by code. It needs Gmail administrator access and an
+independent external mailbox.
 
 ## Rollback record
 

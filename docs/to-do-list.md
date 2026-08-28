@@ -43,6 +43,13 @@ and never from `/health`, which is liveness-only and cannot report a commit at a
   Flash sales need only `write_discounts`, which is already granted, so they work
   without this.
 
+  **Reconcile the connected dev store's scope grant while you are here.** The
+  2026-08-04 validation found `palette-dev` holding 38 OAuth scopes against a declared
+  set that is now 17. Under managed installation the released version is what decides
+  the grant, so this release is the mechanism that trims it — confirm afterwards that the
+  store shows 17 and not the stale 38, which folds into the grant check under Channels
+  and providers below.
+
 - [ ] **Restore the production Postmark forwarding integration after a credential
   canary.** Verify the dashboard's configured `POSTMARK_API_KEY` can send from
   `hello@useshopkeeper.com`, then recreate that forwarding integration and make it the
@@ -145,6 +152,17 @@ provider. **None of these is a code task.**
 - [ ] **Postmark outbound canary.** Send and bounce attribution under real traffic;
   inbound is already proven end to end. Steps in
   [phase-6-external-services.md](phase-6-external-services.md).
+- [ ] **Gmail alias send/receive for `support@palettegarments.com`.** The 2026-07-29
+  rollout proved native inbound and mailbox receipt, then stopped: a read-only `sendAs`
+  check found the address neither present nor verified, so Shopkeeper's `fromEmail` was
+  left alone. Needs Gmail administrator access plus an independent external mailbox,
+  neither of which the release workspace had. Configure delivery, verify it as a **Send
+  mail as** address, and prove inbound and alias sending in Gmail *before* saving the
+  alias in Shopkeeper — then send plain-text and HTML-plus-attachment canaries, reply
+  from the dashboard alias, and confirm one ticket, attachment persistence, alias sender,
+  Gmail threading, one continuing thread, and no duplicate jobs. If alias behavior fails,
+  restore Palette's original address immediately; the reliability release can stay
+  deployed. Read logs for identifiers only, never content or tokens.
 - [ ] **Instagram Advanced Access.** Implementation and Standard Access acceptance are
   done. Launch is gated on Meta App Review plus a non-role merchant account completing
   the full DM loop: connect → inbound → approve reply → disconnect/reconnect. Ops in
@@ -180,6 +198,11 @@ closing verification passes.
   and 1 seat, Pro unbounded and 2 seats. Verify by confirming a Starter org is capped
   and a Pro org is not. Stripe steps in
   [phase-6-external-services.md](phase-6-external-services.md).
+- [ ] **Align the Vercel project's Node version with the repo.** Every repo
+  declaration says 22.x — root and both app `package.json` engines, `.nvmrc`, and all
+  five `ci.yml` jobs — but the Vercel project may still be set to 24.x, unverified since
+  2026-08-04. A build running a different major than CI is a silently divergent surface.
+  Read the project setting and set it to 22.x if it differs.
 - [ ] **Prove the Shopify compliance webhooks.** Handlers, the durable data-request
   workflow, redaction paths, the `shopify_privacy_requests` table and the
   `compliance_topics` declarations are all shipped and released, so nothing is blocked.

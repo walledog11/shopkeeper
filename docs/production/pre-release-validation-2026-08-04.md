@@ -94,14 +94,14 @@ from the 2026-08-04 run and what has since cleared.
 
 ### Still open from this validation
 
+Every item below is now carried in [to-do-list.md](../to-do-list.md), which is the
+file to read for current status. They are listed here only so this record states what
+it left behind. Reconciled 2026-08-27.
+
 #### Dashboard production environment contract
 
-Still missing before two-tier billing:
-
-- `PRICE_ID_STARTER`
-- `PRICE_ID_PRO`
-
-Re-verify any remaining sentinel values:
+`PRICE_ID_STARTER` and `PRICE_ID_PRO` are still missing before two-tier billing, in
+**both** Vercel and Railway. Re-verify any remaining sentinel values:
 
 ```bash
 node scripts/check-production-env.mjs dashboard \
@@ -110,13 +110,15 @@ node scripts/check-production-env.mjs dashboard \
 ```
 
 The Vercel project may still be configured for Node.js 24.x while the repository
-declares Node.js 22.x. Align the project setting to Node.js 22.x if not already
-done.
+declares Node.js 22.x throughout. Still unverified.
 
 #### Shopify follow-up
 
-The connected `palette-dev` store retains 38 OAuth scopes; trim it to the 15
-used scopes before merchant number two.
+The connected `palette-dev` store retained 38 OAuth scopes against a declared set that
+was 15 at the time of this run and is **17 today** — `write_products` and
+`write_app_proxy` were added afterwards. Do not trim toward 15. Under managed
+installation the released app version decides the grant, so the pending
+`shopkeeper-production-28` release is the mechanism, not a separate console edit.
 
 #### Email and Sentry evidence
 
