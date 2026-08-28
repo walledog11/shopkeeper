@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { jsonResponse } from '@shopkeeper/agent/testing';
 import {
   exchangeShopifyAccessToken,
   isValidShopifyHmac,
@@ -104,9 +105,3 @@ function exchange() {
   });
 }
 
-function jsonResponse(body: unknown, init: ResponseInit = {}) {
-  return new Response(JSON.stringify(body), {
-    status: init.status ?? 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}

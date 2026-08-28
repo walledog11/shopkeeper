@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { jsonResponse } from '@shopkeeper/agent/testing';
 
 const { mockFetch, mockUpsert } = vi.hoisted(() => ({
   mockFetch: vi.fn(),
@@ -139,9 +140,3 @@ function mockSuccessfulToken() {
   }));
 }
 
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}

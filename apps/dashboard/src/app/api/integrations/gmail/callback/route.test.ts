@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { jsonResponse } from '@shopkeeper/agent/testing';
 import { ChannelType, EmailProvider, db } from '@shopkeeper/db';
 import {
   NoopAnalyticsSink,
@@ -463,9 +464,3 @@ function encodeTestAttempt(values: Record<string, string>, prefix: string): stri
   });
 }
 
-function jsonResponse(body: unknown, init: ResponseInit = {}) {
-  return new Response(JSON.stringify(body), {
-    status: init.status ?? 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}

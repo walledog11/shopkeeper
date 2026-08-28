@@ -1,14 +1,11 @@
 import { describe, expect, it, vi } from "vitest"
+import { jsonResponse } from "@shopkeeper/agent/testing";
 import {
   clearWorkspaceTicketsRequest,
   deleteWorkspaceRequest,
   exportFilenameFromDisposition,
   saveWorkspaceName,
 } from "./workspace-requests"
-
-function jsonResponse(body: unknown, init?: ResponseInit) {
-  return new Response(JSON.stringify(body), init)
-}
 
 describe("saveWorkspaceName", () => {
   it("returns conflict data without throwing", async () => {

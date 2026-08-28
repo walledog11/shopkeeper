@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { jsonResponse as sharedJsonResponse } from "../testing/json-response.js";
 import { createRefund } from "./refunds.js";
 
 const ctx = {
@@ -7,11 +8,10 @@ const ctx = {
   operationId: "0ecfcf1c-2a07-4caf-956f-77cbaa2fb83a:refund_step",
 };
 
+// Every stub here answers with retry-after: 0 so the client's backoff does not
+// sleep the suite; otherwise this is the shared helper.
 function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json", "retry-after": "0" },
-  });
+  return sharedJsonResponse(body, { status, headers: { "retry-after": "0" } });
 }
 
 function orderResponse() {

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { jsonResponse } from "../testing/json-response.js";
 import { createGiftCard } from "./gift-cards.js";
 import { shopifyIdempotencyKey } from "./client.js";
 
@@ -9,13 +10,6 @@ const ctx = {
 };
 
 const expectedCode = shopifyIdempotencyKey(ctx.operationId).replaceAll("-", "").slice(0, 20);
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-}
 
 afterEach(() => {
   vi.useRealTimers();

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { jsonResponse } from '@shopkeeper/agent/testing';
 import {
   exchangeTikTokShopOAuthCode,
   refreshTikTokShopAccessToken,
@@ -118,9 +119,3 @@ describe('refreshTikTokShopAccessToken', () => {
   });
 });
 
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}

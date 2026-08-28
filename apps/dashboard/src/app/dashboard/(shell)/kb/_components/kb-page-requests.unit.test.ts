@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
+import { jsonResponse } from "@shopkeeper/agent/testing";
 import { createArticle, deleteKnowledgeBase } from "./kb-page-requests"
-
-function jsonResponse(body: unknown, init?: ResponseInit) {
-  return new Response(JSON.stringify(body), init)
-}
 
 describe("kb-page-requests", () => {
   it("creates articles with parsed request input", async () => {

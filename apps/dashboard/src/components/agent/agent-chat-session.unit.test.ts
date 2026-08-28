@@ -1,13 +1,10 @@
 import { describe, expect, it, vi } from "vitest"
+import { jsonResponse } from "@shopkeeper/agent/testing";
 import {
   fetchOperatorTranscript,
   sendAgentChatInstruction,
   transcriptToChatMessages,
 } from "./agent-chat-session"
-
-function jsonResponse(body: unknown, init?: ResponseInit) {
-  return new Response(JSON.stringify(body), init)
-}
 
 describe("sendAgentChatInstruction", () => {
   it("posts only the instruction — the gateway owns the thread", async () => {

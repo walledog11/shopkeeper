@@ -1,17 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { jsonResponse } from "../testing/json-response.js";
 import { deepestMarkdownPercent, setVariantPrices } from "./variant-pricing.js";
 import { resolveAgentSettings } from "../settings.js";
 
 const ctx = { shop: "test-store.myshopify.com", accessToken: "shpat_test" };
 const NOW = new Date("2026-04-29T12:00:00Z");
 const SETTINGS = resolveAgentSettings(null);
-
-function jsonResponse(body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
-}
 
 /** The three calls a successful reprice makes, in order. */
 function successfulFetch(price = "48.00") {

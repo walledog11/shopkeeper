@@ -1,17 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { jsonResponse } from '@shopkeeper/agent/testing';
 import {
   checkInstagramAccountAccess,
   exchangeFacebookLongLivedToken,
   fetchInstagramUserProfile,
   META_GRAPH_VERSION,
 } from './meta-graph.js';
-
-function jsonResponse(body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
 
 afterEach(() => {
   vi.unstubAllGlobals();
