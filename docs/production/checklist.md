@@ -2,10 +2,11 @@
 
 Last reviewed: 2026-08-04.
 
-The latest attempted production sign-off is recorded in
-[pre-release-validation-2026-08-04.md](pre-release-validation-2026-08-04.md).
-It contains passing evidence plus unresolved launch blockers; do not treat that
-run as a completed sign-off.
+The latest attempted production sign-off was the 2026-08-04 validation run. It passed
+its gates but left launch blockers open, so it was never a completed sign-off; its
+record was retired on 2026-08-27 once each blocker had moved to
+[to-do-list.md](../to-do-list.md), which is where they are tracked. Read the run at
+`git show cb61ac44:docs/production/pre-release-validation-2026-08-04.md`.
 
 This is the short release gate for production readiness. Keep detailed deploy procedure in
 [deployment.md](deployment.md) and operational response steps in [runbook.md](runbook.md).

@@ -359,8 +359,10 @@ maintenance interval and verify:
    specifically for `sync_recovery_truncated`; it caps the override at 50,000
    messages and keeps the same checkpoint/idempotency rules.
 
-The 2026-07-29 production release and observation checklist are recorded in
-[`gmail-rollout-evidence-2026-07-29.md`](gmail-rollout-evidence-2026-07-29.md).
+The 2026-07-29 production release and its observation checklist closed on 2026-08-07
+and the record was retired on 2026-08-27; read it at
+`git show cb61ac44:docs/production/gmail-rollout-evidence-2026-07-29.md`. The alias
+work it left open is in [`to-do-list.md`](../to-do-list.md).
 The owner-ready restricted-scope package is
 [`google-gmail-verification-packet.md`](google-gmail-verification-packet.md).
 

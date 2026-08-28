@@ -315,12 +315,14 @@ that layer has.
   read before renaming any BullMQ queue or job string.
 - [phase-6-external-services.md](phase-6-external-services.md) — console-only
   brand/domain checklist; delete when closing verification passes.
-- [production/pre-release-validation-2026-08-04.md](production/pre-release-validation-2026-08-04.md) —
-  2026-08-04 production validation evidence.
-- [production/gmail-rollout-evidence-2026-07-29.md](production/gmail-rollout-evidence-2026-07-29.md) —
-  Gmail native inbound soak (scheduled observation closed 2026-08-07).
 - [production/posthog-reports.md](production/posthog-reports.md) — PostHog report
   definitions and provisioning.
 - [production/runbook.md](production/runbook.md) — ops, monitors, channel rollout.
 - [production/alerting-evidence.md](production/alerting-evidence.md) — controlled
   alert triggers and verification cheatsheet.
+
+Two closed evidence records were deleted on 2026-08-27 once every live item in them
+was carried into this file: the 2026-08-04 pre-release validation run
+(`git show cb61ac44:docs/production/pre-release-validation-2026-08-04.md`) and the
+2026-07-29 Gmail native-inbound rollout and soak
+(`git show cb61ac44:docs/production/gmail-rollout-evidence-2026-07-29.md`).
