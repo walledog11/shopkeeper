@@ -94,9 +94,42 @@ const groups = [
       || file.endsWith('/src/workers/order-review.ts'),
   },
   {
+    // Re-drafts plans for threads that missed one. An absent plan is recovery
+    // work, not a merchant decision.
+    name: 'gateway plan recovery',
+    report: 'apps/gateway/coverage/coverage-summary.json',
+    matches: (file) => file.endsWith('/src/maintenance/plan-recovery.ts'),
+  },
+  {
+    // Decides whether a stale outbound row is retried or marked unknown once a
+    // provider attempt has started.
+    name: 'gateway outbound send sweep',
+    report: 'apps/gateway/coverage/coverage-summary.json',
+    matches: (file) => file.endsWith('/src/maintenance/outbound-send-sweep.ts'),
+  },
+  {
+    // Re-enqueues durable integration disconnect work that never finished.
+    name: 'gateway integration disconnect sweep',
+    report: 'apps/gateway/coverage/coverage-summary.json',
+    matches: (file) => file.endsWith('/src/maintenance/integration-disconnect-sweep.ts'),
+  },
+  {
+    // Closes genuinely quiet threads without operator-owned work in flight.
+    name: 'gateway inactive thread sweep',
+    report: 'apps/gateway/coverage/coverage-summary.json',
+    matches: (file) => file.endsWith('/src/maintenance/inactive-thread-sweep.ts'),
+  },
+  {
     name: 'agent Shopify write operations',
     report: 'packages/agent/coverage/coverage-summary.json',
     matches: (file) => /\/src\/shopify\/(discounts|order-cancellation)\.ts$/.test(file),
+  },
+  {
+    // Determines whether a Shopify mutation actually landed after an ambiguous
+    // provider outcome. A confident no_effect here can release a duplicate send.
+    name: 'agent Shopify reconciliation probes',
+    report: 'packages/agent/coverage/coverage-summary.json',
+    matches: (file) => file.includes('/src/shopify/reconciliation-probes/'),
   },
   {
     name: 'agent Shopify tracking and product lookup',

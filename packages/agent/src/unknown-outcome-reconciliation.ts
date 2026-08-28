@@ -12,7 +12,7 @@ import {
   probeUnknownShopifyMutation,
   RECONCILABLE_SHOPIFY_MUTATION_TOOLS,
   type ShopifyReconciliationProbeResult,
-} from "./shopify/reconciliation-probes.js";
+} from "./shopify/reconciliation-probes/index.js";
 import type { ShopifyContext } from "./shopify/client.js";
 
 export const STALE_UNKNOWN_RECONCILIATION_MS = 10 * 60 * 1000;

@@ -3,7 +3,6 @@
 import Image from "next/image"
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react"
 import { Card } from "@/components/ui/card"
-import { boardCardFooterClassName } from "@/lib/ui/board-card-styles"
 import { cn } from "@/lib/ui/cn"
 import { getChannelInfoByName } from "@/lib/messaging/channels"
 import { timeAgoCard } from "@/lib/messaging/customer-display"
@@ -15,6 +14,7 @@ import {
   isInboundTone,
   needsYouMetaPillShellClassName,
   needsYouSoftShadowClassName,
+  needsYouCardFooterClassName,
   needsYouCardShellClassName,
   needsYouConversationSurfaceClassName,
   type BubbleTone,
@@ -66,7 +66,7 @@ export function NeedsYouCardHeader({
   return (
     <div
       className={cn(
-        "relative z-10 rounded-t-3xl border-b border-border/60 bg-card px-4 py-2.5 sm:px-5 sm:py-3.5 md:px-6",
+        "relative z-10 rounded-t-3xl border-b border-border/60 bg-white px-4 py-2.5 sm:px-5 sm:py-3.5 md:px-6",
         className,
       )}
     >
@@ -104,7 +104,7 @@ export function NeedsYouCardFooter({
     <div
       className={cn(
         "relative z-10 mt-auto px-5 py-4 sm:px-6",
-        boardCardFooterClassName,
+        needsYouCardFooterClassName,
         className,
       )}
     >

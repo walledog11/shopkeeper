@@ -33,7 +33,7 @@ import {
   GIFT_CARDS_BY_CODE_QUERY,
   RECENT_GIFT_CARDS_QUERY,
   RETURN_RECONCILIATION_QUERY,
-} from "./reconciliation-probes.js";
+} from "./reconciliation-probes/index.js";
 import { ORDER_RETURNS_QUERY } from "./return-labels.js";
 import { ORDER_RETURN_STATUSES_QUERY } from "./return-status.js";
 import { RETURNABLE_FULFILLMENTS_QUERY } from "./returns.js";

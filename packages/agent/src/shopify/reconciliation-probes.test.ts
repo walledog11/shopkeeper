@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { shopifyIdempotencyKey, shopifyOperationTag } from "./client.js";
 import { discountCodeForOperation } from "./discounts.js";
-import { probeUnknownShopifyMutation } from "./reconciliation-probes.js";
+import { probeUnknownShopifyMutation } from "./reconciliation-probes/index.js";
 
 const ctx = {
   shop: "test-store.myshopify.com",
@@ -761,5 +761,263 @@ describe("probeUnknownShopifyMutation", () => {
     );
 
     expect(result).toMatchObject({ outcome: "committed" });
+  });
+
+  it("stays unknown when multiple successful refunds match the requested amount", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+      refunds: [
+        { id: 1, transactions: [{ status: "success", amount: "20.00" }] },
+        { id: 2, transactions: [{ status: "success", amount: "20.00" }] },
+      ],
+    })));
+
+    const result = await probeUnknownShopifyMutation(
+      "create_refund",
+      { order_id: "456", amount: "20.00" },
+      ctx,
+    );
+
+    expect(result).toMatchObject({ outcome: "still_unknown" });
+    expect(result.message).toContain("Multiple successful refunds");
+  });
+
+  it("rules out a refund when no successful refund matches the requested amount", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+      refunds: [{
+        id: 1,
+        transactions: [{ status: "pending", amount: "20.00" }],
+      }],
+    })));
+
+    const result = await probeUnknownShopifyMutation(
+      "create_refund",
+      { order_id: "456", amount: "20.00" },
+      ctx,
+    );
+
+    expect(result).toMatchObject({ outcome: "no_effect" });
+  });
+
+  it("commits a cancellation when the cancel reason matches", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+      order: { id: 456, name: "#1001", cancelled_at: "2026-08-01T00:00:00Z", cancel_reason: "customer" },
+    })));
+
+    const result = await probeUnknownShopifyMutation(
+      "cancel_order",
+      { order_id: "456", reason: "customer" },
+      ctx,
+    );
+
+    expect(result).toMatchObject({ outcome: "committed" });
+  });
+
+  it("stays unknown when the order is cancelled with a different reason", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+      order: { id: 456, name: "#1001", cancelled_at: "2026-08-01T00:00:00Z", cancel_reason: "fraud" },
+    })));
+
+    const result = await probeUnknownShopifyMutation(
+      "cancel_order",
+      { order_id: "456", reason: "customer" },
+      ctx,
+    );
+
+    expect(result).toMatchObject({ outcome: "still_unknown" });
+    expect(result.message).toContain("fraud");
+  });
+
+  it("reports still_unknown for tools without a reconciliation probe", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await probeUnknownShopifyMutation("search_kb", { query: "returns" }, ctx);
+
+    expect(result).toMatchObject({ outcome: "still_unknown" });
+    expect(result.message).toContain("does not have a Shopify reconciliation probe");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("wraps probe failures as still_unknown instead of throwing", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
+
+    const result = await probeUnknownShopifyMutation(
+      "create_refund",
+      { order_id: "456", amount: "20.00" },
+      ctx,
+    );
+
+    expect(result).toMatchObject({ outcome: "still_unknown" });
+    expect(result.message).toContain("reconciliation probe failed");
+  });
+
+  it("cannot reconcile an order edit without variant identifiers", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+      order: { id: 456, name: "#1001", line_items: [] },
+    })));
+
+    const result = await probeUnknownShopifyMutation(
+      "edit_shopify_order",
+      { order_id: "456" },
+      ctx,
+    );
+
+    expect(result).toMatchObject({ outcome: "still_unknown" });
+    expect(result.message).toContain("requires variant_id or remove_variant_id");
+  });
+
+  it("stays unknown when Shopify does not return the order during an edit probe", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({})));
+
+    const result = await probeUnknownShopifyMutation(
+      "edit_shopify_order",
+      { order_id: "456", variant_id: "222", quantity: 1 },
+      ctx,
+    );
+
+    expect(result).toMatchObject({ outcome: "still_unknown" });
+    expect(result.message).toContain("was not returned by Shopify");
+  });
+
+  it("cannot reconcile a discount without a stable operation identity", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await probeUnknownShopifyMutation(
+      "issue_discount",
+      { percentage: 10 },
+      { ...ctx, operationId: undefined },
+    );
+
+    expect(result).toMatchObject({ outcome: "still_unknown" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("cannot reconcile a discount without a finite percentage", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await probeUnknownShopifyMutation(
+      "issue_discount",
+      { percentage: Number.NaN },
+      ctx,
+    );
+
+    expect(result).toMatchObject({ outcome: "still_unknown" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("stays unknown when multiple gift cards match the operation code", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+      data: {
+        giftCards: {
+          nodes: [
+            {
+              id: "gid://shopify/GiftCard/1",
+              initialValue: { amount: "25.00" },
+              note: `Shopkeeper operation: ${giftCardCode}`,
+            },
+            {
+              id: "gid://shopify/GiftCard/2",
+              initialValue: { amount: "25.00" },
+              note: `Shopkeeper operation: ${giftCardCode}`,
+            },
+          ],
+        },
+      },
+    })));
+
+    const result = await probeUnknownShopifyMutation(
+      "create_gift_card",
+      giftCardInput,
+      { ...ctx, operationId: giftCardOperationId },
+    );
+
+    expect(result).toMatchObject({ outcome: "still_unknown" });
+    expect(result.message).toContain("Multiple gift cards");
+  });
+
+  it("stays unknown when multiple store-credit transactions match the amount", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+      data: {
+        customer: {
+          storeCreditAccounts: {
+            nodes: [{
+              transactions: {
+                nodes: [
+                  {
+                    __typename: "StoreCreditAccountCreditTransaction",
+                    amount: { amount: "0.01" },
+                  },
+                  {
+                    __typename: "StoreCreditAccountCreditTransaction",
+                    amount: { amount: "0.01" },
+                  },
+                ],
+              },
+            }],
+          },
+        },
+      },
+    })));
+
+    const result = await probeUnknownShopifyMutation(
+      "issue_store_credit",
+      { customer_id: "9071668134122", amount: "0.01" },
+      ctx,
+    );
+
+    expect(result).toMatchObject({ outcome: "still_unknown" });
+    expect(result.message).toContain("Multiple store-credit transactions");
+  });
+
+  it("stays unknown when multiple fulfillments carry the same tracking number", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(fulfillmentOrdersResponse(0))
+      .mockResolvedValueOnce(jsonResponse({
+        data: {
+          order: {
+            fulfillments: [
+              { id: "gid://shopify/Fulfillment/1", status: "SUCCESS", trackingInfo: [{ number: "TRACK-123" }] },
+              { id: "gid://shopify/Fulfillment/2", status: "SUCCESS", trackingInfo: [{ number: "TRACK-123" }] },
+            ],
+          },
+        },
+      })));
+
+    const result = await probeUnknownShopifyMutation(
+      "fulfill_order",
+      { order_id: "456", tracking_number: "TRACK-123" },
+      ctx,
+    );
+
+    expect(result).toMatchObject({ outcome: "still_unknown" });
+    expect(result.message).toContain("Multiple fulfillments");
+  });
+
+  it("stays unknown when nothing remains fulfillable but no fulfillment carries the tracking number", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(fulfillmentOrdersResponse(0))
+      .mockResolvedValueOnce(jsonResponse({
+        data: { order: { fulfillments: [] } },
+      })));
+
+    const result = await probeUnknownShopifyMutation(
+      "fulfill_order",
+      { order_id: "456", tracking_number: "TRACK-123" },
+      ctx,
+    );
+
+    expect(result).toMatchObject({ outcome: "still_unknown" });
+    expect(result.message).toContain("nothing left to fulfill");
+  });
+
+  it("stays unknown when Shopify does not return returnable items during reconciliation", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({ data: { order: null } })));
+
+    const result = await probeUnknownShopifyMutation("create_return", { order_id: "456" }, ctx);
+
+    expect(result).toMatchObject({ outcome: "still_unknown" });
+    expect(result.message).toContain("was not returned by Shopify");
   });
 });

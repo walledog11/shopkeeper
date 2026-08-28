@@ -19,7 +19,7 @@ import {
   formatTicketLine,
   hasHandoffRequestContext,
   rowRequestFacts,
-} from './maintenance/digest-briefing.js';
+} from './maintenance/digest-briefing/index.js';
 
 // Every persisted classifier version that has reached production, plus the two
 // shapes a row can degrade into. Version 5 is the control: it is the only

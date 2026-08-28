@@ -9,7 +9,7 @@ import {
   type ShopifyContext,
 } from '@shopkeeper/agent/shopify';
 import logger from '../logger.js';
-import { resolveHandledWindowStart } from './digest-briefing.js';
+import { resolveHandledWindowStart } from './digest-briefing/index.js';
 
 const SHOPIFY_GARNISH_TIMEOUT_MS = 10_000;
 

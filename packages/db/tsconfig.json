@@ -11,6 +11,10 @@
   },
   "include": [
     "index.ts",
+    "client.ts",
+    "messages.ts",
+    "notes-knowledge-base.ts",
+    "prisma-enums.ts",
     "test-helpers.ts",
     "crypto.ts",
     "llm-spend.ts",

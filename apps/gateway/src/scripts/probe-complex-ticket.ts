@@ -34,7 +34,7 @@ const TICKET = [
 async function main() {
   const { db } = await import('@shopkeeper/db');
   const { generateThreadIntelligence } = await import('../message-handlers/intelligence.js');
-  const { formatEscalatedTicketLine } = await import('../maintenance/digest-briefing.js');
+  const { formatEscalatedTicketLine } = await import('../maintenance/digest-briefing/index.js');
   const { formatOperatorPlanMessage } = await import('../message-handlers/planning-notifications.js');
   const { readRequestDisplay } = await import('../message-handlers/request-display.js');
 
