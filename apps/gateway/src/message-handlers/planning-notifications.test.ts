@@ -507,6 +507,49 @@ describe('formatOperatorPlanMessage', () => {
     expect(message).not.toContain('This replaces');
   });
 
+  it('names whose plan was pushed out when the queue was full', () => {
+    const message = formatOperatorPlanMessage(
+      'Jane Doe',
+      ChannelType.email,
+      requestDisplay('Needs a refund'),
+      plan.steps,
+      { queueNotice: { kind: 'evicts', customerName: 'Sarah Chen' } },
+    );
+
+    expect(message).toContain("(This pushes out Sarah's plan to stay under your limit. It's still on your dashboard.)");
+    expect(message).not.toContain('This replaces');
+  });
+
+  it('uses a generic eviction notice when the dropped plan has no customer name', () => {
+    const message = formatOperatorPlanMessage(
+      null,
+      ChannelType.email,
+      requestDisplay('Needs a refund'),
+      plan.steps,
+      { queueNotice: { kind: 'evicts', customerName: null } },
+    );
+
+    expect(message).toContain("(This pushes out the oldest waiting plan to stay under your limit. It's still on your dashboard.)");
+  });
+
+  // Stacking drops nothing, so the line reports a count and must never claim a
+  // replacement — the whole point of the disclosure is that it is truthful about
+  // what parking this card did.
+  it('reports the waiting count when the plan joins the queue without dropping one', () => {
+    const message = formatOperatorPlanMessage(
+      'Jane Doe',
+      ChannelType.email,
+      requestDisplay('Needs a refund'),
+      plan.steps,
+      { queueNotice: { kind: 'stacked', waiting: 3 } },
+    );
+
+    expect(message).toContain('(Added — you now have 3 plans waiting for you.)');
+    expect(message).not.toContain('This replaces');
+    expect(message).not.toContain('pushes out');
+    expect(message.indexOf('Added —')).toBeLessThan(message.indexOf('Good to send?'));
+  });
+
   // A verified storefront shopper is the one case where the card asks the
   // merchant to approve disclosing order details to someone the rest of the card
   // calls anonymous. Without this line the safe-looking move is to reject a
