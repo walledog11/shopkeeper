@@ -144,6 +144,21 @@ describe.sequential("agent evals", () => {
             results: retries.results,
           };
         }
+        // An infrastructure or budget failure is not a statement about the model, and the
+        // capture below writes after every fixture — so recording one would publish an outage
+        // as a pass-rate. Run 33129019610 put 19 fixtures at 0/3 with `calls=0` because the
+        // API answered "credit balance is too low"; had the outage instead hit one repeat of
+        // three, the relaxed capture bar would have written 2/3 and called it flappiness.
+        // Refuse before the write, in every mode.
+        const brokenResult = summary.results.find(
+          result => result.failureKind === "infrastructure" || result.failureKind === "budget",
+        );
+        if (brokenResult) {
+          throw new Error(
+            `${summary.id}: ${brokenResult.failureKind} failure, not a model result — `
+            + `${brokenResult.failures[0] ?? "no detail"}`,
+          );
+        }
         collected.push(summary);
         writePassingSummary(fixture, repeats, summary);
         // In update mode, persist after each fixture so an interrupted capture keeps
