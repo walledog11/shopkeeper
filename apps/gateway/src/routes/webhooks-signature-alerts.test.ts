@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import {
+  createOpsAlertCounterClient as createCounterClient,
+} from '@shopkeeper/agent/testing';
 import type { GatewayOpsAlertConfig } from '../config/runtime-config.js';
 import {
   emitOpsAlert,
@@ -196,20 +199,6 @@ describe('recordWebhookSignatureFailure', () => {
     });
   });
 });
-
-function createCounterClient(): { client: OpsAlertCounterClient } {
-  const counts = new Map<string, number>();
-  return {
-    client: {
-      incr: async (key) => {
-        const next = (counts.get(key) ?? 0) + 1;
-        counts.set(key, next);
-        return next;
-      },
-      expire: async () => undefined,
-    },
-  };
-}
 
 function createEmitAlert() {
   return vi.fn<NonNullable<WebhookSignatureAlertDependencies['emitAlert']>>(() => LOG_ONLY_RESULT);

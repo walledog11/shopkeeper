@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import {
+  createOpsAlertCounterClient as createCounterClient,
+} from '@shopkeeper/agent/testing';
 import type { DashboardOpsAlertConfig } from '@/lib/env';
 import type { EmitOpsAlertResult, OpsAlertCounterClient } from '@/lib/server/ops-alerts';
 import {
@@ -22,20 +25,6 @@ const LOG_ONLY_RESULT: EmitOpsAlertResult = {
   logged: true,
   reason: 'logged',
 };
-
-function createCounterClient(): { client: OpsAlertCounterClient } {
-  const counts = new Map<string, number>();
-  return {
-    client: {
-      incr: async (key) => {
-        const next = (counts.get(key) ?? 0) + 1;
-        counts.set(key, next);
-        return next;
-      },
-      expire: async () => undefined,
-    },
-  };
-}
 
 function createEmitAlert() {
   return vi.fn<NonNullable<AgentFailureAlertDependencies['emitAlert']>>(() => LOG_ONLY_RESULT);

@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
+import {
+  createOpsAlertCounterClient as createCounterClient,
+} from '@shopkeeper/agent/testing';
 import type { GatewayOpsAlertConfig } from '../config/runtime-config.js';
-import type { EmitOpsAlertResult, OpsAlertCounterClient } from '../ops-alerts.js';
+import type { EmitOpsAlertResult } from '../ops-alerts.js';
 import {
   checkGatewayQueueHealth,
   type QueueHealthActiveJob,
@@ -271,17 +274,3 @@ function createEmitAlert() {
   return vi.fn<NonNullable<QueueHealthCheckDependencies['emitAlert']>>(() => LOG_ONLY_RESULT);
 }
 
-function createCounterClient(): { client: OpsAlertCounterClient } {
-  const counts = new Map<string, number>();
-
-  return {
-    client: {
-      incr: async (key) => {
-        const next = (counts.get(key) ?? 0) + 1;
-        counts.set(key, next);
-        return next;
-      },
-      expire: async () => undefined,
-    },
-  };
-}

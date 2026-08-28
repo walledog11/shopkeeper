@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
+import {
+  createOpsAlertCounterClient as createCounterClient,
+  createOpsAlertRecordingLogger as createTestLogger,
+} from '@shopkeeper/agent/testing';
 import type { GatewayOpsAlertConfig } from './config/runtime-config.js';
 import {
   emitOpsAlert,
   type EmitOpsAlertResult,
   type OpsAlertCounterClient,
-  type OpsAlertLogger,
 } from './ops-alerts.js';
 import {
   recordAgentFailure,
@@ -164,21 +167,6 @@ function createEmitAlert() {
   );
 }
 
-function createCounterClient(): { client: OpsAlertCounterClient } {
-  const counts = new Map<string, number>();
-
-  return {
-    client: {
-      incr: async (key) => {
-        const next = (counts.get(key) ?? 0) + 1;
-        counts.set(key, next);
-        return next;
-      },
-      expire: async () => {},
-    },
-  };
-}
-
 function makeDeps(
   client: OpsAlertCounterClient,
   overrides: Partial<AgentFailureAlertDependencies> = {},
@@ -190,18 +178,3 @@ function makeDeps(
   };
 }
 
-function createTestLogger(): {
-  logger: OpsAlertLogger;
-  calls: Array<{ level: 'info' | 'warn' | 'error'; fields: Record<string, unknown>; message: string }>;
-} {
-  const calls: Array<{ level: 'info' | 'warn' | 'error'; fields: Record<string, unknown>; message: string }> = [];
-
-  return {
-    logger: {
-      info: (fields, message) => calls.push({ level: 'info', fields, message }),
-      warn: (fields, message) => calls.push({ level: 'warn', fields, message }),
-      error: (fields, message) => calls.push({ level: 'error', fields, message }),
-    },
-    calls,
-  };
-}

@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import {
+  createOpsAlertCounterClient as createCounterClient,
+  createOpsAlertRecordingLogger as createTestLogger,
+} from '@shopkeeper/agent/testing';
 import type { GatewayOpsAlertConfig } from './config/runtime-config.js';
 import {
   buildOpsAlertScope,
   emitOpsAlert,
   incrementOpsAlertWindow,
-  type OpsAlertCounterClient,
-  type OpsAlertLogger,
 } from './ops-alerts.js';
 
 const DEFAULT_CONFIG: GatewayOpsAlertConfig = {
@@ -216,40 +218,3 @@ describe('incrementOpsAlertWindow', () => {
   });
 });
 
-function createTestLogger(): {
-  logger: OpsAlertLogger;
-  calls: Array<{ level: 'info' | 'warn' | 'error'; fields: Record<string, unknown>; message: string }>;
-} {
-  const calls: Array<{ level: 'info' | 'warn' | 'error'; fields: Record<string, unknown>; message: string }> = [];
-
-  return {
-    logger: {
-      info: (fields, message) => calls.push({ level: 'info', fields, message }),
-      warn: (fields, message) => calls.push({ level: 'warn', fields, message }),
-      error: (fields, message) => calls.push({ level: 'error', fields, message }),
-    },
-    calls,
-  };
-}
-
-function createCounterClient(): {
-  client: OpsAlertCounterClient;
-  expireCalls: Array<[string, number]>;
-} {
-  const counts = new Map<string, number>();
-  const expireCalls: Array<[string, number]> = [];
-
-  return {
-    client: {
-      incr: async (key) => {
-        const next = (counts.get(key) ?? 0) + 1;
-        counts.set(key, next);
-        return next;
-      },
-      expire: async (key, seconds) => {
-        expireCalls.push([key, seconds]);
-      },
-    },
-    expireCalls,
-  };
-}

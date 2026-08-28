@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@shopkeeper/db';
+import { readFlagOrderFinding } from '@shopkeeper/agent/order-ops-finding';
 import { withOrgRoute } from '@/lib/api/route';
 import { canonicalInboxThreadWhere } from '@/lib/messaging/inbox-filter';
 
@@ -22,10 +23,11 @@ export interface OrderAttentionReturn {
   at: string;
 }
 
-// Order-ops findings persist as flag_order AgentAction rows. The order id lives
-// in the turn instruction ("order-risk-review:<id>") and the name in the turn
-// summary ("Flagged order <name> for review: <reason>"); the reason is the
-// flag_order tool input. Parsing stays here so the client gets a clean shape.
+// Order-ops findings persist as flag_order AgentAction rows. `readFlagOrderFinding`
+// owns how one is read back — structurally for rows written since the identity
+// was recorded on the action input, off the summary sentence for older ones. It
+// lives beside the producer so the two cannot drift; this route only reshapes
+// what it returns for the client.
 export function parseFlagOrderRow(row: {
   id: string;
   input: unknown;
@@ -33,23 +35,8 @@ export function parseFlagOrderRow(row: {
   summary: string | null;
   executedAt: Date;
 }): OrderAttentionFinding {
-  const orderId = row.instruction?.startsWith('order-risk-review:')
-    ? row.instruction.slice('order-risk-review:'.length).trim() || null
-    : null;
-  const nameMatch = row.summary?.match(/^Flagged order (.+?) for review:/);
-  const orderName = nameMatch?.[1]?.trim() || (orderId ? `Order ${orderId}` : 'An order');
-  const inputReason =
-    row.input && typeof row.input === 'object' && 'reason' in row.input
-      ? String((row.input as { reason: unknown }).reason ?? '').trim()
-      : '';
-  const summaryReason = row.summary?.split(' for review:')[1]?.trim() ?? '';
-  return {
-    id: row.id,
-    orderId,
-    orderName,
-    reason: inputReason || summaryReason || 'Flagged for review',
-    at: row.executedAt.toISOString(),
-  };
+  const { orderId, orderName, reason } = readFlagOrderFinding(row);
+  return { id: row.id, orderId, orderName, reason, at: row.executedAt.toISOString() };
 }
 
 export const GET = withOrgRoute(

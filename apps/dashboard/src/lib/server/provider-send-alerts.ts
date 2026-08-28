@@ -1,9 +1,9 @@
 import {
-  emitOpsAlert,
-  incrementOpsAlertWindow,
+  recordProviderSendFailureAlert,
   type OpsAlertCounterClient,
-  type IncrementOpsAlertWindowResult,
-} from '@/lib/server/ops-alerts';
+  type OpsAlertRecordResult,
+} from '@shopkeeper/agent/observability';
+import { emitOpsAlert, incrementOpsAlertWindow } from '@/lib/server/ops-alerts';
 import { getDashboardOpsAlertConfig, type DashboardOpsAlertConfig } from '@/lib/env';
 
 export type ProviderSendAlertProvider = 'meta' | 'postmark' | 'shopify' | 'gmail' | 'tiktok_shop';
@@ -21,10 +21,7 @@ export interface ProviderSendAlertDependencies {
   extra?: Record<string, unknown>;
 }
 
-export interface ProviderSendAlertResult {
-  window: IncrementOpsAlertWindowResult;
-  emitted: boolean;
-}
+export type ProviderSendAlertResult = OpsAlertRecordResult;
 
 export async function recordProviderSendFailure(
   provider: ProviderSendAlertProvider,
@@ -32,36 +29,19 @@ export async function recordProviderSendFailure(
   orgId: string,
   deps: ProviderSendAlertDependencies,
 ): Promise<ProviderSendAlertResult> {
-  const config = deps.config ?? getDashboardOpsAlertConfig();
-  const emit = deps.emitAlert ?? emitOpsAlert;
-  const incr = deps.incrementWindow ?? incrementOpsAlertWindow;
-
-  const window = await incr(deps.counterClient, {
-    keyParts: ['provider_send', provider, channel, orgId],
-    threshold: config.providerSendThreshold,
-    windowSecs: config.windowSecs,
-    nowMs: deps.nowMs,
+  return recordProviderSendFailureAlert({
+    provider,
+    channel,
+    orgId,
+    threadId: deps.threadId,
+    integrationId: deps.integrationId,
+    detail: deps.detail,
+    ...(deps.extra ? { extra: deps.extra } : {}),
+  }, {
+    counterClient: deps.counterClient,
+    config: deps.config ?? getDashboardOpsAlertConfig(),
+    emitAlert: deps.emitAlert ?? emitOpsAlert,
+    ...(deps.incrementWindow ? { incrementWindow: deps.incrementWindow } : {}),
+    ...(deps.nowMs !== undefined ? { nowMs: deps.nowMs } : {}),
   });
-
-  if (window.thresholdCrossed) {
-    emit({
-      category: 'provider_send',
-      message: `Repeated provider send failure: provider=${provider} channel=${channel} count=${window.count}`,
-      level: 'error',
-      tags: { provider, channel },
-      extra: {
-        orgId,
-        threadId: deps.threadId ?? null,
-        integrationId: deps.integrationId ?? null,
-        detail: deps.detail ?? null,
-        count: window.count,
-        threshold: window.threshold,
-        windowSecs: config.windowSecs,
-        resetAt: window.resetAt,
-        ...(deps.extra ?? {}),
-      },
-    });
-  }
-
-  return { window, emitted: window.thresholdCrossed };
 }
