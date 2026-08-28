@@ -6,7 +6,7 @@ import {
   type ShopifyGraphqlUserError,
 } from "./client.js";
 import { toolError, toolOk, type ToolResult } from "../tools/result.js";
-import { ShopifyInputError } from "./validation.js";
+import { moneyToCents, ShopifyInputError } from "./validation.js";
 import { loadVariantsAtRisk } from "./flash-sales.js";
 import {
   assessValueAtRisk,
@@ -68,11 +68,6 @@ export interface RecordedPriceChange {
   variantId: string;
   originalPriceCents: number;
   newPriceCents: number;
-}
-
-function priceToCents(price: string | null | undefined): number {
-  const parsed = Number.parseFloat(price ?? "");
-  return Number.isFinite(parsed) ? Math.round(parsed * 100) : 0;
 }
 
 function centsToPrice(cents: number): string {
@@ -139,7 +134,7 @@ export async function setVariantPrices(
     const current = new Map<string, { priceCents: number; productId: string }>();
     for (const node of data.nodes ?? []) {
       if (!node?.id || !node.product?.id) continue;
-      current.set(node.id, { priceCents: priceToCents(node.price), productId: node.product.id });
+      current.set(node.id, { priceCents: moneyToCents(node.price), productId: node.product.id });
     }
 
     const missing = variantIds.filter((id) => !current.has(id));

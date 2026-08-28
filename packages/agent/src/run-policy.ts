@@ -5,7 +5,7 @@ import { resolveAgentSettings } from "./settings.js";
 import { READ_TOOL_NAMES } from "./tools/registry/index.js";
 
 export const DEFAULT_MAX_ITERATIONS = 10;
-export const READ_ONLY_MAX_ITERATIONS = 4;
+const READ_ONLY_MAX_ITERATIONS = 4;
 export const TOKEN_BUDGET = 20_000;
 
 export { READ_TOOL_NAMES };

@@ -4,7 +4,7 @@ import type { GmailWatchRequest } from './client.js';
 import { isRecord } from '../guards.js';
 const GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 
-export const GMAIL_HISTORY_ID_PATTERN = /^\d+$/;
+const GMAIL_HISTORY_ID_PATTERN = /^\d+$/;
 
 
 export function getGmailMetadata(metadata: unknown): Record<string, unknown> | null {

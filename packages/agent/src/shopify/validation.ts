@@ -70,9 +70,19 @@ export function requireAmount(value: unknown, field: string): string {
   return amount;
 }
 
-export function moneyToCents(value: string): number {
+// The one money parser for the Shopify layer. Integer math on the decimal
+// string, never `parseFloat * 100`, so a price is read the same way whether it
+// reaches us through a refund comparison or a value-at-risk bound.
+//
+// Anything unparseable is 0, not NaN. Shopify's own amounts are always valid
+// decimals, but a null slips through the optional fields of a GraphQL response,
+// and NaN fails every `>` comparison silently — it would wave a sale past the
+// blast-radius guard rather than block it.
+export function moneyToCents(value: string | null | undefined): number {
+  if (typeof value !== "string") return 0;
   const [dollars, cents = ""] = value.split(".");
-  return Number(dollars) * 100 + Number(cents.padEnd(2, "0").slice(0, 2));
+  const total = Number(dollars) * 100 + Number(cents.padEnd(2, "0").slice(0, 2));
+  return Number.isFinite(total) ? total : 0;
 }
 
 export function centsToMoney(cents: number): string {

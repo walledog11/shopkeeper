@@ -16,6 +16,11 @@ import { createModelUsageMetrics } from "../usage.js";
 import { enforceSpendCap } from "../spend.js";
 import { recordAgentActionsBatch } from "../agent-actions.js";
 import type { ActionEntry } from "../agent-context.js";
+import {
+  buildFlagOrderInput,
+  buildOrderRiskInstruction,
+  formatFlagOrderSummary,
+} from "./finding.js";
 import { buildOrderRiskPrompt } from "./prompt.js";
 import type { OrderOpsContext } from "./context.js";
 
@@ -133,7 +138,14 @@ export async function runOrderOps(
       actionsPerformed.push({
         tool: call.name,
         result,
-        input: call.input,
+        // The flag_order row is the finding: record which order it names
+        // alongside the model's reason, so the surfaces that render it read a
+        // field instead of re-parsing the summary sentence. The model is never
+        // asked which order it is flagging — that would let it flag a different
+        // one — so the identity comes from the context, not from call.input.
+        input: call.name === "flag_order"
+          ? buildFlagOrderInput(call.input, { orderId: ctx.order.id, orderName: ctx.order.name })
+          : call.input,
         durationMs: Date.now() - toolStartedAt,
         status,
         category: call.name === "flag_order" ? "action" : (TOOL_CATEGORIES[call.name] ?? "read"),
@@ -162,9 +174,12 @@ export async function runOrderOps(
     getEscalationReason: () => flagReason,
   });
 
-  const flagged = flagReason !== null;
-  const summary = flagged
-    ? `Flagged order ${ctx.order.name} for review: ${flagReason}`
+  // Read once into a const: `flagReason` is assigned inside runTools, so the
+  // compiler cannot narrow it through the `flagged` boolean.
+  const finalFlagReason = flagReason;
+  const flagged = finalFlagReason !== null;
+  const summary = finalFlagReason !== null
+    ? formatFlagOrderSummary(ctx.order.name, finalFlagReason)
     : loop.stop === "max_iterations"
       ? "Reached maximum steps without a decision."
       : (loop.finalText?.trim() || "No action - order looks normal.");
@@ -178,7 +193,7 @@ export async function runOrderOps(
         customerId: null,
         mode: "auto_executed",
         actions: actionsPerformed,
-        instruction: `order-risk-review:${ctx.order.id}`,
+        instruction: buildOrderRiskInstruction(ctx.order.id),
         summary,
         ...(options?.turnId ? { turnId: options.turnId } : {}),
       });
@@ -200,5 +215,5 @@ export async function runOrderOps(
     actionCount: actionsPerformed.length,
   }, "[order-ops] run complete");
 
-  return { summary, flagged, flagReason, actionsPerformed };
+  return { summary, flagged, flagReason: finalFlagReason, actionsPerformed };
 }

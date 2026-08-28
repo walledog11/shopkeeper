@@ -84,7 +84,7 @@ const EXTRA_CHANNEL_INFO: Record<string, ChannelInfo> = {
   },
 }
 
-export const DASHBOARD_CHANNEL_TYPES = [
+const DASHBOARD_CHANNEL_TYPES = [
   'email',
   'ig_dm',
   'sms',

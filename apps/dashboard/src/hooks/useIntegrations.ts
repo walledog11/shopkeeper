@@ -6,7 +6,7 @@ import { requestJson } from "@/lib/api/fetcher"
 import type { Integration } from "@/types"
 
 export const INTEGRATIONS_SWR_KEY = "/api/integrations"
-export const INTEGRATIONS_REFRESH_INTERVAL_MS = 15_000
+const INTEGRATIONS_REFRESH_INTERVAL_MS = 15_000
 
 function useIsDocumentVisible() {
   const [isVisible, setIsVisible] = useState(

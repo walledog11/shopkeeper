@@ -245,7 +245,7 @@ export async function captureDashboardOutboundReplySent(args: {
   }
 }
 
-export async function captureDashboardWorkspaceActivation(
+async function captureDashboardWorkspaceActivation(
   organizationId: string,
 ): Promise<void> {
   const [organization, integrations, inboundMessageCount] = await Promise.all([

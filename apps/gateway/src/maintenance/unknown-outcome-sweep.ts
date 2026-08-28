@@ -25,7 +25,7 @@ async function loadShopifyContext(organizationId: string): Promise<ShopifyContex
   return { shop: integration.externalAccountId, accessToken: integration.accessToken };
 }
 
-export async function runUnknownOutcomeSweep(): Promise<void> {
+async function runUnknownOutcomeSweep(): Promise<void> {
   const result = await runUnknownOutcomeReconciliation({ loadShopifyContext });
 
   const needsAttention = result.staleClaimedExecutions > 0

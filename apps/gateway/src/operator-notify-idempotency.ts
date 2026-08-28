@@ -16,7 +16,7 @@ function redisKey(
   return `op:notify:${channel}:${contextKey}:${idempotencyKey}`;
 }
 
-export function hashOperatorNotifyContent(parts: string[]): string {
+function hashOperatorNotifyContent(parts: string[]): string {
   return createHash('sha256').update(parts.join('\0')).digest('hex').slice(0, 32);
 }
 

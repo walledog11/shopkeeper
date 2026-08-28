@@ -3,6 +3,7 @@ import { db } from '@shopkeeper/db';
 import { createTestOrg, cleanupTestData } from '@shopkeeper/db/test-helpers';
 import { recordAgentActionsBatch } from '@shopkeeper/agent/agent-actions';
 import { runOrderOps, type OrderForReview, type OrderOpsContext } from '@shopkeeper/agent/order-ops';
+import { readFlagOrderFinding } from '@shopkeeper/agent/order-ops-finding';
 
 // The model is stubbed here (unlike order-ops.eval.test.ts, which gates judgment
 // against the real model). This file gates PERSISTENCE: given a decision to flag,
@@ -130,6 +131,19 @@ describe('order-ops finding persistence', () => {
     expect(rows[0].status).toBe('escalated');
     // The dedupe key any re-review guard would key off: one order, one review.
     expect(rows[0].instruction).toBe('order-risk-review:998877');
+    // The identity the dashboard renders. It used to be recoverable only by
+    // regex-matching the summary sentence, in two places, with two different
+    // regexes; the row carries it structurally now.
+    expect(rows[0].input).toMatchObject({
+      reason,
+      orderId: '998877',
+      orderName: '#1001',
+    });
+    expect(readFlagOrderFinding(rows[0])).toEqual({
+      orderId: '998877',
+      orderName: '#1001',
+      reason,
+    });
   });
 
   it('writes no finding and spends nothing when the pre-scan produces no signals', async () => {

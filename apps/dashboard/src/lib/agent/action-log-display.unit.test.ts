@@ -5,8 +5,6 @@ import {
   formatPlanVerdictLabel,
   formatRequestOutcomeDisplay,
   formatRequestOutcomeSummary,
-  orderNameFromSummary,
-  parseOrderRiskInstruction,
 } from "./action-log-display"
 import type { ActionLogEntry } from "@/types"
 
@@ -28,26 +26,51 @@ function entry(overrides: Partial<ActionLogEntry> = {}): ActionLogEntry {
 }
 
 describe("action log display", () => {
-  it("parses order-risk instructions", () => {
-    expect(parseOrderRiskInstruction("order-risk-review:7317445509440")).toEqual({
-      orderId: "7317445509440",
-    })
-    expect(parseOrderRiskInstruction("other:123")).toBeNull()
-  })
-
-  it("extracts order names from summaries", () => {
-    expect(orderNameFromSummary("Flagged order #PG1013 for review: high value")).toBe("#PG1013")
-    expect(orderNameFromSummary("No order here")).toBeNull()
-  })
-
-  it("humanizes order-risk headlines and links", () => {
+  it("humanizes order-risk headlines and links from the recorded identity", () => {
     const row = entry({
       instruction: "order-risk-review:7317445509440",
       summary: "Flagged order #PG1013 for review: account age",
+      actions: [{
+        tool: "flag_order",
+        result: "account age",
+        status: "escalated",
+        input: { reason: "account age", orderId: "7317445509440", orderName: "#PG1013" },
+      }],
     })
 
     expect(formatActionLogHeadline(row)).toBe("#PG1013 flagged for review")
     expect(actionLogEntryHref(row)).toBe("/dashboard/orders?q=%23PG1013")
+  })
+
+  // Rows written before runOrderOps recorded the identity carry it only in the
+  // summary sentence. They still have to render.
+  it("falls back to the summary sentence for rows with no recorded identity", () => {
+    const row = entry({
+      instruction: "order-risk-review:7317445509440",
+      summary: "Flagged order #PG1013 for review: account age",
+      actions: [{ tool: "flag_order", result: "account age", status: "escalated" }],
+    })
+
+    expect(formatActionLogHeadline(row)).toBe("#PG1013 flagged for review")
+    expect(actionLogEntryHref(row)).toBe("/dashboard/orders?q=%23PG1013")
+  })
+
+  // The old headline regex was /\border\s+(#[\w-]+)/i, which needed the name to
+  // start with "#". Shopify order names are merchant-configurable and often do
+  // not; those entries rendered a bare "Order flagged for review".
+  it("renders an order name the old summary regex could not match", () => {
+    const row = entry({
+      instruction: "order-risk-review:7317445509440",
+      summary: "Flagged order PG-1013 for review: account age",
+      actions: [{
+        tool: "flag_order",
+        result: "account age",
+        status: "escalated",
+        input: { reason: "account age", orderId: "7317445509440", orderName: "PG-1013" },
+      }],
+    })
+
+    expect(formatActionLogHeadline(row)).toBe("PG-1013 flagged for review")
   })
 
   it("keeps ticket headlines for support threads", () => {

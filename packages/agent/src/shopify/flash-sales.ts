@@ -6,7 +6,7 @@ import {
   type ShopifyGraphqlUserError,
 } from "./client.js";
 import { toolError, toolNotFound, toolOk, type ToolResult } from "../tools/result.js";
-import { ShopifyInputError } from "./validation.js";
+import { moneyToCents, ShopifyInputError } from "./validation.js";
 import { VARIANT_PRICES_QUERY } from "./exchanges.js";
 import {
   assessValueAtRisk,
@@ -119,11 +119,6 @@ export interface FlashSaleSummary {
   endsAt: string | null;
 }
 
-function priceToCents(price: string | null | undefined): number {
-  const parsed = Number.parseFloat(price ?? "");
-  return Number.isFinite(parsed) ? Math.round(parsed * 100) : 0;
-}
-
 /**
  * Price and stock for the variants a sale names, read fresh.
  *
@@ -149,7 +144,7 @@ export async function loadVariantsAtRisk(
     found.push({
       variantId: node.id,
       title: variantTitle,
-      unitPriceCents: priceToCents(node.price),
+      unitPriceCents: moneyToCents(node.price),
       // Stock on hand is the ceiling on how many units the discount can touch.
       // An untracked variant has no ceiling, so it is counted as the sale's own
       // worst case rather than as zero exposure.

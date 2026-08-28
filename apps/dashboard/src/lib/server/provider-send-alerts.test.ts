@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
+import {
+  createOpsAlertCounterClient as createCounterClient,
+  createOpsAlertRecordingLogger as createTestLogger,
+} from '@shopkeeper/agent/testing';
 import type { DashboardOpsAlertConfig } from '@/lib/env';
 import {
   emitOpsAlert,
   type EmitOpsAlertResult,
   type OpsAlertCounterClient,
-  type OpsAlertLogger,
 } from './ops-alerts';
 import {
   recordProviderSendFailure,
@@ -128,13 +131,10 @@ describe('recordProviderSendFailure', () => {
 
   it('does not log alerts when alerts are disabled', async () => {
     const { client } = createCounterClient();
-    const mockLogger = createTestLogger();
+    const { logger, calls } = createTestLogger();
 
     const realEmitDisabled: typeof emitOpsAlert = (input) =>
-      emitOpsAlert(input, {
-        config: DISABLED_CONFIG,
-        logger: mockLogger,
-      });
+      emitOpsAlert(input, { config: DISABLED_CONFIG, logger });
 
     for (let i = 1; i <= CONFIG.providerSendThreshold; i++) {
       await recordProviderSendFailure(
@@ -145,8 +145,31 @@ describe('recordProviderSendFailure', () => {
       );
     }
 
-    expect(mockLogger.error).not.toHaveBeenCalled();
-    expect(mockLogger.warn).not.toHaveBeenCalled();
+    expect(calls).toEqual([]);
+  });
+
+  // The test above injects DISABLED_CONFIG twice — once into the recorder and
+  // again into its own emit shim — so it passed even while the recorder dropped
+  // the config on the floor. Injecting it only once is what actually proves the
+  // recorder forwards it: without that, emitOpsAlert falls back to
+  // getDashboardOpsAlertConfig() and the caller's config never reaches the gate.
+  it('forwards an injected config to the emit gate', async () => {
+    const { client } = createCounterClient();
+    const { logger, calls } = createTestLogger();
+
+    const emitWithTestLogger: typeof emitOpsAlert = (input, dependencies) =>
+      emitOpsAlert(input, { ...dependencies, logger });
+
+    for (let i = 1; i <= CONFIG.providerSendThreshold; i++) {
+      await recordProviderSendFailure(
+        'meta',
+        'ig_dm',
+        'org_abc',
+        makeDeps(client, { config: DISABLED_CONFIG, emitAlert: emitWithTestLogger }),
+      );
+    }
+
+    expect(calls).toEqual([]);
   });
 
   it('re-alerts in a new window after the previous window expires', async () => {
@@ -175,30 +198,8 @@ describe('recordProviderSendFailure', () => {
   });
 });
 
-function createCounterClient(): { client: OpsAlertCounterClient } {
-  const counts = new Map<string, number>();
-  return {
-    client: {
-      incr: async (key) => {
-        const next = (counts.get(key) ?? 0) + 1;
-        counts.set(key, next);
-        return next;
-      },
-      expire: async () => undefined,
-    },
-  };
-}
-
 function createEmitAlert() {
   return vi.fn<NonNullable<ProviderSendAlertDependencies['emitAlert']>>(() => LOG_ONLY_RESULT);
-}
-
-function createTestLogger(): OpsAlertLogger {
-  return {
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  };
 }
 
 function makeDeps(

@@ -53,7 +53,7 @@ function toolFromAction(tool: string): ReturnWatchTool | null {
 
 // Legacy bridge: infer open returns from recent successful audit rows when a
 // durable ReturnWatch row does not exist yet (pre-migration actions).
-export async function loadLegacyOpenReturnCandidates(organizationId: string): Promise<OpenReturnCandidate[]> {
+async function loadLegacyOpenReturnCandidates(organizationId: string): Promise<OpenReturnCandidate[]> {
   const since = new Date(Date.now() - LOOKBACK_DAYS * 24 * 3_600_000);
   const actions = await db.agentAction.findMany({
     where: {

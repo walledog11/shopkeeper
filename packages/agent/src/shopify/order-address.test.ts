@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { jsonResponse } from "../testing/json-response.js";
 import { updateShopifyOrderAddress } from "./order-address.js";
 
 const ctx = {
@@ -33,13 +34,6 @@ const requestedAddress = {
   country: "United States",
   country_code: "US",
 };
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-}
 
 function order(address = oldAddress, overrides: Record<string, unknown> = {}) {
   return {

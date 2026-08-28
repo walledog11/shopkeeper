@@ -1,17 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { jsonResponse } from "../testing/json-response.js";
 import { createReturn } from "./returns.js";
 
 const ctx = {
   shop: "test-store.myshopify.com",
   accessToken: "shpat_test",
 };
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-}
 
 function returnableFulfillmentsResponse(): Response {
   return jsonResponse({

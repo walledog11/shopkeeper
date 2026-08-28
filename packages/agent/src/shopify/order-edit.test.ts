@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { jsonResponse } from "../testing/json-response.js";
 import { editShopifyOrder } from "./order-edit.js";
 
 const ctx = {
@@ -6,13 +7,6 @@ const ctx = {
   accessToken: "shpat_test",
   operationId: "execution-1:edit-order",
 };
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-}
 
 function beginResponse() {
   return jsonResponse({

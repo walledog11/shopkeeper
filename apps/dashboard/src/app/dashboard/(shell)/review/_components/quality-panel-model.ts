@@ -23,9 +23,23 @@ export interface ReviewFilterConfig {
   query: ActionLogQueryFilters
 }
 
+// `code` is what the badge *is*; `label` is what it reads. Anything deciding
+// behaviour off this chrome reads the code — the label is free to be reworded
+// without silently changing what the card renders next to it.
+export type ReviewItemCode =
+  | "error"
+  | "escalated"
+  | "flagged_order"
+  | "store_action"
+  | "auto_reply"
+  | "auto_action"
+  | "read_only"
+  | "approved"
+
 export interface ReviewItemChrome {
   tone: ReviewItemTone
   icon: ReviewIconKey
+  code: ReviewItemCode
   label: string
 }
 
@@ -181,6 +195,7 @@ export function reviewItemChrome(entry: ActionLogEntry): ReviewItemChrome {
     return {
       tone: "error",
       icon: "alert",
+      code: "error",
       label: errored.status === "policy_block"
         ? "Policy block"
         : errored.status === "unknown"
@@ -190,25 +205,28 @@ export function reviewItemChrome(entry: ActionLogEntry): ReviewItemChrome {
   }
 
   const escalation = entry.actions.find((action) => action.tool === "escalate_to_human" || action.status === "escalated")
-  if (escalation) return { tone: "attention", icon: "alert", label: "Escalated" }
+  if (escalation) return { tone: "attention", icon: "alert", code: "escalated", label: "Escalated" }
 
   const flag = entry.actions.find((action) => action.tool === "flag_order")
-  if (flag) return { tone: "attention", icon: "alert", label: "Flagged order" }
+  if (flag) return { tone: "attention", icon: "alert", code: "flagged_order", label: "Flagged order" }
 
   const storeAction = entry.actions.find((action) => MONEY_TOOLS.has(action.tool))
-  if (storeAction) return { tone: "store", icon: "store", label: toolLabel(storeAction.tool) }
+  if (storeAction) {
+    return { tone: "store", icon: "store", code: "store_action", label: toolLabel(storeAction.tool) }
+  }
 
   const reply = entry.actions.find((action) => action.tool === "send_reply" || action.tool === "send_email")
   if (entry.mode === "auto_executed") {
     return {
       tone: "auto",
       icon: reply ? "message" : "tool",
+      code: reply ? "auto_reply" : "auto_action",
       label: reply ? "Auto reply" : "Auto action",
     }
   }
 
-  if (entry.mode === "read_only") return { tone: "note", icon: "note", label: "Read only" }
-  return { tone: "approved", icon: "check", label: "Approved" }
+  if (entry.mode === "read_only") return { tone: "note", icon: "note", code: "read_only", label: "Read only" }
+  return { tone: "approved", icon: "check", code: "approved", label: "Approved" }
 }
 
 // Who authorised the turn, but only when the status badge does not already say
@@ -216,15 +234,15 @@ export function reviewItemChrome(entry: ActionLogEntry): ReviewItemChrome {
 // "Auto reply" + "Auto-sent" and, at worst, "Approved" twice on one card.
 export function reviewModeNote(entry: ActionLogEntry): string | null {
   if (!entry.mode) return null
-  const label = reviewItemChrome(entry).label
+  const { code } = reviewItemChrome(entry)
 
   if (entry.mode === "auto_executed") {
-    return label.startsWith("Auto") ? null : "sent automatically"
+    return code === "auto_reply" || code === "auto_action" ? null : "sent automatically"
   }
   if (entry.mode === "read_only") {
-    return label === "Read only" ? null : "read-only lookup"
+    return code === "read_only" ? null : "read-only lookup"
   }
-  return label === "Approved" ? null : "you approved"
+  return code === "approved" ? null : "you approved"
 }
 
 export function primaryPreviewText(entry: ActionLogEntry): string {

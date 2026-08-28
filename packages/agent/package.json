@@ -142,6 +142,10 @@
       "types": "./dist/order-ops/index.d.ts",
       "default": "./dist/order-ops/index.js"
     },
+    "./order-ops-finding": {
+      "types": "./dist/order-ops/finding.d.ts",
+      "default": "./dist/order-ops/finding.js"
+    },
     "./lock": {
       "types": "./dist/lock/index.d.ts",
       "default": "./dist/lock/index.js"
@@ -211,8 +215,8 @@
       "default": "./dist/unknown-outcome-reconciliation.js"
     },
     "./testing": {
-      "types": "./dist/testing/failure-harness.d.ts",
-      "default": "./dist/testing/failure-harness.js"
+      "types": "./dist/testing/index.d.ts",
+      "default": "./dist/testing/index.js"
     },
     "./sender-trust": {
       "types": "./dist/sender-trust.d.ts",

@@ -386,7 +386,7 @@ export function shopifyIdempotencyKey(operationId?: string): string {
 // idempotency key plus this prefix is, at 50. Strip the key's hyphens and take
 // 24 of its hex digits instead: 14 + 24 = 38, comfortably under the cap and
 // still 96 bits of the same digest.
-export const SHOPIFY_OPERATION_TAG_PREFIX = "shopkeeper-op-";
+const SHOPIFY_OPERATION_TAG_PREFIX = "shopkeeper-op-";
 export const SHOPIFY_TAG_MAX_LENGTH = 40;
 
 // The one definition of an operation tag. The writer that stamps it and the

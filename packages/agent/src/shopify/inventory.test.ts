@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { jsonResponse } from "../testing/json-response.js";
 import {
   formatInventoryStatusLine,
   getInventoryStatus,
@@ -9,13 +10,6 @@ const ctx = {
   shop: "test-store.myshopify.com",
   accessToken: "shpat_test",
 };
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-}
 
 function productsResponse(nodes: unknown[]): Response {
   return jsonResponse({ data: { products: { nodes } } });

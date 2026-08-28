@@ -1,16 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { jsonResponse } from "../testing/json-response.js";
 import { createPartialRefund, parseRefundItems, unrefundableItems } from "./partial-refunds.js";
 import { resolveAgentSettings } from "../settings.js";
 
 const ctx = { shop: "test-store.myshopify.com", accessToken: "shpat_test" };
 const SETTINGS = resolveAgentSettings(null);
-
-function jsonResponse(body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
-}
 
 function order(overrides: Record<string, unknown> = {}) {
   return {

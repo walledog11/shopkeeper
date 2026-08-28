@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { jsonResponse } from "../testing/json-response.js";
 import { shopifyIdempotencyKey, shopifyOperationTag } from "./client.js";
 import { discountCodeForOperation } from "./discounts.js";
 import { probeUnknownShopifyMutation } from "./reconciliation-probes/index.js";
@@ -22,13 +23,6 @@ const createdOrderInput = {
 };
 
 const giftCardInput = { amount: "25.00", customer_id: "123" };
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-}
 
 afterEach(() => {
   vi.unstubAllGlobals();

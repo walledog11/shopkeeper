@@ -678,9 +678,12 @@ Expected log tags: `category=provider_send`, `service=gateway`, `provider=imessa
 
 **Legacy customer iMessage threads (pre-rewire)**
 
-Completed 2026-07-30. Pre-GA customer-support rows on `channel_type = imessage` were
-migration tooling only; operator iMessage uses `sms_agent` plus
-`org_member_imessage_bindings` and is unaffected. Verify with:
+The purge module was retired 2026-07-30, but the `imessage` enum value outlived it
+and is still a tracked retirement candidate — see
+[compatibility-retirement-backlog.md](../compatibility-retirement-backlog.md).
+Pre-GA customer-support rows on `channel_type = imessage` were migration tooling
+only; operator iMessage uses `sms_agent` plus `org_member_imessage_bindings` and is
+unaffected. Verify with:
 
 ```bash
 npm run audit:legacy-imessage-threads

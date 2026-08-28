@@ -41,8 +41,6 @@ export {
 } from '@shopkeeper/agent/observability';
 export type {
   EmitOpsAlertResult,
-  IncrementOpsAlertWindowResult,
   OpsAlertCounterClient,
   OpsAlertInput,
-  OpsAlertLogger,
 } from '@shopkeeper/agent/observability';

@@ -6,8 +6,6 @@ import type { AgentContext } from "./agent-context.js";
 import { recordSpend } from "./spend.js";
 import { recordModelUsage, type createModelUsageMetrics } from "./usage.js";
 
-/** Phase-1 Haiku calls emit tool calls only (reads, send_reply, escalate). */
-export const PLAN_INITIAL_MAX_TOKENS = 1024;
 /** Replan may include send_reply body text alongside mutative tools. */
 export const PLAN_REPLAN_MAX_TOKENS = 2048;
 

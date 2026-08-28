@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { jsonResponse as sharedJsonResponse } from "@shopkeeper/agent/testing"
 import { ChannelType } from "@shopkeeper/db"
 import { cleanupTestData, createTestIntegration, createTestOrg } from "@shopkeeper/db/test-helpers"
 
@@ -23,10 +24,12 @@ afterEach(async () => {
   vi.clearAllMocks()
 })
 
+// Takes a page_info cursor rather than a ResponseInit: these stubs exist to walk
+// Shopify's rfc5988 pagination, so every call site names the next page.
 function jsonResponse(body: unknown, cursor?: string): Response {
-  return Response.json(body, cursor ? {
-    headers: { Link: `<https://example.com?page_info=${cursor}>; rel="next"` },
-  } : undefined)
+  return sharedJsonResponse(body, cursor
+    ? { headers: { Link: `<https://example.com?page_info=${cursor}>; rel="next"` } }
+    : {})
 }
 
 function order(id: number, financial_status: string, fulfillment_status: string | null = null) {

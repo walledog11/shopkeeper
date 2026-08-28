@@ -3,7 +3,7 @@ import { createHmac } from "node:crypto"
 // Mints the short-lived token the browser hands to the gateway SSE endpoint.
 // Wire format must match apps/gateway/src/realtime/token.ts:
 //   base64url(JSON {orgId, exp}) + "." + hex HMAC-SHA256 of that segment.
-export const REALTIME_TOKEN_TTL_MS = 5 * 60 * 1000
+const REALTIME_TOKEN_TTL_MS = 5 * 60 * 1000
 
 export function mintRealtimeToken(
   orgId: string,

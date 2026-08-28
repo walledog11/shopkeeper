@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { jsonResponse } from "../testing/json-response.js";
 import { fulfillOrder } from "./fulfillment.js";
 import { probeUnknownShopifyMutation } from "./reconciliation-probes/index.js";
 
@@ -6,13 +7,6 @@ const ctx = {
   shop: "test-store.myshopify.com",
   accessToken: "shpat_test",
 };
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-}
 
 function fulfillmentOrdersResponse(status = "OPEN", remainingQuantity = 2): Response {
   return jsonResponse({

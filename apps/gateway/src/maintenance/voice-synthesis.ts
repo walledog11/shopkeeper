@@ -26,7 +26,7 @@ import {
 const MAX_OUTPUT_TOKENS = 512;
 const MAX_EDIT_CHARS = 600;
 
-export const VOICE_SYNTHESIS_SYSTEM_PROMPT = `You maintain the brand-voice brief for a Shopify store's customer-support AI.
+const VOICE_SYNTHESIS_SYSTEM_PROMPT = `You maintain the brand-voice brief for a Shopify store's customer-support AI.
 
 You are given the store's current brief and recent examples where a human operator sent a customer reply that differed from the AI's drafted reply. The difference reveals how the operator actually wants replies to sound.
 
@@ -41,7 +41,7 @@ Rules:
 - brief: at most ${BRAND_VOICE_MAX_CHARS} characters.
 - rationale: at most ${VOICE_RATIONALE_MAX_CHARS} characters, plainly explaining what you changed and why.`;
 
-export const VOICE_SYNTHESIS_OUTPUT_SCHEMA = {
+const VOICE_SYNTHESIS_OUTPUT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
   properties: {
@@ -112,7 +112,7 @@ function parseSynthesizedBrief(value: unknown): SynthesizedBrief {
   return { brief: value.brief, rationale: value.rationale };
 }
 
-export async function synthesizeVoiceBrief({
+async function synthesizeVoiceBrief({
   organizationId,
   currentBrief,
   edits,

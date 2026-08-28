@@ -15,16 +15,13 @@ import { resolveAgentSettings } from "../settings.js";
  * it.
  */
 
-export const VALUE_AT_RISK_CODES = [
-  "no_variants",
-  "too_many_variants",
-  "discount_too_deep",
-  "value_at_risk_exceeded",
-  "ttl_missing",
-  "ttl_too_long",
-] as const;
-
-export type ValueAtRiskCode = (typeof VALUE_AT_RISK_CODES)[number];
+export type ValueAtRiskCode =
+  | "no_variants"
+  | "too_many_variants"
+  | "discount_too_deep"
+  | "value_at_risk_exceeded"
+  | "ttl_missing"
+  | "ttl_too_long";
 
 export interface ValueAtRiskViolation {
   code: ValueAtRiskCode;

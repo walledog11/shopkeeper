@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { jsonResponse } from '@shopkeeper/agent/testing';
 import {
   buildInstagramAuthorizationUrl,
   exchangeInstagramAuthorizationCode,
@@ -14,17 +15,6 @@ import {
   subscribeInstagramMessages,
   unsubscribeInstagramMessages,
 } from './client.js';
-
-function jsonResponse(
-  body: unknown,
-  status = 200,
-  headers: Record<string, string> = {},
-): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', ...headers },
-  });
-}
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -256,7 +246,7 @@ describe('Instagram API client', () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
       recipient_id: 'igsid-1',
       message_id: 'mid-1',
-    }, 200, { 'x-fb-trace-id': 'trace-2' }));
+    }, { headers: { 'x-fb-trace-id': 'trace-2' } }));
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(sendInstagramTextMessage({
@@ -396,7 +386,7 @@ describe('Instagram API client', () => {
   it('rejects malformed success responses instead of inferring success from HTTP 200', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(jsonResponse({
       access_token: 'missing-expiry',
-    }, 200, { 'x-request-id': 'request-1' })));
+    }, { headers: { 'x-request-id': 'request-1' } })));
 
     await expect(refreshInstagramAccessToken('long-token')).resolves.toEqual({
       ok: false,

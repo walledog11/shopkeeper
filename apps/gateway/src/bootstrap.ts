@@ -1,7 +1,7 @@
 import { pathToFileURL } from 'node:url';
 import { loadGatewayEnv } from './config/load-env.js';
 
-export function isMainModule(moduleUrl: string): boolean {
+function isMainModule(moduleUrl: string): boolean {
   if (!process.argv[1]) return false;
   return moduleUrl === pathToFileURL(process.argv[1]).href;
 }

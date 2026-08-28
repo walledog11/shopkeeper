@@ -23,7 +23,7 @@ import {
 const ARCHIVE_AFTER_DAYS = 90;
 const PURGE_AFTER_DAYS = 90;
 
-export async function archiveOldClosedThreads(): Promise<void> {
+async function archiveOldClosedThreads(): Promise<void> {
   const cutoff = new Date(Date.now() - ARCHIVE_AFTER_DAYS * ONE_DAY_MS);
   const result = await db.thread.updateMany({
     where: { status: 'closed', archivedAt: null, deletedAt: null, updatedAt: { lt: cutoff } },
@@ -32,7 +32,7 @@ export async function archiveOldClosedThreads(): Promise<void> {
   logger.info({ count: result.count, cutoffDays: ARCHIVE_AFTER_DAYS }, '[Archival] Archived old closed threads');
 }
 
-export async function purgeDeletedRecords(): Promise<void> {
+async function purgeDeletedRecords(): Promise<void> {
   const cutoff = new Date(Date.now() - PURGE_AFTER_DAYS * ONE_DAY_MS);
 
   const deletedMessages = await db.message.deleteMany({ where: { deletedAt: { lt: cutoff } } });
@@ -68,7 +68,7 @@ export async function purgeDeletedRecords(): Promise<void> {
   );
 }
 
-export async function runDailyThreadRetention(): Promise<void> {
+async function runDailyThreadRetention(): Promise<void> {
   await archiveOldClosedThreads();
   await closeInactiveOpenThreads();
 }

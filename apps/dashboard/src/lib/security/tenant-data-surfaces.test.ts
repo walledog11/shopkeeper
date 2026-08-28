@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { jsonResponse } from '@shopkeeper/agent/testing';
 import { ChannelType, db } from '@shopkeeper/db';
 import {
   cleanupTestData,
@@ -340,10 +341,3 @@ function jsonReq(url: string, body: unknown) {
   });
 }
 
-function jsonResponse(body: unknown, init: ResponseInit = {}) {
-  return new Response(JSON.stringify(body), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) },
-    ...init,
-  });
-}

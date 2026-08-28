@@ -1,4 +1,4 @@
-export const OAUTH_PROVIDERS = [
+const OAUTH_PROVIDERS = [
   'gmail',
   'instagram',
   'shopify',
@@ -57,7 +57,7 @@ export function isOAuthFlowMode(value: unknown): value is OAuthFlowMode {
   return value === 'popup' || value === 'redirect';
 }
 
-export function isOAuthErrorCode(value: unknown): value is OAuthErrorCode {
+function isOAuthErrorCode(value: unknown): value is OAuthErrorCode {
   return typeof value === 'string'
     && Object.prototype.hasOwnProperty.call(OAUTH_ERROR_MESSAGES, value);
 }

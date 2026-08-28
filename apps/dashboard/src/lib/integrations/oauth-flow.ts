@@ -11,7 +11,7 @@ export type { OAuthDoneMessage } from './oauth-contract';
 
 export const OAUTH_POPUP_NAME = 'shopkeeper_oauth_popup';
 export const OAUTH_POPUP_SESSION_KEY = 'shopkeeper-oauth-popup';
-export const OAUTH_RESULT_CHANNEL = 'shopkeeper-oauth-result';
+const OAUTH_RESULT_CHANNEL = 'shopkeeper-oauth-result';
 
 export type OAuthLaunchResult =
   | { mode: 'popup'; popup: Window }
@@ -31,7 +31,7 @@ function withOAuthMode(value: string, mode: OAuthFlowMode): string {
   return url.origin === window.location.origin ? `${url.pathname}${url.search}${url.hash}` : url.toString();
 }
 
-export function markOAuthPopupSession(target?: Window): void {
+function markOAuthPopupSession(target?: Window): void {
   if (typeof window === 'undefined') return;
   try {
     (target ?? window).sessionStorage.setItem(OAUTH_POPUP_SESSION_KEY, '1');
@@ -40,7 +40,7 @@ export function markOAuthPopupSession(target?: Window): void {
   }
 }
 
-export function clearOAuthPopupSession(): void {
+function clearOAuthPopupSession(): void {
   if (typeof window === 'undefined') return;
   try {
     sessionStorage.removeItem(OAUTH_POPUP_SESSION_KEY);
@@ -64,7 +64,7 @@ export function resolveOAuthCompletionMode(value: unknown): OAuthFlowMode {
   return isOAuthPopupWindow() ? 'popup' : 'redirect';
 }
 
-export function publishOAuthDone(payload: OAuthDoneMessage): void {
+function publishOAuthDone(payload: OAuthDoneMessage): void {
   if (typeof window === 'undefined') return;
 
   let postedToOpener = false;

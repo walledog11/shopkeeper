@@ -1,17 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { jsonResponse } from "../testing/json-response.js";
 import { listRecentUnfulfilledOrderIds } from "./orders.js";
 
 const ctx = {
   shop: "test-store.myshopify.com",
   accessToken: "shpat_test",
 };
-
-function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
-  return new Response(JSON.stringify(body), {
-    status: init.status ?? 200,
-    headers: { "Content-Type": "application/json", ...init.headers },
-  });
-}
 
 afterEach(() => {
   vi.unstubAllGlobals();

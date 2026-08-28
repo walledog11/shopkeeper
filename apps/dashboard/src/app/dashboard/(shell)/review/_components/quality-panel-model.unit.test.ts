@@ -72,6 +72,36 @@ describe("quality panel review model", () => {
     }))).toBe("sent automatically")
   })
 
+  // reviewModeNote used to suppress the note by string-matching the badge it
+  // sits next to (`label.startsWith("Auto")`), so rewording a badge silently
+  // brought back the "Auto reply" + "Auto-sent" pair it exists to prevent. It
+  // reads the chrome's `code` now; only that coupling is allowed.
+  it("suppresses the mode note by code, not by how the badge is worded", () => {
+    const autoReply = entry({
+      actions: [action({ tool: "send_reply", input: { text: "Thanks!" } })],
+      mode: "auto_executed",
+    })
+    expect(reviewItemChrome(autoReply).code).toBe("auto_reply")
+    expect(reviewModeNote(autoReply)).toBeNull()
+
+    const autoAction = entry({
+      actions: [action({ tool: "add_internal_note", result: "Noted." })],
+      mode: "auto_executed",
+    })
+    expect(reviewItemChrome(autoAction).code).toBe("auto_action")
+    expect(reviewModeNote(autoAction)).toBeNull()
+
+    // A store action under auto mode carries its own tool label ("Issued
+    // refund"), which never began with "Auto" — the note is the only thing
+    // saying nobody approved it.
+    const autoStoreAction = entry({
+      actions: [action({ tool: "create_refund", result: "Refunded $25.00." })],
+      mode: "auto_executed",
+    })
+    expect(reviewItemChrome(autoStoreAction).code).toBe("store_action")
+    expect(reviewModeNote(autoStoreAction)).toBe("sent automatically")
+  })
+
   it("offers one filter set that queries the server, not the client", () => {
     expect(REVIEW_FILTERS.map(filter => filter.id)).toEqual([
       "all",

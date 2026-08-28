@@ -142,7 +142,7 @@ function recordJudgeUsage(usage: EvalUsage, judged: {
   usage.judgeUsage.cacheCreationInputTokens += judged.usage.cacheCreationInputTokens
 }
 
-export async function runFixture(
+async function runFixture(
   fixture: Fixture,
   budget?: ModelSpendBudget | null,
 ): Promise<EvalResult> {

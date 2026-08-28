@@ -1,6 +1,6 @@
 import { shopifyGraphql, type ShopifyContext } from "./client.js";
 import { toolNotFound, toolOk, type ToolResult } from "../tools/result.js";
-import { clampLimit, requireNonEmptyString } from "./validation.js";
+import { clampLimit, moneyToCents, requireNonEmptyString } from "./validation.js";
 import { listLowStockVariants } from "./low-stock.js";
 import type { GetInventoryStatusInput } from "../tools/registry/types.js";
 
@@ -69,11 +69,6 @@ export interface InventoryVariantStatus {
   oversellAllowed: boolean;
 }
 
-function priceToCents(price: string): number {
-  const parsed = Number.parseFloat(price);
-  return Number.isFinite(parsed) ? Math.round(parsed * 100) : 0;
-}
-
 function toSearchTerms(query: string): string {
   return query
     .split(/\s+/)
@@ -93,7 +88,7 @@ export function readInventoryStatus(data: InventoryStatusData): InventoryVariant
         productTitle: product.title,
         variantTitle: variant.title,
         sku: variant.sku || null,
-        priceCents: priceToCents(variant.price),
+        priceCents: moneyToCents(variant.price),
         quantity: product.tracksInventory === false ? null : variant.inventoryQuantity ?? null,
         oversellAllowed: (variant.inventoryPolicy ?? "").toUpperCase() === "CONTINUE",
       });

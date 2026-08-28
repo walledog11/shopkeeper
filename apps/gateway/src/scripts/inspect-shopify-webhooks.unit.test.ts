@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { jsonResponse } from '@shopkeeper/agent/testing';
 import {
   matchingMigrationSubscriptions,
   migrateShopifyWebhooks,
@@ -159,9 +160,3 @@ function fakeShopify(initial: ShopifyWebhookSubscription[]) {
   return { fetchImpl, requests, subscriptions };
 }
 
-function jsonResponse(body: unknown, init: ResponseInit = {}) {
-  return new Response(JSON.stringify(body), {
-    status: init.status ?? 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}

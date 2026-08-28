@@ -41,7 +41,7 @@ export type InactiveThreadSweepRow = {
 
 export type InactiveThreadCloseDecision = 'close_non_conversational' | 'close_quiet' | 'skip';
 
-export function hasMerchantWorkCachedPlan(
+function hasMerchantWorkCachedPlan(
   thread: Pick<InactiveThreadSweepRow, 'cachedPlan' | 'filterStatus'>,
   settings: ReturnType<typeof resolveAgentSettings>,
 ): boolean {

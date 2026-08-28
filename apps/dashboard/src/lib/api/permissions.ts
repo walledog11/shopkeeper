@@ -7,7 +7,7 @@ import { getE2EAuthIdentity } from '@/lib/e2e-auth';
 // credentials, or destroy data. Everything a member does day to day — tickets,
 // agent runs and approvals, replies, KB, binding their own operator device —
 // stays open to the whole workspace.
-export const ADMIN_ROLE = 'org:admin';
+const ADMIN_ROLE = 'org:admin';
 
 export const ADMIN_REQUIRED_MESSAGE = 'Only workspace admins can do this.';
 

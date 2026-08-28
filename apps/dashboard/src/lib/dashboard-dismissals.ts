@@ -20,7 +20,7 @@ export function parseDismissedNotificationIds(raw: string | undefined): Set<stri
   }
 }
 
-export function serializeDismissedNotificationIds(ids: Iterable<string>): string {
+function serializeDismissedNotificationIds(ids: Iterable<string>): string {
   return JSON.stringify([...ids])
 }
 

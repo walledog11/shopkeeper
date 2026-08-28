@@ -1,4 +1,4 @@
-export const DEFAULT_EXTERNAL_REQUEST_TIMEOUT_MS = 15_000;
+const DEFAULT_EXTERNAL_REQUEST_TIMEOUT_MS = 15_000;
 
 export class ExternalRequestTimeoutError extends Error {
   readonly operation: string;
@@ -17,12 +17,6 @@ export class ExternalRequestTimeoutError extends Error {
     this.operation = operation;
     this.timeoutMs = timeoutMs;
   }
-}
-
-export function isExternalRequestTimeoutError(
-  error: unknown,
-): error is ExternalRequestTimeoutError {
-  return error instanceof ExternalRequestTimeoutError;
 }
 
 export async function fetchWithDeadline(

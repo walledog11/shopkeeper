@@ -10,7 +10,7 @@ import type { OperatorEvent, Prisma as PrismaTypes } from '@prisma/client';
 
 export type OperatorEventChannel = 'telegram' | 'imessage';
 
-export const OPERATOR_REPLY_DELIVERY_UNKNOWN_ERROR =
+const OPERATOR_REPLY_DELIVERY_UNKNOWN_ERROR =
   'Operator reply may have reached the provider, but delivery could not be confirmed. Do not resend automatically.';
 
 export interface IngestOperatorEventParams {

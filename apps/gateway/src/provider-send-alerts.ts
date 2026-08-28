@@ -1,11 +1,13 @@
 import { getGatewayOpsAlertConfig, type GatewayOpsAlertConfig } from './config/runtime-config.js';
 import { getOpsAlertCounterClient } from './ops-alert-counter.js';
 import {
-  emitOpsAlert,
-  incrementOpsAlertWindow,
-  type IncrementOpsAlertWindowResult,
+  recordProviderSendFailureAlert,
+  shouldSkipOpsAlertInTest,
+  type OpsAlertBackgroundOptions,
   type OpsAlertCounterClient,
-} from './ops-alerts.js';
+  type OpsAlertRecordResult,
+} from '@shopkeeper/agent/observability';
+import { emitOpsAlert, incrementOpsAlertWindow } from './ops-alerts.js';
 
 export type ProviderSendAlertProvider = 'telegram' | 'imessage';
 export type ProviderSendAlertChannel = 'operator_notify';
@@ -21,18 +23,8 @@ export interface ProviderSendAlertDependencies {
   extra?: Record<string, unknown>;
 }
 
-export interface ProviderSendAlertResult {
-  window: IncrementOpsAlertWindowResult;
-  emitted: boolean;
-}
-
-export interface ProviderSendBackgroundOptions {
-  getCounterClient?: () => OpsAlertCounterClient;
-  onError?: (error: unknown) => void;
-  skipInTest?: boolean;
-}
-
-const UNKNOWN_ORG = 'unknown';
+export type ProviderSendAlertResult = OpsAlertRecordResult;
+export type ProviderSendBackgroundOptions = OpsAlertBackgroundOptions;
 
 export async function recordProviderSendFailure(
   provider: ProviderSendAlertProvider,
@@ -40,38 +32,20 @@ export async function recordProviderSendFailure(
   orgId: string | null | undefined,
   deps: ProviderSendAlertDependencies,
 ): Promise<ProviderSendAlertResult> {
-  const config = deps.config ?? getGatewayOpsAlertConfig();
-  const emit = deps.emitAlert ?? emitOpsAlert;
-  const incr = deps.incrementWindow ?? incrementOpsAlertWindow;
-  const normalizedOrgId = normalizeOrgId(orgId);
-
-  const window = await incr(deps.counterClient, {
-    keyParts: ['provider_send', provider, channel, normalizedOrgId],
-    threshold: config.providerSendThreshold,
-    windowSecs: config.windowSecs,
-    nowMs: deps.nowMs,
+  return recordProviderSendFailureAlert({
+    provider,
+    channel,
+    orgId,
+    threadId: deps.threadId,
+    detail: deps.detail,
+    ...(deps.extra ? { extra: deps.extra } : {}),
+  }, {
+    counterClient: deps.counterClient,
+    config: deps.config ?? getGatewayOpsAlertConfig(),
+    emitAlert: deps.emitAlert ?? emitOpsAlert,
+    ...(deps.incrementWindow ? { incrementWindow: deps.incrementWindow } : {}),
+    ...(deps.nowMs !== undefined ? { nowMs: deps.nowMs } : {}),
   });
-
-  if (window.thresholdCrossed) {
-    emit({
-      category: 'provider_send',
-      message: `Repeated provider send failure: provider=${provider} channel=${channel} count=${window.count}`,
-      level: 'error',
-      tags: { provider, channel },
-      extra: {
-        orgId: normalizedOrgId,
-        threadId: deps.threadId ?? null,
-        detail: deps.detail ?? null,
-        count: window.count,
-        threshold: window.threshold,
-        windowSecs: config.windowSecs,
-        resetAt: window.resetAt,
-        ...(deps.extra ?? {}),
-      },
-    }, { config });
-  }
-
-  return { window, emitted: window.thresholdCrossed };
 }
 
 export function recordProviderSendFailureInBackground(
@@ -81,9 +55,7 @@ export function recordProviderSendFailureInBackground(
   input: Omit<ProviderSendAlertDependencies, 'counterClient'>,
   options: ProviderSendBackgroundOptions = {},
 ): void {
-  if (shouldSkipInTest(options)) {
-    return;
-  }
+  if (shouldSkipOpsAlertInTest(options)) return;
 
   let counterClient: OpsAlertCounterClient;
   try {
@@ -99,21 +71,4 @@ export function recordProviderSendFailureInBackground(
   }).catch((error) => {
     options.onError?.(error);
   });
-}
-
-function shouldSkipInTest(options: ProviderSendBackgroundOptions): boolean {
-  if (options.skipInTest === false) {
-    return false;
-  }
-
-  return process.env.NODE_ENV === 'test' || process.env.E2E_TEST_RUN === 'true';
-}
-
-function normalizeOrgId(orgId: string | null | undefined): string {
-  if (typeof orgId !== 'string') {
-    return UNKNOWN_ORG;
-  }
-
-  const trimmed = orgId.trim();
-  return trimmed.length > 0 ? trimmed : UNKNOWN_ORG;
 }
