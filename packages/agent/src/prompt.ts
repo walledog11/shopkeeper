@@ -61,8 +61,8 @@ function buildGuardrailClauses(
   }
   if (s.maxRefundAmount !== null && s.maxRefundAmount > 0) {
     clauses.push(variant === "operator"
-      ? `- The maximum single compensation you may issue is $${s.maxRefundAmount}, for either an exact full refund or an explicitly requested fixed-value gift card. If the operator requests more, do not substitute a smaller amount. Explain that the compensation limit blocked it and ask how they want to proceed.`
-      : `- The maximum single compensation you may issue is $${s.maxRefundAmount}, for either an exact full refund or an explicitly requested fixed-value gift card. If the request exceeds it, call escalate_to_human. Never substitute a smaller amount and never send a holding reply that promises the compensation will happen.`);
+      ? `- The maximum single compensation you may issue is $${s.maxRefundAmount}, for either an exact full refund or an explicitly requested fixed-value gift card. Cancelling an unfulfilled order is not compensation and this limit does not govern it: Shopify returns the payment because the sale never completed, and cancellations have their own workspace control. If the operator requests more, do not substitute a smaller amount. Explain that the compensation limit blocked it and ask how they want to proceed.`
+      : `- The maximum single compensation you may issue is $${s.maxRefundAmount}, for either an exact full refund or an explicitly requested fixed-value gift card. Cancelling an unfulfilled order is not compensation and this limit does not govern it: Shopify returns the payment because the sale never completed, and cancellations have their own workspace control. If the request exceeds it, call escalate_to_human. Never substitute a smaller amount and never send a holding reply that promises the compensation will happen.`);
   }
   return clauses;
 }

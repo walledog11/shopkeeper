@@ -93,6 +93,23 @@ describe('buildSystemPrompt', () => {
     expect(prompt).not.toMatch(/call escalate_to_human/i);
   });
 
+  it('excludes cancellation from the compensation cap in both variants', () => {
+    // The cap enumerates two compensation forms and a cancellation is neither,
+    // but the prompt used not to say so, and the model sometimes applied the cap
+    // to a cancellation's Shopify-side refund and escalated instead of calling
+    // cancel_order. cancel_order carries no refundAmountLimits policy, so the
+    // cap it was invoking would never have fired.
+    const support = buildSystemPrompt(makeCtx(), { maxRefundAmount: 50 });
+    const operator = buildSystemPrompt(
+      makeCtx({ thread: { ...makeCtx().thread, channelType: 'sms_agent' } }),
+      { maxRefundAmount: 50 },
+    );
+    for (const prompt of [support, operator]) {
+      expect(prompt).toMatch(/maximum single compensation you may issue is \$50/i);
+      expect(prompt).toMatch(/Cancelling an unfulfilled order is not compensation/i);
+    }
+  });
+
   it('tells support mode to answer unfulfilled order status questions without tracking lookups', () => {
     const prompt = buildSystemPrompt(makeCtx({
       recentOrders: [{
