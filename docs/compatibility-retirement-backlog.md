@@ -4,7 +4,7 @@ Evidence-gated removal of compatibility surfaces identified in the 2026-07-10
 codebase audit (in git history). One candidate per pull request; never
 batch unrelated retirements.
 
-Last reviewed: 2026-08-25.
+Last reviewed: 2026-08-28.
 
 ## Completed
 
@@ -30,6 +30,8 @@ repeatable schedulers and can break operator digests and async outbound recovery
 | WhatsApp-named BullMQ queue IDs | Gateway / platform | `npm run audit:bullmq-compatibility-names` inventories live repeatable jobs; rename only after old Redis entries are removed and recreated | Deferred — storage compatibility names per AUD-021 |
 | `OUTBOUND_SEND_SWEEP` legacy string | Gateway maintenance | Same BullMQ audit; sweep is channel-agnostic (email + iMessage) | Deferred — cosmetic rename blocked on Redis migration |
 | `dashboard_agent` ChannelType enum value | Operator channels | Nothing has written it since the Concierge moved onto `sms_agent` operator threads (2026-08-06), but a Postgres enum value cannot be dropped while rows reference it — and historical rows do. Needs those rows re-channelled or purged first; the display mappings stay meanwhile so history still renders | Deferred — live rows reference it |
+| `imessage` ChannelType enum value | Operator / iMessage | `npm run audit:legacy-imessage-threads` must report zero active **and** zero soft-deleted rows. Same shape as `dashboard_agent`: the purge module was retired 2026-07-30, but the enum value outlived it and no live path writes a thread on it — operator iMessage is `sms_agent` plus `org_member_imessage_bindings`. The `'imessage'` strings elsewhere in the gateway are transport/provider names, not this enum | Deferred — enum drop needs a row inventory |
+| Identity-less operator queue entries | Operator channels | `npm run audit:operator-context-compatibility` must report zero `identityLessQueuedPlans`. Queue entries written before durable approval carry no `planId`/`sourceMessageId`/`planHash`/`instructionHash`; `operator-context.ts` refuses to offer them rather than risk running a stale plan. That reader retires when no such rows remain | Deferred — live rows reference it |
 
 ## Product decisions blocking retirement
 
@@ -53,5 +55,11 @@ npm run audit:legacy-imessage-threads
 npm run audit:bullmq-compatibility-names
 npm run audit:outbound-email-mode
 ```
+
+The first two read as dead tooling, because every candidate they were
+originally written for is in the Completed table above. They are not: each
+still measures a surface in the Deferred table — the `imessage` enum value and
+identity-less queue entries respectively. Retire the script with the last
+candidate it gates, never before.
 
 Add `--strict` to any audit that supports it when gating a retirement PR.
