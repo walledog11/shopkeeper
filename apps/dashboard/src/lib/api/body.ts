@@ -27,7 +27,7 @@ function badRequest(options: BodyErrorOptions | undefined, fallbackMessage: stri
   return new BadRequestError(options?.message ?? fallbackMessage, options?.details ?? fallbackDetails);
 }
 
-export async function readJsonBody(request: Request, options: ReadJsonBodyOptions = {}): Promise<unknown> {
+async function readJsonBody(request: Request, options: ReadJsonBodyOptions = {}): Promise<unknown> {
   let text: string;
   try {
     text = await request.text();

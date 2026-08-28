@@ -25,7 +25,7 @@ export type MaintenanceJobRegistration = (
   context: MaintenanceRegistrationContext,
 ) => Promise<MaintenanceResources>;
 
-export function emptyMaintenanceResources(): MaintenanceResources {
+function emptyMaintenanceResources(): MaintenanceResources {
   return { workers: [], queues: [] };
 }
 

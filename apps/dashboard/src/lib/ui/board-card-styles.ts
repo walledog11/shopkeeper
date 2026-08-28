@@ -28,7 +28,7 @@ export function boardCardShellClassName(variant: BoardCardVariant = "default") {
   )
 }
 
-export const boardCardFooterClassName =
+const boardCardFooterClassName =
   "border-t border-border/50 bg-muted/30 rounded-b-3xl"
 
 export const boardSecondaryButtonClassName =

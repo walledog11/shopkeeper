@@ -29,8 +29,8 @@ export interface GmailPushNotification {
   messageId: string;
 }
 
-export class GmailPushPayloadError extends Error {}
-export class GmailPushAuthenticationError extends Error {}
+class GmailPushPayloadError extends Error {}
+class GmailPushAuthenticationError extends Error {}
 
 function readBearerToken(req: Request): string | null {
   const authorization = req.headers.authorization;
@@ -57,7 +57,7 @@ function decodePubSubMessageData(data: string): unknown {
   }
 }
 
-export function parseGmailPubSubEnvelope(body: unknown): GmailPushNotification {
+function parseGmailPubSubEnvelope(body: unknown): GmailPushNotification {
   if (!isRecord(body) || !isRecord(body.message)) {
     throw new GmailPushPayloadError('Invalid Pub/Sub envelope');
   }
@@ -88,7 +88,7 @@ export function parseGmailPubSubEnvelope(body: unknown): GmailPushNotification {
   return { emailAddress, historyId, messageId: messageId.trim() };
 }
 
-export async function verifyGmailPushToken(
+async function verifyGmailPushToken(
   token: string,
   config: GmailPubSubPushConfig,
   verifier: GoogleTokenVerifier = new OAuth2Client(),

@@ -9,8 +9,8 @@ import { authorizeInternalRequest } from './routes/internal-auth.js';
 import logger from './logger.js';
 import { isRecord } from './lib/typing.js';
 
-export const WORKER_HEARTBEAT_KEY = 'health:gateway-worker:heartbeat';
-export const FAILED_QUEUE_JOB_SAMPLE_LIMIT = 5;
+const WORKER_HEARTBEAT_KEY = 'health:gateway-worker:heartbeat';
+const FAILED_QUEUE_JOB_SAMPLE_LIMIT = 5;
 
 export interface FailedQueueJobSnapshot {
   id: string | null;
@@ -79,7 +79,7 @@ export async function writeWorkerHeartbeat(redis: IORedis): Promise<void> {
   );
 }
 
-export async function readWorkerHeartbeat(redis: IORedis): Promise<{
+async function readWorkerHeartbeat(redis: IORedis): Promise<{
   healthy: boolean;
   ageMs: number | null;
   payload: WorkerHeartbeatPayload | null;
@@ -103,7 +103,7 @@ export async function readWorkerHeartbeat(redis: IORedis): Promise<{
   }
 }
 
-export async function getQueueDiagnostics(): Promise<Record<string, unknown>> {
+async function getQueueDiagnostics(): Promise<Record<string, unknown>> {
   const now = Date.now();
   if (cachedQueueDiagnostics && cachedQueueDiagnostics.expiresAt > now) {
     return cachedQueueDiagnostics.value;

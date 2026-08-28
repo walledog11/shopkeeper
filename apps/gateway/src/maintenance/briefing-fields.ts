@@ -93,7 +93,7 @@ interface BriefingLineParts {
   ask: string | null;
 }
 
-export function briefingLineParts(
+function briefingLineParts(
   facts: RequestFacts,
   person: string | null,
   now: Date,

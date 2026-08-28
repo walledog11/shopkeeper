@@ -6,7 +6,7 @@ import {
 import { formatFactsBriefingLine } from '../maintenance/briefing-fields.js';
 import { isRecord } from '../lib/typing.js';
 
-export const REQUEST_DISPLAY_VERSION = 1 as const;
+const REQUEST_DISPLAY_VERSION = 1 as const;
 const ALIGNED_CLASSIFIER_VERSION = 5;
 const DISPLAY_TOPIC_LIMIT = 120;
 

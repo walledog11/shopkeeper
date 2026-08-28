@@ -28,7 +28,7 @@ export interface GatewayWorkerShutdownOptions {
   exitProcess?: (code?: number) => unknown;
 }
 
-export function emptyGatewayWorkerResources(): GatewayWorkerResources {
+function emptyGatewayWorkerResources(): GatewayWorkerResources {
   return {
     workers: [],
     queues: [],

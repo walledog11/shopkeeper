@@ -164,5 +164,3 @@ export function storefrontChatDenialMessage(denial: StorefrontChatBudgetDenial):
     ? "You're sending messages faster than we can read them. Give it a moment and try again."
     : "We've hit today's chat limit. Please email us and we'll pick this up from there.";
 }
-
-export { ALLOWED as STOREFRONT_CHAT_BUDGET_ALLOWED };

@@ -19,7 +19,7 @@ let subscriberConnection: IORedis | null = null;
 let producerConnection: GatewayBullMqConnection | null = null;
 let workerConnection: GatewayBullMqConnection | null = null;
 
-export function getGatewayRedisUrl(db = 0): string {
+function getGatewayRedisUrl(db = 0): string {
   const rawUrl = process.env.REDIS_URL;
   if (!rawUrl) {
     throw new Error('[Gateway] Missing required environment variable: REDIS_URL');
@@ -30,7 +30,7 @@ export function getGatewayRedisUrl(db = 0): string {
   return redisUrl.toString();
 }
 
-export function createGatewayRedisClient(options?: RedisOptions): IORedis {
+function createGatewayRedisClient(options?: RedisOptions): IORedis {
   if (options) {
     return new IORedis(getGatewayRedisUrl(), options);
   }
@@ -38,7 +38,7 @@ export function createGatewayRedisClient(options?: RedisOptions): IORedis {
   return new IORedis(getGatewayRedisUrl());
 }
 
-export function createGatewayBullMqConnection(options?: RedisOptions): GatewayBullMqConnection {
+function createGatewayBullMqConnection(options?: RedisOptions): GatewayBullMqConnection {
   return createGatewayRedisClient(options) as GatewayBullMqConnection;
 }
 

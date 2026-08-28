@@ -43,7 +43,7 @@ function readRedirectUri(appUrl: string): string {
   return `${appUrl}/api/integrations/tiktok-shop/callback`;
 }
 
-export function isTikTokShopEnabled(): boolean {
+function isTikTokShopEnabled(): boolean {
   return parseBooleanEnv('TIKTOK_SHOP_ENABLED', false);
 }
 

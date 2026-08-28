@@ -5,7 +5,7 @@ import { relativeAge } from '../routes/telegram/format.js';
 import { customerFirstName } from '@shopkeeper/agent/person-name';
 import { briefingOrdinal, type PendingDigest } from '../operator-context.js';
 
-export const DIGEST_SUMMARY_TRUNC = 90;
+const DIGEST_SUMMARY_TRUNC = 90;
 
 export interface DigestThreadRow {
   id: string;
@@ -14,7 +14,7 @@ export interface DigestThreadRow {
   customer: { name: string | null };
 }
 
-export function truncateDigestSummary(text: string): string {
+function truncateDigestSummary(text: string): string {
   const trimmed = text.trim();
   return trimmed.length > DIGEST_SUMMARY_TRUNC ? `${trimmed.slice(0, DIGEST_SUMMARY_TRUNC)}…` : trimmed;
 }
@@ -52,7 +52,7 @@ export async function loadDigestThreads(
   }));
 }
 
-export function formatDigestThreadLine(
+function formatDigestThreadLine(
   entry: { index: number; id: string; thread: DigestThreadRow | null },
 ): string | null {
   if (!entry.thread) return null;

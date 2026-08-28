@@ -1,6 +1,6 @@
 export type OAuthPopupVisualState = 'loading' | 'success' | 'error';
 
-export function escapeOAuthPopupHtml(value: string): string {
+function escapeOAuthPopupHtml(value: string): string {
   return value
     .replaceAll('&', '&amp;')
     .replaceAll('"', '&quot;')

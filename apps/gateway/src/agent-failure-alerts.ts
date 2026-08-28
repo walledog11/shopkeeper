@@ -11,7 +11,7 @@ import {
 } from '@shopkeeper/agent/observability';
 import { emitOpsAlert, incrementOpsAlertWindow } from './ops-alerts.js';
 
-export const GATEWAY_AGENT_FAILURE_ROUTES = [
+const GATEWAY_AGENT_FAILURE_ROUTES = [
   'gateway-thread-sink',
 ] as const;
 

@@ -23,7 +23,7 @@ const PLAN_AFFORDANCE: Record<OperatorSurface, string> = {
 
 // The customer-facing body a send tool would deliver. Used both to surface the
 // draft the merchant is approving (ledger) and to summarize a re-drafted plan.
-export function extractSendDraftBody(toolCall: { name: string; input?: unknown }): string | null {
+function extractSendDraftBody(toolCall: { name: string; input?: unknown }): string | null {
   const input = toolCall.input;
   if (!input || typeof input !== 'object') return null;
   if (toolCall.name === 'send_reply') {

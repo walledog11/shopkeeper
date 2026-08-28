@@ -57,11 +57,11 @@ export function classifyOrder(order: Pick<OrderRow, "financial_status" | "fulfil
   return "fulfilled"
 }
 
-export function isOrderNumberSearch(value: string): boolean {
+function isOrderNumberSearch(value: string): boolean {
   return /^#?\d+$/.test(value)
 }
 
-export function isCustomerEmailSearch(value: string): boolean {
+function isCustomerEmailSearch(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
 }
 
@@ -142,7 +142,7 @@ function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === "string"
 }
 
-export function isOrderRow(value: unknown): value is OrderRow {
+function isOrderRow(value: unknown): value is OrderRow {
   if (!isRecord(value)) return false
   if (
     typeof value.id !== "number"

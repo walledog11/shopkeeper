@@ -5,8 +5,11 @@ const KNIP_BIN = fileURLToPath(new URL('../node_modules/knip/bin/knip.js', impor
 const WARNING_BASELINE = {
   // Ratcheted 149 -> 81 after removing dead exports, unused shadcn subcomponents,
   // and internal-only digest helpers; 81 -> 77 after dropping the ops-alert
-  // pass-throughs both host adapters re-exported and nothing imported.
-  exports: 77,
+  // pass-throughs both host adapters re-exported and nothing imported; 77 -> 11
+  // after dropping the `export` keyword from every declaration nothing outside
+  // its own file referenced. The 11 that remain are re-exported through a
+  // barrel or a package subpath, so they are API surface rather than oversight.
+  exports: 11,
   // Ratcheted 116 -> 90 after deleting duplicate tool-inputs re-exports and
   // trimming stale dashboard type surfaces; 90 -> 78 with the same ops-alert
   // pass-throughs. Consumers import these from @shopkeeper/agent/observability.

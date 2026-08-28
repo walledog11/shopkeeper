@@ -1,6 +1,6 @@
 // Deep link into the theme editor with the Shopkeeper Chat app embed selected.
 // Block handle matches extensions/shopkeeper-chat/blocks/chat.liquid.
-export const SHOPIFY_STOREFRONT_CHAT_EMBED_BLOCK_HANDLE = "chat";
+const SHOPIFY_STOREFRONT_CHAT_EMBED_BLOCK_HANDLE = "chat";
 
 export function buildShopifyThemeEditorAppEmbedUrl(
   shopDomain: string,

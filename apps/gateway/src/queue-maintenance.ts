@@ -1,6 +1,4 @@
-import { getGatewayBullMqQueue, resolveGatewayQueueName } from './clients/gateway-queues.js';
-
-export { resolveGatewayQueueName as resolveQueueName };
+import { getGatewayBullMqQueue } from './clients/gateway-queues.js';
 
 export async function removeFailedQueueJob(
   queueName: string,

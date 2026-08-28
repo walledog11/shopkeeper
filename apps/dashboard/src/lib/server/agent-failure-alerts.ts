@@ -10,7 +10,7 @@ import {
 } from '@shopkeeper/agent/observability';
 import { emitOpsAlert, incrementOpsAlertWindow } from '@/lib/server/ops-alerts';
 
-export const AGENT_FAILURE_ROUTES = [
+const AGENT_FAILURE_ROUTES = [
   '/api/agent',
   '/api/agent/chat',
   '/api/agent/quick-approve',
@@ -113,7 +113,7 @@ export function recordAgentFailureInBackground(
   });
 }
 
-export function recordAgentRouteFailureInBackground(
+function recordAgentRouteFailureInBackground(
   input: AgentRouteFailureInput,
   options: AgentFailureBackgroundOptions,
 ): void {

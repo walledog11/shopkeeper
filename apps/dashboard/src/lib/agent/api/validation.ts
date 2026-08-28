@@ -179,7 +179,7 @@ export function parseAgentPlanBody(body: unknown) {
   };
 }
 
-export function parseAgentPlanInternalBody(body: unknown) {
+function parseAgentPlanInternalBody(body: unknown) {
   const candidate = requireObject(body);
   return {
     orgId: requireNonEmptyString(candidate.orgId, "orgId"),

@@ -61,7 +61,7 @@ function normalizeFilters(filters: ActionLogQueryFilters): NormalizedActionLogFi
   }
 }
 
-export function buildActionLogSearchParams(filters: ActionLogQueryFilters = {}): URLSearchParams {
+function buildActionLogSearchParams(filters: ActionLogQueryFilters = {}): URLSearchParams {
   const normalized = normalizeFilters(filters)
   const params = new URLSearchParams()
   if (normalized.channels.length) params.set("channel", normalized.channels.join(","))

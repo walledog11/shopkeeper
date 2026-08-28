@@ -11,7 +11,7 @@ interface StartBindingOptions {
   now?: () => number;
 }
 
-export class ChannelBindingContractError extends Error {
+class ChannelBindingContractError extends Error {
   constructor(message: string, public readonly payload: unknown) {
     super(message);
     this.name = "ChannelBindingContractError";
