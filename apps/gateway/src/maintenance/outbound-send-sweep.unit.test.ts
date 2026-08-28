@@ -40,6 +40,25 @@ describe('runOutboundSendSweep', () => {
     expect(disconnect).toHaveBeenCalledOnce();
   });
 
+  it('gives up after the retry rather than looping', async () => {
+    transaction
+      .mockRejectedValueOnce(new Error('P1017'))
+      .mockRejectedValueOnce(new Error('P1017'));
+
+    await expect(runOutboundSendSweep()).rejects.toThrow('P1017');
+    expect(transaction).toHaveBeenCalledTimes(2);
+  });
+
+  it('still retries when the disconnect itself fails', async () => {
+    disconnect.mockRejectedValueOnce(new Error('already disconnected'));
+    transaction
+      .mockRejectedValueOnce(new Error('kind: Closed'))
+      .mockResolvedValueOnce(sweepCounts());
+
+    await expect(runOutboundSendSweep()).resolves.toBeUndefined();
+    expect(transaction).toHaveBeenCalledTimes(2);
+  });
+
   it.each([
   'Error in PostgreSQL connection: kind: Closed',
   'P1017: connection terminated',
@@ -49,6 +68,16 @@ describe('runOutboundSendSweep', () => {
     transaction
       .mockRejectedValueOnce(new Error(message))
       .mockResolvedValueOnce(sweepCounts());
+
+    await expect(runOutboundSendSweep()).resolves.toBeUndefined();
+    expect(transaction).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ['a non-Error throw', 'kind: Closed'],
+    ['a stack-only match', Object.assign(new Error('query failed'), { stack: 'P1017 at db' })],
+  ])('classifies %s as a closed connection', async (_label, thrown) => {
+    transaction.mockRejectedValueOnce(thrown).mockResolvedValueOnce(sweepCounts());
 
     await expect(runOutboundSendSweep()).resolves.toBeUndefined();
     expect(transaction).toHaveBeenCalledTimes(2);
@@ -70,6 +99,28 @@ describe('runOutboundSendSweep', () => {
     expect(errorLog).toHaveBeenCalledWith(
       expect.objectContaining({ opsAlert: true, failedCount: 3, unknownCount: 3 }),
       expect.stringContaining('Reconciled orphaned outbound send claims'),
+    );
+  });
+
+  it('sums both no-send buckets into the failed count', async () => {
+    transaction.mockResolvedValueOnce(sweepCounts(2, 3, 0));
+
+    await runOutboundSendSweep();
+
+    expect(errorLog).toHaveBeenCalledWith(
+      expect.objectContaining({ opsAlert: true, failedCount: 5, unknownCount: 0 }),
+      expect.stringContaining('Reconciled orphaned outbound send claims'),
+    );
+  });
+
+  it('alerts when only the ambiguous post-provider case fired', async () => {
+    transaction.mockResolvedValueOnce(sweepCounts(0, 0, 4));
+
+    await runOutboundSendSweep();
+
+    expect(errorLog).toHaveBeenCalledWith(
+      expect.objectContaining({ opsAlert: true, failedCount: 0, unknownCount: 4 }),
+      expect.anything(),
     );
   });
 
