@@ -7,7 +7,7 @@ of its own fix: the moment an item reads as evidence rather than as an instructi
 it back. Evidence checklists, failure drills, and standing procedure live in the linked
 docs.
 
-Last reviewed: 2026-08-27.
+Last reviewed: 2026-08-28.
 
 Work is grouped by **what kind of action it needs**, not by when it was filed.
 
@@ -21,33 +21,6 @@ version. Read the deployed commit off the deployment record itself — Vercel's
 `meta.githubCommitSha` via the API, Railway's `meta.commitHash` via
 `railway deployment list --json`. Never infer it from a timestamp sitting near a commit,
 and never from `/health`, which is liveness-only and cannot report a commit at all.
-
-- [ ] **Release `shopkeeper-production-28`.** `-27` (2026-08-19) is still the `★ active`
-  version, but `5ee51baa` changed `extensions/shopkeeper-chat/assets/shopkeeper-chat.js`
-  and its locale string. Theme app extension assets reach merchants only in a released
-  app version, so the handoff-notice fix — the notice promising a reply that had already
-  arrived — is live on both app surfaces and in nobody's storefront. `shopify app deploy`,
-  then confirm `-28` becomes the active row. Do this before the merchant rollout below,
-  which would otherwise put a real merchant on the stale copy. `-26` is the one-step
-  rollback target; derive that from the CLI rather than from here, per
-  [production/shopify-app-config-reference.md](production/shopify-app-config-reference.md).
-
-  **A scope changed, so this release is no longer cosmetic.** `write_products` joined
-  `access_scopes` for enumerated repricing (`set_variant_prices`). Under managed
-  installation the Partner Dashboard configuration decides what a merchant grants, so
-  until this ships no merchant can hold the scope and the tool refuses with "reconnect
-  Shopify" — which would not have helped them, because there was nothing to reconnect
-  *to*. Expect every already-connected merchant to show the Shopify card as
-  needs-attention until they re-authorize; that is the intended degradation, not a fault.
-  Flash sales need only `write_discounts`, which is already granted, so they work
-  without this.
-
-  **Reconcile the connected dev store's scope grant while you are here.** The
-  2026-08-04 validation found `palette-dev` holding 38 OAuth scopes against a declared
-  set that is now 17. Under managed installation the released version is what decides
-  the grant, so this release is the mechanism that trims it — confirm afterwards that the
-  store shows 17 and not the stale 38, which folds into the grant check under Channels
-  and providers below.
 
 - [ ] **Restore the production Postmark forwarding integration after a credential
   canary.** Verify the dashboard's configured `POSTMARK_API_KEY` can send from
@@ -67,7 +40,8 @@ provider. **None of these is a code task.**
 - [ ] **One real merchant workspace, in approval mode.** Toggle on through the
   integration card, activate the theme embed, remove the Shopify Inbox bubble, then run
   the full loop with no ops touching metadata. Never exercised outside the dev store the
-  author controls. Waiting only on the `-28` release above.
+  author controls. `shopkeeper-production-28` shipped 2026-08-28, so the merchant would
+  now get the current widget; nothing blocks this.
 - [ ] **Dev-store browser matrix.** Online Store 2.0 and a vintage theme, desktop and
   mobile, embed on and off, Shopify Inbox bubble present and removed. The automated
   remainder is already covered. Matrix and evidence:
@@ -128,13 +102,20 @@ provider. **None of these is a code task.**
   done. Launch is gated on Meta App Review plus a non-role merchant account completing
   the full DM loop: connect → inbound → approve reply → disconnect/reconnect. Ops in
   [runbook.md](production/runbook.md).
-- [ ] **Confirm what the released Shopify app version actually grants.** One check with
-  three parts, none done since `write_app_proxy` and the `[app_proxy]` block shipped in
-  `-9`: whether the one connected production store shows the new scope as granted or
-  backfilled, whether it raised a re-authorization prompt, and the merchant-facing
-  explanation of that prompt, which was owed *before* the deploy and never written.
-  Connected merchants are few enough to tell directly. Scopes are unchanged through
-  `-27`, so the question is still valid against the current release.
+- [ ] **Confirm what `shopkeeper-production-28` actually grants.** The release shipped
+  2026-08-28; what it changed on merchant stores has not been read back. Four parts, all
+  against the one connected production store and `palette-dev`: whether `write_products`
+  — new in `-28` for enumerated repricing (`set_variant_prices`) — shows as granted or
+  needs re-authorization, whether `write_app_proxy` from `-9` was ever backfilled,
+  whether `palette-dev` still holds the stale 38 OAuth scopes the 2026-08-04 validation
+  found against a declared 17, and the merchant-facing explanation of the
+  re-authorization prompt, which was owed before `-9` and still is not written. Expect
+  the Shopify card to read needs-attention on every already-connected store until the
+  merchant re-authorizes; that is the intended degradation, not a fault. Flash sales need
+  only `write_discounts`, already granted, so they are unaffected. Connected merchants
+  are few enough to tell directly. `-27` is the one-step rollback target; derive it from
+  the CLI rather than from here, per
+  [production/shopify-app-config-reference.md](production/shopify-app-config-reference.md).
 
 ---
 

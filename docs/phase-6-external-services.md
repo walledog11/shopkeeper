@@ -6,8 +6,9 @@ file has no reason to exist — delete it, git history is the record.
 
 Architecture (why marketing is on the apex and the app on `app.`, the
 canonical-host redirect, the naming rule) is in `.claude/CLAUDE.md`.
-The Shopify scope trim now rides on the pending `shopkeeper-production-28` release in
-[to-do-list.md](to-do-list.md); the strict reservation audit closed 2026-08-07.
+`shopkeeper-production-28` shipped 2026-08-28; whether it actually trimmed the scope
+grant is unread, and tracked in [to-do-list.md](to-do-list.md). The strict reservation
+audit closed 2026-08-07.
 Launch gates that touch this file are summarized in
 [to-do-list.md](to-do-list.md) — not duplicated here.
 
