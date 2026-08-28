@@ -37,21 +37,13 @@ export function emitOpsAlert(
 }
 
 export {
-  OPS_ALERT_CATEGORIES,
   buildOpsAlertScope,
-  buildOpsAlertWindowKey,
   incrementOpsAlertWindow,
 } from '@shopkeeper/agent/observability';
 export type {
   EmitOpsAlertResult,
-  IncrementOpsAlertWindowOptions,
   IncrementOpsAlertWindowResult,
-  OpsAlertCaptureContext,
-  OpsAlertCategory,
   OpsAlertCounterClient,
   OpsAlertInput,
   OpsAlertLogger,
-  OpsAlertService,
-  OpsAlertSeverity,
-  OpsAlertTagValue,
 } from '@shopkeeper/agent/observability';

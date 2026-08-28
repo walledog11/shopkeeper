@@ -4,11 +4,13 @@ import { fileURLToPath } from 'node:url';
 const KNIP_BIN = fileURLToPath(new URL('../node_modules/knip/bin/knip.js', import.meta.url));
 const WARNING_BASELINE = {
   // Ratcheted 149 -> 81 after removing dead exports, unused shadcn subcomponents,
-  // and internal-only digest helpers.
-  exports: 81,
+  // and internal-only digest helpers; 81 -> 77 after dropping the ops-alert
+  // pass-throughs both host adapters re-exported and nothing imported.
+  exports: 77,
   // Ratcheted 116 -> 90 after deleting duplicate tool-inputs re-exports and
-  // trimming stale dashboard type surfaces.
-  types: 90,
+  // trimming stale dashboard type surfaces; 90 -> 78 with the same ops-alert
+  // pass-throughs. Consumers import these from @shopkeeper/agent/observability.
+  types: 78,
 };
 
 const result = spawnSync(process.execPath, [KNIP_BIN, '--reporter', 'json'], {
