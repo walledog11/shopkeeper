@@ -57,6 +57,13 @@ const SPECIFIC_CLAIM_ACTIONS: readonly [RegExp, ReadonlySet<string>][] = [
 ];
 const GENERIC_ORDER_ACTIONS = new Set(["fulfill_order", "create_shopify_order", "edit_shopify_order"]);
 
+// The claim patterns are declared without `g` because claimingSentences tests
+// them, and a global regex there would carry lastIndex between sentences. Clone
+// per scan instead, so collecting spans cannot disturb those callers.
+function allMatches(pattern: RegExp, text: string): string[] {
+  return [...text.matchAll(new RegExp(pattern.source, `${pattern.flags}g`))].map((m) => m[0]);
+}
+
 /**
  * The spans of `text` that actually claim an operation: each primary
  * verb-anchored claim, plus any coordinated verb phrase continuing it.
@@ -69,12 +76,15 @@ const GENERIC_ORDER_ACTIONS = new Set(["fulfill_order", "create_shopify_order", 
  * on a phrasing coin-flip. Bounding the scan to the claim spans removes the
  * mismatch instead of extending the list: a noun the claim verb does not govern
  * is not a claim, whatever preposition introduces it.
+ *
+ * Every verb-anchored match is its own span, not just the first. A sentence can
+ * make a second claim without a coordinator — "I've refunded your order, I've
+ * cancelled the shipment" — and taking one match per pattern would leave that
+ * second claim ungrounded-but-unchecked, which is the failure this validator
+ * exists to catch.
  */
 function claimSpans(text: string, patterns: readonly RegExp[]): string[] {
-  const spans = patterns.flatMap((pattern) => {
-    const match = pattern.exec(text);
-    return match ? [match[0]] : [];
-  });
+  const spans = patterns.flatMap((pattern) => allMatches(pattern, text));
   if (spans.length === 0) return [];
   return [...spans, ...[...text.matchAll(CLAIM_CONTINUATION)].map((match) => match[0])];
 }
