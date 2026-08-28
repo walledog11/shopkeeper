@@ -460,15 +460,46 @@ off everything" reach one. `issue_discount` stays retired.
   question), `adjacent-edit-order-vs-cancel` 3/3 (the item-scoped refund tool does not steal a
   pre-fulfillment edit).
 
-### The fixture this milestone contradicted
+### The tool this milestone shipped and forbade
 
-Adding a capability to the shared registry can invalidate a fixture without touching it, and the
-selection is what makes that reachable rather than theoretical. `create_partial_refund` shipped in
-`0780cb34` and no fixture changed. `refund-partial` — core, hard-gated — still asserted
+`create_partial_refund` reached the shared registry in `0780cb34` while
+`SUPPORT_INSTRUCTIONS` still listed "partial or item-only refunds" among the things that must call
+`escalate_to_human`. The compensation decision tree had three branches — exact full refund,
+fixed-value gift card, escalate-everything-else — and the new tool landed in the third one. So the
+model was handed a tool description saying *use me for item-only refunds* and a system prompt
+saying *item-only refunds must escalate*, and split: `refund-partial` came back 2/3 in the
+2026-08-27 baseline run, with the failing repeat's escalation reason quoting the tree back —
+"outside the exact-full-refund and gift-card policy paths".
+
+**A targeted run of that same fixture had passed 3/3 an hour earlier.** Three samples of a
+coin-flip is not evidence, and the 84-fixture run is what exposed it. This is the argument for
+reading the failing repeat's reason rather than re-running until green.
+
+Fixed in `dbe3c089`: the tree gets a third allowed branch whose preconditions are the ones
+`createPartialRefund` actually enforces — one fully paid order, no prior refund, every named line
+item resolvable with enough units left — so the prompt promises what the implementation will
+honour. The escalate branch keeps the case the branch cannot serve: an item-only request whose
+line items do not resolve. Operator mode carried the same prohibition and got the same branch.
+Verified on `dbe3c089`, three repeats: `refund-partial` 3/3 plus the three branches it could
+disturb — `refund-under-cap` (full refund still picks `create_refund`), `refund-no-amount`
+(amount-less still escalates), `adjacent-refund-vs-return` (goods going back still picks
+`create_return`) — 12/12 hard-gated, $0.18.
+
+**Standing consequence.** A new financial tool needs a prompt branch, not just a registry entry.
+The decision tree enumerates what is allowed and escalates the rest, so a tool absent from it is
+unreachable-to-unreliable no matter what its description says. Grep the tree for the category the
+tool serves.
+
+### The fixture that agreed with the prompt
+
+The same contradiction had a second face. `refund-partial` — core, hard-gated — asserted
 `mustEscalate` on the grounds that "partial refunds are merchant-only", and its scenario, one
 cracked candle out of a two-item order, is verbatim the case the new tool's description claims.
 Because the tool sits in `BROAD_ORDER_MUTATION_TOOL_NAMES`, the fixture's own `mutative_request`
-intent put it in front of the model. The fixture was asserting against the product.
+intent put it in front of the model. This plan previously recorded that as "the fixture was
+asserting against the product" — that was half wrong, and the correction is the useful part: the
+fixture agreed with the prompt and disagreed with the tool. The product contradicted itself, and
+the fixture was faithfully encoding one side of it.
 
 It was reconciled in `36896c72` before the gate ran: the plan now expects
 `create_partial_refund` + `send_reply`, and `escalate_to_human` moved to `mustNotCallTools`. At the
@@ -485,6 +516,39 @@ description. One fixture was wrong, not a class of them.
 **Standing consequence.** A tool added to the shared registry is added to every support fixture's
 option set. Grep the fixtures whose scenario the new tool's own description claims, before the gate
 runs — a stale assertion spends the budget proving something reading would have shown for free.
+
+### What the baseline attempt cost and found
+
+Run 33120836618 ran all 84 fixtures three times, spent **$2.71, and committed nothing**. Neither
+cause was a model regression; both were harness bugs that only bite in `baseline`/`drift` mode,
+which is why nothing had caught them.
+
+- **The capture was circular.** `index.test.ts` asserted `passes === repeats` for every
+  non-`advisory` fixture, including during a capture — so a three-repeat baseline, whose purpose is
+  recording flap rates, could only be written in a run where nothing flapped. The comment directly
+  above that line already said flappy fixtures clear the bar; the code had drifted from its own
+  comment. `quick-reply-thanks-ack` is in the committed baseline at 1/3 only because it is
+  `advisory: true`. Fixed in `22d22aa6`: a capture fails on 0/N and records anything above it,
+  while the release and PR gates keep the strict bar.
+- **The gateway got a hardcoded call budget.** `eval-budget-preflight.mjs` set
+  `gatewayMaxCalls = mode === 'release' ? 6 : 24`. The dollar allocation scaled off the caller's
+  ceiling; the call allocation ignored both that and `repeats`, and drift/baseline force
+  `repeats=3`. Five order-ops fixtures need ~30 calls at three repeats, got 24, and died
+  `24 / 24` on a run that had authorised 700. Fixed in `93be611e`, with a regression test at 1, 2
+  and 3 repeats — the previous test covered only `release`, which is how a constant survived in a
+  file whose whole job is arithmetic.
+
+**Two fixtures still flap and are not explained.** `adjacent-cancel-vs-refund` (core) and
+`tier-guarded-store-credit-approval` reproduced at 2/3 in a targeted re-run;
+`tier-watch-refund-draft-only` was one-off noise. They are not recorded as regressions: the
+baseline they would be compared against is from 2026-08-17, four milestones stale, and at three
+samples the gap between 3/3 and 2/3 is weak evidence in either direction. Recording their real
+rate is the point of the recapture — it is the prerequisite for telling variance from regression
+rather than guessing.
+
+**Habit this bought.** Before re-running a failed multi-dollar capture, re-run the failing fixtures
+alone at the same repeat count (~$0.18). That is what proved two of three reproduced, which meant a
+blind retry would have failed identically.
 
 ### Completion gate (pre-user)
 
@@ -516,6 +580,7 @@ produce a capture no matter how many repeats it does. To-do 1 was closed without
 | ~~1~~ | ~~Eval gate for the two new shared-registry tools~~ | — | **Done 2026-08-27** on `36896c72`, merged in `4d69d40c`. 9/9 hard-gated at three repeats, $0.21. Required reconciling `refund-partial` first — see Milestone 7 |
 | 2 | Regenerate `baseline.json` at three repeats | `apps/dashboard/src/lib/agent/__evals__/` | Still the 2026-08-17 capture, and `master` has moved a great deal since — every drift comparison against it is decreasingly meaningful, and `drift` mode is the only thing that reads it. **Run it in CI** (`gh workflow run evals.yml -f mode=baseline`), which commits the regenerated file and covers the gateway suite; the local `test:evals:baseline:overwrite` does neither. Preflight estimate **$3.48 / 459 calls**, not the ~$2.55 this row used to claim: baseline mode forces `judges=on` and the local script's figure excludes the 21 judged fixtures. Its own authorisation, not a by-product of a targeted run |
 | 3 | Gate `master` | `.github/workflows/`, repo settings | `evals.yml` triggers only on `pull_request` and `master` is unprotected, so a direct push is an ungated agent change. Either protect `master` or add a `push: branches: [master]` trigger for the **free** preflight. Free to do; the cost is only in what it prevents |
+| 4 | Explain or accept two flapping fixtures | `apps/dashboard/src/lib/agent/__evals__/fixtures/` | `adjacent-cancel-vs-refund` (core) and `tier-guarded-store-credit-approval` reproduce at 2/3. `refund-partial` flapped for a findable reason — a prompt contradiction — so these deserve the same read of their failing repeat before being written off as variance. Not a blocker: the recapture records their rate either way |
 
 ### Standing constraints (not to-dos)
 
