@@ -2,12 +2,14 @@
 
 **Status:** canonical execution plan
 
-**Last reconciled:** 2026-08-27 (Milestone 7 complete and merged in `4d69d40c`, PR #71)
+**Last reconciled:** 2026-08-27 (Milestone 7 complete and merged in `4d69d40c`, PR #71;
+`master` gated for the free preflight)
 
 **Current milestone:** none building. Every milestone is complete, and the `baseline.json`
 recapture is [deliberately deferred](#why-the-baseline-is-deferred) rather than owed. Two open
-items remain, both process rather than product and neither blocking: branch protection on
-`master`, and reading the failing repeats of two flapping fixtures — which is free. See
+items remain, and both are now code rather than process: the grounding prose matcher, and the
+unanswered question of what the compensation cap governs. Neither is blocking, and both were
+diagnosed for free from runs already paid for. See
 [Retiring this document](#retiring-this-document) for what has to be true before this file can be
 deleted.
 
@@ -85,8 +87,12 @@ Shopkeeper is in active development with **no production users** as of 2026-08-2
   `refund-partial` contradiction below: a core hard-gated fixture sat asserting against the shipped
   product for a day, and no CI run existed that could have said so. This is the same accounting as
   the 2026-08 backlog (31 of 34 agent-path commits ungated); the difference is that this time the
-  drift was found before the paid run rather than by it. The structural fix is branch protection on
-  `master` or a `master`-push trigger for the free preflight — see [Open to-dos](#open-to-dos).
+  drift was found before the paid run rather than by it. **Fixed 2026-08-27:** `evals.yml` now
+  also triggers on `push: branches: [master]`, so a direct push runs the free preflight and an
+  ungated agent change shows up as a red check on `master` within minutes. It reports rather than
+  blocks — `master` stays unprotected deliberately, because requiring a pull request for every
+  non-agent commit would cost more than this repo's push habit does. Every paid job is guarded on
+  `workflow_dispatch`, so the trigger cannot bill anything.
 
 ### Paid eval policy pre-user
 
@@ -610,25 +616,26 @@ write, in every mode.
 
 Nothing here waits on a first customer, a production canary, or a monitoring period.
 
-All the milestone code is written and every milestone gate is discharged. What remains is process,
-not product. Do not re-add a code item without checking it is genuinely unwritten — the last audit
-found four plan claims that had drifted from the code.
+All the milestone code is written and every milestone gate is discharged. What remains is two
+defects the baseline attempt surfaced, both diagnosed without a model call. Do not re-add a code
+item without checking it is genuinely unwritten — the last audit found four plan claims that had
+drifted from the code.
 
 Rows 1 and 2 were previously recorded as the same run. They are not: a targeted run names its
 fixtures and skips baseline comparison outright (`EVAL_FIXTURE` → `selectFixtures`), so it cannot
 produce a capture no matter how many repeats it does. To-do 1 was closed without touching to-do 2.
 
-**Neither remaining row costs money**, which is the point of the ordering. To-do 3 is a repo
-setting and a workflow trigger. To-do 4 is reading two failing plans — the same free move that
-turned `refund-partial`'s flap from "variance" into a shipped prompt contradiction. Do both
-before anything reaches for a paid run.
+**Neither remaining row cost money to find**, which is the point of the ordering: both came out
+of reading the failing repeats of runs already paid for — the same free move that turned
+`refund-partial`'s flap from "variance" into a shipped prompt contradiction. Fix both before
+anything reaches for a paid run.
 
 | # | To-do | Where | Notes |
 |---|---|---|---|
 | ~~1~~ | ~~Eval gate for the two new shared-registry tools~~ | — | **Done 2026-08-27** on `36896c72`, merged in `4d69d40c`. 9/9 hard-gated at three repeats, $0.21. Required reconciling `refund-partial` first — see Milestone 7 |
 | ~~2~~ | ~~Regenerate `baseline.json` at three repeats~~ | — | **Deferred 2026-08-27, deliberately.** See [Why the baseline is deferred](#why-the-baseline-is-deferred). Not blocked — the harness bugs that stopped it are fixed — but nothing currently reads what it would produce |
-| 3 | Gate `master` | `.github/workflows/`, repo settings | `evals.yml` triggers only on `pull_request` and `master` is unprotected, so a direct push is an ungated agent change. Either protect `master` or add a `push: branches: [master]` trigger for the **free** preflight. Free to do; the cost is only in what it prevents |
-| 4 | Fix the grounding prose matcher | `packages/agent/src/plan-grounding.ts` | **Diagnosed free 2026-08-27** — see [Neither flapper was variance](#neither-flapper-was-variance). `withoutNegatedOperationMentions` scrubs three negation phrasings and not "instead of a refund", so a store-credit reply that mentions the refund it is replacing is marked `ungrounded_customer_reply` and the plan is invalidated. Real defect: an invalid plan cannot execute, so the customer gets no reply |
+| ~~3~~ | ~~Gate `master`~~ | `.github/workflows/evals.yml` | **Done 2026-08-27.** Added `push: branches: [master]` with the same paths filter, so a direct push to `master` runs the free `deterministic-preflight`. All seven paid jobs stay guarded on `workflow_dispatch` and are unreachable from a push; `cancel-in-progress` now excludes only `workflow_dispatch`, so a paid run still cannot be cancelled. `master` is left unprotected on purpose — the check reports, it does not block |
+| 4 | Fix the grounding prose matcher | `packages/agent/src/plan-grounding.ts` | **Fixed 2026-08-27, eval owed.** PR #72 `f69ab6e0` drops the three deleted-phrase rules for a claim-span bound; `c8d33d37` closes a regression that rewrite introduced — one match per pattern lost any second claim joined by punctuation rather than `and`, so a reply could promise a cancellation the plan never ran. Deterministically green. The targeted eval the branch promised is owed on `c8d33d37`, not `f69ab6e0`. Diagnosis in [Neither flapper was variance](#neither-flapper-was-variance) |
 | 5 | Decide whether the compensation cap governs `cancel_order` | `packages/agent/src/prompt.ts` | Also diagnosed free. The prompt caps "compensation" and enumerates two forms, neither of which is a cancellation; the model sometimes applies the cap to a cancellation's refund anyway and escalates. Needs a stated answer either way, not a fixture assertion that assumes one |
 
 ### Neither flapper was variance
@@ -657,6 +664,15 @@ enforces plan safety: control flow reading English, and three `.replace()` carve
 themselves the "growth by special case" signal. Adding a fourth phrase is not the fix. The
 grounding question — *does this plan perform what the reply claims?* — is answerable from the
 typed tool calls the reply is supposed to describe, not from re-parsing the prose.
+
+**Fixed in PR #72 — and the first attempt at it shipped a regression of its own.** Bounding the
+scan to claim spans is the right move, but collecting only the first match per pattern dropped any
+second claim a coordinator did not introduce, so `"I've refunded your order, I've cancelled the
+shipment"` went from correctly refused to silently accepted. Diffing old against new behaviour
+directly — free, no model call — caught it before the eval was booked. **Standing consequence:** a
+validator rewrite that narrows what it inspects can loosen a safety check while reading as a pure
+fix, and its own new tests will agree with it. Compare the old and new verdicts on the same inputs,
+which costs nothing.
 
 **`adjacent-cancel-vs-refund` — an unanswered question about what the cap governs.** The fixture
 sets no `maxRefundAmount`, so it inherits the guarded-tier default of $50; the order is $62. On
@@ -747,8 +763,8 @@ links.
 
 Two distinct questions, often conflated:
 
-**1. When does it stop being a plan?** When to-dos 2 and 3 are discharged. At that point no row in
-this file describes work anyone still has to do.
+**1. When does it stop being a plan?** When to-dos 4 and 5 are discharged (to-do 2 is deferred by
+decision, not owed). At that point no row in this file describes work anyone still has to do.
 
 **2. When can the file be deleted?** Only when everything below has a new home. Retirement is a
 migration, not a deletion.

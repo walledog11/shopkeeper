@@ -1,6 +1,16 @@
 name: Evals
 
 on:
+  push:
+    branches: [master]
+    paths:
+      - 'packages/agent/**'
+      - 'apps/dashboard/src/lib/agent/**'
+      - 'apps/dashboard/src/lib/messaging/**'
+      - 'apps/gateway/src/order-ops.eval.test.ts'
+      - 'packages/db/refund-spend.ts'
+      - 'scripts/eval-budget-preflight.mjs'
+      - '.github/workflows/evals.yml'
   pull_request:
     paths:
       - 'packages/agent/**'
@@ -42,11 +52,12 @@ on:
         required: true
         default: '120'
 
-# Pull requests run only the free preflight. Every paid invocation is manual,
-# has an explicit dollar/call ceiling, and is never cancelled or retriggered.
+# Pushes to master and pull requests run only the free preflight. Every paid
+# invocation is manual, has an explicit dollar/call ceiling, and is never
+# cancelled or retriggered.
 concurrency:
   group: evals-${{ github.ref }}-${{ github.event_name }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 permissions:
   contents: read
