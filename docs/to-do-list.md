@@ -9,8 +9,7 @@ docs.
 
 Last reviewed: 2026-08-27.
 
-Work is grouped by **what kind of action it needs**, not by when it was filed. Only the
-one item under Ship needs code.
+Work is grouped by **what kind of action it needs**, not by when it was filed.
 
 ---
 
@@ -48,19 +47,6 @@ and never from `/health`, which is liveness-only and cannot report a commit at a
   `hello@useshopkeeper.com`, then recreate that forwarding integration and make it the
   workspace default. If the canary fails, leave Gmail as the default and reconnect
   Postmark through the dashboard instead of writing a live-looking row that cannot send.
-
----
-
-## Ship
-
-Code work that is started and not finished. **Nothing else in this file needs code.**
-
-- [ ] **Split the remaining high-risk multi-purpose modules along operational seams.**
-  `digest.ts` (732), `planning-notifications.ts` (682), `gmail-sync.ts`, and the
-  `packages/db` barrel. Separate pure selection/rendering/policy code from persistence,
-  provider calls, scheduling, and worker/HTTP wiring. Behavior-preserving slices with
-  characterization tests, not one repository-wide rewrite. `reconciliation-probes/` and
-  `digest-briefing/` are done — use them as the model.
 
 ---
 
