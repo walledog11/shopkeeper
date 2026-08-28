@@ -69,12 +69,12 @@ All seven milestones are complete. Each was closed against the completion gate n
 
 | # | Milestone | Outcome | Evidence |
 |---|---|---|---|
-| 1 | Actionable merchant briefings | Every briefing item that asks for a decision carries grounded context, or asks the merchant to open the thread instead of deciding | [agent-m1-briefing-evidence-2026-08-23.md](docs/agent-m1-briefing-evidence-2026-08-23.md) |
-| 2 | Classification lifecycle and compatibility | One versioned request contract across every inbound channel; classifier versions 2–5 all still render | [agent-m2-evidence-2026-08-25.md](docs/agent-m2-evidence-2026-08-25.md) |
-| 3 | Immutable outcome attribution | One row per plan attempt keyed on `source_message_id`; resolution measurable without replaying thread history | [agent-m3-evidence-2026-08-25.md](docs/agent-m3-evidence-2026-08-25.md) |
-| 4 | Bounded replanning after definite failure | One child plan after a definite failure; unknown outcomes escalate and never replan | [agent-m4-evidence-2026-08-25.md](docs/agent-m4-evidence-2026-08-25.md) |
-| 5 | Merchant preference memory | Explicit merchant judgment applied as guidance only, never overriding caps or policy | [agent-m5-evidence-2026-08-25.md](docs/agent-m5-evidence-2026-08-25.md) |
-| 6 | Attachment vision | Damage photos reach the model on email, TikTok and Instagram; image text is untrusted | [agent-m6-evidence-2026-08-26.md](docs/agent-m6-evidence-2026-08-26.md) |
+| 1 | Actionable merchant briefings | Every briefing item that asks for a decision carries grounded context, or asks the merchant to open the thread instead of deciding | `git show dab6aa1b:docs/agent-m1-briefing-evidence-2026-08-23.md` |
+| 2 | Classification lifecycle and compatibility | One versioned request contract across every inbound channel; classifier versions 2–5 all still render | `git show dab6aa1b:docs/agent-m2-evidence-2026-08-25.md` |
+| 3 | Immutable outcome attribution | One row per plan attempt keyed on `source_message_id`; resolution measurable without replaying thread history | `git show dab6aa1b:docs/agent-m3-evidence-2026-08-25.md` |
+| 4 | Bounded replanning after definite failure | One child plan after a definite failure; unknown outcomes escalate and never replan | `git show dab6aa1b:docs/agent-m4-evidence-2026-08-25.md` |
+| 5 | Merchant preference memory | Explicit merchant judgment applied as guidance only, never overriding caps or policy | `git show dab6aa1b:docs/agent-m5-evidence-2026-08-25.md` |
+| 6 | Attachment vision | Damage photos reach the model on email, TikTok and Instagram; image text is untrusted | `git show dab6aa1b:docs/agent-m6-evidence-2026-08-26.md` |
 | 7 | Shop-management capabilities | Operator-only promotions and repricing with bounded, previewable, reversible blast radius | This file, §5–6; PR #71, merge `4d69d40c` |
 
 Two corrections are worth carrying forward because they were found after the milestone was first
@@ -270,10 +270,15 @@ while looking like a pure fix. Compare old and new verdicts on the same inputs; 
 - Superseded execution plan, in full: `git show 5303309d:docs/agent-remediation-plan.md`
 - Full pre-consolidation audit: `git show 32dcc391:AGENT_AUDIT.md`
 - Earlier model-call audit: `git show 2cc9749c:AGENT_AUDIT.md`
-- Measurement report: [docs/agent-phase-a-measurement-2026-08-22.md](docs/agent-phase-a-measurement-2026-08-22.md)
-- Eval operating model: [docs/agent-eval-gates.md](docs/agent-eval-gates.md)
-- Milestone evidence reports: `docs/agent-m1-briefing-evidence-2026-08-23.md` through
-  `docs/agent-m6-evidence-2026-08-26.md`
+- Measurement report: `git show dab6aa1b:docs/agent-phase-a-measurement-2026-08-22.md`
+- Milestone evidence reports, m1 through m6: `git show dab6aa1b:docs/` + the filenames in §2
+- Eval operating model, still live: [docs/agent-eval-gates.md](docs/agent-eval-gates.md)
+
+The measurement report and the six milestone evidence reports were deleted from `docs/` on
+2026-08-27 once the programme closed. They were point-in-time evidence, and three of them had
+already drifted out of agreement with §3 — each carried a "still open" or "deferred" item for a
+capability that §3 removed. Retrieve one by SHA when you need the detail behind a milestone row;
+do not restore one to `docs/`, which holds open work.
 
 These sources are evidence, not current status. If they conflict with `CLAUDE.md` or the working
 tree, re-derive the claim from the code and correct this file.

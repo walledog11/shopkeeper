@@ -213,6 +213,11 @@ Gated-off integrations cost nothing to keep dark.
   verifying an email has no server-side identity bridge. Closing it needs cart-attribute
   plumbing in the theme extension — a merchant-facing extension change and a new app
   version. Decide when the attributed share looks low enough to matter.
+- [ ] **A two-message email burst still costs two classifier calls** — one inline on the
+  first email, one on the settled burst after the follow-up. The characterization suite
+  pins this as the remaining lifecycle asymmetry, so it is correct, just not free.
+  Closing it means classifying once per request episode; decide when classifier spend
+  is worth a restructure of `apps/gateway/src/message-handlers/classification.ts`.
 - [ ] **`quick-reply-thanks-ack` passes 1/3.** The only fixture below full, and advisory,
   so it does not gate. Runs classify `needs_review` after repeated `get_order_by_name`
   errors and escalate.
@@ -225,6 +230,7 @@ Gated-off integrations cost nothing to keep dark.
 | Redis TLS migration | Gateway `REDIS_URL` → `rediss://` on both services | [compatibility-retirement-backlog.md](compatibility-retirement-backlog.md) |
 | Paid beta | Better Stack Level 1 log drains + escalation (free tier done 2026-07-31) | [runbook.md](production/runbook.md), [alerting-evidence.md](production/alerting-evidence.md) |
 | Merchants report a duplicate "over your plan" notice | Move the once-per-period marker off `Organization.settings`. `buildSettingsUpdate` rebuilds that blob from `normalizeStoredOrgSettings`, a whitelist, so saving any org setting drops the marker. Every available fix costs more than the bug today. | — |
+| First customer launch | The canaries the remediation milestones deferred while there was no real traffic to run them against: outcome rows on a live request path (M3), the auto-plan failure-replan path and its prompt tuning (M4), observed preference proposals under `MERCHANT_PREFERENCE_OBSERVED_PROPOSALS=true` and operator-channel confirm/dismiss (M5), and the classifier version-lifecycle ceremony — production inventory by version, retirement procedure, version-upgrade test (M2). | [AGENT_AUDIT.md](../AGENT_AUDIT.md) §2 |
 
 **Decisions on record** (not tasks): operate "Shopkeeper" unregistered (2026-08-02),
 revisiting the trademark at ~50 paying merchants or before marketing spend. Sync
