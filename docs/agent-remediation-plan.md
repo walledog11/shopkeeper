@@ -6,10 +6,9 @@
 `master` gated for the free preflight)
 
 **Current milestone:** none building. Every milestone is complete, and the `baseline.json`
-recapture is [deliberately deferred](#why-the-baseline-is-deferred) rather than owed. Two open
-items remain, and both are now code rather than process: the grounding prose matcher, and the
-unanswered question of what the compensation cap governs. Neither is blocking, and both were
-diagnosed for free from runs already paid for. See
+recapture is [deliberately deferred](#why-the-baseline-is-deferred) rather than owed. One open
+item remains and it is not blocking: the unanswered question of what the compensation cap governs,
+diagnosed for free from a run already paid for. See
 [Retiring this document](#retiring-this-document) for what has to be true before this file can be
 deleted.
 
@@ -107,7 +106,9 @@ Shopkeeper is in active development with **no production users** as of 2026-08-2
 **Do not treat local eval results as certifying `master`** when they ran on an uncommitted or superseded tree. PR #69 merged a different implementation than an in-flight local refactor during the 2026-08-25 contract-unification session — the local $0.67 run did not certify what shipped.
 
 **Canary one fixture before dispatching anything over a dollar.** A single-fixture
-`targeted` run costs about **$0.02** and takes under a minute. A full capture costs about
+`targeted` run costs about **$0.05** in CI (measured $0.0534 on run 33133359265) — the per-run
+rate is high because one run amortises almost no prompt cache, and the wall-clock cost is the
+job's own `npm ci` and bootstrap rather than the model call. A full capture costs about
 **$2.80** and takes forty. Spending the two cents first converts a class of expensive silent
 failures — an exhausted account, a revoked key, a provider outage, an unmigrated test database —
 into a cheap loud one. On 2026-08-27 the second baseline attempt spent **$1.95** to discover the
@@ -130,8 +131,8 @@ amortises less prompt cache.
 
 | Run | Fixture-runs | Cost |
 |---|---:|---:|
-| One fixture, 1 repeat (canary) | 1 | ~$0.02 |
-| Targeted, 3 fixtures × 3 repeats | 9 | ~$0.20 |
+| One fixture, 1 repeat (canary) | 1 | ~$0.05 |
+| Targeted, 3 fixtures × 3 repeats | 9 | $0.11–0.21 |
 | `release` gate, 48 fixtures × 1 | 48 | ~$0.51 |
 | Full `baseline`, 84 × 3, judges on | 252 | ~$2.80 |
 
@@ -616,26 +617,26 @@ write, in every mode.
 
 Nothing here waits on a first customer, a production canary, or a monitoring period.
 
-All the milestone code is written and every milestone gate is discharged. What remains is two
-defects the baseline attempt surfaced, both diagnosed without a model call. Do not re-add a code
-item without checking it is genuinely unwritten — the last audit found four plan claims that had
+All the milestone code is written and every milestone gate is discharged. What remains is one
+question the baseline attempt surfaced, diagnosed without a model call. Do not re-add a code item
+without checking it is genuinely unwritten — the last audit found four plan claims that had
 drifted from the code.
 
 Rows 1 and 2 were previously recorded as the same run. They are not: a targeted run names its
 fixtures and skips baseline comparison outright (`EVAL_FIXTURE` → `selectFixtures`), so it cannot
 produce a capture no matter how many repeats it does. To-do 1 was closed without touching to-do 2.
 
-**Neither remaining row cost money to find**, which is the point of the ordering: both came out
-of reading the failing repeats of runs already paid for — the same free move that turned
-`refund-partial`'s flap from "variance" into a shipped prompt contradiction. Fix both before
-anything reaches for a paid run.
+**The remaining row cost nothing to find**, which is the point of the ordering: it came out of
+reading the failing repeats of a run already paid for — the same free move that turned
+`refund-partial`'s flap from "variance" into a shipped prompt contradiction. To-do 4 closed the
+same way, and its eventual paid run cost $0.17 because the diagnosis was already done.
 
 | # | To-do | Where | Notes |
 |---|---|---|---|
 | ~~1~~ | ~~Eval gate for the two new shared-registry tools~~ | — | **Done 2026-08-27** on `36896c72`, merged in `4d69d40c`. 9/9 hard-gated at three repeats, $0.21. Required reconciling `refund-partial` first — see Milestone 7 |
 | ~~2~~ | ~~Regenerate `baseline.json` at three repeats~~ | — | **Deferred 2026-08-27, deliberately.** See [Why the baseline is deferred](#why-the-baseline-is-deferred). Not blocked — the harness bugs that stopped it are fixed — but nothing currently reads what it would produce |
 | ~~3~~ | ~~Gate `master`~~ | `.github/workflows/evals.yml` | **Done 2026-08-27.** Added `push: branches: [master]` with the same paths filter, so a direct push to `master` runs the free `deterministic-preflight`. All seven paid jobs stay guarded on `workflow_dispatch` and are unreachable from a push; `cancel-in-progress` now excludes only `workflow_dispatch`, so a paid run still cannot be cancelled. `master` is left unprotected on purpose — the check reports, it does not block |
-| 4 | Fix the grounding prose matcher | `packages/agent/src/plan-grounding.ts` | **Fixed 2026-08-27, eval owed.** PR #72 `f69ab6e0` drops the three deleted-phrase rules for a claim-span bound; `c8d33d37` closes a regression that rewrite introduced — one match per pattern lost any second claim joined by punctuation rather than `and`, so a reply could promise a cancellation the plan never ran. Deterministically green. The targeted eval the branch promised is owed on `c8d33d37`, not `f69ab6e0`. Diagnosis in [Neither flapper was variance](#neither-flapper-was-variance) |
+| ~~4~~ | ~~Fix the grounding prose matcher~~ | `packages/agent/src/plan-grounding.ts` | **Done 2026-08-27** on `c8d33d37` (PR #72). `f69ab6e0` drops the three deleted-phrase rules for a claim-span bound; `c8d33d37` closes a regression that rewrite introduced — one match per pattern lost any second claim joined by punctuation rather than `and`, so a reply could promise a cancellation the plan never ran. **Paid, green:** targeted on `c8d33d37`, 3 fixtures × 3 repeats, 9/9 hard-gated, $0.1133 of $0.60 and 22 of 60 calls (run 33133538357), after a $0.0534 one-fixture canary (33133359265). `tier-guarded-store-credit-approval` is 3/3, up from the 2/3 it flapped at in 33120836618 |
 | 5 | Decide whether the compensation cap governs `cancel_order` | `packages/agent/src/prompt.ts` | Also diagnosed free. The prompt caps "compensation" and enumerates two forms, neither of which is a cancellation; the model sometimes applies the cap to a cancellation's refund anyway and escalates. Needs a stated answer either way, not a fixture assertion that assumes one |
 
 ### Neither flapper was variance
@@ -665,7 +666,8 @@ themselves the "growth by special case" signal. Adding a fourth phrase is not th
 grounding question — *does this plan perform what the reply claims?* — is answerable from the
 typed tool calls the reply is supposed to describe, not from re-parsing the prose.
 
-**Fixed in PR #72 — and the first attempt at it shipped a regression of its own.** Bounding the
+**Fixed in PR #72, paid gate green — and the first attempt at it shipped a regression of its
+own.** Bounding the
 scan to claim spans is the right move, but collecting only the first match per pattern dropped any
 second claim a coordinator did not introduce, so `"I've refunded your order, I've cancelled the
 shipment"` went from correctly refused to silently accepted. Diffing old against new behaviour
@@ -763,7 +765,7 @@ links.
 
 Two distinct questions, often conflated:
 
-**1. When does it stop being a plan?** When to-dos 4 and 5 are discharged (to-do 2 is deferred by
+**1. When does it stop being a plan?** When to-do 5 is discharged (to-do 2 is deferred by
 decision, not owed). At that point no row in this file describes work anyone still has to do.
 
 **2. When can the file be deleted?** Only when everything below has a new home. Retirement is a
