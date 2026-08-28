@@ -61,10 +61,12 @@ client secret, access tokens, and the app secret. `SHOPIFY_CLIENT_ID` and
 
 **Verbatim export captured 2026-08-07** via `shopify app config link
 --client-id … --path <scratch>` against app `shopkeeper-production`, org
-`40511769`. It is checked in beside this file as
-[shopify-app-config-export-2026-08-07.toml](shopify-app-config-export-2026-08-07.toml)
-— named so it does **not** match the `shopify.app*.toml` pattern the CLI
-discovers, so no stray `shopify app deploy` can ever target it.
+`40511769`. It was checked in beside this file and **deleted 2026-08-27**, once
+the live `shopify.app.toml` in the repo root had diverged from it far enough
+that keeping a copy was a hazard rather than a record. Read the snapshot at
+`git show dab6aa1b:docs/production/shopify-app-config-export-2026-08-07.toml`;
+read the current config at `shopify.app.toml`, whose history is the durable
+record.
 
 "Expected configuration" below is the code-derived prediction written *before*
 the export, kept because the divergences are the interesting part. Where the two
@@ -250,24 +252,20 @@ keeping it would be actively harmful — it invented `[[webhooks.subscriptions]]
 blocks the production app does not have, which would have double-delivered every
 order event alongside the per-shop registrations.
 
-**The M0a file is the export, verbatim.** That is what migrating at parity means:
-[shopify-app-config-export-2026-08-07.toml](shopify-app-config-export-2026-08-07.toml)
-is already a valid, complete, CLI-authoritative config for this app, because the
-CLI generated it from the live app. Nothing needs authoring.
+**M0a is done, and every rule this section used to give is now inverted.** The
+migration copied the export to the repo root as `shopify.app.toml`, released as
+`shopkeeper-production-9` (`de2ee92f`). Since then the live file has moved on:
+it declares two `[[webhooks.subscriptions]]` blocks, carries `compliance_topics`
+against handlers that now exist (`routes/shopify-compliance.ts`), and holds both
+`write_app_proxy` and `write_products`.
 
-Rules for handling it:
-
-- **Do not add `[[webhooks.subscriptions]]`.** The five order/uninstall topics
-  are registered per-shop at OAuth callback. Declaring them at app level too
-  would double-deliver.
-- **Do not add `[app_proxy]` or `write_app_proxy`.** That is M0b.
-- **Do not add `compliance_topics`.** Finding 1 — no handlers exist yet.
-- **Do not "fix" `embedded = true` or drop the second redirect URL.** Both look
-  wrong and both are what production has. See "Export divergences."
-
-Which reduces M0a to: copy the export to the repo root as `shopify.app.toml`,
-rehearse it on a dev app, verify the round-trip, then link production. The file
-content is a solved problem; the remaining risk is entirely in the deploy path.
+The four "do not add" rules that stood here were correct for a parity migration
+in August 2026 and would now each *undo* something shipped. They are deleted
+rather than updated, because the question they answered — what belongs in the
+file we are about to create — is closed. **`shopify.app.toml` is the
+authoritative config; read it, not a description of it.** The one durable point
+worth keeping: `embedded = true` and the second redirect URL look wrong and are
+what production has, so do not "fix" either. See "Export divergences."
 
 ## Rehearsal evidence — 2026-08-07
 
@@ -411,8 +409,11 @@ Console and CLI steps that cannot be done from the repo.
 - [x] **Settle finding 1** — resolved by the export. The app declares no
   compliance topics at all, and none are registered per-shop either. Real
   pre-existing gap; blocking only for App Store distribution, not for M0a.
-- [ ] **Write the three compliance webhook handlers** and declare the topics —
-  separately from M0a, which migrates at parity. Blocking for distribution.
+- [x] **Write the three compliance webhook handlers** and declare the topics —
+  done. `routes/shopify-compliance.ts` handles all three and `shopify.app.toml`
+  declares them under `compliance_topics`. What remains is exercising Shopify's
+  compliance checks against production, tracked in
+  [to-do-list.md](../to-do-list.md), not more code.
 - [x] **Decide finding 2** — split applied 2026-08-07. M0a migrates at the
   current scope set; M0b adds the proxy and `write_app_proxy` separately.
 - [x] **Rehearse on a dev app** — done 2026-08-07 against `shopkeeper-dev`,

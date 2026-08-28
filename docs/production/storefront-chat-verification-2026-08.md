@@ -269,6 +269,10 @@ the CLI generated it from the live app, so nothing needed authoring and the
 earlier hand-written draft was deleted as a hazard. Scopes matched the
 code-derived prediction exactly.
 
+*(The export was deleted 2026-08-27 once the live `shopify.app.toml` had
+diverged from it; the findings below are what it settled **in August 2026** and
+several no longer describe the app. Read `shopify.app.toml` for current state.)*
+
 It also corrected two assumptions:
 
 - **The app declares none of the three mandatory compliance webhooks**
