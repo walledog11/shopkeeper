@@ -94,9 +94,62 @@ describe("plan grounding", () => {
       "I've issued a $15 store credit gift card — no refund needed.",
       "I've issued a $15 store credit gift card without a refund.",
       "I've issued a $15 store credit gift card; a refund was not required.",
+      // The phrasing that was not on the deleted-phrase list, and so invalidated a
+      // correct plan on run 33120836618: a store-credit reply naming the refund it
+      // replaces. The claim verb governs "store credit"; "a refund" is the object of
+      // "instead of", which claims nothing.
+      "I've issued a $15 store credit (gift card) to your account for order #10101 instead of a refund, as requested.",
+      "I've issued a $15 store credit gift card rather than a refund.",
+      "I've issued a $15 store credit gift card in place of a refund.",
     ]) {
       expect(detectUngroundedReplyText([
         { id: "credit", name: "create_gift_card", input: {} },
+        { id: "reply", name: "send_reply", input: { text } },
+      ])).toEqual([]);
+    }
+  });
+
+  it("still catches a real second claim that a contrastive phrase sits beside", () => {
+    // "instead of a refund" is inert, but "and opened a return" is a coordinated
+    // verb phrase making a second claim — the distinction the span bound exists for.
+    expect(detectUngroundedReplyText([
+      { id: "credit", name: "create_gift_card", input: {} },
+      {
+        id: "reply",
+        name: "send_reply",
+        input: {
+          text: "I've issued a $15 store credit instead of a refund and opened a return.",
+        },
+      },
+    ])).toEqual([expect.objectContaining({ toolCallId: "reply" })]);
+  });
+
+  // Second claims a coordinator never introduces, so CLAIM_CONTINUATION cannot
+  // see them. Each one is grounded only if it is its own claim span.
+  const PUNCTUATION_JOINED_CLAIMS = [
+    "I've issued your refund, I've cancelled the order.",
+    "I've issued your refund; I've cancelled the order.",
+    "I've issued your refund - I've cancelled the order.",
+  ];
+
+  it("catches a second claim joined by punctuation rather than a coordinator", () => {
+    // A coordinated verb phrase is not the only way to make a second claim.
+    // Joined by a comma, semicolon or dash, the continuation pattern never sees
+    // it, so each verb-anchored claim has to be its own span — otherwise the
+    // reply promises a cancellation the plan never performs.
+    for (const text of PUNCTUATION_JOINED_CLAIMS) {
+      expect(detectUngroundedReplyText([
+        { id: "refund", name: "create_refund", input: {} },
+        { id: "reply", name: "send_reply", input: { text } },
+      ])).toEqual([expect.objectContaining({ toolCallId: "reply" })]);
+    }
+  });
+
+  it("clears the same sentence once every claim has its tool", () => {
+    for (const text of PUNCTUATION_JOINED_CLAIMS) {
+      expect(detectUngroundedReplyText([
+        { id: "refund", name: "create_refund", input: {} },
+        { id: "cancel", name: "cancel_order", input: {} },
         { id: "reply", name: "send_reply", input: { text } },
       ])).toEqual([]);
     }
