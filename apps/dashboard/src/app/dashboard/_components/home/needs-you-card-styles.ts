@@ -75,8 +75,11 @@ export const CONCIERGE_BUBBLE = {
 } as const
 
 export function needsYouConversationSurfaceClassName() {
-  return "bg-card"
+  return "bg-white"
 }
+
+export const needsYouCardFooterClassName =
+  "border-t border-border/50 bg-white rounded-b-3xl"
 
 function toBoardCardVariant(variant: NeedsYouCardVariant): BoardCardVariant {
   if (variant === "briefing") return "briefing"
@@ -88,6 +91,7 @@ export function needsYouCardShellClassName(variant: NeedsYouCardVariant = "front
   return cn(
     "h-full w-full box-border flex flex-col",
     boardCardShellClassName(toBoardCardVariant(variant)),
+    "bg-white",
   )
 }
 

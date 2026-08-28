@@ -89,7 +89,7 @@ export {
   probeUnknownShopifyMutation,
   RECONCILABLE_SHOPIFY_MUTATION_TOOLS,
   type ShopifyReconciliationProbeResult,
-} from "./reconciliation-probes.js";
+} from "./reconciliation-probes/index.js";
 export {
   SHOPIFY_MUTATION_DOCUMENTS,
   skippedMutationDocument,

@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -75,10 +75,18 @@ describe("SHOPIFY_QUERY_DOCUMENTS", () => {
     // FindShopkeeperCreatedOrder is deliberately two different documents.
     const dir = dirname(fileURLToPath(import.meta.url));
     const sourceNames: string[] = [];
-    for (const file of readdirSync(dir)) {
-      if (!file.endsWith(".ts") || file.includes(".test.") || file === "query-documents.ts") continue;
-      sourceNames.push(...operationNames(readFileSync(join(dir, file), "utf8")));
-    }
+    const walk = (directory: string) => {
+      for (const entry of readdirSync(directory)) {
+        const fullPath = join(directory, entry);
+        if (statSync(fullPath).isDirectory()) {
+          walk(fullPath);
+          continue;
+        }
+        if (!entry.endsWith(".ts") || entry.includes(".test.") || entry === "query-documents.ts") continue;
+        sourceNames.push(...operationNames(readFileSync(fullPath, "utf8")));
+      }
+    };
+    walk(dir);
 
     const registered = Object.values(SHOPIFY_QUERY_DOCUMENTS).flatMap((entry) =>
       operationNames(`\`${entry.document}`),

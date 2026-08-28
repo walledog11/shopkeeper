@@ -8,6 +8,13 @@ import {
   writeWorkflowBannerDismissedCookie,
   writeWorkflowBannerExpandedCookie,
 } from "@/lib/dashboard-dismissals"
+import { boardCardShadowClassName } from "@/lib/ui/board-card-styles"
+import { cn } from "@/lib/ui/cn"
+
+const bannerShellClassName = cn(
+  "shrink-0 overflow-hidden rounded-2xl border border-border bg-white",
+  boardCardShadowClassName("briefing"),
+)
 
 const bannerTransition = {
   type: "spring" as const,
@@ -84,9 +91,6 @@ export default function WorkflowSetupBanner({
 
   const isVisible = pending === false && dismissed === false && trackedDoneCount < totalCount
 
-  const remaining = Math.max(totalCount - trackedDoneCount, 0)
-  const summary = `${remaining} left to finish setup`
-
   function dismiss() {
     writeWorkflowBannerDismissedCookie()
     setDismissed(true)
@@ -110,37 +114,38 @@ export default function WorkflowSetupBanner({
           animate={{ opacity: 1, height: "auto", y: 0 }}
           exit={{ opacity: 0, height: 0, y: -6 }}
           transition={bannerTransition}
-          className="rounded-md border border-foreground/[0.07] bg-foreground/[0.02] shrink-0 overflow-hidden"
+          className={bannerShellClassName}
         >
-          <div className="flex items-center gap-3 px-4 py-2.5">
+          <div className="flex items-center gap-2 px-4 py-3 sm:px-5">
             <button
               type="button"
               onClick={toggle}
-              className="flex items-center gap-3 min-w-0 flex-1 text-left"
+              className="flex min-w-0 flex-1 items-center gap-3 text-left"
               aria-expanded={expanded}
             >
-              <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                <span className="text-xs font-semibold text-strong shrink-0">
-                  Workflow setup · {trackedDoneCount} of {totalCount}
-                </span>
-                <span className="text-faint">—</span>
-                <span className="text-xs text-muted-foreground truncate">{summary}</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-strong">
+                  Workflow setup
+                </p>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  {trackedDoneCount} of {totalCount} complete
+                </p>
               </div>
               <m.div
                 animate={{ rotate: expanded ? 180 : 0 }}
                 transition={{ duration: 0.18, ease: "easeInOut" }}
                 className="shrink-0"
               >
-                <ChevronDown className="size-3.5 text-faint" />
+                <ChevronDown className="size-4 text-faint" />
               </m.div>
             </button>
             <button
               type="button"
               onClick={dismiss}
-              className="size-6 rounded flex items-center justify-center text-faint hover:text-strong hover:bg-foreground/[0.04] transition-colors shrink-0"
+              className="flex size-8 shrink-0 items-center justify-center rounded-xl text-faint transition-colors hover:bg-foreground/[0.04] hover:text-strong"
               aria-label="Dismiss"
             >
-              <X className="size-3.5" />
+              <X className="size-4" />
             </button>
           </div>
 
@@ -154,7 +159,7 @@ export default function WorkflowSetupBanner({
                 exit="collapsed"
                 className="overflow-hidden"
               >
-                <ul className="border-t border-foreground/[0.06] px-2 py-1.5">
+                <ul className="border-t border-border/60 px-2 py-2 sm:px-3">
                   {steps.map((step) => {
                     const isDone = step.status === "done"
                     const stepKey = getStepKey(step)
@@ -163,12 +168,12 @@ export default function WorkflowSetupBanner({
                         <m.li
                           key={stepKey}
                           variants={stepItemVariants}
-                          className="flex items-center gap-3 px-2.5 py-2 rounded-md"
+                          className="flex items-center gap-3 rounded-xl px-3 py-2.5"
                         >
-                          <span className="size-4 rounded-full bg-green-600/15 border border-green-600/40 flex items-center justify-center shrink-0">
-                            <Check className="size-2.5 text-green-600" />
+                          <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
+                            <Check className="size-3" />
                           </span>
-                          <span className="text-xs text-faint line-through truncate flex-1">
+                          <span className="flex-1 truncate text-sm text-muted-foreground line-through">
                             {step.label}
                           </span>
                         </m.li>
@@ -178,14 +183,14 @@ export default function WorkflowSetupBanner({
                       <m.li key={stepKey} variants={stepItemVariants}>
                         <Link
                           href={step.href}
-                          className="group flex items-center gap-3 px-2.5 py-2 rounded-md hover:bg-foreground/[0.03] transition-colors"
+                          className="group flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-foreground/[0.04]"
                         >
-                          <span className="size-4 rounded-full border border-foreground/25 shrink-0" />
-                          <span className="text-xs text-strong group-hover:text-foreground truncate flex-1">
+                          <span className="size-5 shrink-0 rounded-full border-2 border-foreground/15" />
+                          <span className="flex-1 truncate text-sm text-strong group-hover:text-foreground">
                             {step.label}
                             {step.optional ? <span className="text-faint"> · optional</span> : null}
                           </span>
-                          <ChevronRight className="size-3.5 text-faint group-hover:text-muted-foreground shrink-0 transition-colors" />
+                          <ChevronRight className="size-4 shrink-0 text-faint transition-colors group-hover:text-muted-foreground" />
                         </Link>
                       </m.li>
                     )

@@ -29,7 +29,7 @@ import {
   rowRequestFacts,
   finalizeDigestSend,
   resolveHandledWindowStart,
-} from './digest-briefing.js';
+} from './digest-briefing/index.js';
 import { byDeadlineFirst } from './briefing-fields.js';
 import { loadDigestShopifyGarnish } from './digest-shopify-garnish.js';
 import { loadAttributionLine } from '../message-handlers/conversation-attribution.js';

@@ -13,7 +13,7 @@ import {
   UNTRUSTED_OPEN_TAG,
 } from '@shopkeeper/agent/message-history';
 import { isOrderRiskMonitorEnabled } from '../config/runtime-config.js';
-import { truncateBriefingText } from '../maintenance/digest-briefing.js';
+import { truncateBriefingText } from '../maintenance/digest-briefing/index.js';
 import logger from '../logger.js';
 import { listOperatorBindings, notifyOperator } from '../operator-notify.js';
 import type { OrderReviewJobData } from '../types.js';

@@ -22,7 +22,7 @@ import {
   loadHandledRollup,
   loadWaitingOnYouItems,
   resolveHandledWindowStart,
-} from './digest-briefing.js';
+} from './digest-briefing/index.js';
 import { appendPendingPlan, updateContext } from '../operator-context.js';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;

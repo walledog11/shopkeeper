@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fulfillOrder } from "./fulfillment.js";
-import { probeUnknownShopifyMutation } from "./reconciliation-probes.js";
+import { probeUnknownShopifyMutation } from "./reconciliation-probes/index.js";
 
 const ctx = {
   shop: "test-store.myshopify.com",

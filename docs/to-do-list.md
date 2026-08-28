@@ -10,7 +10,7 @@ docs.
 Last reviewed: 2026-08-27.
 
 Work is grouped by **what kind of action it needs**, not by when it was filed. Only the
-two items under Ship need code.
+one item under Ship needs code.
 
 ---
 
@@ -55,37 +55,12 @@ and never from `/health`, which is liveness-only and cannot report a commit at a
 
 Code work that is started and not finished. **Nothing else in this file needs code.**
 
-- [ ] **Ratchet the recovery and reconciliation paths.** The last open leg of the
-  coverage work — routes, plan execution and the real-Clerk browser contract are closed,
-  and `scripts/check-critical-coverage.mjs` is at fifteen groups. These four have tests
-  but no floor, so their coverage can erode without anything failing:
-
-  - `apps/gateway/src/maintenance/plan-recovery.ts` — re-drafts plans for threads that
-    missed one.
-  - `apps/gateway/src/maintenance/outbound-send-sweep.ts` — decides whether a stale
-    outbound row is retried or marked `unknown`. Same class of decision as
-    `operator-event-sweep.ts`, which *is* ratcheted, under "gateway durable operator
-    events" — that group is the model to copy.
-  - `packages/agent/src/shopify/reconciliation-probes.ts` — determines whether a
-    mutation actually landed after an ambiguous provider outcome.
-  - `apps/gateway/src/maintenance/integration-disconnect-sweep.ts` and
-    `inactive-thread-sweep.ts`, if measurement says they are close to the bar.
-
-  Measure on a real coverage run **first**, then admit each threshold — that order is
-  what makes it a ratchet rather than a wish. Write the gaps the measurement exposes
-  guard-first, the way plan execution was done: stubs that throw if execution is
-  reached, so each case asserts the path was refused *before* a side effect could leave
-  the process, rather than merely that an error came back.
-
-- [ ] **Split the highest-risk multi-purpose modules along operational seams.**
-  `digest-briefing.ts` (979 lines), `digest.ts` (732), `reconciliation-probes.ts` (692),
-  `planning-notifications.ts` (682), `gmail-sync.ts`, and the `packages/db` barrel.
-  Separate pure selection/rendering/policy code from persistence, provider calls,
-  scheduling, and worker/HTTP wiring; use a registry for reconciliation probes.
-  Behavior-preserving slices with characterization tests, not one repository-wide
-  rewrite. Do this after the ratchet above — it overlaps on `reconciliation-probes.ts`,
-  and characterization tests are cheaper to write against a path that already has a
-  measured floor.
+- [ ] **Split the remaining high-risk multi-purpose modules along operational seams.**
+  `digest.ts` (732), `planning-notifications.ts` (682), `gmail-sync.ts`, and the
+  `packages/db` barrel. Separate pure selection/rendering/policy code from persistence,
+  provider calls, scheduling, and worker/HTTP wiring. Behavior-preserving slices with
+  characterization tests, not one repository-wide rewrite. `reconciliation-probes/` and
+  `digest-briefing/` are done — use them as the model.
 
 ---
 

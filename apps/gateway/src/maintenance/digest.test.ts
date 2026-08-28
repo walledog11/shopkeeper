@@ -5,7 +5,7 @@ import type { SupportStatsSummary } from '@shopkeeper/agent/support-stats';
 import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { bucketDigestThreads, buildOrgDigest, digestWindowKey, formatDigestMessage, formatWeeklySummaryLine } from './digest.js';
-import type { BriefingItem } from './digest-briefing.js';
+import type { BriefingItem } from './digest-briefing/index.js';
 
 const NOW = new Date('2026-04-29T12:00:00Z');
 const HOUR = 3_600_000;

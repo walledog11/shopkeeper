@@ -8,6 +8,7 @@ import { AccountSettingsSkeleton } from "./AccountSettingsSkeleton"
 import { dashboardChromeColumnClassName, dashboardChromeMaxWidthClass, dashboardPageShellClassName } from "@/app/dashboard/_components/sidebar/sidebar-helpers"
 import { SearchFilterBarSkeleton } from "@/components/ui/search-filter-bar"
 import { SOLID_SETTINGS_TILE } from "@/lib/ui/glass-card-styles"
+import { boardCardShadowClassName } from "@/lib/ui/board-card-styles"
 import { CARD_SHELL } from "@/components/integrations/integration-card-styles"
 import { cn } from "@/lib/ui/cn"
 
@@ -29,7 +30,7 @@ export function HomePageSkeleton() {
           "flex flex-col min-h-full w-full mx-auto px-5 md:px-6 lg:px-8 pt-2 pb-4 gap-3 md:pt-0",
           dashboardChromeMaxWidthClass,
         )}>
-          <Pulse className="h-11 w-full rounded-md border border-foreground/[0.07] bg-foreground/[0.02]" />
+          <Pulse className={cn("h-[4.75rem] w-full rounded-2xl border border-border bg-white", boardCardShadowClassName("briefing"))} />
 
           <Card className={needsYouCardShellClassName("briefing")} aria-busy="true" aria-label="Loading home briefing">
               <div className="px-5 py-3 sm:px-6 sm:py-4">
@@ -39,7 +40,7 @@ export function HomePageSkeleton() {
                   <Pulse className="h-4 w-[62%] rounded-full" />
                 </div>
               </div>
-              <div className="flex gap-2 rounded-b-3xl border-t border-border/50 bg-muted/30 px-5 py-3 sm:px-6 sm:py-4">
+              <div className="flex gap-2 rounded-b-3xl border-t border-border/50 bg-white px-5 py-3 sm:px-6 sm:py-4">
                 <Pulse className="h-12 min-w-0 flex-1 rounded-2xl" />
                 <Pulse className="h-12 min-w-0 flex-1 rounded-2xl" />
               </div>
@@ -47,7 +48,7 @@ export function HomePageSkeleton() {
 
             <section className="mt-5 sm:mt-10 flex flex-col gap-2.5" aria-busy="true" aria-label="Loading action plan cards">
               <Card className={needsYouCardShellClassName("front")}>
-                <div className="rounded-t-3xl border-b border-border/60 bg-card px-5 py-3.5 sm:px-6">
+                <div className="rounded-t-3xl border-b border-border/60 bg-white px-5 py-3.5 sm:px-6">
                   <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
                     <div className="flex w-full items-center gap-2">
                       <Skeleton className="h-10 w-10 shrink-0 rounded-2xl bg-foreground/[0.06]" />
@@ -59,11 +60,11 @@ export function HomePageSkeleton() {
                     </div>
                   </div>
                 </div>
-                <div className="space-y-4 bg-card px-5 py-4 sm:px-6">
+                <div className="space-y-4 bg-white px-5 py-4 sm:px-6">
                   <Skeleton className="h-20 w-[85%] rounded-[18px_18px_18px_0] bg-foreground/[0.06]" />
                   <Skeleton className="ml-auto h-24 w-[85%] rounded-[18px_18px_0_18px] bg-foreground/[0.05]" />
                 </div>
-                <div className="space-y-2 rounded-b-3xl border-t border-border/50 bg-muted/30 px-5 py-4 sm:px-6">
+                <div className="space-y-2 rounded-b-3xl border-t border-border/50 bg-white px-5 py-4 sm:px-6">
                   <Skeleton className="h-12 w-full rounded-2xl bg-foreground/[0.08]" />
                   <Skeleton className="h-12 w-full rounded-2xl bg-foreground/[0.05]" />
                 </div>
