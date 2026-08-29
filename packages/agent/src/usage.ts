@@ -25,6 +25,11 @@ export interface ModelUsageMetrics {
   // turn before its first tool call, while an identical warm turn spent 7% — the
   // guard's headroom tracked cache temperature rather than loop behavior.
   budgetTokens: number;
+  // `budgetTokens` after the first model call, before any tool result has come
+  // back. Separates the two ways a turn reaches the ceiling: opening near it is
+  // a cache-temperature problem, climbing to it over many calls is a loop. Not
+  // part of `LlmUsageTokens`; pricing ignores it.
+  firstCallBudgetTokens: number;
 }
 
 type AnthropicUsageLike = {
@@ -49,6 +54,7 @@ export function createModelUsageMetrics(): ModelUsageMetrics {
     cacheReadInputTokens: 0,
     totalTokens: 0,
     budgetTokens: 0,
+    firstCallBudgetTokens: 0,
   };
 }
 
@@ -89,6 +95,7 @@ export function readModelUsage(response: { usage?: unknown }) {
 
 export function recordModelUsage(metrics: ModelUsageMetrics, response: { usage?: unknown }) {
   const usage = readModelUsage(response);
+  if (metrics.modelCalls === 0) metrics.firstCallBudgetTokens = usage.budgetTokens;
   metrics.modelCalls += 1;
   metrics.inputTokens += usage.inputTokens;
   metrics.outputTokens += usage.outputTokens;

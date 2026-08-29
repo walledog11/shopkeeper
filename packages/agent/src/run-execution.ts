@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import logger from "./logger.js";
 import type { OrgSettings } from "./types.js";
 import { TOOL_CATEGORIES, type AgentToolDefinition } from "./tools/registry/index.js";
@@ -12,6 +13,7 @@ import type {
 } from "./agent-context.js";
 import {
   recordAgentActionsBatch,
+  recordAgentTurnUsage,
   type AgentActionApproval,
   type PersistedAgentAction,
 } from "./agent-actions.js";
@@ -132,6 +134,17 @@ export async function finishAgentRun(input: {
     await Promise.allSettled(failureAlertPromises);
   }
 
+  // Resolved once so the usage row and the action rows carry the same turn id
+  // and can be joined. The batch would otherwise mint its own, and a turn that
+  // executes nothing has none at all.
+  const resolvedTurnId = turnId ?? randomUUID();
+  const durationMs = Date.now() - summaryStartedAt;
+  const purpose = readOnly
+    ? "composer_ask"
+    : supportThread?.channelType === "sms_agent"
+      ? "operator_turn"
+      : "agent_run";
+
   if (result.actionsPerformed.length > 0) {
     try {
       const persistedActions = await recordAgentActionsBatch({
@@ -142,7 +155,7 @@ export async function finishAgentRun(input: {
         actions: result.actionsPerformed,
         instruction,
         summary: result.summary,
-        ...(turnId ? { turnId } : {}),
+        turnId: resolvedTurnId,
         ...(approval ? { approval } : {}),
         ...(input.executionId ? { executionId: input.executionId } : {}),
       });
@@ -157,18 +170,39 @@ export async function finishAgentRun(input: {
     }
   }
 
+  // Persisted as well as logged: the log line is the richer record, but it is
+  // only readable while the platform is holding it, and a `token_budget` stop is
+  // exactly the turn someone wants to read days later.
+  try {
+    await recordAgentTurnUsage({
+      turnId: resolvedTurnId,
+      orgId: ctx.orgId,
+      threadId: supportThread?.id ?? null,
+      purpose,
+      channelType: supportThread?.channelType ?? null,
+      outcome,
+      durationMs,
+      usage: usageTotals,
+    });
+  } catch (err) {
+    // Never fatal. This is a metrics row, and the turn's real work is already
+    // done -- including in the window where the migration has not landed yet.
+    logger.error({
+      err,
+      orgId: ctx.orgId,
+      turnId: resolvedTurnId,
+    }, "[agent] failed to persist agent turn usage");
+  }
+
   logger.info({
     orgId: ctx.orgId,
     threadId: supportThread?.id ?? null,
-    purpose: readOnly
-      ? "composer_ask"
-      : supportThread?.channelType === "sms_agent"
-        ? "operator_turn"
-        : "agent_run",
+    turnId: resolvedTurnId,
+    purpose,
     channelType: supportThread?.channelType ?? null,
     outcome,
     readOnly,
-    durationMs: Date.now() - summaryStartedAt,
+    durationMs,
     modelCalls: usageTotals.modelCalls,
     usageTotals,
     approvedToolCallCount,

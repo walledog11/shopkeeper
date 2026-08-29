@@ -102,6 +102,10 @@
       "types": "./dist/run.d.ts",
       "default": "./dist/run.js"
     },
+    "./run-policy": {
+      "types": "./dist/run-policy.d.ts",
+      "default": "./dist/run-policy.js"
+    },
     "./planner": {
       "types": "./dist/planner.d.ts",
       "default": "./dist/planner.js"
