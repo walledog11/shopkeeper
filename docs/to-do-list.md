@@ -70,12 +70,16 @@ provider. **None of these is a code task.**
   on a cheap variant, end it, confirm the price returns. They need only `write_discounts`,
   granted well before `-28`, so nothing gates this. Evals cannot cover any of it: every
   Shopify tool result in the suite is simulated.
-- [ ] **Confirm a cold operator turn now opens warm.** Text the bot after more than
-  five minutes of silence and read the first turn's weighted tokens against
-  `TOKEN_BUDGET = 20_000` (`run-policy.ts:9`). The operator prompt now has a stable
-  prefix, so the 1h cache block exists and `stableCacheCreation` should stop counting its
-  write tokens at the 1.25x weight; cold turns previously opened at 19,047–19,721 and
-  ended at `token_budget` with the work unfinished. Verify by phone, not evals.
+- [ ] **Confirm a cold operator turn now opens warm.** Text the bot after more than five
+  minutes of silence, then read `firstCallBudgetTokens` off the turn's `agent_turn_usage`
+  row (`inspect-turn-usage.ts`) against `TOKEN_BUDGET` in `run-policy.ts`. The operator
+  prompt now has a stable prefix, so the 1h cache block exists and `stableCacheCreation`
+  should stop counting its write tokens at the 1.25x weight. **Expect a small number.**
+  Measured 2026-08-29 with `measure-agent-prompt.ts`, the whole operator prompt is 4,949
+  tokens — 5,983 weighted if nothing is attributed to the 1h block, 1,228 warm. The
+  19,047–19,721 this item used to quote was a *support*-turn figure and never applied
+  here; a support thread measures 9,281 before its KB articles and history load. Verify by
+  phone, not evals.
 - [ ] **Approve a plan in prose, by phone.** Text "go ahead and approve the refund" at a
   real pending plan and watch for `approve_pending_plan` rather than an order lookup.
   Operator prompt changes are never verified by evals.
@@ -109,11 +113,13 @@ provider. **None of these is a code task.**
   done. Launch is gated on Meta App Review plus a non-role merchant account completing
   the full DM loop: connect → inbound → approve reply → disconnect/reconnect. Ops in
   [runbook.md](production/runbook.md).
-- [ ] **Read the release grant back on the connected production store.** `palette-dev`
-  is done — 22 scopes, `write_products` granted and reflected in
-  `Integration.metadata.oauthScopes`, `write_app_proxy` present, and the stale 38-scope
-  grant the 2026-08-04 validation found is gone. The production store was never checked:
-  `shopify app execute --store <domain>` could not reach it from the release account.
+- [ ] **Read the release grant back from Shopify, not from our own row.** The connected
+  production store *is* `palette-dev-3peukw16.myshopify.com` — there is no second store,
+  and earlier wording here implied one. `Integration.metadata.oauthScopes` currently
+  records 12 scopes for it including `write_products` and `write_app_proxy`, but that is
+  our copy of the grant, written at OAuth callback. What has never been done is reading
+  the grant back from Shopify's side, because `shopify app execute --store <domain>` could
+  not reach it from the release account.
   Read it with
   `{ currentAppInstallation { app { title } accessScopes { handle } } }` and expect the
   Shopify card to read needs-attention until that merchant re-authorizes — the intended

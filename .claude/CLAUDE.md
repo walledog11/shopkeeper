@@ -45,7 +45,7 @@ External webhook → `apps/gateway/src/routes/webhooks.ts` (HMAC verify, enqueue
 - `Message` — `senderType`: customer/agent/ai/note. Agent turn transcripts in threads are `note` rows prefixed `__shopkeeper_agent__`; the audit trail is `AgentAction`, not note-row parsing.
 - `AgentAction` — first-class audit record per agent tool call (tool, category, status, mode, approver); backs `/api/agent/actions` and the Review page
 - `AutonomyShadowDecision` — per-plan shadow record while `autoExecuteMode: "shadow"`: what the agent would have auto-executed vs. what the human decided
-- `OperatorContext` — per (org, chatId) operator pending-state only: `pendingPlan`, `pendingQuestion`, `pendingDigest` (the approval ledger's backing store). **DB-backed, not Redis.**
+- `OperatorContext` — per (org, `memberKey`) operator pending-state only: `pendingPlans` (a newest-last JSONB array, at most one entry per thread), `pendingQuestion`, `pendingDigest` (the approval ledger's backing store). **DB-backed, not Redis.**
 - `OperatorEvent` — durable inbound operator-message record (P4-03, complete): persisted+enqueued before the webhook ack, claimed once by the operator-event worker, unique `(channel, providerMessageId)` for dedupe. Always on for Telegram and iMessage. A 15-min `operator-event-sweep` maintenance job reconciles stale `claimed` rows to `unknown` and re-sends committed-but-undelivered replies.
 - `OrgMember` — extends Clerk org membership; Telegram chats bound via `OrgMemberTelegramChat`
 - `KnowledgeBase` (`source: "user" | "shopify"`) / `KbArticle` (tagged for context filtering) / `KbCitation` (per-thread article citation events)
@@ -133,35 +133,43 @@ including changes that don't mention them. Moving away from one needs a reason i
   is resolved once in `planAgent`, and `message` is display-only. New decision points carry
   a `code`, not a `.includes(`. Adding a case to a prose matcher is never the fix.
 - **Validate, don't repair.** A wrong model output is evidence the model misunderstood the
-  situation, not a sentence to edit. `planner.ts:135-192` runs six sequential repair passes,
-  two of which delete sentences from the reply the customer will read; shipping the
-  remainder is a worse failure than stopping. Prefer returning the plan to the merchant with
-  a reason. Where a schema can express the rule, put it in the tool schema rather than in a
-  later pass.
+  situation, not a sentence to edit. The planner used to run six sequential repair passes,
+  two of which deleted sentences from the reply the customer would read; shipping the
+  remainder is a worse failure than stopping. They are gone — `validatePlan` now grades the
+  proposal exactly as authored and an invalid plan stays intact so the merchant can see what
+  failed. The one thing that still discards a proposal is structural escalation evidence,
+  and it discards it wholesale rather than editing it. Where a schema can express the rule,
+  put it in the tool schema rather than in a later pass.
 - **Compose from fields; don't rewrite sentences.** The classifier emits structured facts and
   the surface renders them. It must never emit an English sentence that a downstream layer
-  re-tenses, re-subjects, re-punctuates, and truncates — that is what grew
-  `digest-briefing.ts` into a hand-rolled NLP engine larger than the agent it serves. Control
-  length by choosing which fields to render, never by cutting a string.
-- **One decision, one owner.** "May this run without a human?" is answered in four places
-  across two packages, chained through a mutable `plan.routing` field, with static policy
-  evaluated twice. A decision re-derived at each call site has no owner and nothing keeps the
-  copies agreeing. Collapse toward one function with one return type; never add a fifth site.
-- **One helper per concept.** "What do we call this person" had five implementations and
-  reported a verified customer to the merchant as an anonymous visitor. Grep before writing a
-  text/format helper — `customerFirstName`, `endSentence`, and `lowerFirst` each drifted into
-  two versions with different trimming.
+  re-tenses, re-subjects, re-punctuates, and truncates — that is what grew the digest
+  briefing into a hand-rolled NLP engine larger than the agent it serves. It has since been
+  broken up into `apps/gateway/src/maintenance/digest-briefing/`, which bounds the damage
+  without changing the lesson. Control length by choosing which fields to render, never by
+  cutting a string.
+- **One decision, one owner.** "May this run without a human?" was once answered in four
+  places across two packages, chained through a mutable `plan.routing` field, with static
+  policy evaluated twice. It is now `decideAutonomy`, one function with one return type, and
+  execution-time policy is the authoritative current-state backstop behind it. A decision
+  re-derived at each call site has no owner and nothing keeps the copies agreeing — so call
+  `decideAutonomy`, never add a site that re-derives its answer.
+- **One helper per concept.** "What do we call this person" once had five implementations and
+  reported a verified customer to the merchant as an anonymous visitor. `customerFirstName`,
+  `endSentence` and `lowerFirst` had each drifted into two versions with different trimming;
+  each is now defined once. Grep before writing a text/format helper.
 - **Growth by special case means a capability is missing.** A prompt bullet, a repair pass, a
   regex carve-out, or a per-phrase fix added in response to one observed bad output is a
-  signal to find the missing structure, not a fix worth keeping. `SUPPORT_INSTRUCTIONS` is 27
-  prohibitions; most describe invariants a schema or the executor could enforce structurally.
+  signal to find the missing structure, not a fix worth keeping. `SUPPORT_INSTRUCTIONS` was
+  27 bullets when this was written and is over fifty now, which is the law being broken
+  rather than followed; most describe invariants a schema or the executor could enforce
+  structurally.
 
 ## Coding
 - Don't add features, comments, error handling, or abstractions beyond what's asked. This
   bounds the diff, not the judgment: when the ask sits on top of a structural problem — a
   fifth copy of a helper, a seventh repair pass, a new branch on prose — build what was
-  asked, then name the problem in a sentence. Staying silent is how `digest-briefing.ts`
-  reached 1,068 lines one reasonable minimal diff at a time.
+  asked, then name the problem in a sentence. Staying silent is how the digest briefing
+  passed a thousand lines one reasonable minimal diff at a time.
 - **Local verification is free; model calls are not.** Typecheck, lint, and unit/integration
   runs cost nothing — run them without asking and before every push. Only live-model runs
   (`test:evals*`, anything setting `EVAL_RUN=1`) need justifying. Eval-cost discipline is
@@ -169,6 +177,13 @@ including changes that don't mention them. Moving away from one needs a reason i
 - **Run the whole suite, not the files you touched, before closing anything.** Milestones 4 and 6 both closed on targeted green runs; a full `npm run test:integration` would have caught a stale job count and an acceptance test that only passes on an empty database. Targeted runs are for the edit loop, never for the close.
 - **A red static stage hides everything behind it.** `Static Verification` gates Build, Integration/Coverage and E2E in `ci.yml`. One unused export over the knip baseline skipped all three for two commits and let broken tests reach `master` unseen. A knip baseline failure is a blocked pipeline, not a lint nit.
 - **A migration that ships behind its code is an outage, not a lag.** Milestone 5 shipped `loadActiveMerchantPreferences` to production while its table did not exist; the `P2021` threw out of an uncaught `Promise.all` in `buildContext` and every inbound message went unplanned for a day. Read production `migrate status` before closing anything that adds a table, and give every fan-out load in `buildContext` its own catch.
+- **Cite names, not line numbers or counts.** A doc is read to decide what to build, so a
+  stale citation costs a whole investigation before anyone thinks to check it — and it reads
+  as authoritative the entire way. `npm run lint:structure` resolves every path-plus-line
+  citation in the docs and fails when one drifts onto a closing brace, but it cannot check "27
+  prohibitions", "four places", "1,068 lines", or a number measured on one code path and
+  quoted about another. Those rot silently and have. Name the symbol, say which path a
+  measurement came from, and date it.
 - **Fetch before building.** Check whether the work already exists (`git fetch`, open PRs) before starting a parallel implementation.
 - Read the file before editing it.
 - Edit existing files. Don't create new ones unless necessary.

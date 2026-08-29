@@ -682,7 +682,7 @@ counter.
 
 **One divergence from the plan's own prose, in the safer direction.** The plan's
 "Flow" said a stranger's order number plus your own email gets a code delivered to
-the real owner. It does not: `verification.ts:135` returns before generating anything
+the real owner. It does not: `requestVerification` in `verification.ts` returns before generating anything
 unless the supplied address matches, so nothing is mailed at all and the widget
 cannot be used to mail-bomb an owner even once. The invariant holds; the mechanism
 described did not exist. (Corrected in the plan on 2026-08-13.)
@@ -816,11 +816,11 @@ refund, where trust is binary.
 `/dashboard` at all. `tickets/` holds only `page.tsx`, and the app directory
 contains no `[…]` segment anywhere. Two call sites emit the path form:
 
-- `apps/gateway/src/operator-escalation.ts:25` — `Open: ${dashboardUrl}/dashboard/tickets/${threadId}`
-- `apps/gateway/src/message-handlers/planning-notifications.ts:334` — `Full thread: …`
+- `apps/gateway/src/operator-escalation.ts` — `Open: ${dashboardUrl}/dashboard/tickets/${threadId}`
+- `apps/gateway/src/message-handlers/planning-notifications/format-plan.ts` — `Full thread: …`
 
 The dashboard's own links use the query form — `/dashboard/tickets?thread=${threadId}`
-(`NeedsYouCards.tsx:61`, `AgentPanelPendingLedger.tsx:98`) — which was loaded
+(`NeedsYouCards.tsx`, `AgentPanelPendingLedger.tsx`) — which was loaded
 against the same thread and resolves. Nothing caught this because the tests assert
 the string is *built*, never that the route exists.
 

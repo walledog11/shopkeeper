@@ -141,7 +141,7 @@ Beyond the table, and worse than it:
   principle 3 — the most serious thing on the page.
 - **"reads your last 100 outgoing replies on connect" has no implementation.**
   Voice learning is `VoiceEdit`-driven and capped at `VOICE_SYNTHESIS_MAX_EDITS
-  = 30` (`packages/db/voice.ts:22`); there is no on-connect backfill.
+  = 30` (`packages/db/voice.ts`); there is no on-connect backfill.
 - **"No credit card" is false.** Checkout runs subscription mode without
   `payment_method_collection: 'if_required'`
   (`api/billing/checkout/route.ts`), so a card is collected. `14 days free` is
@@ -174,7 +174,7 @@ shot" comment.
 **Check the premise before doing this work (noted 2026-08-20).** These are not
 displayed as photographs. `hero-light.jpg` renders at `blur(26px)` with
 `opacity-75`, `sepia(0.18) saturate(0.85) brightness(1.07)`, behind a radial
-mask that fades it out past 74% (`Hero.tsx:78-86`) — an atmosphere *wash*, not
+mask that fades it out past 74% (the hero backdrop layer in `Hero.tsx`) — an atmosphere *wash*, not
 an image a visitor reads as an image. If the other two are treated the same way,
 then "swap for the final shot" may be work that changes nothing anyone can see,
 and the honest resolution is to delete the comments rather than commission

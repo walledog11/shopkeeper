@@ -182,7 +182,7 @@ matters.
 **What the re-link cost actually is, and when it applies.**
 `OrgMemberTelegramChat` is keyed on `chatId`
 (`apps/gateway/src/routes/telegram/start-binding.ts:64`), and a Telegram `chatId`
-is a conversation with *one specific bot*. `operator-notify.ts:68` reads those
+is a conversation with *one specific bot*. `listOperatorBindings` in `operator-notify.ts` reads those
 rows to decide where to push plans, questions, and the briefing. A **new** bot
 has never spoken to those users, so bindings are dead and pushes fail silently.
 This applies **only** on the `/newbot` path — if step 0 says the username can be
