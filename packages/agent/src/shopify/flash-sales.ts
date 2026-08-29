@@ -1,11 +1,12 @@
 import {
   formatShopifyToolError,
+  isAmbiguousShopifyMutationError,
   formatUserErrors,
   shopifyGraphql,
   type ShopifyContext,
   type ShopifyGraphqlUserError,
 } from "./client.js";
-import { toolError, toolNotFound, toolOk, type ToolResult } from "../tools/result.js";
+import { toolError, toolNotFound, toolOk, toolUnknown, type ToolResult } from "../tools/result.js";
 import { moneyToCents, ShopifyInputError } from "./validation.js";
 import { VARIANT_PRICES_QUERY } from "./exchanges.js";
 import {
@@ -185,6 +186,7 @@ export async function createFlashSale(
   settings: OrgSettings,
   now: Date = new Date(),
 ): Promise<ToolResult> {
+  let mutationStarted = false;
   try {
     const percentage = requirePercentage(input.discount_percentage);
     const hours = requireHours(input.duration_hours);
@@ -214,6 +216,7 @@ export async function createFlashSale(
 
     const endsAt = assessment.preview.expiresAt;
     const title = `${TITLE_PREFIX}: ${name || `${percentage}% off`}`;
+    mutationStarted = true;
     const data = await shopifyGraphql<AutomaticDiscountCreateData>(
       ctx,
       AUTOMATIC_DISCOUNT_CREATE_MUTATION,
@@ -251,6 +254,14 @@ export async function createFlashSale(
     );
   } catch (err) {
     if (err instanceof ShopifyInputError) return toolError(`Error: ${err.message}`);
+    if (mutationStarted && isAmbiguousShopifyMutationError(err)) {
+      return toolUnknown(
+        `Unknown: the sale may have started at Shopify but could not be confirmed. `
+        + `Check the store's automatic discounts before starting another — a second one would `
+        + `stack a further markdown on the same variants. `
+        + formatShopifyToolError("flash sale reconciliation failed", err),
+      );
+    }
     return toolError(formatShopifyToolError("failed to start the sale", err));
   }
 }
@@ -287,6 +298,7 @@ export async function endFlashSale(
   input: EndFlashSaleInput,
   ctx: ShopifyContext,
 ): Promise<ToolResult> {
+  let mutationStarted = false;
   try {
     const id = typeof input.flash_sale_id === "string" ? input.flash_sale_id.trim() : "";
     if (!id) {
@@ -302,6 +314,7 @@ export async function endFlashSale(
       );
     }
 
+    mutationStarted = true;
     const data = await shopifyGraphql<AutomaticDiscountDeleteData>(
       ctx,
       AUTOMATIC_DISCOUNT_DELETE_MUTATION,
@@ -319,6 +332,15 @@ export async function endFlashSale(
       { endedFlashSaleId: payload.deletedAutomaticDiscountId },
     );
   } catch (err) {
+    if (mutationStarted && isAmbiguousShopifyMutationError(err)) {
+      // Ending is the safe direction — the risk of a lost confirmation here is a
+      // sale the merchant believes is over and is in fact still discounting.
+      return toolUnknown(
+        `Unknown: the sale may have ended at Shopify but could not be confirmed. `
+        + `Check the store's automatic discounts — it may still be running. `
+        + formatShopifyToolError("end-sale reconciliation failed", err),
+      );
+    }
     return toolError(formatShopifyToolError("failed to end the sale", err));
   }
 }

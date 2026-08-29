@@ -10,6 +10,10 @@
 // fail with an HTTP status rather than as a statusless document-validation
 // error, so they are not part of this class.
 import { DISCOUNT_CODE_BASIC_CREATE_MUTATION } from "./discounts.js";
+import {
+  AUTOMATIC_DISCOUNT_CREATE_MUTATION,
+  AUTOMATIC_DISCOUNT_DELETE_MUTATION,
+} from "./flash-sales.js";
 import { FULFILLMENT_CREATE_MUTATION } from "./fulfillment.js";
 import { GIFT_CARD_CREATE_MUTATION } from "./gift-cards.js";
 import {
@@ -22,6 +26,7 @@ import { REFUND_CREATE_MUTATION } from "./refunds.js";
 import { REVERSE_DELIVERY_CREATE_WITH_SHIPPING_MUTATION } from "./return-labels.js";
 import { RETURN_CREATE_MUTATION } from "./returns.js";
 import { STORE_CREDIT_ACCOUNT_CREDIT_MUTATION } from "./store-credit.js";
+import { VARIANT_PRICE_UPDATE_MUTATION } from "./variant-pricing.js";
 
 export interface ShopifyMutationDocument {
   document: string;
@@ -70,6 +75,18 @@ export const SHOPIFY_MUTATION_DOCUMENTS: Record<string, ShopifyMutationDocument>
   returnCreate: {
     document: RETURN_CREATE_MUTATION,
     rootField: "returnCreate",
+  },
+  flashSaleCreate: {
+    document: AUTOMATIC_DISCOUNT_CREATE_MUTATION,
+    rootField: "discountAutomaticBasicCreate",
+  },
+  flashSaleEnd: {
+    document: AUTOMATIC_DISCOUNT_DELETE_MUTATION,
+    rootField: "discountAutomaticDelete",
+  },
+  variantPriceUpdate: {
+    document: VARIANT_PRICE_UPDATE_MUTATION,
+    rootField: "productVariantsBulkUpdate",
   },
   storeCreditAccountCredit: {
     document: STORE_CREDIT_ACCOUNT_CREDIT_MUTATION,
