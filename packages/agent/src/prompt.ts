@@ -120,12 +120,15 @@ const OPERATOR_UNTRUSTED_CONTENT_GUIDANCE = UNTRUSTED_CONTENT_GUIDANCE.replace(
 );
 
 function composeSystemPrompt(parts: { identity: string; context: string; instructions: string; trailer: string }): string {
+  // The static operator instructions live in the cached stable prefix, so the
+  // volatile half carries only the turn-conditional ones — and a turn that has
+  // none must not emit a bare "## Instructions" heading with nothing under it.
+  const instructionsSection = parts.instructions
+    ? `\n\n## Instructions\n${parts.instructions}`
+    : "";
   return `${parts.identity}
 
-${parts.context}
-
-## Instructions
-${parts.instructions}${parts.trailer}`;
+${parts.context}${instructionsSection}${parts.trailer}`;
 }
 
 // ── Support module ──
@@ -228,9 +231,27 @@ const SUPPORT_STABLE_PREFIX = `You are an AI support agent for an e-commerce sto
 ## Instructions
 ${SUPPORT_INSTRUCTIONS}${UNTRUSTED_CONTENT_GUIDANCE}`;
 
+// The operator equivalent, and it holds only what is on EVERY operator turn.
+// The control-tool, inbox-tool and dashboard-nav blocks are deliberately absent:
+// each is conditional, and a prefix that varies splits the cache into variants
+// while naming tools the turn may not hold. Keeping them in the volatile half
+// buys one prefix shared by every operator turn of every org, on every surface.
+//
+// Sizing is load-bearing. Anthropic will not cache a block under 1024 tokens, so
+// a prefix trimmed below that would silently stop caching rather than fail.
+//
+// The untrusted-content guidance stays in the volatile trailer despite being just
+// as static: the guardrail clauses append bare bullets to whatever precedes them,
+// so hoisting it would reseat them under "## Pending state".
+const OPERATOR_STABLE_PREFIX = `You are an AI action assistant for an e-commerce store. You are receiving instructions from a team member.
+
+## Instructions
+${OPERATOR_INSTRUCTIONS}
+${OPERATOR_INTEGRATION_GUIDANCE}
+${OPERATOR_PRODUCT_HELP_INSTRUCTIONS}`;
+
 // Splits the system prompt into a stable prefix (cached across requests) and a
-// volatile suffix (per-thread/per-store). Operator mode is not split — it returns
-// an empty stable half so callers fall back to single-block caching.
+// volatile suffix (per-thread/per-store).
 export function buildSystemPromptParts(ctx: AgentContext, settings?: Partial<OrgSettings>): { stable: string; volatile: string } {
   const s = resolveAgentSettings(settings);
   const isOperatorMode = isOperatorChannel(ctx.thread.channelType);
@@ -274,16 +295,18 @@ export function buildSystemPromptParts(ctx: AgentContext, settings?: Partial<Org
     const pendingStateSection = ctx.operatorLedger
       ? `\n\n## Pending state\n${promptText(ctx.operatorLedger, CONTEXT_BUDGETS.operatorLedgerChars)}`
       : "";
-    const deskNavInstructions = ctx.operatorDeskMode ? `\n${OPERATOR_DASHBOARD_NAV_INSTRUCTIONS}` : "";
-    const instructions = ctx.operatorLedger
-      ? `${OPERATOR_INSTRUCTIONS}\n${OPERATOR_CONTROL_TOOL_INSTRUCTIONS}\n${OPERATOR_INBOX_TOOL_INSTRUCTIONS}\n${OPERATOR_PRODUCT_HELP_INSTRUCTIONS}${deskNavInstructions}`
-      : `${OPERATOR_INSTRUCTIONS}\n${OPERATOR_PRODUCT_HELP_INSTRUCTIONS}${deskNavInstructions}`;
+    // Only the turn-conditional instructions: the rest are in OPERATOR_STABLE_PREFIX.
+    const deskNavInstructions = ctx.operatorDeskMode ? OPERATOR_DASHBOARD_NAV_INSTRUCTIONS : "";
+    const instructions = [
+      ...(ctx.operatorLedger ? [OPERATOR_CONTROL_TOOL_INSTRUCTIONS, OPERATOR_INBOX_TOOL_INSTRUCTIONS] : []),
+      ...(deskNavInstructions ? [deskNavInstructions] : []),
+    ].join("\n");
 
     return {
-      stable: "",
+      stable: OPERATOR_STABLE_PREFIX,
       volatile: composeSystemPrompt({
         identity: `You are ${s.agentName}, an AI action assistant for ${ctx.orgName}. You are receiving instructions from a team member. They reach you from wherever they are — Telegram, iMessage, or the dashboard — and it is the same conversation either way.`,
-        context: `## Integrations\n${shopifyNote}\n${shopifyCustomerNote}\n${OPERATOR_INTEGRATION_GUIDANCE}${linkedCustomerSection}${ordersSection}${buildStoreProfileSection(ctx.orgName, s.aiContext)}${pendingStateSection}`,
+        context: `## Integrations\n${shopifyNote}\n${shopifyCustomerNote}${linkedCustomerSection}${ordersSection}${buildStoreProfileSection(ctx.orgName, s.aiContext)}${pendingStateSection}`,
         instructions,
         trailer: `${OPERATOR_UNTRUSTED_CONTENT_GUIDANCE}${buildGuardrailSection(s, "operator")}${buildMerchantPreferencesSection(ctx)}`,
       }),

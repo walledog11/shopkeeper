@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentContext } from './agent-context.js';
-import { buildComposerAskPrompt, buildSystemPrompt } from './prompt.js';
+import { buildComposerAskPrompt, buildSystemPrompt, buildSystemPromptParts } from './prompt.js';
+import { buildSplitCachedSystemPrompt } from './ai/anthropic.js';
 import { buildMessageHistory } from './message-history.js';
 import { AGENT_TOOLS, TOOL_GROUPS, toolNamesForGroups } from './tools/index.js';
 import { CONTEXT_BUDGETS } from './context-budget.js';
@@ -505,5 +506,106 @@ describe('TOOL_GROUPS', () => {
       'send_reply',
       'send_email',
     ]);
+  });
+});
+
+// The split is what puts a 1h cache block in front of the tool schemas. Operator
+// mode returned an empty stable half, so buildSplitCachedSystemPrompt took its
+// `if (!stable)` fallback and wrote one 5-minute block; with no 1h block the
+// response carried no ephemeral_1h_input_tokens, stableCacheCreation resolved to
+// 0, and every write token counted at 1.25x against TOKEN_BUDGET. Three live
+// turns opened cold at 19,715 / 19,721 / 19,047 against a 20,000 budget and died
+// on their second model call. Nothing covered the split at all, which is why.
+describe('buildSystemPromptParts caching split', () => {
+  const operatorThread = {
+    id: 'thread_test',
+    status: 'open' as const,
+    channelType: 'sms_agent' as const,
+    tag: 'Support',
+    aiSummary: null,
+    shopifyCustomerId: null,
+  };
+
+  const operatorCtx = (overrides: Partial<AgentContext> = {}) =>
+    makeCtx({ thread: operatorThread, operatorLedger: 'Nothing is awaiting a decision.', ...overrides });
+
+  it('gives operator mode a non-empty stable half', () => {
+    expect(buildSystemPromptParts(operatorCtx()).stable).not.toBe('');
+  });
+
+  it('emits a 1h cache block for an operator turn', () => {
+    const { stable, volatile } = buildSystemPromptParts(operatorCtx());
+    const blocks = buildSplitCachedSystemPrompt(stable, volatile);
+
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]?.cache_control).toEqual({ type: 'ephemeral', ttl: '1h' });
+    expect(blocks[1]?.cache_control).toEqual({ type: 'ephemeral' });
+  });
+
+  // A prefix under 1024 tokens is not cached by Anthropic at all, and nothing
+  // fails when that happens — the block is simply written every turn, and the
+  // budget regression comes back silently. The prefix is 5,283 chars today; the
+  // 4096 tripwire is 1024 tokens at 4 chars/token, and this text tokenizes
+  // denser than plain prose because snake_case tool names split, so a prefix
+  // that trips it is under the floor by any measure.
+  it('keeps the operator prefix above the cacheable minimum', () => {
+    expect(buildSystemPromptParts(operatorCtx()).stable.length).toBeGreaterThan(4096);
+  });
+
+  // The whole value is the prefix being byte-identical across turns. Anything
+  // org-, thread-, settings- or turn-conditional in it splits the cache into
+  // variants that each miss.
+  it('holds the operator prefix identical across orgs, settings and turn shape', () => {
+    const base = buildSystemPromptParts(operatorCtx()).stable;
+
+    const variants = [
+      buildSystemPromptParts(operatorCtx({ orgId: 'org_other', orgName: 'Other Store' })),
+      buildSystemPromptParts(operatorCtx({ thread: { ...operatorThread, id: 'thread_other', tag: 'Refund' } })),
+      buildSystemPromptParts(operatorCtx({ operatorDeskMode: true })),
+      buildSystemPromptParts(makeCtx({ thread: operatorThread })),
+      buildSystemPromptParts(operatorCtx(), { agentName: 'Robin', maxRefundAmount: 50, blockCancellations: true }),
+    ];
+
+    for (const variant of variants) expect(variant.stable).toBe(base);
+  });
+
+  it('leaves the turn-conditional instruction blocks out of the stable half', () => {
+    const { stable } = buildSystemPromptParts(operatorCtx({ operatorDeskMode: true }));
+
+    expect(stable).not.toContain('approve_pending_plan');
+    expect(stable).not.toContain('list_active_tickets');
+    expect(stable).not.toContain('navigate_dashboard');
+  });
+
+  it('loses nothing from the assembled operator prompt', () => {
+    const ctx = operatorCtx({ operatorDeskMode: true });
+    const prompt = buildSystemPrompt(ctx);
+
+    // One probe per block that moved or stayed conditional.
+    expect(prompt).toMatch(/Never escalate the operator conversation/i);
+    expect(prompt).toContain('search_shopify_products');
+    expect(prompt).toContain('search_product_help');
+    expect(prompt).toContain('approve_pending_plan');
+    expect(prompt).toContain('list_active_tickets');
+    expect(prompt).toContain('navigate_dashboard');
+    expect(prompt).toContain('## Untrusted content');
+    expect(prompt).toContain('## Pending state');
+  });
+
+  // A ledger-less operator turn (the dashboard Concierge path, which passes none)
+  // has no conditional instructions left, and composeSystemPrompt must not then
+  // emit a heading with nothing under it.
+  it('omits an empty instructions heading when no conditional block applies', () => {
+    const { volatile } = buildSystemPromptParts(makeCtx({ thread: operatorThread }));
+
+    expect(volatile).not.toMatch(/## Instructions\s*\n\s*\n/);
+    expect(volatile).not.toMatch(/## Instructions\s*$/);
+  });
+
+  it('still splits support mode', () => {
+    const { stable } = buildSystemPromptParts(makeCtx());
+
+    expect(stable).toContain('You are an AI support agent for an e-commerce store.');
+    expect(stable).not.toContain('Test Store');
   });
 });
