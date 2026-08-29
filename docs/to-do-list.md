@@ -233,6 +233,31 @@ Gated-off integrations cost nothing to keep dark.
   discounting or about price blast radius — the answer changes what it measures. Note
   also that no live run has yet had a *markdown* pass this guard: the one committed
   reprice was a raise, so the monetary checks were inert.
+- [ ] **A cold cache spends 95% of the operator turn budget before the first tool call.**
+  Measured on the live thread, not inferred: three turns opened cold at 19,715 / 19,721 /
+  19,047 weighted tokens against `TOKEN_BUDGET = 20_000` (`run-policy.ts:9`), so the
+  second model call ended the turn at `token_budget` with the work unfinished. Warm turns
+  in the same session opened at 2,066–2,996 and finished in three or four calls. The
+  chain: the operator branch of `buildSystemPromptParts` returns `stable: ""`
+  (`prompt.ts:283`), so `buildSplitCachedSystemPrompt` takes its `if (!stable)` fallback
+  (`ai/anthropic.ts:53`) and writes one **5-minute** block instead of a 1h stable prefix
+  plus a volatile tail. With no 1h block the response carries no
+  `ephemeral_1h_input_tokens`, so `stableCacheCreation` resolves to 0 (`usage.ts:70`) and
+  all 14,585 write tokens count at the 1.25x write weight. `usage.ts:24` records this
+  exact failure as *fixed* — "75% of the budget on a cold support turn before its first
+  tool call" — but the fix only reaches turns that have a stable prefix, and operator
+  turns have none by construction. The 5-minute TTL is the other half: any turn following
+  more than five minutes of merchant silence is cold, which for a merchant who texts
+  occasionally is the normal case, not the edge. Give the operator prompt a real stable
+  prefix so the 1h block exists and the exclusion applies. Verify by phone, not evals.
+- [ ] **Give the operator agent a way to read back what it changed.** `set_variant_prices`
+  is permanent and its stated rollback is the original prices in its own result, but no
+  operator tool reads `AgentAction` history — the set is approve/reject/revise/answer,
+  `list_active_tickets`, `get_ticket`, product help, the three shop writes, digest and
+  desk nav. So an undo works only while the record is still in the model's context, and
+  when asked to reverse a reprice it guessed variant IDs, got an error, and went to
+  `search_shopify_products` to recover. Compare `end_flash_sale`, which is a first-class
+  reversal for the *reversible* write; the permanent one has none.
 - [ ] **Stop the operator agent offering a remedy that does not exist.** Refused over the
   value-at-risk bound, it proposed lowering exposure by "only reprice a portion". A
   variant has one price and it applies to every unit in stock; there is no partial-
