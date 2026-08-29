@@ -7,7 +7,7 @@ of its own fix: the moment an item reads as evidence rather than as an instructi
 it back. Evidence checklists, failure drills, and standing procedure live in the linked
 docs.
 
-Last reviewed: 2026-08-28.
+Last reviewed: 2026-08-29.
 
 Work is grouped by **what kind of action it needs**, not by when it was filed.
 
@@ -40,8 +40,8 @@ provider. **None of these is a code task.**
 - [ ] **One real merchant workspace, in approval mode.** Toggle on through the
   integration card, activate the theme embed, remove the Shopify Inbox bubble, then run
   the full loop with no ops touching metadata. Never exercised outside the dev store the
-  author controls. `shopkeeper-production-28` shipped 2026-08-28, so the merchant would
-  now get the current widget; nothing blocks this.
+  author controls. The released app carries the current widget, so a merchant connecting
+  now gets it; nothing blocks this.
 - [ ] **Dev-store browser matrix.** Online Store 2.0 and a vintage theme, desktop and
   mobile, embed on and off, Shopify Inbox bubble present and removed. The automated
   remainder is already covered. Matrix and evidence:
@@ -64,6 +64,12 @@ provider. **None of these is a code task.**
 
 ### Operator and agent
 
+- [ ] **Run the flash-sale pair against a real store.** `set_variant_prices` is verified
+  live — scope guard, value-at-risk refusal, and a committed price change on `palette-dev`
+  — but `create_flash_sale` and `end_flash_sale` have never run outside tests. Start one
+  on a cheap variant, end it, confirm the price returns. They need only `write_discounts`,
+  granted well before `-28`, so nothing gates this. Evals cannot cover any of it: every
+  Shopify tool result in the suite is simulated.
 - [ ] **Approve a plan in prose, by phone.** Text "go ahead and approve the refund" at a
   real pending plan and watch for `approve_pending_plan` rather than an order lookup.
   Operator prompt changes are never verified by evals.
@@ -102,20 +108,24 @@ provider. **None of these is a code task.**
   done. Launch is gated on Meta App Review plus a non-role merchant account completing
   the full DM loop: connect → inbound → approve reply → disconnect/reconnect. Ops in
   [runbook.md](production/runbook.md).
-- [ ] **Confirm what `shopkeeper-production-28` actually grants.** The release shipped
-  2026-08-28; what it changed on merchant stores has not been read back. Four parts, all
-  against the one connected production store and `palette-dev`: whether `write_products`
-  — new in `-28` for enumerated repricing (`set_variant_prices`) — shows as granted or
-  needs re-authorization, whether `write_app_proxy` from `-9` was ever backfilled,
-  whether `palette-dev` still holds the stale 38 OAuth scopes the 2026-08-04 validation
-  found against a declared 17, and the merchant-facing explanation of the
-  re-authorization prompt, which was owed before `-9` and still is not written. Expect
-  the Shopify card to read needs-attention on every already-connected store until the
-  merchant re-authorizes; that is the intended degradation, not a fault. Flash sales need
-  only `write_discounts`, already granted, so they are unaffected. Connected merchants
-  are few enough to tell directly. `-27` is the one-step rollback target; derive it from
-  the CLI rather than from here, per
+- [ ] **Read the release grant back on the connected production store.** `palette-dev`
+  is done — 22 scopes, `write_products` granted and reflected in
+  `Integration.metadata.oauthScopes`, `write_app_proxy` present, and the stale 38-scope
+  grant the 2026-08-04 validation found is gone. The production store was never checked:
+  `shopify app execute --store <domain>` could not reach it from the release account.
+  Read it with
+  `{ currentAppInstallation { app { title } accessScopes { handle } } }` and expect the
+  Shopify card to read needs-attention until that merchant re-authorizes — the intended
+  degradation, not a fault. Derive the rollback target from
+  `npx shopify app versions list --json`, never from a doc, per
   [production/shopify-app-config-reference.md](production/shopify-app-config-reference.md).
+- [ ] **Write the merchant-facing explanation of the re-authorization prompt.** Owed
+  since before `-9`. A scope added by a release is declared, not granted, so an existing
+  install keeps working until it silently does not: the tool refuses with
+  `missingScopeError` and nothing else in the product says why. Reconnecting from
+  Settings is the fix — the OAuth callback replaces `metadata.oauthScopes` wholesale
+  (`complete-shopify-oauth.ts:258`) — but a merchant has no way to know that from the
+  refusal alone.
 
 ---
 
@@ -203,6 +213,25 @@ Gated-off integrations cost nothing to keep dark.
 - [ ] **`quick-reply-thanks-ack` passes 1/3.** The only fixture below full, and advisory,
   so it does not gate. Runs classify `needs_review` after repeated `get_order_by_name`
   errors and escalate.
+- [ ] **Decide what the promotion value-at-risk bound should measure.** It is
+  `gross inventory value × rounded depth` (`value-at-risk.ts:142`) against a $500 default,
+  which on the first live reprice allowed a **1.4% markdown** on a $749.95 item with 48
+  units: gross $35,997.60, so $500 of headroom buys almost nothing. The bound scales with
+  stock on hand, so it tightens exactly where a merchant is most likely to want a
+  markdown. Two questions, and the first governs: is "every unit sells at the new price"
+  the right basis, or should a depth ceiling plus a per-unit-delta bound carry it? Then,
+  whatever the basis, `maxPromotionValueAtRiskCents` has to become reachable — it is
+  defaulted at `settings.ts:65` and parsed at `settings-parser.ts:44`, but nothing in
+  `apps/dashboard/src` or `apps/gateway/src` writes it, so neither the merchant nor the
+  agent can raise it. The refusal is correct; being unable to answer it is not.
+- [ ] **Stop the operator agent offering a remedy that does not exist.** Refused over the
+  value-at-risk bound, it proposed lowering exposure by "only reprice a portion". A
+  variant has one price and it applies to every unit in stock; there is no partial-
+  inventory reprice in `set_variant_prices` or anywhere else. The refusal and the "I
+  cannot override this myself" were both right — the way out was invented. Fix in the
+  `isOperatorMode` branch of `packages/agent/src/prompt.ts`, or by having the guard's
+  refusal name the remedies that exist, which is the more structural of the two. Verified
+  by live phone round-trip, not evals.
 
 **Resume when triggered** (not open checkboxes):
 
