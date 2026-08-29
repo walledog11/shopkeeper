@@ -224,6 +224,15 @@ Gated-off integrations cost nothing to keep dark.
   defaulted at `settings.ts:65` and parsed at `settings-parser.ts:44`, but nothing in
   `apps/dashboard/src` or `apps/gateway/src` writes it, so neither the merchant nor the
   agent can raise it. The refusal is correct; being unable to answer it is not.
+  **A price raise is bounded by none of it.** `deepestMarkdownPercent` skips any change
+  where the new price is not lower, so depth is 0 and value at risk is `gross × 0` — a
+  50× raise measures zero and clears both monetary checks, leaving only variant count and
+  TTL. Coherent if the guard exists to stop money being given away, which is how it is
+  framed; less so for a tool that writes a live storefront price, where a wrong raise is
+  the same class of visible error as a wrong refund. Decide whether the bound is about
+  discounting or about price blast radius — the answer changes what it measures. Note
+  also that no live run has yet had a *markdown* pass this guard: the one committed
+  reprice was a raise, so the monetary checks were inert.
 - [ ] **Stop the operator agent offering a remedy that does not exist.** Refused over the
   value-at-risk bound, it proposed lowering exposure by "only reprice a portion". A
   variant has one price and it applies to every unit in stock; there is no partial-
