@@ -70,6 +70,17 @@ provider. **None of these is a code task.**
   on a cheap variant, end it, confirm the price returns. They need only `write_discounts`,
   granted well before `-28`, so nothing gates this. Evals cannot cover any of it: every
   Shopify tool result in the suite is simulated.
+- [ ] **Confirm a cold operator turn now opens warm.** Text the bot after more than
+  five minutes of silence and read the first turn's weighted tokens against
+  `TOKEN_BUDGET = 20_000` (`run-policy.ts:9`). The operator prompt now has a stable
+  prefix, so the 1h cache block exists and `stableCacheCreation` should stop counting its
+  write tokens at the 1.25x weight; cold turns previously opened at 19,047–19,721 and
+  ended at `token_budget` with the work unfinished. Verify by phone, not evals.
+- [ ] **Confirm a refused write no longer invents a way out.** Every value-at-risk
+  refusal now names a remedy that exists, and none offers to raise a limit in Settings —
+  there is no such control. Push a reprice past the bound by phone and read what the
+  agent proposes: lowering the discount or naming fewer variants is the way out, a
+  partial-inventory reprice is not one. Verify by live phone round-trip, not evals.
 - [ ] **Approve a plan in prose, by phone.** Text "go ahead and approve the refund" at a
   real pending plan and watch for `approve_pending_plan` rather than an order lookup.
   Operator prompt changes are never verified by evals.
@@ -82,11 +93,6 @@ provider. **None of these is a code task.**
   message that makes the model want to attach one. Known residual gap, left in
   deliberately: a `we`-voiced or passive-voiced fabrication still passes, because
   matching those would mutilate truthful replies read out of `get_order`.
-- [ ] **Read one clean day of LLM spend.** Due now — 2026-08-19 UTC is the first day
-  entirely after the 1-hour cache-write pricing fix, and earlier rows straddle the
-  deploy and prove nothing. Expect a small correction, bounded under $0.64/day worst
-  case against a $20 cap whose worst real day was $4.82. Close this once a full day of
-  `llm_daily_spend` rows looks sane.
 
 ### Channels and providers
 
@@ -150,11 +156,6 @@ closing verification passes.
   and 1 seat, Pro unbounded and 2 seats. Verify by confirming a Starter org is capped
   and a Pro org is not. Stripe steps in
   [phase-6-external-services.md](phase-6-external-services.md).
-- [ ] **Align the Vercel project's Node version with the repo.** Every repo
-  declaration says 22.x — root and both app `package.json` engines, `.nvmrc`, and all
-  five `ci.yml` jobs — but the Vercel project may still be set to 24.x, unverified since
-  2026-08-04. A build running a different major than CI is a silently divergent surface.
-  Read the project setting and set it to 22.x if it differs.
 - [ ] **Prove the Shopify compliance webhooks.** Handlers, the durable data-request
   workflow, redaction paths, the `shopify_privacy_requests` table and the
   `compliance_topics` declarations are all shipped and released, so nothing is blocked.
@@ -220,10 +221,12 @@ Gated-off integrations cost nothing to keep dark.
   stock on hand, so it tightens exactly where a merchant is most likely to want a
   markdown. Two questions, and the first governs: is "every unit sells at the new price"
   the right basis, or should a depth ceiling plus a per-unit-delta bound carry it? Then,
-  whatever the basis, `maxPromotionValueAtRiskCents` has to become reachable — it is
-  defaulted at `settings.ts:65` and parsed at `settings-parser.ts:44`, but nothing in
-  `apps/dashboard/src` or `apps/gateway/src` writes it, so neither the merchant nor the
-  agent can raise it. The refusal is correct; being unable to answer it is not.
+  whatever the basis, `maxPromotionValueAtRiskCents` has to become reachable — and none
+  of the four `maxPromotion*` bounds is. Each is defaulted at `settings.ts:63-66` and
+  parsed at `settings-parser.ts:44`, but `apps/dashboard/src` and `apps/gateway/src`
+  contain zero references between them, so neither the merchant nor the agent can raise
+  any of them. The refusals no longer promise a Settings control, so the gap is visible
+  rather than papered over. The refusal is correct; being unable to answer it is not.
   **A price raise is bounded by none of it.** `deepestMarkdownPercent` skips any change
   where the new price is not lower, so depth is 0 and value at risk is `gross × 0` — a
   50× raise measures zero and clears both monetary checks, leaving only variant count and
@@ -233,23 +236,6 @@ Gated-off integrations cost nothing to keep dark.
   discounting or about price blast radius — the answer changes what it measures. Note
   also that no live run has yet had a *markdown* pass this guard: the one committed
   reprice was a raise, so the monetary checks were inert.
-- [ ] **A cold cache spends 95% of the operator turn budget before the first tool call.**
-  Measured on the live thread, not inferred: three turns opened cold at 19,715 / 19,721 /
-  19,047 weighted tokens against `TOKEN_BUDGET = 20_000` (`run-policy.ts:9`), so the
-  second model call ended the turn at `token_budget` with the work unfinished. Warm turns
-  in the same session opened at 2,066–2,996 and finished in three or four calls. The
-  chain: the operator branch of `buildSystemPromptParts` returns `stable: ""`
-  (`prompt.ts:283`), so `buildSplitCachedSystemPrompt` takes its `if (!stable)` fallback
-  (`ai/anthropic.ts:53`) and writes one **5-minute** block instead of a 1h stable prefix
-  plus a volatile tail. With no 1h block the response carries no
-  `ephemeral_1h_input_tokens`, so `stableCacheCreation` resolves to 0 (`usage.ts:70`) and
-  all 14,585 write tokens count at the 1.25x write weight. `usage.ts:24` records this
-  exact failure as *fixed* — "75% of the budget on a cold support turn before its first
-  tool call" — but the fix only reaches turns that have a stable prefix, and operator
-  turns have none by construction. The 5-minute TTL is the other half: any turn following
-  more than five minutes of merchant silence is cold, which for a merchant who texts
-  occasionally is the normal case, not the edge. Give the operator prompt a real stable
-  prefix so the 1h block exists and the exclusion applies. Verify by phone, not evals.
 - [ ] **Give the operator agent a way to read back what it changed.** `set_variant_prices`
   is permanent and its stated rollback is the original prices in its own result, but no
   operator tool reads `AgentAction` history — the set is approve/reject/revise/answer,
@@ -258,14 +244,6 @@ Gated-off integrations cost nothing to keep dark.
   when asked to reverse a reprice it guessed variant IDs, got an error, and went to
   `search_shopify_products` to recover. Compare `end_flash_sale`, which is a first-class
   reversal for the *reversible* write; the permanent one has none.
-- [ ] **Stop the operator agent offering a remedy that does not exist.** Refused over the
-  value-at-risk bound, it proposed lowering exposure by "only reprice a portion". A
-  variant has one price and it applies to every unit in stock; there is no partial-
-  inventory reprice in `set_variant_prices` or anywhere else. The refusal and the "I
-  cannot override this myself" were both right — the way out was invented. Fix in the
-  `isOperatorMode` branch of `packages/agent/src/prompt.ts`, or by having the guard's
-  refusal name the remedies that exist, which is the more structural of the two. Verified
-  by live phone round-trip, not evals.
 
 **Resume when triggered** (not open checkboxes):
 
