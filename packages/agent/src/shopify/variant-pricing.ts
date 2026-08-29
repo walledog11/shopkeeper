@@ -1,11 +1,12 @@
 import {
   formatShopifyToolError,
+  isAmbiguousShopifyMutationError,
   formatUserErrors,
   shopifyGraphql,
   type ShopifyContext,
   type ShopifyGraphqlUserError,
 } from "./client.js";
-import { toolError, toolOk, type ToolResult } from "../tools/result.js";
+import { toolError, toolOk, toolUnknown, type ToolResult } from "../tools/result.js";
 import { moneyToCents, ShopifyInputError } from "./validation.js";
 import { loadVariantsAtRisk } from "./flash-sales.js";
 import {
@@ -121,6 +122,12 @@ export async function setVariantPrices(
   settings: OrgSettings,
   now: Date = new Date(),
 ): Promise<ToolResult> {
+  // Hoisted so an ambiguous failure can still name what it got through. The
+  // loop below commits one product at a time, so a mid-loop timeout leaves
+  // earlier products definitely repriced and the current one in question.
+  const applied: string[] = [];
+  let changes: RecordedPriceChange[] = [];
+  let mutationStarted = false;
   try {
     const entries = requirePriceEntries(input.prices);
     const variantIds = entries.map((entry) => entry.variantId);
@@ -145,7 +152,7 @@ export async function setVariantPrices(
       );
     }
 
-    const changes: RecordedPriceChange[] = entries.map((entry) => ({
+    changes = entries.map((entry) => ({
       variantId: entry.variantId,
       originalPriceCents: current.get(entry.variantId)!.priceCents,
       newPriceCents: entry.priceCents,
@@ -177,7 +184,7 @@ export async function setVariantPrices(
       byProduct.set(productId, list);
     }
 
-    const applied: string[] = [];
+    mutationStarted = true;
     for (const [productId, variantInputs] of byProduct) {
       const result = await shopifyGraphql<VariantBulkUpdateData>(
         ctx,
@@ -207,6 +214,18 @@ export async function setVariantPrices(
     );
   } catch (err) {
     if (err instanceof ShopifyInputError) return toolError(`Error: ${err.message}`);
+    if (mutationStarted && isAmbiguousShopifyMutationError(err)) {
+      // A price the merchant cannot see is worse than one they can undo, so the
+      // original prices ride along even here: they are the only record of what
+      // to restore, and this path is exactly where the merchant needs it.
+      return toolUnknown(
+        `Unknown: repricing may have committed at Shopify but could not be confirmed. `
+        + `Confirmed repriced before contact was lost: ${applied.length ? applied.join(", ") : "none"}. `
+        + `Check the store's prices before repricing again. `
+        + `Original prices: ${formatOriginalPrices(changes)}. `
+        + formatShopifyToolError("reprice reconciliation failed", err),
+      );
+    }
     return toolError(formatShopifyToolError("failed to reprice", err));
   }
 }

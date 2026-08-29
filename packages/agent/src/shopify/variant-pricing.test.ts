@@ -187,6 +187,92 @@ describe("setVariantPrices", () => {
 
   // A partial bulk failure must still hand back what the prices were, or the
   // merchant has a half-repriced catalogue and no record of the originals.
+  it("reports a lost mutation confirmation as unknown, not as a failure", async () => {
+    // A definite failure earns a replan; this one may already have committed,
+    // so it must not.
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(jsonResponse({
+        data: {
+          nodes: [{
+            id: "gid://shopify/ProductVariant/1",
+            price: "48.00",
+            product: { id: "gid://shopify/Product/1" },
+          }],
+        },
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        data: {
+          nodes: [{
+            id: "gid://shopify/ProductVariant/1",
+            title: "Set of 4",
+            price: "48.00",
+            inventoryQuantity: 2,
+            product: { title: "Olive Linen Napkins" },
+          }],
+        },
+      }))
+      .mockRejectedValueOnce(new TypeError("connection reset")));
+
+    const result = await setVariantPrices(
+      { prices: [{ variant_id: "gid://shopify/ProductVariant/1", price: 44 }], revisit_in_hours: 24 },
+      ctx,
+      SETTINGS,
+      NOW,
+    );
+
+    expect(result.status).toBe("unknown");
+    expect(result.message).toContain("Check the store's prices before repricing again");
+    // The original prices are the only record of what to restore.
+    expect(result.message).toContain("48.00");
+  });
+
+  it("names the products already repriced when contact is lost mid-loop", async () => {
+    const variant = (id: string, productId: string) => ({
+      id: `gid://shopify/ProductVariant/${id}`,
+      price: "48.00",
+      product: { id: `gid://shopify/Product/${productId}` },
+    });
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ data: { nodes: [variant("1", "1"), variant("2", "2")] } }))
+      .mockResolvedValueOnce(jsonResponse({
+        data: {
+          nodes: [1, 2].map((n) => ({
+            id: `gid://shopify/ProductVariant/${n}`,
+            title: "Set of 4",
+            price: "48.00",
+            inventoryQuantity: 2,
+            product: { title: "Olive Linen Napkins" },
+          })),
+        },
+      }))
+      // One product commits, the next never answers.
+      .mockResolvedValueOnce(jsonResponse({
+        data: {
+          productVariantsBulkUpdate: {
+            productVariants: [{ id: "gid://shopify/ProductVariant/1", price: "44.00" }],
+            userErrors: [],
+          },
+        },
+      }))
+      .mockRejectedValueOnce(new TypeError("connection reset")));
+
+    const result = await setVariantPrices(
+      {
+        prices: [
+          { variant_id: "gid://shopify/ProductVariant/1", price: 44 },
+          { variant_id: "gid://shopify/ProductVariant/2", price: 44 },
+        ],
+        revisit_in_hours: 24,
+      },
+      ctx,
+      SETTINGS,
+      NOW,
+    );
+
+    expect(result.status).toBe("unknown");
+    expect(result.message).toContain("gid://shopify/ProductVariant/1");
+  });
+
   it("reports the original prices when the update fails partway", async () => {
     vi.stubGlobal("fetch", vi.fn()
       .mockResolvedValueOnce(jsonResponse({

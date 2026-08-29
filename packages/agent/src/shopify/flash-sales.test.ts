@@ -62,6 +62,30 @@ describe("createFlashSale", () => {
 
   // The Milestone 7 acceptance criterion, at the tool boundary rather than only
   // in the guard's unit test.
+  it("reports a lost create confirmation as unknown, not as a failure", async () => {
+    // Reported as a definite failure this earns a replan, and the replan would
+    // stack a second markdown on the same variants.
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(jsonResponse({
+        data: { nodes: [variantNode("gid://shopify/ProductVariant/1")] },
+      }))
+      .mockRejectedValueOnce(new TypeError("connection reset")));
+
+    const result = await createFlashSale(
+      {
+        variant_ids: ["gid://shopify/ProductVariant/1"],
+        discount_percentage: 20,
+        duration_hours: 24,
+      },
+      ctx,
+      SETTINGS,
+      NOW,
+    );
+
+    expect(result.status).toBe("unknown");
+    expect(result.message).toContain("before starting another");
+  });
+
   it("refuses a catalog-wide 90% sale without calling the mutation", async () => {
     const ids = variantIds(300);
     const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
@@ -174,6 +198,15 @@ describe("endFlashSale", () => {
 
   // "Ended with one command" has to hold when the merchant does not know the
   // ID, which on a phone is most of the time.
+  it("reports a lost end confirmation as unknown, so the sale is not assumed over", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("connection reset")));
+
+    const result = await endFlashSale({ flash_sale_id: "gid://shopify/DiscountAutomaticNode/9" }, ctx);
+
+    expect(result.status).toBe("unknown");
+    expect(result.message).toContain("it may still be running");
+  });
+
   it("lists what is running when no id is given", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
       data: {

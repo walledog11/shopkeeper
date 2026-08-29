@@ -1088,6 +1088,41 @@ const VALIDATION_CASES = [
       },
     },
   },
+  {
+    // Mirrors createFlashSale: an automatic discount bounded by endsAt, scoped
+    // to named variants rather than the catalog. The dates are in the past so
+    // that even an executed document would start nothing.
+    name: 'flashSaleCreate',
+    document: 'flashSaleCreate',
+    variables: {
+      automaticBasicDiscount: {
+        title: 'Shopkeeper validation probe',
+        startsAt: '2020-01-01T00:00:00.000Z',
+        endsAt: '2020-01-02T00:00:00.000Z',
+        minimumRequirement: { quantity: { greaterThanOrEqualToQuantity: '1' } },
+        customerGets: {
+          items: { products: { productVariantsToAdd: ['gid://shopify/ProductVariant/1'] } },
+          value: { percentage: 0.1 },
+        },
+      },
+    },
+  },
+  {
+    name: 'flashSaleEnd',
+    document: 'flashSaleEnd',
+    variables: { id: 'gid://shopify/DiscountAutomaticNode/1' },
+  },
+  {
+    // The only document here that would permanently change a price, so the
+    // variant id must point at nothing and the @skip preflight above is what
+    // stands between this and a real repricing.
+    name: 'variantPriceUpdate',
+    document: 'variantPriceUpdate',
+    variables: {
+      productId: 'gid://shopify/Product/1',
+      variants: [{ id: 'gid://shopify/ProductVariant/1', price: '1.00' }],
+    },
+  },
 ];
 
 // Everything in this mode rests on Shopify honoring @skip on a mutation root
