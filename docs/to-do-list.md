@@ -76,11 +76,15 @@ provider. **None of these is a code task.**
   prefix, so the 1h cache block exists and `stableCacheCreation` should stop counting its
   write tokens at the 1.25x weight; cold turns previously opened at 19,047–19,721 and
   ended at `token_budget` with the work unfinished. Verify by phone, not evals.
-- [ ] **Confirm a refused write no longer invents a way out.** Every value-at-risk
-  refusal now names a remedy that exists, and none offers to raise a limit in Settings —
-  there is no such control. Push a reprice past the bound by phone and read what the
-  agent proposes: lowering the discount or naming fewer variants is the way out, a
-  partial-inventory reprice is not one. Verify by live phone round-trip, not evals.
+- [ ] **Confirm a refused write no longer proposes splitting itself.** Exercised
+  2026-08-29 and it failed: refused for $1,040 against the $500 money bound, the agent
+  offered to "do it in two separate calls, one variant at a time, since each one alone is
+  under the cap" — a remedy that exists and defeats the bound, which the previous refusal
+  copy had invited by naming "name fewer variants" against a *money* violation. The money
+  bound is now removed, so that message is gone. What remains is proving the surviving
+  three refusals — variant count, depth, TTL — do not produce the same offer. Push a
+  reprice past the 40% depth ceiling by phone and read what it proposes. Verify by live
+  phone round-trip, not evals.
 - [ ] **Approve a plan in prose, by phone.** Text "go ahead and approve the refund" at a
   real pending plan and watch for `approve_pending_plan` rather than an order lookup.
   Operator prompt changes are never verified by evals.
@@ -214,28 +218,13 @@ Gated-off integrations cost nothing to keep dark.
 - [ ] **`quick-reply-thanks-ack` passes 1/3.** The only fixture below full, and advisory,
   so it does not gate. Runs classify `needs_review` after repeated `get_order_by_name`
   errors and escalate.
-- [ ] **Decide what the promotion value-at-risk bound should measure.** It is
-  `gross inventory value × rounded depth` (`value-at-risk.ts:142`) against a $500 default,
-  which on the first live reprice allowed a **1.4% markdown** on a $749.95 item with 48
-  units: gross $35,997.60, so $500 of headroom buys almost nothing. The bound scales with
-  stock on hand, so it tightens exactly where a merchant is most likely to want a
-  markdown. Two questions, and the first governs: is "every unit sells at the new price"
-  the right basis, or should a depth ceiling plus a per-unit-delta bound carry it? Then,
-  whatever the basis, `maxPromotionValueAtRiskCents` has to become reachable — and none
-  of the four `maxPromotion*` bounds is. Each is defaulted at `settings.ts:63-66` and
-  parsed at `settings-parser.ts:44`, but `apps/dashboard/src` and `apps/gateway/src`
-  contain zero references between them, so neither the merchant nor the agent can raise
-  any of them. The refusals no longer promise a Settings control, so the gap is visible
-  rather than papered over. The refusal is correct; being unable to answer it is not.
-  **A price raise is bounded by none of it.** `deepestMarkdownPercent` skips any change
-  where the new price is not lower, so depth is 0 and value at risk is `gross × 0` — a
-  50× raise measures zero and clears both monetary checks, leaving only variant count and
-  TTL. Coherent if the guard exists to stop money being given away, which is how it is
-  framed; less so for a tool that writes a live storefront price, where a wrong raise is
-  the same class of visible error as a wrong refund. Decide whether the bound is about
-  discounting or about price blast radius — the answer changes what it measures. Note
-  also that no live run has yet had a *markdown* pass this guard: the one committed
-  reprice was a raise, so the monetary checks were inert.
+- [ ] **Decide whether the three surviving promotion bounds should be reachable.**
+  `maxPromotionVariants` / `maxPromotionDiscountPercent` / `maxPromotionTtlHours` are
+  defaulted in `settings.ts` and parsed in `settings-parser.ts`, but `apps/dashboard/src`
+  and `apps/gateway/src` contain zero references between them, so neither the merchant nor
+  the agent can raise any of them. Less urgent than it was — the bound that actually
+  blocked a live write is gone — but a merchant running a real clearance sale will hit the
+  40% depth ceiling, and today the only way past it is a code change.
 - [ ] **Give the operator agent a way to read back what it changed.** `set_variant_prices`
   is permanent and its stated rollback is the original prices in its own result, but no
   operator tool reads `AgentAction` history — the set is approve/reject/revise/answer,

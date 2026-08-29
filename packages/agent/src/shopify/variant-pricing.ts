@@ -7,7 +7,7 @@ import {
   type ShopifyGraphqlUserError,
 } from "./client.js";
 import { toolError, toolOk, toolUnknown, type ToolResult } from "../tools/result.js";
-import { moneyToCents, ShopifyInputError } from "./validation.js";
+import { moneyToCents, requireVariantGid, ShopifyInputError } from "./validation.js";
 import { loadVariantsAtRisk } from "./flash-sales.js";
 import {
   assessValueAtRisk,
@@ -84,10 +84,7 @@ function requirePriceEntries(value: unknown): { variantId: string; priceCents: n
       throw new ShopifyInputError("each price entry must be an object.");
     }
     const record = entry as Record<string, unknown>;
-    const variantId = typeof record.variant_id === "string" ? record.variant_id.trim() : "";
-    if (!variantId) {
-      throw new ShopifyInputError("each price entry needs a variant_id.");
-    }
+    const variantId = requireVariantGid(record.variant_id, "variant_id");
     const price = typeof record.price === "number"
       ? record.price
       : Number.parseFloat(String(record.price ?? ""));

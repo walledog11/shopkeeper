@@ -4,23 +4,23 @@ import { resolveAgentSettings } from "../settings.js";
 /**
  * The blast-radius guard shared by every shop-management write.
  *
- * A refund risks one order's value and the existing per-call cap is enough to
- * bound it. A promotion or a reprice risks every unit that sells while it is
- * live, which is a different quantity: unbounded in time unless something makes
- * it expire, and unbounded in breadth unless something enumerates what it
- * touches. This is that something, and it is deliberately one module so
- * inventory and promotion writes cannot drift into two answers.
+ * It bounds how far a written instruction can be misread, not how much money
+ * the merchant may choose to forgo: breadth (how many variants a sentence
+ * resolved to), depth (a 20% cut written as 80%), and expiry (a sale nobody
+ * ends). A merchant lowering a price knows what it costs them, so there is no
+ * bound on the revenue a markdown gives up — that judgement is theirs and the
+ * guard does not price it.
  *
  * Every violation is a code. The message is display, and no caller branches on
  * it. Each message names a way out that exists: the model reads this refusal,
- * and a bound stated without a remedy is one it will invent a remedy for.
+ * and a bound stated without a remedy is one it will invent a remedy for. A
+ * remedy that only splits the same write across two calls is not one.
  */
 
 export type ValueAtRiskCode =
   | "no_variants"
   | "too_many_variants"
   | "discount_too_deep"
-  | "value_at_risk_exceeded"
   | "ttl_missing"
   | "ttl_too_long";
 
@@ -34,13 +34,10 @@ export interface ValueAtRiskViolation {
   requested: number;
 }
 
-/** One variant a write would touch, priced so the exposure can be summed. */
+/** One variant a write would touch, named so the merchant can see what it hits. */
 export interface ValueAtRiskVariant {
   variantId: string;
   title?: string;
-  unitPriceCents: number;
-  /** Units the merchant could sell at the discounted price before it expires. */
-  unitsAtRisk: number;
 }
 
 export interface ValueAtRiskRequest {
@@ -62,10 +59,6 @@ export interface ValueAtRiskPreview {
   /** Truncated for display; `variantCount` is the true figure. */
   sampleTitles: readonly string[];
   discountPercent: number;
-  /** Revenue the discount forgoes if every at-risk unit sells. */
-  valueAtRiskCents: number;
-  /** Gross revenue those units would have produced undiscounted. */
-  grossExposureCents: number;
   ttlHours: number | null;
   expiresAt: Date | null;
 }
@@ -79,7 +72,6 @@ export interface ValueAtRiskAssessment {
 export interface ValueAtRiskLimits {
   maxVariants: number;
   maxDiscountPercent: number;
-  maxValueAtRiskCents: number;
   maxTtlHours: number;
 }
 
@@ -92,7 +84,6 @@ export interface ValueAtRiskLimits {
 export const VALUE_AT_RISK_DEFAULTS: ValueAtRiskLimits = {
   maxVariants: 50,
   maxDiscountPercent: 40,
-  maxValueAtRiskCents: 50_000,
   maxTtlHours: 168,
 };
 
@@ -112,36 +103,22 @@ export function resolveValueAtRiskLimits(settings?: OrgSettings): ValueAtRiskLim
     maxDiscountPercent: clampPercent(
       s.maxPromotionDiscountPercent ?? VALUE_AT_RISK_DEFAULTS.maxDiscountPercent,
     ),
-    maxValueAtRiskCents: Math.max(0, Math.floor(
-      s.maxPromotionValueAtRiskCents ?? VALUE_AT_RISK_DEFAULTS.maxValueAtRiskCents,
-    )),
     maxTtlHours: Math.max(1, Math.floor(
       s.maxPromotionTtlHours ?? VALUE_AT_RISK_DEFAULTS.maxTtlHours,
     )),
   };
 }
 
-function grossExposure(variants: readonly ValueAtRiskVariant[]): number {
-  return variants.reduce(
-    (total, variant) => total + Math.max(0, variant.unitPriceCents) * Math.max(0, variant.unitsAtRisk),
-    0,
-  );
-}
-
 export function buildValueAtRiskPreview(
   request: ValueAtRiskRequest,
   now: Date = new Date(),
 ): ValueAtRiskPreview {
-  const gross = grossExposure(request.variants);
-  const discountPercent = clampPercent(request.discountPercent);
   return {
     variantCount: request.variants.length,
     sampleTitles: request.variants
       .slice(0, SAMPLE_TITLE_LIMIT)
       .map((variant) => variant.title ?? variant.variantId),
-    discountPercent,
-    valueAtRiskCents: Math.round((gross * discountPercent) / 100),
-    grossExposureCents: gross,
+    discountPercent: clampPercent(request.discountPercent),
     ttlHours: request.ttlHours,
     expiresAt: request.ttlHours === null
       ? null
@@ -200,18 +177,6 @@ export function assessValueAtRisk(
     });
   }
 
-  if (preview.valueAtRiskCents > limits.maxValueAtRiskCents) {
-    violations.push({
-      code: "value_at_risk_exceeded",
-      message:
-        `This puts ${formatCents(preview.valueAtRiskCents)} of revenue at risk, over the `
-        + `${formatCents(limits.maxValueAtRiskCents)} limit. Lower the discount, or name fewer `
-        + "variants.",
-      limit: limits.maxValueAtRiskCents,
-      requested: preview.valueAtRiskCents,
-    });
-  }
-
   if (request.ttlHours === null) {
     violations.push({
       code: "ttl_missing",
@@ -263,8 +228,6 @@ export function formatValueAtRiskPreview(preview: ValueAtRiskPreview): string {
   const lines = [
     `Variants: ${preview.variantCount}`,
     `Discount: ${preview.discountPercent}%`,
-    `Revenue at risk: ${formatCents(preview.valueAtRiskCents)} of `
-      + `${formatCents(preview.grossExposureCents)}`,
   ];
   if (preview.expiresAt) {
     lines.push(`Expires: ${preview.expiresAt.toISOString()}`);

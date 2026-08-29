@@ -41,7 +41,6 @@ const SETTINGS_KEYS = [
   "maxIterations",
   "maxPromotionVariants",
   "maxPromotionDiscountPercent",
-  "maxPromotionValueAtRiskCents",
   "maxPromotionTtlHours",
   "digestEnabled",
   "digestFrequency",
@@ -104,7 +103,6 @@ const NULLABLE_NON_NEGATIVE_FIELDS = [
   // whether a stored value is a number at all.
   "maxPromotionVariants",
   "maxPromotionDiscountPercent",
-  "maxPromotionValueAtRiskCents",
   "maxPromotionTtlHours",
 ] as const satisfies readonly (keyof OrgSettings)[];
 

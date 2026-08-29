@@ -41,7 +41,6 @@ export interface OrgSettings {
   // there is no unlimited setting for these.
   maxPromotionVariants: number | null;
   maxPromotionDiscountPercent: number | null;
-  maxPromotionValueAtRiskCents: number | null;
   maxPromotionTtlHours: number | null;
 
   // Operator digest (fanned out to bound Telegram/iMessage channels)

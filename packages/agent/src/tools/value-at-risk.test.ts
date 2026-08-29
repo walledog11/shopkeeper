@@ -12,12 +12,10 @@ import {
 
 const NOW = new Date("2026-04-29T12:00:00Z");
 
-function variants(count: number, unitPriceCents = 2_000, unitsAtRisk = 1): ValueAtRiskVariant[] {
+function variants(count: number): ValueAtRiskVariant[] {
   return Array.from({ length: count }, (_, index) => ({
     variantId: `gid://shopify/ProductVariant/${index}`,
     title: `Variant ${index}`,
-    unitPriceCents,
-    unitsAtRisk,
   }));
 }
 
@@ -48,7 +46,6 @@ describe("assessValueAtRisk", () => {
     expect(assessment.ok).toBe(false);
     expect(codes(assessment)).toContain("too_many_variants");
     expect(codes(assessment)).toContain("discount_too_deep");
-    expect(codes(assessment)).toContain("value_at_risk_exceeded");
   });
 
   // Depth alone is enough: a 90% cut on one product is still refused, so the
@@ -109,15 +106,18 @@ describe("assessValueAtRisk", () => {
     expect(codes(assessment)).toContain("no_variants");
   });
 
-  it("bounds money independently of count and depth", () => {
-    // Inside the count and discount limits, but a high-value catalogue.
+  // The guard bounds how far an instruction can be misread, never how much
+  // revenue the merchant chooses to forgo. A markdown on a high-value catalogue
+  // is a pricing decision with an owner, and that owner is not this module.
+  it("allows a high-value markdown inside the count and depth bounds", () => {
     const assessment = assessValueAtRisk(
-      { variants: variants(10, 200_000, 1), discountPercent: 30, ttlHours: 24 },
+      { variants: variants(10), discountPercent: 30, ttlHours: 24 },
       undefined,
       NOW,
     );
 
-    expect(codes(assessment)).toEqual(["value_at_risk_exceeded"]);
+    expect(assessment.ok).toBe(true);
+    expect(assessment.violations).toEqual([]);
   });
 
   it("reports every violation in one pass", () => {
@@ -130,7 +130,6 @@ describe("assessValueAtRisk", () => {
     expect(codes(assessment)).toEqual([
       "too_many_variants",
       "discount_too_deep",
-      "value_at_risk_exceeded",
       "ttl_missing",
     ]);
   });
@@ -139,7 +138,6 @@ describe("assessValueAtRisk", () => {
     const settings = resolveAgentSettings({
       maxPromotionVariants: 1_000,
       maxPromotionDiscountPercent: 95,
-      maxPromotionValueAtRiskCents: 100_000_000,
       maxPromotionTtlHours: 24 * 30,
     });
 
@@ -160,15 +158,14 @@ describe("resolveValueAtRiskLimits", () => {
 });
 
 describe("buildValueAtRiskPreview", () => {
-  it("prices the exposure and dates the expiry", () => {
+  it("counts what is touched and dates the expiry", () => {
     const preview = buildValueAtRiskPreview(
-      { variants: variants(4, 5_000, 3), discountPercent: 25, ttlHours: 12 },
+      { variants: variants(4), discountPercent: 25, ttlHours: 12 },
       NOW,
     );
 
-    // 4 variants x 3 units x $50 = $600 gross, 25% of which is at risk.
-    expect(preview.grossExposureCents).toBe(60_000);
-    expect(preview.valueAtRiskCents).toBe(15_000);
+    expect(preview.variantCount).toBe(4);
+    expect(preview.discountPercent).toBe(25);
     expect(preview.expiresAt?.toISOString()).toBe("2026-04-30T00:00:00.000Z");
   });
 

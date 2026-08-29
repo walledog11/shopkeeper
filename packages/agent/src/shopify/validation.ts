@@ -27,6 +27,31 @@ export function requireNumericId(value: unknown, field: string): string {
   return id;
 }
 
+/**
+ * A variant id in the form the GraphQL API takes, from either form the model
+ * writes.
+ *
+ * `search_shopify_products` returns full gids and the mutation requires them,
+ * but the model writes the bare number first on almost every reprice, spends a
+ * round-trip on `Invalid global id`, and retries with the prefix. Accepting
+ * both is a schema answer to what was otherwise a wasted iteration per write.
+ * Anything that is neither is rejected here rather than at Shopify, so an
+ * invented id like `.../Medium-Sand` fails without a network call.
+ */
+export function requireVariantGid(value: unknown, field: string): string {
+  const raw = requireNonEmptyString(value, field);
+  const numeric = raw.startsWith("gid://shopify/ProductVariant/")
+    ? raw.slice("gid://shopify/ProductVariant/".length)
+    : raw;
+  if (!/^\d+$/.test(numeric)) {
+    throw new ShopifyInputError(
+      `${field} must be a Shopify variant ID — the number, or the full `
+      + `gid://shopify/ProductVariant/<id>. Got "${raw}".`,
+    );
+  }
+  return `gid://shopify/ProductVariant/${numeric}`;
+}
+
 function requirePositiveInteger(value: unknown, field: string): number {
   const numberValue = typeof value === "number" ? value : Number(value);
   if (!Number.isInteger(numberValue) || numberValue <= 0) {

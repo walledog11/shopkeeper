@@ -106,27 +106,6 @@ describe("createFlashSale", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("prices the exposure from Shopify, not from the caller", async () => {
-    // Cheap-looking request, expensive catalogue: the guard must see the real
-    // prices, so this trips the money bound rather than passing.
-    const ids = variantIds(4);
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
-      data: { nodes: ids.map((id) => variantNode(id, "900.00", 20)) },
-    }));
-    vi.stubGlobal("fetch", fetchMock);
-
-    const result = await createFlashSale(
-      { variant_ids: ids, discount_percentage: 30, duration_hours: 24 },
-      ctx,
-      SETTINGS,
-      NOW,
-    );
-
-    expect(result.status).toBe("error");
-    expect(result.message).toContain("revenue at risk");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-
   it("refuses when a named variant does not exist", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(jsonResponse({
       data: { nodes: [variantNode("gid://shopify/ProductVariant/1")] },

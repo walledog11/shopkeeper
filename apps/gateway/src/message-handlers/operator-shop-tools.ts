@@ -71,7 +71,7 @@ export function buildOperatorShopTools(
     description:
       'Start a time-limited sale on specific product variants. You must list the variant IDs individually — there is no way to discount a whole collection or the entire catalog, and asking for one will be refused. Every sale expires: give the duration in hours. Prices are never edited, so ending the sale restores them exactly. Use get_inventory_status or search_shopify_products first to resolve variant IDs.',
     fields: {
-      variant_ids: stringArg('Comma-separated Shopify variant IDs the sale applies to.', { required: true }),
+      variant_ids: stringArg('Comma-separated Shopify variant IDs the sale applies to, each either the bare number or the full gid.', { required: true }),
       discount_percentage: numberArg('Percent off, 1-100.', { required: true }),
       duration_hours: numberArg('How many hours the sale runs before Shopify ends it.', { required: true }),
       name: stringArg('Short name for the sale, shown in Shopify.'),
@@ -124,7 +124,7 @@ export function buildOperatorShopTools(
     description:
       'Permanently change the price of specific variants. Each variant is named with its own new price, as "variantId=price" pairs — there is no way to reprice a collection, a pattern, or the whole catalog. The previous prices are recorded in the result. For a temporary markdown use create_flash_sale instead, which expires on its own.',
     fields: {
-      prices: stringArg('Comma-separated variantId=price pairs, e.g. "gid://shopify/ProductVariant/1=19.99".', { required: true }),
+      prices: stringArg('Comma-separated variantId=price pairs. The variant ID may be the bare number or the full gid, e.g. "1234567=19.99" or "gid://shopify/ProductVariant/1234567=19.99".', { required: true }),
       revisit_in_hours: numberArg('When the merchant intends to revisit this price. Required by the safety guard.', { required: true }),
     },
     category: 'action',

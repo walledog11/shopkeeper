@@ -7,7 +7,7 @@ import {
   type ShopifyGraphqlUserError,
 } from "./client.js";
 import { toolError, toolNotFound, toolOk, toolUnknown, type ToolResult } from "../tools/result.js";
-import { moneyToCents, ShopifyInputError } from "./validation.js";
+import { requireVariantGid, ShopifyInputError } from "./validation.js";
 import { VARIANT_PRICES_QUERY } from "./exchanges.js";
 import {
   assessValueAtRisk,
@@ -121,11 +121,9 @@ export interface FlashSaleSummary {
 }
 
 /**
- * Price and stock for the variants a sale names, read fresh.
- *
- * The exposure is computed from what Shopify says now, not from anything the
- * model asserted, so a model that understates a price cannot talk its way under
- * the money bound.
+ * The variants a sale names, titled from what Shopify says now rather than from
+ * anything the model asserted, so the merchant reads the store's own names for
+ * what is about to change.
  */
 export async function loadVariantsAtRisk(
   ctx: ShopifyContext,
@@ -145,11 +143,6 @@ export async function loadVariantsAtRisk(
     found.push({
       variantId: node.id,
       title: variantTitle,
-      unitPriceCents: moneyToCents(node.price),
-      // Stock on hand is the ceiling on how many units the discount can touch.
-      // An untracked variant has no ceiling, so it is counted as the sale's own
-      // worst case rather than as zero exposure.
-      unitsAtRisk: node.inventoryQuantity ?? 1,
     });
   }
   return found;
@@ -173,11 +166,7 @@ function requireVariantIds(value: unknown): string[] {
   if (!Array.isArray(value) || value.length === 0) {
     throw new ShopifyInputError("variant_ids must list the variants the sale applies to.");
   }
-  const ids = value.filter((id): id is string => typeof id === "string" && id.trim().length > 0);
-  if (ids.length !== value.length) {
-    throw new ShopifyInputError("variant_ids must all be Shopify variant IDs.");
-  }
-  return ids;
+  return value.map((id) => requireVariantGid(id, "variant_ids"));
 }
 
 export async function createFlashSale(

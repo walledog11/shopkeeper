@@ -62,7 +62,6 @@ export const AGENT_SETTINGS_DEFAULTS: OrgSettings = {
   maxIterations: 10,
   maxPromotionVariants: null,
   maxPromotionDiscountPercent: null,
-  maxPromotionValueAtRiskCents: null,
   maxPromotionTtlHours: null,
   digestEnabled: false,
   digestFrequency: "daily",

@@ -148,6 +148,49 @@ describe("setVariantPrices", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  // The model writes the bare number first on almost every reprice. Before this
+  // it cost a round-trip to Shopify's `Invalid global id` and a retry, which is
+  // two wasted iterations against the turn's token budget.
+  it("accepts a bare numeric variant id as the full gid", async () => {
+    vi.stubGlobal("fetch", successfulFetch());
+
+    const result = await setVariantPrices(
+      { prices: [{ variant_id: "1", price: 44 }], revisit_in_hours: 72 },
+      ctx,
+      SETTINGS,
+      NOW,
+    );
+
+    expect(result.status).toBe("ok");
+    expect(result.data).toEqual({
+      priceChanges: [{
+        variantId: "gid://shopify/ProductVariant/1",
+        originalPriceCents: 4_800,
+        newPriceCents: 4_400,
+      }],
+    });
+  });
+
+  // An id the model invented out of option names never reaches the network.
+  it("rejects a non-numeric variant id without calling Shopify", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await setVariantPrices(
+      {
+        prices: [{ variant_id: "gid://shopify/ProductVariant/Medium-Sand", price: 148 }],
+        revisit_in_hours: 24,
+      },
+      ctx,
+      SETTINGS,
+      NOW,
+    );
+
+    expect(result.status).toBe("error");
+    expect(result.message).toContain("Medium-Sand");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("rejects the same variant named twice", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
