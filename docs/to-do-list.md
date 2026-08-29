@@ -65,7 +65,7 @@ provider. **None of these is a code task.**
 ### Operator and agent
 
 - [ ] **Run the flash-sale pair against a real store.** `set_variant_prices` is verified
-  live — scope guard, value-at-risk refusal, and a committed price change on `palette-dev`
+  live — scope guard and a committed price change on `palette-dev`
   — but `create_flash_sale` and `end_flash_sale` have never run outside tests. Start one
   on a cheap variant, end it, confirm the price returns. They need only `write_discounts`,
   granted well before `-28`, so nothing gates this. Evals cannot cover any of it: every
@@ -76,15 +76,6 @@ provider. **None of these is a code task.**
   prefix, so the 1h cache block exists and `stableCacheCreation` should stop counting its
   write tokens at the 1.25x weight; cold turns previously opened at 19,047–19,721 and
   ended at `token_budget` with the work unfinished. Verify by phone, not evals.
-- [ ] **Confirm a refused write no longer proposes splitting itself.** Exercised
-  2026-08-29 and it failed: refused for $1,040 against the $500 money bound, the agent
-  offered to "do it in two separate calls, one variant at a time, since each one alone is
-  under the cap" — a remedy that exists and defeats the bound, which the previous refusal
-  copy had invited by naming "name fewer variants" against a *money* violation. The money
-  bound is now removed, so that message is gone. What remains is proving the surviving
-  three refusals — variant count, depth, TTL — do not produce the same offer. Push a
-  reprice past the 40% depth ceiling by phone and read what it proposes. Verify by live
-  phone round-trip, not evals.
 - [ ] **Approve a plan in prose, by phone.** Text "go ahead and approve the refund" at a
   real pending plan and watch for `approve_pending_plan` rather than an order lookup.
   Operator prompt changes are never verified by evals.
@@ -218,13 +209,6 @@ Gated-off integrations cost nothing to keep dark.
 - [ ] **`quick-reply-thanks-ack` passes 1/3.** The only fixture below full, and advisory,
   so it does not gate. Runs classify `needs_review` after repeated `get_order_by_name`
   errors and escalate.
-- [ ] **Decide whether the three surviving promotion bounds should be reachable.**
-  `maxPromotionVariants` / `maxPromotionDiscountPercent` / `maxPromotionTtlHours` are
-  defaulted in `settings.ts` and parsed in `settings-parser.ts`, but `apps/dashboard/src`
-  and `apps/gateway/src` contain zero references between them, so neither the merchant nor
-  the agent can raise any of them. Less urgent than it was — the bound that actually
-  blocked a live write is gone — but a merchant running a real clearance sale will hit the
-  40% depth ceiling, and today the only way past it is a code change.
 - [ ] **Give the operator agent a way to read back what it changed.** `set_variant_prices`
   is permanent and its stated rollback is the original prices in its own result, but no
   operator tool reads `AgentAction` history — the set is approve/reject/revise/answer,

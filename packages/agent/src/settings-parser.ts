@@ -39,9 +39,6 @@ const SETTINGS_KEYS = [
   "blockCancellations",
   "blockCustomLineItems",
   "maxIterations",
-  "maxPromotionVariants",
-  "maxPromotionDiscountPercent",
-  "maxPromotionTtlHours",
   "digestEnabled",
   "digestFrequency",
   "digestHour",
@@ -98,12 +95,6 @@ const NULLABLE_NON_NEGATIVE_FIELDS = [
   "maxRefundAmount",
   "dailyRefundCap",
   "dailyLLMSpendCapUsd",
-  // Null means "use the shipped default", not "no limit". The value-at-risk
-  // resolver clamps these into their sensible ranges; the parser only decides
-  // whether a stored value is a number at all.
-  "maxPromotionVariants",
-  "maxPromotionDiscountPercent",
-  "maxPromotionTtlHours",
 ] as const satisfies readonly (keyof OrgSettings)[];
 
 const HOUR_FIELDS = [

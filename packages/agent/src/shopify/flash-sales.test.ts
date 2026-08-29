@@ -1,11 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsonResponse } from "../testing/json-response.js";
 import { createFlashSale, endFlashSale, readFlashSales } from "./flash-sales.js";
-import { resolveAgentSettings } from "../settings.js";
 
 const ctx = { shop: "test-store.myshopify.com", accessToken: "shpat_test" };
 const NOW = new Date("2026-04-29T12:00:00Z");
-const SETTINGS = resolveAgentSettings(null);
 
 function variantNode(id: string, price = "48.00", inventoryQuantity = 4) {
   return {
@@ -50,7 +48,6 @@ describe("createFlashSale", () => {
         name: "Weekend",
       },
       ctx,
-      SETTINGS,
       NOW,
     );
 
@@ -78,32 +75,11 @@ describe("createFlashSale", () => {
         duration_hours: 24,
       },
       ctx,
-      SETTINGS,
       NOW,
     );
 
     expect(result.status).toBe("unknown");
     expect(result.message).toContain("before starting another");
-  });
-
-  it("refuses a catalog-wide 90% sale without calling the mutation", async () => {
-    const ids = variantIds(300);
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
-      data: { nodes: ids.map((id) => variantNode(id)) },
-    }));
-    vi.stubGlobal("fetch", fetchMock);
-
-    const result = await createFlashSale(
-      { variant_ids: ids, discount_percentage: 90, duration_hours: 24 },
-      ctx,
-      SETTINGS,
-      NOW,
-    );
-
-    expect(result.status).toBe("error");
-    expect(result.message).toContain("nothing was applied");
-    // One call: the price read. The mutation never happened.
-    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("refuses when a named variant does not exist", async () => {
@@ -118,7 +94,6 @@ describe("createFlashSale", () => {
         duration_hours: 4,
       },
       ctx,
-      SETTINGS,
       NOW,
     );
 
@@ -133,7 +108,6 @@ describe("createFlashSale", () => {
     const result = await createFlashSale(
       { variant_ids: variantIds(1), discount_percentage: 10, duration_hours: 0 },
       ctx,
-      SETTINGS,
       NOW,
     );
 
@@ -149,7 +123,6 @@ describe("createFlashSale", () => {
     const result = await createFlashSale(
       { variant_ids: [], discount_percentage: 10, duration_hours: 4 },
       ctx,
-      SETTINGS,
       NOW,
     );
 

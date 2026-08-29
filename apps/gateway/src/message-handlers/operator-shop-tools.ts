@@ -12,7 +12,6 @@ import {
   recordedShopifyScopes,
   unmetScopes,
 } from '@shopkeeper/agent/shopify/integration-health';
-import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import type { ShopifyContext } from '@shopkeeper/agent/shopify';
 import type {
   CreateFlashSaleInput,
@@ -23,8 +22,10 @@ import type {
 // Shop management is the merchant's, not the customer's. These live here rather
 // than in the shared registry so a customer conversation can never reach them:
 // the support planner's tool set is unchanged by this file, and a ticket that
-// says "give me 90% off everything" has no promotion tool to reach for. The
-// value-at-risk guard is the second line, not the only one.
+// says "give me 90% off everything" has no promotion tool to reach for. That
+// separation is now the only line — the blast-radius bounds that used to sit
+// behind it were removed deliberately, so nothing second-guesses the merchant's
+// own pricing once an operator turn is approved.
 //
 // They are also the reason `write_discounts` and `write_products` sit in the
 // requested scope set. An older grant is short of them, so the tool says which
@@ -36,22 +37,17 @@ const REPRICE_SCOPES = ['write_products'] as const;
 interface ShopContext {
   shopify: ShopifyContext;
   grantedScopes: readonly string[];
-  settings: unknown;
 }
 
 async function loadShopContext(organizationId: string): Promise<ShopContext | null> {
-  const [org, integration] = await Promise.all([
-    db.organization.findUnique({ where: { id: organizationId }, select: { settings: true } }),
-    db.integration.findFirst({
-      where: { organizationId, platform: 'shopify' },
-      select: { externalAccountId: true, accessToken: true, metadata: true },
-    }),
-  ]);
+  const integration = await db.integration.findFirst({
+    where: { organizationId, platform: 'shopify' },
+    select: { externalAccountId: true, accessToken: true, metadata: true },
+  });
   if (!integration?.accessToken) return null;
   return {
     shopify: { shop: integration.externalAccountId, accessToken: integration.accessToken },
     grantedScopes: recordedShopifyScopes(integration.metadata) ?? [],
-    settings: org?.settings ?? null,
   };
 }
 
@@ -93,7 +89,7 @@ export function buildOperatorShopTools(
         duration_hours: input.duration_hours,
         ...(input.name ? { name: input.name } : {}),
       };
-      return createFlashSale(payload, shop.shopify, resolveAgentSettings(shop.settings));
+      return createFlashSale(payload, shop.shopify);
     },
   });
 
@@ -125,14 +121,13 @@ export function buildOperatorShopTools(
       'Permanently change the price of specific variants. Each variant is named with its own new price, as "variantId=price" pairs — there is no way to reprice a collection, a pattern, or the whole catalog. The previous prices are recorded in the result. For a temporary markdown use create_flash_sale instead, which expires on its own.',
     fields: {
       prices: stringArg('Comma-separated variantId=price pairs. The variant ID may be the bare number or the full gid, e.g. "1234567=19.99" or "gid://shopify/ProductVariant/1234567=19.99".', { required: true }),
-      revisit_in_hours: numberArg('When the merchant intends to revisit this price. Required by the safety guard.', { required: true }),
     },
     category: 'action',
     group: 'product',
     capabilities: [],
     label: 'Repriced variants',
     planStepLabel: 'Reprice variants',
-    execute: async (input: { prices: string; revisit_in_hours: number }) => {
+    execute: async (input: { prices: string }) => {
       const shop = await loadShopContext(organizationId);
       if (!shop) return toolError('Error: no Shopify integration connected.');
       if (!grantCoversScopes(shop.grantedScopes, REPRICE_SCOPES)) {
@@ -140,11 +135,8 @@ export function buildOperatorShopTools(
       }
       const parsed = parsePricePairs(input.prices);
       if ('error' in parsed) return toolError(parsed.error);
-      const payload: SetVariantPricesInput = {
-        prices: parsed.prices,
-        revisit_in_hours: input.revisit_in_hours,
-      };
-      return setVariantPrices(payload, shop.shopify, resolveAgentSettings(shop.settings));
+      const payload: SetVariantPricesInput = { prices: parsed.prices };
+      return setVariantPrices(payload, shop.shopify);
     },
   });
 

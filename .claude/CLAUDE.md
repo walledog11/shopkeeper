@@ -66,7 +66,6 @@ Canonical location for all agent logic; both apps import it via subpath exports.
 - `plan-preview.ts` — classifies plans as `quick_reply` vs `needs_review` for the dashboard home
 - `tools/registry/` — all tool definitions (Anthropic format), `TOOL_CATEGORIES`, `PLAN_STEP_LABELS`, `TOOL_LABELS`, input types
 - `tools/executor.ts` — tool dispatch + policy enforcement (`maxRefundAmount`, `blockCancellations`, etc.)
-- `tools/value-at-risk.ts` — blast-radius guard for shop-management writes: bounds affected variants, discount depth, and duration; returns typed violation codes and a preview. It bounds how far a written instruction can be misread, **never how much revenue the merchant chooses to forgo** — a merchant lowering a price knows what it costs them, so there is no money bound and adding one back needs a reason
 - `shopify/*.ts` — Shopify API implementations
 - `settings.ts` — defaults + resolver. Settings live in `Organization.settings` JSON.
 - `thread-auth.ts`, `plan-cache.ts`, `plan-cache-shape.ts`, `turns.ts`, `turn.ts`, `plan-execution.ts` — route-facing helpers
@@ -82,12 +81,12 @@ Not a copy of the core — these inject dashboard infrastructure into it:
 Modes:
 - **Support** — ticket threads. Auto-plan on open if last message is from the customer; plan cached in `Thread.cachedPlan`. `ActionPlanCard` → approve → `POST /api/agent`. Manual invoke via `@{agentName}` in the ticket composer.
 - **Operator** — `/dashboard/agent` (Concierge: each session opens a new `dashboard_agent` thread and closes the previous), and Telegram/iMessage via `sms_agent`: one durable operator thread per binding; pending approvals are agent state + control tools (approve/reject/revise/answer the pending plan), with a keyword fast path for literal yes/no/help.
-- **Shop management** — operator turns only, via gateway `moduleTools` (`operator-shop-tools.ts`): flash sales, ending them, and enumerated repricing. Every write goes through the value-at-risk guard and declares its Shopify scope. A support thread cannot reach these.
+- **Shop management** — operator turns only, via gateway `moduleTools` (`operator-shop-tools.ts`): flash sales, ending them, and enumerated repricing. Every write declares its Shopify scope. A support thread cannot reach these. **Nothing bounds the size of the change** — no variant cap, no discount-depth ceiling, no revenue-at-risk limit (removed 2026-08-29). A merchant setting their own prices knows what it costs them, and the guard that second-guessed it also blocked the undo of a write it had permitted. Operator-only reachability plus the merchant's own approval is the containment; do not reintroduce a bound without one.
 - **Composer-ask** — read-only Q&A inside the support composer (`POST /api/agent/ask`). Calls `runAgent(..., { readOnly: true })`, which filters tools to `read` category and never mutates anything.
 
 Read tool list and exact behavior from `packages/agent/src/tools/registry/` — do not infer.
 
-`Organization.settings` keys: `agentName`, `aiContext`, `brandVoice`, `autoPlanOnOpen`, `defaultInstruction`, `requireApprovalForActions`, `autonomyTier` (watch/guarded/trusted; stored `broad`/`full` map to trusted), `autoExecuteMode` (off/shadow/live; legacy boolean `autoExecuteEnabled` is migrated), `toolsEnabled` (action/communication/internal/read), `maxRefundAmount`, `blockCancellations`, `blockCustomLineItems`, `maxIterations` (default 10), and the shop-management bounds `maxPromotionVariants` / `maxPromotionDiscountPercent` / `maxPromotionTtlHours` (null means "use the shipped default", never "no limit").
+`Organization.settings` keys: `agentName`, `aiContext`, `brandVoice`, `autoPlanOnOpen`, `defaultInstruction`, `requireApprovalForActions`, `autonomyTier` (watch/guarded/trusted; stored `broad`/`full` map to trusted), `autoExecuteMode` (off/shadow/live; legacy boolean `autoExecuteEnabled` is migrated), `toolsEnabled` (action/communication/internal/read), `maxRefundAmount`, `blockCancellations`, `blockCustomLineItems`, and `maxIterations` (default 10). Note that `autoPlanOnOpen`, `maxIterations` and `blockCustomLineItems` are read but have no writer in either app.
 
 ### Agent-change invariants
 Standing rules for any change to agent behavior (promoted from the 2026-07 behavior plan):
