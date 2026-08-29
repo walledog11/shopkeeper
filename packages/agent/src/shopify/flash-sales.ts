@@ -9,7 +9,7 @@ import {
 import { toolError, toolNotFound, toolOk, toolUnknown, type ToolResult } from "../tools/result.js";
 import { requireVariantGid, ShopifyInputError } from "./validation.js";
 import { VARIANT_PRICES_QUERY } from "./exchanges.js";
-import type { CreateFlashSaleInput, EndFlashSaleInput } from "../tools/registry/types.js";
+import type { CreateFlashSaleInput, EndFlashSaleInput, FlashSaleScope } from "../tools/registry/types.js";
 
 /** One variant a sale names, titled from the store's own record. */
 export interface SaleVariant {
@@ -21,22 +21,29 @@ const SAMPLE_TITLE_LIMIT = 5;
 
 /**
  * What the sale hit, rendered from fields. Length is controlled by choosing how
- * many titles to show, never by truncating the line.
+ * many titles to show, never by truncating the line. A catalog-wide sale has no
+ * variant list to sample, so it says what it covers instead of counting.
  */
 function describeSale(
+  scope: FlashSaleScope,
   variants: readonly SaleVariant[],
   discountPercent: number,
   endsAt: Date,
 ): string[] {
-  const shown = variants.slice(0, SAMPLE_TITLE_LIMIT)
-    .map((variant) => variant.title ?? variant.variantId);
-  const more = variants.length - shown.length;
-  return [
-    `Variants: ${variants.length}`,
+  const lines = [
+    scope === "entire_catalog"
+      ? "Applies to: every product in the store"
+      : `Variants: ${variants.length}`,
     `Discount: ${discountPercent}%`,
     `Ends: ${endsAt.toISOString()}`,
-    `Affected: ${shown.join(", ")}${more > 0 ? ` and ${more} more` : ""}`,
   ];
+  if (scope === "variants") {
+    const shown = variants.slice(0, SAMPLE_TITLE_LIMIT)
+      .map((variant) => variant.title ?? variant.variantId);
+    const more = variants.length - shown.length;
+    lines.push(`Affected: ${shown.join(", ")}${more > 0 ? ` and ${more} more` : ""}`);
+  }
+  return lines;
 }
 
 /**
@@ -189,9 +196,16 @@ function requireHours(value: unknown): number {
 
 function requireVariantIds(value: unknown): string[] {
   if (!Array.isArray(value) || value.length === 0) {
-    throw new ShopifyInputError("variant_ids must list the variants the sale applies to.");
+    throw new ShopifyInputError(
+      'variant_ids must list the variants the sale applies to when applies_to is "variants".',
+    );
   }
   return value.map((id) => requireVariantGid(id, "variant_ids"));
+}
+
+function requireScope(value: unknown): FlashSaleScope {
+  if (value === "entire_catalog" || value === "variants") return value;
+  throw new ShopifyInputError('applies_to must be "entire_catalog" or "variants".');
 }
 
 export async function createFlashSale(
@@ -203,20 +217,27 @@ export async function createFlashSale(
   try {
     const percentage = requirePercentage(input.discount_percentage);
     const hours = requireHours(input.duration_hours);
-    const variantIds = requireVariantIds(input.variant_ids);
+    const scope = requireScope(input.applies_to);
     const name = typeof input.name === "string" ? input.name.trim() : "";
 
-    const variants = await loadSaleVariants(ctx, variantIds);
-    if (variants.length === 0) {
-      return toolNotFound("None of those variant IDs exist in this store.");
-    }
-    if (variants.length !== variantIds.length) {
-      const found = new Set(variants.map((variant) => variant.variantId));
-      const missing = variantIds.filter((id) => !found.has(id));
-      return toolError(
-        `Error: ${missing.length} of those variant IDs do not exist in this store, so nothing was `
-        + `applied: ${missing.join(", ")}.`,
-      );
+    // Only the enumerated form has variants to resolve. A catalog-wide sale
+    // names no products at all, so there is nothing to look up and nothing that
+    // can be missing.
+    let variants: SaleVariant[] = [];
+    if (scope === "variants") {
+      const variantIds = requireVariantIds(input.variant_ids);
+      variants = await loadSaleVariants(ctx, variantIds);
+      if (variants.length === 0) {
+        return toolNotFound("None of those variant IDs exist in this store.");
+      }
+      if (variants.length !== variantIds.length) {
+        const found = new Set(variants.map((variant) => variant.variantId));
+        const missing = variantIds.filter((id) => !found.has(id));
+        return toolError(
+          `Error: ${missing.length} of those variant IDs do not exist in this store, so nothing was `
+          + `applied: ${missing.join(", ")}.`,
+        );
+      }
     }
 
     const endsAt = new Date(now.getTime() + hours * 3_600_000);
@@ -234,7 +255,9 @@ export async function createFlashSale(
           endsAt: endsAt.toISOString(),
           minimumRequirement: { quantity: { greaterThanOrEqualToQuantity: "1" } },
           customerGets: {
-            items: { products: { productVariantsToAdd: variants.map((v) => v.variantId) } },
+            items: scope === "entire_catalog"
+              ? { all: true }
+              : { products: { productVariantsToAdd: variants.map((v) => v.variantId) } },
             value: { percentage: percentage / 100 },
           },
         },
@@ -252,12 +275,13 @@ export async function createFlashSale(
     return toolOk(
       [
         `Started "${title}".`,
-        ...describeSale(variants, percentage, endsAt),
+        ...describeSale(scope, variants, percentage, endsAt),
         `End it early with end_flash_sale and this ID: ${id}`,
       ].join("\n"),
       {
         flashSaleId: id,
-        variantCount: variants.length,
+        appliesTo: scope,
+        ...(scope === "variants" ? { variantCount: variants.length } : {}),
         discountPercent: percentage,
         endsAt: endsAt.toISOString(),
       },

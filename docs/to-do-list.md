@@ -64,12 +64,14 @@ provider. **None of these is a code task.**
 
 ### Operator and agent
 
-- [ ] **Run the flash-sale pair against a real store.** `set_variant_prices` is verified
-  live — scope guard and a committed price change on `palette-dev`
-  — but `create_flash_sale` and `end_flash_sale` have never run outside tests. Start one
-  on a cheap variant, end it, confirm the price returns. They need only `write_discounts`,
-  granted well before `-28`, so nothing gates this. Evals cannot cover any of it: every
-  Shopify tool result in the suite is simulated.
+- [ ] **Verify the flash-sale listing and a storewide sale on `palette-dev`.**
+  `set_variant_prices`, `create_flash_sale` over named variants, and `end_flash_sale` by
+  ID are all verified live (2026-08-29). Two paths are not. The no-ID listing returned
+  nothing on every store until the `automaticDiscountNodes` fix, so ask "what sales are
+  running?" with a sale live and no ID in the conversation. And `applies_to:
+  "entire_catalog"` has never run outside tests — start one, confirm Shopify shows every
+  product discounted, end it. Both need only `write_discounts`. Evals cannot cover any of
+  it: every Shopify tool result in the suite is simulated.
 - [ ] **Confirm a cold operator turn now opens warm.** Text the bot after more than five
   minutes of silence, then read `firstCallBudgetTokens` off the turn's `agent_turn_usage`
   row (`inspect-turn-usage.ts`) against `TOKEN_BUDGET` in `run-policy.ts`. The operator

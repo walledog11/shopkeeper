@@ -16,6 +16,7 @@ import type { ShopifyContext } from '@shopkeeper/agent/shopify';
 import type {
   CreateFlashSaleInput,
   EndFlashSaleInput,
+  FlashSaleScope,
   SetVariantPricesInput,
 } from '@shopkeeper/agent/tools';
 
@@ -65,9 +66,10 @@ export function buildOperatorShopTools(
   const createFlashSaleTool = defineTool({
     name: 'create_flash_sale',
     description:
-      'Start a time-limited sale on specific product variants. You must list the variant IDs individually — there is no way to discount a whole collection or the entire catalog, and asking for one will be refused. Every sale expires: give the duration in hours. Prices are never edited, so ending the sale restores them exactly. Use get_inventory_status or search_shopify_products first to resolve variant IDs.',
+      'Start a time-limited sale. Set applies_to to "entire_catalog" for a storewide sale — one discount covering every product, so it needs no variant list — or to "variants" to name individual variants. Every sale expires: give the duration in hours. Prices are never edited, so ending the sale restores them exactly, whatever it covered. For the variants form, use get_inventory_status or search_shopify_products first to resolve variant IDs.',
     fields: {
-      variant_ids: stringArg('Comma-separated Shopify variant IDs the sale applies to, each either the bare number or the full gid.', { required: true }),
+      applies_to: stringArg('What the sale covers: "entire_catalog" for every product in the store, or "variants" for a named list.', { required: true, enum: ['entire_catalog', 'variants'] }),
+      variant_ids: stringArg('Comma-separated Shopify variant IDs, each either the bare number or the full gid. Required when applies_to is "variants"; omit it for a storewide sale.'),
       discount_percentage: numberArg('Percent off, 1-100.', { required: true }),
       duration_hours: numberArg('How many hours the sale runs before Shopify ends it.', { required: true }),
       name: stringArg('Short name for the sale, shown in Shopify.'),
@@ -77,14 +79,16 @@ export function buildOperatorShopTools(
     capabilities: [],
     label: 'Started a flash sale',
     planStepLabel: 'Start flash sale',
-    execute: async (input: { variant_ids: string; discount_percentage: number; duration_hours: number; name?: string }) => {
+    execute: async (input: { applies_to: FlashSaleScope; variant_ids?: string; discount_percentage: number; duration_hours: number; name?: string }) => {
       const shop = await loadShopContext(organizationId);
       if (!shop) return toolError('Error: no Shopify integration connected.');
       if (!grantCoversScopes(shop.grantedScopes, FLASH_SALE_SCOPES)) {
         return toolError(missingScopeError(shop.grantedScopes, FLASH_SALE_SCOPES));
       }
+      const variantIds = (input.variant_ids ?? '').split(',').map((id) => id.trim()).filter(Boolean);
       const payload: CreateFlashSaleInput = {
-        variant_ids: input.variant_ids.split(',').map((id) => id.trim()).filter(Boolean),
+        applies_to: input.applies_to,
+        ...(variantIds.length > 0 ? { variant_ids: variantIds } : {}),
         discount_percentage: input.discount_percentage,
         duration_hours: input.duration_hours,
         ...(input.name ? { name: input.name } : {}),
@@ -118,7 +122,7 @@ export function buildOperatorShopTools(
   const setVariantPricesTool = defineTool({
     name: 'set_variant_prices',
     description:
-      'Permanently change the price of specific variants. Each variant is named with its own new price, as "variantId=price" pairs — there is no way to reprice a collection, a pattern, or the whole catalog. The previous prices are recorded in the result. For a temporary markdown use create_flash_sale instead, which expires on its own.',
+      'Permanently change the price of specific variants. Each variant is named with its own new price, as "variantId=price" pairs, and the previous prices come back in the result. That record is the only way back, which is why a collection or the whole catalog cannot be repriced in one call the way a sale can cover one: undoing it is a second bulk write that can half-fail. For a temporary markdown use create_flash_sale instead — it expires on its own and needs no undo.',
     fields: {
       prices: stringArg('Comma-separated variantId=price pairs. The variant ID may be the bare number or the full gid, e.g. "1234567=19.99" or "gid://shopify/ProductVariant/1234567=19.99".', { required: true }),
     },

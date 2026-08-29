@@ -42,6 +42,7 @@ describe("createFlashSale", () => {
 
     const result = await createFlashSale(
       {
+        applies_to: "variants",
         variant_ids: ["gid://shopify/ProductVariant/1"],
         discount_percentage: 20,
         duration_hours: 24,
@@ -70,6 +71,7 @@ describe("createFlashSale", () => {
 
     const result = await createFlashSale(
       {
+        applies_to: "variants",
         variant_ids: ["gid://shopify/ProductVariant/1"],
         discount_percentage: 20,
         duration_hours: 24,
@@ -89,6 +91,7 @@ describe("createFlashSale", () => {
 
     const result = await createFlashSale(
       {
+        applies_to: "variants",
         variant_ids: ["gid://shopify/ProductVariant/1", "gid://shopify/ProductVariant/404"],
         discount_percentage: 10,
         duration_hours: 4,
@@ -106,7 +109,7 @@ describe("createFlashSale", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await createFlashSale(
-      { variant_ids: variantIds(1), discount_percentage: 10, duration_hours: 0 },
+      { applies_to: "variants", variant_ids: variantIds(1), discount_percentage: 10, duration_hours: 0 },
       ctx,
       NOW,
     );
@@ -116,12 +119,81 @@ describe("createFlashSale", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("discounts the whole catalog without naming a product", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      data: {
+        discountAutomaticBasicCreate: {
+          automaticDiscountNode: { id: "gid://shopify/DiscountAutomaticNode/9" },
+          userErrors: [],
+        },
+      },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await createFlashSale(
+      { applies_to: "entire_catalog", discount_percentage: 50, duration_hours: 2 },
+      ctx,
+      NOW,
+    );
+
+    // One call, not two: a catalog-wide sale resolves no variants, so there is
+    // nothing to look up and nothing that can be half-found.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const sent = JSON.parse(String(fetchMock.mock.calls[0][1].body)).variables;
+    expect(sent.automaticBasicDiscount.customerGets.items).toEqual({ all: true });
+    expect(sent.automaticBasicDiscount.endsAt).toBe("2026-04-29T14:00:00.000Z");
+    expect(result.status).toBe("ok");
+    expect(result.message).toContain("every product in the store");
+  });
+
+  it("ignores variant ids that came with a catalog-wide sale", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      data: {
+        discountAutomaticBasicCreate: {
+          automaticDiscountNode: { id: "gid://shopify/DiscountAutomaticNode/9" },
+          userErrors: [],
+        },
+      },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await createFlashSale(
+      {
+        applies_to: "entire_catalog",
+        variant_ids: ["gid://shopify/ProductVariant/1"],
+        discount_percentage: 50,
+        duration_hours: 2,
+      },
+      ctx,
+      NOW,
+    );
+
+    const sent = JSON.parse(String(fetchMock.mock.calls[0][1].body)).variables;
+    expect(sent.automaticBasicDiscount.customerGets.items).toEqual({ all: true });
+    expect(result.status).toBe("ok");
+  });
+
+  it("refuses a target it does not recognise rather than guessing one", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await createFlashSale(
+      { applies_to: "everything" as never, discount_percentage: 50, duration_hours: 2 },
+      ctx,
+      NOW,
+    );
+
+    expect(result.status).toBe("error");
+    expect(result.message).toContain("applies_to");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("rejects an empty variant list before touching Shopify", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await createFlashSale(
-      { variant_ids: [], discount_percentage: 10, duration_hours: 4 },
+      { applies_to: "variants", variant_ids: [], discount_percentage: 10, duration_hours: 4 },
       ctx,
       NOW,
     );
