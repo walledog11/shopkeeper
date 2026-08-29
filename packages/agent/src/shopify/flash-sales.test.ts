@@ -42,6 +42,7 @@ describe("createFlashSale", () => {
 
     const result = await createFlashSale(
       {
+        applies_to: "variants",
         variant_ids: ["gid://shopify/ProductVariant/1"],
         discount_percentage: 20,
         duration_hours: 24,
@@ -70,6 +71,7 @@ describe("createFlashSale", () => {
 
     const result = await createFlashSale(
       {
+        applies_to: "variants",
         variant_ids: ["gid://shopify/ProductVariant/1"],
         discount_percentage: 20,
         duration_hours: 24,
@@ -89,6 +91,7 @@ describe("createFlashSale", () => {
 
     const result = await createFlashSale(
       {
+        applies_to: "variants",
         variant_ids: ["gid://shopify/ProductVariant/1", "gid://shopify/ProductVariant/404"],
         discount_percentage: 10,
         duration_hours: 4,
@@ -106,7 +109,7 @@ describe("createFlashSale", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await createFlashSale(
-      { variant_ids: variantIds(1), discount_percentage: 10, duration_hours: 0 },
+      { applies_to: "variants", variant_ids: variantIds(1), discount_percentage: 10, duration_hours: 0 },
       ctx,
       NOW,
     );
@@ -116,12 +119,81 @@ describe("createFlashSale", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("discounts the whole catalog without naming a product", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      data: {
+        discountAutomaticBasicCreate: {
+          automaticDiscountNode: { id: "gid://shopify/DiscountAutomaticNode/9" },
+          userErrors: [],
+        },
+      },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await createFlashSale(
+      { applies_to: "entire_catalog", discount_percentage: 50, duration_hours: 2 },
+      ctx,
+      NOW,
+    );
+
+    // One call, not two: a catalog-wide sale resolves no variants, so there is
+    // nothing to look up and nothing that can be half-found.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const sent = JSON.parse(String(fetchMock.mock.calls[0][1].body)).variables;
+    expect(sent.automaticBasicDiscount.customerGets.items).toEqual({ all: true });
+    expect(sent.automaticBasicDiscount.endsAt).toBe("2026-04-29T14:00:00.000Z");
+    expect(result.status).toBe("ok");
+    expect(result.message).toContain("every product in the store");
+  });
+
+  it("ignores variant ids that came with a catalog-wide sale", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      data: {
+        discountAutomaticBasicCreate: {
+          automaticDiscountNode: { id: "gid://shopify/DiscountAutomaticNode/9" },
+          userErrors: [],
+        },
+      },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await createFlashSale(
+      {
+        applies_to: "entire_catalog",
+        variant_ids: ["gid://shopify/ProductVariant/1"],
+        discount_percentage: 50,
+        duration_hours: 2,
+      },
+      ctx,
+      NOW,
+    );
+
+    const sent = JSON.parse(String(fetchMock.mock.calls[0][1].body)).variables;
+    expect(sent.automaticBasicDiscount.customerGets.items).toEqual({ all: true });
+    expect(result.status).toBe("ok");
+  });
+
+  it("refuses a target it does not recognise rather than guessing one", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await createFlashSale(
+      { applies_to: "everything" as never, discount_percentage: 50, duration_hours: 2 },
+      ctx,
+      NOW,
+    );
+
+    expect(result.status).toBe("error");
+    expect(result.message).toContain("applies_to");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("rejects an empty variant list before touching Shopify", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await createFlashSale(
-      { variant_ids: [], discount_percentage: 10, duration_hours: 4 },
+      { applies_to: "variants", variant_ids: [], discount_percentage: 10, duration_hours: 4 },
       ctx,
       NOW,
     );
@@ -162,10 +234,10 @@ describe("endFlashSale", () => {
   it("lists what is running when no id is given", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
       data: {
-        discountNodes: {
+        automaticDiscountNodes: {
           nodes: [{
             id: "gid://shopify/DiscountAutomaticNode/9",
-            discount: {
+            automaticDiscount: {
               title: "Shopkeeper flash sale: Weekend",
               status: "ACTIVE",
               endsAt: "2026-04-30T12:00:00Z",
@@ -182,6 +254,35 @@ describe("endFlashSale", () => {
     expect(result.message).toContain("gid://shopify/DiscountAutomaticNode/9");
   });
 
+  // The listing shipped broken because every test here stubs the response and
+  // so grades the parser, never the request. Shopify does not validate a search
+  // argument: `query: "type:automatic"` matched nothing on every store, and no
+  // amount of well-shaped fixture data could show it.
+  it("asks the automatic-discount connection directly, with no search argument", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      data: { automaticDiscountNodes: { nodes: [] } },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await endFlashSale({}, ctx);
+
+    const sent = JSON.parse(String(fetchMock.mock.calls[0][1].body)).query;
+    expect(sent).toContain("automaticDiscountNodes(first: $first)");
+    expect(sent).not.toContain("query:");
+  });
+
+  it("says it checked rather than implying the sale was ended", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+      data: { automaticDiscountNodes: { nodes: [] } },
+    })));
+
+    const result = await endFlashSale({}, ctx);
+
+    expect(result.status).toBe("not_found");
+    expect(result.message).toContain("Checked");
+    expect(result.message).not.toMatch(/\bended\b/i);
+  });
+
   it("reports a missing sale rather than claiming success", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
       data: { discountAutomaticDelete: { deletedAutomaticDiscountId: null, userErrors: [] } },
@@ -196,14 +297,27 @@ describe("endFlashSale", () => {
 describe("readFlashSales", () => {
   it("skips nodes Shopify returned without a usable discount", () => {
     expect(readFlashSales({
-      discountNodes: {
+      automaticDiscountNodes: {
         nodes: [
           null,
-          { id: "gid://1", discount: null },
-          { id: null, discount: { title: "x" } },
-          { id: "gid://2", discount: { title: "Real", status: "ACTIVE", endsAt: null } },
+          { id: "gid://1", automaticDiscount: null },
+          { id: null, automaticDiscount: { title: "x", status: "ACTIVE" } },
+          { id: "gid://2", automaticDiscount: { title: "Real", status: "ACTIVE", endsAt: null } },
         ],
       },
     })).toEqual([{ id: "gid://2", title: "Real", status: "ACTIVE", endsAt: null }]);
+  });
+
+  // The connection returns every automatic discount the store has ever had.
+  it("leaves out discounts that are not currently running", () => {
+    expect(readFlashSales({
+      automaticDiscountNodes: {
+        nodes: [
+          { id: "gid://1", automaticDiscount: { title: "Last June", status: "EXPIRED", endsAt: null } },
+          { id: "gid://2", automaticDiscount: { title: "Next week", status: "SCHEDULED", endsAt: null } },
+          { id: "gid://3", automaticDiscount: { title: "Live", status: "ACTIVE", endsAt: null } },
+        ],
+      },
+    })).toEqual([{ id: "gid://3", title: "Live", status: "ACTIVE", endsAt: null }]);
   });
 });

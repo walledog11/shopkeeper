@@ -33,6 +33,7 @@ export type {
   EndFlashSaleInput,
   EscalateToHumanInput,
   FindCustomerInput,
+  FlashSaleScope,
   FulfillOrderInput,
   GetInventoryStatusInput,
   GetOrderByNameInput,

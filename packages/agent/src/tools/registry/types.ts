@@ -213,15 +213,20 @@ export interface GetInventoryStatusInput {
 }
 
 /**
- * A sale over named variants. There is no query, collection, or "all products"
- * form: the set is enumerated or the sale does not exist.
+ * A sale is one automatic discount with an expiry, so what it covers is a
+ * property of that single object rather than a count of writes. `applies_to`
+ * names the target the way Shopify models it; `variant_ids` belongs to the
+ * enumerated form and is meaningless without it.
  */
 export interface CreateFlashSaleInput {
-  variant_ids: string[];
+  applies_to: FlashSaleScope;
+  variant_ids?: string[];
   discount_percentage: number;
   duration_hours: number;
   name?: string;
 }
+
+export type FlashSaleScope = "entire_catalog" | "variants";
 
 /** Omitting the id lists what is running, so ending one is always one call. */
 export interface EndFlashSaleInput {
