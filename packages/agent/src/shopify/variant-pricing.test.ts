@@ -1,13 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsonResponse } from "../testing/json-response.js";
-import { deepestMarkdownPercent, setVariantPrices } from "./variant-pricing.js";
-import { resolveAgentSettings } from "../settings.js";
+import { setVariantPrices } from "./variant-pricing.js";
 
 const ctx = { shop: "test-store.myshopify.com", accessToken: "shpat_test" };
-const NOW = new Date("2026-04-29T12:00:00Z");
-const SETTINGS = resolveAgentSettings(null);
 
-/** The three calls a successful reprice makes, in order. */
+/** The two calls a successful reprice makes, in order. */
 function successfulFetch(price = "48.00") {
   return vi.fn()
     .mockResolvedValueOnce(jsonResponse({
@@ -16,17 +13,6 @@ function successfulFetch(price = "48.00") {
           id: "gid://shopify/ProductVariant/1",
           price,
           product: { id: "gid://shopify/Product/1" },
-        }],
-      },
-    }))
-    .mockResolvedValueOnce(jsonResponse({
-      data: {
-        nodes: [{
-          id: "gid://shopify/ProductVariant/1",
-          title: "Set of 4",
-          price,
-          inventoryQuantity: 2,
-          product: { title: "Olive Linen Napkins" },
         }],
       },
     }))
@@ -45,28 +31,6 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("deepestMarkdownPercent", () => {
-  // Averaging would let one catastrophic cut hide behind mild ones.
-  it("takes the steepest cut, not the average", () => {
-    expect(deepestMarkdownPercent([
-      { variantId: "a", originalPriceCents: 10_000, newPriceCents: 9_500 },
-      { variantId: "b", originalPriceCents: 10_000, newPriceCents: 1_000 },
-    ])).toBe(90);
-  });
-
-  it("treats a price increase as no markdown", () => {
-    expect(deepestMarkdownPercent([
-      { variantId: "a", originalPriceCents: 1_000, newPriceCents: 2_000 },
-    ])).toBe(0);
-  });
-
-  it("ignores a variant that had no price to cut", () => {
-    expect(deepestMarkdownPercent([
-      { variantId: "a", originalPriceCents: 0, newPriceCents: 0 },
-    ])).toBe(0);
-  });
-});
-
 describe("setVariantPrices", () => {
   it("records the original prices alongside the change", async () => {
     vi.stubGlobal("fetch", successfulFetch());
@@ -74,11 +38,8 @@ describe("setVariantPrices", () => {
     const result = await setVariantPrices(
       {
         prices: [{ variant_id: "gid://shopify/ProductVariant/1", price: 44 }],
-        revisit_in_hours: 72,
       },
       ctx,
-      SETTINGS,
-      NOW,
     );
 
     expect(result.status).toBe("ok");
@@ -92,43 +53,6 @@ describe("setVariantPrices", () => {
     });
   });
 
-  // A permanent 90% cut is the same exposure as a temporary one, so the guard
-  // applies to repricing too.
-  it("refuses a markdown deeper than the guard allows", async () => {
-    const fetchMock = successfulFetch();
-    vi.stubGlobal("fetch", fetchMock);
-
-    const result = await setVariantPrices(
-      {
-        prices: [{ variant_id: "gid://shopify/ProductVariant/1", price: 4.8 }],
-        revisit_in_hours: 72,
-      },
-      ctx,
-      SETTINGS,
-      NOW,
-    );
-
-    expect(result.status).toBe("error");
-    expect(result.message).toContain("nothing was applied");
-    // Two reads happened; the update did not.
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it("refuses when the guard has no revisit horizon to bound the change", async () => {
-    const fetchMock = successfulFetch();
-    vi.stubGlobal("fetch", fetchMock);
-
-    const result = await setVariantPrices(
-      { prices: [{ variant_id: "gid://shopify/ProductVariant/1", price: 44 }] },
-      ctx,
-      SETTINGS,
-      NOW,
-    );
-
-    expect(result.status).toBe("error");
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
   it("changes nothing when a named variant does not exist", async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ data: { nodes: [] } }));
     vi.stubGlobal("fetch", fetchMock);
@@ -136,16 +60,51 @@ describe("setVariantPrices", () => {
     const result = await setVariantPrices(
       {
         prices: [{ variant_id: "gid://shopify/ProductVariant/404", price: 10 }],
-        revisit_in_hours: 24,
       },
       ctx,
-      SETTINGS,
-      NOW,
     );
 
     expect(result.status).toBe("error");
     expect(result.message).toContain("no price was changed");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  // The model writes the bare number first on almost every reprice. Before this
+  // it cost a round-trip to Shopify's `Invalid global id` and a retry, which is
+  // two wasted iterations against the turn's token budget.
+  it("accepts a bare numeric variant id as the full gid", async () => {
+    vi.stubGlobal("fetch", successfulFetch());
+
+    const result = await setVariantPrices(
+      { prices: [{ variant_id: "1", price: 44 }] },
+      ctx,
+    );
+
+    expect(result.status).toBe("ok");
+    expect(result.data).toEqual({
+      priceChanges: [{
+        variantId: "gid://shopify/ProductVariant/1",
+        originalPriceCents: 4_800,
+        newPriceCents: 4_400,
+      }],
+    });
+  });
+
+  // An id the model invented out of option names never reaches the network.
+  it("rejects a non-numeric variant id without calling Shopify", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await setVariantPrices(
+      {
+        prices: [{ variant_id: "gid://shopify/ProductVariant/Medium-Sand", price: 148 }],
+      },
+      ctx,
+    );
+
+    expect(result.status).toBe("error");
+    expect(result.message).toContain("Medium-Sand");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("rejects the same variant named twice", async () => {
@@ -158,11 +117,8 @@ describe("setVariantPrices", () => {
           { variant_id: "gid://shopify/ProductVariant/1", price: 10 },
           { variant_id: "gid://shopify/ProductVariant/1", price: 20 },
         ],
-        revisit_in_hours: 24,
       },
       ctx,
-      SETTINGS,
-      NOW,
     );
 
     expect(result.status).toBe("error");
@@ -175,10 +131,8 @@ describe("setVariantPrices", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await setVariantPrices(
-      { prices: [], revisit_in_hours: 24 },
+      { prices: [] },
       ctx,
-      SETTINGS,
-      NOW,
     );
 
     expect(result.status).toBe("error");
@@ -200,24 +154,11 @@ describe("setVariantPrices", () => {
           }],
         },
       }))
-      .mockResolvedValueOnce(jsonResponse({
-        data: {
-          nodes: [{
-            id: "gid://shopify/ProductVariant/1",
-            title: "Set of 4",
-            price: "48.00",
-            inventoryQuantity: 2,
-            product: { title: "Olive Linen Napkins" },
-          }],
-        },
-      }))
       .mockRejectedValueOnce(new TypeError("connection reset")));
 
     const result = await setVariantPrices(
-      { prices: [{ variant_id: "gid://shopify/ProductVariant/1", price: 44 }], revisit_in_hours: 24 },
+      { prices: [{ variant_id: "gid://shopify/ProductVariant/1", price: 44 }] },
       ctx,
-      SETTINGS,
-      NOW,
     );
 
     expect(result.status).toBe("unknown");
@@ -234,17 +175,6 @@ describe("setVariantPrices", () => {
     });
     vi.stubGlobal("fetch", vi.fn()
       .mockResolvedValueOnce(jsonResponse({ data: { nodes: [variant("1", "1"), variant("2", "2")] } }))
-      .mockResolvedValueOnce(jsonResponse({
-        data: {
-          nodes: [1, 2].map((n) => ({
-            id: `gid://shopify/ProductVariant/${n}`,
-            title: "Set of 4",
-            price: "48.00",
-            inventoryQuantity: 2,
-            product: { title: "Olive Linen Napkins" },
-          })),
-        },
-      }))
       // One product commits, the next never answers.
       .mockResolvedValueOnce(jsonResponse({
         data: {
@@ -262,11 +192,8 @@ describe("setVariantPrices", () => {
           { variant_id: "gid://shopify/ProductVariant/1", price: 44 },
           { variant_id: "gid://shopify/ProductVariant/2", price: 44 },
         ],
-        revisit_in_hours: 24,
       },
       ctx,
-      SETTINGS,
-      NOW,
     );
 
     expect(result.status).toBe("unknown");
@@ -286,17 +213,6 @@ describe("setVariantPrices", () => {
       }))
       .mockResolvedValueOnce(jsonResponse({
         data: {
-          nodes: [{
-            id: "gid://shopify/ProductVariant/1",
-            title: "Set of 4",
-            price: "48.00",
-            inventoryQuantity: 2,
-            product: { title: "Olive Linen Napkins" },
-          }],
-        },
-      }))
-      .mockResolvedValueOnce(jsonResponse({
-        data: {
           productVariantsBulkUpdate: {
             productVariants: [],
             userErrors: [{ field: ["price"], message: "Price is invalid" }],
@@ -307,11 +223,8 @@ describe("setVariantPrices", () => {
     const result = await setVariantPrices(
       {
         prices: [{ variant_id: "gid://shopify/ProductVariant/1", price: 44 }],
-        revisit_in_hours: 72,
       },
       ctx,
-      SETTINGS,
-      NOW,
     );
 
     expect(result.status).toBe("error");

@@ -117,8 +117,8 @@ connected store against. It is not proof of what the Dashboard grants.
 ### Webhooks
 
 Endpoint: `POST https://clerk-production-e37f.up.railway.app/webhooks/shopify`
-(gateway `shopkeeper` service, `routes/webhooks-shopify.ts:18`, mounted under
-`/webhooks` by `routes/webhooks.ts:25`).
+(gateway `shopkeeper` service, `registerShopifyWebhookRoutes` in `routes/webhooks-shopify.ts`, mounted under
+`/webhooks` by `routes/webhooks.ts`).
 
 | Topic | Handling |
 | --- | --- |
@@ -132,7 +132,7 @@ Endpoint: `POST https://clerk-production-e37f.up.railway.app/webhooks/shopify`
 message that introduced it, `ea1d12ee` — claimed there was "no webhook
 registration code anywhere in the repo" and concluded subscriptions were
 Dashboard-configured. **Both halves are wrong.** The registration lives at
-`apps/dashboard/src/app/api/integrations/shopify/callback/route.ts:368-392`: on
+`apps/dashboard/src/app/api/integrations/shopify/callback/`: on
 every OAuth callback the app POSTs each of `SHOPIFY_WEBHOOK_TOPICS`
 (`route.ts:30`, the same five topics above) to the REST Admin `webhooks.json`,
 pointing at `${GATEWAY_INTERNAL_URL}/webhooks/shopify`. The original grep

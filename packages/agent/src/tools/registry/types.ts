@@ -234,7 +234,6 @@ export interface EndFlashSaleInput {
  */
 export interface SetVariantPricesInput {
   prices: { variant_id: string; price: number }[];
-  revisit_in_hours?: number;
 }
 
 export interface SearchKbInput {

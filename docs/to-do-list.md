@@ -65,22 +65,21 @@ provider. **None of these is a code task.**
 ### Operator and agent
 
 - [ ] **Run the flash-sale pair against a real store.** `set_variant_prices` is verified
-  live — scope guard, value-at-risk refusal, and a committed price change on `palette-dev`
+  live — scope guard and a committed price change on `palette-dev`
   — but `create_flash_sale` and `end_flash_sale` have never run outside tests. Start one
   on a cheap variant, end it, confirm the price returns. They need only `write_discounts`,
   granted well before `-28`, so nothing gates this. Evals cannot cover any of it: every
   Shopify tool result in the suite is simulated.
-- [ ] **Confirm a cold operator turn now opens warm.** Text the bot after more than
-  five minutes of silence and read the first turn's weighted tokens against
-  `TOKEN_BUDGET = 20_000` (`run-policy.ts:9`). The operator prompt now has a stable
-  prefix, so the 1h cache block exists and `stableCacheCreation` should stop counting its
-  write tokens at the 1.25x weight; cold turns previously opened at 19,047–19,721 and
-  ended at `token_budget` with the work unfinished. Verify by phone, not evals.
-- [ ] **Confirm a refused write no longer invents a way out.** Every value-at-risk
-  refusal now names a remedy that exists, and none offers to raise a limit in Settings —
-  there is no such control. Push a reprice past the bound by phone and read what the
-  agent proposes: lowering the discount or naming fewer variants is the way out, a
-  partial-inventory reprice is not one. Verify by live phone round-trip, not evals.
+- [ ] **Confirm a cold operator turn now opens warm.** Text the bot after more than five
+  minutes of silence, then read `firstCallBudgetTokens` off the turn's `agent_turn_usage`
+  row (`inspect-turn-usage.ts`) against `TOKEN_BUDGET` in `run-policy.ts`. The operator
+  prompt now has a stable prefix, so the 1h cache block exists and `stableCacheCreation`
+  should stop counting its write tokens at the 1.25x weight. **Expect a small number.**
+  Measured 2026-08-29 with `measure-agent-prompt.ts`, the whole operator prompt is 4,949
+  tokens — 5,983 weighted if nothing is attributed to the 1h block, 1,228 warm. The
+  19,047–19,721 this item used to quote was a *support*-turn figure and never applied
+  here; a support thread measures 9,281 before its KB articles and history load. Verify by
+  phone, not evals.
 - [ ] **Approve a plan in prose, by phone.** Text "go ahead and approve the refund" at a
   real pending plan and watch for `approve_pending_plan` rather than an order lookup.
   Operator prompt changes are never verified by evals.
@@ -114,11 +113,13 @@ provider. **None of these is a code task.**
   done. Launch is gated on Meta App Review plus a non-role merchant account completing
   the full DM loop: connect → inbound → approve reply → disconnect/reconnect. Ops in
   [runbook.md](production/runbook.md).
-- [ ] **Read the release grant back on the connected production store.** `palette-dev`
-  is done — 22 scopes, `write_products` granted and reflected in
-  `Integration.metadata.oauthScopes`, `write_app_proxy` present, and the stale 38-scope
-  grant the 2026-08-04 validation found is gone. The production store was never checked:
-  `shopify app execute --store <domain>` could not reach it from the release account.
+- [ ] **Read the release grant back from Shopify, not from our own row.** The connected
+  production store *is* `palette-dev-3peukw16.myshopify.com` — there is no second store,
+  and earlier wording here implied one. `Integration.metadata.oauthScopes` currently
+  records 12 scopes for it including `write_products` and `write_app_proxy`, but that is
+  our copy of the grant, written at OAuth callback. What has never been done is reading
+  the grant back from Shopify's side, because `shopify app execute --store <domain>` could
+  not reach it from the release account.
   Read it with
   `{ currentAppInstallation { app { title } accessScopes { handle } } }` and expect the
   Shopify card to read needs-attention until that merchant re-authorizes — the intended
@@ -214,28 +215,6 @@ Gated-off integrations cost nothing to keep dark.
 - [ ] **`quick-reply-thanks-ack` passes 1/3.** The only fixture below full, and advisory,
   so it does not gate. Runs classify `needs_review` after repeated `get_order_by_name`
   errors and escalate.
-- [ ] **Decide what the promotion value-at-risk bound should measure.** It is
-  `gross inventory value × rounded depth` (`value-at-risk.ts:142`) against a $500 default,
-  which on the first live reprice allowed a **1.4% markdown** on a $749.95 item with 48
-  units: gross $35,997.60, so $500 of headroom buys almost nothing. The bound scales with
-  stock on hand, so it tightens exactly where a merchant is most likely to want a
-  markdown. Two questions, and the first governs: is "every unit sells at the new price"
-  the right basis, or should a depth ceiling plus a per-unit-delta bound carry it? Then,
-  whatever the basis, `maxPromotionValueAtRiskCents` has to become reachable — and none
-  of the four `maxPromotion*` bounds is. Each is defaulted at `settings.ts:63-66` and
-  parsed at `settings-parser.ts:44`, but `apps/dashboard/src` and `apps/gateway/src`
-  contain zero references between them, so neither the merchant nor the agent can raise
-  any of them. The refusals no longer promise a Settings control, so the gap is visible
-  rather than papered over. The refusal is correct; being unable to answer it is not.
-  **A price raise is bounded by none of it.** `deepestMarkdownPercent` skips any change
-  where the new price is not lower, so depth is 0 and value at risk is `gross × 0` — a
-  50× raise measures zero and clears both monetary checks, leaving only variant count and
-  TTL. Coherent if the guard exists to stop money being given away, which is how it is
-  framed; less so for a tool that writes a live storefront price, where a wrong raise is
-  the same class of visible error as a wrong refund. Decide whether the bound is about
-  discounting or about price blast radius — the answer changes what it measures. Note
-  also that no live run has yet had a *markdown* pass this guard: the one committed
-  reprice was a raise, so the monetary checks were inert.
 - [ ] **Give the operator agent a way to read back what it changed.** `set_variant_prices`
   is permanent and its stated rollback is the original prices in its own result, but no
   operator tool reads `AgentAction` history — the set is approve/reject/revise/answer,

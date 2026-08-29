@@ -16,15 +16,19 @@ export default defineConfig({
         'src/**/*.d.ts',
         'src/**/test-fixtures/**',
         'src/test-setup.ts',
+        // Hand-run diagnostics and canaries, entered by tsx and imported by
+        // nothing the service runs. Counting them measures how many one-off
+        // scripts exist, not how well the gateway is tested.
+        'src/scripts/**',
       ],
       reporter: ['text', 'json-summary', 'lcov', 'html'],
       reportsDirectory: './coverage',
       reportOnFailure: true,
       thresholds: {
-        statements: 67.26,
-        branches: 62.84,
-        functions: 67.58,
-        lines: 68.74,
+        statements: 83,
+        branches: 75,
+        functions: 84.3,
+        lines: 84.8,
       },
     },
   },

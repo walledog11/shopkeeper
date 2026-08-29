@@ -7,16 +7,37 @@ import {
   type ShopifyGraphqlUserError,
 } from "./client.js";
 import { toolError, toolNotFound, toolOk, toolUnknown, type ToolResult } from "../tools/result.js";
-import { moneyToCents, ShopifyInputError } from "./validation.js";
+import { requireVariantGid, ShopifyInputError } from "./validation.js";
 import { VARIANT_PRICES_QUERY } from "./exchanges.js";
-import {
-  assessValueAtRisk,
-  formatValueAtRiskPreview,
-  formatValueAtRiskRefusal,
-  type ValueAtRiskVariant,
-} from "../tools/value-at-risk.js";
-import type { OrgSettings } from "../types.js";
 import type { CreateFlashSaleInput, EndFlashSaleInput } from "../tools/registry/types.js";
+
+/** One variant a sale names, titled from the store's own record. */
+export interface SaleVariant {
+  variantId: string;
+  title?: string;
+}
+
+const SAMPLE_TITLE_LIMIT = 5;
+
+/**
+ * What the sale hit, rendered from fields. Length is controlled by choosing how
+ * many titles to show, never by truncating the line.
+ */
+function describeSale(
+  variants: readonly SaleVariant[],
+  discountPercent: number,
+  endsAt: Date,
+): string[] {
+  const shown = variants.slice(0, SAMPLE_TITLE_LIMIT)
+    .map((variant) => variant.title ?? variant.variantId);
+  const more = variants.length - shown.length;
+  return [
+    `Variants: ${variants.length}`,
+    `Discount: ${discountPercent}%`,
+    `Ends: ${endsAt.toISOString()}`,
+    `Affected: ${shown.join(", ")}${more > 0 ? ` and ${more} more` : ""}`,
+  ];
+}
 
 /**
  * A flash sale is an automatic discount with an end date, never a price edit.
@@ -121,21 +142,19 @@ export interface FlashSaleSummary {
 }
 
 /**
- * Price and stock for the variants a sale names, read fresh.
- *
- * The exposure is computed from what Shopify says now, not from anything the
- * model asserted, so a model that understates a price cannot talk its way under
- * the money bound.
+ * The variants a sale names, titled from what Shopify says now rather than from
+ * anything the model asserted, so the merchant reads the store's own names for
+ * what is about to change.
  */
-export async function loadVariantsAtRisk(
+export async function loadSaleVariants(
   ctx: ShopifyContext,
   variantIds: readonly string[],
-): Promise<ValueAtRiskVariant[]> {
+): Promise<SaleVariant[]> {
   const data = await shopifyGraphql<VariantPricesData>(ctx, VARIANT_PRICES_QUERY, {
     ids: [...variantIds],
   });
 
-  const found: ValueAtRiskVariant[] = [];
+  const found: SaleVariant[] = [];
   for (const node of data.nodes ?? []) {
     if (!node?.id) continue;
     const productTitle = node.product?.title ?? "Product";
@@ -145,11 +164,6 @@ export async function loadVariantsAtRisk(
     found.push({
       variantId: node.id,
       title: variantTitle,
-      unitPriceCents: moneyToCents(node.price),
-      // Stock on hand is the ceiling on how many units the discount can touch.
-      // An untracked variant has no ceiling, so it is counted as the sale's own
-      // worst case rather than as zero exposure.
-      unitsAtRisk: node.inventoryQuantity ?? 1,
     });
   }
   return found;
@@ -173,17 +187,12 @@ function requireVariantIds(value: unknown): string[] {
   if (!Array.isArray(value) || value.length === 0) {
     throw new ShopifyInputError("variant_ids must list the variants the sale applies to.");
   }
-  const ids = value.filter((id): id is string => typeof id === "string" && id.trim().length > 0);
-  if (ids.length !== value.length) {
-    throw new ShopifyInputError("variant_ids must all be Shopify variant IDs.");
-  }
-  return ids;
+  return value.map((id) => requireVariantGid(id, "variant_ids"));
 }
 
 export async function createFlashSale(
   input: CreateFlashSaleInput,
   ctx: ShopifyContext,
-  settings: OrgSettings,
   now: Date = new Date(),
 ): Promise<ToolResult> {
   let mutationStarted = false;
@@ -193,7 +202,7 @@ export async function createFlashSale(
     const variantIds = requireVariantIds(input.variant_ids);
     const name = typeof input.name === "string" ? input.name.trim() : "";
 
-    const variants = await loadVariantsAtRisk(ctx, variantIds);
+    const variants = await loadSaleVariants(ctx, variantIds);
     if (variants.length === 0) {
       return toolNotFound("None of those variant IDs exist in this store.");
     }
@@ -206,15 +215,7 @@ export async function createFlashSale(
       );
     }
 
-    // The guard runs before the mutation, on Shopify's own numbers.
-    const assessment = assessValueAtRisk(
-      { variants, discountPercent: percentage, ttlHours: hours },
-      settings,
-      now,
-    );
-    if (!assessment.ok) return toolError(formatValueAtRiskRefusal(assessment));
-
-    const endsAt = assessment.preview.expiresAt;
+    const endsAt = new Date(now.getTime() + hours * 3_600_000);
     const title = `${TITLE_PREFIX}: ${name || `${percentage}% off`}`;
     mutationStarted = true;
     const data = await shopifyGraphql<AutomaticDiscountCreateData>(
@@ -226,7 +227,7 @@ export async function createFlashSale(
           startsAt: now.toISOString(),
           // Never optional. Shopify enforces the expiry, so the sale ends even
           // if nothing of ours ever runs again.
-          endsAt: endsAt?.toISOString(),
+          endsAt: endsAt.toISOString(),
           minimumRequirement: { quantity: { greaterThanOrEqualToQuantity: "1" } },
           customerGets: {
             items: { products: { productVariantsToAdd: variants.map((v) => v.variantId) } },
@@ -247,10 +248,15 @@ export async function createFlashSale(
     return toolOk(
       [
         `Started "${title}".`,
-        formatValueAtRiskPreview(assessment.preview),
+        ...describeSale(variants, percentage, endsAt),
         `End it early with end_flash_sale and this ID: ${id}`,
       ].join("\n"),
-      { flashSaleId: id, preview: assessment.preview },
+      {
+        flashSaleId: id,
+        variantCount: variants.length,
+        discountPercent: percentage,
+        endsAt: endsAt.toISOString(),
+      },
     );
   } catch (err) {
     if (err instanceof ShopifyInputError) return toolError(`Error: ${err.message}`);

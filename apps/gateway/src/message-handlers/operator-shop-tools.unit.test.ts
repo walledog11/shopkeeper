@@ -36,11 +36,13 @@ describe('operator shop tools', () => {
     }
   });
 
+  // A sale still has to expire — Shopify enforces the end date, so a sale with
+  // no duration is one nothing ever ends. A reprice is permanent by definition
+  // and carries no horizon of its own.
   it('requires a duration on every sale it can start', () => {
     const tools = buildOperatorShopTools({ organizationId: 'org_1' });
 
     expect(tools.create_flash_sale.inputSchema.required).toContain('duration_hours');
-    expect(tools.set_variant_prices.inputSchema.required).toContain('revisit_in_hours');
   });
 });
 

@@ -7,14 +7,12 @@ import {
   type ShopifyGraphqlUserError,
 } from "./client.js";
 import { toolError, toolOk, toolUnknown, type ToolResult } from "../tools/result.js";
-import { moneyToCents, ShopifyInputError } from "./validation.js";
-import { loadVariantsAtRisk } from "./flash-sales.js";
 import {
-  assessValueAtRisk,
-  formatCents,
-  formatValueAtRiskRefusal,
-} from "../tools/value-at-risk.js";
-import type { OrgSettings } from "../types.js";
+  centsToMoney,
+  moneyToCents,
+  requireVariantGid,
+  ShopifyInputError,
+} from "./validation.js";
 import type { SetVariantPricesInput } from "../tools/registry/types.js";
 
 /**
@@ -27,8 +25,9 @@ import type { SetVariantPricesInput } from "../tools/registry/types.js";
  * price is read before the write and returned with the result, so the audit
  * record carries what the price was, not only what it became.
  *
- * A markdown still goes through the value-at-risk guard, because a permanent
- * 90% cut is the same exposure as a temporary one.
+ * Nothing here bounds the depth of the change. A merchant setting a price knows
+ * what it is worth, and the guard that used to second-guess that also blocked
+ * the undo of its own permitted write.
  */
 
 export const VARIANT_PRICE_UPDATE_MUTATION = `mutation variantPriceUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
@@ -84,10 +83,7 @@ function requirePriceEntries(value: unknown): { variantId: string; priceCents: n
       throw new ShopifyInputError("each price entry must be an object.");
     }
     const record = entry as Record<string, unknown>;
-    const variantId = typeof record.variant_id === "string" ? record.variant_id.trim() : "";
-    if (!variantId) {
-      throw new ShopifyInputError("each price entry needs a variant_id.");
-    }
+    const variantId = requireVariantGid(record.variant_id, "variant_id");
     const price = typeof record.price === "number"
       ? record.price
       : Number.parseFloat(String(record.price ?? ""));
@@ -98,29 +94,9 @@ function requirePriceEntries(value: unknown): { variantId: string; priceCents: n
   });
 }
 
-/**
- * The deepest markdown across the set, as a percentage.
- *
- * The guard's depth bound is about how far below its usual price anything is
- * being sold, so the steepest single cut governs — averaging would let one
- * catastrophic markdown hide behind a set of mild ones.
- */
-export function deepestMarkdownPercent(changes: readonly RecordedPriceChange[]): number {
-  let deepest = 0;
-  for (const change of changes) {
-    if (change.originalPriceCents <= 0) continue;
-    if (change.newPriceCents >= change.originalPriceCents) continue;
-    const cut = ((change.originalPriceCents - change.newPriceCents) / change.originalPriceCents) * 100;
-    if (cut > deepest) deepest = cut;
-  }
-  return Math.round(deepest);
-}
-
 export async function setVariantPrices(
   input: SetVariantPricesInput,
   ctx: ShopifyContext,
-  settings: OrgSettings,
-  now: Date = new Date(),
 ): Promise<ToolResult> {
   // Hoisted so an ambiguous failure can still name what it got through. The
   // loop below commits one product at a time, so a mid-loop timeout leaves
@@ -157,23 +133,6 @@ export async function setVariantPrices(
       originalPriceCents: current.get(entry.variantId)!.priceCents,
       newPriceCents: entry.priceCents,
     }));
-
-    // Priced from Shopify's current values, so the exposure cannot be
-    // understated by anything the caller claimed.
-    const variants = await loadVariantsAtRisk(ctx, variantIds);
-    const assessment = assessValueAtRisk(
-      {
-        variants,
-        discountPercent: deepestMarkdownPercent(changes),
-        // A price change has no expiry of its own. The guard still demands one,
-        // so it is given the review horizon rather than exempted: the merchant
-        // is agreeing to a change they are expected to revisit.
-        ttlHours: input.revisit_in_hours ?? null,
-      },
-      settings,
-      now,
-    );
-    if (!assessment.ok) return toolError(formatValueAtRiskRefusal(assessment));
 
     // Shopify's bulk update is per product, so one call per product.
     const byProduct = new Map<string, { id: string; price: string }[]>();
@@ -233,8 +192,8 @@ export async function setVariantPrices(
 export function formatOriginalPrices(changes: readonly RecordedPriceChange[]): string {
   return changes
     .map((change) => (
-      `${change.variantId} ${formatCents(change.originalPriceCents)} -> `
-      + `${formatCents(change.newPriceCents)}`
+      `${change.variantId} $${centsToMoney(change.originalPriceCents)} -> `
+      + `$${centsToMoney(change.newPriceCents)}`
     ))
     .join("; ");
 }

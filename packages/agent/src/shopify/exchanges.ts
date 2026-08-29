@@ -18,8 +18,9 @@ interface VariantPricesData {
   } | null)[];
 }
 
-// Shared with the value-at-risk guard, which needs stock on hand to bound how
-// many units a markdown can touch. Exchanges ignore that field.
+// Shared with the flash-sale variant load, which uses the titles. Exchanges and
+// that caller both ignore `inventoryQuantity`; it stays because the document is
+// shared and other readers of this query still ask for stock.
 export const VARIANT_PRICES_QUERY = `query variantPrices($ids: [ID!]!) {
   nodes(ids: $ids) {
     ... on ProductVariant {

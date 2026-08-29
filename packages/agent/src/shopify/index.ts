@@ -39,14 +39,14 @@ export {
   createFlashSale,
   endFlashSale,
   listFlashSales,
-  loadVariantsAtRisk,
+  loadSaleVariants,
   readFlashSales,
   type FlashSaleSummary,
+  type SaleVariant,
 } from "./flash-sales.js";
 export {
   VARIANT_PRICE_UPDATE_MUTATION,
   VARIANT_PRODUCT_QUERY,
-  deepestMarkdownPercent,
   formatOriginalPrices,
   setVariantPrices,
   type RecordedPriceChange,

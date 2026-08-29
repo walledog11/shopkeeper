@@ -8,6 +8,7 @@ import type {
   AgentActionStatus,
 } from "./agent-context.js";
 import type { AgentPlan } from "./types.js";
+import type { ModelUsageMetrics } from "./usage.js";
 
 export interface AgentActionApproval {
   approverId: string;
@@ -150,4 +151,49 @@ export async function recordAgentActionsBatch(
     status: row.status,
     tool: row.tool,
   }));
+}
+
+export interface RecordAgentTurnUsageParams {
+  turnId: string;
+  orgId: string;
+  threadId?: string | null;
+  purpose: string;
+  channelType?: string | null;
+  outcome: string;
+  durationMs: number;
+  usage: ModelUsageMetrics;
+}
+
+/**
+ * The per-turn counterpart to the daily `llm_daily_spend` roll-up.
+ *
+ * A turn that stops on `token_budget` before executing anything writes no
+ * `AgentAction` row, so the turns most worth reading were the ones that left no
+ * trace. Rows are keyed by the same `turnId` the action batch uses, so the two
+ * join.
+ */
+export async function recordAgentTurnUsage(
+  params: RecordAgentTurnUsageParams,
+): Promise<void> {
+  const { usage } = params;
+  await db.agentTurnUsage.create({
+    data: {
+      turnId: params.turnId,
+      organizationId: params.orgId,
+      threadId: params.threadId ?? null,
+      purpose: params.purpose,
+      channelType: params.channelType ?? null,
+      outcome: params.outcome,
+      modelCalls: usage.modelCalls,
+      budgetTokens: usage.budgetTokens,
+      firstCallBudgetTokens: usage.firstCallBudgetTokens,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      cacheCreationInputTokens: usage.cacheCreationInputTokens,
+      cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
+      cacheReadInputTokens: usage.cacheReadInputTokens,
+      totalTokens: usage.totalTokens,
+      durationMs: params.durationMs,
+    },
+  });
 }

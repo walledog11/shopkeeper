@@ -12,8 +12,9 @@ const WARNING_BASELINE = {
   exports: 11,
   // Ratcheted 116 -> 90 after deleting duplicate tool-inputs re-exports and
   // trimming stale dashboard type surfaces; 90 -> 78 with the same ops-alert
-  // pass-throughs. Consumers import these from @shopkeeper/agent/observability.
-  types: 78,
+  // pass-throughs; 78 -> 76 when the value-at-risk guard was deleted.
+  // Consumers import these from @shopkeeper/agent/observability.
+  types: 76,
 };
 
 const result = spawnSync(process.execPath, [KNIP_BIN, '--reporter', 'json'], {

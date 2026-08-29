@@ -1159,8 +1159,8 @@ fragments, code samples, and raw payloads.
    `'strict-dynamic'` blocks it the moment the header is enforced, breaking
    authentication for every user. Already ruled out: the nonce is minted and
    forwarded (`x-nonce` on request and response);
-   `buildClerkJSScriptAttributes` applies a nonce when given one (`@clerk/shared`
-   `loadClerkJsScript.mjs:160`); and a server-component `providers.tsx` with
+   `buildClerkJSScriptAttributes` applies a nonce when given one (`@clerk/shared`,
+   `loadClerkJsScript`); and a server-component `providers.tsx` with
    `dynamic` on `ClerkProvider` does not fix it. Expect this to appear in the
    report-only telemetry as a `script-src` violation against the Clerk frontend
    API origin — that is the policy working, not a collector fault.
