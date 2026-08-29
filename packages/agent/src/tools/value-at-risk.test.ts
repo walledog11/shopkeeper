@@ -207,4 +207,21 @@ describe("formatValueAtRiskRefusal", () => {
       expect(refusal).toContain(violation.message);
     }
   });
+
+  it("never sends the merchant to a Settings control that does not exist", () => {
+    // No promotion bound is writable from either app, so a refusal that offers
+    // "raise the limit in Settings" is a remedy the merchant cannot take.
+    const cases = [
+      { variants: variants(0), discountPercent: 0, ttlHours: 1 },
+      { variants: variants(500), discountPercent: 90, ttlHours: null },
+      { variants: variants(1), discountPercent: 90, ttlHours: 0 },
+      { variants: variants(1), discountPercent: 1, ttlHours: 10_000 },
+    ];
+
+    for (const request of cases) {
+      const assessment = assessValueAtRisk(request, undefined, NOW);
+      expect(assessment.violations.length).toBeGreaterThan(0);
+      expect(formatValueAtRiskRefusal(assessment)).not.toContain("Settings");
+    }
+  });
 });

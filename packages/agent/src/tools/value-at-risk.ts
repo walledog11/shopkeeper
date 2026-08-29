@@ -12,7 +12,8 @@ import { resolveAgentSettings } from "../settings.js";
  * inventory and promotion writes cannot drift into two answers.
  *
  * Every violation is a code. The message is display, and no caller branches on
- * it.
+ * it. Each message names a way out that exists: the model reads this refusal,
+ * and a bound stated without a remedy is one it will invent a remedy for.
  */
 
 export type ValueAtRiskCode =
@@ -170,7 +171,8 @@ export function assessValueAtRisk(
   if (request.variants.length === 0) {
     violations.push({
       code: "no_variants",
-      message: "No variants were named, so there is nothing to preview or bound.",
+      message: "No variants were named, so there is nothing to preview or bound. "
+        + "Name the variants to change.",
       limit: 1,
       requested: 0,
     });
@@ -181,7 +183,7 @@ export function assessValueAtRisk(
       code: "too_many_variants",
       message:
         `This would change ${request.variants.length} variants, over the limit of `
-        + `${limits.maxVariants}. Name fewer variants, or raise the limit in Settings.`,
+        + `${limits.maxVariants}. Name fewer variants.`,
       limit: limits.maxVariants,
       requested: request.variants.length,
     });
@@ -192,7 +194,7 @@ export function assessValueAtRisk(
       code: "discount_too_deep",
       message:
         `A ${preview.discountPercent}% discount is deeper than the ${limits.maxDiscountPercent}% `
-        + "limit. Lower the discount, or raise the limit in Settings.",
+        + "limit. Lower the discount.",
       limit: limits.maxDiscountPercent,
       requested: preview.discountPercent,
     });
@@ -203,7 +205,8 @@ export function assessValueAtRisk(
       code: "value_at_risk_exceeded",
       message:
         `This puts ${formatCents(preview.valueAtRiskCents)} of revenue at risk, over the `
-        + `${formatCents(limits.maxValueAtRiskCents)} limit.`,
+        + `${formatCents(limits.maxValueAtRiskCents)} limit. Lower the discount, or name fewer `
+        + "variants.",
       limit: limits.maxValueAtRiskCents,
       requested: preview.valueAtRiskCents,
     });
@@ -219,7 +222,8 @@ export function assessValueAtRisk(
   } else if (request.ttlHours <= 0) {
     violations.push({
       code: "ttl_missing",
-      message: "A promotion that expires immediately or in the past cannot run.",
+      message: "A promotion that expires immediately or in the past cannot run. "
+        + "Set a positive number of hours.",
       limit: limits.maxTtlHours,
       requested: request.ttlHours,
     });
@@ -228,7 +232,7 @@ export function assessValueAtRisk(
       code: "ttl_too_long",
       message:
         `Running for ${request.ttlHours} hours is longer than the `
-        + `${limits.maxTtlHours}-hour limit.`,
+        + `${limits.maxTtlHours}-hour limit. Shorten it to ${limits.maxTtlHours} hours or less.`,
       limit: limits.maxTtlHours,
       requested: request.ttlHours,
     });
