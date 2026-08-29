@@ -183,6 +183,23 @@ Gated-off integrations cost nothing to keep dark.
   pins this as the remaining lifecycle asymmetry, so it is correct, just not free.
   Closing it means classifying once per request episode; decide when classifier spend
   is worth a restructure of `apps/gateway/src/message-handlers/classification.ts`.
+- [ ] **Consolidate the order-read tools, or decide not to.** Deferred with Phase 6 and
+  lost when the plan was retired; the condition it waited on has since been met, so it is
+  a live decision again. `get_shopify_orders` and `get_order_by_name` genuinely are one
+  endpoint — both call `orders.json` through the same `orderFields()` projection
+  (`packages/agent/src/shopify/orders.ts:22`, `:47`), differing only in query parameter.
+  `get_order_fulfillment_status` is that endpoint under a narrower field allowlist plus an
+  email-match guard, so it stays separate for guests. `get_order_tracking` is **not** a
+  projection on the order record — it is a different endpoint
+  (`orders/{id}/fulfillments.json`) — so folding it in behind an `include` flag would turn
+  a call the model visibly did not make into a field it silently omitted. Neither can be
+  retired outright: `get_order_by_name` and `get_order_tracking` are the entire
+  verified-storefront capability (`guest-policy.ts:60`), so consolidation needs a
+  storefront-only exclusion beside `isGuestOnlyTool` (`planner.ts:82`) and the whole
+  guest/verified matrix re-proved. If the schema cost justifies that, build
+  `get_order { by: 'name' | 'id' | 'customer', value, limit?, fields? }` over `orders.json`
+  only, leave `get_order_tracking` as its own tool, and expose `by: 'customer'` to neither
+  storefront state. Shared-registry change: it owes the eval gate.
 - [ ] **`quick-reply-thanks-ack` passes 1/3.** The only fixture below full, and advisory,
   so it does not gate. Runs classify `needs_review` after repeated `get_order_by_name`
   errors and escalate.
