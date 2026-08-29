@@ -162,10 +162,10 @@ describe("endFlashSale", () => {
   it("lists what is running when no id is given", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
       data: {
-        discountNodes: {
+        automaticDiscountNodes: {
           nodes: [{
             id: "gid://shopify/DiscountAutomaticNode/9",
-            discount: {
+            automaticDiscount: {
               title: "Shopkeeper flash sale: Weekend",
               status: "ACTIVE",
               endsAt: "2026-04-30T12:00:00Z",
@@ -182,6 +182,35 @@ describe("endFlashSale", () => {
     expect(result.message).toContain("gid://shopify/DiscountAutomaticNode/9");
   });
 
+  // The listing shipped broken because every test here stubs the response and
+  // so grades the parser, never the request. Shopify does not validate a search
+  // argument: `query: "type:automatic"` matched nothing on every store, and no
+  // amount of well-shaped fixture data could show it.
+  it("asks the automatic-discount connection directly, with no search argument", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      data: { automaticDiscountNodes: { nodes: [] } },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await endFlashSale({}, ctx);
+
+    const sent = JSON.parse(String(fetchMock.mock.calls[0][1].body)).query;
+    expect(sent).toContain("automaticDiscountNodes(first: $first)");
+    expect(sent).not.toContain("query:");
+  });
+
+  it("says it checked rather than implying the sale was ended", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+      data: { automaticDiscountNodes: { nodes: [] } },
+    })));
+
+    const result = await endFlashSale({}, ctx);
+
+    expect(result.status).toBe("not_found");
+    expect(result.message).toContain("Checked");
+    expect(result.message).not.toMatch(/\bended\b/i);
+  });
+
   it("reports a missing sale rather than claiming success", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
       data: { discountAutomaticDelete: { deletedAutomaticDiscountId: null, userErrors: [] } },
@@ -196,14 +225,27 @@ describe("endFlashSale", () => {
 describe("readFlashSales", () => {
   it("skips nodes Shopify returned without a usable discount", () => {
     expect(readFlashSales({
-      discountNodes: {
+      automaticDiscountNodes: {
         nodes: [
           null,
-          { id: "gid://1", discount: null },
-          { id: null, discount: { title: "x" } },
-          { id: "gid://2", discount: { title: "Real", status: "ACTIVE", endsAt: null } },
+          { id: "gid://1", automaticDiscount: null },
+          { id: null, automaticDiscount: { title: "x", status: "ACTIVE" } },
+          { id: "gid://2", automaticDiscount: { title: "Real", status: "ACTIVE", endsAt: null } },
         ],
       },
     })).toEqual([{ id: "gid://2", title: "Real", status: "ACTIVE", endsAt: null }]);
+  });
+
+  // The connection returns every automatic discount the store has ever had.
+  it("leaves out discounts that are not currently running", () => {
+    expect(readFlashSales({
+      automaticDiscountNodes: {
+        nodes: [
+          { id: "gid://1", automaticDiscount: { title: "Last June", status: "EXPIRED", endsAt: null } },
+          { id: "gid://2", automaticDiscount: { title: "Next week", status: "SCHEDULED", endsAt: null } },
+          { id: "gid://3", automaticDiscount: { title: "Live", status: "ACTIVE", endsAt: null } },
+        ],
+      },
+    })).toEqual([{ id: "gid://3", title: "Live", status: "ACTIVE", endsAt: null }]);
   });
 });

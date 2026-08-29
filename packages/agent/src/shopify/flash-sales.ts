@@ -75,17 +75,21 @@ export const AUTOMATIC_DISCOUNT_DELETE_MUTATION = `mutation flashSaleEnd($id: ID
   }
 }`;
 
+// `automaticDiscountNodes` rather than `discountNodes` with a search argument.
+// The search string is not validated: an unknown field is ignored and returns
+// every discount, while a known field with a value the API does not recognise
+// returns none. `query: "type:automatic"` was the second kind, so this listing
+// came back empty for every store and told a merchant a live sale was over.
+// The dedicated connection is exact by construction and has no vocabulary to
+// get wrong.
 export const AUTOMATIC_DISCOUNTS_QUERY = `query flashSales($first: Int!) {
-  discountNodes(first: $first, query: "type:automatic") {
+  automaticDiscountNodes(first: $first) {
     nodes {
       id
-      discount {
-        ... on DiscountAutomaticBasic {
-          title
-          status
-          startsAt
-          endsAt
-        }
+      automaticDiscount {
+        ... on DiscountAutomaticBasic { title status startsAt endsAt }
+        ... on DiscountAutomaticBxgy { title status startsAt endsAt }
+        ... on DiscountAutomaticFreeShipping { title status startsAt endsAt }
       }
     }
   }
@@ -109,10 +113,10 @@ interface AutomaticDiscountDeleteData {
 }
 
 interface AutomaticDiscountsData {
-  discountNodes?: {
+  automaticDiscountNodes?: {
     nodes?: ({
       id?: string | null;
-      discount?: {
+      automaticDiscount?: {
         title?: string | null;
         status?: string | null;
         startsAt?: string | null;
@@ -272,15 +276,22 @@ export async function createFlashSale(
   }
 }
 
+/**
+ * The sales a merchant would call running. Status is checked here because the
+ * connection returns every automatic discount the store has ever had, and an
+ * expired one offered as endable is the same lie as a live one hidden.
+ */
 export function readFlashSales(data: AutomaticDiscountsData): FlashSaleSummary[] {
   const sales: FlashSaleSummary[] = [];
-  for (const node of data.discountNodes?.nodes ?? []) {
-    if (!node?.id || !node.discount?.title) continue;
+  for (const node of data.automaticDiscountNodes?.nodes ?? []) {
+    const discount = node?.automaticDiscount;
+    if (!node?.id || !discount?.title) continue;
+    if (discount.status !== "ACTIVE") continue;
     sales.push({
       id: node.id,
-      title: node.discount.title,
-      status: node.discount.status ?? null,
-      endsAt: node.discount.endsAt ?? null,
+      title: discount.title,
+      status: discount.status,
+      endsAt: discount.endsAt ?? null,
     });
   }
   return sales;
@@ -309,7 +320,12 @@ export async function endFlashSale(
     const id = typeof input.flash_sale_id === "string" ? input.flash_sale_id.trim() : "";
     if (!id) {
       const running = await listFlashSales(ctx);
-      if (running.length === 0) return toolOk("No automatic discounts are running.");
+      if (running.length === 0) {
+        return toolNotFound(
+          "Checked this store's automatic discounts: none are running, so there was "
+          + "no sale to end.",
+        );
+      }
       const lines = running.map((sale) => (
         `- ${sale.title} (${sale.id})${sale.endsAt ? ` ends ${sale.endsAt}` : ""}`
       ));
