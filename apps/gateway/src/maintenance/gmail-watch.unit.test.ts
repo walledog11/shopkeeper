@@ -16,7 +16,7 @@ const { dbMock, loggerMock } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@shopkeeper/db', () => ({ db: dbMock }));
+vi.mock('@shopkeeper/db', () => ({ db: dbMock, INTEGRATION_REAUTH_SENTINEL: new Date(0) }));
 vi.mock('../logger.js', () => ({ default: loggerMock }));
 
 import { runGmailWatchMaintenance } from './gmail-watch.js';

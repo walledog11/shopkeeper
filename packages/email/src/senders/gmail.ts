@@ -1,5 +1,6 @@
 import { getEmailLogger } from '../logger.js';
 import { buildRawMime } from '../mime-build.js';
+import { markIntegrationReauthorizationRequired } from '@shopkeeper/db';
 import { getEmailOAuthClient, persistRefreshedToken, requestTokenRefresh } from '../token.js';
 import {
   EmailNotConfiguredError,
@@ -97,6 +98,15 @@ export class GmailSender implements EmailSender {
         { status: result.status, body: result.body, integrationId: this.integration.id },
         '[GmailSender] Token refresh failed',
       );
+      // A refused refresh is the earliest and most certain evidence that the
+      // grant is dead, and until this was recorded it was thrown away: the
+      // integration card reads the sentinel, so a merchant whose reply had just
+      // failed still saw a healthy Gmail connection until the daily probe in
+      // email-token-health caught up. Transient failures are excluded --
+      // flagging a 5xx or a network blip tells them to reconnect a live one.
+      if (!result.transient) {
+        await markIntegrationReauthorizationRequired(this.integration.id);
+      }
       throw new Error(`Gmail token refresh failed: ${result.status}`);
     }
 

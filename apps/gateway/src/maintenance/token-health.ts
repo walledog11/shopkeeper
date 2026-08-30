@@ -1,5 +1,5 @@
 import type { Prisma } from '@prisma/client';
-import { db } from '@shopkeeper/db';
+import { db, INTEGRATION_REAUTH_SENTINEL } from '@shopkeeper/db';
 import { isRecord } from '../lib/typing.js';
 import {
   fetchConnectedInstagramAccount,
@@ -23,7 +23,8 @@ const CONCURRENCY = 5;
 const INSTAGRAM_REFRESH_WINDOW_MS = 7 * ONE_DAY_MS;
 const INSTAGRAM_MIN_REFRESH_AGE_MS = ONE_DAY_MS;
 const TIKTOK_REFRESH_WINDOW_MS = 7 * ONE_DAY_MS;
-const EPOCH_SENTINEL = new Date(0);
+// One definition, in @shopkeeper/db: four files each had their own.
+const EPOCH_SENTINEL = INTEGRATION_REAUTH_SENTINEL;
 
 type InstagramHealthStatus = 'healthy' | 'degraded' | 'reconnect_required';
 

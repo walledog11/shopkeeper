@@ -22,6 +22,7 @@ const {
 
 vi.mock('@shopkeeper/db', () => ({
   db: { integration: { findMany, update } },
+  INTEGRATION_REAUTH_SENTINEL: new Date(0),
 }));
 vi.mock('../clients/instagram-graph.js', () => ({
   fetchConnectedInstagramAccount: fetchAccount,

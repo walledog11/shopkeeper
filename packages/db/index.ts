@@ -144,3 +144,8 @@ export type {
   PlanLimits,
   PlanTier,
 } from './plan-limits.js';
+export {
+  INTEGRATION_REAUTH_SENTINEL,
+  isIntegrationReauthorizationRequired,
+  markIntegrationReauthorizationRequired,
+} from './integration-auth.js';

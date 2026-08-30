@@ -9,6 +9,12 @@ const tokenMocks = vi.hoisted(() => ({
 
 vi.mock('../token.js', () => tokenMocks);
 
+const dbMocks = vi.hoisted(() => ({
+  markIntegrationReauthorizationRequired: vi.fn(),
+}));
+
+vi.mock('@shopkeeper/db', () => dbMocks);
+
 import { GmailSender } from './gmail';
 
 const mockFetch = vi.fn();
@@ -18,6 +24,8 @@ beforeEach(() => {
   tokenMocks.getEmailOAuthClient.mockReset();
   tokenMocks.persistRefreshedToken.mockReset();
   tokenMocks.requestTokenRefresh.mockReset();
+  dbMocks.markIntegrationReauthorizationRequired.mockReset();
+  dbMocks.markIntegrationReauthorizationRequired.mockResolvedValue(undefined);
   vi.stubGlobal('fetch', mockFetch);
   tokenMocks.getEmailOAuthClient.mockReturnValue({
     clientId: 'google-client-id',
@@ -74,6 +82,63 @@ describe('buildRawMime', () => {
 });
 
 describe('GmailSender.send', () => {
+  it('flags the integration for reconnection when the refresh is refused', async () => {
+    mockFetch.mockResolvedValueOnce(new Response('Unauthorized', { status: 401 }));
+    tokenMocks.requestTokenRefresh.mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      transient: false,
+      body: '{"error":"invalid_grant"}',
+    });
+
+    const sender = new GmailSender({
+      id: 'gmail-integration',
+      accessToken: 'old_token',
+      refreshToken: 'dead_refresh_token',
+      tokenExpiresAt: new Date(Date.now() + 3600_000),
+    });
+
+    await expect(sender.send({
+      to: 'customer@example.test',
+      fromAddress: 'merchant@gmail.test',
+      fromName: 'Merchant',
+      subject: 'Hi',
+      text: 'Hello',
+    })).rejects.toThrow('Gmail token refresh failed: 400');
+
+    // Without this the send is the only thing that knows, and the integration
+    // card keeps reporting a healthy connection until the daily probe runs.
+    expect(dbMocks.markIntegrationReauthorizationRequired)
+      .toHaveBeenCalledWith('gmail-integration');
+  });
+
+  it('leaves the integration alone when the refresh fails transiently', async () => {
+    mockFetch.mockResolvedValueOnce(new Response('Unauthorized', { status: 401 }));
+    tokenMocks.requestTokenRefresh.mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      transient: true,
+    });
+
+    const sender = new GmailSender({
+      id: 'gmail-integration',
+      accessToken: 'old_token',
+      refreshToken: 'refresh_token',
+      tokenExpiresAt: new Date(Date.now() + 3600_000),
+    });
+
+    await expect(sender.send({
+      to: 'customer@example.test',
+      fromAddress: 'merchant@gmail.test',
+      fromName: 'Merchant',
+      subject: 'Hi',
+      text: 'Hello',
+    })).rejects.toThrow('Gmail token refresh failed: 503');
+
+    // Google having a bad minute must not tell the merchant to reconnect.
+    expect(dbMocks.markIntegrationReauthorizationRequired).not.toHaveBeenCalled();
+  });
+
   it('refreshes on 401, retries once, and persists the new token', async () => {
     const refreshedToken = {
       accessToken: 'new_token',

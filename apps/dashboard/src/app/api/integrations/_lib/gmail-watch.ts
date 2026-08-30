@@ -1,4 +1,4 @@
-import { db } from '@shopkeeper/db';
+import { db, INTEGRATION_REAUTH_SENTINEL } from '@shopkeeper/db';
 import type { Prisma as PrismaTypes } from '@prisma/client';
 import {
   buildGmailWatchFailureUpdate,
@@ -31,7 +31,8 @@ export type GmailWatchCleanupResult =
   | { ok: true }
   | { ok: false; category: GmailWatchErrorCategory };
 
-const EPOCH_SENTINEL = new Date(0);
+// One definition, in @shopkeeper/db: four files each had their own.
+const EPOCH_SENTINEL = INTEGRATION_REAUTH_SENTINEL;
 
 async function updateWatchSuccess(
   integrationId: string,

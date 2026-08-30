@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Queue } from 'bullmq';
 import type { Prisma } from '@prisma/client';
-import { db } from '@shopkeeper/db';
+import { db, INTEGRATION_REAUTH_SENTINEL } from '@shopkeeper/db';
 import {
   buildGmailWatchFailureUpdate,
   buildInboxWatchRequest,
@@ -39,7 +39,8 @@ const GMAIL_WATCH_MAINTENANCE_INTERVAL_MS = 12 * ONE_HOUR_MS;
 const GMAIL_WATCH_RENEWAL_INTERVAL_MS = 24 * ONE_HOUR_MS;
 const GMAIL_WATCH_RENEWAL_WINDOW_MS = 24 * ONE_HOUR_MS;
 const GMAIL_REPEATED_WATCH_FAILURE_THRESHOLD = 3;
-const EPOCH_SENTINEL = new Date(0);
+// One definition, in @shopkeeper/db: four files each had their own.
+const EPOCH_SENTINEL = INTEGRATION_REAUTH_SENTINEL;
 
 interface GmailWatchIntegration {
   id: string;

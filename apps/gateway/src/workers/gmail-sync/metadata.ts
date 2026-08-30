@@ -1,5 +1,5 @@
 import type { Prisma } from '@prisma/client';
-import { db } from '@shopkeeper/db';
+import { db, INTEGRATION_REAUTH_SENTINEL } from '@shopkeeper/db';
 import {
   maxGmailHistoryId,
   metadataWithGmailState,
@@ -17,7 +17,7 @@ export async function markReauthorizationRequired(integrationId: string): Promis
   await db.integration.update({
     where: { id: integrationId },
     data: {
-      tokenExpiresAt: new Date(0),
+      tokenExpiresAt: INTEGRATION_REAUTH_SENTINEL,
       metadata: metadataWithGmailState(current.metadata, {
         inboundStatus: 'reauthorization_required',
         lastError: 'sync_authentication',

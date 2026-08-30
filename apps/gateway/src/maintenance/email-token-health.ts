@@ -1,4 +1,8 @@
-import { db } from '@shopkeeper/db';
+import {
+  db,
+  isIntegrationReauthorizationRequired,
+  markIntegrationReauthorizationRequired,
+} from '@shopkeeper/db';
 import { CHANNEL, JOB, QUEUE } from '../constants.js';
 import logger from '../logger.js';
 import { fetchWithDeadline } from '../clients/request-deadline.js';
@@ -11,7 +15,6 @@ import {
 } from './registration.js';
 
 const CONCURRENCY = 5;
-const EPOCH_SENTINEL = new Date(0);
 
 const TOKEN_ENDPOINT = {
   gmail: 'https://oauth2.googleapis.com/token',
@@ -43,17 +46,14 @@ function oauthClient(): { clientId: string; clientSecret: string } | null {
 }
 
 async function markReauthRequired(integration: EmailIntegrationRow): Promise<void> {
-  if (integration.tokenExpiresAt?.getTime() === 0) return;
-  await db.integration.update({
-    where: { id: integration.id },
-    data: { tokenExpiresAt: EPOCH_SENTINEL },
-  });
+  if (isIntegrationReauthorizationRequired(integration.tokenExpiresAt)) return;
+  await markIntegrationReauthorizationRequired(integration.id);
 }
 
 async function probeIntegration(integration: EmailIntegrationRow, provider: EmailOAuthProvider): Promise<void> {
   // Already flagged for reconnect — a dead refresh token stays dead until the
   // merchant reconnects (which resets tokenExpiresAt), so skip to avoid noise.
-  if (integration.tokenExpiresAt?.getTime() === 0) return;
+  if (isIntegrationReauthorizationRequired(integration.tokenExpiresAt)) return;
   if (!integration.refreshToken) return;
 
   const client = oauthClient();
