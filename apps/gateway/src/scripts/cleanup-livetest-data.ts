@@ -59,6 +59,25 @@ async function main() {
     return;
   }
 
+  // request_episode_outcomes.source_message_id is NOT NULL behind an ON DELETE
+  // SET NULL foreign key, so the message cascade below raises 23502 instead of
+  // nulling the column. These rows are attribution for throwaway tickets, so
+  // they go with them.
+  const customerIds = customers.map((c) => c.id);
+  const threadIds = (await db.thread.findMany({
+    where: { organizationId: orgId, customerId: { in: customerIds } },
+    select: { id: true },
+  })).map((t) => t.id);
+  const outcomes = await db.requestEpisodeOutcome.deleteMany({
+    where: {
+      organizationId: orgId,
+      OR: [{ customerId: { in: customerIds } }, { threadId: { in: threadIds } }],
+    },
+  });
+  if (outcomes.count > 0) {
+    console.log(`\nDeleted ${outcomes.count} request episode outcome row(s) first.`);
+  }
+
   const { count } = await db.customer.deleteMany({
     where: {
       organizationId: orgId,

@@ -7,7 +7,7 @@ of its own fix: the moment an item reads as evidence rather than as an instructi
 it back. Evidence checklists, failure drills, and standing procedure live in the linked
 docs.
 
-Last reviewed: 2026-08-29.
+Last reviewed: 2026-08-30.
 
 Work is grouped by **what kind of action it needs**, not by when it was filed.
 
@@ -27,6 +27,16 @@ and never from `/health`, which is liveness-only and cannot report a commit at a
   `hello@useshopkeeper.com`, then recreate that forwarding integration and make it the
   workspace default. If the canary fails, leave Gmail as the default and reconnect
   Postmark through the dashboard instead of writing a live-looking row that cannot send.
+
+- [ ] **Reconnect Gmail for the live operator org — it cannot send.** `send_reply` fails
+  with `Gmail token refresh failed: 400` for org `9b81d9c8-9205-48da-90d1-66732f0f5dbd`
+  against integration `4a0520c1-8ac3-4963-8015-6c96909463e3` (`rscoding11@gmail.com`),
+  whose access token expired 2026-08-30T13:00Z. It is that org's only email route, so
+  every outbound reply fails the same way — an approved plan reports the failure to the
+  merchant rather than sending. `emailReplyBlock` in `generate-thread-plan.ts` cannot
+  pre-empt it: a revoked refresh token is still present and non-empty, so
+  `canRefreshOrSend` is true and only a real refresh attempt surfaces the 400. Reconnect
+  from Settings, then re-run an approved reply to close.
 
 ---
 
@@ -64,19 +74,6 @@ provider. **None of these is a code task.**
 
 ### Operator and agent
 
-- [ ] **Approve a plan in prose, by phone.** Text "go ahead and approve the refund" at a
-  real pending plan and watch for `approve_pending_plan` rather than an order lookup.
-  Stage the plan with `stage-pending-plan.ts` — the operator channel's own traffic is
-  shop-management writes, which never create one, so this does not get exercised as a
-  side effect of other phone work. Operator prompt changes are never verified by evals.
-- [ ] **Reverse a reprice by phone, off the record rather than the transcript.**
-  `list_recent_changes` reads the `AgentAction` audit trail back, so the original prices
-  a reprice returned outlive the model's context window, and `set_variant_prices` now
-  points at it. Reprice a variant on `palette-dev`, let the turn go cold, then ask for the
-  price back: watch for `list_recent_changes` instead of the guessed variant IDs and the
-  `search_shopify_products` fallback that prompted this. It does not fix the agent
-  repeating a stale refusal — that item is still open below, and this tool is only a place
-  for it to check.
 - [ ] **Watch the escalation notice clear itself.** Reply as the merchant *in the
   composer* and confirm the widget notice disappears. Approving an agent plan cannot
   discharge it — `recordMerchantReply` is merchant-only by design, which was confirmed
@@ -143,9 +140,11 @@ closing verification passes.
 
 - [ ] **Prove the Shopify compliance webhooks.** Handlers, the durable data-request
   workflow, redaction paths, the `shopify_privacy_requests` table and the
-  `compliance_topics` declarations are all shipped and released, so nothing is blocked.
-  What remains is exercising Shopify's compliance checks or signed production
-  deliveries. Operator fulfillment and completion steps in
+  `compliance_topics` declarations are shipped and released. What remains is exercising
+  Shopify's compliance checks or signed production deliveries. The `customers/redact`
+  transaction has never run against a real payload, and the first thing to check is that
+  it completes: it used to abort on every customer holding a captured request episode.
+  Operator fulfillment and completion steps in
   [production/data-deletion.md](production/data-deletion.md).
 
 ---
@@ -199,6 +198,17 @@ Gated-off integrations cost nothing to keep dark.
 - [ ] **`quick-reply-thanks-ack` passes 1/3.** The only fixture below full, and advisory,
   so it does not gate. Runs classify `needs_review` after repeated `get_order_by_name`
   errors and escalate.
+- [ ] **The approval card asks for a decision it has just said it cannot show.** A plan
+  card whose `requestDisplay` resolves to `unavailable` prints "Request details
+  unavailable — open the thread for the original message" and then asks "Good to send?"
+  underneath — the standing invariant says to ask them to open the thread *instead of*
+  asking for a decision, not both. Reachable in production, not only from a hand-seeded
+  thread: `buildRequestDisplaySnapshot` returns `unavailable` whenever a thread's
+  `classifierSignals.version` is not exactly `ALIGNED_CLASSIFIER_VERSION`, so every
+  thread left on an older classifier version renders this card. `load-waiting.ts` already
+  has the fallback shape — prefer the source message text, and drop the approve prompt
+  only when there is none. Decide that, or decide the invariant means something narrower
+  than it reads.
 - [ ] **A capability the agent has already denied stays denied in that thread.** Told it
   could not run a storewide sale, it repeated the refusal after `applies_to` shipped and
   deployed, citing its own earlier message rather than the tool schema in front of it.

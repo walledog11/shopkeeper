@@ -48,6 +48,22 @@ async function main() {
     orgId = orgs[0].id;
   }
 
+  // generateThreadPlan refuses to plan an email thread that has no reply route
+  // (`email_reply_route_missing`), so the staged thread needs the same
+  // replyIntegrationId the inbound path stamps on a real one. Without it the
+  // run fails as "planner produced no actionable tool calls", which sends you
+  // hunting for a better PROMPT that does not exist.
+  const replyIntegration = await db.integration.findFirst({
+    where: { organizationId: orgId, platform: 'email', lifecycleStatus: 'active' },
+    select: { id: true, fromEmail: true },
+  });
+  if (!replyIntegration) {
+    console.error('No active email integration on this org — the planner will refuse an email thread.');
+    console.error('  Connect email in the dashboard, or set ORG_ID to an org that has one.');
+    await db.$disconnect();
+    process.exit(1);
+  }
+
   const customer = await db.customer.upsert({
     where: { organizationId_platformId: { organizationId: orgId, platformId: customerEmail } },
     update: { name: customerName },
@@ -63,6 +79,7 @@ async function main() {
       organizationId: orgId,
       customerId: customer.id,
       channelType: 'email',
+      replyIntegrationId: replyIntegration.id,
       status: 'open',
       subject: process.env.SUBJECT ?? 'Live interpretation test',
       aiSummary,
@@ -139,6 +156,7 @@ async function main() {
   console.log('   org:      ', orgId);
   console.log('   thread:   ', thread.id, '(email · "Live interpretation test")');
   console.log('   customer: ', customer.id, `(${customerEmail})`);
+  console.log('   replyTo:  ', replyIntegration.id, `(${replyIntegration.fromEmail ?? 'no from address'})`);
   console.log('   steps:    ', JSON.stringify(plan.steps));
   console.log('   toolCalls:', plan.rawToolCalls.map((t) => t.name).join(', '));
   console.log('');
@@ -150,6 +168,11 @@ async function main() {
   console.log('Cleanup later:  delete thread', thread.id, 'and customer', customer.id);
 
   await db.$disconnect();
+  // The shared gateway Redis client is still retrying redis.railway.internal,
+  // which only resolves inside Railway's private network, and it holds the event
+  // loop open printing that error forever. The failure paths above exit
+  // explicitly; the success path has to as well.
+  process.exit(0);
 }
 
 main().catch(async (e) => {
