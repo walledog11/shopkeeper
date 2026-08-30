@@ -64,14 +64,6 @@ provider. **None of these is a code task.**
 
 ### Operator and agent
 
-- [ ] **Verify the flash-sale listing and a storewide sale on `palette-dev`.**
-  `set_variant_prices`, `create_flash_sale` over named variants, and `end_flash_sale` by
-  ID are all verified live (2026-08-29). Two paths are not. The no-ID listing returned
-  nothing on every store until the `automaticDiscountNodes` fix, so ask "what sales are
-  running?" with a sale live and no ID in the conversation. And `applies_to:
-  "entire_catalog"` has never run outside tests — start one, confirm Shopify shows every
-  product discounted, end it. Both need only `write_discounts`. Evals cannot cover any of
-  it: every Shopify tool result in the suite is simulated.
 - [ ] **Confirm a cold operator turn now opens warm.** Text the bot after more than five
   minutes of silence, then read `firstCallBudgetTokens` off the turn's `agent_turn_usage`
   row (`inspect-turn-usage.ts`) against `TOKEN_BUDGET` in `run-policy.ts`. The operator
@@ -217,6 +209,14 @@ Gated-off integrations cost nothing to keep dark.
 - [ ] **`quick-reply-thanks-ack` passes 1/3.** The only fixture below full, and advisory,
   so it does not gate. Runs classify `needs_review` after repeated `get_order_by_name`
   errors and escalate.
+- [ ] **A capability the agent has already denied stays denied in that thread.** Told it
+  could not run a storewide sale, it repeated the refusal after `applies_to` shipped and
+  deployed, citing its own earlier message rather than the tool schema in front of it.
+  Nothing is stale but the conversation — `buildOperatorShopTools` runs every turn — and
+  operator threads are one per binding and effectively permanent, so it does not clear
+  itself; a fresh request worked. Every capability added from here inherits this, and it
+  fails toward telling the merchant no. The decision is what to do about it: a prompt
+  bullet is the special case, not the fix.
 - [ ] **Give the operator agent a way to read back what it changed.** `set_variant_prices`
   is permanent and its stated rollback is the original prices in its own result, but no
   operator tool reads `AgentAction` history — the set is approve/reject/revise/answer,
