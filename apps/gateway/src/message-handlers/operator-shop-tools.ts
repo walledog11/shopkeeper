@@ -122,7 +122,7 @@ export function buildOperatorShopTools(
   const setVariantPricesTool = defineTool({
     name: 'set_variant_prices',
     description:
-      'Permanently change the price of specific variants. Each variant is named with its own new price, as "variantId=price" pairs, and the previous prices come back in the result. That record is the only way back, which is why a collection or the whole catalog cannot be repriced in one call the way a sale can cover one: undoing it is a second bulk write that can half-fail. For a temporary markdown use create_flash_sale instead — it expires on its own and needs no undo.',
+      'Permanently change the price of specific variants. Each variant is named with its own new price, as "variantId=price" pairs, and the previous prices come back in the result — call list_recent_changes to read them again later rather than recalling them. That record is the only way back, which is why a collection or the whole catalog cannot be repriced in one call the way a sale can cover one: undoing it is a second bulk write that can half-fail. For a temporary markdown use create_flash_sale instead — it expires on its own and needs no undo.',
     fields: {
       prices: stringArg('Comma-separated variantId=price pairs. The variant ID may be the bare number or the full gid, e.g. "1234567=19.99" or "gid://shopify/ProductVariant/1234567=19.99".', { required: true }),
     },

@@ -69,6 +69,14 @@ provider. **None of these is a code task.**
   Stage the plan with `stage-pending-plan.ts` — the operator channel's own traffic is
   shop-management writes, which never create one, so this does not get exercised as a
   side effect of other phone work. Operator prompt changes are never verified by evals.
+- [ ] **Reverse a reprice by phone, off the record rather than the transcript.**
+  `list_recent_changes` reads the `AgentAction` audit trail back, so the original prices
+  a reprice returned outlive the model's context window, and `set_variant_prices` now
+  points at it. Reprice a variant on `palette-dev`, let the turn go cold, then ask for the
+  price back: watch for `list_recent_changes` instead of the guessed variant IDs and the
+  `search_shopify_products` fallback that prompted this. It does not fix the agent
+  repeating a stale refusal — that item is still open below, and this tool is only a place
+  for it to check.
 - [ ] **Watch the escalation notice clear itself.** Reply as the merchant *in the
   composer* and confirm the widget notice disappears. Approving an agent plan cannot
   discharge it — `recordMerchantReply` is merchant-only by design, which was confirmed
@@ -199,14 +207,6 @@ Gated-off integrations cost nothing to keep dark.
   itself; a fresh request worked. Every capability added from here inherits this, and it
   fails toward telling the merchant no. The decision is what to do about it: a prompt
   bullet is the special case, not the fix.
-- [ ] **Give the operator agent a way to read back what it changed.** `set_variant_prices`
-  is permanent and its stated rollback is the original prices in its own result, but no
-  operator tool reads `AgentAction` history — the set is approve/reject/revise/answer,
-  `list_active_tickets`, `get_ticket`, product help, the three shop writes, digest and
-  desk nav. So an undo works only while the record is still in the model's context, and
-  when asked to reverse a reprice it guessed variant IDs, got an error, and went to
-  `search_shopify_products` to recover. Compare `end_flash_sale`, which is a first-class
-  reversal for the *reversible* write; the permanent one has none.
 
 **Resume when triggered** (not open checkboxes):
 

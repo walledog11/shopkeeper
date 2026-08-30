@@ -1,6 +1,7 @@
 import { renderOperatorLedger } from './operator-ledger.js';
 import { buildOperatorSessionTools } from './operator-session-tools.js';
 import { buildOperatorInboxTools } from './operator-inbox-tools.js';
+import { buildOperatorActionHistoryTools } from './operator-action-history-tools.js';
 import { buildOperatorDigestTools } from './operator-digest-tools.js';
 import { buildOperatorProductHelpTools } from './operator-product-help-tools.js';
 import { buildOperatorShopTools } from './operator-shop-tools.js';
@@ -49,6 +50,7 @@ export async function runOperatorFreeFormTurn(
       context,
     }),
     ...buildOperatorInboxTools({ organizationId }),
+    ...buildOperatorActionHistoryTools({ organizationId }),
     ...buildOperatorDigestTools({ organizationId, context }),
     ...buildOperatorProductHelpTools(),
     ...buildOperatorShopTools({ organizationId }),
