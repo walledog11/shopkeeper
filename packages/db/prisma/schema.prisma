@@ -909,12 +909,16 @@ model PlanExecution {
 // Immutable attribution for one plan attempt on a customer request episode.
 // `sourceMessageId` is the episode identity; `planId` distinguishes replaced
 // plans on the same burst. Rows are append-only: terminal fields are set once.
+// `sourceMessageId` is nullable for the same reason `threadId` and `customerId`
+// are: the foreign key is ON DELETE SET NULL, so deleting a message severs the
+// link rather than destroying the outcome. It shipped NOT NULL behind that
+// SET NULL, which made every message delete raise 23502 instead.
 model RequestEpisodeOutcome {
   id             String @id @default(uuid()) @db.Uuid
   organizationId String @map("organization_id") @db.Uuid
   threadId       String? @map("thread_id") @db.Uuid
   customerId     String? @map("customer_id") @db.Uuid
-  sourceMessageId String @map("source_message_id") @db.Uuid
+  sourceMessageId String? @map("source_message_id") @db.Uuid
   planId         String @map("plan_id") @db.Uuid
   channelType    ChannelType @map("channel_type")
 

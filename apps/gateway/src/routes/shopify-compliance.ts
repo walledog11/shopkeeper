@@ -243,6 +243,18 @@ async function deleteSelectedCustomerData(
       },
     });
     await tx.planExecution.deleteMany({ where: threadWhere });
+    // Same class as the audit rows above, and deleted for the same reason: the
+    // SET NULL foreign keys keep an outcome row alive when a thread is removed
+    // outside an erasure demand, but redaction deletes this class outright.
+    await tx.requestEpisodeOutcome.deleteMany({
+      where: {
+        organizationId,
+        OR: [
+          { customerId: { in: selection.customerIds } },
+          { threadId: { in: selection.threadIds } },
+        ],
+      },
+    });
     await tx.refundSpendReservation.deleteMany({ where: { id: { in: reservationIds } } });
     await tx.operatorContext.deleteMany({ where: { id: { in: operatorContextIds } } });
     await tx.shopifyPrivacyRequest.deleteMany({

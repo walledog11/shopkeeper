@@ -152,12 +152,14 @@ export function ReviewDetail({
                   </dd>
                 </div>
               )}
-              <div className="grid gap-1">
-                <dt className="text-xs font-semibold uppercase tracking-wide text-faint">Episode</dt>
-                <dd className="break-all font-mono text-xs text-muted-foreground">
-                  {entry.requestOutcome.sourceMessageId}
-                </dd>
-              </div>
+              {entry.requestOutcome.sourceMessageId && (
+                <div className="grid gap-1">
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-faint">Episode</dt>
+                  <dd className="break-all font-mono text-xs text-muted-foreground">
+                    {entry.requestOutcome.sourceMessageId}
+                  </dd>
+                </div>
+              )}
             </dl>
           </DetailSection>
         )}

@@ -137,7 +137,7 @@ export interface ActionLogEntry {
   approver: { id: string; displayName: string | null } | null;
   requestOutcome?: {
     planId: string;
-    sourceMessageId: string;
+    sourceMessageId: string | null;
     planVerdict: string;
     terminalResolution: string;
     replyProvenance: 'agent_automatic' | 'agent_approved' | 'manual' | null;

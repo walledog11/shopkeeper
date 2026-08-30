@@ -44,6 +44,56 @@ afterEach(async () => {
 });
 
 describe("request episode outcomes", () => {
+  it("survives deletion of its source message with the link severed", async () => {
+    const org = await createTestOrg();
+    orgIds.push(org.id);
+    const customer = await createTestCustomer(org.id, `${randomUUID()}@test.com`);
+    const thread = await createTestThread(org.id, customer.id, "email");
+    const hydratedThread = await db.thread.findUniqueOrThrow({ where: { id: thread.id } });
+    const message = await createTestMessage(thread.id, "Where is order #1001?");
+    const settings = resolveAgentSettings(null);
+    const instruction = "Where is order #1001?";
+    const plan = quickReplyPlan(instruction);
+    const cache = buildAgentPlanCacheRecord({
+      instruction,
+      lastCustomerMessageId: message.id,
+      settings,
+      plan,
+    });
+    await commitThreadPlanCacheIfCurrent({
+      orgId: org.id,
+      threadId: thread.id,
+      sourceMessageId: message.id,
+      cache,
+    });
+    await captureCommittedPlanOutcome({
+      orgId: org.id,
+      thread: {
+        id: hydratedThread.id,
+        customerId: customer.id,
+        channelType: hydratedThread.channelType,
+        tag: hydratedThread.tag,
+        requestDisposition: hydratedThread.requestDisposition,
+        classifierSignals: hydratedThread.classifierSignals,
+      },
+      sourceMessageId: message.id,
+      planId: cache.planId!,
+      instruction,
+      plan,
+      settings,
+    });
+
+    // The foreign key is ON DELETE SET NULL. The column shipped NOT NULL behind
+    // it, so this delete raised 23502 and aborted any transaction that reached a
+    // message — customers/redact among them.
+    await db.message.delete({ where: { id: message.id } });
+
+    const row = await db.requestEpisodeOutcome.findFirstOrThrow({
+      where: { organizationId: org.id, planId: cache.planId! },
+    });
+    expect(row.sourceMessageId).toBeNull();
+  });
+
   it("records planned, superseded, executed, and dismissed histories separately", async () => {
     const org = await createTestOrg();
     orgIds.push(org.id);

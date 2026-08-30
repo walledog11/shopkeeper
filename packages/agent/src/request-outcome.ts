@@ -480,7 +480,9 @@ export async function recordManualMerchantReplyForThread(params: {
 
 export interface RequestOutcomeActionLogSnapshot {
   planId: string;
-  sourceMessageId: string;
+  // Null once the source message has been deleted: the foreign key severs the
+  // link rather than dropping the row.
+  sourceMessageId: string | null;
   planVerdict: string;
   terminalResolution: string;
   replyProvenance: RequestEpisodeReplyProvenance | null;
@@ -498,7 +500,7 @@ export async function loadRequestOutcomesForExecutionIds(
   const rows = await db.$queryRaw<Array<{
     executionId: string;
     planId: string;
-    sourceMessageId: string;
+    sourceMessageId: string | null;
     planVerdict: string;
     terminalResolution: string;
     replyProvenance: RequestEpisodeReplyProvenance | null;

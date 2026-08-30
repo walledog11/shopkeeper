@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { ChannelType, db } from '@shopkeeper/db';
@@ -103,6 +104,23 @@ describe('POST /webhooks/shopify — mandatory compliance topics', () => {
       where: { id: message.id },
       data: { attachments: ['blob:attachments/test/private.png'] },
     });
+    // Production always has one of these for a classified request, and its
+    // absence here is why the NOT NULL / ON DELETE SET NULL contradiction on
+    // request_episode_outcomes.source_message_id survived: without it the
+    // customer delete never cascaded into a message the table pointed at.
+    const outcome = await db.requestEpisodeOutcome.create({
+      data: {
+        organizationId: org.id,
+        threadId: thread.id,
+        customerId: customer.id,
+        sourceMessageId: message.id,
+        planId: randomUUID(),
+        channelType: ChannelType.email,
+        planVerdict: 'quick_reply',
+        planHash: 'plan-hash',
+        instructionHash: 'instruction-hash',
+      },
+    });
     const other = await createTestCustomer(org.id, 'keep@example.com');
     await db.shopifyPrivacyRequest.create({
       data: {
@@ -152,6 +170,7 @@ describe('POST /webhooks/shopify — mandatory compliance topics', () => {
     expect(await db.message.findUnique({ where: { id: message.id } })).toBeNull();
     expect(await db.customer.findUnique({ where: { id: other.id } })).not.toBeNull();
     expect(await db.shopifyPrivacyRequest.count({ where: { organizationId: org.id } })).toBe(0);
+    expect(await db.requestEpisodeOutcome.findUnique({ where: { id: outcome.id } })).toBeNull();
     expect(await db.refundSpendReservation.findUnique({
       where: { id: matchingReservation.id },
     })).toBeNull();
