@@ -64,19 +64,11 @@ provider. **None of these is a code task.**
 
 ### Operator and agent
 
-- [ ] **Confirm a cold operator turn now opens warm.** Text the bot after more than five
-  minutes of silence, then read `firstCallBudgetTokens` off the turn's `agent_turn_usage`
-  row (`inspect-turn-usage.ts`) against `TOKEN_BUDGET` in `run-policy.ts`. The operator
-  prompt now has a stable prefix, so the 1h cache block exists and `stableCacheCreation`
-  should stop counting its write tokens at the 1.25x weight. **Expect a small number.**
-  Measured 2026-08-29 with `measure-agent-prompt.ts`, the whole operator prompt is 4,949
-  tokens — 5,983 weighted if nothing is attributed to the 1h block, 1,228 warm. The
-  19,047–19,721 this item used to quote was a *support*-turn figure and never applied
-  here; a support thread measures 9,281 before its KB articles and history load. Verify by
-  phone, not evals.
 - [ ] **Approve a plan in prose, by phone.** Text "go ahead and approve the refund" at a
   real pending plan and watch for `approve_pending_plan` rather than an order lookup.
-  Operator prompt changes are never verified by evals.
+  Stage the plan with `stage-pending-plan.ts` — the operator channel's own traffic is
+  shop-management writes, which never create one, so this does not get exercised as a
+  side effect of other phone work. Operator prompt changes are never verified by evals.
 - [ ] **Watch the escalation notice clear itself.** Reply as the merchant *in the
   composer* and confirm the widget notice disappears. Approving an agent plan cannot
   discharge it — `recordMerchantReply` is merchant-only by design, which was confirmed
@@ -141,16 +133,6 @@ the Gmail restricted-scope packet all live in
 [phase-6-external-services.md](phase-6-external-services.md); delete that file when its
 closing verification passes.
 
-- [ ] **Provision `PRICE_ID_STARTER` and `PRICE_ID_PRO`, in both services.** This is the
-  only thing between the plan limits and actual enforcement. The code shipped inert on
-  purpose: with the prices missing every org resolves to the unbounded unknown tier,
-  because capping a real workspace on the strength of an absent env var would be the
-  opposite of failing safe. Set both in **Vercel *and* Railway** — the gateway reads
-  them too, and a value set on one service but not the other silently produces two
-  different answers about the same org. The tiers are Starter at 500 conversations/month
-  and 1 seat, Pro unbounded and 2 seats. Verify by confirming a Starter org is capped
-  and a Pro org is not. Stripe steps in
-  [phase-6-external-services.md](phase-6-external-services.md).
 - [ ] **Prove the Shopify compliance webhooks.** Handlers, the durable data-request
   workflow, redaction paths, the `shopify_privacy_requests` table and the
   `compliance_topics` declarations are all shipped and released, so nothing is blocked.

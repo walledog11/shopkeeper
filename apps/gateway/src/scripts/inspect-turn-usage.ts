@@ -14,6 +14,16 @@ loadGatewayEnv();
 // against `total`. A turn that stops with `first` already near the ceiling is a
 // cache-temperature problem; one where `first` is small and `total` is not is a
 // loop.
+//
+// Read `1h-write` against `cache-read`, never on its own. The 1h block is the
+// stable prompt prefix (`buildSplitCachedSystemPrompt`), and `budgetTokens`
+// excludes its write entirely while counting reads at 0.1 — so the WARM turn is
+// the one showing `1h-write 0` beside a large `cache-read`, and it scores higher
+// than the cold turn that wrote the block. That inversion is the accounting, not
+// a cost: a hit is far cheaper in dollars. A rewrite means the prefix expired
+// (>1h) or changed (a deploy), and a changed prefix writes a different number of
+// tokens than the one before it. The real fault this column catches is a write
+// with no 1h attribution AND no reads at all.
 
 function arg(name: string, fallback?: string): string | undefined {
   return process.env[name]?.trim() || fallback;
@@ -47,7 +57,7 @@ async function main() {
   console.log(
     `${'when'.padEnd(21)} ${'purpose'.padEnd(13)} ${'outcome'.padEnd(14)} `
     + `${'calls'.padStart(5)} ${'first'.padStart(7)} ${'total'.padStart(7)} `
-    + `${'%budget'.padStart(7)} ${'1h-cache'.padStart(9)}`,
+    + `${'%budget'.padStart(7)} ${'1h-write'.padStart(9)} ${'cache-read'.padStart(10)}`,
   );
   for (const row of rows) {
     const pct = Math.round((row.budgetTokens / TOKEN_BUDGET) * 100);
@@ -58,21 +68,26 @@ async function main() {
       + `${String(row.firstCallBudgetTokens).padStart(7)} `
       + `${String(row.budgetTokens).padStart(7)} `
       + `${`${pct}%`.padStart(7)} `
-      + `${String(row.cacheCreation1hInputTokens).padStart(9)}`,
+      + `${String(row.cacheCreation1hInputTokens).padStart(9)} `
+      + `${String(row.cacheReadInputTokens).padStart(10)}`,
     );
   }
 
   const stopped = rows.filter((row) => row.outcome === 'token_budget');
   console.log(`\n${rows.length} turns, ${stopped.length} stopped on token_budget.`);
-  // Zero here on a turn with cache writes means the 1h block is not being
-  // reported, so every write counts at 1.25x and cold turns open near the cap.
-  const coldWrites = rows.filter(
-    (row) => row.cacheCreationInputTokens > 0 && row.cacheCreation1hInputTokens === 0,
+  // A write with no 1h attribution is only a fault when nothing was read either:
+  // that is a turn that neither wrote nor hit the stable prefix, so the whole
+  // write counted at 1.25x. The same two columns on a turn that DID read are an
+  // ordinary cache hit — see the header note before reading anything into them.
+  const unattributedWrites = rows.filter(
+    (row) => row.cacheCreationInputTokens > 0
+      && row.cacheCreation1hInputTokens === 0
+      && row.cacheReadInputTokens === 0,
   );
-  if (coldWrites.length > 0) {
+  if (unattributedWrites.length > 0) {
     console.log(
-      `${coldWrites.length} turn(s) wrote cache with no 1h block attributed — `
-      + 'those paid 1.25x on the write against the budget.',
+      `${unattributedWrites.length} turn(s) wrote cache with no 1h block and no reads — `
+      + 'the stable prefix is missing, and those paid 1.25x on the whole write.',
     );
   }
 
