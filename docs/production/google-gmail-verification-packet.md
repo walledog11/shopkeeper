@@ -1,7 +1,8 @@
 # Google Gmail restricted-scope verification packet
 
 Prepared from the production deployment and repository behavior on
-2026-07-29; domain rows reconciled against the live deployment 2026-08-02. This
+2026-07-29; domain rows reconciled against the live deployment 2026-08-02;
+Branding, scope, and deletion rows reconciled 2026-08-30. This
 is an owner-ready working packet, not proof that Google has approved the app. Do
 not submit credentials, tokens, customer addresses, message content, or raw Gmail
 payloads.
@@ -15,7 +16,7 @@ payloads.
 | Privacy policy | `https://useshopkeeper.com/privacy` returns 200 anonymously and publishes `hello@useshopkeeper.com` | Legal-review the Limited Use disclosure |
 | Terms | `https://useshopkeeper.com/terms` returns 200 anonymously | — |
 | OAuth redirect | `https://app.useshopkeeper.com/api/integrations/gmail/callback` set in Vercel and Google Console (2026-08-02) | — |
-| Authorized domains | `useshopkeeper.com` attached to Vercel and **verified in Search Console (2026-08-02)**; not yet added to OAuth Branding | Add the domain on the Branding page |
+| Authorized domains | `useshopkeeper.com` attached to Vercel and **verified in Search Console (2026-08-02)**; Branding app name, homepage, privacy and terms links updated to the apex (owner-confirmed in console 2026-08-30, not independently readable from the repo) | — |
 | User support email | Live policy publishes `hello@useshopkeeper.com`, forwarding via ImprovMX to a monitored inbox (verified 2026-08-02) | — |
 | Developer contacts | Not discoverable from the repository | Add at least two monitored owner/editor contacts |
 | Demo video | Script below is ready | Record after the alias canary |
@@ -23,9 +24,18 @@ payloads.
 
 The owned-domain blocker is resolved: the homepage, privacy policy, and terms all
 serve from `useshopkeeper.com`, which the app owner controls and has verified in
-Search Console, and `hello@useshopkeeper.com` reaches a monitored inbox. **The
-remaining pre-submission blockers are the OAuth Branding page (still carrying the
-old host), two developer contacts, the alias canary, and the demo video.**
+Search Console, and `hello@useshopkeeper.com` reaches a monitored inbox. The
+Branding page was updated to the apex on 2026-08-30. **The remaining
+pre-submission blockers are two developer contacts, the alias canary, and the
+demo video, which the canary gates** — the script sends from the verified alias.
+
+Re-verified against the live deployment 2026-08-30: the apex homepage, `/privacy`
+and `/terms` each return 200 anonymously; the homepage links `/privacy` and
+`/terms`; the privacy policy carries both the Limited Use sentence and the
+"create, train, or improve a general-purpose AI model" prohibition; and the four
+scopes requested by `emailOAuthProviders` in
+`apps/dashboard/src/app/api/integrations/_lib/email-oauth-providers.ts` match the
+four declared below, with no drift.
 
 Note the apex/`app.` split when filling in console fields: the homepage and legal
 pages are on the **apex**, while the OAuth redirect URI is on **`app.`**.
@@ -47,6 +57,24 @@ The Pub/Sub push URL remains operationally separate from the browser OAuth
 redirect:
 
 `https://clerk-production-e37f.up.railway.app/webhooks/gmail/push`
+
+## Publishing status and the 7-day refresh token
+
+Publishing status is **separate from verification** and worth changing first.
+While an external-user-type consent screen sits in **Testing**, Google issues
+refresh tokens that expire after 7 days, so every connected mailbox stops
+sending weekly until the merchant reconnects. That is a console setting
+(**Google Auth Platform → Audience → Publish app**), not a code defect, and it
+does not wait on review.
+
+Observed on the live `rscoding11@gmail.com` integration: the grant died on
+2026-08-30 with a `400` on refresh roughly four such cycles after the row was
+created on 2026-08-03. Publishing stops the clock for grants issued afterwards;
+tokens already issued keep their original expiry until the next reconnect.
+
+Publishing before verification is expected and reversible. The cost is the
+unverified-app interstitial behind **Advanced** and a 100-user cap, neither of
+which binds before launch.
 
 ## Exact requested scopes
 
@@ -185,6 +213,14 @@ Before security assessment, close or formally accept these operational gaps:
 
 - attachment deletion is an explicit operator step rather than an automatic
   cascade;
+- `customers/redact` could not complete at all until 2026-08-30:
+  `request_episode_outcomes.source_message_id` was `NOT NULL` behind an
+  `ON DELETE SET NULL` foreign key, so the customer delete cascaded into a
+  message and raised `23502`, aborting the transaction and deleting nothing
+  while the webhook returned 200. Fixed by making the column nullable and
+  deleting the outcome rows in `deleteSelectedCustomerData`, with a regression
+  test that fails without it — but **the path has still never run against a real
+  signed delivery**, which is the evidence an assessor will ask for;
 - active messages do not have a fixed maximum lifetime while the merchant keeps
   the workspace;
 - verify backup/PITR deletion behavior and the exact production retention
@@ -261,7 +297,9 @@ logs in the recording.
 - [ ] Provide logging/monitoring configuration showing restricted data is not
   written to logs.
 - [ ] Exercise verified deletion across Neon, Vercel Blob, Redis retention,
-  backups, and connected-provider handoff.
+  backups, and connected-provider handoff. The `customers/redact` transaction is
+  the first thing to prove: it aborted silently until 2026-08-30 and its fix is
+  unexercised against a real payload.
 - [ ] Select a Google-empanelled assessor and budget for at least annual
   reassessment/recertification.
 
@@ -277,8 +315,9 @@ least every 12 months after the Letter of Assessment approval date.
 - [x] Set `APP_URL` and `NEXT_PUBLIC_APP_URL` to the final domain and redeploy.
   (both `https://app.useshopkeeper.com`)
 - [x] Update the Google OAuth client redirect URI to the exact final callback.
-- [ ] Add only the final owned domain to OAuth Branding authorized domains, and
-  update the Branding app name / homepage / privacy URL — still the old host.
+- [x] Add only the final owned domain to OAuth Branding authorized domains, and
+  update the Branding app name / homepage / privacy and terms URLs to the apex.
+  (2026-08-30, owner-confirmed in console)
 - [x] Confirm homepage, privacy, and terms return 200 in an anonymous browser.
   (verified 2026-08-02 on the apex)
 - [x] Confirm homepage visibly links the same privacy URL used in OAuth
@@ -293,6 +332,8 @@ least every 12 months after the Letter of Assessment approval date.
 - [ ] Legal/owner approves the privacy, retention, deletion, subprocessor, and
   no-training statements against current contracts.
 - [ ] Publish the OAuth app to production and click **Prepare for Verification**.
+  Publishing is worth doing immediately and independently of the rest: it ends
+  the 7-day refresh-token expiry described above.
 - [ ] Submit the verification request from an authorized project owner/editor.
 - [ ] Respond to reviewer questions and begin the security assessment when
   Google requests it.

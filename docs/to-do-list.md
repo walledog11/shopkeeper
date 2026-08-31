@@ -28,15 +28,16 @@ and never from `/health`, which is liveness-only and cannot report a commit at a
   workspace default. If the canary fails, leave Gmail as the default and reconnect
   Postmark through the dashboard instead of writing a live-looking row that cannot send.
 
-- [ ] **Reconnect Gmail for the live operator org — it cannot send.** `send_reply` fails
-  with `Gmail token refresh failed: 400` for org `9b81d9c8-9205-48da-90d1-66732f0f5dbd`
-  against integration `4a0520c1-8ac3-4963-8015-6c96909463e3` (`rscoding11@gmail.com`),
-  whose access token expired 2026-08-30T13:00Z. It is that org's only email route, so
-  every outbound reply fails the same way — an approved plan reports the failure to the
-  merchant rather than sending. `emailReplyBlock` in `generate-thread-plan.ts` cannot
-  pre-empt it: a revoked refresh token is still present and non-empty, so
-  `canRefreshOrSend` is true and only a real refresh attempt surfaces the 400. Reconnect
-  from Settings, then re-run an approved reply to close.
+- [ ] **Publish the Google OAuth app, so Gmail stops dying weekly.** While the consent
+  screen's publishing status is **Testing** with an external user type, Google issues
+  refresh tokens that expire after 7 days, so every connected mailbox stops sending until
+  the merchant reconnects — four cycles on `rscoding11@gmail.com` between 2026-08-03 and
+  the `400` on 2026-08-30. **Google Auth Platform → Audience → Publish app**, no review
+  and no code; grants issued afterwards stop expiring, while tokens already issued keep
+  their original expiry until the next reconnect. The cost before verification is the
+  unverified-app interstitial and a 100-user cap, neither of which binds yet. Verification
+  itself is a separate and much longer track —
+  [google-gmail-verification-packet.md](production/google-gmail-verification-packet.md).
 
 ---
 
