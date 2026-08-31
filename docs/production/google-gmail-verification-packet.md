@@ -221,11 +221,12 @@ Before security assessment, close or formally accept these operational gaps:
   deleting the outcome rows in `deleteSelectedCustomerData`. A signed production
   delivery on 2026-08-30 then erased a fixture customer carrying that exact
   shape, with non-zero `deleted*` counts in the gateway log
-  (`canary:customer-redact:{seed,deliver,verify}`). Two gaps remain in that
-  evidence: the run seeded without `BLOB_READ_WRITE_TOKEN`, so attachment
-  deletion is still unexercised, and the canary holds the signing key, so it
-  does not show Shopify originated the call — only the admin **Erase personal
-  data** path does, on a ~10-day delay;
+  (`canary:customer-redact:{seed,deliver,verify}`). A second delivery the same
+  day carried a real private Blob attachment and erased that too, so the
+  operator-step concern above is exercised rather than merely accepted. One gap
+  remains in that evidence: the canary holds the signing key, so it does not
+  show Shopify originated the call — only the admin **Erase personal data** path
+  does, on a ~10-day delay;
 - active messages do not have a fixed maximum lifetime while the merchant keeps
   the workspace;
 - verify backup/PITR deletion behavior and the exact production retention
@@ -302,10 +303,10 @@ logs in the recording.
 - [ ] Provide logging/monitoring configuration showing restricted data is not
   written to logs.
 - [ ] Exercise verified deletion across Neon, Vercel Blob, Redis retention,
-  backups, and connected-provider handoff. The Neon leg of `customers/redact` is
-  proven against a signed production delivery (2026-08-30); the Vercel Blob leg
-  is not, and attachment cleanup there is an explicit operator step rather than
-  a cascade.
+  backups, and connected-provider handoff. The Neon and Vercel Blob legs of
+  `customers/redact` are both proven against signed production deliveries
+  (2026-08-30). Redis retention, backup/PITR and connected-provider handoff are
+  not.
 - [ ] Select a Google-empanelled assessor and budget for at least annual
   reassessment/recertification.
 
