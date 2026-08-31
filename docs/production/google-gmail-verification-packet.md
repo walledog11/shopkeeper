@@ -218,9 +218,14 @@ Before security assessment, close or formally accept these operational gaps:
   `ON DELETE SET NULL` foreign key, so the customer delete cascaded into a
   message and raised `23502`, aborting the transaction and deleting nothing
   while the webhook returned 200. Fixed by making the column nullable and
-  deleting the outcome rows in `deleteSelectedCustomerData`, with a regression
-  test that fails without it — but **the path has still never run against a real
-  signed delivery**, which is the evidence an assessor will ask for;
+  deleting the outcome rows in `deleteSelectedCustomerData`. A signed production
+  delivery on 2026-08-30 then erased a fixture customer carrying that exact
+  shape, with non-zero `deleted*` counts in the gateway log
+  (`canary:customer-redact:{seed,deliver,verify}`). Two gaps remain in that
+  evidence: the run seeded without `BLOB_READ_WRITE_TOKEN`, so attachment
+  deletion is still unexercised, and the canary holds the signing key, so it
+  does not show Shopify originated the call — only the admin **Erase personal
+  data** path does, on a ~10-day delay;
 - active messages do not have a fixed maximum lifetime while the merchant keeps
   the workspace;
 - verify backup/PITR deletion behavior and the exact production retention
@@ -297,9 +302,10 @@ logs in the recording.
 - [ ] Provide logging/monitoring configuration showing restricted data is not
   written to logs.
 - [ ] Exercise verified deletion across Neon, Vercel Blob, Redis retention,
-  backups, and connected-provider handoff. The `customers/redact` transaction is
-  the first thing to prove: it aborted silently until 2026-08-30 and its fix is
-  unexercised against a real payload.
+  backups, and connected-provider handoff. The Neon leg of `customers/redact` is
+  proven against a signed production delivery (2026-08-30); the Vercel Blob leg
+  is not, and attachment cleanup there is an explicit operator step rather than
+  a cascade.
 - [ ] Select a Google-empanelled assessor and budget for at least annual
   reassessment/recertification.
 

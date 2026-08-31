@@ -139,14 +139,27 @@ the Gmail restricted-scope packet all live in
 [phase-6-external-services.md](phase-6-external-services.md); delete that file when its
 closing verification passes.
 
-- [ ] **Prove the Shopify compliance webhooks.** Handlers, the durable data-request
-  workflow, redaction paths, the `shopify_privacy_requests` table and the
-  `compliance_topics` declarations are shipped and released. What remains is exercising
-  Shopify's compliance checks or signed production deliveries. The `customers/redact`
-  transaction has never run against a real payload, and the first thing to check is that
-  it completes: it used to abort on every customer holding a captured request episode.
-  Operator fulfillment and completion steps in
+- [ ] **Prove the Shopify compliance webhooks.** `customers/redact` is done: a signed
+  production delivery on 2026-08-30 erased a fixture customer holding a captured request
+  episode — the shape that used to abort — and the gateway logged non-zero `deleted*`
+  counts. Reproduce with `canary:customer-redact:{seed,deliver,verify}`; note that
+  `shopify app webhook trigger` cannot do this, because its sample payload names a
+  customer that matches nothing and so exercises the empty path. Three gaps remain.
+  Attachment deletion is unproven: that run seeded without `BLOB_READ_WRITE_TOKEN`, and
+  Blob cleanup is an explicit operator step rather than a cascade. Provenance is
+  unproven: the canary holds the signing key, so only the admin **Erase personal data**
+  path shows Shopify originated the call, on a ~10-day delay. And `customers/data_request`
+  and `shop/redact` have their own paths — the first durable-row-plus-export, not a
+  delete — and neither has been exercised. Operator fulfillment and completion steps in
   [production/data-deletion.md](production/data-deletion.md).
+
+- [ ] **Rotate `SHOPIFY_APP_SECRET` before onboarding a real merchant.** It was read into
+  a terminal transcript on 2026-08-30. It verifies every Shopify webhook and signs the
+  OAuth exchange, so whoever holds it can forge deliveries into the gateway — compliance
+  topics that delete data among them. Rotation is Partner Dashboard, then **both** Railway
+  and Vercel, with webhook verification failing in the gap, which is why it is not worth
+  doing while the only store is the author's dev store. It becomes worth doing the moment
+  a merchant's data is behind it, and it is no more expensive then.
 
 ---
 
