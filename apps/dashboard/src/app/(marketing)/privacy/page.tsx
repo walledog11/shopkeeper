@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { CONTACT_EMAIL } from '@/lib/brand'
 import { LegalPage } from '../_components/LegalPage'
 
@@ -18,7 +19,7 @@ export default function PrivacyPage() {
   return (
     <LegalPage
       title="Privacy Policy"
-      effectiveDate="July 29, 2026"
+      effectiveDate="August 30, 2026"
       intro={privacyIntro}
       sections={[
         {
@@ -30,9 +31,9 @@ export default function PrivacyPage() {
                 team membership, authentication identifiers, billing status, and settings chosen by a merchant.
               </p>
               <p>
-                Merchants may connect email, Shopify, and other support channels. Those integrations can send us
-                customer names, email addresses, order context, message content, attachments, and conversation metadata
-                needed to provide support workflows.
+                Merchants may connect email, Shopify, Instagram, and other support channels. Those integrations can
+                send us customer names, email addresses, social account identifiers, order context, message content,
+                attachments, and conversation metadata needed to provide support workflows.
               </p>
               <p>
                 We also collect product usage, device, log, and diagnostic data such as request metadata, error reports,
@@ -88,6 +89,46 @@ export default function PrivacyPage() {
           ),
         },
         {
+          title: 'Meta Platform Data (Instagram)',
+          body: (
+            <>
+              <p>
+                When a merchant connects an Instagram professional account, Shopkeeper requests two permissions.
+                Instagram Business Basic (instagram_business_basic) identifies the connected account so the merchant can
+                confirm which account is linked and so incoming messages route to the correct workspace. Instagram
+                Business Manage Messages (instagram_business_manage_messages) receives the direct messages people send
+                to that account and delivers merchant-approved replies back to the sender. Shopkeeper does not request
+                access to a merchant&apos;s posts, comments, insights, followers, or advertising data.
+              </p>
+              <p>
+                From those permissions Shopkeeper stores the message text, accepted media attachments, the
+                Instagram-scoped sender identifier, the sender&apos;s Instagram name, username, and profile picture, and
+                the provider timestamps and message identifiers returned by Meta. That data creates the visible support
+                ticket, prevents duplicate tickets, preserves conversation threading, and records that a reply was
+                delivered. Attachments are stored privately and can be opened only by authenticated members of the
+                merchant&apos;s workspace.
+              </p>
+              <p>
+                Meta Platform Data is shared only with the infrastructure and AI service providers needed to provide and
+                secure these user-facing support features, and with authorized members of the merchant&apos;s workspace.
+                It is not sold, not used for advertising or ad targeting, not used to build profiles of people
+                independently of the merchant relationship, and not used to create, train, or improve a general-purpose
+                AI model. Shopkeeper&apos;s use of Meta Platform Data follows the Meta Platform Terms and Developer
+                Policies.
+              </p>
+              <p>
+                A merchant can disconnect Instagram at any time from Settings, then Integrations, which revokes
+                Shopkeeper&apos;s access and unsubscribes the account so no further messages are delivered. Deleting
+                data Shopkeeper has already received is covered by our{' '}
+                <Link href="/data-deletion" className="font-semibold text-stone-900 underline decoration-stone-400 underline-offset-4">
+                  data deletion instructions
+                </Link>
+                .
+              </p>
+            </>
+          ),
+        },
+        {
           title: 'How We Share Information',
           body: (
             <>
@@ -109,8 +150,11 @@ export default function PrivacyPage() {
             <p>
               We retain account, workspace, support, and integration data while the merchant account is active or as
               needed for legitimate business, legal, security, and compliance purposes. Merchants can request export or
-              deletion by contacting {CONTACT_EMAIL}. We process verified deletion requests according to our
-              documented data deletion procedure.
+              deletion by contacting {CONTACT_EMAIL}. Our{' '}
+              <Link href="/data-deletion" className="font-semibold text-stone-900 underline decoration-stone-400 underline-offset-4">
+                data deletion instructions
+              </Link>{' '}
+              explain who may request deletion, what is removed, and how long it takes.
             </p>
           ),
         },

@@ -11,6 +11,7 @@ const footerLinks = [
   { href: `mailto:${CONTACT_EMAIL}`, label: "Contact" },
   { href: "/privacy", label: "Privacy" },
   { href: "/terms", label: "Terms" },
+  { href: "/data-deletion", label: "Data deletion" },
 ] as const;
 
 export function Footer() {

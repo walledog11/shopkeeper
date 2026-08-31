@@ -10,6 +10,7 @@ const publicRoutes = [
   "/product/security",
   "/privacy",
   "/terms",
+  "/data-deletion",
 ] as const;
 
 export default function sitemap(): MetadataRoute.Sitemap {
