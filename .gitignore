@@ -52,6 +52,9 @@ artifacts/landing-media/
 
 # Shopify CLI local state
 .shopify/
+
+# customers/redact canary run state — carries live row ids for a seeded fixture.
+redact-canary*.json
 .env*
 # ...but the committed templates are how the env list is documented.
 !.env.example
