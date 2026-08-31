@@ -74,10 +74,13 @@ Shopkeeper starts sending mail as itself.
 ### Google
 
 - [x] `useshopkeeper.com` verified in Google Search Console (2026-08-02)
-- [ ] OAuth **Branding** page: app name, homepage, privacy URL, authorized
-  domain. Distinct from the redirect URI, and still on the old host. With Search
-  Console done this plus the support mailbox is what remains on the Gmail gate —
-  see [production/google-gmail-verification-packet.md](production/google-gmail-verification-packet.md).
+- [x] OAuth **Branding** page: app name, homepage, privacy and terms URLs moved
+  to the apex (2026-08-30, owner-confirmed in console). Distinct from the
+  redirect URI.
+- [x] Consent screen published to production (2026-08-30), which ends the 7-day
+  refresh-token expiry for grants issued afterwards. Separate from verification,
+  which is a much longer track — see
+  [production/google-gmail-verification-packet.md](production/google-gmail-verification-packet.md).
 - [ ] This is a *separate* OAuth client from the Clerk social-login one — do not
   disturb the Clerk client while editing it.
 
@@ -113,16 +116,10 @@ configured on it, so it was abandoned rather than migrated.
   resolve publicly. SPF was deliberately left alone: Postmark authenticates via
   DKIM and its own envelope sender, so no `include:` was added to the ImprovMX
   record.
-- [ ] **Postmark account approval — this is the live blocker on outbound.** Until
-  it clears, every recipient must share the From address's domain: sending from
-  `hello@useshopkeeper.com` to an `icloud.com` address fails with *"While your
-  account is pending approval…"*. Config is otherwise correct — that error proves
-  the From domain, token, and integration all resolved.
-  - Describe the use case as transactional support replies sent in response to
-    inbound customer email, no marketing or bulk, **on behalf of merchants from
-    their own verified domains** — declare the multi-tenant model up front.
-  - To test before approval lands, make the test customer an address on
-    `useshopkeeper.com` so the same-domain rule is satisfied.
+- [x] **Postmark account approval** (2026-08-30). Outbound is no longer confined
+  to recipients sharing the From address's domain, so a canary to an external
+  mailbox is now the one worth running — a same-domain send would have passed
+  before approval too, and proves nothing.
 - [ ] Per-merchant sending domains. Replies go out as the *merchant's* address,
   so each merchant verifies their own domain at onboarding — recurring work, not
   a one-time setup.

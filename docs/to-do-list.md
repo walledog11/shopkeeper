@@ -27,16 +27,15 @@ and never from `/health`, which is liveness-only and cannot report a commit at a
   `hello@useshopkeeper.com`, then recreate that forwarding integration and make it the
   workspace default. If the canary fails, leave Gmail as the default and reconnect
   Postmark through the dashboard instead of writing a live-looking row that cannot send.
+  Account approval landed 2026-08-30, so the canary may now send cross-domain — pick a
+  recipient off `useshopkeeper.com`, or it proves nothing that the same-domain rule
+  would not have allowed anyway.
 
-- [ ] **Publish the Google OAuth app, so Gmail stops dying weekly.** While the consent
-  screen's publishing status is **Testing** with an external user type, Google issues
-  refresh tokens that expire after 7 days, so every connected mailbox stops sending until
-  the merchant reconnects — four cycles on `rscoding11@gmail.com` between 2026-08-03 and
-  the `400` on 2026-08-30. **Google Auth Platform → Audience → Publish app**, no review
-  and no code; grants issued afterwards stop expiring, while tokens already issued keep
-  their original expiry until the next reconnect. The cost before verification is the
-  unverified-app interstitial and a 100-user cap, neither of which binds yet. Verification
-  itself is a separate and much longer track —
+- [ ] **Reconnect `rscoding11@gmail.com` once, to pick up a non-expiring grant.**
+  Publishing the OAuth app stopped the 7-day refresh-token clock for grants issued after
+  it, but tokens already issued keep their original expiry — so the live mailbox stays on
+  a dying grant until it reconnects. One pass through Settings → Integrations → Gmail.
+  Verification is a separate and much longer track —
   [google-gmail-verification-packet.md](production/google-gmail-verification-packet.md).
 
 ---

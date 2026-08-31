@@ -2,7 +2,7 @@
 
 Prepared from the production deployment and repository behavior on
 2026-07-29; domain rows reconciled against the live deployment 2026-08-02;
-Branding, scope, and deletion rows reconciled 2026-08-30. This
+Branding, scope, publishing, and deletion rows reconciled 2026-08-30. This
 is an owner-ready working packet, not proof that Google has approved the app. Do
 not submit credentials, tokens, customer addresses, message content, or raw Gmail
 payloads.
@@ -12,7 +12,8 @@ payloads.
 | Requirement | Current evidence | Owner action |
 |---|---|---|
 | Production app | Dashboard and two Railway gateway services are healthy | Keep production stable through review |
-| Homepage | `https://useshopkeeper.com/` returns 200 and identifies Shopkeeper (owned domain, live 2026-08-02) | Verify the domain in Search Console |
+| Homepage | `https://useshopkeeper.com/` returns 200 and identifies Shopkeeper (owned domain, live 2026-08-02) | — |
+| Publishing status | Consent screen published to production 2026-08-30; separate from verification | Reconnect the live mailbox once to pick up a non-expiring grant |
 | Privacy policy | `https://useshopkeeper.com/privacy` returns 200 anonymously and publishes `hello@useshopkeeper.com` | Legal-review the Limited Use disclosure |
 | Terms | `https://useshopkeeper.com/terms` returns 200 anonymously | — |
 | OAuth redirect | `https://app.useshopkeeper.com/api/integrations/gmail/callback` set in Vercel and Google Console (2026-08-02) | — |
@@ -48,7 +49,8 @@ pages are on the **apex**, while the OAuth redirect URI is on **`app.`**.
 - Terms: `https://useshopkeeper.com/terms`
 - OAuth redirect URI:
   `https://app.useshopkeeper.com/api/integrations/gmail/callback`
-- User support email: `hello@useshopkeeper.com` (pending a monitored mailbox)
+- User support email: `hello@useshopkeeper.com` (forwarding via ImprovMX to a
+  monitored inbox, verified 2026-08-02)
 - Authorized domain: `useshopkeeper.com`
 - Google Cloud project ID observed in production Gmail configuration:
   `shopkeeper-501301`
@@ -60,21 +62,22 @@ redirect:
 
 ## Publishing status and the 7-day refresh token
 
-Publishing status is **separate from verification** and worth changing first.
+**Published 2026-08-30.** Publishing status is separate from verification, which
+is why it did not wait on it.
+
 While an external-user-type consent screen sits in **Testing**, Google issues
 refresh tokens that expire after 7 days, so every connected mailbox stops
-sending weekly until the merchant reconnects. That is a console setting
-(**Google Auth Platform → Audience → Publish app**), not a code defect, and it
-does not wait on review.
+sending weekly until the merchant reconnects. That was observed on the live
+`rscoding11@gmail.com` integration: the grant died on 2026-08-30 with a `400` on
+refresh, roughly four such cycles after the row was created on 2026-08-03.
 
-Observed on the live `rscoding11@gmail.com` integration: the grant died on
-2026-08-30 with a `400` on refresh roughly four such cycles after the row was
-created on 2026-08-03. Publishing stops the clock for grants issued afterwards;
-tokens already issued keep their original expiry until the next reconnect.
+Publishing stops that clock only for grants issued **afterwards**. Tokens
+already issued keep their original expiry, so the live mailbox stays on a dying
+grant until it reconnects once — tracked in
+[../to-do-list.md](../to-do-list.md), not here.
 
-Publishing before verification is expected and reversible. The cost is the
-unverified-app interstitial behind **Advanced** and a 100-user cap, neither of
-which binds before launch.
+The cost before verification is the unverified-app interstitial behind
+**Advanced** and a 100-user cap, neither of which binds before launch.
 
 ## Exact requested scopes
 
@@ -338,9 +341,9 @@ least every 12 months after the Letter of Assessment approval date.
 - [ ] Record and review the demo video.
 - [ ] Legal/owner approves the privacy, retention, deletion, subprocessor, and
   no-training statements against current contracts.
-- [ ] Publish the OAuth app to production and click **Prepare for Verification**.
-  Publishing is worth doing immediately and independently of the rest: it ends
-  the 7-day refresh-token expiry described above.
+- [x] Publish the OAuth app to production. (2026-08-30, which ends the 7-day
+  refresh-token expiry for grants issued afterwards)
+- [ ] Click **Prepare for Verification**, once the rows above it are done.
 - [ ] Submit the verification request from an authorized project owner/editor.
 - [ ] Respond to reviewer questions and begin the security assessment when
   Google requests it.
