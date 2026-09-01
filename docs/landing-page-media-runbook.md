@@ -2,7 +2,7 @@
 
 **Status:** Active
 
-**Last updated:** 2026-08-21
+**Last updated:** 2026-09-01
 
 **Applies to:** The verified product media specified in
 [landing-page-media-and-content-plan.md](landing-page-media-and-content-plan.md).
@@ -202,7 +202,11 @@ lp-order-swap-imessage-approval-v01-390x844.webp
   `apps/dashboard/public/marketing/landing-media/{workflow}/vNN/`.
 - Video delivery assets go to the `shopkeeper-landing-assets` Blob store under
   `landing-media/{workflow}/vNN/`. Upload versioned object names; do not reuse
-  the legacy unversioned `demo-film.mp4` path.
+  the legacy unversioned `demo-film.mp4` path. **Neither `BLOB_READ_WRITE_TOKEN`
+  in the repo can write this store** — production and development both belong to
+  `shopkeeper-attachments`. The landing-assets read-write token comes from the
+  Vercel dashboard (Storage) and is in no `.env`. Publishing is outward-facing:
+  it needs the token holder's go-ahead, not just the token.
 - Only synthetic, PII-reviewed exports may enter the public directory or Blob
   store. Raw device captures never do.
 

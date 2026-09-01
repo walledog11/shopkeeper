@@ -283,6 +283,25 @@ Build in this order:
 Do not create thin routes to make the navigation look larger. The homepage may
 link to a strong section until a full page is ready.
 
+The five pages above are the buyer-education track. There is no acquisition
+track, and that is currently a choice by omission rather than a decision. Two
+candidates, neither scheduled:
+
+- **Comparison pages**, starting with Gorgias and Shopify Inbox. Intent-driven
+  organic search, and the angle is sharp — a helpdesk is something you staff, an
+  employee is something you supervise from your phone. Each still owes the
+  substantive-page bar above; a comparison page is the easiest kind of thin
+  route to write.
+- **A public changelog.** Git history is already the record, and for a
+  solo-founder product a dated shipping trail is evidence the thing is alive.
+
+Section 4 of **Target homepage** — the Shopify action map — can be generated
+from `TOOL_LABELS` and `TOOL_CATEGORIES` in `packages/agent/src/tools/registry/`
+rather than hand-written, which makes it provably complete and permanently
+current. If that route is taken, note the client-boundary landmine: the registry
+is in the client bundle, so a `@shopkeeper/db` import on that path breaks
+`next build`.
+
 ## To-do list
 
 ### Phase 0 — reconcile product truth
@@ -295,6 +314,19 @@ link to a strong section until a full page is ready.
   future state; all other identified high-risk copy has been corrected.
 - [ ] Verify the displayed Starter and Pro prices against a live Stripe checkout;
   the repository supports these two tiers and a 14-day trial.
+- [ ] Decide whether the conversation and seat numbers return to `Pricing.tsx`. The
+  condition the **Pricing and conversion copy** rule waits on — "until enforcement
+  exists" — has been met. `PLAN_LIMITS` in `packages/db/plan-limits.ts` carries the
+  counts (Starter 500/mo and 1 seat, Pro unlimited and 2 seats), and both are
+  enforced: `degradeForConversationLimit` on the gateway planning path in
+  `apps/gateway/src/message-handlers/planning.ts`, and the seat check in
+  `apps/dashboard/src/app/api/team/route.ts`, which refuses the invite. The two
+  behave differently and the copy has to say which — seats refuse, conversations
+  degrade rather than stop. Scale stays omitted regardless: `PlanTier` has no such
+  tier and there is no checkout behind it. Blocked on the same Stripe verification
+  as the item above; `plan-limits.ts` records `PRICE_ID_STARTER` and `PRICE_ID_PRO`
+  as unprovisioned in production, which is why every live org currently resolves to
+  the deliberately unbounded `unknown` tier.
 - [x] Update metadata, footer copy, FAQ, and navigation terminology to match the
   approved positioning.
 
@@ -332,6 +364,27 @@ meet every truth and delivery requirement in this document.
 - [x] Replace repeated simulations with concise static content while preserving
   the planned setup animation.
 - [x] Preserve paper styling at the edges without reducing product readability.
+- [ ] Settle the two atmosphere photographs still marked placeholder in source:
+  `hero-light.jpg` (`Hero.tsx`) and `footer-dawn.jpg` (`Footer.tsx`, and
+  `OnboardingExperience.tsx` in the onboarding route), each carrying a "swap for
+  the final shot" comment. Check the premise before commissioning anything:
+  `hero-light.jpg` renders blurred, de-saturated, and radially masked — an
+  atmosphere wash, not an image a visitor reads as an image — so the swap may
+  change nothing anyone can see, and the honest resolution is deleting the
+  comments. **Additional media** above already rules out generic lifestyle
+  photography, so replacement means a product composition. Confirm both at real
+  viewing size, then either accept them or replace them; do not leave the
+  comments standing.
+- [ ] Decide the display typeface. Every H1 and H2 on the marketing surfaces —
+  `CTA.tsx`, `FAQ.tsx`, `Footer.tsx`, `Onboarding.tsx`, `Pricing.tsx`,
+  `ProductDetailTemplate.tsx` — sets `--m-hand`, which resolves to Just Another
+  Hand, a condensed marker face, at display sizes. `--m-serif` in
+  `apps/dashboard/src/app/styles/marketing.css` is still bare Georgia: a
+  fallback, never a chosen face. The open question is whether "restrained
+  handwriting" in **Positioning** means handwriting carries the display type or
+  only the annotations, margin notes, and timeline stamps. Answer it once and
+  apply it; a real display serif on H1/H2 is the alternative if the answer is
+  the latter.
 - [x] Replace the stale hosted film with a responsive, meaningful seeded
   walkthrough that works without autoplay.
 - [ ] Add responsive video sources, a verified poster, offscreen pause, and

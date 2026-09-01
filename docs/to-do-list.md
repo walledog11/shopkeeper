@@ -222,6 +222,12 @@ Gated-off integrations cost nothing to keep dark.
   has the fallback shape — prefer the source message text, and drop the approve prompt
   only when there is none. Decide that, or decide the invariant means something narrower
   than it reads.
+- [ ] **Shopify App Store distribution, or not.** The listing is a primary acquisition
+  channel for Shopify merchants and the site appears to have none. The first step is a
+  Partner Dashboard check — confirm whether a listing exists at all — because the answer
+  decides whether this is a footer badge or a months-long app-review submission, and
+  those belong in different quarters. Not a landing-page task; the marketing site can
+  only link to whatever this produces.
 - [ ] **A capability the agent has already denied stays denied in that thread.** Told it
   could not run a storewide sale, it repeated the refusal after `applies_to` shipped and
   deployed, citing its own earlier message rather than the tool schema in front of it.
@@ -306,9 +312,23 @@ that layer has.
 - [production/runbook.md](production/runbook.md) — ops, monitors, channel rollout.
 - [production/alerting-evidence.md](production/alerting-evidence.md) — controlled
   alert triggers and verification cheatsheet.
+- [landing-page-media-and-content-plan.md](landing-page-media-and-content-plan.md) —
+  the marketing site's own open work: positioning, the claim allow/deny list, the
+  target homepage, and phases 0–4. Landing-page items are filed there, not here.
+- [landing-page-media-runbook.md](landing-page-media-runbook.md) — capture procedure
+  for that plan's phase 1, behind `npm run landing:media:fixture`. Blocked on a test
+  Instagram account for the named intake path.
 
 Two closed evidence records were deleted on 2026-08-27 once every live item in them
 was carried into this file: the 2026-08-04 pre-release validation run
 (`git show cb61ac44:docs/production/pre-release-validation-2026-08-04.md`) and the
 2026-07-29 Gmail native-inbound rollout and soak
 (`git show cb61ac44:docs/production/gmail-rollout-evidence-2026-07-29.md`).
+
+The 2026-08-19 landing-page overhaul plan was deleted on 2026-09-01
+(`git show de741725:docs/landing-page-overhaul-plan.md`). It was an audit against
+zipchat.ai that the 2026-08-21 redesign superseded: its two closed defects describe a
+hero film and a `Features.tsx` that no longer exist. Its four live residues were
+carried out first — the placeholder photography, the display-typeface question, and
+the acquisition track into the landing-page plan above, the App Store decision into
+**Parked / decide**.
