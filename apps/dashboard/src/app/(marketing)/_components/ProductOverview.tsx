@@ -25,6 +25,20 @@ function SectionHeading({
   );
 }
 
+function SectionHandoff({ href, label }: { href: string; label: string }) {
+  return (
+    <div className="mt-6 text-center">
+      <Link
+        href={href}
+        className="inline-flex items-center gap-2 rounded-full border border-stone-900/15 bg-[#fdfbf7] px-5 py-2.5 text-sm font-semibold text-stone-800 transition-transform hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-stone-900 motion-reduce:transition-none"
+      >
+        {label}
+        <ArrowRight className="size-4" aria-hidden />
+      </Link>
+    </div>
+  );
+}
+
 function PaperCard({
   children,
   className = "",
@@ -162,15 +176,7 @@ export function CoreProductOverview() {
             </PaperCard>
           ))}
         </div>
-        <div className="mt-6 text-center">
-          <Link
-            href="/product/order-operations"
-            className="inline-flex items-center gap-2 rounded-full border border-stone-900/15 bg-[#fdfbf7] px-5 py-2.5 text-sm font-semibold text-stone-800 transition-transform hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-stone-900 motion-reduce:transition-none"
-          >
-            Explore Order operations
-            <ArrowRight className="size-4" aria-hidden />
-          </Link>
-        </div>
+        <SectionHandoff href="/product/order-operations" label="Explore Order operations" />
       </section>
 
       <section id="controls" className="mx-auto max-w-6xl scroll-mt-24 px-6 py-14">
@@ -224,9 +230,7 @@ export function CoreProductOverview() {
             </p>
           </PaperCard>
         </div>
-        <p className="mt-4 rounded-xl bg-[#2b2118] px-5 py-4 text-center text-sm text-[#f6f2eb]/80">
-          Proposed actions, merchant decisions, and execution outcomes remain reviewable in the action history.
-        </p>
+        <SectionHandoff href="/product/approvals-and-controls" label="See approval modes and limits" />
       </section>
 
       <section id="system" className="mx-auto max-w-6xl scroll-mt-24 px-6 py-14">
@@ -255,6 +259,7 @@ export function CoreProductOverview() {
         <p className="mt-4 rounded-xl border border-stone-900/10 bg-[#fdfbf7]/80 px-5 py-4 text-center text-sm text-stone-700">
           The dashboard remains the setup, review, audit, and manual fallback surface.
         </p>
+        <SectionHandoff href="/product/integrations" label="See what each connection does" />
       </section>
 
       <section id="context" className="mx-auto max-w-6xl scroll-mt-24 px-6 py-14">
@@ -298,6 +303,7 @@ export function CoreProductOverview() {
             </div>
           </PaperCard>
         </div>
+        <SectionHandoff href="/product/customer-support" label="See how a reply gets grounded" />
       </section>
     </div>
   );
@@ -356,6 +362,7 @@ export function TrustSection() {
       <p className="mt-5 text-center text-sm text-stone-600">
         Read the public <Link href="/privacy" className="font-semibold text-stone-900 underline decoration-stone-400 underline-offset-4">Privacy Policy</Link> for data-use details.
       </p>
+      <SectionHandoff href="/product/security" label="See the security model" />
     </section>
   );
 }
