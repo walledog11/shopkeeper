@@ -71,10 +71,15 @@ export function formatRequestHeaderLines(
   display: RequestDisplay,
   stage: ConversationStage,
   now: Date,
+  // The customer's own words, already rendered. Supplied only when `display`
+  // cannot ground the card, and preferred over the unavailable line when it is:
+  // an unrenderable snapshot is a fact about our classifier, not about whether
+  // the merchant can be told what was asked.
+  sourceQuote?: string | null,
 ): string[] {
   // Reuse the established channel/stage sentence, but never its prose summary.
   const lead = formatHeaderLines(person, channelType, '', stage)[0]!;
-  const request = formatRequestDisplayLine(display, personLabel(person), now);
+  const request = sourceQuote ?? formatRequestDisplayLine(display, personLabel(person), now);
   return [
     lead,
     endSentence(request),

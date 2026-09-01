@@ -180,7 +180,7 @@ describe('persisted classifier versions still render', () => {
     });
   }
 
-  it('renders an approvable card on a legacy row with no structured request', async () => {
+  it('quotes the customer on a legacy row the card cannot render structurally', async () => {
     org = await createTestOrg();
     const seeded = await seedThread({
       classifierSignals: { version: 4, language: 'en', intents: {} },
@@ -199,14 +199,53 @@ describe('persisted classifier versions still render', () => {
       'email',
       display,
       cache!.plan.steps,
+      {
+        threadId: seeded.thread.id,
+        rawToolCalls: cache!.plan.rawToolCalls,
+        now: NOW,
+        sourceMessageText: CUSTOMER_TEXT,
+      },
+    );
+
+    // The same row the digest already quotes. An unrenderable snapshot is a fact
+    // about our classifier, not about whether the merchant can be shown what was
+    // asked -- so the card shows it, names the action, and may ask.
+    expect(card).toContain('cracked lid');
+    expect(card).not.toContain('Request details unavailable');
+    expect(card).toMatch(/refund/i);
+    expect(card).toContain('Sound good?');
+  });
+
+  it('never asks a card to be approved when the request cannot be shown', async () => {
+    org = await createTestOrg();
+    const seeded = await seedThread({
+      classifierSignals: { version: 4, language: 'en', intents: {} },
+      sourceText: null,
+    });
+
+    const display = await buildRequestDisplaySnapshot({
+      organizationId: org.id,
+      threadId: seeded.thread.id,
+      sourceMessageId: seeded.sourceMessageId,
+    });
+    const cache = readAgentPlanCache(seeded.thread.cachedPlan);
+
+    const card = formatOperatorPlanMessage(
+      seeded.customer.name,
+      'email',
+      display,
+      cache!.plan.steps,
       { threadId: seeded.thread.id, rawToolCalls: cache!.plan.rawToolCalls, now: NOW },
     );
 
-    // The plan is real even when the request rendering is not. The card says
-    // plainly that it cannot show the request, and still names the action the
-    // merchant is being asked to approve rather than going blank.
+    // The standing invariant, and the whole point of the pair: ask them to open
+    // the thread *instead of* asking for a decision, never both. The action is
+    // still named, so the card is not blank -- it just carries no question.
     expect(card).toContain('Request details unavailable');
     expect(card).toMatch(/refund/i);
+    expect(card).toContain('open the thread first');
+    expect(card).not.toContain('Sound good?');
+    expect(card).not.toContain('Good to send?');
   });
 
   it('never asks a legacy row to be decided when it cannot be shown', async () => {
