@@ -2,16 +2,82 @@
 
 Prepared from the production deployment and repository behavior on
 2026-07-29; domain rows reconciled against the live deployment 2026-08-02;
-Branding, scope, publishing, and deletion rows reconciled 2026-08-30. This
-is an owner-ready working packet, not proof that Google has approved the app. Do
-not submit credentials, tokens, customer addresses, message content, or raw Gmail
-payloads.
+Branding, scope, publishing, and deletion rows reconciled 2026-08-30; the
+submission to-do list and the security-assessment section rewritten 2026-08-30
+against CASA Specification v2.1.1. This is an owner-ready working packet, not
+proof that Google has approved the app. Do not submit credentials, tokens,
+customer addresses, message content, or raw Gmail payloads.
+
+## What is left to get verified
+
+This is the only checklist in this file. Everything under **Blocks submission**
+is console or desk work — none of it is blocked on code, and none of it is
+blocked on the Palette alias canary.
+
+### Blocks submission
+
+- [ ] **Add at least two developer contacts.** Google Cloud console → OAuth
+  Branding → developer contact information. They must be monitored owner or
+  editor addresses. Open since 2026-07-29 and the oldest blocker in the file.
+- [ ] **Declare exactly the four scopes** in Google Cloud Data Access — the four
+  under *Exact requested scopes* below, no more.
+- [ ] **Paste the scope justifications** from that same section, adjusted only
+  for final UI wording.
+- [ ] **Save the Anthropic no-training evidence.** Proof that the production
+  Anthropic organization is not enrolled in a training or development-partner
+  opt-in, and that feedback paths do not submit customer content. Required by
+  the Limited Use disclosure below, which is what makes it a submission blocker
+  rather than a nicety.
+- [ ] **Legal/owner approval** of the privacy, retention, deletion,
+  subprocessor, and no-training statements against current contracts.
+- [ ] **Record and review the demo video.** Script below. It uses a *test*
+  merchant, test mailbox, test send-as alias and independent sender — it does
+  not need `support@palettegarments.com`, and nothing gates it.
+- [ ] **Click Prepare for Verification**, once every box above is checked.
+- [ ] **Submit** from an authorized project owner or editor.
+
+### After submission
+
+- [ ] Respond to reviewer questions.
+- [ ] Begin the security assessment **when Google requests it** — see *Security
+  assessment (CASA)* below. Do not start it early.
+- [ ] Record annual recertification and assessment owners.
+
+### Deliberately not blockers
+
+Both are real work, both are tracked in [../to-do-list.md](../to-do-list.md),
+and neither stands between the app and a submission:
+
+- The Palette alias canary for `support@palettegarments.com`. It needs Gmail
+  administrator access the release workspace does not have. Earlier revisions of
+  this file gated the demo video on it; that was wrong.
+- Reconnecting `rscoding11@gmail.com` to pick up a non-expiring grant.
+
+### Already established
+
+- [x] Attach an owned custom domain to Vercel. (`useshopkeeper.com`, 2026-08-02)
+- [x] Verify that domain in Google Search Console using a project owner/editor.
+  (2026-08-02)
+- [x] Set `APP_URL` and `NEXT_PUBLIC_APP_URL` to the final domain and redeploy.
+  (both `https://app.useshopkeeper.com`)
+- [x] Update the Google OAuth client redirect URI to the exact final callback.
+- [x] Add only the final owned domain to OAuth Branding authorized domains, and
+  update the Branding app name / homepage / privacy and terms URLs to the apex.
+  (2026-08-30, owner-confirmed in console)
+- [x] Confirm homepage, privacy, and terms return 200 in an anonymous browser.
+  (re-verified 2026-08-30 on the apex)
+- [x] Confirm homepage visibly links the same privacy URL used in OAuth
+  Branding. (`href="/privacy"` on the apex homepage)
+- [x] Confirm the support mailbox is monitored and matches the public brand.
+  (`hello@useshopkeeper.com` via ImprovMX, 2026-08-02)
+- [x] Publish the OAuth app to production. (2026-08-30, which ends the 7-day
+  refresh-token expiry for grants issued afterwards)
 
 ## Submission status
 
 | Requirement | Current evidence | Owner action |
 |---|---|---|
-| Production app | Dashboard and two Railway gateway services are healthy | Keep production stable through review |
+| Production app | Dashboard and two Railway gateway services reported healthy 2026-08-02; not re-checked since | Re-confirm immediately before submitting, and keep production stable through review |
 | Homepage | `https://useshopkeeper.com/` returns 200 and identifies Shopkeeper (owned domain, live 2026-08-02) | — |
 | Publishing status | Consent screen published to production 2026-08-30; separate from verification | Reconnect the live mailbox once to pick up a non-expiring grant |
 | Privacy policy | `https://useshopkeeper.com/privacy` returns 200 anonymously and publishes `hello@useshopkeeper.com` | Legal-review the Limited Use disclosure |
@@ -20,15 +86,14 @@ payloads.
 | Authorized domains | `useshopkeeper.com` attached to Vercel and **verified in Search Console (2026-08-02)**; Branding app name, homepage, privacy and terms links updated to the apex (owner-confirmed in console 2026-08-30, not independently readable from the repo) | — |
 | User support email | Live policy publishes `hello@useshopkeeper.com`, forwarding via ImprovMX to a monitored inbox (verified 2026-08-02) | — |
 | Developer contacts | Not discoverable from the repository | Add at least two monitored owner/editor contacts |
-| Demo video | Script below is ready | Record after the alias canary |
-| Restricted-scope assessment | `gmail.readonly` is restricted and server-side data is stored/transmitted | Complete the assessor/CASA path when Google initiates it |
+| Demo video | Script below is ready and needs only a test mailbox | Record it — nothing gates it |
+| Restricted-scope assessment | `gmail.readonly` is restricted and server-side data is stored/transmitted | Downstream and Google-initiated; see *Security assessment (CASA)* |
 
 The owned-domain blocker is resolved: the homepage, privacy policy, and terms all
 serve from `useshopkeeper.com`, which the app owner controls and has verified in
 Search Console, and `hello@useshopkeeper.com` reaches a monitored inbox. The
-Branding page was updated to the apex on 2026-08-30. **The remaining
-pre-submission blockers are two developer contacts, the alias canary, and the
-demo video, which the canary gates** — the script sends from the verified alias.
+Branding page was updated to the apex on 2026-08-30. What remains is the
+*Blocks submission* list above — all of it console or desk work.
 
 Re-verified against the live deployment 2026-08-30: the apex homepage, `/privacy`
 and `/terms` each return 200 anonymously; the homepage links `/privacy` and
@@ -288,66 +353,78 @@ Upload the video as an unlisted link accessible to Google's reviewers without a
 login. Do not expose real customer data, console secrets, tokens, or production
 logs in the recording.
 
-## CASA/security assessment readiness
+## Security assessment (CASA)
 
-- [ ] Confirm assessment scope includes dashboard, both Railway services,
-  production database, Redis, Blob storage, OAuth/token handling, CI/CD, and
-  observability.
-- [ ] Provide current architecture and data-flow diagrams.
-- [ ] Provide asset inventory, owners, environments, and data classifications.
-- [ ] Provide access-control/RBAC evidence and joiner/mover/leaver procedures.
-- [ ] Provide encryption-in-transit and encryption-at-rest evidence, including
-  application-layer OAuth token encryption and key rotation.
-- [ ] Provide SDLC, code-review, dependency/vulnerability-management, and
-  release evidence.
-- [ ] Provide incident response, breach notification, backup/PITR, restoration,
-  and disaster-recovery evidence.
-- [ ] Provide penetration-test and vulnerability-remediation evidence.
-- [ ] Provide logging/monitoring configuration showing restricted data is not
-  written to logs.
-- [ ] Exercise verified deletion across Neon, Vercel Blob, Redis retention,
-  backups, and connected-provider handoff. The Neon and Vercel Blob legs of
+**Google initiates this after verification review. It is not part of getting the
+submission in, and starting it early is worse than not starting it:** the Letter
+of Assessment expires 12 months after approval, so certifying before there are
+merchants spends a validity window on an empty application.
+
+The requirements are not the ones an earlier revision of this section listed. The
+current standard is **CASA Specification v2.1.1 (2026-06-03)**, published at
+[appdefensealliance/ASA-WG](https://github.com/appdefensealliance/ASA-WG) —
+**23 requirements across 7 domains**: Authentication, Session Management, Access
+Control, Communications, Data Validation, Configuration, and Webhook Security.
+The ADA website still describes an older scan-driven model built on 73 or 134
+ASVS requirements; the specification repository is authoritative.
+
+There are two assurance levels, and **Google assigns the level, not the
+developer** — weighted by data sensitivity, user volume per data type, and risk
+indicators:
+
+- **AL1 (Verified Self Assessment)** — the developer provides evidence and
+  statements of compliance per audit test case, and the lab reviews that evidence
+  without assessing the application directly. An evidence-assembly exercise.
+- **AL2 (Lab Assessment)** — the lab evaluates each audit test case directly
+  against the running application.
+
+Neither Google nor ADA publishes pricing. Reported assessor pricing is roughly
+$540–$1,500 per year for the verified-self-assessment path with a one-to-three
+week turnaround, and several thousand for a lab-conducted assessment; treat those
+as indicative and get a quote. The widely repeated $50,000 figure does not
+reflect either path.
+
+ADA recommends Fluid Attacks for static scanning and OWASP ZAP for dynamic. Its
+own tooling matrix states that the static tool is **incompatible with TypeScript
+or JavaScript applications**, so it cannot be used against this codebase at all.
+Semgrep is the substitute; an alternative tool additionally owes a CWE policy
+file, PASS/FAIL-per-CWE results, and an OWASP Benchmark scorecard.
+
+A requirement-by-requirement readiness assessment against all 23 — with the
+Semgrep result, the evidence per requirement, and the reasoning behind each
+status — was produced 2026-08-30. Static analysis found no findings in
+first-party application source across 2,007 files.
+
+Open before an assessment:
+
+- [ ] **Inbound attachment filtering is a denylist, and CASA 5.2.1 asks for an
+  allowlist.** `isBlocked` in `apps/gateway/src/storage/blob.ts` rejects
+  executables and shell scripts but passes `text/html` and `image/svg+xml`, and
+  `applyInboundAttachmentBudget` filters only on count and size. Inbound email is
+  attacker-controlled. Mitigated but not resolved by private blob access and
+  `nosniff`.
+- [ ] **Pre-write the CASA 7.2.3 argument.** Signed-timestamp replay protection
+  is satisfied for Clerk via `svix-timestamp`, but Shopify's HMAC covers the body
+  only and carries no timestamp. As the webhook consumer this cannot be fixed in
+  code; deduplication by `externalMessageId` is idempotency, which the
+  specification lists as a Leading Practice and explicitly does not accept as a
+  substitute. Name the providers, state which sign timestamps, describe the
+  deduplication.
+- [ ] **Close the seven requirements not yet verified**: URLs exposing
+  authentication material (2.1), sensitive account modifications (2.4), access
+  control including IDOR and anti-CSRF (3.1), administrative-interface MFA (3.3),
+  origin-header authorization (6.3), subdomain takeover (6.4), and clearing
+  browser storage on logout (6.6).
+- [ ] **Run the dynamic scan.** Not yet done. It must not target production, and
+  against a local instance it must run with `E2E_AI_MODE=deterministic` —
+  `preview:serve` hardcodes `live`, and a spider crossing the agent routes would
+  bill a model call per request.
+- [ ] **Exercise verified deletion** across Redis retention, backup/PITR, and
+  connected-provider handoff. The Neon and Vercel Blob legs of
   `customers/redact` are both proven against signed production deliveries
-  (2026-08-30). Redis retention, backup/PITR and connected-provider handoff are
-  not.
-- [ ] Select a Google-empanelled assessor and budget for at least annual
-  reassessment/recertification.
-
-Google states that server-side apps accessing restricted data generally require
-an assessment using the App Defense Alliance/CASA framework and reassessment at
-least every 12 months after the Letter of Assessment approval date.
-
-## Final owner submission checklist
-
-- [x] Attach an owned custom domain to Vercel. (`useshopkeeper.com`, 2026-08-02)
-- [x] Verify that domain in Google Search Console using a project owner/editor.
-  (2026-08-02)
-- [x] Set `APP_URL` and `NEXT_PUBLIC_APP_URL` to the final domain and redeploy.
-  (both `https://app.useshopkeeper.com`)
-- [x] Update the Google OAuth client redirect URI to the exact final callback.
-- [x] Add only the final owned domain to OAuth Branding authorized domains, and
-  update the Branding app name / homepage / privacy and terms URLs to the apex.
-  (2026-08-30, owner-confirmed in console)
-- [x] Confirm homepage, privacy, and terms return 200 in an anonymous browser.
-  (verified 2026-08-02 on the apex)
-- [x] Confirm homepage visibly links the same privacy URL used in OAuth
-  Branding. (`href="/privacy"` on the apex homepage)
-- [x] Confirm the support mailbox is monitored and matches the public brand.
-  (`hello@useshopkeeper.com` via ImprovMX, 2026-08-02)
-- [ ] Add at least two current developer/project contacts.
-- [ ] Declare exactly the four scopes above in Google Cloud Data Access.
-- [ ] Paste the scope justifications above, adjusted only for final UI wording.
-- [ ] Complete the Palette/test-mailbox alias canary.
-- [ ] Record and review the demo video.
-- [ ] Legal/owner approves the privacy, retention, deletion, subprocessor, and
-  no-training statements against current contracts.
-- [x] Publish the OAuth app to production. (2026-08-30, which ends the 7-day
-  refresh-token expiry for grants issued afterwards)
-- [ ] Click **Prepare for Verification**, once the rows above it are done.
-- [ ] Submit the verification request from an authorized project owner/editor.
-- [ ] Respond to reviewer questions and begin the security assessment when
-  Google requests it.
-- [ ] Record annual recertification and assessment owners.
+  (2026-08-30); these three are not.
+- [ ] **Select a Google-empanelled assessor** when a merchant is actually blocked
+  by the unverified-app interstitial, or the 100-user cap comes into view.
 
 ## Primary references
 
@@ -355,6 +432,10 @@ least every 12 months after the Letter of Assessment approval date.
 - [Google submission process](https://support.google.com/cloud/answer/13461325?hl=en)
 - [Google restricted-scope verification](https://developers.google.com/identity/protocols/oauth2/production-readiness/restricted-scope-verification)
 - [Gmail scope classifications](https://developers.google.com/workspace/gmail/api/auth/scopes)
+- [CASA Specification v2.1.1 and Test Guide](https://github.com/appdefensealliance/ASA-WG/tree/develop/CASA) —
+  the 23 requirements themselves; read this rather than the ADA website, which
+  still describes the older ASVS-based model
+- [ADA authorized assessment labs](https://www.appdefensealliance.org/certification/authorized-labs)
 - [Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy)
 - [Google Workspace API user data and developer policy](https://developers.google.com/workspace/workspace-api-user-data-developer-policy)
 - [Anthropic commercial API model-training statement](https://privacy.claude.com/en/articles/7996885-how-do-you-use-personal-data-in-model-training)
