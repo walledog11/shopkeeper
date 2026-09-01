@@ -5,18 +5,13 @@ import { CTA } from "./CTA";
 import { Footer } from "./Footer";
 import { MarginThread } from "./MarginThread";
 import { Navbar } from "./Navbar";
+import { RelatedLinks, type ProductLink } from "./RelatedLinks";
 import { SectionLabel } from "./SectionLabel";
 
 type Capability = {
   title: string;
   body: string;
   details: readonly string[];
-};
-
-type ProductLink = {
-  href: string;
-  label: string;
-  body: string;
 };
 
 type FAQ = {
@@ -163,25 +158,7 @@ export function ProductDetailTemplate({
           </div>
         </section>
 
-        <section aria-labelledby="related-heading" className="mx-auto max-w-6xl px-6 py-14">
-          <div className="mb-8 text-center">
-            <SectionLabel>keep exploring</SectionLabel>
-            <h2 id="related-heading" className="text-[clamp(34px,5vw,54px)] font-bold leading-none [font-family:var(--m-hand)]">
-              Follow the product story.
-            </h2>
-          </div>
-          <div className="grid gap-4 md:grid-cols-3">
-            {relatedLinks.map((link) => (
-              <Link key={link.href} href={link.href} className="group rounded-2xl border border-stone-900/10 bg-[#fdfbf7]/80 p-5 transition-transform hover:-translate-y-0.5 motion-reduce:transition-none">
-                <span className="flex items-center justify-between gap-3 text-sm font-semibold text-stone-900">
-                  {link.label}
-                  <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" aria-hidden />
-                </span>
-                <span className="mt-2 block text-[13px] leading-relaxed text-stone-600">{link.body}</span>
-              </Link>
-            ))}
-          </div>
-        </section>
+        <RelatedLinks links={relatedLinks} />
 
         <section aria-labelledby="product-faq-heading" className="mx-auto max-w-4xl px-6 py-14">
           <div className="mb-9 text-center">

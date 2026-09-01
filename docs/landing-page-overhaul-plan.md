@@ -232,12 +232,12 @@ convention.
    [to-do-list.md](to-do-list.md). Defect 2.
 3. **Replace or accept the placeholder photography.** Defect 3.
 4. **Nav** — **mostly a false alarm; verified 2026-08-20.** Pricing *is*
-   reachable, at `NavLinks.tsx:29` under the Resources dropdown, and signed-out
+   reachable — it sat one hover deep under a Resources dropdown when this was
+   written and is now a top-level link in `NavLinks` — and signed-out
    visitors *do* get a persistent "Sign up free" CTA
    (`AuthNavLinks.tsx:88`) — the auth avatar only replaces it once you are
-   signed in, which is the right behavior. The only real residue is that
-   Pricing sits one hover deep rather than top-level. That is a judgment call
-   about nav weight, not a defect.
+   signed in, which is the right behavior. The residue recorded here, Pricing
+   sitting one hover deep rather than top-level, is gone.
 
 ### Build — new surfaces
 

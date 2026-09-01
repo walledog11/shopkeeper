@@ -4,14 +4,33 @@ import { CONTACT_EMAIL } from "@/lib/brand";
 
 const COPYRIGHT_YEAR = 2026;
 
-const footerLinks = [
-  { href: "/#workflow", label: "Product" },
-  { href: "/#pricing", label: "Pricing" },
-  { href: "/#faq", label: "FAQ" },
-  { href: `mailto:${CONTACT_EMAIL}`, label: "Contact" },
-  { href: "/privacy", label: "Privacy" },
-  { href: "/terms", label: "Terms" },
-  { href: "/data-deletion", label: "Data deletion" },
+const footerGroups = [
+  {
+    label: "Product",
+    links: [
+      { href: "/product/order-operations", label: "Order operations" },
+      { href: "/product/customer-support", label: "Customer support" },
+      { href: "/product/approvals-and-controls", label: "Approvals and controls" },
+      { href: "/product/integrations", label: "Integrations" },
+      { href: "/product/security", label: "Security" },
+    ],
+  },
+  {
+    label: "Company",
+    links: [
+      { href: "/#pricing", label: "Pricing" },
+      { href: "/#faq", label: "FAQ" },
+      { href: `mailto:${CONTACT_EMAIL}`, label: "Contact" },
+    ],
+  },
+  {
+    label: "Legal",
+    links: [
+      { href: "/privacy", label: "Privacy" },
+      { href: "/terms", label: "Terms" },
+      { href: "/data-deletion", label: "Data deletion" },
+    ],
+  },
 ] as const;
 
 export function Footer() {
@@ -34,21 +53,33 @@ export function Footer() {
         <div className="m-grain absolute inset-0" />
       </div>
       <div className="mx-auto max-w-6xl">
-        <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-4">
-          <div className="text-[13px] text-stone-500">
-            © {COPYRIGHT_YEAR} Shopkeeper · AI support operator for Shopify stores.
-          </div>
-          <nav aria-label="Footer" className="flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-stone-600">
-            {footerLinks.map((link) => (
-              <Link
-                key={link.label}
-                href={link.href}
-                className="text-inherit transition-colors hover:text-stone-900"
-              >
-                {link.label}
-              </Link>
-            ))}
-          </nav>
+        <nav
+          aria-label="Footer"
+          className="grid gap-x-8 gap-y-7 border-b border-stone-900/10 pb-8 sm:grid-cols-3"
+        >
+          {footerGroups.map((group) => (
+            <div key={group.label}>
+              <h2 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-stone-500">
+                {group.label}
+              </h2>
+              <ul className="mt-3 space-y-2 text-[13px] text-stone-600">
+                {group.links.map((link) => (
+                  <li key={link.label}>
+                    <Link
+                      href={link.href}
+                      className="text-inherit transition-colors hover:text-stone-900"
+                    >
+                      {link.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </nav>
+
+        <div className="pt-6 text-[13px] text-stone-500">
+          © {COPYRIGHT_YEAR} Shopkeeper · AI support operator for Shopify stores.
         </div>
 
         {/* Giant wordmark outro, descenders cropped by the page edge */}

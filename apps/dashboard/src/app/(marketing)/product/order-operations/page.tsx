@@ -5,6 +5,7 @@ import { CTA } from "../../_components/CTA";
 import { Footer } from "../../_components/Footer";
 import { MarginThread } from "../../_components/MarginThread";
 import { Navbar } from "../../_components/Navbar";
+import { RelatedLinks } from "../../_components/RelatedLinks";
 import { SectionLabel } from "../../_components/SectionLabel";
 
 const title = "Order operations — Shopkeeper";
@@ -90,6 +91,12 @@ const decisionStates = [
     title: "Block or escalate",
     body: "Ineligible orders, disabled actions, and work beyond configured limits do not proceed by improvisation.",
   },
+] as const;
+
+const relatedLinks = [
+  { href: "/product/customer-support", label: "Customer support", body: "See how context, replies, policy knowledge, and voice fit together." },
+  { href: "/product/approvals-and-controls", label: "Approvals and controls", body: "Understand autonomy modes, limits, decisions, and action history." },
+  { href: "/product/integrations", label: "Integrations", body: "Understand what each connected surface contributes to the system." },
 ] as const;
 
 const faqs = [
@@ -241,6 +248,8 @@ export default function OrderOperationsPage() {
             </p>
           </div>
         </section>
+
+        <RelatedLinks links={relatedLinks} />
 
         <section aria-labelledby="order-faq-heading" className="mx-auto max-w-4xl px-6 py-14">
           <div className="mb-9 text-center">

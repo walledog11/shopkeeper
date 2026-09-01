@@ -14,6 +14,7 @@ import { CTA } from "../../_components/CTA";
 import { Footer } from "../../_components/Footer";
 import { MarginThread } from "../../_components/MarginThread";
 import { Navbar } from "../../_components/Navbar";
+import { RelatedLinks } from "../../_components/RelatedLinks";
 import { SectionLabel } from "../../_components/SectionLabel";
 
 const title = "Approvals and controls — Shopkeeper";
@@ -69,6 +70,12 @@ const boundaries = [
     title: "Reviewable outcomes",
     body: "The action history ties the proposal, mode, approver, execution status, result, and source thread together.",
   },
+] as const;
+
+const relatedLinks = [
+  { href: "/product/order-operations", label: "Order operations", body: "See which Shopify actions Shopkeeper can prepare and complete." },
+  { href: "/product/customer-support", label: "Customer support", body: "See how context, replies, policy knowledge, and voice fit together." },
+  { href: "/product/security", label: "Security", body: "Read the access, action-boundary, audit, and export model." },
 ] as const;
 
 const faqs = [
@@ -265,6 +272,8 @@ export default function ApprovalsAndControlsPage() {
             </Link>
           </div>
         </section>
+
+        <RelatedLinks links={relatedLinks} />
 
         <section aria-labelledby="approvals-faq-heading" className="mx-auto max-w-4xl px-6 py-14">
           <div className="mb-9 text-center">
