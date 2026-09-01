@@ -7,9 +7,10 @@ import {
   type PersonName,
 } from '@shopkeeper/agent/person-name';
 import { lowerFirst } from '../../lib/sentence-case.js';
+import { formatBlockedTicketLine } from '../../maintenance/digest-briefing/ticket-lines.js';
 import type { AgentPlan, PlanStep } from '../../types.js';
 import { firstDraftExcerpt } from '../operator-ledger.js';
-import type { RequestDisplay } from '../request-display.js';
+import { requestDisplayHasContext, type RequestDisplay } from '../request-display.js';
 import { FRESH_STAGE } from './conversation-stage.js';
 import { endSentence, formatRequestHeaderLines } from './headers.js';
 import type { ConversationStage, QueueNotice } from './types.js';
@@ -80,9 +81,13 @@ export function formatOperatorPlanMessage(
     // and the merchant has no way to tell a correct disclosure from a leak.
     verifiedOrders?: readonly string[];
     validation?: AgentPlan['validation'];
+    // The customer's own words, for the threads whose structured request did not
+    // survive. Only read when `requestDisplay` cannot ground the card itself.
+    sourceMessageText?: string | null;
   },
 ): string {
   const stage = options?.stage ?? FRESH_STAGE;
+  const now = options?.now ?? new Date();
   const verifiedOrders = options?.verifiedOrders ?? [];
   // The card states the verified orders on their own line below, so the name
   // does not repeat them: a verified shopper is "the customer" here, not "the
@@ -98,12 +103,28 @@ export function formatOperatorPlanMessage(
   // The actual draft the merchant is approving, so approval is not sight-unseen.
   const draftBody = options?.rawToolCalls ? firstDraftExcerpt(options.rawToolCalls) : null;
 
+  // A thread still on a classifier version older than requestFacts renders no
+  // structured request, but the customer's message is on the thread either way.
+  // The briefing has quoted it since Milestone 1; the card printed "Request
+  // details unavailable" and then asked "Good to send?" underneath it.
+  const sourceMessageText = options?.sourceMessageText?.trim() ? options.sourceMessageText : null;
+  const sourceQuote = !requestDisplayHasContext(requestDisplay, now) && sourceMessageText
+    ? formatBlockedTicketLine({
+        customer: { name: customerName },
+        channelType,
+        verifiedOrders,
+        pendingMessage: sourceMessageText,
+      }, now)
+    : null;
+  const canShowRequest = requestDisplayHasContext(requestDisplay, now) || sourceQuote !== null;
+
   const lines: string[] = formatRequestHeaderLines(
     person,
     channelType,
     requestDisplay,
     stage,
-    options?.now ?? new Date(),
+    now,
+    sourceQuote,
   );
 
   if (options?.validation?.status === 'invalid') {
@@ -201,6 +222,12 @@ export function formatOperatorPlanMessage(
     // approves handing the merchant a thread they are already holding. Tell them
     // where it sits instead of asking them to authorise it.
     lines.push('', "Nothing's gone out — it's waiting on you.");
+  } else if (!canShowRequest) {
+    // Never ask someone to approve what cannot be shown. The card still names
+    // the action, because the plan is real even when the request rendering is
+    // not — what it drops is the question, which is the half that asked for a
+    // blind decision. Same call the briefing makes with needsThreadReview.
+    lines.push('', "I can't show you what they asked — open the thread first.");
   } else {
     const replyOnly = approvableSteps.length > 0 && approvableSteps.every(isSendStep);
     lines.push('', replyOnly ? 'Good to send?' : 'Sound good?');

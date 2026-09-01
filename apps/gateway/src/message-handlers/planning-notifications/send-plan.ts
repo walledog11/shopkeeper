@@ -1,6 +1,7 @@
-import type { DbChannelType } from '@shopkeeper/db';
+import { db, type DbChannelType } from '@shopkeeper/db';
 import { classifyPerson } from '@shopkeeper/agent/person-name';
 import { memberOperatorKey } from '@shopkeeper/agent/internal-thread';
+import { SENDER_TYPE } from '@shopkeeper/agent/thread-constants';
 import logger from '../../logger.js';
 import { getGatewayDashboardUrl } from '../../config/env.js';
 import { getOperatorPlanQueueMax } from '../../config/runtime-config.js';
@@ -14,6 +15,7 @@ import type { AgentPlan } from '../../types.js';
 import type { PlanIdentity } from '../planning-types.js';
 import {
   buildRequestDisplaySnapshot,
+  requestDisplayHasContext,
   type RequestDisplay,
   type SystemRequestKind,
 } from '../request-display.js';
@@ -21,6 +23,34 @@ import { getConversationStage } from './conversation-stage.js';
 import { notifyCriticalToAllOperators } from './delivery.js';
 import { formatOperatorPlanMessage, parkedActionLabel } from './format-plan.js';
 import type { OperatorNotificationExclude, QueueNotice } from './types.js';
+
+/**
+ * The customer's message behind this plan, for the card to quote when the
+ * request snapshot cannot render one. The thread filter is the alignment check:
+ * `buildRequestDisplaySnapshot` returns `unavailable` both for a stale source
+ * message and for a classifier version older than the display format, and only
+ * the second of those is safe to quote — a superseded message is not what the
+ * merchant is being asked about.
+ */
+async function loadRequestSourceText(
+  organizationId: string,
+  threadId: string,
+  sourceMessageId: string | null | undefined,
+): Promise<string | null> {
+  if (!sourceMessageId) return null;
+  const message = await db.message.findFirst({
+    where: {
+      id: sourceMessageId,
+      organizationId,
+      threadId,
+      senderType: SENDER_TYPE.CUSTOMER,
+      deletedAt: null,
+      thread: { requestSourceMessageId: sourceMessageId },
+    },
+    select: { contentText: true },
+  });
+  return message?.contentText ?? null;
+}
 
 export async function sendOperatorPlanNotification(
   organizationId: string,
@@ -53,6 +83,25 @@ export async function sendOperatorPlanNotification(
     rawToolCalls: plan.rawToolCalls,
     ...(options?.systemRequest ? { systemEvent: options.systemRequest } : {}),
   });
+  // Only when the snapshot cannot ground the card itself. A read failure must
+  // not widen the critical push's failure surface: without it the card falls
+  // back to the unavailable line and drops its approval question, which is the
+  // safe direction.
+  let sourceMessageText: string | null = null;
+  if (!requestDisplayHasContext(requestDisplay)) {
+    try {
+      sourceMessageText = await loadRequestSourceText(
+        organizationId,
+        threadId,
+        options?.identity?.sourceMessageId,
+      );
+    } catch (error) {
+      logger.warn(
+        { err: (error as Error).message, organizationId, threadId },
+        '[Worker] Request source-text read failed',
+      );
+    }
+  }
   const dashboardUrl = getGatewayDashboardUrl();
   const idempotencyKey = planNotificationIdempotencyKey(
     organizationId,
@@ -120,6 +169,7 @@ export async function sendOperatorPlanNotification(
           ...(verifiedOrders.length > 0 ? { verifiedOrders } : {}),
           ...(plan.validation ? { validation: plan.validation } : {}),
           ...(queueNotice ? { queueNotice } : {}),
+          ...(sourceMessageText ? { sourceMessageText } : {}),
         }),
         contextPatch: {},
         appendPlan: { plan: parkPlan, maxDepth },

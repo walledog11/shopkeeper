@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChannelType, SenderType } from '@shopkeeper/db';
+import { ChannelType, db, SenderType } from '@shopkeeper/db';
 import {
   cleanupTestData,
   createTestCustomer,
@@ -667,6 +667,103 @@ describe('sendOperatorPlanNotification', () => {
     orgId = null;
   });
 
+  function planIdentity(sourceMessageId: string) {
+    return {
+      planId: '00000000-0000-4000-8000-0000000000c1',
+      sourceMessageId,
+      planHash: 'c'.repeat(64),
+      instructionHash: 'd'.repeat(64),
+    };
+  }
+
+  // A thread on a classifier version older than requestFacts. Production still
+  // held two of these at the 2026-08-23 inventory, and every one of them renders
+  // through unavailableRequestDisplay().
+  async function seedLegacyThread(sourceText: string | null) {
+    const org = await createTestOrg();
+    orgId = org.id;
+    const customer = await createTestCustomer(org.id, `legacy_${Date.now()}`, { name: 'Dana Reyes' });
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    const message = sourceText === null ? null : await createTestMessage(thread.id, sourceText);
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        classifierSignals: { version: 4, language: 'en', intents: {} } as never,
+        requestSourceMessageId: message?.id ?? null,
+      },
+    });
+    listOperatorBindingsSpy.mockResolvedValue([TELEGRAM_BINDING]);
+    notifyOperatorSpy.mockResolvedValue({ channel: 'telegram', chatId: 'chat_1' });
+    return { org, thread, messageId: message?.id ?? null };
+  }
+
+  // The wiring, not the formatter: nothing is handed in, so the send path has to
+  // find the customer's message itself.
+  it('quotes the customer when the request snapshot cannot render one', async () => {
+    const { org, thread, messageId } = await seedLegacyThread(
+      'My order arrived with a cracked lid. Can I get a refund?',
+    );
+
+    await sendOperatorPlanNotification(
+      org.id,
+      thread.id,
+      'Dana Reyes',
+      ChannelType.email,
+      'Needs a refund',
+      plan,
+      'Handle refund request',
+      { identity: planIdentity(messageId!) },
+    );
+
+    const [, , body] = notifyOperatorSpy.mock.calls[0] ?? [];
+    expect(body).toContain('cracked lid');
+    expect(body).not.toContain('Request details unavailable');
+    expect(body).toContain('Good to send?');
+  });
+
+  it('drops the approval question when nothing can show the request', async () => {
+    const { org, thread } = await seedLegacyThread(null);
+
+    await sendOperatorPlanNotification(
+      org.id,
+      thread.id,
+      'Dana Reyes',
+      ChannelType.email,
+      'Needs a refund',
+      plan,
+      'Handle refund request',
+    );
+
+    const [, , body] = notifyOperatorSpy.mock.calls[0] ?? [];
+    expect(body).toContain('Request details unavailable');
+    expect(body).toContain('open the thread first');
+    expect(body).not.toContain('Good to send?');
+    expect(body).not.toContain('Sound good?');
+  });
+
+  // A superseded message is not what the merchant is being asked about, so the
+  // alignment filter has to reject it even though the row is readable.
+  it('does not quote a message the thread has moved past', async () => {
+    const { org, thread } = await seedLegacyThread('My order arrived with a cracked lid.');
+    const stale = await createTestMessage(thread.id, 'Ignore that, wrong order number.');
+
+    await sendOperatorPlanNotification(
+      org.id,
+      thread.id,
+      'Dana Reyes',
+      ChannelType.email,
+      'Needs a refund',
+      plan,
+      'Handle refund request',
+      { identity: planIdentity(stale.id) },
+    );
+
+    const [, , body] = notifyOperatorSpy.mock.calls[0] ?? [];
+    expect(body).not.toContain('Ignore that');
+    expect(body).toContain('Request details unavailable');
+    expect(body).not.toContain('Good to send?');
+  });
+
   it('uses critical notification policy for each bound operator', async () => {
     const org = await createTestOrg();
     orgId = org.id;
@@ -688,6 +785,12 @@ describe('sendOperatorPlanNotification', () => {
           planHash: 'a'.repeat(64),
           instructionHash: 'b'.repeat(64),
         },
+        // This fixture seeds no thread row, so the snapshot would resolve to
+        // `unavailable` and the card would correctly refuse to ask for a
+        // decision -- which is not what this test is about. Every production
+        // plan notification has a thread behind it; supply the display so the
+        // policy assertions run on the path they describe.
+        requestDisplay: requestDisplay('a refund on #1024'),
       },
     );
 
