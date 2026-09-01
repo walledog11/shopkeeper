@@ -112,27 +112,46 @@ jobs:
       - uses: actions/checkout@v4
       - name: Refuse an underfunded or malformed run before contacting a model
         id: budget
+        # Dispatch inputs reach the shell through env, never through `${{ }}` in
+        # the script body: an expression is substituted before bash parses the
+        # line, so a quote inside `fixtures` ends the string and the rest of the
+        # input runs as shell. `mode`, `repeats` and `judges` are choice inputs
+        # that GitHub constrains, but they travel the same way so the rule holds
+        # with no exception to remember.
+        env:
+          MODE: ${{ inputs.mode }}
+          REPEATS: ${{ inputs.repeats }}
+          JUDGES: ${{ inputs.judges }}
+          FIXTURES: ${{ inputs.fixtures }}
+          MAX_USD: ${{ inputs.max_usd }}
+          MAX_MODEL_CALLS: ${{ inputs.max_model_calls }}
         run: |
-          mode='${{ inputs.mode }}'
-          repeats='${{ inputs.repeats }}'
-          judges='${{ inputs.judges }}'
+          mode="$MODE"
+          repeats="$REPEATS"
+          judges="$JUDGES"
           if [ "$mode" = release ]; then repeats=1; judges=off; fi
           if [ "$mode" = drift ] || [ "$mode" = baseline ]; then repeats=3; judges=on; fi
           node scripts/eval-budget-preflight.mjs \
             --mode "$mode" \
-            --fixtures '${{ inputs.fixtures }}' \
+            --fixtures "$FIXTURES" \
             --repeats "$repeats" \
             --judges "$judges" \
-            --max-usd '${{ inputs.max_usd }}' \
-            --max-calls '${{ inputs.max_model_calls }}' \
+            --max-usd "$MAX_USD" \
+            --max-calls "$MAX_MODEL_CALLS" \
             --github-output "$GITHUB_OUTPUT"
       - name: Record approved maximums
+        env:
+          MODE: ${{ inputs.mode }}
+          ESTIMATED_CALLS: ${{ steps.budget.outputs.estimated_calls }}
+          ESTIMATED_USD: ${{ steps.budget.outputs.estimated_usd }}
+          MAX_USD: ${{ inputs.max_usd }}
+          MAX_MODEL_CALLS: ${{ inputs.max_model_calls }}
         run: |
           {
             echo '## Paid eval authorization'
-            echo '- Mode: `${{ inputs.mode }}`'
-            echo '- Expected: **${{ steps.budget.outputs.estimated_calls }} calls / $${{ steps.budget.outputs.estimated_usd }}**'
-            echo '- Hard allocation: **${{ inputs.max_model_calls }} calls / $${{ inputs.max_usd }}**'
+            printf -- '- Mode: `%s`\n' "$MODE"
+            printf -- '- Expected: **%s calls / $%s**\n' "$ESTIMATED_CALLS" "$ESTIMATED_USD"
+            printf -- '- Hard allocation: **%s calls / $%s**\n' "$MAX_MODEL_CALLS" "$MAX_USD"
             echo '- No paid rerun is automatic.'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -301,12 +320,14 @@ jobs:
         env:
           DASHBOARD_RESULT: ${{ needs.release-dashboard.result }}
           GATEWAY_RESULT: ${{ needs.release-gateway.result }}
+          MAX_USD: ${{ inputs.max_usd }}
+          MAX_MODEL_CALLS: ${{ inputs.max_model_calls }}
         run: |
           {
             echo '## Release eval conclusion'
             echo "- Dashboard: $DASHBOARD_RESULT"
             echo "- Gateway: $GATEWAY_RESULT"
-            echo '- Approved maximum: ${{ inputs.max_usd }} / ${{ inputs.max_model_calls }} calls'
+            printf -- '- Approved maximum: %s / %s calls\n' "$MAX_USD" "$MAX_MODEL_CALLS"
             echo '- A failure is a blocker or targeted-diagnosis input; it does not trigger another paid run.'
           } >> "$GITHUB_STEP_SUMMARY"
           test "$DASHBOARD_RESULT" = success
