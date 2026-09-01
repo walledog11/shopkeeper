@@ -229,17 +229,6 @@ Gated-off integrations cost nothing to keep dark.
 - [ ] **`quick-reply-thanks-ack` passes 1/3.** The only fixture below full, and advisory,
   so it does not gate. Runs classify `needs_review` after repeated `get_order_by_name`
   errors and escalate.
-- [ ] **The approval card asks for a decision it has just said it cannot show.** A plan
-  card whose `requestDisplay` resolves to `unavailable` prints "Request details
-  unavailable — open the thread for the original message" and then asks "Good to send?"
-  underneath — the standing invariant says to ask them to open the thread *instead of*
-  asking for a decision, not both. Reachable in production, not only from a hand-seeded
-  thread: `buildRequestDisplaySnapshot` returns `unavailable` whenever a thread's
-  `classifierSignals.version` is not exactly `ALIGNED_CLASSIFIER_VERSION`, so every
-  thread left on an older classifier version renders this card. `load-waiting.ts` already
-  has the fallback shape — prefer the source message text, and drop the approve prompt
-  only when there is none. Decide that, or decide the invariant means something narrower
-  than it reads.
 - [ ] **Shopify App Store distribution, or not.** The listing is a primary acquisition
   channel for Shopify merchants and the site appears to have none. The first step is a
   Partner Dashboard check — confirm whether a listing exists at all — because the answer
