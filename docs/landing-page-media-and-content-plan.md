@@ -2,7 +2,7 @@
 
 **Status:** In progress
 
-**Last updated:** 2026-08-20
+**Last updated:** 2026-09-01
 
 **Owner:** Marketing and product
 
@@ -346,15 +346,19 @@ in control.
 ### Phase 3 — add site depth
 
 - [x] Build and link the Order operations page.
-- [ ] Build Approvals and controls, Integrations, Customer support, and Security
+- [x] Build Approvals and controls, Integrations, Customer support, and Security
   pages as each meets the substantive-page requirements.
 - [x] Route Order operations through the product navigation while retaining
   homepage anchors for sections that do not yet have substantive pages.
-- [ ] Replace the remaining homepage-anchor navigation only as substantive pages
-  become ready.
+- [x] Replace the remaining homepage-anchor navigation only as substantive pages
+  become ready. Every anchor with a page behind it now resolves to that page, in
+  the navbar and in a new footer product column. Pricing and FAQ stay anchors
+  deliberately — neither has a page in the build order above. One residue: this
+  file's navigation row wants Integrations top-level, and it currently sits
+  inside the Product menu.
 - [x] Add unique metadata, canonical URL, Open Graph asset, internal links, and
   a page-specific FAQ to Order operations.
-- [ ] Add unique metadata, canonical URLs, Open Graph assets, internal links, and
+- [x] Add unique metadata, canonical URLs, Open Graph assets, internal links, and
   page-specific FAQs to each remaining page when built.
 - [x] Verify the Order operations route has accurate limitations, integration
   roles, seeded proof, and a trial CTA.
