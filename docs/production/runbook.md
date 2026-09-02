@@ -732,7 +732,7 @@ Relevant signed dashboard webhook route:
 
 ## Operational Guardrails
 
-The guardrail code is implemented, but the production checklist item is not complete until ops-alert log routing is validated against live or staging traffic. Treat [`operational-guardrails.md`](operational-guardrails.md) as the implementation record and this section as the production operating procedure.
+The guardrail code is implemented, but the production checklist item is not complete until ops-alert log routing is validated against live or staging traffic. This section is the production operating procedure; the sign-off evidence is in [`alerting-evidence.md`](alerting-evidence.md). The V1 implementation plan that built these — thresholds, call sites, phase gates — had every code phase ticked and only its Phase 5 production rollout open, which is what `alerting-evidence.md` tracks. It was deleted on 2026-09-01; read it at `git show c06be3b4:docs/production/operational-guardrails.md`.
 
 ### Plan-execution ledger staged enforcement (P1-02)
 
@@ -1047,6 +1047,32 @@ Default thresholds to restore:
 - `WEBHOOK_SIGNATURE_ALERT_THRESHOLD=5`
 - `PROVIDER_SEND_ALERT_THRESHOLD=3`
 - `AGENT_FAILURE_ALERT_THRESHOLD=3`
+
+### Triage By Alert Category
+
+When `queue_health` fires:
+
+- Check `/health/queues` (send the `x-internal-secret` header) for worker heartbeat and queue counts. Coarse liveness (db/redis/worker/queue `status`) is on the public `/health/deep`.
+- If active jobs are stuck, inspect the job payload and trace id in Railway logs.
+- Restart the gateway worker only after confirming Redis and DB are healthy.
+
+When `webhook_signature` fires:
+
+- Confirm provider webhook URLs point directly at the gateway production routes.
+- Confirm provider secrets match production env vars.
+- Check whether failures are concentrated on one provider or one org.
+
+When `provider_send` fires:
+
+- Confirm provider credentials and account status.
+- Check rate limits, sandbox/live account state, and provider incident pages.
+- Confirm the app did not persist a successful outbound message for failed sends.
+
+When `agent_failure` fires:
+
+- Group failures by tool name and org.
+- Inspect the associated audit note and structured logs.
+- Disable affected tool categories in org settings if the issue involves write actions and customer risk.
 
 ### Controlled Alert Validation
 

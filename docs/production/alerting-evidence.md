@@ -6,7 +6,7 @@ observability. Better Stack paid tier is deferred until paid beta — see
 until every row below is filled.
 
 **Procedure:** [runbook.md](runbook.md) (Ops Alert Log Routing, Controlled Alert Validation)  
-**Implementation reference:** [operational-guardrails.md](operational-guardrails.md), [runbook.md](runbook.md) (Ops Alert Log Routing)  
+**Implementation reference:** [runbook.md](runbook.md) (Ops Alert Log Routing, Triage By Alert Category)  
 **Helper script:** `npm run verify:production:alerts`
 
 ## Baseline health (2026-06-09)
