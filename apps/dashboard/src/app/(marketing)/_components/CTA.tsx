@@ -76,7 +76,8 @@ export function CTA() {
             Hire it for two weeks and see.
           </h2>
           <p className="mx-auto mb-8 max-w-[46ch] text-[clamp(22px,3vw,32px)] leading-[1.05] text-stone-600 [font-family:var(--m-hand)]">
-            Connect Shopify, set your rules, and keep routine support moving after hours.
+            Connect Shopify. Set your rules. Then go to bed — it’ll have the reply ready
+            when you wake up.
           </p>
           <a
             href="/signup"

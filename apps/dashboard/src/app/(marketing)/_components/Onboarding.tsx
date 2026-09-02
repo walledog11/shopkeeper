@@ -12,15 +12,15 @@ const TYPE_MS_PER_CHAR = 175;
 const STEPS = [
   {
     id: "connect",
-    title: "Connect it",
-    desc: "Auto-reads products, policies, and orders from Shopify.",
-    aria: "Connecting a Shopify store. Products, policies, orders, FAQs, and custom instructions sync one by one.",
+    title: "Connect Shopify",
+    desc: "It reads your store on its own — every product, your refund policy, every past order.",
+    aria: "Connecting a Shopify store. Products, policies, orders, FAQs, and about your store sync one by one.",
     duration: 10500,
   },
   {
     id: "channels",
-    title: "Turn them on",
-    desc: "Instagram and email for customers. iMessage when something needs you.",
+    title: "Pick your channels",
+    desc: "Instagram, email, and chat on your store so customers reach it. iMessage so it can reach you.",
     aria: "Turning on Instagram, email, website chat, and iMessage.",
     duration: 8000,
   },
@@ -31,7 +31,7 @@ const TILES = [
   { label: "Policies", icon: PoliciesIcon },
   { label: "Orders", icon: OrdersIcon },
   { label: "FAQ", icon: FaqIcon },
-  { label: "Custom instructions", icon: InstructionsIcon },
+  { label: "About your store", icon: InstructionsIcon },
 ] as const;
 
 const CHANNELS = [

@@ -6,32 +6,32 @@ import { SectionLabel } from "./SectionLabel";
 
 const faqs = [
   {
-    q: "What can Shopkeeper send automatically?",
-    a: "Draft only never sends replies or changes Shopify. The default Ask first mode can keep routine replies moving, but changes, money, and exceptions pause for merchant approval. Trusted is an explicit opt-in for simple replies; configured limits and approval rules still apply.",
+    q: "Will it email a customer without me seeing it?",
+    a: "That’s yours to set. On Draft only, never — it can’t send anything at all. On Ask first, the default, routine replies can go out on their own. Order changes, money, and anything unusual wait for you. Trusted is opt-in, and only for simple replies.",
   },
   {
-    q: "How does it learn my voice?",
-    a: "Shopkeeper learns from edits you approve. After enough examples it can propose an updated voice brief, which changes only after you review and approve it.",
+    q: "Will it sound like me, or like a robot?",
+    a: "It learns from the edits you make to its drafts. After enough of them it proposes a new voice brief. Nothing changes until you read it and say yes.",
   },
   {
-    q: "Can I export my data?",
-    a: "Yes. Workspace and customer data export as JSON, and the action history exports as CSV.",
+    q: "If I leave, do I get my data?",
+    a: "Yes. Store and customer data downloads as JSON. Your action history downloads as CSV.",
   },
   {
-    q: "What if I don't use Shopify?",
-    a: "Customer replies can use connected channels and the guidance you provide, but order context and actions such as refunds, address changes, and exchanges require Shopify.",
+    q: "I don’t use Shopify. What do I get?",
+    a: "It can still read your channels and reply using the rules you give it. But refunds, address changes, and exchanges need Shopify. Without it, there’s no order to fix.",
   },
   {
-    q: "Which channels are supported today?",
-    a: "Customers can reach Shopkeeper through Instagram, Gmail, or forwarded support email. Merchants can review and approve through iMessage or the dashboard.",
+    q: "Where do my customers actually reach it?",
+    a: "On Instagram, Gmail, forwarded support email, or the chat on your store. You review and approve on iMessage, or in the dashboard.",
   },
   {
-    q: "What happens when Shopkeeper is uncertain?",
-    a: "It can ask for missing policy or judgment, pause consequential work for approval, or block and escalate work that falls outside the rules instead of improvising.",
+    q: "What if it doesn’t know the answer?",
+    a: "It asks you for the missing policy or the judgment call. If the action changes an order or moves money, it pauses for your approval. If it’s outside your rules, it stops and hands you the thread. It never improvises.",
   },
   {
-    q: "How is customer data protected?",
-    a: "Workspace access is scoped to the organization, connected-provider credentials are encrypted before storage, and the product provides supported workspace and customer export controls.",
+    q: "Can another store see my customers?",
+    a: "No. Your customers and your orders are yours alone. Your Shopify and Instagram logins are encrypted before they’re stored. You can download your data yourself.",
   },
 ];
 

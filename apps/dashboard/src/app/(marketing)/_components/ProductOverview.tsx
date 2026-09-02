@@ -56,43 +56,43 @@ function PaperCard({
 }
 
 const workflowSteps = [
-  ["01", "Understand", "Find order #3102, confirm it is unfulfilled, and check Small is in stock."],
-  ["02", "Prepare", "Build the Shopify item swap and explain exactly what will change."],
-  ["03", "Ask", "Pause the consequential action and request approval through iMessage."],
-  ["04", "Finish", "Update Shopify, reply to the customer, and record the completed action."],
+  ["01", "Reads it", "Opens order #3102, checks it hasn’t shipped, counts the Small in stock."],
+  ["02", "Gets it ready", "Builds the swap in Shopify and writes out exactly what changes."],
+  ["03", "Texts you", "Stops there. Changing order #3102 needs your yes first."],
+  ["04", "Does it", "Updates Shopify, replies to Maya, keeps a record you can check."],
 ] as const;
 
 const operationGroups = [
   {
-    title: "Resolve the order",
-    items: ["Tracking and fulfillment", "Address correction", "Add, remove, or swap items"],
+    title: "Fix the order",
+    items: ["“Where’s my order?”", "“I typed the wrong address”", "“Can I swap the size?”"],
   },
   {
-    title: "Handle the exception",
-    items: ["Refund or cancellation", "Return or exchange", "Gift card and return label"],
+    title: "When it goes wrong",
+    items: ["“I want a refund”", "“I need to return this”", "“Store credit or a return label?”"],
   },
   {
-    title: "Finish the work",
-    items: ["Update customer details", "Add Shopify notes", "Fulfill and send the response"],
+    title: "Close it out",
+    items: ["Update their details", "Add a note on the order", "Mark it fulfilled and send the reply"],
   },
 ] as const;
 
 const systemLayers = [
   {
-    title: "Customer channels",
-    body: "Instagram and email",
+    title: "Where customers write",
+    body: "Instagram, email, and chat on your store",
   },
   {
     title: "Shopkeeper",
-    body: "Understands context and prepares the right action",
+    body: "Reads the order and gets the work ready",
   },
   {
-    title: "Merchant control",
-    body: "iMessage and dashboard",
+    title: "Where you decide",
+    body: "iMessage, or the dashboard if you’d rather",
   },
   {
     title: "Shopify",
-    body: "Executes the work and returns the result",
+    body: "Does the work and reports back",
   },
 ] as const;
 
@@ -101,7 +101,7 @@ export function CoreProductOverview() {
     <div className="relative">
       <section id="workflow" aria-labelledby="workflow-heading" className="mx-auto max-w-6xl scroll-mt-24 px-6 py-14">
         <div className="mb-9 text-center">
-          <SectionLabel>one request, fully resolved</SectionLabel>
+          <SectionLabel>one request, start to finish</SectionLabel>
           <h2
             id="workflow-heading"
             className="mx-auto mb-4 max-w-[20ch] text-[clamp(34px,4.5vw,58px)] font-bold leading-[1] tracking-[0.03em] [font-family:var(--m-hand)]"
@@ -109,8 +109,8 @@ export function CoreProductOverview() {
             A customer asks. The order actually changes.
           </h2>
           <p className="mx-auto max-w-[58ch] text-[15px] leading-relaxed text-stone-700 sm:text-[16px]">
-            Shopkeeper follows the request from customer message to Shopify execution, pausing for
-            merchant judgment before consequential work.
+            You’re asleep. Shopkeeper reads the DM, opens order #3102, and gets the swap
+            ready. Then it waits for you.
           </p>
         </div>
 
@@ -118,7 +118,7 @@ export function CoreProductOverview() {
           <PaperCard className="flex flex-col justify-between !bg-[#2b2118] text-[#f6f2eb]">
             <div>
               <div className="mb-5 flex items-center justify-between gap-3 text-xs text-[#f6f2eb]/60">
-                <span>Seeded walkthrough · Instagram</span>
+                <span>Demo data · Instagram</span>
                 <span>2:14 AM</span>
               </div>
               <p className="text-[22px] leading-snug [font-family:var(--m-hand)] sm:text-[26px]">
@@ -126,7 +126,7 @@ export function CoreProductOverview() {
               </p>
             </div>
             <p className="mt-8 border-t border-white/10 pt-5 text-xs leading-relaxed text-[#f6f2eb]/60">
-              Fictional store and customer data used to explain the product workflow.
+              Fictional store and customer. Real product workflow.
             </p>
           </PaperCard>
 
@@ -135,7 +135,7 @@ export function CoreProductOverview() {
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">
                 Swap Medium → Small
               </p>
-              <p className="mt-1 text-sm text-stone-600">Request → approval → Shopify result</p>
+              <p className="mt-1 text-sm text-stone-600">DM → your yes → Shopify updated</p>
             </div>
             <ol className="grid gap-3 sm:grid-cols-2">
               {workflowSteps.map(([number, title, body]) => (
@@ -155,8 +155,8 @@ export function CoreProductOverview() {
       <section id="operations" className="mx-auto max-w-6xl scroll-mt-24 px-6 py-14">
         <SectionHeading
           label="shopify work, not just answers"
-          title="Give support the ability to finish the job."
-          body="Shopkeeper can move from understanding the request to completing supported order work and sending the customer a grounded response."
+          title="It doesn’t just reply. It changes the order."
+          body="You’ve written that apology before. Shopkeeper can issue the refund on order #3102 instead, then update Shopify. It asks you before it does."
         />
 
         <div className="grid gap-4 md:grid-cols-3">
@@ -176,14 +176,14 @@ export function CoreProductOverview() {
             </PaperCard>
           ))}
         </div>
-        <SectionHandoff href="/product/order-operations" label="Explore Order operations" />
+        <SectionHandoff href="/product/order-operations" label="See everything it can do to an order" />
       </section>
 
       <section id="controls" className="mx-auto max-w-6xl scroll-mt-24 px-6 py-14">
         <SectionHeading
           label="control without babysitting"
           title="It knows when to answer, when to ask, and when to stop."
-          body="The autonomy setting, action limits, and store policies define the boundary before Shopkeeper handles a request."
+          body="You tell it once where your line is. A tracking question and a $180 refund are not the same thing, and it knows that."
         />
 
         <div className="grid gap-4 md:grid-cols-3">
@@ -195,10 +195,10 @@ export function CoreProductOverview() {
               Routine and safe
             </p>
             <h3 className="mt-2 text-[25px] font-bold leading-none [font-family:var(--m-hand)]">
-              Follow the autonomy setting
+              Handles it
             </h3>
             <p className="mt-3 text-sm leading-relaxed text-stone-600">
-              Routine replies can keep moving according to the mode the merchant selected.
+              Answers the easy ones itself, if that’s the trust level you set.
             </p>
           </PaperCard>
           <PaperCard>
@@ -206,13 +206,13 @@ export function CoreProductOverview() {
               <CircleAlert className="size-5" aria-hidden />
             </div>
             <p className="text-xs font-semibold uppercase tracking-[0.1em] text-stone-500">
-              Consequential or exceptional
+              Money, or a change to the order
             </p>
             <h3 className="mt-2 text-[25px] font-bold leading-none [font-family:var(--m-hand)]">
-              Pause and ask the merchant
+              Checks with you
             </h3>
             <p className="mt-3 text-sm leading-relaxed text-stone-600">
-              Order changes, money, and exceptions arrive with the facts needed to decide.
+              Refunds, cancellations, address changes. One text, with the facts already in it.
             </p>
           </PaperCard>
           <PaperCard>
@@ -220,24 +220,28 @@ export function CoreProductOverview() {
               <LockKeyhole className="size-5" aria-hidden />
             </div>
             <p className="text-xs font-semibold uppercase tracking-[0.1em] text-stone-500">
-              Outside policy
+              Outside your rules
             </p>
             <h3 className="mt-2 text-[25px] font-bold leading-none [font-family:var(--m-hand)]">
-              Block or escalate instead of guessing
+              Won’t go near it
             </h3>
             <p className="mt-3 text-sm leading-relaxed text-stone-600">
-              Limits and blocked actions establish a hard boundary around what the agent can do.
+              Past your cap it stops and hands you the thread. No guessing.
             </p>
           </PaperCard>
         </div>
+        <p className="mt-4 rounded-xl border border-stone-900/10 bg-[#fdfbf7]/80 px-5 py-4 text-center text-sm text-stone-700">
+          There’s also a mode where it can’t send anything at all. Draft only writes the
+          reply and leaves it to you.
+        </p>
         <SectionHandoff href="/product/approvals-and-controls" label="See approval modes and limits" />
       </section>
 
       <section id="system" className="mx-auto max-w-6xl scroll-mt-24 px-6 py-14">
         <SectionHeading
-          label="one system, four surfaces"
-          title="Customers write in one place. You stay in control from another."
-          body="Customer intake, merchant control, Shopify execution, and dashboard review each have a distinct role."
+          label="one system, four places"
+          title="Your customers get a reply. You get a text."
+          body="Maya messages you on Instagram. You get one text on iMessage. Shopify gets the update. You never have to open the dashboard to do it."
         />
 
         <ol className="grid gap-3 md:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] md:items-stretch">
@@ -257,7 +261,8 @@ export function CoreProductOverview() {
           ))}
         </ol>
         <p className="mt-4 rounded-xl border border-stone-900/10 bg-[#fdfbf7]/80 px-5 py-4 text-center text-sm text-stone-700">
-          The dashboard remains the setup, review, audit, and manual fallback surface.
+          The dashboard is still there for setup, for reviewing what happened, and for
+          taking over by hand.
         </p>
         <SectionHandoff href="/product/integrations" label="See what each connection does" />
       </section>
@@ -265,15 +270,15 @@ export function CoreProductOverview() {
       <section id="context" className="mx-auto max-w-6xl scroll-mt-24 px-6 py-14">
         <SectionHeading
           label="answers grounded in the store"
-          title="The response comes from context, not vibes."
-          body="Shopkeeper combines live commerce data, available history, and merchant-provided rules before it proposes an answer or action."
+          title="It reads the order before it answers."
+          body="Order #3102 is paid and hasn’t shipped. There are 12 Small in stock. Shopkeeper knew all of that before it wrote to Maya. When it can’t find the answer, it asks you instead of inventing one."
         />
 
         <div className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
           <PaperCard>
-            <h3 className="text-[25px] font-bold [font-family:var(--m-hand)]">Context sources</h3>
+            <h3 className="text-[25px] font-bold [font-family:var(--m-hand)]">What it reads</h3>
             <div className="mt-5 flex flex-wrap gap-2">
-              {["Order state", "Customer context", "Products", "Inventory", "Policies", "Custom instructions", "Approved voice"].map(
+              {["The order", "This customer’s past messages", "Products", "Stock", "Your policies", "About your store", "Your approved voice"].map(
                 (source) => (
                   <span
                     key={source}
@@ -284,10 +289,13 @@ export function CoreProductOverview() {
                 ),
               )}
             </div>
+            <p className="mt-5 border-t border-stone-900/10 pt-4 text-[13px] leading-relaxed text-stone-600">
+              A first-time customer has no history. It says so rather than guessing.
+            </p>
           </PaperCard>
           <PaperCard>
             <p className="text-xs font-semibold uppercase tracking-[0.1em] text-stone-500">
-              Seeded order-change context
+              What it knew before replying to Maya
             </p>
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
               {["Order #3102\nPaid · Unfulfilled", "Small / Sand\n12 in stock", "Store policy\nSame-price swap allowed"].map(
@@ -309,28 +317,70 @@ export function CoreProductOverview() {
   );
 }
 
+const briefingOptions = [
+  {
+    title: "Morning briefing",
+    body: "Off until you turn it on. One text, once a day.",
+  },
+  {
+    title: "Sales and stock",
+    body: "Add yesterday’s sales and a low-stock line on top of it.",
+  },
+] as const;
+
 export function ProactiveOperations() {
   return (
     <section id="proactive" className="mx-auto max-w-6xl scroll-mt-24 px-6 py-14">
       <SectionHeading
-        label="after the immediate reply"
-        title="Keep an eye on the work that should not be forgotten."
-        body="Optional briefings surface follow-up work after the core request is understood."
+        label="while you were asleep"
+        title="You wake up already caught up."
+        body="At 7am, one text. It tells you what it handled while you were asleep, and what still needs you."
       />
-      <div className="grid gap-4">
-        <PaperCard>
-          <div className="flex items-center justify-between gap-3">
-            <h3 className="text-[27px] font-bold leading-none [font-family:var(--m-hand)]">
-              Morning briefing
-            </h3>
-            <span className="rounded-full bg-stone-900/5 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-stone-500">
-              Optional
-            </span>
+
+      <div className="grid gap-5 lg:grid-cols-[1.3fr_0.9fr]">
+        <PaperCard className="flex flex-col justify-between !bg-[#2b2118] text-[#f6f2eb]">
+          <div>
+            <div className="mb-5 flex items-center justify-between gap-3 text-xs text-[#f6f2eb]/60">
+              <span>Morning briefing · iMessage</span>
+              <span>7:00 AM</span>
+            </div>
+            <div className="flex flex-col gap-4 text-[15px] leading-relaxed sm:text-[16px]">
+              <div>
+                <p>
+                  Since your last briefing I handled three things, including one refund and
+                  one reply:
+                </p>
+                <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-[#f6f2eb]/85">
+                  <li>- Swapped #3102 from Medium to Small for Maya Chen</li>
+                  <li>- Refunded #3098, damaged in transit</li>
+                </ul>
+              </div>
+              <p>Two of those ran without needing you.</p>
+              <p>One action is waiting for your approval.</p>
+              <p>Priya wants to change the address on #3107 before it ships.</p>
+              <p>Should I go ahead?</p>
+            </div>
           </div>
-          <p className="mt-4 text-sm leading-relaxed text-stone-600">
-            Summarize support activity and optionally include a sales pulse or low-stock alert through iMessage.
+          <p className="mt-8 border-t border-white/10 pt-5 text-xs leading-relaxed text-[#f6f2eb]/60">
+            Fictional store and customer. Real briefing wording.
           </p>
         </PaperCard>
+
+        <div className="grid content-start gap-4">
+          {briefingOptions.map((option) => (
+            <PaperCard key={option.title}>
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-[25px] font-bold leading-none [font-family:var(--m-hand)]">
+                  {option.title}
+                </h3>
+                <span className="shrink-0 rounded-full bg-stone-900/5 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-stone-500">
+                  Optional
+                </span>
+              </div>
+              <p className="mt-4 text-sm leading-relaxed text-stone-600">{option.body}</p>
+            </PaperCard>
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -338,18 +388,18 @@ export function ProactiveOperations() {
 
 export function TrustSection() {
   const trustFacts = [
-    ["Organization scope", "Workspace and customer access is scoped to the organization."],
-    ["Protected credentials", "Connected-provider credentials are encrypted before storage."],
-    ["Action history", "Proposals, approvals, and execution outcomes remain reviewable."],
-    ["Data exports", "Workspace and customer data export as JSON; action history exports as CSV."],
+    ["Nobody else sees it", "Another store using Shopkeeper can’t see your customers or your orders."],
+    ["Your logins are encrypted", "Your Shopify and Instagram logins are encrypted before they’re stored."],
+    ["Every action is on the record", "What it proposed, what you approved, and what happened. All still readable."],
+    ["Download it all", "Store and customer data downloads as JSON. Action history downloads as CSV."],
   ] as const;
 
   return (
     <section id="trust" className="mx-auto max-w-6xl scroll-mt-24 px-6 py-14">
       <SectionHeading
         label="trust and data handling"
-        title="The controls are part of the product, not a footnote."
-        body="Shopkeeper keeps access, decisions, and completed work tied to the workspace that owns them."
+        title="Your data stays yours. Even if you leave."
+        body="Your Shopify login is encrypted before it’s stored. Your customers’ addresses never touch another merchant’s account. You can download all of it."
       />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {trustFacts.map(([title, body]) => (
@@ -360,7 +410,7 @@ export function TrustSection() {
         ))}
       </div>
       <p className="mt-5 text-center text-sm text-stone-600">
-        Read the public <Link href="/privacy" className="font-semibold text-stone-900 underline decoration-stone-400 underline-offset-4">Privacy Policy</Link> for data-use details.
+        The full details are in the <Link href="/privacy" className="font-semibold text-stone-900 underline decoration-stone-400 underline-offset-4">Privacy Policy</Link>.
       </p>
       <SectionHandoff href="/product/security" label="See the security model" />
     </section>

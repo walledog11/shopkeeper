@@ -4,7 +4,7 @@ import { NAV_CTA_LABEL } from "@/lib/brand";
 import { HeroMedia } from "./HeroMedia";
 
 const integrationRoles = [
-  { name: "Instagram + email", role: "Customer messages", logo: "/logos/instagram-logo.png" },
+  { name: "Instagram, email, website chat", role: "Customer messages", logo: "/logos/instagram-logo.png" },
   { name: "iMessage", role: "Your approvals", logo: "/logos/imessage.svg" },
   { name: "Shopify", role: "Order work", logo: "/logos/shopify.svg" },
 ] as const;
@@ -25,23 +25,22 @@ export function Hero() {
       />
 
       <p className="m-kicker mb-5" style={rise(0)}>
-        AI support operator for Shopify stores
+        An AI support operator for your Shopify store
       </p>
 
       <h1
         className="m-display mx-auto mb-6 max-w-[min(820px,94vw)] text-[clamp(2.55rem,6vw,5rem)]"
         style={rise(0)}
       >
-        Customer support that can actually fix the order.
+        Answers the DM. Fixes the order. Asks before spending your money.
       </h1>
 
       <p
         className="mx-auto mb-8 max-w-[620px] text-[17px] leading-[1.6] text-stone-600 sm:text-[18px]"
         style={rise(80)}
       >
-        Shopkeeper handles routine support where customers already message you,
-        checks the live order, and completes the Shopify work. When a decision
-        needs you, it asks.
+        You get to your DMs at 11pm. Order #3102 already has a size swap waiting,
+        checked against live stock. Shopkeeper wrote the reply — it just needs your yes.
       </p>
 
       <div className="mb-9" style={rise(160)}>
@@ -54,7 +53,7 @@ export function Hero() {
           </GlassLink>
         </div>
         <p className="mt-3 text-[13px] text-stone-500">
-          14 days free · payment method collected when you choose a plan
+          Free for 14 days. You add a card when you pick a plan.
         </p>
       </div>
 
@@ -80,13 +79,13 @@ export function Hero() {
 
       <div id="demo" style={rise(260)} className="relative mx-auto mt-2 max-w-6xl scroll-mt-28">
         <div className="mb-7 text-center">
-          <p className="m-kicker">Example workflow · Demo data</p>
+          <p className="m-kicker">Example workflow · demo data</p>
           <h2 className="m-display mx-auto mt-4 max-w-[18ch] text-[clamp(1.9rem,4vw,3.25rem)]">
             One message. The order gets handled.
           </h2>
           <p className="mx-auto mt-4 max-w-[52ch] text-[15px] leading-relaxed text-stone-600">
-            A customer asks for a size swap. Shopkeeper checks the order and stock,
-            brings you the decision, then updates Shopify and replies.
+            The third step is the one that matters. Shopkeeper has the swap ready and
+            stops anyway, because changing order #3102 is your call.
           </p>
         </div>
 
@@ -109,8 +108,9 @@ export function Hero() {
           </div>
         </div>
         <p className="mx-auto mt-5 max-w-[54ch] text-center text-[12px] leading-relaxed text-stone-500">
-          Representative workflow using fictional customer, store, and order details.
-          Eligibility and approval depend on the order state and your settings.
+          Fictional customer, store, and order details. Once an order ships, a swap
+          becomes an exchange rather than an edit. What Shopkeeper can do is still
+          bounded by the rules you set.
         </p>
       </div>
     </section>

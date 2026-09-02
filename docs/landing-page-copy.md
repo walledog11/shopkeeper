@@ -1,7 +1,8 @@
 # Landing page copy
 
-**Status:** Locked and **not yet implemented** — `Hero.tsx` still renders the
-pre-deck H1. Applying it is an open item under Phase 2 of
+**Status:** Locked and **applied** on 2026-09-01 — every section below now renders
+from the components it names. The remaining follow-on work this deck creates is
+tracked under Phase 2 of
 [landing-page-media-and-content-plan.md](landing-page-media-and-content-plan.md).
 
 **Last updated:** 2026-09-01
@@ -129,12 +130,20 @@ is also the word the app already badges its recommended trust level with.
 
 ## Follow-on work this page creates
 
-This document holds no checkboxes. Applying this deck, provisioning the two Stripe
-price IDs, renaming workspace → store in the app, and dropping the website-chat
-hedge on `/product/integrations` are all open items in
+This document holds no checkboxes. Applying this deck and dropping the website-chat
+hedge on `/product/integrations` are both done. Provisioning the two Stripe price
+IDs and renaming workspace → store in the app remain open items in
 [landing-page-media-and-content-plan.md](landing-page-media-and-content-plan.md),
 which is where every landing-page task is tracked. The storefront-chat production
 canary is in [to-do-list.md](to-do-list.md).
+
+**Section 11 carries one unanswered question.** `PLAN_LIMITS` is enforced in code —
+`degradeForConversationLimit` on the gateway planning path and the seat check in
+the dashboard team route — and the two limits behave differently: a seat over the
+cap is refused outright, while conversations degrade rather than stop. The cards
+state both numbers without saying which is which, because no wording here was
+written for that difference. Settle it when the price IDs are provisioned and the
+limits start biting.
 
 ## Load-bearing hedges — do not polish these away
 

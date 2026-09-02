@@ -6,17 +6,24 @@ import { Reveal } from "./Reveal";
 import { SectionLabel } from "./SectionLabel";
 import { cn } from "@/lib/ui/cn";
 
+// Both plans run the whole product. `PLAN_LIMITS` in `packages/db/plan-limits.ts`
+// sells volume and seats and gates no tool or capability, so a $19 subscriber
+// already gets Shopify actions, phone approvals and voice training. Do not add a
+// feature bullet that implies otherwise — "Everything in Starter", "Shopify order
+// actions", "Approvals through iMessage" were exactly that, removed once in
+// `c558c788` and restored by a later redesign. Two bullets per card is thin on
+// purpose: there is nothing else true to put there, and the shared line above the
+// cards plus the conversation definition below are what fill the section.
 const tiers = [
   {
     name: "Starter",
     badge: null,
     price: "$19",
     per: "/mo",
-    desc: "For stores starting with customer support and assisted replies.",
+    desc: "For one person answering their own messages.",
     features: [
-      "Instagram and email customer intake",
-      "AI-assisted customer replies",
-      "Shopify order and customer context",
+      "500 customer conversations a month",
+      "One seat",
     ],
     cta: "Start free trial",
     href: "/signup",
@@ -24,15 +31,13 @@ const tiers = [
   },
   {
     name: "Pro",
-    badge: "Most picked",
+    badge: "Recommended",
     price: "$49",
     per: "/mo",
-    desc: "For brands ready to delegate work, not just drafts.",
+    desc: "For a store past 500 a month, or a second person on the inbox.",
     features: [
-      "Everything in Starter",
-      "Shopify order actions and action history",
-      "Approvals through iMessage or the dashboard",
-      "Configurable limits and approved voice guidance",
+      "No conversation limit",
+      "Two seats",
     ],
     cta: "Try Pro free →",
     href: "/signup",
@@ -48,17 +53,21 @@ export function Pricing() {
         <h2 className="mx-auto mb-5 max-w-[20ch] text-[clamp(36px,5vw,68px)] font-bold leading-[1] tracking-[0.03em] [font-family:var(--m-hand)]">
           Costs less than <em className="italic text-[var(--m-quill)]">a part-time hire.</em>
         </h2>
-        <p className="mx-auto mb-14 max-w-[48ch] text-[16px] leading-relaxed text-stone-700">
-          Every plan starts with{" "}
+        <p className="mx-auto mb-8 max-w-[48ch] text-[16px] leading-relaxed text-stone-700">
           <span className="relative inline-block whitespace-nowrap">
-            14 days free
+            Two weeks free
             <InkDoodle
               kind="ellipse"
               delay={500}
               className="pointer-events-none absolute -inset-x-2 -inset-y-1 h-[calc(100%+8px)] w-[calc(100%+16px)] opacity-70 [color:var(--m-pen)]"
             />
-          </span>
-          . Review the current plan and total in checkout before subscribing.
+          </span>{" "}
+          on either plan. Check the plan and total in checkout before you subscribe.
+        </p>
+
+        <p className="mx-auto mb-12 max-w-[62ch] rounded-xl border border-stone-900/10 bg-[#fdfbf7]/80 px-5 py-4 text-[15px] leading-relaxed text-stone-700">
+          Both plans are the same product. Refunds, swaps, address fixes, approvals from
+          your phone, your voice, your limits. The price is about how much you use it.
         </p>
       </Reveal>
 
@@ -128,6 +137,11 @@ export function Pricing() {
           </Reveal>
         ))}
       </div>
+
+      <p className="mx-auto mt-8 max-w-[58ch] text-[14px] leading-relaxed text-stone-600">
+        A conversation is one customer thread in a month, however long it runs. Your own
+        messages to Shopkeeper don’t count.
+      </p>
     </section>
   );
 }

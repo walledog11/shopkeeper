@@ -151,7 +151,7 @@ function RequestScene({
   return (
     <div className={sceneClass("request", playing, staticPlay, motion)}>
       <IgFrame markId={`m-hero-ig-${motion}`}>
-        <p className="m-hero-ig-time">Today 4:12 PM</p>
+        <p className="m-hero-ig-time">Today 2:14 AM</p>
         <MayaRequestMessages />
       </IgFrame>
     </div>
@@ -248,7 +248,7 @@ function DoneScene({
   return (
     <div className={sceneClass("done", playing, staticPlay, motion)}>
       <IgFrame markId={`m-hero-ig-done-${motion}`}>
-        <p className="m-hero-ig-time">Today 4:12 PM</p>
+        <p className="m-hero-ig-time">Today 2:14 AM</p>
         <MayaRequestMessages prior />
         <div className="m-hero-ig-row is-out" style={{ "--i": 0 } as CSSProperties}>
           <p className="m-hero-ig-out">Done — your jumpsuit is now Small / Sand.</p>

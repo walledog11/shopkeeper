@@ -358,22 +358,23 @@ meet every truth and delivery requirement in this document.
 
 ### Phase 2 — reconstruct the homepage
 
-- [ ] **Apply the copy deck.** [landing-page-copy.md](landing-page-copy.md) is locked
-  and unimplemented — `Hero.tsx` still renders the pre-deck H1. The deck is the copy
-  spec for the homepage and the components it composes; applying it is this task, and
-  its "Load-bearing hedges" table is the list of phrases a later editing pass must not
-  polish away.
+- [x] **Apply the copy deck.** [landing-page-copy.md](landing-page-copy.md) is applied
+  as of 2026-09-01 across `Hero.tsx`, `HeroMedia.tsx`, `ProductOverview.tsx`,
+  `Onboarding.tsx`, `Pricing.tsx`, `FAQ.tsx` and `CTA.tsx`. Its "Load-bearing hedges"
+  table remains the list of phrases a later editing pass must not polish away, and
+  `Pricing.tsx` carries a comment recording why its bullets are thin — the feature-gate
+  framing has now been removed twice.
 - [ ] **Rename workspace → store in the app**, per the deck's decision 3. Until then
   the site and the settings tab use different words for the same thing, deliberately.
   Two apparent collisions are not collisions and must not be "fixed": the app's
   control is **Trust level** with modes **Draft only** / **Ask first** / **Trusted**,
   and there is no *custom instructions* field — the nearest real one is **About your
   store**.
-- [ ] **Drop the website-chat hedge on `/product/integrations`.** It still reads
-  "Storefront chat as the product expands". Once the homepage claims the channel as
-  present, that line is stale. Note that the storefront-chat production canary is
-  still open in [to-do-list.md](to-do-list.md) — putting the channel on the homepage
-  raises the cost of leaving it open, but does not change what the code does.
+- [x] **Drop the website-chat hedge on `/product/integrations`.** Done 2026-09-01:
+  the capability list, the intake card in the system map, and the iMessage FAQ answer
+  all name chat as a present channel. Note that the storefront-chat production canary
+  is still open in [to-do-list.md](to-do-list.md) — putting the channel on the
+  homepage raised the cost of leaving it open, but did not change what the code does.
 - [ ] Replace the simulated hero film with the verified order-swap loop.
 - [x] Reorder the homepage to match the target structure above.
 - [x] Add the Shopify action map, approval states, and four-surface system

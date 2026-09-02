@@ -35,7 +35,7 @@ function IntegrationsMap() {
         <div className="rounded-2xl border border-sky-200/15 bg-sky-200/[0.06] p-4">
           <Mail className="size-5 text-sky-100" aria-hidden />
           <p className="mt-4 text-[10px] font-semibold uppercase tracking-[0.1em] text-sky-100/50">Customer intake</p>
-          <p className="mt-2 text-sm font-semibold">Instagram + email</p>
+          <p className="mt-2 text-sm font-semibold">Instagram, email, chat</p>
           <p className="mt-2 text-[11px] leading-relaxed text-[#f6f2eb]/50">Customers ask for help where support is available.</p>
         </div>
         <ArrowDown className="mx-auto size-4 text-[#f6f2eb]/25 lg:-rotate-90 lg:self-center" aria-hidden />
@@ -75,7 +75,7 @@ const capabilities = [
   {
     title: "Bring in the request",
     body: "Customer channels supply the conversation; they are not merchant approval surfaces.",
-    details: ["Instagram customer messages", "Gmail support intake", "Forwarded support email", "Storefront chat as the product expands"],
+    details: ["Instagram customer messages", "Gmail support intake", "Forwarded support email", "Chat on your store"],
   },
   {
     title: "Keep judgment close",
@@ -90,7 +90,7 @@ const capabilities = [
 ] as const;
 
 const faqs = [
-  { q: "Is iMessage a customer support inbox?", a: "No. In this product model, Instagram, Gmail, forwarded email, and supported storefront chat are customer-intake surfaces. iMessage is for the merchant to review, approve, and direct Shopkeeper." },
+  { q: "Is iMessage a customer support inbox?", a: "No. In this product model, Instagram, Gmail, forwarded email, and chat on your store are customer-intake surfaces. iMessage is for the merchant to review, approve, and direct Shopkeeper." },
   { q: "Is Shopify required?", a: "Yes. Shopkeeper is built for Shopify stores, and Shopify supplies the commerce context and system of action behind supported order work." },
   { q: "Can I use forwarded support email instead of Gmail?", a: "Yes. A store can forward a support address into the provided intake path. The setup should explain the forwarding destination and verification steps without asking customers to change how they write in." },
   { q: "Does Shopkeeper merge every customer across channels?", a: "No. It uses the conversation, customer, and Shopify context available to the request. It does not promise perfect cross-channel identity resolution." },
