@@ -37,11 +37,43 @@
 > So `-8` is re-releasable and always was, but reaching for it reverts the whole
 > storefront chat surface.
 
-**Webhooks, since 2026-08-09.** The five order and uninstall subscriptions are
-declared in the root `shopify.app.toml`, and OAuth no longer creates per-shop
-subscriptions. Use
-[shopify-webhook-migration.md](shopify-webhook-migration.md) to audit, remove, or
-restore the legacy per-shop subscriptions without touching unrelated webhooks.
+## Webhooks
+
+Since 2026-08-09 the five order and uninstall subscriptions — `orders/create`,
+`orders/fulfilled`, `orders/updated`, `orders/cancelled`, `app/uninstalled` — are
+declared app-level in the root `shopify.app.toml` on Admin API version `2026-04`,
+and OAuth no longer creates per-shop subscriptions. The migration off per-shop
+subscriptions closed 2026-08-19.
+
+`npm run audit:shopify-webhooks` remains the way to inventory or repair per-shop
+leftovers. It is read-only by default; both mutation modes require an exact
+`myshopify.com` domain **and** `--execute`:
+
+```sh
+npm run audit:shopify-webhooks
+npm run audit:shopify-webhooks -- --shop palette-garments.myshopify.com
+npm run audit:shopify-webhooks -- remove --shop palette-garments.myshopify.com --execute
+npm run audit:shopify-webhooks -- restore --shop palette-garments.myshopify.com --execute
+```
+
+`remove` deletes every duplicate of only those five topic/address pairs, then
+verifies none remain. `restore` creates only missing pairs, then verifies exactly
+one subscription per topic. Neither touches a webhook with a different topic or
+address. If a release fails after a `remove`, run `restore` immediately; if the
+released configuration is defective, release the prior app version first and then
+`restore`.
+
+**Verifying delivery.** A Shopify webhook does leave a durable receipt —
+`webhooks-shopify.ts` passes `shopify:<shop>:<webhookId>` as `inboundMessageId`
+and `handleShopifyJob` stores it as the message's `external_message_id`, so
+deliveries are queryable after the fact. Exactly-once is enforced by the database
+rather than by inspection: the partial unique index
+`messages_org_external_id_unique` on `(organization_id, external_message_id)`
+makes a duplicate delivery fail its insert. One trap when testing —
+`handleShopifyJob` **drops** an order with neither `customer.email` nor
+`customer.id`, logging a warn and returning, and such an order leaves no row at
+all, which is indistinguishable from non-delivery. Place test orders with customer
+identity attached.
 
 ## Two settings that look wrong and are not
 
@@ -77,6 +109,11 @@ rehearsal evidence were deleted on 2026-09-01. Read them at
 The two follow-ups that were skipped rather than completed are open in
 [to-do-list.md](../to-do-list.md): reading the release grant back from Shopify's
 side, and writing the merchant-facing explanation of the re-authorization prompt.
+
+The 2026-08-19 app-specific webhook migration record was deleted the same day;
+its guarded-utility commands and delivery receipt survive under "Webhooks" above,
+and the production sequence it prescribed is spent. Read it at
+`git show c06be3b4:docs/production/shopify-webhook-migration.md`.
 
 The current configuration is `shopify.app.toml` in the repo root, and its git
 history is the durable record. The 2026-08-07 verbatim export is at
