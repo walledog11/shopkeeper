@@ -74,7 +74,7 @@ only place a merchant must work.
 | Forwarded email/Postmark | Customer support intake | Include in the customer-channel group and explain setup simply. |
 | Instagram | Customer support intake | Include without a release-state badge; complete Advanced Access and a non-role merchant loop before launch. |
 | iMessage | Merchant control | Present as an approval and direction surface. |
-| Storefront chat | Customer support intake | May remain in the future-state onboarding animation; verify it in a real merchant workspace before launch. |
+| Storefront chat | Customer support intake | Named as a present channel across the homepage and `/product/integrations` since 2026-09-01. The production canary in [to-do-list.md](to-do-list.md) is still open — claiming it raised the cost of leaving that open, but did not change what the code does. |
 | TikTok Shop and WhatsApp | Not in the launch integration set | Omit from active marketing. |
 
 Recheck this table against the canonical product docs before every marketing
@@ -129,8 +129,11 @@ Do not claim these until they ship or have the required evidence:
 
 - Publish only plans, prices, and trial terms that can be purchased and verified
   through checkout.
-- Until enforcement exists, omit Scale, team-seat counts, conversation limits,
-  and “no credit card required.”
+- Scale and “no credit card required” stay omitted: `PlanTier` has no Scale tier
+  and there is no checkout behind it, and a payment method *is* collected, just
+  later. The seat and conversation counts are no longer omitted — enforcement
+  exists (`degradeForConversationLimit`, and the seat check in the dashboard team
+  route), so `Pricing.tsx` carries them as of 2026-09-01.
 - Keep the verified 14-day trial.
 - Treat “in minutes” as a pre-release setup target and verify it from a new
   account through a successful first message before launch.
@@ -156,16 +159,12 @@ Each section must answer a buyer question and lead naturally to the next one.
 | 11 | Trust | Verified facts about data handling, isolation, access, exports, limits, and audit behavior. Link to Security. |
 | 12 | Pricing | Only purchasable, enforced plans and verified trial conditions. |
 | 13 | FAQ | Automatic sending, required approvals, supported channels, voice learning, exports, uncertainty, Shopify requirement, and data protection. |
-| 14 | Final CTA | “Give support the ability to finish the job.” Keep the torn-paper brand moment and grounded trial copy. |
+| 14 | Final CTA | “Hire it for two weeks and see.” Keep the torn-paper brand moment and grounded trial copy. |
 
-Suggested hero copy:
-
-- **Eyebrow:** AI support operator for Shopify
-- **Headline:** Customer support that can actually fix the order.
-- **Body:** Shopkeeper answers routine questions, prepares and completes Shopify
-  order work, and asks you before consequential actions.
-- **Primary CTA:** Start 14-day trial
-- **Secondary CTA:** See an order change
+Hero copy is **not** specified here. [landing-page-copy.md](landing-page-copy.md)
+is the copy spec and it is applied; the sketch that used to sit here has been
+removed rather than updated, because two documents holding hero copy is how the
+page ends up with two headlines. Section 1 of the deck is the live wording.
 
 ## Core demo and media specification
 
@@ -309,9 +308,11 @@ is in the client bundle, so a `@shopkeeper/db` import on that path breaks
 - [x] Inventory homepage claims, integrations, pricing, media, and navigation.
 - [x] Approve the positioning and four-layer product model.
 - [x] Classify active, gated, pending, and unsupported claims.
-- [ ] Finish claim and integration verification before launch. The onboarding
-  animation intentionally retains the planned storefront-chat and “in minutes”
-  future state; all other identified high-risk copy has been corrected.
+- [ ] Finish claim and integration verification before launch. Storefront chat is
+  no longer a future state in the animation — the homepage claims it as a present
+  channel and the setup tiles name it, so what remains is the production canary in
+  [to-do-list.md](to-do-list.md), not a copy question. “In minutes” is still
+  inherited and untimed. All other identified high-risk copy has been corrected.
 - [ ] **Provision `PRICE_ID_STARTER` and `PRICE_ID_PRO`, then verify the displayed
   Starter and Pro prices against a live Stripe checkout.** The repository supports
   these two tiers and a 14-day trial. Until the price IDs exist every org resolves to
@@ -319,19 +320,20 @@ is in the client bundle, so a `@shopkeeper/db` import on that path breaks
   would print two numbers nothing enforces. The `PLAN_LIMITS` values were recovered
   from the pre-`c558c788` page precisely so enforcement and the page agree when the
   page carries them again; this is the step that closes that loop.
-- [ ] Decide whether the conversation and seat numbers return to `Pricing.tsx`. The
-  condition the **Pricing and conversion copy** rule waits on — "until enforcement
-  exists" — has been met. `PLAN_LIMITS` in `packages/db/plan-limits.ts` carries the
-  counts (Starter 500/mo and 1 seat, Pro unlimited and 2 seats), and both are
-  enforced: `degradeForConversationLimit` on the gateway planning path in
+- [x] Decide whether the conversation and seat numbers return to `Pricing.tsx`.
+  They did, on 2026-09-01: Starter 500/mo and one seat, Pro no limit and two seats,
+  with the conversation definition under both cards. `PLAN_LIMITS` in
+  `packages/db/plan-limits.ts` carries the counts and both are enforced —
+  `degradeForConversationLimit` on the gateway planning path in
   `apps/gateway/src/message-handlers/planning.ts`, and the seat check in
-  `apps/dashboard/src/app/api/team/route.ts`, which refuses the invite. The two
-  behave differently and the copy has to say which — seats refuse, conversations
-  degrade rather than stop. Scale stays omitted regardless: `PlanTier` has no such
-  tier and there is no checkout behind it. Blocked on the same Stripe verification
-  as the item above; `plan-limits.ts` records `PRICE_ID_STARTER` and `PRICE_ID_PRO`
-  as unprovisioned in production, which is why every live org currently resolves to
-  the deliberately unbounded `unknown` tier.
+  `apps/dashboard/src/app/api/team/route.ts`, which refuses the invite. Scale stays
+  omitted: `PlanTier` has no such tier and there is no checkout behind it.
+- [ ] **Say which limit refuses and which degrades.** The two do not behave alike —
+  a seat over the cap is refused outright, while conversations degrade rather than
+  stop — and the cards state both numbers without distinguishing them, because no
+  wording in the deck was written for that difference. Not urgent while every live
+  org resolves to the deliberately unbounded `unknown` tier; settle it with the
+  Stripe verification above, when the limits start biting.
 - [x] Update metadata, footer copy, FAQ, and navigation terminology to match the
   approved positioning.
 
