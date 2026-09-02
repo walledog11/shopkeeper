@@ -8,8 +8,8 @@ record was retired on 2026-08-27 once each blocker had moved to
 [to-do-list.md](../to-do-list.md), which is where they are tracked. Read the run at
 `git show cb61ac44:docs/production/pre-release-validation-2026-08-04.md`.
 
-This is the short release gate for production readiness. Keep detailed deploy procedure in
-[deployment.md](deployment.md) and operational response steps in [runbook.md](runbook.md).
+This is the short release gate for production readiness. Detailed deploy procedure and
+operational response steps are both in [runbook.md](runbook.md).
 
 ## Pre-Release Gate
 
@@ -42,7 +42,8 @@ Notes:
 - `PRODUCT_ANALYTICS_ENABLED` is explicitly set for both applications. Keep it `false` until the
   privacy policy is deployed, staging payload review passes, and production reports are saved.
 - Production migrations are run with both pooled `DATABASE_URL` and direct `DIRECT_DATABASE_URL`
-  set, as shown in [deployment.md](deployment.md#deploy-order).
+  set, as shown in [runbook.md](runbook.md#migrations), and `migrate status` confirms none lagged
+  its code.
 - Dashboard deploy completes and `GET /api/health/deep` returns healthy (`/api/health` is
   liveness only — it touches no dependency so uptime monitors cannot hold the DB awake).
 - Gateway deploy completes and `GET /health/deep` plus `GET /health/queues` return healthy.

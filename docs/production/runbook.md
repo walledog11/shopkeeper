@@ -7,7 +7,7 @@ This runbook covers the first launch track:
 3. verify health endpoints
 4. prove the live inbound-message path works end-to-end
 
-It is intentionally narrower than [`checklist.md`](checklist.md). This document is only about getting the current product scope deployed and verified.
+It absorbed `deployment.md` on 2026-09-01; the two had been describing the same deploy from two files, and the migration guidance was the half that mattered and was split across both. [`checklist.md`](checklist.md) stays separate as the short release gate — it is the sign-off contract, not the procedure.
 
 ## Runtime Contract
 
@@ -66,6 +66,28 @@ npm run build -w apps/gateway
 ```
 
 - If Railway is configured with a custom build command in the console, use the same targeted build path above instead of a monorepo-wide build.
+- `nixpacks.toml` mirrors the start command.
+- `GATEWAY_RUNTIME_ROLE=all` is the default. For split Railway services, use `server` on the web service and `worker` on the background worker service, keeping the same start command.
+- Upstash's free tier is usually not enough for always-on BullMQ workers. Use pay-as-you-go/fixed pricing or another Redis deployment for production.
+- Cost-tuning env vars: `GATEWAY_BULLMQ_DRAIN_DELAY_SECONDS`, `GATEWAY_BULLMQ_STALLED_INTERVAL_MS`, `GATEWAY_WORKER_HEARTBEAT_INTERVAL_MS`, `GATEWAY_WORKER_HEARTBEAT_TTL_SECS`, `GATEWAY_WORKER_HEARTBEAT_STALE_MS`, `GATEWAY_QUEUE_DIAGNOSTICS_CACHE_MS`, `GATEWAY_ENABLE_MAINTENANCE_WORKERS`.
+
+### Both platforms
+
+- Vercel and Railway build the shared DB and agent packages before their apps, so package output is current during deploy.
+- Neither uploads source maps at launch. The dashboard reports errors through `@sentry/nextjs`; the gateway build is compile-only (`tsc`).
+- **Neither platform runs migrations.** See [Writing a migration](#writing-a-migration).
+
+## Prerequisites
+
+Before the first deploy:
+
+- Production Neon Postgres created. `DATABASE_URL` uses the pooled host with `pgbouncer=true&connection_limit=1`; `DIRECT_DATABASE_URL` uses the same database over the direct (non-pooler) host. Both apps need both set, because the schema declares `directUrl`.
+- Production Upstash Redis created for the dashboard (rate limiting, locks, presence), in the same region as Vercel.
+- A dedicated Redis created for the gateway's BullMQ queues (e.g. Railway Redis), **separate** from Upstash, with `maxmemory-policy=noeviction` and persistence enabled. Railway private networking uses `redis://...redis.railway.internal`; managed Redis over the public internet uses the TLS form `rediss://...`. Do not point it at Upstash.
+- A new production-only `INTERNAL_API_SECRET` generated.
+- Clerk lifecycle webhook endpoint configured to `https://<dashboard>/api/webhooks/clerk`, and `CLERK_WEBHOOK_SECRET` set on the dashboard.
+- Separate staging and production PostHog projects, before product analytics is enabled.
+- Launch env covers email and Shopify. Meta and Twilio vars are optional until those channels are reintroduced. There are no carrier-tracking env vars — shipment and delivery monitoring were removed on 2026-08-26.
 
 ## Environment Matrix
 
@@ -452,7 +474,19 @@ VERIFY_INBOUND_EMAIL_FROM='shopkeeper-smoke@example.com' \
 npm run verify:production
 ```
 
-## Writing a migration
+## Migrations
+
+Every migration runs through `prisma migrate deploy` against
+`packages/db/prisma/schema.prisma`. **Nothing applies them automatically.** The
+Vercel build is `next build`, the Railway build is `tsc`, and CI only ever
+migrates a throwaway local database. A production migration is applied because a
+human ran it — which is why the failures at the end of this section keep
+recurring.
+
+Apply an additive migration **before** deploying the build that reads the new
+columns, and treat destructive cleanup as a separate later release.
+
+### Writing one
 
 Standing rules for **every** migration in this repo, not one-time tasks.
 
@@ -493,8 +527,111 @@ broke, but read the `Datasource "db": … neon.tech` line before trusting where 
 migration went. The local test DB is `127.0.0.1:55432/clerk_test` and needs both
 `DATABASE_URL` and `DIRECT_DATABASE_URL` passed inline.
 
-**A migration that ships behind its code is an outage, not a lag.** Read
-production `migrate status` before closing anything that adds a table or column.
+### Env vars by context
+
+The datasource declares both URLs, so Prisma resolves **both** variables
+everywhere — even in contexts that never migrate:
+
+```prisma
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")         // pooled (PgBouncer)
+  directUrl = env("DIRECT_DATABASE_URL")  // direct host; migrations travel over this
+}
+```
+
+| Context | `DATABASE_URL` | `DIRECT_DATABASE_URL` | Runs migrations? |
+|---------|----------------|-----------------------|------------------|
+| Production migration run (your machine) | pooled Neon host + `?pgbouncer=true&connection_limit=1` | direct Neon host + `?sslmode=require` | **Yes — this is the only path that migrates production** |
+| Vercel (dashboard) | pooled Neon host | direct Neon host | No — `next build` only |
+| Railway (gateway server + worker) | pooled Neon host | direct Neon host | No — `npm run build` is compile-only |
+| Local tests | injected by `scripts/with-test-env.mjs` | same value | Yes — via `scripts/test-bootstrap.mjs` |
+| CI | same as local tests | same value | Yes — same bootstrap, against the CI service container |
+
+Set both variables in Vercel and Railway even though neither platform migrates:
+the schema declares `directUrl`, so both must resolve at client initialization.
+
+The local/CI test database defaults to
+`postgresql://postgres:postgres@127.0.0.1:55432/clerk_test?schema=public` and is
+overridden with `TEST_DATABASE_URL`. It is never a deployed database.
+
+### Applying one
+
+Production — run before deploying the build that depends on the migration. This
+is step 3 of the [Deploy Sequence](#deploy-sequence):
+
+```bash
+DATABASE_URL='postgresql://...@ep-....-pooler.us-east-2.aws.neon.tech/neondb?pgbouncer=true&connection_limit=1' \
+DIRECT_DATABASE_URL='postgresql://...@ep-....us-east-2.aws.neon.tech/neondb?sslmode=require' \
+npm run db:migrate:deploy
+```
+
+Local and CI — `test:integration` bootstraps the schema itself, so a new
+migration needs no separate step. To apply to the local test database without
+running the suite:
+
+```bash
+npm run test:services:up
+node scripts/test-bootstrap.mjs
+```
+
+### Verify what is actually applied
+
+**A migration that ships behind its code is an outage, not a lag.** Merging and
+deploying a feature does not imply its migration ran. Check explicitly, with
+production env injected and no credentials on your clipboard:
+
+```bash
+railway run npx prisma migrate status --schema=packages/db/prisma/schema.prisma
+```
+
+Run this after every deploy that included a migration, before closing anything
+that adds a table or column, and whenever a tool starts failing-and-warning for
+no apparent reason.
+
+Three failures this prevents, all caught by `migrate status` rather than by an
+error at deploy time:
+
+- **2026-07-22** — the B3/B4 watch-table migrations (`add_return_watches`,
+  `add_shipment_watches`) were found unapplied in production two days after their
+  code shipped, so their tool-success recording had been failing and warning the
+  entire time.
+- **2026-07-28** — release verification found the additive
+  `20260723000000_add_operator_pending_plans` had never been applied, well after
+  the feature merged.
+- **Milestone 5** — `loadActiveMerchantPreferences` shipped to production while
+  its table did not exist. The `P2021` threw out of an uncaught `Promise.all` in
+  `buildContext` and every inbound message went unplanned for a day. Give every
+  fan-out load in `buildContext` its own catch.
+
+## Product Analytics
+
+Both dashboard and gateway require an explicit `PRODUCT_ANALYTICS_ENABLED` value
+in production. Deploy new instrumentation with capture disabled first:
+
+```dotenv
+PRODUCT_ANALYTICS_ENABLED=false
+POSTHOG_PROJECT_TOKEN=<project-token>
+POSTHOG_HOST=https://us.i.posthog.com
+```
+
+When enabled, use the token for the environment-specific PostHog project. Product
+analytics is server-only and organization-scoped; do not add a browser PostHog
+key or enable autocapture, session replay, cookies, or person profiles.
+
+Before enabling production capture:
+
+1. enable and review every event in staging;
+2. confirm raw payloads contain no names, addresses, message content, prompts,
+   provider identifiers, credentials, or provider payloads;
+3. confirm deterministic retries retain one unique event;
+4. save and verify the reports specified in
+   [`posthog-reports.md`](posthog-reports.md); and
+5. assign an owner to monitor analytics-delivery warnings for the first
+   production week.
+
+After enabling, complete one controlled workspace journey and verify both the raw
+events and the saved reports. Do not backfill events from before deployment.
 
 ## Manual End-to-End Smoke Tests
 
