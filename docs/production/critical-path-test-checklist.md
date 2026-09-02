@@ -44,58 +44,18 @@ Coverage reports are generated for dashboard and gateway integration suites in C
 
 ## Paid Model-Backed Agent Evals
 
-The agent evals call Anthropic when given a real `ANTHROPIC_API_KEY`. They are
-not part of the ordinary PR test loop: the production planner carries a large
-system prompt and tool schema, so a full repeated suite can consume millions of
-tokens in minutes. API spend is determined by tokens, not wall-clock duration.
+The eval operating model — the four run modes, what each one gates, and the
+budget ceilings every paid invocation must carry — is
+[agent-eval-gates.md](../agent-eval-gates.md). The rules for when a change *owes*
+a run are in `.claude/CLAUDE.md` under Agent-change invariants, and the local
+commands are in [TESTING.md](../../TESTING.md).
 
-Use the following escalation ladder. Do not skip directly to a full capture.
+Two things belong here because they are route-coverage decisions rather than eval
+policy:
 
-1. Run the deterministic unit/integration checks above first. Ensure a real
-   `ANTHROPIC_API_KEY` is not exported for these commands (or explicitly set it
-   to `test-anthropic-key`); `with-test-env.mjs` otherwise preserves a real key
-   from the calling environment. These checks must not make live model calls.
-2. During diagnosis, run only the affected fixture IDs, once. Leave the LLM
-   judge off unless the change specifically affects reply semantics:
-
-   ```bash
-   REQUIRE_MODEL_EVALS=1 EVAL_REPEATS=1 \
-     EVAL_FIXTURE=fixture-id,second-fixture-id RUN_JUDGE_EVALS=0 \
-     npm run test:evals:fixture -w apps/dashboard
-   ```
-
-   Set `RUN_JUDGE_EVALS=1` only for selected fixtures whose rubric needs semantic
-   judging. A failed targeted run is investigated with more targeted runs; it is
-   not a reason to rerun the full suite. Use targeted three-repeat probes only
-   when measuring a suspected flaky fixture.
-3. After the affected fixtures are green and the implementation is stable, an
-   unfiltered one-repeat gate may be used for release-level confidence:
-
-   ```bash
-   REQUIRE_MODEL_EVALS=1 EVAL_REPEATS=1 RUN_JUDGE_EVALS=0 \
-     npm run test:evals:fixture -w apps/dashboard
-   ```
-
-   Enable judges for this run only when the release needs the semantic reply
-   gate. Any unfiltered live-key run requires explicit human approval after the
-   operator states the scope, repeats, judge setting, credential source, and an
-   approximate spend ceiling.
-4. A three-repeat full baseline capture is reserved for an explicitly approved
-   release/baseline decision, after the one-repeat gate passes:
-
-   ```bash
-   REQUIRE_MODEL_EVALS=1 RUN_JUDGE_EVALS=1 \
-     npm run test:evals:baseline -w apps/dashboard
-   ```
-
-   Run it once. Do not automatically rerun it after a failure. The baseline
-   command writes `baseline.json` incrementally, so an interrupted or failing
-   capture must not be committed; restore the last accepted baseline, diagnose
-   with fixture filters, and request fresh approval before another full capture.
-   Accept a new baseline only when the capture completes and all hard gates pass.
-
-The eval runner currently reports token usage after execution but has no
-model-aware dollar estimator or hard spending cutoff. Until an `EVAL_MAX_USD`
-guard exists, the approval and one-run rules above are the spending control. Do
-not borrow a production API credential for evals without explicit permission,
-and never import production database or Redis configuration into a test run.
+- Evals grade what the model does with a tool result, never whether the tool can
+  produce one. `packages/agent/src/shopify/*` is simulated in fixtures, so a
+  Shopify tool can be structurally broken against the live API while the gate
+  stays green. Live probes are the only cover that layer has.
+- A route added under **Applies To** above owes deterministic tests regardless of
+  whether it is on an agent path. A green eval is not coverage for a route.
