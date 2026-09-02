@@ -53,8 +53,9 @@ provider. **None of these is a code task.**
   author controls. The released app carries the current widget, so a merchant connecting
   now gets it; nothing blocks this.
 - [ ] **Dev-store browser matrix.** Online Store 2.0 and a vintage theme, desktop and
-  mobile, embed on and off, Shopify Inbox bubble present and removed. The automated
-  remainder is already covered. Matrix and evidence:
+  mobile, embed on and off, Shopify Inbox bubble present and removed — those four
+  dimensions are the matrix; no other file holds a longer one. The automated remainder
+  is already covered. Read the channel invariants before running it:
   [storefront-chat-verification-2026-08.md](production/storefront-chat-verification-2026-08.md).
 - [ ] **Fire the router-materialized escalation path once.** Guest escalations that
   arrived with no reply were fixed by passing `keepReply` into `applyEscalationRouting`,
