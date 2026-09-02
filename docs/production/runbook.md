@@ -425,7 +425,7 @@ DIRECT_DATABASE_URL='postgresql://...@ep-....us-east-2.aws.neon.tech/neondb?sslm
 npm run db:migrate:deploy
 ```
 
-Prisma routes migrations through `DIRECT_DATABASE_URL` (`directUrl` in the schema). CI and local migration runs need both URLs set.
+Prisma routes migrations through `DIRECT_DATABASE_URL` (`directUrl` in the schema). CI and local migration runs need both URLs set. Every migration in this repo is hand-written — see [Writing a migration](#writing-a-migration) before authoring one.
 
 4. Deploy the dashboard to Vercel.
    - Confirm `GET /api/health` returns `status: ok`.
@@ -451,6 +451,50 @@ VERIFY_INBOUND_EMAIL_TO='org-id@mail.example.com' \
 VERIFY_INBOUND_EMAIL_FROM='shopkeeper-smoke@example.com' \
 npm run verify:production
 ```
+
+## Writing a migration
+
+Standing rules for **every** migration in this repo, not one-time tasks.
+
+Production carries **six partial unique indexes that `schema.prisma` cannot
+declare**, created by raw SQL across six migrations:
+`threads_one_open_per_customer`, `messages_org_external_id_unique`,
+`integrations_instagram_organization_unique`,
+`integrations_instagram_account_unique`, `integrations_shopify_account_unique`,
+`integrations_non_email_account_unique`.
+
+Prisma has no `where` clause on `@@unique` or `@@index` (verified against the
+pinned 6.19.3), so `prisma migrate dev` builds its shadow database from the
+migration history, diffs it against `schema.prisma`, and emits a `DROP INDEX` for
+each one inside whatever migration you are authoring — silently removing inbound
+dedupe, the open-thread race protection, and every cross-tenant integration
+constraint at once. Hand-writing is not the fallback; it is the only path.
+
+- Hand-write the migration directory and its `migration.sql`, then apply with
+  `prisma migrate deploy`. Never run `prisma migrate dev` against this schema.
+- If you draft SQL with `prisma migrate diff`, delete every `DROP INDEX` from its
+  output before saving.
+- Verify the saved `migration.sql` contains no `DROP INDEX` before applying it.
+- After it lands, confirm all six survived — this must return 6:
+
+  ```sql
+  SELECT count(*) FROM pg_indexes WHERE indexname IN (
+    'threads_one_open_per_customer', 'messages_org_external_id_unique',
+    'integrations_instagram_organization_unique', 'integrations_instagram_account_unique',
+    'integrations_shopify_account_unique', 'integrations_non_email_account_unique');
+  ```
+
+**Run prisma from the repo root, never from inside `packages/db`.** That
+directory's `.env` points at the production Neon instance and *overrides* an
+inline `DATABASE_URL`, so `cd packages/db && DATABASE_URL=…local… npx prisma
+migrate deploy` silently targets production. It has done so once, landing a
+migration in production before its code. Additive and inert that time, so nothing
+broke, but read the `Datasource "db": … neon.tech` line before trusting where a
+migration went. The local test DB is `127.0.0.1:55432/clerk_test` and needs both
+`DATABASE_URL` and `DIRECT_DATABASE_URL` passed inline.
+
+**A migration that ships behind its code is an outage, not a lag.** Read
+production `migrate status` before closing anything that adds a table or column.
 
 ## Manual End-to-End Smoke Tests
 
@@ -1140,8 +1184,10 @@ eval no longer exist. Rollback is a revert of that change, not an environment ed
 The 2026-08-12 context correction still stands: token bounding is not a
 conversation boundary. Bounded context combines a whole-thread prior summary with
 recent messages and must not be presented as the fix for stale context. Episode
-behavior has its own rollout control in
-[`conversation-context-and-cross-channel-memory-plan.md`](../conversation-context-and-cross-channel-memory-plan.md).
+boundaries are code-owned defaults with no flag behind them —
+`CHANNEL_EPISODE_POLICY` in
+`apps/gateway/src/message-handlers/resolve-inbound-episode.ts`, which carries the
+per-channel rule and the reason each absent channel never rolls.
 
 Budget telemetry remains: `[agent:context] budget` and `[Worker] AI input budget`
 carry counts and character totals only, never prompt text.

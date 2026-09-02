@@ -65,8 +65,10 @@ provider. **None of these is a code task.**
   message the model believes it *can* answer, where `routePlan` returns `escalate`
   anyway. Storefront chat, dev store.
 - [ ] **Episode boundary, end to end on the dev store.** Widget, dashboard, operator
-  notification and reply/approval paths together — the last open box in
-  [conversation-context-and-cross-channel-memory-plan.md](conversation-context-and-cross-channel-memory-plan.md).
+  notification and reply/approval paths together. The last unrun item from the
+  2026-08-12 episode plan; everything else in it shipped, and the eval gate ran on
+  2026-08-17. Boundaries are `CHANNEL_EPISODE_POLICY` in
+  `apps/gateway/src/message-handlers/resolve-inbound-episode.ts`.
 - [ ] **One live order attributed as `chat_assisted`.** Talk to the widget, verify an
   email, buy something, then confirm the `conversation_attributions` row lands and the
   next briefing reports it. When reading those numbers: attribution covers shoppers who
@@ -182,6 +184,21 @@ Gated-off integrations cost nothing to keep dark.
   and the Customer Account API requires the shop to be on new customer accounts, so
   merchants on classic accounts would be permanently guest-only. Sketch in
   [storefront-chat-verification-2026-08.md](production/storefront-chat-verification-2026-08.md).
+- [ ] **Episode memory: identity, obligations, and prior-episode retrieval.** Cut from
+  the 2026-08-12 episode plan with reasons, and the reasons still hold — each is here
+  so it is not re-proposed from scratch. `Person` / `ChannelIdentity` /
+  `IdentityLinkAudit` / `PersonMemoryFact` were justified entirely by "skipping
+  destroys data permanently", which requires traffic to be losing, and there is none;
+  every `Person` would also hold exactly one `ChannelIdentity` until Shopify Customer
+  Account OAuth lands. `CustomerObligation` — rollover drops the merchant's queued card
+  silently today, and the cheap fix if it bites is telling them the card expired, not a
+  table. `ThreadMemoryIndex` and prior-episode retrieval are a ranking problem with no
+  traffic to rank against, so designing it blind ships matching rules that are wrong in
+  a way no test catches. Also deferred: the widget's collapsed "Previous conversation"
+  history (reversible — rolled-over threads are closed, not deleted, and archive at 90
+  days), a `CONVERSATION_EPISODE_MODE` shadow mode (shadow-running against zero traffic
+  is ceremony), and an email provider-conversation key (`providerConversationScoped:
+  true` is already set, so adding the key is the only change needed when it matters).
 - [ ] **Attribution for wholly anonymous shoppers.** The real coverage gap in
   conversation-to-sale: a shopper who asks a pre-purchase question and buys without ever
   verifying an email has no server-side identity bridge. Closing it needs cart-attribute

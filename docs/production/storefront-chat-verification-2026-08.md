@@ -148,10 +148,10 @@ each is in the deleted chronology named above.
   number is a one-line change if the trade stops being worth it.
 - **No cross-channel customer identity.** A shopper who chats on the storefront
   and later emails is two customers with two threads, and agent memory will not
-  join them. Superseded as an accepted model by
-  [conversation-context-and-cross-channel-memory-plan.md](../conversation-context-and-cross-channel-memory-plan.md);
-  until that ships, channels stay separate rather than joined by a weak name or
-  address guess.
+  join them. Superseded as an accepted model by conversation episodes, which
+  shipped; until cross-channel identity itself is built, channels stay separate
+  rather than joined by a weak name or address guess. The deferred identity tables
+  and their reasons are in [to-do-list.md](../to-do-list.md) under Parked.
 - **The merchant must disable Shopify Inbox** to avoid duplicate launchers. There
   is no coexistence story.
 

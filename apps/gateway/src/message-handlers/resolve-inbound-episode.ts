@@ -35,9 +35,9 @@ const DAYS_7 = 7 * 24 * 60 * 60 * 1000;
 // than an omission. Operator channels (sms_agent, dashboard_agent, imessage) are
 // one durable thread per binding, so a boundary there would fragment the
 // merchant's own conversation. `shopify` is merchant-side order/email-fallback
-// traffic, and `sms` is retired. The plan specifies boundaries for exactly the
-// four customer-origin channels below; inventing one for the rest would be
-// policy nobody asked for.
+// traffic, and `sms` is retired. Boundaries are specified for exactly the four
+// customer-origin channels below; inventing one for the rest would be policy
+// nobody asked for.
 const CHANNEL_EPISODE_POLICY: Partial<Record<DbChannelType, ChannelEpisodePolicy>> = {
   [CHANNEL.SHOPIFY_CHAT]: { idleMs: HOURS_24, providerConversationScoped: false },
   [CHANNEL.IG_DM]: { idleMs: HOURS_24, providerConversationScoped: false },

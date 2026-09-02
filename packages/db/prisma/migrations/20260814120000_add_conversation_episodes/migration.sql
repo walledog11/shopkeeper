@@ -1,5 +1,5 @@
 -- Conversation episodes, migration 1 of 2 (see
--- docs/conversation-context-and-cross-channel-memory-plan.md): the state a
+-- apps/gateway/src/message-handlers/resolve-inbound-episode.ts): the state a
 -- rollover has to record, plus the storefront's episode history.
 --
 -- HAND-WRITTEN. `prisma migrate dev` must never be run against this schema: six
