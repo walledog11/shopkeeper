@@ -312,8 +312,13 @@ is in the client bundle, so a `@shopkeeper/db` import on that path breaks
 - [ ] Finish claim and integration verification before launch. The onboarding
   animation intentionally retains the planned storefront-chat and “in minutes”
   future state; all other identified high-risk copy has been corrected.
-- [ ] Verify the displayed Starter and Pro prices against a live Stripe checkout;
-  the repository supports these two tiers and a 14-day trial.
+- [ ] **Provision `PRICE_ID_STARTER` and `PRICE_ID_PRO`, then verify the displayed
+  Starter and Pro prices against a live Stripe checkout.** The repository supports
+  these two tiers and a 14-day trial. Until the price IDs exist every org resolves to
+  `unknown` in `resolvePlanTier` and both limits fail open by design, so the page
+  would print two numbers nothing enforces. The `PLAN_LIMITS` values were recovered
+  from the pre-`c558c788` page precisely so enforcement and the page agree when the
+  page carries them again; this is the step that closes that loop.
 - [ ] Decide whether the conversation and seat numbers return to `Pricing.tsx`. The
   condition the **Pricing and conversion copy** rule waits on — "until enforcement
   exists" — has been met. `PLAN_LIMITS` in `packages/db/plan-limits.ts` carries the
@@ -353,6 +358,22 @@ meet every truth and delivery requirement in this document.
 
 ### Phase 2 — reconstruct the homepage
 
+- [ ] **Apply the copy deck.** [landing-page-copy.md](landing-page-copy.md) is locked
+  and unimplemented — `Hero.tsx` still renders the pre-deck H1. The deck is the copy
+  spec for the homepage and the components it composes; applying it is this task, and
+  its "Load-bearing hedges" table is the list of phrases a later editing pass must not
+  polish away.
+- [ ] **Rename workspace → store in the app**, per the deck's decision 3. Until then
+  the site and the settings tab use different words for the same thing, deliberately.
+  Two apparent collisions are not collisions and must not be "fixed": the app's
+  control is **Trust level** with modes **Draft only** / **Ask first** / **Trusted**,
+  and there is no *custom instructions* field — the nearest real one is **About your
+  store**.
+- [ ] **Drop the website-chat hedge on `/product/integrations`.** It still reads
+  "Storefront chat as the product expands". Once the homepage claims the channel as
+  present, that line is stale. Note that the storefront-chat production canary is
+  still open in [to-do-list.md](to-do-list.md) — putting the channel on the homepage
+  raises the cost of leaving it open, but does not change what the code does.
 - [ ] Replace the simulated hero film with the verified order-swap loop.
 - [x] Reorder the homepage to match the target structure above.
 - [x] Add the Shopify action map, approval states, and four-surface system

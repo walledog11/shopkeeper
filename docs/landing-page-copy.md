@@ -1,6 +1,8 @@
 # Landing page copy
 
-**Status:** Locked. All four open items resolved 2026-09-01 — ready to implement.
+**Status:** Locked and **not yet implemented** — `Hero.tsx` still renders the
+pre-deck H1. Applying it is an open item under Phase 2 of
+[landing-page-media-and-content-plan.md](landing-page-media-and-content-plan.md).
 
 **Last updated:** 2026-09-01
 
@@ -127,23 +129,12 @@ is also the word the app already badges its recommended trust level with.
 
 ## Follow-on work this page creates
 
-None of these are copy tasks. Each is something the page asserts once implemented.
-
-- **Provision `PRICE_ID_STARTER` and `PRICE_ID_PRO`.** Until they exist every org
-  resolves to `unknown` in `resolvePlanTier` and both limits fail open by design,
-  so the page would print two numbers nothing enforces. The values in
-  `PLAN_LIMITS` were recovered from the pre-`c558c788` page precisely so that
-  enforcement and the page agree when the page carries them again. This is the
-  step that closes that loop.
-- **`/product/integrations` still hedges website chat** as "Storefront chat as
-  the product expands". Once the homepage claims it as present, that line is
-  stale. Outside this document's scope, inside the same change's blast radius.
-- **The storefront-chat production canary is still open.** Every verification box
-  in [to-do-list.md](to-do-list.md) is unrun outside the author's dev store.
-  Putting the channel on the homepage raises the cost of leaving it open; it does
-  not change what the code does.
-- **Rename workspace → store in the app,** per decision 3. Until then the site
-  and the settings tab use different words for the same thing, deliberately.
+This document holds no checkboxes. Applying this deck, provisioning the two Stripe
+price IDs, renaming workspace → store in the app, and dropping the website-chat
+hedge on `/product/integrations` are all open items in
+[landing-page-media-and-content-plan.md](landing-page-media-and-content-plan.md),
+which is where every landing-page task is tracked. The storefront-chat production
+canary is in [to-do-list.md](to-do-list.md).
 
 ## Load-bearing hedges — do not polish these away
 
