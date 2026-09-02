@@ -75,7 +75,7 @@ npm run build -w apps/gateway
 
 - Vercel and Railway build the shared DB and agent packages before their apps, so package output is current during deploy.
 - Neither uploads source maps at launch. The dashboard reports errors through `@sentry/nextjs`; the gateway build is compile-only (`tsc`).
-- **Neither platform runs migrations.** See [Writing a migration](#writing-a-migration).
+- **Neither platform runs migrations.** See [Migrations](#migrations).
 
 ## Prerequisites
 
@@ -447,7 +447,7 @@ DIRECT_DATABASE_URL='postgresql://...@ep-....us-east-2.aws.neon.tech/neondb?sslm
 npm run db:migrate:deploy
 ```
 
-Prisma routes migrations through `DIRECT_DATABASE_URL` (`directUrl` in the schema). CI and local migration runs need both URLs set. Every migration in this repo is hand-written — see [Writing a migration](#writing-a-migration) before authoring one.
+Prisma routes migrations through `DIRECT_DATABASE_URL` (`directUrl` in the schema). CI and local migration runs need both URLs set. Every migration in this repo is hand-written — see [Migrations](#migrations) before authoring one.
 
 4. Deploy the dashboard to Vercel.
    - Confirm `GET /api/health` returns `status: ok`.

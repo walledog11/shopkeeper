@@ -7,7 +7,7 @@ of its own fix: the moment an item reads as evidence rather than as an instructi
 it back. Evidence checklists, failure drills, and standing procedure live in the linked
 docs.
 
-Last reviewed: 2026-08-30.
+Last reviewed: 2026-09-01.
 
 Work is grouped by **what kind of action it needs**, not by when it was filed.
 
@@ -321,32 +321,78 @@ that layer has.
 
 ## Reference docs
 
+Every file in `docs/`. If it is not here, it does not exist.
+
+**Product and process**
+
+- [product-truth.md](product-truth.md) — the four-layer channel model. Read before
+  claiming a channel does something.
+- [agent-eval-gates.md](agent-eval-gates.md) — the four eval run modes, what each
+  gates, and the budget ceilings a paid run must carry.
 - [compatibility-retirement-backlog.md](compatibility-retirement-backlog.md) —
   read before renaming any BullMQ queue or job string.
-- [phase-6-external-services.md](phase-6-external-services.md) — console-only
-  brand/domain checklist; delete when closing verification passes.
-- [production/posthog-reports.md](production/posthog-reports.md) — PostHog report
-  definitions and provisioning.
-- [production/runbook.md](production/runbook.md) — ops, monitors, channel rollout.
+
+**Production**
+
+- [production/runbook.md](production/runbook.md) — the deploy document: prerequisites,
+  env matrix, deploy sequence, migrations, smoke tests, monitors, channel rollout,
+  guardrail triage.
+- [production/checklist.md](production/checklist.md) — the short release gate that
+  runbook procedure feeds.
+- [production/critical-path-test-checklist.md](production/critical-path-test-checklist.md) —
+  the coverage contract a new high-risk route owes.
 - [production/alerting-evidence.md](production/alerting-evidence.md) — controlled
   alert triggers and verification cheatsheet.
+- [production/posthog-reports.md](production/posthog-reports.md) — PostHog report
+  definitions and provisioning.
+- [production/data-deletion.md](production/data-deletion.md) — merchant and customer
+  deletion/export request handling.
+- [production/google-gmail-verification-packet.md](production/google-gmail-verification-packet.md) —
+  the restricted-scope submission track.
+- [production/shopify-app-config-reference.md](production/shopify-app-config-reference.md) —
+  rollback targets, the webhook audit utility, and two settings that look like
+  cleanups and are not.
+- [production/storefront-chat-verification-2026-08.md](production/storefront-chat-verification-2026-08.md) —
+  durable findings, channel invariants, and the M2 sketch.
+- [phase-6-external-services.md](phase-6-external-services.md) — console-only
+  brand/domain checklist; delete when closing verification passes.
+
+**Marketing site**
+
 - [landing-page-media-and-content-plan.md](landing-page-media-and-content-plan.md) —
   the marketing site's own open work: positioning, the claim allow/deny list, the
-  target homepage, and phases 0–4. Landing-page items are filed there, not here.
+  target homepage, and phases 0–4. **Every landing-page item is filed there, not
+  here and not in the copy deck.**
+- [landing-page-copy.md](landing-page-copy.md) — the homepage copy spec: final
+  strings per section, and the load-bearing hedges a later editing pass must not
+  polish away. No checkboxes.
 - [landing-page-media-runbook.md](landing-page-media-runbook.md) — capture procedure
   for that plan's phase 1, behind `npm run landing:media:fixture`. Blocked on a test
   Instagram account for the named intake path.
 
-Two closed evidence records were deleted on 2026-08-27 once every live item in them
-was carried into this file: the 2026-08-04 pre-release validation run
-(`git show cb61ac44:docs/production/pre-release-validation-2026-08-04.md`) and the
-2026-07-29 Gmail native-inbound rollout and soak
-(`git show cb61ac44:docs/production/gmail-rollout-evidence-2026-07-29.md`).
+Also live, outside `docs/`: [AGENT_AUDIT.md](../AGENT_AUDIT.md) (the agent pipeline
+audit and its completion bar), [TESTING.md](../TESTING.md) (suite ownership and local
+commands), and `.claude/CLAUDE.md` (architecture law and agent-change invariants).
 
-The 2026-08-19 landing-page overhaul plan was deleted on 2026-09-01
-(`git show de741725:docs/landing-page-overhaul-plan.md`). It was an audit against
-zipchat.ai that the 2026-08-21 redesign superseded: its two closed defects describe a
-hero film and a `Features.tsx` that no longer exist. Its four live residues were
-carried out first — the placeholder photography, the display-typeface question, and
-the acquisition track into the landing-page plan above, the App Store decision into
-**Parked / decide**.
+## Deleted records
+
+Closed docs are deleted, not archived — git history is the record. Named here only
+so a search for one lands somewhere.
+
+- 2026-08-27, once every live item was carried into this file: the 2026-08-04
+  pre-release validation run
+  (`git show cb61ac44:docs/production/pre-release-validation-2026-08-04.md`) and the
+  2026-07-29 Gmail native-inbound rollout and soak
+  (`git show cb61ac44:docs/production/gmail-rollout-evidence-2026-07-29.md`).
+- 2026-09-01, the landing-page overhaul plan
+  (`git show de741725:docs/landing-page-overhaul-plan.md`). An audit against
+  zipchat.ai that the 2026-08-21 redesign superseded; its four live residues were
+  carried into the landing-page plan and **Parked / decide** first.
+- 2026-09-01, the docs consolidation. All at `c06be3b4:`
+  `docs/conversation-context-and-cross-channel-memory-plan.md` (migration rule to the
+  runbook, deferred decisions to **Parked**),
+  `docs/production/operational-guardrails.md` (triage steps to the runbook),
+  `docs/production/deployment.md` (merged into the runbook),
+  `docs/production/shopify-webhook-migration.md` (utility into the config reference),
+  plus the chronology cut from the storefront-chat record and the closed M0a/M0b
+  archaeology cut from the Shopify config reference.
