@@ -73,7 +73,7 @@ export function CTA() {
         <div className="m-torn-paper relative bg-[length:100%_100%] px-8 py-20 text-center [filter:drop-shadow(0_2px_4px_rgba(43,33,24,0.14))_drop-shadow(0_28px_44px_rgba(43,33,24,0.32))] sm:flex sm:aspect-[3842/2724] sm:flex-col sm:items-center sm:justify-center sm:bg-contain sm:py-0">
           <WaxSeal className="pointer-events-none absolute bottom-[14%] right-[11%] hidden w-[140px] -rotate-[9deg] [filter:drop-shadow(0_6px_11px_rgba(60,15,10,0.32))] sm:block" />
           <h2 className="mx-auto mb-3 max-w-[15ch] -rotate-[2deg] text-[clamp(56px,9vw,116px)] font-normal leading-[0.9] text-stone-900 [font-family:var(--m-hand)]">
-            Give support the ability to finish the job.
+            Hire it for two weeks and see.
           </h2>
           <p className="mx-auto mb-8 max-w-[46ch] text-[clamp(22px,3vw,32px)] leading-[1.05] text-stone-600 [font-family:var(--m-hand)]">
             Connect Shopify, set your rules, and keep routine support moving after hours.

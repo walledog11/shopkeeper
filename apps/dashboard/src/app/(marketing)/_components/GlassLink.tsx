@@ -3,7 +3,6 @@ import { cn } from "@/lib/ui/cn";
 
 const variantClass = {
   primary: "m-glass-btn m-glass-btn-primary",
-  secondary: "m-glass-btn m-glass-btn-secondary",
   light: "m-glass-btn m-glass-btn-light",
   outline: "m-glass-btn m-glass-btn-outline",
 } as const;

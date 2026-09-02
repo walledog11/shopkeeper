@@ -16,7 +16,6 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
           color: "#2b2118",
           minHeight: "100vh",
           overflowX: "clip",
-          "--m-serif": "Georgia, 'Times New Roman', serif",
           "--m-mono": "ui-monospace, SFMono-Regular, 'SF Mono', Consolas, 'Liberation Mono', monospace",
         } as React.CSSProperties}
       >

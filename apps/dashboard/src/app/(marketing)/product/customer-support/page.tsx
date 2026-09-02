@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { BookOpenCheck, Check, MessageCircle, PackageSearch, Sparkles } from "lucide-react";
+import { Check, MessageCircle, PackageSearch, Sparkles } from "lucide-react";
 import { ProductDetailTemplate } from "../../_components/ProductDetailTemplate";
 
 const title = "Customer support — Shopkeeper";

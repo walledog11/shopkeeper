@@ -28,7 +28,6 @@ export function HeroMedia() {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduce) {
       setStaticPlay(true);
-      setScene(SCENES.length - 1);
       setIntro(false);
       setReady(true);
       return;
@@ -89,26 +88,34 @@ export function HeroMedia() {
 
       <div
         ref={stageRef}
-        className="m-hero-stage"
+        className={staticPlay ? "m-hero-stage is-static" : "m-hero-stage"}
         aria-hidden
-        data-scene={active.id}
+        data-scene={staticPlay ? "all" : active.id}
       >
-        {leaving !== null ? (
-          <SceneView
-            key={`leave-${leaving}`}
-            index={leaving}
-            playing={false}
-            frozen
-            motion="leave"
-          />
-        ) : null}
-        <SceneView
-          key={`enter-${scene}-${playId}`}
-          index={scene}
-          playing={playing}
-          frozen={staticPlay}
-          motion={incomingMotion}
-        />
+        {staticPlay ? (
+          SCENES.map((step, index) => (
+            <SceneView key={step.id} index={index} playing={false} frozen motion="idle" />
+          ))
+        ) : (
+          <>
+            {leaving !== null ? (
+              <SceneView
+                key={`leave-${leaving}`}
+                index={leaving}
+                playing={false}
+                frozen
+                motion="leave"
+              />
+            ) : null}
+            <SceneView
+              key={`enter-${scene}-${playId}`}
+              index={scene}
+              playing={playing}
+              frozen={false}
+              motion={incomingMotion}
+            />
+          </>
+        )}
       </div>
     </figure>
   );
