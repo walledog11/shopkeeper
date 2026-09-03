@@ -3,7 +3,6 @@
 // ops-alert runAgent).
 import {
   executeCurrentCachedHomePlan as coreExecuteCurrentCachedHomePlan,
-  maybeAutoExecuteCurrentCachedHomePlan as coreMaybeAutoExecuteCurrentCachedHomePlan,
   type ApproverIdentity,
   type ExecutionIntent,
   type ExpectedPlanIdentity,
@@ -33,13 +32,4 @@ export function executeCurrentCachedHomePlan(params: {
   expectedIdentity?: ExpectedPlanIdentity;
 }) {
   return coreExecuteCurrentCachedHomePlan(params, buildDashboardPlanExecutionDeps());
-}
-
-export function maybeAutoExecuteCurrentCachedHomePlan(params: {
-  orgId: string;
-  threadId: string;
-  settings: OrgSettings;
-  failureRoute: AgentFailureAlertRoute;
-}) {
-  return coreMaybeAutoExecuteCurrentCachedHomePlan(params, buildDashboardPlanExecutionDeps());
 }

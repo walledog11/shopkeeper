@@ -1,7 +1,6 @@
 export {
   buildTikTokShopAuthorizeUrl,
   exchangeTikTokShopOAuthCode,
-  refreshTikTokShopAccessToken,
   sendTikTokShopTextMessage,
   TikTokShopProviderError,
   type TikTokShopTokenResult,

@@ -12,7 +12,7 @@ import {
 import {
   recordWebhookSignatureFailure,
   type WebhookSignatureAlertDependencies,
-} from './webhooks.js';
+} from './webhooks-signature-alerts.js';
 
 const CONFIG: GatewayOpsAlertConfig = {
   enabled: true,

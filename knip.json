@@ -24,7 +24,6 @@
     "apps/dashboard": {
       "entry": [
         "src/app/**/*.{ts,tsx}",
-        "src/scripts/**/*.ts",
         "next.config.js",
         "postcss.config.mjs"
       ],

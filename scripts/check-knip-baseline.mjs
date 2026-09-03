@@ -7,14 +7,15 @@ const WARNING_BASELINE = {
   // and internal-only digest helpers; 81 -> 77 after dropping the ops-alert
   // pass-throughs both host adapters re-exported and nothing imported; 77 -> 11
   // after dropping the `export` keyword from every declaration nothing outside
-  // its own file referenced. The 11 that remain are re-exported through a
-  // barrel or a package subpath, so they are API surface rather than oversight.
-  exports: 11,
+  // its own file referenced. 11 -> 0 after removing dashboard re-export shims,
+  // dead host wrappers, and webhook barrel pass-throughs.
+  exports: 0,
   // Ratcheted 116 -> 90 after deleting duplicate tool-inputs re-exports and
   // trimming stale dashboard type surfaces; 90 -> 78 with the same ops-alert
   // pass-throughs; 78 -> 76 when the value-at-risk guard was deleted.
-  // Consumers import these from @shopkeeper/agent/observability.
-  types: 76,
+  // 76 -> 72 after removing unused dashboard validation helpers and catalog
+  // re-exports. Consumers import these from @shopkeeper/agent/observability.
+  types: 72,
 };
 
 const result = spawnSync(process.execPath, [KNIP_BIN, '--reporter', 'json'], {

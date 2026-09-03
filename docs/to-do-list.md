@@ -7,7 +7,7 @@ of its own fix: the moment an item reads as evidence rather than as an instructi
 it back. Evidence checklists, failure drills, and standing procedure live in the linked
 docs.
 
-Last reviewed: 2026-09-01.
+Last reviewed: 2026-09-02.
 
 Work is grouped by **what kind of action it needs**, not by when it was filed.
 
@@ -357,19 +357,6 @@ Every file in `docs/`. If it is not here, it does not exist.
 - [phase-6-external-services.md](phase-6-external-services.md) — console-only
   brand/domain checklist; delete when closing verification passes.
 
-**Marketing site**
-
-- [landing-page-media-and-content-plan.md](landing-page-media-and-content-plan.md) —
-  the marketing site's own open work: positioning, the claim allow/deny list, the
-  target homepage, and phases 0–4. **Every landing-page item is filed there, not
-  here and not in the copy deck.**
-- [landing-page-copy.md](landing-page-copy.md) — the homepage copy spec: final
-  strings per section, and the load-bearing hedges a later editing pass must not
-  polish away. No checkboxes.
-- [landing-page-media-runbook.md](landing-page-media-runbook.md) — capture procedure
-  for that plan's phase 1, behind `npm run landing:media:fixture`. Blocked on a test
-  Instagram account for the named intake path.
-
 Also live, outside `docs/`: [AGENT_AUDIT.md](../AGENT_AUDIT.md) (the agent pipeline
 audit and its completion bar), [TESTING.md](../TESTING.md) (suite ownership and local
 commands), and `.claude/CLAUDE.md` (architecture law and agent-change invariants).
@@ -384,10 +371,6 @@ so a search for one lands somewhere.
   (`git show cb61ac44:docs/production/pre-release-validation-2026-08-04.md`) and the
   2026-07-29 Gmail native-inbound rollout and soak
   (`git show cb61ac44:docs/production/gmail-rollout-evidence-2026-07-29.md`).
-- 2026-09-01, the landing-page overhaul plan
-  (`git show de741725:docs/landing-page-overhaul-plan.md`). An audit against
-  zipchat.ai that the 2026-08-21 redesign superseded; its four live residues were
-  carried into the landing-page plan and **Parked / decide** first.
 - 2026-09-01, the docs consolidation. All at `c06be3b4:`
   `docs/conversation-context-and-cross-channel-memory-plan.md` (migration rule to the
   runbook, deferred decisions to **Parked**),

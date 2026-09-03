@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, Check } from "lucide-react";
+import { PRIMARY_CTA_LABEL } from "@/lib/brand";
 import { CTA } from "./CTA";
 import { Footer } from "./Footer";
 import { MarginThread } from "./MarginThread";
@@ -23,8 +24,13 @@ export function ProductDetailTemplate({
   eyebrow,
   title,
   lede,
+  backHref = "/",
+  backLabel = "Back to overview",
   jumpLabel,
+  jumpHref = "#product-view",
+  visualSectionId = "product-view",
   visual,
+  afterVisual,
   capabilitiesLabel,
   capabilitiesTitle,
   capabilitiesBody,
@@ -35,15 +41,22 @@ export function ProductDetailTemplate({
   requirementsTitle,
   requirementsBody,
   requirements,
+  requirementsFooter,
   relatedLinks,
   faqLabel,
+  faqTitle = "The practical questions.",
   faqs,
 }: {
   eyebrow: string;
   title: string;
   lede: string;
+  backHref?: string;
+  backLabel?: string;
   jumpLabel: string;
+  jumpHref?: string;
+  visualSectionId?: string;
   visual: ReactNode;
+  afterVisual?: ReactNode;
   capabilitiesLabel: string;
   capabilitiesTitle: string;
   capabilitiesBody: string;
@@ -54,8 +67,10 @@ export function ProductDetailTemplate({
   requirementsTitle: string;
   requirementsBody: string;
   requirements: readonly string[];
+  requirementsFooter?: ReactNode;
   relatedLinks: readonly ProductLink[];
   faqLabel: string;
+  faqTitle?: string;
   faqs: readonly FAQ[];
 }) {
   return (
@@ -66,14 +81,14 @@ export function ProductDetailTemplate({
       <article>
         <header className="mx-auto max-w-6xl px-6 pb-12 pt-16 text-center sm:pt-24">
           <Link
-            href="/"
+            href={backHref}
             className="mb-8 inline-flex items-center gap-2 text-sm font-semibold text-stone-600 underline decoration-stone-300 underline-offset-4 hover:text-stone-900"
           >
             <ArrowLeft className="size-4" aria-hidden />
-            Back to overview
+            {backLabel}
           </Link>
           <SectionLabel>{eyebrow}</SectionLabel>
-          <h1 className="mx-auto max-w-[18ch] text-[clamp(48px,7vw,88px)] font-bold leading-[0.95] tracking-[0.03em] [font-family:var(--m-hand)]">
+          <h1 className="m-display mx-auto max-w-[18ch] text-[clamp(48px,7vw,88px)]">
             {title}
           </h1>
           <p className="mx-auto mt-7 max-w-[64ch] text-[16px] leading-relaxed text-stone-700 sm:text-[18px]">
@@ -81,23 +96,25 @@ export function ProductDetailTemplate({
           </p>
           <div className="mt-9 flex flex-wrap justify-center gap-3">
             <Link href="/signup" className="m-glass-btn m-glass-btn-primary px-6 py-3">
-              Start 14-day trial
+              {PRIMARY_CTA_LABEL}
             </Link>
-            <Link href="#product-view" className="m-glass-btn m-glass-btn-outline px-6 py-3">
+            <Link href={jumpHref} className="m-glass-btn m-glass-btn-outline px-6 py-3">
               {jumpLabel}
               <ArrowRight className="size-4" aria-hidden />
             </Link>
           </div>
         </header>
 
-        <section id="product-view" className="mx-auto max-w-6xl scroll-mt-24 px-6 py-12">
+        <section id={visualSectionId} className="mx-auto max-w-6xl scroll-mt-24 px-6 py-12">
           {visual}
         </section>
+
+        {afterVisual}
 
         <section aria-labelledby="capabilities-heading" className="mx-auto max-w-6xl px-6 py-14">
           <div className="mb-9 text-center">
             <SectionLabel>{capabilitiesLabel}</SectionLabel>
-            <h2 id="capabilities-heading" className="mx-auto max-w-[20ch] text-[clamp(36px,5vw,64px)] font-bold leading-none [font-family:var(--m-hand)]">
+            <h2 id="capabilities-heading" className="m-display mx-auto max-w-[20ch] text-[clamp(36px,5vw,64px)]">
               {capabilitiesTitle}
             </h2>
             <p className="mx-auto mt-5 max-w-[62ch] text-[15px] leading-relaxed text-stone-700">
@@ -125,14 +142,14 @@ export function ProductDetailTemplate({
         <section aria-labelledby="workflow-detail-heading" className="mx-auto max-w-6xl px-6 py-14">
           <div className="rounded-3xl border border-stone-900/10 bg-white/45 p-6 sm:p-10">
             <SectionLabel>{workflowLabel}</SectionLabel>
-            <h2 id="workflow-detail-heading" className="max-w-[20ch] text-[clamp(36px,5vw,60px)] font-bold leading-none [font-family:var(--m-hand)]">
+            <h2 id="workflow-detail-heading" className="m-display max-w-[20ch] text-[clamp(36px,5vw,60px)]">
               {workflowTitle}
             </h2>
             <ol className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {workflowSteps.map(([title, body], index) => (
-                <li key={title} className="rounded-2xl border border-stone-900/10 bg-[#fdfbf7] p-5">
+              {workflowSteps.map(([stepTitle, body], index) => (
+                <li key={stepTitle} className="rounded-2xl border border-stone-900/10 bg-[#fdfbf7] p-5">
                   <span className="text-xs font-semibold text-stone-400">0{index + 1}</span>
-                  <h3 className="mt-3 text-xl font-bold leading-none [font-family:var(--m-hand)]">{title}</h3>
+                  <h3 className="mt-3 text-xl font-bold leading-none [font-family:var(--m-hand)]">{stepTitle}</h3>
                   <p className="mt-3 text-[13px] leading-relaxed text-stone-600">{body}</p>
                 </li>
               ))}
@@ -143,7 +160,7 @@ export function ProductDetailTemplate({
         <section aria-labelledby="requirements-heading" className="mx-auto max-w-4xl px-6 py-14">
           <div className="rounded-2xl border border-stone-900/10 bg-[#fdfbf7]/80 p-6 sm:p-9">
             <SectionLabel>setup and limits</SectionLabel>
-            <h2 id="requirements-heading" className="text-[clamp(34px,5vw,54px)] font-bold leading-none [font-family:var(--m-hand)]">
+            <h2 id="requirements-heading" className="m-display text-[clamp(34px,5vw,54px)]">
               {requirementsTitle}
             </h2>
             <p className="mt-5 text-[15px] leading-relaxed text-stone-700">{requirementsBody}</p>
@@ -155,6 +172,7 @@ export function ProductDetailTemplate({
                 </li>
               ))}
             </ul>
+            {requirementsFooter}
           </div>
         </section>
 
@@ -163,8 +181,8 @@ export function ProductDetailTemplate({
         <section aria-labelledby="product-faq-heading" className="mx-auto max-w-4xl px-6 py-14">
           <div className="mb-9 text-center">
             <SectionLabel>{faqLabel}</SectionLabel>
-            <h2 id="product-faq-heading" className="text-[clamp(36px,5vw,60px)] font-bold leading-none [font-family:var(--m-hand)]">
-              The practical questions.
+            <h2 id="product-faq-heading" className="m-display text-[clamp(36px,5vw,60px)]">
+              {faqTitle}
             </h2>
           </div>
           <dl className="divide-y divide-stone-900/10 rounded-2xl border border-stone-900/10 bg-[#fdfbf7]/80 px-6 sm:px-8">

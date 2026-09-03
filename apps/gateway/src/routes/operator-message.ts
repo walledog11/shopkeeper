@@ -43,7 +43,7 @@ export interface OperatorMessageContext {
  * - With no indicator at all, the words *are* the acknowledgement and a long
  *   silence reads as "the app didn't get my text" — so they come quickly.
  */
-export const PROGRESS_THRESHOLD_MS = 10000;
+const PROGRESS_THRESHOLD_MS = 10000;
 export const SILENT_CHANNEL_PROGRESS_THRESHOLD_MS = 2500;
 export const TYPING_INDICATOR_PROGRESS_THRESHOLD_MS = 25000;
 

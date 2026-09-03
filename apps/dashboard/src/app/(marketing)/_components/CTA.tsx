@@ -1,5 +1,5 @@
 import { Reveal } from "./Reveal";
-import { HIRE_CTA_LABEL } from "@/lib/brand";
+import { PRIMARY_CTA_LABEL } from "@/lib/brand";
 
 /* Pressed wax seal with the shop-awning mark — turbulence displacement gives
    the blob its squeezed-out irregular edge; the emblem is debossed with a
@@ -83,7 +83,7 @@ export function CTA() {
             href="/signup"
             className="inline-flex rounded-full bg-white px-8 py-3 text-[clamp(22px,2.6vw,28px)] leading-none text-stone-900 shadow-[0_10px_24px_-10px_rgba(43,33,24,0.4)] transition-transform duration-200 hover:-translate-y-0.5 [font-family:var(--m-hand)]"
           >
-            {HIRE_CTA_LABEL}
+            {PRIMARY_CTA_LABEL}
           </a>
         </div>
       </Reveal>

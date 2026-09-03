@@ -7,6 +7,10 @@ export {
   shopifyRestJson,
   type ShopifyContext,
 } from "./client.js";
+export {
+  SHOPIFY_SIMULATOR_DOMAIN,
+  SHOPIFY_SIMULATOR_TOKEN,
+} from "./simulator-store.js";
 export { searchShopifyProducts } from "./products.js";
 export {
   addShopifyCustomerNote,

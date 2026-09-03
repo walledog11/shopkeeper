@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useClerk, useUser } from "@clerk/nextjs";
 import { LayoutDashboard, LogOut } from "lucide-react";
 import { OrgAvatar } from "@/components/OrgAvatar";
-import { NAV_CTA_LABEL } from "@/lib/brand";
+import { PRIMARY_CTA_LABEL } from "@/lib/brand";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -88,7 +88,7 @@ export function AuthNavLinks() {
           Log in
         </Link>
         <Link href="/signup" className={primaryLinkClass}>
-          {NAV_CTA_LABEL}
+          {PRIMARY_CTA_LABEL}
         </Link>
       </>
     );

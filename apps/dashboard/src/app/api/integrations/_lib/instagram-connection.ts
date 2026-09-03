@@ -2,17 +2,12 @@ import { ChannelType, db, Prisma } from '@shopkeeper/db';
 import type { Integration, Prisma as PrismaTypes } from '@prisma/client';
 
 import { isRecord } from "@shopkeeper/agent/guards";
+import { AmbiguousInstagramIntegrationError } from "@shopkeeper/integrations/instagram";
+
 export class InstagramAccountInUseError extends Error {
   constructor() {
     super('Instagram account is already connected to another workspace');
     this.name = 'InstagramAccountInUseError';
-  }
-}
-
-export class AmbiguousInstagramIntegrationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'AmbiguousInstagramIntegrationError';
   }
 }
 

@@ -34,7 +34,7 @@ function SecurityModel() {
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-white/10 pb-5">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-[#f6f2eb]/40">Product security model</p>
-          <h2 className="mt-2 text-[30px] font-bold leading-none [font-family:var(--m-hand)] sm:text-[38px]">Protect access. Bound actions. Preserve the record.</h2>
+          <h2 className="m-display mt-2 text-[30px] sm:text-[38px]">Protect access. Bound actions. Preserve the record.</h2>
         </div>
         <span className="rounded-full border border-white/10 px-3 py-1 text-[10px] text-[#f6f2eb]/50">Principles, not certification claims</span>
       </div>

@@ -1,4 +1,5 @@
 import { db } from '@shopkeeper/db';
+import { AmbiguousInstagramIntegrationError } from '@shopkeeper/integrations/instagram';
 
 import { isRecord } from './typing.js';
 export interface ActiveInstagramIntegration {
@@ -7,14 +8,6 @@ export interface ActiveInstagramIntegration {
   instagramAccountId: string;
   accessToken: string;
 }
-
-export class AmbiguousInstagramIntegrationError extends Error {
-  constructor(instagramAccountId: string) {
-    super(`Instagram account ${instagramAccountId} resolves to multiple active integrations`);
-    this.name = 'AmbiguousInstagramIntegrationError';
-  }
-}
-
 
 function isInstagramLoginMetadata(metadata: unknown): boolean {
   if (!isRecord(metadata) || !isRecord(metadata.instagram)) return false;
@@ -61,7 +54,9 @@ export async function resolveActiveInstagramIntegration(
   });
 
   if (integrations.length > 1) {
-    throw new AmbiguousInstagramIntegrationError(instagramAccountId);
+    throw new AmbiguousInstagramIntegrationError(
+      `Instagram account ${instagramAccountId} resolves to multiple active integrations`,
+    );
   }
 
   return integrations[0] ? toActiveInstagramIntegration(integrations[0]) : null;

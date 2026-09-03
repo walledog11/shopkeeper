@@ -94,34 +94,6 @@ export async function recordAgentRouteFailure(
   }
 }
 
-export function recordAgentFailureInBackground(
-  input: AgentFailureAlertInput,
-  options: AgentFailureBackgroundOptions,
-): void {
-  if (shouldSkipOpsAlertInTest(options)) return;
-
-  let counterClient: OpsAlertCounterClient;
-  try {
-    counterClient = options.getCounterClient();
-  } catch (error) {
-    options.onError?.(error);
-    return;
-  }
-
-  void recordAgentFailure(input, { counterClient }).catch((error) => {
-    options.onError?.(error);
-  });
-}
-
-function recordAgentRouteFailureInBackground(
-  input: AgentRouteFailureInput,
-  options: AgentFailureBackgroundOptions,
-): void {
-  void recordAgentRouteFailure(input, options).catch((error) => {
-    options.onError?.(error);
-  });
-}
-
 function readStatusCode(error: unknown): number {
   if (typeof error === 'object' && error !== null) {
     const status = (error as { status?: unknown }).status;

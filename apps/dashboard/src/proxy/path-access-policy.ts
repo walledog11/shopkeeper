@@ -15,7 +15,6 @@ export const publicRoutePatterns = [
   "/sitemap.xml",
   "/login(.*)",
   "/signup(.*)",
-  "/demo-film",
   "/api/health(.*)",
   "/api/security/csp-report",
   "/api/billing/webhook(.*)",

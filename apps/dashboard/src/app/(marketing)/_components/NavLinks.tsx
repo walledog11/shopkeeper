@@ -17,7 +17,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { NAV_CTA_LABEL, PRODUCT_NAME } from "@/lib/brand";
+import { PRIMARY_CTA_LABEL, PRODUCT_NAME } from "@/lib/brand";
 import { cn } from "@/lib/ui/cn";
 
 type ProductCard = {
@@ -337,7 +337,7 @@ export function MobileNav() {
         </Link>
         <div className="flex items-center gap-2">
           <Link href="/signup" className="m-nav-cta" onClick={close}>
-            {NAV_CTA_LABEL}
+            {PRIMARY_CTA_LABEL}
           </Link>
           <button
             ref={closeRef}
@@ -401,7 +401,7 @@ export function MobileNav() {
       </nav>
 
       <Link href="/signup" className="m-nav-sheet-cta" onClick={close}>
-        {NAV_CTA_LABEL}
+        {PRIMARY_CTA_LABEL}
       </Link>
     </div>
   );

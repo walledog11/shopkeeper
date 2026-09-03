@@ -27,14 +27,6 @@ export function optionalNonEmptyString(value: unknown, field: string, message = 
   return value.trim();
 }
 
-export function optionalString(value: unknown, field: string, message = `${field} must be a string`): string | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value !== 'string') {
-    throw new BadRequestError(message);
-  }
-  return value;
-}
-
 export function optionalBoolean(value: unknown, field: string, message = `${field} must be a boolean`): boolean | undefined {
   if (value === undefined) return undefined;
   if (typeof value !== 'boolean') {

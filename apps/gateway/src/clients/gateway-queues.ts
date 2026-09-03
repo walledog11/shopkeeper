@@ -33,7 +33,7 @@ const QUEUE_ALIASES: Record<string, string> = {
 
 const queueCache = new Map<string, Queue>();
 
-export function resolveGatewayQueueName(raw: string): string {
+function resolveGatewayQueueName(raw: string): string {
   const value = raw.trim();
   if (!value) {
     throw new Error('Queue name is required');

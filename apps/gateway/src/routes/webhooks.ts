@@ -7,16 +7,6 @@ import { registerTikTokShopWebhookRoutes } from './webhooks-tiktok-shop.js';
 import { registerPhotonWebhookRoutes } from './webhooks-photon.js';
 import { registerGmailWebhookRoutes } from './webhooks-gmail.js';
 
-export {
-  recordWebhookSignatureFailure,
-  buildWebhookSignatureRequestMetadata,
-  type WebhookSignatureProvider,
-  type WebhookSignatureFailureReason,
-  type WebhookSignatureAlertDependencies,
-  type WebhookSignatureAlertResult,
-  type WebhookSignatureRequestMetadata,
-} from './webhooks-signature-alerts.js';
-
 const router = express.Router();
 
 registerMetaWebhookRoutes(router);

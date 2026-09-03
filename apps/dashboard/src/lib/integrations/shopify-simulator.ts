@@ -1,7 +1,8 @@
 export { isSimulatedShopifyIntegration } from "@shopkeeper/agent/shopify/integration-health";
-
-export const SHOPIFY_SIMULATOR_DOMAIN = "demo-store.shopkeeper.test";
-export const SHOPIFY_SIMULATOR_TOKEN = "shopkeeper-development-simulator";
+export {
+  SHOPIFY_SIMULATOR_DOMAIN,
+  SHOPIFY_SIMULATOR_TOKEN,
+} from "@shopkeeper/agent/shopify";
 
 export function isShopifySimulatorEnabled(
   env: {
@@ -12,4 +13,3 @@ export function isShopifySimulatorEnabled(
   if (env.NODE_ENV === "production") return false;
   return env.NODE_ENV === "development" || env.SHOPIFY_ONBOARDING_SIMULATOR_ENABLED === "true";
 }
-

@@ -55,7 +55,6 @@
     "demo:seed": "node scripts/seed-local-demo-store.mjs",
     "preview:serve": "E2E_AUTH_BYPASS=true E2E_AI_MODE=live node scripts/with-test-env.mjs npm run serve:e2e -w apps/dashboard",
     "preview:dev": "E2E_AUTH_BYPASS=true E2E_AI_MODE=live node scripts/with-test-env.mjs npm run dev:e2e -w apps/dashboard",
-    "landing:media:fixture": "node scripts/seed-landing-media-store.mjs",
     "recover:gmail-history": "tsx ./scripts/recover-gmail-history.ts",
     "canary:agent-rollout": "tsx ./apps/gateway/src/scripts/canary-agent-rollout.ts",
     "canary:agent-briefings": "tsx ./apps/gateway/src/scripts/canary-agent-briefing.ts",

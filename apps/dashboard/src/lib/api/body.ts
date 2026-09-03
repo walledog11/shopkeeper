@@ -47,7 +47,7 @@ async function readJsonBody(request: Request, options: ReadJsonBodyOptions = {})
   }
 }
 
-export function isJsonObject(value: unknown): value is Record<string, unknown> {
+function isJsonObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 

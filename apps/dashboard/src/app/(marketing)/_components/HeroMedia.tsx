@@ -6,10 +6,11 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 const TRANSITION_MS = 480;
 
 const SCENES = [
-  { id: "request", duration: 2600 },
-  { id: "verify", duration: 3200 },
-  { id: "ask", duration: 3400 },
-  { id: "done", duration: 3200 },
+  { id: "request", duration: 1800 },
+  { id: "verify", duration: 2100 },
+  { id: "ask", duration: 2400 },
+  { id: "done", duration: 2000 },
+  { id: "log", duration: 1800 },
 ] as const;
 
 type SceneMotion = "enter" | "leave" | "idle";
@@ -83,7 +84,8 @@ export function HeroMedia() {
         asks through Instagram to swap the Linen Jumpsuit on order 3102 from Medium
         to Small. Shopkeeper reads the request, checks that the order is unfulfilled
         and Small is in stock, asks the merchant to approve over iMessage, updates
-        Shopify, replies to Maya, and Maya thanks them. All details are fictional.
+        Shopify, replies to Maya, and records the approved action. This is a product
+        preview and all details are fictional.
       </figcaption>
 
       <div
@@ -136,7 +138,8 @@ function SceneView({
   if (index === 0) return <RequestScene {...props} />;
   if (index === 1) return <VerifyScene {...props} />;
   if (index === 2) return <AskScene {...props} />;
-  return <DoneScene {...props} />;
+  if (index === 3) return <DoneScene {...props} />;
+  return <LogScene {...props} />;
 }
 
 function RequestScene({
@@ -258,6 +261,38 @@ function DoneScene({
           <p className="m-hero-ig-in is-first">perfect, thank you!</p>
         </div>
       </IgFrame>
+    </div>
+  );
+}
+
+function LogScene({
+  playing,
+  staticPlay,
+  motion,
+}: {
+  playing: boolean;
+  staticPlay: boolean;
+  motion: SceneMotion;
+}) {
+  return (
+    <div className={sceneClass("log", playing, staticPlay, motion)}>
+      <div className="m-hero-stack">
+        <ChannelPill
+          icon={
+            <Image
+              src="/logos/shopify.svg"
+              alt=""
+              width={22}
+              height={25}
+              className="m-hero-logo-shopify"
+            />
+          }
+          label="Order #3102 · Completed"
+        />
+        <CheckTile index={0} label="Small / Sand committed in Shopify" />
+        <CheckTile index={1} label="Reply sent to Maya" />
+        <CheckTile index={2} label="Action log · Approved by you" />
+      </div>
     </div>
   );
 }

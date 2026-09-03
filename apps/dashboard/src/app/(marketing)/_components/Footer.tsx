@@ -36,8 +36,7 @@ const footerGroups = [
 export function Footer() {
   return (
     <footer className="relative isolate overflow-hidden px-6 pt-12">
-      {/* Dawn-sky wash behind the wordmark — placeholder photography, swap
-          /atmosphere/footer-dawn.jpg for the final shot. */}
+      {/* Dawn-sky atmosphere wash behind the wordmark. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-[460px] [mask-image:linear-gradient(180deg,transparent_0%,black_58%)]"

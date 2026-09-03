@@ -13,7 +13,7 @@ export function RelatedLinks({ links }: { links: readonly ProductLink[] }) {
     <section aria-labelledby="related-heading" className="mx-auto max-w-6xl px-6 py-14">
       <div className="mb-8 text-center">
         <SectionLabel>keep exploring</SectionLabel>
-        <h2 id="related-heading" className="text-[clamp(34px,5vw,54px)] font-bold leading-none [font-family:var(--m-hand)]">
+        <h2 id="related-heading" className="m-display text-[clamp(34px,5vw,54px)]">
           Follow the product story.
         </h2>
       </div>

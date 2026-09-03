@@ -242,5 +242,3 @@ export function getOAuthIntegrationDefinition(
   if (definition.kind !== "oauth") throw new Error(`Integration is not OAuth: ${id}`)
   return definition
 }
-
-export { OAUTH_ERROR_MESSAGES } from "./oauth-contract"

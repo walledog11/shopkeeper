@@ -1,6 +1,6 @@
 import Image from "next/image";
 import { GlassLink } from "./GlassLink";
-import { NAV_CTA_LABEL } from "@/lib/brand";
+import { PRIMARY_CTA_LABEL } from "@/lib/brand";
 import { HeroMedia } from "./HeroMedia";
 
 const integrationRoles = [
@@ -46,7 +46,7 @@ export function Hero() {
       <div className="mb-9" style={rise(160)}>
         <div className="flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-center">
           <GlassLink href="/signup" variant="primary" className="min-h-12 justify-center px-6 py-3">
-            {NAV_CTA_LABEL}
+            {PRIMARY_CTA_LABEL}
           </GlassLink>
           <GlassLink href="#demo" variant="outline" className="min-h-12 justify-center px-6 py-3">
             See Shopkeeper work

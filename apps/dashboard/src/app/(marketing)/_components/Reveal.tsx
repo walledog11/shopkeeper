@@ -15,6 +15,7 @@ export function Reveal({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState(false);
+  const [armed, setArmed] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
@@ -25,10 +26,19 @@ export function Reveal({
       return;
     }
 
+    const rect = el.getBoundingClientRect();
+    if (rect.bottom > 0 && rect.top < window.innerHeight * 0.9) {
+      setShown(true);
+      return;
+    }
+
+    setArmed(true);
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (!entry.isIntersecting) return;
         setShown(true);
+        setArmed(false);
         observer.disconnect();
       },
       { threshold: 0.12, rootMargin: "0px 0px -10% 0px" },
@@ -43,7 +53,9 @@ export function Reveal({
       className={cn(
         shown
           ? "animate-[m-rise_0.7s_ease-out_both] motion-reduce:animate-none"
-          : "opacity-0",
+          : armed
+            ? "opacity-0"
+            : "",
         className,
       )}
       style={shown && delay ? { animationDelay: `${delay}ms` } : undefined}

@@ -1,20 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
-  ArrowLeft,
   ArrowRight,
   Check,
-  CircleAlert,
-  ClipboardCheck,
-  LockKeyhole,
-  MessageCircle,
-  SlidersHorizontal,
 } from "lucide-react";
-import { CTA } from "../../_components/CTA";
-import { Footer } from "../../_components/Footer";
-import { MarginThread } from "../../_components/MarginThread";
-import { Navbar } from "../../_components/Navbar";
-import { RelatedLinks } from "../../_components/RelatedLinks";
+import { ProductDetailTemplate } from "../../_components/ProductDetailTemplate";
 import { SectionLabel } from "../../_components/SectionLabel";
 
 const title = "Approvals and controls — Shopkeeper";
@@ -56,17 +46,14 @@ const modes = [
 
 const boundaries = [
   {
-    icon: SlidersHorizontal,
     title: "Action limits",
     body: "Set the refund cap, block cancellations or custom line items, and disable tool categories the workspace should not use.",
   },
   {
-    icon: MessageCircle,
     title: "Merchant judgment",
     body: "Use iMessage for phone-native direction and approval, or review the same request in the dashboard.",
   },
   {
-    icon: ClipboardCheck,
     title: "Reviewable outcomes",
     body: "The action history ties the proposal, mode, approver, execution status, result, and source thread together.",
   },
@@ -147,154 +134,77 @@ function ControlModel() {
   );
 }
 
+function AutonomyModes() {
+  return (
+    <section aria-labelledby="modes-heading" className="mx-auto max-w-6xl px-6 py-14">
+      <div className="mb-9 text-center">
+        <SectionLabel>autonomy modes</SectionLabel>
+        <h2 id="modes-heading" className="m-display mx-auto max-w-[19ch] text-[clamp(36px,5vw,64px)]">
+          Start cautious. Change the mode deliberately.
+        </h2>
+      </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        {modes.map((mode) => (
+          <div key={mode.label} className={`rounded-2xl border p-6 ${mode.tone}`}>
+            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-stone-500">{mode.eyebrow}</p>
+            <h3 className="mt-3 text-[30px] font-bold leading-none [font-family:var(--m-hand)]">{mode.label}</h3>
+            <p className="mt-4 text-sm leading-relaxed text-stone-600">{mode.body}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function ApprovalsAndControlsPage() {
   return (
-    <main className="relative">
-      <MarginThread />
-      <Navbar />
-
-      <article>
-        <header className="mx-auto max-w-6xl px-6 pb-14 pt-16 text-center sm:pt-24">
-          <Link
-            href="/#controls"
-            className="mb-8 inline-flex items-center gap-2 text-sm font-semibold text-stone-600 underline decoration-stone-300 underline-offset-4 hover:text-stone-900"
-          >
-            <ArrowLeft className="size-4" aria-hidden />
-            Back to control overview
-          </Link>
-          <SectionLabel>approvals and controls</SectionLabel>
-          <h1 className="mx-auto max-w-[18ch] text-[clamp(48px,7vw,88px)] font-bold leading-[0.95] tracking-[0.03em] [font-family:var(--m-hand)]">
-            Set the boundary before the request arrives.
-          </h1>
-          <p className="mx-auto mt-7 max-w-[64ch] text-[16px] leading-relaxed text-stone-700 sm:text-[18px]">
-            Choose what stays a draft, what can reply, and what must pause. Shopkeeper carries the exact Shopify work to the merchant, then keeps the decision and result reviewable.
-          </p>
-          <div className="mt-9 flex flex-wrap justify-center gap-3">
-            <Link href="/signup" className="m-glass-btn m-glass-btn-primary px-6 py-3">
-              Start 14-day trial
-            </Link>
-            <Link href="#control-model" className="m-glass-btn m-glass-btn-outline px-6 py-3">
-              Follow an approval
-              <ArrowRight className="size-4" aria-hidden />
-            </Link>
-          </div>
-        </header>
-
-        <section id="control-model" aria-labelledby="control-model-heading" className="mx-auto max-w-6xl scroll-mt-24 px-6 py-14">
-          <div className="mb-9 text-center">
-            <SectionLabel>one consequential action</SectionLabel>
-            <h2 id="control-model-heading" className="mx-auto max-w-[20ch] text-[clamp(36px,5vw,64px)] font-bold leading-none [font-family:var(--m-hand)]">
-              The decision stays attached to the work.
-            </h2>
-          </div>
-          <ControlModel />
-        </section>
-
-        <section aria-labelledby="modes-heading" className="mx-auto max-w-6xl px-6 py-14">
-          <div className="mb-9 text-center">
-            <SectionLabel>autonomy modes</SectionLabel>
-            <h2 id="modes-heading" className="mx-auto max-w-[19ch] text-[clamp(36px,5vw,64px)] font-bold leading-none [font-family:var(--m-hand)]">
-              Start cautious. Change the mode deliberately.
-            </h2>
-          </div>
-          <div className="grid gap-4 md:grid-cols-3">
-            {modes.map((mode) => (
-              <div key={mode.label} className={`rounded-2xl border p-6 ${mode.tone}`}>
-                <p className="text-xs font-semibold uppercase tracking-[0.1em] text-stone-500">{mode.eyebrow}</p>
-                <h3 className="mt-3 text-[30px] font-bold leading-none [font-family:var(--m-hand)]">{mode.label}</h3>
-                <p className="mt-4 text-sm leading-relaxed text-stone-600">{mode.body}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section aria-labelledby="boundaries-heading" className="mx-auto max-w-6xl px-6 py-14">
-          <div className="mb-9 text-center">
-            <SectionLabel>the boundary has layers</SectionLabel>
-            <h2 id="boundaries-heading" className="mx-auto max-w-[20ch] text-[clamp(36px,5vw,64px)] font-bold leading-none [font-family:var(--m-hand)]">
-              A mode is the start, not the whole control system.
-            </h2>
-          </div>
-          <div className="grid gap-4 md:grid-cols-3">
-            {boundaries.map(({ icon: Icon, title: itemTitle, body }) => (
-              <div key={itemTitle} className="rounded-2xl border border-stone-900/10 bg-[#fdfbf7]/85 p-6">
-                <span className="grid size-10 place-items-center rounded-full bg-stone-900/[0.06] text-stone-800">
-                  <Icon className="size-5" aria-hidden />
-                </span>
-                <h3 className="mt-5 text-[26px] font-bold leading-none [font-family:var(--m-hand)]">{itemTitle}</h3>
-                <p className="mt-3 text-sm leading-relaxed text-stone-600">{body}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section aria-labelledby="decision-heading" className="mx-auto max-w-6xl px-6 py-14">
-          <div className="rounded-3xl border border-stone-900/10 bg-white/45 p-6 sm:p-10">
-            <SectionLabel>decision states</SectionLabel>
-            <h2 id="decision-heading" className="max-w-[20ch] text-[clamp(36px,5vw,60px)] font-bold leading-none [font-family:var(--m-hand)]">
-              Three outcomes, stated before execution.
-            </h2>
-            <div className="mt-8 grid gap-4 md:grid-cols-3">
-              <div className="rounded-2xl bg-[#2f7a4a]/[0.07] p-5">
-                <Check className="size-5 text-[#2f7a4a]" aria-hidden />
-                <h3 className="mt-4 font-semibold">Follow the selected mode</h3>
-                <p className="mt-2 text-sm leading-relaxed text-stone-600">Routine and structurally safe information work follows the configured autonomy.</p>
-              </div>
-              <div className="rounded-2xl bg-amber-700/[0.07] p-5">
-                <CircleAlert className="size-5 text-amber-800" aria-hidden />
-                <h3 className="mt-4 font-semibold">Pause for judgment</h3>
-                <p className="mt-2 text-sm leading-relaxed text-stone-600">Consequential, exceptional, or uncertain work waits with the relevant context attached.</p>
-              </div>
-              <div className="rounded-2xl bg-[#b0472f]/[0.07] p-5">
-                <LockKeyhole className="size-5 text-[#b0472f]" aria-hidden />
-                <h3 className="mt-4 font-semibold">Block or escalate</h3>
-                <p className="mt-2 text-sm leading-relaxed text-stone-600">Ineligible or disabled work stops instead of crossing a limit or inventing policy.</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section aria-labelledby="requirements-heading" className="mx-auto max-w-4xl px-6 py-14">
-          <div className="rounded-2xl border border-stone-900/10 bg-[#fdfbf7]/80 p-6 sm:p-9">
-            <SectionLabel>what it needs</SectionLabel>
-            <h2 id="requirements-heading" className="text-[clamp(34px,5vw,54px)] font-bold leading-none [font-family:var(--m-hand)]">
-              Configure the rules and one place to reach you.
-            </h2>
-            <p className="mt-5 text-[15px] leading-relaxed text-stone-700">
-              Connect Shopify, choose Draft only, Ask first, or Trusted, review the action permissions and refund cap, and add store policies. Connect iMessage for phone-native control; the dashboard remains the configuration, review, and audit surface.
-            </p>
-            <Link
-              href="/product/order-operations"
-              className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-stone-800 underline decoration-stone-300 underline-offset-4 hover:text-stone-950"
-            >
-              See the supported Shopify work
-              <ArrowRight className="size-4" aria-hidden />
-            </Link>
-          </div>
-        </section>
-
-        <RelatedLinks links={relatedLinks} />
-
-        <section aria-labelledby="approvals-faq-heading" className="mx-auto max-w-4xl px-6 py-14">
-          <div className="mb-9 text-center">
-            <SectionLabel>approvals faq</SectionLabel>
-            <h2 id="approvals-faq-heading" className="text-[clamp(36px,5vw,60px)] font-bold leading-none [font-family:var(--m-hand)]">
-              Where does the boundary hold?
-            </h2>
-          </div>
-          <dl className="divide-y divide-stone-900/10 rounded-2xl border border-stone-900/10 bg-[#fdfbf7]/80 px-6 sm:px-8">
-            {faqs.map((item) => (
-              <div key={item.q} className="py-6">
-                <dt className="text-lg font-semibold text-stone-900">{item.q}</dt>
-                <dd className="mt-2 text-sm leading-relaxed text-stone-600">{item.a}</dd>
-              </div>
-            ))}
-          </dl>
-        </section>
-      </article>
-
-      <CTA />
-      <Footer />
-    </main>
+    <ProductDetailTemplate
+      eyebrow="approvals and controls"
+      title="Set the boundary before the request arrives."
+      lede="Choose what stays a draft, what can reply, and what must pause. Shopkeeper carries the exact Shopify work to the merchant, then keeps the decision and result reviewable."
+      backHref="/#controls"
+      backLabel="Back to control overview"
+      jumpLabel="Follow an approval"
+      jumpHref="#control-model"
+      visualSectionId="control-model"
+      visual={<ControlModel />}
+      afterVisual={<AutonomyModes />}
+      capabilitiesLabel="the boundary has layers"
+      capabilitiesTitle="A mode is the start, not the whole control system."
+      capabilitiesBody="Action limits, merchant judgment, and reviewable outcomes stack on top of the selected autonomy mode."
+      capabilities={boundaries.map(({ title, body }) => ({
+        title,
+        body,
+        details: [],
+      }))}
+      workflowLabel="decision states"
+      workflowTitle="Three outcomes, stated before execution."
+      workflowSteps={[
+        ["Follow the selected mode", "Routine and structurally safe information work follows the configured autonomy."],
+        ["Pause for judgment", "Consequential, exceptional, or uncertain work waits with the relevant context attached."],
+        ["Block or escalate", "Ineligible or disabled work stops instead of crossing a limit or inventing policy."],
+      ]}
+      requirementsTitle="Configure the rules and one place to reach you."
+      requirementsBody="Connect Shopify, choose Draft only, Ask first, or Trusted, review the action permissions and refund cap, and add store policies. Connect iMessage for phone-native control; the dashboard remains the configuration, review, and audit surface."
+      requirements={[
+        "Shopify connected for order and customer context",
+        "An autonomy mode selected deliberately",
+        "Action permissions, refund cap, and store policies reviewed",
+        "iMessage or dashboard available for merchant judgment",
+      ]}
+      requirementsFooter={
+        <Link
+          href="/product/order-operations"
+          className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-stone-800 underline decoration-stone-300 underline-offset-4 hover:text-stone-950"
+        >
+          See the supported Shopify work
+          <ArrowRight className="size-4" aria-hidden />
+        </Link>
+      }
+      relatedLinks={relatedLinks}
+      faqLabel="approvals faq"
+      faqTitle="Where does the boundary hold?"
+      faqs={faqs}
+    />
   );
 }

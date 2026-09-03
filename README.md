@@ -16,9 +16,19 @@ Open work: [`docs/to-do-list.md`](docs/to-do-list.md).
 ## Repo Layout
 ```
 shopkeeper/
-├── apps/dashboard/     # Next.js 16 — UI + API routes (Clerk.com auth, SWR, Tailwind)
-├── apps/gateway/       # Express — webhook receiver + BullMQ worker
-└── packages/db/        # Prisma schema + shared @shopkeeper/db client (Neon PostgreSQL)
+├── apps/
+│   ├── dashboard/          # Next.js 16 — marketing site, merchant UI, and API routes (Clerk, SWR, Tailwind)
+│   └── gateway/            # Express — webhook receiver + BullMQ worker
+├── packages/
+│   ├── agent/              # @shopkeeper/agent — planner, tools, Shopify client, observability
+│   ├── analytics/          # Product analytics helpers
+│   ├── db/                 # Prisma schema + shared @shopkeeper/db client (Neon PostgreSQL)
+│   ├── email/              # Gmail/Postmark outbound and inbound email helpers
+│   └── integrations/       # Provider clients (Instagram, TikTok Shop, shared integration errors)
+├── extensions/
+│   └── shopkeeper-chat/    # Shopify theme app extension — storefront chat widget
+├── scripts/                # Repo maintenance, audits, canaries, and test harnesses
+└── e2e/                    # Playwright smoke and browser specs
 ```
 
 Local development and all deployed services use Node.js 22.x with npm 10.x.
