@@ -10,6 +10,7 @@ const CANARY_BODY = [
 export interface OutboundGmailCanaryArgs {
   acknowledgeSelfEmail: boolean;
   attach: boolean;
+  attachFile: string | null;
   attachMissing: boolean;
   execute: boolean;
   integrationId: string | null;
@@ -24,6 +25,7 @@ export function parseOutboundGmailCanaryArgs(args: string[]): OutboundGmailCanar
   return {
     acknowledgeSelfEmail: args.includes('--acknowledge-self-email'),
     attach: args.includes('--attach'),
+    attachFile: readArg(args, '--attach-file='),
     attachMissing: args.includes('--attach-missing'),
     execute: args.includes('--execute'),
     integrationId: readArg(args, '--integration-id='),
@@ -38,13 +40,17 @@ export function assertOutboundGmailCanaryRuntime(
     throw new Error(
       'Usage: npx tsx apps/gateway/src/scripts/canary-outbound-gmail.ts '
       + '--integration-id=<uuid> --acknowledge-self-email --execute '
-      + '[--attach | --attach-missing]',
+      + '[--attach | --attach-file=<path> | --attach-missing]',
     );
   }
-  // The two attachment modes assert opposite terminal statuses, so a run that
-  // set both would pass whichever check it happened to evaluate.
-  if (args.attach && args.attachMissing) {
-    throw new Error('Pass either --attach or --attach-missing, not both.');
+  // The delivery modes and the refusal mode assert opposite terminal statuses,
+  // so a run that set both would pass whichever check it happened to evaluate.
+  const deliveryModes = [args.attach, args.attachFile !== null].filter(Boolean).length;
+  if (deliveryModes > 0 && args.attachMissing) {
+    throw new Error('Pass either an attachment to send or --attach-missing, not both.');
+  }
+  if (args.attach && args.attachFile !== null) {
+    throw new Error('Pass either --attach or --attach-file=<path>, not both.');
   }
   if (!env.INTERNAL_API_SECRET?.trim()) {
     throw new Error('INTERNAL_API_SECRET is required.');
@@ -79,14 +85,52 @@ export function buildSelfCanaryAddress(accountAddress: string, marker: string): 
 // inbound attachment is. The upload has to succeed here or the run proves
 // nothing about delivery.
 async function stageCanaryAttachment(organizationId: string, marker: string): Promise<string> {
-  const { uploadInboundAttachment } = await import('../storage/blob.js');
-  const ref = await uploadInboundAttachment(
+  const { uploadOrgAttachment } = await import('../storage/blob.js');
+  const ref = await uploadOrgAttachment(
     organizationId,
     `canary-${marker}.txt`,
     'text/plain',
     Buffer.from(`Shopkeeper outbound attachment canary ${marker}\n`).toString('base64'),
   );
   if (!ref) throw new Error('The canary attachment could not be stored.');
+  return ref;
+}
+
+// Send a real file the operator names — a photo or a PDF, whose bytes are
+// mostly non-ASCII and so actually exercise the base64 round trip that the
+// generated text file survives either way.
+async function stageAttachmentFromFile(organizationId: string, filePath: string): Promise<string> {
+  const { readFile } = await import('node:fs/promises');
+  const { basename, extname } = await import('node:path');
+  const { uploadOrgAttachment } = await import('../storage/blob.js');
+
+  const resolved = filePath.startsWith('~/')
+    ? filePath.replace('~', process.env.HOME ?? '~')
+    : filePath;
+  const bytes = await readFile(resolved).catch((err: unknown) => {
+    throw new Error(`Could not read ${resolved}: ${err instanceof Error ? err.message : String(err)}`);
+  });
+  const contentTypes: Record<string, string> = {
+    '.gif': 'image/gif',
+    '.jpeg': 'image/jpeg',
+    '.jpg': 'image/jpeg',
+    '.pdf': 'application/pdf',
+    '.png': 'image/png',
+    '.txt': 'text/plain',
+    '.webp': 'image/webp',
+  };
+  const ref = await uploadOrgAttachment(
+    organizationId,
+    basename(resolved),
+    contentTypes[extname(resolved).toLowerCase()] ?? 'application/octet-stream',
+    bytes.toString('base64'),
+  );
+  // A null here is the storage contract refusing the file — over the per-file
+  // cap, or an extension the denylist blocks. Say so rather than sending
+  // nothing and reporting success.
+  if (!ref) {
+    throw new Error(`${basename(resolved)} was refused by the attachment contract (too large, or a blocked type).`);
+  }
   return ref;
 }
 
@@ -149,11 +193,13 @@ export async function main(
     }
 
     const target = buildSelfCanaryAddress(integration.externalAccountId, marker);
-    const attachmentRef = args.attach
-      ? await stageCanaryAttachment(integration.organizationId, marker)
-      : args.attachMissing
-        ? missingAttachmentRef(integration.organizationId, marker)
-        : null;
+    const attachmentRef = args.attachFile !== null
+      ? await stageAttachmentFromFile(integration.organizationId, args.attachFile)
+      : args.attach
+        ? await stageCanaryAttachment(integration.organizationId, marker)
+        : args.attachMissing
+          ? missingAttachmentRef(integration.organizationId, marker)
+          : null;
     const staged = await db.$transaction(async (tx) => {
       const customer = await tx.customer.upsert({
         where: {
@@ -269,7 +315,7 @@ export async function main(
     });
 
     console.log(JSON.stringify({
-      attachment: args.attach ? 'sent' : null,
+      attachment: attachmentRef !== null ? 'sent' : null,
       deduplicated: duplicate.deduplicated === true,
       hasProviderMessageId: true,
       integrationId: integration.id,

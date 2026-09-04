@@ -8,7 +8,7 @@ vi.mock('@vercel/blob', () => ({
   put: putSpy,
 }));
 
-import { uploadInboundAttachment } from './blob.js';
+import { uploadOrgAttachment } from './blob.js';
 
 const ORG_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -17,9 +17,9 @@ beforeEach(() => {
   putSpy.mockResolvedValue({ url: 'https://blob.vercel-storage.com/test' });
 });
 
-describe('uploadInboundAttachment', () => {
+describe('uploadOrgAttachment', () => {
   it('uploads a normal attachment and returns a private blob ref', async () => {
-    const ref = await uploadInboundAttachment(
+    const ref = await uploadOrgAttachment(
       ORG_ID,
       'photo.png',
       ' Image/PNG; charset=binary ',
@@ -35,7 +35,7 @@ describe('uploadInboundAttachment', () => {
 
   it('skips attachments larger than 10 MB', async () => {
     const oversized = Buffer.alloc(10 * 1024 * 1024 + 1).toString('base64');
-    const url = await uploadInboundAttachment(ORG_ID, 'big.bin', 'application/octet-stream', oversized);
+    const url = await uploadOrgAttachment(ORG_ID, 'big.bin', 'application/octet-stream', oversized);
     expect(url).toBeNull();
     expect(putSpy).not.toHaveBeenCalled();
   });
@@ -60,7 +60,7 @@ describe('uploadInboundAttachment', () => {
     ['evil.exe.txt', 'text/plain'],
     ['photo.jpg.scr', 'image/jpeg'],
   ])('skips blocked attachment %s (%s)', async (name, contentType) => {
-    const url = await uploadInboundAttachment(
+    const url = await uploadOrgAttachment(
       ORG_ID,
       name,
       contentType,
@@ -71,7 +71,7 @@ describe('uploadInboundAttachment', () => {
   });
 
   it('stores malformed declared content types as generic binary data', async () => {
-    await uploadInboundAttachment(
+    await uploadOrgAttachment(
       ORG_ID,
       'report.pdf',
       'not a media type',
@@ -84,14 +84,14 @@ describe('uploadInboundAttachment', () => {
   });
 
   it('skips empty attachments', async () => {
-    const url = await uploadInboundAttachment(ORG_ID, 'empty.png', 'image/png', '');
+    const url = await uploadOrgAttachment(ORG_ID, 'empty.png', 'image/png', '');
     expect(url).toBeNull();
     expect(putSpy).not.toHaveBeenCalled();
   });
 
   it('returns null when the upload throws', async () => {
     putSpy.mockRejectedValueOnce(new Error('network down'));
-    const url = await uploadInboundAttachment(
+    const url = await uploadOrgAttachment(
       ORG_ID,
       'photo.png',
       'image/png',
@@ -101,7 +101,7 @@ describe('uploadInboundAttachment', () => {
   });
 
   it('sanitizes filenames with unsafe characters', async () => {
-    await uploadInboundAttachment(
+    await uploadOrgAttachment(
       ORG_ID,
       'invoice 2026/04 (final).pdf',
       'application/pdf',

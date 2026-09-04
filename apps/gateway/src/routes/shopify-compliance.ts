@@ -1,6 +1,6 @@
 import { db } from '@shopkeeper/db';
 import logger from '../logger.js';
-import { deleteInboundAttachments } from '../storage/blob.js';
+import { deleteOrgAttachments } from '../storage/blob.js';
 
 export const SHOPIFY_COMPLIANCE_TOPICS = new Set([
   'customers/data_request',
@@ -203,7 +203,7 @@ async function deleteSelectedCustomerData(
 
   // Blob deletion happens first. If it fails, the webhook returns 500 and
   // Shopify retries without leaving detached personal data in object storage.
-  await deleteInboundAttachments(selection.attachmentRefs);
+  await deleteOrgAttachments(selection.attachmentRefs);
 
   await db.$transaction(async (tx) => {
     const threadWhere = { organizationId, threadId: { in: selection.threadIds } };

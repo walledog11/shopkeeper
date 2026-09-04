@@ -26,8 +26,8 @@ const {
   queueGetJobSpy,
   getPlatformSpectrumAppSpy,
   spectrumWebhookSpy,
-  deleteInboundAttachmentsSpy,
-  uploadInboundAttachmentSpy,
+  deleteOrgAttachmentsSpy,
+  uploadOrgAttachmentSpy,
   SpectrumConfigError,
 } = vi.hoisted(() => ({
   clearRedisDedupeStore: () => redisDedupeStore.clear(),
@@ -43,8 +43,8 @@ const {
   queueGetJobSpy: vi.fn().mockResolvedValue(null),
   getPlatformSpectrumAppSpy: vi.fn(),
   spectrumWebhookSpy: vi.fn(),
-  deleteInboundAttachmentsSpy: vi.fn(),
-  uploadInboundAttachmentSpy: vi.fn(),
+  deleteOrgAttachmentsSpy: vi.fn(),
+  uploadOrgAttachmentSpy: vi.fn(),
   SpectrumConfigError: class SpectrumIntegrationConfigError extends Error {},
 }));
 
@@ -98,8 +98,8 @@ vi.mock('../clients/spectrum.js', () => ({
 }));
 
 vi.mock('../storage/blob.js', () => ({
-  deleteInboundAttachments: deleteInboundAttachmentsSpy,
-  uploadInboundAttachment: uploadInboundAttachmentSpy,
+  deleteOrgAttachments: deleteOrgAttachmentsSpy,
+  uploadOrgAttachment: uploadOrgAttachmentSpy,
 }));
 
 // Import the router after mocks are hoisted
@@ -125,8 +125,8 @@ export const webhookFixture = {
   queueAddSpy,
   queueGetJobSpy,
   spectrumWebhookSpy,
-  deleteInboundAttachmentsSpy,
-  uploadInboundAttachmentSpy,
+  deleteOrgAttachmentsSpy,
+  uploadOrgAttachmentSpy,
   get org() {
     return org;
   },
@@ -143,8 +143,8 @@ beforeEach(async () => {
   getPlatformSpectrumAppSpy.mockReset();
   googleTokenVerifySpy.mockReset();
   spectrumWebhookSpy.mockReset();
-  deleteInboundAttachmentsSpy.mockReset().mockResolvedValue(undefined);
-  uploadInboundAttachmentSpy.mockReset();
+  deleteOrgAttachmentsSpy.mockReset().mockResolvedValue(undefined);
+  uploadOrgAttachmentSpy.mockReset();
   getPlatformSpectrumAppSpy.mockResolvedValue({ webhook: spectrumWebhookSpy });
   googleTokenVerifySpy.mockResolvedValue({
     getPayload: () => ({
@@ -155,7 +155,7 @@ beforeEach(async () => {
     }),
   });
   spectrumWebhookSpy.mockResolvedValue({ status: 200, headers: {}, body: new Uint8Array() });
-  uploadInboundAttachmentSpy.mockResolvedValue('blob:attachments/test/attachment');
+  uploadOrgAttachmentSpy.mockResolvedValue('blob:attachments/test/attachment');
   clearMockLogger(mockLogger);
 });
 

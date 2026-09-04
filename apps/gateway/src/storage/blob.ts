@@ -12,7 +12,7 @@ import { getInboundAttachmentLimits } from '../config/runtime-config.js';
 import logger from '../logger.js';
 import { decodedByteLength } from './attachment-budget.js';
 
-export async function uploadInboundAttachment(
+export async function uploadOrgAttachment(
   organizationId: string,
   filename: string,
   contentType: string,
@@ -66,7 +66,7 @@ export async function uploadInboundAttachment(
   }
 }
 
-export async function deleteInboundAttachments(references: readonly string[]): Promise<void> {
+export async function deleteOrgAttachments(references: readonly string[]): Promise<void> {
   const pathnames = [...new Set(
     references
       .filter(reference => reference.startsWith(BLOB_ATTACHMENT_PREFIX))
