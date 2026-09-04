@@ -19,7 +19,7 @@ import type {
   ShopifyOrderPayload,
 } from '../types.js';
 import { emptyRequestFacts } from '@shopkeeper/agent/classifier-signals';
-import { uploadInboundAttachment } from '../storage/blob.js';
+import { uploadOrgAttachment } from '../storage/blob.js';
 import { applyInboundAttachmentBudget, mapWithConcurrency } from '../storage/attachment-budget.js';
 import { getInboundAttachmentLimits } from '../config/runtime-config.js';
 import {
@@ -138,7 +138,7 @@ async function persistInstagramBinaryAttachments(
 
     const downloaded = await downloadInstagramAttachment(attachment);
     if (!downloaded) continue;
-    const ref = await uploadInboundAttachment(
+    const ref = await uploadOrgAttachment(
       organizationId,
       downloaded.filename,
       downloaded.contentType,
@@ -158,7 +158,7 @@ async function persistTikTokShopImageAttachments(
     if (refs.length >= MAX_STORED_TIKTOK_IMAGE_ATTACHMENTS) break;
     const downloaded = await downloadTikTokShopImage(url);
     if (!downloaded) continue;
-    const ref = await uploadInboundAttachment(
+    const ref = await uploadOrgAttachment(
       organizationId,
       downloaded.filename,
       downloaded.contentType,
@@ -384,7 +384,7 @@ export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Q
     const attachmentUrls = (await mapWithConcurrency(
       budgetedAttachments,
       getInboundAttachmentLimits().uploadConcurrency,
-      (att) => uploadInboundAttachment(organizationId, att.name, att.contentType, att.contentBase64),
+      (att) => uploadOrgAttachment(organizationId, att.name, att.contentType, att.contentBase64),
     )).filter((url): url is string => url !== null);
 
     await processInboundMessage(organizationId, senderEmail!, CHANNEL.EMAIL, stripQuotedReply(body!), aiSummaryQueue, {

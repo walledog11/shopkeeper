@@ -9,6 +9,7 @@ import {
 const validArgs: OutboundGmailCanaryArgs = {
   acknowledgeSelfEmail: true,
   attach: false,
+  attachFile: null,
   attachMissing: false,
   execute: true,
   integrationId: 'integration_1',
@@ -65,15 +66,27 @@ describe('outbound Gmail canary safety', () => {
 
   // They assert opposite terminal statuses, so a run with both set would pass
   // on whichever branch it reached.
-  it('refuses both attachment modes at once', () => {
+  it.each([
+    { ...validArgs, attach: true, attachMissing: true },
+    { ...validArgs, attachFile: '/tmp/photo.png', attachMissing: true },
+    { ...validArgs, attach: true, attachFile: '/tmp/photo.png' },
+  ])('refuses conflicting attachment modes', (args) => {
     expect(() => assertOutboundGmailCanaryRuntime(
-      { ...validArgs, attach: true, attachMissing: true },
+      args,
       { GATEWAY_URL: 'https://gateway.up.railway.app', INTERNAL_API_SECRET: 'secret' },
     )).toThrow('not both');
   });
 
+  it('parses a file path to send', () => {
+    expect(parseOutboundGmailCanaryArgs([
+      'node', 'canary.ts', '--integration-id=i', '--acknowledge-self-email', '--execute',
+      '--attach-file= ~/Desktop/photo.png ',
+    ])).toMatchObject({ attach: false, attachFile: '~/Desktop/photo.png', attachMissing: false });
+  });
+
   it.each([
     { ...validArgs, attach: true },
+    { ...validArgs, attachFile: '/tmp/photo.png' },
     { ...validArgs, attachMissing: true },
   ])('accepts a single attachment mode', (args) => {
     expect(assertOutboundGmailCanaryRuntime(args, {
