@@ -5,11 +5,11 @@ import { resetTestData, runCommand, waitForAllTestServices } from './test-infra.
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 async function main() {
-  await runCommand('npm', ['run', 'build', '-w', 'packages/db'], { cwd: REPO_ROOT });
-  await runCommand('npm', ['run', 'build', '-w', 'packages/email'], { cwd: REPO_ROOT });
-  await runCommand('npm', ['run', 'build', '-w', 'packages/agent'], { cwd: REPO_ROOT });
-  await runCommand('npm', ['run', 'build', '-w', 'packages/analytics'], { cwd: REPO_ROOT });
-  await runCommand('npm', ['run', 'build', '-w', 'packages/integrations'], { cwd: REPO_ROOT });
+  // Order comes from each package's own dependencies via turbo's `^build`, not
+  // from a list here. A hand-maintained sequence is a second copy of the
+  // dependency graph, and it silently built the wrong thing the first time a
+  // package gained a workspace dependency.
+  await runCommand('npx', ['turbo', 'run', 'build', '--filter=./packages/*'], { cwd: REPO_ROOT });
 
   try {
     await waitForAllTestServices(process.env);

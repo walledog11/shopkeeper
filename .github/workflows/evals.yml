@@ -75,12 +75,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Build workspace package exports used by eval controls
-        run: |
-          npm run build -w packages/db
-          npm run build -w packages/email
-          npm run build -w packages/agent
-          npm run build -w packages/analytics
-          npm run build -w packages/integrations
+        # Ordered by turbo from each package's own dependencies, never by a list
+        # here — a hand-maintained sequence is a second copy of the dependency
+        # graph and goes stale the moment a package gains a workspace dependency.
+        run: npx turbo run build --filter="./packages/*"
       - name: Validate shared cost accounting and fixture controls
         run: |
           npm run test:unit -w packages/agent
