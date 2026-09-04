@@ -92,11 +92,20 @@ export async function dispatchMessage(
   options: DispatchMessageOptions = {},
 ): Promise<DispatchMessageResult> {
   const source = options.source ?? "dispatch_message"
+  const attachments = options.attachments ?? []
   const isEmailChannel =
     thread.channelType === CHANNEL_TYPE.EMAIL || thread.channelType === CHANNEL_TYPE.SHOPIFY
 
   const superseded = await assertCurrentEpisode(thread)
   if (superseded) return superseded
+
+  // Refuse before the provider rather than dropping the files silently. Only
+  // email has an outbound attachment path: Instagram's send client is text-only
+  // and Meta fetches media by public URL, storefront chat has no shopper-
+  // reachable route to a private blob, and TikTok is gated off.
+  if (attachments.length > 0 && !isEmailChannel) {
+    return { ok: false, error: "Attachments can only be sent on email conversations" }
+  }
 
   if (isEmailChannel && isOutboundEmailAsyncEnabled()) {
     return dispatchEmailViaGatewayQueue(
@@ -105,6 +114,7 @@ export async function dispatchMessage(
       text,
       source,
       options.analyticsReplySource,
+      attachments,
     )
   }
 
@@ -116,12 +126,14 @@ export async function dispatchMessage(
       ? await sendEmailSynchronously(thread, org, text, {
         source,
         subjectFallback: options.emailSubjectFallback,
+        attachments,
       })
       : thread.channelType === CHANNEL_TYPE.SHOPIFY
         ? await sendEmailSynchronously(thread, org, text, {
           source,
           subjectFallback: options.emailSubjectFallback,
           originalChannel: CHANNEL_TYPE.SHOPIFY,
+          attachments,
         })
         : thread.channelType === CHANNEL_TYPE.SHOPIFY_CHAT
           ? await resolveStorefrontChatDelivery(thread)
@@ -134,6 +146,7 @@ export async function dispatchMessage(
     text,
     providerResult.integrationId,
     providerResult.providerMessageId,
+    attachments,
   )
   const replySource = options.analyticsReplySource
     ?? (source === "agent_send_reply" ? "agent_approved" : "manual")

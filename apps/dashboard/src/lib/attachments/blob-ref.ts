@@ -1,10 +1,11 @@
-import { BLOB_ATTACHMENT_PREFIX } from '@shopkeeper/agent/attachment-ref';
+import {
+  BLOB_ATTACHMENT_PREFIX,
+  formatAttachmentRef,
+} from '@shopkeeper/agent/attachment-ref';
 
 const VERCEL_BLOB_HOST_SUFFIX = '.blob.vercel-storage.com';
 
-export function formatBlobAttachmentRef(pathname: string): string {
-  return `${BLOB_ATTACHMENT_PREFIX}${pathname}`;
-}
+export const formatBlobAttachmentRef = formatAttachmentRef;
 
 export function parseManagedAttachmentRef(ref: string): string | null {
   if (ref.startsWith(BLOB_ATTACHMENT_PREFIX)) {
@@ -30,6 +31,14 @@ export function isManagedAttachmentRef(ref: string): boolean {
 
 export function attachmentBelongsToOrg(pathname: string, organizationId: string): boolean {
   return pathname.startsWith(`attachments/${organizationId}/`);
+}
+
+// A ref arriving on a send request is client-supplied. Reuse the same org
+// segment the read route authorizes against, so a merchant cannot attach
+// another workspace's blob to their own outgoing message.
+export function isOwnedAttachmentRef(ref: string, organizationId: string): boolean {
+  const pathname = parseManagedAttachmentRef(ref);
+  return pathname !== null && attachmentBelongsToOrg(pathname, organizationId);
 }
 
 export function attachmentFilename(pathname: string): string {

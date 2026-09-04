@@ -10,7 +10,7 @@
     "npm": "10.x"
   },
   "scripts": {
-    "predev": "npm run db:generate -w packages/db && npm run build -w packages/db && npm run build -w packages/email && npm run build -w packages/agent && npm run build -w packages/analytics && npm run build -w packages/integrations",
+    "predev": "npm run db:generate -w packages/db && npx turbo run build --filter=\"./packages/*\"",
     "dev": "npx turbo run dev",
     "build": "npx turbo run build",
     "clean": "node ./scripts/clean.mjs artifacts",

@@ -3,6 +3,11 @@ import { CHANNEL_TYPE } from "@shopkeeper/agent/thread-constants"
 import { getEmailProvider } from "@shopkeeper/email/providers"
 import { buildThreadReplyHeaders, formatReplySubject } from "@shopkeeper/email/reply"
 import { getEmailSender } from "@shopkeeper/email/senders"
+import {
+  getOutboundAttachmentLimits,
+  loadOutboundAttachments,
+  OutboundAttachmentError,
+} from "@shopkeeper/email/attachment-load"
 import { EmailNotConfiguredError } from "@shopkeeper/email/types"
 import { resolveEmailIntegration } from "@shopkeeper/email/integration-resolution"
 import logger from "@/lib/server/logger"
@@ -32,6 +37,7 @@ export async function dispatchEmailViaGatewayQueue(
   text: string,
   source: DispatchSource,
   replySource?: ReplySource,
+  attachments: string[] = [],
 ): Promise<DispatchMessageResult> {
   let integration
   try {
@@ -47,7 +53,7 @@ export async function dispatchEmailViaGatewayQueue(
     throw error
   }
 
-  const message = await createPendingAgentMessage(thread, text, integration.id)
+  const message = await createPendingAgentMessage(thread, text, integration.id, attachments)
 
   const enqueued = await enqueueOutboundEmail({
     organizationId: org.id,
@@ -78,6 +84,7 @@ export async function sendEmailSynchronously(
     source: DispatchSource
     subjectFallback?: string
     originalChannel?: string
+    attachments?: string[]
   },
 ): Promise<DispatchProviderResult> {
   let integration
@@ -112,6 +119,23 @@ export async function sendEmailSynchronously(
   const headers = buildThreadReplyHeaders(thread.id, threadCtx?.messages[0]?.externalMessageId)
 
   const provider = getEmailProvider(integration)
+
+  // Ahead of the recorder and the provider call, so an unreadable or
+  // over-budget attachment is a plain refusal the merchant sees rather than a
+  // half-sent message.
+  let outboundAttachments
+  try {
+    outboundAttachments = await loadOutboundAttachments(
+      opts.attachments ?? [],
+      getOutboundAttachmentLimits(),
+    )
+  } catch (err) {
+    if (err instanceof OutboundAttachmentError) {
+      return { ok: false, error: err.message }
+    }
+    throw err
+  }
+
   const recorded = await recordOutboundCall({
     source: opts.source,
     provider,
@@ -126,6 +150,11 @@ export async function sendEmailSynchronously(
     metadata: {
       replyTo: integration.externalAccountId,
       ...(opts.originalChannel && { originalChannel: opts.originalChannel }),
+      // Names only. The recorder writes fixtures to disk, and a recorded run
+      // should show that a file rode along without embedding its bytes.
+      ...(outboundAttachments.length > 0 && {
+        attachments: outboundAttachments.map(a => a.name),
+      }),
     },
   })
   if (recorded) return { ok: true, integrationId: integration.id }
@@ -139,6 +168,7 @@ export async function sendEmailSynchronously(
       subject,
       text,
       headers,
+      ...(outboundAttachments.length > 0 && { attachments: outboundAttachments }),
     })
   } catch (err) {
     if (err instanceof EmailNotConfiguredError) {

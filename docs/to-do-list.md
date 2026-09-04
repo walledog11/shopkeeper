@@ -81,6 +81,17 @@ provider. **None of these is a code task.**
   composer* and confirm the widget notice disappears. Approving an agent plan cannot
   discharge it — `recordMerchantReply` is merchant-only by design, which was confirmed
   live when `escalatedAt` survived an approved `send_reply`.
+- [ ] **Send one outbound attachment for real, on both providers.** The merchant can
+  attach files to an email reply from the composer; nothing has ever left the building.
+  Prove it on Postmark *and* Gmail, because they take different paths — Postmark maps to
+  its `Attachments` field, Gmail goes through `buildRawMime`'s `multipart/mixed`. Confirm
+  the file opens in the receiving mailbox, the ref renders on the sent bubble in the
+  timeline, and `/api/attachments` still serves it afterwards. Then exercise the refusal:
+  delete the blob before sending and confirm the row lands `failed` with a readable
+  `sendError` and no provider call — not `unknown`, which is what the claim ordering in
+  `handleOutboundEmailJob` exists to prevent. Email-only by design; the refusal for other
+  channels is in `dispatchMessage`.
+
 - [ ] **See a grounded `send_reply` in production once.** `groundReplyText` strips
   first-person-singular mutation claims the plan never contained; watch for a shopper
   message that makes the model want to attach one. Known residual gap, left in

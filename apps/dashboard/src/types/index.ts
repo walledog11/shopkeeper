@@ -215,4 +215,7 @@ export interface FailedMessage {
   threadId: string;
   text: string;
   isNote: boolean;
+  // Carried so a retry re-sends what the merchant attached. The blobs outlive
+  // the failed attempt, so the refs stay valid.
+  attachments: string[];
 }

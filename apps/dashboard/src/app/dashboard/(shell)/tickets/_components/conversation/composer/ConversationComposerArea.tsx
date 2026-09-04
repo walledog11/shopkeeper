@@ -8,6 +8,7 @@ import { useMediaQuery } from "@/hooks/useMediaQuery"
 import Composer from "./Composer"
 import MobileFloatingReplyComposer from "./MobileFloatingReplyComposer"
 import { PlanReviewSurface } from "./PlanReviewSurface"
+import type { ComposerAttachments } from "../../../_hooks/useComposerAttachments"
 import type { AgentPlan, PlanExecutionOutcome, RawToolCall, Ticket } from "@/types"
 
 interface Props {
@@ -35,6 +36,7 @@ interface Props {
     customerPlatformId?: string
     isSending: boolean
     replyText: string
+    attachments: ComposerAttachments
     sendError: string | null
     shopifyCustomerId?: string | null
     lastCustomerMessageAt: string | null
@@ -110,6 +112,7 @@ export default function ConversationComposerArea({
     customerPlatformId: composer.customerPlatformId,
     lastCustomerMessageAt: composer.lastCustomerMessageAt,
     isSending: composer.isSending,
+    attachments: composer.attachments,
     onSend,
   }
 

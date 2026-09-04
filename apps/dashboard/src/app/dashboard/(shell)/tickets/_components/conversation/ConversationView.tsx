@@ -7,6 +7,7 @@ import { useFillerPhrase } from "@/hooks/useFillerPhrase"
 import { useIsMobile } from "@/hooks/useMobile"
 import { requestShopifyLinkFocus } from "@/lib/messaging/shopify-link-focus"
 import { useConversationAgentFlow } from "../../_hooks/useConversationAgentFlow"
+import type { ComposerAttachments } from "../../_hooks/useComposerAttachments"
 import { buildTicketCardMeta } from "../../_lib/inbox-row"
 import ConversationHeader from "./ConversationHeader"
 import ConversationContextBar from "./ConversationContextBar"
@@ -29,6 +30,7 @@ interface Props {
   shopifyCustomerId?: string | null
   customerPlatformId?: string
   replyText: string
+  composerAttachments: ComposerAttachments
   sendError: string | null
   messagesEndRef: RefObject<HTMLDivElement | null>
   agentTurns: AgentTurn[]
@@ -69,6 +71,7 @@ export default function ConversationView({
   shopifyCustomerId,
   customerPlatformId,
   replyText,
+  composerAttachments,
   sendError,
   messagesEndRef,
   agentTurns,
@@ -318,6 +321,7 @@ export default function ConversationView({
         reply={{
           isSending,
           replyText,
+          composerAttachments,
           sendError,
           isAgentRunning,
         }}
@@ -364,6 +368,7 @@ interface ConversationOpenComposerProps {
     isAgentRunning: boolean
     isSending: boolean
     replyText: string
+    composerAttachments: ComposerAttachments
     sendError: string | null
   }
 }
@@ -415,6 +420,7 @@ function ConversationOpenComposer({
         customerPlatformId: customer.customerPlatformId,
         isSending: reply.isSending || reply.isAgentRunning || agent.isPlanLoading,
         replyText: reply.replyText,
+        attachments: reply.composerAttachments,
         sendError: reply.sendError,
         shopifyCustomerId: customer.shopifyCustomerId,
         lastCustomerMessageAt: customer.lastCustomerMessageAt,

@@ -46,6 +46,14 @@ export {
   type GmailIntegration,
 } from './senders/index.js';
 
+export {
+  getOutboundAttachmentLimits,
+  loadOutboundAttachments,
+  OutboundAttachmentError,
+  type OutboundAttachmentLimits,
+  type OutboundAttachmentLoadLimits,
+} from './attachment-load.js';
+
 export { buildRawMime, buildMimeBase64 } from './mime-build.js';
 export { parseMime } from './mime-parse.js';
 export { normalizeInboundEmail } from './inbound-normalize.js';

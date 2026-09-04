@@ -1,3 +1,5 @@
+import type { ComposerAttachments } from "../../../_hooks/useComposerAttachments"
+
 export interface IntegrationRow {
   platform: string
   fromEmail?: string | null
@@ -6,6 +8,9 @@ export interface IntegrationRow {
 
 export interface ComposerProps {
   customerName: string
+  // Optional: the mobile plan-edit surface reuses this shape to revise an
+  // agent draft, a flow that never attaches files.
+  attachments?: ComposerAttachments
   channelType?: string
   shopifyCustomerId?: string | null
   customerPlatformId?: string

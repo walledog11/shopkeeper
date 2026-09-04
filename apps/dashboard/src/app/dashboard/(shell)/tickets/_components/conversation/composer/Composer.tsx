@@ -1,13 +1,21 @@
 "use client"
 
-import { ArrowUp, Bot, Loader2 } from "lucide-react"
+import { useRef } from "react"
+import { ArrowUp, Bot, Loader2, Paperclip, X } from "lucide-react"
 import { AGENT_DISPLAY_NAME } from "@shopkeeper/agent/settings"
 import { NeedsYouCardFooter } from "@/app/dashboard/_components/home/needs-you-card-ui"
 import { useComposerState } from "./composer-state"
 import type { ComposerProps } from "./composer-types"
 
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1_048_576) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / 1_048_576).toFixed(1)} MB`
+}
+
 export default function Composer(props: ComposerProps) {
   const {
+    attachments,
     error,
     isAgentMode = false,
     isSending,
@@ -15,7 +23,9 @@ export default function Composer(props: ComposerProps) {
     onSend,
     value,
   } = props
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const {
+    canAttach,
     igWindowExpired,
     isEmailLike,
     onChange,
@@ -35,7 +45,62 @@ export default function Composer(props: ComposerProps) {
           </div>
         )}
 
+        {canAttach && attachments && attachments.attachments.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {attachments.attachments.map(file => (
+              <span
+                key={file.localId}
+                data-testid="composer-attachment-chip"
+                className={`inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs ${
+                  file.error
+                    ? "border-red-500/30 bg-red-500/10 text-red-600"
+                    : "border-border bg-foreground/[0.04] text-muted-foreground"
+                }`}
+              >
+                {file.ref === null && !file.error && <Loader2 className="size-3 shrink-0 animate-spin" />}
+                <span className="min-w-0 truncate font-medium text-strong">{file.name}</span>
+                <span className="shrink-0 text-faint">
+                  {file.error ? file.error : formatBytes(file.bytes)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => attachments.removeAttachment(file.localId)}
+                  aria-label={`Remove ${file.name}`}
+                  className="shrink-0 rounded-full p-0.5 text-faint transition-colors hover:bg-foreground/10 hover:text-strong"
+                >
+                  <X className="size-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
         <div className="flex min-w-0 items-end gap-1.5 rounded-[24px] border border-border bg-card px-1.5 py-1.5 shadow-sm transition-colors focus-within:border-foreground/30 sm:gap-2 sm:px-2">
+          {canAttach && attachments && (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                hidden
+                onChange={e => {
+                  const picked = Array.from(e.target.files ?? [])
+                  e.target.value = ""
+                  if (picked.length > 0) void attachments.addFiles(picked)
+                }}
+              />
+              <button
+                type="button"
+                data-testid="composer-attach"
+                disabled={isSending}
+                onClick={() => fileInputRef.current?.click()}
+                aria-label="Attach a file"
+                className="mb-0.5 flex size-9 shrink-0 items-center justify-center self-end rounded-full text-faint transition-colors hover:bg-foreground/[0.06] hover:text-strong disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Paperclip className="size-4" />
+              </button>
+            </>
+          )}
           {isAgentMode ? (
             <span className="mb-1 inline-flex shrink-0 items-center gap-1 self-center rounded-full bg-foreground/[0.07] px-2.5 py-[5px] text-xs font-semibold text-strong">
               <Bot className="size-3" />

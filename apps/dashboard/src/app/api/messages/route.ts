@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import { db, SenderType, createMessage } from '@shopkeeper/db';
+import { getOutboundAttachmentLimits } from '@shopkeeper/email/attachment-load';
 import { readRequiredJsonObject } from '@/lib/api/body';
-import { ApiError } from '@/lib/api/errors';
+import { ApiError, BadRequestError } from '@/lib/api/errors';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
+import { isOwnedAttachmentRef } from '@/lib/attachments/blob-ref';
 import { parseSendMessageBody } from '@/app/api/messages/_lib/validation';
 import { dispatchMessage } from '@/lib/messaging/dispatch-message';
 import { recordMerchantReply } from '@/lib/messaging/merchant-reply';
@@ -18,7 +20,20 @@ export const POST = withOrgRoute(
     rateLimit: { key: 'messages:send', limit: 60, windowSecs: 60 },
   },
   async ({ org, request }) => {
-    const { threadId, text, isNote } = parseSendMessageBody(await readRequiredJsonObject(request));
+    const { threadId, text, isNote, attachments } = parseSendMessageBody(
+      await readRequiredJsonObject(request),
+    );
+
+    // The refs come from the client, so ownership is re-checked here rather
+    // than trusted — the same org segment the read route authorizes against.
+    // Byte totals are the loader's call; it is the one that reads real sizes.
+    if (attachments.some(ref => !isOwnedAttachmentRef(ref, org.id))) {
+      throw new BadRequestError('Unknown attachment');
+    }
+    const { maxCount } = getOutboundAttachmentLimits();
+    if (attachments.length > maxCount) {
+      throw new BadRequestError(`You can attach at most ${maxCount} files`);
+    }
 
     const thread = await db.thread.findUnique({
       where: { id: threadId },
@@ -31,11 +46,12 @@ export const POST = withOrgRoute(
         threadId,
         senderType: SenderType.note,
         contentText: text,
+        ...(attachments.length > 0 && { attachments }),
       });
       return NextResponse.json(message);
     }
 
-    const result = await dispatchMessage(thread, org, text);
+    const result = await dispatchMessage(thread, org, text, { attachments });
     if (!result.ok) {
       throw new ApiError(result.error ?? 'Failed to send message', 502);
     }

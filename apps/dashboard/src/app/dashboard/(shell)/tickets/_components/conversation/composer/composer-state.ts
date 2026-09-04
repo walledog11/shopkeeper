@@ -15,6 +15,7 @@ export function useComposerState({
   isAgentMode = false,
   isSending,
   onChange,
+  attachments,
 }: ComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -67,9 +68,16 @@ export function useComposerState({
     isMobile,
   })
 
-  const sendDisabled = !value.trim() || isSending || igWindowExpired
+  // Only email carries attachments outbound, and a file still uploading (or one
+  // that failed) holds the send rather than dropping out of it silently.
+  const canAttach = isEmailLike && !isAgentMode && Boolean(attachments)
+  const sendDisabled = !value.trim()
+    || isSending
+    || igWindowExpired
+    || Boolean(attachments?.attachmentsBlockSend)
 
   return {
+    canAttach,
     igWindowExpired,
     isEmailLike,
     onChange,

@@ -43,6 +43,7 @@ interface InboxPageLayoutConversationState {
   messagesEndRef: ConversationViewProps["messagesEndRef"]
   orgSettings?: ConversationViewProps["orgSettings"]
   replyText: string
+  composerAttachments: ConversationViewProps["composerAttachments"]
   sendError: ConversationViewProps["sendError"]
   toast: TicketToast | null
 }
@@ -144,6 +145,7 @@ function TicketConversation({
       activeTab={conversationTab}
       initialPlan={conversation.cachedPlan}
       replyText={conversation.replyText}
+      composerAttachments={conversation.composerAttachments}
       sendError={conversation.sendError}
       messagesEndRef={conversation.messagesEndRef}
       failedMessages={conversation.failedMessages}
