@@ -318,7 +318,10 @@ describe('DELETE /api/agent/plan', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ threadId: thread.id, planId: 'stale-plan' }),
     }));
-    expect(stale.status).toBe(409);
+    // A stale card is the merchant's problem to see, not an error to raise: the
+    // request succeeds as a no-op and the current plan survives untouched.
+    expect(stale.status).toBe(200);
+    expect(await stale.json()).toEqual({ ok: true, dismissed: false });
     expect((await db.thread.findUnique({ where: { id: thread.id } }))?.cachedPlan).not.toBeNull();
 
     const dismissed = await DELETE(new Request('http://localhost:3000/api/agent/plan', {

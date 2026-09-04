@@ -33,6 +33,12 @@ function createAgentTurn(turn: Omit<AgentTurn, "id">): AgentTurn {
   return { id: crypto.randomUUID(), ...turn }
 }
 
+// `instruction` is the merchant's own composer text, echoed back above the turn.
+// Only the `@{agentName}` path has one; a card button or an auto-plan carries a
+// planner instruction the merchant never wrote, and echoing that puts words in
+// their mouth — an internal prompt paragraph included.
+const NO_MERCHANT_INSTRUCTION = ""
+
 export function getAgentCommandState(replyText: string) {
   const triggerPrefix = `@${AGENT_DISPLAY_NAME.toLowerCase()}`
   const trimmedReply = replyText.trimStart()
@@ -150,14 +156,14 @@ export function useConversationAgentFlow({
     // Pin the reviewed plan locally while the server consumes its cache. This
     // preserves failure/partial/unknown recovery context across SWR refreshes.
     setPendingPlan(plan)
-    setPendingInstruction(instruction)
+    setPendingInstruction(NO_MERCHANT_INSTRUCTION)
     setIsPlanExecuting(true)
     onAgentRunningChange(true)
 
     try {
       const result = await executeApprovedAgentPlan(ticket.id, instruction, approvedToolCalls)
       setPlanExecutionState({ ...executionIdentity, outcome: result.outcome })
-      const turn = createAgentTurn(result.turn)
+      const turn = createAgentTurn({ ...result.turn, instruction: NO_MERCHANT_INSTRUCTION })
       if (result.ok) {
         onAgentComplete(turn)
         successDismissTimer.current = setTimeout(() => {
@@ -174,14 +180,14 @@ export function useConversationAgentFlow({
     }
   }
 
-  const answerPrivateQuestion = async (instruction: string) => {
+  const answerPrivateQuestion = async (instruction: string, echo: string = instruction) => {
     onReplyChange("")
-    setPendingInstruction(instruction)
+    setPendingInstruction(echo)
     setIsPlanLoading(true)
 
     try {
       const result = await askAgentPrivately(ticket.id, instruction)
-      const turn = createAgentTurn(result.turn)
+      const turn = createAgentTurn({ ...result.turn, instruction: echo })
       if (result.ok) {
         onAgentComplete(turn)
       } else {
@@ -243,7 +249,7 @@ export function useConversationAgentFlow({
       try {
         await dismissAgentPlan(ticket.id, dismissedPlan.planId)
       } catch (error) {
-        onAgentTurnAdd(createAgentTurn(planRequestErrorTurn(dismissedPlan.instruction, error)))
+        onAgentTurnAdd(createAgentTurn(planRequestErrorTurn(NO_MERCHANT_INSTRUCTION, error)))
         return
       }
     }
@@ -265,7 +271,7 @@ export function useConversationAgentFlow({
       try {
         await dismissAgentPlan(ticket.id, editedPlan.planId)
       } catch (error) {
-        onAgentTurnAdd(createAgentTurn(planRequestErrorTurn(editedPlan.instruction, error)))
+        onAgentTurnAdd(createAgentTurn(planRequestErrorTurn(NO_MERCHANT_INSTRUCTION, error)))
         return
       }
     }
@@ -293,7 +299,7 @@ export function useConversationAgentFlow({
 
       setPendingPlan(null)
       onAgentTurnAdd(createAgentTurn({
-        instruction,
+        instruction: NO_MERCHANT_INSTRUCTION,
         actions: [],
         summary: plan.steps.length === 0
           ? "This ticket was already answered — there is no new draft to generate."
@@ -301,7 +307,7 @@ export function useConversationAgentFlow({
         error: null,
       }))
     } catch (err) {
-      onAgentTurnAdd(createAgentTurn(planRequestErrorTurn(instruction, err)))
+      onAgentTurnAdd(createAgentTurn(planRequestErrorTurn(NO_MERCHANT_INSTRUCTION, err)))
     } finally {
       setIsRegenerating(false)
     }
@@ -309,7 +315,7 @@ export function useConversationAgentFlow({
 
   const requestAgentPlan = async (instruction: string, options: { force?: boolean } = {}) => {
     onReplyChange("")
-    setPendingInstruction(instruction)
+    setPendingInstruction(NO_MERCHANT_INSTRUCTION)
     setIsPlanLoading(true)
 
     try {
@@ -317,13 +323,13 @@ export function useConversationAgentFlow({
       const requiresApproval = planRequiresApproval(plan)
 
       if (!requiresApproval) {
-        await answerPrivateQuestion(instruction)
+        await answerPrivateQuestion(instruction, NO_MERCHANT_INSTRUCTION)
         return
       }
 
       setPendingPlan(resolvePendingPlan(plan, instruction))
     } catch (err) {
-      onAgentTurnAdd(createAgentTurn(planRequestErrorTurn(instruction, err)))
+      onAgentTurnAdd(createAgentTurn(planRequestErrorTurn(NO_MERCHANT_INSTRUCTION, err)))
     } finally {
       setIsPlanLoading(false)
       setPendingInstruction(null)

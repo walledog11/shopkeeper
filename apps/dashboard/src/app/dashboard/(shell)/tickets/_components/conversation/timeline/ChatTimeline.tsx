@@ -107,10 +107,14 @@ export default function ChatTimeline({
                 {bubbleContent}
               </div>
             ) : (
+              // NeedsYouBubble caps itself at a percentage of this box, so it has
+              // to span the timeline — shrink-to-fit made the cap 88% of the
+              // bubble's own width and pushed attachments outside it.
               <div
                 data-testid="chat-message-bubble"
                 data-message-id={msg.id}
                 data-sender={msg.sender}
+                className="flex w-full"
               >
                 <NeedsYouBubble tone={isOutbound ? "reply" : "customer"} flush>
                   {bubbleContent}

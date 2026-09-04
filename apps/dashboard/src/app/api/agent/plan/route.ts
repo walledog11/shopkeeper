@@ -191,9 +191,10 @@ export const DELETE = withOrgRoute(
       threadId,
       expectedPlanId: planId,
     });
-    if (!cleared) {
-      throw new ConflictError("This plan is no longer current. Review the latest plan before dismissing it.");
-    }
-    return NextResponse.json({ ok: true });
+    // A card the merchant is dismissing can already be gone — the reply was sent,
+    // or a newer customer message replaced the plan. The card is stale either way
+    // and the client refetches, so this is a no-op, not something to escalate at
+    // them. A plan mid-execution still throws, from dismissCurrentCachedPlan.
+    return NextResponse.json({ ok: true, dismissed: cleared });
   },
 );

@@ -26,18 +26,22 @@ export default function AgentPrivateTurns({
     <>
       {agentTurns.map((turn, index) => (
         <div key={turn.id ?? `${turn.instruction}-${index}`} className="space-y-2">
-          <div className="flex flex-col gap-1 items-end">
-            {turn.senderPhone && (
-              <div className="flex items-center gap-1 text-xs text-faint mr-1">
-                <Smartphone className="size-3" />
-                From your phone
+          {/* No instruction means the merchant pressed a button rather than
+              typing — there is no message of theirs to echo. */}
+          {turn.instruction && (
+            <div className="flex flex-col gap-1 items-end">
+              {turn.senderPhone && (
+                <div className="flex items-center gap-1 text-xs text-faint mr-1">
+                  <Smartphone className="size-3" />
+                  From your phone
+                </div>
+              )}
+              <div className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-foreground/[0.08] text-strong rounded-md rounded-tr-sm">
+                <span className="text-violet-600 font-semibold">@{AGENT_DISPLAY_NAME.toLowerCase()}</span>{" "}
+                {turn.instruction}
               </div>
-            )}
-            <div className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-foreground/[0.08] text-strong rounded-md rounded-tr-sm">
-              <span className="text-violet-600 font-semibold">@{AGENT_DISPLAY_NAME.toLowerCase()}</span>{" "}
-              {turn.instruction}
             </div>
-          </div>
+          )}
           <div className="flex flex-col gap-1 items-start">
             <div className="flex items-center gap-1.5 mb-0.5 ml-1">
               <Bot className="size-3 text-violet-600" />
