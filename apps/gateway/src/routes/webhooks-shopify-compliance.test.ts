@@ -16,7 +16,7 @@ import {
 
 const {
   app,
-  deleteInboundAttachmentsSpy,
+  deleteOrgAttachmentsSpy,
   mockLogger,
   queueAddSpy,
 } = webhookFixture;
@@ -162,7 +162,7 @@ describe('POST /webhooks/shopify — mandatory compliance topics', () => {
 
     expect(response.status).toBe(200);
     expect(queueAddSpy).not.toHaveBeenCalled();
-    expect(deleteInboundAttachmentsSpy).toHaveBeenCalledWith([
+    expect(deleteOrgAttachmentsSpy).toHaveBeenCalledWith([
       'blob:attachments/test/private.png',
     ]);
     expect(await db.customer.findUnique({ where: { id: customer.id } })).toBeNull();

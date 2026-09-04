@@ -21,7 +21,7 @@ const {
   queueAddBulkSpy,
   queueAddSpy,
   spectrumWebhookSpy,
-  uploadInboundAttachmentSpy,
+  uploadOrgAttachmentSpy,
 } = webhookFixture;
 let org: { id: string };
 
@@ -411,7 +411,7 @@ describe('POST /webhooks/photon', () => {
 
     expect(res.status).toBe(200);
     // Operator channel: attachment bytes are never persisted to org blob storage.
-    expect(uploadInboundAttachmentSpy).not.toHaveBeenCalled();
+    expect(uploadOrgAttachmentSpy).not.toHaveBeenCalled();
     expect(queueAddSpy).not.toHaveBeenCalled();
     expect(sendSpy).toHaveBeenCalledOnce();
   });
