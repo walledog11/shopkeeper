@@ -6,7 +6,10 @@ import {
   getEmailProvider,
   buildOutboundMessageReplyHeaders,
   formatReplySubject,
+  getOutboundAttachmentLimits,
+  loadOutboundAttachments,
   EmailNotConfiguredError,
+  OutboundAttachmentError,
 } from '@shopkeeper/email';
 import { recordManualMerchantReplyForThread } from '@shopkeeper/agent/request-outcome';
 import logger from '../logger.js';
@@ -53,6 +56,7 @@ export async function handleOutboundEmailJob(
       select: {
         id: true,
         contentText: true,
+        attachments: true,
         integrationId: true,
         sendStatus: true,
         thread: {
@@ -144,6 +148,32 @@ export async function handleOutboundEmailJob(
     : formatReplySubject(message.thread.subject);
   const headers = buildOutboundMessageReplyHeaders(message.thread.id, message.id, inReplyTo);
 
+  // Resolve stored refs to bytes before the delivery claim, so a missing or
+  // over-budget attachment fails *definitely* — no provider request has been
+  // made yet, so this is `failed` and retriable, not the `unknown` that any
+  // error after the attempt has to become.
+  let attachments;
+  try {
+    attachments = await loadOutboundAttachments(
+      message.attachments,
+      getOutboundAttachmentLimits(),
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await markClaimFailed(messageId, claimToken, msg);
+    logger.error(
+      {
+        opsAlert: !(err instanceof OutboundAttachmentError),
+        err: msg,
+        messageId,
+        provider,
+        traceId,
+      },
+      '[OutboundEmail] Could not load attachments; send refused before the provider',
+    );
+    return;
+  }
+
   const attempted = await db.message.updateMany({
     where: {
       id: messageId,
@@ -167,6 +197,7 @@ export async function handleOutboundEmailJob(
       subject,
       text: message.contentText ?? '',
       headers,
+      ...(attachments.length > 0 && { attachments }),
     });
     providerMessageId = sent.providerMessageId;
   } catch (err) {

@@ -90,6 +90,7 @@ export function useInboxPageView({
 
   const {
     replyText, setReplyText,
+    composerAttachments,
     isSending, sendError, setSendError,
     toast,
     failedMessages, handleRetry, handleRetrySend,
@@ -158,6 +159,7 @@ export function useInboxPageView({
         messagesEndRef,
         orgSettings,
         replyText,
+        composerAttachments,
         sendError,
         toast,
       },

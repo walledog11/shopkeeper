@@ -24,6 +24,9 @@ export interface DispatchMessageOptions {
   analyticsReplySource?: ReplySource
   source?: DispatchSource
   emailSubjectFallback?: string
+  // Stored `blob:` refs, already checked for org ownership by the caller.
+  // Email is the only channel that carries them; see `attachmentsUnsupported`.
+  attachments?: string[]
 }
 
 export type Message = Awaited<ReturnType<typeof createMessage>>

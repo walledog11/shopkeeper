@@ -12,6 +12,9 @@ import type { OutboundEmailJobData } from '../types.js';
 
 const sendMock = vi.fn();
 const captureOutboundReplySent = vi.hoisted(() => vi.fn());
+const blobGet = vi.hoisted(() => vi.fn());
+
+vi.mock('@vercel/blob', () => ({ get: blobGet, put: vi.fn(), del: vi.fn() }));
 
 vi.mock('@shopkeeper/email', async (importActual) => {
   const actual = await importActual<typeof import('@shopkeeper/email')>();
@@ -44,7 +47,20 @@ function makeJob(
 
 let org: Awaited<ReturnType<typeof createTestOrg>>;
 
-async function seed(sendStatus: string) {
+function blobOf(content: string, contentType = 'application/pdf') {
+  return {
+    statusCode: 200,
+    stream: new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(content));
+        controller.close();
+      },
+    }),
+    blob: { contentType },
+  };
+}
+
+async function seed(sendStatus: string, attachments: string[] = []) {
   const integration = await createTestIntegration(org.id, {
     externalAccountId: 'support@store.com',
     accessToken: 'token',
@@ -59,6 +75,7 @@ async function seed(sendStatus: string) {
       senderType: SenderType.agent,
       contentText: 'Hello there',
       sendStatus,
+      attachments,
       integrationId: integration.id,
     },
   });
@@ -76,6 +93,7 @@ describe('handleOutboundEmailJob', () => {
   beforeEach(async () => {
     org = await createTestOrg();
     sendMock.mockReset();
+    blobGet.mockReset();
     captureOutboundReplySent.mockReset();
     captureOutboundReplySent.mockResolvedValue(undefined);
   });
@@ -284,5 +302,50 @@ describe('handleOutboundEmailJob', () => {
     const after = await db.message.findUnique({ where: { id: message.id } });
     expect(after?.sendStatus).toBe('failed');
     expect(after?.sendError).toContain('no creds');
+  });
+
+  it('carries the stored attachments through to the provider', async () => {
+    blobGet.mockResolvedValueOnce(blobOf('receipt bytes'));
+    sendMock.mockResolvedValueOnce({ providerMessageId: 'provider-message-att' });
+    const { message, data } = await seed('pending', [`blob:attachments/${org.id}/id/receipt.pdf`]);
+
+    await handleOutboundEmailJob(makeJob(data));
+
+    expect(sendMock.mock.calls[0][0]).toMatchObject({
+      attachments: [{
+        name: 'receipt.pdf',
+        contentType: 'application/pdf',
+        contentBase64: Buffer.from('receipt bytes').toString('base64'),
+      }],
+    });
+    const after = await db.message.findUnique({ where: { id: message.id } });
+    expect(after?.sendStatus).toBe('sent');
+  });
+
+  it('omits the attachments field entirely when the message has none', async () => {
+    sendMock.mockResolvedValueOnce({ providerMessageId: 'provider-message-plain' });
+    const { data } = await seed('pending');
+
+    await handleOutboundEmailJob(makeJob(data));
+
+    expect(sendMock.mock.calls[0][0]).not.toHaveProperty('attachments');
+    expect(blobGet).not.toHaveBeenCalled();
+  });
+
+  // The claim ordering is the point: an unreadable attachment must land as a
+  // definite `failed` the merchant can retry, not the `unknown` that any error
+  // after the provider attempt has to become.
+  it('fails before the provider attempt when an attachment cannot be read', async () => {
+    blobGet.mockResolvedValue({ statusCode: 404, stream: null, blob: {} });
+    const { message, data } = await seed('pending', [`blob:attachments/${org.id}/id/gone.pdf`]);
+
+    await expect(handleOutboundEmailJob(makeJob(data))).resolves.toBeUndefined();
+
+    expect(sendMock).not.toHaveBeenCalled();
+    const after = await db.message.findUnique({ where: { id: message.id } });
+    expect(after?.sendStatus).toBe('failed');
+    expect(after?.sendError).toContain('no longer available');
+    expect(after?.sendAttemptedAt).toBeNull();
+    expect(after?.sendClaimToken).toBeNull();
   });
 });

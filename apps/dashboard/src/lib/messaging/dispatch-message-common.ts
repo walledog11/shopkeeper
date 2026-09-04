@@ -23,6 +23,7 @@ export async function createSentAgentMessage(
   text: string,
   integrationId?: string,
   providerMessageId?: string,
+  attachments: string[] = [],
 ) {
   return createMessage(
     {
@@ -31,15 +32,20 @@ export async function createSentAgentMessage(
       contentText: text,
       ...(integrationId && { integrationId }),
       ...(providerMessageId && { providerMessageId }),
+      ...(attachments.length > 0 && { attachments }),
     },
     await reopenPatchFor(thread.id),
   )
 }
 
+// The refs ride on the row rather than the queue payload: the gateway job
+// carries ids only, and a retry re-reads the row, so an attached reply survives
+// a manual retry without the queue having to remember anything.
 export async function createPendingAgentMessage(
   thread: DispatchThread,
   text: string,
   integrationId: string,
+  attachments: string[] = [],
 ) {
   return createMessage(
     {
@@ -48,6 +54,7 @@ export async function createPendingAgentMessage(
       contentText: text,
       integrationId,
       sendStatus: "pending",
+      ...(attachments.length > 0 && { attachments }),
     },
     await reopenPatchFor(thread.id),
   )

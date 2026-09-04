@@ -3,6 +3,8 @@ import type { Dispatch, SetStateAction } from 'react'
 import type { FailedMessage, Message, Thread, ThreadFilterFeedback, ThreadFilterStatus } from '@/types'
 import { SENDER_TYPE } from '@shopkeeper/agent/thread-constants'
 import { errorMessageFromUnknown, requestOk } from '@/lib/api/fetcher'
+import { toAttachmentDisplayUrl } from '@/lib/attachments/blob-ref'
+import { useComposerAttachments } from './useComposerAttachments'
 
 export interface TicketToast {
   message: string
@@ -48,6 +50,8 @@ export function useTicketActions({
   const [toast, setToast] = useState<TicketToast | null>(null)
   const [failedMessages, setFailedMessages] = useState<FailedMessage[]>([])
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const composerAttachments = useComposerAttachments()
+  const { attachmentRefs, clearAttachments } = composerAttachments
 
   const showToast = useCallback((message: string, tone: TicketToast['tone'] = 'success') => {
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current)
@@ -59,7 +63,9 @@ export function useTicketActions({
     if (!replyText.trim() || !activeTicketId) return
     const threadId = activeTicketId
     const textToSend = replyText
+    const refsToSend = attachmentRefs
     setReplyText('')
+    clearAttachments()
     setIsSending(true)
     setSendError(null)
 
@@ -69,7 +75,9 @@ export function useTicketActions({
       senderType: noteMode ? SENDER_TYPE.NOTE : SENDER_TYPE.AGENT,
       contentText: textToSend,
       mediaUrl: null,
-      attachments: [],
+      // The timeline renders display URLs; the raw refs stay on the failed-message
+      // record, which is what a retry re-POSTs.
+      attachments: refsToSend.map(toAttachmentDisplayUrl),
       sentAt: new Date().toISOString(),
     }
 
@@ -79,17 +87,34 @@ export function useTicketActions({
     }))
 
     try {
-      await requestOk('/api/messages', jsonPost({ threadId, text: textToSend, isNote: noteMode }), 'Failed to send message')
+      await requestOk(
+        '/api/messages',
+        jsonPost({ threadId, text: textToSend, isNote: noteMode, attachments: refsToSend }),
+        'Failed to send message',
+      )
       await revalidateThreadCaches()
     } catch (err) {
       console.error('Failed to send message', err)
       setSendError(errorMessageFromUnknown(err, 'Failed to send message.'))
-      setFailedMessages(prev => [...prev, { id: optimisticMessage.id, threadId, text: textToSend, isNote: noteMode }])
+      setFailedMessages(prev => [...prev, {
+        id: optimisticMessage.id,
+        threadId,
+        text: textToSend,
+        isNote: noteMode,
+        attachments: refsToSend,
+      }])
       await revalidateThreadCaches()
     } finally {
       setIsSending(false)
     }
-  }, [activeTicketId, patchThreadCaches, replyText, revalidateThreadCaches])
+  }, [
+    activeTicketId,
+    attachmentRefs,
+    clearAttachments,
+    patchThreadCaches,
+    replyText,
+    revalidateThreadCaches,
+  ])
 
   const handleResolve = useCallback(async () => {
     if (!activeTicketId) return
@@ -153,7 +178,7 @@ export function useTicketActions({
       senderType: failed.isNote ? SENDER_TYPE.NOTE : SENDER_TYPE.AGENT,
       contentText: failed.text,
       mediaUrl: null,
-      attachments: [],
+      attachments: failed.attachments.map(toAttachmentDisplayUrl),
       sentAt: new Date().toISOString(),
     }
 
@@ -163,7 +188,12 @@ export function useTicketActions({
     }))
 
     try {
-      await requestOk('/api/messages', jsonPost({ threadId: failed.threadId, text: failed.text, isNote: failed.isNote }), 'Failed to retry message')
+      await requestOk('/api/messages', jsonPost({
+        threadId: failed.threadId,
+        text: failed.text,
+        isNote: failed.isNote,
+        attachments: failed.attachments,
+      }), 'Failed to retry message')
       await revalidateThreadCaches()
     } catch (err) {
       console.error('Failed to retry message', err)
@@ -229,6 +259,7 @@ export function useTicketActions({
   return {
     replyText,
     setReplyText,
+    composerAttachments,
     isSending,
     sendError,
     setSendError,
