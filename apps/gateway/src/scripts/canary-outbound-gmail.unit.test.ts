@@ -8,6 +8,8 @@ import {
 
 const validArgs: OutboundGmailCanaryArgs = {
   acknowledgeSelfEmail: true,
+  attach: false,
+  attachMissing: false,
   execute: true,
   integrationId: 'integration_1',
 };
@@ -50,6 +52,34 @@ describe('outbound Gmail canary safety', () => {
     expect(() => assertOutboundGmailCanaryRuntime(validArgs, {
       GATEWAY_URL: 'https://gateway.up.railway.app',
     })).toThrow('INTERNAL_API_SECRET');
+  });
+
+  it('parses the attachment modes', () => {
+    expect(parseOutboundGmailCanaryArgs([
+      'node', 'canary.ts', '--integration-id=i', '--acknowledge-self-email', '--execute', '--attach',
+    ])).toMatchObject({ attach: true, attachMissing: false });
+    expect(parseOutboundGmailCanaryArgs([
+      'node', 'canary.ts', '--integration-id=i', '--acknowledge-self-email', '--execute', '--attach-missing',
+    ])).toMatchObject({ attach: false, attachMissing: true });
+  });
+
+  // They assert opposite terminal statuses, so a run with both set would pass
+  // on whichever branch it reached.
+  it('refuses both attachment modes at once', () => {
+    expect(() => assertOutboundGmailCanaryRuntime(
+      { ...validArgs, attach: true, attachMissing: true },
+      { GATEWAY_URL: 'https://gateway.up.railway.app', INTERNAL_API_SECRET: 'secret' },
+    )).toThrow('not both');
+  });
+
+  it.each([
+    { ...validArgs, attach: true },
+    { ...validArgs, attachMissing: true },
+  ])('accepts a single attachment mode', (args) => {
+    expect(assertOutboundGmailCanaryRuntime(args, {
+      GATEWAY_URL: 'https://gateway.up.railway.app',
+      INTERNAL_API_SECRET: 'secret',
+    }).hostname).toBe('gateway.up.railway.app');
   });
 
   it('builds a fresh plus-address only from the connected account', () => {

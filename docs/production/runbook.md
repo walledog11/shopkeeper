@@ -296,6 +296,22 @@ Require `sendStatus=sent`, `hasProviderMessageId=true`, and
 replace recipient mailbox confirmation, the independent inbound/threading
 canary, or recovery-path exercises.
 
+Two attachment modes extend the same canary. `--attach` stores a few bytes under
+the org's attachment prefix and sends them for real — require the same three
+conditions plus `attachment: "sent"`, and open the file in the receiving mailbox,
+which no script can assert for you. Gmail and Postmark build the payload
+differently (`buildRawMime` multipart/mixed versus Postmark's `Attachments`
+field), so one passing says nothing about the other.
+
+`--attach-missing` stages a well-formed ref that was never written and asserts
+the refusal instead: `sendStatus=failed` with `providerWasAttempted=false` and a
+non-empty `sendError`. **`unknown` is the regression this exists to catch**, not a
+lesser pass — it suppresses automatic retry and pages ops, and
+`loadOutboundAttachments` runs ahead of the delivery claim in
+`handleOutboundEmailJob` precisely so an unreadable attachment cannot land there.
+A `sent` is worse still: the reply went out silently missing the merchant's file.
+The two modes are mutually exclusive because they assert opposite statuses.
+
 Rollback by setting `OUTBOUND_EMAIL_ASYNC=false` and redeploying the dashboard. Existing pending,
 processing, failed, or unknown rows remain recovery evidence; do not delete or blindly enqueue
 them during rollback.

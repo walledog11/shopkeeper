@@ -9,6 +9,8 @@ const CANARY_BODY = [
 
 export interface OutboundGmailCanaryArgs {
   acknowledgeSelfEmail: boolean;
+  attach: boolean;
+  attachMissing: boolean;
   execute: boolean;
   integrationId: string | null;
 }
@@ -21,6 +23,8 @@ function readArg(args: string[], prefix: string): string | null {
 export function parseOutboundGmailCanaryArgs(args: string[]): OutboundGmailCanaryArgs {
   return {
     acknowledgeSelfEmail: args.includes('--acknowledge-self-email'),
+    attach: args.includes('--attach'),
+    attachMissing: args.includes('--attach-missing'),
     execute: args.includes('--execute'),
     integrationId: readArg(args, '--integration-id='),
   };
@@ -33,8 +37,14 @@ export function assertOutboundGmailCanaryRuntime(
   if (!args.execute || !args.acknowledgeSelfEmail || !args.integrationId) {
     throw new Error(
       'Usage: npx tsx apps/gateway/src/scripts/canary-outbound-gmail.ts '
-      + '--integration-id=<uuid> --acknowledge-self-email --execute',
+      + '--integration-id=<uuid> --acknowledge-self-email --execute '
+      + '[--attach | --attach-missing]',
     );
+  }
+  // The two attachment modes assert opposite terminal statuses, so a run that
+  // set both would pass whichever check it happened to evaluate.
+  if (args.attach && args.attachMissing) {
+    throw new Error('Pass either --attach or --attach-missing, not both.');
   }
   if (!env.INTERNAL_API_SECRET?.trim()) {
     throw new Error('INTERNAL_API_SECRET is required.');
@@ -65,16 +75,47 @@ export function buildSelfCanaryAddress(accountAddress: string, marker: string): 
   return `${localPart}+shopkeeper-canary-${safeMarker}@${domain}`;
 }
 
+// A few bytes under the org's own attachment prefix, stored exactly the way an
+// inbound attachment is. The upload has to succeed here or the run proves
+// nothing about delivery.
+async function stageCanaryAttachment(organizationId: string, marker: string): Promise<string> {
+  const { uploadInboundAttachment } = await import('../storage/blob.js');
+  const ref = await uploadInboundAttachment(
+    organizationId,
+    `canary-${marker}.txt`,
+    'text/plain',
+    Buffer.from(`Shopkeeper outbound attachment canary ${marker}\n`).toString('base64'),
+  );
+  if (!ref) throw new Error('The canary attachment could not be stored.');
+  return ref;
+}
+
+// A well-formed ref for this org that was never written. The worker must refuse
+// it before the provider attempt, which is the whole point of the drill.
+function missingAttachmentRef(organizationId: string, marker: string): string {
+  return `blob:attachments/${organizationId}/missing-${marker}/canary-missing.txt`;
+}
+
 async function waitForTerminalStatus(
   messageId: string,
   timeoutMs = 30_000,
-): Promise<{ providerMessageId: string | null; sendError: string | null; sendStatus: string | null }> {
+): Promise<{
+  providerMessageId: string | null;
+  sendAttemptedAt: Date | null;
+  sendError: string | null;
+  sendStatus: string | null;
+}> {
   const { db } = await import('@shopkeeper/db');
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const message = await db.message.findUnique({
       where: { id: messageId },
-      select: { providerMessageId: true, sendError: true, sendStatus: true },
+      select: {
+        providerMessageId: true,
+        sendAttemptedAt: true,
+        sendError: true,
+        sendStatus: true,
+      },
     });
     if (!message) throw new Error('The canary message disappeared.');
     if (message.sendStatus === 'sent' || message.sendStatus === 'failed' || message.sendStatus === 'unknown') {
@@ -108,6 +149,11 @@ export async function main(
     }
 
     const target = buildSelfCanaryAddress(integration.externalAccountId, marker);
+    const attachmentRef = args.attach
+      ? await stageCanaryAttachment(integration.organizationId, marker)
+      : args.attachMissing
+        ? missingAttachmentRef(integration.organizationId, marker)
+        : null;
     const staged = await db.$transaction(async (tx) => {
       const customer = await tx.customer.upsert({
         where: {
@@ -144,6 +190,7 @@ export async function main(
           senderType: 'agent',
           sendStatus: 'pending',
           threadId: thread.id,
+          ...(attachmentRef && { attachments: [attachmentRef] }),
         },
         select: { id: true },
       });
@@ -177,6 +224,41 @@ export async function main(
 
     await enqueue();
     const result = await waitForTerminalStatus(staged.messageId);
+
+    // The refusal drill. `unknown` is the failure this asserts against, not a
+    // lesser pass: it suppresses automatic retry and pages ops, and the loader
+    // sits ahead of the delivery claim precisely so an unreadable attachment
+    // cannot land there. A `sent` here is worse still — it means the send went
+    // out silently missing the file the merchant attached.
+    if (args.attachMissing) {
+      await db.thread.update({
+        where: { id: staged.threadId },
+        data: { status: 'closed' },
+      });
+      console.log(JSON.stringify({
+        attachment: 'missing',
+        integrationId: integration.id,
+        messageId: staged.messageId,
+        organizationId: integration.organizationId,
+        providerWasAttempted: result.sendAttemptedAt !== null,
+        sendError: result.sendError,
+        sendStatus: result.sendStatus,
+        threadId: staged.threadId,
+      }, null, 2));
+      if (result.sendStatus !== 'failed') {
+        throw new Error(
+          `Expected a definite 'failed' for an unreadable attachment, got '${result.sendStatus ?? 'unset'}'.`,
+        );
+      }
+      if (result.sendAttemptedAt !== null) {
+        throw new Error('The provider was attempted despite an unreadable attachment.');
+      }
+      if (!result.sendError?.trim()) {
+        throw new Error('The refusal recorded no sendError for the merchant to act on.');
+      }
+      return;
+    }
+
     if (result.sendStatus !== 'sent' || !result.providerMessageId) {
       throw new Error(`Gmail canary finished with status ${result.sendStatus ?? 'unset'}.`);
     }
@@ -187,6 +269,7 @@ export async function main(
     });
 
     console.log(JSON.stringify({
+      attachment: args.attach ? 'sent' : null,
       deduplicated: duplicate.deduplicated === true,
       hasProviderMessageId: true,
       integrationId: integration.id,
