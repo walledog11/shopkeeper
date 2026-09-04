@@ -5,14 +5,11 @@ nixPkgs = ["nodejs_22"]
 cmds = ["npm install"]
 
 [phases.build]
-cmds = [
-  "npm run build -w packages/db",
-  "npm run build -w packages/email",
-  "npm run build -w packages/agent",
-  "npm run build -w packages/analytics",
-  "npm run build -w packages/integrations",
-  "npm run build -w apps/gateway",
-]
+# turbo orders workspace builds from each package's own dependencies. A literal
+# sequence here is a second copy of the dependency graph and goes stale the
+# moment a package gains a workspace dependency — which is how a gateway deploy
+# broke on `@shopkeeper/email` importing `@shopkeeper/agent`.
+cmds = ["npx turbo run build --filter=shopkeeper-gateway"]
 
 [start]
 cmd = "npm run start -w apps/gateway"
