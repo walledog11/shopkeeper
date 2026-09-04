@@ -54,18 +54,24 @@ npm run start -w apps/gateway
 ```
 
 - The gateway start script launches both the HTTP server and the worker by default via `dist/start.js`.
-- Local validation for the targeted build path:
+- Build command (`railway.json`, mirrored in `nixpacks.toml`), which is also the
+  local validation path:
 
 ```bash
-npm run build -w packages/db
-npm run build -w packages/email
-npm run build -w packages/agent
-npm run build -w packages/analytics
-npm run build -w packages/integrations
-npm run build -w apps/gateway
+npx turbo run build --filter=shopkeeper-gateway
 ```
 
-- If Railway is configured with a custom build command in the console, use the same targeted build path above instead of a monorepo-wide build.
+- **Never expand that into a literal sequence of `npm run build -w <package>` steps.**
+  turbo orders workspace builds from each package's own dependencies; a written-out
+  list is a second copy of the dependency graph and goes stale the moment a package
+  gains a workspace dependency. That is not hypothetical: `@shopkeeper/email` gained
+  an import from `@shopkeeper/agent`, and five separate copies of the order — two
+  build configs, two scripts, and this document — all still listed email first, so
+  the gateway deploy failed on a `dist/` that did not exist yet. Verify a build-order
+  change by deleting every `packages/*/dist` first; a stale artifact makes the wrong
+  order pass.
+- If Railway is configured with a custom build command in the console, use the same
+  command above rather than a hand-written sequence.
 - `nixpacks.toml` mirrors the start command.
 - `GATEWAY_RUNTIME_ROLE=all` is the default. For split Railway services, use `server` on the web service and `worker` on the background worker service, keeping the same start command.
 - Upstash's free tier is usually not enough for always-on BullMQ workers. Use pay-as-you-go/fixed pricing or another Redis deployment for production.
