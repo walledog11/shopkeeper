@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   classifyOrder,
-  isOrdersBoardResponse,
   isOrdersPageResponse,
-  parseOrderBoardRequestParams,
   parseOrdersRequestParams,
   type OrderRow,
 } from "./order-contract"
@@ -41,17 +39,8 @@ describe("order contract", () => {
     })).toBe(true)
   })
 
-  it("rejects malformed page and board responses", () => {
+  it("rejects malformed page responses", () => {
     expect(isOrdersPageResponse({ orders: [{ ...order(), currency: undefined }], nextPageInfo: null, shop: "shop" })).toBe(false)
-    expect(isOrdersBoardResponse({ shop: "shop", columns: {} })).toBe(false)
-    expect(isOrdersBoardResponse({
-      shop: "shop",
-      columns: {
-        needs_fulfillment: { orders: [order()], nextPageInfo: null },
-        unpaid: { orders: [], nextPageInfo: null },
-        fulfilled: { orders: [], nextPageInfo: null },
-      },
-    })).toBe(true)
   })
 
   it.each(["1001", "#1001", "customer@example.com"])("accepts supported search query %s", query => {
@@ -62,14 +51,13 @@ describe("order contract", () => {
     expect(() => parseOrdersRequestParams(new URLSearchParams({ q: query }))).toThrow(/order number or customer email/)
   })
 
-  it("validates column ids, cursors, and strict integer limits", () => {
-    expect(parseOrderBoardRequestParams("unpaid", new URLSearchParams({ page_info: "next", limit: "50" }))).toEqual({
-      columnId: "unpaid",
+  it("validates cursors and strict integer limits", () => {
+    expect(parseOrdersRequestParams(new URLSearchParams({ page_info: "next", limit: "50" }))).toEqual({
+      query: null,
       pageInfo: "next",
       limit: 50,
     })
-    expect(() => parseOrderBoardRequestParams("refunds", new URLSearchParams())).toThrow(/Unknown/)
-    expect(() => parseOrderBoardRequestParams("unpaid", new URLSearchParams("page_info="))).toThrow(/page_info/)
+    expect(() => parseOrdersRequestParams(new URLSearchParams("page_info="))).toThrow(/page_info/)
     for (const limit of ["0", "51", "2.5", "abc", " 2"]) {
       expect(() => parseOrdersRequestParams(new URLSearchParams({ limit }))).toThrow(/limit/)
     }

@@ -84,16 +84,6 @@ const EXTRA_CHANNEL_INFO: Record<string, ChannelInfo> = {
   },
 }
 
-const DASHBOARD_CHANNEL_TYPES = [
-  'email',
-  'ig_dm',
-  'sms',
-  'shopify',
-  'tiktok',
-  'dashboard_agent',
-  'sms_agent',
-] as const satisfies readonly ChannelType[]
-
 export function getChannelInfo(channelType: ChannelType | string | null | undefined): ChannelInfo {
   if (!channelType) return DEFAULT_CHANNEL_INFO
   return CHANNEL_INFO[channelType as ChannelType] ?? EXTRA_CHANNEL_INFO[channelType] ?? {
@@ -136,10 +126,4 @@ export function getChannelLabel(
 
 export function getChannelBadgeClassName(channelType: ChannelType | string | null | undefined): string {
   return getChannelInfo(channelType).badgeClassName
-}
-
-export function getChannelOptions(
-  channelTypes: readonly ChannelType[] = DASHBOARD_CHANNEL_TYPES,
-): { id: ChannelType; label: string }[] {
-  return channelTypes.map(id => ({ id, label: getChannelLabel(id) }))
 }

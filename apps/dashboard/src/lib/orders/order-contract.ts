@@ -1,12 +1,5 @@
 import { isRecord } from "@shopkeeper/agent/guards";
-export const ORDER_BOARD_COLUMN_IDS = [
-  "needs_fulfillment",
-  "unpaid",
-  "fulfilled",
-] as const
-
-export type OrderBoardColumnId = typeof ORDER_BOARD_COLUMN_IDS[number]
-export type OrderClassification = OrderBoardColumnId | "excluded"
+export type OrderClassification = "needs_fulfillment" | "unpaid" | "fulfilled" | "excluded"
 
 export interface OrderCustomer {
   id: number
@@ -38,18 +31,11 @@ export interface OrdersPageResponse {
   shop: string
 }
 
-export type OrdersBoardColumnResponse = Pick<OrdersPageResponse, "orders" | "nextPageInfo">
-
-export interface OrdersBoardResponse {
-  shop: string
-  columns: Record<OrderBoardColumnId, OrdersBoardColumnResponse>
-}
-
 const UNPAID_FINANCIAL_STATUSES = new Set(["pending", "authorized", "partially_paid"])
 const EXCLUDED_FINANCIAL_STATUSES = new Set(["refunded", "voided"])
 const OPEN_FULFILLMENT_STATUSES = new Set([null, "", "unfulfilled", "partial", "partially_fulfilled"])
 
-/** Assigns every visible order to one, and only one, board column. */
+/** Assigns every visible order to one, and only one, classification. */
 export function classifyOrder(order: Pick<OrderRow, "financial_status" | "fulfillment_status">): OrderClassification {
   if (EXCLUDED_FINANCIAL_STATUSES.has(order.financial_status)) return "excluded"
   if (UNPAID_FINANCIAL_STATUSES.has(order.financial_status)) return "unpaid"
@@ -122,22 +108,6 @@ export function parseOrdersRequestParams(searchParams: URLSearchParams): {
   }
 }
 
-export function parseOrderBoardRequestParams(
-  columnId: string,
-  searchParams: URLSearchParams,
-): { columnId: OrderBoardColumnId; limit: number; pageInfo: string | null } {
-  assertOnlyParams(searchParams, ["page_info", "limit"])
-  if (!ORDER_BOARD_COLUMN_IDS.includes(columnId as OrderBoardColumnId)) {
-    throw new OrderContractValidationError("Unknown order board column")
-  }
-  return {
-    columnId: columnId as OrderBoardColumnId,
-    limit: parseLimit(searchParams),
-    pageInfo: parsePageInfo(searchParams),
-  }
-}
-
-
 function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === "string"
 }
@@ -178,17 +148,4 @@ export function isOrdersPageResponse(value: unknown): value is OrdersPageRespons
     && value.orders.every(isOrderRow)
     && isNullableString(value.nextPageInfo)
     && typeof value.shop === "string"
-}
-
-function isOrdersBoardColumnResponse(value: unknown): value is OrdersBoardColumnResponse {
-  return isRecord(value)
-    && Array.isArray(value.orders)
-    && value.orders.every(isOrderRow)
-    && isNullableString(value.nextPageInfo)
-}
-
-export function isOrdersBoardResponse(value: unknown): value is OrdersBoardResponse {
-  if (!isRecord(value) || typeof value.shop !== "string" || !isRecord(value.columns)) return false
-  const columns = value.columns
-  return ORDER_BOARD_COLUMN_IDS.every(columnId => isOrdersBoardColumnResponse(columns[columnId]))
 }

@@ -15,7 +15,8 @@ const WARNING_BASELINE = {
   // pass-throughs; 78 -> 76 when the value-at-risk guard was deleted.
   // 76 -> 72 after removing unused dashboard validation helpers and catalog
   // re-exports. Consumers import these from @shopkeeper/agent/observability.
-  types: 72,
+  // 72 -> 71 with the unreachable customers-directory and orders-board surfaces.
+  types: 71,
 };
 
 const result = spawnSync(process.execPath, [KNIP_BIN, '--reporter', 'json'], {

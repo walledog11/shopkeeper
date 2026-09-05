@@ -4,7 +4,6 @@ import {
   getChannelBadgeClassName,
   getChannelInfo,
   getChannelLabel,
-  getChannelOptions,
 } from "./channels";
 
 describe("channel metadata", () => {
@@ -39,14 +38,6 @@ describe("channel metadata", () => {
       logo: "/logos/default.svg",
       badgeClassName: "bg-muted text-muted-foreground",
     });
-  });
-
-  it("builds dashboard channel options from shared labels", () => {
-    expect(getChannelOptions(["email", "dashboard_agent", "sms_agent"])).toEqual([
-      { id: "email", label: "Email" },
-      { id: "dashboard_agent", label: "Dashboard" },
-      { id: "sms_agent", label: "Telegram" },
-    ]);
   });
 
   it("can group operator channels for report labels", () => {

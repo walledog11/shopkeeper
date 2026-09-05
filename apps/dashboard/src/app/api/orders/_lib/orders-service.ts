@@ -8,8 +8,6 @@ import {
 } from "@/lib/server/shopify-integration"
 import { normalizeCurrencyCode } from "@/lib/format/currency"
 import {
-  classifyOrder,
-  type OrderBoardColumnId,
   type OrderRow,
   type OrdersPageResponse,
 } from "@/lib/orders/order-contract"
@@ -146,44 +144,6 @@ export async function listShopifyOrders(
     nextPageInfo: parseNextPageInfo(headers),
     shop,
   }
-}
-
-const BOARD_PROVIDER_QUERY: Record<OrderBoardColumnId, ShopifyOrdersQuery> = {
-  needs_fulfillment: { fulfillmentStatus: "unfulfilled" },
-  unpaid: { financialStatus: "unpaid" },
-  fulfilled: { fulfillmentStatus: "shipped" },
-}
-
-const MAX_BOARD_PROVIDER_PAGES = 5
-
-/**
- * Shopify's status filters overlap, so skip provider pages until a page has
- * rows belonging to the requested canonical column. A bounded empty page may
- * still carry a cursor; callers must expose that cursor rather than treating
- * the column as exhausted.
- */
-export async function listCanonicalOrderColumnPage(
-  integration: ShopifyIntegration,
-  columnId: OrderBoardColumnId,
-  options: { pageInfo?: string | null; limit?: number } = {},
-): Promise<OrdersPageResponse> {
-  let pageInfo = options.pageInfo ?? null
-  let latestPage: OrdersPageResponse | null = null
-
-  for (let scanned = 0; scanned < MAX_BOARD_PROVIDER_PAGES; scanned += 1) {
-    const page = await listShopifyOrders(integration, {
-      ...(pageInfo ? { pageInfo } : BOARD_PROVIDER_QUERY[columnId]),
-      limit: options.limit,
-    })
-    latestPage = page
-    const orders = page.orders.filter(order => classifyOrder(order) === columnId)
-    if (orders.length > 0 || !page.nextPageInfo) return { ...page, orders }
-    pageInfo = page.nextPageInfo
-  }
-
-  return latestPage
-    ? { ...latestPage, orders: [] }
-    : { orders: [], nextPageInfo: null, shop: integration.externalAccountId }
 }
 
 export async function listShopifyOrdersForOrg(
