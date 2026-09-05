@@ -12,11 +12,11 @@ loadGatewayEnv();
 //
 // It seeds one open ticket per briefing outcome — two `questionable` (1: "Sarah",
 // outreach that might be a customer; 2: a shipping question), one `genuine` that
-// is deliberately NOT in pendingDigest.threadIds so you can confirm
-// mark_ticket_spam refuses to reach a healthy inbox ticket, one `no_request`
+// is deliberately NOT on the briefing so you can confirm reply/spam still reach a
+// ticket the merchant names without having been shown it, one `no_request`
 // opener, and one `filtered` pitch — then builds and pushes the digest through
 // the production path (buildOrgDigest + notifyOperator), so OperatorContext
-// .pendingDigest carries exactly the threadIds the merchant just read.
+// .pendingDigest carries exactly the items the merchant just read.
 //
 // Keep every fixture's verdict one the classifier would plausibly reach for that
 // body. This script is also how the briefing gets read before shipping copy, and
@@ -428,9 +428,9 @@ async function main() {
   // which otherwise needs a bound phone.
   console.log(`\n${'─'.repeat(52)}\n${digest.message}\n${'─'.repeat(52)}\n`);
 
-  const flaggedOrder = digest.pendingDigest.threadIds.map((id: string, index: number) => {
-    const match = staged.find((s) => s.threadId === id);
-    return `  ${index + 1}. ${match?.fixture.name ?? 'unknown'}  ${id}`;
+  const flaggedOrder = digest.pendingDigest.items.map((item, index) => {
+    const match = staged.find((s) => s.threadId === item.threadId);
+    return `  ${index + 1}. [${item.kind}] ${match?.fixture.name ?? 'unknown'}  ${item.threadId}`;
   });
 
   const bindings = await listOperatorBindings(orgId);
@@ -460,10 +460,10 @@ async function main() {
 
   console.log(`✅ Staged a digest with ${digest.flaggedCount} flagged ticket(s) and pushed it to ${delivered}/${bindings.length} operator channel(s).`);
   console.log('   org:    ', orgId);
-  console.log('   flagged (the order the model and the merchant both see):');
+  console.log('   briefing (the order the model and the merchant both see):');
   for (const line of flaggedOrder) console.log(line);
   const genuine = staged.find((s) => s.fixture.filterStatus === 'genuine');
-  console.log('   genuine (NOT in pendingDigest — mark_ticket_spam must refuse it):');
+  console.log('   genuine, not on the briefing (reply/spam must still reach it):');
   console.log(`     ${genuine?.fixture.name}  ${genuine?.threadId}`);
   console.log('');
   // start.ts spawns ./index.js and ./worker.js, so it only resolves from dist —

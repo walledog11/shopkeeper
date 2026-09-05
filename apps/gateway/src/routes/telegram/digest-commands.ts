@@ -1,12 +1,13 @@
 import { db } from '@shopkeeper/db';
 import logger from '../../logger.js';
 import {
+  findInboxThread,
   formatDigestReplyConfirmation,
   formatDigestSpamConfirmation,
   formatDigestThreadBlurb,
   loadDigestThreads,
-  markDigestThreadSpam,
-  sendDigestThreadReply,
+  markInboxThreadSpam,
+  sendInboxThreadReply,
 } from '../../message-handlers/digest-triage.js';
 import type { OperatorContext } from '../../operator-context.js';
 import type { DigestCommand } from './command-parser.js';
@@ -22,18 +23,17 @@ export async function handleDigestCommand(
   const { reply, presence } = message;
   if (!context.pendingDigest) return false;
 
-  // Ordinals index the briefing the merchant is looking at, not the flagged
-  // subset. They used to be separate lists that both started at 1, so "spam 2"
-  // and "2 yes" pointed at different tickets and the merchant had no way to know.
+  // Ordinals index the briefing the merchant is looking at. They used to be
+  // separate lists that both started at 1, so "spam 2" and "2 yes" pointed at
+  // different tickets and the merchant had no way to know.
   const { items } = context.pendingDigest;
-  const threadIds = context.pendingDigest.threadIds;
   if (command.type === 'digest-review') {
-    if (threadIds.length === 0) {
-      await reply('No flagged tickets in your last digest.');
+    if (items.length === 0) {
+      await reply('Nothing from your last briefing is waiting on you.');
       return true;
     }
-    const entries = await loadDigestThreads(organizationId, threadIds);
-    const lines = ['Flagged tickets:'];
+    const entries = await loadDigestThreads(organizationId, items);
+    const lines = ['From your last briefing:'];
     for (const entry of entries) {
       if (!entry.thread) continue;
       const blurb = formatDigestThreadBlurb(entry.thread);
@@ -56,10 +56,14 @@ export async function handleDigestCommand(
     await reply(`Open number ${command.index} before deciding what to do with it.`);
     return true;
   }
-  if (target.kind !== 'flagged' && !canOpenThreadReview) {
-    await reply(target.kind === 'approval'
-      ? `Number ${command.index} is a reply I've already drafted, not a flagged ticket. Say "${command.index} yes" to send it.`
-      : `Number ${command.index} isn't one I flagged, so tell me what to do with it instead.`);
+  // `kind` decides what a BARE number does, not what the merchant may ask for.
+  // OPEN, SPAM and REPLY reach every item: an escalation the agent could not
+  // plan is exactly the thing a merchant answers by hand, and refusing it as
+  // "not one I flagged" left the briefing's own items unactionable. Only an
+  // `approval` is redirected — replying by hand while a drafted reply is parked
+  // would send the customer two messages, so point at the draft instead.
+  if (target.kind === 'approval' && command.type !== 'digest-open') {
+    await reply(`Number ${command.index} is a reply I've already drafted. Say "${command.index} yes" to send it, or "${command.index}" plus a change to re-draft it.`);
     return true;
   }
   const targetId = target.threadId;
@@ -99,19 +103,16 @@ export async function handleDigestCommand(
   }
 
   if (command.type === 'digest-spam') {
-    const result = await markDigestThreadSpam(organizationId, context.pendingDigest, targetId);
+    const result = await markInboxThreadSpam(organizationId, targetId);
     if (!result.ok) {
       await reply('Ticket not found.');
       return true;
     }
-    await reply(formatDigestSpamConfirmation(result.customerName, result.index));
+    await reply(formatDigestSpamConfirmation(result.customerName, command.index));
     return true;
   }
 
-  const replyTarget = await db.thread.findFirst({
-    where: { id: targetId, organizationId },
-    select: { customer: { select: { name: true } } },
-  });
+  const replyTarget = await findInboxThread(organizationId, targetId);
   if (!replyTarget) {
     await reply('Ticket not found.');
     return true;
@@ -122,7 +123,7 @@ export async function handleDigestCommand(
       kind: 'digest-reply',
       ticketIndex: command.index,
     },
-    () => sendDigestThreadReply(targetId, command.text),
+    () => sendInboxThreadReply(targetId, command.text),
   );
   if (!response.ok) {
     logger.error({ status: response.status, err: response.responseBody, threadId: targetId }, '[Operator] Digest REPLY failed');

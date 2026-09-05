@@ -120,7 +120,7 @@ export async function sendScheduledDigests(
         flaggedCount = digest.flaggedCount;
       } else {
         message = await buildFirstNightMessage(org.id, org.name, agentName);
-        pendingDigest = { items: [], threadIds: [], sentAt: now.toISOString() };
+        pendingDigest = { items: [], sentAt: now.toISOString() };
       }
 
       const bindings = await listOperatorBindings(org.id);

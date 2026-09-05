@@ -61,7 +61,14 @@ export function isPendingPlanInvalid(plan: Pick<PendingPlan, 'validation'>): boo
  * - `approval` has a drafted plan; a bare yes executes it.
  * - `decision` is a thread the agent could not plan; there is nothing to
  *   approve, so a number here needs an instruction with it.
- * - `flagged` is a classifier maybe; SPAM and REPLY act on these.
+ * - `flagged` is a classifier maybe.
+ *
+ * `kind` says what a bare number does, never what the merchant is allowed to ask
+ * for. Replying to a ticket and binning it as spam are inbox actions scoped by
+ * `canonicalInboxThreadWhere`, so they reach any of these — see
+ * `operator-inbox-tools.ts`. Gating them on `kind` is what made the two
+ * "needs your decision" items in a briefing unactionable by the tools that exist
+ * to act on briefing items.
  */
 export interface PendingDigestItem {
   threadId: string;
@@ -72,16 +79,18 @@ export interface PendingDigestItem {
   needsThreadReview?: boolean;
 }
 
+/**
+ * `items` is the whole briefing, in the order the merchant read it, and it is the
+ * only list. A `threadIds` field carrying just the flagged subset used to sit
+ * beside it and was still the gate on the reply/spam tools after the ordinals had
+ * moved on: a briefing whose needs-you items were all approvals and escalations
+ * wrote `threadIds: []` and every triage call failed "not in the current digest".
+ * The field is now write-only (see `serializePendingDigest`) so nothing can gate
+ * on it again.
+ */
 export interface PendingDigest {
   items: PendingDigestItem[];
   sentAt: string;
-  /**
-   * The flagged subset, in briefing order. Retained because it is the shape
-   * already persisted in every OperatorContext row in production, and a merchant
-   * mid-conversation with yesterday's briefing must not have their ordinals
-   * silently repoint.
-   */
-  threadIds: string[];
 }
 
 const DIGEST_ITEM_KINDS = new Set(['approval', 'decision', 'flagged']);
@@ -104,6 +113,25 @@ export function pendingPlanNeedsThreadReview(
     item.needsThreadReview === true
     && ((plan.planId && item.planId === plan.planId) || item.threadId === plan.threadId)
   )) === true;
+}
+
+/**
+ * The persisted shape. `threadIds` is a compatibility field only: the previous
+ * deploy's `readPendingDigest` requires it to be an array, so a row written
+ * without it would leave a rolled-back gateway with no pending digest at all.
+ * Nothing reads it back into `PendingDigest`. Drop it once no deploy that
+ * requires it can be rolled back to.
+ */
+function serializePendingDigest(digest: PendingDigest): {
+  items: PendingDigestItem[];
+  sentAt: string;
+  threadIds: string[];
+} {
+  return {
+    items: digest.items,
+    sentAt: digest.sentAt,
+    threadIds: digest.items.flatMap((item) => (item.kind === 'flagged' ? [item.threadId] : [])),
+  };
 }
 
 function readPendingDigestItems(value: unknown, threadIds: string[]): PendingDigestItem[] {
@@ -266,17 +294,16 @@ export function mostRecentPendingPlan(plans: PendingPlan[]): PendingPlan | null 
 }
 
 function readPendingDigest(value: unknown): PendingDigest | null {
-  if (
-    !isRecord(value) ||
-    !Array.isArray(value.threadIds) ||
-    typeof value.sentAt !== 'string'
-  ) {
-    return null;
-  }
+  if (!isRecord(value) || typeof value.sentAt !== 'string') return null;
 
-  const threadIds = value.threadIds.filter((threadId): threadId is string => typeof threadId === 'string');
+  // Legacy rows carry only `threadIds`; current rows carry `items` and write
+  // `threadIds` for rollback. Either alone is enough to rebuild the list.
+  const threadIds = Array.isArray(value.threadIds)
+    ? value.threadIds.filter((threadId): threadId is string => typeof threadId === 'string')
+    : [];
+  if (!Array.isArray(value.items) && threadIds.length === 0) return null;
+
   return {
-    threadIds,
     items: readPendingDigestItems(value.items, threadIds),
     sentAt: value.sentAt,
   };
@@ -299,7 +326,7 @@ function readPendingQuestion(value: unknown): PendingQuestion | null {
   };
 }
 
-function toJsonObject(value: PendingPlan | PendingDigest | PendingQuestion): PrismaTypes.InputJsonObject {
+function toJsonObject(value: PendingPlan | PendingQuestion): PrismaTypes.InputJsonObject {
   return JSON.parse(JSON.stringify(value)) as PrismaTypes.InputJsonObject;
 }
 
@@ -343,7 +370,9 @@ export async function updateContext(
     data.pendingPlans = updates.pendingPlan ? [toJsonObject(updates.pendingPlan)] : Prisma.DbNull;
   }
   if ('pendingDigest' in updates) {
-    data.pendingDigest = updates.pendingDigest ? toJsonObject(updates.pendingDigest) : Prisma.DbNull;
+    data.pendingDigest = updates.pendingDigest
+      ? (JSON.parse(JSON.stringify(serializePendingDigest(updates.pendingDigest))) as PrismaTypes.InputJsonObject)
+      : Prisma.DbNull;
   }
   if ('pendingQuestion' in updates) {
     data.pendingQuestion = updates.pendingQuestion ? toJsonObject(updates.pendingQuestion) : Prisma.DbNull;

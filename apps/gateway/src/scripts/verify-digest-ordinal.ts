@@ -75,7 +75,6 @@ async function main() {
       pendingQuestion: null,
       pendingDigest: {
         items: ticketIds.map((threadId: string) => ({ threadId, kind: 'flagged' as const })),
-        threadIds: ticketIds,
         sentAt: new Date().toISOString(),
       },
     });

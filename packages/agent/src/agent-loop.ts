@@ -187,6 +187,17 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
       system: systemPromptBlocks,
       messages,
       tools,
+      // Cache the transcript too, not just the system blocks. `messages` grows by
+      // an assistant turn plus its tool results every iteration and was re-sent
+      // uncached each time, so one substantial tool result cost its full price
+      // once per remaining iteration — a 7KB knowledge-base article on a four-call
+      // operator turn spent ~5.5k tokens re-reading itself and pushed the turn
+      // past TOKEN_BUDGET at call four. Top-level cache_control auto-places on the
+      // last cacheable block, which keeps this to one moving breakpoint (three
+      // total with the two system blocks, under the four-per-request cap) and
+      // leaves the earlier ones readable, so each call writes only its own delta.
+      // Nothing the model sees changes.
+      cache_control: { type: "ephemeral" },
       ...tuning,
     });
 

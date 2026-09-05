@@ -131,6 +131,26 @@ describe("runAgentLoop model tuning", () => {
   });
 });
 
+describe("runAgentLoop transcript caching", () => {
+  // The messages array grows by an assistant turn plus its tool results every
+  // iteration, and used to be re-sent uncached each time: one 7KB knowledge-base
+  // article on a four-call operator turn re-read itself three times and pushed
+  // the turn past TOKEN_BUDGET. Top-level cache_control auto-places the
+  // breakpoint on the last cacheable block, so each call writes only its delta.
+  it("asks for the transcript to be cached on every call", async () => {
+    mockCreate
+      .mockResolvedValueOnce(toolUse({ input_tokens: 10, output_tokens: 0 }))
+      .mockResolvedValueOnce(endTurn("Done.", { input_tokens: 10, output_tokens: 0 }));
+
+    await runExecuteLoop(vi.fn(toolResult));
+
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+    for (const [params] of mockCreate.mock.calls) {
+      expect(params.cache_control).toEqual({ type: "ephemeral" });
+    }
+  });
+});
+
 describe("runAgentLoop token budget", () => {
   it("returns end_turn with the finished answer even when the budget is exhausted", async () => {
     // 200 weighted budget tokens >= the 100 budget, but the turn ended cleanly.

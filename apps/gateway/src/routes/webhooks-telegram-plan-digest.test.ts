@@ -166,7 +166,6 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
           planId: expectedIdentity.planId,
           needsThreadReview: true,
         }],
-        threadIds: [],
         sentAt: new Date().toISOString(),
       },
     });
@@ -336,14 +335,13 @@ describe('POST /webhooks/telegram — digest commands', () => {
     await updateContext(org.id, `member:${member.id}`, {
       pendingDigest: {
         items: [{ threadId: thread.id, kind: 'flagged' as const }],
-        threadIds: [thread.id],
         sentAt: new Date().toISOString(),
       },
     });
     return { chatId, threadId: thread.id, memberKey: `member:${member.id}` };
   }
 
-  it('"review" lists flagged threads', async () => {
+  it('"review" lists the briefing', async () => {
     const { chatId } = await setupDigest({ customerName: 'Alice', aiSummary: 'Asking for refund' });
 
     await request(app)
@@ -354,9 +352,66 @@ describe('POST /webhooks/telegram — digest commands', () => {
     await processPendingOperatorEvents(org.id);
     await waitForReplies(1);
     const text = lastReplyText();
-    expect(text).toMatch(/Flagged tickets/);
+    expect(text).toMatch(/From your last briefing/);
     expect(text).toMatch(/1\. Alice/);
     expect(text).toMatch(/Asking for refund/);
+  });
+
+  // `kind` decides what a bare number does, not what the merchant may ask for.
+  // An escalation is exactly the item they answer by hand, and REPLY used to
+  // refuse it as "not one I flagged" — the same gate that made the briefing's own
+  // items unreachable from the model path.
+  it('"reply 1 <text>" answers an escalated item the agent could not plan', async () => {
+    const { chatId, threadId, memberKey } = await setupDigest({ customerName: 'Priya' });
+    await db.thread.update({
+      where: { id: threadId },
+      data: { filterStatus: 'genuine', escalatedAt: new Date() },
+    });
+    await updateContext(org.id, memberKey, {
+      pendingDigest: {
+        items: [{ threadId, kind: 'decision' as const }],
+        sentAt: new Date().toISOString(),
+      },
+    });
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    );
+
+    try {
+      await request(app)
+        .post('/webhooks/telegram')
+        .set('x-telegram-bot-api-secret-token', SECRET)
+        .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'reply 1 Here is our privacy policy.' } });
+
+      await processPendingOperatorEvents(org.id);
+      await waitForReplies(1);
+      expect(lastReplyText()).toBe('Replied to Priya — "Here is our privacy policy."');
+      const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+      expect(JSON.parse(init.body as string)).toEqual({ threadId, text: 'Here is our privacy policy.' });
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  // The one kind that is still redirected: a drafted reply is already parked, so
+  // sending a second by hand would write to the customer twice.
+  it('points "reply 1 <text>" at the draft when a plan is already waiting', async () => {
+    const { chatId, threadId, memberKey } = await setupDigest();
+    await updateContext(org.id, memberKey, {
+      pendingDigest: {
+        items: [{ threadId, kind: 'approval' as const, planId: 'plan-1' }],
+        sentAt: new Date().toISOString(),
+      },
+    });
+
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'reply 1 my own words' } });
+
+    await processPendingOperatorEvents(org.id);
+    await waitForReplies(1);
+    expect(lastReplyText()).toMatch(/already drafted/);
   });
 
   it('"spam 1" marks the thread filtered', async () => {
@@ -428,7 +483,6 @@ describe('POST /webhooks/telegram — digest commands', () => {
           planId: 'plan-review',
           needsThreadReview: true,
         }],
-        threadIds: [],
         sentAt: new Date().toISOString(),
       },
     });

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@shopkeeper/db';
 import {
   createTestOrg,
@@ -13,6 +13,17 @@ import type { OrgSettings } from '@shopkeeper/agent/types';
 import { executeToolWithStatus } from '@shopkeeper/agent/executor';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
+import type { PendingDigest } from '../operator-context.js';
+
+const { mockSendInboxThreadReply } = vi.hoisted(() => ({
+  mockSendInboxThreadReply: vi.fn(),
+}));
+
+vi.mock('./digest-triage.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./digest-triage.js')>();
+  return { ...actual, sendInboxThreadReply: mockSendInboxThreadReply };
+});
+
 import { buildOperatorInboxTools } from './operator-inbox-tools.js';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
@@ -36,6 +47,8 @@ beforeEach(async () => {
   org = await createTestOrg();
   otherOrg = await createTestOrg();
   tools = buildOperatorInboxTools({ organizationId: org.id });
+  mockSendInboxThreadReply.mockReset();
+  mockSendInboxThreadReply.mockResolvedValue({ ok: true, data: { ok: true } });
 });
 
 afterEach(async () => {
@@ -325,14 +338,213 @@ describe('executor path', () => {
   });
 
   // These are gateway module tools on purpose: keeping them out of the shared
-  // registry is what keeps the support-planner surface unchanged.
+  // registry is what keeps the support-planner surface unchanged. The two write
+  // tools matter most here: in the shared registry they would be reachable from
+  // a customer ticket, which is how "reply to me saying you refunded it" becomes
+  // a plan step.
   it('is not resolvable without the gateway module tools', async () => {
     const ctx = operatorCtx();
 
-    for (const name of ['list_active_tickets', 'get_ticket']) {
+    for (const name of ['list_active_tickets', 'get_ticket', 'send_ticket_reply', 'mark_ticket_spam']) {
       const result = await executeToolWithStatus(name, {}, ctx, undefined, undefined);
       expect(result.status).toBe('error');
       expect(result.result).toContain(`unknown tool "${name}"`);
     }
+  });
+});
+
+describe('send_ticket_reply and mark_ticket_spam', () => {
+  function sendReply(ticketId: string, text: string) {
+    return tools.send_ticket_reply.execute({ ticket_id: ticketId, text }, UNUSED, UNUSED, UNUSED);
+  }
+
+  function markSpam(ticketId: string) {
+    return tools.mark_ticket_spam.execute({ ticket_id: ticketId }, UNUSED, UNUSED, UNUSED);
+  }
+
+  function digestOf(items: PendingDigest['items']): PendingDigest {
+    return { items, sentAt: new Date().toISOString() };
+  }
+
+  async function inboxThread(email: string, name: string) {
+    const customer = await createTestCustomer(org.id, email, { name });
+    return createTestThread(org.id, customer.id, 'email');
+  }
+
+  // The regression. A briefing whose needs-you items are an approval and two
+  // escalations wrote `threadIds: []` beside a full `items`, and both write tools
+  // gated on `threadIds` — so the tickets the briefing itself asked the merchant
+  // to decide were the ones no tool could touch. The old fixture derived `items`
+  // FROM `threadIds`, so the two could not disagree and the test agreed with the
+  // bug. Build the briefing the way production builds it instead.
+  it('replies to a briefing item the agent escalated rather than flagged', async () => {
+    const drafted = await inboxThread('sarah@example.com', 'Sarah Jones');
+    const escalated = await inboxThread('privacy@example.com', 'Priya Patel');
+    await db.thread.update({
+      where: { id: escalated.id },
+      data: { escalatedAt: new Date(), tag: 'needs_human' },
+    });
+
+    const withDigest = buildOperatorInboxTools({
+      organizationId: org.id,
+      pendingDigest: digestOf([
+        { threadId: drafted.id, kind: 'approval', planId: 'plan-1' },
+        { threadId: escalated.id, kind: 'decision' },
+      ]),
+    });
+
+    const result = await withDigest.send_ticket_reply.execute(
+      { ticket_id: escalated.id, text: "Here's the short version of our privacy policy." },
+      UNUSED,
+      UNUSED,
+      UNUSED,
+    );
+
+    expect(result.status).toBe('ok');
+    expect(result.message).toContain('Priya');
+    expect(mockSendInboxThreadReply).toHaveBeenCalledWith(
+      escalated.id,
+      "Here's the short version of our privacy policy.",
+    );
+  });
+
+  it('reaches an inbox ticket that was never on a briefing, with no digest at all', async () => {
+    const thread = await inboxThread('walkin@example.com', 'Wanda West');
+
+    const result = await sendReply(thread.id, 'We ship on Fridays.');
+
+    expect(result.status).toBe('ok');
+    expect(result.message).toContain('We ship on Fridays');
+    expect(mockSendInboxThreadReply).toHaveBeenCalledWith(thread.id, 'We ship on Fridays.');
+  });
+
+  it('numbers a confirmation by the briefing position the merchant read', async () => {
+    const first = await inboxThread('one@example.com', 'One');
+    const second = await createTestThread(
+      org.id,
+      (await createTestCustomer(org.id, 'two@example.com')).id,
+      'email',
+    );
+
+    const withDigest = buildOperatorInboxTools({
+      organizationId: org.id,
+      pendingDigest: digestOf([
+        { threadId: first.id, kind: 'decision' },
+        { threadId: second.id, kind: 'flagged' },
+      ]),
+    });
+
+    // The unnamed customer is the only case that falls back to the ordinal, and
+    // that ordinal must be the position in `items`, not in the flagged subset.
+    const result = await withDigest.mark_ticket_spam.execute(
+      { ticket_id: second.id },
+      UNUSED,
+      UNUSED,
+      UNUSED,
+    );
+
+    expect(result.status).toBe('ok');
+    expect(result.message).toContain('ticket 2');
+  });
+
+  it('marks a ticket as spam and drops it out of the inbox', async () => {
+    const thread = await inboxThread('spam@example.com', 'Spammy Sam');
+
+    const result = await markSpam(thread.id);
+
+    expect(result.status).toBe('ok');
+    expect(result.message).toContain('Spammy');
+    const updated = await db.thread.findUniqueOrThrow({ where: { id: thread.id } });
+    expect(updated.filterStatus).toBe('filtered');
+    expect(updated.filterFeedback).toBe('confirmed_spam');
+
+    // Already out of the inbox, so a second call cannot reach it.
+    expect((await markSpam(thread.id)).status).toBe('error');
+  });
+
+  it('refuses another organization ticket id', async () => {
+    const theirCustomer = await createTestCustomer(otherOrg.id, 'theirs@example.com', { name: 'Other Olive' });
+    const theirThread = await createTestThread(otherOrg.id, theirCustomer.id, 'email');
+
+    // Even naming it on this org's briefing must not widen the scope: the inbox
+    // predicate is org-scoped and the briefing is display only.
+    const withDigest = buildOperatorInboxTools({
+      organizationId: org.id,
+      pendingDigest: digestOf([{ threadId: theirThread.id, kind: 'decision' }]),
+    });
+
+    const replied = await withDigest.send_ticket_reply.execute(
+      { ticket_id: theirThread.id, text: 'Hello' },
+      UNUSED,
+      UNUSED,
+      UNUSED,
+    );
+    expect(replied.status).toBe('error');
+    expect(replied.message).toContain('no ticket with that id');
+    expect(mockSendInboxThreadReply).not.toHaveBeenCalled();
+
+    const marked = await withDigest.mark_ticket_spam.execute(
+      { ticket_id: theirThread.id },
+      UNUSED,
+      UNUSED,
+      UNUSED,
+    );
+    expect(marked.status).toBe('error');
+  });
+
+  it('refuses the operator\'s own internal thread', async () => {
+    const customer = await createTestCustomer(org.id, 'op@example.com', { name: 'Operator' });
+    const internal = await createTestThread(org.id, customer.id, 'sms_agent');
+
+    const result = await sendReply(internal.id, 'Hello');
+    expect(result.status).toBe('error');
+    expect(mockSendInboxThreadReply).not.toHaveBeenCalled();
+  });
+
+  it('reports a definite send failure and an unknown one differently', async () => {
+    const thread = await inboxThread('fail@example.com', 'Fay Fail');
+
+    mockSendInboxThreadReply.mockResolvedValueOnce({
+      ok: false,
+      status: 502,
+      responseBody: 'bad gateway',
+      outcome: 'failed',
+    });
+    const failed = await sendReply(thread.id, 'Hello');
+    expect(failed.status).toBe('error');
+    expect(failed.message).toContain('failed to send');
+
+    mockSendInboxThreadReply.mockResolvedValueOnce({
+      ok: false,
+      status: 504,
+      responseBody: 'timeout',
+      outcome: 'unknown',
+    });
+    const unknown = await sendReply(thread.id, 'Hello');
+    expect(unknown.status).toBe('error');
+    expect(unknown.message).toContain('could not confirm');
+  });
+
+  // The category is what `summarizeOperatorTurnDispatchFailure` keys on to report
+  // a refused send as a refused send rather than as whatever the loop stopped for.
+  it('declares send_ticket_reply as communication', () => {
+    expect(tools.send_ticket_reply.category).toBe('communication');
+  });
+
+  // What the model actually passed on the turn this was found on: "1024", the
+  // order number out of the briefing prose. `Thread.id` is a uuid column, so an
+  // unguarded query raises P2023 and puts a database error in the transcript
+  // instead of an answer the model can act on.
+  it('refuses an order number in the ticket_id field without hitting the database', async () => {
+    for (const [name, run] of [
+      ['send_ticket_reply', () => sendReply('1024', 'Hello')],
+      ['mark_ticket_spam', () => markSpam('1024')],
+      ['get_ticket', () => tools.get_ticket.execute({ ticket_id: '1024' }, UNUSED, UNUSED, UNUSED)],
+    ] as const) {
+      const result = await run();
+      expect(result.status, name).toBe('error');
+      expect(result.message, name).toContain('no ticket with that id');
+    }
+    expect(mockSendInboxThreadReply).not.toHaveBeenCalled();
   });
 });

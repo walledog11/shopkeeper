@@ -5,9 +5,21 @@ import { wrapUntrusted } from '@shopkeeper/agent/message-history';
 import { getCurrentPlanForThread } from '@shopkeeper/agent/plan-cache-shape';
 import { SENDER_TYPE, THREAD_STATUS } from '@shopkeeper/agent/thread-constants';
 import { relativeAge } from '../routes/telegram/format.js';
+import type { PendingDigest } from '../operator-context.js';
+import {
+  digestOrdinalFor,
+  findInboxThread,
+  formatDigestReplyConfirmation,
+  formatDigestSpamConfirmation,
+  isThreadId,
+  markInboxThreadSpam,
+  sendInboxThreadReply,
+} from './digest-triage.js';
 
 export interface OperatorInboxToolDeps {
   organizationId: string;
+  /** Display only: supplies the merchant's own number for a ticket they were shown. */
+  pendingDigest?: PendingDigest | null;
 }
 
 interface ListActiveTicketsInput {
@@ -18,6 +30,17 @@ interface ListActiveTicketsInput {
 interface GetTicketInput {
   ticket_id: string;
 }
+
+interface SendTicketReplyInput {
+  ticket_id: string;
+  text: string;
+}
+
+interface MarkTicketSpamInput {
+  ticket_id: string;
+}
+
+const TICKET_NOT_IN_INBOX = 'Error: no ticket with that id is in the inbox.';
 
 const LIST_LIMIT = 20;
 const TRANSCRIPT_LIMIT = 10;
@@ -50,7 +73,7 @@ function asUntrustedTicketData(prefix: string, body: string): string {
 export function buildOperatorInboxTools(
   deps: OperatorInboxToolDeps,
 ): Record<string, AgentToolDefinition> {
-  const { organizationId } = deps;
+  const { organizationId, pendingDigest } = deps;
 
   const listActiveTickets = defineTool({
     name: 'list_active_tickets',
@@ -143,6 +166,9 @@ export function buildOperatorInboxTools(
     label: 'Read ticket',
     planStepLabel: 'Read ticket',
     execute: async (input: GetTicketInput) => {
+      // `Thread.id` is a uuid column, so a non-id (an order number lifted from
+      // the briefing prose, say) raises P2023 rather than matching nothing.
+      if (!isThreadId(input.ticket_id)) return toolError(TICKET_NOT_IN_INBOX);
       // Org-scoped + the canonical inbox predicate, so a ticket id alone can
       // never reach another tenant's thread or the operator's own internal
       // sms_agent/dashboard_agent threads.
@@ -168,7 +194,7 @@ export function buildOperatorInboxTools(
         },
       });
 
-      if (!thread) return toolError('Error: no ticket with that id is in the inbox.');
+      if (!thread) return toolError(TICKET_NOT_IN_INBOX);
 
       // Fetched newest-first to bound the transcript; getCurrentPlanForThread
       // reads the last element as the newest, so both want oldest-first.
@@ -201,8 +227,75 @@ export function buildOperatorInboxTools(
     },
   });
 
+  // Reply and spam live beside the two reads because they share the read's
+  // scope: any ticket in this org's inbox. They used to be gated on the flagged
+  // subset of the last briefing, which meant the agent could read a ticket it
+  // was then forbidden to answer — and the merchant's own "reply to that
+  // customer" had no tool that could carry it out.
+  const sendTicketReply = defineTool({
+    name: 'send_ticket_reply',
+    description:
+      'Send a reply to the customer on one of the inbox tickets, using the merchant\'s message. Takes any ticket id from the briefing or from list_active_tickets. This is how you answer a customer who already has a ticket; send_email is for contacting someone who does not.',
+    fields: {
+      ticket_id: stringArg('The ticket id from the briefing or list_active_tickets.', { required: true }),
+      text: stringArg('The exact reply text to send to the customer.', { required: true }),
+    },
+    // Communication, not a generic action: this is the tool that puts words in
+    // front of a customer, and `summarizeOperatorTurnDispatchFailure` keys on
+    // the category so a failed send is reported as a failed send.
+    category: 'communication',
+    group: 'thread',
+    capabilities: [],
+    label: 'Sent ticket reply',
+    planStepLabel: 'Send ticket reply',
+    policy: { categoryPermission: false },
+    execute: async (input: SendTicketReplyInput) => {
+      const thread = await findInboxThread(organizationId, input.ticket_id);
+      if (!thread) return toolError(TICKET_NOT_IN_INBOX);
+
+      const response = await sendInboxThreadReply(input.ticket_id, input.text);
+      if (!response.ok) {
+        return toolError(response.outcome === 'unknown'
+          ? 'I could not confirm whether that reply sent. Check the ticket before trying again.'
+          : 'Reply failed to send. Please try again from the dashboard.');
+      }
+
+      return toolOk(formatDigestReplyConfirmation(
+        thread.customer.name,
+        digestOrdinalFor(pendingDigest ?? null, input.ticket_id),
+        input.text,
+      ));
+    },
+  });
+
+  const markTicketSpam = defineTool({
+    name: 'mark_ticket_spam',
+    description:
+      'Bin an inbox ticket as spam when the merchant clearly wants to dismiss it. Takes any ticket id from the briefing or from list_active_tickets. Ask one short confirming question first if their intent is ambiguous.',
+    fields: {
+      ticket_id: stringArg('The ticket id from the briefing or list_active_tickets.', { required: true }),
+    },
+    category: 'action',
+    group: 'thread',
+    capabilities: [],
+    label: 'Marked ticket as spam',
+    planStepLabel: 'Mark ticket as spam',
+    policy: { categoryPermission: false },
+    execute: async (input: MarkTicketSpamInput) => {
+      const result = await markInboxThreadSpam(organizationId, input.ticket_id);
+      if (!result.ok) return toolError(TICKET_NOT_IN_INBOX);
+
+      return toolOk(formatDigestSpamConfirmation(
+        result.customerName,
+        digestOrdinalFor(pendingDigest ?? null, input.ticket_id),
+      ));
+    },
+  });
+
   return {
     list_active_tickets: listActiveTickets,
     get_ticket: getTicket,
+    send_ticket_reply: sendTicketReply,
+    mark_ticket_spam: markTicketSpam,
   };
 }

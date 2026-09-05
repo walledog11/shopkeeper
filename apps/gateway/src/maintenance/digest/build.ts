@@ -199,9 +199,6 @@ export async function buildOrgDigest(
         ...(planId ? { planId } : {}),
         ...(needsThreadReview ? { needsThreadReview: true } : {}),
       })),
-      // The flagged subset stays in briefing order so anything still reading
-      // `threadIds` sees the same tickets, just not the same ordinals.
-      threadIds: flagged.map((thread) => thread.id),
       sentAt: now.toISOString(),
     },
     // What the briefing actually flagged, before the recite limit — a count that
