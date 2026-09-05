@@ -270,10 +270,15 @@ export async function runAgent(
       const dispatchFailure = gatewayOperatorMode
         ? summarizeOperatorTurnDispatchFailure(actionsPerformed)
         : null;
+      // The budget is a token ceiling, not a step count, and it is reached mid-turn
+      // with nothing sent. Saying "too many steps" described a four-call turn as
+      // the merchant's fault for asking too much, and said nothing about whether
+      // the customer had been written to. Say what is true: it stopped, and
+      // nothing went out.
       return finish({
         summary: dispatchFailure
           ?? loop.finalText?.trim()
-          ?? "Agent stopped - this request required too many steps. Please try a more specific instruction.",
+          ?? "I ran out of room to finish that one, so I stopped before sending anything. Tell me the ticket or customer and I'll go straight at it.",
         actionsPerformed,
       }, "token_budget");
     }

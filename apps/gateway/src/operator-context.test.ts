@@ -150,12 +150,20 @@ describe('updateContext + getContext round-trip', () => {
         { threadId: 't1', kind: 'approval', planId: 'p1', needsThreadReview: true },
         { threadId: 't2', kind: 'flagged' },
       ],
-      threadIds: ['t2'],
       sentAt: new Date().toISOString(),
     };
     await updateContext(org.id, '999', { pendingDigest: digest });
     const ctx = await getContext(org.id, '999');
     expect(ctx.pendingDigest).toEqual(digest);
+
+    // The stored row keeps a derived `threadIds` that the in-memory shape no
+    // longer has: the previous deploy's reader requires the key, so a rollback
+    // would otherwise find no pending digest. Nothing reads it back — the two
+    // disagreeing about the same briefing is the bug this shape replaced.
+    const row = await db.operatorContext.findUniqueOrThrow({
+      where: { organizationId_memberKey: { organizationId: org.id, memberKey: '999' } },
+    });
+    expect(row.pendingDigest).toEqual({ ...digest, threadIds: ['t2'] });
   });
 
   it('persists and clears pendingQuestion', async () => {
@@ -193,6 +201,8 @@ describe('updateContext + getContext round-trip', () => {
             rawToolCalls: [{ id: 'tc_1', name: 'get_order' }, { id: 'tc_2' }],
           },
         ],
+        // Stored shape, not the in-memory one: a row written before the merged
+        // list carries `threadIds` and no `items`.
         pendingDigest: {
           threadIds: ['thread_1', 123],
           sentAt: '2026-06-03T00:00:00.000Z',
@@ -211,7 +221,6 @@ describe('updateContext + getContext round-trip', () => {
     // ordinal it ever showed was a flagged one and it has to keep resolving that
     // way rather than reading as an empty briefing.
     expect(ctx.pendingDigest).toEqual({
-      threadIds: ['thread_1'],
       items: [{ threadId: 'thread_1', kind: 'flagged' }],
       sentAt: '2026-06-03T00:00:00.000Z',
     });
@@ -317,7 +326,6 @@ describe('updateContext slot isolation', () => {
   it('does not clobber when two different slots are updated concurrently', async () => {
     const digest: PendingDigest = {
       items: [{ threadId: 't1', kind: 'flagged' }],
-      threadIds: ['t1'],
       sentAt: '2026-07-20T00:00:00.000Z',
     };
     await db.operatorContext.create({
@@ -428,7 +436,6 @@ describe('selectPendingPlan', () => {
         planId: a.planId,
         needsThreadReview: true,
       }],
-      threadIds: [],
       sentAt: '2026-08-23T12:00:00.000Z',
     });
 

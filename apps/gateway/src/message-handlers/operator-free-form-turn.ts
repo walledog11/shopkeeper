@@ -2,7 +2,6 @@ import { renderOperatorLedger } from './operator-ledger.js';
 import { buildOperatorSessionTools } from './operator-session-tools.js';
 import { buildOperatorInboxTools } from './operator-inbox-tools.js';
 import { buildOperatorActionHistoryTools } from './operator-action-history-tools.js';
-import { buildOperatorDigestTools } from './operator-digest-tools.js';
 import { buildOperatorProductHelpTools } from './operator-product-help-tools.js';
 import { buildOperatorShopTools } from './operator-shop-tools.js';
 import { buildOperatorDashboardNavTools } from './operator-dashboard-nav-tools.js';
@@ -49,9 +48,8 @@ export async function runOperatorFreeFormTurn(
       ...(deliveryRef ? { deliveryRef } : {}),
       context,
     }),
-    ...buildOperatorInboxTools({ organizationId }),
+    ...buildOperatorInboxTools({ organizationId, pendingDigest: context.pendingDigest }),
     ...buildOperatorActionHistoryTools({ organizationId }),
-    ...buildOperatorDigestTools({ organizationId, context }),
     ...buildOperatorProductHelpTools(),
     ...buildOperatorShopTools({ organizationId }),
     ...(deskMode ? buildOperatorDashboardNavTools() : {}),

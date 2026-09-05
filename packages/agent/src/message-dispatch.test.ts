@@ -28,4 +28,30 @@ describe("message-dispatch helpers", () => {
     expect(summary).toContain("couldn't send the customer message");
     expect(summary).toContain("req-9");
   });
+
+  // Keyed on the declared category, not a list of tool names. The list held
+  // send_reply and send_email, so a failed `send_ticket_reply` was invisible here
+  // and the merchant was told the turn "required too many steps" while what had
+  // actually happened was a refused send.
+  it("reports any failed communication tool, including ones added later", () => {
+    const summary = summarizeOperatorTurnDispatchFailure([
+      { tool: "search_kb", category: "read", result: "[]", status: "success", durationMs: 1 },
+      {
+        tool: "send_ticket_reply",
+        category: "communication",
+        result: "Error: no ticket with that id is in the inbox.",
+        status: "error",
+        durationMs: 1,
+      },
+    ] as never);
+
+    expect(summary).toBe("Error: no ticket with that id is in the inbox.");
+  });
+
+  it("stays silent when nothing customer-facing failed", () => {
+    expect(summarizeOperatorTurnDispatchFailure([
+      { tool: "get_ticket", category: "read", result: "Error: no ticket with that id is in the inbox.", status: "error", durationMs: 1 },
+      { tool: "mark_ticket_spam", category: "action", result: "Error: nope.", status: "error", durationMs: 1 },
+    ] as never)).toBeNull();
+  });
 });

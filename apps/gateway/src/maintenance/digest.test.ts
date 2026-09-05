@@ -803,7 +803,9 @@ describe('buildOrgDigest — inbox scope', () => {
     expect(digest.message).not.toContain('Wren');
     // The count describes the message that was sent, not the bucket behind it.
     expect(digest.flaggedCount).toBe(1);
-    expect(digest.pendingDigest.threadIds).toEqual([pitchThread.id]);
+    expect(digest.pendingDigest.items).toEqual([
+      { threadId: pitchThread.id, kind: 'flagged' },
+    ]);
   });
 
   // The diagnosed 8:00am briefing, rebuilt around explicit merchant work.

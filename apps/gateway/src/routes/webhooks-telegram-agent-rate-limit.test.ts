@@ -119,7 +119,7 @@ describe('POST /webhooks/telegram — help & summary', () => {
     expect(text).toContain('Dana: policy question — wholesale pricing.');
 
     const ctx = await getContext(org.id, memberKey);
-    expect(ctx.pendingDigest?.threadIds).toEqual([flagged.id]);
+    expect(ctx.pendingDigest?.items).toEqual([{ threadId: flagged.id, kind: 'flagged' }]);
   });
 
   it('"summary" replies that the inbox is empty when there are no open tickets', async () => {

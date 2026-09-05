@@ -35,6 +35,18 @@ export function formatOperatorDispatchFailure(message: string): string {
   return message;
 }
 
+/**
+ * The last thing this turn did that was supposed to reach a customer and did
+ * not, phrased for the merchant.
+ *
+ * Keyed on the tool's declared `communication` category rather than a list of
+ * tool names. The list was `send_reply` / `send_email`, so when the gateway's
+ * `send_ticket_reply` failed, the turn reported whatever generic reason the loop
+ * stopped for — the merchant was told the request "required too many steps"
+ * while the actual event was a refused send. A new customer-facing tool must not
+ * have to remember to register itself here to be reported honestly; declaring
+ * its category is enough.
+ */
 export function summarizeOperatorTurnDispatchFailure(actions: ActionEntry[]): string | null {
   for (let index = actions.length - 1; index >= 0; index -= 1) {
     const action = actions[index]!;
@@ -42,7 +54,7 @@ export function summarizeOperatorTurnDispatchFailure(actions: ActionEntry[]): st
       return formatOperatorDispatchFailure(action.result);
     }
     if (
-      (action.tool === "send_reply" || action.tool === "send_email")
+      action.category === "communication"
       && (action.status === "error" || action.status === "unknown")
     ) {
       return formatOperatorDispatchFailure(action.result);
