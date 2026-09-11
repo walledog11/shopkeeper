@@ -205,9 +205,9 @@ function reservationJson(value: unknown): ReservationInput {
 }
 
 function committedSpendCents(result: ToolResult): number | null {
-  const candidate = "refundedCents" in result
-    ? (result as ToolResult & { refundedCents?: unknown }).refundedCents
-    : (result as ToolResult & { spentCents?: unknown }).spentCents;
+  const candidate = "refundedShopCents" in result
+    ? (result as ToolResult & { refundedShopCents?: unknown }).refundedShopCents
+    : (result as ToolResult & { spentShopCents?: unknown }).spentShopCents;
   if (typeof candidate !== "number" || !Number.isFinite(candidate) || candidate <= 0) {
     return null;
   }

@@ -50,7 +50,7 @@ export interface ShopifyOrderLineItem {
 
 // Shopify returns every money field twice: once in the shop's own currency and
 // once in the currency the customer was actually charged.
-interface ShopifyPriceSet {
+export interface ShopifyPriceSet {
   shop_money?: { amount?: string; currency_code?: string };
   presentment_money?: { amount?: string; currency_code?: string };
 }
@@ -95,6 +95,11 @@ export interface ShopifyCalculatedRefundLineItem {
   quantity: number;
   restock_type: string;
   location_id?: number | string | null;
+  // Present on a calculation response, absent on the ones we send. Carrying
+  // both sides is what lets a workspace cap be judged in the merchant's own
+  // currency on an order the customer paid in another.
+  subtotal_set?: ShopifyPriceSet;
+  total_tax_set?: ShopifyPriceSet;
 }
 
 export interface ShopifyFulfillment {

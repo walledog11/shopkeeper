@@ -265,11 +265,11 @@ export type ToolGroup =
 export type ToolCapability = "shopify" | "thread-io" | "kb" | "stats";
 
 export interface RefundToolResult extends ToolResult {
-  refundedCents: number | null;
+  refundedShopCents: number | null;
 }
 
 export interface SpendToolResult extends ToolResult {
-  spentCents: number | null;
+  spentShopCents: number | null;
 }
 
 export interface KnowledgeBaseToolArticle {

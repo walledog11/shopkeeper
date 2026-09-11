@@ -11,6 +11,7 @@ import {
 // this module reaches the client bundle through plan-preview, and
 // storefront-verification imports node:crypto. Both sides of the comparison go
 // through this one function, so consistency is what matters, not which.
+import { formatMoney, makeMoney, moneyFromCents } from "../money.js";
 import { normalizeOrderName } from "../order-reference.js";
 import type { OrgSettings } from "../types.js";
 import type {
@@ -29,6 +30,13 @@ export type StaticPolicyResult =
 export interface StaticPolicyOptions {
   authState?: AgentAuthState;
   verifiedOrders?: VerifiedOrderRef[];
+  /**
+   * The shop's own currency, which is the one the merchant typed their caps in.
+   * Absent when the caller does not know it — in which case a claim naming a
+   * currency cannot be compared to a cap here, and the execution-time check
+   * (which loads the order) is the one that decides.
+   */
+  shopCurrency?: string | null;
 }
 
 // The allowlist half of storefront enforcement: which tools this auth state may
@@ -127,8 +135,21 @@ export function checkParsedStaticToolPolicy(
       if (!Number.isFinite(amount) || amount <= 0) {
         return { blocked: true, reason: `${noun} amount must be a positive decimal value.` };
       }
-      if (hasPerCallCap && amount > (settings.maxRefundAmount as number)) {
-        return { blocked: true, reason: `${noun} amount $${refundInput.amount} exceeds the workspace limit of $${settings.maxRefundAmount}.` };
+      // The cap is a number the merchant typed in their own currency. This check
+      // runs before the order is loaded, so it can only compare like with like
+      // when the claimed money is in that same currency — which an amount
+      // carrying a foreign currency code is not. Comparing anyway is what
+      // refused a 59.90 CAD refund against a limit of 50 dollars. Those defer to
+      // the execution-time check, which loads the order and judges the cap
+      // against the shop's own figure; deferring to a stricter authoritative
+      // check is safe, passing one is not.
+      const claimedCurrency = typeof refundInput.currency === "string"
+        ? refundInput.currency.trim().toUpperCase()
+        : null;
+      const shopCurrency = options?.shopCurrency?.trim().toUpperCase() ?? null;
+      const comparable = !claimedCurrency || (!!shopCurrency && claimedCurrency === shopCurrency);
+      if (hasPerCallCap && comparable && amount > (settings.maxRefundAmount as number)) {
+        return { blocked: true, reason: `${noun} amount ${formatMoney(makeMoney(refundInput.amount, claimedCurrency ?? shopCurrency ?? "USD")!)} exceeds the workspace limit of ${formatMoney(moneyFromCents(Math.round((settings.maxRefundAmount as number) * 100), claimedCurrency ?? shopCurrency ?? "USD"))}.` };
       }
     }
   }

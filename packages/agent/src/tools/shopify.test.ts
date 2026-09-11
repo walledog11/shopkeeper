@@ -160,7 +160,7 @@ describe("shopify tools", () => {
     });
     expect(createBody.variables.idempotencyKey).toMatch(/^[0-9a-f-]{36}$/);
     expect(result.message).toContain("Refund of $25.00 issued successfully");
-    expect(result.refundedCents).toBe(2500);
+    expect(result.refundedShopCents).toBe(2500);
   });
 
   it("fails order removal when the requested variant is not on the order", async () => {

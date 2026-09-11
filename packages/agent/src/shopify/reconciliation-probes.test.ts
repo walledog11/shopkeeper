@@ -79,7 +79,7 @@ describe("probeUnknownShopifyMutation", () => {
       ctx,
     );
 
-    expect(result).toMatchObject({ outcome: "committed", spentCents: 2000 });
+    expect(result).toMatchObject({ outcome: "committed", spentShopCents: 2000 });
   });
 
   it("releases cancellation reconciliation when the order is not cancelled", async () => {
@@ -124,7 +124,7 @@ describe("probeUnknownShopifyMutation", () => {
       ctx,
     );
 
-    expect(result).toMatchObject({ outcome: "committed", spentCents: 1 });
+    expect(result).toMatchObject({ outcome: "committed", spentShopCents: 1 });
   });
 
   it("does not read a store-credit debit as the credit it was asked to reconcile", async () => {
@@ -263,7 +263,7 @@ describe("probeUnknownShopifyMutation", () => {
       { ...ctx, operationId: giftCardOperationId },
     );
 
-    expect(result).toMatchObject({ outcome: "committed", spentCents: 2500 });
+    expect(result).toMatchObject({ outcome: "committed", spentShopCents: 2500 });
   });
 
   // The code is per-operation, so an unrelated card of the same value is not
@@ -314,7 +314,7 @@ describe("probeUnknownShopifyMutation", () => {
       { ...ctx, operationId: giftCardOperationId },
     );
 
-    expect(result).toMatchObject({ outcome: "committed", spentCents: 2500 });
+    expect(result).toMatchObject({ outcome: "committed", spentShopCents: 2500 });
   });
 
   it("cannot reconcile a gift card without a stable operation identity", async () => {

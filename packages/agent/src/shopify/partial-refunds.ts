@@ -15,11 +15,12 @@ import {
   moneyToCents,
   requireNumericId,
 } from "./validation.js";
-import { ORDER_CURRENCY_FIELDS, orderSettlementCurrency } from "./serializers.js";
+import { ORDER_CURRENCY_FIELDS } from "./serializers.js";
+import { formatMoney, makeMoney, moneyCents, moneyFromCents, orderSettlementCurrency, orderShopCurrency, withinShopLimit } from "../money.js";
 import type { RefundToolResult } from "../tools/registry/types.js";
 import type { CreatePartialRefundInput } from "../tools/registry/types.js";
 import type { OrgSettings } from "../types.js";
-import type { ShopifyOrder, ShopifyOrderLineItem } from "./types.js";
+import type { ShopifyOrder, ShopifyOrderLineItem, ShopifyPriceSet } from "./types.js";
 
 /**
  * Refunding some of an order, deliberately kept apart from `createRefund`.
@@ -58,6 +59,11 @@ interface RefundCalculationLineItem {
   location_id?: number | string | null;
   subtotal?: string;
   total_tax?: string;
+  // Shopify returns each figure on both sides when the order was charged in a
+  // currency other than the shop's. `subtotal`/`total_tax` above are the
+  // customer's side only, so a cap in the merchant's currency needs these.
+  subtotal_set?: ShopifyPriceSet;
+  total_tax_set?: ShopifyPriceSet;
 }
 
 interface PartialRefundCalculation {
@@ -150,6 +156,35 @@ function gid(resource: "Order" | "LineItem" | "OrderTransaction", id: string | n
   return `gid://shopify/${resource}/${id}`;
 }
 
+// Shopify's shop-money side of the calculation, in cents, or null when it did
+// not return one. Never derived from the customer's amount: the two differ by an
+// exchange rate that is Shopify's to know and not ours to guess. A
+// single-currency order has one money, so the presentment figure is the shop
+// figure and is used directly.
+function calculatedShopCents(
+  calculation: PartialRefundCalculation,
+  order: ShopifyOrder,
+): number | null {
+  const settlement = orderSettlementCurrency(order);
+  const shop = orderShopCurrency(order);
+  const lineItems = calculation.refund?.refund_line_items ?? [];
+  const fromShopMoney = lineItems.reduce<number | null>((total, lineItem) => {
+    if (total === null) return null;
+    const subtotal = makeMoney(lineItem.subtotal_set?.shop_money?.amount, lineItem.subtotal_set?.shop_money?.currency_code);
+    const tax = makeMoney(lineItem.total_tax_set?.shop_money?.amount, lineItem.total_tax_set?.shop_money?.currency_code);
+    if (!subtotal) return null;
+    return total + moneyCents(subtotal) + (tax ? moneyCents(tax) : 0);
+  }, 0);
+  if (fromShopMoney !== null && lineItems.length > 0) return fromShopMoney;
+  if (settlement && shop && settlement === shop) {
+    const suggested = calculation.refund?.transactions ?? calculation.refund?.suggested_transactions ?? [];
+    return suggested.reduce((total, transaction) => total + moneyCents(
+      makeMoney(transaction.amount, settlement) ?? { amount: "0.00", currency: settlement },
+    ), 0);
+  }
+  return null;
+}
+
 export async function createPartialRefund(
   input: CreatePartialRefundInput,
   ctx: ShopifyContext,
@@ -174,7 +209,7 @@ export async function createPartialRefund(
           `Error: refund policy blocked - order ${orderId} could not be resolved at Shopify.`,
           { code: "order_unresolved" },
         ),
-        refundedCents: null,
+        refundedShopCents: null,
       };
     }
 
@@ -185,7 +220,7 @@ export async function createPartialRefund(
           `Error: refund policy blocked - order ${orderId} has financial status "${financialStatus}"; only a fully paid order can be partially refunded by the agent.`,
           { code: "order_not_paid", financialStatus },
         ),
-        refundedCents: null,
+        refundedShopCents: null,
       };
     }
 
@@ -198,7 +233,7 @@ export async function createPartialRefund(
           `Error: refund policy blocked - order ${orderId} already has a refund record and requires merchant review.`,
           { code: "prior_refund" },
         ),
-        refundedCents: null,
+        refundedShopCents: null,
       };
     }
 
@@ -209,7 +244,7 @@ export async function createPartialRefund(
           `Error: refund policy blocked - ${problems.join("; ")}.`,
           { code: "line_items_unrefundable" },
         ),
-        refundedCents: null,
+        refundedShopCents: null,
       };
     }
 
@@ -218,13 +253,14 @@ export async function createPartialRefund(
     // the shop's own currency, and the cap and the mutation would both then be
     // working in a currency this order never used.
     const currency = orderSettlementCurrency(order);
+    const shopCurrency = orderShopCurrency(order);
     if (!currency) {
       return {
         ...toolPolicyBlock(
           `Error: refund policy blocked - order ${orderId} has no currency at Shopify.`,
           { code: "currency_missing" },
         ),
-        refundedCents: null,
+        refundedShopCents: null,
       };
     }
 
@@ -256,7 +292,7 @@ export async function createPartialRefund(
           `Error: refund policy blocked - Shopify priced those items in ${calculatedCurrency}, not the ${currency} this order was charged in.`,
           { code: "currency_mismatch", currency: calculatedCurrency },
         ),
-        refundedCents: null,
+        refundedShopCents: null,
       };
     }
     const suggested = calculation.refund?.transactions
@@ -268,7 +304,7 @@ export async function createPartialRefund(
           "Error: refund policy blocked - Shopify calculated no refundable amount for those items.",
           { code: "no_refundable_balance" },
         ),
-        refundedCents: null,
+        refundedShopCents: null,
       };
     }
 
@@ -282,21 +318,39 @@ export async function createPartialRefund(
           "Error: refund policy blocked - Shopify calculated a zero refund for those items.",
           { code: "no_refundable_balance" },
         ),
-        refundedCents: null,
+        refundedShopCents: null,
       };
     }
 
     // The cap applies to Shopify's figure, because that is the only amount that
     // exists. The static policy cannot do this: it runs before the calculation.
+    //
+    // It is judged in the merchant's own currency, which is what they typed the
+    // limit in. On a multi-currency order that figure has to come from Shopify's
+    // own shop-money side of the calculation — inferring it from the customer's
+    // amount would be inventing an exchange rate.
+    const shopCents = calculatedShopCents(calculation, order);
     const perCallCap = settings.maxRefundAmount;
-    if (perCallCap !== null && perCallCap > 0 && calculatedCents > Math.round(perCallCap * 100)) {
-      return {
-        ...toolPolicyBlock(
-          `Error: refund policy blocked - those items come to $${centsToMoney(calculatedCents)}, over the workspace limit of $${perCallCap}.`,
-          { code: "amount_over_cap", calculatedCents, capCents: Math.round(perCallCap * 100) },
-        ),
-        refundedCents: null,
-      };
+    if (perCallCap !== null && perCallCap > 0) {
+      if (shopCents === null) {
+        return {
+          ...toolPolicyBlock(
+            `Error: refund policy blocked - this order was charged in ${currency} and Shopify did not price the selection in the shop's currency, so the workspace limit cannot be applied to it. This one needs the merchant.`,
+            { code: "cap_not_comparable", currency },
+          ),
+          refundedShopCents: null,
+        };
+      }
+      const shopMoney = moneyFromCents(shopCents, shopCurrency ?? currency);
+      if (withinShopLimit(shopMoney, shopCurrency ?? currency, perCallCap) === false) {
+        return {
+          ...toolPolicyBlock(
+            `Error: refund policy blocked - those items come to ${formatMoney(shopMoney)}, over the workspace limit of ${formatMoney(moneyFromCents(Math.round(perCallCap * 100), shopMoney.currency))}.`,
+            { code: "amount_over_cap", calculatedCents: shopCents, capCents: Math.round(perCallCap * 100) },
+          ),
+          refundedShopCents: null,
+        };
+      }
     }
 
     const idempotencyKey = shopifyIdempotencyKey(ctx.operationId);
@@ -328,14 +382,14 @@ export async function createPartialRefund(
 
     const userError = formatUserErrors(data.refundCreate.userErrors);
     if (userError) {
-      return { ...toolError(`Error: failed to create refund - ${userError}`), refundedCents: null };
+      return { ...toolError(`Error: failed to create refund - ${userError}`), refundedShopCents: null };
     }
 
     const refund = data.refundCreate.refund;
     if (!refund) {
       return {
         ...toolUnknown(`Unknown: Shopify accepted the partial refund for order ${orderId} but did not return a refund. Do not retry or confirm it to the customer until it is reconciled.`),
-        refundedCents: null,
+        refundedShopCents: null,
       };
     }
 
@@ -345,7 +399,7 @@ export async function createPartialRefund(
     if (statuses.length === 0 || statuses.some((status) => status !== "SUCCESS")) {
       return {
         ...toolUnknown(`Unknown: Shopify created refund ${refund.id} for order ${orderId}, but its payment status is ${statuses.join(", ") || "unavailable"}. Do not retry or confirm it to the customer until it is reconciled.`),
-        refundedCents: null,
+        refundedShopCents: null,
       };
     }
 
@@ -353,7 +407,7 @@ export async function createPartialRefund(
     if (!refundedAmount) {
       return {
         ...toolUnknown(`Unknown: Shopify created refund ${refund.id} for order ${orderId}, but did not return the committed amount. Do not retry or confirm it to the customer until it is reconciled.`),
-        refundedCents: null,
+        refundedShopCents: null,
       };
     }
 
@@ -361,24 +415,24 @@ export async function createPartialRefund(
     const unitCount = items.reduce((total, item) => total + item.quantity, 0);
     return {
       ...toolOk(
-        `Refunded $${centsToMoney(totalRefunded)} for ${unitCount} item(s) on order ${orderId}.`
+        `Refunded ${formatMoney(moneyFromCents(totalRefunded, currency))} for ${unitCount} item(s) on order ${orderId}.`
         + `${note ? ` Reason: ${note}.` : ""}`,
       ),
-      refundedCents: totalRefunded,
+      refundedShopCents: shopCents ?? totalRefunded,
     };
   } catch (err) {
     if (err instanceof ShopifyInputError) {
-      return { ...toolError(`Error: ${err.message}`), refundedCents: null };
+      return { ...toolError(`Error: ${err.message}`), refundedShopCents: null };
     }
     if (mutationStarted && isAmbiguousShopifyMutationError(err)) {
       return {
         ...toolUnknown(`Unknown: a partial refund for order ${orderId} may have been created at Shopify but could not be confirmed. Do not retry or confirm it to the customer until it is reconciled. ${formatShopifyToolError("partial refund reconciliation failed", err)}`),
-        refundedCents: null,
+        refundedShopCents: null,
       };
     }
     return {
       ...toolError(formatShopifyToolError("failed to create partial refund", err)),
-      refundedCents: null,
+      refundedShopCents: null,
     };
   }
 }

@@ -4,6 +4,7 @@ import type {
   BaseAgentContext,
   SupportContext,
 } from "./agent-context.js";
+import { canonicalAmount as canonicalMoneyAmount, orderSettlementCurrency } from "./money.js";
 import type { RawToolCall } from "./types.js";
 
 export type CompletionAction =
@@ -55,9 +56,7 @@ function textField(input: Record<string, unknown>, key: string): string | undefi
 }
 
 function canonicalAmount(value: string | undefined): string | undefined {
-  if (!value || !/^\d+(?:\.\d{1,2})?$/.test(value.trim())) return undefined;
-  const [whole, fraction = ""] = value.trim().split(".");
-  return `${BigInt(whole)}.${fraction.padEnd(2, "0")}`;
+  return canonicalMoneyAmount(value) ?? undefined;
 }
 
 function orderTarget(
@@ -74,10 +73,12 @@ function orderTarget(
   };
 }
 
+// The currency a completed money movement is denominated in: what the customer
+// was charged, not the shop's own books. Reading `currency` here is what would
+// label a 59.90 CAD refund as USD whenever the model left the field off.
 function orderCurrency(orderId: string, ctx?: FactContext): string | undefined {
-  return ctx?.recentOrders
-    ?.find((candidate) => candidate.id === orderId)
-    ?.currency?.trim().toUpperCase() || undefined;
+  const order = ctx?.recentOrders?.find((candidate) => candidate.id === orderId);
+  return (order ? orderSettlementCurrency(order) : null) ?? undefined;
 }
 
 function fact(
@@ -127,9 +128,21 @@ function mutationFacts(input: {
       return orderId ? [{ ...base, action: "refund", ...orderOptions, ...(amountFromInput ? { amount: amountFromInput } : {}) }] : [];
     case "create_partial_refund": {
       if (!orderId) return [];
-      const resultAmount = input.result?.match(/\bRefunded\s+\$(\d+(?:\.\d{1,2})?)/i)?.[1];
-      const amount = input.outcome === "success" ? canonicalAmount(resultAmount) : undefined;
-      return [{ ...base, action: "refund", ...orderOptions, ...(amount ? { amount } : {}) }];
+      // Reading the money back out of a sentence this package wrote is the shape
+      // that keeps breaking: the writer changed format once and the reader went
+      // quietly empty, which reads downstream as an unsupported claim. Both
+      // forms are accepted here for exactly that reason, and the currency the
+      // writer names wins over the order's when present.
+      const settled = input.result?.match(/\bRefunded\s+(?:\$)?(\d+(?:\.\d{1,2})?)(?:\s+([A-Z]{3}))?/i);
+      const amount = input.outcome === "success" ? canonicalAmount(settled?.[1]) : undefined;
+      const settledCurrency = settled?.[2]?.toUpperCase();
+      return [{
+        ...base,
+        action: "refund",
+        ...orderOptions,
+        ...(settledCurrency ? { currency: settledCurrency } : {}),
+        ...(amount ? { amount } : {}),
+      }];
     }
     case "cancel_order": {
       if (!orderId) return [];
@@ -279,11 +292,15 @@ function historicalOrderFacts(
       id: id ?? name!,
       ...(name && name !== id ? { aliases: [name] } : {}),
     };
-    const currency = textField(order, "currency")?.toUpperCase();
+    const currency = (textField(order, "presentment_currency") ?? textField(order, "currency"))?.toUpperCase();
     const common = { target, ...(currency ? { currency } : {}) };
     const facts: CompletionFact[] = [];
     if (textField(order, "financial_status")?.toLowerCase() === "refunded") {
-      const amount = canonicalAmount(textField(order, "total_price"));
+      // The pair has to stay together: a presentment amount labelled with the
+      // shop's currency is a truthful number and a false statement.
+      const amount = canonicalAmount(
+        textField(order, "presentment_total_price") ?? textField(order, "total_price"),
+      );
       facts.push(fact("refund", sourceTool, "success", executionReference, {
         ...common,
         ...(amount ? { amount } : {}),
