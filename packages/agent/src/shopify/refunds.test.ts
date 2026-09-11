@@ -132,7 +132,7 @@ describe("createRefund full-refund input", () => {
         parentId: "gid://shopify/OrderTransaction/224",
       },
     ]);
-    expect(result).toMatchObject({ status: "ok", refundedCents: 2550 });
+    expect(result).toMatchObject({ status: "ok", refundedShopCents: 2550 });
   });
 
   it("always asks for full shipping and all refundable line items", async () => {
@@ -159,7 +159,7 @@ describe("createRefund full-refund input", () => {
 
     const result = await createRefund({ order_id: "456", amount: "20.00" }, ctx);
 
-    expect(result).toMatchObject({ status: "policy_block", refundedCents: null, data: { code: "amount_mismatch" } });
+    expect(result).toMatchObject({ status: "policy_block", refundedShopCents: null, data: { code: "amount_mismatch" } });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -262,7 +262,7 @@ describe("createRefund full-refund input", () => {
 
     const result = await createRefund({ order_id: "456", amount: "59.90", currency: "CAD" }, ctx);
 
-    expect(result).toMatchObject({ status: "ok", refundedCents: 5990 });
+    expect(result).toMatchObject({ status: "ok", refundedShopCents: 5990 });
     // The calculation is asked in the customer's currency rather than left to a
     // default, which `refundCreate` requires whenever the two differ...
     expect(JSON.parse(fetchMock.mock.calls[1][1].body as string).refund.currency).toBe("CAD");
@@ -341,7 +341,7 @@ describe("createRefund provider outcomes", () => {
     const firstAttempt = JSON.parse(fetchMock.mock.calls[2][1].body as string);
     const retry = JSON.parse(fetchMock.mock.calls[3][1].body as string);
 
-    expect(result).toMatchObject({ status: "ok", refundedCents: 2000 });
+    expect(result).toMatchObject({ status: "ok", refundedShopCents: 2000 });
     expect(firstAttempt.variables).toEqual(retry.variables);
     expect(firstAttempt.variables.idempotencyKey).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
@@ -361,7 +361,7 @@ describe("createRefund provider outcomes", () => {
     const firstAttempt = JSON.parse(fetchMock.mock.calls[2][1].body as string);
     const retry = JSON.parse(fetchMock.mock.calls[3][1].body as string);
 
-    expect(result).toMatchObject({ status: "ok", refundedCents: 2000 });
+    expect(result).toMatchObject({ status: "ok", refundedShopCents: 2000 });
     expect(firstAttempt.variables.idempotencyKey).toBe(retry.variables.idempotencyKey);
   });
 
@@ -376,7 +376,7 @@ describe("createRefund provider outcomes", () => {
     const result = await createRefund({ order_id: "456", amount: "20.00" }, ctx);
 
     expect(result.status).toBe("unknown");
-    expect(result.refundedCents).toBeNull();
+    expect(result.refundedShopCents).toBeNull();
     expect(result.message).toContain("may have committed at Shopify");
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
@@ -391,7 +391,7 @@ describe("createRefund provider outcomes", () => {
     const result = await createRefund({ order_id: "456", amount: "20.00" }, ctx);
 
     expect(result.status).toBe("unknown");
-    expect(result.refundedCents).toBeNull();
+    expect(result.refundedShopCents).toBeNull();
     expect(result.message).toContain("payment status is PENDING");
   });
 
@@ -414,7 +414,7 @@ describe("createRefund provider outcomes", () => {
     expect(result).toEqual({
       status: "error",
       message: "Error: failed to create refund - Amount is not refundable",
-      refundedCents: null,
+      refundedShopCents: null,
     });
   });
 });

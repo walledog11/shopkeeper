@@ -48,11 +48,11 @@ export const GIFT_CARD_CREATE_MUTATION = `mutation giftCardCreate($input: GiftCa
       }`;
 
 function spendError(message: string): SpendToolResult {
-  return { ...toolError(message), spentCents: null };
+  return { ...toolError(message), spentShopCents: null };
 }
 
 function spendUnknown(message: string): SpendToolResult {
-  return { ...toolUnknown(message), spentCents: null };
+  return { ...toolUnknown(message), spentShopCents: null };
 }
 
 function operationCode(operationId?: string): string {
@@ -138,7 +138,7 @@ export async function createGiftCard(
       : " This code is only shown once - you MUST tell the customer the code in your reply so they can redeem it at checkout.";
     return {
       ...toolOk(`Created a $${amount} gift card with code ${returnedCode}.${expiryNote}${deliveryNote}`),
-      spentCents: moneyToCents(amount),
+      spentShopCents: moneyToCents(amount),
     };
   } catch (err) {
     if (mutationStarted && isAmbiguousShopifyMutationError(err)) {

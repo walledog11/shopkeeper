@@ -54,7 +54,7 @@ const goodwillSpendTool = defineTool({
   execute: async (input: { amount: number }) => ({
     status: "ok" as const,
     message: "Goodwill issued.",
-    spentCents: Math.round(input.amount * 100),
+    spentShopCents: Math.round(input.amount * 100),
   }),
 });
 
