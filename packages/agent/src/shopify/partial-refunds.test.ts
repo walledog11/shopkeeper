@@ -184,9 +184,48 @@ describe("createPartialRefund", () => {
     expect(result.refundedShopCents).toBe(1_160);
   });
 
-  // Refusing is the only honest answer here: judging a cap set in USD against an
-  // amount in CAD is a guess at an exchange rate, and the guess is what refused
-  // an ordinary international refund in production.
+  // The live shape, probed 2026-09-11: the REST calculation on a multi-currency
+  // order carries no `subtotal_set`, so the shop-side figure has to be asked for
+  // separately. Without this the default guarded tier's 50 limit blocks every
+  // international partial refund as `cap_not_comparable`.
+  it("asks Shopify for the shop-side price when the calculation has none", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(order({
+        currency: "USD",
+        presentment_currency: "CAD",
+        current_total_price_set: {
+          shop_money: { amount: "43.48", currency_code: "USD" },
+          presentment_money: { amount: "59.90", currency_code: "CAD" },
+        },
+      })))
+      // No `refund_line_items` at all, which is what Shopify actually returns.
+      .mockResolvedValueOnce(jsonResponse({
+        refund: {
+          currency: "CAD",
+          transactions: [{ amount: "59.90", currency: "CAD", gateway: "shopify_payments", parent_id: 77, kind: "suggested_refund" }],
+        },
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        data: { order: { suggestedRefund: { amountSet: { shopMoney: { amount: "43.48", currencyCode: "USD" } } } } },
+      }))
+      .mockResolvedValueOnce(jsonResponse(committed("59.90")));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await createPartialRefund(
+      { order_id: "2001", items: [{ line_item_id: "9001", quantity: 1 }] },
+      ctx,
+      resolveAgentSettings({ maxRefundAmount: 50 }),
+    );
+
+    // 43.48 in the shop's books is under the 50 limit, so it proceeds, and the
+    // ledger counts the shop figure rather than the 59.90 the customer sees.
+    expect(result.status).toBe("ok");
+    expect(result.refundedShopCents).toBe(4_348);
+  });
+
+  // When neither Shopify call yields a shop-side figure, refusing is the only
+  // honest answer: judging a cap set in USD against an amount in CAD is a guess
+  // at an exchange rate. A failed read is "cannot tell", never "no cap applies".
   it("refuses rather than compare a cap across currencies", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse(order({
@@ -202,7 +241,8 @@ describe("createPartialRefund", () => {
           currency: "CAD",
           transactions: [{ amount: "16.00", currency: "CAD", gateway: "shopify_payments", parent_id: 77, kind: "suggested_refund" }],
         },
-      }));
+      }))
+      .mockResolvedValueOnce(jsonResponse({ data: { order: { suggestedRefund: null } } }));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await createPartialRefund(
@@ -213,7 +253,8 @@ describe("createPartialRefund", () => {
 
     expect(result.status).toBe("policy_block");
     expect(result).toMatchObject({ data: { code: "cap_not_comparable" } });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // Order, calculation, suggested refund - and no mutation.
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   // The model never names an amount, so it cannot understate one to duck a cap.

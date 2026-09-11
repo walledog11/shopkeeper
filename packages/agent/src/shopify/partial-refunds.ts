@@ -155,6 +155,58 @@ function gid(resource: "Order" | "LineItem" | "OrderTransaction", id: string | n
   return `gid://shopify/${resource}/${id}`;
 }
 
+const SUGGESTED_REFUND_QUERY = `
+  query suggestedRefund($id: ID!, $items: [RefundLineItemInput!]) {
+    order(id: $id) {
+      suggestedRefund(refundLineItems: $items, refundShipping: false) {
+        amountSet { shopMoney { amount currencyCode } }
+      }
+    }
+  }`;
+
+/**
+ * The shop-money price of this selection, asked of Shopify rather than derived.
+ *
+ * The REST calculation answers in one currency only, and a 2026-09-11 probe of
+ * the live multi-currency order confirmed its `refund_line_items` carry no
+ * `subtotal_set` at all — so on an international order it cannot say what the
+ * selection costs the merchant. `Order.suggestedRefund` prices the same line
+ * items and returns a MoneyBag, which carries both sides. It commits nothing.
+ *
+ * Without this the cap has no figure to compare on an international order, and
+ * since the default `guarded` tier sets a 50 per-call limit, every international
+ * partial refund would block as `cap_not_comparable`.
+ */
+async function suggestedRefundShopMoney(
+  ctx: ShopifyContext,
+  orderId: string,
+  items: readonly { lineItemId: string; quantity: number }[],
+): Promise<number | null> {
+  try {
+    const data = await shopifyGraphql<{
+      order?: {
+        suggestedRefund?: {
+          amountSet?: { shopMoney?: { amount?: string; currencyCode?: string } };
+        } | null;
+      } | null;
+    }>(ctx, SUGGESTED_REFUND_QUERY, {
+      id: gid("Order", orderId),
+      items: items.map((item) => ({
+        lineItemId: gid("LineItem", item.lineItemId),
+        quantity: item.quantity,
+        restockType: "NO_RESTOCK",
+      })),
+    });
+    const shop = data.order?.suggestedRefund?.amountSet?.shopMoney;
+    const money = makeMoney(shop?.amount, shop?.currencyCode);
+    return money ? moneyCents(money) : null;
+  } catch {
+    // A failed read is "cannot tell", which the caller turns into a block. It is
+    // never "no cap applies".
+    return null;
+  }
+}
+
 // Shopify's shop-money side of the calculation, in cents, or null when it did
 // not return one. Never derived from the customer's amount: the two differ by an
 // exchange rate that is Shopify's to know and not ours to guess. A
@@ -328,7 +380,8 @@ export async function createPartialRefund(
     // limit in. On a multi-currency order that figure has to come from Shopify's
     // own shop-money side of the calculation — inferring it from the customer's
     // amount would be inventing an exchange rate.
-    const shopCents = calculatedShopCents(calculation, order);
+    const shopCents = calculatedShopCents(calculation, order)
+      ?? await suggestedRefundShopMoney(ctx, orderId, items);
     const perCallCap = settings.maxRefundAmount;
     if (perCallCap !== null && perCallCap > 0) {
       if (shopCents === null) {
