@@ -129,6 +129,16 @@ function mergePinnedKbArticles(
   return merged.slice(0, limit);
 }
 
+// Present only when the customer was charged in something other than the shop's
+// own currency; on a single-currency store this adds nothing, as before.
+function presentmentCharge(
+  order: RawShopifyOrder,
+): { presentment_total_price: string; presentment_currency: string } | Record<string, never> {
+  const settlement = orderSettlementMoney(order);
+  if (!settlement || settlement.currency === (order.currency ?? "").toUpperCase()) return {};
+  return { presentment_total_price: settlement.amount, presentment_currency: settlement.currency };
+}
+
 export async function buildContext(
   threadId: string,
   orgId: string,
@@ -302,12 +312,12 @@ export async function buildContext(
         // figure rather than dropped here — this summary is the only order the
         // model sees on most threads, and quoting the shop's number to a
         // customer who paid another is how the two get confused.
-        ...(orderSettlementMoney(o) && orderSettlementMoney(o)!.currency !== (o.currency ?? "").toUpperCase()
-          ? {
-              presentment_total_price: orderSettlementMoney(o)!.amount,
-              presentment_currency: orderSettlementMoney(o)!.currency,
-            }
-          : {}),
+        //
+        // Both fields or neither: `historicalOrderFacts` pairs the presentment
+        // amount with the presentment currency and falls back to the shop's for
+        // each independently, so emitting one alone would label one currency's
+        // number with the other's code.
+        ...presentmentCharge(o),
         items: o.line_items.map((li) => ({
           line_item_id: li.id !== undefined && li.id !== null ? String(li.id) : null,
           title: li.title,
