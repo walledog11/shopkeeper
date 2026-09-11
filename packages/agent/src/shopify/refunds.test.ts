@@ -215,49 +215,43 @@ describe("createRefund full-refund input", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  // Live shape of order #1031: a CAD shop, a customer charged $43.48 USD. The
-  // agent asks for USD because that is what the order read reports and what the
-  // customer paid. Shopify prices a refund in the shop's currency unless the
-  // request names one, so the calculation has to be asked in USD — asking
-  // unqualified and then reading the answer's currency back is what produced
-  // "requested currency USD does not match Shopify currency CAD" in production
-  // and made every international order unrefundable.
+  // Live shape of order #1031, read off the store on 2026-09-11: a USD shop and
+  // a Toronto customer charged 59.90 CAD. The refund settles in CAD, and the
+  // probe confirmed Shopify's calculation answers CAD whether or not the request
+  // names one. The agent must therefore ask for CAD; asking for the shop's USD
+  // is the input error the block below exists to catch.
+  const internationalOrder = {
+    id: 456,
+    currency: "USD",
+    presentment_currency: "CAD",
+    current_total_price_set: { presentment_money: { amount: "59.90", currency_code: "CAD" } },
+    financial_status: "paid",
+    refunds: [],
+    line_items: [{ id: 11, title: "Hat", quantity: 1, current_quantity: 1 }],
+  };
+
   it("prices and settles an international refund in the currency the customer was charged", async () => {
     const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ order: internationalOrder }))
       .mockResolvedValueOnce(jsonResponse({
-        order: {
-          id: 456,
+        refund: {
           currency: "CAD",
-          presentment_currency: "USD",
-          current_total_price_set: { presentment_money: { amount: "43.48", currency_code: "USD" } },
-          financial_status: "paid",
-          refunds: [],
-          line_items: [{ id: 11, title: "Hat", quantity: 1, current_quantity: 1 }],
+          transactions: [{
+            kind: "suggested_refund",
+            gateway: "shopify_payments",
+            parent_id: 222,
+            amount: "59.90",
+            currency: "CAD",
+            maximum_refundable: "59.90",
+          }],
         },
       }))
-      .mockImplementationOnce((_url: string, init: RequestInit) => {
-        // Shopify answers in whatever currency the request named.
-        const requested = JSON.parse(init.body as string).refund.currency as string;
-        return Promise.resolve(jsonResponse({
-          refund: {
-            currency: requested,
-            transactions: [{
-              kind: "suggested_refund",
-              gateway: "shopify_payments",
-              parent_id: 222,
-              amount: "43.48",
-              currency: requested,
-              maximum_refundable: "43.48",
-            }],
-          },
-        }));
-      })
       .mockResolvedValueOnce(jsonResponse({
         data: {
           refundCreate: {
             refund: {
               id: "gid://shopify/Refund/9001",
-              totalRefundedSet: { presentmentMoney: { amount: "43.48" } },
+              totalRefundedSet: { presentmentMoney: { amount: "59.90" } },
               transactions: { nodes: [{ status: "SUCCESS" }] },
             },
             userErrors: [],
@@ -266,67 +260,50 @@ describe("createRefund full-refund input", () => {
       }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await createRefund({ order_id: "456", amount: "43.48", currency: "USD" }, ctx);
+    const result = await createRefund({ order_id: "456", amount: "59.90", currency: "CAD" }, ctx);
 
-    expect(result).toMatchObject({ status: "ok", refundedCents: 4348 });
-    // The calculation is asked in the customer's currency...
-    expect(JSON.parse(fetchMock.mock.calls[1][1].body as string).refund.currency).toBe("USD");
+    expect(result).toMatchObject({ status: "ok", refundedCents: 5990 });
+    // The calculation is asked in the customer's currency rather than left to a
+    // default, which `refundCreate` requires whenever the two differ...
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body as string).refund.currency).toBe("CAD");
     // ...and the mutation settles in it.
-    expect(JSON.parse(fetchMock.mock.calls[2][1].body as string).variables.input.currency).toBe("USD");
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body as string).variables.input.currency).toBe("CAD");
   });
 
-  // The shop's own currency is never the settlement currency on an order the
-  // customer paid in something else, so a request naming it is the mismatch.
+  // The 2026-09-11 production failure, from the input side. The tool schema used
+  // to ask for "the store's currency", so the agent sent USD for an order the
+  // customer paid in CAD and the refund was refused. The guard is right; the
+  // instruction that produced the input was not.
   it("policy-blocks a request naming the shop currency on an international order", async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
-      order: {
-        id: 456,
-        currency: "CAD",
-        presentment_currency: "USD",
-        current_total_price_set: { presentment_money: { amount: "43.48", currency_code: "USD" } },
-        financial_status: "paid",
-        refunds: [],
-        line_items: [{ id: 11, title: "Hat", quantity: 1, current_quantity: 1 }],
-      },
-    }));
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ order: internationalOrder }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await createRefund({ order_id: "456", amount: "43.48", currency: "CAD" }, ctx);
+    const result = await createRefund({ order_id: "456", amount: "43.48", currency: "USD" }, ctx);
 
     expect(result).toMatchObject({
       status: "policy_block",
-      data: { code: "currency_mismatch", requestedCurrency: "CAD", currency: "USD" },
+      data: { code: "currency_mismatch", requestedCurrency: "USD", currency: "CAD" },
     });
     // Nothing was priced: the currency is decided before any money is asked for.
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  // Shopify honouring a different currency than the one asked for would mean the
+  // Shopify answering in a currency other than the one asked for would mean the
   // transactions no longer match the order, so it stops before the mutation.
   it("policy-blocks when Shopify prices the refund in another currency", async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({
-        order: {
-          id: 456,
-          currency: "CAD",
-          presentment_currency: "USD",
-          current_total_price_set: { presentment_money: { amount: "43.48", currency_code: "USD" } },
-          financial_status: "paid",
-          refunds: [],
-          line_items: [{ id: 11, title: "Hat", quantity: 1, current_quantity: 1 }],
-        },
-      }))
+      .mockResolvedValueOnce(jsonResponse({ order: internationalOrder }))
       .mockResolvedValueOnce(jsonResponse({
         refund: {
-          currency: "CAD",
-          transactions: [{ kind: "suggested_refund", gateway: "manual", parent_id: 222, amount: "59.90", currency: "CAD" }],
+          currency: "USD",
+          transactions: [{ kind: "suggested_refund", gateway: "manual", parent_id: 222, amount: "43.48", currency: "USD" }],
         },
       }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await createRefund({ order_id: "456", amount: "43.48", currency: "USD" }, ctx);
+    const result = await createRefund({ order_id: "456", amount: "59.90", currency: "CAD" }, ctx);
 
-    expect(result).toMatchObject({ status: "policy_block", data: { code: "currency_mismatch", currency: "CAD" } });
+    expect(result).toMatchObject({ status: "policy_block", data: { code: "currency_mismatch", currency: "USD" } });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 

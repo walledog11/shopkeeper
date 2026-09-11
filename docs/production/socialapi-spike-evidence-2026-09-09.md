@@ -287,15 +287,16 @@ apart, differing only in the deployed commit:
 | `pendingPlans` entry | present, `validation: invalid` | present, `actionLabel: "run those 3 steps"` |
 
 **The `currency_mismatch` block, and why the first fix missed.** A 2026-09-11 re-run escalated with
-the same message: "requested currency USD does not match Shopify currency CAD". The shop's books are
-CAD and the customer was charged USD, and the agent asked for USD because that is what the order read
-reports. The refund path called `refunds/calculate.json` without naming a currency, so Shopify priced
-it in the shop's currency and returned CAD — and the code read that answer back as though it were the
-currency the customer paid. `afc88439` changed which of two shop-currency fields it read, which could
-not help, and its regression stubbed the calculation as already answering in the presentment currency,
-so the test agreed with the code rather than with Shopify. The currency is now resolved from the order
-(`orderSettlementCurrency`) and passed *into* the calculation and the mutation, in both the full and
-partial refund paths.
+the same message: "requested currency USD does not match Shopify currency CAD". A read-only probe
+against the live store (`orders/{id}/refunds/calculate.json`, which prices without committing) records
+the shape: order #1031 is a **USD shop** whose customer was charged **59.90 CAD**, and Shopify's
+calculation answers CAD whether or not the request names a currency. So the executor's CAD was right
+and the agent's USD was wrong. `afc88439` had fixed the executor and the order read but not the
+instruction that produces the input: `create_refund`'s schema still asked for the amount "in the
+store's currency" and for the "three-letter store currency", which is exactly what the agent sent.
+The contract and the executor had been made to disagree, and the guard caught the disagreement. The
+schema now asks for the currency the customer was charged and names the order-read fields that carry
+it (`presentment_total_price` / `presentment_currency`, falling back to `total_price` / `currency`).
 
 **Still open from this run**, all tracked in `to-do-list.md`: `approve_pending_plan` returning "no plan is awaiting the merchant's approval" twice
 before the plan it approves executed anyway; and `AgentAction.approverId` being null on rows marked

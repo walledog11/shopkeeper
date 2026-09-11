@@ -116,11 +116,11 @@ export const ORDER_TOOL_DEFINITIONS = [
   defineTool({
     name: "create_refund",
     description:
-      "Use when the customer or merchant explicitly requests an exact full-order refund and does not also explicitly ask to send the delivered items back. Do not infer a return merely because the item was damaged, unwanted, or the wrong size: an explicit full-refund request controls unless the customer also says the goods are being returned. Pass the identified paid order, its complete current refundable balance, and its currency. Partial, item-only, vague, mismatched, previously refunded, chargeback, and non-paid requests must be escalated instead. If the customer explicitly asks to send delivered items back or open a return, use create_return. If nothing has shipped and the whole order should be stopped, use cancel_order.",
+      "Use when the customer or merchant explicitly requests an exact full-order refund and does not also explicitly ask to send the delivered items back. Do not infer a return merely because the item was damaged, unwanted, or the wrong size: an explicit full-refund request controls unless the customer also says the goods are being returned. Pass the identified paid order, its complete current refundable balance, and the currency that balance is in — which is the currency the customer was charged, not the shop's own when they differ. Partial, item-only, vague, mismatched, previously refunded, chargeback, and non-paid requests must be escalated instead. If the customer explicitly asks to send delivered items back or open a return, use create_return. If nothing has shipped and the whole order should be stopped, use cancel_order.",
     fields: {
       order_id: stringArg("Shopify order ID (numeric).", { required: true }),
-      amount: stringArg("Amount to refund in the store's currency (e.g. '19.99'). For a full refund, use the order's total from context. Always provide this.", { required: true }),
-      currency: stringArg("Three-letter store currency from the identified order (for example 'USD')."),
+      amount: stringArg("Amount to refund: the order's complete current refundable balance, in the currency the customer was charged. Use `presentment_total_price` from the order read when it carries one, otherwise `total_price` (e.g. '19.99'). Always provide this.", { required: true }),
+      currency: stringArg("Three-letter code for the currency the customer was charged: `presentment_currency` from the order read when it carries one, otherwise the order's `currency` (for example 'USD')."),
       reason: stringArg("Reason for the refund (e.g. 'Item not received', 'Wrong item sent')."),
     },
     category: "action",
