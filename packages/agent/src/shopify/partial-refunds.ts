@@ -42,7 +42,7 @@ const PARTIAL_REFUND_MUTATION = `mutation partialRefundCreate($input: RefundInpu
   refundCreate(input: $input, idempotencyKey: $idempotencyKey) {
     refund {
       id
-      totalRefundedSet { presentmentMoney { amount } shopMoney { amount } }
+      totalRefundedSet { presentmentMoney { amount } shopMoney { amount currencyCode } }
       transactions(first: 20) {
         nodes { status amountSet { presentmentMoney { amount } } }
       }
@@ -78,7 +78,7 @@ interface RefundCreateData {
   refundCreate: {
     refund?: {
       id: string;
-      totalRefundedSet?: { presentmentMoney?: { amount?: string }; shopMoney?: { amount?: string } };
+      totalRefundedSet?: { presentmentMoney?: { amount?: string }; shopMoney?: { amount?: string; currencyCode?: string } };
       transactions?: { nodes?: { status?: string }[] };
     } | null;
     userErrors?: ShopifyGraphqlUserError[];
@@ -411,9 +411,13 @@ export async function createPartialRefund(
     }
 
     const totalRefunded = moneyToCents(refundedAmount);
+    // Currency from the same MoneyBag as the amount. `?? currency` here would
+    // label Shopify's shop-side figure with the customer's code whenever the
+    // order read carried no shop currency — an amount and a currency that never
+    // belonged together.
     const committedShopMoney = makeMoney(
       refund.totalRefundedSet?.shopMoney?.amount,
-      shopCurrency ?? currency,
+      refund.totalRefundedSet?.shopMoney?.currencyCode ?? shopCurrency,
     );
     const unitCount = items.reduce((total, item) => total + item.quantity, 0);
     return {

@@ -138,15 +138,13 @@ function factMatchesDetails(span: string, fact: CompletionFact): boolean {
   if (isFinancialFact && amounts.length > 0) {
     const factAmount = fact.amount ? canonicalAmount(fact.amount) : null;
     if (!factAmount || amounts.some((claim) => claim.amount !== factAmount)) return false;
+    // A claim that names the wrong currency is unsupported. A bare `$` names
+    // none, and is left grounded on purpose: this runs at plan validation, and
+    // the renderer at execution rewrites the whole sentence from the fact's own
+    // fields — "A refund of 59.90 CAD has been issued for order #1031". Treating
+    // the `$` as unsupported here makes the plan invalid, so it never reaches
+    // the renderer that would have fixed it, and the repair is lost to a block.
     const factCurrency = fact.currency?.toUpperCase();
-    // A bare `$` is not "currency unspecified" when the money moved in another
-    // currency — it is a claim that the customer will read as their own symbol.
-    // The renderer composes `59.90 CAD` for exactly this case, so text that
-    // reaches here still wearing a dollar sign is unsupported rather than
-    // ambiguous.
-    if (factCurrency && factCurrency !== "USD" && amounts.some((claim) => claim.currency !== factCurrency)) {
-      return false;
-    }
     if (amounts.some((claim) => claim.currency && claim.currency !== factCurrency)) return false;
   }
 

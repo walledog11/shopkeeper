@@ -37,7 +37,7 @@ interface RefundCreateData {
       id: string;
       totalRefundedSet?: {
         presentmentMoney?: { amount?: string };
-        shopMoney?: { amount?: string };
+        shopMoney?: { amount?: string; currencyCode?: string };
       };
       transactions?: {
         nodes?: Array<{
@@ -63,7 +63,7 @@ export const REFUND_CREATE_MUTATION = `
             id
             totalRefundedSet {
               presentmentMoney { amount }
-              shopMoney { amount }
+              shopMoney { amount currencyCode }
             }
             transactions(first: 20) {
               nodes {
@@ -361,8 +361,16 @@ export async function createRefund(
     // for what committed, then the order's shop total. It never falls back to
     // the settled amount: on the international order this all exists for, that
     // would file the customer's currency under the merchant's.
-    const committedShopMoney = makeMoney(refund.totalRefundedSet?.shopMoney?.amount, shopCurrency)
-      ?? shopMoney;
+    //
+    // Its currency comes from the same MoneyBag as its amount. Labelling it with
+    // a code read off the order would be the pairing defect again, and reading
+    // one the order did not carry would discard a figure Shopify did return —
+    // which the executor turns into an Unknown outcome on a refund that
+    // committed.
+    const committedShopMoney = makeMoney(
+      refund.totalRefundedSet?.shopMoney?.amount,
+      refund.totalRefundedSet?.shopMoney?.currencyCode ?? shopCurrency,
+    ) ?? shopMoney;
 
     return {
       // What the customer sees named in the currency they were charged; what the
