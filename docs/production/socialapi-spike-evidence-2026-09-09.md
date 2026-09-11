@@ -286,9 +286,18 @@ apart, differing only in the deployed commit:
 | operator card | "I couldn't produce a safe executable draft… Nothing can run from this draft." | "Here's what I'd do: 1. Issue refund 2. Add internal note 3. Reply to the customer… Sound good?" |
 | `pendingPlans` entry | present, `validation: invalid` | present, `actionLabel: "run those 3 steps"` |
 
-**Still open from this run**, all tracked in `to-do-list.md`: the `currency_mismatch` block in
-`packages/agent/src/shopify/refunds.ts`, which is the last thing between this leg and a closed
-round trip; `approve_pending_plan` returning "no plan is awaiting the merchant's approval" twice
+**The `currency_mismatch` block, and why the first fix missed.** A 2026-09-11 re-run escalated with
+the same message: "requested currency USD does not match Shopify currency CAD". The shop's books are
+CAD and the customer was charged USD, and the agent asked for USD because that is what the order read
+reports. The refund path called `refunds/calculate.json` without naming a currency, so Shopify priced
+it in the shop's currency and returned CAD — and the code read that answer back as though it were the
+currency the customer paid. `afc88439` changed which of two shop-currency fields it read, which could
+not help, and its regression stubbed the calculation as already answering in the presentment currency,
+so the test agreed with the code rather than with Shopify. The currency is now resolved from the order
+(`orderSettlementCurrency`) and passed *into* the calculation and the mutation, in both the full and
+partial refund paths.
+
+**Still open from this run**, all tracked in `to-do-list.md`: `approve_pending_plan` returning "no plan is awaiting the merchant's approval" twice
 before the plan it approves executed anyway; and `AgentAction.approverId` being null on rows marked
 `human_approved`. The plan also still carries `shopify_customer_unresolved` as a blocking signal —
 the agent found the order but never identified the shopper, which is a separate identity problem

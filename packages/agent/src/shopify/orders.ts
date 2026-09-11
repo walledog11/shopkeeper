@@ -5,12 +5,12 @@ import type {
 } from "../tools/index.js";
 import { toolError, toolNotFound, toolOk, type ToolResult } from "../tools/result.js";
 import { formatShopifyToolError, shopifyRestJson, type ShopifyContext } from "./client.js";
-import { serializeOrder } from "./serializers.js";
+import { ORDER_CURRENCY_FIELDS, serializeOrder } from "./serializers.js";
 import type { ShopifyFulfillment, ShopifyOrder } from "./types.js";
 import { optionalString, requireNonEmptyString, requireNumericId } from "./validation.js";
 
 function orderFields(): string {
-  return "id,name,created_at,financial_status,fulfillment_status,total_price,current_total_price,currency,presentment_currency,total_price_set,current_total_price_set,line_items,shipping_address";
+  return `id,name,created_at,financial_status,fulfillment_status,total_price,current_total_price,${ORDER_CURRENCY_FIELDS},line_items,shipping_address`;
 }
 
 export async function getShopifyOrders(

@@ -17,6 +17,7 @@ import type {
   ShopifyTransaction,
 } from "./types.js";
 import { centsToMoney, moneyToCents, optionalString, requireAmount, requireNumericId, ShopifyInputError } from "./validation.js";
+import { ORDER_CURRENCY_FIELDS, orderSettlementCurrency } from "./serializers.js";
 
 interface RefundCalculation {
   refund?: {
@@ -106,15 +107,20 @@ function buildFullRefundTransactions(calculation: RefundCalculation): ShopifyTra
   ));
 }
 
+// `currency` is not optional on a multi-currency order: omit it and Shopify
+// prices the refund in the shop's own currency, which is neither what the
+// customer paid nor what the refund can settle against.
 async function calculateRefund(
   ctx: ShopifyContext,
   orderId: string,
-  refundLineItems: ShopifyCalculatedRefundLineItem[]
+  refundLineItems: ShopifyCalculatedRefundLineItem[],
+  currency: string
 ): Promise<RefundCalculation> {
   return shopifyRestJson<RefundCalculation>(ctx, `orders/${orderId}/refunds/calculate.json`, {
     method: "POST",
     body: {
       refund: {
+        currency,
         shipping: { full_refund: true },
         refund_line_items: refundLineItems,
       },
@@ -165,7 +171,7 @@ export async function createRefund(
     const note = optionalString(input.reason) ?? "";
 
     const orderData = await shopifyRestJson<{ order?: ShopifyOrder }>(ctx, `orders/${orderId}.json`, {
-      query: { fields: "id,name,currency,line_items,total_price,current_total_price,financial_status,refunds" },
+      query: { fields: `id,name,${ORDER_CURRENCY_FIELDS},line_items,total_price,current_total_price,financial_status,refunds` },
     });
 
     if (!orderData.order) {
@@ -189,6 +195,25 @@ export async function createRefund(
       };
     }
 
+    // The currency is settled before any money is priced, because it is an input
+    // to the pricing rather than a property of the answer. Reading it off the
+    // calculation instead is what made every international order unrefundable:
+    // an unqualified calculation comes back in the shop's currency, so the
+    // customer's own currency read as a mismatch with itself.
+    const currency = orderSettlementCurrency(orderData.order);
+    if (!currency) {
+      return {
+        ...toolPolicyBlock("Error: refund policy blocked - Shopify returned no currency for this order.", { code: "currency_missing" }),
+        refundedCents: null,
+      };
+    }
+    if (requestedCurrency && requestedCurrency !== currency) {
+      return {
+        ...toolPolicyBlock(`Error: refund policy blocked - requested currency ${requestedCurrency} does not match the ${currency} this order was charged in.`, { code: "currency_mismatch", requestedCurrency, currency }),
+        refundedCents: null,
+      };
+    }
+
     const refundLineItems = buildRefundLineItems(orderData.order);
     if (refundLineItems.length === 0) {
       return {
@@ -197,24 +222,11 @@ export async function createRefund(
       };
     }
 
-    const calculation = await calculateRefund(ctx, orderId, refundLineItems);
-    // A refund settles in the currency the customer was charged, which Shopify
-    // returns here. `order.currency` is the shop's own currency and differs on
-    // every international order (USD shop, CAD buyer) — comparing the two called
-    // a correct calculation unsafe and made international orders unrefundable.
-    // The currencies that must agree are the calculation's and the transactions'
-    // it is refunding against, checked below once transactions are built.
-    const currency = calculation.refund?.currency?.toUpperCase()
-      ?? orderData.order.currency?.toUpperCase();
-    if (!currency) {
+    const calculation = await calculateRefund(ctx, orderId, refundLineItems, currency);
+    const calculatedCurrency = calculation.refund?.currency?.toUpperCase();
+    if (calculatedCurrency && calculatedCurrency !== currency) {
       return {
-        ...toolPolicyBlock("Error: refund policy blocked - Shopify returned no refund currency.", { code: "currency_missing" }),
-        refundedCents: null,
-      };
-    }
-    if (requestedCurrency && requestedCurrency !== currency) {
-      return {
-        ...toolPolicyBlock(`Error: refund policy blocked - requested currency ${requestedCurrency} does not match Shopify currency ${currency}.`, { code: "currency_mismatch", requestedCurrency, currency }),
+        ...toolPolicyBlock(`Error: refund policy blocked - Shopify priced the refund in ${calculatedCurrency}, not the ${currency} this order was charged in.`, { code: "currency_mismatch", requestedCurrency: currency, currency: calculatedCurrency }),
         refundedCents: null,
       };
     }
@@ -252,7 +264,7 @@ export async function createRefund(
       orderId: gid("Order", orderId),
       notify: true,
       note,
-      ...(currency ? { currency } : {}),
+      currency,
       shipping: { fullRefund: true },
       refundLineItems: graphqlRefundLineItems(
         calculation.refund?.refund_line_items ?? refundLineItems,
