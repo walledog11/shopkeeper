@@ -149,7 +149,18 @@ export function checkParsedStaticToolPolicy(
       const shopCurrency = options?.shopCurrency?.trim().toUpperCase() ?? null;
       const comparable = !claimedCurrency || (!!shopCurrency && claimedCurrency === shopCurrency);
       if (hasPerCallCap && comparable && amount > (settings.maxRefundAmount as number)) {
-        return { blocked: true, reason: `${noun} amount ${formatMoney(makeMoney(refundInput.amount, claimedCurrency ?? shopCurrency ?? "USD")!)} exceeds the workspace limit of ${formatMoney(moneyFromCents(Math.round((settings.maxRefundAmount as number) * 100), claimedCurrency ?? shopCurrency ?? "USD"))}.` };
+        // `amount` passed `Number.isFinite` above, which "19.999" and "1e3" also
+        // pass while being no kind of money. `makeMoney` rejects them, so this
+        // renders what the model actually wrote rather than asserting a Money
+        // that is null — the assertion threw a TypeError out of a check that
+        // runs in the client bundle, and only when the amount was over cap.
+        const code = claimedCurrency ?? shopCurrency ?? "USD";
+        const claimed = makeMoney(refundInput.amount, code);
+        const cap = moneyFromCents(Math.round((settings.maxRefundAmount as number) * 100), code);
+        return {
+          blocked: true,
+          reason: `${noun} amount ${claimed ? formatMoney(claimed) : `${refundInput.amount} ${code}`} exceeds the workspace limit of ${formatMoney(cap)}.`,
+        };
       }
     }
   }

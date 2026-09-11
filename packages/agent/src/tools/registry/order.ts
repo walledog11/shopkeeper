@@ -132,12 +132,14 @@ export const ORDER_TOOL_DEFINITIONS = [
       refundAmountLimits: true,
       dailyRefundSpendLimit: true,
     },
-    execute: async (input: CreateRefundInput, ctx, _settings, deps) => {
+    execute: async (input: CreateRefundInput, ctx, settings, deps) => {
       const shopify = requireShopify(ctx);
       if (!shopify) return noShopify;
 
-      const result = await deps.createRefund(input, shopify);
-      return result;
+      // The workspace cap is judged here, against the order Shopify returns.
+      // The static pre-check cannot do it: it runs before the order is loaded
+      // and cannot put a foreign amount into the merchant's own currency.
+      return deps.createRefund(input, shopify, settings);
     },
   }),
   defineTool({

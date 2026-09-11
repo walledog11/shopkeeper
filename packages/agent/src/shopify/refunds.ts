@@ -37,6 +37,7 @@ interface RefundCreateData {
       id: string;
       totalRefundedSet?: {
         presentmentMoney?: { amount?: string };
+        shopMoney?: { amount?: string };
       };
       transactions?: {
         nodes?: Array<{
@@ -62,6 +63,7 @@ export const REFUND_CREATE_MUTATION = `
             id
             totalRefundedSet {
               presentmentMoney { amount }
+              shopMoney { amount }
             }
             transactions(first: 20) {
               nodes {
@@ -165,7 +167,7 @@ function graphqlRefundTransactions(orderId: string, transactions: ShopifyTransac
 export async function createRefund(
   input: CreateRefundInput,
   ctx: ShopifyContext,
-  settings?: Pick<OrgSettings, "maxRefundAmount">
+  settings: Pick<OrgSettings, "maxRefundAmount">
 ): Promise<RefundResult> {
   let mutationStarted = false;
   try {
@@ -219,25 +221,42 @@ export async function createRefund(
     // The workspace cap is a number the merchant typed in their own currency, so
     // it is judged against the shop's books rather than the customer's. Comparing
     // it to the settlement amount would refuse a refund for being large in a
-    // currency the merchant never set a limit in. This is the authoritative
-    // check: the static pre-check cannot see either figure.
+    // currency the merchant never set a limit in.
+    //
+    // This is the only place the per-call cap is enforced for a full refund. The
+    // static pre-check runs before the order is loaded, so it cannot convert a
+    // foreign amount and defers to here; nothing else re-checks it. Every exit
+    // from the block below is therefore a decision, and "cannot tell" is a
+    // policy block rather than a fall-through.
     const shopCurrency = orderShopCurrency(orderData.order);
     // The order's own shop-money total when Shopify gave one; otherwise the
     // amount the caller named, but only once it is known to be in the shop's
-    // currency. A capped workspace never skips this check silently.
+    // currency. Null means this refund's size in the merchant's own books is
+    // unknown, which is a thing to say out loud rather than to work around.
     const shopMoney = orderShopMoney(orderData.order)
       ?? (currency === shopCurrency ? makeMoney(amount, currency) : null);
-    const withinCap = shopMoney
-      ? withinShopLimit(shopMoney, shopCurrency, settings?.maxRefundAmount)
-      : null;
-    if (shopMoney && withinCap === false) {
-      return {
-        ...toolPolicyBlock(
-          `Error: refund policy blocked - ${formatMoney(shopMoney)} exceeds the workspace refund limit of ${formatMoney(moneyFromCents(Math.round((settings?.maxRefundAmount ?? 0) * 100), shopMoney.currency))}.`,
-          { code: "amount_over_cap", shopCents: moneyCents(shopMoney), capCents: Math.round((settings?.maxRefundAmount ?? 0) * 100) },
-        ),
-        refundedShopCents: null,
-      };
+
+    const cap = settings.maxRefundAmount;
+    if (cap !== null && cap !== undefined && cap > 0) {
+      const withinCap = shopMoney ? withinShopLimit(shopMoney, shopCurrency, cap) : null;
+      if (!shopMoney || withinCap === null) {
+        return {
+          ...toolPolicyBlock(
+            `Error: refund policy blocked - this order was charged in ${currency} and Shopify did not price it in the shop's own currency, so the workspace limit cannot be applied to it. This one needs the merchant.`,
+            { code: "cap_not_comparable", currency },
+          ),
+          refundedShopCents: null,
+        };
+      }
+      if (withinCap === false) {
+        return {
+          ...toolPolicyBlock(
+            `Error: refund policy blocked - ${formatMoney(shopMoney)} exceeds the workspace refund limit of ${formatMoney(moneyFromCents(Math.round(cap * 100), shopMoney.currency))}.`,
+            { code: "amount_over_cap", shopCents: moneyCents(shopMoney), capCents: Math.round(cap * 100) },
+          ),
+          refundedShopCents: null,
+        };
+      }
     }
 
     const refundLineItems = buildRefundLineItems(orderData.order);
@@ -338,12 +357,18 @@ export async function createRefund(
       };
     }
     const settled = makeMoney(refundedAmount, currency) ?? { amount: refundedAmount, currency };
+    // The ledger counts shop money, so it takes Shopify's own shop-side figure
+    // for what committed, then the order's shop total. It never falls back to
+    // the settled amount: on the international order this all exists for, that
+    // would file the customer's currency under the merchant's.
+    const committedShopMoney = makeMoney(refund.totalRefundedSet?.shopMoney?.amount, shopCurrency)
+      ?? shopMoney;
 
     return {
       // What the customer sees named in the currency they were charged; what the
       // compensation ledger counts in the merchant's own.
       ...toolOk(`Refund of ${formatMoney(settled)} issued successfully for order ${orderId}.${note ? ` Reason: ${note}.` : ""}`),
-      refundedShopCents: shopMoney ? moneyCents(shopMoney) : moneyCents(settled),
+      refundedShopCents: committedShopMoney ? moneyCents(committedShopMoney) : null,
     };
   } catch (err) {
     if (mutationStarted && isAmbiguousShopifyMutationError(err)) {

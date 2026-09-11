@@ -105,11 +105,20 @@ function planExceedsCompensationCap(
     const shopMoney = order ? orderShopMoney(order) : null;
     if (shopMoney) return withinShopLimit(shopMoney, shopMoney.currency, cap) === false;
 
+    const amountText = typeof input?.amount === "string" ? input.amount : String(input?.amount ?? "");
     const claimed = makeMoney(
-      typeof input?.amount === "string" ? input.amount : String(input?.amount ?? ""),
+      amountText,
       typeof input?.currency === "string" ? input.currency : (order?.currency ?? null),
     );
-    if (!claimed) return false;
+    // No currency anywhere on the claim. `create_gift_card` has no currency
+    // field at all, so this is its normal shape, not a defect: the value is shop
+    // money by construction and the cap is the number to compare it to.
+    // Returning "not over cap" here is what stopped a $500 gift card against a
+    // $50 limit from routing to a human.
+    if (!claimed) {
+      const amount = Number(amountText);
+      return Number.isFinite(amount) && amount > cap;
+    }
     // No order in context to anchor the currency: comparable only when nothing
     // says it is foreign.
     const shopCurrency = order ? orderShopMoney(order)?.currency ?? order.currency ?? null : null;

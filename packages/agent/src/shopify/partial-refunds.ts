@@ -11,7 +11,6 @@ import {
 import { toolError, toolOk, toolPolicyBlock, toolUnknown } from "../tools/result.js";
 import {
   ShopifyInputError,
-  centsToMoney,
   moneyToCents,
   requireNumericId,
 } from "./validation.js";
@@ -43,7 +42,7 @@ const PARTIAL_REFUND_MUTATION = `mutation partialRefundCreate($input: RefundInpu
   refundCreate(input: $input, idempotencyKey: $idempotencyKey) {
     refund {
       id
-      totalRefundedSet { presentmentMoney { amount } }
+      totalRefundedSet { presentmentMoney { amount } shopMoney { amount } }
       transactions(first: 20) {
         nodes { status amountSet { presentmentMoney { amount } } }
       }
@@ -79,7 +78,7 @@ interface RefundCreateData {
   refundCreate: {
     refund?: {
       id: string;
-      totalRefundedSet?: { presentmentMoney?: { amount?: string } };
+      totalRefundedSet?: { presentmentMoney?: { amount?: string }; shopMoney?: { amount?: string } };
       transactions?: { nodes?: { status?: string }[] };
     } | null;
     userErrors?: ShopifyGraphqlUserError[];
@@ -412,13 +411,21 @@ export async function createPartialRefund(
     }
 
     const totalRefunded = moneyToCents(refundedAmount);
+    const committedShopMoney = makeMoney(
+      refund.totalRefundedSet?.shopMoney?.amount,
+      shopCurrency ?? currency,
+    );
     const unitCount = items.reduce((total, item) => total + item.quantity, 0);
     return {
       ...toolOk(
         `Refunded ${formatMoney(moneyFromCents(totalRefunded, currency))} for ${unitCount} item(s) on order ${orderId}.`
         + `${note ? ` Reason: ${note}.` : ""}`,
       ),
-      refundedShopCents: shopCents ?? totalRefunded,
+      // Shop money only: Shopify's own shop-side figure for what committed, then
+      // the shop-side calculation. Never `totalRefunded`, which is the
+      // customer's currency — filing that here is the ledger defect this module
+      // exists to end.
+      refundedShopCents: committedShopMoney ? moneyCents(committedShopMoney) : shopCents,
     };
   } catch (err) {
     if (err instanceof ShopifyInputError) {

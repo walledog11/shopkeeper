@@ -71,10 +71,6 @@ export function moneyFromCents(cents: number, currency: string): Money {
   return { amount: (cents / 100).toFixed(2), currency: currency.trim().toUpperCase() };
 }
 
-export function sameCurrency(a: Money, b: Money): boolean {
-  return a.currency === b.currency;
-}
-
 /**
  * How money is written to a customer or a merchant: `$20.00` for USD, and
  * `18.50 EUR` otherwise, because a bare symbol on a non-USD amount is the

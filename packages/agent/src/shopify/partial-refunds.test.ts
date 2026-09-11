@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsonResponse } from "../testing/json-response.js";
 import { createPartialRefund, parseRefundItems, unrefundableItems } from "./partial-refunds.js";
 import { resolveAgentSettings } from "../settings.js";
+import { executedCompletionFacts } from "../completion-facts.js";
 
 const ctx = { shop: "test-store.myshopify.com", accessToken: "shpat_test" };
 const SETTINGS = resolveAgentSettings(null);
@@ -121,6 +122,22 @@ describe("createPartialRefund", () => {
     // Shipping is never part of a partial refund.
     const calcBody = JSON.parse(String(fetchMock.mock.calls[1][1].body));
     expect(calcBody.refund.shipping).toEqual({ full_refund: false });
+
+    // This tool's amount survives only in the sentence it writes, so writer and
+    // reader are asserted together. A case-insensitive currency group in the
+    // reader once matched the word "for" here and reported every single-currency
+    // refund as FOR, which made each "$16.00" in the reply an unsupported claim.
+    expect(executedCompletionFacts([{
+      tool: "create_partial_refund",
+      toolCallId: "partial_1",
+      input: { order_id: "2001" },
+      result: result.message,
+      status: "success",
+    }])).toEqual([expect.objectContaining({
+      action: "refund",
+      amount: "16.00",
+      currency: "USD",
+    })]);
   });
 
   // A multi-currency order settles in what the customer was charged, while the

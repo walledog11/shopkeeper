@@ -43,6 +43,18 @@ describe("deterministic compensation policy matrix", () => {
       settings,
       shop,
     )).toEqual({ blocked: false });
+    // Over cap and not a plain decimal amount. `Number` accepts these, the money
+    // canonicalizer does not, and rendering the refusal used to assert a Money
+    // that was null and throw a TypeError out of a client-bundled check.
+    for (const amount of ["5000.999", "1e3", "20."]) {
+      expect(() => checkStaticToolPolicy(
+        "create_refund",
+        { order_id: "1001", amount, currency: "USD" },
+        settings,
+        shop,
+      )).not.toThrow();
+    }
+
     expect(checkStaticToolPolicy(
       "create_gift_card",
       { customer_id: "501", amount: (cap + 0.01).toFixed(2) },
