@@ -22,7 +22,7 @@ describe("issueStoreCredit", () => {
     const result = await issueStoreCredit({ customer_id: "1001", amount: "-5" }, ctx);
 
     expect(result.status).toBe("error");
-    expect(result.spentCents).toBeNull();
+    expect(result.spentShopCents).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -54,7 +54,7 @@ describe("issueStoreCredit", () => {
       creditInput: { creditAmount: { amount: "25.00", currencyCode: "USD" } },
     });
     expect(result.status).toBe("ok");
-    expect(result.spentCents).toBe(2500);
+    expect(result.spentShopCents).toBe(2500);
     expect(result.message).toContain("$25.00 USD of store credit");
     expect(result.message).toContain("balance is now $40.00 USD");
   });
@@ -102,7 +102,7 @@ describe("issueStoreCredit", () => {
     const result = await issueStoreCredit({ customer_id: "1001", amount: "25.00" }, ctx);
 
     expect(result.status).toBe("error");
-    expect(result.spentCents).toBeNull();
+    expect(result.spentShopCents).toBeNull();
     expect(result.message).toContain("Store credit is not enabled.");
     expect(result.message).toContain("use create_gift_card");
   });
@@ -116,7 +116,7 @@ describe("issueStoreCredit", () => {
     const result = await issueStoreCredit({ customer_id: "1001", amount: "25.00" }, ctx);
 
     expect(result.status).toBe("unknown");
-    expect(result.spentCents).toBeNull();
+    expect(result.spentShopCents).toBeNull();
     expect(result.message).toContain("Do not issue a gift-card fallback");
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
@@ -130,7 +130,7 @@ describe("issueStoreCredit", () => {
     const result = await issueStoreCredit({ customer_id: "1001", amount: "25.00" }, ctx);
 
     expect(result.status).toBe("unknown");
-    expect(result.spentCents).toBeNull();
+    expect(result.spentShopCents).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -154,7 +154,7 @@ describe("issueStoreCredit", () => {
     const result = await issueStoreCredit({ customer_id: "1001", amount: "25.00" }, ctx);
 
     expect(result.status).toBe("unknown");
-    expect(result.spentCents).toBeNull();
+    expect(result.spentShopCents).toBeNull();
     expect(result.message).toContain("incomplete or mismatched");
   });
 });

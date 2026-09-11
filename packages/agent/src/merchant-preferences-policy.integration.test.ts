@@ -121,7 +121,9 @@ describe("merchant preference policy backstop", () => {
       toolCalls: [],
     });
 
-    const policy = checkStaticToolPolicy("create_refund", rawToolCalls[0]?.input, settings);
+    // The shop's own currency is what the cap is denominated in; without it the
+    // pre-execution check cannot compare like with like and defers.
+    const policy = checkStaticToolPolicy("create_refund", rawToolCalls[0]?.input, settings, { shopCurrency: "USD" });
     expect(policy.blocked).toBe(true);
     if (policy.blocked) {
       expect(policy.reason).toContain("workspace limit");

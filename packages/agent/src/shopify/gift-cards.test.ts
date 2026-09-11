@@ -25,7 +25,7 @@ describe("createGiftCard", () => {
     const result = await createGiftCard({ amount: "0" }, ctx);
 
     expect(result.status).toBe("error");
-    expect(result.spentCents).toBeNull();
+    expect(result.spentShopCents).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -64,7 +64,7 @@ describe("createGiftCard", () => {
       expiresOn: "2026-10-04",
     });
     expect(result.status).toBe("ok");
-    expect(result.spentCents).toBe(2500);
+    expect(result.spentShopCents).toBe(2500);
     expect(result.message).toContain(expectedCode);
     expect(result.message).toContain("Shopify is emailing the code to the customer");
   });
@@ -113,7 +113,7 @@ describe("createGiftCard", () => {
 
     expect(result).toMatchObject({
       status: "unknown",
-      spentCents: null,
+      spentShopCents: null,
     });
     expect(result.message).toContain("incomplete or mismatched gift card");
   });
@@ -125,7 +125,7 @@ describe("createGiftCard", () => {
     const result = await createGiftCard({ amount: "25.00" }, ctx);
 
     expect(result.status).toBe("unknown");
-    expect(result.spentCents).toBeNull();
+    expect(result.spentShopCents).toBeNull();
     expect(result.message).toContain(expectedCode);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -137,7 +137,7 @@ describe("createGiftCard", () => {
     const result = await createGiftCard({ amount: "25.00" }, ctx);
 
     expect(result.status).toBe("unknown");
-    expect(result.spentCents).toBeNull();
+    expect(result.spentShopCents).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -155,7 +155,7 @@ describe("createGiftCard", () => {
     const result = await createGiftCard({ amount: "25.00" }, ctx);
 
     expect(result.status).toBe("unknown");
-    expect(result.spentCents).toBeNull();
+    expect(result.spentShopCents).toBeNull();
     expect(result.message).toContain("same operation may already have committed");
   });
 });

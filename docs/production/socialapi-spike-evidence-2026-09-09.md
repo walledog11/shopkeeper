@@ -286,9 +286,19 @@ apart, differing only in the deployed commit:
 | operator card | "I couldn't produce a safe executable draft… Nothing can run from this draft." | "Here's what I'd do: 1. Issue refund 2. Add internal note 3. Reply to the customer… Sound good?" |
 | `pendingPlans` entry | present, `validation: invalid` | present, `actionLabel: "run those 3 steps"` |
 
-**Still open from this run**, all tracked in `to-do-list.md`: the `currency_mismatch` block in
-`packages/agent/src/shopify/refunds.ts`, which is the last thing between this leg and a closed
-round trip; `approve_pending_plan` returning "no plan is awaiting the merchant's approval" twice
+**The `currency_mismatch` block, and why the first fix missed.** A 2026-09-11 re-run escalated with
+the same message: "requested currency USD does not match Shopify currency CAD". A read-only probe
+against the live store (`orders/{id}/refunds/calculate.json`, which prices without committing) records
+the shape: order #1031 is a **USD shop** whose customer was charged **59.90 CAD**, and Shopify's
+calculation answers CAD whether or not the request names a currency. So the executor's CAD was right
+and the agent's USD was wrong. `afc88439` had fixed the executor and the order read but not the
+instruction that produces the input: `create_refund`'s schema still asked for the amount "in the
+store's currency" and for the "three-letter store currency", which is exactly what the agent sent.
+The contract and the executor had been made to disagree, and the guard caught the disagreement. The
+schema now asks for the currency the customer was charged and names the order-read fields that carry
+it (`presentment_total_price` / `presentment_currency`, falling back to `total_price` / `currency`).
+
+**Still open from this run**, all tracked in `to-do-list.md`: `approve_pending_plan` returning "no plan is awaiting the merchant's approval" twice
 before the plan it approves executed anyway; and `AgentAction.approverId` being null on rows marked
 `human_approved`. The plan also still carries `shopify_customer_unresolved` as a blocking signal —
 the agent found the order but never identified the shopper, which is a separate identity problem

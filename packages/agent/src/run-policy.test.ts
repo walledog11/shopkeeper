@@ -277,7 +277,7 @@ describe("runAgent policy enforcement", () => {
   it("escalates a refund when the daily cap is already exhausted", async () => {
     mockReserveDailyRefundSpend.mockResolvedValueOnce({
       kind: "blocked",
-      spentCents: 9000,
+      spentShopCents: 9000,
       heldCents: 0,
       remainingCents: 1000,
     });
@@ -307,13 +307,13 @@ describe("runAgent policy enforcement", () => {
       { ...AGENT_SETTINGS_DEFAULTS, maxRefundAmount: 50 },
     );
 
-    expect(mockEscalateToHuman).toHaveBeenCalledWith("refund amount $200.00 exceeds the workspace limit of $50.");
+    expect(mockEscalateToHuman).toHaveBeenCalledWith("refund amount $200.00 exceeds the workspace limit of $50.00.");
     expect(result.actionsPerformed).toHaveLength(1);
     expect(result.actionsPerformed[0]).toMatchObject({
       tool: "create_refund",
       status: "escalated",
     });
-    expect(result.summary).toBe("Escalated to merchant: refund amount $200.00 exceeds the workspace limit of $50.");
+    expect(result.summary).toBe("Escalated to merchant: refund amount $200.00 exceeds the workspace limit of $50.00.");
     expect(mockReserveDailyRefundSpend).not.toHaveBeenCalled();
   });
 

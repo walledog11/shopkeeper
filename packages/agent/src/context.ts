@@ -1,4 +1,7 @@
 import { db, Prisma } from "@shopkeeper/db";
+import { orderSettlementMoney } from "./money.js";
+import { ORDER_CURRENCY_FIELDS } from "./shopify/serializers.js";
+import type { ShopifyPriceSet } from "./shopify/types.js";
 import { parseClassifierSignals } from "./classifier-signals.js";
 import { shopifyRestJson, type ShopifyContext } from "./shopify/client.js";
 import { recordedShopifyScopes } from "./shopify/integration-health.js";
@@ -65,6 +68,9 @@ type RawShopifyOrder = {
   fulfillment_status: string | null;
   current_total_price: string;
   currency?: string | null;
+  presentment_currency?: string | null;
+  total_price_set?: ShopifyPriceSet;
+  current_total_price_set?: ShopifyPriceSet;
   line_items: {
     id?: number | string;
     title: string;
@@ -262,7 +268,7 @@ export async function buildContext(
           customer_id: shopifyCustomerId,
           status: "any",
           limit: 5,
-          fields: "id,name,created_at,financial_status,fulfillment_status,current_total_price,currency,line_items,shipping_address",
+          fields: `id,name,created_at,financial_status,fulfillment_status,current_total_price,${ORDER_CURRENCY_FIELDS},line_items,shipping_address`,
         },
       }
     ).catch((error) => {
@@ -292,6 +298,16 @@ export async function buildContext(
         fulfillment_status: o.fulfillment_status,
         total_price: o.current_total_price,
         currency: o.currency ?? null,
+        // What the customer was actually charged, carried beside the shop's own
+        // figure rather than dropped here — this summary is the only order the
+        // model sees on most threads, and quoting the shop's number to a
+        // customer who paid another is how the two get confused.
+        ...(orderSettlementMoney(o) && orderSettlementMoney(o)!.currency !== (o.currency ?? "").toUpperCase()
+          ? {
+              presentment_total_price: orderSettlementMoney(o)!.amount,
+              presentment_currency: orderSettlementMoney(o)!.currency,
+            }
+          : {}),
         items: o.line_items.map((li) => ({
           line_item_id: li.id !== undefined && li.id !== null ? String(li.id) : null,
           title: li.title,

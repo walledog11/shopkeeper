@@ -117,10 +117,86 @@ describe("createPartialRefund", () => {
     );
 
     expect(result.status).toBe("ok");
-    expect(result.refundedCents).toBe(1_600);
+    expect(result.refundedShopCents).toBe(1_600);
     // Shipping is never part of a partial refund.
     const calcBody = JSON.parse(String(fetchMock.mock.calls[1][1].body));
     expect(calcBody.refund.shipping).toEqual({ full_refund: false });
+  });
+
+  // A multi-currency order settles in what the customer was charged, while the
+  // merchant's cap is a number they typed in their own. Shopify's calculation
+  // carries both sides, and the cap is judged against the shop side.
+  it("prices in the customer's currency and judges the cap in the shop's", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(order({
+        currency: "USD",
+        presentment_currency: "CAD",
+        current_total_price_set: {
+          shop_money: { amount: "43.48", currency_code: "USD" },
+          presentment_money: { amount: "59.90", currency_code: "CAD" },
+        },
+      })))
+      .mockResolvedValueOnce(jsonResponse({
+        refund: {
+          currency: "CAD",
+          refund_line_items: [{
+            line_item_id: 9001,
+            quantity: 1,
+            subtotal_set: {
+              shop_money: { amount: "11.60", currency_code: "USD" },
+              presentment_money: { amount: "16.00", currency_code: "CAD" },
+            },
+          }],
+          transactions: [{ amount: "16.00", currency: "CAD", gateway: "shopify_payments", parent_id: 77, kind: "suggested_refund" }],
+        },
+      }))
+      .mockResolvedValueOnce(jsonResponse(committed("16.00")));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await createPartialRefund(
+      { order_id: "2001", items: [{ line_item_id: "9001", quantity: 1 }] },
+      ctx,
+      resolveAgentSettings({ maxRefundAmount: 50 }),
+    );
+
+    expect(result.status).toBe("ok");
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1].body)).refund.currency).toBe("CAD");
+    expect(JSON.parse(String(fetchMock.mock.calls[2][1].body)).variables.input.currency).toBe("CAD");
+    // The ledger counts the merchant's own money, like every other compensation
+    // tool, so the two cannot be summed into one column in different units.
+    expect(result.refundedShopCents).toBe(1_160);
+  });
+
+  // Refusing is the only honest answer here: judging a cap set in USD against an
+  // amount in CAD is a guess at an exchange rate, and the guess is what refused
+  // an ordinary international refund in production.
+  it("refuses rather than compare a cap across currencies", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(order({
+        currency: "USD",
+        presentment_currency: "CAD",
+        current_total_price_set: {
+          shop_money: { amount: "43.48", currency_code: "USD" },
+          presentment_money: { amount: "59.90", currency_code: "CAD" },
+        },
+      })))
+      .mockResolvedValueOnce(jsonResponse({
+        refund: {
+          currency: "CAD",
+          transactions: [{ amount: "16.00", currency: "CAD", gateway: "shopify_payments", parent_id: 77, kind: "suggested_refund" }],
+        },
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await createPartialRefund(
+      { order_id: "2001", items: [{ line_item_id: "9001", quantity: 1 }] },
+      ctx,
+      resolveAgentSettings({ maxRefundAmount: 50 }),
+    );
+
+    expect(result.status).toBe("policy_block");
+    expect(result).toMatchObject({ data: { code: "cap_not_comparable" } });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   // The model never names an amount, so it cannot understate one to duck a cap.
@@ -138,8 +214,8 @@ describe("createPartialRefund", () => {
     );
 
     expect(result.status).toBe("policy_block");
-    expect(result.message).toContain("over the workspace limit of $50");
-    expect(result.refundedCents).toBeNull();
+    expect(result.message).toContain("over the workspace limit of $50.00");
+    expect(result.refundedShopCents).toBeNull();
     // Two reads happened; the refund did not.
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
@@ -202,7 +278,7 @@ describe("createPartialRefund", () => {
     );
 
     expect(result.status).toBe("policy_block");
-    expect(result.refundedCents).toBeNull();
+    expect(result.refundedShopCents).toBeNull();
   });
 
   // A committed refund whose transaction is not SUCCESS is unknown, never ok:
@@ -232,7 +308,7 @@ describe("createPartialRefund", () => {
 
     expect(result.status).toBe("unknown");
     expect(result.message).toContain("Do not retry");
-    expect(result.refundedCents).toBeNull();
+    expect(result.refundedShopCents).toBeNull();
   });
 
   it("sends an idempotency key with the mutation", async () => {

@@ -203,7 +203,7 @@ describe('refund spend', () => {
         return {
           status: 'ok' as const,
           message: 'spent',
-          spentCents: input.amount * 100,
+          spentShopCents: input.amount * 100,
         };
       },
     });

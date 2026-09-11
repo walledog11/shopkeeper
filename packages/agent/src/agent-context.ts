@@ -28,8 +28,13 @@ export interface ShopifyOrderSummary {
   created_at: string;
   financial_status: string;
   fulfillment_status: string | null;
+  /** Shop money: the merchant's own books. */
   total_price: string;
+  /** Shop currency. Not necessarily what the customer was charged. */
   currency?: string | null;
+  /** What the customer was charged, present only when it differs from above. */
+  presentment_total_price?: string;
+  presentment_currency?: string;
   items: {
     line_item_id: string | null;
     title: string;
