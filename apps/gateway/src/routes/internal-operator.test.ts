@@ -330,7 +330,7 @@ describe('POST /internal/operator/turn', () => {
     const thread = await db.thread.findFirstOrThrow({
       where: { organizationId: org.id, operatorKey: `member:${member.id}` },
     });
-    expect(thread.channelType).toBe('sms_agent');
+    expect(thread.channelType).toBe('operator');
     expect(res.body).toEqual({
       threadId: thread.id,
       summary: 'Nothing urgent.',

@@ -725,7 +725,7 @@ describe('loadWaitingOnYouItems', () => {
 
   it('ignores stale plans on threads outside the support inbox', async () => {
     const customer = await createTestCustomer(org.id, 'op@example.com', { name: 'Operator' });
-    for (const channel of ['sms_agent', 'dashboard_agent'] as const) {
+    for (const channel of ['operator', 'dashboard_agent'] as const) {
       const thread = await createTestThread(org.id, customer.id, channel);
       const message = await createTestMessage(thread.id, 'What needs my attention?');
       await db.thread.update({

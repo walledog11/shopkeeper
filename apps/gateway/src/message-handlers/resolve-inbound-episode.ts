@@ -32,7 +32,7 @@ const DAYS_7 = 7 * 24 * 60 * 60 * 1000;
 // traffic to tune against yet.
 //
 // Channels absent from this map never roll over, and that is a decision rather
-// than an omission. Operator channels (sms_agent, dashboard_agent, imessage) are
+// than an omission. Operator channels (operator, dashboard_agent, imessage) are
 // one durable thread per binding, so a boundary there would fragment the
 // merchant's own conversation. `shopify` is merchant-side order/email-fallback
 // traffic, and `sms` is retired. Boundaries are specified for exactly the four

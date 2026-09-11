@@ -8,7 +8,7 @@ export const CHANNEL_TYPE = {
   SHOPIFY_CHAT: 'shopify_chat',
   IMESSAGE: 'imessage',
   SMS: 'sms',
-  SMS_AGENT: 'sms_agent',
+  OPERATOR: 'operator',
   DASHBOARD_AGENT: 'dashboard_agent',
 } as const;
 
@@ -16,7 +16,7 @@ export const CHANNEL_TYPE = {
 // the operator-class predicate — do not re-spell `channelType === ...` for this.
 export const OPERATOR_CHANNEL_TYPES = new Set<string>([
   CHANNEL_TYPE.DASHBOARD_AGENT,
-  CHANNEL_TYPE.SMS_AGENT,
+  CHANNEL_TYPE.OPERATOR,
 ]);
 
 export function isOperatorChannel(channelType: string | null | undefined): boolean {
@@ -27,11 +27,11 @@ export function isOperatorChannel(channelType: string | null | undefined): boole
 // What a channel is called in front of a person — badges, KB provenance, digest
 // copy. One map, because it had drifted into two that disagreed.
 //
-// `sms_agent` is deliberately not a provider name. It is the merchant's own
-// operator thread and carries Telegram *and* iMessage, so naming either one
-// mislabels the other; the legacy `sms_agent` key names a third thing it has
-// never been. The provider is knowable from `OperatorEvent.channel` where it
-// matters, and is not a property of the thread.
+// `operator` is deliberately not a provider name. It is the merchant's own
+// thread with the agent and it carries Telegram *and* iMessage, so naming
+// either one mislabels the other. It was `sms_agent` until 2026-09-11, which
+// named a third transport it has never used. The provider is knowable from
+// `OperatorEvent.channel` where it matters; it is not a property of the thread.
 export const CHANNEL_DISPLAY_NAME: Readonly<Record<string, string>> = {
   [CHANNEL_TYPE.EMAIL]: 'Email',
   [CHANNEL_TYPE.IG_DM]: 'Instagram',
@@ -40,7 +40,7 @@ export const CHANNEL_DISPLAY_NAME: Readonly<Record<string, string>> = {
   [CHANNEL_TYPE.SHOPIFY_CHAT]: 'Storefront chat',
   [CHANNEL_TYPE.IMESSAGE]: 'iMessage',
   [CHANNEL_TYPE.SMS]: 'SMS',
-  [CHANNEL_TYPE.SMS_AGENT]: 'Messages',
+  [CHANNEL_TYPE.OPERATOR]: 'Messages',
   [CHANNEL_TYPE.DASHBOARD_AGENT]: 'Dashboard',
 };
 

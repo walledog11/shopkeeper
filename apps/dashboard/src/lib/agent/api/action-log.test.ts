@@ -315,7 +315,7 @@ describe("action-log reader (AgentAction-sourced)", () => {
     org = await createTestOrg();
     const customer = await createTestCustomer(org.id, "ada@example.com", { name: "Ada" });
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);
-    const operatorThread = await createTestThread(org.id, customer.id, ChannelType.sms_agent);
+    const operatorThread = await createTestThread(org.id, customer.id, ChannelType.operator);
 
     await seedTurn({
       orgId: org.id,
@@ -374,7 +374,7 @@ describe("action-log reader (AgentAction-sourced)", () => {
       filters: { excludeOperator: true },
     });
     expect(nonOperator.entries).toHaveLength(4);
-    expect(nonOperator.entries.every((entry) => entry.channelType !== "sms_agent")).toBe(true);
+    expect(nonOperator.entries.every((entry) => entry.channelType !== "operator")).toBe(true);
   });
 
   it("streamAgentActionLogCsv emits a header row plus one row per turn", async () => {

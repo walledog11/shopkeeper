@@ -120,7 +120,7 @@ describe("runAgent tool execution", () => {
       thread: {
         id: "operator_thread",
         status: "open",
-        channelType: "sms_agent",
+        channelType: "operator",
         tag: "Support",
         aiSummary: null,
         shopifyCustomerId: null,
@@ -147,7 +147,7 @@ describe("runAgent tool execution", () => {
       thread: {
         id: "operator_thread",
         status: "open",
-        channelType: "sms_agent",
+        channelType: "operator",
         tag: "Support",
         aiSummary: null,
         shopifyCustomerId: null,

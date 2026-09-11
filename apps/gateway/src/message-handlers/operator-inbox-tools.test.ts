@@ -102,7 +102,7 @@ describe('list_active_tickets', () => {
   it('excludes closed, archived, deleted, filtered, and operator threads', async () => {
     // A partial unique index allows only one open thread per (org, customer,
     // channel), so each excluded-thread case needs its own customer.
-    const threadFor = async (platformId: string, channel: 'email' | 'sms_agent' | 'dashboard_agent') => {
+    const threadFor = async (platformId: string, channel: 'email' | 'operator' | 'dashboard_agent') => {
       const customer = await createTestCustomer(org.id, platformId, { name: `Noisy ${platformId}` });
       return createTestThread(org.id, customer.id, channel);
     };
@@ -115,7 +115,7 @@ describe('list_active_tickets', () => {
     await db.thread.update({ where: { id: deleted.id }, data: { deletedAt: new Date() } });
     const filtered = await threadFor('filtered@example.com', 'email');
     await db.thread.update({ where: { id: filtered.id }, data: { filterStatus: 'filtered' } });
-    await threadFor('operator@example.com', 'sms_agent');
+    await threadFor('operator@example.com', 'operator');
     await threadFor('concierge@example.com', 'dashboard_agent');
 
     const { message } = await listTickets();
@@ -198,7 +198,7 @@ describe('get_ticket', () => {
 
   it('rejects the operator\'s own internal threads', async () => {
     const customer = await createTestCustomer(org.id, 'op@example.com', { name: 'Operator Thread' });
-    const operatorThread = await createTestThread(org.id, customer.id, 'sms_agent');
+    const operatorThread = await createTestThread(org.id, customer.id, 'operator');
 
     const result = await getTicket(operatorThread.id);
     expect(result.status).toBe('error');
@@ -494,7 +494,7 @@ describe('send_ticket_reply and mark_ticket_spam', () => {
 
   it('refuses the operator\'s own internal thread', async () => {
     const customer = await createTestCustomer(org.id, 'op@example.com', { name: 'Operator' });
-    const internal = await createTestThread(org.id, customer.id, 'sms_agent');
+    const internal = await createTestThread(org.id, customer.id, 'operator');
 
     const result = await sendReply(internal.id, 'Hello');
     expect(result.status).toBe('error');

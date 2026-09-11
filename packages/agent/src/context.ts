@@ -209,7 +209,7 @@ export async function buildContext(
   }
 
   const isOperator = isOperatorChannel(thread.channelType);
-  const isGatewayOperator = thread.channelType === "sms_agent";
+  const isGatewayOperator = thread.channelType === "operator";
   // The single place a conversation becomes a guest. Storefront chat is the only
   // channel whose sender is anonymous by construction: every other channel
   // carries an identity the merchant's provider already established.

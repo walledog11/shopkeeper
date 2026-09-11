@@ -4,7 +4,7 @@
   "suite": "extended",
   "setup": {
     "classifierIntents": { "mutative_request": true },
-    "channelType": "sms_agent",
+    "channelType": "operator",
     "customerName": "Operator Session",
     "shopifyCustomerId": "601",
     "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },

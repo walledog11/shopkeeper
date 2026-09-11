@@ -33,7 +33,7 @@ describe("recordAgentTurnUsage", () => {
       orgId: org.id,
       threadId: null,
       purpose: "operator_turn",
-      channelType: "sms_agent",
+      channelType: "operator",
       outcome: "token_budget",
       durationMs: 8_120,
       usage: {

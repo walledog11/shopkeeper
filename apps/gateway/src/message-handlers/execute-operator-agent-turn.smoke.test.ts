@@ -55,7 +55,7 @@ const fetchMock = vi.fn(async () => {
 beforeEach(async () => {
   org = await createTestOrg();
   const customer = await createTestCustomer(org.id, 'op@test.com', { name: 'Owner' });
-  const thread = await createTestThread(org.id, customer.id, ChannelType.sms_agent);
+  const thread = await createTestThread(org.id, customer.id, ChannelType.operator);
   threadId = thread.id;
   const message = await createTestMessage(threadId, 'Please refund order #1001');
   const plan: AgentPlan = {

@@ -2,7 +2,7 @@ import { loadGatewayEnv } from '../config/load-env.js';
 
 loadGatewayEnv();
 
-// THROWAWAY read-only — show every operator (sms_agent) thread for the org with
+// THROWAWAY read-only — show every operator (operator) thread for the org with
 // its operator_key + the customer's platform_id, plus the bindings, so we can
 // confirm one live thread per person keyed `member:<orgMemberId>` and the
 // pre-merge per-binding threads left closed behind it.
@@ -29,11 +29,11 @@ async function main() {
   >(
     `SELECT t.id, t.status::text, t.operator_key, c.platform_id, t.customer_id
        FROM threads t JOIN customers c ON c.id = t.customer_id
-      WHERE t.organization_id = $1 AND t.channel_type = 'sms_agent'
+      WHERE t.organization_id = $1 AND t.channel_type = 'operator'
       ORDER BY t.status`,
     orgId,
   );
-  console.log('── sms_agent threads (operatorKey / customer.platformId) ──');
+  console.log('── operator threads (operatorKey / customer.platformId) ──');
   for (const t of threads) {
     console.log(`  ${t.status.padEnd(7)} operator_key=${String(t.operator_key)}  platformId=${t.platform_id}  (thread ${t.id})`);
   }

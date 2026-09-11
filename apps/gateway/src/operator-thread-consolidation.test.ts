@@ -78,7 +78,7 @@ describe('operator thread consolidation', () => {
       where: { organizationId: org.id, operatorKey: memberKey },
     });
     expect(threads).toHaveLength(1);
-    expect(threads[0].channelType).toBe('sms_agent');
+    expect(threads[0].channelType).toBe('operator');
   });
 
   // The Phase 2 payoff: two transports, one conversation. Both bindings resolve
@@ -107,7 +107,7 @@ describe('operator thread consolidation', () => {
 
     expect(fromDesk.threadId).toBe(fromPhone.threadId);
     const threads = await db.thread.findMany({
-      where: { organizationId: org.id, channelType: 'sms_agent' },
+      where: { organizationId: org.id, channelType: 'operator' },
     });
     expect(threads).toHaveLength(1);
     expect(threads[0].operatorKey).toBe(memberOperatorKey(member.id));
@@ -129,7 +129,7 @@ describe('operator thread consolidation', () => {
 
     expect(b.threadId).not.toBe(a.threadId);
     const threads = await db.thread.findMany({
-      where: { organizationId: org.id, channelType: 'sms_agent' },
+      where: { organizationId: org.id, channelType: 'operator' },
     });
     expect(threads).toHaveLength(2);
   });

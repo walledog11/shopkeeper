@@ -340,7 +340,7 @@ export function classifierSystemPrompt(
 // A channel in neither set gets no decision, so `filterDecidedAt` stays null and
 // the thread keeps the `genuine` default. `shopify` is why this scope existed:
 // those threads carry order-webhook notes that read as "automated system alerts"
-// and would be purged wholesale. `imessage`, `sms_agent` and `dashboard_agent`
+// and would be purged wholesale. `imessage`, `operator` and `dashboard_agent`
 // are the merchant's own channels, not customers writing in.
 const CHANNELS_FILTERED_AS_SPAM: ReadonlySet<string> = new Set<string>([CHANNEL.EMAIL]);
 const CHANNELS_CAPPED_AT_QUESTIONABLE: ReadonlySet<string> = new Set<string>([

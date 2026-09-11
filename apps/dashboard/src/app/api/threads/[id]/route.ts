@@ -16,7 +16,7 @@ export const GET = withOrgRoute<{ id: string }>(
       where: {
         id,
         organizationId: org.id,
-        channelType: { notIn: [CHANNEL_TYPE.SMS_AGENT, CHANNEL_TYPE.DASHBOARD_AGENT] },
+        channelType: { notIn: [CHANNEL_TYPE.OPERATOR, CHANNEL_TYPE.DASHBOARD_AGENT] },
         archivedAt: null,
         deletedAt: null,
       },

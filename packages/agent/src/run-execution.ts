@@ -151,7 +151,7 @@ export async function finishAgentRun(input: {
   const durationMs = Date.now() - summaryStartedAt;
   const purpose = readOnly
     ? "composer_ask"
-    : supportThread?.channelType === "sms_agent"
+    : supportThread?.channelType === "operator"
       ? "operator_turn"
       : "agent_run";
 
@@ -356,7 +356,7 @@ export async function executeAgentToolCall(
   // into the loop - the safe outcome no longer depends on the model choosing to escalate.
   const operatorPolicyBlock = status === "policy_block"
     && supportThread != null
-    && supportThread.channelType === "sms_agent";
+    && supportThread.channelType === "operator";
   if (!threw && status === "policy_block" && category === "action" && !operatorPolicyBlock) {
     const reason = result.replace(/^Error:\s*/, "").trim() || "Action blocked by policy.";
     await ctx.escalate(reason);

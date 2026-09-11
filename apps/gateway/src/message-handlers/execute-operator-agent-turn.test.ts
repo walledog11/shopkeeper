@@ -11,7 +11,7 @@ const {
     summary: 'Done.',
     actionsPerformed: [{ tool: 'get_shopify_orders', result: 'ok' }],
   }),
-  mockResolveOperatorThread: vi.fn().mockResolvedValue({ id: 'op_thread_1', channelType: 'sms_agent' }),
+  mockResolveOperatorThread: vi.fn().mockResolvedValue({ id: 'op_thread_1', channelType: 'operator' }),
   mockAssertBillingWriteAllowedForOrgId: vi.fn().mockResolvedValue(undefined),
 }));
 

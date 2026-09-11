@@ -14,7 +14,7 @@ const CHANNELS = new Set([
   "tiktok",
   "shopify",
   "sms",
-  "sms_agent",
+  "operator",
   "dashboard_agent",
   "imessage",
   "shopify_chat",

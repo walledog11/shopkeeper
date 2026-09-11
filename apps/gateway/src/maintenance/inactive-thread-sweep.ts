@@ -148,7 +148,7 @@ export async function closeInactiveOpenThreads(now: Date = new Date()): Promise<
         status: THREAD_STATUS.OPEN,
         archivedAt: null,
         deletedAt: null,
-        channelType: { notIn: [CHANNEL_TYPE.SMS_AGENT, CHANNEL_TYPE.DASHBOARD_AGENT] },
+        channelType: { notIn: [CHANNEL_TYPE.OPERATOR, CHANNEL_TYPE.DASHBOARD_AGENT] },
         filterStatus: { not: ThreadFilterStatus.filtered },
         ...(lastId ? { id: { gt: lastId } } : {}),
       },

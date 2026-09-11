@@ -77,7 +77,7 @@ describe('buildSystemPrompt', () => {
       thread: {
         id: 'thread_test',
         status: 'open',
-        channelType: 'sms_agent',
+        channelType: 'operator',
         tag: 'Support',
         aiSummary: null,
         shopifyCustomerId: null,
@@ -102,7 +102,7 @@ describe('buildSystemPrompt', () => {
     // cap it was invoking would never have fired.
     const support = buildSystemPrompt(makeCtx(), { maxRefundAmount: 50 });
     const operator = buildSystemPrompt(
-      makeCtx({ thread: { ...makeCtx().thread, channelType: 'sms_agent' } }),
+      makeCtx({ thread: { ...makeCtx().thread, channelType: 'operator' } }),
       { maxRefundAmount: 50 },
     );
     for (const prompt of [support, operator]) {
@@ -548,7 +548,7 @@ describe('buildSystemPromptParts caching split', () => {
   const operatorThread = {
     id: 'thread_test',
     status: 'open' as const,
-    channelType: 'sms_agent' as const,
+    channelType: 'operator' as const,
     tag: 'Support',
     aiSummary: null,
     shopifyCustomerId: null,

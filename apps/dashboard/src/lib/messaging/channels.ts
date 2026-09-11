@@ -31,7 +31,7 @@ const CHANNEL_CHROME: Record<ChannelType, Pick<ChannelInfo, 'logo' | 'badgeClass
   shopify_chat: { logo: '/logos/shopify.svg', badgeClassName: 'bg-green-500/15 text-green-600' },
   imessage: { logo: '/logos/sms.svg', badgeClassName: 'bg-sky-500/15 text-sky-600' },
   sms: { logo: '/logos/sms.svg', badgeClassName: 'bg-emerald-500/15 text-emerald-600' },
-  sms_agent: { logo: '/logos/sms.svg', badgeClassName: 'bg-emerald-500/15 text-emerald-600' },
+  operator: { logo: '/logos/sms.svg', badgeClassName: 'bg-emerald-500/15 text-emerald-600' },
   dashboard_agent: { logo: '/logos/sms.svg', badgeClassName: 'bg-violet-500/15 text-violet-600' },
 }
 
@@ -85,7 +85,7 @@ export function getChannelLabel(
   channelType: ChannelType | string | null | undefined,
   { operatorLabel = "canonical" }: ChannelLabelOptions = {},
 ): string {
-  if (operatorLabel === "internal" && (channelType === "dashboard_agent" || channelType === "sms_agent")) {
+  if (operatorLabel === "internal" && (channelType === "dashboard_agent" || channelType === "operator")) {
     return "Internal"
   }
   return getChannelInfo(channelType).label

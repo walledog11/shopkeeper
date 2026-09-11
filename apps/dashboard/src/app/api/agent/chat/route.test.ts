@@ -121,7 +121,7 @@ describe("GET /api/agent/chat", () => {
       data: {
         organizationId: org.id,
         customerId: customer.id,
-        channelType: ChannelType.sms_agent,
+        channelType: ChannelType.operator,
         status: "open",
         operatorKey: memberOperatorKey(member.id),
       },

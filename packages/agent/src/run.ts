@@ -98,7 +98,7 @@ export async function runAgent(
   const supportThread = isSupportContext(ctx) ? ctx.thread : null;
   const supportCustomer = isSupportContext(ctx) ? ctx.customer : null;
   const operatorMode = supportThread != null && isOperatorChannel(supportThread.channelType);
-  const gatewayOperatorMode = supportThread?.channelType === "sms_agent";
+  const gatewayOperatorMode = supportThread?.channelType === "operator";
   const failureAlertPromises: Promise<unknown>[] = [];
   let escalationReason: string | null = null;
   const finish = (result: AgentResult, outcome: string) => finishAgentRun({
