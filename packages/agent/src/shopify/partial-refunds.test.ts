@@ -123,26 +123,22 @@ describe("createPartialRefund", () => {
     expect(calcBody.refund.shipping).toEqual({ full_refund: false });
   });
 
-  // Same defect as the full refund had: an unqualified calculation comes back in
-  // the shop's currency, so on an international order the merchant's cap would be
-  // applied to a figure in a currency the customer never paid, and the mutation
-  // would settle in it too.
+  // A multi-currency order settles in what the customer was charged. The model
+  // names no amount here, so the currency is the whole question: the cap below
+  // and the mutation both have to be working in the same one Shopify priced in.
   it("prices and settles an international partial refund in the customer's currency", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse(order({
-        currency: "CAD",
-        presentment_currency: "USD",
-        current_total_price_set: { presentment_money: { amount: "43.48", currency_code: "USD" } },
+        currency: "USD",
+        presentment_currency: "CAD",
+        current_total_price_set: { presentment_money: { amount: "59.90", currency_code: "CAD" } },
       })))
-      .mockImplementationOnce((_url: string, init: RequestInit) => {
-        const requested = JSON.parse(String(init.body)).refund.currency as string;
-        return Promise.resolve(jsonResponse({
-          refund: {
-            currency: requested,
-            transactions: [{ amount: "16.00", gateway: "shopify_payments", parent_id: 77, kind: "suggested_refund" }],
-          },
-        }));
-      })
+      .mockResolvedValueOnce(jsonResponse({
+        refund: {
+          currency: "CAD",
+          transactions: [{ amount: "16.00", currency: "CAD", gateway: "shopify_payments", parent_id: 77, kind: "suggested_refund" }],
+        },
+      }))
       .mockResolvedValueOnce(jsonResponse(committed("16.00")));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -153,8 +149,8 @@ describe("createPartialRefund", () => {
     );
 
     expect(result.status).toBe("ok");
-    expect(JSON.parse(String(fetchMock.mock.calls[1][1].body)).refund.currency).toBe("USD");
-    expect(JSON.parse(String(fetchMock.mock.calls[2][1].body)).variables.input.currency).toBe("USD");
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1].body)).refund.currency).toBe("CAD");
+    expect(JSON.parse(String(fetchMock.mock.calls[2][1].body)).variables.input.currency).toBe("CAD");
   });
 
   // The model never names an amount, so it cannot understate one to duck a cap.
