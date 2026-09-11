@@ -90,13 +90,6 @@ provider. **None of these is a code task.**
   ([PR #88](https://github.com/walledog11/shopkeeper/pull/88)) for the `ungrounded_customer_reply`
   rejection that stopped the first attempt. This is the A3 critical path.
 
-- [ ] **Nothing prunes a stale `pendingQuestion`.** `loadLivePendingPlans` drops parked plans
-  whose execution is terminal or whose cache moved on; questions have no equivalent, so one
-  parked for thread `dd5eb30f` was still in the production ledger 11 days later, feeding the
-  operator ledger the model reads. It is also what makes a bare "yes" ambiguous: the keyword
-  fast path defers to the model whenever a question is pending, so a stale one changes how an
-  unrelated approval is handled. Give questions the same liveness check as plans.
-
 - [ ] **Close the release gate on `310362b9`.** It changes the support planner's tool set for
   threads with no Shopify customer behind them, so it owes a release run, and none has completed
   for it. Run `34541492999` graded 47 of the 49 core fixtures and stopped on the $0.70 ceiling —
@@ -225,7 +218,7 @@ it costs — not a design.
 - [ ] **Find out why the merchant's parked plan was discarded.** On 2026-09-10 the card went out
   at 09:40:44 and the queue was empty by the merchant's 09:44:40 reply; the logs that would have
   said why had expired before the forensic pass ran. The leading reading is the thread re-planning
-  at 09:40:50, six seconds after the card, orphaning the parked entry so `loadLivePendingPlans`
+  at 09:40:50, six seconds after the card, orphaning the parked entry so `loadLiveOperatorContext`
   prunes it as `plan_replaced`. `afc88439` makes every drop name its condition and log the thread
   and plan, so this closes on a reproduction or one production log line naming which of the seven
   fired. If it is the re-plan, the fix is upstream — a re-plan should re-park and re-notify, not

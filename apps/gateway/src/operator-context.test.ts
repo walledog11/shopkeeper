@@ -11,7 +11,7 @@ import {
   getContext,
   resolvePendingPlanContexts,
   appendPendingPlan,
-  loadLivePendingPlans,
+  loadLiveOperatorContext,
   mostRecentPendingPlan,
   selectPendingPlan,
   updateContext,
@@ -492,7 +492,7 @@ describe('selectPendingPlan', () => {
   });
 });
 
-describe('loadLivePendingPlans', () => {
+describe('loadLiveOperatorContext', () => {
   async function currentPendingPlan(params: {
     thread: Awaited<ReturnType<typeof createTestThread>>;
     instruction?: string;
@@ -566,7 +566,7 @@ describe('loadLivePendingPlans', () => {
     await appendPendingPlan(org.id, 'q7', terminal, 3);
     await appendPendingPlan(org.id, 'q7', live, 3);
 
-    const pruned = await loadLivePendingPlans(org.id, 'q7', await getContext(org.id, 'q7'));
+    const pruned = await loadLiveOperatorContext(org.id, 'q7', await getContext(org.id, 'q7'));
     expect(pruned.pendingPlans.map((plan) => plan.planId)).toEqual([live.planId]);
     expect(pruned.pendingPlans[0]?.requestDisplay?.kind).toBe('system');
     // The stale entry is also removed from the stored queue.
@@ -587,7 +587,7 @@ describe('loadLivePendingPlans', () => {
     await currentPendingPlan({ thread, instruction: 'refund the customer' });
     const infoSpy = vi.spyOn(logger, 'info');
 
-    const pruned = await loadLivePendingPlans(org.id, 'q-replan', await getContext(org.id, 'q-replan'));
+    const pruned = await loadLiveOperatorContext(org.id, 'q-replan', await getContext(org.id, 'q-replan'));
 
     expect(pruned.pendingPlans).toEqual([]);
     expect(infoSpy).toHaveBeenCalledWith(
@@ -595,6 +595,103 @@ describe('loadLivePendingPlans', () => {
       expect.stringContaining('dropped'),
     );
     infoSpy.mockRestore();
+  });
+
+  async function currentPendingQuestion(
+    thread: Awaited<ReturnType<typeof createTestThread>>,
+  ): Promise<PendingQuestion> {
+    const asking = await currentPendingPlan({ thread, instruction: 'ask the merchant' });
+    return {
+      threadId: thread.id,
+      question: 'What is the return window on sale items?',
+      planId: asking.planId!,
+      sourceMessageId: asking.sourceMessageId!,
+    };
+  }
+
+  it('keeps a question whose asking plan is still the thread\'s cached plan', async () => {
+    const customer = await createTestCustomer(org.id, 'q-live@example.com');
+    const thread = await createTestThread(org.id, customer.id, 'email');
+    const question = await currentPendingQuestion(thread);
+    await updateContext(org.id, 'q-live', { pendingQuestion: question });
+
+    const loaded = await loadLiveOperatorContext(org.id, 'q-live', await getContext(org.id, 'q-live'));
+    expect(loaded.pendingQuestion).toEqual(question);
+  });
+
+  // The 11-day-stale production shape: the thread moved on, nothing pruned the
+  // question, and the ledger the model reads kept saying an answer was wanted —
+  // which also makes a bare "yes" about something else ambiguous, because the
+  // keyword fast path defers to the model whenever a question is pending.
+  it('prunes a question the thread has re-planned past', async () => {
+    const customer = await createTestCustomer(org.id, 'q-replanned@example.com');
+    const thread = await createTestThread(org.id, customer.id, 'email');
+    const question = await currentPendingQuestion(thread);
+    await updateContext(org.id, 'q-stale', { pendingQuestion: question });
+    await currentPendingPlan({ thread, instruction: 'refund the customer' });
+    const infoSpy = vi.spyOn(logger, 'info');
+
+    const loaded = await loadLiveOperatorContext(org.id, 'q-stale', await getContext(org.id, 'q-stale'));
+
+    expect(loaded.pendingQuestion).toBeNull();
+    expect((await getContext(org.id, 'q-stale')).pendingQuestion).toBeNull();
+    expect(infoSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ threadId: thread.id, planId: question.planId, reason: 'plan_replaced' }),
+      expect.stringContaining('question'),
+    );
+    infoSpy.mockRestore();
+  });
+
+  it('prunes a question whose thread is closed or gone', async () => {
+    const customer = await createTestCustomer(org.id, 'q-closed@example.com');
+    const closedThread = await createTestThread(org.id, customer.id, 'email');
+    const closed = await currentPendingQuestion(closedThread);
+    await db.thread.update({ where: { id: closedThread.id }, data: { status: 'closed' } });
+    await updateContext(org.id, 'q-closed', { pendingQuestion: closed });
+
+    expect(
+      (await loadLiveOperatorContext(org.id, 'q-closed', await getContext(org.id, 'q-closed'))).pendingQuestion,
+    ).toBeNull();
+
+    const deletedThread = await createTestThread(org.id, customer.id, 'email');
+    const deleted = await currentPendingQuestion(deletedThread);
+    await db.thread.update({ where: { id: deletedThread.id }, data: { deletedAt: new Date() } });
+    await updateContext(org.id, 'q-deleted', { pendingQuestion: deleted });
+
+    expect(
+      (await loadLiveOperatorContext(org.id, 'q-deleted', await getContext(org.id, 'q-deleted'))).pendingQuestion,
+    ).toBeNull();
+  });
+
+  // A question carries no authority to execute, so an absent plan identity is not
+  // a reason to discard state the merchant can still answer.
+  it('keeps an identity-less question while its thread is open', async () => {
+    const customer = await createTestCustomer(org.id, 'q-legacy@example.com');
+    const thread = await createTestThread(org.id, customer.id, 'email');
+    const question: PendingQuestion = { threadId: thread.id, question: 'Which warehouse ships this?' };
+    await updateContext(org.id, 'q-legacy', { pendingQuestion: question });
+
+    const loaded = await loadLiveOperatorContext(org.id, 'q-legacy', await getContext(org.id, 'q-legacy'));
+    expect(loaded.pendingQuestion).toEqual(question);
+  });
+
+  it('leaves a question parked after the turn loaded its own', async () => {
+    const customer = await createTestCustomer(org.id, 'q-raced@example.com');
+    const thread = await createTestThread(org.id, customer.id, 'email');
+    const stale = await currentPendingQuestion(thread);
+    await updateContext(org.id, 'q-raced', { pendingQuestion: stale });
+    const loadedContext = await getContext(org.id, 'q-raced');
+    await currentPendingPlan({ thread, instruction: 'refund the customer' });
+
+    // A newer question lands on the row while this turn is still running.
+    const newerCustomer = await createTestCustomer(org.id, 'q-newer@example.com');
+    const newerThread = await createTestThread(org.id, newerCustomer.id, 'email');
+    const newer = await currentPendingQuestion(newerThread);
+    await updateContext(org.id, 'q-raced', { pendingQuestion: newer });
+
+    await loadLiveOperatorContext(org.id, 'q-raced', loadedContext);
+
+    expect((await getContext(org.id, 'q-raced')).pendingQuestion).toEqual(newer);
   });
 
   it('prunes identity-less and version-old parked entries before offering approval', async () => {
@@ -617,7 +714,7 @@ describe('loadLivePendingPlans', () => {
     } as PendingPlan, 3);
     await appendPendingPlan(org.id, 'legacy-q', current, 3);
 
-    const loaded = await loadLivePendingPlans(org.id, 'legacy-q', await getContext(org.id, 'legacy-q'));
+    const loaded = await loadLiveOperatorContext(org.id, 'legacy-q', await getContext(org.id, 'legacy-q'));
     expect(loaded.pendingPlans).toEqual([]);
     expect((await getContext(org.id, 'legacy-q')).pendingPlans).toEqual([]);
   });

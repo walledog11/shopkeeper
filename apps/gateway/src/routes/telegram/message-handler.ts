@@ -1,6 +1,6 @@
 import { db } from '@shopkeeper/db';
 import { buildOrgDigest } from '../../maintenance/digest.js';
-import { getContext, loadLivePendingPlans, updateContext } from '../../operator-context.js';
+import { getContext, loadLiveOperatorContext, updateContext } from '../../operator-context.js';
 import { resolveOperatorMemberKey } from '../../operator-identity.js';
 import { executeFreeFormInstruction } from './agent-execution.js';
 import {
@@ -58,7 +58,7 @@ export async function runTelegramOperatorTurn(params: TelegramOperatorTurnParams
   // State is keyed to the person, so this chat sees the same pending queue the
   // merchant's other transports do.
   const memberKey = await resolveOperatorMemberKey(organizationId, clerkUserId);
-  const context = await loadLivePendingPlans(
+  const context = await loadLiveOperatorContext(
     organizationId,
     memberKey,
     await getContext(organizationId, memberKey),

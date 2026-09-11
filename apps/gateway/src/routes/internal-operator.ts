@@ -7,7 +7,7 @@ import {
   expectedPlanIdentity,
   isPendingPlanInvalid,
   getContext,
-  loadLivePendingPlans,
+  loadLiveOperatorContext,
   normalizeApprovedToolCalls,
 } from '../operator-context.js';
 import { clearPendingPlan, runApprovedPendingPlan } from '../message-handlers/pending-plan-actions.js';
@@ -77,7 +77,7 @@ export function registerInternalOperatorRoutes(router: Router): void {
         presence: (_progress, work) => work(),
       };
 
-      const context = await loadLivePendingPlans(
+      const context = await loadLiveOperatorContext(
         organizationId,
         memberKey,
         await getContext(organizationId, memberKey),
@@ -145,7 +145,7 @@ export function registerInternalOperatorRoutes(router: Router): void {
 
     try {
       const memberKey = await resolveOperatorMemberKey(organizationId, clerkUserId);
-      const context = await loadLivePendingPlans(
+      const context = await loadLiveOperatorContext(
         organizationId,
         memberKey,
         await getContext(organizationId, memberKey),

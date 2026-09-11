@@ -1,7 +1,7 @@
 import { db, findOrgMemberBindToken, looksLikeOrgMemberBindToken } from '@shopkeeper/db';
 import logger from '../../logger.js';
 import { buildOrgDigest } from '../../maintenance/digest.js';
-import { getContext, loadLivePendingPlans, updateContext } from '../../operator-context.js';
+import { getContext, loadLiveOperatorContext, updateContext } from '../../operator-context.js';
 import { resolveOperatorMemberKey } from '../../operator-identity.js';
 import { executeFreeFormInstruction } from '../telegram/agent-execution.js';
 import { isDigestCommand, isPendingPlanCommand, parseTelegramCommand } from '../telegram/command-parser.js';
@@ -133,7 +133,7 @@ export async function runImessageOperatorTurn(params: ImessageOperatorTurnParams
   // State is keyed to the person, so this handle sees the same pending queue the
   // merchant's other transports do.
   const memberKey = await resolveOperatorMemberKey(organizationId, clerkUserId);
-  const context = await loadLivePendingPlans(
+  const context = await loadLiveOperatorContext(
     organizationId,
     memberKey,
     await getContext(organizationId, memberKey),

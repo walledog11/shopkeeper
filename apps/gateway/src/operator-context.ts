@@ -670,16 +670,77 @@ async function resolveStalePendingPlanContext(
       AND pending_plans @> ${threadMatch}::jsonb`;
 }
 
-// Drop queue entries whose plan is terminal or no longer matches the exact
-// current cache. This also removes pre-v7 and identity-less rows on first use;
-// proactive/system plans survive when their v7 cache identity is genuinely
-// current, rather than via a display-origin exception.
-export async function loadLivePendingPlans(
+/**
+ * Why a parked question is no longer answerable, or null when it still is.
+ *
+ * A question is not an authorization to execute — answering one records a fact
+ * and re-plans the thread — so `pendingPlanStaleReason`'s identity conditions do
+ * not carry over: a question with no plan identity is still answerable, and is
+ * kept. What makes one stale is that the thing it was asked about is gone.
+ */
+type PendingQuestionStaleReason =
+  | 'thread_absent'
+  | 'thread_closed'
+  | 'cache_absent'
+  | 'plan_replaced';
+
+async function pendingQuestionStaleReason(
+  organizationId: string,
+  question: PendingQuestion,
+): Promise<PendingQuestionStaleReason | null> {
+  const thread = await db.thread.findFirst({
+    where: { id: question.threadId, organizationId, deletedAt: null },
+    select: { status: true, cachedPlan: true },
+  });
+  if (!thread) return 'thread_absent';
+  if (thread.status === 'closed') return 'thread_closed';
+  // Questions parked by a plan that carried no identity have nothing to compare
+  // against. The thread is open, so keep offering it rather than discarding
+  // merchant-visible state on an absent field.
+  if (!question.planId) return null;
+  const cached = readAgentPlanCacheRecordShape(thread.cachedPlan);
+  // The plan that asked is gone. The dashboard reads its question off this same
+  // cache, so its absence means the operator ledger is the last surface still
+  // saying an answer is wanted.
+  if (!cached) return 'cache_absent';
+  if (cached.planId !== question.planId) return 'plan_replaced';
+  return null;
+}
+
+// Clear only this exact question, so one parked while the turn was loading
+// survives. Containment rather than equality: the stored object can carry fields
+// this parser drops.
+async function resolveStalePendingQuestion(
+  organizationId: string,
+  memberKey: string,
+  question: PendingQuestion,
+): Promise<void> {
+  const match = JSON.stringify(question.planId
+    ? { threadId: question.threadId, planId: question.planId }
+    : { threadId: question.threadId, question: question.question });
+  await db.$executeRaw`
+    UPDATE operator_contexts
+    SET pending_question = NULL
+    WHERE organization_id = ${organizationId}::uuid AND member_key = ${memberKey}
+      AND pending_question @> ${match}::jsonb`;
+}
+
+// Drop parked state the merchant can no longer act on: queue entries whose plan
+// is terminal or no longer matches the exact current cache, and a question whose
+// thread or asking plan is gone. This also removes pre-v7 and identity-less plan
+// rows on first use; proactive/system plans survive when their v7 cache identity
+// is genuinely current, rather than via a display-origin exception.
+//
+// Questions used to have no liveness check at all, so one parked for a thread
+// that had long since moved on stayed in the ledger the model reads — and,
+// because the keyword fast path defers to the model whenever a question is
+// pending, changed how an unrelated "yes" was handled.
+export async function loadLiveOperatorContext(
   organizationId: string,
   memberKey: string,
   context: OperatorContext,
 ): Promise<OperatorContext> {
-  if (context.pendingPlans.length === 0) return context;
+  if (context.pendingPlans.length === 0 && !context.pendingQuestion) return context;
 
   const live: PendingPlan[] = [];
   for (const plan of context.pendingPlans) {
@@ -706,8 +767,31 @@ export async function loadLivePendingPlans(
     live.push(plan);
   }
 
-  if (live.length === context.pendingPlans.length) return context;
-  return { ...context, pendingPlans: live, pendingPlan: mostRecentPendingPlan(live) };
+  let pendingQuestion = context.pendingQuestion;
+  if (pendingQuestion) {
+    const reason = await pendingQuestionStaleReason(organizationId, pendingQuestion);
+    if (reason) {
+      logger.info({
+        organizationId,
+        memberKey,
+        threadId: pendingQuestion.threadId,
+        planId: pendingQuestion.planId ?? null,
+        reason,
+      }, '[Operator] Parked question dropped before the merchant answered it');
+      await resolveStalePendingQuestion(organizationId, memberKey, pendingQuestion).catch(() => undefined);
+      pendingQuestion = null;
+    }
+  }
+
+  if (live.length === context.pendingPlans.length && pendingQuestion === context.pendingQuestion) {
+    return context;
+  }
+  return {
+    ...context,
+    pendingPlans: live,
+    pendingPlan: mostRecentPendingPlan(live),
+    pendingQuestion,
+  };
 }
 
 // Map stored pending-plan tool calls into the RawToolCall shape the approved
