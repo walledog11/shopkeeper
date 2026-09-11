@@ -15,6 +15,7 @@ import {
   moneyToCents,
   requireNumericId,
 } from "./validation.js";
+import { ORDER_CURRENCY_FIELDS, orderSettlementCurrency } from "./serializers.js";
 import type { RefundToolResult } from "../tools/registry/types.js";
 import type { CreatePartialRefundInput } from "../tools/registry/types.js";
 import type { OrgSettings } from "../types.js";
@@ -164,7 +165,7 @@ export async function createPartialRefund(
     const orderData = await shopifyRestJson<{ order?: ShopifyOrder }>(
       ctx,
       `orders/${orderId}.json`,
-      { query: { fields: "id,name,currency,line_items,financial_status,refunds" } },
+      { query: { fields: `id,name,${ORDER_CURRENCY_FIELDS},line_items,financial_status,refunds` } },
     );
     const order = orderData.order;
     if (!order) {
@@ -212,6 +213,21 @@ export async function createPartialRefund(
       };
     }
 
+    // What the customer was charged, which is an input to the pricing below and
+    // not something to read back off it: an unqualified calculation answers in
+    // the shop's own currency, and the cap and the mutation would both then be
+    // working in a currency this order never used.
+    const currency = orderSettlementCurrency(order);
+    if (!currency) {
+      return {
+        ...toolPolicyBlock(
+          `Error: refund policy blocked - order ${orderId} has no currency at Shopify.`,
+          { code: "currency_missing" },
+        ),
+        refundedCents: null,
+      };
+    }
+
     // Shopify prices the selection. Shipping is not refunded: a partial return
     // of goods does not undo the delivery that was already performed.
     const calculation = await shopifyRestJson<PartialRefundCalculation>(
@@ -221,6 +237,7 @@ export async function createPartialRefund(
         method: "POST",
         body: {
           refund: {
+            currency,
             shipping: { full_refund: false },
             refund_line_items: items.map((item) => ({
               line_item_id: item.lineItemId,
@@ -232,8 +249,16 @@ export async function createPartialRefund(
       },
     );
 
-    const currency = calculation.refund?.currency?.toUpperCase()
-      ?? order.currency?.toUpperCase();
+    const calculatedCurrency = calculation.refund?.currency?.toUpperCase();
+    if (calculatedCurrency && calculatedCurrency !== currency) {
+      return {
+        ...toolPolicyBlock(
+          `Error: refund policy blocked - Shopify priced those items in ${calculatedCurrency}, not the ${currency} this order was charged in.`,
+          { code: "currency_mismatch", currency: calculatedCurrency },
+        ),
+        refundedCents: null,
+      };
+    }
     const suggested = calculation.refund?.transactions
       ?? calculation.refund?.suggested_transactions
       ?? [];
@@ -281,7 +306,7 @@ export async function createPartialRefund(
         orderId: gid("Order", orderId),
         notify: true,
         note,
-        ...(currency ? { currency } : {}),
+        currency,
         shipping: { fullRefund: false },
         refundLineItems: items.map((item) => ({
           lineItemId: gid("LineItem", item.lineItemId),

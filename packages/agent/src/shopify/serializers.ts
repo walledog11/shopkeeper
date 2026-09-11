@@ -61,14 +61,37 @@ function serializeOrderLineItem(lineItem: ShopifyOrderLineItem) {
   };
 }
 
+// The REST fields that make the settlement currency knowable. Any order fetch
+// that quotes or moves money must request them: without them Shopify returns
+// only `currency`, which is the shop's own, and every caller that reads it is
+// silently working in the wrong currency on an international order.
+export const ORDER_CURRENCY_FIELDS = "currency,presentment_currency,total_price_set,current_total_price_set";
+
+/**
+ * The currency this order settles in — what the customer was actually charged.
+ *
+ * `order.currency` is the shop's books and differs from it on every
+ * international order, so nothing that quotes or refunds money may read that
+ * field directly. This is the one owner of that question; a refund also has to
+ * *tell* Shopify this currency, because the REST calculation defaults to the
+ * shop's and will otherwise answer in it.
+ */
+export function orderSettlementCurrency(order: ShopifyOrder): string | null {
+  const priceSet = order.current_total_price_set ?? order.total_price_set;
+  const currency = priceSet?.presentment_money?.currency_code
+    ?? order.presentment_currency
+    ?? order.currency;
+  return currency?.toUpperCase() ?? null;
+}
+
 // What the customer was actually charged, and only when that differs from the
 // shop's own currency. A single-currency store serializes exactly as before.
 function presentmentCharge(order: ShopifyOrder): { presentment_total_price: string; presentment_currency: string } | null {
   const priceSet = order.current_total_price_set ?? order.total_price_set;
   const presentment = priceSet?.presentment_money;
-  const currency = presentment?.currency_code ?? order.presentment_currency;
+  const currency = orderSettlementCurrency(order);
   if (!currency || !presentment?.amount) return null;
-  if (order.currency && currency.toUpperCase() === order.currency.toUpperCase()) return null;
+  if (order.currency && currency === order.currency.toUpperCase()) return null;
   return { presentment_total_price: presentment.amount, presentment_currency: currency };
 }
 
