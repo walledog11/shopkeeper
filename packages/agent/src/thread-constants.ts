@@ -24,6 +24,33 @@ export function isOperatorChannel(channelType: string | null | undefined): boole
   return OPERATOR_CHANNEL_TYPES.has(channelType);
 }
 
+// What a channel is called in front of a person — badges, KB provenance, digest
+// copy. One map, because it had drifted into two that disagreed.
+//
+// `sms_agent` is deliberately not a provider name. It is the merchant's own
+// operator thread and carries Telegram *and* iMessage, so naming either one
+// mislabels the other; the legacy `sms_agent` key names a third thing it has
+// never been. The provider is knowable from `OperatorEvent.channel` where it
+// matters, and is not a property of the thread.
+export const CHANNEL_DISPLAY_NAME: Readonly<Record<string, string>> = {
+  [CHANNEL_TYPE.EMAIL]: 'Email',
+  [CHANNEL_TYPE.IG_DM]: 'Instagram',
+  [CHANNEL_TYPE.TIKTOK]: 'TikTok Shop',
+  [CHANNEL_TYPE.SHOPIFY]: 'Shopify',
+  [CHANNEL_TYPE.SHOPIFY_CHAT]: 'Storefront chat',
+  [CHANNEL_TYPE.IMESSAGE]: 'iMessage',
+  [CHANNEL_TYPE.SMS]: 'SMS',
+  [CHANNEL_TYPE.SMS_AGENT]: 'Messages',
+  [CHANNEL_TYPE.DASHBOARD_AGENT]: 'Dashboard',
+};
+
+export function channelDisplayName(
+  channelType: string | null | undefined,
+  fallback: string,
+): string {
+  return (channelType && CHANNEL_DISPLAY_NAME[channelType]) || fallback;
+}
+
 export const THREAD_STATUS = {
   OPEN: 'open',
   PENDING: 'pending',

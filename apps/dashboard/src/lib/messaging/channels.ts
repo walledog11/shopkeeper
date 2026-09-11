@@ -1,3 +1,5 @@
+import { channelDisplayName } from '@shopkeeper/agent/thread-constants'
+
 import type { ChannelType } from '@/types'
 
 export interface ChannelInfo {
@@ -18,62 +20,27 @@ const DEFAULT_CHANNEL_INFO: ChannelInfo = {
   badgeClassName: 'bg-muted text-muted-foreground',
 }
 
-const CHANNEL_INFO: Record<ChannelType, ChannelInfo> = {
-  ig_dm: {
-    name: 'Instagram',
-    label: 'Instagram',
-    logo: '/logos/instagram-outline.svg',
-    badgeClassName: 'bg-pink-500/15 text-pink-600',
-  },
-  email: {
-    name: 'Email',
-    label: 'Email',
-    logo: '/logos/email.svg',
-    badgeClassName: 'bg-blue-500/15 text-blue-600',
-  },
-  tiktok: {
-    name: 'TikTok Shop',
-    label: 'TikTok Shop',
-    logo: '/logos/tiktok-logo.png',
-    badgeClassName: 'bg-slate-500/15 text-stone-600',
-  },
-  shopify: {
-    name: 'Shopify',
-    label: 'Shopify',
-    logo: '/logos/shopify.svg',
-    badgeClassName: 'bg-green-500/15 text-green-600',
-  },
-  shopify_chat: {
-    name: 'Storefront chat',
-    label: 'Storefront chat',
-    logo: '/logos/shopify.svg',
-    badgeClassName: 'bg-green-500/15 text-green-600',
-  },
-  imessage: {
-    name: 'iMessage',
-    label: 'iMessage',
-    logo: '/logos/sms.svg',
-    badgeClassName: 'bg-sky-500/15 text-sky-600',
-  },
-  sms: {
-    name: 'SMS',
-    label: 'SMS',
-    logo: '/logos/sms.svg',
-    badgeClassName: 'bg-emerald-500/15 text-emerald-600',
-  },
-  sms_agent: {
-    name: 'Telegram',
-    label: 'Telegram',
-    logo: '/logos/sms.svg',
-    badgeClassName: 'bg-emerald-500/15 text-emerald-600',
-  },
-  dashboard_agent: {
-    name: 'Dashboard',
-    label: 'Dashboard',
-    logo: '/logos/sms.svg',
-    badgeClassName: 'bg-violet-500/15 text-violet-600',
-  },
+// Display names come from `@shopkeeper/agent` so the badge, the KB provenance
+// line and the digest all call a channel the same thing. Only the chrome —
+// logo and badge colour — is the dashboard's own.
+const CHANNEL_CHROME: Record<ChannelType, Pick<ChannelInfo, 'logo' | 'badgeClassName'>> = {
+  ig_dm: { logo: '/logos/instagram-outline.svg', badgeClassName: 'bg-pink-500/15 text-pink-600' },
+  email: { logo: '/logos/email.svg', badgeClassName: 'bg-blue-500/15 text-blue-600' },
+  tiktok: { logo: '/logos/tiktok-logo.png', badgeClassName: 'bg-slate-500/15 text-stone-600' },
+  shopify: { logo: '/logos/shopify.svg', badgeClassName: 'bg-green-500/15 text-green-600' },
+  shopify_chat: { logo: '/logos/shopify.svg', badgeClassName: 'bg-green-500/15 text-green-600' },
+  imessage: { logo: '/logos/sms.svg', badgeClassName: 'bg-sky-500/15 text-sky-600' },
+  sms: { logo: '/logos/sms.svg', badgeClassName: 'bg-emerald-500/15 text-emerald-600' },
+  sms_agent: { logo: '/logos/sms.svg', badgeClassName: 'bg-emerald-500/15 text-emerald-600' },
+  dashboard_agent: { logo: '/logos/sms.svg', badgeClassName: 'bg-violet-500/15 text-violet-600' },
 }
+
+const CHANNEL_INFO: Record<ChannelType, ChannelInfo> = Object.fromEntries(
+  (Object.keys(CHANNEL_CHROME) as ChannelType[]).map((channelType) => {
+    const name = channelDisplayName(channelType, channelType)
+    return [channelType, { name, label: name, ...CHANNEL_CHROME[channelType] }]
+  }),
+) as Record<ChannelType, ChannelInfo>
 
 const EXTRA_CHANNEL_INFO: Record<string, ChannelInfo> = {
   whatsapp: {

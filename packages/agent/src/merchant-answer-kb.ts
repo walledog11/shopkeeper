@@ -2,6 +2,7 @@ import { db, getOrCreateNotesKnowledgeBase } from "@shopkeeper/db";
 import { AGENT_LEARNED_KB_TAG, buildMerchantAnswerKbTags } from "./kb-learned.js";
 import { NOTES_KB_FOLDER, resolveTopicFolderName } from "./kb-memory.js";
 import { DISCOUNT_POLICY_QUESTION_RES, SHIPPING_COVERAGE_QUESTION_RES } from "./intent.js";
+import { channelDisplayName } from "./thread-constants.js";
 
 const RETURN_POLICY_QUESTION_RES: readonly RegExp[] = [
   /\breturn\s+policy\b/,
@@ -23,17 +24,6 @@ const WHOLESALE_QUESTION_RES: readonly RegExp[] = [
   /\bbulk\s+order\b/,
   /\bstockist\b/,
 ];
-
-const CHANNEL_LABELS: Readonly<Record<string, string>> = {
-  email: "Email",
-  ig_dm: "Instagram",
-  imessage: "iMessage",
-  sms: "SMS",
-  shopify: "Shopify",
-  tiktok: "TikTok",
-  sms_agent: "Telegram",
-  dashboard_agent: "Dashboard",
-};
 
 export interface SaveMerchantAnswerToKbInput {
   organizationId: string;
@@ -88,7 +78,7 @@ export function deriveMerchantAnswerKbTitle(question: string | null, answer: str
 }
 
 export function formatMerchantAnswerChannelLabel(channelType: string): string {
-  return CHANNEL_LABELS[channelType] ?? "Message";
+  return channelDisplayName(channelType, "Message");
 }
 
 export function buildMerchantAnswerContextLine(input: {

@@ -15,7 +15,9 @@ describe("channel metadata", () => {
       badgeClassName: "bg-blue-500/15 text-blue-600",
     });
     expect(getChannelLabel("dashboard_agent")).toBe("Dashboard");
-    expect(getChannelLabel("sms_agent")).toBe("Telegram");
+    // Not a provider name: this one thread type carries Telegram and iMessage
+    // both, so naming either mislabels the other.
+    expect(getChannelLabel("sms_agent")).toBe("Messages");
     expect(getChannelBadgeClassName("ig_dm")).toBe("bg-pink-500/15 text-pink-600");
   });
 
