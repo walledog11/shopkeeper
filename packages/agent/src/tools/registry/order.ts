@@ -395,6 +395,8 @@ export const ORDER_TOOL_DEFINITIONS = [
     category: "action",
     group: "order",
     capabilities: ["shopify"],
+    requiredScopes: ["write_returns"],
+    requiredReceiptVersion: 1,
     label: "Attached return label",
     planStepLabel: "Attach return label",
     execute: async (input: AttachReturnLabelInput, ctx, _settings, deps) => {

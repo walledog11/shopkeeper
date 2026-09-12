@@ -279,6 +279,44 @@ describe("completion facts", () => {
     ]));
   });
 
+  it("grounds a return-label attachment in its receipt instead of display wording", () => {
+    const common = {
+      tool: "attach_return_label",
+      input: { order_id: "wrong-order", label_url: "https://example.com/label.pdf" },
+      status: "success" as const,
+      receipt: {
+        version: 1 as const,
+        operationId: "operation-label-1",
+        executionId: "execution-label-1",
+        tool: "attach_return_label" as const,
+        target: { kind: "order", id: "2001" },
+        observedAt: "2026-09-12T07:00:00.000Z",
+        outcome: "succeeded" as const,
+        providerReference: "gid://shopify/ReverseDelivery/777",
+        facts: {
+          orderId: "2001",
+          returnId: "gid://shopify/Return/999",
+          reverseFulfillmentOrderId: "gid://shopify/ReverseFulfillmentOrder/555",
+          reverseDeliveryId: "gid://shopify/ReverseDelivery/777",
+          labelSha256: "a".repeat(64),
+          trackingNumber: "1Z999",
+          attachmentState: "attached" as const,
+        },
+      },
+    };
+
+    const first = executedCompletionFacts([{ ...common, result: "Label attached." }]);
+    const second = executedCompletionFacts([{ ...common, result: "Different display wording." }]);
+
+    expect(first).toEqual(second);
+    expect(first).toEqual([expect.objectContaining({
+      action: "return",
+      target: { kind: "order", id: "2001" },
+      outcome: "success",
+      executionReference: "operation-label-1",
+    })]);
+  });
+
   it("turns only successful live order reads into historical facts", () => {
     const calls = [{ id: "read_1", name: "get_order_by_name", input: { order_name: "#1001" } }];
     expect(historicalCompletionFacts(calls, {

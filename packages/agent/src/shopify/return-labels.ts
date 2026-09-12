@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { AttachReturnLabelInput } from "../tools/index.js";
 import {
   formatShopifyToolError,
@@ -7,7 +8,16 @@ import {
   type ShopifyContext,
   type ShopifyGraphqlUserError,
 } from "./client.js";
-import { toolError, toolOk, toolUnknown, type ToolResult } from "../tools/result.js";
+import {
+  toolError,
+  toolNotFound,
+  toolOk,
+  toolPolicyBlock,
+  toolUnknown,
+  type ReceiptV1,
+  type ToolResult,
+} from "../tools/result.js";
+import { shopifyFailureReceipt, shopifyReceiptEnvelope } from "./receipts.js";
 import { optionalString, requireNonEmptyString, requireNumericId, ShopifyInputError } from "./validation.js";
 
 // Exported so the reconciliation probe decides "is this return open?" with the
@@ -82,6 +92,38 @@ export const REVERSE_DELIVERY_CREATE_WITH_SHIPPING_MUTATION = `mutation reverseD
         }
       }`;
 
+function returnLabelFailure(
+  ctx: ShopifyContext,
+  orderId: string,
+  result: ToolResult,
+  outcome: "not_found" | "rejected" | "failed",
+  code: string,
+): ToolResult {
+  const receipt = shopifyFailureReceipt(
+    ctx,
+    { kind: "order", id: orderId },
+    "attach_return_label",
+    outcome,
+    code,
+  );
+  return receipt ? { ...result, receipt } : result;
+}
+
+function unknownReturnLabelReceipt(
+  ctx: ShopifyContext,
+  orderId: string,
+  code: string,
+): ReceiptV1 | undefined {
+  const envelope = shopifyReceiptEnvelope(ctx, { kind: "order", id: orderId });
+  return envelope ? {
+    ...envelope,
+    tool: "attach_return_label",
+    outcome: "unknown",
+    code,
+    providerReference: null,
+  } : undefined;
+}
+
 export async function attachReturnLabel(
   input: AttachReturnLabelInput,
   ctx: ShopifyContext
@@ -102,7 +144,13 @@ export async function attachReturnLabel(
     );
 
     if (!data.order) {
-      return toolError(`Error: failed to attach return label - order ${orderId} was not found.`);
+      return returnLabelFailure(
+        ctx,
+        orderId,
+        toolNotFound(`Error: failed to attach return label - order ${orderId} was not found.`),
+        "not_found",
+        "order_not_found",
+      );
     }
 
     const openReturn = (data.order.returns?.edges ?? [])
@@ -110,7 +158,13 @@ export async function attachReturnLabel(
       .find((node) => OPEN_RETURN_STATUSES.has(node.status ?? "") && (node.reverseFulfillmentOrders?.edges.length ?? 0) > 0);
 
     if (!openReturn) {
-      return toolError(`Error: could not attach return label - order ${orderId} has no open return. Open one with create_return or create_exchange first.`);
+      return returnLabelFailure(
+        ctx,
+        orderId,
+        toolPolicyBlock(`Error: could not attach return label - order ${orderId} has no open return. Open one with create_return or create_exchange first.`),
+        "rejected",
+        "no_open_return",
+      );
     }
 
     const reverseFulfillmentOrderId = openReturn.reverseFulfillmentOrders!.edges[0].node.id;
@@ -128,23 +182,65 @@ export async function attachReturnLabel(
 
     const payload = created.reverseDeliveryCreateWithShipping;
     const userErrors = formatUserErrors(payload?.userErrors);
-    if (userErrors) return toolError(`Error: could not attach return label - ${userErrors}`);
+    if (userErrors) {
+      return returnLabelFailure(
+        ctx,
+        orderId,
+        toolError(`Error: could not attach return label - ${userErrors}`),
+        "failed",
+        "provider_rejected",
+      );
+    }
 
-    if (!payload?.reverseDelivery) {
-      return toolError("Error: could not attach return label - Shopify did not return a reverse delivery.");
+    const reverseDeliveryId = payload?.reverseDelivery?.id?.trim();
+    if (!reverseDeliveryId) {
+      const result = toolUnknown(
+        `Unknown: Shopify accepted the return-label request for order ${orderId}, but did not return a reverse delivery. Do not attach another label, retry, or send the customer a label link until the return is reviewed.`,
+      );
+      const receipt = unknownReturnLabelReceipt(ctx, orderId, "provider_reverse_delivery_missing");
+      return receipt ? { ...result, receipt } : result;
     }
 
     const returnName = openReturn.name ?? openReturn.id;
     const trackingNote = trackingNumber ? ` with tracking number ${trackingNumber}` : "";
-    return toolOk(
+    const envelope = shopifyReceiptEnvelope(ctx, { kind: "order", id: orderId });
+    const receipt: ReceiptV1 | undefined = envelope ? {
+      ...envelope,
+      tool: "attach_return_label",
+      outcome: "succeeded",
+      providerReference: reverseDeliveryId,
+      facts: {
+        orderId,
+        returnId: openReturn.id,
+        reverseFulfillmentOrderId,
+        reverseDeliveryId,
+        labelSha256: createHash("sha256").update(labelUrl).digest("hex"),
+        trackingNumber: trackingNumber ?? null,
+        attachmentState: "attached",
+      },
+    } : undefined;
+    const result = toolOk(
       `Attached the return label to return ${returnName} on order ${orderId}${trackingNote}. Send the customer the label link in your reply so they can ship the items back: ${labelUrl}`
     );
+    return receipt ? { ...result, receipt } : result;
   } catch (err) {
     if (mutationStarted && isAmbiguousShopifyMutationError(err)) {
-      return toolUnknown(
+      const result = toolUnknown(
         `Unknown: the return label may have been attached at Shopify, but it could not be confirmed. Do not attach another label, retry, or send the customer a label link until the return on order ${input.order_id} is reviewed. ${formatShopifyToolError("return label reconciliation failed", err)}`,
       );
+      const receipt = unknownReturnLabelReceipt(
+        ctx,
+        input.order_id.trim() || "invalid",
+        "ambiguous_provider_response",
+      );
+      return receipt ? { ...result, receipt } : result;
     }
-    return toolError(formatShopifyToolError("failed to attach return label", err));
+    return returnLabelFailure(
+      ctx,
+      input.order_id.trim() || "invalid",
+      toolError(formatShopifyToolError("failed to attach return label", err)),
+      "failed",
+      "definite_failure",
+    );
   }
 }

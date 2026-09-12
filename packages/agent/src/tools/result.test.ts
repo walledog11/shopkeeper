@@ -79,6 +79,29 @@ function exchangeReceipt(overrides: Partial<ReceiptV1> = {}): ReceiptV1 {
   } as ReceiptV1;
 }
 
+function returnLabelReceipt(overrides: Partial<ReceiptV1> = {}): ReceiptV1 {
+  return {
+    version: 1,
+    operationId: "operation-label-1",
+    executionId: "execution-label-1",
+    tool: "attach_return_label",
+    target: { kind: "order", id: "2001" },
+    observedAt: "2026-09-12T07:00:00.000Z",
+    outcome: "succeeded",
+    providerReference: "gid://shopify/ReverseDelivery/777",
+    facts: {
+      orderId: "2001",
+      returnId: "gid://shopify/Return/999",
+      reverseFulfillmentOrderId: "gid://shopify/ReverseFulfillmentOrder/555",
+      reverseDeliveryId: "gid://shopify/ReverseDelivery/777",
+      labelSha256: "a".repeat(64),
+      trackingNumber: "1Z999",
+      attachmentState: "attached",
+    },
+    ...overrides,
+  } as ReceiptV1;
+}
+
 describe("receipt v1", () => {
   it("validates exact refund facts independently of display text", () => {
     const receipt = refundReceipt();
@@ -210,6 +233,25 @@ describe("receipt v1", () => {
         financialConsequence: { kind: "charge", amount: "10.00", currency: "usd" },
       } as never,
     }))).toThrow("currency");
+  });
+
+  it("validates return-label identity and retained label metadata", () => {
+    expect(() => parseReceiptV1(returnLabelReceipt())).not.toThrow();
+    expect(() => parseReceiptV1(returnLabelReceipt({
+      providerReference: "gid://shopify/ReverseDelivery/different",
+    }))).toThrow("providerReference");
+    expect(() => parseReceiptV1(returnLabelReceipt({
+      facts: {
+        ...(returnLabelReceipt() as Extract<ReceiptV1, { tool: "attach_return_label"; outcome: "succeeded" }>).facts,
+        labelSha256: "not-a-digest",
+      } as never,
+    }))).toThrow("labelSha256");
+    expect(() => parseReceiptV1(returnLabelReceipt({
+      facts: {
+        ...(returnLabelReceipt() as Extract<ReceiptV1, { tool: "attach_return_label"; outcome: "succeeded" }>).facts,
+        attachmentState: "requested",
+      } as never,
+    }))).toThrow("attachmentState");
   });
 
   it("rejects unregistered receipt tools and wrong target kinds", () => {

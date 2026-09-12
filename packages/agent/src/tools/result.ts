@@ -68,6 +68,16 @@ export interface ExchangeReceiptFactsV1 {
   } | null;
 }
 
+export interface ReturnLabelReceiptFactsV1 {
+  orderId: string;
+  returnId: string;
+  reverseFulfillmentOrderId: string;
+  reverseDeliveryId: string;
+  labelSha256: string;
+  trackingNumber: string | null;
+  attachmentState: "attached";
+}
+
 export type ReceiptSuccessV1 =
   | (ReceiptBaseV1<"create_refund"> & {
       outcome: "succeeded";
@@ -93,6 +103,11 @@ export type ReceiptSuccessV1 =
       outcome: "succeeded";
       providerReference: string;
       facts: ExchangeReceiptFactsV1;
+    })
+  | (ReceiptBaseV1<"attach_return_label"> & {
+      outcome: "succeeded";
+      providerReference: string;
+      facts: ReturnLabelReceiptFactsV1;
     });
 
 type ReceiptToolV1 = ReceiptSuccessV1["tool"];
@@ -164,9 +179,28 @@ function requireRegisteredReceiptTool(tool: string): asserts tool is ReceiptTool
     && tool !== "cancel_order"
     && tool !== "create_return"
     && tool !== "create_exchange"
+    && tool !== "attach_return_label"
   ) {
     throw new ReceiptValidationError(`no receipt validator is registered for ${tool}`);
   }
+}
+
+function parseReturnLabelFacts(value: unknown): ReturnLabelReceiptFactsV1 {
+  if (!isRecord(value)) throw new ReceiptValidationError("return label facts must be an object");
+  requireNonEmptyString(value.orderId, "facts.orderId");
+  requireNonEmptyString(value.returnId, "facts.returnId");
+  requireNonEmptyString(value.reverseFulfillmentOrderId, "facts.reverseFulfillmentOrderId");
+  requireNonEmptyString(value.reverseDeliveryId, "facts.reverseDeliveryId");
+  if (typeof value.labelSha256 !== "string" || !/^[a-f0-9]{64}$/.test(value.labelSha256)) {
+    throw new ReceiptValidationError("facts.labelSha256 must be a lowercase SHA-256 digest");
+  }
+  if (value.trackingNumber !== null) {
+    requireNonEmptyString(value.trackingNumber, "facts.trackingNumber");
+  }
+  if (value.attachmentState !== "attached") {
+    throw new ReceiptValidationError("facts.attachmentState must be attached");
+  }
+  return value as unknown as ReturnLabelReceiptFactsV1;
 }
 
 function parseReturnFacts(value: unknown): ReturnReceiptFactsV1 {
@@ -327,6 +361,17 @@ export function parseReceiptV1(value: unknown): ReceiptV1 {
       }
       if (value.providerReference !== facts.returnId) {
         throw new ReceiptValidationError("exchange providerReference must match facts.returnId");
+      }
+    } else if (base.tool === "attach_return_label") {
+      requireNonEmptyString(value.providerReference, "providerReference");
+      const facts = parseReturnLabelFacts(value.facts);
+      if (base.target.id !== facts.orderId) {
+        throw new ReceiptValidationError("return label target must match facts.orderId");
+      }
+      if (value.providerReference !== facts.reverseDeliveryId) {
+        throw new ReceiptValidationError(
+          "return label providerReference must match facts.reverseDeliveryId",
+        );
       }
     }
   } else if (

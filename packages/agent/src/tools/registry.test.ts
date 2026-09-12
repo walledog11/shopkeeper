@@ -440,6 +440,7 @@ describe("Shopify scope gating", () => {
       "cancel_order",
       "create_return",
       "create_exchange",
+      "attach_return_label",
     ]);
   });
 
@@ -460,6 +461,8 @@ describe("Shopify scope gating", () => {
     expect(toolScopesGranted("create_return", ["write_returns"])).toBe(true);
     expect(toolScopesGranted("create_exchange", ["write_returns"])).toBe(false);
     expect(toolScopesGranted("create_exchange", ["read_products", "write_returns"])).toBe(true);
+    expect(toolScopesGranted("attach_return_label", ["read_returns"])).toBe(false);
+    expect(toolScopesGranted("attach_return_label", ["write_returns"])).toBe(true);
   });
 
   describe("a tool that does declare scopes", () => {

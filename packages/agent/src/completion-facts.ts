@@ -144,6 +144,7 @@ function mutationFacts(input: {
       return facts;
     }
     case "create_return":
+    case "attach_return_label":
       return orderId ? [fact("return", input.tool, input.outcome, input.executionReference, orderOptions)] : [];
     case "create_exchange":
       return orderId
@@ -225,6 +226,14 @@ function receiptCompletionFacts(
   }
 
   if (receipt.tool === "create_return") {
+    return [fact("return", receipt.tool, outcome, executionReference, {
+      target: receipt.outcome === "succeeded"
+        ? orderTarget(receipt.facts.orderId, ctx, orderNames)
+        : target,
+    })];
+  }
+
+  if (receipt.tool === "attach_return_label") {
     return [fact("return", receipt.tool, outcome, executionReference, {
       target: receipt.outcome === "succeeded"
         ? orderTarget(receipt.facts.orderId, ctx, orderNames)
