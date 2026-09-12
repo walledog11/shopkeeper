@@ -8,7 +8,7 @@ import { cn } from "@/lib/ui/cn"
 import AgentAvatar from "@/components/agent/AgentAvatar"
 import AgentPanelBriefing from "@/app/dashboard/_components/agent-panel/AgentPanelBriefing"
 import AgentPanelPendingLedger from "@/app/dashboard/_components/agent-panel/AgentPanelPendingLedger"
-import AgentPanelTelegramNudge from "@/app/dashboard/_components/agent-panel/AgentPanelTelegramNudge"
+import AgentPanelOperatorNudge from "@/app/dashboard/_components/agent-panel/AgentPanelOperatorNudge"
 import type { AgentPanelOpenContext } from "@/lib/agent/panel"
 import { WalkthroughCard, WalkthroughNote } from "@/components/agent/WalkthroughBriefing"
 import type { PanelSuggestionChip } from "@/lib/agent/panel-briefing"
@@ -276,7 +276,7 @@ export function AgentChatView({
       </div>
 
       {compact && !headerSearchMode && (
-        <AgentPanelTelegramNudge
+        <AgentPanelOperatorNudge
           enabled
           showConnectBanner={messages.length === 0 && !walkthrough}
         />

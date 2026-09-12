@@ -54,7 +54,7 @@ External webhook → `apps/gateway/src/routes/webhooks.ts` (HMAC verify, enqueue
 ## Channels
 Email (Postmark inbound/outbound + Gmail native OAuth inbound via Pub/Sub push), Instagram DM (Meta OAuth), Telegram (operator-only, single Shopkeeper bot), iMessage (operator-only, single platform-wide Photon Spectrum line for all orgs — no per-org credentials; merchants link a handle by texting a single-use code, routed by the sender→member binding), Shopify (OAuth + webhooks). TikTok Shop is fully wired but gated off (`TIKTOK_SHOP_ENABLED=false`): signed webhook → normalize → queue → worker, plus outbound dispatch and OAuth. WhatsApp is not built.
 
-Internal-only `channelType` values (not user-facing): `dashboard_agent` (Concierge sessions), `sms_agent` (operator threads via Telegram — legacy name).
+Internal-only `channelType` values (not user-facing): `dashboard_agent` (Concierge sessions), `operator` (the merchant's durable operator thread, reached from Telegram or iMessage; it was `sms_agent` until 2026-09-11 and is never SMS).
 
 ## Agent core (`packages/agent/`, imported as `@shopkeeper/agent/*`)
 Canonical location for all agent logic; both apps import it via subpath exports.
@@ -80,7 +80,7 @@ Not a copy of the core — these inject dashboard infrastructure into it:
 
 Modes:
 - **Support** — ticket threads. Auto-plan on open if last message is from the customer; plan cached in `Thread.cachedPlan`. `ActionPlanCard` → approve → `POST /api/agent`. Manual invoke via `@{agentName}` in the ticket composer.
-- **Operator** — `/dashboard/agent` (Concierge: each session opens a new `dashboard_agent` thread and closes the previous), and Telegram/iMessage via `sms_agent`: one durable operator thread per binding; pending approvals are agent state + control tools (approve/reject/revise/answer the pending plan), with a keyword fast path for literal yes/no/help.
+- **Operator** — `/dashboard/agent` (Concierge: each session opens a new `dashboard_agent` thread and closes the previous), and Telegram/iMessage via `operator`: one durable operator thread per binding; pending approvals are agent state + control tools (approve/reject/revise/answer the pending plan), with a keyword fast path for literal yes/no/help.
 - **Shop management** — operator turns only, via gateway `moduleTools` (`operator-shop-tools.ts`): flash sales over the whole catalog or named variants, ending them, and enumerated repricing. Every write declares its Shopify scope. A support thread cannot reach these. **Nothing bounds the size of the change** — no variant cap, no discount-depth ceiling, no revenue-at-risk limit (removed 2026-08-29). A merchant setting their own prices knows what it costs them, and the guard that second-guessed it also blocked the undo of a write it had permitted. Operator-only reachability plus the merchant's own approval is the containment; do not reintroduce a bound without one.
 - **Composer-ask** — read-only Q&A inside the support composer (`POST /api/agent/ask`). Calls `runAgent(..., { readOnly: true })`, which filters tools to `read` category and never mutates anything.
 

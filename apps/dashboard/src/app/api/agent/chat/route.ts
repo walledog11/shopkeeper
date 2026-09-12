@@ -7,7 +7,7 @@
  * session of its own: the turn runs on the gateway's operator path against the
  * durable operator thread their phone talks to, so module tools, the pending-state
  * ledger, and the control tools all apply, and an approval given here clears the
- * plan showing on Telegram.
+ * plan showing on their phone.
  *
  * POST  { instruction: string }
  *       -> { summary, actionsPerformed, awaitingApproval }
