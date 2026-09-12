@@ -273,3 +273,99 @@ describe("recent-orders prefetch safety", () => {
     }
   });
 });
+
+// The pre-loaded order summary is the only order most threads ever show the
+// model, and `SUPPORT_INSTRUCTIONS` tells it to prefer that data for status
+// questions. `serializeOrder` carried the presentment pair from 2026-09-10;
+// this fetch did not until the settlement work, which is how a USD shop's
+// Toronto customer read as $43.48 to the agent and 59.90 CAD to Shopify.
+describe("recent-orders currency", () => {
+  async function threadWithOrders(orders: unknown[]) {
+    const org = await createTestOrg();
+    orgIds.push(org.id);
+    await createTestIntegration(org.id, {
+      platform: ChannelType.shopify,
+      externalAccountId: `ctx-${randomUUID()}.myshopify.com`,
+      accessToken: "shpat_test",
+    });
+    const customer = await createTestCustomer(org.id, `${randomUUID()}@example.com`, { name: "Jane" });
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email, {
+      shopifyCustomerId: "123456789",
+    });
+    await createTestMessage(thread.id, "How much was my order?");
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      const body = url.includes("orders.json")
+        ? { orders }
+        : { customer: { first_name: "Jane", last_name: "Doe" } };
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+
+    try {
+      return { ctx: await buildContext(thread.id, org.id, sink), fetchSpy };
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  }
+
+  const baseOrder = {
+    id: 1031,
+    name: "#1031",
+    created_at: "2026-09-09T12:00:00Z",
+    financial_status: "paid",
+    fulfillment_status: null,
+    current_total_price: "43.48",
+    currency: "USD",
+    line_items: [],
+    shipping_address: null,
+  };
+
+  it("carries what the customer was charged when it differs from the shop's currency", async () => {
+    const { ctx } = await threadWithOrders([{
+      ...baseOrder,
+      presentment_currency: "CAD",
+      current_total_price_set: {
+        shop_money: { amount: "43.48", currency_code: "USD" },
+        presentment_money: { amount: "59.90", currency_code: "CAD" },
+      },
+    }]);
+
+    const order = ctx.recentOrders[0]!;
+    expect(order.total_price).toBe("43.48");
+    expect(order.currency).toBe("USD");
+    expect(order.presentment_total_price).toBe("59.90");
+    expect(order.presentment_currency).toBe("CAD");
+  });
+
+  // The guard that keeps this change off the eval gate: every fixture is a
+  // single-currency USD store, so the serialized summary must be byte-identical
+  // for one. Asserting absence, not undefined — `JSON.stringify` drops the key
+  // either way, but a present-and-undefined field would still widen the type.
+  it("adds nothing for a single-currency store", async () => {
+    const { ctx } = await threadWithOrders([{
+      ...baseOrder,
+      presentment_currency: "USD",
+      current_total_price_set: {
+        shop_money: { amount: "43.48", currency_code: "USD" },
+        presentment_money: { amount: "43.48", currency_code: "USD" },
+      },
+    }]);
+
+    const order = ctx.recentOrders[0]!;
+    expect(order.currency).toBe("USD");
+    expect(Object.keys(order)).not.toContain("presentment_total_price");
+    expect(Object.keys(order)).not.toContain("presentment_currency");
+    expect(JSON.stringify(ctx.recentOrders)).not.toContain("presentment");
+  });
+
+  // A store that reports no price set at all must not be read as a mismatch.
+  it("adds nothing when Shopify returns no price set", async () => {
+    const { ctx } = await threadWithOrders([baseOrder]);
+
+    expect(JSON.stringify(ctx.recentOrders)).not.toContain("presentment");
+  });
+});
