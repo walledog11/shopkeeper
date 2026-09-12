@@ -8,7 +8,8 @@ import {
   type ShopifyContext,
   type ShopifyGraphqlUserError,
 } from "./client.js";
-import { toolError, toolOk, toolPolicyBlock, toolUnknown } from "../tools/result.js";
+import { toolError, toolOk, toolPolicyBlock, toolUnknown, type ReceiptV1 } from "../tools/result.js";
+import { shopifyFailureReceipt, shopifyReceiptEnvelope } from "./receipts.js";
 import {
   ShopifyInputError,
   centsToMoney,
@@ -37,13 +38,13 @@ import type { ShopifyOrder, ShopifyOrderLineItem } from "./types.js";
  * is the only figure that exists.
  */
 
-const PARTIAL_REFUND_MUTATION = `mutation partialRefundCreate($input: RefundInput!, $idempotencyKey: String) {
-  refundCreate(input: $input, idempotencyKey: $idempotencyKey) {
+export const PARTIAL_REFUND_MUTATION = `mutation partialRefundCreate($input: RefundInput!, $idempotencyKey: String!) {
+  refundCreate(input: $input) @idempotent(key: $idempotencyKey) {
     refund {
       id
       totalRefundedSet { presentmentMoney { amount } }
       transactions(first: 20) {
-        nodes { status amountSet { presentmentMoney { amount } } }
+        nodes { id status amountSet { presentmentMoney { amount } } }
       }
     }
     userErrors { field message }
@@ -73,7 +74,7 @@ interface RefundCreateData {
     refund?: {
       id: string;
       totalRefundedSet?: { presentmentMoney?: { amount?: string } };
-      transactions?: { nodes?: { status?: string }[] };
+      transactions?: { nodes?: { id?: string | null; status?: string }[] };
     } | null;
     userErrors?: ShopifyGraphqlUserError[];
   };
@@ -149,6 +150,39 @@ function gid(resource: "Order" | "LineItem" | "OrderTransaction", id: string | n
   return `gid://shopify/${resource}/${id}`;
 }
 
+function unknownPartialRefundReceipt(
+  ctx: ShopifyContext,
+  orderId: string,
+  code: string,
+  providerReference: string | null = null,
+): ReceiptV1 | undefined {
+  const envelope = shopifyReceiptEnvelope(ctx, { kind: "order", id: orderId });
+  return envelope ? {
+    ...envelope,
+    tool: "create_partial_refund",
+    outcome: "unknown",
+    code,
+    providerReference,
+  } : undefined;
+}
+
+function partialRefundNoEffect(
+  ctx: ShopifyContext,
+  orderId: string,
+  result: ReturnType<typeof toolError> | ReturnType<typeof toolPolicyBlock>,
+  outcome: "rejected" | "failed",
+  code: string,
+): RefundToolResult {
+  const receipt = shopifyFailureReceipt(
+    ctx,
+    { kind: "order", id: orderId },
+    "create_partial_refund",
+    outcome,
+    code,
+  );
+  return { ...result, refundedCents: null, ...(receipt ? { receipt } : {}) };
+}
+
 export async function createPartialRefund(
   input: CreatePartialRefundInput,
   ctx: ShopifyContext,
@@ -168,48 +202,36 @@ export async function createPartialRefund(
     );
     const order = orderData.order;
     if (!order) {
-      return {
-        ...toolPolicyBlock(
+      return partialRefundNoEffect(ctx, orderId, toolPolicyBlock(
           `Error: refund policy blocked - order ${orderId} could not be resolved at Shopify.`,
           { code: "order_unresolved" },
-        ),
-        refundedCents: null,
-      };
+        ), "rejected", "order_unresolved");
     }
 
     const financialStatus = order.financial_status?.toLowerCase() ?? "unknown";
     if (financialStatus !== "paid") {
-      return {
-        ...toolPolicyBlock(
+      return partialRefundNoEffect(ctx, orderId, toolPolicyBlock(
           `Error: refund policy blocked - order ${orderId} has financial status "${financialStatus}"; only a fully paid order can be partially refunded by the agent.`,
           { code: "order_not_paid", financialStatus },
-        ),
-        refundedCents: null,
-      };
+        ), "rejected", "order_not_paid");
     }
 
     // A prior refund is escalated rather than stacked. Two refunds on one order
     // is also what would make the reconciliation probe ambiguous, so this guard
     // is what keeps an unknown outcome answerable.
     if ((order.refunds?.length ?? 0) > 0) {
-      return {
-        ...toolPolicyBlock(
+      return partialRefundNoEffect(ctx, orderId, toolPolicyBlock(
           `Error: refund policy blocked - order ${orderId} already has a refund record and requires merchant review.`,
           { code: "prior_refund" },
-        ),
-        refundedCents: null,
-      };
+        ), "rejected", "prior_refund");
     }
 
     const problems = unrefundableItems(order, items);
     if (problems.length > 0) {
-      return {
-        ...toolPolicyBlock(
+      return partialRefundNoEffect(ctx, orderId, toolPolicyBlock(
           `Error: refund policy blocked - ${problems.join("; ")}.`,
           { code: "line_items_unrefundable" },
-        ),
-        refundedCents: null,
-      };
+        ), "rejected", "line_items_unrefundable");
     }
 
     // Shopify prices the selection. Shipping is not refunded: a partial return
@@ -234,17 +256,20 @@ export async function createPartialRefund(
 
     const currency = calculation.refund?.currency?.toUpperCase()
       ?? order.currency?.toUpperCase();
+    if (!currency) {
+      return partialRefundNoEffect(ctx, orderId, toolPolicyBlock(
+          "Error: refund policy blocked - Shopify returned no refund currency.",
+          { code: "currency_missing" },
+        ), "rejected", "currency_missing");
+    }
     const suggested = calculation.refund?.transactions
       ?? calculation.refund?.suggested_transactions
       ?? [];
     if (suggested.length === 0) {
-      return {
-        ...toolPolicyBlock(
+      return partialRefundNoEffect(ctx, orderId, toolPolicyBlock(
           "Error: refund policy blocked - Shopify calculated no refundable amount for those items.",
           { code: "no_refundable_balance" },
-        ),
-        refundedCents: null,
-      };
+        ), "rejected", "no_refundable_balance");
     }
 
     const calculatedCents = suggested.reduce(
@@ -252,26 +277,20 @@ export async function createPartialRefund(
       0,
     );
     if (calculatedCents <= 0) {
-      return {
-        ...toolPolicyBlock(
+      return partialRefundNoEffect(ctx, orderId, toolPolicyBlock(
           "Error: refund policy blocked - Shopify calculated a zero refund for those items.",
           { code: "no_refundable_balance" },
-        ),
-        refundedCents: null,
-      };
+        ), "rejected", "no_refundable_balance");
     }
 
     // The cap applies to Shopify's figure, because that is the only amount that
     // exists. The static policy cannot do this: it runs before the calculation.
     const perCallCap = settings.maxRefundAmount;
     if (perCallCap !== null && perCallCap > 0 && calculatedCents > Math.round(perCallCap * 100)) {
-      return {
-        ...toolPolicyBlock(
+      return partialRefundNoEffect(ctx, orderId, toolPolicyBlock(
           `Error: refund policy blocked - those items come to $${centsToMoney(calculatedCents)}, over the workspace limit of $${perCallCap}.`,
           { code: "amount_over_cap", calculatedCents, capCents: Math.round(perCallCap * 100) },
-        ),
-        refundedCents: null,
-      };
+        ), "rejected", "amount_over_cap");
     }
 
     const idempotencyKey = shopifyIdempotencyKey(ctx.operationId);
@@ -303,57 +322,104 @@ export async function createPartialRefund(
 
     const userError = formatUserErrors(data.refundCreate.userErrors);
     if (userError) {
-      return { ...toolError(`Error: failed to create refund - ${userError}`), refundedCents: null };
+      return partialRefundNoEffect(ctx, orderId, toolError(`Error: failed to create refund - ${userError}`), "failed", "provider_rejected");
     }
 
     const refund = data.refundCreate.refund;
     if (!refund) {
+      const receipt = unknownPartialRefundReceipt(ctx, orderId, "provider_refund_missing");
       return {
         ...toolUnknown(`Unknown: Shopify accepted the partial refund for order ${orderId} but did not return a refund. Do not retry or confirm it to the customer until it is reconciled.`),
         refundedCents: null,
+        ...(receipt ? { receipt } : {}),
       };
     }
 
-    const statuses = (refund.transactions?.nodes ?? [])
+    const transactionNodes = refund.transactions?.nodes ?? [];
+    const statuses = transactionNodes
       .map((transaction) => transaction.status?.toUpperCase())
       .filter((status): status is string => Boolean(status));
     if (statuses.length === 0 || statuses.some((status) => status !== "SUCCESS")) {
+      const receipt = unknownPartialRefundReceipt(ctx, orderId, "transaction_not_successful", refund.id);
       return {
         ...toolUnknown(`Unknown: Shopify created refund ${refund.id} for order ${orderId}, but its payment status is ${statuses.join(", ") || "unavailable"}. Do not retry or confirm it to the customer until it is reconciled.`),
         refundedCents: null,
+        ...(receipt ? { receipt } : {}),
       };
     }
 
     const refundedAmount = refund.totalRefundedSet?.presentmentMoney?.amount;
     if (!refundedAmount) {
+      const receipt = unknownPartialRefundReceipt(ctx, orderId, "committed_amount_missing", refund.id);
       return {
         ...toolUnknown(`Unknown: Shopify created refund ${refund.id} for order ${orderId}, but did not return the committed amount. Do not retry or confirm it to the customer until it is reconciled.`),
         refundedCents: null,
+        ...(receipt ? { receipt } : {}),
+      };
+    }
+
+    const transactionReferences = transactionNodes
+      .map((transaction) => transaction.id?.trim())
+      .filter((id): id is string => Boolean(id));
+    if (!refund.id?.trim() || transactionReferences.length !== transactionNodes.length) {
+      const receipt = unknownPartialRefundReceipt(
+        ctx,
+        orderId,
+        "provider_reference_missing",
+        refund.id?.trim() || null,
+      );
+      return {
+        ...toolUnknown(`Unknown: Shopify created a partial refund for order ${orderId}, but did not return complete provider references. Do not retry or confirm it to the customer until it is reconciled.`),
+        refundedCents: null,
+        ...(receipt ? { receipt } : {}),
       };
     }
 
     const totalRefunded = moneyToCents(refundedAmount);
     const unitCount = items.reduce((total, item) => total + item.quantity, 0);
+    const envelope = shopifyReceiptEnvelope(ctx, { kind: "order", id: orderId });
+    const receipt: ReceiptV1 | undefined = envelope ? {
+      ...envelope,
+      tool: "create_partial_refund",
+      outcome: "succeeded",
+      providerReference: refund.id,
+      facts: {
+        orderId,
+        refundId: refund.id,
+        amount: refundedAmount,
+        currency,
+        transactionStatus: "SUCCESS",
+        transactionReference: transactionReferences.join(","),
+        classification: "partial",
+        lineItems: items,
+      },
+    } : undefined;
     return {
       ...toolOk(
         `Refunded $${centsToMoney(totalRefunded)} for ${unitCount} item(s) on order ${orderId}.`
         + `${note ? ` Reason: ${note}.` : ""}`,
       ),
       refundedCents: totalRefunded,
+      ...(receipt ? { receipt } : {}),
     };
   } catch (err) {
     if (err instanceof ShopifyInputError) {
-      return { ...toolError(`Error: ${err.message}`), refundedCents: null };
+      return partialRefundNoEffect(ctx, input.order_id.trim() || "invalid", toolError(`Error: ${err.message}`), "failed", "invalid_refund_input");
     }
     if (mutationStarted && isAmbiguousShopifyMutationError(err)) {
+      const receipt = unknownPartialRefundReceipt(ctx, orderId || input.order_id, "provider_response_ambiguous");
       return {
         ...toolUnknown(`Unknown: a partial refund for order ${orderId} may have been created at Shopify but could not be confirmed. Do not retry or confirm it to the customer until it is reconciled. ${formatShopifyToolError("partial refund reconciliation failed", err)}`),
         refundedCents: null,
+        ...(receipt ? { receipt } : {}),
       };
     }
-    return {
-      ...toolError(formatShopifyToolError("failed to create partial refund", err)),
-      refundedCents: null,
-    };
+    return partialRefundNoEffect(
+      ctx,
+      orderId || input.order_id.trim() || "invalid",
+      toolError(formatShopifyToolError("failed to create partial refund", err)),
+      "failed",
+      mutationStarted ? "provider_definite_failure" : "preflight_failed",
+    );
   }
 }

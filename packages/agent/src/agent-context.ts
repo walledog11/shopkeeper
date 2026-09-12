@@ -129,6 +129,9 @@ export interface BaseAgentContext {
     // Host-generated identity for one tool call. Mutations that support
     // provider idempotency derive their stable provider key from this value.
     operationId?: string;
+    // Durable execution enclosing the operation. Kept distinct from the
+    // per-call operation id in typed receipts.
+    executionId?: string;
     // The OAuth grant this token was issued with. A token keeps its grant, so an
     // install that predates a capability expansion is short of the scopes that
     // expansion added; tools declaring those scopes are withheld rather than
@@ -204,6 +207,8 @@ export interface ActionEntry {
   mode?: AgentActionMode;
   errorDetail?: string;
   category?: string;
+  /** Validated provider/runtime observation. New writes never derive it from result text. */
+  receipt?: import("./tools/result.js").ReceiptV1;
 }
 
 export interface AgentResult {

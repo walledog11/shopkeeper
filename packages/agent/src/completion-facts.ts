@@ -4,6 +4,7 @@ import type {
   BaseAgentContext,
   SupportContext,
 } from "./agent-context.js";
+import { parseReceiptV1, type ReceiptV1 } from "./tools/result.js";
 import type { RawToolCall } from "./types.js";
 
 export type CompletionAction =
@@ -18,7 +19,10 @@ export type CompletionAction =
   | "return"
   | "store_credit";
 
-export type CompletionFactOutcome = "proposed" | AgentActionStatus;
+export type CompletionFactOutcome =
+  | "proposed"
+  | AgentActionStatus
+  | Exclude<ReceiptV1["outcome"], "succeeded">;
 
 interface CompletionFactTarget {
   kind: "customer" | "email" | "order";
@@ -178,6 +182,51 @@ function mutationFacts(input: {
   }
 }
 
+function receiptOutcome(receipt: ReceiptV1): CompletionFactOutcome {
+  return receipt.outcome === "succeeded" ? "success" : receipt.outcome;
+}
+
+function receiptCompletionFacts(
+  action: ActionEntry,
+  ctx?: FactContext,
+  orderNames?: ReadonlyMap<string, string>,
+): CompletionFact[] {
+  const receipt = parseReceiptV1(action.receipt);
+  if (receipt.tool !== action.tool) {
+    throw new Error(`Receipt tool ${receipt.tool} does not match action tool ${action.tool}`);
+  }
+
+  const executionReference = receipt.operationId;
+  const outcome = receiptOutcome(receipt);
+  const target = receipt.target.kind === "order"
+    ? orderTarget(receipt.target.id, ctx, orderNames)
+    : { kind: receipt.target.kind as CompletionFactTarget["kind"], id: receipt.target.id };
+
+  if (receipt.tool === "create_refund" || receipt.tool === "create_partial_refund") {
+    if (receipt.outcome !== "succeeded") {
+      return [fact("refund", receipt.tool, outcome, executionReference, { target })];
+    }
+    return [fact("refund", receipt.tool, outcome, executionReference, {
+      target: orderTarget(receipt.facts.orderId, ctx, orderNames),
+      amount: receipt.facts.amount,
+      currency: receipt.facts.currency,
+    })];
+  }
+
+  if (receipt.tool === "cancel_order") {
+    const facts = [fact("cancellation", receipt.tool, outcome, executionReference, { target })];
+    if (
+      receipt.outcome === "succeeded"
+      && /^(?:partially_)?refunded$/i.test(receipt.facts.financialStatus.trim())
+    ) {
+      facts.push(fact("refund", receipt.tool, outcome, executionReference, { target }));
+    }
+    return facts;
+  }
+
+  return [];
+}
+
 /**
  * Order names read on this turn, keyed by order id.
  *
@@ -233,12 +282,22 @@ export function proposedCompletionFacts(
 export function executedCompletionFacts(
   actions: readonly ActionEntry[],
   ctx?: FactContext,
+  options: { allowHistoricalResultInference?: boolean } = {},
 ): CompletionFact[] {
   const orderNames = collectOrderNames(actions.map((action) => ({
     tool: action.tool,
-    raw: (action.status ?? "success") === "success" ? action.result : undefined,
+    raw: options.allowHistoricalResultInference && (action.status ?? "success") === "success"
+      ? action.result
+      : undefined,
   })));
   return actions.flatMap((action, index) => {
+    if (action.receipt !== undefined) {
+      return receiptCompletionFacts(action, ctx, orderNames);
+    }
+    if (!options.allowHistoricalResultInference) return [];
+
+    // Compatibility reader for taskless legacy actions. It may infer facts from
+    // inputs and display strings, so new-runtime callers must leave it disabled.
     const executionReference = action.providerOperationKey ?? action.toolCallId ?? `action:${index}`;
     if (
       (action.tool === "get_order_by_name" || action.tool === "get_shopify_orders")

@@ -128,7 +128,7 @@ describe("shopify tools", () => {
             refund: {
               id: "gid://shopify/Refund/9001",
               totalRefundedSet: { presentmentMoney: { amount: "25.00" } },
-              transactions: { nodes: [{ status: "SUCCESS" }] },
+              transactions: { nodes: [{ id: "gid://shopify/OrderTransaction/7001", status: "SUCCESS" }] },
             },
             userErrors: [],
           },

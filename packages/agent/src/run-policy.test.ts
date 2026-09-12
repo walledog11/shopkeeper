@@ -14,6 +14,7 @@ const {
   mockReleaseDailyRefundSpendReservation,
   mockMarkDailyRefundSpendReservationUnknown,
   mockEscalateToHuman,
+  mockBeginAgentActionAttempt,
   mockRecordAgentActionsBatch,
 } = vi.hoisted(() => ({
   mockCreate: vi.fn(),
@@ -25,6 +26,7 @@ const {
   mockReleaseDailyRefundSpendReservation: vi.fn().mockResolvedValue(undefined),
   mockMarkDailyRefundSpendReservationUnknown: vi.fn().mockResolvedValue(undefined),
   mockEscalateToHuman: vi.fn().mockResolvedValue(undefined),
+  mockBeginAgentActionAttempt: vi.fn().mockResolvedValue({ id: "action_1", operationId: "operation_1" }),
   mockRecordAgentActionsBatch: vi.fn().mockResolvedValue([{ id: "action_1" }]),
 }));
 
@@ -53,6 +55,9 @@ vi.mock("./spend.js", () => ({
 }));
 
 vi.mock("./agent-actions.js", () => ({
+  beginAgentActionAttempt: mockBeginAgentActionAttempt,
+  authorizeAgentActionDispatch: vi.fn().mockResolvedValue(undefined),
+  markAgentActionSubmitted: vi.fn().mockResolvedValue(undefined),
   recordAgentActionsBatch: mockRecordAgentActionsBatch,
   summarizeJournaledActions: vi.fn().mockResolvedValue(undefined),
   completeAgentActionAttempt: vi.fn().mockResolvedValue(undefined),
@@ -79,7 +84,11 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
     customer: { id: "customer_1", name: "Jane", platformId: "jane@test.com" },
     recentMessages: [{ senderType: "customer", contentText: "Help me" }],
     openThreadCount: 1,
-    shopify: { shop: "test-store.myshopify.com", accessToken: "shpat_test" },
+    shopify: {
+      shop: "test-store.myshopify.com",
+      accessToken: "shpat_test",
+      grantedScopes: ["write_orders"],
+    },
     recentOrders: [],
     linkedShopifyCustomerName: null,
     kbArticles: [],
@@ -135,6 +144,7 @@ beforeEach(() => {
   mockReleaseDailyRefundSpendReservation.mockReset();
   mockMarkDailyRefundSpendReservationUnknown.mockReset();
   mockEscalateToHuman.mockReset();
+  mockBeginAgentActionAttempt.mockReset();
   mockRecordAgentActionsBatch.mockReset();
 
   mockSendReply.mockResolvedValue({ status: "ok", message: "Reply sent." });
@@ -148,6 +158,7 @@ beforeEach(() => {
   mockReleaseDailyRefundSpendReservation.mockResolvedValue(undefined);
   mockMarkDailyRefundSpendReservationUnknown.mockResolvedValue(undefined);
   mockEscalateToHuman.mockResolvedValue(undefined);
+  mockBeginAgentActionAttempt.mockResolvedValue({ id: "action_1", operationId: "operation_1" });
   mockRecordAgentActionsBatch.mockResolvedValue([{ id: "action_1" }]);
 });
 
@@ -396,7 +407,7 @@ describe("runAgent policy enforcement", () => {
             refund: {
               id: "gid://shopify/Refund/1",
               totalRefundedSet: { presentmentMoney: { amount: "20.00" } },
-              transactions: { nodes: [{ status: "SUCCESS" }] },
+              transactions: { nodes: [{ id: "gid://shopify/OrderTransaction/7001", status: "SUCCESS" }] },
             },
             userErrors: [],
           },
@@ -475,7 +486,7 @@ describe("runAgent policy enforcement", () => {
             refund: {
               id: "gid://shopify/Refund/1",
               totalRefundedSet: { presentmentMoney: { amount: "20.00" } },
-              transactions: { nodes: [{ status: "PENDING" }] },
+              transactions: { nodes: [{ id: "gid://shopify/OrderTransaction/7001", status: "PENDING" }] },
             },
             userErrors: [],
           },

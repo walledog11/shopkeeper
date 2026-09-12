@@ -88,6 +88,14 @@ enum PlanExecutionStatus {
   unknown
 }
 
+enum AgentActionDispatchState {
+  prepared
+  dispatch_authorized
+  submitted
+  settled
+  unknown
+}
+
 // Terminal resolution for one plan attempt on a customer request episode.
 enum RequestEpisodeTerminalResolution {
   unresolved
@@ -815,7 +823,13 @@ model AgentAction {
   threadId         String?   @map("thread_id") @db.Uuid
   customerId       String?   @map("customer_id") @db.Uuid
   executionId      String?   @map("execution_id") @db.Uuid
+  operationId      String?   @map("operation_id") @db.Uuid
+  actionIndex      Int?      @map("action_index")
   providerOperationKey String? @map("provider_operation_key") @db.VarChar(255)
+  dispatchState    AgentActionDispatchState? @map("dispatch_state")
+  submittedAt      DateTime? @map("submitted_at") @db.Timestamptz
+  receiptVersion   Int?      @map("receipt_version")
+  receipt          Json?     @db.JsonB
   tool             String    @db.VarChar(64)
   category         String    @db.VarChar(32)
   input            Json      @db.JsonB
@@ -829,8 +843,9 @@ model AgentAction {
   approvedAt       DateTime? @map("approved_at") @db.Timestamptz
   approvedPlanHash String?   @map("approved_plan_hash") @db.VarChar(64)
   instructionHash  String?   @map("instruction_hash") @db.VarChar(64)
-  executedAt       DateTime  @default(now()) @map("executed_at") @db.Timestamptz
-  durationMs       Int       @map("duration_ms")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  executedAt       DateTime? @map("executed_at") @db.Timestamptz
+  durationMs       Int?      @map("duration_ms")
 
   organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   thread       Thread?        @relation(fields: [threadId], references: [id], onDelete: SetNull)
@@ -841,7 +856,9 @@ model AgentAction {
   @@index([organizationId, threadId])
   @@index([organizationId, tool, executedAt])
   @@index([organizationId, status])
-  @@index([providerOperationKey])
+  @@unique([organizationId, operationId])
+  @@unique([organizationId, providerOperationKey])
+  @@index([dispatchState, submittedAt])
   @@index([turnId])
   @@index([executionId])
   @@map("agent_actions")

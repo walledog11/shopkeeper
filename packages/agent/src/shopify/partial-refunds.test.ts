@@ -3,7 +3,12 @@ import { jsonResponse } from "../testing/json-response.js";
 import { createPartialRefund, parseRefundItems, unrefundableItems } from "./partial-refunds.js";
 import { resolveAgentSettings } from "../settings.js";
 
-const ctx = { shop: "test-store.myshopify.com", accessToken: "shpat_test" };
+const ctx = {
+  shop: "test-store.myshopify.com",
+  accessToken: "shpat_test",
+  operationId: "execution-1:partial-refund",
+  executionId: "execution-1",
+};
 const SETTINGS = resolveAgentSettings(null);
 
 function order(overrides: Record<string, unknown> = {}) {
@@ -39,7 +44,7 @@ function committed(amount: string) {
         refund: {
           id: "gid://shopify/Refund/1",
           totalRefundedSet: { presentmentMoney: { amount } },
-          transactions: { nodes: [{ status: "SUCCESS" }] },
+          transactions: { nodes: [{ id: "gid://shopify/OrderTransaction/2", status: "SUCCESS" }] },
         },
         userErrors: [],
       },
@@ -118,6 +123,15 @@ describe("createPartialRefund", () => {
 
     expect(result.status).toBe("ok");
     expect(result.refundedCents).toBe(1_600);
+    expect(result.receipt).toMatchObject({
+      tool: "create_partial_refund",
+      outcome: "succeeded",
+      facts: {
+        amount: "16.00",
+        currency: "USD",
+        lineItems: [{ lineItemId: "9001", quantity: 1 }],
+      },
+    });
     // Shipping is never part of a partial refund.
     const calcBody = JSON.parse(String(fetchMock.mock.calls[1][1].body));
     expect(calcBody.refund.shipping).toEqual({ full_refund: false });
@@ -140,6 +154,12 @@ describe("createPartialRefund", () => {
     expect(result.status).toBe("policy_block");
     expect(result.message).toContain("over the workspace limit of $50");
     expect(result.refundedCents).toBeNull();
+    expect(result.receipt).toMatchObject({
+      tool: "create_partial_refund",
+      outcome: "rejected",
+      code: "amount_over_cap",
+      target: { kind: "order", id: "2001" },
+    });
     // Two reads happened; the refund did not.
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
@@ -217,7 +237,7 @@ describe("createPartialRefund", () => {
             refund: {
               id: "gid://shopify/Refund/1",
               totalRefundedSet: { presentmentMoney: { amount: "16.00" } },
-              transactions: { nodes: [{ status: "PENDING" }] },
+              transactions: { nodes: [{ id: "gid://shopify/OrderTransaction/2", status: "PENDING" }] },
             },
             userErrors: [],
           },

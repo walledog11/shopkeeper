@@ -39,7 +39,7 @@ async function recordAction(
       status: overrides.status ?? 'success',
       mode: 'auto',
       durationMs: 12,
-      ...(overrides.executedAt ? { executedAt: overrides.executedAt } : {}),
+      executedAt: overrides.executedAt ?? new Date(),
     },
   });
 }

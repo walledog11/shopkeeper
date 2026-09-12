@@ -35,7 +35,17 @@ import {
 } from "./shopify.js";
 import { checkParsedStaticToolPolicy } from "./static-policy.js";
 import { getSupportStats } from "./support-stats.js";
-import { toolError, toolPolicyBlock, toolUnknown, type ToolResult, type ToolStatus } from "./result.js";
+import {
+  ReceiptValidationError,
+  receiptAsUnknown,
+  toolError,
+  toolPolicyBlock,
+  toolUnknown,
+  validateToolResultReceipt,
+  type ReceiptV1,
+  type ToolResult,
+  type ToolStatus,
+} from "./result.js";
 import type { BaseAgentContext } from "../agent-context.js";
 import type {
   AgentToolDefinition,
@@ -199,6 +209,37 @@ interface PreparedExecutionResult {
   policyBlocked: boolean;
 }
 
+async function executeDefinitionWithValidatedReceipt(
+  definition: AgentToolDefinition,
+  input: unknown,
+  ctx: BaseAgentContext,
+  settings: ReturnType<typeof resolveAgentSettings>,
+): Promise<ToolResult> {
+  const result = await definition.execute(input, ctx, settings, TOOL_EXECUTION_DEPS);
+  try {
+    const receipt = validateToolResultReceipt(result, {
+      tool: definition.name,
+      ...(ctx.shopify?.operationId ? { operationId: ctx.shopify.operationId } : {}),
+      ...(ctx.shopify?.executionId ? { executionId: ctx.shopify.executionId } : {}),
+    });
+    if (
+      definition.requiredReceiptVersion !== null
+      && ctx.shopify?.operationId
+      && ctx.shopify.executionId
+      && receipt === undefined
+    ) {
+      throw new ReceiptValidationError(
+        `${definition.name} requires a v${definition.requiredReceiptVersion} execution receipt`,
+      );
+    }
+    return result;
+  } catch (error) {
+    if (!(error instanceof ReceiptValidationError)) throw error;
+    logger.error({ tool: definition.name, err: error.message }, "[agent] invalid tool receipt");
+    return toolUnknown(`Unknown: ${definition.name} returned an invalid execution receipt; its outcome requires reconciliation.`);
+  }
+}
+
 function reservationJson(value: unknown): ReservationInput {
   const serialized = JSON.stringify(value);
   return (serialized === undefined ? null : JSON.parse(serialized)) as ReservationInput;
@@ -230,7 +271,7 @@ async function executePreparedTool(
   const resolvedSettings = resolveAgentSettings(settings);
   if (!definition.policy.dailyRefundSpendLimit) {
     return {
-      result: await definition.execute(input, ctx, resolvedSettings, TOOL_EXECUTION_DEPS),
+      result: await executeDefinitionWithValidatedReceipt(definition, input, ctx, resolvedSettings),
       policyBlocked: false,
     };
   }
@@ -281,7 +322,7 @@ async function executePreparedTool(
 
   let result: ToolResult;
   try {
-    result = await definition.execute(input, executionCtx, resolvedSettings, TOOL_EXECUTION_DEPS);
+    result = await executeDefinitionWithValidatedReceipt(definition, input, executionCtx, resolvedSettings);
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     await markDailyRefundSpendReservationUnknown(reservation.reservation.id, reason).catch(() => undefined);
@@ -301,7 +342,13 @@ async function executePreparedTool(
   if (committedCents === null) {
     const message = "Unknown: provider reported success but the committed compensation amount could not be verified.";
     await markDailyRefundSpendReservationUnknown(reservation.reservation.id, message);
-    return { result: toolUnknown(message), policyBlocked: false };
+    const unknown = toolUnknown(message);
+    return {
+      result: result.receipt
+        ? { ...unknown, receipt: receiptAsUnknown(result.receipt, "committed_amount_unverified") }
+        : unknown,
+      policyBlocked: false,
+    };
   }
   try {
     await commitDailyRefundSpendReservation(reservation.reservation.id, committedCents);
@@ -309,7 +356,13 @@ async function executePreparedTool(
   } catch {
     const message = "Unknown: the provider action completed but its compensation budget record could not be finalized.";
     await markDailyRefundSpendReservationUnknown(reservation.reservation.id, message).catch(() => undefined);
-    return { result: toolUnknown(message), policyBlocked: false };
+    const unknown = toolUnknown(message);
+    return {
+      result: result.receipt
+        ? { ...unknown, receipt: receiptAsUnknown(result.receipt, "budget_record_persistence_failed") }
+        : unknown,
+      policyBlocked: false,
+    };
   }
 }
 
@@ -350,6 +403,7 @@ export async function executeToolStructured(
 export interface ExecuteToolResult {
   result: string;
   status: "success" | "error" | "policy_block" | "escalated" | "unknown";
+  receipt?: ReceiptV1;
 }
 
 const TOOL_STATUS_TO_EXECUTE_STATUS: Record<ToolStatus, ExecuteToolResult["status"]> = {
@@ -391,5 +445,6 @@ export async function executeToolWithStatus(
   return {
     result: executed.result.message,
     status: TOOL_STATUS_TO_EXECUTE_STATUS[executed.result.status],
+    ...(executed.result.receipt ? { receipt: executed.result.receipt } : {}),
   };
 }

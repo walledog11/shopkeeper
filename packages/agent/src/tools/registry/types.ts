@@ -283,6 +283,7 @@ export interface ShopifyToolContext {
   shop: string;
   accessToken: string;
   operationId?: string;
+  executionId?: string;
 }
 
 export interface ToolExecutionDeps {
@@ -357,6 +358,12 @@ export interface AgentToolDefinition<TInput = unknown, TName extends string = st
    * covering everything it covered before.
    */
   requiredScopes: readonly ShopifyOAuthScope[];
+  /**
+   * A migrated write must return a schema-valid receipt whenever the runtime
+   * supplies stable execution and operation identities. Older/taskless callers
+   * remain compatible while their result boundary is still in service.
+   */
+  requiredReceiptVersion: 1 | null;
   execute(
     input: TInput,
     ctx: BaseAgentContext,

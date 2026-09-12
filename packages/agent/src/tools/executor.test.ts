@@ -192,6 +192,114 @@ describe("goodwill spend reservation finalization", () => {
   });
 });
 
+describe("receipt validation", () => {
+  it("turns a missing required receipt into unknown when stable identities were supplied", async () => {
+    const missingReceiptTool = defineTool({
+      name: "test_missing_receipt",
+      description: "Omits required execution evidence.",
+      fields: {},
+      category: "action",
+      group: "order",
+      capabilities: ["shopify"],
+      label: "Missing receipt",
+      planStepLabel: "Missing receipt",
+      requiredReceiptVersion: 1,
+      execute: async () => ({ status: "ok" as const, message: "Provider said yes." }),
+    });
+    const ctx = {
+      ...threadlessCtx(vi.fn()),
+      shopify: {
+        shop: "test.myshopify.com",
+        accessToken: "token",
+        operationId: "operation-1",
+        executionId: "execution-1",
+      },
+    } as BaseAgentContext;
+
+    const result = await executeToolWithStatus(
+      missingReceiptTool.name,
+      {},
+      ctx,
+      undefined,
+      { [missingReceiptTool.name]: missingReceiptTool },
+    );
+
+    expect(result.status).toBe("unknown");
+    expect(result.result).toContain("invalid execution receipt");
+    expect(result.receipt).toBeUndefined();
+  });
+
+  it("keeps taskless compatibility calls working while identities are absent", async () => {
+    const compatibilityTool = defineTool({
+      name: "test_legacy_receipt_compatibility",
+      description: "Represents a taskless legacy execution.",
+      fields: {},
+      category: "action",
+      group: "order",
+      capabilities: [],
+      label: "Legacy result",
+      planStepLabel: "Legacy result",
+      requiredReceiptVersion: 1,
+      execute: async () => ({ status: "ok" as const, message: "Legacy success." }),
+    });
+
+    const result = await executeToolWithStatus(
+      compatibilityTool.name,
+      {},
+      threadlessCtx(vi.fn()),
+      undefined,
+      { [compatibilityTool.name]: compatibilityTool },
+    );
+
+    expect(result).toEqual({ status: "success", result: "Legacy success." });
+  });
+
+  it("turns a malformed success receipt into unknown before it can be journaled as success", async () => {
+    const malformedReceiptTool = defineTool({
+      name: "test_malformed_receipt",
+      description: "Returns malformed evidence.",
+      fields: {},
+      category: "action",
+      group: "order",
+      capabilities: [],
+      label: "Malformed receipt",
+      planStepLabel: "Malformed receipt",
+      policy: {},
+      execute: async () => ({
+        status: "ok" as const,
+        message: "Provider said yes.",
+        receipt: {
+          version: 1,
+          operationId: "wrong-operation",
+          executionId: "execution-1",
+          tool: "create_refund",
+          target: { kind: "order", id: "order-1" },
+          observedAt: "not-a-date",
+          outcome: "succeeded",
+          providerReference: "refund-1",
+          facts: {},
+        } as never,
+      }),
+    });
+    const ctx = {
+      ...threadlessCtx(vi.fn()),
+      shopify: { shop: "test.myshopify.com", accessToken: "token", operationId: "operation-1" },
+    } as BaseAgentContext;
+
+    const result = await executeToolWithStatus(
+      malformedReceiptTool.name,
+      {},
+      ctx,
+      undefined,
+      { [malformedReceiptTool.name]: malformedReceiptTool },
+    );
+
+    expect(result.status).toBe("unknown");
+    expect(result.result).toContain("invalid execution receipt");
+    expect(result.receipt).toBeUndefined();
+  });
+});
+
 describe("actionAuthorityBlock", () => {
   function blockedCtx(): BaseAgentContext {
     return {

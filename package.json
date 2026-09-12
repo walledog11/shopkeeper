@@ -50,6 +50,7 @@
     "audit:shopify-webhooks": "tsx ./apps/gateway/src/scripts/inspect-shopify-webhooks.ts",
     "audit:refund-spend-reservations": "node ./scripts/audit-refund-spend-reservations.mjs",
     "audit:unknown-outcomes": "node ./scripts/audit-unknown-outcomes.mjs",
+    "audit:conversational-overhaul-p0": "node ./scripts/audit-conversational-overhaul-p0.mjs",
     "audit:production-dependencies": "npm audit --omit=dev --audit-level=high",
     "preview:seed": "node scripts/with-test-env.mjs node scripts/seed-preview-store.mjs",
     "demo:seed": "node scripts/seed-local-demo-store.mjs",

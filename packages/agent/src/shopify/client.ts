@@ -10,6 +10,7 @@ export interface ShopifyContext {
   shop: string;
   accessToken: string;
   operationId?: string;
+  executionId?: string;
 }
 
 export interface ShopifyRequestOptions {

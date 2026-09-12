@@ -126,6 +126,8 @@ export const ORDER_TOOL_DEFINITIONS = [
     category: "action",
     group: "order",
     capabilities: ["shopify"],
+    requiredScopes: ["write_orders"],
+    requiredReceiptVersion: 1,
     label: "Issued refund",
     planStepLabel: "Issue refund",
     policy: {
@@ -159,6 +161,8 @@ export const ORDER_TOOL_DEFINITIONS = [
     category: "action",
     group: "order",
     capabilities: ["shopify"],
+    requiredScopes: ["write_orders"],
+    requiredReceiptVersion: 1,
     label: "Issued partial refund",
     planStepLabel: "Issue partial refund",
     policy: {
@@ -186,6 +190,8 @@ export const ORDER_TOOL_DEFINITIONS = [
     category: "action",
     group: "order",
     capabilities: ["shopify"],
+    requiredScopes: ["write_orders"],
+    requiredReceiptVersion: 1,
     label: "Cancelled order",
     planStepLabel: "Cancel order",
     policy: {

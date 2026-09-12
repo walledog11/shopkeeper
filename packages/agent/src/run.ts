@@ -1,10 +1,19 @@
 import logger from "./logger.js";
 import { randomUUID } from "node:crypto";
-import { recordAgentActionsBatch, completeAgentActionAttempt } from "./agent-actions.js";
+import {
+  authorizeAgentActionDispatch,
+  beginAgentActionAttempt,
+  completeAgentActionAttempt,
+  markAgentActionSubmitted,
+} from "./agent-actions.js";
 import { buildCachedSystemPrompt, buildSplitCachedSystemPrompt } from "./ai/anthropic.js";
 import { pickModel } from "./ai/index.js";
 import type { OrgSettings, RawToolCall } from "./types.js";
-import { selectAgentTools, type AgentToolDefinition } from "./tools/registry/index.js";
+import {
+  selectAgentTools,
+  TOOL_CATEGORIES,
+  type AgentToolDefinition,
+} from "./tools/registry/index.js";
 import { buildSystemPromptParts, buildComposerAskPrompt } from "./prompt.js";
 import { isOperatorChannel } from "./intent.js";
 import { buildMessageHistory } from "./message-history.js";
@@ -131,6 +140,7 @@ export async function runAgent(
     supportThread,
     failureAlertPromises,
   });
+  let actionIndex = 0;
   const executeToolCalls = (
     toolCalls: { id: string; name: string; input: unknown }[],
     executionOptions?: { stopOnDefiniteFailure?: boolean },
@@ -143,8 +153,8 @@ export async function runAgent(
       actionsPerformed,
       executedToolCalls,
       completionEvidence: options?.completionEvidence,
-      beginAction: async (call, providerOperationKey) => {
-        const [attempt] = await recordAgentActionsBatch({
+      beginAction: async (call, operationId, providerOperationKey) => {
+        const attempt = await beginAgentActionAttempt({
           orgId: ctx.orgId,
           threadId: supportThread?.id,
           customerId: supportCustomer?.id,
@@ -153,19 +163,35 @@ export async function runAgent(
           instruction,
           approval,
           executionId: options?.executionId,
-          actions: [{ tool: call.name, input: call.input, providerOperationKey,
+          operationId,
+          actionIndex: actionIndex++,
+          action: {
+            tool: call.name,
+            input: call.input,
+            providerOperationKey,
             category: options?.moduleTools?.[call.name]?.category,
-            status: "unknown", result: "Execution started; completion has not been recorded." }],
+          },
         });
-        if (!attempt) throw new Error("Could not persist agent action attempt");
-        return async (action) => {
-          journaledActions.add(action);
-          await completeAgentActionAttempt(attempt.id, action);
-          try {
-            options?.onActionsPersisted?.([{ ...attempt, status: action.status ?? "success" }]);
-          } catch (err) {
-            logger.error({ err, turnId }, "[agent] action observer failed");
-          }
+        return {
+          authorizeDispatch: () => authorizeAgentActionDispatch(attempt),
+          markSubmitted: () => markAgentActionSubmitted(attempt),
+          complete: async (action) => {
+            journaledActions.add(action);
+            await completeAgentActionAttempt(attempt, action);
+            try {
+              options?.onActionsPersisted?.([{
+                id: attempt.id,
+                category: options?.moduleTools?.[call.name]?.category
+                  ?? TOOL_CATEGORIES[call.name]
+                  ?? "unknown",
+                organizationId: ctx.orgId,
+                status: action.status ?? "success",
+                tool: call.name,
+              }]);
+            } catch (err) {
+              logger.error({ err, turnId }, "[agent] action observer failed");
+            }
+          },
         };
       },
       recordAgentFailure: recordAgentFailureSafely,

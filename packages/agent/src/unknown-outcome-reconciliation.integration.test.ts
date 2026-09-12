@@ -11,10 +11,12 @@ import {
 } from "./execution-ledger.js";
 import {
   reconcileStaleReservedRefundSpendReservations,
+  reconcileStaleAgentActionDispatches,
   reconcileUnknownAgentAction,
   runUnknownOutcomeReconciliation,
   STALE_CLAIMED_EXECUTION_ERROR,
   STALE_RESERVED_SPEND_ERROR,
+  STALE_ACTION_DISPATCH_ERROR,
 } from "./unknown-outcome-reconciliation.js";
 import { shopifyOperationTag } from "./shopify/client.js";
 
@@ -53,6 +55,126 @@ describe("unknown outcome reconciliation", () => {
     const updated = await db.planExecution.findUniqueOrThrow({ where: { id: execution.id } });
     expect(updated.status).toBe("unknown");
     expect(updated.lastError).toBe(STALE_CLAIMED_EXECUTION_ERROR);
+  });
+
+  it("turns stale authorized and submitted dispatches into unknown without touching prepared work", async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
+    const base = {
+      turnId: crypto.randomUUID(),
+      organizationId: org.id,
+      tool: "cancel_order",
+      category: "action",
+      input: { order_id: "1" },
+      output: "Execution started; completion has not been recorded.",
+      status: "unknown",
+      errorDetail: "Execution started; completion has not been recorded.",
+      mode: "human_approved",
+      actionIndex: 0,
+      executedAt: null,
+      durationMs: null,
+      createdAt: ELEVEN_MINUTES_AGO(),
+    } as const;
+    const prepared = await db.agentAction.create({
+      data: { ...base, operationId: crypto.randomUUID(), dispatchState: "prepared" },
+    });
+    const authorized = await db.agentAction.create({
+      data: {
+        ...base,
+        id: undefined,
+        operationId: crypto.randomUUID(),
+        actionIndex: 1,
+        dispatchState: "dispatch_authorized",
+      },
+    });
+    const submitted = await db.agentAction.create({
+      data: {
+        ...base,
+        id: undefined,
+        operationId: crypto.randomUUID(),
+        actionIndex: 2,
+        dispatchState: "submitted",
+        submittedAt: ELEVEN_MINUTES_AGO(),
+      },
+    });
+
+    await expect(reconcileStaleAgentActionDispatches(
+      new Date(Date.now() - 10 * 60 * 1000),
+      STALE_ACTION_DISPATCH_ERROR,
+    )).resolves.toBe(2);
+
+    await expect(db.agentAction.findUniqueOrThrow({ where: { id: prepared.id } }))
+      .resolves.toMatchObject({ dispatchState: "prepared", executedAt: null });
+    for (const id of [authorized.id, submitted.id]) {
+      const row = await db.agentAction.findUniqueOrThrow({ where: { id } });
+      expect(row).toMatchObject({
+        dispatchState: "unknown",
+        status: "unknown",
+        errorDetail: STALE_ACTION_DISPATCH_ERROR,
+        durationMs: 0,
+      });
+      expect(row.executedAt).toBeInstanceOf(Date);
+    }
+  });
+
+  it("probes a stale standalone dispatch from storage without replaying the write", async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
+    const providerOperationKey = `${crypto.randomUUID()}:tool_call_create_order`;
+    const operationId = crypto.randomUUID();
+    const action = await db.agentAction.create({
+      data: {
+        turnId: crypto.randomUUID(),
+        organizationId: org.id,
+        operationId,
+        actionIndex: 0,
+        providerOperationKey,
+        dispatchState: "dispatch_authorized",
+        createdAt: ELEVEN_MINUTES_AGO(),
+        tool: "create_shopify_order",
+        category: "action",
+        input: {
+          email: "buyer@example.com",
+          first_name: "Test",
+          last_name: "Buyer",
+          address1: "1 Main St",
+          city: "San Francisco",
+          province: "CA",
+          zip: "94105",
+          country: "US",
+          line_items: [{ variant_id: "1", quantity: 1 }],
+        },
+        output: "Execution started; completion has not been recorded.",
+        status: "unknown",
+        errorDetail: "Execution started; completion has not been recorded.",
+        mode: "human_approved",
+        executedAt: null,
+        durationMs: null,
+      },
+    });
+    const providerRead = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      orders: [{ id: 123, name: "#1001", tags: shopifyOperationTag(providerOperationKey) }],
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", providerRead);
+
+    const result = await runUnknownOutcomeReconciliation({
+      staleBefore: new Date(Date.now() - 10 * 60 * 1000),
+      loadShopifyContext: async () => ({ shop: "test.myshopify.com", accessToken: "test" }),
+    });
+
+    expect(result.staleActionDispatches).toBe(1);
+    expect(result.stillUnknownStandaloneActions).toBe(1);
+    expect(providerRead).toHaveBeenCalledOnce();
+    await expect(db.agentAction.findUniqueOrThrow({ where: { id: action.id } }))
+      .resolves.toMatchObject({
+        operationId,
+        providerOperationKey,
+        dispatchState: "unknown",
+        status: "unknown",
+      });
   });
 
   it("releases stale reserved goodwill reservations", async () => {

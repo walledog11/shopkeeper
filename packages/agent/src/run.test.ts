@@ -7,11 +7,19 @@ import type { AgentContext } from "./agent-context.js";
 
 const {
   mockCreate,
+  mockBeginAgentActionAttempt,
+  mockAuthorizeAgentActionDispatch,
+  mockMarkAgentActionSubmitted,
+  mockCompleteAgentActionAttempt,
   mockRecordAgentActionsBatch,
   mockEnforceSpendCap,
   mockRecordSpend,
 } = vi.hoisted(() => ({
   mockCreate: vi.fn(),
+  mockBeginAgentActionAttempt: vi.fn().mockResolvedValue({ id: "action_1", operationId: "operation_1" }),
+  mockAuthorizeAgentActionDispatch: vi.fn().mockResolvedValue(undefined),
+  mockMarkAgentActionSubmitted: vi.fn().mockResolvedValue(undefined),
+  mockCompleteAgentActionAttempt: vi.fn().mockResolvedValue(undefined),
   mockRecordAgentActionsBatch: vi.fn().mockResolvedValue([{ id: "action_1" }]),
   mockEnforceSpendCap: vi.fn().mockResolvedValue(undefined),
   mockRecordSpend: vi.fn().mockResolvedValue(undefined),
@@ -30,9 +38,12 @@ vi.mock("./spend.js", () => ({
 }));
 
 vi.mock("./agent-actions.js", () => ({
+  beginAgentActionAttempt: mockBeginAgentActionAttempt,
+  authorizeAgentActionDispatch: mockAuthorizeAgentActionDispatch,
+  markAgentActionSubmitted: mockMarkAgentActionSubmitted,
   recordAgentActionsBatch: mockRecordAgentActionsBatch,
   summarizeJournaledActions: vi.fn().mockResolvedValue(undefined),
-  completeAgentActionAttempt: vi.fn().mockResolvedValue(undefined),
+  completeAgentActionAttempt: mockCompleteAgentActionAttempt,
   recordAgentTurnUsage: vi.fn().mockResolvedValue(undefined),
   recordAgentAction: vi.fn().mockResolvedValue(undefined),
   hashInstruction: vi.fn().mockReturnValue("hash"),
@@ -102,6 +113,10 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
 
 beforeEach(() => {
   mockCreate.mockReset();
+  mockBeginAgentActionAttempt.mockResolvedValue({ id: "action_1", operationId: "operation_1" });
+  mockAuthorizeAgentActionDispatch.mockResolvedValue(undefined);
+  mockMarkAgentActionSubmitted.mockResolvedValue(undefined);
+  mockCompleteAgentActionAttempt.mockResolvedValue(undefined);
   mockRecordAgentActionsBatch.mockResolvedValue([{ id: "action_1" }]);
   mockEnforceSpendCap.mockResolvedValue(undefined);
   mockRecordSpend.mockResolvedValue(undefined);
@@ -372,12 +387,21 @@ describe("runAgent moduleTools seam", () => {
       },
     );
 
-    expect(moduleExecute.mock.calls[0]?.[1]?.shopify?.operationId)
-      .toBe("execution_42:tool_call_7");
-    expect(result.actionsPerformed[0]?.providerOperationKey)
-      .toBe("execution_42:tool_call_7");
-    expect(mockRecordAgentActionsBatch.mock.calls.at(-1)?.[0]?.actions[0]?.providerOperationKey)
-      .toBe("execution_42:tool_call_7");
+    const providerOperationKey = moduleExecute.mock.calls[0]?.[1]?.shopify?.operationId;
+    expect(providerOperationKey).toMatch(/^[0-9a-f-]{36}$/);
+    expect(result.actionsPerformed[0]?.providerOperationKey).toBe(providerOperationKey);
+    expect(mockBeginAgentActionAttempt.mock.calls.at(-1)?.[0]).toMatchObject({
+      operationId: providerOperationKey,
+      action: { providerOperationKey },
+    });
+    expect(mockAuthorizeAgentActionDispatch).toHaveBeenCalledWith({
+      id: "action_1",
+      operationId: "operation_1",
+    });
+    expect(mockMarkAgentActionSubmitted).toHaveBeenCalledWith({
+      id: "action_1",
+      operationId: "operation_1",
+    });
   });
 
   it("does not offer module tools in read-only mode", async () => {
@@ -400,14 +424,16 @@ it('keeps a completed action journaled when the following model call fails', asy
   const ctx = makeCtx();
   await expect(runAgent(ctx, 'Reply')).rejects.toThrow('model unavailable');
   expect(ctx.io?.sendReply).toHaveBeenCalledOnce();
-  expect(mockRecordAgentActionsBatch).toHaveBeenCalledOnce();
-  expect(mockRecordAgentActionsBatch.mock.calls[0][0].actions[0].status).toBe('unknown');
-  expect(completeAgentActionAttempt).toHaveBeenCalledWith('action_1', expect.objectContaining({ status: 'success' }));
+  expect(mockBeginAgentActionAttempt).toHaveBeenCalledOnce();
+  expect(completeAgentActionAttempt).toHaveBeenCalledWith(
+    { id: 'action_1', operationId: 'operation_1' },
+    expect.objectContaining({ status: 'success' }),
+  );
   expect(recordAgentTurnUsage).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'error' }));
 });
 
 it('does not execute a mutation when the attempt cannot be persisted', async () => {
-  mockRecordAgentActionsBatch.mockRejectedValueOnce(new Error('database unavailable'));
+  mockBeginAgentActionAttempt.mockRejectedValueOnce(new Error('database unavailable'));
   const ctx = makeCtx();
   await expect(runAgent(ctx, 'Reply', [{ id: 'send', name: 'send_reply', input: { text: 'hello' } }])).rejects.toThrow('database unavailable');
   expect(ctx.io?.sendReply).not.toHaveBeenCalled();
