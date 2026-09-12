@@ -52,6 +52,33 @@ function returnReceipt(overrides: Partial<ReceiptV1> = {}): ReceiptV1 {
   } as ReceiptV1;
 }
 
+function exchangeReceipt(overrides: Partial<ReceiptV1> = {}): ReceiptV1 {
+  return {
+    version: 1,
+    operationId: "operation-exchange-1",
+    executionId: "execution-exchange-1",
+    tool: "create_exchange",
+    target: { kind: "order", id: "2001" },
+    observedAt: "2026-09-12T07:00:00.000Z",
+    outcome: "succeeded",
+    providerReference: "gid://shopify/Return/999",
+    facts: {
+      orderId: "2001",
+      returnId: "gid://shopify/Return/999",
+      returnName: "#2001-R1",
+      status: "REQUESTED",
+      returnedItems: [{
+        variantId: "gid://shopify/ProductVariant/10",
+        fulfillmentLineItemId: "gid://shopify/FulfillmentLineItem/321",
+        quantity: 1,
+      }],
+      replacementItems: [{ variantId: "gid://shopify/ProductVariant/11", quantity: 1 }],
+      financialConsequence: null,
+    },
+    ...overrides,
+  } as ReceiptV1;
+}
+
 describe("receipt v1", () => {
   it("validates exact refund facts independently of display text", () => {
     const receipt = refundReceipt();
@@ -164,6 +191,25 @@ describe("receipt v1", () => {
         lineItems: [],
       } as never,
     }))).toThrow("line items");
+  });
+
+  it("validates provider-observed exchange sides without inventing money", () => {
+    expect(() => parseReceiptV1(exchangeReceipt())).not.toThrow();
+    expect(() => parseReceiptV1(exchangeReceipt({ providerReference: "different-return" }))).toThrow(
+      "providerReference",
+    );
+    expect(() => parseReceiptV1(exchangeReceipt({
+      facts: {
+        ...(exchangeReceipt() as Extract<ReceiptV1, { tool: "create_exchange"; outcome: "succeeded" }>).facts,
+        replacementItems: [],
+      } as never,
+    }))).toThrow("replacement items");
+    expect(() => parseReceiptV1(exchangeReceipt({
+      facts: {
+        ...(exchangeReceipt() as Extract<ReceiptV1, { tool: "create_exchange"; outcome: "succeeded" }>).facts,
+        financialConsequence: { kind: "charge", amount: "10.00", currency: "usd" },
+      } as never,
+    }))).toThrow("currency");
   });
 
   it("rejects unregistered receipt tools and wrong target kinds", () => {

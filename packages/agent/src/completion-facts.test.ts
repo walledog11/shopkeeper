@@ -235,6 +235,50 @@ describe("completion facts", () => {
     })]);
   });
 
+  it("grounds both sides of an exchange in one receipt", () => {
+    const common = {
+      tool: "create_exchange",
+      input: { order_id: "wrong-order" },
+      status: "success" as const,
+      receipt: {
+        version: 1 as const,
+        operationId: "operation-exchange-1",
+        executionId: "execution-exchange-1",
+        tool: "create_exchange" as const,
+        target: { kind: "order", id: "2001" },
+        observedAt: "2026-09-12T07:00:00.000Z",
+        outcome: "succeeded" as const,
+        providerReference: "gid://shopify/Return/999",
+        facts: {
+          orderId: "2001",
+          returnId: "gid://shopify/Return/999",
+          returnName: "#2001-R1",
+          status: "REQUESTED",
+          returnedItems: [{
+            variantId: "gid://shopify/ProductVariant/10",
+            fulfillmentLineItemId: "gid://shopify/FulfillmentLineItem/321",
+            quantity: 1,
+          }],
+          replacementItems: [{ variantId: "gid://shopify/ProductVariant/11", quantity: 1 }],
+          financialConsequence: null,
+        },
+      },
+    };
+
+    const first = executedCompletionFacts([{ ...common, result: "Exchange opened." }]);
+    const second = executedCompletionFacts([{ ...common, result: "Different display wording." }]);
+
+    expect(first).toEqual(second);
+    expect(first.map((fact) => fact.action)).toEqual(["exchange", "return"]);
+    expect(first).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        target: { kind: "order", id: "2001" },
+        outcome: "success",
+        executionReference: "operation-exchange-1",
+      }),
+    ]));
+  });
+
   it("turns only successful live order reads into historical facts", () => {
     const calls = [{ id: "read_1", name: "get_order_by_name", input: { order_name: "#1001" } }];
     expect(historicalCompletionFacts(calls, {

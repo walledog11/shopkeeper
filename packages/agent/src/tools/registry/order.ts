@@ -322,6 +322,8 @@ export const ORDER_TOOL_DEFINITIONS = [
     category: "action",
     group: "order",
     capabilities: ["shopify"],
+    requiredScopes: ["read_products", "write_returns"],
+    requiredReceiptVersion: 1,
     label: "Set up exchange",
     planStepLabel: "Set up exchange",
     execute: async (input: CreateExchangeInput, ctx, _settings, deps) => {

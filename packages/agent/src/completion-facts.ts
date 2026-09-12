@@ -232,6 +232,16 @@ function receiptCompletionFacts(
     })];
   }
 
+  if (receipt.tool === "create_exchange") {
+    const receiptTarget = receipt.outcome === "succeeded"
+      ? orderTarget(receipt.facts.orderId, ctx, orderNames)
+      : target;
+    return [
+      fact("exchange", receipt.tool, outcome, executionReference, { target: receiptTarget }),
+      fact("return", receipt.tool, outcome, executionReference, { target: receiptTarget }),
+    ];
+  }
+
   return [];
 }
 

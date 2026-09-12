@@ -439,6 +439,7 @@ describe("Shopify scope gating", () => {
       "create_partial_refund",
       "cancel_order",
       "create_return",
+      "create_exchange",
     ]);
   });
 
@@ -457,6 +458,8 @@ describe("Shopify scope gating", () => {
     expect(toolScopesGranted("create_refund", ["write_orders"])).toBe(true);
     expect(toolScopesGranted("create_return", ["read_returns"])).toBe(false);
     expect(toolScopesGranted("create_return", ["write_returns"])).toBe(true);
+    expect(toolScopesGranted("create_exchange", ["write_returns"])).toBe(false);
+    expect(toolScopesGranted("create_exchange", ["read_products", "write_returns"])).toBe(true);
   });
 
   describe("a tool that does declare scopes", () => {

@@ -177,7 +177,15 @@ describe("unknown outcome reconciliation", () => {
       });
   });
 
-  it("keeps a reconciled return commit unknown when the probe cannot rebuild its receipt facts", async () => {
+  it.each([
+    ["create_return", { order_id: "456" }],
+    ["create_exchange", {
+      order_id: "456",
+      variant_id: "999",
+      exchange_variant_id: "1000",
+      quantity: 1,
+    }],
+  ] as const)("keeps a reconciled %s commit unknown when the probe cannot rebuild its receipt facts", async (tool, input) => {
     const org = await createTestOrg();
     orgId = org.id;
     const operationId = crypto.randomUUID();
@@ -190,9 +198,9 @@ describe("unknown outcome reconciliation", () => {
         providerOperationKey: operationId,
         dispatchState: "unknown",
         submittedAt: ELEVEN_MINUTES_AGO(),
-        tool: "create_return",
+        tool,
         category: "action",
-        input: { order_id: "456" },
+        input,
         output: "Unknown provider result",
         status: "unknown",
         errorDetail: "Unknown provider result",

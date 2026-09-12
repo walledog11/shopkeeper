@@ -50,6 +50,24 @@ export interface ReturnReceiptFactsV1 {
   refundIssued: false;
 }
 
+export interface ExchangeReceiptFactsV1 {
+  orderId: string;
+  returnId: string;
+  returnName: string;
+  status: string;
+  returnedItems: Array<{
+    variantId: string;
+    fulfillmentLineItemId: string;
+    quantity: number;
+  }>;
+  replacementItems: Array<{ variantId: string; quantity: number }>;
+  financialConsequence: {
+    kind: "refund" | "charge";
+    amount: string;
+    currency: string;
+  } | null;
+}
+
 export type ReceiptSuccessV1 =
   | (ReceiptBaseV1<"create_refund"> & {
       outcome: "succeeded";
@@ -70,6 +88,11 @@ export type ReceiptSuccessV1 =
       outcome: "succeeded";
       providerReference: string;
       facts: ReturnReceiptFactsV1;
+    })
+  | (ReceiptBaseV1<"create_exchange"> & {
+      outcome: "succeeded";
+      providerReference: string;
+      facts: ExchangeReceiptFactsV1;
     });
 
 type ReceiptToolV1 = ReceiptSuccessV1["tool"];
@@ -140,6 +163,7 @@ function requireRegisteredReceiptTool(tool: string): asserts tool is ReceiptTool
     && tool !== "create_partial_refund"
     && tool !== "cancel_order"
     && tool !== "create_return"
+    && tool !== "create_exchange"
   ) {
     throw new ReceiptValidationError(`no receipt validator is registered for ${tool}`);
   }
@@ -168,6 +192,59 @@ function parseReturnFacts(value: unknown): ReturnReceiptFactsV1 {
     throw new ReceiptValidationError("facts.refundIssued must be false");
   }
   return value as unknown as ReturnReceiptFactsV1;
+}
+
+function requirePositiveQuantity(value: unknown, field: string): void {
+  if (!Number.isSafeInteger(value) || Number(value) <= 0) {
+    throw new ReceiptValidationError(`${field} must be a positive integer`);
+  }
+}
+
+function parseExchangeFacts(value: unknown): ExchangeReceiptFactsV1 {
+  if (!isRecord(value)) throw new ReceiptValidationError("exchange facts must be an object");
+  requireNonEmptyString(value.orderId, "facts.orderId");
+  requireNonEmptyString(value.returnId, "facts.returnId");
+  requireNonEmptyString(value.returnName, "facts.returnName");
+  requireNonEmptyString(value.status, "facts.status");
+  if (!Array.isArray(value.returnedItems) || value.returnedItems.length === 0) {
+    throw new ReceiptValidationError("exchange facts require returned items");
+  }
+  for (const [index, item] of value.returnedItems.entries()) {
+    if (!isRecord(item)) throw new ReceiptValidationError(`facts.returnedItems[${index}] must be an object`);
+    requireNonEmptyString(item.variantId, `facts.returnedItems[${index}].variantId`);
+    requireNonEmptyString(
+      item.fulfillmentLineItemId,
+      `facts.returnedItems[${index}].fulfillmentLineItemId`,
+    );
+    requirePositiveQuantity(item.quantity, `facts.returnedItems[${index}].quantity`);
+  }
+  if (!Array.isArray(value.replacementItems) || value.replacementItems.length === 0) {
+    throw new ReceiptValidationError("exchange facts require replacement items");
+  }
+  for (const [index, item] of value.replacementItems.entries()) {
+    if (!isRecord(item)) throw new ReceiptValidationError(`facts.replacementItems[${index}] must be an object`);
+    requireNonEmptyString(item.variantId, `facts.replacementItems[${index}].variantId`);
+    requirePositiveQuantity(item.quantity, `facts.replacementItems[${index}].quantity`);
+  }
+  if (value.financialConsequence !== null) {
+    if (!isRecord(value.financialConsequence)) {
+      throw new ReceiptValidationError("facts.financialConsequence must be an object or null");
+    }
+    if (
+      value.financialConsequence.kind !== "refund"
+      && value.financialConsequence.kind !== "charge"
+    ) {
+      throw new ReceiptValidationError("facts.financialConsequence.kind must be refund or charge");
+    }
+    requirePositiveDecimal(value.financialConsequence.amount, "facts.financialConsequence.amount");
+    if (
+      typeof value.financialConsequence.currency !== "string"
+      || !/^[A-Z]{3}$/.test(value.financialConsequence.currency)
+    ) {
+      throw new ReceiptValidationError("facts.financialConsequence.currency must be a three-letter uppercase code");
+    }
+  }
+  return value as unknown as ExchangeReceiptFactsV1;
 }
 
 function parseRefundFacts(value: unknown, partial: boolean): RefundReceiptFactsV1 | PartialRefundReceiptFactsV1 {
@@ -241,6 +318,15 @@ export function parseReceiptV1(value: unknown): ReceiptV1 {
       }
       if (value.providerReference !== facts.returnId) {
         throw new ReceiptValidationError("return providerReference must match facts.returnId");
+      }
+    } else if (base.tool === "create_exchange") {
+      requireNonEmptyString(value.providerReference, "providerReference");
+      const facts = parseExchangeFacts(value.facts);
+      if (base.target.id !== facts.orderId) {
+        throw new ReceiptValidationError("exchange target must match facts.orderId");
+      }
+      if (value.providerReference !== facts.returnId) {
+        throw new ReceiptValidationError("exchange providerReference must match facts.returnId");
       }
     }
   } else if (

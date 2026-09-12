@@ -5,6 +5,8 @@ import { createExchange } from "./exchanges.js";
 const ctx = {
   shop: "test-store.myshopify.com",
   accessToken: "shpat_test",
+  operationId: "operation-exchange-1",
+  executionId: "execution-exchange-1",
 };
 
 const returnableResponse = () => jsonResponse({
@@ -76,8 +78,13 @@ describe("createExchange", () => {
 
     const result = await createExchange({ ...input, exchange_variant_id: input.variant_id }, ctx);
 
-    expect(result.status).toBe("error");
+    expect(result.status).toBe("policy_block");
     expect(result.message).toContain("same as the item being returned");
+    expect(result.receipt).toMatchObject({
+      tool: "create_exchange",
+      outcome: "rejected",
+      code: "same_variant",
+    });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -89,7 +96,7 @@ describe("createExchange", () => {
 
     const result = await createExchange(input, ctx);
 
-    expect(result.status).toBe("error");
+    expect(result.status).toBe("policy_block");
     expect(result.message).toContain("costs more");
     expect(result.message).toContain("Escalate to the merchant");
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -101,7 +108,7 @@ describe("createExchange", () => {
 
     const result = await createExchange({ ...input, quantity: 3 }, ctx);
 
-    expect(result.status).toBe("error");
+    expect(result.status).toBe("policy_block");
     expect(result.message).toContain("only 1 unit(s)");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -140,6 +147,31 @@ describe("createExchange", () => {
     expect(result.message).toContain("#4040-R1");
     expect(result.message).toContain("Trail Boots - Size 11");
     expect(result.message).toContain("No refund was issued");
+    expect(result.receipt).toMatchObject({
+      version: 1,
+      operationId: ctx.operationId,
+      executionId: ctx.executionId,
+      tool: "create_exchange",
+      target: { kind: "order", id: "9000004040" },
+      outcome: "succeeded",
+      providerReference: "gid://shopify/Return/999",
+      facts: {
+        orderId: "9000004040",
+        returnId: "gid://shopify/Return/999",
+        returnName: "#4040-R1",
+        status: "REQUESTED",
+        returnedItems: [{
+          variantId: "gid://shopify/ProductVariant/710000004040",
+          fulfillmentLineItemId: "gid://shopify/FulfillmentLineItem/111",
+          quantity: 1,
+        }],
+        replacementItems: [{
+          variantId: "gid://shopify/ProductVariant/710000004041",
+          quantity: 1,
+        }],
+        financialConsequence: null,
+      },
+    });
   });
 
   it("reports an ambiguous returnCreate failure as unknown after the mutation starts", async () => {
@@ -154,6 +186,11 @@ describe("createExchange", () => {
     expect(result.status).toBe("unknown");
     expect(result.message).toContain("may have been opened");
     expect(result.message).toContain("Do not create another exchange");
+    expect(result.receipt).toMatchObject({
+      tool: "create_exchange",
+      outcome: "unknown",
+      code: "ambiguous_provider_response",
+    });
   });
 
   it("keeps pre-mutation lookup failures on the ordinary error path", async () => {
@@ -163,5 +200,81 @@ describe("createExchange", () => {
 
     expect(result.status).toBe("error");
     expect(result.message).not.toContain("may have been opened");
+    expect(result.receipt).toMatchObject({
+      tool: "create_exchange",
+      outcome: "failed",
+      code: "definite_failure",
+    });
+  });
+
+  it("keeps an incomplete provider return record unknown", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(returnableResponse())
+      .mockResolvedValueOnce(pricesResponse("120.00", "120.00"))
+      .mockResolvedValueOnce(jsonResponse({
+        data: {
+          returnCreate: {
+            return: { id: "gid://shopify/Return/999", name: "#4040-R1", status: null },
+            userErrors: [],
+          },
+        },
+      })));
+
+    const result = await createExchange(input, ctx);
+
+    expect(result).toMatchObject({
+      status: "unknown",
+      receipt: {
+        tool: "create_exchange",
+        outcome: "unknown",
+        code: "confirmed_state_incomplete",
+        providerReference: "gid://shopify/Return/999",
+      },
+    });
+  });
+
+  it("records a provider rejection as a definite failure", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(returnableResponse())
+      .mockResolvedValueOnce(pricesResponse("120.00", "120.00"))
+      .mockResolvedValueOnce(jsonResponse({
+        data: {
+          returnCreate: {
+            return: null,
+            userErrors: [{ field: ["returnInput"], message: "Exchange is not allowed" }],
+          },
+        },
+      })));
+
+    const result = await createExchange(input, ctx);
+
+    expect(result).toMatchObject({
+      status: "error",
+      receipt: {
+        tool: "create_exchange",
+        outcome: "failed",
+        code: "provider_rejected",
+      },
+    });
+  });
+
+  it("keeps a missing post-mutation return record unknown", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(returnableResponse())
+      .mockResolvedValueOnce(pricesResponse("120.00", "120.00"))
+      .mockResolvedValueOnce(jsonResponse({
+        data: { returnCreate: { return: null, userErrors: [] } },
+      })));
+
+    const result = await createExchange(input, ctx);
+
+    expect(result).toMatchObject({
+      status: "unknown",
+      receipt: {
+        tool: "create_exchange",
+        outcome: "unknown",
+        code: "provider_return_missing",
+      },
+    });
   });
 });
