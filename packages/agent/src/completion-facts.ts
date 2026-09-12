@@ -259,6 +259,21 @@ function receiptCompletionFacts(
     })];
   }
 
+  if (receipt.tool === "update_shopify_order_address") {
+    const addressOutcome = receipt.facts?.orderAddress.outcome;
+    return [fact(
+      "address_update",
+      receipt.tool,
+      addressOutcome === "updated" || addressOutcome === "already_matched" ? "success" : outcome,
+      executionReference,
+      {
+        target: receipt.facts
+          ? orderTarget(receipt.facts.orderId, ctx, orderNames)
+          : target,
+      },
+    )];
+  }
+
   return [];
 }
 

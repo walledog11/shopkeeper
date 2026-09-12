@@ -1,5 +1,15 @@
 import type { UpdateShopifyOrderAddressInput } from "../tools/index.js";
-import { toolError, toolOk, toolUnknown, type ToolResult } from "../tools/result.js";
+import {
+  toolError,
+  toolNotFound,
+  toolOk,
+  toolPolicyBlock,
+  toolUnknown,
+  type AddressReceiptAddressV1,
+  type OrderAddressReceiptFactsV1,
+  type ReceiptV1,
+  type ToolResult,
+} from "../tools/result.js";
 import {
   formatShopifyToolError,
   isAmbiguousShopifyMutationError,
@@ -7,8 +17,14 @@ import {
   type ShopifyContext,
 } from "./client.js";
 import { formatAddressForMessage } from "./serializers.js";
+import { shopifyFailureReceipt, shopifyReceiptEnvelope } from "./receipts.js";
 import type { ShopifyCustomer, ShopifyCustomerAddress, ShopifyOrder } from "./types.js";
-import { optionalString, requireNonEmptyString, requireNumericId } from "./validation.js";
+import {
+  optionalString,
+  requireNonEmptyString,
+  requireNumericId,
+  ShopifyInputError,
+} from "./validation.js";
 
 interface OrderAddressInput {
   first_name?: unknown;
@@ -43,6 +59,65 @@ function normalizeAddressPart(value: unknown): string {
 function locationPartMatches(expected: string, ...actualValues: unknown[]): boolean {
   const normalizedExpected = normalizeAddressPart(expected);
   return actualValues.some((value) => normalizeAddressPart(value) === normalizedExpected);
+}
+
+function observedAddress(address: ShopifyCustomerAddress): AddressReceiptAddressV1 | null {
+  const value = (input: unknown): string | null => {
+    const normalized = typeof input === "string" ? input.trim() : "";
+    return normalized || null;
+  };
+  const address1 = value(address.address1);
+  const city = value(address.city);
+  const province = value(address.province) ?? value(address.province_code);
+  const postalCode = value(address.zip);
+  const country = value(address.country) ?? value(address.country_code) ?? value(address.country_name);
+  if (!address1 || !city || !province || !postalCode || !country) return null;
+  return {
+    firstName: value(address.first_name),
+    lastName: value(address.last_name),
+    address1,
+    address2: value(address.address2),
+    city,
+    province,
+    provinceCode: value(address.province_code),
+    postalCode,
+    country,
+    countryCode: value(address.country_code),
+  };
+}
+
+function addressFailure(
+  ctx: ShopifyContext,
+  orderId: string,
+  result: ToolResult,
+  outcome: "not_found" | "rejected" | "failed" | "unknown",
+  code: string,
+  facts?: OrderAddressReceiptFactsV1,
+): ToolResult {
+  const receipt = shopifyFailureReceipt(
+    ctx,
+    { kind: "order", id: orderId },
+    "update_shopify_order_address",
+    outcome,
+    code,
+    facts ? orderId : null,
+  );
+  return receipt ? { ...result, receipt: facts ? { ...receipt, facts } : receipt } : result;
+}
+
+function addressSuccessReceipt(
+  ctx: ShopifyContext,
+  orderId: string,
+  facts: OrderAddressReceiptFactsV1,
+): ReceiptV1 | undefined {
+  const envelope = shopifyReceiptEnvelope(ctx, { kind: "order", id: orderId });
+  return envelope ? {
+    ...envelope,
+    tool: "update_shopify_order_address",
+    outcome: "succeeded",
+    providerReference: orderId,
+    facts,
+  } : undefined;
 }
 
 export function addressMatches(
@@ -156,11 +231,11 @@ async function reconcileCustomerAddress(
   customerId: string,
   addressPayload: Record<string, string>,
   mutationError?: unknown,
-): Promise<{ ok: true; reconciled: true } | { result: ToolResult }> {
+): Promise<{ address: ShopifyCustomerAddress; reconciled: true } | { result: ToolResult }> {
   try {
     const address = await readCustomerDefaultAddress(ctx, customerId);
     if (addressMatches(address, addressPayload)) {
-      return { ok: true, reconciled: true };
+      return { address: address!, reconciled: true };
     }
     const detail = mutationError
       ? ` ${formatShopifyToolError("customer address reconciliation failed", mutationError)}`
@@ -184,12 +259,29 @@ async function syncCustomerDefaultAddress(
   customerId: string,
   currentAddress: ShopifyCustomerAddress | null,
   addressPayload: Record<string, string>,
-): Promise<{ message: string } | { result: ToolResult }> {
+): Promise<{
+  message: string;
+  outcome: OrderAddressReceiptFactsV1["customerDefaultAddress"];
+} | { result: ToolResult; code: string; outcome: "failed" | "unknown" }> {
   if (currentAddress?.id === undefined || currentAddress.id === null) {
-    return { message: "Customer profile was not updated because no default address exists." };
+    return {
+      message: "Customer profile was not updated because no default address exists.",
+      outcome: { outcome: "not_updated", code: "no_default_address" },
+    };
   }
   if (addressMatches(currentAddress, addressPayload)) {
-    return { message: "Customer profile already matched." };
+    const address = observedAddress(currentAddress);
+    if (!address) {
+      return {
+        result: toolUnknown("Unknown: the order address was updated, but Shopify returned an incomplete customer default address. Do not retry or confirm the full change until it is reviewed."),
+        code: "customer_confirmed_state_incomplete",
+        outcome: "unknown",
+      };
+    }
+    return {
+      message: "Customer profile already matched.",
+      outcome: { outcome: "already_matched", addressId: String(currentAddress.id), address },
+    };
   }
 
   try {
@@ -202,23 +294,50 @@ async function syncCustomerDefaultAddress(
       },
     );
     if (addressMatches(data.customer_address, addressPayload)) {
-      return { message: "Customer profile also updated." };
+      const address = observedAddress(data.customer_address!);
+      if (!address) {
+        return {
+          result: toolUnknown("Unknown: the order address was updated, but Shopify returned an incomplete customer default address. Do not retry or confirm the full change until it is reviewed."),
+          code: "customer_confirmed_state_incomplete",
+          outcome: "unknown",
+        };
+      }
+      return {
+        message: "Customer profile also updated.",
+        outcome: { outcome: "updated", addressId: String(currentAddress.id), address },
+      };
     }
     const reconciled = await reconcileCustomerAddress(ctx, customerId, addressPayload);
     return "result" in reconciled
-      ? reconciled
-      : { message: "Customer profile also updated (confirmed after an interrupted provider response)." };
+      ? { ...reconciled, code: "customer_address_unconfirmed", outcome: "unknown" }
+      : {
+          message: "Customer profile also updated (confirmed after an interrupted provider response).",
+          outcome: {
+            outcome: "updated",
+            addressId: String(reconciled.address.id ?? currentAddress.id),
+            address: observedAddress(reconciled.address)!,
+          },
+        };
   } catch (err) {
     if (isAmbiguousShopifyMutationError(err)) {
       const reconciled = await reconcileCustomerAddress(ctx, customerId, addressPayload, err);
       return "result" in reconciled
-        ? reconciled
-        : { message: "Customer profile also updated (confirmed after an interrupted provider response)." };
+        ? { ...reconciled, code: "customer_address_unconfirmed", outcome: "unknown" }
+        : {
+            message: "Customer profile also updated (confirmed after an interrupted provider response).",
+            outcome: {
+              outcome: "updated",
+              addressId: String(reconciled.address.id ?? currentAddress.id),
+              address: observedAddress(reconciled.address)!,
+            },
+          };
     }
     return {
       result: toolUnknown(
         `Partial: the order shipping address was updated, but the customer profile was not. Do not confirm the full change or retry it until the partial result is reviewed. ${formatShopifyToolError("customer profile sync failed", err)}`,
       ),
+      code: "customer_sync_failed_after_order_update",
+      outcome: "failed",
     };
   }
 }
@@ -234,20 +353,61 @@ export async function updateShopifyOrderAddress(
 
     const beforeOrder = await readOrder(ctx, orderId);
     if (!beforeOrder) {
-      return toolError(`Error: failed to update order shipping address - order ${orderId} was not returned by Shopify.`);
+      return addressFailure(
+        ctx,
+        orderId,
+        toolNotFound(`Error: failed to update order shipping address - order ${orderId} was not returned by Shopify.`),
+        "not_found",
+        "order_not_found",
+      );
     }
     if (beforeOrder.fulfillment_status && beforeOrder.fulfillment_status !== "unfulfilled") {
-      return toolError(`Error: failed to update order shipping address - order ${beforeOrder.name ?? orderId} is already fulfilled or partially fulfilled.`);
+      return addressFailure(
+        ctx,
+        orderId,
+        toolPolicyBlock(`Error: failed to update order shipping address - order ${beforeOrder.name ?? orderId} is already fulfilled or partially fulfilled.`),
+        "rejected",
+        "order_already_fulfilled",
+      );
     }
     if (!beforeOrder.customer?.id || String(beforeOrder.customer.id) !== customerId) {
-      return toolError(`Error: failed to update order shipping address - customer ${customerId} does not own order ${beforeOrder.name ?? orderId}.`);
+      return addressFailure(
+        ctx,
+        orderId,
+        toolPolicyBlock(`Error: failed to update order shipping address - customer ${customerId} does not own order ${beforeOrder.name ?? orderId}.`),
+        "rejected",
+        "customer_order_mismatch",
+      );
     }
 
     const beforeCustomerAddress = await readCustomerDefaultAddress(ctx, customerId);
     const orderUpdate = addressMatches(beforeOrder.shipping_address, addressPayload)
       ? { order: beforeOrder, changed: false, reconciled: false }
       : await updateOrderAddress(ctx, orderId, addressPayload);
-    if ("result" in orderUpdate) return orderUpdate.result;
+    if ("result" in orderUpdate) {
+      return addressFailure(
+        ctx,
+        orderId,
+        orderUpdate.result,
+        orderUpdate.result.status === "unknown" ? "unknown" : "failed",
+        orderUpdate.result.status === "unknown" ? "order_address_unconfirmed" : "order_update_failed",
+      );
+    }
+
+    const confirmedOrderAddress = observedAddress(orderUpdate.order.shipping_address!);
+    if (!confirmedOrderAddress) {
+      return addressFailure(
+        ctx,
+        orderId,
+        toolUnknown("Unknown: Shopify accepted the order address update but returned incomplete confirmed address state. Do not retry or confirm it until it is reviewed."),
+        "unknown",
+        "order_confirmed_state_incomplete",
+      );
+    }
+    const orderAddressOutcome: OrderAddressReceiptFactsV1["orderAddress"] = {
+      outcome: orderUpdate.changed ? "updated" : "already_matched",
+      address: confirmedOrderAddress,
+    };
 
     const customerSync = await syncCustomerDefaultAddress(
       ctx,
@@ -255,7 +415,22 @@ export async function updateShopifyOrderAddress(
       beforeCustomerAddress,
       addressPayload,
     );
-    if ("result" in customerSync) return customerSync.result;
+    if ("result" in customerSync) {
+      const facts: OrderAddressReceiptFactsV1 = {
+        orderId,
+        customerId,
+        orderAddress: orderAddressOutcome,
+        customerDefaultAddress: { outcome: customerSync.outcome, code: customerSync.code },
+      };
+      return addressFailure(
+        ctx,
+        orderId,
+        customerSync.result,
+        "unknown",
+        customerSync.code,
+        facts,
+      );
+    }
 
     const orderLabel = String(orderUpdate.order.order_number ?? orderUpdate.order.name ?? orderId);
     const orderMessage = orderUpdate.changed
@@ -264,8 +439,33 @@ export async function updateShopifyOrderAddress(
     const reconciliation = orderUpdate.reconciled
       ? " Confirmed after an interrupted provider response."
       : "";
-    return toolOk(`${orderMessage}${reconciliation} ${customerSync.message}`);
+    const result = toolOk(`${orderMessage}${reconciliation} ${customerSync.message}`);
+    const receipt = addressSuccessReceipt(ctx, orderId, {
+      orderId,
+      customerId,
+      orderAddress: orderAddressOutcome,
+      customerDefaultAddress: customerSync.outcome,
+    });
+    return receipt ? { ...result, receipt } : result;
   } catch (err) {
-    return toolError(formatShopifyToolError("failed to update order shipping address", err));
+    const orderId = typeof input.order_id === "string" && input.order_id.trim()
+      ? input.order_id.trim()
+      : "invalid";
+    if (err instanceof ShopifyInputError) {
+      return addressFailure(
+        ctx,
+        orderId,
+        toolPolicyBlock(`Error: failed to update order shipping address - ${err.message}`),
+        "rejected",
+        "invalid_address_input",
+      );
+    }
+    return addressFailure(
+      ctx,
+      orderId,
+      toolError(formatShopifyToolError("failed to update order shipping address", err)),
+      "failed",
+      "definite_failure",
+    );
   }
 }

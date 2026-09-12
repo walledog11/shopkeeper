@@ -1,11 +1,13 @@
 # Conversational agent overhaul plan
 
 Status: in progress. Package 0 is complete. Package 1 has completed the shared
-receipt boundary, durable action dispatch/recovery lifecycle, and seven retained
+receipt boundary, durable action dispatch/recovery lifecycle, and eight retained
 Shopify write migrations: full refund, partial refund, cancellation, return,
-exchange, return-label attachment, and fulfillment. The remaining retained
-writes are open; Packages 2–6 have not started. Created 2026-09-11; last updated
-2026-09-12.
+exchange, return-label attachment, fulfillment, and order address. Five retained
+Shopify writes remain open — `update_shopify_customer_info`,
+`add_shopify_customer_note`, `create_shopify_order`, `edit_shopify_order`, and
+`create_gift_card` — alongside the internal thread writes; Packages 2–6 have not
+started. Created 2026-09-11; last updated 2026-09-12.
 
 Implementation detail expanded 2026-09-11 against the current repository. Names marked **proposed** describe work to implement, not APIs or tables that already exist. This document authorizes no production operation by itself.
 
@@ -408,6 +410,17 @@ Progress as of 2026-09-12:
   can identify a likely commit, but cannot rebuild the label fingerprint and
   complete receipt, so lifecycle reconciliation conservatively leaves it
   unknown.
+- [x] Migrate `update_shopify_order_address` to a version-1 receipt carrying the
+  canonical order and customer IDs, the provider-normalized order address, and a
+  separately typed customer-default-address outcome, so a committed order
+  address stays visible when the customer profile half fails or cannot be
+  confirmed. Require `write_orders` plus `write_customers`. Preconditions are
+  `rejected`, a missing order is `not_found`, and an unconfirmed or failed
+  customer sync keeps the whole receipt `unknown` while retaining the committed
+  order-address facts. The existing read-after-write probe reads only the
+  order's shipping address, so it can observe the order half but cannot
+  reconstruct the compound receipt, and lifecycle reconciliation leaves it
+  unknown.
 - [x] Migrate `fulfill_order` to a version-1 receipt with provider-confirmed
   fulfillment identity, status/time, fulfillment and order line-item
   identities/quantities, returned tracking fields, and the customer-notification
@@ -549,6 +562,23 @@ Shopify-simulator fixture uniqueness collision; its isolated two-test suite
 passed, and the final clean aggregate rerun passed with local test-port access.
 No live Shopify or model operation was run.
 
+Incremental `update_shopify_order_address` evidence: `npm run verify:pr` passed,
+including repository lint/structure, typecheck, unit suites across every
+workspace, coverage and critical-coverage gates, browser and send-reply E2E
+suites, and production builds. Agent suites: 1,080 unit tests across 86 files,
+1,187 coverage tests across 99 files, and 107 integration tests across 13 files.
+Focused suites: 19 order-address adapter tests, 18 receipt-validation tests, 14
+completion-fact tests, 114 registry tests, and 12 unknown-outcome integration
+tests, including a fresh-storage assertion that an observed order-address commit
+whose probe cannot rebuild the compound receipt remains unknown. The first
+full-gate attempt failed in the dashboard coverage project under workspace
+concurrency; that project passed 1,453 of 1,455 tests in isolation with 2
+skipped, and the clean aggregate rerun passed. No source change was needed for
+this slice beyond the adapter, registry, receipt, and completion-fact edits; the
+`observedAddress` non-null assertions were reviewed and are guarded by
+`addressMatches`, which requires a superset of the fields the receipt needs. No
+live Shopify or model operation was run.
+
 Implementation checkpoints committed so far:
 
 | Commit | Completed scope | Verification recorded here |
@@ -557,16 +587,21 @@ Implementation checkpoints committed so far:
 | `588844c2` | `create_return` typed outcomes, exact return facts, `write_returns`, return-watch compatibility, and conservative recovery. | Full PR gate; 1,050 agent unit tests; 8 focused reconciliation tests. |
 | `3092dffa` | `create_exchange` typed outcomes, returned/replacement facts, `read_products` + `write_returns`, return-watch compatibility, and conservative recovery. | Full PR gate; 1,055 agent unit tests; 9 focused reconciliation tests. |
 | `0e143143` | `attach_return_label` typed outcomes, reverse-delivery facts, URL-free label fingerprint, `write_returns`, receipt-grounded completion facts, and conservative recovery. | Full PR gate; 1,059 agent unit tests; 10 focused reconciliation tests. |
+| `915b92e4` | `fulfill_order` typed outcomes, fulfillment and line-item facts, tracking fields, requested-notification flag, and `write_merchant_managed_fulfillment_orders`. | Full PR gate; 1,064 agent unit tests; 11 focused reconciliation tests. |
 
-The `fulfill_order` checkpoint is implemented and verified in the current
-working tree; add its commit ID to this table when the checkpoint is committed.
+The `update_shopify_order_address` checkpoint is implemented and verified in the
+current working tree; add its commit ID to this table when the checkpoint is
+committed.
 
 Current next step: migrate the remaining retained writes one at a time through
 the completed identity/dispatch/receipt boundary. The next order-lifecycle
-slice should be `update_shopify_order_address`, which already has a registered
-read-after-write probe but needs typed partial outcomes for the order address
-and customer default address, exact `write_orders` plus `write_customers`
-requirements, and receipt-grounded completion facts.
+slice should be `edit_shopify_order`. It is the second compound write, so it
+reuses the partial-outcome shape the order-address slice established, and the
+baseline already names its required facts: canonical order ID plus an ordered
+per-line change list carrying variant/line-item identity, requested
+quantity or removal, provider-observed final quantity, and a per-change
+outcome. Its multi-step `orderEditBegin`/commit sequence means a partial
+provider result is the expected case rather than the exception.
 
 Implementation order:
 

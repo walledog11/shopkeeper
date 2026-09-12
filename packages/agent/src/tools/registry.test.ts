@@ -425,6 +425,7 @@ describe("Shopify scope gating", () => {
     const complete = selectAgentTools(undefined, null, [
       "read_products",
       "write_orders",
+      "write_customers",
       "write_returns",
       "write_merchant_managed_fulfillment_orders",
     ]).map((t) => t.name);
@@ -440,6 +441,7 @@ describe("Shopify scope gating", () => {
     expect(unchecked).toContain("get_inventory_status");
     expect(unchecked.filter((name) => !short.includes(name))).toEqual([
       "get_inventory_status",
+      "update_shopify_order_address",
       "create_refund",
       "create_partial_refund",
       "cancel_order",
@@ -457,6 +459,7 @@ describe("Shopify scope gating", () => {
     expect([...new Set(scoped)]).toEqual([
       "read_products",
       "write_orders",
+      "write_customers",
       "write_returns",
       "write_merchant_managed_fulfillment_orders",
     ]);
@@ -466,6 +469,8 @@ describe("Shopify scope gating", () => {
     expect(toolScopesGranted("search_shopify_products", [])).toBe(true);
     expect(toolScopesGranted("get_inventory_status", [])).toBe(false);
     expect(toolScopesGranted("get_inventory_status", ["write_products"])).toBe(true);
+    expect(toolScopesGranted("update_shopify_order_address", ["write_orders"])).toBe(false);
+    expect(toolScopesGranted("update_shopify_order_address", ["write_orders", "write_customers"])).toBe(true);
     expect(toolScopesGranted("create_refund", ["read_orders"])).toBe(false);
     expect(toolScopesGranted("create_refund", ["write_orders"])).toBe(true);
     expect(toolScopesGranted("create_return", ["read_returns"])).toBe(false);

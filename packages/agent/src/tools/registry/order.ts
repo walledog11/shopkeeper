@@ -54,6 +54,8 @@ export const ORDER_TOOL_DEFINITIONS = [
     category: "action",
     group: "order",
     capabilities: ["shopify"],
+    requiredScopes: ["write_orders", "write_customers"],
+    requiredReceiptVersion: 1,
     label: "Updated shipping address",
     planStepLabel: "Update shipping address on Shopify",
     execute: async (input: UpdateShopifyOrderAddressInput, ctx, _settings, deps) => {

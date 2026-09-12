@@ -359,6 +359,103 @@ describe("completion facts", () => {
     })]);
   });
 
+  it("grounds an address change in its receipt rather than the requested input", () => {
+    const address = {
+      firstName: null,
+      lastName: null,
+      address1: "123 Main St",
+      address2: null,
+      city: "Los Angeles",
+      province: "California",
+      provinceCode: "CA",
+      postalCode: "90001",
+      country: "United States",
+      countryCode: "US",
+    };
+    const common = {
+      tool: "update_shopify_order_address",
+      input: { order_id: "wrong-order", city: "Requested City" },
+      status: "success" as const,
+      receipt: {
+        version: 1 as const,
+        operationId: "operation-address-1",
+        executionId: "execution-address-1",
+        tool: "update_shopify_order_address" as const,
+        target: { kind: "order", id: "3001" },
+        observedAt: "2026-09-12T08:00:00.000Z",
+        outcome: "succeeded" as const,
+        providerReference: "3001",
+        facts: {
+          orderId: "3001",
+          customerId: "900",
+          orderAddress: { outcome: "updated" as const, address },
+          customerDefaultAddress: { outcome: "updated" as const, addressId: "789", address },
+        },
+      },
+    };
+
+    const first = executedCompletionFacts([{ ...common, result: "Address updated." }]);
+    const second = executedCompletionFacts([{ ...common, result: "Totally different wording." }]);
+
+    expect(first).toEqual(second);
+    expect(first).toEqual([expect.objectContaining({
+      action: "address_update",
+      target: { kind: "order", id: "3001" },
+      outcome: "success",
+      executionReference: "operation-address-1",
+    })]);
+  });
+
+  // A committed order address stays claimable even though the customer profile
+  // half is uncertain; the merchant can be told the order was changed without
+  // being told the profile was.
+  it("supports the committed half of a partial address change", () => {
+    const address = {
+      firstName: null,
+      lastName: null,
+      address1: "123 Main St",
+      address2: null,
+      city: "Los Angeles",
+      province: "California",
+      provinceCode: "CA",
+      postalCode: "90001",
+      country: "United States",
+      countryCode: "US",
+    };
+    const facts = executedCompletionFacts([{
+      tool: "update_shopify_order_address",
+      input: { order_id: "3001" },
+      result: "Partial: the order address was updated, the customer profile was not.",
+      status: "unknown" as const,
+      receipt: {
+        version: 1 as const,
+        operationId: "operation-address-2",
+        executionId: "execution-address-2",
+        tool: "update_shopify_order_address" as const,
+        target: { kind: "order", id: "3001" },
+        observedAt: "2026-09-12T08:00:00.000Z",
+        outcome: "unknown" as const,
+        code: "customer_sync_failed_after_order_update",
+        providerReference: "3001",
+        facts: {
+          orderId: "3001",
+          customerId: "900",
+          orderAddress: { outcome: "updated" as const, address },
+          customerDefaultAddress: {
+            outcome: "failed" as const,
+            code: "customer_sync_failed_after_order_update",
+          },
+        },
+      },
+    }]);
+
+    expect(facts).toEqual([expect.objectContaining({
+      action: "address_update",
+      target: { kind: "order", id: "3001" },
+      outcome: "success",
+    })]);
+  });
+
   it("turns only successful live order reads into historical facts", () => {
     const calls = [{ id: "read_1", name: "get_order_by_name", input: { order_name: "#1001" } }];
     expect(historicalCompletionFacts(calls, {

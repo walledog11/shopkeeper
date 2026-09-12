@@ -92,6 +92,36 @@ export interface FulfillmentReceiptFactsV1 {
   notifyCustomerRequested: boolean;
 }
 
+export interface AddressReceiptAddressV1 {
+  firstName: string | null;
+  lastName: string | null;
+  address1: string;
+  address2: string | null;
+  city: string;
+  province: string;
+  provinceCode: string | null;
+  postalCode: string;
+  country: string;
+  countryCode: string | null;
+}
+
+export interface OrderAddressReceiptFactsV1 {
+  orderId: string;
+  customerId: string;
+  orderAddress: {
+    outcome: "updated" | "already_matched";
+    address: AddressReceiptAddressV1;
+  };
+  customerDefaultAddress:
+    | {
+        outcome: "updated" | "already_matched";
+        addressId: string;
+        address: AddressReceiptAddressV1;
+      }
+    | { outcome: "not_updated"; code: "no_default_address" }
+    | { outcome: "failed" | "unknown"; code: string };
+}
+
 export type ReceiptSuccessV1 =
   | (ReceiptBaseV1<"create_refund"> & {
       outcome: "succeeded";
@@ -127,6 +157,11 @@ export type ReceiptSuccessV1 =
       outcome: "succeeded";
       providerReference: string;
       facts: FulfillmentReceiptFactsV1;
+    })
+  | (ReceiptBaseV1<"update_shopify_order_address"> & {
+      outcome: "succeeded";
+      providerReference: string;
+      facts: OrderAddressReceiptFactsV1;
     });
 
 type ReceiptToolV1 = ReceiptSuccessV1["tool"];
@@ -134,6 +169,7 @@ type ReceiptToolV1 = ReceiptSuccessV1["tool"];
 export type ReceiptFailureV1 = ReceiptBaseV1<ReceiptToolV1> & {
   outcome: "not_found" | "rejected" | "failed" | "unknown";
   code: string;
+  facts?: OrderAddressReceiptFactsV1;
 };
 
 export type ReceiptV1 = ReceiptSuccessV1 | ReceiptFailureV1;
@@ -200,9 +236,51 @@ function requireRegisteredReceiptTool(tool: string): asserts tool is ReceiptTool
     && tool !== "create_exchange"
     && tool !== "attach_return_label"
     && tool !== "fulfill_order"
+    && tool !== "update_shopify_order_address"
   ) {
     throw new ReceiptValidationError(`no receipt validator is registered for ${tool}`);
   }
+}
+
+function parseAddress(value: unknown, field: string): AddressReceiptAddressV1 {
+  if (!isRecord(value)) throw new ReceiptValidationError(`${field} must be an object`);
+  for (const key of ["address1", "city", "province", "postalCode", "country"] as const) {
+    requireNonEmptyString(value[key], `${field}.${key}`);
+  }
+  for (const key of ["firstName", "lastName", "address2", "provinceCode", "countryCode"] as const) {
+    if (value[key] !== null) requireNonEmptyString(value[key], `${field}.${key}`);
+  }
+  return value as unknown as AddressReceiptAddressV1;
+}
+
+function parseOrderAddressFacts(value: unknown): OrderAddressReceiptFactsV1 {
+  if (!isRecord(value)) throw new ReceiptValidationError("order address facts must be an object");
+  requireNonEmptyString(value.orderId, "facts.orderId");
+  requireNonEmptyString(value.customerId, "facts.customerId");
+  if (!isRecord(value.orderAddress)) {
+    throw new ReceiptValidationError("facts.orderAddress must be an object");
+  }
+  if (value.orderAddress.outcome !== "updated" && value.orderAddress.outcome !== "already_matched") {
+    throw new ReceiptValidationError("facts.orderAddress.outcome is invalid");
+  }
+  parseAddress(value.orderAddress.address, "facts.orderAddress.address");
+  if (!isRecord(value.customerDefaultAddress)) {
+    throw new ReceiptValidationError("facts.customerDefaultAddress must be an object");
+  }
+  const customerOutcome = value.customerDefaultAddress.outcome;
+  if (customerOutcome === "updated" || customerOutcome === "already_matched") {
+    requireNonEmptyString(value.customerDefaultAddress.addressId, "facts.customerDefaultAddress.addressId");
+    parseAddress(value.customerDefaultAddress.address, "facts.customerDefaultAddress.address");
+  } else if (customerOutcome === "not_updated") {
+    if (value.customerDefaultAddress.code !== "no_default_address") {
+      throw new ReceiptValidationError("facts.customerDefaultAddress.code is invalid");
+    }
+  } else if (customerOutcome === "failed" || customerOutcome === "unknown") {
+    requireNonEmptyString(value.customerDefaultAddress.code, "facts.customerDefaultAddress.code");
+  } else {
+    throw new ReceiptValidationError("facts.customerDefaultAddress.outcome is invalid");
+  }
+  return value as unknown as OrderAddressReceiptFactsV1;
 }
 
 function parseFulfillmentFacts(value: unknown): FulfillmentReceiptFactsV1 {
@@ -438,6 +516,15 @@ export function parseReceiptV1(value: unknown): ReceiptV1 {
           "fulfillment providerReference must match facts.fulfillmentId",
         );
       }
+    } else if (base.tool === "update_shopify_order_address") {
+      requireNonEmptyString(value.providerReference, "providerReference");
+      const facts = parseOrderAddressFacts(value.facts);
+      if (base.target.id !== facts.orderId) {
+        throw new ReceiptValidationError("order address target must match facts.orderId");
+      }
+      if (value.providerReference !== facts.orderId) {
+        throw new ReceiptValidationError("order address providerReference must match facts.orderId");
+      }
     }
   } else if (
     value.outcome === "not_found"
@@ -446,6 +533,15 @@ export function parseReceiptV1(value: unknown): ReceiptV1 {
     || value.outcome === "unknown"
   ) {
     requireNonEmptyString(value.code, "code");
+    if (value.facts !== undefined) {
+      if (base.tool !== "update_shopify_order_address") {
+        throw new ReceiptValidationError("failure receipt facts are not supported for this tool");
+      }
+      const facts = parseOrderAddressFacts(value.facts);
+      if (base.target.id !== facts.orderId) {
+        throw new ReceiptValidationError("order address target must match facts.orderId");
+      }
+    }
   } else {
     throw new ReceiptValidationError("receipt outcome is invalid");
   }

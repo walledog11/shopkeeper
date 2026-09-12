@@ -331,6 +331,80 @@ describe("unknown outcome reconciliation", () => {
       });
   });
 
+  // The probe reads only the order's shipping address, so it can prove the
+  // order half committed but knows nothing about the customer default address
+  // the receipt also requires. Promoting it would claim a compound outcome from
+  // half the evidence.
+  it("keeps a reconciled order-address commit unknown when the probe cannot rebuild its receipt facts", async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
+    const operationId = crypto.randomUUID();
+    const action = await db.agentAction.create({
+      data: {
+        turnId: crypto.randomUUID(),
+        organizationId: org.id,
+        operationId,
+        actionIndex: 0,
+        providerOperationKey: operationId,
+        dispatchState: "unknown",
+        submittedAt: ELEVEN_MINUTES_AGO(),
+        tool: "update_shopify_order_address",
+        category: "action",
+        input: {
+          order_id: "456",
+          customer_id: "123",
+          address1: "123 Main St",
+          city: "Los Angeles",
+          province: "CA",
+          zip: "90001",
+          country: "United States",
+        },
+        output: "Unknown provider result",
+        status: "unknown",
+        errorDetail: "Unknown provider result",
+        mode: "human_approved",
+        executedAt: ELEVEN_MINUTES_AGO(),
+        durationMs: 1,
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({
+      order: {
+        id: 456,
+        name: "#1001",
+        shipping_address: {
+          address1: "123 Main St",
+          city: "Los Angeles",
+          province: "California",
+          province_code: "CA",
+          zip: "90001",
+          country: "United States",
+          country_code: "US",
+        },
+      },
+    }), { status: 200, headers: { "Content-Type": "application/json" } })));
+
+    const outcome = await reconcileUnknownAgentAction({
+      actionId: action.id,
+      organizationId: org.id,
+      executionId: null,
+      providerOperationKey: operationId,
+      tool: action.tool,
+      input: action.input,
+      shopify: { shop: "test.myshopify.com", accessToken: "test" },
+    });
+
+    expect(outcome).toBe("still_unknown");
+    await expect(db.agentAction.findUniqueOrThrow({ where: { id: action.id } }))
+      .resolves.toMatchObject({
+        operationId,
+        providerOperationKey: operationId,
+        dispatchState: "unknown",
+        status: "unknown",
+        receiptVersion: null,
+        receipt: null,
+      });
+  });
+
   it("releases stale reserved goodwill reservations", async () => {
     const org = await createTestOrg();
     orgId = org.id;

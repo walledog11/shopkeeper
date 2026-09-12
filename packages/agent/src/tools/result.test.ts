@@ -129,6 +129,39 @@ function fulfillmentReceipt(overrides: Partial<ReceiptV1> = {}): ReceiptV1 {
   } as ReceiptV1;
 }
 
+const ADDRESS = {
+  firstName: "Ada",
+  lastName: "Lovelace",
+  address1: "123 Main St",
+  address2: null,
+  city: "Los Angeles",
+  province: "California",
+  provinceCode: "CA",
+  postalCode: "90001",
+  country: "United States",
+  countryCode: "US",
+};
+
+function orderAddressReceipt(overrides: Partial<ReceiptV1> = {}): ReceiptV1 {
+  return {
+    version: 1,
+    operationId: "operation-address-1",
+    executionId: "execution-address-1",
+    tool: "update_shopify_order_address",
+    target: { kind: "order", id: "3001" },
+    observedAt: "2026-09-12T08:00:00.000Z",
+    outcome: "succeeded",
+    providerReference: "3001",
+    facts: {
+      orderId: "3001",
+      customerId: "900",
+      orderAddress: { outcome: "updated", address: ADDRESS },
+      customerDefaultAddress: { outcome: "updated", addressId: "789", address: ADDRESS },
+    },
+    ...overrides,
+  } as ReceiptV1;
+}
+
 describe("receipt v1", () => {
   it("validates exact refund facts independently of display text", () => {
     const receipt = refundReceipt();
@@ -298,6 +331,74 @@ describe("receipt v1", () => {
         notifyCustomerRequested: "yes",
       } as never,
     }))).toThrow("notifyCustomerRequested");
+  });
+
+  // The compound write is the one capability whose partial outcome must survive
+  // a non-success receipt: the order address committed even though the overall
+  // outcome is uncertain, and dropping its facts would erase the committed half.
+  it("keeps compound address facts on an unknown receipt", () => {
+    const partial = parseReceiptV1(orderAddressReceipt({
+      outcome: "unknown",
+      code: "customer_sync_failed_after_order_update",
+      facts: {
+        orderId: "3001",
+        customerId: "900",
+        orderAddress: { outcome: "updated", address: ADDRESS },
+        customerDefaultAddress: { outcome: "failed", code: "customer_sync_failed_after_order_update" },
+      },
+    } as never));
+
+    expect(partial.outcome).toBe("unknown");
+    expect((partial as Extract<ReceiptV1, { tool: "update_shopify_order_address" }>).facts)
+      .toMatchObject({ orderAddress: { outcome: "updated" } });
+  });
+
+  it("refuses failure-receipt facts for a tool that has no partial contract", () => {
+    expect(() => parseReceiptV1({
+      ...refundReceipt(),
+      outcome: "unknown",
+      code: "uncertain",
+      facts: (orderAddressReceipt() as Extract<ReceiptV1, { outcome: "succeeded" }>).facts,
+    } as never)).toThrow("failure receipt facts are not supported");
+  });
+
+  it("rejects an address receipt whose target or reference leaves its order", () => {
+    expect(() => parseReceiptV1(orderAddressReceipt({
+      target: { kind: "order", id: "9999" },
+    }))).toThrow("order address target must match facts.orderId");
+    expect(() => parseReceiptV1(orderAddressReceipt({
+      providerReference: "9999",
+    }))).toThrow("order address providerReference must match facts.orderId");
+  });
+
+  it("rejects an address missing provider-confirmed location fields", () => {
+    expect(() => parseReceiptV1(orderAddressReceipt({
+      facts: {
+        orderId: "3001",
+        customerId: "900",
+        orderAddress: { outcome: "updated", address: { ...ADDRESS, city: "" } },
+        customerDefaultAddress: { outcome: "not_updated", code: "no_default_address" },
+      },
+    } as never))).toThrow("facts.orderAddress.address.city");
+  });
+
+  it("rejects an invalid customer-default-address outcome or code", () => {
+    expect(() => parseReceiptV1(orderAddressReceipt({
+      facts: {
+        orderId: "3001",
+        customerId: "900",
+        orderAddress: { outcome: "updated", address: ADDRESS },
+        customerDefaultAddress: { outcome: "skipped" },
+      },
+    } as never))).toThrow("facts.customerDefaultAddress.outcome is invalid");
+    expect(() => parseReceiptV1(orderAddressReceipt({
+      facts: {
+        orderId: "3001",
+        customerId: "900",
+        orderAddress: { outcome: "updated", address: ADDRESS },
+        customerDefaultAddress: { outcome: "not_updated", code: "some_other_reason" },
+      },
+    } as never))).toThrow("facts.customerDefaultAddress.code is invalid");
   });
 
   it("rejects unregistered receipt tools and wrong target kinds", () => {
