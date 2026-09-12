@@ -1,9 +1,9 @@
 # Conversational agent overhaul plan
 
 Status: in progress; Package 0 completed. Package 1 has completed the shared
-receipt boundary, the refund/partial-refund/cancellation outcome slice, and the
-durable action dispatch/recovery lifecycle. The remaining retained writes are
-open; Packages 2–6 have not started. Created 2026-09-11; last updated
+receipt boundary, the refund/partial-refund/cancellation/create-return outcome
+slices, and the durable action dispatch/recovery lifecycle. The remaining
+retained writes are open; Packages 2–6 have not started. Created 2026-09-11; last updated
 2026-09-12.
 
 Implementation detail expanded 2026-09-11 against the current repository. Names marked **proposed** describe work to implement, not APIs or tables that already exist. This document authorizes no production operation by itself.
@@ -386,6 +386,12 @@ Progress as of 2026-09-12:
   refunds also carry line-item IDs and quantities. Successful cancellation
   carries provider-confirmed cancellation time, reason, financial status, and
   restock result without inferring a refund amount.
+- [x] Migrate `create_return` to a version-1 receipt with provider-confirmed
+  return identity, name, status, returned fulfillment-line-item quantities, and
+  explicit `refundIssued: false`. Preserve the existing `returnWatch`
+  compatibility record. Missing success state remains unknown, and a recovery
+  probe that cannot rebuild every required receipt fact cannot promote a
+  lifecycle action to success.
 - [x] Preserve ambiguous or incomplete post-write outcomes as `unknown` for all
   three migrated operations. Cancellation reuses its existing reconciliation
   read; refund operation identities remain available to existing reconciliation
@@ -429,10 +435,10 @@ Completed Package 1 scope at this checkpoint:
 | Typed result boundary | `ReceiptV1` discriminates succeeded, rejected, failed, not-found, and unknown outcomes; runtime validation binds tool, target, operation, execution, provider reference, legacy status, and per-tool facts. |
 | Receipt propagation | Structured receipts travel from the Shopify adapter through `ToolResult`, executor results, `ActionEntry`, run execution, `AgentAction` JSONB, completion facts, and model-visible completion evidence. |
 | Compatibility | Historical string-only actions remain readable only through the explicit pinned-legacy option. New receipt-aware facts never infer consequential success from display prose or proposed inputs. |
-| Migrated provider writes | `create_refund`, `create_partial_refund`, and `cancel_order` emit version-1 receipts for definitive and uncertain outcomes with provider-observed facts. |
+| Migrated provider writes | `create_refund`, `create_partial_refund`, `cancel_order`, and `create_return` emit version-1 receipts for definitive and uncertain outcomes with provider-observed facts. |
 | Refund correctness | Full and partial refunds use Shopify-returned amount/currency/refund/transaction facts; partial refunds also preserve line-item quantities. Later budget-finalization failure retains an unknown receipt and reservation rather than erasing provider success evidence. |
 | Cancellation correctness | Cancellation records provider-confirmed cancellation state/time, reason, financial status, and restock result. It never fabricates refund evidence. |
-| Shopify contracts | All three migrated tools require `write_orders`; selection and execution enforce it. Both refund mutations use Shopify 2026-04 `@idempotent`, and both documents are registered for schema validation. |
+| Shopify contracts | The three migrated order-money/state tools require `write_orders`; `create_return` requires `write_returns`. Selection and execution enforce both. Both refund mutations use Shopify 2026-04 `@idempotent`, and both documents are registered for schema validation. |
 | Durable operation identity | Every new non-read attempt receives a UUID operation ID and action index. Organization/operation and organization/non-null-provider-key uniqueness are database-enforced after an abort-on-duplicate migration preflight. |
 | Dispatch lifecycle | Conditional writes enforce `prepared → dispatch_authorized → submitted → settled/unknown`. Prepared rows have null execution fields; submitted and terminal rows carry the appropriate timestamps. A receipt must match the durable operation before settlement. |
 | Crash recovery | Stale authorized or submitted attempts become unknown, never prepared. The existing recovery sweep includes taskless/standalone lifecycle actions and probes using their stored provider identity without replaying the write. |
@@ -475,11 +481,19 @@ Checkpoint evidence:
   Never reinterpret, reset, or resubmit an operation already stored as
   authorized, submitted, or unknown.
 
+Incremental `create_return` evidence: `npm run verify:pr` passed, including
+repository lint/structure, typecheck, all 1,050 agent unit tests across 86 files,
+coverage and critical-coverage gates, browser smoke tests, and production
+builds. The focused unknown-outcome integration suite passed 8 tests, including
+a fresh-storage assertion that an observed return commit without reconstructable
+receipt facts remains unknown. The local Postgres and Redis test services were
+started for those runs. No live Shopify or model operation was run.
+
 Current next step: migrate the remaining retained writes one at a time through
-the completed identity/dispatch/receipt boundary, beginning with `create_return`
-because it already has structured return-watch data and a registered provider
-probe. Each migration must add exact receipt facts, scopes, and recovery behavior
-before moving to the next adapter.
+the completed identity/dispatch/receipt boundary, beginning with
+`create_exchange` because it shares the return creation and return-watch
+lifecycle now covered by `create_return`. Each migration must add exact receipt
+facts, scopes, and recovery behavior before moving to the next adapter.
 
 Implementation order:
 

@@ -422,7 +422,7 @@ describe("agent tool execution routing", () => {
 
 describe("Shopify scope gating", () => {
   it("keeps the whole tool set for a store holding the scopes required by migrated tools", () => {
-    const complete = selectAgentTools(undefined, null, ["read_products", "write_orders"]).map((t) => t.name);
+    const complete = selectAgentTools(undefined, null, ["read_products", "write_orders", "write_returns"]).map((t) => t.name);
     const unchecked = selectAgentTools(undefined, null, null).map((t) => t.name);
 
     expect(complete).toEqual(unchecked);
@@ -438,6 +438,7 @@ describe("Shopify scope gating", () => {
       "create_refund",
       "create_partial_refund",
       "cancel_order",
+      "create_return",
     ]);
   });
 
@@ -445,7 +446,7 @@ describe("Shopify scope gating", () => {
     const scoped = TOOL_DEFINITIONS.flatMap((definition) => TOOL_REQUIRED_SCOPES[definition.name]);
 
     expect(scoped.length).toBeGreaterThan(0);
-    expect([...new Set(scoped)]).toEqual(["read_products", "write_orders"]);
+    expect([...new Set(scoped)]).toEqual(["read_products", "write_orders", "write_returns"]);
   });
 
   it("reads a tool's requirement through the shared grant rule", () => {
@@ -454,6 +455,8 @@ describe("Shopify scope gating", () => {
     expect(toolScopesGranted("get_inventory_status", ["write_products"])).toBe(true);
     expect(toolScopesGranted("create_refund", ["read_orders"])).toBe(false);
     expect(toolScopesGranted("create_refund", ["write_orders"])).toBe(true);
+    expect(toolScopesGranted("create_return", ["read_returns"])).toBe(false);
+    expect(toolScopesGranted("create_return", ["write_returns"])).toBe(true);
   });
 
   describe("a tool that does declare scopes", () => {

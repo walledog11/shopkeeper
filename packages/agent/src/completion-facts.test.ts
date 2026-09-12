@@ -198,6 +198,43 @@ describe("completion facts", () => {
     expect(refunded.map((fact) => fact.action)).toEqual(["cancellation", "refund"]);
   });
 
+  it("grounds a completed return in its receipt instead of display wording", () => {
+    const common = {
+      tool: "create_return",
+      input: { order_id: "wrong-order" },
+      status: "success" as const,
+      receipt: {
+        version: 1 as const,
+        operationId: "operation-return-1",
+        executionId: "execution-return-1",
+        tool: "create_return" as const,
+        target: { kind: "order", id: "2001" },
+        observedAt: "2026-09-12T07:00:00.000Z",
+        outcome: "succeeded" as const,
+        providerReference: "gid://shopify/Return/999",
+        facts: {
+          orderId: "2001",
+          returnId: "gid://shopify/Return/999",
+          returnName: "#2001-R1",
+          status: "REQUESTED",
+          lineItems: [{ fulfillmentLineItemId: "gid://shopify/FulfillmentLineItem/321", quantity: 1 }],
+          refundIssued: false as const,
+        },
+      },
+    };
+
+    const first = executedCompletionFacts([{ ...common, result: "Return opened." }]);
+    const second = executedCompletionFacts([{ ...common, result: "Different display wording." }]);
+
+    expect(first).toEqual(second);
+    expect(first).toEqual([expect.objectContaining({
+      action: "return",
+      target: { kind: "order", id: "2001" },
+      outcome: "success",
+      executionReference: "operation-return-1",
+    })]);
+  });
+
   it("turns only successful live order reads into historical facts", () => {
     const calls = [{ id: "read_1", name: "get_order_by_name", input: { order_name: "#1001" } }];
     expect(historicalCompletionFacts(calls, {

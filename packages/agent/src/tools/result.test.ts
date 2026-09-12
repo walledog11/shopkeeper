@@ -30,6 +30,28 @@ function refundReceipt(overrides: Partial<ReceiptV1> = {}): ReceiptV1 {
   } as ReceiptV1;
 }
 
+function returnReceipt(overrides: Partial<ReceiptV1> = {}): ReceiptV1 {
+  return {
+    version: 1,
+    operationId: "operation-return-1",
+    executionId: "execution-return-1",
+    tool: "create_return",
+    target: { kind: "order", id: "2001" },
+    observedAt: "2026-09-12T07:00:00.000Z",
+    outcome: "succeeded",
+    providerReference: "gid://shopify/Return/999",
+    facts: {
+      orderId: "2001",
+      returnId: "gid://shopify/Return/999",
+      returnName: "#2001-R1",
+      status: "REQUESTED",
+      lineItems: [{ fulfillmentLineItemId: "gid://shopify/FulfillmentLineItem/321", quantity: 1 }],
+      refundIssued: false,
+    },
+    ...overrides,
+  } as ReceiptV1;
+}
+
 describe("receipt v1", () => {
   it("validates exact refund facts independently of display text", () => {
     const receipt = refundReceipt();
@@ -123,6 +145,25 @@ describe("receipt v1", () => {
       ...refundReceipt(),
       tool: "cancel_order",
     })).toThrow("facts.cancelledAt");
+  });
+
+  it("validates observed return facts and binds them to the provider return", () => {
+    expect(() => parseReceiptV1(returnReceipt())).not.toThrow();
+    expect(() => parseReceiptV1(returnReceipt({ providerReference: "different-return" }))).toThrow(
+      "providerReference",
+    );
+    expect(() => parseReceiptV1(returnReceipt({
+      facts: {
+        ...(returnReceipt() as Extract<ReceiptV1, { tool: "create_return"; outcome: "succeeded" }>).facts,
+        refundIssued: true,
+      } as never,
+    }))).toThrow("refundIssued");
+    expect(() => parseReceiptV1(returnReceipt({
+      facts: {
+        ...(returnReceipt() as Extract<ReceiptV1, { tool: "create_return"; outcome: "succeeded" }>).facts,
+        lineItems: [],
+      } as never,
+    }))).toThrow("line items");
   });
 
   it("rejects unregistered receipt tools and wrong target kinds", () => {

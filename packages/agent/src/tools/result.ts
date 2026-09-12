@@ -41,6 +41,15 @@ export interface CancellationReceiptFactsV1 {
   restockResult: string | null;
 }
 
+export interface ReturnReceiptFactsV1 {
+  orderId: string;
+  returnId: string;
+  returnName: string;
+  status: string;
+  lineItems: Array<{ fulfillmentLineItemId: string; quantity: number }>;
+  refundIssued: false;
+}
+
 export type ReceiptSuccessV1 =
   | (ReceiptBaseV1<"create_refund"> & {
       outcome: "succeeded";
@@ -56,6 +65,11 @@ export type ReceiptSuccessV1 =
       outcome: "succeeded";
       providerReference: string | null;
       facts: CancellationReceiptFactsV1;
+    })
+  | (ReceiptBaseV1<"create_return"> & {
+      outcome: "succeeded";
+      providerReference: string;
+      facts: ReturnReceiptFactsV1;
     });
 
 type ReceiptToolV1 = ReceiptSuccessV1["tool"];
@@ -121,9 +135,39 @@ function parseBaseReceipt(value: Record<string, unknown>): ReceiptBaseV1 {
 }
 
 function requireRegisteredReceiptTool(tool: string): asserts tool is ReceiptToolV1 {
-  if (tool !== "create_refund" && tool !== "create_partial_refund" && tool !== "cancel_order") {
+  if (
+    tool !== "create_refund"
+    && tool !== "create_partial_refund"
+    && tool !== "cancel_order"
+    && tool !== "create_return"
+  ) {
     throw new ReceiptValidationError(`no receipt validator is registered for ${tool}`);
   }
+}
+
+function parseReturnFacts(value: unknown): ReturnReceiptFactsV1 {
+  if (!isRecord(value)) throw new ReceiptValidationError("return facts must be an object");
+  requireNonEmptyString(value.orderId, "facts.orderId");
+  requireNonEmptyString(value.returnId, "facts.returnId");
+  requireNonEmptyString(value.returnName, "facts.returnName");
+  requireNonEmptyString(value.status, "facts.status");
+  if (!Array.isArray(value.lineItems) || value.lineItems.length === 0) {
+    throw new ReceiptValidationError("return facts require line items");
+  }
+  for (const [index, line] of value.lineItems.entries()) {
+    if (!isRecord(line)) throw new ReceiptValidationError(`facts.lineItems[${index}] must be an object`);
+    requireNonEmptyString(
+      line.fulfillmentLineItemId,
+      `facts.lineItems[${index}].fulfillmentLineItemId`,
+    );
+    if (!Number.isSafeInteger(line.quantity) || Number(line.quantity) <= 0) {
+      throw new ReceiptValidationError(`facts.lineItems[${index}].quantity must be a positive integer`);
+    }
+  }
+  if (value.refundIssued !== false) {
+    throw new ReceiptValidationError("facts.refundIssued must be false");
+  }
+  return value as unknown as ReturnReceiptFactsV1;
 }
 
 function parseRefundFacts(value: unknown, partial: boolean): RefundReceiptFactsV1 | PartialRefundReceiptFactsV1 {
@@ -188,6 +232,15 @@ export function parseReceiptV1(value: unknown): ReceiptV1 {
       const facts = parseCancellationFacts(value.facts);
       if (base.target.kind !== "order" || base.target.id !== facts.orderId) {
         throw new ReceiptValidationError("cancellation target must match facts.orderId");
+      }
+    } else if (base.tool === "create_return") {
+      requireNonEmptyString(value.providerReference, "providerReference");
+      const facts = parseReturnFacts(value.facts);
+      if (base.target.id !== facts.orderId) {
+        throw new ReceiptValidationError("return target must match facts.orderId");
+      }
+      if (value.providerReference !== facts.returnId) {
+        throw new ReceiptValidationError("return providerReference must match facts.returnId");
       }
     }
   } else if (

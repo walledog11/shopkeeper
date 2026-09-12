@@ -423,7 +423,7 @@ describe("shopify tools", () => {
     expect(result.message).toContain("No refund was issued");
   });
 
-  it("returns an error when the order has no returnable items", async () => {
+  it("policy-blocks when the order has no returnable items", async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
       data: { order: { id: "gid://shopify/Order/456" }, returnableFulfillments: { edges: [] } },
     }));
@@ -431,7 +431,7 @@ describe("shopify tools", () => {
 
     const result = await createReturn({ order_id: "456" }, ctx);
 
-    expect(result.status).toBe("error");
+    expect(result.status).toBe("policy_block");
     expect(result.message).toContain("no returnable items");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });

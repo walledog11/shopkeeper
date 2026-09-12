@@ -177,6 +177,76 @@ describe("unknown outcome reconciliation", () => {
       });
   });
 
+  it("keeps a reconciled return commit unknown when the probe cannot rebuild its receipt facts", async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
+    const operationId = crypto.randomUUID();
+    const action = await db.agentAction.create({
+      data: {
+        turnId: crypto.randomUUID(),
+        organizationId: org.id,
+        operationId,
+        actionIndex: 0,
+        providerOperationKey: operationId,
+        dispatchState: "unknown",
+        submittedAt: ELEVEN_MINUTES_AGO(),
+        tool: "create_return",
+        category: "action",
+        input: { order_id: "456" },
+        output: "Unknown provider result",
+        status: "unknown",
+        errorDetail: "Unknown provider result",
+        mode: "human_approved",
+        executedAt: ELEVEN_MINUTES_AGO(),
+        durationMs: 1,
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        data: {
+          order: { id: "gid://shopify/Order/456" },
+          returnableFulfillments: { edges: [] },
+        },
+      }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        data: {
+          order: {
+            returns: {
+              edges: [{
+                node: {
+                  id: "gid://shopify/Return/999",
+                  name: "#1001-R1",
+                  status: "OPEN",
+                  reverseFulfillmentOrders: { edges: [] },
+                },
+              }],
+            },
+          },
+        },
+      }), { status: 200, headers: { "Content-Type": "application/json" } })));
+
+    const outcome = await reconcileUnknownAgentAction({
+      actionId: action.id,
+      organizationId: org.id,
+      executionId: null,
+      providerOperationKey: operationId,
+      tool: action.tool,
+      input: action.input,
+      shopify: { shop: "test.myshopify.com", accessToken: "test" },
+    });
+
+    expect(outcome).toBe("still_unknown");
+    await expect(db.agentAction.findUniqueOrThrow({ where: { id: action.id } }))
+      .resolves.toMatchObject({
+        operationId,
+        providerOperationKey: operationId,
+        dispatchState: "unknown",
+        status: "unknown",
+        receiptVersion: null,
+        receipt: null,
+      });
+  });
+
   it("releases stale reserved goodwill reservations", async () => {
     const org = await createTestOrg();
     orgId = org.id;

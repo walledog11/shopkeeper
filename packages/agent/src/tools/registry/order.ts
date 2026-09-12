@@ -296,6 +296,8 @@ export const ORDER_TOOL_DEFINITIONS = [
     category: "action",
     group: "order",
     capabilities: ["shopify"],
+    requiredScopes: ["write_returns"],
+    requiredReceiptVersion: 1,
     label: "Opened return",
     planStepLabel: "Open return",
     execute: async (input: CreateReturnInput, ctx, _settings, deps) => {
