@@ -317,6 +317,48 @@ describe("completion facts", () => {
     })]);
   });
 
+  it("grounds fulfillment in its receipt instead of requested input or display wording", () => {
+    const common = {
+      tool: "fulfill_order",
+      input: { order_id: "wrong-order", tracking_number: "REQUESTED" },
+      status: "success" as const,
+      receipt: {
+        version: 1 as const,
+        operationId: "operation-fulfillment-1",
+        executionId: "execution-fulfillment-1",
+        tool: "fulfill_order" as const,
+        target: { kind: "order", id: "2001" },
+        observedAt: "2026-09-12T07:00:00.000Z",
+        outcome: "succeeded" as const,
+        providerReference: "gid://shopify/Fulfillment/444",
+        facts: {
+          orderId: "2001",
+          fulfillmentId: "gid://shopify/Fulfillment/444",
+          status: "SUCCESS",
+          fulfilledAt: "2026-09-12T06:59:59.000Z",
+          lineItems: [{
+            fulfillmentLineItemId: "gid://shopify/FulfillmentLineItem/501",
+            lineItemId: "gid://shopify/LineItem/601",
+            quantity: 2,
+          }],
+          tracking: { number: "1Z999", company: "UPS", url: null },
+          notifyCustomerRequested: true,
+        },
+      },
+    };
+
+    const first = executedCompletionFacts([{ ...common, result: "Order shipped." }]);
+    const second = executedCompletionFacts([{ ...common, result: "Different display wording." }]);
+
+    expect(first).toEqual(second);
+    expect(first).toEqual([expect.objectContaining({
+      action: "fulfillment",
+      target: { kind: "order", id: "2001" },
+      outcome: "success",
+      executionReference: "operation-fulfillment-1",
+    })]);
+  });
+
   it("turns only successful live order reads into historical facts", () => {
     const calls = [{ id: "read_1", name: "get_order_by_name", input: { order_name: "#1001" } }];
     expect(historicalCompletionFacts(calls, {

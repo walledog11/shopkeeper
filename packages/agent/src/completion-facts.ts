@@ -251,6 +251,14 @@ function receiptCompletionFacts(
     ];
   }
 
+  if (receipt.tool === "fulfill_order") {
+    return [fact("fulfillment", receipt.tool, outcome, executionReference, {
+      target: receipt.outcome === "succeeded"
+        ? orderTarget(receipt.facts.orderId, ctx, orderNames)
+        : target,
+    })];
+  }
+
   return [];
 }
 

@@ -185,6 +185,7 @@ describe("unknown outcome reconciliation", () => {
       exchange_variant_id: "1000",
       quantity: 1,
     }],
+    ["fulfill_order", { order_id: "456" }],
   ] as const)("keeps a reconciled %s commit unknown when the probe cannot rebuild its receipt facts", async (tool, input) => {
     const org = await createTestOrg();
     orgId = org.id;

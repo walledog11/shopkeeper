@@ -78,6 +78,20 @@ export interface ReturnLabelReceiptFactsV1 {
   attachmentState: "attached";
 }
 
+export interface FulfillmentReceiptFactsV1 {
+  orderId: string;
+  fulfillmentId: string;
+  status: string;
+  fulfilledAt: string;
+  lineItems: Array<{ fulfillmentLineItemId: string; lineItemId: string; quantity: number }>;
+  tracking: {
+    number: string | null;
+    company: string | null;
+    url: string | null;
+  };
+  notifyCustomerRequested: boolean;
+}
+
 export type ReceiptSuccessV1 =
   | (ReceiptBaseV1<"create_refund"> & {
       outcome: "succeeded";
@@ -108,6 +122,11 @@ export type ReceiptSuccessV1 =
       outcome: "succeeded";
       providerReference: string;
       facts: ReturnLabelReceiptFactsV1;
+    })
+  | (ReceiptBaseV1<"fulfill_order"> & {
+      outcome: "succeeded";
+      providerReference: string;
+      facts: FulfillmentReceiptFactsV1;
     });
 
 type ReceiptToolV1 = ReceiptSuccessV1["tool"];
@@ -180,9 +199,44 @@ function requireRegisteredReceiptTool(tool: string): asserts tool is ReceiptTool
     && tool !== "create_return"
     && tool !== "create_exchange"
     && tool !== "attach_return_label"
+    && tool !== "fulfill_order"
   ) {
     throw new ReceiptValidationError(`no receipt validator is registered for ${tool}`);
   }
+}
+
+function parseFulfillmentFacts(value: unknown): FulfillmentReceiptFactsV1 {
+  if (!isRecord(value)) throw new ReceiptValidationError("fulfillment facts must be an object");
+  requireNonEmptyString(value.orderId, "facts.orderId");
+  requireNonEmptyString(value.fulfillmentId, "facts.fulfillmentId");
+  requireNonEmptyString(value.status, "facts.status");
+  requireIsoTimestamp(value.fulfilledAt, "facts.fulfilledAt");
+  if (!Array.isArray(value.lineItems) || value.lineItems.length === 0) {
+    throw new ReceiptValidationError("fulfillment facts require line items");
+  }
+  for (const [index, item] of value.lineItems.entries()) {
+    if (!isRecord(item)) {
+      throw new ReceiptValidationError(`facts.lineItems[${index}] must be an object`);
+    }
+    requireNonEmptyString(
+      item.fulfillmentLineItemId,
+      `facts.lineItems[${index}].fulfillmentLineItemId`,
+    );
+    requireNonEmptyString(item.lineItemId, `facts.lineItems[${index}].lineItemId`);
+    requirePositiveQuantity(item.quantity, `facts.lineItems[${index}].quantity`);
+  }
+  if (!isRecord(value.tracking)) {
+    throw new ReceiptValidationError("facts.tracking must be an object");
+  }
+  for (const field of ["number", "company", "url"] as const) {
+    if (value.tracking[field] !== null) {
+      requireNonEmptyString(value.tracking[field], `facts.tracking.${field}`);
+    }
+  }
+  if (typeof value.notifyCustomerRequested !== "boolean") {
+    throw new ReceiptValidationError("facts.notifyCustomerRequested must be a boolean");
+  }
+  return value as unknown as FulfillmentReceiptFactsV1;
 }
 
 function parseReturnLabelFacts(value: unknown): ReturnLabelReceiptFactsV1 {
@@ -371,6 +425,17 @@ export function parseReceiptV1(value: unknown): ReceiptV1 {
       if (value.providerReference !== facts.reverseDeliveryId) {
         throw new ReceiptValidationError(
           "return label providerReference must match facts.reverseDeliveryId",
+        );
+      }
+    } else if (base.tool === "fulfill_order") {
+      requireNonEmptyString(value.providerReference, "providerReference");
+      const facts = parseFulfillmentFacts(value.facts);
+      if (base.target.id !== facts.orderId) {
+        throw new ReceiptValidationError("fulfillment target must match facts.orderId");
+      }
+      if (value.providerReference !== facts.fulfillmentId) {
+        throw new ReceiptValidationError(
+          "fulfillment providerReference must match facts.fulfillmentId",
         );
       }
     }

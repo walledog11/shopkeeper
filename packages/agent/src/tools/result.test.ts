@@ -102,6 +102,33 @@ function returnLabelReceipt(overrides: Partial<ReceiptV1> = {}): ReceiptV1 {
   } as ReceiptV1;
 }
 
+function fulfillmentReceipt(overrides: Partial<ReceiptV1> = {}): ReceiptV1 {
+  return {
+    version: 1,
+    operationId: "operation-fulfillment-1",
+    executionId: "execution-fulfillment-1",
+    tool: "fulfill_order",
+    target: { kind: "order", id: "2001" },
+    observedAt: "2026-09-12T07:00:00.000Z",
+    outcome: "succeeded",
+    providerReference: "gid://shopify/Fulfillment/444",
+    facts: {
+      orderId: "2001",
+      fulfillmentId: "gid://shopify/Fulfillment/444",
+      status: "SUCCESS",
+      fulfilledAt: "2026-09-12T06:59:59.000Z",
+      lineItems: [{
+        fulfillmentLineItemId: "gid://shopify/FulfillmentLineItem/501",
+        lineItemId: "gid://shopify/LineItem/601",
+        quantity: 2,
+      }],
+      tracking: { number: "1Z999", company: "UPS", url: null },
+      notifyCustomerRequested: true,
+    },
+    ...overrides,
+  } as ReceiptV1;
+}
+
 describe("receipt v1", () => {
   it("validates exact refund facts independently of display text", () => {
     const receipt = refundReceipt();
@@ -252,6 +279,25 @@ describe("receipt v1", () => {
         attachmentState: "requested",
       } as never,
     }))).toThrow("attachmentState");
+  });
+
+  it("validates provider-confirmed fulfillment identity and facts", () => {
+    expect(() => parseReceiptV1(fulfillmentReceipt())).not.toThrow();
+    expect(() => parseReceiptV1(fulfillmentReceipt({
+      providerReference: "gid://shopify/Fulfillment/different",
+    }))).toThrow("providerReference");
+    expect(() => parseReceiptV1(fulfillmentReceipt({
+      facts: {
+        ...(fulfillmentReceipt() as Extract<ReceiptV1, { tool: "fulfill_order"; outcome: "succeeded" }>).facts,
+        lineItems: [],
+      } as never,
+    }))).toThrow("line items");
+    expect(() => parseReceiptV1(fulfillmentReceipt({
+      facts: {
+        ...(fulfillmentReceipt() as Extract<ReceiptV1, { tool: "fulfill_order"; outcome: "succeeded" }>).facts,
+        notifyCustomerRequested: "yes",
+      } as never,
+    }))).toThrow("notifyCustomerRequested");
   });
 
   it("rejects unregistered receipt tools and wrong target kinds", () => {

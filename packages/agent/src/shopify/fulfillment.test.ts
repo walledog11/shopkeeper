@@ -8,6 +8,12 @@ const ctx = {
   accessToken: "shpat_test",
 };
 
+const receiptCtx = {
+  ...ctx,
+  operationId: "fulfillment-operation-1",
+  executionId: "fulfillment-execution-1",
+};
+
 function fulfillmentOrdersResponse(status = "OPEN", remainingQuantity = 2): Response {
   return jsonResponse({
     data: {
@@ -46,8 +52,18 @@ function fulfillmentCreatedResponse(): Response {
         fulfillment: {
           id: "gid://shopify/Fulfillment/444",
           status: "SUCCESS",
+          createdAt: "2026-09-12T08:00:00.000Z",
           totalQuantity: 2,
           trackingInfo: [{ number: "1Z999", company: "UPS", url: null }],
+          fulfillmentLineItems: {
+            edges: [{
+              node: {
+                id: "gid://shopify/FulfillmentLineItem/501",
+                quantity: 2,
+                lineItem: { id: "gid://shopify/LineItem/601" },
+              },
+            }],
+          },
         },
         userErrors: [],
       },
@@ -69,20 +85,32 @@ describe("fulfillOrder", () => {
 
     const result = await fulfillOrder({ ...input, tracking_url: "not a url" }, ctx);
 
-    expect(result.status).toBe("error");
+    expect(result.status).toBe("policy_block");
     expect(result.message).toContain("tracking_url must be a valid URL");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("errors when the order has nothing left to fulfill", async () => {
+  it("rejects when the order has nothing left to fulfill", async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(fulfillmentOrdersResponse("CLOSED"));
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await fulfillOrder(input, ctx);
+    const result = await fulfillOrder(input, receiptCtx);
 
-    expect(result.status).toBe("error");
+    expect(result.status).toBe("policy_block");
     expect(result.message).toContain("nothing left to fulfill");
+    expect(result.receipt).toMatchObject({ outcome: "rejected", code: "nothing_fulfillable" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("distinguishes a missing order from a rejected fulfillment", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(jsonResponse({
+      data: { order: null },
+    })));
+
+    const result = await fulfillOrder(input, receiptCtx);
+
+    expect(result.status).toBe("not_found");
+    expect(result.receipt).toMatchObject({ outcome: "not_found", code: "order_not_found" });
   });
 
   // ON_HOLD and SCHEDULED fulfillment orders are refused by fulfillmentCreate,
@@ -93,7 +121,7 @@ describe("fulfillOrder", () => {
 
     const result = await fulfillOrder(input, ctx);
 
-    expect(result.status).toBe("error");
+    expect(result.status).toBe("policy_block");
     expect(result.message).toContain("nothing left to fulfill");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -104,7 +132,7 @@ describe("fulfillOrder", () => {
 
     const result = await fulfillOrder(input, ctx);
 
-    expect(result.status).toBe("error");
+    expect(result.status).toBe("policy_block");
     expect(result.message).toContain("nothing left to fulfill");
   });
 
@@ -137,6 +165,46 @@ describe("fulfillOrder", () => {
     expect(result.message).toContain("Tracking 1Z999 via UPS");
   });
 
+  it("records provider-confirmed fulfillment facts independently of display wording", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(fulfillmentOrdersResponse())
+      .mockResolvedValueOnce(fulfillmentCreatedResponse());
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await fulfillOrder(
+      { ...input, tracking_number: "REQUESTED", notify_customer: false },
+      receiptCtx,
+    );
+
+    expect(result).toMatchObject({
+      status: "ok",
+      receipt: {
+        version: 1,
+        operationId: "fulfillment-operation-1",
+        executionId: "fulfillment-execution-1",
+        tool: "fulfill_order",
+        target: { kind: "order", id: "3001" },
+        outcome: "succeeded",
+        providerReference: "gid://shopify/Fulfillment/444",
+        facts: {
+          orderId: "3001",
+          fulfillmentId: "gid://shopify/Fulfillment/444",
+          status: "SUCCESS",
+          fulfilledAt: "2026-09-12T08:00:00.000Z",
+          lineItems: [{
+            fulfillmentLineItemId: "gid://shopify/FulfillmentLineItem/501",
+            lineItemId: "gid://shopify/LineItem/601",
+            quantity: 2,
+          }],
+          tracking: { number: "1Z999", company: "UPS", url: null },
+          notifyCustomerRequested: false,
+        },
+      },
+    });
+    expect(result.message).not.toContain("REQUESTED");
+    expect(result.message).toContain("1Z999");
+  });
+
   it("omits trackingInfo entirely when no tracking was supplied", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(fulfillmentOrdersResponse())
@@ -149,8 +217,8 @@ describe("fulfillOrder", () => {
     expect(request.variables.fulfillment).not.toHaveProperty("trackingInfo");
   });
 
-  // Whether Shopify emailed the customer decides whether the agent's reply is
-  // the first notice or a follow-up, so the result has to say which happened.
+  // Whether Shopify was asked to email the customer decides whether the agent's
+  // reply should be the first notice or a follow-up. It is not delivery proof.
   it("tells the agent it owns the notification when notify_customer is false", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(fulfillmentOrdersResponse())
@@ -161,7 +229,7 @@ describe("fulfillOrder", () => {
 
     const request = JSON.parse(fetchMock.mock.calls[1][1].body as string);
     expect(request.variables.fulfillment.notifyCustomer).toBe(false);
-    expect(result.message).toContain("did NOT email the customer");
+    expect(result.message).toContain("was NOT asked to email the customer");
   });
 
   // A dropped connection after fulfillmentCreate went out can leave the order
@@ -173,10 +241,40 @@ describe("fulfillOrder", () => {
       .mockRejectedValueOnce(new TypeError("fetch failed"));
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await fulfillOrder(input, ctx);
+    const result = await fulfillOrder(input, receiptCtx);
 
     expect(result.status).toBe("unknown");
     expect(result.message).toContain("Do not fulfill again");
+    expect(result.receipt).toMatchObject({
+      tool: "fulfill_order",
+      outcome: "unknown",
+      code: "ambiguous_provider_response",
+    });
+  });
+
+  it("keeps an incomplete post-mutation fulfillment response unknown", async () => {
+    const response = fulfillmentCreatedResponse();
+    const body = await response.json() as {
+      data: {
+        fulfillmentCreate: {
+          fulfillment: { fulfillmentLineItems: { edges: unknown[] } };
+        };
+      };
+    };
+    body.data.fulfillmentCreate.fulfillment.fulfillmentLineItems = { edges: [] };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(fulfillmentOrdersResponse())
+      .mockResolvedValueOnce(jsonResponse(body));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await fulfillOrder(input, receiptCtx);
+
+    expect(result.status).toBe("unknown");
+    expect(result.receipt).toMatchObject({
+      outcome: "unknown",
+      code: "confirmed_state_incomplete",
+      providerReference: "gid://shopify/Fulfillment/444",
+    });
   });
 
   // The lookup runs before any mutation, so its failure committed nothing and
@@ -216,10 +314,11 @@ describe("fulfillOrder", () => {
       }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await fulfillOrder(input, ctx);
+    const result = await fulfillOrder(input, receiptCtx);
 
     expect(result.status).toBe("error");
     expect(result.message).toContain("Fulfillment orders are on hold");
+    expect(result.receipt).toMatchObject({ outcome: "failed", code: "provider_rejected" });
   });
 });
 

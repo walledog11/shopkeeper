@@ -418,6 +418,8 @@ export const ORDER_TOOL_DEFINITIONS = [
     category: "action",
     group: "order",
     capabilities: ["shopify"],
+    requiredScopes: ["write_merchant_managed_fulfillment_orders"],
+    requiredReceiptVersion: 1,
     label: "Fulfilled order",
     planStepLabel: "Mark order fulfilled",
     execute: async (input: FulfillOrderInput, ctx, _settings, deps) => {
