@@ -456,6 +456,44 @@ describe("completion facts", () => {
     })]);
   });
 
+  it("does not accept definitive rejection facts as a completed address change", () => {
+    const address = {
+      firstName: null,
+      lastName: null,
+      address1: "123 Main St",
+      address2: null,
+      city: "Los Angeles",
+      province: "California",
+      provinceCode: "CA",
+      postalCode: "90001",
+      country: "United States",
+      countryCode: "US",
+    };
+
+    expect(() => executedCompletionFacts([{
+      tool: "update_shopify_order_address",
+      result: "Rejected.",
+      status: "policy_block",
+      receipt: {
+        version: 1,
+        operationId: "operation-address-rejected",
+        executionId: "execution-address-rejected",
+        tool: "update_shopify_order_address",
+        target: { kind: "order", id: "3001" },
+        observedAt: "2026-09-12T08:00:00.000Z",
+        outcome: "rejected",
+        code: "blocked",
+        providerReference: "3001",
+        facts: {
+          orderId: "3001",
+          customerId: "900",
+          orderAddress: { outcome: "updated", address },
+          customerDefaultAddress: { outcome: "failed", code: "blocked" },
+        },
+      } as never,
+    }])).toThrow("partial order address facts require an unknown outcome");
+  });
+
   it("turns only successful live order reads into historical facts", () => {
     const calls = [{ id: "read_1", name: "get_order_by_name", input: { order_name: "#1001" } }];
     expect(historicalCompletionFacts(calls, {

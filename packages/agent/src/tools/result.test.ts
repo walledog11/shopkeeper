@@ -353,6 +353,43 @@ describe("receipt v1", () => {
       .toMatchObject({ orderAddress: { outcome: "updated" } });
   });
 
+  it("rejects partial address facts on definitive non-success outcomes", () => {
+    const facts = {
+      orderId: "3001",
+      customerId: "900",
+      orderAddress: { outcome: "updated", address: ADDRESS },
+      customerDefaultAddress: {
+        outcome: "failed",
+        code: "customer_sync_failed_after_order_update",
+      },
+    };
+
+    for (const outcome of ["not_found", "rejected", "failed"] as const) {
+      expect(() => parseReceiptV1(orderAddressReceipt({
+        outcome,
+        code: "definitive_outcome",
+        facts,
+      } as never))).toThrow("partial order address facts require an unknown outcome");
+    }
+  });
+
+  it("binds a partial unknown address receipt to its provider order reference", () => {
+    expect(() => parseReceiptV1(orderAddressReceipt({
+      outcome: "unknown",
+      code: "customer_sync_failed_after_order_update",
+      providerReference: "different-order",
+      facts: {
+        orderId: "3001",
+        customerId: "900",
+        orderAddress: { outcome: "updated", address: ADDRESS },
+        customerDefaultAddress: {
+          outcome: "failed",
+          code: "customer_sync_failed_after_order_update",
+        },
+      },
+    } as never))).toThrow("order address providerReference must match facts.orderId");
+  });
+
   it("refuses failure-receipt facts for a tool that has no partial contract", () => {
     expect(() => parseReceiptV1({
       ...refundReceipt(),

@@ -7,6 +7,7 @@ import {
   toolUnknown,
   type AddressReceiptAddressV1,
   type OrderAddressReceiptFactsV1,
+  type ReceiptFailureV1,
   type ReceiptV1,
   type ToolResult,
 } from "../tools/result.js";
@@ -17,7 +18,7 @@ import {
   type ShopifyContext,
 } from "./client.js";
 import { formatAddressForMessage } from "./serializers.js";
-import { shopifyFailureReceipt, shopifyReceiptEnvelope } from "./receipts.js";
+import { shopifyReceiptEnvelope } from "./receipts.js";
 import type { ShopifyCustomer, ShopifyCustomerAddress, ShopifyOrder } from "./types.js";
 import {
   optionalString,
@@ -94,15 +95,28 @@ function addressFailure(
   code: string,
   facts?: OrderAddressReceiptFactsV1,
 ): ToolResult {
-  const receipt = shopifyFailureReceipt(
-    ctx,
-    { kind: "order", id: orderId },
-    "update_shopify_order_address",
-    outcome,
-    code,
-    facts ? orderId : null,
-  );
-  return receipt ? { ...result, receipt: facts ? { ...receipt, facts } : receipt } : result;
+  const envelope = shopifyReceiptEnvelope(ctx, { kind: "order", id: orderId });
+  if (!envelope) return result;
+  if (facts && outcome !== "unknown") {
+    throw new Error("partial order address facts require an unknown outcome");
+  }
+  const receipt: ReceiptFailureV1 = facts
+    ? {
+        ...envelope,
+        tool: "update_shopify_order_address",
+        outcome: "unknown",
+        code,
+        providerReference: orderId,
+        facts,
+      }
+    : {
+        ...envelope,
+        tool: "update_shopify_order_address",
+        outcome,
+        code,
+        providerReference: null,
+      };
+  return { ...result, receipt };
 }
 
 function addressSuccessReceipt(

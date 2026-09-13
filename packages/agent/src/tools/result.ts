@@ -166,11 +166,21 @@ export type ReceiptSuccessV1 =
 
 type ReceiptToolV1 = ReceiptSuccessV1["tool"];
 
-export type ReceiptFailureV1 = ReceiptBaseV1<ReceiptToolV1> & {
+type ReceiptFailureWithoutPartialFactsV1 = ReceiptBaseV1<ReceiptToolV1> & {
   outcome: "not_found" | "rejected" | "failed" | "unknown";
   code: string;
-  facts?: OrderAddressReceiptFactsV1;
+  facts?: never;
 };
+
+type OrderAddressPartialUnknownReceiptV1 = ReceiptBaseV1<"update_shopify_order_address"> & {
+  outcome: "unknown";
+  code: string;
+  facts: OrderAddressReceiptFactsV1;
+};
+
+export type ReceiptFailureV1 =
+  | ReceiptFailureWithoutPartialFactsV1
+  | OrderAddressPartialUnknownReceiptV1;
 
 export type ReceiptV1 = ReceiptSuccessV1 | ReceiptFailureV1;
 
@@ -537,9 +547,16 @@ export function parseReceiptV1(value: unknown): ReceiptV1 {
       if (base.tool !== "update_shopify_order_address") {
         throw new ReceiptValidationError("failure receipt facts are not supported for this tool");
       }
+      if (value.outcome !== "unknown") {
+        throw new ReceiptValidationError("partial order address facts require an unknown outcome");
+      }
+      requireNonEmptyString(value.providerReference, "providerReference");
       const facts = parseOrderAddressFacts(value.facts);
       if (base.target.id !== facts.orderId) {
         throw new ReceiptValidationError("order address target must match facts.orderId");
+      }
+      if (value.providerReference !== facts.orderId) {
+        throw new ReceiptValidationError("order address providerReference must match facts.orderId");
       }
     }
   } else {

@@ -4,10 +4,11 @@ Status: in progress. Package 0 is complete. Package 1 has completed the shared
 receipt boundary, durable action dispatch/recovery lifecycle, and eight retained
 Shopify write migrations: full refund, partial refund, cancellation, return,
 exchange, return-label attachment, fulfillment, and order address. Five retained
-Shopify writes remain open — `update_shopify_customer_info`,
+writes in the shared Shopify registry remain open — `update_shopify_customer_info`,
 `add_shopify_customer_note`, `create_shopify_order`, `edit_shopify_order`, and
-`create_gift_card` — alongside the internal thread writes; Packages 2–6 have not
-started. Created 2026-09-11; last updated 2026-09-12.
+`create_gift_card` — alongside the isolated operator Shopify writes, internal
+thread writes, and durable communication outcomes; Packages 2–6 have not started.
+Created 2026-09-11; last updated 2026-09-12.
 
 Implementation detail expanded 2026-09-11 against the current repository. Names marked **proposed** describe work to implement, not APIs or tables that already exist. This document authorizes no production operation by itself.
 
