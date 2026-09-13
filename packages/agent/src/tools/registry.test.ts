@@ -428,6 +428,8 @@ describe("Shopify scope gating", () => {
       "write_customers",
       "write_returns",
       "write_merchant_managed_fulfillment_orders",
+      "write_order_edits",
+      "read_orders",
     ]).map((t) => t.name);
     const unchecked = selectAgentTools(undefined, null, null).map((t) => t.name);
 
@@ -445,6 +447,7 @@ describe("Shopify scope gating", () => {
       "create_refund",
       "create_partial_refund",
       "cancel_order",
+      "edit_shopify_order",
       "create_return",
       "create_exchange",
       "attach_return_label",
@@ -460,6 +463,8 @@ describe("Shopify scope gating", () => {
       "read_products",
       "write_orders",
       "write_customers",
+      "write_order_edits",
+      "read_orders",
       "write_returns",
       "write_merchant_managed_fulfillment_orders",
     ]);
@@ -479,6 +484,8 @@ describe("Shopify scope gating", () => {
     expect(toolScopesGranted("create_exchange", ["read_products", "write_returns"])).toBe(true);
     expect(toolScopesGranted("attach_return_label", ["read_returns"])).toBe(false);
     expect(toolScopesGranted("attach_return_label", ["write_returns"])).toBe(true);
+    expect(toolScopesGranted("edit_shopify_order", ["write_order_edits"])).toBe(false);
+    expect(toolScopesGranted("edit_shopify_order", ["write_order_edits", "read_orders"])).toBe(true);
     expect(toolScopesGranted("fulfill_order", ["read_orders"])).toBe(false);
     expect(toolScopesGranted("fulfill_order", ["write_merchant_managed_fulfillment_orders"])).toBe(true);
   });

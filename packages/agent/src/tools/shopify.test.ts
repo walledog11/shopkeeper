@@ -190,7 +190,7 @@ describe("shopify tools", () => {
     const result = await editShopifyOrder({ order_id: "456", remove_variant_id: "123" }, ctx);
 
     expect(result.message).toContain("variant 123 was not found");
-    expect(result.status).toBe("error");
+    expect(result.status).toBe("policy_block");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -295,7 +295,7 @@ describe("shopify tools", () => {
     const result = await editShopifyOrder({ order_id: "456" }, ctx);
 
     expect(result).toEqual({
-      status: "error",
+      status: "policy_block",
       message: "Error: edit_shopify_order requires at least variant_id (to add) or remove_variant_id (to remove).",
     });
     expect(fetchMock).not.toHaveBeenCalled();

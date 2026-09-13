@@ -162,6 +162,31 @@ function orderAddressReceipt(overrides: Partial<ReceiptV1> = {}): ReceiptV1 {
   } as ReceiptV1;
 }
 
+function orderEditReceipt(overrides: Partial<ReceiptV1> = {}): ReceiptV1 {
+  return {
+    version: 1,
+    operationId: "operation-edit-1",
+    executionId: "execution-edit-1",
+    tool: "edit_shopify_order",
+    target: { kind: "order", id: "3001" },
+    observedAt: "2026-09-12T08:00:00.000Z",
+    outcome: "succeeded",
+    providerReference: "3001",
+    facts: {
+      orderId: "3001",
+      changes: [{
+        kind: "addition",
+        variantId: "gid://shopify/ProductVariant/44",
+        lineItemId: "gid://shopify/LineItem/55",
+        requestedQuantity: 2,
+        providerObservedFinalQuantity: 3,
+        outcome: "committed",
+      }],
+    },
+    ...overrides,
+  } as ReceiptV1;
+}
+
 describe("receipt v1", () => {
   it("validates exact refund facts independently of display text", () => {
     const receipt = refundReceipt();
@@ -436,6 +461,77 @@ describe("receipt v1", () => {
         customerDefaultAddress: { outcome: "not_updated", code: "some_other_reason" },
       },
     } as never))).toThrow("facts.customerDefaultAddress.code is invalid");
+  });
+
+  it("validates committed order-edit changes and their provider observation", () => {
+    expect(() => parseReceiptV1(orderEditReceipt())).not.toThrow();
+    expect(() => parseReceiptV1(orderEditReceipt({ providerReference: "different-order" })))
+      .toThrow("order edit providerReference");
+    expect(() => parseReceiptV1(orderEditReceipt({
+      facts: {
+        orderId: "3001",
+        changes: [{
+          kind: "addition",
+          variantId: "gid://shopify/ProductVariant/44",
+          lineItemId: null,
+          requestedQuantity: 2,
+          providerObservedFinalQuantity: null,
+          outcome: "staged",
+        }],
+      },
+    } as never))).toThrow("must be committed with a provider-observed final quantity");
+  });
+
+  it("keeps staged and rejected order-edit legs on an unknown receipt", () => {
+    const receipt = parseReceiptV1(orderEditReceipt({
+      outcome: "unknown",
+      code: "partial_staging_rejected",
+      facts: {
+        orderId: "3001",
+        changes: [
+          {
+            kind: "addition",
+            variantId: "gid://shopify/ProductVariant/44",
+            lineItemId: "gid://shopify/CalculatedLineItem/1",
+            requestedQuantity: 2,
+            providerObservedFinalQuantity: null,
+            outcome: "staged",
+          },
+          {
+            kind: "removal",
+            variantId: "gid://shopify/ProductVariant/45",
+            lineItemId: "gid://shopify/CalculatedLineItem/2",
+            requestedQuantity: null,
+            providerObservedFinalQuantity: null,
+            outcome: "rejected",
+          },
+        ],
+      },
+    } as never));
+
+    expect(receipt.outcome).toBe("unknown");
+    expect((receipt as Extract<ReceiptV1, { tool: "edit_shopify_order" }>).facts?.changes)
+      .toHaveLength(2);
+  });
+
+  it("rejects invalid order-edit quantities and definitive partial facts", () => {
+    expect(() => parseReceiptV1(orderEditReceipt({
+      facts: {
+        orderId: "3001",
+        changes: [{
+          kind: "addition",
+          variantId: "gid://shopify/ProductVariant/44",
+          lineItemId: null,
+          requestedQuantity: 0,
+          providerObservedFinalQuantity: 1,
+          outcome: "committed",
+        }],
+      },
+    } as never))).toThrow("requestedQuantity");
+    expect(() => parseReceiptV1(orderEditReceipt({
+      outcome: "failed",
+      code: "provider_rejected",
+    } as never))).toThrow("partial order edit facts require an unknown outcome");
   });
 
   it("rejects unregistered receipt tools and wrong target kinds", () => {

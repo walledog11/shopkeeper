@@ -260,6 +260,8 @@ export const ORDER_TOOL_DEFINITIONS = [
     category: "action",
     group: "order",
     capabilities: ["shopify"],
+    requiredScopes: ["write_order_edits", "read_orders"],
+    requiredReceiptVersion: 1,
     label: "Edited order",
     planStepLabel: "Edit existing order",
     execute: async (input: EditShopifyOrderInput, ctx, _settings, deps) => {

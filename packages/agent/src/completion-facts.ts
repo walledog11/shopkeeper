@@ -274,6 +274,23 @@ function receiptCompletionFacts(
     )];
   }
 
+  if (receipt.tool === "edit_shopify_order") {
+    const hasCommittedChange = receipt.facts?.changes.some(
+      (change) => change.outcome === "committed",
+    ) ?? false;
+    return [fact(
+      "order_update",
+      receipt.tool,
+      hasCommittedChange ? "success" : outcome,
+      executionReference,
+      {
+        target: receipt.facts
+          ? orderTarget(receipt.facts.orderId, ctx, orderNames)
+          : target,
+      },
+    )];
+  }
+
   return [];
 }
 

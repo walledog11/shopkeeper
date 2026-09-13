@@ -122,6 +122,20 @@ export interface OrderAddressReceiptFactsV1 {
     | { outcome: "failed" | "unknown"; code: string };
 }
 
+export interface OrderEditReceiptChangeV1 {
+  kind: "addition" | "removal";
+  variantId: string;
+  lineItemId: string | null;
+  requestedQuantity: number | null;
+  providerObservedFinalQuantity: number | null;
+  outcome: "committed" | "staged" | "rejected" | "unknown";
+}
+
+export interface OrderEditReceiptFactsV1 {
+  orderId: string;
+  changes: OrderEditReceiptChangeV1[];
+}
+
 export type ReceiptSuccessV1 =
   | (ReceiptBaseV1<"create_refund"> & {
       outcome: "succeeded";
@@ -162,6 +176,11 @@ export type ReceiptSuccessV1 =
       outcome: "succeeded";
       providerReference: string;
       facts: OrderAddressReceiptFactsV1;
+    })
+  | (ReceiptBaseV1<"edit_shopify_order"> & {
+      outcome: "succeeded";
+      providerReference: string;
+      facts: OrderEditReceiptFactsV1;
     });
 
 type ReceiptToolV1 = ReceiptSuccessV1["tool"];
@@ -178,9 +197,16 @@ type OrderAddressPartialUnknownReceiptV1 = ReceiptBaseV1<"update_shopify_order_a
   facts: OrderAddressReceiptFactsV1;
 };
 
+type OrderEditPartialUnknownReceiptV1 = ReceiptBaseV1<"edit_shopify_order"> & {
+  outcome: "unknown";
+  code: string;
+  facts: OrderEditReceiptFactsV1;
+};
+
 export type ReceiptFailureV1 =
   | ReceiptFailureWithoutPartialFactsV1
-  | OrderAddressPartialUnknownReceiptV1;
+  | OrderAddressPartialUnknownReceiptV1
+  | OrderEditPartialUnknownReceiptV1;
 
 export type ReceiptV1 = ReceiptSuccessV1 | ReceiptFailureV1;
 
@@ -247,9 +273,61 @@ function requireRegisteredReceiptTool(tool: string): asserts tool is ReceiptTool
     && tool !== "attach_return_label"
     && tool !== "fulfill_order"
     && tool !== "update_shopify_order_address"
+    && tool !== "edit_shopify_order"
   ) {
     throw new ReceiptValidationError(`no receipt validator is registered for ${tool}`);
   }
+}
+
+function parseOrderEditFacts(
+  value: unknown,
+  options: { requireCommitted: boolean },
+): OrderEditReceiptFactsV1 {
+  if (!isRecord(value)) throw new ReceiptValidationError("order edit facts must be an object");
+  requireNonEmptyString(value.orderId, "facts.orderId");
+  if (!Array.isArray(value.changes) || value.changes.length === 0) {
+    throw new ReceiptValidationError("order edit facts require changes");
+  }
+  for (const [index, change] of value.changes.entries()) {
+    const field = `facts.changes[${index}]`;
+    if (!isRecord(change)) throw new ReceiptValidationError(`${field} must be an object`);
+    if (change.kind !== "addition" && change.kind !== "removal") {
+      throw new ReceiptValidationError(`${field}.kind is invalid`);
+    }
+    requireNonEmptyString(change.variantId, `${field}.variantId`);
+    if (change.lineItemId !== null) requireNonEmptyString(change.lineItemId, `${field}.lineItemId`);
+    if (change.kind === "addition") {
+      requirePositiveQuantity(change.requestedQuantity, `${field}.requestedQuantity`);
+    } else if (change.requestedQuantity !== null) {
+      throw new ReceiptValidationError(`${field}.requestedQuantity must be null for a removal`);
+    }
+    if (
+      change.providerObservedFinalQuantity !== null
+      && (!Number.isSafeInteger(change.providerObservedFinalQuantity)
+        || Number(change.providerObservedFinalQuantity) < 0)
+    ) {
+      throw new ReceiptValidationError(
+        `${field}.providerObservedFinalQuantity must be a non-negative integer or null`,
+      );
+    }
+    if (
+      change.outcome !== "committed"
+      && change.outcome !== "staged"
+      && change.outcome !== "rejected"
+      && change.outcome !== "unknown"
+    ) {
+      throw new ReceiptValidationError(`${field}.outcome is invalid`);
+    }
+    if (
+      options.requireCommitted
+      && (change.outcome !== "committed" || change.providerObservedFinalQuantity === null)
+    ) {
+      throw new ReceiptValidationError(
+        `${field} must be committed with a provider-observed final quantity`,
+      );
+    }
+  }
+  return value as unknown as OrderEditReceiptFactsV1;
 }
 
 function parseAddress(value: unknown, field: string): AddressReceiptAddressV1 {
@@ -535,6 +613,15 @@ export function parseReceiptV1(value: unknown): ReceiptV1 {
       if (value.providerReference !== facts.orderId) {
         throw new ReceiptValidationError("order address providerReference must match facts.orderId");
       }
+    } else if (base.tool === "edit_shopify_order") {
+      requireNonEmptyString(value.providerReference, "providerReference");
+      const facts = parseOrderEditFacts(value.facts, { requireCommitted: true });
+      if (base.target.id !== facts.orderId) {
+        throw new ReceiptValidationError("order edit target must match facts.orderId");
+      }
+      if (value.providerReference !== facts.orderId) {
+        throw new ReceiptValidationError("order edit providerReference must match facts.orderId");
+      }
     }
   } else if (
     value.outcome === "not_found"
@@ -544,19 +631,33 @@ export function parseReceiptV1(value: unknown): ReceiptV1 {
   ) {
     requireNonEmptyString(value.code, "code");
     if (value.facts !== undefined) {
-      if (base.tool !== "update_shopify_order_address") {
+      if (base.tool !== "update_shopify_order_address" && base.tool !== "edit_shopify_order") {
         throw new ReceiptValidationError("failure receipt facts are not supported for this tool");
       }
       if (value.outcome !== "unknown") {
-        throw new ReceiptValidationError("partial order address facts require an unknown outcome");
+        throw new ReceiptValidationError(
+          base.tool === "update_shopify_order_address"
+            ? "partial order address facts require an unknown outcome"
+            : "partial order edit facts require an unknown outcome",
+        );
       }
       requireNonEmptyString(value.providerReference, "providerReference");
-      const facts = parseOrderAddressFacts(value.facts);
-      if (base.target.id !== facts.orderId) {
-        throw new ReceiptValidationError("order address target must match facts.orderId");
-      }
-      if (value.providerReference !== facts.orderId) {
-        throw new ReceiptValidationError("order address providerReference must match facts.orderId");
+      if (base.tool === "update_shopify_order_address") {
+        const facts = parseOrderAddressFacts(value.facts);
+        if (base.target.id !== facts.orderId) {
+          throw new ReceiptValidationError("order address target must match facts.orderId");
+        }
+        if (value.providerReference !== facts.orderId) {
+          throw new ReceiptValidationError("order address providerReference must match facts.orderId");
+        }
+      } else {
+        const facts = parseOrderEditFacts(value.facts, { requireCommitted: false });
+        if (base.target.id !== facts.orderId) {
+          throw new ReceiptValidationError("order edit target must match facts.orderId");
+        }
+        if (value.providerReference !== facts.orderId) {
+          throw new ReceiptValidationError("order edit providerReference must match facts.orderId");
+        }
       }
     }
   } else {

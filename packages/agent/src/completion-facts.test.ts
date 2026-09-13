@@ -406,6 +406,83 @@ describe("completion facts", () => {
     })]);
   });
 
+  it("grounds an order edit in committed receipt changes rather than requested input or wording", () => {
+    const common = {
+      tool: "edit_shopify_order",
+      input: { order_id: "wrong-order", variant_id: "wrong-variant", quantity: 99 },
+      status: "success" as const,
+      receipt: {
+        version: 1 as const,
+        operationId: "operation-edit-1",
+        executionId: "execution-edit-1",
+        tool: "edit_shopify_order" as const,
+        target: { kind: "order", id: "3001" },
+        observedAt: "2026-09-12T08:00:00.000Z",
+        outcome: "succeeded" as const,
+        providerReference: "3001",
+        facts: {
+          orderId: "3001",
+          changes: [{
+            kind: "addition" as const,
+            variantId: "gid://shopify/ProductVariant/44",
+            lineItemId: "gid://shopify/LineItem/55",
+            requestedQuantity: 2,
+            providerObservedFinalQuantity: 3,
+            outcome: "committed" as const,
+          }],
+        },
+      },
+    };
+
+    const first = executedCompletionFacts([{ ...common, result: "Order edited." }]);
+    const second = executedCompletionFacts([{ ...common, result: "Different display wording." }]);
+
+    expect(first).toEqual(second);
+    expect(first).toEqual([expect.objectContaining({
+      action: "order_update",
+      target: { kind: "order", id: "3001" },
+      outcome: "success",
+      executionReference: "operation-edit-1",
+    })]);
+  });
+
+  it("does not call staged order-edit legs completed", () => {
+    const facts = executedCompletionFacts([{
+      tool: "edit_shopify_order",
+      input: { order_id: "3001", variant_id: "44", quantity: 2 },
+      result: "The addition was staged but the swap did not commit.",
+      status: "unknown" as const,
+      receipt: {
+        version: 1 as const,
+        operationId: "operation-edit-2",
+        executionId: "execution-edit-2",
+        tool: "edit_shopify_order" as const,
+        target: { kind: "order", id: "3001" },
+        observedAt: "2026-09-12T08:00:00.000Z",
+        outcome: "unknown" as const,
+        code: "partial_staging_rejected",
+        providerReference: "3001",
+        facts: {
+          orderId: "3001",
+          changes: [{
+            kind: "addition" as const,
+            variantId: "gid://shopify/ProductVariant/44",
+            lineItemId: null,
+            requestedQuantity: 2,
+            providerObservedFinalQuantity: null,
+            outcome: "staged" as const,
+          }],
+        },
+      },
+    }]);
+
+    expect(facts).toEqual([expect.objectContaining({
+      action: "order_update",
+      outcome: "unknown",
+      target: { kind: "order", id: "3001" },
+    })]);
+  });
+
   // A committed order address stays claimable even though the customer profile
   // half is uncertain; the merchant can be told the order was changed without
   // being told the profile was.
