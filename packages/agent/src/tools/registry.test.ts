@@ -447,6 +447,7 @@ describe("Shopify scope gating", () => {
       "create_refund",
       "create_partial_refund",
       "cancel_order",
+      "create_shopify_order",
       "edit_shopify_order",
       "create_return",
       "create_exchange",
@@ -478,6 +479,8 @@ describe("Shopify scope gating", () => {
     expect(toolScopesGranted("update_shopify_order_address", ["write_orders", "write_customers"])).toBe(true);
     expect(toolScopesGranted("create_refund", ["read_orders"])).toBe(false);
     expect(toolScopesGranted("create_refund", ["write_orders"])).toBe(true);
+    expect(toolScopesGranted("create_shopify_order", ["read_orders"])).toBe(false);
+    expect(toolScopesGranted("create_shopify_order", ["write_orders"])).toBe(true);
     expect(toolScopesGranted("create_return", ["read_returns"])).toBe(false);
     expect(toolScopesGranted("create_return", ["write_returns"])).toBe(true);
     expect(toolScopesGranted("create_exchange", ["write_returns"])).toBe(false);

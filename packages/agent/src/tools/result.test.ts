@@ -187,11 +187,81 @@ function orderEditReceipt(overrides: Partial<ReceiptV1> = {}): ReceiptV1 {
   } as ReceiptV1;
 }
 
+function orderCreationReceipt(overrides: Partial<ReceiptV1> = {}): ReceiptV1 {
+  return {
+    version: 1,
+    operationId: "operation-create-order-1",
+    executionId: "execution-create-order-1",
+    tool: "create_shopify_order",
+    target: { kind: "order", id: "4001" },
+    observedAt: "2026-09-12T08:00:00.000Z",
+    outcome: "succeeded",
+    providerReference: "4001",
+    facts: {
+      orderId: "4001",
+      orderName: "#1042",
+      operationTag: "shopkeeper-op-123456789012345678901234",
+      financialStatus: "pending",
+      adminUrl: "https://test-store.myshopify.com/admin/orders/4001",
+      totalAmount: "25.00",
+      currency: "USD",
+    },
+    ...overrides,
+  } as ReceiptV1;
+}
+
 describe("receipt v1", () => {
   it("validates exact refund facts independently of display text", () => {
     const receipt = refundReceipt();
     expect(validateToolResultReceipt({ status: "ok", message: "first wording", receipt })).toEqual(receipt);
     expect(validateToolResultReceipt({ status: "ok", message: "completely different wording", receipt })).toEqual(receipt);
+  });
+
+  it("validates created-order identity, financial state, and provider URL", () => {
+    expect(() => parseReceiptV1(orderCreationReceipt())).not.toThrow();
+    expect(() => parseReceiptV1(orderCreationReceipt({ providerReference: "different-order" })))
+      .toThrow("providerReference");
+    expect(() => parseReceiptV1(orderCreationReceipt({
+      facts: {
+        ...(orderCreationReceipt() as Extract<ReceiptV1, {
+          tool: "create_shopify_order";
+          outcome: "succeeded";
+        }>).facts,
+        adminUrl: "https://test-store.myshopify.com/admin/orders/other",
+      } as never,
+    }))).toThrow("adminUrl");
+    expect(() => parseReceiptV1(orderCreationReceipt({
+      facts: {
+        ...(orderCreationReceipt() as Extract<ReceiptV1, {
+          tool: "create_shopify_order";
+          outcome: "succeeded";
+        }>).facts,
+        currency: "usd",
+      } as never,
+    }))).toThrow("facts.currency");
+    expect(() => parseReceiptV1(orderCreationReceipt({
+      facts: {
+        ...(orderCreationReceipt() as Extract<ReceiptV1, {
+          tool: "create_shopify_order";
+          outcome: "succeeded";
+        }>).facts,
+        operationTag: "unbound-tag",
+      } as never,
+    }))).toThrow("facts.operationTag");
+  });
+
+  it("allows an order-creation failure to retain its email target", () => {
+    expect(() => parseReceiptV1({
+      version: 1,
+      operationId: "operation-create-order-1",
+      executionId: "execution-create-order-1",
+      tool: "create_shopify_order",
+      target: { kind: "email", id: "buyer@example.com" },
+      observedAt: "2026-09-12T08:00:00.000Z",
+      outcome: "unknown",
+      code: "creation_not_confirmed",
+      providerReference: null,
+    })).not.toThrow();
   });
 
   it("rejects imprecise money and invalid currency", () => {

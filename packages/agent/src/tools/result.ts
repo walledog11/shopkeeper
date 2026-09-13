@@ -136,6 +136,16 @@ export interface OrderEditReceiptFactsV1 {
   changes: OrderEditReceiptChangeV1[];
 }
 
+export interface OrderCreationReceiptFactsV1 {
+  orderId: string;
+  orderName: string;
+  operationTag: string;
+  financialStatus: string;
+  adminUrl: string;
+  totalAmount: string;
+  currency: string;
+}
+
 export type ReceiptSuccessV1 =
   | (ReceiptBaseV1<"create_refund"> & {
       outcome: "succeeded";
@@ -181,6 +191,11 @@ export type ReceiptSuccessV1 =
       outcome: "succeeded";
       providerReference: string;
       facts: OrderEditReceiptFactsV1;
+    })
+  | (ReceiptBaseV1<"create_shopify_order"> & {
+      outcome: "succeeded";
+      providerReference: string;
+      facts: OrderCreationReceiptFactsV1;
     });
 
 type ReceiptToolV1 = ReceiptSuccessV1["tool"];
@@ -274,9 +289,39 @@ function requireRegisteredReceiptTool(tool: string): asserts tool is ReceiptTool
     && tool !== "fulfill_order"
     && tool !== "update_shopify_order_address"
     && tool !== "edit_shopify_order"
+    && tool !== "create_shopify_order"
   ) {
     throw new ReceiptValidationError(`no receipt validator is registered for ${tool}`);
   }
+}
+
+function parseOrderCreationFacts(value: unknown): OrderCreationReceiptFactsV1 {
+  if (!isRecord(value)) throw new ReceiptValidationError("order creation facts must be an object");
+  requireNonEmptyString(value.orderId, "facts.orderId");
+  requireNonEmptyString(value.orderName, "facts.orderName");
+  requireNonEmptyString(value.operationTag, "facts.operationTag");
+  if (!/^shopkeeper-op-[a-f0-9]{24}$/.test(value.operationTag)) {
+    throw new ReceiptValidationError("facts.operationTag must be a deterministic Shopkeeper operation tag");
+  }
+  requireNonEmptyString(value.financialStatus, "facts.financialStatus");
+  requireNonEmptyString(value.adminUrl, "facts.adminUrl");
+  let adminUrl: URL;
+  try {
+    adminUrl = new URL(value.adminUrl);
+  } catch {
+    throw new ReceiptValidationError("facts.adminUrl must be a valid URL");
+  }
+  if (adminUrl.protocol !== "https:" || !adminUrl.pathname.endsWith(`/admin/orders/${value.orderId}`)) {
+    throw new ReceiptValidationError("facts.adminUrl must identify the created order");
+  }
+  requireNonEmptyString(value.totalAmount, "facts.totalAmount");
+  if (!/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value.totalAmount)) {
+    throw new ReceiptValidationError("facts.totalAmount must be a non-negative exact decimal string");
+  }
+  if (typeof value.currency !== "string" || !/^[A-Z]{3}$/.test(value.currency)) {
+    throw new ReceiptValidationError("facts.currency must be a three-letter uppercase code");
+  }
+  return value as unknown as OrderCreationReceiptFactsV1;
 }
 
 function parseOrderEditFacts(
@@ -546,7 +591,7 @@ export function parseReceiptV1(value: unknown): ReceiptV1 {
   if (!isRecord(value)) throw new ReceiptValidationError("receipt must be an object");
   const base = parseBaseReceipt(value);
   requireRegisteredReceiptTool(base.tool);
-  if (base.target.kind !== "order") {
+  if (base.tool !== "create_shopify_order" && base.target.kind !== "order") {
     throw new ReceiptValidationError(`${base.tool} receipt target must be an order`);
   }
   if (value.outcome === "succeeded") {
@@ -622,6 +667,15 @@ export function parseReceiptV1(value: unknown): ReceiptV1 {
       if (value.providerReference !== facts.orderId) {
         throw new ReceiptValidationError("order edit providerReference must match facts.orderId");
       }
+    } else if (base.tool === "create_shopify_order") {
+      requireNonEmptyString(value.providerReference, "providerReference");
+      const facts = parseOrderCreationFacts(value.facts);
+      if (base.target.kind !== "order" || base.target.id !== facts.orderId) {
+        throw new ReceiptValidationError("order creation target must match facts.orderId");
+      }
+      if (value.providerReference !== facts.orderId) {
+        throw new ReceiptValidationError("order creation providerReference must match facts.orderId");
+      }
     }
   } else if (
     value.outcome === "not_found"
@@ -630,6 +684,13 @@ export function parseReceiptV1(value: unknown): ReceiptV1 {
     || value.outcome === "unknown"
   ) {
     requireNonEmptyString(value.code, "code");
+    if (
+      base.tool === "create_shopify_order"
+      && base.target.kind !== "order"
+      && base.target.kind !== "email"
+    ) {
+      throw new ReceiptValidationError("create_shopify_order failure target must be an order or email");
+    }
     if (value.facts !== undefined) {
       if (base.tool !== "update_shopify_order_address" && base.tool !== "edit_shopify_order") {
         throw new ReceiptValidationError("failure receipt facts are not supported for this tool");

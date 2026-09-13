@@ -151,6 +151,43 @@ describe("completion facts", () => {
     }])).toEqual([]);
   });
 
+  it("grounds created-order completion in the receipt instead of the requested email", () => {
+    const common = {
+      tool: "create_shopify_order",
+      input: { email: "buyer@example.com" },
+      status: "success" as const,
+      receipt: {
+        version: 1 as const,
+        operationId: "operation-create-order-1",
+        executionId: "execution-create-order-1",
+        tool: "create_shopify_order" as const,
+        target: { kind: "order", id: "4001" },
+        observedAt: "2026-09-12T08:00:00.000Z",
+        outcome: "succeeded" as const,
+        providerReference: "4001",
+        facts: {
+          orderId: "4001",
+          orderName: "#1042",
+          operationTag: "shopkeeper-op-123456789012345678901234",
+          financialStatus: "pending",
+          adminUrl: "https://test-store.myshopify.com/admin/orders/4001",
+          totalAmount: "25.00",
+          currency: "USD",
+        },
+      },
+    };
+
+    const first = executedCompletionFacts([{ ...common, result: "Created it." }]);
+    const second = executedCompletionFacts([{ ...common, result: "Different display text." }]);
+    expect(first).toEqual(second);
+    expect(first).toEqual([expect.objectContaining({
+      action: "order_creation",
+      target: { kind: "order", id: "4001", aliases: ["#1042"] },
+      outcome: "success",
+      executionReference: "operation-create-order-1",
+    })]);
+  });
+
   it("requires cancellation receipt evidence before claiming a refund", () => {
     const common = {
       version: 1 as const,

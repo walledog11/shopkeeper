@@ -233,6 +233,8 @@ export const ORDER_TOOL_DEFINITIONS = [
     category: "action",
     group: "order",
     capabilities: ["shopify"],
+    requiredScopes: ["write_orders"],
+    requiredReceiptVersion: 1,
     label: "Created order",
     planStepLabel: "Create Shopify order",
     policy: {

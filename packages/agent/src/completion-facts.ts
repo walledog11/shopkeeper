@@ -291,6 +291,20 @@ function receiptCompletionFacts(
     )];
   }
 
+  if (receipt.tool === "create_shopify_order") {
+    return [fact("order_creation", receipt.tool, outcome, executionReference, {
+      target: receipt.outcome === "succeeded"
+        ? {
+            kind: "order",
+            id: receipt.facts.orderId,
+            ...(receipt.facts.orderName !== receipt.facts.orderId
+              ? { aliases: [receipt.facts.orderName] }
+              : {}),
+          }
+        : target,
+    })];
+  }
+
   return [];
 }
 
