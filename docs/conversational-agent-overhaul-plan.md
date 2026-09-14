@@ -1,13 +1,13 @@
 # Conversational agent overhaul plan
 
 Status: in progress. Package 0 is complete. Package 1 has completed the shared
-receipt boundary, durable action dispatch/recovery lifecycle, and twelve retained
+receipt boundary, durable action dispatch/recovery lifecycle, and thirteen retained
 Shopify write migrations: full refund, partial refund, cancellation, return,
 exchange, return-label attachment, fulfillment, order address, order edit, and
-order creation, customer info, and customer notes. One retained write in the
-shared Shopify registry remains open — `create_gift_card` — alongside the isolated
-operator Shopify writes, internal thread writes, and durable communication outcomes;
-Packages 2–6 have not started.
+order creation, customer info, customer notes, and gift-card creation. The
+shared Shopify registry migration is complete; isolated operator Shopify writes,
+internal thread writes, and durable communication outcomes remain open in
+Package 1. Packages 2–6 have not started.
 Created 2026-09-11; last updated 2026-09-13.
 
 Implementation detail expanded 2026-09-11 against the current repository. Names marked **proposed** describe work to implement, not APIs or tables that already exist. This document authorizes no production operation by itself.
@@ -452,13 +452,23 @@ Progress as of 2026-09-13:
   and provider-returned final note. Require `write_customers`, issue only one
   append attempt, reconcile against the exact constructed final note, and never
   promote a later text-only observation without the hash-bound receipt.
+- [x] Migrate `create_gift_card` to a version-1 receipt with the provider gift-card
+  identity, exact initial value/currency, customer identity, expiration date,
+  notification-request flag, last four code characters, and a SHA-256 code
+  fingerprint without copying the one-time code into the receipt. Require
+  `write_gift_cards` plus `write_customers`, and `read_gift_cards` for exact
+  recovery lookup (the matching write grant satisfies that read). Reconcile an
+  interrupted response or stable-code collision only when exactly one complete
+  card matches the operation code, note, customer, amount, and expiration.
 - [x] Preserve ambiguous or incomplete post-write outcomes as `unknown` for all
-  twelve migrated writes. Cancellation reuses its existing reconciliation read;
+  thirteen migrated writes. Cancellation reuses its existing reconciliation read;
   refund operation identities remain available to existing reconciliation
   machinery; return, exchange, return-label, fulfillment, order-address, and
   order-edit probes cannot promote a commit unless they can reconstruct the
   complete required receipt; order creation reconciles by its deterministic
-  operation tag and likewise remains unknown on incomplete evidence.
+  operation tag; gift-card creation performs an exact receipt lookup during the
+  adapter call, while later lifecycle recovery remains unknown if it cannot
+  reconstruct the receipt.
 - [x] Emit versioned definitive outcomes for the migrated operations:
   precondition/policy refusals are `rejected`, confirmed missing cancellation
   targets are `not_found`, and errors known to have made no provider change are
@@ -467,13 +477,15 @@ Progress as of 2026-09-13:
   local refund-budget finalization fails, so reconciliation retains the stable
   operation and provider reference.
 - [x] Register version-1 receipts as required for identity-bearing executions of
-  all twelve migrated tools. Full refund, partial refund, cancellation, and order
+  all thirteen migrated tools. Full refund, partial refund, cancellation, and order
   creation require `write_orders`; return and return-label attachment require `write_returns`;
   exchange requires `read_products` plus `write_returns`; fulfillment requires
   `write_merchant_managed_fulfillment_orders`; order address requires
   `write_orders` plus `write_customers`; and order edit requires
   `write_order_edits` plus `read_orders`; customer info requires
-  `write_customers`; customer notes also require `write_customers`. Selection withholds tools from
+  `write_customers`; customer notes also require `write_customers`; gift-card
+  creation requires `write_gift_cards`, `write_customers`, and a
+  `read_gift_cards` recovery grant satisfied by `write_gift_cards`. Selection withholds tools from
   insufficient grants and execution rechecks the same metadata.
 - [x] Change partial refund creation to Shopify's `@idempotent` directive and
   register its exact exported mutation beside the full-refund mutation in
@@ -503,7 +515,7 @@ Completed Package 1 work at this checkpoint:
 | Typed result boundary | `ReceiptV1` discriminates succeeded, rejected, failed, not-found, and unknown outcomes; runtime validation binds tool, target, operation, execution, provider reference, legacy status, and per-tool facts. |
 | Receipt propagation | Structured receipts travel from the Shopify adapter through `ToolResult`, executor results, `ActionEntry`, run execution, `AgentAction` JSONB, completion facts, and model-visible completion evidence. |
 | Compatibility | Historical string-only actions remain readable only through the explicit pinned-legacy option. New receipt-aware facts never infer consequential success from display prose or proposed inputs. |
-| Migrated provider writes | `create_refund`, `create_partial_refund`, `cancel_order`, `create_return`, `create_exchange`, `attach_return_label`, `fulfill_order`, `update_shopify_order_address`, `edit_shopify_order`, `create_shopify_order`, `update_shopify_customer_info`, and `add_shopify_customer_note` emit version-1 receipts for definitive and uncertain outcomes with provider-observed facts. |
+| Migrated provider writes | `create_refund`, `create_partial_refund`, `cancel_order`, `create_return`, `create_exchange`, `attach_return_label`, `fulfill_order`, `update_shopify_order_address`, `edit_shopify_order`, `create_shopify_order`, `update_shopify_customer_info`, `add_shopify_customer_note`, and `create_gift_card` emit version-1 receipts for definitive and uncertain outcomes with provider-observed facts. |
 | Refund correctness | Full and partial refunds use Shopify-returned amount/currency/refund/transaction facts; partial refunds also preserve line-item quantities. Later budget-finalization failure retains an unknown receipt and reservation rather than erasing provider success evidence. |
 | Cancellation correctness | Cancellation records provider-confirmed cancellation state/time, reason, financial status, and restock result. It never fabricates refund evidence. |
 | Return/exchange correctness | Return and exchange receipts preserve provider return identity/state and exact affected item identities/quantities while retaining the existing `returnWatch` projection. Exchange price comparison remains a precondition rather than fabricated provider financial evidence. Return-label receipts retain exact reverse-delivery identity and a label fingerprint without persisting the URL. |
@@ -512,7 +524,8 @@ Completed Package 1 work at this checkpoint:
 | Order creation correctness | Created-order receipts bind the provider ID/name to the deterministic operation tag and preserve the observed financial status, exact total/currency, and admin URL. Incomplete direct or reconciled state remains unknown. |
 | Customer-info correctness | Customer-info receipts bind the canonical customer and preserve an ordered list of the returned name, email, or phone fields that exactly match the request. Missing or mismatched provider state remains unknown. |
 | Customer-note correctness | Customer-note receipts bind the customer and exact old/append/final note transformation by SHA-256 without copying note plaintext into the receipt. Missing or mismatched read-back remains unknown, and later recovery does not infer authorship from matching text alone. |
-| Shopify contracts | `create_refund`, `create_partial_refund`, `cancel_order`, and `create_shopify_order` require `write_orders`; `create_return` and `attach_return_label` require `write_returns`; `create_exchange` requires `read_products` plus `write_returns`; `fulfill_order` requires `write_merchant_managed_fulfillment_orders` and retains Shopify's `fulfill_and_ship_orders` user-permission check; order address requires `write_orders` plus `write_customers`; order edit requires `write_order_edits` plus `read_orders`; customer info and customer notes require `write_customers`. Selection and execution enforce grant metadata. Both refund mutations use Shopify 2026-04 `@idempotent`, and the fulfillment and order-edit mutations remain registered for schema validation. |
+| Gift-card correctness | Gift-card receipts bind the provider card and customer, preserve the returned value/currency and expiry, and fingerprint the one-time code without persisting it as a receipt fact. Exact read-after-interruption reconciliation can produce a receipt; incomplete or non-unique state remains unknown. |
+| Shopify contracts | `create_refund`, `create_partial_refund`, `cancel_order`, and `create_shopify_order` require `write_orders`; `create_return` and `attach_return_label` require `write_returns`; `create_exchange` requires `read_products` plus `write_returns`; `fulfill_order` requires `write_merchant_managed_fulfillment_orders` and retains Shopify's `fulfill_and_ship_orders` user-permission check; order address requires `write_orders` plus `write_customers`; order edit requires `write_order_edits` plus `read_orders`; customer info and customer notes require `write_customers`; gift-card creation requires `write_gift_cards` plus `write_customers`, with `read_gift_cards` declared for its recovery query and satisfied by the write grant. Selection and execution enforce grant metadata. Both refund mutations use Shopify 2026-04 `@idempotent`; the fulfillment, order-edit, and gift-card reconciliation query documents remain registered for schema validation. |
 | Durable operation identity | Every new non-read attempt receives a UUID operation ID and action index. Organization/operation and organization/non-null-provider-key uniqueness are database-enforced after an abort-on-duplicate migration preflight. |
 | Dispatch lifecycle | Conditional writes enforce `prepared → dispatch_authorized → submitted → settled/unknown`. Prepared rows have null execution fields; submitted and terminal rows carry the appropriate timestamps. A receipt must match the durable operation before settlement. |
 | Crash recovery | Stale authorized or submitted attempts become unknown, never prepared. The existing recovery sweep includes taskless/standalone lifecycle actions and probes using their stored provider identity without replaying the write. |
@@ -527,8 +540,9 @@ Checkpoint evidence:
   `agent-actions.ts`, `completion-facts.ts`, `unknown-outcome-reconciliation.ts`,
   the gateway unknown-outcome sweep, the refund, partial-refund, cancellation,
   return, exchange, return-label, fulfillment, order-address, and order-edit
-  Shopify adapters, plus order creation, customer info, and customer notes,
-  `shopify/receipts.ts`, `shopify/mutation-documents.ts`, Prisma schema and two
+  Shopify adapters, plus order creation, customer info, customer notes, and gift
+  cards, `shopify/receipts.ts`, `shopify/{mutation,query}-documents.ts`, Shopify
+  integration-health scope metadata and app configuration, Prisma schema and two
   migrations, affected dashboard/gateway completed-action readers, plus their
   adjacent tests.
 - Invariants covered: display wording cannot change receipt-derived facts;
@@ -541,6 +555,9 @@ Checkpoint evidence:
   to prepared; durable and provider operation identities cannot be reused within
   an organization; nonterminal attempts do not appear as completed history; a
   recovery probe never substitutes human-readable text for a required receipt.
+  Gift-card completion facts likewise use only provider-observed receipt money
+  and customer identity, never requested inputs or display text; the secret code
+  is fingerprinted rather than duplicated into receipt storage.
 - Foundational checkpoint verification passed: `npm run verify:pr`, including
   all 1,046 agent unit tests across 86 files, 1,147 agent coverage tests across
   99 files, repository lint,
@@ -664,6 +681,17 @@ could not open local listeners or reach local Postgres; the same changed and
 database suites passed with the required local-service access. No live Shopify
 or model operation was run.
 
+Incremental `create_gift_card` evidence: all 1,119 agent unit tests across 86
+files, all 1,230 agent coverage tests across 99 files, and all 111 agent
+integration tests across 13 files passed. The five focused adapter, receipt,
+grounding, registry, and reconciliation-probe suites passed 226 tests. Agent
+lint and typecheck passed. Coverage includes exact success reconciliation after
+an interrupted response, typed provider rejection and invalid-input outcomes,
+receipt-derived value/currency/customer grounding, scope gating, query-document
+registration, and a fresh-storage assertion that a probe-observed gift-card
+commit remains unknown when the lifecycle cannot reconstruct its required
+receipt. No live Shopify or model operation was run.
+
 Implementation checkpoints committed so far:
 
 | Commit | Completed scope | Verification recorded here |
@@ -679,16 +707,21 @@ Implementation checkpoints committed so far:
 | `7a7a96c5` | `create_shopify_order` typed outcomes, deterministic operation-tag reconciliation, provider-observed order facts, `write_orders`, and receipt-grounded completion facts. | All component gates passed; 1,096 agent unit tests; 13 focused reconciliation tests. |
 | `e77b51f0` | `update_shopify_customer_info` typed outcomes, exact provider-observed changed fields, `write_customers`, customer-profile grounding, and conservative recovery. | Agent lint/typecheck/unit/integration/coverage passed; 1,105 agent unit tests; 14 focused reconciliation tests. |
 | `337291ac` | `add_shopify_customer_note` typed outcomes, hash-bound append facts, `write_customers`, customer-note grounding, and no-replay recovery. | Agent lint/typecheck/unit/integration/coverage passed; 1,114 agent unit tests; 15 focused reconciliation tests. |
+| `8af92e82` | `create_gift_card` typed outcomes, secret-safe exact provider facts, interrupted-response reconciliation, receipt-grounded completion facts, and `write_gift_cards` + `write_customers` + recovery-read scope metadata. | Agent lint/typecheck/unit/integration/coverage passed; 1,119 unit, 111 integration, and 1,230 coverage tests. |
 
 Current verified checkpoint:
-`add_shopify_customer_note` now has typed definitive and uncertain outcomes,
-privacy-preserving hash-bound append facts, exact scope metadata,
-receipt-grounded customer-note completion facts, and conservative no-replay
-recovery. The slice and agent-wide gates passed with the counts recorded above.
+`create_gift_card` now has typed definitive and uncertain outcomes,
+secret-safe exact provider facts, exact scope metadata, receipt-grounded
+store-credit completion facts, and exact same-call reconciliation after an
+interrupted provider response. The slice and agent-wide gates passed with the
+counts recorded above, completing the shared Shopify registry migrations.
 
-Current next step: migrate the remaining retained writes one at a time through
-the completed identity/dispatch/receipt boundary. The final shared-registry
-Package 1 slice is `create_gift_card`; finish it before starting Package 2.
+Current next step: continue Package 1 with the isolated operator Shopify writes
+from the Package 0 inventory, starting with `create_flash_sale`, then
+`end_flash_sale` and `set_variant_prices`. Keep them outside support/storefront
+authority while moving each through the completed identity/dispatch/receipt
+boundary; finish the remaining internal-thread and communication contracts
+before starting Package 2.
 
 Implementation order:
 
@@ -703,12 +736,12 @@ Required tests: same typed result with completely different display text produce
 - [x] Extend tool/executor/action contracts so typed data reaches persistence and completion facts without being converted to message text.
 - [x] Migrate full refund, partial refund, cancellation, return, exchange,
   return-label, fulfillment, order-address, order-edit, and order-creation
-  results, plus customer-info and customer-note updates, including exact
+  results, plus customer-info, customer-note, and gift-card updates, including exact
   provider facts and unknown outcomes.
 - [ ] Cover every remaining retained write capability with the same receipt contract.
 - [x] Make new receipt records for the migrated capabilities versioned and keep their historical string decoding at the compatibility boundary only.
 - [ ] Extend the versioned-only result rule to every remaining retained write.
-- [x] Add explicit provider requirements for all twelve migrated capabilities and
+- [x] Add explicit provider requirements for all thirteen migrated capabilities and
   test missing or insufficient grants.
 - [ ] Add and test explicit provider requirements for every remaining retained capability.
 - [x] Verify common operation identity, dispatch, receipt binding, and crash-outcome semantics before changing conversation behavior. Per-capability outcome verification remains part of each retained-write migration above.
