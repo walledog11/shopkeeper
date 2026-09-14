@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type {
   AddShopifyCustomerNoteInput,
   FindCustomerInput,
@@ -30,6 +31,7 @@ import {
   toolUnknown,
   type CustomerInfoReceiptFactsV1,
   type CustomerInfoReceiptFieldV1,
+  type CustomerNoteReceiptFactsV1,
   type ReceiptV1,
   type ToolResult,
 } from "../tools/result.js";
@@ -307,9 +309,14 @@ export async function addShopifyCustomerNote(
   input: AddShopifyCustomerNoteInput,
   ctx: ShopifyContext
 ): Promise<ToolResult> {
+  let mutationStarted = false;
+  let customerId = String(input.customer_id ?? "invalid");
+  let note = "";
+  let previousNote = "";
+  let resultingNote = "";
   try {
-    const customerId = requireNumericId(input.customer_id, "customer_id");
-    const note = requireNonEmptyString(input.note, "note");
+    customerId = requireNumericId(input.customer_id, "customer_id");
+    note = requireNonEmptyString(input.note, "note");
 
     const existing = await shopifyRestJson<{ customer?: Pick<ShopifyCustomer, "id" | "note"> }>(
       ctx,
@@ -318,23 +325,157 @@ export async function addShopifyCustomerNote(
     );
 
     if (!existing.customer) {
-      return toolError(`Error: failed to add note - customer ${customerId} was not returned by Shopify.`);
+      return customerNoteFailure(
+        ctx,
+        customerId,
+        toolNotFound(`Error: failed to add note - customer ${customerId} was not returned by Shopify.`),
+        "not_found",
+        "customer_not_found",
+      );
     }
 
-    const existingNote = existing.customer.note ?? "";
-    const newNote = existingNote ? `${existingNote}\n\n${note}` : note;
+    previousNote = existing.customer.note ?? "";
+    resultingNote = previousNote ? `${previousNote}\n\n${note}` : note;
 
+    mutationStarted = true;
     const data = await shopifyRestJson<{ customer?: ShopifyCustomer }>(ctx, `customers/${customerId}.json`, {
       method: "PUT",
-      body: { customer: { id: customerId, note: newNote } },
+      body: { customer: { id: customerId, note: resultingNote } },
     });
 
-    if (!data.customer) {
-      return toolError(`Error: failed to add note - customer ${customerId} was not returned after update.`);
+    if (customerNoteMatches(data.customer, customerId, resultingNote)) {
+      return customerNoteSuccess(ctx, customerId, note, previousNote, resultingNote, false);
     }
-
-    return toolOk(`Note added to Shopify customer record: "${note}"`);
+    return reconcileCustomerNote(ctx, customerId, note, previousNote, resultingNote);
   } catch (err) {
-    return toolError(formatShopifyToolError("failed to add note", err));
+    if (mutationStarted && isAmbiguousShopifyMutationError(err)) {
+      return reconcileCustomerNote(ctx, customerId, note, previousNote, resultingNote, err);
+    }
+    if (err instanceof ShopifyInputError) {
+      return customerNoteFailure(
+        ctx,
+        customerId,
+        toolPolicyBlock(formatShopifyToolError("failed to add note", err)),
+        "rejected",
+        "invalid_customer_note_input",
+      );
+    }
+    if (err instanceof ShopifyRequestError && err.status === 404) {
+      return customerNoteFailure(
+        ctx,
+        customerId,
+        toolNotFound(formatShopifyToolError("failed to add note", err)),
+        "not_found",
+        "customer_not_found",
+      );
+    }
+    return customerNoteFailure(
+      ctx,
+      customerId,
+      toolError(formatShopifyToolError("failed to add note", err)),
+      "failed",
+      mutationStarted ? "provider_rejected_customer_note" : "pre_dispatch_failure",
+    );
+  }
+}
+
+function noteSha256(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function customerNoteMatches(
+  customer: Pick<ShopifyCustomer, "id" | "note"> | null | undefined,
+  customerId: string,
+  expectedNote: string,
+): boolean {
+  return Boolean(customer && String(customer.id) === customerId && customer.note === expectedNote);
+}
+
+function customerNoteFailure(
+  ctx: ShopifyContext,
+  customerId: string,
+  result: ToolResult,
+  outcome: "not_found" | "rejected" | "failed" | "unknown",
+  code: string,
+  providerReference: string | null = null,
+): ToolResult {
+  const receipt = shopifyFailureReceipt(
+    ctx,
+    { kind: "customer", id: customerId },
+    "add_shopify_customer_note",
+    outcome,
+    code,
+    providerReference,
+  );
+  return receipt ? { ...result, receipt } : result;
+}
+
+function customerNoteSuccess(
+  ctx: ShopifyContext,
+  customerId: string,
+  appendedNote: string,
+  oldNote: string,
+  newNote: string,
+  reconciled: boolean,
+): ToolResult {
+  const confirmation = reconciled ? " (confirmed after an interrupted provider response)" : "";
+  const result = toolOk(`Note added to Shopify customer record${confirmation}: "${appendedNote}"`);
+  const envelope = shopifyReceiptEnvelope(ctx, { kind: "customer", id: customerId });
+  if (!envelope) return result;
+  const facts: CustomerNoteReceiptFactsV1 = {
+    customerId,
+    previousNoteSha256: noteSha256(oldNote),
+    appendedNoteSha256: noteSha256(appendedNote),
+    resultingNoteSha256: noteSha256(newNote),
+    resultingNoteLength: newNote.length,
+    appendState: "appended",
+  };
+  const receipt: ReceiptV1 = {
+    ...envelope,
+    tool: "add_shopify_customer_note",
+    outcome: "succeeded",
+    providerReference: customerId,
+    facts,
+  };
+  return { ...result, receipt };
+}
+
+async function reconcileCustomerNote(
+  ctx: ShopifyContext,
+  customerId: string,
+  appendedNote: string,
+  oldNote: string,
+  newNote: string,
+  mutationError?: unknown,
+): Promise<ToolResult> {
+  try {
+    const data = await shopifyRestJson<{ customer?: Pick<ShopifyCustomer, "id" | "note"> }>(
+      ctx,
+      `customers/${customerId}.json`,
+      { query: { fields: "id,note" }, maxRetries: 1 },
+    );
+    if (customerNoteMatches(data.customer, customerId, newNote)) {
+      return customerNoteSuccess(ctx, customerId, appendedNote, oldNote, newNote, true);
+    }
+    const detail = mutationError
+      ? ` ${formatShopifyToolError("customer note reconciliation failed", mutationError)}`
+      : "";
+    return customerNoteFailure(
+      ctx,
+      customerId,
+      toolUnknown(`Unknown: the customer-note append may have committed at Shopify, but a follow-up read did not confirm the exact resulting note. Do not retry or confirm it until it is reconciled.${detail}`),
+      "unknown",
+      "customer_note_not_confirmed",
+      customerId,
+    );
+  } catch (error) {
+    return customerNoteFailure(
+      ctx,
+      customerId,
+      toolUnknown(`Unknown: the customer-note append may have committed at Shopify and its follow-up read failed. Do not retry or confirm it until it is reconciled. ${formatShopifyToolError("customer note reconciliation failed", error)}`),
+      "unknown",
+      "customer_note_reconciliation_failed",
+      customerId,
+    );
   }
 }

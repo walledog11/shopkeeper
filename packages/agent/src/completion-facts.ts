@@ -10,6 +10,7 @@ import type { RawToolCall } from "./types.js";
 export type CompletionAction =
   | "address_update"
   | "cancellation"
+  | "customer_note"
   | "customer_update"
   | "discount"
   | "exchange"
@@ -167,6 +168,8 @@ function mutationFacts(input: {
       return orderId ? [fact("address_update", input.tool, input.outcome, input.executionReference, orderOptions)] : [];
     case "update_shopify_customer_info":
       return customerId ? [fact("customer_update", input.tool, input.outcome, input.executionReference, customerOptions)] : [];
+    case "add_shopify_customer_note":
+      return customerId ? [fact("customer_note", input.tool, input.outcome, input.executionReference, customerOptions)] : [];
     case "fulfill_order":
       return orderId ? [fact("fulfillment", input.tool, input.outcome, input.executionReference, orderOptions)] : [];
     case "create_shopify_order": {
@@ -308,6 +311,14 @@ function receiptCompletionFacts(
 
   if (receipt.tool === "update_shopify_customer_info") {
     return [fact("customer_update", receipt.tool, outcome, executionReference, {
+      target: receipt.outcome === "succeeded"
+        ? { kind: "customer", id: receipt.facts.customerId }
+        : target,
+    })];
+  }
+
+  if (receipt.tool === "add_shopify_customer_note") {
+    return [fact("customer_note", receipt.tool, outcome, executionReference, {
       target: receipt.outcome === "succeeded"
         ? { kind: "customer", id: receipt.facts.customerId }
         : target,

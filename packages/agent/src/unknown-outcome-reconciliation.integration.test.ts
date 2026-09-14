@@ -505,6 +505,54 @@ describe("unknown outcome reconciliation", () => {
       });
   });
 
+  it("keeps an observed customer-note append unknown without its hash-bound receipt", async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
+    const operationId = crypto.randomUUID();
+    const action = await db.agentAction.create({
+      data: {
+        turnId: crypto.randomUUID(),
+        organizationId: org.id,
+        operationId,
+        actionIndex: 0,
+        providerOperationKey: operationId,
+        dispatchState: "unknown",
+        submittedAt: ELEVEN_MINUTES_AGO(),
+        tool: "add_shopify_customer_note",
+        category: "action",
+        input: { customer_id: "123", note: "Follow up" },
+        output: "Unknown provider result",
+        status: "unknown",
+        errorDetail: "Unknown provider result",
+        mode: "human_approved",
+        executedAt: ELEVEN_MINUTES_AGO(),
+        durationMs: 1,
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      customer: { id: 123, note: "Existing\n\nFollow up" },
+    }), { status: 200, headers: { "Content-Type": "application/json" } })));
+
+    const outcome = await reconcileUnknownAgentAction({
+      actionId: action.id,
+      organizationId: org.id,
+      executionId: null,
+      providerOperationKey: operationId,
+      tool: action.tool,
+      input: action.input,
+      shopify: { shop: "test.myshopify.com", accessToken: "test" },
+    });
+
+    expect(outcome).toBe("still_unknown");
+    await expect(db.agentAction.findUniqueOrThrow({ where: { id: action.id } }))
+      .resolves.toMatchObject({
+        dispatchState: "unknown",
+        status: "unknown",
+        receiptVersion: null,
+        receipt: null,
+      });
+  });
+
   it("releases stale reserved goodwill reservations", async () => {
     const org = await createTestOrg();
     orgId = org.id;

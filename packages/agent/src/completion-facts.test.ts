@@ -516,6 +516,41 @@ describe("completion facts", () => {
     })]);
   });
 
+  it("grounds a customer-note append in its receipt without exposing note text", () => {
+    const facts = executedCompletionFacts([{
+      tool: "add_shopify_customer_note",
+      input: { customer_id: "wrong-customer", note: "private text" },
+      result: "A note was added.",
+      status: "success" as const,
+      receipt: {
+        version: 1 as const,
+        operationId: "operation-note-1",
+        executionId: "execution-note-1",
+        tool: "add_shopify_customer_note" as const,
+        target: { kind: "customer", id: "9001" },
+        observedAt: "2026-09-13T08:00:00.000Z",
+        outcome: "succeeded" as const,
+        providerReference: "9001",
+        facts: {
+          customerId: "9001",
+          previousNoteSha256: "a".repeat(64),
+          appendedNoteSha256: "b".repeat(64),
+          resultingNoteSha256: "c".repeat(64),
+          resultingNoteLength: 42,
+          appendState: "appended" as const,
+        },
+      },
+    }]);
+
+    expect(facts).toEqual([expect.objectContaining({
+      action: "customer_note",
+      target: { kind: "customer", id: "9001" },
+      outcome: "success",
+      executionReference: "operation-note-1",
+    })]);
+    expect(JSON.stringify(facts)).not.toContain("private text");
+  });
+
   it("does not call staged order-edit legs completed", () => {
     const facts = executedCompletionFacts([{
       tool: "edit_shopify_order",

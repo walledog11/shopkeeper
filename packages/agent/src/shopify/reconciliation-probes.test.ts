@@ -860,6 +860,21 @@ describe("probeUnknownShopifyMutation", () => {
     expect(result).toMatchObject({ outcome: "still_unknown" });
   });
 
+  it("does not promote an observed customer note without the append receipt", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+      customer: { id: 123, note: "Existing\n\nFollow up" },
+    })));
+
+    const result = await probeUnknownShopifyMutation(
+      "add_shopify_customer_note",
+      { customer_id: "123", note: "Follow up" },
+      ctx,
+    );
+
+    expect(result).toMatchObject({ outcome: "still_unknown" });
+    expect(result.message).toContain("present");
+  });
+
   it("wraps probe failures as still_unknown instead of throwing", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
 

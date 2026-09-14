@@ -231,6 +231,28 @@ function customerInfoReceipt(overrides: Partial<ReceiptV1> = {}): ReceiptV1 {
   } as ReceiptV1;
 }
 
+function customerNoteReceipt(overrides: Partial<ReceiptV1> = {}): ReceiptV1 {
+  return {
+    version: 1,
+    operationId: "operation-customer-note-1",
+    executionId: "execution-customer-note-1",
+    tool: "add_shopify_customer_note",
+    target: { kind: "customer", id: "9001" },
+    observedAt: "2026-09-13T08:00:00.000Z",
+    outcome: "succeeded",
+    providerReference: "9001",
+    facts: {
+      customerId: "9001",
+      previousNoteSha256: "a".repeat(64),
+      appendedNoteSha256: "b".repeat(64),
+      resultingNoteSha256: "c".repeat(64),
+      resultingNoteLength: 42,
+      appendState: "appended",
+    },
+    ...overrides,
+  } as ReceiptV1;
+}
+
 describe("receipt v1", () => {
   it("validates exact refund facts independently of display text", () => {
     const receipt = refundReceipt();
@@ -300,6 +322,22 @@ describe("receipt v1", () => {
         ],
       },
     }))).toThrow("must be unique");
+  });
+
+  it("validates privacy-preserving customer-note hashes and target binding", () => {
+    expect(() => parseReceiptV1(customerNoteReceipt())).not.toThrow();
+    expect(() => parseReceiptV1(customerNoteReceipt({ providerReference: "different" })))
+      .toThrow("providerReference");
+    expect(() => parseReceiptV1(customerNoteReceipt({
+      facts: {
+        customerId: "9001",
+        previousNoteSha256: "not-a-digest",
+        appendedNoteSha256: "b".repeat(64),
+        resultingNoteSha256: "c".repeat(64),
+        resultingNoteLength: 42,
+        appendState: "appended",
+      },
+    }))).toThrow("previousNoteSha256");
   });
 
   it("rejects imprecise money and invalid currency", () => {

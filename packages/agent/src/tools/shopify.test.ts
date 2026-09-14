@@ -171,8 +171,90 @@ describe("shopify tools", () => {
     const result = await addShopifyCustomerNote({ customer_id: "123", note: "New note" }, ctx);
 
     expect(result.message).toContain("Error: failed to add note");
-    expect(result.status).toBe("error");
+    expect(result.status).toBe("not_found");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("emits a hash-bound receipt after appending a customer note", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123, note: "Existing" } }))
+      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123, note: "Existing\n\nFollow up" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await addShopifyCustomerNote({ customer_id: "123", note: "Follow up" }, {
+      ...ctx,
+      operationId: "operation-note-1",
+      executionId: "execution-note-1",
+    });
+
+    expect(result).toMatchObject({
+      status: "ok",
+      receipt: {
+        tool: "add_shopify_customer_note",
+        target: { kind: "customer", id: "123" },
+        outcome: "succeeded",
+        providerReference: "123",
+        facts: {
+          customerId: "123",
+          resultingNoteLength: 19,
+          appendState: "appended",
+        },
+      },
+    });
+    const facts = (result.receipt as Extract<NonNullable<typeof result.receipt>, {
+      tool: "add_shopify_customer_note";
+      outcome: "succeeded";
+    }>).facts;
+    expect(facts.previousNoteSha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(facts.appendedNoteSha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(facts.resultingNoteSha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(JSON.stringify(facts)).not.toContain("Follow up");
+  });
+
+  it("reconciles an incomplete customer-note response without appending twice", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123, note: "Existing" } }))
+      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123 } }))
+      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123, note: "Existing\n\nFollow up" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await addShopifyCustomerNote({ customer_id: "123", note: "Follow up" }, {
+      ...ctx,
+      operationId: "operation-note-1",
+      executionId: "execution-note-1",
+    });
+
+    expect(result.status).toBe("ok");
+    expect(result.message).toContain("confirmed after an interrupted provider response");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls.filter(([, init]) => init.method === "PUT")).toHaveLength(1);
+  });
+
+  it("keeps a customer-note append unknown when read-back does not match", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123, note: "Existing" } }))
+      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123 } }))
+      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123, note: "Different" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await addShopifyCustomerNote({ customer_id: "123", note: "Follow up" }, {
+      ...ctx,
+      operationId: "operation-note-1",
+      executionId: "execution-note-1",
+    });
+
+    expect(result).toMatchObject({
+      status: "unknown",
+      receipt: {
+        tool: "add_shopify_customer_note",
+        outcome: "unknown",
+        code: "customer_note_not_confirmed",
+        providerReference: "123",
+      },
+    });
   });
 
   it("stops the plan on a partial order-address update", async () => {
