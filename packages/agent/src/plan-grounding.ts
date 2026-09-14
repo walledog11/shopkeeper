@@ -11,7 +11,7 @@ import {
 import type { RawToolCall } from "./types.js";
 
 const MUTATION_SUBJECT =
-  "refunds?|returns?|exchanges?|cancellations?|gift cards?|store credit|replacements?|discounts?|orders?|address(?:es)?|labels?|shipments?";
+  "refunds?|returns?|exchanges?|cancellations?|gift cards?|store credit|replacements?|discounts?|orders?|address(?:es)?|customer (?:info|information|profile)|email address|phone number|customer name|labels?|shipments?";
 const MUTATION_VERB =
   "initiated|issued|processed|created|started|placed|sent|applied|approved|arranged|completed|refunded|returned|cancell?ed|exchanged|fulfilled|shipped|updated|changed|edited|opened|set up";
 const MUTATION_VERB_PROGRESSIVE =
@@ -64,6 +64,7 @@ const SPECIFIC_CLAIM_ACTIONS: readonly [RegExp, ReadonlySet<CompletionAction>][]
   [/\b(?:exchanges?|exchanged|exchanging|replacements?)\b/i, new Set(["exchange", "order_creation"])],
   [/\bcancell?(?:ations?|ed|ing)?\b/i, new Set(["cancellation"])],
   [/\baddress(?:es)?\b/i, new Set(["address_update"])],
+  [/\b(?:customer (?:info|information|profile)|email address|phone number|customer name)\b/i, new Set(["customer_update"])],
   [/\b(?:shipments?|shipped|shipping|fulfilled|fulfilling)\b/i, new Set(["fulfillment"])],
   [/\bdiscounts?\b/i, new Set(["discount"])],
 ];
@@ -324,6 +325,8 @@ function renderCompletionFact(fact: CompletionFact): string {
       return `Store credit${moneySuffix} has been issued.`;
     case "address_update":
       return order ? `The address for order ${order} has been updated.` : "The address has been updated.";
+    case "customer_update":
+      return "The customer profile has been updated.";
     case "fulfillment":
       return order ? `Order ${order} has been fulfilled.` : "The order has been fulfilled.";
     case "order_creation":

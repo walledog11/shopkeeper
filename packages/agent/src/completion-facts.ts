@@ -10,6 +10,7 @@ import type { RawToolCall } from "./types.js";
 export type CompletionAction =
   | "address_update"
   | "cancellation"
+  | "customer_update"
   | "discount"
   | "exchange"
   | "fulfillment"
@@ -165,7 +166,7 @@ function mutationFacts(input: {
     case "update_shopify_order_address":
       return orderId ? [fact("address_update", input.tool, input.outcome, input.executionReference, orderOptions)] : [];
     case "update_shopify_customer_info":
-      return customerId ? [fact("address_update", input.tool, input.outcome, input.executionReference, customerOptions)] : [];
+      return customerId ? [fact("customer_update", input.tool, input.outcome, input.executionReference, customerOptions)] : [];
     case "fulfill_order":
       return orderId ? [fact("fulfillment", input.tool, input.outcome, input.executionReference, orderOptions)] : [];
     case "create_shopify_order": {
@@ -301,6 +302,14 @@ function receiptCompletionFacts(
               ? { aliases: [receipt.facts.orderName] }
               : {}),
           }
+        : target,
+    })];
+  }
+
+  if (receipt.tool === "update_shopify_customer_info") {
+    return [fact("customer_update", receipt.tool, outcome, executionReference, {
+      target: receipt.outcome === "succeeded"
+        ? { kind: "customer", id: receipt.facts.customerId }
         : target,
     })];
   }

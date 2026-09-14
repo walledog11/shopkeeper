@@ -146,6 +146,13 @@ export interface OrderCreationReceiptFactsV1 {
   currency: string;
 }
 
+export type CustomerInfoReceiptFieldV1 = "firstName" | "lastName" | "email" | "phone";
+
+export interface CustomerInfoReceiptFactsV1 {
+  customerId: string;
+  updates: Array<{ field: CustomerInfoReceiptFieldV1; value: string }>;
+}
+
 export type ReceiptSuccessV1 =
   | (ReceiptBaseV1<"create_refund"> & {
       outcome: "succeeded";
@@ -196,6 +203,11 @@ export type ReceiptSuccessV1 =
       outcome: "succeeded";
       providerReference: string;
       facts: OrderCreationReceiptFactsV1;
+    })
+  | (ReceiptBaseV1<"update_shopify_customer_info"> & {
+      outcome: "succeeded";
+      providerReference: string;
+      facts: CustomerInfoReceiptFactsV1;
     });
 
 type ReceiptToolV1 = ReceiptSuccessV1["tool"];
@@ -290,9 +302,31 @@ function requireRegisteredReceiptTool(tool: string): asserts tool is ReceiptTool
     && tool !== "update_shopify_order_address"
     && tool !== "edit_shopify_order"
     && tool !== "create_shopify_order"
+    && tool !== "update_shopify_customer_info"
   ) {
     throw new ReceiptValidationError(`no receipt validator is registered for ${tool}`);
   }
+}
+
+function parseCustomerInfoFacts(value: unknown): CustomerInfoReceiptFactsV1 {
+  if (!isRecord(value)) throw new ReceiptValidationError("customer info facts must be an object");
+  requireNonEmptyString(value.customerId, "facts.customerId");
+  if (!Array.isArray(value.updates) || value.updates.length === 0) {
+    throw new ReceiptValidationError("customer info facts require updates");
+  }
+  const allowedFields = new Set<CustomerInfoReceiptFieldV1>(["firstName", "lastName", "email", "phone"]);
+  const seen = new Set<CustomerInfoReceiptFieldV1>();
+  for (const [index, update] of value.updates.entries()) {
+    const field = `facts.updates[${index}]`;
+    if (!isRecord(update) || typeof update.field !== "string" || !allowedFields.has(update.field as CustomerInfoReceiptFieldV1)) {
+      throw new ReceiptValidationError(`${field}.field is invalid`);
+    }
+    const updateField = update.field as CustomerInfoReceiptFieldV1;
+    if (seen.has(updateField)) throw new ReceiptValidationError(`${field}.field must be unique`);
+    seen.add(updateField);
+    requireNonEmptyString(update.value, `${field}.value`);
+  }
+  return value as unknown as CustomerInfoReceiptFactsV1;
 }
 
 function parseOrderCreationFacts(value: unknown): OrderCreationReceiptFactsV1 {
@@ -591,7 +625,14 @@ export function parseReceiptV1(value: unknown): ReceiptV1 {
   if (!isRecord(value)) throw new ReceiptValidationError("receipt must be an object");
   const base = parseBaseReceipt(value);
   requireRegisteredReceiptTool(base.tool);
-  if (base.tool !== "create_shopify_order" && base.target.kind !== "order") {
+  if (base.tool === "update_shopify_customer_info" && base.target.kind !== "customer") {
+    throw new ReceiptValidationError(`${base.tool} receipt target must be a customer`);
+  }
+  if (
+    base.tool !== "create_shopify_order"
+    && base.tool !== "update_shopify_customer_info"
+    && base.target.kind !== "order"
+  ) {
     throw new ReceiptValidationError(`${base.tool} receipt target must be an order`);
   }
   if (value.outcome === "succeeded") {
@@ -675,6 +716,15 @@ export function parseReceiptV1(value: unknown): ReceiptV1 {
       }
       if (value.providerReference !== facts.orderId) {
         throw new ReceiptValidationError("order creation providerReference must match facts.orderId");
+      }
+    } else if (base.tool === "update_shopify_customer_info") {
+      requireNonEmptyString(value.providerReference, "providerReference");
+      const facts = parseCustomerInfoFacts(value.facts);
+      if (base.target.id !== facts.customerId) {
+        throw new ReceiptValidationError("customer info target must match facts.customerId");
+      }
+      if (value.providerReference !== facts.customerId) {
+        throw new ReceiptValidationError("customer info providerReference must match facts.customerId");
       }
     }
   } else if (

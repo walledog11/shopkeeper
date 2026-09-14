@@ -7,6 +7,7 @@ import {
   createShopifyOrder,
   editShopifyOrder,
   issueDiscount,
+  updateShopifyCustomerInfo,
   updateShopifyOrderAddress,
 } from "./shopify.js";
 import { shopifyOperationTag } from "../shopify/client.js";
@@ -22,6 +23,147 @@ afterEach(() => {
 });
 
 describe("shopify tools", () => {
+  it("emits provider-observed customer-info facts for an identity-bearing update", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
+      customer: {
+        id: 123,
+        first_name: "Jane",
+        last_name: "Smith",
+        email: "jane@example.com",
+        phone: "+14155550100",
+      },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await updateShopifyCustomerInfo({
+      customer_id: "123",
+      first_name: "Jane",
+      email: "JANE@example.com",
+    }, { ...ctx, operationId: "operation-customer-1", executionId: "execution-customer-1" });
+
+    expect(result).toMatchObject({
+      status: "ok",
+      receipt: {
+        tool: "update_shopify_customer_info",
+        target: { kind: "customer", id: "123" },
+        outcome: "succeeded",
+        providerReference: "123",
+        facts: {
+          customerId: "123",
+          updates: [
+            { field: "firstName", value: "Jane" },
+            { field: "email", value: "jane@example.com" },
+          ],
+        },
+      },
+    });
+  });
+
+  it("reconciles an incomplete customer-update response with a provider read", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123 } }))
+      .mockResolvedValueOnce(jsonResponse({
+        customer: { id: 123, first_name: "Jane", email: "jane@example.com" },
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await updateShopifyCustomerInfo({
+      customer_id: "123",
+      first_name: "Jane",
+      email: "jane@example.com",
+    }, { ...ctx, operationId: "operation-customer-1", executionId: "execution-customer-1" });
+
+    expect(result.status).toBe("ok");
+    expect(result.message).toContain("confirmed after an interrupted provider response");
+    expect(result.receipt).toMatchObject({ outcome: "succeeded", providerReference: "123" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a customer update unknown when the provider state does not match", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123 } }))
+      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123, first_name: "Old" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await updateShopifyCustomerInfo({
+      customer_id: "123",
+      first_name: "Jane",
+    }, { ...ctx, operationId: "operation-customer-1", executionId: "execution-customer-1" });
+
+    expect(result).toMatchObject({
+      status: "unknown",
+      receipt: {
+        tool: "update_shopify_customer_info",
+        target: { kind: "customer", id: "123" },
+        outcome: "unknown",
+        code: "customer_update_not_confirmed",
+        providerReference: "123",
+      },
+    });
+  });
+
+  it("reconciles a customer update after an ambiguous provider response", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ errors: "upstream unavailable" }, { status: 503 }))
+      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123, phone: "+14155550100" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await updateShopifyCustomerInfo({
+      customer_id: "123",
+      phone: "+14155550100",
+    }, { ...ctx, operationId: "operation-customer-1", executionId: "execution-customer-1" });
+
+    expect(result.status).toBe("ok");
+    expect(result.message).toContain("confirmed after an interrupted provider response");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns a typed not-found outcome for a missing customer", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(jsonResponse(
+      { errors: "Not found" },
+      { status: 404 },
+    )));
+
+    const result = await updateShopifyCustomerInfo({
+      customer_id: "123",
+      first_name: "Jane",
+    }, { ...ctx, operationId: "operation-customer-1", executionId: "execution-customer-1" });
+
+    expect(result).toMatchObject({
+      status: "not_found",
+      receipt: {
+        tool: "update_shopify_customer_info",
+        outcome: "not_found",
+        code: "customer_not_found",
+        providerReference: null,
+      },
+    });
+  });
+
+  it("rejects an empty customer update before provider dispatch", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await updateShopifyCustomerInfo({ customer_id: "123" }, {
+      ...ctx,
+      operationId: "operation-customer-1",
+      executionId: "execution-customer-1",
+    });
+
+    expect(result).toMatchObject({
+      status: "policy_block",
+      receipt: {
+        outcome: "rejected",
+        code: "invalid_customer_update_input",
+        target: { kind: "customer", id: "123" },
+      },
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("does not overwrite a customer note when fetching the existing note fails", async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ errors: "Not found" }, { status: 404 }));
     vi.stubGlobal("fetch", fetchMock);

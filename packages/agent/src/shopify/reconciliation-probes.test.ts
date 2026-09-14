@@ -832,6 +832,34 @@ describe("probeUnknownShopifyMutation", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("observes a committed customer-info update without fabricating receipt facts", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+      customer: { id: 123, first_name: "Jane", email: "jane@example.com" },
+    })));
+
+    const result = await probeUnknownShopifyMutation(
+      "update_shopify_customer_info",
+      { customer_id: "123", first_name: "Jane", email: "JANE@example.com" },
+      ctx,
+    );
+
+    expect(result).toMatchObject({ outcome: "committed" });
+  });
+
+  it("keeps a mismatched customer-info update unknown", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+      customer: { id: 123, first_name: "Old" },
+    })));
+
+    const result = await probeUnknownShopifyMutation(
+      "update_shopify_customer_info",
+      { customer_id: "123", first_name: "Jane" },
+      ctx,
+    );
+
+    expect(result).toMatchObject({ outcome: "still_unknown" });
+  });
+
   it("wraps probe failures as still_unknown instead of throwing", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
 

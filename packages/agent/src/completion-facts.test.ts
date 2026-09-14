@@ -483,6 +483,39 @@ describe("completion facts", () => {
     })]);
   });
 
+  it("grounds a customer-profile update in receipt identity rather than input or wording", () => {
+    const common = {
+      tool: "update_shopify_customer_info",
+      input: { customer_id: "wrong-customer", first_name: "Requested" },
+      status: "success" as const,
+      receipt: {
+        version: 1 as const,
+        operationId: "operation-customer-1",
+        executionId: "execution-customer-1",
+        tool: "update_shopify_customer_info" as const,
+        target: { kind: "customer", id: "9001" },
+        observedAt: "2026-09-13T08:00:00.000Z",
+        outcome: "succeeded" as const,
+        providerReference: "9001",
+        facts: {
+          customerId: "9001",
+          updates: [{ field: "firstName" as const, value: "Observed" }],
+        },
+      },
+    };
+
+    const first = executedCompletionFacts([{ ...common, result: "Profile updated." }]);
+    const second = executedCompletionFacts([{ ...common, result: "Entirely different display text." }]);
+
+    expect(first).toEqual(second);
+    expect(first).toEqual([expect.objectContaining({
+      action: "customer_update",
+      target: { kind: "customer", id: "9001" },
+      outcome: "success",
+      executionReference: "operation-customer-1",
+    })]);
+  });
+
   it("does not call staged order-edit legs completed", () => {
     const facts = executedCompletionFacts([{
       tool: "edit_shopify_order",

@@ -443,6 +443,7 @@ describe("Shopify scope gating", () => {
     expect(unchecked).toContain("get_inventory_status");
     expect(unchecked.filter((name) => !short.includes(name))).toEqual([
       "get_inventory_status",
+      "update_shopify_customer_info",
       "update_shopify_order_address",
       "create_refund",
       "create_partial_refund",
@@ -462,8 +463,8 @@ describe("Shopify scope gating", () => {
     expect(scoped.length).toBeGreaterThan(0);
     expect([...new Set(scoped)]).toEqual([
       "read_products",
-      "write_orders",
       "write_customers",
+      "write_orders",
       "write_order_edits",
       "read_orders",
       "write_returns",
@@ -477,6 +478,8 @@ describe("Shopify scope gating", () => {
     expect(toolScopesGranted("get_inventory_status", ["write_products"])).toBe(true);
     expect(toolScopesGranted("update_shopify_order_address", ["write_orders"])).toBe(false);
     expect(toolScopesGranted("update_shopify_order_address", ["write_orders", "write_customers"])).toBe(true);
+    expect(toolScopesGranted("update_shopify_customer_info", ["read_customers"])).toBe(false);
+    expect(toolScopesGranted("update_shopify_customer_info", ["write_customers"])).toBe(true);
     expect(toolScopesGranted("create_refund", ["read_orders"])).toBe(false);
     expect(toolScopesGranted("create_refund", ["write_orders"])).toBe(true);
     expect(toolScopesGranted("create_shopify_order", ["read_orders"])).toBe(false);

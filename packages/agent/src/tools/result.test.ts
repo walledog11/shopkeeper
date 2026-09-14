@@ -210,6 +210,27 @@ function orderCreationReceipt(overrides: Partial<ReceiptV1> = {}): ReceiptV1 {
   } as ReceiptV1;
 }
 
+function customerInfoReceipt(overrides: Partial<ReceiptV1> = {}): ReceiptV1 {
+  return {
+    version: 1,
+    operationId: "operation-customer-info-1",
+    executionId: "execution-customer-info-1",
+    tool: "update_shopify_customer_info",
+    target: { kind: "customer", id: "9001" },
+    observedAt: "2026-09-13T08:00:00.000Z",
+    outcome: "succeeded",
+    providerReference: "9001",
+    facts: {
+      customerId: "9001",
+      updates: [
+        { field: "firstName", value: "Jane" },
+        { field: "email", value: "jane@example.com" },
+      ],
+    },
+    ...overrides,
+  } as ReceiptV1;
+}
+
 describe("receipt v1", () => {
   it("validates exact refund facts independently of display text", () => {
     const receipt = refundReceipt();
@@ -262,6 +283,23 @@ describe("receipt v1", () => {
       code: "creation_not_confirmed",
       providerReference: null,
     })).not.toThrow();
+  });
+
+  it("validates customer-info facts and binds them to the customer", () => {
+    expect(() => parseReceiptV1(customerInfoReceipt())).not.toThrow();
+    expect(() => parseReceiptV1(customerInfoReceipt({ providerReference: "different" })))
+      .toThrow("providerReference");
+    expect(() => parseReceiptV1(customerInfoReceipt({ target: { kind: "order", id: "9001" } })))
+      .toThrow("target must be a customer");
+    expect(() => parseReceiptV1(customerInfoReceipt({
+      facts: {
+        customerId: "9001",
+        updates: [
+          { field: "email", value: "jane@example.com" },
+          { field: "email", value: "duplicate@example.com" },
+        ],
+      },
+    }))).toThrow("must be unique");
   });
 
   it("rejects imprecise money and invalid currency", () => {
