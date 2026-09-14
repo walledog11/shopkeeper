@@ -430,6 +430,8 @@ describe("Shopify scope gating", () => {
       "write_merchant_managed_fulfillment_orders",
       "write_order_edits",
       "read_orders",
+      "write_gift_cards",
+      "read_gift_cards",
     ]).map((t) => t.name);
     const unchecked = selectAgentTools(undefined, null, null).map((t) => t.name);
 
@@ -453,6 +455,7 @@ describe("Shopify scope gating", () => {
       "edit_shopify_order",
       "create_return",
       "create_exchange",
+      "create_gift_card",
       "attach_return_label",
       "fulfill_order",
     ]);
@@ -469,6 +472,8 @@ describe("Shopify scope gating", () => {
       "write_order_edits",
       "read_orders",
       "write_returns",
+      "write_gift_cards",
+      "read_gift_cards",
       "write_merchant_managed_fulfillment_orders",
     ]);
   });
@@ -487,6 +492,11 @@ describe("Shopify scope gating", () => {
     expect(toolScopesGranted("create_refund", ["write_orders"])).toBe(true);
     expect(toolScopesGranted("create_shopify_order", ["read_orders"])).toBe(false);
     expect(toolScopesGranted("create_shopify_order", ["write_orders"])).toBe(true);
+    expect(toolScopesGranted("create_gift_card", ["write_customers"])).toBe(false);
+    expect(toolScopesGranted("create_gift_card", ["write_gift_cards"])).toBe(false);
+    expect(toolScopesGranted("create_gift_card", ["read_gift_cards", "write_customers"])).toBe(false);
+    expect(toolScopesGranted("create_gift_card", ["write_gift_cards", "write_customers"])).toBe(true);
+    expect(toolScopesGranted("create_gift_card", ["write_gift_cards", "write_customers", "read_gift_cards"])).toBe(true);
     expect(toolScopesGranted("create_return", ["read_returns"])).toBe(false);
     expect(toolScopesGranted("create_return", ["write_returns"])).toBe(true);
     expect(toolScopesGranted("create_exchange", ["write_returns"])).toBe(false);

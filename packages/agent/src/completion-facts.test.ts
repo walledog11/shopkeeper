@@ -142,6 +142,46 @@ describe("completion facts", () => {
     })]);
   });
 
+  it("uses observed gift-card money and customer rather than requested input or wording", () => {
+    const common = {
+      tool: "create_gift_card",
+      input: { customer_id: "wrong-customer", amount: "50.00" },
+      status: "success" as const,
+      receipt: {
+        version: 1 as const,
+        operationId: "operation-gift-card-1",
+        executionId: "execution-gift-card-1",
+        tool: "create_gift_card" as const,
+        target: { kind: "customer" as const, id: "9001" },
+        observedAt: "2026-09-13T08:00:00.000Z",
+        outcome: "succeeded" as const,
+        providerReference: "gid://shopify/GiftCard/42",
+        facts: {
+          giftCardId: "gid://shopify/GiftCard/42",
+          customerId: "9001",
+          amount: "25.00",
+          currency: "USD",
+          codeSha256: "d".repeat(64),
+          lastCharacters: "a1b2",
+          expiresOn: null,
+          notificationRequested: true as const,
+        },
+      },
+    };
+
+    const first = executedCompletionFacts([{ ...common, result: "Created it." }]);
+    const second = executedCompletionFacts([{ ...common, result: "Different display text." }]);
+    expect(first).toEqual(second);
+    expect(first).toEqual([expect.objectContaining({
+      action: "store_credit",
+      target: { kind: "customer", id: "9001" },
+      amount: "25.00",
+      currency: "USD",
+      outcome: "success",
+      executionReference: "operation-gift-card-1",
+    })]);
+  });
+
   it("does not infer new-runtime facts when a receipt is absent", () => {
     expect(executedCompletionFacts([{
       tool: "create_refund",

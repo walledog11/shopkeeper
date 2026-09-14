@@ -24,7 +24,7 @@ describe("createGiftCard", () => {
 
     const result = await createGiftCard({ amount: "0" }, ctx);
 
-    expect(result.status).toBe("error");
+    expect(result.status).toBe("policy_block");
     expect(result.spentCents).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -40,7 +40,7 @@ describe("createGiftCard", () => {
             id: "gid://shopify/GiftCard/9001",
             expiresOn: "2026-10-04",
             note: `Goodwill: damaged item\nShopkeeper operation: ${expectedCode}`,
-            initialValue: { amount: "25.00" },
+            initialValue: { amount: "25.00", currencyCode: "USD" },
             customer: { id: "gid://shopify/Customer/1001" },
           },
           userErrors: [],
@@ -51,7 +51,7 @@ describe("createGiftCard", () => {
 
     const result = await createGiftCard(
       { amount: "25.00", customer_id: "1001", reason: "damaged item", expires_in_days: 90 },
-      ctx,
+      { ...ctx, executionId: "execution-gift-card-1" },
     );
 
     const request = JSON.parse(fetchMock.mock.calls[0][1].body as string);
@@ -67,6 +67,23 @@ describe("createGiftCard", () => {
     expect(result.spentCents).toBe(2500);
     expect(result.message).toContain(expectedCode);
     expect(result.message).toContain("Shopify is emailing the code to the customer");
+    expect(result.receipt).toMatchObject({
+      tool: "create_gift_card",
+      target: { kind: "customer", id: "1001" },
+      outcome: "succeeded",
+      providerReference: "gid://shopify/GiftCard/9001",
+      facts: {
+        giftCardId: "gid://shopify/GiftCard/9001",
+        customerId: "1001",
+        amount: "25.00",
+        currency: "USD",
+        lastCharacters: expectedCode.slice(-4),
+        expiresOn: "2026-10-04",
+        notificationRequested: true,
+      },
+    });
+    expect(result.receipt && "facts" in result.receipt && JSON.stringify(result.receipt.facts))
+      .not.toContain(expectedCode);
   });
 
   it("requires the code in the reply when no customer is attached", async () => {
@@ -78,7 +95,7 @@ describe("createGiftCard", () => {
             id: "gid://shopify/GiftCard/9002",
             expiresOn: null,
             note: `Shopkeeper operation: ${expectedCode}`,
-            initialValue: { amount: "25.00" },
+            initialValue: { amount: "25.00", currencyCode: "USD" },
             customer: null,
           },
           userErrors: [],
@@ -115,11 +132,13 @@ describe("createGiftCard", () => {
       status: "unknown",
       spentCents: null,
     });
-    expect(result.message).toContain("incomplete or mismatched gift card");
+    expect(result.message).toContain("may have committed");
   });
 
   it.each([429, 503])("returns unknown without replaying an ambiguous HTTP %i", async (status) => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ errors: "response lost" }, status));
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ errors: "response lost" }, status))
+      .mockResolvedValueOnce(jsonResponse({ data: { giftCards: { nodes: [] } } }));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await createGiftCard({ amount: "25.00" }, ctx);
@@ -127,35 +146,121 @@ describe("createGiftCard", () => {
     expect(result.status).toBe("unknown");
     expect(result.spentCents).toBeNull();
     expect(result.message).toContain(expectedCode);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("returns unknown after a connection loss without replaying the gift card", async () => {
-    const fetchMock = vi.fn().mockRejectedValueOnce(new TypeError("socket closed after request write"));
+    const fetchMock = vi.fn()
+      .mockRejectedValueOnce(new TypeError("socket closed after request write"))
+      .mockResolvedValueOnce(jsonResponse({ data: { giftCards: { nodes: [] } } }));
     vi.stubGlobal("fetch", fetchMock);
 
     const result = await createGiftCard({ amount: "25.00" }, ctx);
 
     expect(result.status).toBe("unknown");
     expect(result.spentCents).toBeNull();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("treats a taken stable code as an unknown prior commit", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(jsonResponse({
-      data: {
-        giftCardCreate: {
-          giftCard: null,
-          giftCardCode: null,
-          userErrors: [{ field: ["input", "code"], message: "Code has already been taken.", code: "TAKEN" }],
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(jsonResponse({
+        data: {
+          giftCardCreate: {
+            giftCard: null,
+            giftCardCode: null,
+            userErrors: [{ field: ["input", "code"], message: "Code has already been taken.", code: "TAKEN" }],
+          },
         },
-      },
-    })));
+      }))
+      .mockResolvedValueOnce(jsonResponse({ data: { giftCards: { nodes: [] } } })));
 
     const result = await createGiftCard({ amount: "25.00" }, ctx);
 
     expect(result.status).toBe("unknown");
     expect(result.spentCents).toBeNull();
-    expect(result.message).toContain("same operation may already have committed");
+    expect(result.message).toContain("may have committed");
+  });
+
+  it("confirms an exact gift card after an ambiguous provider response", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ errors: "response lost" }, 503))
+      .mockResolvedValueOnce(jsonResponse({
+        data: {
+          giftCards: {
+            nodes: [{
+              id: "gid://shopify/GiftCard/9004",
+              expiresOn: null,
+              note: `Goodwill: delayed parcel\nShopkeeper operation: ${expectedCode}`,
+              initialValue: { amount: "25.00", currencyCode: "USD" },
+              customer: { id: "gid://shopify/Customer/1001" },
+              lastCharacters: expectedCode.slice(-4),
+            }],
+          },
+        },
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await createGiftCard(
+      { amount: "25.00", customer_id: "1001", reason: "delayed parcel" },
+      { ...ctx, executionId: "execution-gift-card-reconciled" },
+    );
+
+    expect(result).toMatchObject({
+      status: "ok",
+      spentCents: 2500,
+      receipt: {
+        outcome: "succeeded",
+        providerReference: "gid://shopify/GiftCard/9004",
+        facts: { amount: "25.00", currency: "USD", customerId: "1001" },
+      },
+    });
+    expect(result.message).toContain("confirmed after an interrupted provider response");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns a typed failed receipt for a conclusive provider rejection", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse({
+      data: {
+        giftCardCreate: {
+          giftCard: null,
+          giftCardCode: null,
+          userErrors: [{ field: ["input", "initialValue"], message: "Value is unavailable.", code: "INVALID" }],
+        },
+      },
+    })));
+
+    const result = await createGiftCard(
+      { amount: "25.00", customer_id: "1001" },
+      { ...ctx, executionId: "execution-gift-card-failed" },
+    );
+
+    expect(result).toMatchObject({
+      status: "error",
+      spentCents: null,
+      receipt: {
+        tool: "create_gift_card",
+        target: { kind: "customer", id: "1001" },
+        outcome: "failed",
+        code: "provider_rejected_gift_card",
+        providerReference: null,
+      },
+    });
+  });
+
+  it("returns a typed rejected receipt for invalid input", async () => {
+    const result = await createGiftCard(
+      { amount: "0", customer_id: "1001" },
+      { ...ctx, executionId: "execution-gift-card-rejected" },
+    );
+
+    expect(result).toMatchObject({
+      status: "policy_block",
+      spentCents: null,
+      receipt: {
+        outcome: "rejected",
+        code: "invalid_gift_card_input",
+      },
+    });
   });
 });

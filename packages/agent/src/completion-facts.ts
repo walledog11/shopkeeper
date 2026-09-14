@@ -325,6 +325,17 @@ function receiptCompletionFacts(
     })];
   }
 
+  if (receipt.tool === "create_gift_card") {
+    return [fact("store_credit", receipt.tool, outcome, executionReference, {
+      target: receipt.outcome === "succeeded"
+        ? { kind: "customer", id: receipt.facts.customerId }
+        : target,
+      ...(receipt.outcome === "succeeded"
+        ? { amount: receipt.facts.amount, currency: receipt.facts.currency }
+        : {}),
+    })];
+  }
+
   return [];
 }
 

@@ -253,6 +253,30 @@ function customerNoteReceipt(overrides: Partial<ReceiptV1> = {}): ReceiptV1 {
   } as ReceiptV1;
 }
 
+function giftCardReceipt(overrides: Partial<ReceiptV1> = {}): ReceiptV1 {
+  return {
+    version: 1,
+    operationId: "operation-gift-card-1",
+    executionId: "execution-gift-card-1",
+    tool: "create_gift_card",
+    target: { kind: "customer", id: "9001" },
+    observedAt: "2026-09-13T08:00:00.000Z",
+    outcome: "succeeded",
+    providerReference: "gid://shopify/GiftCard/42",
+    facts: {
+      giftCardId: "gid://shopify/GiftCard/42",
+      customerId: "9001",
+      amount: "25.00",
+      currency: "USD",
+      codeSha256: "d".repeat(64),
+      lastCharacters: "a1b2",
+      expiresOn: null,
+      notificationRequested: true,
+    },
+    ...overrides,
+  } as ReceiptV1;
+}
+
 describe("receipt v1", () => {
   it("validates exact refund facts independently of display text", () => {
     const receipt = refundReceipt();
@@ -338,6 +362,21 @@ describe("receipt v1", () => {
         appendState: "appended",
       },
     }))).toThrow("previousNoteSha256");
+  });
+
+  it("validates gift-card money, secret fingerprint, and provider identity", () => {
+    expect(() => parseReceiptV1(giftCardReceipt())).not.toThrow();
+    expect(() => parseReceiptV1(giftCardReceipt({ providerReference: "different" })))
+      .toThrow("providerReference");
+    expect(() => parseReceiptV1(giftCardReceipt({
+      facts: {
+        ...(giftCardReceipt() as Extract<ReceiptV1, {
+          tool: "create_gift_card";
+          outcome: "succeeded";
+        }>).facts,
+        currency: "usd",
+      },
+    }))).toThrow("facts.currency");
   });
 
   it("rejects imprecise money and invalid currency", () => {

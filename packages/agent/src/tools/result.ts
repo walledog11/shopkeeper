@@ -162,6 +162,17 @@ export interface CustomerNoteReceiptFactsV1 {
   appendState: "appended";
 }
 
+export interface GiftCardReceiptFactsV1 {
+  giftCardId: string;
+  customerId: string;
+  amount: string;
+  currency: string;
+  codeSha256: string;
+  lastCharacters: string;
+  expiresOn: string | null;
+  notificationRequested: true;
+}
+
 export type ReceiptSuccessV1 =
   | (ReceiptBaseV1<"create_refund"> & {
       outcome: "succeeded";
@@ -222,6 +233,11 @@ export type ReceiptSuccessV1 =
       outcome: "succeeded";
       providerReference: string;
       facts: CustomerNoteReceiptFactsV1;
+    })
+  | (ReceiptBaseV1<"create_gift_card"> & {
+      outcome: "succeeded";
+      providerReference: string;
+      facts: GiftCardReceiptFactsV1;
     });
 
 type ReceiptToolV1 = ReceiptSuccessV1["tool"];
@@ -318,9 +334,33 @@ function requireRegisteredReceiptTool(tool: string): asserts tool is ReceiptTool
     && tool !== "create_shopify_order"
     && tool !== "update_shopify_customer_info"
     && tool !== "add_shopify_customer_note"
+    && tool !== "create_gift_card"
   ) {
     throw new ReceiptValidationError(`no receipt validator is registered for ${tool}`);
   }
+}
+
+function parseGiftCardFacts(value: unknown): GiftCardReceiptFactsV1 {
+  if (!isRecord(value)) throw new ReceiptValidationError("gift card facts must be an object");
+  requireNonEmptyString(value.giftCardId, "facts.giftCardId");
+  requireNonEmptyString(value.customerId, "facts.customerId");
+  requirePositiveDecimal(value.amount, "facts.amount");
+  if (typeof value.currency !== "string" || !/^[A-Z]{3}$/.test(value.currency)) {
+    throw new ReceiptValidationError("facts.currency must be a three-letter uppercase code");
+  }
+  if (typeof value.codeSha256 !== "string" || !/^[a-f0-9]{64}$/.test(value.codeSha256)) {
+    throw new ReceiptValidationError("facts.codeSha256 must be a SHA-256 digest");
+  }
+  if (typeof value.lastCharacters !== "string" || !/^[a-z0-9]{4}$/i.test(value.lastCharacters)) {
+    throw new ReceiptValidationError("facts.lastCharacters must be four alphanumeric characters");
+  }
+  if (value.expiresOn !== null && (typeof value.expiresOn !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value.expiresOn))) {
+    throw new ReceiptValidationError("facts.expiresOn must be an ISO date or null");
+  }
+  if (value.notificationRequested !== true) {
+    throw new ReceiptValidationError("facts.notificationRequested must be true");
+  }
+  return value as unknown as GiftCardReceiptFactsV1;
 }
 
 function parseCustomerNoteFacts(value: unknown): CustomerNoteReceiptFactsV1 {
@@ -658,7 +698,11 @@ export function parseReceiptV1(value: unknown): ReceiptV1 {
   const base = parseBaseReceipt(value);
   requireRegisteredReceiptTool(base.tool);
   if (
-    (base.tool === "update_shopify_customer_info" || base.tool === "add_shopify_customer_note")
+    (
+      base.tool === "update_shopify_customer_info"
+      || base.tool === "add_shopify_customer_note"
+      || base.tool === "create_gift_card"
+    )
     && base.target.kind !== "customer"
   ) {
     throw new ReceiptValidationError(`${base.tool} receipt target must be a customer`);
@@ -667,6 +711,7 @@ export function parseReceiptV1(value: unknown): ReceiptV1 {
     base.tool !== "create_shopify_order"
     && base.tool !== "update_shopify_customer_info"
     && base.tool !== "add_shopify_customer_note"
+    && base.tool !== "create_gift_card"
     && base.target.kind !== "order"
   ) {
     throw new ReceiptValidationError(`${base.tool} receipt target must be an order`);
@@ -770,6 +815,15 @@ export function parseReceiptV1(value: unknown): ReceiptV1 {
       }
       if (value.providerReference !== facts.customerId) {
         throw new ReceiptValidationError("customer note providerReference must match facts.customerId");
+      }
+    } else if (base.tool === "create_gift_card") {
+      requireNonEmptyString(value.providerReference, "providerReference");
+      const facts = parseGiftCardFacts(value.facts);
+      if (base.target.id !== facts.customerId) {
+        throw new ReceiptValidationError("gift card target must match facts.customerId");
+      }
+      if (value.providerReference !== facts.giftCardId) {
+        throw new ReceiptValidationError("gift card providerReference must match facts.giftCardId");
       }
     }
   } else if (

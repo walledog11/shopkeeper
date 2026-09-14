@@ -18,7 +18,7 @@ import {
   STALE_RESERVED_SPEND_ERROR,
   STALE_ACTION_DISPATCH_ERROR,
 } from "./unknown-outcome-reconciliation.js";
-import { shopifyOperationTag } from "./shopify/client.js";
+import { shopifyIdempotencyKey, shopifyOperationTag } from "./shopify/client.js";
 
 const ELEVEN_MINUTES_AGO = () => new Date(Date.now() - 11 * 60 * 1000);
 
@@ -538,6 +538,64 @@ describe("unknown outcome reconciliation", () => {
       organizationId: org.id,
       executionId: null,
       providerOperationKey: operationId,
+      tool: action.tool,
+      input: action.input,
+      shopify: { shop: "test.myshopify.com", accessToken: "test" },
+    });
+
+    expect(outcome).toBe("still_unknown");
+    await expect(db.agentAction.findUniqueOrThrow({ where: { id: action.id } }))
+      .resolves.toMatchObject({
+        dispatchState: "unknown",
+        status: "unknown",
+        receiptVersion: null,
+        receipt: null,
+      });
+  });
+
+  it("keeps an observed gift-card commit unknown when the probe cannot rebuild its receipt", async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
+    const operationId = crypto.randomUUID();
+    const providerOperationKey = "execution-1:gift_card";
+    const code = shopifyIdempotencyKey(providerOperationKey).replaceAll("-", "").slice(0, 20);
+    const action = await db.agentAction.create({
+      data: {
+        turnId: crypto.randomUUID(),
+        organizationId: org.id,
+        operationId,
+        actionIndex: 0,
+        providerOperationKey,
+        dispatchState: "unknown",
+        submittedAt: ELEVEN_MINUTES_AGO(),
+        tool: "create_gift_card",
+        category: "action",
+        input: { customer_id: "123", amount: "25.00" },
+        output: "Unknown provider result",
+        status: "unknown",
+        errorDetail: "Unknown provider result",
+        mode: "human_approved",
+        executedAt: ELEVEN_MINUTES_AGO(),
+        durationMs: 1,
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      data: {
+        giftCards: {
+          nodes: [{
+            id: "gid://shopify/GiftCard/42",
+            initialValue: { amount: "25.00" },
+            note: `Shopkeeper operation: ${code}`,
+          }],
+        },
+      },
+    }), { status: 200, headers: { "Content-Type": "application/json" } })));
+
+    const outcome = await reconcileUnknownAgentAction({
+      actionId: action.id,
+      organizationId: org.id,
+      executionId: null,
+      providerOperationKey,
       tool: action.tool,
       input: action.input,
       shopify: { shop: "test.myshopify.com", accessToken: "test" },

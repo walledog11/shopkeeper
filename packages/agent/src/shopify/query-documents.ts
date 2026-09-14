@@ -24,6 +24,7 @@ import {
   ORDER_FULFILLMENT_ORDERS_QUERY,
 } from "./fulfillment.js";
 import { CREATED_ORDER_LOOKUP_QUERY } from "./order-creation.js";
+import { GIFT_CARD_RECEIPT_LOOKUP_QUERY } from "./gift-cards.js";
 import { PRODUCT_SEARCH_QUERY } from "./products.js";
 import { INVENTORY_STATUS_QUERY } from "./inventory.js";
 import { AUTOMATIC_DISCOUNTS_QUERY } from "./flash-sales.js";
@@ -62,6 +63,10 @@ export const SHOPIFY_QUERY_DOCUMENTS: Record<string, ShopifyQueryDocument> = {
   },
   giftCardsByCode: {
     document: GIFT_CARDS_BY_CODE_QUERY,
+    variables: { query: "code:shopkeeper-validation" },
+  },
+  giftCardReceiptLookup: {
+    document: GIFT_CARD_RECEIPT_LOOKUP_QUERY,
     variables: { query: "code:shopkeeper-validation" },
   },
   recentGiftCards: {
