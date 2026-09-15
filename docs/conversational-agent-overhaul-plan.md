@@ -1,14 +1,11 @@
 # Conversational agent overhaul plan
 
 Status: in progress. Package 0 is complete. Package 1 has completed the shared
-receipt boundary, durable action dispatch/recovery lifecycle, and thirteen retained
-Shopify write migrations: full refund, partial refund, cancellation, return,
-exchange, return-label attachment, fulfillment, order address, order edit, and
-order creation, customer info, customer notes, and gift-card creation. The
-shared Shopify registry migration is complete; isolated operator Shopify writes,
-internal thread writes, and durable communication outcomes remain open in
-Package 1. Packages 2–6 have not started.
-Created 2026-09-11; last updated 2026-09-13.
+receipt boundary, durable action dispatch/recovery lifecycle, thirteen retained
+shared-registry Shopify write migrations, and all three isolated operator
+Shopify writes. Internal thread writes and durable communication outcomes remain open in Package 1.
+Packages 2–6 have not started.
+Created 2026-09-11; last updated 2026-09-14.
 
 Implementation detail expanded 2026-09-11 against the current repository. Names marked **proposed** describe work to implement, not APIs or tables that already exist. This document authorizes no production operation by itself.
 
@@ -364,7 +361,7 @@ Primary locations: [agent package](../packages/agent/README.md), [database schem
 
 ### 1. Preserve typed outcomes through the existing execution path
 
-Progress as of 2026-09-13:
+Progress as of 2026-09-14:
 
 - [x] Add a versioned receipt union with runtime validation for `succeeded`,
   `rejected`, `failed`, `not_found`, and `unknown`, including exact decimal
@@ -460,15 +457,44 @@ Progress as of 2026-09-13:
   recovery lookup (the matching write grant satisfies that read). Reconcile an
   interrupted response or stable-code collision only when exactly one complete
   card matches the operation code, note, customer, amount, and expiration.
+- [x] Migrate the isolated operator `create_flash_sale` write to a version-1
+  receipt with the provider discount identity, application scope, exact variant
+  identities, percentage, start/end times, and provider status. Require
+  `write_discounts` for catalog sales and add `read_products` for variant-scoped
+  sales. Bind identity-bearing attempts to a stable operation marker in the
+  title, submit the mutation only once, and reconcile an interrupted response
+  only when exactly one complete automatic discount matches that marker.
+- [x] Migrate the isolated operator `end_flash_sale` write to a version-1
+  receipt with the exact automatic-discount identity and whether Shopify
+  confirmed deletion directly or a targeted post-interruption read confirmed
+  absence. Require an explicit ID and `write_discounts`, preserve malformed,
+  rejected, missing, incomplete, and uncertain outcomes, and never repeat an
+  ambiguous delete. Expose active-sale discovery separately as the read-only
+  `list_flash_sales` operator tool while retaining the adapter's legacy no-ID
+  listing behavior.
+- [x] Migrate the isolated operator `set_variant_prices` write to a version-1
+  receipt with ordered product batches and exact per-variant product/variant
+  identities, original/requested/provider-observed prices, store currency when
+  Shopify returns it, batch outcome, and confirmation source. Require
+  `write_products`, preserve the legacy `priceChanges` projection, and treat a
+  mixed multi-product result as unknown while retaining confirmed batches.
+  Submit each product batch once; after an interrupted or incomplete mutation
+  response, read all named prices and settle success only when every requested
+  price is observed. A partial, mismatched, or unobservable result remains
+  unknown and is never replayed.
 - [x] Preserve ambiguous or incomplete post-write outcomes as `unknown` for all
-  thirteen migrated writes. Cancellation reuses its existing reconciliation read;
+  sixteen migrated retained Shopify writes. Cancellation reuses its existing
+  reconciliation read;
   refund operation identities remain available to existing reconciliation
   machinery; return, exchange, return-label, fulfillment, order-address, and
   order-edit probes cannot promote a commit unless they can reconstruct the
   complete required receipt; order creation reconciles by its deterministic
   operation tag; gift-card creation performs an exact receipt lookup during the
-  adapter call, while later lifecycle recovery remains unknown if it cannot
-  reconstruct the receipt.
+  adapter call; flash-sale creation performs an operation-tag lookup and
+  flash-sale ending performs an exact-ID absence lookup during the adapter call;
+  variant repricing performs a same-call exact price read after an interrupted
+  or incomplete result; later lifecycle recovery remains unknown if it cannot
+  reconstruct the applicable receipt.
 - [x] Emit versioned definitive outcomes for the migrated operations:
   precondition/policy refusals are `rejected`, confirmed missing cancellation
   targets are `not_found`, and errors known to have made no provider change are
@@ -477,7 +503,7 @@ Progress as of 2026-09-13:
   local refund-budget finalization fails, so reconciliation retains the stable
   operation and provider reference.
 - [x] Register version-1 receipts as required for identity-bearing executions of
-  all thirteen migrated tools. Full refund, partial refund, cancellation, and order
+  all sixteen migrated Shopify tools. Full refund, partial refund, cancellation, and order
   creation require `write_orders`; return and return-label attachment require `write_returns`;
   exchange requires `read_products` plus `write_returns`; fulfillment requires
   `write_merchant_managed_fulfillment_orders`; order address requires
@@ -485,7 +511,10 @@ Progress as of 2026-09-13:
   `write_order_edits` plus `read_orders`; customer info requires
   `write_customers`; customer notes also require `write_customers`; gift-card
   creation requires `write_gift_cards`, `write_customers`, and a
-  `read_gift_cards` recovery grant satisfied by `write_gift_cards`. Selection withholds tools from
+  `read_gift_cards` recovery grant satisfied by `write_gift_cards`; flash-sale
+  creation requires `write_discounts` and conditionally requires
+  `read_products` for variant targeting; flash-sale ending requires
+  `write_discounts`; variant repricing requires `write_products`. Selection withholds tools from
   insufficient grants and execution rechecks the same metadata.
 - [x] Change partial refund creation to Shopify's `@idempotent` directive and
   register its exact exported mutation beside the full-refund mutation in
@@ -515,7 +544,7 @@ Completed Package 1 work at this checkpoint:
 | Typed result boundary | `ReceiptV1` discriminates succeeded, rejected, failed, not-found, and unknown outcomes; runtime validation binds tool, target, operation, execution, provider reference, legacy status, and per-tool facts. |
 | Receipt propagation | Structured receipts travel from the Shopify adapter through `ToolResult`, executor results, `ActionEntry`, run execution, `AgentAction` JSONB, completion facts, and model-visible completion evidence. |
 | Compatibility | Historical string-only actions remain readable only through the explicit pinned-legacy option. New receipt-aware facts never infer consequential success from display prose or proposed inputs. |
-| Migrated provider writes | `create_refund`, `create_partial_refund`, `cancel_order`, `create_return`, `create_exchange`, `attach_return_label`, `fulfill_order`, `update_shopify_order_address`, `edit_shopify_order`, `create_shopify_order`, `update_shopify_customer_info`, `add_shopify_customer_note`, and `create_gift_card` emit version-1 receipts for definitive and uncertain outcomes with provider-observed facts. |
+| Migrated provider writes | `create_refund`, `create_partial_refund`, `cancel_order`, `create_return`, `create_exchange`, `attach_return_label`, `fulfill_order`, `update_shopify_order_address`, `edit_shopify_order`, `create_shopify_order`, `update_shopify_customer_info`, `add_shopify_customer_note`, `create_gift_card`, and the isolated operator `create_flash_sale`, `end_flash_sale`, and `set_variant_prices` writes emit version-1 receipts for definitive and uncertain outcomes with provider-observed facts. |
 | Refund correctness | Full and partial refunds use Shopify-returned amount/currency/refund/transaction facts; partial refunds also preserve line-item quantities. Later budget-finalization failure retains an unknown receipt and reservation rather than erasing provider success evidence. |
 | Cancellation correctness | Cancellation records provider-confirmed cancellation state/time, reason, financial status, and restock result. It never fabricates refund evidence. |
 | Return/exchange correctness | Return and exchange receipts preserve provider return identity/state and exact affected item identities/quantities while retaining the existing `returnWatch` projection. Exchange price comparison remains a precondition rather than fabricated provider financial evidence. Return-label receipts retain exact reverse-delivery identity and a label fingerprint without persisting the URL. |
@@ -525,7 +554,10 @@ Completed Package 1 work at this checkpoint:
 | Customer-info correctness | Customer-info receipts bind the canonical customer and preserve an ordered list of the returned name, email, or phone fields that exactly match the request. Missing or mismatched provider state remains unknown. |
 | Customer-note correctness | Customer-note receipts bind the customer and exact old/append/final note transformation by SHA-256 without copying note plaintext into the receipt. Missing or mismatched read-back remains unknown, and later recovery does not infer authorship from matching text alone. |
 | Gift-card correctness | Gift-card receipts bind the provider card and customer, preserve the returned value/currency and expiry, and fingerprint the one-time code without persisting it as a receipt fact. Exact read-after-interruption reconciliation can produce a receipt; incomplete or non-unique state remains unknown. |
-| Shopify contracts | `create_refund`, `create_partial_refund`, `cancel_order`, and `create_shopify_order` require `write_orders`; `create_return` and `attach_return_label` require `write_returns`; `create_exchange` requires `read_products` plus `write_returns`; `fulfill_order` requires `write_merchant_managed_fulfillment_orders` and retains Shopify's `fulfill_and_ship_orders` user-permission check; order address requires `write_orders` plus `write_customers`; order edit requires `write_order_edits` plus `read_orders`; customer info and customer notes require `write_customers`; gift-card creation requires `write_gift_cards` plus `write_customers`, with `read_gift_cards` declared for its recovery query and satisfied by the write grant. Selection and execution enforce grant metadata. Both refund mutations use Shopify 2026-04 `@idempotent`; the fulfillment, order-edit, and gift-card reconciliation query documents remain registered for schema validation. |
+| Flash-sale correctness | Flash-sale receipts bind the provider discount, exact percentage and schedule, provider status, and either the entire catalog or the returned variant identities. The adapter submits once and can reconcile an interrupted response by its operation-tagged title; incomplete, mismatched, or non-unique state remains unknown. |
+| End-sale correctness | End-sale receipts bind the requested and returned automatic-discount identity and distinguish direct deletion confirmation from absence observed after an interrupted response. Active-sale discovery is a separate read tool; an inconclusive end is never replayed. |
+| Variant-price correctness | Repricing receipts preserve ordered per-product batches and exact old/requested/observed prices per variant. Direct mutation results and read-after-interruption confirmation are distinguished; partial, mismatched, and unobservable batches remain unknown without replay. |
+| Shopify contracts | `create_refund`, `create_partial_refund`, `cancel_order`, and `create_shopify_order` require `write_orders`; `create_return` and `attach_return_label` require `write_returns`; `create_exchange` requires `read_products` plus `write_returns`; `fulfill_order` requires `write_merchant_managed_fulfillment_orders` and retains Shopify's `fulfill_and_ship_orders` user-permission check; order address requires `write_orders` plus `write_customers`; order edit requires `write_order_edits` plus `read_orders`; customer info and customer notes require `write_customers`; gift-card creation requires `write_gift_cards` plus `write_customers`, with `read_gift_cards` declared for its recovery query and satisfied by the write grant; flash-sale creation and ending require `write_discounts`, variant-targeted creation adds `read_products`, and variant repricing requires `write_products`. Selection and execution enforce grant metadata. Both refund mutations use Shopify 2026-04 `@idempotent`; the fulfillment, order-edit, gift-card, flash-sale, and variant-price query documents remain registered for schema validation. |
 | Durable operation identity | Every new non-read attempt receives a UUID operation ID and action index. Organization/operation and organization/non-null-provider-key uniqueness are database-enforced after an abort-on-duplicate migration preflight. |
 | Dispatch lifecycle | Conditional writes enforce `prepared → dispatch_authorized → submitted → settled/unknown`. Prepared rows have null execution fields; submitted and terminal rows carry the appropriate timestamps. A receipt must match the durable operation before settlement. |
 | Crash recovery | Stale authorized or submitted attempts become unknown, never prepared. The existing recovery sweep includes taskless/standalone lifecycle actions and probes using their stored provider identity without replaying the write. |
@@ -541,10 +573,11 @@ Checkpoint evidence:
   the gateway unknown-outcome sweep, the refund, partial-refund, cancellation,
   return, exchange, return-label, fulfillment, order-address, and order-edit
   Shopify adapters, plus order creation, customer info, customer notes, and gift
-  cards, `shopify/receipts.ts`, `shopify/{mutation,query}-documents.ts`, Shopify
-  integration-health scope metadata and app configuration, Prisma schema and two
-  migrations, affected dashboard/gateway completed-action readers, plus their
-  adjacent tests.
+  cards and flash sales, `shopify/receipts.ts`,
+  `shopify/{mutation,query}-documents.ts`, the gateway operator shop-tool owner,
+  Shopify integration-health scope metadata and app configuration, Prisma schema
+  and two migrations, affected dashboard/gateway completed-action readers, plus
+  their adjacent tests.
 - Invariants covered: display wording cannot change receipt-derived facts;
   requested refund money cannot replace provider-confirmed money; cancellation
   does not imply refund evidence; not-found and unknown remain distinct;
@@ -557,7 +590,11 @@ Checkpoint evidence:
   recovery probe never substitutes human-readable text for a required receipt.
   Gift-card completion facts likewise use only provider-observed receipt money
   and customer identity, never requested inputs or display text; the secret code
-  is fingerprinted rather than duplicated into receipt storage.
+  is fingerprinted rather than duplicated into receipt storage. Flash-sale
+  completion facts likewise use the validated receipt percentage, and catalog
+  versus variant targeting is internally consistent and provider-observed.
+  End-sale completion likewise requires an identity-bound receipt; a direct
+  deletion and absence after an interrupted response remain distinguishable.
 - Foundational checkpoint verification passed: `npm run verify:pr`, including
   all 1,046 agent unit tests across 86 files, 1,147 agent coverage tests across
   99 files, repository lint,
@@ -692,6 +729,51 @@ registration, and a fresh-storage assertion that a probe-observed gift-card
 commit remains unknown when the lifecycle cannot reconstruct its required
 receipt. No live Shopify or model operation was run.
 
+Incremental `create_flash_sale` evidence: `npm run verify:pr` passed, including
+repository lint/structure, typecheck, Node tests, all workspace unit and coverage
+suites, critical-coverage gates, 12 browser smoke tests, and production builds.
+Agent suites passed 1,126 unit tests across 86 files and 1,237 coverage tests
+across 99 files; gateway coverage passed 1,362 tests with 1 skipped, and
+dashboard coverage passed 1,453 tests with 2 skipped. The five focused agent
+receipt, flash-sale adapter, grounding, mutation-document, and query-document
+suites passed 85 tests; the focused gateway operator shop-tool suite passed 11.
+Coverage includes typed invalid-input, missing-variant, provider-rejection,
+definite-failure, and unknown outcomes; exact provider-returned sale facts;
+display-independent completion grounding; conditional scope gating; one-shot
+operation-tag reconciliation; and a regression proving that an inconclusive
+lookup does not repeat the mutation. No live Shopify or model operation was run.
+
+Incremental `end_flash_sale` evidence: `npm run verify:pr` passed, including
+repository lint/structure, typecheck, Node tests, all workspace unit and coverage
+suites, critical-coverage gates, 12 browser smoke tests, and production builds.
+Agent suites passed 1,134 unit tests across 86 files and 1,245 coverage tests
+across 99 files; gateway unit passed 453 tests, gateway coverage passed 1,364
+tests with 1 skipped, and dashboard coverage passed 1,453 tests with 2 skipped.
+The five focused agent receipt, flash-sale adapter, grounding,
+mutation-document, and query-document suites passed 93 tests; the focused
+gateway shop-tool suite passed 13, and the two affected gateway route suites
+passed 20 integration tests. Coverage includes exact deletion receipts,
+bare-ID normalization, typed invalid-input, provider-rejection, missing-target,
+incomplete-result, mismatched-identity, and uncertain outcomes; exact-ID
+read-after-interruption reconciliation; no delete replay; the separate read-only
+listing surface; scope gating; and display-independent completion grounding. No
+live Shopify or model operation was run.
+
+Incremental `set_variant_prices` evidence: `npm run verify:pr` passed, including
+repository lint/structure, typecheck, Node tests, all workspace unit and coverage
+suites, critical-coverage gates, 12 browser smoke tests, and production builds.
+Agent suites passed 1,141 unit tests across 86 files and 1,252 coverage tests
+across 99 files; gateway unit passed 454 tests, gateway coverage passed 1,365
+tests with 1 skipped, and dashboard coverage passed 1,453 tests with 2 skipped.
+The focused receipt, variant-pricing adapter, grounding, mutation-document, and
+query-document suites passed 117 tests; the focused gateway shop-tool suite
+passed 14. Coverage includes exact direct success, typed invalid-input,
+missing-variant, provider-rejection, definite-failure, partial, and unknown
+outcomes; ordered multi-product batches; exact old/requested/observed prices;
+store currency; read-after-interruption confirmation without mutation replay;
+scope gating; compatibility data; and display-independent completion grounding.
+No live Shopify or model operation was run.
+
 Implementation checkpoints committed so far:
 
 | Commit | Completed scope | Verification recorded here |
@@ -710,18 +792,18 @@ Implementation checkpoints committed so far:
 | `8af92e82` | `create_gift_card` typed outcomes, secret-safe exact provider facts, interrupted-response reconciliation, receipt-grounded completion facts, and `write_gift_cards` + `write_customers` + recovery-read scope metadata. | Agent lint/typecheck/unit/integration/coverage passed; 1,119 unit, 111 integration, and 1,230 coverage tests. |
 
 Current verified checkpoint:
-`create_gift_card` now has typed definitive and uncertain outcomes,
-secret-safe exact provider facts, exact scope metadata, receipt-grounded
-store-credit completion facts, and exact same-call reconciliation after an
-interrupted provider response. The slice and agent-wide gates passed with the
-counts recorded above, completing the shared Shopify registry migrations.
+`set_variant_prices` now has typed definitive, partial, and uncertain outcomes,
+ordered product batches, exact provider-observed price facts, required
+`write_products` and receipt metadata, receipt-grounded completion facts, and
+one-shot read-after-interruption confirmation. The isolated operator Shopify
+write migration is complete, and the full PR gate passed with the counts
+recorded above.
 
-Current next step: continue Package 1 with the isolated operator Shopify writes
-from the Package 0 inventory, starting with `create_flash_sale`, then
-`end_flash_sale` and `set_variant_prices`. Keep them outside support/storefront
-authority while moving each through the completed identity/dispatch/receipt
-boundary; finish the remaining internal-thread and communication contracts
-before starting Package 2.
+Current next step: continue Package 1 with the retained internal-thread writes,
+starting with `add_internal_note`, then `update_thread_status`,
+`update_thread_tag`, and the isolated operator `mark_ticket_spam`. Move each
+through the completed identity/dispatch/receipt boundary before migrating the
+durable communication outcomes; do not start Package 2 yet.
 
 Implementation order:
 
@@ -736,13 +818,14 @@ Required tests: same typed result with completely different display text produce
 - [x] Extend tool/executor/action contracts so typed data reaches persistence and completion facts without being converted to message text.
 - [x] Migrate full refund, partial refund, cancellation, return, exchange,
   return-label, fulfillment, order-address, order-edit, and order-creation
-  results, plus customer-info, customer-note, and gift-card updates, including exact
-  provider facts and unknown outcomes.
+  results, plus customer-info, customer-note, gift-card, isolated flash-sale
+  creation and ending, and variant repricing, including exact provider facts and
+  unknown outcomes.
 - [ ] Cover every remaining retained write capability with the same receipt contract.
 - [x] Make new receipt records for the migrated capabilities versioned and keep their historical string decoding at the compatibility boundary only.
 - [ ] Extend the versioned-only result rule to every remaining retained write.
-- [x] Add explicit provider requirements for all thirteen migrated capabilities and
-  test missing or insufficient grants.
+- [x] Add explicit provider requirements for all sixteen migrated Shopify capabilities
+  and test missing or insufficient grants.
 - [ ] Add and test explicit provider requirements for every remaining retained capability.
 - [x] Verify common operation identity, dispatch, receipt binding, and crash-outcome semantics before changing conversation behavior. Per-capability outcome verification remains part of each retained-write migration above.
 

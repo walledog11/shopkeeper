@@ -4,9 +4,18 @@ import {
   numberArg,
   stringArg,
   toolError,
+  toolNotFound,
+  toolOk,
+  toolPolicyBlock,
   type AgentToolDefinition,
+  type ReceiptV1,
 } from '@shopkeeper/agent/tools';
-import { createFlashSale, endFlashSale, setVariantPrices } from '@shopkeeper/agent/shopify';
+import {
+  createFlashSale,
+  endFlashSale,
+  listFlashSales,
+  setVariantPrices,
+} from '@shopkeeper/agent/shopify';
 import {
   grantCoversScopes,
   recordedShopifyScopes,
@@ -33,6 +42,7 @@ import type {
 // scope is missing instead of letting Shopify answer with a 403.
 
 const FLASH_SALE_SCOPES = ['write_discounts'] as const;
+const VARIANT_FLASH_SALE_SCOPES = ['write_discounts', 'read_products'] as const;
 const REPRICE_SCOPES = ['write_products'] as const;
 
 interface ShopContext {
@@ -58,6 +68,38 @@ function missingScopeError(granted: readonly string[], required: readonly string
     + 'Reconnect Shopify from Settings to enable this.';
 }
 
+function withExecutionIdentity(
+  shopify: ShopifyContext,
+  runtimeShopify: ShopifyContext | undefined,
+): ShopifyContext {
+  return {
+    ...shopify,
+    ...(runtimeShopify?.operationId ? { operationId: runtimeShopify.operationId } : {}),
+    ...(runtimeShopify?.executionId ? { executionId: runtimeShopify.executionId } : {}),
+  };
+}
+
+function shopScopeRejection(
+  shopify: ShopifyContext,
+  tool: 'create_flash_sale' | 'end_flash_sale' | 'set_variant_prices',
+  message: string,
+): ReturnType<typeof toolPolicyBlock> {
+  const result = toolPolicyBlock(message);
+  if (!shopify.operationId || !shopify.executionId) return result;
+  const receipt: ReceiptV1 = {
+    version: 1,
+    operationId: shopify.operationId,
+    executionId: shopify.executionId,
+    tool,
+    target: { kind: 'shop', id: shopify.shop },
+    observedAt: new Date().toISOString(),
+    providerReference: null,
+    outcome: 'rejected',
+    code: 'missing_shopify_scope',
+  };
+  return { ...result, receipt };
+}
+
 export function buildOperatorShopTools(
   params: { organizationId: string },
 ): Record<string, AgentToolDefinition> {
@@ -77,13 +119,23 @@ export function buildOperatorShopTools(
     category: 'action',
     group: 'product',
     capabilities: [],
+    requiredScopes: FLASH_SALE_SCOPES,
+    requiredReceiptVersion: 1,
     label: 'Started a flash sale',
     planStepLabel: 'Start flash sale',
-    execute: async (input: { applies_to: FlashSaleScope; variant_ids?: string; discount_percentage: number; duration_hours: number; name?: string }) => {
+    execute: async (input: { applies_to: FlashSaleScope; variant_ids?: string; discount_percentage: number; duration_hours: number; name?: string }, ctx) => {
       const shop = await loadShopContext(organizationId);
       if (!shop) return toolError('Error: no Shopify integration connected.');
-      if (!grantCoversScopes(shop.grantedScopes, FLASH_SALE_SCOPES)) {
-        return toolError(missingScopeError(shop.grantedScopes, FLASH_SALE_SCOPES));
+      const executionShopify = withExecutionIdentity(shop.shopify, ctx.shopify ?? undefined);
+      const requiredScopes = input.applies_to === 'variants'
+        ? VARIANT_FLASH_SALE_SCOPES
+        : FLASH_SALE_SCOPES;
+      if (!grantCoversScopes(shop.grantedScopes, requiredScopes)) {
+        return shopScopeRejection(
+          executionShopify,
+          'create_flash_sale',
+          missingScopeError(shop.grantedScopes, requiredScopes),
+        );
       }
       const variantIds = (input.variant_ids ?? '').split(',').map((id) => id.trim()).filter(Boolean);
       const payload: CreateFlashSaleInput = {
@@ -93,29 +145,67 @@ export function buildOperatorShopTools(
         duration_hours: input.duration_hours,
         ...(input.name ? { name: input.name } : {}),
       };
-      return createFlashSale(payload, shop.shopify);
+      return createFlashSale(payload, executionShopify);
+    },
+  });
+
+  const listFlashSalesTool = defineTool({
+    name: 'list_flash_sales',
+    description: 'List the store\'s currently active automatic discounts and their IDs before choosing one to end.',
+    fields: {},
+    category: 'read',
+    group: 'product',
+    capabilities: [],
+    requiredScopes: FLASH_SALE_SCOPES,
+    label: 'Listed active flash sales',
+    planStepLabel: 'List active flash sales',
+    execute: async () => {
+      const shop = await loadShopContext(organizationId);
+      if (!shop) return toolError('Error: no Shopify integration connected.');
+      if (!grantCoversScopes(shop.grantedScopes, FLASH_SALE_SCOPES)) {
+        return toolError(missingScopeError(shop.grantedScopes, FLASH_SALE_SCOPES));
+      }
+      const running = await listFlashSales(shop.shopify);
+      if (running.length === 0) {
+        return toolNotFound('Checked this store\'s automatic discounts: none are currently active.');
+      }
+      const lines = running.map((sale) => (
+        `- ${sale.title} (${sale.id})${sale.endsAt ? ` ends ${sale.endsAt}` : ''}`
+      ));
+      return toolOk(
+        ['Running automatic discounts — call end_flash_sale with one of these IDs:', ...lines]
+          .join('\n'),
+        { sales: running },
+      );
     },
   });
 
   const endFlashSaleTool = defineTool({
     name: 'end_flash_sale',
     description:
-      'End a running sale immediately, or list what is running if you do not know the ID. Ending a sale restores the original prices exactly, because no price was ever changed.',
+      'End one running sale immediately by its Shopify automatic discount ID. Use list_flash_sales first if you do not know the ID. Ending a sale restores the original prices exactly, because no price was ever changed.',
     fields: {
-      flash_sale_id: stringArg('The sale ID to end. Omit to list what is currently running.'),
+      flash_sale_id: stringArg('The Shopify automatic discount ID to end.', { required: true, nonBlank: true }),
     },
     category: 'action',
     group: 'product',
     capabilities: [],
+    requiredScopes: FLASH_SALE_SCOPES,
+    requiredReceiptVersion: 1,
     label: 'Ended a flash sale',
     planStepLabel: 'End flash sale',
-    execute: async (input: EndFlashSaleInput) => {
+    execute: async (input: EndFlashSaleInput, ctx) => {
       const shop = await loadShopContext(organizationId);
       if (!shop) return toolError('Error: no Shopify integration connected.');
+      const executionShopify = withExecutionIdentity(shop.shopify, ctx.shopify ?? undefined);
       if (!grantCoversScopes(shop.grantedScopes, FLASH_SALE_SCOPES)) {
-        return toolError(missingScopeError(shop.grantedScopes, FLASH_SALE_SCOPES));
+        return shopScopeRejection(
+          executionShopify,
+          'end_flash_sale',
+          missingScopeError(shop.grantedScopes, FLASH_SALE_SCOPES),
+        );
       }
-      return endFlashSale(input, shop.shopify);
+      return endFlashSale(input, executionShopify);
     },
   });
 
@@ -129,23 +219,46 @@ export function buildOperatorShopTools(
     category: 'action',
     group: 'product',
     capabilities: [],
+    requiredScopes: REPRICE_SCOPES,
+    requiredReceiptVersion: 1,
     label: 'Repriced variants',
     planStepLabel: 'Reprice variants',
-    execute: async (input: { prices: string }) => {
+    execute: async (input: { prices: string }, ctx) => {
       const shop = await loadShopContext(organizationId);
       if (!shop) return toolError('Error: no Shopify integration connected.');
+      const executionShopify = withExecutionIdentity(shop.shopify, ctx.shopify ?? undefined);
       if (!grantCoversScopes(shop.grantedScopes, REPRICE_SCOPES)) {
-        return toolError(missingScopeError(shop.grantedScopes, REPRICE_SCOPES));
+        return shopScopeRejection(
+          executionShopify,
+          'set_variant_prices',
+          missingScopeError(shop.grantedScopes, REPRICE_SCOPES),
+        );
       }
       const parsed = parsePricePairs(input.prices);
-      if ('error' in parsed) return toolError(parsed.error);
+      if ('error' in parsed) {
+        const result = toolPolicyBlock(parsed.error);
+        if (!executionShopify.operationId || !executionShopify.executionId) return result;
+        const receipt: ReceiptV1 = {
+          version: 1,
+          operationId: executionShopify.operationId,
+          executionId: executionShopify.executionId,
+          tool: 'set_variant_prices',
+          target: { kind: 'shop', id: executionShopify.shop },
+          observedAt: new Date().toISOString(),
+          providerReference: null,
+          outcome: 'rejected',
+          code: 'invalid_variant_price_input',
+        };
+        return { ...result, receipt };
+      }
       const payload: SetVariantPricesInput = { prices: parsed.prices };
-      return setVariantPrices(payload, shop.shopify);
+      return setVariantPrices(payload, executionShopify);
     },
   });
 
   return {
     [createFlashSaleTool.name]: createFlashSaleTool,
+    [listFlashSalesTool.name]: listFlashSalesTool,
     [endFlashSaleTool.name]: endFlashSaleTool,
     [setVariantPricesTool.name]: setVariantPricesTool,
   };

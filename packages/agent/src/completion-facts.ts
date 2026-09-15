@@ -17,6 +17,7 @@ export type CompletionAction =
   | "fulfillment"
   | "order_creation"
   | "order_update"
+  | "price_update"
   | "refund"
   | "return"
   | "store_credit";
@@ -180,8 +181,12 @@ function mutationFacts(input: {
     }
     case "edit_shopify_order":
       return orderId ? [fact("order_update", input.tool, input.outcome, input.executionReference, orderOptions)] : [];
+    case "create_flash_sale":
+    case "end_flash_sale":
     case "issue_discount":
       return [fact("discount", input.tool, input.outcome, input.executionReference)];
+    case "set_variant_prices":
+      return [fact("price_update", input.tool, input.outcome, input.executionReference)];
     default:
       return [];
   }
@@ -334,6 +339,14 @@ function receiptCompletionFacts(
         ? { amount: receipt.facts.amount, currency: receipt.facts.currency }
         : {}),
     })];
+  }
+
+  if (receipt.tool === "create_flash_sale" || receipt.tool === "end_flash_sale") {
+    return [fact("discount", receipt.tool, outcome, executionReference)];
+  }
+
+  if (receipt.tool === "set_variant_prices") {
+    return [fact("price_update", receipt.tool, outcome, executionReference)];
   }
 
   return [];

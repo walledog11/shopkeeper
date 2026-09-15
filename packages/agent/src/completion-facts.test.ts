@@ -716,6 +716,136 @@ describe("completion facts", () => {
     }])).toThrow("partial order address facts require an unknown outcome");
   });
 
+  it("grounds a flash sale in its receipt independently of display wording", () => {
+    const receipt = {
+      version: 1 as const,
+      operationId: "operation-flash-sale-1",
+      executionId: "execution-flash-sale-1",
+      tool: "create_flash_sale" as const,
+      target: { kind: "shop", id: "test-store.myshopify.com" },
+      observedAt: "2026-09-13T08:00:00.000Z",
+      outcome: "succeeded" as const,
+      providerReference: "gid://shopify/DiscountAutomaticNode/42",
+      facts: {
+        flashSaleId: "gid://shopify/DiscountAutomaticNode/42",
+        appliesTo: "entire_catalog" as const,
+        variantIds: [],
+        discountPercentage: "20",
+        startsAt: "2026-09-13T08:00:00.000Z",
+        endsAt: "2026-09-14T08:00:00.000Z",
+        providerStatus: "ACTIVE",
+      },
+    };
+    const action = {
+      tool: "create_flash_sale",
+      input: { applies_to: "entire_catalog", discount_percentage: 50, duration_hours: 1 },
+      status: "success" as const,
+      receipt,
+    };
+
+    const first = executedCompletionFacts([{ ...action, result: "Sale started." }]);
+    const second = executedCompletionFacts([{ ...action, result: "Entirely different display text." }]);
+
+    expect(first).toEqual(second);
+    expect(first).toEqual([{
+      action: "discount",
+      sourceTool: "create_flash_sale",
+      outcome: "success",
+      executionReference: "operation-flash-sale-1",
+    }]);
+  });
+
+  it("grounds an ended flash sale only in its receipt", () => {
+    const receipt = {
+      version: 1 as const,
+      operationId: "operation-end-sale-1",
+      executionId: "execution-end-sale-1",
+      tool: "end_flash_sale" as const,
+      target: { kind: "discount", id: "gid://shopify/DiscountAutomaticNode/42" },
+      observedAt: "2026-09-14T08:00:00.000Z",
+      outcome: "succeeded" as const,
+      providerReference: "gid://shopify/DiscountAutomaticNode/42",
+      facts: {
+        flashSaleId: "gid://shopify/DiscountAutomaticNode/42",
+        confirmation: "deleted" as const,
+      },
+    };
+    const action = {
+      tool: "end_flash_sale",
+      input: { flash_sale_id: "gid://shopify/DiscountAutomaticNode/999" },
+      status: "success" as const,
+      receipt,
+    };
+
+    const first = executedCompletionFacts([{ ...action, result: "Sale ended." }]);
+    const second = executedCompletionFacts([{ ...action, result: "Different display text." }]);
+
+    expect(first).toEqual(second);
+    expect(first).toEqual([{
+      action: "discount",
+      sourceTool: "end_flash_sale",
+      outcome: "success",
+      executionReference: "operation-end-sale-1",
+    }]);
+  });
+
+  it("grounds a variant reprice in observed receipt batches, not display text", () => {
+    const receipt = {
+      version: 1 as const,
+      operationId: "operation-reprice-1",
+      executionId: "execution-reprice-1",
+      tool: "set_variant_prices" as const,
+      target: { kind: "shop", id: "test-store.myshopify.com" },
+      observedAt: "2026-09-14T09:00:00.000Z",
+      outcome: "unknown" as const,
+      code: "partial",
+      providerReference: "test-store.myshopify.com",
+      facts: {
+        currency: "USD",
+        batches: [{
+          productId: "gid://shopify/Product/1",
+          outcome: "succeeded" as const,
+          confirmation: "mutation_response" as const,
+          changes: [{
+            productId: "gid://shopify/Product/1",
+            variantId: "gid://shopify/ProductVariant/1",
+            originalPrice: "48.00",
+            requestedPrice: "44.00",
+            observedPrice: "44.00",
+          }],
+        }, {
+          productId: "gid://shopify/Product/2",
+          outcome: "unknown" as const,
+          confirmation: "read_after_ambiguous_response" as const,
+          changes: [{
+            productId: "gid://shopify/Product/2",
+            variantId: "gid://shopify/ProductVariant/2",
+            originalPrice: "48.00",
+            requestedPrice: "44.00",
+            observedPrice: null,
+          }],
+        }],
+      },
+    };
+    const action = {
+      tool: "set_variant_prices",
+      input: { prices: "invented=1.00" },
+      status: "unknown" as const,
+      receipt,
+    };
+
+    const first = executedCompletionFacts([{ ...action, result: "One batch committed." }]);
+    const second = executedCompletionFacts([{ ...action, result: "Completely different text." }]);
+
+    expect(first).toEqual(second);
+    expect(first).toEqual([{
+      action: "price_update",
+      sourceTool: "set_variant_prices",
+      outcome: "unknown",
+      executionReference: "operation-reprice-1",
+    }]);
+  });
+
   it("turns only successful live order reads into historical facts", () => {
     const calls = [{ id: "read_1", name: "get_order_by_name", input: { order_name: "#1001" } }];
     expect(historicalCompletionFacts(calls, {

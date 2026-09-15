@@ -11,7 +11,7 @@ import {
 import type { RawToolCall } from "./types.js";
 
 const MUTATION_SUBJECT =
-  "refunds?|returns?|exchanges?|cancellations?|gift cards?|store credit|replacements?|discounts?|orders?|address(?:es)?|customer (?:info|information|profile|notes?)|email address|phone number|customer name|notes?|labels?|shipments?";
+  "refunds?|returns?|exchanges?|cancellations?|gift cards?|store credit|replacements?|discounts?|prices?|orders?|address(?:es)?|customer (?:info|information|profile|notes?)|email address|phone number|customer name|notes?|labels?|shipments?";
 const MUTATION_VERB =
   "initiated|issued|processed|created|started|placed|sent|applied|approved|arranged|completed|refunded|returned|cancell?ed|exchanged|fulfilled|shipped|updated|changed|edited|added|opened|set up";
 const MUTATION_VERB_PROGRESSIVE =
@@ -68,6 +68,7 @@ const SPECIFIC_CLAIM_ACTIONS: readonly [RegExp, ReadonlySet<CompletionAction>][]
   [/\b(?:customer notes?|notes?)\b/i, new Set(["customer_note"])],
   [/\b(?:shipments?|shipped|shipping|fulfilled|fulfilling)\b/i, new Set(["fulfillment"])],
   [/\bdiscounts?\b/i, new Set(["discount"])],
+  [/\bprices?\b/i, new Set(["price_update"])],
 ];
 const GENERIC_ORDER_ACTIONS = new Set<CompletionAction>(["fulfillment", "order_creation", "order_update"]);
 
@@ -336,6 +337,8 @@ function renderCompletionFact(fact: CompletionFact): string {
       return "The order has been created.";
     case "order_update":
       return order ? `Order ${order} has been updated.` : "The order has been updated.";
+    case "price_update":
+      return "The variant prices have been updated.";
     case "discount":
       return "The discount has been applied.";
   }

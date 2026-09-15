@@ -3,6 +3,11 @@ import { jsonResponse } from "../testing/json-response.js";
 import { setVariantPrices } from "./variant-pricing.js";
 
 const ctx = { shop: "test-store.myshopify.com", accessToken: "shpat_test" };
+const receiptCtx = {
+  ...ctx,
+  operationId: "operation-reprice-1",
+  executionId: "execution-reprice-1",
+};
 
 /** The two calls a successful reprice makes, in order. */
 function successfulFetch(price = "48.00") {
@@ -32,6 +37,118 @@ afterEach(() => {
 });
 
 describe("setVariantPrices", () => {
+  it("emits exact provider-observed prices in a versioned receipt", async () => {
+    vi.stubGlobal("fetch", successfulFetch());
+
+    const result = await setVariantPrices(
+      { prices: [{ variant_id: "gid://shopify/ProductVariant/1", price: 44 }] },
+      receiptCtx,
+    );
+
+    expect(result.receipt).toEqual(expect.objectContaining({
+      version: 1,
+      tool: "set_variant_prices",
+      operationId: "operation-reprice-1",
+      executionId: "execution-reprice-1",
+      outcome: "succeeded",
+      providerReference: "test-store.myshopify.com",
+      facts: {
+        currency: null,
+        batches: [{
+          productId: "gid://shopify/Product/1",
+          outcome: "succeeded",
+          confirmation: "mutation_response",
+          changes: [{
+            productId: "gid://shopify/Product/1",
+            variantId: "gid://shopify/ProductVariant/1",
+            originalPrice: "48.00",
+            requestedPrice: "44.00",
+            observedPrice: "44.00",
+          }],
+        }],
+      },
+    }));
+  });
+
+  it("confirms an interrupted mutation with a read instead of replaying it", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ data: {
+        shop: { currencyCode: "USD" },
+        nodes: [{
+          id: "gid://shopify/ProductVariant/1",
+          price: "48.00",
+          product: { id: "gid://shopify/Product/1" },
+        }],
+      } }))
+      .mockRejectedValueOnce(new TypeError("connection reset"))
+      .mockResolvedValueOnce(jsonResponse({ data: {
+        shop: { currencyCode: "USD" },
+        nodes: [{
+          id: "gid://shopify/ProductVariant/1",
+          price: "44.00",
+          product: { id: "gid://shopify/Product/1" },
+        }],
+      } })));
+
+    const result = await setVariantPrices(
+      { prices: [{ variant_id: "gid://shopify/ProductVariant/1", price: 44 }] },
+      receiptCtx,
+    );
+
+    expect(result.status).toBe("ok");
+    expect(result.receipt).toEqual(expect.objectContaining({
+      outcome: "succeeded",
+      facts: expect.objectContaining({
+        currency: "USD",
+        batches: [expect.objectContaining({
+          outcome: "succeeded",
+          confirmation: "read_after_ambiguous_response",
+        })],
+      }),
+    }));
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("records a mixed read-after-interruption result as partial and unknown", async () => {
+    const variant = (id: string, price: string) => ({
+      id: `gid://shopify/ProductVariant/${id}`,
+      price,
+      product: { id: "gid://shopify/Product/1" },
+    });
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ data: {
+        shop: { currencyCode: "USD" },
+        nodes: [variant("1", "48.00"), variant("2", "48.00")],
+      } }))
+      .mockRejectedValueOnce(new TypeError("connection reset"))
+      .mockResolvedValueOnce(jsonResponse({ data: {
+        shop: { currencyCode: "USD" },
+        nodes: [variant("1", "44.00"), variant("2", "48.00")],
+      } })));
+
+    const result = await setVariantPrices({ prices: [
+      { variant_id: "1", price: 44 },
+      { variant_id: "2", price: 44 },
+    ] }, receiptCtx);
+
+    expect(result.status).toBe("unknown");
+    expect(result.receipt).toEqual(expect.objectContaining({
+      outcome: "unknown",
+      code: "partial_or_unconfirmed_variant_prices",
+      facts: expect.objectContaining({
+        batches: [expect.objectContaining({
+          outcome: "unknown",
+          confirmation: "read_after_ambiguous_response",
+          changes: [
+            expect.objectContaining({ variantId: "gid://shopify/ProductVariant/1", observedPrice: "44.00" }),
+            expect.objectContaining({ variantId: "gid://shopify/ProductVariant/2", observedPrice: "48.00" }),
+          ],
+        })],
+      }),
+    }));
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
   it("records the original prices alongside the change", async () => {
     vi.stubGlobal("fetch", successfulFetch());
 
@@ -64,7 +181,7 @@ describe("setVariantPrices", () => {
       ctx,
     );
 
-    expect(result.status).toBe("error");
+    expect(result.status).toBe("not_found");
     expect(result.message).toContain("no price was changed");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -102,7 +219,7 @@ describe("setVariantPrices", () => {
       ctx,
     );
 
-    expect(result.status).toBe("error");
+    expect(result.status).toBe("policy_block");
     expect(result.message).toContain("Medium-Sand");
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -121,7 +238,7 @@ describe("setVariantPrices", () => {
       ctx,
     );
 
-    expect(result.status).toBe("error");
+    expect(result.status).toBe("policy_block");
     expect(result.message).toContain("more than once");
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -135,7 +252,7 @@ describe("setVariantPrices", () => {
       ctx,
     );
 
-    expect(result.status).toBe("error");
+    expect(result.status).toBe("policy_block");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -227,7 +344,7 @@ describe("setVariantPrices", () => {
       ctx,
     );
 
-    expect(result.status).toBe("error");
+    expect(result.status).toBe("policy_block");
     expect(result.message).toContain("$48.00 -> $44.00");
   });
 });

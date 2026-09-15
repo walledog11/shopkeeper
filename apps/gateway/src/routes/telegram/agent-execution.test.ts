@@ -62,6 +62,7 @@ describe('executeFreeFormInstruction', () => {
       'end_flash_sale',
       'get_ticket',
       'list_active_tickets',
+      'list_flash_sales',
       'list_recent_changes',
       'mark_ticket_spam',
       'reject_pending_plan',

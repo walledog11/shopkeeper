@@ -1,10 +1,27 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TOOL_DEFINITIONS } from '@shopkeeper/agent/tools';
 import { buildOperatorShopTools, parsePricePairs } from './operator-shop-tools.js';
 
-const SHOP_TOOL_NAMES = ['create_flash_sale', 'end_flash_sale', 'set_variant_prices'];
+const findIntegration = vi.hoisted(() => vi.fn());
+
+vi.mock('@shopkeeper/db', () => ({
+  db: { integration: { findFirst: findIntegration } },
+}));
+
+const SHOP_TOOL_NAMES = [
+  'create_flash_sale',
+  'end_flash_sale',
+  'list_flash_sales',
+  'set_variant_prices',
+];
 
 describe('operator shop tools', () => {
+  beforeEach(() => {
+    findIntegration.mockReset();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
   // The reason these live in the gateway rather than the shared registry: a
   // customer conversation must never be able to reach a promotion or a reprice.
   // If one of these ever appears in TOOL_DEFINITIONS, the support planner can
@@ -17,7 +34,7 @@ describe('operator shop tools', () => {
     }
   });
 
-  it('exposes exactly the three shop-management tools', () => {
+  it('exposes exactly the four shop-management tools', () => {
     const tools = buildOperatorShopTools({ organizationId: 'org_1' });
 
     expect(Object.keys(tools).sort()).toEqual([...SHOP_TOOL_NAMES].sort());
@@ -43,6 +60,134 @@ describe('operator shop tools', () => {
     const tools = buildOperatorShopTools({ organizationId: 'org_1' });
 
     expect(tools.create_flash_sale.inputSchema.required).toContain('duration_hours');
+  });
+
+  it('marks flash-sale writes as receipt- and discount-scope-bound', () => {
+    const tools = buildOperatorShopTools({ organizationId: 'org_1' });
+
+    expect(tools.create_flash_sale.requiredScopes).toEqual(['write_discounts']);
+    expect(tools.create_flash_sale.requiredReceiptVersion).toBe(1);
+    expect(tools.end_flash_sale.requiredScopes).toEqual(['write_discounts']);
+    expect(tools.end_flash_sale.requiredReceiptVersion).toBe(1);
+    expect(tools.end_flash_sale.inputSchema.required).toContain('flash_sale_id');
+    expect(tools.list_flash_sales.category).toBe('read');
+    expect(tools.list_flash_sales.requiredReceiptVersion).toBeNull();
+    expect(tools.set_variant_prices.requiredScopes).toEqual(['write_products']);
+    expect(tools.set_variant_prices.requiredReceiptVersion).toBe(1);
+  });
+
+  it('returns a typed scope rejection for a variant reprice', async () => {
+    findIntegration.mockResolvedValue({
+      externalAccountId: 'test-store.myshopify.com',
+      accessToken: 'shpat_test',
+      metadata: { oauthScopes: [] },
+    });
+    const tool = buildOperatorShopTools({ organizationId: 'org_1' }).set_variant_prices;
+    const result = await tool.execute({ prices: '1=44.00' }, {
+      orgId: 'org_1',
+      mode: 'execute',
+      shopify: {
+        shop: 'test-store.myshopify.com',
+        accessToken: 'shpat_test',
+        operationId: 'operation-reprice-1',
+        executionId: 'execution-reprice-1',
+      },
+    } as never, {} as never, {} as never);
+
+    expect(result.status).toBe('policy_block');
+    expect(result.receipt).toEqual(expect.objectContaining({
+      tool: 'set_variant_prices',
+      outcome: 'rejected',
+      code: 'missing_shopify_scope',
+    }));
+  });
+
+  it('returns a typed scope rejection for an end-sale write', async () => {
+    findIntegration.mockResolvedValue({
+      externalAccountId: 'test-store.myshopify.com',
+      accessToken: 'shpat_test',
+      metadata: { oauthScopes: [] },
+    });
+    const tool = buildOperatorShopTools({ organizationId: 'org_1' }).end_flash_sale;
+    const result = await tool.execute({
+      flash_sale_id: 'gid://shopify/DiscountAutomaticNode/9',
+    }, {
+      orgId: 'org_1',
+      mode: 'execute',
+      shopify: {
+        shop: 'test-store.myshopify.com',
+        accessToken: 'shpat_test',
+        operationId: 'operation-end-1',
+        executionId: 'execution-end-1',
+      },
+    } as never, {} as never, {} as never);
+
+    expect(result.status).toBe('policy_block');
+    expect(result.receipt).toEqual(expect.objectContaining({
+      tool: 'end_flash_sale',
+      outcome: 'rejected',
+      operationId: 'operation-end-1',
+      executionId: 'execution-end-1',
+    }));
+  });
+
+  it('lists sales through a read tool without an execution receipt', async () => {
+    findIntegration.mockResolvedValue({
+      externalAccountId: 'test-store.myshopify.com',
+      accessToken: 'shpat_test',
+      metadata: { oauthScopes: ['write_discounts'] },
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      data: {
+        automaticDiscountNodes: {
+          nodes: [{
+            id: 'gid://shopify/DiscountAutomaticNode/9',
+            automaticDiscount: { title: 'Weekend', status: 'ACTIVE', endsAt: null },
+          }],
+        },
+      },
+    }), { status: 200, headers: { 'content-type': 'application/json' } })));
+
+    const tool = buildOperatorShopTools({ organizationId: 'org_1' }).list_flash_sales;
+    const result = await tool.execute({}, {} as never, {} as never, {} as never);
+
+    expect(result.status).toBe('ok');
+    expect(result.message).toContain('Weekend');
+    expect(result.receipt).toBeUndefined();
+  });
+
+  it('requires product-read scope only when a sale names variants', async () => {
+    findIntegration.mockResolvedValue({
+      externalAccountId: 'test-store.myshopify.com',
+      accessToken: 'shpat_test',
+      metadata: { oauthScopes: ['write_discounts'] },
+    });
+    const tool = buildOperatorShopTools({ organizationId: 'org_1' }).create_flash_sale;
+    const result = await tool.execute({
+      applies_to: 'variants',
+      variant_ids: 'gid://shopify/ProductVariant/1',
+      discount_percentage: 20,
+      duration_hours: 2,
+    }, {
+      orgId: 'org_1',
+      mode: 'execute',
+      shopify: {
+        shop: 'test-store.myshopify.com',
+        accessToken: 'shpat_test',
+        operationId: 'operation-1',
+        executionId: 'execution-1',
+      },
+    } as never, {} as never, {} as never);
+
+    expect(result.status).toBe('policy_block');
+    expect(result.message).toContain('read_products');
+    expect(result.receipt).toEqual(expect.objectContaining({
+      tool: 'create_flash_sale',
+      outcome: 'rejected',
+      code: 'missing_shopify_scope',
+      operationId: 'operation-1',
+      executionId: 'execution-1',
+    }));
   });
 });
 

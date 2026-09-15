@@ -39,6 +39,7 @@ describe("plan grounding", () => {
     ["fulfillment", "We've fulfilled the order.", "Order #1001 has been fulfilled."],
     ["order_creation", "We've created the order.", "The order has been created."],
     ["order_update", "We've updated the order.", "Order #1001 has been updated."],
+    ["price_update", "We've updated the prices.", "The variant prices have been updated."],
     ["discount", "We've applied the discount.", "The discount has been applied."],
   ] as const)("renders a deterministic %s completion statement", (action, text, expected) => {
     const rendered = renderReplyCompletionClaims({

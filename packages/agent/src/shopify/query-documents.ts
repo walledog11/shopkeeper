@@ -27,7 +27,10 @@ import { CREATED_ORDER_LOOKUP_QUERY } from "./order-creation.js";
 import { GIFT_CARD_RECEIPT_LOOKUP_QUERY } from "./gift-cards.js";
 import { PRODUCT_SEARCH_QUERY } from "./products.js";
 import { INVENTORY_STATUS_QUERY } from "./inventory.js";
-import { AUTOMATIC_DISCOUNTS_QUERY } from "./flash-sales.js";
+import {
+  AUTOMATIC_DISCOUNT_NODE_QUERY,
+  AUTOMATIC_DISCOUNTS_QUERY,
+} from "./flash-sales.js";
 import { VARIANT_PRODUCT_QUERY } from "./variant-pricing.js";
 import {
   CUSTOMER_STORE_CREDIT_TRANSACTIONS_QUERY,
@@ -116,6 +119,10 @@ export const SHOPIFY_QUERY_DOCUMENTS: Record<string, ShopifyQueryDocument> = {
   flashSales: {
     document: AUTOMATIC_DISCOUNTS_QUERY,
     variables: { first: 1 },
+  },
+  flashSaleById: {
+    document: AUTOMATIC_DISCOUNT_NODE_QUERY,
+    variables: { id: "gid://shopify/DiscountAutomaticNode/1" },
   },
   variantProducts: {
     document: VARIANT_PRODUCT_QUERY,

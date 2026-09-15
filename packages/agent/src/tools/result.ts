@@ -173,6 +173,41 @@ export interface GiftCardReceiptFactsV1 {
   notificationRequested: true;
 }
 
+export interface FlashSaleReceiptFactsV1 {
+  flashSaleId: string;
+  appliesTo: "entire_catalog" | "variants";
+  variantIds: string[];
+  discountPercentage: string;
+  startsAt: string;
+  endsAt: string;
+  providerStatus: string;
+}
+
+export interface EndFlashSaleReceiptFactsV1 {
+  flashSaleId: string;
+  confirmation: "deleted" | "absent_after_ambiguous_response";
+}
+
+export interface VariantPriceReceiptChangeV1 {
+  productId: string;
+  variantId: string;
+  originalPrice: string;
+  requestedPrice: string;
+  observedPrice: string | null;
+}
+
+export interface VariantPriceReceiptBatchV1 {
+  productId: string;
+  outcome: "succeeded" | "failed" | "unknown";
+  confirmation: "mutation_response" | "read_after_ambiguous_response" | "provider_rejected" | "not_attempted";
+  changes: VariantPriceReceiptChangeV1[];
+}
+
+export interface VariantPriceReceiptFactsV1 {
+  currency: string | null;
+  batches: VariantPriceReceiptBatchV1[];
+}
+
 export type ReceiptSuccessV1 =
   | (ReceiptBaseV1<"create_refund"> & {
       outcome: "succeeded";
@@ -238,6 +273,21 @@ export type ReceiptSuccessV1 =
       outcome: "succeeded";
       providerReference: string;
       facts: GiftCardReceiptFactsV1;
+    })
+  | (ReceiptBaseV1<"create_flash_sale"> & {
+      outcome: "succeeded";
+      providerReference: string;
+      facts: FlashSaleReceiptFactsV1;
+    })
+  | (ReceiptBaseV1<"end_flash_sale"> & {
+      outcome: "succeeded";
+      providerReference: string;
+      facts: EndFlashSaleReceiptFactsV1;
+    })
+  | (ReceiptBaseV1<"set_variant_prices"> & {
+      outcome: "succeeded";
+      providerReference: string;
+      facts: VariantPriceReceiptFactsV1;
     });
 
 type ReceiptToolV1 = ReceiptSuccessV1["tool"];
@@ -260,10 +310,18 @@ type OrderEditPartialUnknownReceiptV1 = ReceiptBaseV1<"edit_shopify_order"> & {
   facts: OrderEditReceiptFactsV1;
 };
 
+type VariantPricePartialUnknownReceiptV1 = ReceiptBaseV1<"set_variant_prices"> & {
+  outcome: "unknown";
+  code: string;
+  providerReference: string;
+  facts: VariantPriceReceiptFactsV1;
+};
+
 export type ReceiptFailureV1 =
   | ReceiptFailureWithoutPartialFactsV1
   | OrderAddressPartialUnknownReceiptV1
-  | OrderEditPartialUnknownReceiptV1;
+  | OrderEditPartialUnknownReceiptV1
+  | VariantPricePartialUnknownReceiptV1;
 
 export type ReceiptV1 = ReceiptSuccessV1 | ReceiptFailureV1;
 
@@ -335,9 +393,126 @@ function requireRegisteredReceiptTool(tool: string): asserts tool is ReceiptTool
     && tool !== "update_shopify_customer_info"
     && tool !== "add_shopify_customer_note"
     && tool !== "create_gift_card"
+    && tool !== "create_flash_sale"
+    && tool !== "end_flash_sale"
+    && tool !== "set_variant_prices"
   ) {
     throw new ReceiptValidationError(`no receipt validator is registered for ${tool}`);
   }
+}
+
+function requireMoneyDecimal(value: unknown, field: string): asserts value is string {
+  requireNonEmptyString(value, field);
+  if (!/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value)) {
+    throw new ReceiptValidationError(`${field} must be an exact non-negative decimal string`);
+  }
+}
+
+function parseVariantPriceFacts(value: unknown): VariantPriceReceiptFactsV1 {
+  if (!isRecord(value)) throw new ReceiptValidationError("variant price facts must be an object");
+  if (value.currency !== null && (typeof value.currency !== "string" || !/^[A-Z]{3}$/.test(value.currency))) {
+    throw new ReceiptValidationError("facts.currency must be a three-letter uppercase code or null");
+  }
+  if (!Array.isArray(value.batches) || value.batches.length === 0) {
+    throw new ReceiptValidationError("facts.batches must be a non-empty array");
+  }
+  const products = new Set<string>();
+  const variants = new Set<string>();
+  for (const [batchIndex, candidate] of value.batches.entries()) {
+    if (!isRecord(candidate)) {
+      throw new ReceiptValidationError(`facts.batches[${batchIndex}] must be an object`);
+    }
+    requireNonEmptyString(candidate.productId, `facts.batches[${batchIndex}].productId`);
+    if (products.has(candidate.productId)) {
+      throw new ReceiptValidationError("facts.batches product IDs must be unique");
+    }
+    products.add(candidate.productId);
+    if (candidate.outcome !== "succeeded" && candidate.outcome !== "failed" && candidate.outcome !== "unknown") {
+      throw new ReceiptValidationError(`facts.batches[${batchIndex}].outcome is invalid`);
+    }
+    if (
+      candidate.confirmation !== "mutation_response"
+      && candidate.confirmation !== "read_after_ambiguous_response"
+      && candidate.confirmation !== "provider_rejected"
+      && candidate.confirmation !== "not_attempted"
+    ) {
+      throw new ReceiptValidationError(`facts.batches[${batchIndex}].confirmation is invalid`);
+    }
+    if (!Array.isArray(candidate.changes) || candidate.changes.length === 0) {
+      throw new ReceiptValidationError(`facts.batches[${batchIndex}].changes must be a non-empty array`);
+    }
+    for (const [changeIndex, change] of candidate.changes.entries()) {
+      if (!isRecord(change)) {
+        throw new ReceiptValidationError(`facts.batches[${batchIndex}].changes[${changeIndex}] must be an object`);
+      }
+      requireNonEmptyString(change.productId, `facts.batches[${batchIndex}].changes[${changeIndex}].productId`);
+      requireNonEmptyString(change.variantId, `facts.batches[${batchIndex}].changes[${changeIndex}].variantId`);
+      if (change.productId !== candidate.productId) {
+        throw new ReceiptValidationError("variant price change product must match its batch");
+      }
+      if (variants.has(change.variantId)) {
+        throw new ReceiptValidationError("variant price receipt variants must be unique");
+      }
+      variants.add(change.variantId);
+      requireMoneyDecimal(change.originalPrice, `facts.batches[${batchIndex}].changes[${changeIndex}].originalPrice`);
+      requireMoneyDecimal(change.requestedPrice, `facts.batches[${batchIndex}].changes[${changeIndex}].requestedPrice`);
+      if (change.observedPrice !== null) {
+        requireMoneyDecimal(change.observedPrice, `facts.batches[${batchIndex}].changes[${changeIndex}].observedPrice`);
+      }
+      if (candidate.outcome === "succeeded" && change.observedPrice !== change.requestedPrice) {
+        throw new ReceiptValidationError("successful variant price changes must observe the requested price");
+      }
+    }
+  }
+  return value as unknown as VariantPriceReceiptFactsV1;
+}
+
+function parseEndFlashSaleFacts(value: unknown): EndFlashSaleReceiptFactsV1 {
+  if (!isRecord(value)) throw new ReceiptValidationError("ended flash sale facts must be an object");
+  requireNonEmptyString(value.flashSaleId, "facts.flashSaleId");
+  if (
+    value.confirmation !== "deleted"
+    && value.confirmation !== "absent_after_ambiguous_response"
+  ) {
+    throw new ReceiptValidationError("facts.confirmation is invalid");
+  }
+  return value as unknown as EndFlashSaleReceiptFactsV1;
+}
+
+function parseFlashSaleFacts(value: unknown): FlashSaleReceiptFactsV1 {
+  if (!isRecord(value)) throw new ReceiptValidationError("flash sale facts must be an object");
+  requireNonEmptyString(value.flashSaleId, "facts.flashSaleId");
+  if (value.appliesTo !== "entire_catalog" && value.appliesTo !== "variants") {
+    throw new ReceiptValidationError("facts.appliesTo is invalid");
+  }
+  if (!Array.isArray(value.variantIds)) {
+    throw new ReceiptValidationError("facts.variantIds must be an array");
+  }
+  const seen = new Set<string>();
+  for (const [index, variantId] of value.variantIds.entries()) {
+    requireNonEmptyString(variantId, `facts.variantIds[${index}]`);
+    if (seen.has(variantId)) {
+      throw new ReceiptValidationError("facts.variantIds must be unique");
+    }
+    seen.add(variantId);
+  }
+  if (value.appliesTo === "entire_catalog" && value.variantIds.length !== 0) {
+    throw new ReceiptValidationError("catalog flash sale facts cannot name variants");
+  }
+  if (value.appliesTo === "variants" && value.variantIds.length === 0) {
+    throw new ReceiptValidationError("variant flash sale facts require variants");
+  }
+  requirePositiveDecimal(value.discountPercentage, "facts.discountPercentage");
+  if (Number(value.discountPercentage) > 100) {
+    throw new ReceiptValidationError("facts.discountPercentage cannot exceed 100");
+  }
+  requireIsoTimestamp(value.startsAt, "facts.startsAt");
+  requireIsoTimestamp(value.endsAt, "facts.endsAt");
+  if (Date.parse(value.endsAt) <= Date.parse(value.startsAt)) {
+    throw new ReceiptValidationError("facts.endsAt must be after facts.startsAt");
+  }
+  requireNonEmptyString(value.providerStatus, "facts.providerStatus");
+  return value as unknown as FlashSaleReceiptFactsV1;
 }
 
 function parseGiftCardFacts(value: unknown): GiftCardReceiptFactsV1 {
@@ -712,6 +887,9 @@ export function parseReceiptV1(value: unknown): ReceiptV1 {
     && base.tool !== "update_shopify_customer_info"
     && base.tool !== "add_shopify_customer_note"
     && base.tool !== "create_gift_card"
+    && base.tool !== "create_flash_sale"
+    && base.tool !== "end_flash_sale"
+    && base.tool !== "set_variant_prices"
     && base.target.kind !== "order"
   ) {
     throw new ReceiptValidationError(`${base.tool} receipt target must be an order`);
@@ -825,6 +1003,39 @@ export function parseReceiptV1(value: unknown): ReceiptV1 {
       if (value.providerReference !== facts.giftCardId) {
         throw new ReceiptValidationError("gift card providerReference must match facts.giftCardId");
       }
+    } else if (base.tool === "create_flash_sale") {
+      if (base.target.kind !== "shop") {
+        throw new ReceiptValidationError("create_flash_sale receipt target must be a shop");
+      }
+      requireNonEmptyString(value.providerReference, "providerReference");
+      const facts = parseFlashSaleFacts(value.facts);
+      if (value.providerReference !== facts.flashSaleId) {
+        throw new ReceiptValidationError("flash sale providerReference must match facts.flashSaleId");
+      }
+    } else if (base.tool === "end_flash_sale") {
+      if (base.target.kind !== "discount") {
+        throw new ReceiptValidationError("end_flash_sale receipt target must be a discount");
+      }
+      requireNonEmptyString(value.providerReference, "providerReference");
+      const facts = parseEndFlashSaleFacts(value.facts);
+      if (base.target.id !== facts.flashSaleId) {
+        throw new ReceiptValidationError("ended flash sale target must match facts.flashSaleId");
+      }
+      if (value.providerReference !== facts.flashSaleId) {
+        throw new ReceiptValidationError("ended flash sale providerReference must match facts.flashSaleId");
+      }
+    } else if (base.tool === "set_variant_prices") {
+      if (base.target.kind !== "shop") {
+        throw new ReceiptValidationError("set_variant_prices receipt target must be a shop");
+      }
+      requireNonEmptyString(value.providerReference, "providerReference");
+      if (value.providerReference !== base.target.id) {
+        throw new ReceiptValidationError("variant price providerReference must match the shop target");
+      }
+      const facts = parseVariantPriceFacts(value.facts);
+      if (facts.batches.some((batch) => batch.outcome !== "succeeded")) {
+        throw new ReceiptValidationError("successful variant price receipts require successful batches");
+      }
     }
   } else if (
     value.outcome === "not_found"
@@ -840,15 +1051,34 @@ export function parseReceiptV1(value: unknown): ReceiptV1 {
     ) {
       throw new ReceiptValidationError("create_shopify_order failure target must be an order or email");
     }
+    if (base.tool === "create_flash_sale" && base.target.kind !== "shop") {
+      throw new ReceiptValidationError("create_flash_sale failure target must be a shop");
+    }
+    if (base.tool === "set_variant_prices" && base.target.kind !== "shop") {
+      throw new ReceiptValidationError("set_variant_prices failure target must be a shop");
+    }
+    if (
+      base.tool === "end_flash_sale"
+      && base.target.kind !== "shop"
+      && base.target.kind !== "discount"
+    ) {
+      throw new ReceiptValidationError("end_flash_sale failure target must be a shop or discount");
+    }
     if (value.facts !== undefined) {
-      if (base.tool !== "update_shopify_order_address" && base.tool !== "edit_shopify_order") {
+      if (
+        base.tool !== "update_shopify_order_address"
+        && base.tool !== "edit_shopify_order"
+        && base.tool !== "set_variant_prices"
+      ) {
         throw new ReceiptValidationError("failure receipt facts are not supported for this tool");
       }
       if (value.outcome !== "unknown") {
         throw new ReceiptValidationError(
           base.tool === "update_shopify_order_address"
             ? "partial order address facts require an unknown outcome"
-            : "partial order edit facts require an unknown outcome",
+            : base.tool === "edit_shopify_order"
+              ? "partial order edit facts require an unknown outcome"
+              : "partial variant price facts require an unknown outcome",
         );
       }
       requireNonEmptyString(value.providerReference, "providerReference");
@@ -860,7 +1090,7 @@ export function parseReceiptV1(value: unknown): ReceiptV1 {
         if (value.providerReference !== facts.orderId) {
           throw new ReceiptValidationError("order address providerReference must match facts.orderId");
         }
-      } else {
+      } else if (base.tool === "edit_shopify_order") {
         const facts = parseOrderEditFacts(value.facts, { requireCommitted: false });
         if (base.target.id !== facts.orderId) {
           throw new ReceiptValidationError("order edit target must match facts.orderId");
@@ -868,6 +1098,11 @@ export function parseReceiptV1(value: unknown): ReceiptV1 {
         if (value.providerReference !== facts.orderId) {
           throw new ReceiptValidationError("order edit providerReference must match facts.orderId");
         }
+      } else {
+        if (value.providerReference !== base.target.id) {
+          throw new ReceiptValidationError("variant price providerReference must match the shop target");
+        }
+        parseVariantPriceFacts(value.facts);
       }
     }
   } else {
