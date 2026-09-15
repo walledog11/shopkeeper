@@ -818,6 +818,8 @@ Implementation checkpoints committed so far:
 | `e77b51f0` | `update_shopify_customer_info` typed outcomes, exact provider-observed changed fields, `write_customers`, customer-profile grounding, and conservative recovery. | Agent lint/typecheck/unit/integration/coverage passed; 1,105 agent unit tests; 14 focused reconciliation tests. |
 | `337291ac` | `add_shopify_customer_note` typed outcomes, hash-bound append facts, `write_customers`, customer-note grounding, and no-replay recovery. | Agent lint/typecheck/unit/integration/coverage passed; 1,114 agent unit tests; 15 focused reconciliation tests. |
 | `8af92e82` | `create_gift_card` typed outcomes, secret-safe exact provider facts, interrupted-response reconciliation, receipt-grounded completion facts, and `write_gift_cards` + `write_customers` + recovery-read scope metadata. | Agent lint/typecheck/unit/integration/coverage passed; 1,119 unit, 111 integration, and 1,230 coverage tests. |
+| `729e4efa` | Complete the isolated operator Shopify write migration, including typed flash-sale creation/ending and ordered variant-price outcomes. | Full PR gate and the focused receipt, grounding, document, reconciliation, scope, and gateway tool suites recorded above. |
+| `db156a2c` | Complete Package 1 with organization-bound internal-thread receipts and pre-dispatch durable logical responses for replies and emails. | Full PR gate; 1,143 agent, 455 gateway, and 786 dashboard unit tests; 29 focused gateway integration tests; 59 focused dashboard tests; 12 browser tests. |
 
 Current verified checkpoint: Package 1 is complete. All retained Shopify and
 internal-thread writes cross the version-1 receipt boundary, and outbound
