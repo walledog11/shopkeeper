@@ -66,11 +66,16 @@ export async function dispatchEmailViaGatewayQueue(
 
   if (enqueued === "failed") {
     await markAgentMessageSendFailed(message.id, "Could not queue email send")
-    return { ok: false, error: "Could not queue email send" }
+    return { ok: false, error: "Could not queue email send", message }
   }
   if (enqueued === "unknown") {
     await markPendingAgentMessageSendUnknown(message.id, "Email queue admission outcome unknown")
-    return { ok: false, outcome: "unknown", error: "Email queue admission could not be confirmed" }
+    return {
+      ok: false,
+      outcome: "unknown",
+      error: "Email queue admission could not be confirmed",
+      message: { ...message, sendStatus: "unknown" },
+    }
   }
 
   return { ok: true, message }
@@ -187,7 +192,7 @@ export async function sendEmailSynchronously(
       detail: msg,
       originalChannel: opts.originalChannel,
     })
-    return { ok: false, error: "Email dispatch failed", detail: msg }
+    return { ok: false, outcome: "unknown", error: "Email dispatch failed", detail: msg }
   }
 
   return { ok: true, integrationId: integration.id }

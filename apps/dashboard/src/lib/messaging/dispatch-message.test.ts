@@ -210,6 +210,7 @@ describe('dispatchMessage', () => {
 
     expect(result).toEqual({
       ok: false,
+      outcome: 'unknown',
       error: 'Email dispatch failed',
       detail: 'postmark down',
     });
@@ -769,7 +770,11 @@ describe('dispatchMessage — async outbound (OUTBOUND_EMAIL_ASYNC)', () => {
 
     const result = await dispatchMessage({ ...thread, customer }, org, 'Will fail to queue.');
 
-    expect(result).toEqual({ ok: false, error: 'Could not queue email send' });
+    expect(result).toEqual(expect.objectContaining({
+      ok: false,
+      error: 'Could not queue email send',
+      message: expect.objectContaining({ id: expect.any(String) }),
+    }));
     const saved = await db.message.findFirst({
       where: { threadId: thread.id, senderType: SenderType.agent },
     });
@@ -790,11 +795,12 @@ describe('dispatchMessage — async outbound (OUTBOUND_EMAIL_ASYNC)', () => {
 
     const result = await dispatchMessage({ ...thread, customer }, org, 'Queue result is unclear.');
 
-    expect(result).toEqual({
+    expect(result).toEqual(expect.objectContaining({
       ok: false,
       error: 'Email queue admission could not be confirmed',
       outcome: 'unknown',
-    });
+      message: expect.objectContaining({ id: expect.any(String), sendStatus: 'unknown' }),
+    }));
     const saved = await db.message.findFirst({
       where: { threadId: thread.id, senderType: SenderType.agent },
     });

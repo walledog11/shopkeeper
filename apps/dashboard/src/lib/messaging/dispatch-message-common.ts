@@ -60,6 +60,40 @@ export async function createPendingAgentMessage(
   )
 }
 
+/** Persist the logical response before a synchronous provider attempt. */
+export async function createPendingLogicalResponse(
+  thread: DispatchThread,
+  text: string,
+  attachments: string[] = [],
+) {
+  return createMessage(
+    {
+      threadId: thread.id,
+      senderType: SenderType.agent,
+      contentText: text,
+      sendStatus: "pending",
+      ...(attachments.length > 0 && { attachments }),
+    },
+    await reopenPatchFor(thread.id),
+  )
+}
+
+export function markLogicalResponseSent(
+  messageId: string,
+  integrationId?: string,
+  providerMessageId?: string,
+) {
+  return db.message.update({
+    where: { id: messageId },
+    data: {
+      sendStatus: "sent",
+      sendError: null,
+      ...(integrationId && { integrationId }),
+      ...(providerMessageId && { providerMessageId }),
+    },
+  })
+}
+
 export function markAgentMessageSendFailed(messageId: string, sendError: string) {
   return db.message.update({
     where: { id: messageId },

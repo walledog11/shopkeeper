@@ -219,13 +219,17 @@ async function executeDefinitionWithValidatedReceipt(
   try {
     const receipt = validateToolResultReceipt(result, {
       tool: definition.name,
-      ...(ctx.shopify?.operationId ? { operationId: ctx.shopify.operationId } : {}),
-      ...(ctx.shopify?.executionId ? { executionId: ctx.shopify.executionId } : {}),
+      ...(ctx.execution?.operationId || ctx.shopify?.operationId
+        ? { operationId: ctx.execution?.operationId ?? ctx.shopify!.operationId }
+        : {}),
+      ...(ctx.execution?.executionId || ctx.shopify?.executionId
+        ? { executionId: ctx.execution?.executionId ?? ctx.shopify!.executionId }
+        : {}),
     });
     if (
       definition.requiredReceiptVersion !== null
-      && ctx.shopify?.operationId
-      && ctx.shopify.executionId
+      && (ctx.execution?.operationId || ctx.shopify?.operationId)
+      && (ctx.execution?.executionId || ctx.shopify?.executionId)
       && receipt === undefined
     ) {
       throw new ReceiptValidationError(

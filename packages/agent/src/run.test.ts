@@ -67,12 +67,27 @@ function endTurn(text = "Done.") {
 }
 
 function makeIo(): NonNullable<AgentContext["io"]> {
+  const receipt = (
+    tool: "add_internal_note" | "send_reply" | "send_email" | "update_thread_status" | "update_thread_tag",
+    execution: { operationId: string; executionId: string } | undefined,
+    facts: Record<string, unknown>,
+    providerReference = "thread_1",
+  ) => execution ? {
+    version: 1 as const,
+    ...execution,
+    tool,
+    target: { kind: "thread", id: "thread_1" },
+    observedAt: "2026-09-15T07:00:00.000Z",
+    providerReference,
+    outcome: "succeeded" as const,
+    facts,
+  } : undefined;
   return {
-    addInternalNote: vi.fn().mockResolvedValue({ status: "ok", message: "Note added." }),
-    sendReply: vi.fn().mockResolvedValue({ status: "ok", message: "Reply sent to customer via email." }),
+    addInternalNote: vi.fn(async (_input, execution) => ({ status: "ok", message: "Note added.", receipt: receipt("add_internal_note", execution, { threadId: "thread_1", messageId: "message_1", contentSha256: "a".repeat(64) }, "message_1") })),
+    sendReply: vi.fn(async (_input, execution) => ({ status: "ok", message: "Reply sent to customer via email.", receipt: receipt("send_reply", execution, { logicalResponseId: "message_1", messageId: "message_1", threadId: "thread_1", destination: { kind: "thread", id: "thread_1" }, contentSha256: "b".repeat(64), deliveryState: "sent", providerMessageId: null }, "message_1") })),
     sendEmail: vi.fn().mockResolvedValue({ status: "ok", message: "Email sent." }),
-    updateThreadStatus: vi.fn().mockResolvedValue({ status: "ok", message: "Status updated." }),
-    updateThreadTag: vi.fn().mockResolvedValue({ status: "ok", message: "Tag updated." }),
+    updateThreadStatus: vi.fn(async (_input, execution) => ({ status: "ok", message: "Status updated.", receipt: receipt("update_thread_status", execution, { threadId: "thread_1", beforeStatus: "open", afterStatus: "closed" }) })),
+    updateThreadTag: vi.fn(async (_input, execution) => ({ status: "ok", message: "Tag updated.", receipt: receipt("update_thread_tag", execution, { threadId: "thread_1", beforeTag: null, afterTag: "Refund" }) })),
   };
 }
 
@@ -187,7 +202,7 @@ describe("runAgent tool execution", () => {
 
     const result = await runAgent(ctx, "Note that the customer is VIP");
 
-    expect(ctx.io?.addInternalNote).toHaveBeenCalledWith({ text: "Customer is VIP" });
+    expect(ctx.io?.addInternalNote).toHaveBeenCalledWith({ text: "Customer is VIP" }, expect.any(Object));
     expect(result.actionsPerformed[0]).toMatchObject({
       tool: "add_internal_note",
       result: "Note added.",
@@ -210,8 +225,8 @@ describe("runAgent tool execution", () => {
 
     const result = await runAgent(ctx, "Close and tag this thread");
 
-    expect(ctx.io?.updateThreadStatus).toHaveBeenCalledWith({ status: "closed" });
-    expect(ctx.io?.updateThreadTag).toHaveBeenCalledWith({ tag: "Refund" });
+    expect(ctx.io?.updateThreadStatus).toHaveBeenCalledWith({ status: "closed" }, expect.any(Object));
+    expect(ctx.io?.updateThreadTag).toHaveBeenCalledWith({ tag: "Refund" }, expect.any(Object));
     expect(result.actionsPerformed.map((action) => action.tool)).toEqual([
       "update_thread_status",
       "update_thread_tag",
@@ -226,7 +241,7 @@ describe("runAgent tool execution", () => {
 
     const result = await runAgent(ctx, "Tell the customer their order shipped");
 
-    expect(ctx.io?.sendReply).toHaveBeenCalledWith({ text: "Your order shipped!" });
+    expect(ctx.io?.sendReply).toHaveBeenCalledWith({ text: "Your order shipped!" }, expect.any(Object));
     expect(result.actionsPerformed[0].result).toBe("Reply sent to customer via email.");
   });
 
@@ -298,7 +313,7 @@ describe("runAgent loop behavior", () => {
     );
 
     expect(mockCreate).not.toHaveBeenCalled();
-    expect(ctx.io?.addInternalNote).toHaveBeenCalledWith({ text: "Pre-approved note" });
+    expect(ctx.io?.addInternalNote).toHaveBeenCalledWith({ text: "Pre-approved note" }, expect.any(Object));
     expect(result.actionsPerformed).toHaveLength(1);
     expect(result.actionsPerformed[0].tool).toBe("add_internal_note");
   });

@@ -32,6 +32,7 @@ import type {
 import type {
   AgentActionMode,
   AgentContext,
+  AgentExecutionIdentity,
   BaseAgentContext,
   ShopifyOrderSummary,
 } from "./agent-context.js";
@@ -45,6 +46,8 @@ interface ThreadSinkContext {
   threadId: string;
   orgId: string;
   orgName: string;
+  operationId?: string;
+  executionId?: string;
 }
 
 export interface ThreadSink {
@@ -384,11 +387,11 @@ export async function buildContext(
     askOperator: (question) =>
       sink.askOperator({ question }, threadIo).then(() => {}),
     io: {
-      addInternalNote: (input) => sink.addInternalNote(input, threadIo),
-      sendReply: (input) => sink.sendReply(input, threadIo),
-      sendEmail: (input) => sink.sendEmail(input, threadIo),
-      updateThreadStatus: (input) => sink.updateThreadStatus(input, threadIo),
-      updateThreadTag: (input) => sink.updateThreadTag(input, threadIo),
+      addInternalNote: (input, execution?: AgentExecutionIdentity) => sink.addInternalNote(input, { ...threadIo, ...execution }),
+      sendReply: (input, execution?: AgentExecutionIdentity) => sink.sendReply(input, { ...threadIo, ...execution }),
+      sendEmail: (input, execution?: AgentExecutionIdentity) => sink.sendEmail(input, { ...threadIo, ...execution }),
+      updateThreadStatus: (input, execution?: AgentExecutionIdentity) => sink.updateThreadStatus(input, { ...threadIo, ...execution }),
+      updateThreadTag: (input, execution?: AgentExecutionIdentity) => sink.updateThreadTag(input, { ...threadIo, ...execution }),
     },
   };
 

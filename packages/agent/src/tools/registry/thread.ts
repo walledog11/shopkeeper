@@ -22,8 +22,9 @@ export const THREAD_TOOL_DEFINITIONS = [
     capabilities: ["thread-io"],
     label: "Added internal note",
     planStepLabel: "Add internal note",
+    requiredReceiptVersion: 1,
     execute: async (input: AddInternalNoteInput, ctx) => (
-      ctx.io ? ctx.io.addInternalNote(input) : noThread
+      ctx.io ? (ctx.execution ? ctx.io.addInternalNote(input, ctx.execution) : ctx.io.addInternalNote(input)) : noThread
     ),
   }),
   defineTool({
@@ -37,8 +38,9 @@ export const THREAD_TOOL_DEFINITIONS = [
     capabilities: ["thread-io"],
     label: "Updated thread status",
     planStepLabel: "Update ticket status",
+    requiredReceiptVersion: 1,
     execute: async (input: UpdateThreadStatusInput, ctx) => (
-      ctx.io ? ctx.io.updateThreadStatus(input) : noThread
+      ctx.io ? (ctx.execution ? ctx.io.updateThreadStatus(input, ctx.execution) : ctx.io.updateThreadStatus(input)) : noThread
     ),
   }),
   defineTool({
@@ -52,8 +54,9 @@ export const THREAD_TOOL_DEFINITIONS = [
     capabilities: ["thread-io"],
     label: "Updated thread tag",
     planStepLabel: "Update ticket tag",
+    requiredReceiptVersion: 1,
     execute: async (input: UpdateThreadTagInput, ctx) => (
-      ctx.io ? ctx.io.updateThreadTag(input) : noThread
+      ctx.io ? (ctx.execution ? ctx.io.updateThreadTag(input, ctx.execution) : ctx.io.updateThreadTag(input)) : noThread
     ),
   }),
   defineTool({

@@ -79,10 +79,27 @@ describe('sendReply outbound recording', () => {
 
     const result = await sendReply(
       { text: 'Recorded agent reply.' },
-      { threadId: thread.id, orgId: org.id, orgName: org.name },
+      {
+        threadId: thread.id,
+        orgId: org.id,
+        orgName: org.name,
+        operationId: 'operation-reply-1',
+        executionId: 'execution-reply-1',
+      },
     );
 
     expect(result.message).toBe('Reply sent to customer via email.');
+    expect(result.receipt).toEqual(expect.objectContaining({
+      tool: 'send_reply',
+      target: { kind: 'thread', id: thread.id },
+      outcome: 'succeeded',
+      facts: expect.objectContaining({
+        threadId: thread.id,
+        destination: { kind: 'thread', id: thread.id },
+        contentSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+        deliveryState: 'sent',
+      }),
+    }));
     const records = await readOutboundRecords();
     expect(records).toMatchObject([
       {
@@ -259,7 +276,7 @@ describe('sendReply provider failures', () => {
     expect(await readOutboundRecords()).toEqual([]);
   });
 
-  it('preserves the agent-specific email provider error message', async () => {
+  it('preserves an ambiguous provider failure as unknown', async () => {
     process.env.E2E_OUTBOUND_MODE = 'live';
     process.env.POSTMARK_API_KEY = 'test-postmark-key';
     mockPostmarkSend.mockRejectedValueOnce(new Error('postmark down'));
@@ -278,8 +295,8 @@ describe('sendReply provider failures', () => {
     );
 
     expect(result).toEqual({
-      status: 'error',
-      message: 'Error: email dispatch failed — postmark down',
+      status: 'unknown',
+      message: 'Unknown: Email dispatch failed. Do not send it again automatically.',
     });
     expect(mockRecordEmailSendFailure).toHaveBeenCalledWith({
       provider: 'postmark',
@@ -288,6 +305,14 @@ describe('sendReply provider failures', () => {
       integrationId: integration.id,
       detail: 'postmark down',
       originalChannel: undefined,
+    });
+    const durableResponse = await db.message.findFirst({
+      where: { threadId: thread.id, senderType: SenderType.agent },
+    });
+    expect(durableResponse).toMatchObject({
+      contentText: 'This will fail.',
+      sendStatus: 'unknown',
+      sendError: 'Email dispatch failed',
     });
   });
 });
@@ -301,11 +326,11 @@ describe('thread tool tenant ownership', () => {
       const ctx = { threadId: thread.id, orgId: org.id, orgName: org.name };
 
       await expect(sendReply({ text: 'Cross-tenant reply' }, ctx)).resolves.toEqual({
-        status: 'error',
+        status: 'not_found',
         message: 'Error: thread not found.',
       });
       await expect(updateThreadStatus({ status: THREAD_STATUS.CLOSED }, ctx)).resolves.toEqual({
-        status: 'error',
+        status: 'not_found',
         message: 'Error: thread not found.',
       });
       await expect(escalateToHuman({ reason: 'Cross-tenant escalation' }, ctx)).resolves.toEqual({
@@ -525,10 +550,20 @@ describe('updateThreadStatus', () => {
 
     const result = await updateThreadStatus(
       { status: THREAD_STATUS.CLOSED },
-      { threadId: thread.id, orgId: org.id, orgName: org.name },
+      {
+        threadId: thread.id,
+        orgId: org.id,
+        orgName: org.name,
+        operationId: 'operation-status-1',
+        executionId: 'execution-status-1',
+      },
     );
 
     expect(result.message).toBe('Thread status updated to "closed".');
+    expect(result.receipt).toEqual(expect.objectContaining({
+      tool: 'update_thread_status',
+      facts: { threadId: thread.id, beforeStatus: 'open', afterStatus: 'closed' },
+    }));
     const updated = await db.thread.findUnique({ where: { id: thread.id } });
     expect(updated?.status).toBe(THREAD_STATUS.CLOSED);
   });

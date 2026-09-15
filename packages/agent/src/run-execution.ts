@@ -341,16 +341,22 @@ export async function executeAgentToolCall(
     await actionDispatch?.authorizeDispatch();
     await actionDispatch?.markSubmitted();
     try {
-      const toolContext = providerOperationKey && ctx.shopify
-        ? {
-            ...ctx,
+      const executionIdentity = runtimeOperationId && operationScopeId
+        ? { operationId: runtimeOperationId, executionId: operationScopeId }
+        : undefined;
+      const toolContext = {
+        ...ctx,
+        ...(executionIdentity ? { execution: executionIdentity } : {}),
+        ...(providerOperationKey && ctx.shopify
+          ? {
             shopify: {
               ...ctx.shopify,
               operationId: providerOperationKey,
               executionId: operationScopeId,
             },
           }
-        : ctx;
+          : {}),
+      };
       const executed = await executeToolWithStatus(
         executableToolCall.name,
         executableToolCall.input,

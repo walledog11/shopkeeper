@@ -893,4 +893,86 @@ describe("receipt v1", () => {
       target: { kind: "customer", id: "customer-1" },
     })).toThrow("target must be an order");
   });
+
+  it("validates internal thread and spam receipts against their durable identities", () => {
+    const base = {
+      version: 1 as const,
+      operationId: "operation-thread-1",
+      executionId: "execution-thread-1",
+      target: { kind: "thread", id: "thread-1" },
+      observedAt: "2026-09-15T07:00:00.000Z",
+      outcome: "succeeded" as const,
+    };
+    const note = parseReceiptV1({
+      ...base,
+      tool: "add_internal_note",
+      providerReference: "message-1",
+      facts: {
+        threadId: "thread-1",
+        messageId: "message-1",
+        contentSha256: "a".repeat(64),
+      },
+    });
+    expect(note.tool).toBe("add_internal_note");
+    expect(parseReceiptV1({
+      ...base,
+      tool: "update_thread_status",
+      providerReference: "thread-1",
+      facts: { threadId: "thread-1", beforeStatus: "open", afterStatus: "closed" },
+    }).tool).toBe("update_thread_status");
+    expect(parseReceiptV1({
+      ...base,
+      tool: "update_thread_tag",
+      providerReference: "thread-1",
+      facts: { threadId: "thread-1", beforeTag: null, afterTag: "Shipping" },
+    }).tool).toBe("update_thread_tag");
+    expect(parseReceiptV1({
+      ...base,
+      tool: "mark_ticket_spam",
+      providerReference: "thread-1",
+      facts: {
+        threadId: "thread-1",
+        beforeFilterState: "genuine",
+        afterFilterState: "filtered",
+        decidedAt: "2026-09-15T07:00:00.000Z",
+      },
+    }).tool).toBe("mark_ticket_spam");
+    expect(() => parseReceiptV1({
+      ...base,
+      tool: "add_internal_note",
+      providerReference: "wrong-message",
+      facts: {
+        threadId: "thread-1",
+        messageId: "message-1",
+        contentSha256: "a".repeat(64),
+      },
+    })).toThrow("providerReference must match facts.messageId");
+  });
+
+  it("validates durable communication state without treating queue acceptance as delivery", () => {
+    const receipt = parseReceiptV1({
+      version: 1,
+      operationId: "operation-send-1",
+      executionId: "execution-send-1",
+      tool: "send_email",
+      target: { kind: "thread", id: "thread-1" },
+      observedAt: "2026-09-15T07:00:00.000Z",
+      providerReference: "message-1",
+      outcome: "succeeded",
+      facts: {
+        logicalResponseId: "message-1",
+        messageId: "message-1",
+        threadId: "thread-1",
+        destination: { kind: "email", id: "customer@example.com" },
+        contentSha256: "b".repeat(64),
+        deliveryState: "accepted",
+        providerMessageId: null,
+      },
+    });
+    expect(receipt.outcome).toBe("succeeded");
+    expect(() => parseReceiptV1({
+      ...receipt,
+      facts: { ...receipt.facts, deliveryState: "unknown" },
+    })).toThrow("successful communication cannot have unknown delivery state");
+  });
 });

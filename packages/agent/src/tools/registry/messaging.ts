@@ -15,8 +15,9 @@ export const MESSAGING_TOOL_DEFINITIONS = [
     capabilities: ["thread-io"],
     label: "Sent reply",
     planStepLabel: "Notify customer",
+    requiredReceiptVersion: 1,
     execute: async (input: SendReplyInput, ctx) => (
-      ctx.io ? ctx.io.sendReply(input) : noThread
+      ctx.io ? (ctx.execution ? ctx.io.sendReply(input, ctx.execution) : ctx.io.sendReply(input)) : noThread
     ),
   }),
   defineTool({
@@ -33,8 +34,9 @@ export const MESSAGING_TOOL_DEFINITIONS = [
     capabilities: ["thread-io"],
     label: "Sent email",
     planStepLabel: "Send email to customer",
+    requiredReceiptVersion: 1,
     execute: async (input: SendEmailInput, ctx) => (
-      ctx.io ? ctx.io.sendEmail(input) : noThread
+      ctx.io ? (ctx.execution ? ctx.io.sendEmail(input, ctx.execution) : ctx.io.sendEmail(input)) : noThread
     ),
   }),
 ] as const;

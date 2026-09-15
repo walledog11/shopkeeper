@@ -208,6 +208,41 @@ export interface VariantPriceReceiptFactsV1 {
   batches: VariantPriceReceiptBatchV1[];
 }
 
+export interface InternalNoteReceiptFactsV1 {
+  threadId: string;
+  messageId: string;
+  contentSha256: string;
+}
+
+export interface ThreadStatusReceiptFactsV1 {
+  threadId: string;
+  beforeStatus: string;
+  afterStatus: string;
+}
+
+export interface ThreadTagReceiptFactsV1 {
+  threadId: string;
+  beforeTag: string | null;
+  afterTag: string;
+}
+
+export interface TicketSpamReceiptFactsV1 {
+  threadId: string;
+  beforeFilterState: string;
+  afterFilterState: "filtered";
+  decidedAt: string;
+}
+
+export interface CommunicationReceiptFactsV1 {
+  logicalResponseId: string;
+  messageId: string;
+  threadId: string;
+  destination: { kind: "thread" | "email"; id: string };
+  contentSha256: string;
+  deliveryState: "accepted" | "sent" | "delivered" | "unknown";
+  providerMessageId: string | null;
+}
+
 export type ReceiptSuccessV1 =
   | (ReceiptBaseV1<"create_refund"> & {
       outcome: "succeeded";
@@ -288,6 +323,31 @@ export type ReceiptSuccessV1 =
       outcome: "succeeded";
       providerReference: string;
       facts: VariantPriceReceiptFactsV1;
+    })
+  | (ReceiptBaseV1<"add_internal_note"> & {
+      outcome: "succeeded";
+      providerReference: string;
+      facts: InternalNoteReceiptFactsV1;
+    })
+  | (ReceiptBaseV1<"update_thread_status"> & {
+      outcome: "succeeded";
+      providerReference: string;
+      facts: ThreadStatusReceiptFactsV1;
+    })
+  | (ReceiptBaseV1<"update_thread_tag"> & {
+      outcome: "succeeded";
+      providerReference: string;
+      facts: ThreadTagReceiptFactsV1;
+    })
+  | (ReceiptBaseV1<"mark_ticket_spam"> & {
+      outcome: "succeeded";
+      providerReference: string;
+      facts: TicketSpamReceiptFactsV1;
+    })
+  | (ReceiptBaseV1<"send_reply" | "send_email" | "send_ticket_reply"> & {
+      outcome: "succeeded";
+      providerReference: string;
+      facts: CommunicationReceiptFactsV1;
     });
 
 type ReceiptToolV1 = ReceiptSuccessV1["tool"];
@@ -317,11 +377,19 @@ type VariantPricePartialUnknownReceiptV1 = ReceiptBaseV1<"set_variant_prices"> &
   facts: VariantPriceReceiptFactsV1;
 };
 
+type CommunicationPartialUnknownReceiptV1 = ReceiptBaseV1<"send_reply" | "send_email" | "send_ticket_reply"> & {
+  outcome: "unknown";
+  code: string;
+  providerReference: string;
+  facts: CommunicationReceiptFactsV1;
+};
+
 export type ReceiptFailureV1 =
   | ReceiptFailureWithoutPartialFactsV1
   | OrderAddressPartialUnknownReceiptV1
   | OrderEditPartialUnknownReceiptV1
-  | VariantPricePartialUnknownReceiptV1;
+  | VariantPricePartialUnknownReceiptV1
+  | CommunicationPartialUnknownReceiptV1;
 
 export type ReceiptV1 = ReceiptSuccessV1 | ReceiptFailureV1;
 
@@ -396,9 +464,77 @@ function requireRegisteredReceiptTool(tool: string): asserts tool is ReceiptTool
     && tool !== "create_flash_sale"
     && tool !== "end_flash_sale"
     && tool !== "set_variant_prices"
+    && tool !== "add_internal_note"
+    && tool !== "update_thread_status"
+    && tool !== "update_thread_tag"
+    && tool !== "mark_ticket_spam"
+    && tool !== "send_reply"
+    && tool !== "send_email"
+    && tool !== "send_ticket_reply"
   ) {
     throw new ReceiptValidationError(`no receipt validator is registered for ${tool}`);
   }
+}
+
+function parseCommunicationFacts(value: unknown): CommunicationReceiptFactsV1 {
+  if (!isRecord(value)) throw new ReceiptValidationError("communication facts must be an object");
+  requireNonEmptyString(value.logicalResponseId, "facts.logicalResponseId");
+  requireNonEmptyString(value.messageId, "facts.messageId");
+  requireNonEmptyString(value.threadId, "facts.threadId");
+  if (!isRecord(value.destination)) throw new ReceiptValidationError("facts.destination must be an object");
+  if (value.destination.kind !== "thread" && value.destination.kind !== "email") {
+    throw new ReceiptValidationError("facts.destination.kind is invalid");
+  }
+  requireNonEmptyString(value.destination.id, "facts.destination.id");
+  if (typeof value.contentSha256 !== "string" || !/^[a-f0-9]{64}$/.test(value.contentSha256)) {
+    throw new ReceiptValidationError("facts.contentSha256 must be a SHA-256 digest");
+  }
+  if (!['accepted', 'sent', 'delivered', 'unknown'].includes(String(value.deliveryState))) {
+    throw new ReceiptValidationError("facts.deliveryState is invalid");
+  }
+  if (value.providerMessageId !== null && typeof value.providerMessageId !== "string") {
+    throw new ReceiptValidationError("facts.providerMessageId must be a string or null");
+  }
+  return value as unknown as CommunicationReceiptFactsV1;
+}
+
+function parseInternalNoteFacts(value: unknown): InternalNoteReceiptFactsV1 {
+  if (!isRecord(value)) throw new ReceiptValidationError("internal note facts must be an object");
+  requireNonEmptyString(value.threadId, "facts.threadId");
+  requireNonEmptyString(value.messageId, "facts.messageId");
+  if (typeof value.contentSha256 !== "string" || !/^[a-f0-9]{64}$/.test(value.contentSha256)) {
+    throw new ReceiptValidationError("facts.contentSha256 must be a SHA-256 digest");
+  }
+  return value as unknown as InternalNoteReceiptFactsV1;
+}
+
+function parseThreadStatusFacts(value: unknown): ThreadStatusReceiptFactsV1 {
+  if (!isRecord(value)) throw new ReceiptValidationError("thread status facts must be an object");
+  requireNonEmptyString(value.threadId, "facts.threadId");
+  requireNonEmptyString(value.beforeStatus, "facts.beforeStatus");
+  requireNonEmptyString(value.afterStatus, "facts.afterStatus");
+  return value as unknown as ThreadStatusReceiptFactsV1;
+}
+
+function parseThreadTagFacts(value: unknown): ThreadTagReceiptFactsV1 {
+  if (!isRecord(value)) throw new ReceiptValidationError("thread tag facts must be an object");
+  requireNonEmptyString(value.threadId, "facts.threadId");
+  if (value.beforeTag !== null && typeof value.beforeTag !== "string") {
+    throw new ReceiptValidationError("facts.beforeTag must be a string or null");
+  }
+  requireNonEmptyString(value.afterTag, "facts.afterTag");
+  return value as unknown as ThreadTagReceiptFactsV1;
+}
+
+function parseTicketSpamFacts(value: unknown): TicketSpamReceiptFactsV1 {
+  if (!isRecord(value)) throw new ReceiptValidationError("ticket spam facts must be an object");
+  requireNonEmptyString(value.threadId, "facts.threadId");
+  requireNonEmptyString(value.beforeFilterState, "facts.beforeFilterState");
+  if (value.afterFilterState !== "filtered") {
+    throw new ReceiptValidationError("facts.afterFilterState must be filtered");
+  }
+  requireIsoTimestamp(value.decidedAt, "facts.decidedAt");
+  return value as unknown as TicketSpamReceiptFactsV1;
 }
 
 function requireMoneyDecimal(value: unknown, field: string): asserts value is string {
@@ -890,6 +1026,13 @@ export function parseReceiptV1(value: unknown): ReceiptV1 {
     && base.tool !== "create_flash_sale"
     && base.tool !== "end_flash_sale"
     && base.tool !== "set_variant_prices"
+    && base.tool !== "add_internal_note"
+    && base.tool !== "update_thread_status"
+    && base.tool !== "update_thread_tag"
+    && base.tool !== "mark_ticket_spam"
+    && base.tool !== "send_reply"
+    && base.tool !== "send_email"
+    && base.tool !== "send_ticket_reply"
     && base.target.kind !== "order"
   ) {
     throw new ReceiptValidationError(`${base.tool} receipt target must be an order`);
@@ -1036,6 +1179,44 @@ export function parseReceiptV1(value: unknown): ReceiptV1 {
       if (facts.batches.some((batch) => batch.outcome !== "succeeded")) {
         throw new ReceiptValidationError("successful variant price receipts require successful batches");
       }
+    } else if (base.tool === "add_internal_note") {
+      if (base.target.kind !== "thread") throw new ReceiptValidationError("internal note target must be a thread");
+      requireNonEmptyString(value.providerReference, "providerReference");
+      const facts = parseInternalNoteFacts(value.facts);
+      if (base.target.id !== facts.threadId) throw new ReceiptValidationError("internal note target must match facts.threadId");
+      if (value.providerReference !== facts.messageId) throw new ReceiptValidationError("internal note providerReference must match facts.messageId");
+    } else if (base.tool === "update_thread_status") {
+      if (base.target.kind !== "thread") throw new ReceiptValidationError("thread status target must be a thread");
+      requireNonEmptyString(value.providerReference, "providerReference");
+      const facts = parseThreadStatusFacts(value.facts);
+      if (base.target.id !== facts.threadId || value.providerReference !== facts.threadId) {
+        throw new ReceiptValidationError("thread status identities must match the target thread");
+      }
+    } else if (base.tool === "update_thread_tag") {
+      if (base.target.kind !== "thread") throw new ReceiptValidationError("thread tag target must be a thread");
+      requireNonEmptyString(value.providerReference, "providerReference");
+      const facts = parseThreadTagFacts(value.facts);
+      if (base.target.id !== facts.threadId || value.providerReference !== facts.threadId) {
+        throw new ReceiptValidationError("thread tag identities must match the target thread");
+      }
+    } else if (base.tool === "mark_ticket_spam") {
+      if (base.target.kind !== "thread") throw new ReceiptValidationError("ticket spam target must be a thread");
+      requireNonEmptyString(value.providerReference, "providerReference");
+      const facts = parseTicketSpamFacts(value.facts);
+      if (base.target.id !== facts.threadId || value.providerReference !== facts.threadId) {
+        throw new ReceiptValidationError("ticket spam identities must match the target thread");
+      }
+    } else if (base.tool === "send_reply" || base.tool === "send_email" || base.tool === "send_ticket_reply") {
+      if (base.target.kind !== "thread") throw new ReceiptValidationError("communication target must be a thread");
+      requireNonEmptyString(value.providerReference, "providerReference");
+      const facts = parseCommunicationFacts(value.facts);
+      if (base.target.id !== facts.threadId) throw new ReceiptValidationError("communication target must match facts.threadId");
+      if (value.providerReference !== facts.messageId || facts.logicalResponseId !== facts.messageId) {
+        throw new ReceiptValidationError("communication response identities must match the persisted message");
+      }
+      if (facts.deliveryState === "unknown") {
+        throw new ReceiptValidationError("successful communication cannot have unknown delivery state");
+      }
     }
   } else if (
     value.outcome === "not_found"
@@ -1058,6 +1239,24 @@ export function parseReceiptV1(value: unknown): ReceiptV1 {
       throw new ReceiptValidationError("set_variant_prices failure target must be a shop");
     }
     if (
+      (base.tool === "add_internal_note"
+        || base.tool === "update_thread_status"
+        || base.tool === "update_thread_tag"
+        || base.tool === "mark_ticket_spam")
+      && base.target.kind !== "thread"
+    ) {
+      throw new ReceiptValidationError(`${base.tool} failure target must be a thread`);
+    }
+    if (
+      (base.tool === "send_reply" || base.tool === "send_ticket_reply")
+      && base.target.kind !== "thread"
+    ) {
+      throw new ReceiptValidationError(`${base.tool} failure target must be a thread`);
+    }
+    if (base.tool === "send_email" && base.target.kind !== "thread" && base.target.kind !== "email") {
+      throw new ReceiptValidationError("send_email failure target must be a thread or email");
+    }
+    if (
       base.tool === "end_flash_sale"
       && base.target.kind !== "shop"
       && base.target.kind !== "discount"
@@ -1069,6 +1268,9 @@ export function parseReceiptV1(value: unknown): ReceiptV1 {
         base.tool !== "update_shopify_order_address"
         && base.tool !== "edit_shopify_order"
         && base.tool !== "set_variant_prices"
+        && base.tool !== "send_reply"
+        && base.tool !== "send_email"
+        && base.tool !== "send_ticket_reply"
       ) {
         throw new ReceiptValidationError("failure receipt facts are not supported for this tool");
       }
@@ -1078,7 +1280,9 @@ export function parseReceiptV1(value: unknown): ReceiptV1 {
             ? "partial order address facts require an unknown outcome"
             : base.tool === "edit_shopify_order"
               ? "partial order edit facts require an unknown outcome"
-              : "partial variant price facts require an unknown outcome",
+              : base.tool === "set_variant_prices"
+                ? "partial variant price facts require an unknown outcome"
+                : "communication facts require an unknown outcome",
         );
       }
       requireNonEmptyString(value.providerReference, "providerReference");
@@ -1098,11 +1302,22 @@ export function parseReceiptV1(value: unknown): ReceiptV1 {
         if (value.providerReference !== facts.orderId) {
           throw new ReceiptValidationError("order edit providerReference must match facts.orderId");
         }
-      } else {
+      } else if (base.tool === "set_variant_prices") {
         if (value.providerReference !== base.target.id) {
           throw new ReceiptValidationError("variant price providerReference must match the shop target");
         }
         parseVariantPriceFacts(value.facts);
+      } else {
+        const facts = parseCommunicationFacts(value.facts);
+        if (base.target.kind !== "thread" || base.target.id !== facts.threadId) {
+          throw new ReceiptValidationError("communication target must match facts.threadId");
+        }
+        if (value.providerReference !== facts.messageId || facts.logicalResponseId !== facts.messageId) {
+          throw new ReceiptValidationError("communication response identities must match the persisted message");
+        }
+        if (facts.deliveryState !== "unknown") {
+          throw new ReceiptValidationError("unknown communication receipts require unknown delivery state");
+        }
       }
     }
   } else {

@@ -44,6 +44,7 @@ export interface DigestLedgerThread {
   id: string;
   aiSummary: string | null;
   filterReason: string | null;
+  filterStatus: string;
   customer: { name: string | null };
 }
 
@@ -93,6 +94,7 @@ export async function loadDigestThreads(
       id: true,
       aiSummary: true,
       filterReason: true,
+      filterStatus: true,
       customer: { select: { name: true } },
     },
   });
@@ -178,6 +180,7 @@ export async function findInboxThread(
       id: true,
       aiSummary: true,
       filterReason: true,
+      filterStatus: true,
       customer: { select: { name: true } },
     },
   });
@@ -187,22 +190,29 @@ export async function markInboxThreadSpam(
   organizationId: string,
   threadId: string,
 ): Promise<
-  | { ok: true; customerName: string | null }
+  | { ok: true; customerName: string | null; beforeFilterState: string; afterFilterState: 'filtered'; decidedAt: Date }
   | { ok: false; reason: 'not_found' }
 > {
   const thread = await findInboxThread(organizationId, threadId);
   if (!thread) return { ok: false, reason: 'not_found' };
 
+  const decidedAt = new Date();
   await db.thread.update({
     where: { id: threadId },
     data: {
       filterStatus: 'filtered',
       filterFeedback: 'confirmed_spam',
-      filterDecidedAt: new Date(),
+      filterDecidedAt: decidedAt,
     },
   });
 
-  return { ok: true, customerName: thread.customer.name };
+  return {
+    ok: true,
+    customerName: thread.customer.name,
+    beforeFilterState: thread.filterStatus,
+    afterFilterState: 'filtered',
+    decidedAt,
+  };
 }
 
 /**
@@ -227,7 +237,13 @@ export function formatDigestSpamConfirmation(
 export async function sendInboxThreadReply(
   threadId: string,
   text: string,
-): Promise<DashboardApiResult<{ ok: true }>> {
+): Promise<DashboardApiResult<{
+  ok: true;
+  messageId: string;
+  threadId: string;
+  sendStatus: string | null;
+  providerMessageId: string | null;
+}>> {
   return postDashboardInternal('/api/messages/internal', { threadId, text });
 }
 

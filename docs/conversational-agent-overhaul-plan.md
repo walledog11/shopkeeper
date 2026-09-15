@@ -1,11 +1,10 @@
 # Conversational agent overhaul plan
 
-Status: in progress. Package 0 is complete. Package 1 has completed the shared
-receipt boundary, durable action dispatch/recovery lifecycle, thirteen retained
-shared-registry Shopify write migrations, and all three isolated operator
-Shopify writes. Internal thread writes and durable communication outcomes remain open in Package 1.
-Packages 2–6 have not started.
-Created 2026-09-11; last updated 2026-09-14.
+Status: in progress. Packages 0 and 1 are complete. Package 1 now covers the
+shared receipt boundary, durable action dispatch/recovery lifecycle, all retained
+Shopify writes, retained internal-thread writes, and durable communication
+outcomes. Packages 2–6 have not started.
+Created 2026-09-11; last updated 2026-09-15.
 
 Implementation detail expanded 2026-09-11 against the current repository. Names marked **proposed** describe work to implement, not APIs or tables that already exist. This document authorizes no production operation by itself.
 
@@ -361,7 +360,7 @@ Primary locations: [agent package](../packages/agent/README.md), [database schem
 
 ### 1. Preserve typed outcomes through the existing execution path
 
-Progress as of 2026-09-14:
+Progress as of 2026-09-15:
 
 - [x] Add a versioned receipt union with runtime validation for `succeeded`,
   `rejected`, `failed`, `not_found`, and `unknown`, including exact decimal
@@ -482,6 +481,17 @@ Progress as of 2026-09-14:
   response, read all named prices and settle success only when every requested
   price is observed. A partial, mismatched, or unobservable result remains
   unknown and is never replayed.
+- [x] Migrate `add_internal_note`, `update_thread_status`,
+  `update_thread_tag`, and the isolated operator `mark_ticket_spam` through the
+  same operation/dispatch/receipt boundary. Receipts bind the tenant-owned
+  thread and preserve the created note message/hash, observed before/after
+  status or tag, or observed spam-filter transition and decision time.
+- [x] Migrate `send_reply`, `send_email`, and `send_ticket_reply` to durable
+  communication receipts. Persist a logical response `Message` before provider
+  dispatch, hash the exact text, retain destination and provider identity, and
+  distinguish accepted, sent, delivered, and unknown states without treating
+  queue admission as delivery. Retrying delivery reuses persisted text; an
+  ambiguous provider response remains unknown and does not authorize resend.
 - [x] Preserve ambiguous or incomplete post-write outcomes as `unknown` for all
   sixteen migrated retained Shopify writes. Cancellation reuses its existing
   reconciliation read;
@@ -557,6 +567,8 @@ Completed Package 1 work at this checkpoint:
 | Flash-sale correctness | Flash-sale receipts bind the provider discount, exact percentage and schedule, provider status, and either the entire catalog or the returned variant identities. The adapter submits once and can reconcile an interrupted response by its operation-tagged title; incomplete, mismatched, or non-unique state remains unknown. |
 | End-sale correctness | End-sale receipts bind the requested and returned automatic-discount identity and distinguish direct deletion confirmation from absence observed after an interrupted response. Active-sale discovery is a separate read tool; an inconclusive end is never replayed. |
 | Variant-price correctness | Repricing receipts preserve ordered per-product batches and exact old/requested/observed prices per variant. Direct mutation results and read-after-interruption confirmation are distinguished; partial, mismatched, and unobservable batches remain unknown without replay. |
+| Internal-thread correctness | Note, status, tag, and spam writes bind the organization-owned thread and record database-observed results. Note content is represented by the created message identity and SHA-256 hash rather than copied into receipt JSON. |
+| Communication correctness | Replies and emails persist a stable logical response before dispatch and record the message, destination, exact-text hash, provider message identity where available, and accepted/sent/delivered/unknown state. Provider ambiguity is recoverable separately from the preceding action. |
 | Shopify contracts | `create_refund`, `create_partial_refund`, `cancel_order`, and `create_shopify_order` require `write_orders`; `create_return` and `attach_return_label` require `write_returns`; `create_exchange` requires `read_products` plus `write_returns`; `fulfill_order` requires `write_merchant_managed_fulfillment_orders` and retains Shopify's `fulfill_and_ship_orders` user-permission check; order address requires `write_orders` plus `write_customers`; order edit requires `write_order_edits` plus `read_orders`; customer info and customer notes require `write_customers`; gift-card creation requires `write_gift_cards` plus `write_customers`, with `read_gift_cards` declared for its recovery query and satisfied by the write grant; flash-sale creation and ending require `write_discounts`, variant-targeted creation adds `read_products`, and variant repricing requires `write_products`. Selection and execution enforce grant metadata. Both refund mutations use Shopify 2026-04 `@idempotent`; the fulfillment, order-edit, gift-card, flash-sale, and variant-price query documents remain registered for schema validation. |
 | Durable operation identity | Every new non-read attempt receives a UUID operation ID and action index. Organization/operation and organization/non-null-provider-key uniqueness are database-enforced after an abort-on-duplicate migration preflight. |
 | Dispatch lifecycle | Conditional writes enforce `prepared → dispatch_authorized → submitted → settled/unknown`. Prepared rows have null execution fields; submitted and terminal rows carry the appropriate timestamps. A receipt must match the durable operation before settlement. |
@@ -595,6 +607,11 @@ Checkpoint evidence:
   versus variant targeting is internally consistent and provider-observed.
   End-sale completion likewise requires an identity-bound receipt; a direct
   deletion and absence after an interrupted response remain distinguishable.
+  Internal-thread writes likewise require organization-owned targets and bind
+  receipts to database-observed message or state transitions. Communication
+  receipts bind a pre-dispatch logical response to its destination and exact
+  text hash; an ambiguous provider response remains unknown and is never
+  converted into permission to send again.
 - Foundational checkpoint verification passed: `npm run verify:pr`, including
   all 1,046 agent unit tests across 86 files, 1,147 agent coverage tests across
   99 files, repository lint,
@@ -774,6 +791,17 @@ store currency; read-after-interruption confirmation without mutation replay;
 scope gating; compatibility data; and display-independent completion grounding.
 No live Shopify or model operation was run.
 
+Incremental internal-thread and communication evidence: `npm run verify:pr`
+passed, including repository lint/structure, typecheck, Node tests, every
+workspace unit and coverage suite, critical-coverage gates, all 12 browser
+tests, and production builds. The agent unit suite passed 1,143 tests across 86
+files, the gateway unit suite passed 455 tests across 51 files, and the
+dashboard unit suite passed 786 tests across 136 files. Focused gateway
+operator-inbox integration passed 29 tests; focused dashboard thread,
+internal-hop, message-route, and dispatch coverage passed 59 tests. The browser
+send-reply hop verified that the durable logical response settles to `sent`.
+No live provider or model operation was run.
+
 Implementation checkpoints committed so far:
 
 | Commit | Completed scope | Verification recorded here |
@@ -791,19 +819,16 @@ Implementation checkpoints committed so far:
 | `337291ac` | `add_shopify_customer_note` typed outcomes, hash-bound append facts, `write_customers`, customer-note grounding, and no-replay recovery. | Agent lint/typecheck/unit/integration/coverage passed; 1,114 agent unit tests; 15 focused reconciliation tests. |
 | `8af92e82` | `create_gift_card` typed outcomes, secret-safe exact provider facts, interrupted-response reconciliation, receipt-grounded completion facts, and `write_gift_cards` + `write_customers` + recovery-read scope metadata. | Agent lint/typecheck/unit/integration/coverage passed; 1,119 unit, 111 integration, and 1,230 coverage tests. |
 
-Current verified checkpoint:
-`set_variant_prices` now has typed definitive, partial, and uncertain outcomes,
-ordered product batches, exact provider-observed price facts, required
-`write_products` and receipt metadata, receipt-grounded completion facts, and
-one-shot read-after-interruption confirmation. The isolated operator Shopify
-write migration is complete, and the full PR gate passed with the counts
-recorded above.
+Current verified checkpoint: Package 1 is complete. All retained Shopify and
+internal-thread writes cross the version-1 receipt boundary, and outbound
+replies/emails persist a stable logical response before provider dispatch and
+settle it with a durable delivery outcome. The full PR gate passed with the
+counts recorded above.
 
-Current next step: continue Package 1 with the retained internal-thread writes,
-starting with `add_internal_note`, then `update_thread_status`,
-`update_thread_tag`, and the isolated operator `mark_ticket_spam`. Move each
-through the completed identity/dispatch/receipt boundary before migrating the
-durable communication outcomes; do not start Package 2 yet.
+Current next step: start Package 2 by landing the additive request/task/proposal
+schema and ownership tests before switching any dashboard route. Keep the
+legacy runtime route available until durable submission, status retrieval, and
+refresh recovery are verified.
 
 Implementation order:
 
@@ -821,12 +846,12 @@ Required tests: same typed result with completely different display text produce
   results, plus customer-info, customer-note, gift-card, isolated flash-sale
   creation and ending, and variant repricing, including exact provider facts and
   unknown outcomes.
-- [ ] Cover every remaining retained write capability with the same receipt contract.
+- [x] Cover every remaining retained write capability with the same receipt contract.
 - [x] Make new receipt records for the migrated capabilities versioned and keep their historical string decoding at the compatibility boundary only.
-- [ ] Extend the versioned-only result rule to every remaining retained write.
+- [x] Extend the versioned-only result rule to every remaining retained write.
 - [x] Add explicit provider requirements for all sixteen migrated Shopify capabilities
   and test missing or insufficient grants.
-- [ ] Add and test explicit provider requirements for every remaining retained capability.
+- [x] Add and test explicit provider requirements for every remaining retained capability. Internal thread and communication capabilities require tenant-owned thread/message boundaries rather than a Shopify OAuth grant.
 - [x] Verify common operation identity, dispatch, receipt binding, and crash-outcome semantics before changing conversation behavior. Per-capability outcome verification remains part of each retained-write migration above.
 
 Acceptance: changing display wording does not change stored facts or execution decisions; not-found and unknown outcomes remain distinguishable; existing reviewed plans still execute safely.

@@ -418,6 +418,37 @@ describe('send_ticket_reply and mark_ticket_spam', () => {
     expect(mockSendInboxThreadReply).toHaveBeenCalledWith(thread.id, 'We ship on Fridays.');
   });
 
+  it('returns a durable response receipt for an identity-bearing ticket reply', async () => {
+    const thread = await inboxThread('reply-receipt@example.com', 'Rita Receipt');
+    mockSendInboxThreadReply.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        ok: true,
+        messageId: 'message-reply-1',
+        threadId: thread.id,
+        sendStatus: 'pending',
+        providerMessageId: null,
+      },
+    });
+    const result = await tools.send_ticket_reply.execute(
+      { ticket_id: thread.id, text: 'Your replacement is ready.' },
+      { execution: { operationId: 'operation-reply-1', executionId: 'execution-reply-1' } } as BaseAgentContext,
+      UNUSED,
+      UNUSED,
+    );
+
+    expect(result.receipt).toEqual(expect.objectContaining({
+      tool: 'send_ticket_reply',
+      providerReference: 'message-reply-1',
+      facts: expect.objectContaining({
+        logicalResponseId: 'message-reply-1',
+        messageId: 'message-reply-1',
+        threadId: thread.id,
+        deliveryState: 'accepted',
+      }),
+    }));
+  });
+
   it('numbers a confirmation by the briefing position the merchant read', async () => {
     const first = await inboxThread('one@example.com', 'One');
     const second = await createTestThread(
@@ -459,7 +490,31 @@ describe('send_ticket_reply and mark_ticket_spam', () => {
     expect(updated.filterFeedback).toBe('confirmed_spam');
 
     // Already out of the inbox, so a second call cannot reach it.
-    expect((await markSpam(thread.id)).status).toBe('error');
+    expect((await markSpam(thread.id)).status).toBe('not_found');
+  });
+
+  it('returns an observed spam receipt for an identity-bearing execution', async () => {
+    const thread = await inboxThread('spam-receipt@example.com', 'Spam Receipt');
+    const result = await tools.mark_ticket_spam.execute(
+      { ticket_id: thread.id },
+      {
+        execution: { operationId: 'operation-spam-1', executionId: 'execution-spam-1' },
+      } as BaseAgentContext,
+      UNUSED,
+      UNUSED,
+    );
+
+    expect(result.receipt).toEqual(expect.objectContaining({
+      tool: 'mark_ticket_spam',
+      target: { kind: 'thread', id: thread.id },
+      providerReference: thread.id,
+      facts: expect.objectContaining({
+        threadId: thread.id,
+        beforeFilterState: 'genuine',
+        afterFilterState: 'filtered',
+        decidedAt: expect.any(String),
+      }),
+    }));
   });
 
   it('refuses another organization ticket id', async () => {
@@ -479,7 +534,7 @@ describe('send_ticket_reply and mark_ticket_spam', () => {
       UNUSED,
       UNUSED,
     );
-    expect(replied.status).toBe('error');
+    expect(replied.status).toBe('not_found');
     expect(replied.message).toContain('no ticket with that id');
     expect(mockSendInboxThreadReply).not.toHaveBeenCalled();
 
@@ -489,7 +544,7 @@ describe('send_ticket_reply and mark_ticket_spam', () => {
       UNUSED,
       UNUSED,
     );
-    expect(marked.status).toBe('error');
+    expect(marked.status).toBe('not_found');
   });
 
   it('refuses the operator\'s own internal thread', async () => {
@@ -497,7 +552,7 @@ describe('send_ticket_reply and mark_ticket_spam', () => {
     const internal = await createTestThread(org.id, customer.id, 'operator');
 
     const result = await sendReply(internal.id, 'Hello');
-    expect(result.status).toBe('error');
+    expect(result.status).toBe('not_found');
     expect(mockSendInboxThreadReply).not.toHaveBeenCalled();
   });
 
@@ -542,7 +597,7 @@ describe('send_ticket_reply and mark_ticket_spam', () => {
       ['get_ticket', () => tools.get_ticket.execute({ ticket_id: '1024' }, UNUSED, UNUSED, UNUSED)],
     ] as const) {
       const result = await run();
-      expect(result.status, name).toBe('error');
+      expect(result.status, name).toBe(name === 'get_ticket' ? 'error' : 'not_found');
       expect(result.message, name).toContain('no ticket with that id');
     }
     expect(mockSendInboxThreadReply).not.toHaveBeenCalled();

@@ -33,10 +33,12 @@ interface IoSendBody {
   threadId: string;
   op: "send_reply" | "send_email";
   input: unknown;
+  operationId?: string;
+  executionId?: string;
 }
 
 function parseBody(value: Record<string, unknown>): IoSendBody {
-  const { agentActionMode, orgId, threadId, op, input } = value;
+  const { agentActionMode, orgId, threadId, op, input, operationId, executionId } = value;
   if (typeof orgId !== "string" || typeof threadId !== "string") {
     throw new BadRequestError("orgId and threadId are required");
   }
@@ -54,12 +56,19 @@ function parseBody(value: Record<string, unknown>): IoSendBody {
   ) {
     throw new BadRequestError("invalid agentActionMode");
   }
+  if ((operationId === undefined) !== (executionId === undefined)) {
+    throw new BadRequestError("operationId and executionId must be provided together");
+  }
+  if (operationId !== undefined && (typeof operationId !== "string" || typeof executionId !== "string")) {
+    throw new BadRequestError("operationId and executionId must be strings");
+  }
   return {
     ...(agentActionMode ? { agentActionMode } : {}),
     orgId,
     threadId,
     op,
     input,
+    ...(operationId ? { operationId, executionId: executionId as string } : {}),
   };
 }
 
@@ -70,7 +79,7 @@ export const POST = withInternalRoute(
   },
   async ({ request }) => {
     const requestId = readRequestId(request);
-    const { agentActionMode, orgId, threadId, op, input } = parseBody(
+    const { agentActionMode, orgId, threadId, op, input, operationId, executionId } = parseBody(
       await readRequiredJsonObject(request, {
         malformed: { message: "Validation failed", details: [{ code: "invalid_body", message: "Request body must be a JSON object" }] },
         empty: { message: "Validation failed", details: [{ code: "invalid_body", message: "Request body must be a JSON object" }] },
@@ -96,6 +105,7 @@ export const POST = withInternalRoute(
         orgId,
         orgName: ownedThread.organization.name,
         ...(agentActionMode ? { agentActionMode } : {}),
+        ...(operationId && executionId ? { operationId, executionId } : {}),
       };
       const result = op === "send_reply"
         ? await sendReply(input as SendReplyInput, ctx)

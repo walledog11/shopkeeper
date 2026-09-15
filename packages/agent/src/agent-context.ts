@@ -15,11 +15,16 @@ import type {
 // is what lets the executor live in a shared package that cannot import a message
 // provider.
 export interface AgentIO {
-  addInternalNote(input: AddInternalNoteInput): Promise<ToolResult>;
-  sendReply(input: SendReplyInput): Promise<ToolResult>;
-  sendEmail(input: SendEmailInput): Promise<ToolResult>;
-  updateThreadStatus(input: UpdateThreadStatusInput): Promise<ToolResult>;
-  updateThreadTag(input: UpdateThreadTagInput): Promise<ToolResult>;
+  addInternalNote(input: AddInternalNoteInput, execution?: AgentExecutionIdentity): Promise<ToolResult>;
+  sendReply(input: SendReplyInput, execution?: AgentExecutionIdentity): Promise<ToolResult>;
+  sendEmail(input: SendEmailInput, execution?: AgentExecutionIdentity): Promise<ToolResult>;
+  updateThreadStatus(input: UpdateThreadStatusInput, execution?: AgentExecutionIdentity): Promise<ToolResult>;
+  updateThreadTag(input: UpdateThreadTagInput, execution?: AgentExecutionIdentity): Promise<ToolResult>;
+}
+
+export interface AgentExecutionIdentity {
+  operationId: string;
+  executionId: string;
 }
 
 export interface ShopifyOrderSummary {
@@ -115,6 +120,8 @@ export interface BaseAgentContext {
   // this turn. Nothing clears it, because nothing that happens later in a turn
   // can retroactively authorize what the merchant never saw.
   actionAuthorityBlock?: ActionAuthorityBlock | null;
+  /** Runtime-owned identity for the current non-read operation, including non-provider writes. */
+  execution?: AgentExecutionIdentity;
   orgId: string;
   orgName: string;
   authState?: AgentAuthState;
