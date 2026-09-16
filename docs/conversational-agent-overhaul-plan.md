@@ -10,8 +10,9 @@ merchant cancellation ordered at the task row, durable writers for the proposal
 or question a suspended task waits on, one shared boundary that authorizes
 an approved proposal for every surface, and scoped continuation of a parked
 question. Package 2 is complete for the dashboard request path.
-Package 3's step 3 landed with that boundary because the two overlap; the rest of
-packages 3–6 has not started.
+Package 3's step 3 landed with that boundary because the two overlap, followed by
+step 1's deterministic bed and step 2's capture-mode suspension, both behind
+options no caller sets yet. The rest of packages 3–6 has not started.
 Created 2026-09-11; last updated 2026-09-16.
 
 Implementation detail expanded 2026-09-11 against the current repository. Names marked **proposed** describe work to implement, not APIs or tables that already exist. This document authorizes no production operation by itself.
@@ -1287,16 +1288,42 @@ nothing commits, nothing is sent, no completion is composed. That path already
 held, because the refund resolves `unknown` and the executor then skips
 `send_reply` on the chance an earlier action committed.
 
-Verified by `npm run typecheck`, `npm run lint`, `npm run test:unit`
-(87 agent files) and `npm run test:integration` (15 agent, 94 gateway, 93
-dashboard files, 2 skipped), all green. Limitation: this is ordering only, and
-it exercises the *existing* loop — it does not yet show a turn suspending at a
-proposal, which is step 2's work. Rollback is deleting the test file; it adds no
+Verified by `npm run typecheck`, `npm run lint`, `npm run test:unit` (87 agent
+files) and `npm run test:integration` (15 agent, 94 gateway, 93 dashboard
+files, 2 skipped), all green. Limitation: this is ordering only, and it
+exercises the *existing* loop. Rollback is deleting the test file; it adds no
 runtime code and no schema.
 
-The adaptive loop itself, and the checklist below, are still untouched. Step 2's
-suspension-at-a-proposal is the persistence half only; a migrated turn still
-cannot suspend mid-loop.
+Step 2 landed next. Capture mode ended an attempt only at a terminal tool, and
+re-prompted once for one when the turn stalled, so a plan that refunded had to
+carry the sentence describing the refund before the refund existed. Planning
+called with `suspendAtProposal` now ends at the first `action`-category call
+and is not asked for a terminal draft: `captureSuspendAtProposal` adds that
+clause to the stop condition `captureStopToolNames` already shares, and the
+re-prompt is switched off with it. The proposal is the capture parser's own
+normalized `rawToolCalls` — no second extractor, and nothing else about
+planning changes.
+
+Every current caller omits the option and keeps the terminal requirement and
+its re-prompt exactly, which is what pins legacy plans. Two cases cover it: a
+read then a refund stops there with the reply the legacy path would have
+collected scripted and never asked for, and a stalled turn on that path is not
+re-prompted. Verified by `npm run typecheck`, `npm run lint` (which found and
+fixed a `planner.ts` line citation in `docs/to-do-list.md` that this insertion
+drifted), `npm run test:unit` (1,149 agent, 467 gateway, 789 dashboard) and
+`npm run test:integration` (147 agent, 919 gateway, 670 dashboard; one dashboard
+case failed on a first run and passed on re-run, the known workspace-concurrency
+flake). No prompt,
+tool description or planner surface changed — the option is unreachable without
+a caller — so no eval run is owed.
+
+Not done: nothing sets `suspendAtProposal`, so no production plan suspends yet.
+A suspended proposal also cannot be approved as it stands — `decideAutonomy`
+answers `missing_customer_reply` with `approvalAllowed: false` for a write with
+no draft, which is correct for a plan whose draft was its last chance to say
+anything and wrong for one composing from a receipt. Deciding that belongs with
+step 4, where automatic permission and required approval are exercised as
+separate cases, and the composition it waits on is step 5.
 
 Build the slice in this order:
 

@@ -333,7 +333,8 @@ Gated-off integrations cost nothing to keep dark.
   a call the model visibly did not make into a field it silently omitted. Neither can be
   retired outright: `get_order_by_name` and `get_order_tracking` are the entire
   verified-storefront capability (`guest-policy.ts:60`), so consolidation needs a
-  storefront-only exclusion beside `isGuestOnlyTool` (`planner.ts:82`) and the whole
+  storefront-only exclusion beside `isGuestOnlyTool` (called in `planAgent`'s
+  `availableTools` filter) and the whole
   guest/verified matrix re-proved. If the schema cost justifies that, build
   `get_order { by: 'name' | 'id' | 'customer', value, limit?, fields? }` over `orders.json`
   only, leave `get_order_tracking` as its own tool, and expose `by: 'customer'` to neither

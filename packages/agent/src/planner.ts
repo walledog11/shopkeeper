@@ -50,6 +50,12 @@ export interface PlanAgentOptions {
   // derived from the customer's own message. Intent narrowing is inferred from
   // what the customer said, so it must not gate a tool the merchant named.
   merchantInstruction?: boolean;
+  // Set by a caller that suspends at a proposal and composes the customer's
+  // reply from the receipt once the write lands. Planning then stops at the
+  // mutative call and is not asked for a terminal draft, because the outcome it
+  // would describe has not happened yet. Absent for every legacy caller, whose
+  // plans keep the terminal-tool requirement and its single re-prompt.
+  suspendAtProposal?: boolean;
 }
 
 export async function planAgent(
@@ -63,6 +69,7 @@ export async function planAgent(
   const instructionHash = hashInstructionForLog(instruction);
   const modelInstruction = truncateContextText(instruction, CONTEXT_BUDGETS.instructionChars);
   const operatorMode = isOperatorChannel(ctx.thread.channelType);
+  const suspendAtProposal = options?.suspendAtProposal === true;
   const historyWindow = operatorMode ? ctx.recentMessages.slice(-4) : ctx.recentMessages;
   const baseMessages = buildMessageHistory(historyWindow, modelInstruction, {
     segregateUntrusted: !operatorMode,
@@ -159,7 +166,8 @@ export async function planAgent(
     maxTokensPerCall: 4096,
     settings,
     usageTotals,
-    captureReprompt: !operatorMode,
+    captureReprompt: !operatorMode && !suspendAtProposal,
+    captureSuspendAtProposal: suspendAtProposal,
     captureStopToolNames: tools.some((tool) => tool.name === NAMESPACE_MISS_TOOL_NAME)
       ? [NAMESPACE_MISS_TOOL_NAME]
       : undefined,

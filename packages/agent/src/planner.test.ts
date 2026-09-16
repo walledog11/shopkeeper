@@ -474,6 +474,39 @@ describe("planAgent capture loop", () => {
     expect(mockCreate).toHaveBeenCalledTimes(2);
   });
 
+  it("stops at the proposal when the caller composes from the receipt", async () => {
+    installAgentLogger(makeLogger());
+    mockCreate
+      .mockResolvedValueOnce(singleToolUse("search_kb", { query: "refund policy" }, "tu_read"))
+      .mockResolvedValueOnce(singleToolUse("create_refund", { order_id: "123", amount: "10.00" }, "tu_refund"))
+      // The draft the legacy path would have gone on to collect. Scripted so the
+      // assertion is that it was never asked for, rather than that the model ran
+      // out of scripted turns.
+      .mockResolvedValueOnce(singleToolUse("send_reply", { text: "Refund processed." }, "tu_reply"));
+
+    const plan = await planAgent(makeCtx(), "Please refund my order", AGENT_SETTINGS_DEFAULTS, {
+      suspendAtProposal: true,
+    });
+
+    // The read still runs for real; the loop ends at the write rather than
+    // asking for a reply describing a refund that has not happened.
+    expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual(["search_kb", "create_refund"]);
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not ask that path for a terminal tool when nothing was proposed", async () => {
+    const injectedLogger = makeLogger();
+    installAgentLogger(injectedLogger);
+    mockCreate.mockResolvedValueOnce(endTurn("I'll take a look."));
+
+    await planAgent(makeCtx(), "Where is my order?", AGENT_SETTINGS_DEFAULTS, {
+      suspendAtProposal: true,
+    });
+
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(completeLogPayload(injectedLogger)).toMatchObject({ reprompted: false });
+  });
+
   it("re-prompts once for a terminal tool when a support turn stalls", async () => {
     const injectedLogger = makeLogger();
     installAgentLogger(injectedLogger);
