@@ -19,7 +19,7 @@ import type {
   ShopifyOrderPayload,
 } from '../types.js';
 import { emptyRequestFacts } from '@shopkeeper/agent/classifier-signals';
-import { uploadInboundAttachment } from '../storage/blob.js';
+import { uploadOrgAttachment } from '../storage/blob.js';
 import { applyInboundAttachmentBudget, mapWithConcurrency } from '../storage/attachment-budget.js';
 import { getInboundAttachmentLimits } from '../config/runtime-config.js';
 import {
@@ -162,7 +162,7 @@ async function persistProviderAttachments<T>(
     name: item.filename, contentType: item.contentType, contentBase64: item.base64Content,
   }] : []));
   return (await mapWithConcurrency(accepted, limits.uploadConcurrency, item =>
-    uploadInboundAttachment(organizationId, item.name, item.contentType, item.contentBase64, messageIdentity),
+    uploadOrgAttachment(organizationId, item.name, item.contentType, item.contentBase64, messageIdentity),
   )).filter((ref): ref is string => ref !== null);
 }
 
@@ -404,7 +404,7 @@ export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Q
     const attachmentUrls = (await mapWithConcurrency(
       budgetedAttachments,
       getInboundAttachmentLimits().uploadConcurrency,
-      (att) => uploadInboundAttachment(organizationId, att.name, att.contentType, att.contentBase64, job.data.inboundMessageId),
+      (att) => uploadOrgAttachment(organizationId, att.name, att.contentType, att.contentBase64, job.data.inboundMessageId),
     )).filter((url): url is string => url !== null);
 
     await processInboundMessage(organizationId, senderEmail!, CHANNEL.EMAIL, stripQuotedReply(body!), aiSummaryQueue, {
