@@ -1276,9 +1276,27 @@ Step 3 of this list landed ahead of the rest, under Package 2 (see the shared
 approval boundary milestone): the immutable proposal is persisted, every
 approval surface passes through one boundary, and the task revision check lives
 in that boundary rather than in separate dashboard and phone implementations.
-Nothing else in this package has started — the adaptive loop itself, and the
-checklist below, are untouched. Step 2's suspension-at-a-proposal is the
-persistence half only; a migrated turn still cannot suspend mid-loop.
+Step 1 landed next, in `adaptive-slice-ordering.test.ts`: scripted model turns
+and a URL-routed fake provider record one event per observable step, so the
+assertion is the interleaving — read, propose, commit, observe the receipt, then
+compose — rather than a count of calls. Routing the provider by URL rather than
+by call order is deliberate; steps 2 and 5 insert reads, and a call-order stub
+answers every later request with the wrong response while still passing. A
+second case cuts the order read off at the provider and asserts the negative:
+nothing commits, nothing is sent, no completion is composed. That path already
+held, because the refund resolves `unknown` and the executor then skips
+`send_reply` on the chance an earlier action committed.
+
+Verified by `npm run typecheck`, `npm run lint`, `npm run test:unit`
+(87 agent files) and `npm run test:integration` (15 agent, 94 gateway, 93
+dashboard files, 2 skipped), all green. Limitation: this is ordering only, and
+it exercises the *existing* loop — it does not yet show a turn suspending at a
+proposal, which is step 2's work. Rollback is deleting the test file; it adds no
+runtime code and no schema.
+
+The adaptive loop itself, and the checklist below, are still untouched. Step 2's
+suspension-at-a-proposal is the persistence half only; a migrated turn still
+cannot suspend mid-loop.
 
 Build the slice in this order:
 
