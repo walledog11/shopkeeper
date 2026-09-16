@@ -5,9 +5,11 @@ shared receipt boundary, durable action dispatch/recovery lifecycle, all retaine
 Shopify writes, retained internal-thread writes, and durable communication
 outcomes. Package 2 now has additive persistence, ownership helpers, durable
 dashboard submission/status retrieval, a claimed gateway worker, queue-gap and
-stale-claim recovery, refresh reconnection, a crash-safe cumulative budget, and
-merchant cancellation ordered at the task row. Exact proposal and question
-continuation remains. Packages 3–6 have not started.
+stale-claim recovery, refresh reconnection, a crash-safe cumulative budget,
+merchant cancellation ordered at the task row, and durable writers for the
+proposal or question a suspended task waits on. Reading those back — exact
+proposal approval and scoped question continuation — remains. Packages 3–6
+have not started.
 Created 2026-09-11; last updated 2026-09-15.
 
 Implementation detail expanded 2026-09-11 against the current repository. Names marked **proposed** describe work to implement, not APIs or tables that already exist. This document authorizes no production operation by itself.
@@ -1047,6 +1049,58 @@ Rollback: the column and helpers are additive. Reverting the worker to the
 previous settle-time roll-up leaves recorded counters intact and only loses
 crash-safety; a stopped task already marked `reconciling` must be reconciled,
 never reset.
+
+Proposal and question writer milestone (2026-09-15):
+
+A suspended task now names what it is suspended on. `AgentProposal`,
+`AgentTask.activeProposalId`, and the four pending-question columns had no
+writer: the worker inferred `waiting_approval` / `waiting_input` from
+`OperatorContext.pendingPlans` / `pendingQuestion`, so the durable task knew
+*that* it was waiting and nothing durable knew *what on*. `settleAgentTaskClaim`
+now takes a `TaskSettlement` instead of a bare status, and writes the status and
+the record naming the wait in the same transaction, under the same claim-token
+and revision check. `waiting_approval` persists the executable bundle;
+`waiting_input` writes the question text with the task's initiating actor as the
+only actor scoped to answer it, satisfying the database's all-four-or-none
+pending-question check.
+
+Proposal identity is `hashPlan` over the snapshot's own instruction and tool
+calls, so canonicalization is the existing machinery and reordered keys hash
+identically — a replayed attempt at the same revision re-proposes the same
+bundle and reuses the row rather than conflicting on
+`agent_proposals_snapshot_key`. Proposals are written `ready` and their status is
+not maintained here: which one the merchant is being asked about is
+`activeProposalId` and nothing else, so a superseded snapshot cannot contradict
+its task. Approval owns the later status transitions.
+
+Every other exit from `running` leaves the task waiting on nothing — settle after
+a stop, `failAgentTaskClaim`, the expiry sweep, and a stop that lands on unclaimed
+`waiting_*` work. The snapshot itself survives; only the task's claim on it ends.
+
+Files changed: `packages/agent/src/task-ledger.ts` and its integration suite;
+gateway `workers/agent-task.ts` and its unit suite.
+
+Verification: `npm run verify:pr` passed — static checks, lint, typechecks, 1,145
+agent, 466 gateway and 789 dashboard unit tests, coverage projects (1,279 agent,
+1,385 gateway, 1,459 dashboard) and thresholds, and all seven production builds.
+The full `npm run test:integration` passed separately: 134 agent, 919 gateway,
+670 dashboard. New cases cover the proposal bound to its exact task, a replayed
+attempt reusing one row, the answerer scope on a parked question, and a stopped,
+failed or expired attempt left waiting on nothing. No new migration. No live
+model or provider operation was run; the change touches no prompt, tool
+description or planner surface, and therefore owes no eval run.
+
+Not done in this milestone: nothing reads these rows yet. Approval and answers
+still resolve through the `OperatorContext` projection, so a terse "yes" is still
+matched to a parked card rather than to an exact proposal hash, and an unrelated
+message can still answer a pending question despite the answerer scope now being
+recorded. Closing that is the shared approval boundary — the remaining Package 2
+item and package 3 step 3.
+
+Rollback: the writers are additive and no reader depends on them. Reverting
+`settleAgentTaskClaim` to a bare status leaves written proposals and questions
+readable and orphans nothing; a task already marked `reconciling` must be
+reconciled, never reset.
 
 Implementation order:
 

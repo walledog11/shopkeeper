@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
+import type { AgentActorKind, Prisma as PrismaTypes } from "@prisma/client";
 import { db, Prisma } from "@shopkeeper/db";
 import { BadRequestError, ConflictError, ForbiddenError } from "./errors.js";
-import { hashInstruction } from "./agent-actions.js";
+import { hashInstruction, hashPlan } from "./agent-actions.js";
+import type { RawToolCall } from "./types.js";
 
 // Customer/system adapters require their own verified identity boundary.
 export interface MemberRequestInput {
@@ -397,10 +399,109 @@ export async function recordAgentTaskModelUsage(
   return updated.count === 1;
 }
 
+export const AGENT_PROPOSAL_SCHEMA_VERSION = 1;
+
+/** The executable bundle a finished attempt wants the merchant to approve. */
+export interface ProposalSnapshot {
+  instruction: string;
+  rawToolCalls: RawToolCall[];
+  sourceRequestIds: string[];
+}
+
+/**
+ * What the finished attempt left the merchant waiting on. Status and the record
+ * naming the wait are written together under one claim check, so
+ * `waiting_approval` can never mean "waiting on something nothing can name".
+ */
+export type TaskSettlement =
+  | { status: "completed" }
+  | { status: "waiting_input"; question: string }
+  | { status: "waiting_approval"; proposal: ProposalSnapshot };
+
+// The four pending-question columns are all-or-nothing in the database and the
+// active proposal must belong to this task, so every exit from `running` writes
+// the whole suspension shape rather than one field of it.
+const NO_SUSPENSION = {
+  activeProposalId: null,
+  pendingQuestionId: null,
+  pendingQuestion: null,
+  pendingAnswererKind: null,
+  pendingAnswererKey: null,
+} as const;
+
+/**
+ * Proposals are written `ready` and their status is not maintained here. Which
+ * one the merchant is actually being asked about is `AgentTask.activeProposalId`
+ * and nothing else, so a superseded snapshot cannot contradict the task it
+ * belongs to. Approval owns the later status transitions.
+ */
+async function persistProposal(
+  tx: Pick<typeof db, "agentProposal">,
+  task: { id: string; organizationId: string; revision: number },
+  snapshot: ProposalSnapshot,
+): Promise<string> {
+  if (snapshot.rawToolCalls.length === 0) {
+    throw new BadRequestError("A proposal must contain at least one action.");
+  }
+  const proposalHash = hashPlan({
+    instruction: snapshot.instruction, steps: [], rawToolCalls: snapshot.rawToolCalls,
+  });
+  const identity = {
+    organizationId: task.organizationId, taskId: task.id,
+    taskRevision: task.revision, proposalHash,
+  };
+  // A replayed attempt at the same revision re-proposes the same bundle. It is
+  // the same thing to approve, so it reuses the row rather than conflicting.
+  const existing = await tx.agentProposal.findUnique({
+    where: { organizationId_taskId_taskRevision_proposalHash: identity },
+    select: { id: true },
+  });
+  if (existing) return existing.id;
+  const created = await tx.agentProposal.create({
+    data: {
+      ...identity,
+      schemaVersion: AGENT_PROPOSAL_SCHEMA_VERSION,
+      canonicalActions: snapshot.rawToolCalls as unknown as PrismaTypes.InputJsonValue,
+      dependencies: [],
+      sourceRequestIds: snapshot.sourceRequestIds,
+    },
+    select: { id: true },
+  });
+  return created.id;
+}
+
+async function suspensionWrite(
+  tx: Pick<typeof db, "agentProposal">,
+  task: {
+    id: string; organizationId: string; revision: number;
+    initiatingActorKind: AgentActorKind; initiatingActorKey: string;
+  },
+  settlement: TaskSettlement,
+) {
+  if (settlement.status === "completed") return NO_SUSPENSION;
+  if (settlement.status === "waiting_input") {
+    const question = settlement.question.trim();
+    if (!question) throw new BadRequestError("A parked question must have text.");
+    return {
+      ...NO_SUSPENSION,
+      pendingQuestionId: randomUUID(),
+      pendingQuestion: question.slice(0, 2000),
+      // The merchant who asked for the work is the one who may answer it; an
+      // unrelated sender's message is not an answer to this question.
+      pendingAnswererKind: task.initiatingActorKind,
+      pendingAnswererKey: task.initiatingActorKey,
+    };
+  }
+  return {
+    ...NO_SUSPENSION,
+    activeProposalId: await persistProposal(tx, task, settlement.proposal),
+  };
+}
+
 export async function settleAgentTaskClaim(input: TaskClaimIdentity & {
   claimToken: string;
   requestId: string;
-  status: "completed" | "waiting_input" | "waiting_approval";
+  settlement: TaskSettlement;
 }) {
   return db.$transaction(async (tx) => {
     const now = new Date();
@@ -432,7 +533,12 @@ export async function settleAgentTaskClaim(input: TaskClaimIdentity & {
       : 0;
     const status = ownedTask.cancelledAt
       ? consequential > 0 ? "reconciling" as const : "cancelled" as const
-      : input.status;
+      : input.settlement.status;
+    // A stop overrides what the attempt wanted to wait on, so the stopped task
+    // is left pointing at no proposal and no question.
+    const suspension = ownedTask.cancelledAt
+      ? NO_SUSPENSION
+      : await suspensionWrite(tx, ownedTask, input.settlement);
     const activeTimeMs = activeTimeDeltaMs(ownedTask.activeCheckpointAt, now);
     const settled = await tx.agentTask.updateMany({
       where: {
@@ -441,6 +547,7 @@ export async function settleAgentTaskClaim(input: TaskClaimIdentity & {
       },
       data: {
         status,
+        ...suspension,
         claimToken: null,
         leaseExpiresAt: null,
         activeCheckpointAt: null,
@@ -494,6 +601,7 @@ export async function failAgentTaskClaim(input: TaskClaimIdentity & {
       },
       data: {
         status,
+        ...NO_SUSPENSION,
         failureCode: (ownedTask.cancelledAt
           ? consequential > 0 ? "cancelled_after_dispatch" : null
           : input.failureCode.slice(0, 64)),
@@ -538,6 +646,11 @@ export async function reconcileExpiredAgentTaskClaims(now = new Date()) {
         claim_token = NULL,
         lease_expires_at = NULL,
         active_checkpoint_at = NULL,
+        active_proposal_id = NULL,
+        pending_question_id = NULL,
+        pending_question = NULL,
+        pending_answerer_kind = NULL,
+        pending_answerer_key = NULL,
         last_progress_at = ${now}
     WHERE status = 'running' AND lease_expires_at <= ${now}
   `);
@@ -592,7 +705,11 @@ export async function cancelMemberAgentTask(input: {
         cancelledAt: task.cancelledAt ?? now,
         failureCode: consequential > 0 ? "cancelled_after_dispatch" : null,
         lastProgressAt: now,
+        // A stop that lands while the merchant is being asked to approve or
+        // answer ends that wait. A claimed attempt keeps its own, and clears it
+        // through settle or fail.
         ...(!running ? {
+          ...NO_SUSPENSION,
           claimToken: null, leaseExpiresAt: null, activeCheckpointAt: null,
         } : {}),
       },

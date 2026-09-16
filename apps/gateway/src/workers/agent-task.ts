@@ -9,10 +9,11 @@ import {
   settleAgentTaskClaim,
 } from '@shopkeeper/agent/task-ledger';
 import { estimateModelUsageCostUsd, UnknownModelPriceError } from '@shopkeeper/agent/model-cost';
+import type { TaskSettlement } from '@shopkeeper/agent/task-ledger';
 import type { TaskModelBudget } from '@shopkeeper/agent/context';
 import { QUEUE } from '../constants.js';
 import logger from '../logger.js';
-import { getContext, loadLiveOperatorContext } from '../operator-context.js';
+import { getContext, loadLiveOperatorContext, normalizeApprovedToolCalls } from '../operator-context.js';
 import { runOperatorFreeFormTurn } from '../message-handlers/operator-free-form-turn.js';
 import type { AgentTaskJobData } from '../types.js';
 import { registerJobFailureLogging } from './failure.js';
@@ -140,15 +141,24 @@ export async function processAgentTaskJob(data: AgentTaskJobData): Promise<void>
     if (leaseLost) throw new Error('Task lease ownership was lost before completion.');
 
     const after = await getContext(data.organizationId, memberKey);
-    const taskStatus = after.pendingQuestion
-      ? 'waiting_input' as const
-      : after.pendingPlans.length > 0
-        ? 'waiting_approval' as const
-        : 'completed' as const;
+    // The parked queue is the merchant-facing projection; the task records the
+    // same wait durably, so a trimmed card cannot lose what was asked.
+    const settlement: TaskSettlement = after.pendingQuestion
+      ? { status: 'waiting_input', question: after.pendingQuestion.question }
+      : after.pendingPlan
+        ? {
+            status: 'waiting_approval',
+            proposal: {
+              instruction: after.pendingPlan.instruction,
+              rawToolCalls: normalizeApprovedToolCalls(after.pendingPlan.rawToolCalls),
+              sourceRequestIds: [request.id],
+            },
+          }
+        : { status: 'completed' };
     const settled = await settleAgentTaskClaim({
       ...claim,
       requestId: request.id,
-      status: taskStatus,
+      settlement,
     });
     if (!settled) throw new Error('Task claim was lost before its result could be recorded.');
   } catch (error) {

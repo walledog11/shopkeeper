@@ -128,7 +128,7 @@ describe("durable dashboard persistence foundation", () => {
       ...identity, usage: { inputTokens: 10, outputTokens: 5, spentNanoUsd: 99n },
     })).toBe(true);
     await expect(settleAgentTaskClaim({
-      ...identity, requestId: request.id, status: "completed",
+      ...identity, requestId: request.id, settlement: { status: "completed" },
     })).resolves.toBe(true);
     const stored = await db.agentTask.findUniqueOrThrow({ where: { id: task.id }, include: { actions: true, messages: true } });
     expect(stored).toMatchObject({
@@ -210,7 +210,7 @@ describe("durable dashboard persistence foundation", () => {
       taskId: task.id, expectedRevision: 0,
     });
     expect(await settleAgentTaskClaim({
-      ...identity, claimToken: claim!.claimToken, requestId: request.id, status: "completed",
+      ...identity, claimToken: claim!.claimToken, requestId: request.id, settlement: { status: "completed" },
     })).toBe(true);
     const stored = await db.agentTask.findUniqueOrThrow({ where: { id: task.id } });
     expect(stored).toMatchObject({ status: "reconciling", failureCode: "cancelled_after_dispatch" });
@@ -383,5 +383,122 @@ describe("durable dashboard persistence foundation", () => {
     expect(await db.agentRequest.count({ where: { organizationId: input.organizationId } })).toBe(0);
     expect(await db.agentProposal.count({ where: { organizationId: input.organizationId } })).toBe(0);
     orgIds.splice(orgIds.indexOf(input.organizationId), 1);
+  });
+});
+
+describe("durable proposal and question writers", () => {
+  const refundCalls = [{ id: "call-1", name: "create_refund", input: { orderId: "55", amount: "12.00" } }];
+  async function claimedTask() {
+    const seeded = await seedTask();
+    const claim = await claimAgentTask({
+      organizationId: seeded.task.organizationId, taskId: seeded.task.id, expectedRevision: 0,
+    });
+    return {
+      ...seeded,
+      identity: {
+        organizationId: seeded.task.organizationId, taskId: seeded.task.id,
+        expectedRevision: 0, claimToken: claim!.claimToken,
+      },
+    };
+  }
+
+  it("persists the proposal a waiting task is waiting on and binds it to that task", async () => {
+    const { task, request, identity } = await claimedTask();
+    expect(await settleAgentTaskClaim({
+      ...identity, requestId: request.id,
+      settlement: { status: "waiting_approval", proposal: {
+        instruction: "refund the order", rawToolCalls: refundCalls, sourceRequestIds: [request.id],
+      } },
+    })).toBe(true);
+    const stored = await db.agentTask.findUniqueOrThrow({
+      where: { id: task.id }, include: { activeProposal: true },
+    });
+    expect(stored.status).toBe("waiting_approval");
+    expect(stored.activeProposal).toMatchObject({
+      taskId: task.id, taskRevision: 0, schemaVersion: 1, status: "ready",
+      canonicalActions: refundCalls, sourceRequestIds: [request.id],
+    });
+    expect(stored.activeProposal!.proposalHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(stored.pendingQuestionId).toBeNull();
+  });
+
+  it("reuses the proposal row when a replayed attempt re-proposes the same bundle", async () => {
+    const { task, request, identity } = await claimedTask();
+    const settlement = { status: "waiting_approval" as const, proposal: {
+      instruction: "refund the order", rawToolCalls: refundCalls, sourceRequestIds: [request.id],
+    } };
+    await settleAgentTaskClaim({ ...identity, requestId: request.id, settlement });
+    const first = await db.agentProposal.findFirstOrThrow({ where: { taskId: task.id } });
+
+    await db.agentTask.update({ where: { id: task.id }, data: {
+      status: "running", claimToken: identity.claimToken,
+      leaseExpiresAt: new Date(Date.now() + 60000), activeCheckpointAt: new Date(),
+    } });
+    // Key order is canonicalized, so the same bundle authored differently is the
+    // same thing to approve and must not become a second proposal.
+    expect(await settleAgentTaskClaim({
+      ...identity, requestId: request.id,
+      settlement: { ...settlement, proposal: { ...settlement.proposal, rawToolCalls: [
+        { name: "create_refund", id: "call-1", input: { amount: "12.00", orderId: "55" } },
+      ] } },
+    })).toBe(true);
+    expect(await db.agentProposal.count({ where: { taskId: task.id } })).toBe(1);
+    expect((await db.agentTask.findUniqueOrThrow({ where: { id: task.id } })).activeProposalId).toBe(first.id);
+  });
+
+  it("names a parked question and the only actor scoped to answer it", async () => {
+    const { task, request, identity, input } = await claimedTask();
+    expect(await settleAgentTaskClaim({
+      ...identity, requestId: request.id,
+      settlement: { status: "waiting_input", question: "  Refund the shipping too?  " },
+    })).toBe(true);
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: task.id } })).toMatchObject({
+      status: "waiting_input", pendingQuestion: "Refund the shipping too?",
+      pendingAnswererKind: "member", pendingAnswererKey: `member:${input.member.id}`,
+      activeProposalId: null,
+    });
+  });
+
+  it("leaves a stopped, failed, or expired attempt waiting on nothing", async () => {
+    const stopped = await claimedTask();
+    await settleAgentTaskClaim({
+      ...stopped.identity, requestId: stopped.request.id,
+      settlement: { status: "waiting_approval", proposal: {
+        instruction: "refund the order", rawToolCalls: refundCalls, sourceRequestIds: [stopped.request.id],
+      } },
+    });
+    await cancelMemberAgentTask({
+      organizationId: stopped.input.organizationId, clerkUserId: stopped.input.clerkUserId,
+      taskId: stopped.task.id, expectedRevision: 0,
+    });
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: stopped.task.id } }))
+      .toMatchObject({ status: "cancelled", activeProposalId: null });
+    // The snapshot survives the stop; only the task's claim on it ends.
+    expect(await db.agentProposal.count({ where: { taskId: stopped.task.id } })).toBe(1);
+
+    const failed = await claimedTask();
+    await db.agentTask.update({ where: { id: failed.task.id }, data: {
+      pendingQuestionId: randomUUID(), pendingQuestion: "Which order?",
+      pendingAnswererKind: "member", pendingAnswererKey: failed.task.initiatingActorKey,
+    } });
+    expect(await failAgentTaskClaim({
+      ...failed.identity, requestId: failed.request.id, failureCode: "model_failed",
+    })).toBe("failed");
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: failed.task.id } }))
+      .toMatchObject({ pendingQuestionId: null, pendingQuestion: null, pendingAnswererKey: null });
+
+    const expired = await seedTask();
+    const now = new Date("2026-09-15T12:00:00Z");
+    await claimAgentTask({
+      organizationId: expired.task.organizationId, taskId: expired.task.id,
+      expectedRevision: 0, now, leaseMs: 1000,
+    });
+    await db.agentTask.update({ where: { id: expired.task.id }, data: {
+      pendingQuestionId: randomUUID(), pendingQuestion: "Which order?",
+      pendingAnswererKind: "member", pendingAnswererKey: expired.task.initiatingActorKey,
+    } });
+    await reconcileExpiredAgentTaskClaims(new Date(now.getTime() + 1001));
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: expired.task.id } }))
+      .toMatchObject({ status: "reconciling", pendingQuestionId: null, pendingQuestion: null });
   });
 });

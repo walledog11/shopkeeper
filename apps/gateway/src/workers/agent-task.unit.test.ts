@@ -31,7 +31,11 @@ vi.mock('@shopkeeper/db', () => ({
     orgMember: { findFirst: findMember },
   },
 }));
-vi.mock('../operator-context.js', () => ({ getContext, loadLiveOperatorContext: loadContext }));
+vi.mock('../operator-context.js', () => ({
+  getContext, loadLiveOperatorContext: loadContext,
+  normalizeApprovedToolCalls: (calls: { id: string; name: string; input: unknown }[]) =>
+    calls.map(({ id, name, input }) => ({ id, name, input })),
+}));
 vi.mock('../message-handlers/operator-free-form-turn.js', () => ({ runOperatorFreeFormTurn: runTurn }));
 vi.mock('../logger.js', () => ({ default: { error: vi.fn(), info: vi.fn(), warn: vi.fn() } }));
 
@@ -40,6 +44,7 @@ import { processAgentTaskJob } from './agent-task.js';
 const job = { taskId: 'task-1', organizationId: 'org-1', revision: 0 };
 const task = { id: 'task-1', initiatingActorKey: 'member:member-1' };
 const request = { id: 'request-1', normalizedInstruction: 'check order' };
+const IDLE_CONTEXT = { pendingPlans: [], pendingPlan: null, pendingQuestion: null };
 
 describe('processAgentTaskJob', () => {
   beforeEach(() => {
@@ -51,8 +56,8 @@ describe('processAgentTaskJob', () => {
     findMember.mockReset().mockResolvedValue({ clerkUserId: 'usr-1' });
     reserve.mockReset().mockResolvedValue('active');
     recordUsage.mockReset().mockResolvedValue(true);
-    getContext.mockReset().mockResolvedValue({ pendingPlans: [], pendingQuestion: null });
-    loadContext.mockReset().mockResolvedValue({ pendingPlans: [], pendingQuestion: null });
+    getContext.mockReset().mockResolvedValue(IDLE_CONTEXT);
+    loadContext.mockReset().mockResolvedValue(IDLE_CONTEXT);
     runTurn.mockReset().mockResolvedValue({ summary: 'Done', actionsPerformed: [] });
   });
 
@@ -70,7 +75,38 @@ describe('processAgentTaskJob', () => {
       message: expect.objectContaining({ body: 'check order' }),
     }));
     expect(settle).toHaveBeenCalledWith(expect.objectContaining({
-      requestId: 'request-1', taskId: 'task-1', claimToken: 'claim-1', status: 'completed',
+      requestId: 'request-1', taskId: 'task-1', claimToken: 'claim-1',
+      settlement: { status: 'completed' },
+    }));
+  });
+
+  it('settles a parked question as the durable wait, naming the question', async () => {
+    getContext.mockResolvedValue({
+      ...IDLE_CONTEXT,
+      pendingQuestion: { threadId: 'thread-1', question: 'Refund shipping too?' },
+    });
+    await processAgentTaskJob(job);
+    expect(settle).toHaveBeenCalledWith(expect.objectContaining({
+      settlement: { status: 'waiting_input', question: 'Refund shipping too?' },
+    }));
+  });
+
+  it('settles a parked plan as the durable proposal the merchant must approve', async () => {
+    const plan = {
+      threadId: 'thread-1', instruction: 'refund the order',
+      rawToolCalls: [{ id: 'call-1', name: 'refund_order', input: { orderId: '55' } }],
+    };
+    getContext.mockResolvedValue({ ...IDLE_CONTEXT, pendingPlans: [plan], pendingPlan: plan });
+    await processAgentTaskJob(job);
+    expect(settle).toHaveBeenCalledWith(expect.objectContaining({
+      settlement: {
+        status: 'waiting_approval',
+        proposal: {
+          instruction: 'refund the order',
+          rawToolCalls: [{ id: 'call-1', name: 'refund_order', input: { orderId: '55' } }],
+          sourceRequestIds: ['request-1'],
+        },
+      },
     }));
   });
 
