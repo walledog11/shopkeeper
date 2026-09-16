@@ -80,6 +80,13 @@ describe('processAgentTaskJob', () => {
     }));
   });
 
+  it('resumes a continued task from the answer, not the instruction that asked', async () => {
+    await processAgentTaskJob(job);
+    expect(findRequest).toHaveBeenCalledWith(expect.objectContaining({
+      orderBy: [{ acceptedAt: 'desc' }, { id: 'desc' }],
+    }));
+  });
+
   it('settles a parked question as the durable wait, naming the question', async () => {
     getContext.mockResolvedValue({
       ...IDLE_CONTEXT,

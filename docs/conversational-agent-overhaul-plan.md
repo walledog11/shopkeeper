@@ -7,11 +7,12 @@ outcomes. Package 2 now has additive persistence, ownership helpers, durable
 dashboard submission/status retrieval, a claimed gateway worker, queue-gap and
 stale-claim recovery, refresh reconnection, a crash-safe cumulative budget,
 merchant cancellation ordered at the task row, durable writers for the proposal
-or question a suspended task waits on, and one shared boundary that authorizes
-an approved proposal for every surface. Scoped question continuation remains.
+or question a suspended task waits on, one shared boundary that authorizes
+an approved proposal for every surface, and scoped continuation of a parked
+question. Package 2 is complete for the dashboard request path.
 Package 3's step 3 landed with that boundary because the two overlap; the rest of
 packages 3–6 has not started.
-Created 2026-09-11; last updated 2026-09-15.
+Created 2026-09-11; last updated 2026-09-16.
 
 Implementation detail expanded 2026-09-11 against the current repository. Names marked **proposed** describe work to implement, not APIs or tables that already exist. This document authorizes no production operation by itself.
 
@@ -1185,6 +1186,68 @@ Rollback: `authorizeAgentProposal` returning null is the pre-existing behavior,
 so reverting the two calls in `pending-plan-actions.ts` restores the previous
 approval path exactly and leaves recorded approvals readable as audit. A task
 already `completed` must not be reopened.
+
+Scoped question continuation milestone (2026-09-16):
+
+A parked question can now be answered. `pendingAnswererKind` and
+`pendingAnswererKey` had a writer and no reader, so a task could suspend on a
+question that nothing could ever resume: every accepted request created its own
+`AgentTask`, and the merchant's answer started unrelated work while the question
+sat in `waiting_input` forever. `resumeAnsweredTask` in
+`packages/agent/src/task-ledger.ts` now runs before `acceptMemberAgentRequest`
+creates a task — the actor's next request continues the one task in this
+conversation that is waiting on *them*, moving it `waiting_input` → `queued`,
+incrementing the revision, and clearing the pending-question columns in the same
+transaction that attaches the request.
+
+The conditional update is the ordering, not a new lock: `status: "waiting_input"`
+in the `updateMany` predicate means a concurrent answer, stop, or sweep that
+moved the task first simply leaves this request to open its own task. That is
+also what makes two concurrent answers resolve to one resumption and one new
+task rather than two attempts on one revision.
+
+Two matches are not a match. A merchant with two parked questions saying "yes"
+is D19: resuming either would act on a proposal they may not have meant, so
+neither is resumed and the answer becomes its own task, where the model can ask
+which one. That is D19's runtime half — neither consequential action executes;
+the clarification itself stays a conversational judgment, not a keyword rule. A
+task that already dispatched a write is skipped for the reason `claimAgentTask`
+already refuses it: it cannot be replayed from the top, so attaching an answer
+would only queue work no worker may claim.
+
+The worker then had to run the answer rather than the question it had already
+asked. `apps/gateway/src/workers/agent-task.ts` selected the task's requests
+`acceptedAt` ascending, which on a resumed task is the original instruction; it
+now selects newest-first. The four copies of the dispatched-state list that
+decide "has this task touched a provider" became one `DISPATCHED_STATES`
+constant rather than a fifth copy.
+
+Files changed: `packages/agent/src/task-ledger.ts` and its integration suite;
+gateway `workers/agent-task.ts` and its unit suite. No schema change — the
+columns and the revision counter were already there.
+
+Verification: `npm run verify:pr` passed — static checks, lint, typechecks, 1,145
+agent, 467 gateway and 789 dashboard unit tests, coverage projects (1,292 agent,
+1,386 gateway, 1,459 dashboard) and thresholds, and all seven production builds.
+The full `npm run test:integration` passed separately: 147 agent, 919 gateway,
+670 dashboard. Five new integration cases cover the answer continuing its own
+task, a question parked for another actor left unanswered, two parked questions
+resuming neither, a dispatched write refusing continuation, and two racing
+answers resuming once. No live model or provider operation was run; no prompt,
+tool description or planner surface changed, so no eval run is owed.
+
+Not done in this milestone: continuation is scoped to the durable dashboard
+request path. Telegram and iMessage still reach the agent through
+`OperatorEvent` and do not create `AgentRequest` rows, so a question parked by a
+phone turn is not resumable this way — that arrives with their migration onto
+the durable path. Nothing distinguishes an answer from an unrelated new
+instruction beyond the answerer scope: the merchant's next message continues the
+waiting task, and a genuinely new topic reaches the model as that task's next
+turn rather than as its own task.
+
+Rollback: removing the `resumeAnsweredTask` call restores one-task-per-request
+exactly, and the worker's ordering can revert with it; both leave every written
+row readable. A task already resumed must not be re-parked at its old revision.
 
 Implementation order:
 

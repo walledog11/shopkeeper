@@ -31,9 +31,11 @@ export async function processAgentTaskJob(data: AgentTaskJobData): Promise<void>
   });
   if (!claimed) return;
 
+  // Newest first: a resumed task carries both the original instruction and the
+  // answer that woke it, and the answer is what this attempt is running.
   const request = await db.agentRequest.findFirst({
     where: { organizationId: data.organizationId, taskId: data.taskId },
-    orderBy: [{ acceptedAt: 'asc' }, { id: 'asc' }],
+    orderBy: [{ acceptedAt: 'desc' }, { id: 'desc' }],
   });
   const memberId = claimed.task.initiatingActorKey.startsWith('member:')
     ? claimed.task.initiatingActorKey.slice('member:'.length)

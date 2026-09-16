@@ -502,3 +502,86 @@ describe("durable proposal and question writers", () => {
       .toMatchObject({ status: "reconciling", pendingQuestionId: null, pendingQuestion: null });
   });
 });
+
+describe("scoped question continuation", () => {
+  async function park(input: Awaited<ReturnType<typeof seed>>) {
+    const { request } = await acceptMemberAgentRequest({ ...input, dedupeKey: randomUUID() });
+    const task = await attachMemberAgentTask({ ...input, requestId: request.id, budget });
+    const claim = await claimAgentTask({
+      organizationId: task.organizationId, taskId: task.id, expectedRevision: 0,
+    });
+    await settleAgentTaskClaim({
+      organizationId: task.organizationId, taskId: task.id, expectedRevision: 0,
+      claimToken: claim!.claimToken, requestId: request.id,
+      settlement: { status: "waiting_input", question: "Which order did they mean?" },
+    });
+    return { request, task };
+  }
+  function answer(input: Awaited<ReturnType<typeof seed>>) {
+    return acceptMemberAgentRequest({
+      ...input, dedupeKey: randomUUID(), instruction: "The black one", budget,
+    });
+  }
+
+  it("continues the task its answer belongs to instead of opening a second one", async () => {
+    const input = await seed();
+    const { task } = await park(input);
+    const answered = await answer(input);
+    expect(answered.task?.id).toBe(task.id);
+    expect(answered.request.taskId).toBe(task.id);
+    expect(answered.request.state).toBe("attached");
+    expect(await db.agentTask.count({ where: { organizationId: input.organizationId } })).toBe(1);
+    // A fresh revision invalidates the parked attempt's claim and names nothing
+    // to wait on, so the resumed attempt runs the answer rather than the question.
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: task.id } })).toMatchObject({
+      status: "queued", revision: 1, pendingQuestionId: null, pendingQuestion: null,
+      pendingAnswererKind: null, pendingAnswererKey: null,
+    });
+  });
+
+  it("leaves a question parked for another actor unanswered", async () => {
+    const input = await seed();
+    const { task } = await park(input);
+    await db.agentTask.update({
+      where: { id: task.id }, data: { pendingAnswererKey: `member:${randomUUID()}` },
+    });
+    const answered = await answer(input);
+    expect(answered.task?.id).not.toBe(task.id);
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: task.id } }))
+      .toMatchObject({ status: "waiting_input", revision: 0, pendingQuestion: "Which order did they mean?" });
+  });
+
+  it("resumes neither task when two parked questions make the answer ambiguous", async () => {
+    const input = await seed();
+    const first = await park(input);
+    const second = await park(input);
+    const answered = await answer(input);
+    expect([first.task.id, second.task.id]).not.toContain(answered.task?.id);
+    expect(await db.agentTask.count({
+      where: { organizationId: input.organizationId, status: "waiting_input" },
+    })).toBe(2);
+    expect(await db.agentTask.count({ where: { organizationId: input.organizationId } })).toBe(3);
+  });
+
+  it("does not attach an answer to work no worker may claim", async () => {
+    const input = await seed();
+    const { task } = await park(input);
+    await db.agentAction.create({ data: {
+      organizationId: task.organizationId, threadId: task.threadId, taskId: task.id,
+      turnId: randomUUID(), tool: "create_refund", category: "order", input: {},
+      status: "unknown", mode: "auto_executed", dispatchState: "unknown",
+      executedAt: new Date(), durationMs: 1, operationId: randomUUID(), actionIndex: 0,
+    } });
+    expect((await answer(input)).task?.id).not.toBe(task.id);
+    expect((await db.agentTask.findUniqueOrThrow({ where: { id: task.id } })).status).toBe("waiting_input");
+  });
+
+  it("resumes once when two answers race for one parked question", async () => {
+    const input = await seed();
+    const { task } = await park(input);
+    const answers = await Promise.all([answer(input), answer(input)]);
+    expect(answers.filter((result) => result.task?.id === task.id)).toHaveLength(1);
+    expect(await db.agentTask.count({ where: { organizationId: input.organizationId } })).toBe(2);
+    expect((await db.agentTask.findUniqueOrThrow({ where: { id: task.id } })).revision).toBe(1);
+  });
+});

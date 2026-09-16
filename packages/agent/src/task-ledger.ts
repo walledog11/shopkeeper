@@ -1,9 +1,16 @@
 import { randomUUID } from "node:crypto";
-import type { AgentActorKind, Prisma as PrismaTypes } from "@prisma/client";
+import type { AgentActionDispatchState, AgentActorKind, Prisma as PrismaTypes } from "@prisma/client";
 import { db, Prisma } from "@shopkeeper/db";
 import { BadRequestError, ConflictError, ForbiddenError } from "./errors.js";
 import { hashInstruction, hashPlan } from "./agent-actions.js";
 import type { RawToolCall } from "./types.js";
+
+// A task whose actions reached any of these has touched a provider, so it is
+// never replayed from the top — claiming, settling, stopping, and resuming all
+// read the same list.
+const DISPATCHED_STATES: AgentActionDispatchState[] = [
+  "dispatch_authorized", "submitted", "unknown", "settled",
+];
 
 // Customer/system adapters require their own verified identity boundary.
 export interface MemberRequestInput {
@@ -55,6 +62,44 @@ export async function requireMemberActorKey(tx: Pick<typeof db, "orgMember" | "t
   return actorKey;
 }
 
+/**
+ * A parked question names the one actor scoped to answer it, so that actor's
+ * next request continues the waiting task instead of starting a new one.
+ *
+ * Exactly one match is a continuation. Two parked questions make a terse "yes"
+ * ambiguous, and picking one would act on a proposal the merchant may not have
+ * meant, so neither is resumed and the request becomes its own task. A task that
+ * already dispatched a write is skipped for the same reason `claimAgentTask`
+ * refuses it: it cannot be replayed from the top, so attaching an answer would
+ * only queue work no worker may claim.
+ */
+async function resumeAnsweredTask(
+  tx: Pick<typeof db, "agentTask">,
+  input: { organizationId: string; threadId: string; actorKey: string },
+) {
+  const waiting = await tx.agentTask.findMany({
+    where: {
+      organizationId: input.organizationId, threadId: input.threadId,
+      status: "waiting_input", cancelledAt: null,
+      pendingAnswererKind: "member", pendingAnswererKey: input.actorKey,
+      actions: { none: { dispatchState: { in: DISPATCHED_STATES } } },
+    },
+    select: { id: true },
+    take: 2,
+  });
+  if (waiting.length !== 1) return null;
+  // The conditional update is the ordering: a concurrent answer, stop, or sweep
+  // that moved the task first leaves this one to open its own task.
+  const resumed = await tx.agentTask.updateMany({
+    where: { id: waiting[0].id, organizationId: input.organizationId, status: "waiting_input" },
+    data: { ...NO_SUSPENSION, status: "queued", revision: { increment: 1 }, lastProgressAt: new Date() },
+  });
+  if (resumed.count !== 1) return null;
+  return tx.agentTask.findFirstOrThrow({
+    where: { id: waiting[0].id, organizationId: input.organizationId },
+  });
+}
+
 export async function acceptMemberAgentRequest(input: MemberRequestInput) {
   if (input.budget) validateTaskBudget(input.budget);
   const instruction = input.instruction.trim();
@@ -103,7 +148,9 @@ export async function acceptMemberAgentRequest(input: MemberRequestInput) {
           where: { id: request.taskId, organizationId: input.organizationId },
         });
       } else {
-        task = await tx.agentTask.create({
+        task = await resumeAnsweredTask(tx, {
+          organizationId: input.organizationId, threadId: request.threadId, actorKey,
+        }) ?? await tx.agentTask.create({
           data: {
             organizationId: input.organizationId, threadId: request.threadId,
             initiatingActorKind: "member", initiatingActorKey: actorKey,
@@ -272,7 +319,7 @@ export async function claimAgentTask(input: TaskClaimIdentity & { now?: Date; le
         id: input.taskId, organizationId: input.organizationId, revision: input.expectedRevision,
         status: "queued", claimToken: null, cancelledAt: null,
         organization: { lifecycleStatus: "active" },
-        actions: { none: { dispatchState: { in: ["dispatch_authorized", "submitted", "unknown", "settled"] } } },
+        actions: { none: { dispatchState: { in: DISPATCHED_STATES } } },
         executions: { none: { status: { in: ["claimed", "committed", "unknown"] } } },
       },
       data: {
@@ -537,7 +584,7 @@ export async function settleAgentTaskClaim(input: TaskClaimIdentity & {
       ? await tx.agentAction.count({
           where: {
             organizationId: input.organizationId, taskId: input.taskId,
-            dispatchState: { in: ["dispatch_authorized", "submitted", "unknown", "settled"] },
+            dispatchState: { in: DISPATCHED_STATES },
           },
         })
       : 0;
@@ -597,7 +644,7 @@ export async function failAgentTaskClaim(input: TaskClaimIdentity & {
     const consequential = await tx.agentAction.count({
       where: {
         organizationId: input.organizationId, taskId: input.taskId,
-        dispatchState: { in: ["dispatch_authorized", "submitted", "unknown", "settled"] },
+        dispatchState: { in: DISPATCHED_STATES },
       },
     });
     const status = consequential > 0
@@ -701,7 +748,7 @@ export async function cancelMemberAgentTask(input: {
     const consequential = await tx.agentAction.count({
       where: {
         organizationId: input.organizationId, taskId: input.taskId,
-        dispatchState: { in: ["dispatch_authorized", "submitted", "unknown", "settled"] },
+        dispatchState: { in: DISPATCHED_STATES },
       },
     });
     const running = task.status === "running";
