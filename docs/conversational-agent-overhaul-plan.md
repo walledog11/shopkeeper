@@ -957,9 +957,11 @@ and all seven production builds. Coverage runs included 1,268 agent tests, 1,381
 gateway tests (one skipped), and 1,457 dashboard tests (two skipped). No live
 model/provider operation was run.
 
-Remaining work: exact task/proposal approval and answer continuation,
-cancellation/revision ordering, and persistence of partial usage when a process
-dies before the existing completed-turn usage row is written. The synchronous
+Remaining work at that checkpoint: exact task/proposal approval and answer
+continuation, cancellation/revision ordering, and persistence of partial usage
+when a process dies before the existing completed-turn usage row is written. The
+last two are closed by the budget and cancellation milestone below; exact
+proposal and question continuation is still open. The synchronous
 `/operator/turn` endpoint remains available for unmigrated callers; dashboard
 chat uses the durable route. Rollback routes dashboard chat back to that endpoint
 while leaving additive work rows and the version-1 worker readable.
@@ -995,6 +997,14 @@ dispatched ends `cancelled` with no failure code, anything dispatched ends
 every stopped attempt outright, which reported an interrupted write as
 definitely over.
 
+This milestone also resolved an unverified work-in-progress state it inherited:
+the migration existed but had never been applied to any database, so the
+task-ledger suite could not run, and the same ledger had one active-time
+double count and a sweep that cancelled interrupted writes. Both are the defects
+described above; the third inherited helper, a read-only claim inspector, had no
+caller once the reservation path existed and was removed rather than shipped
+dead.
+
 Files changed: `packages/db/prisma/schema.prisma` and migration
 `20260915210000_add_agent_task_active_checkpoint`; `packages/agent/src/task-ledger.ts`,
 `agent-context.ts`, `agent-loop.ts`, `turn.ts`; gateway `workers/agent-task.ts`,
@@ -1018,12 +1028,20 @@ before any provider call. No live model or provider operation was run; the loop
 change is a no-op without `ctx.taskBudget`, touches no prompt or tool
 description, and therefore owes no eval run.
 
+Migration status: `20260915210000_add_agent_task_active_checkpoint` is applied
+to the local test database only. It has not been applied to production, and the
+column is required by the running-task shape check, so it must be deployed
+before the code that writes `activeCheckpointAt`.
+
 Not done in this milestone: no cancel control is wired into the dashboard chat
 UI — the route exists and the durable decision is what the checkbox required.
-`AgentProposal`, `AgentTask.activeProposalId`, and the pending-question fields
-still have no writers, so a stop resolves against the task, not against an exact
-proposal or question. That is the remaining Package 2 item and overlaps package
-3 step 3.
+Cancellation is observed at iteration boundaries, so a stop arriving mid-tool-batch
+takes effect at the next reservation rather than interrupting a call already in
+flight; that is the intended bound, not a gap. `AgentProposal`,
+`AgentTask.activeProposalId`, and the pending-question fields still have no
+writers, so a stop resolves against the task, not against an exact proposal or
+question, and an unrelated message could still answer a pending question. That is
+the remaining Package 2 item and overlaps package 3 step 3.
 
 Rollback: the column and helpers are additive. Reverting the worker to the
 previous settle-time roll-up leaves recorded counters intact and only loses
