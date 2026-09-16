@@ -5,9 +5,9 @@ shared receipt boundary, durable action dispatch/recovery lifecycle, all retaine
 Shopify writes, retained internal-thread writes, and durable communication
 outcomes. Package 2 now has additive persistence, ownership helpers, durable
 dashboard submission/status retrieval, a claimed gateway worker, queue-gap and
-stale-claim recovery, and refresh reconnection. Exact proposal continuation,
-cancellation ordering, and crash-safe cumulative budget enforcement remain.
-Packages 3–6 have not started.
+stale-claim recovery, refresh reconnection, a crash-safe cumulative budget, and
+merchant cancellation ordered at the task row. Exact proposal and question
+continuation remains. Packages 3–6 have not started.
 Created 2026-09-11; last updated 2026-09-15.
 
 Implementation detail expanded 2026-09-11 against the current repository. Names marked **proposed** describe work to implement, not APIs or tables that already exist. This document authorizes no production operation by itself.
@@ -964,6 +964,72 @@ dies before the existing completed-turn usage row is written. The synchronous
 chat uses the durable route. Rollback routes dashboard chat back to that endpoint
 while leaving additive work rows and the version-1 worker readable.
 
+Budget and cancellation milestone (2026-09-15):
+
+Active time has one owner and the model counters have another. `AgentTask`
+gained `activeCheckpointAt`: the start of the current claim's unaccounted
+interval, charged by lease renewal, settle, fail, and the expiry sweep, so a
+worker that dies mid-attempt still spends the wall-clock time it held. It
+replaces the previous settle-time roll-up of `AgentTurnUsage.durationMs`, which
+charged the same milliseconds twice. Model calls are now reserved before the
+provider is contacted (`reserveAgentTaskModelCall`) and charged as soon as the
+response is measured (`recordAgentTaskModelUsage`), both bound to the exact
+claim token and revision, so a crashed attempt costs one call's accounting
+rather than returning the task to a fresh allowance. `settleAgentTaskClaim` no
+longer accepts a usage payload at all.
+
+The hooks reach the loop through `BaseAgentContext.taskBudget`, the same
+injection pattern as `assertExecutionAllowed`: the gateway task worker owns the
+object, `executeAgentTurn` puts it on the context, and `runAgentLoop` reserves
+before `anthropic.messages.create` and records after. A host without a durable
+task supplies nothing and its budgets stay turn-scoped, so the support planner
+path is unchanged.
+
+`cancelMemberAgentTask` records a merchant stop under the task-row lock that
+action dispatch already orders against. A claimed attempt keeps its claim so an
+in-flight model response can still be recorded; the next reservation returns
+`cancelled` and ends the turn. What the stop resolves to is decided by what
+reached the provider, identically in settle, fail, and the expiry sweep: nothing
+dispatched ends `cancelled` with no failure code, anything dispatched ends
+`reconciling` with `cancelled_after_dispatch`. The sweep previously cancelled
+every stopped attempt outright, which reported an interrupted write as
+definitely over.
+
+Files changed: `packages/db/prisma/schema.prisma` and migration
+`20260915210000_add_agent_task_active_checkpoint`; `packages/agent/src/task-ledger.ts`,
+`agent-context.ts`, `agent-loop.ts`, `turn.ts`; gateway `workers/agent-task.ts`,
+`routes/internal-operator.ts`, `message-handlers/operator-free-form-turn.ts`,
+`message-handlers/execute-operator-agent-turn.ts`; dashboard
+`lib/agent/api/gateway-operator-turn.ts` and the new
+`api/agent/requests/[requestId]/cancel` route; plus their tests.
+
+Verification: `npm run verify:pr` passed — static checks, lint, typecheck,
+1,145 agent, 464 gateway, and 789 dashboard unit tests, Node tests, 12 browser
+tests, all coverage projects (1,275 agent, 1,383 gateway, 1,459 dashboard) and
+thresholds, and all seven production builds. The full `npm run test:integration`
+passed separately: 130 agent, 919 gateway, and 670 dashboard tests. New cases
+cover D03 (a stop before dispatch cancels), D04 (a stop after dispatch
+reconciles and records no reversal), D17 (a crashed attempt resumes with its
+calls, tokens, spend, and active time intact and is refused at the limit), the
+expiry sweep deciding a stopped attempt by what it dispatched, stops refused
+from another member or against a stale revision, the loop bracketing each
+provider call with reserve/record, and a refused reservation ending the turn
+before any provider call. No live model or provider operation was run; the loop
+change is a no-op without `ctx.taskBudget`, touches no prompt or tool
+description, and therefore owes no eval run.
+
+Not done in this milestone: no cancel control is wired into the dashboard chat
+UI — the route exists and the durable decision is what the checkbox required.
+`AgentProposal`, `AgentTask.activeProposalId`, and the pending-question fields
+still have no writers, so a stop resolves against the task, not against an exact
+proposal or question. That is the remaining Package 2 item and overlaps package
+3 step 3.
+
+Rollback: the column and helpers are additive. Reverting the worker to the
+previous settle-time roll-up leaves recorded counters intact and only loses
+crash-safety; a stopped task already marked `reconciling` must be reconciled,
+never reset.
+
 Implementation order:
 
 1. Land additive request/task/proposal schema and ownership tests before switching routes. Add database-backed helpers alongside the existing agent execution/ledger modules; gateway code owns queue scheduling, not the task's authorization rules.
@@ -979,7 +1045,7 @@ Required tests: two concurrent submissions with one key create one request; alte
 - [x] Persist and claim requests before running them. Return a request identity promptly and expose progress through existing event/polling facilities.
 - [x] Restore pending and completed work after refresh or reconnect. Display execution state separately from response delivery state.
 - [x] Reuse messaging ingestion and claim patterns where appropriate; keep one active executor for a task.
-- [ ] Carry one time/call/usage budget across attempts. Propagate cancellation and deadlines to new work without treating an interrupted write as a definite failure.
+- [x] Carry one time/call/usage budget across attempts. Propagate cancellation and deadlines to new work without treating an interrupted write as a definite failure.
 
 Acceptance: a slow provider call, browser disconnect, duplicate submission, and worker restart do not cause a lost task or blind replay. A task can complete visibly after the original HTTP request ends.
 

@@ -224,6 +224,33 @@ export interface TaskClaimIdentity {
   organizationId: string; taskId: string; expectedRevision: number;
 }
 
+export interface ActiveTaskClaim extends TaskClaimIdentity {
+  claimToken: string;
+}
+
+export type TaskClaimControlState = "active" | "cancelled" | "budget_exhausted" | "claim_lost";
+
+export interface TaskModelUsageDelta {
+  inputTokens: number;
+  outputTokens: number;
+  spentNanoUsd: bigint;
+}
+
+function validateUsageDelta(usage: TaskModelUsageDelta): void {
+  if (
+    !Number.isSafeInteger(usage.inputTokens) || usage.inputTokens < 0
+    || !Number.isSafeInteger(usage.outputTokens) || usage.outputTokens < 0
+    || usage.spentNanoUsd < 0n
+  ) {
+    throw new BadRequestError("Task usage deltas must be non-negative integers.");
+  }
+}
+
+function activeTimeDeltaMs(checkpoint: Date | null, now: Date): number {
+  if (!checkpoint) return 0;
+  return Math.max(0, Math.min(2147483647, now.getTime() - checkpoint.getTime()));
+}
+
 function leaseExpiry(now: Date, leaseMs: number): Date {
   if (!Number.isFinite(now.getTime()) || !Number.isInteger(leaseMs) || leaseMs <= 0 || leaseMs > 300000) {
     throw new BadRequestError("Lease duration must be 1–300000 ms.");
@@ -246,7 +273,10 @@ export async function claimAgentTask(input: TaskClaimIdentity & { now?: Date; le
         actions: { none: { dispatchState: { in: ["dispatch_authorized", "submitted", "unknown", "settled"] } } },
         executions: { none: { status: { in: ["claimed", "committed", "unknown"] } } },
       },
-      data: { status: "running", claimToken, leaseExpiresAt, lastProgressAt: now },
+      data: {
+        status: "running", claimToken, leaseExpiresAt,
+        activeCheckpointAt: now, lastProgressAt: now,
+      },
     });
     if (won.count !== 1) return null;
     const task = await tx.agentTask.findFirstOrThrow({
@@ -261,12 +291,108 @@ export async function renewAgentTaskLease(input: TaskClaimIdentity & {
 }) {
   const now = input.now ?? new Date();
   const leaseExpiresAt = leaseExpiry(now, input.leaseMs ?? 60000);
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw(Prisma.sql`
+      SELECT id FROM agent_tasks WHERE id = ${input.taskId}::uuid
+      AND organization_id = ${input.organizationId}::uuid FOR UPDATE
+    `);
+    const task = await tx.agentTask.findFirst({
+      where: {
+        id: input.taskId, organizationId: input.organizationId,
+        revision: input.expectedRevision, status: "running",
+        claimToken: input.claimToken, leaseExpiresAt: { gt: now }, cancelledAt: null,
+      },
+    });
+    if (!task) return false;
+    const activeTimeMs = activeTimeDeltaMs(task.activeCheckpointAt, now);
+    const updated = await tx.agentTask.updateMany({
+      where: {
+        id: input.taskId, organizationId: input.organizationId,
+        revision: input.expectedRevision, status: "running",
+        claimToken: input.claimToken, cancelledAt: null,
+      },
+      data: {
+        activeTimeMsUsed: { increment: activeTimeMs },
+        activeCheckpointAt: now, leaseExpiresAt, lastProgressAt: now,
+      },
+    });
+    return updated.count === 1;
+  });
+}
+
+/**
+ * Reserves one model-call slot before contacting the provider. The reservation
+ * is deliberately durable before the network call: a process death may waste a
+ * slot, but it cannot reset the cumulative call budget and retry indefinitely.
+ */
+export async function reserveAgentTaskModelCall(
+  input: ActiveTaskClaim & { now?: Date },
+): Promise<TaskClaimControlState> {
+  const now = input.now ?? new Date();
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw(Prisma.sql`
+      SELECT id FROM agent_tasks WHERE id = ${input.taskId}::uuid
+      AND organization_id = ${input.organizationId}::uuid FOR UPDATE
+    `);
+    const task = await tx.agentTask.findFirst({
+      where: { id: input.taskId, organizationId: input.organizationId },
+    });
+    if (
+      !task || task.status !== "running" || task.revision !== input.expectedRevision
+      || task.claimToken !== input.claimToken || !task.leaseExpiresAt
+      || task.leaseExpiresAt <= now
+    ) return "claim_lost";
+
+    const activeTimeMs = activeTimeDeltaMs(task.activeCheckpointAt, now);
+    const nextActiveTime = Math.min(2147483647, task.activeTimeMsUsed + activeTimeMs);
+    if (task.cancelledAt) {
+      await tx.agentTask.update({
+        where: { id: task.id },
+        data: { activeTimeMsUsed: nextActiveTime, activeCheckpointAt: now, lastProgressAt: now },
+      });
+      return "cancelled";
+    }
+    if (
+      task.modelCallsUsed >= task.modelCallLimit
+      || nextActiveTime >= task.activeTimeMsLimit
+      || task.spentNanoUsd >= task.spendNanoUsdLimit
+    ) {
+      await tx.agentTask.update({
+        where: { id: task.id },
+        data: { activeTimeMsUsed: nextActiveTime, activeCheckpointAt: now, lastProgressAt: now },
+      });
+      return "budget_exhausted";
+    }
+    await tx.agentTask.update({
+      where: { id: task.id },
+      data: {
+        modelCallsUsed: { increment: 1 },
+        activeTimeMsUsed: nextActiveTime,
+        activeCheckpointAt: now,
+        lastProgressAt: now,
+      },
+    });
+    return "active";
+  });
+}
+
+/** Persist the measured response cost immediately, before any resulting tool runs. */
+export async function recordAgentTaskModelUsage(
+  input: ActiveTaskClaim & { usage: TaskModelUsageDelta; now?: Date },
+): Promise<boolean> {
+  validateUsageDelta(input.usage);
+  const now = input.now ?? new Date();
   const updated = await db.agentTask.updateMany({
     where: {
-      id: input.taskId, organizationId: input.organizationId, revision: input.expectedRevision,
-      status: "running", claimToken: input.claimToken, leaseExpiresAt: { gt: now },
+      id: input.taskId, organizationId: input.organizationId,
+      revision: input.expectedRevision, status: "running", claimToken: input.claimToken,
     },
-    data: { leaseExpiresAt, lastProgressAt: now },
+    data: {
+      inputTokensUsed: { increment: input.usage.inputTokens },
+      outputTokensUsed: { increment: input.usage.outputTokens },
+      spentNanoUsd: { increment: input.usage.spentNanoUsd },
+      lastProgressAt: now,
+    },
   });
   return updated.count === 1;
 }
@@ -275,15 +401,20 @@ export async function settleAgentTaskClaim(input: TaskClaimIdentity & {
   claimToken: string;
   requestId: string;
   status: "completed" | "waiting_input" | "waiting_approval";
-  usage?: {
-    modelCalls: number;
-    inputTokens: number;
-    outputTokens: number;
-    activeTimeMs: number;
-    spentNanoUsd: bigint;
-  };
 }) {
   return db.$transaction(async (tx) => {
+    const now = new Date();
+    await tx.$queryRaw(Prisma.sql`
+      SELECT id FROM agent_tasks WHERE id = ${input.taskId}::uuid
+      AND organization_id = ${input.organizationId}::uuid FOR UPDATE
+    `);
+    const ownedTask = await tx.agentTask.findFirst({
+      where: {
+        id: input.taskId, organizationId: input.organizationId,
+        revision: input.expectedRevision, status: "running", claimToken: input.claimToken,
+      },
+    });
+    if (!ownedTask) return false;
     await tx.agentAction.updateMany({
       where: {
         organizationId: input.organizationId, turnId: input.requestId,
@@ -291,25 +422,32 @@ export async function settleAgentTaskClaim(input: TaskClaimIdentity & {
       },
       data: { taskId: input.taskId },
     });
-    const usage = input.usage;
+    const consequential = ownedTask.cancelledAt
+      ? await tx.agentAction.count({
+          where: {
+            organizationId: input.organizationId, taskId: input.taskId,
+            dispatchState: { in: ["dispatch_authorized", "submitted", "unknown", "settled"] },
+          },
+        })
+      : 0;
+    const status = ownedTask.cancelledAt
+      ? consequential > 0 ? "reconciling" as const : "cancelled" as const
+      : input.status;
+    const activeTimeMs = activeTimeDeltaMs(ownedTask.activeCheckpointAt, now);
     const settled = await tx.agentTask.updateMany({
       where: {
         id: input.taskId, organizationId: input.organizationId,
         revision: input.expectedRevision, status: "running", claimToken: input.claimToken,
       },
       data: {
-        status: input.status,
+        status,
         claimToken: null,
         leaseExpiresAt: null,
-        lastProgressAt: new Date(),
-        ...(input.status === "completed" ? { completedAt: new Date() } : {}),
-        ...(usage ? {
-          modelCallsUsed: { increment: usage.modelCalls },
-          inputTokensUsed: { increment: usage.inputTokens },
-          outputTokensUsed: { increment: usage.outputTokens },
-          activeTimeMsUsed: { increment: usage.activeTimeMs },
-          spentNanoUsd: { increment: usage.spentNanoUsd },
-        } : {}),
+        activeCheckpointAt: null,
+        lastProgressAt: now,
+        ...(status === "completed" ? { completedAt: now } : {}),
+        ...(status === "reconciling" ? { failureCode: "cancelled_after_dispatch" } : {}),
+        activeTimeMsUsed: { increment: activeTimeMs },
       },
     });
     return settled.count === 1;
@@ -320,6 +458,18 @@ export async function failAgentTaskClaim(input: TaskClaimIdentity & {
   claimToken: string; requestId: string; failureCode: string;
 }) {
   return db.$transaction(async (tx) => {
+    const now = new Date();
+    await tx.$queryRaw(Prisma.sql`
+      SELECT id FROM agent_tasks WHERE id = ${input.taskId}::uuid
+      AND organization_id = ${input.organizationId}::uuid FOR UPDATE
+    `);
+    const ownedTask = await tx.agentTask.findFirst({
+      where: {
+        id: input.taskId, organizationId: input.organizationId,
+        revision: input.expectedRevision, status: "running", claimToken: input.claimToken,
+      },
+    });
+    if (!ownedTask) return null;
     await tx.agentAction.updateMany({
       where: {
         organizationId: input.organizationId, turnId: input.requestId,
@@ -333,15 +483,22 @@ export async function failAgentTaskClaim(input: TaskClaimIdentity & {
         dispatchState: { in: ["dispatch_authorized", "submitted", "unknown", "settled"] },
       },
     });
-    const status = consequential > 0 ? "reconciling" : "failed";
+    const status = consequential > 0
+      ? "reconciling"
+      : ownedTask.cancelledAt ? "cancelled" : "failed";
+    const activeTimeMs = activeTimeDeltaMs(ownedTask.activeCheckpointAt, now);
     const failed = await tx.agentTask.updateMany({
       where: {
         id: input.taskId, organizationId: input.organizationId,
         revision: input.expectedRevision, status: "running", claimToken: input.claimToken,
       },
       data: {
-        status, failureCode: input.failureCode.slice(0, 64),
-        claimToken: null, leaseExpiresAt: null, lastProgressAt: new Date(),
+        status,
+        failureCode: (ownedTask.cancelledAt
+          ? consequential > 0 ? "cancelled_after_dispatch" : null
+          : input.failureCode.slice(0, 64)),
+        claimToken: null, leaseExpiresAt: null, activeCheckpointAt: null,
+        activeTimeMsUsed: { increment: activeTimeMs }, lastProgressAt: now,
       },
     });
     return failed.count === 1 ? status : null;
@@ -357,13 +514,88 @@ export async function findQueuedAgentTasks(limit = 100) {
   });
 }
 
+// A cancelled attempt is only definitely over when nothing reached the
+// provider. Anything dispatched still owes reconciliation, exactly as the
+// worker-side settle and fail paths decide it.
 export async function reconcileExpiredAgentTaskClaims(now = new Date()) {
-  const result = await db.agentTask.updateMany({
-    where: { status: "running", leaseExpiresAt: { lte: now } },
-    data: {
-      status: "reconciling", failureCode: "interrupted_attempt",
-      claimToken: null, leaseExpiresAt: null, lastProgressAt: now,
-    },
+  const dispatched = Prisma.sql`EXISTS (
+    SELECT 1 FROM agent_actions a
+    WHERE a.task_id = agent_tasks.id AND a.organization_id = agent_tasks.organization_id
+    AND a.dispatch_state IN ('dispatch_authorized', 'submitted', 'unknown', 'settled')
+  )`;
+  return db.$executeRaw(Prisma.sql`
+    UPDATE agent_tasks
+    SET status = CASE WHEN cancelled_at IS NOT NULL AND NOT ${dispatched}
+                      THEN 'cancelled'::"AgentTaskStatus"
+                      ELSE 'reconciling'::"AgentTaskStatus" END,
+        failure_code = CASE
+          WHEN cancelled_at IS NULL THEN 'interrupted_attempt'
+          WHEN ${dispatched} THEN 'cancelled_after_dispatch'
+          ELSE NULL END,
+        active_time_ms_used = LEAST(2147483647,
+          active_time_ms_used + GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
+            (${now}::timestamptz - active_checkpoint_at)) * 1000)::integer)),
+        claim_token = NULL,
+        lease_expires_at = NULL,
+        active_checkpoint_at = NULL,
+        last_progress_at = ${now}
+    WHERE status = 'running' AND lease_expires_at <= ${now}
+  `);
+}
+
+/**
+ * Records a member stop request at the task-row ordering point shared with
+ * action dispatch. Running work keeps its claim long enough to record an
+ * in-flight model response, while every later dispatch observes cancelledAt.
+ */
+export async function cancelMemberAgentTask(input: {
+  organizationId: string;
+  clerkUserId: string;
+  taskId: string;
+  expectedRevision: number;
+  now?: Date;
+}) {
+  const now = input.now ?? new Date();
+  return db.$transaction(async (tx) => {
+    const actorKey = await memberThread(tx, input);
+    await tx.$queryRaw(Prisma.sql`
+      SELECT id FROM agent_tasks WHERE id = ${input.taskId}::uuid
+      AND organization_id = ${input.organizationId}::uuid FOR UPDATE
+    `);
+    const task = await tx.agentTask.findFirst({
+      where: {
+        id: input.taskId, organizationId: input.organizationId,
+        initiatingActorKind: "member", initiatingActorKey: actorKey,
+        thread: { operatorKey: actorKey, deletedAt: null, archivedAt: null },
+      },
+    });
+    if (!task) throw new ForbiddenError("Task is not available to this member.");
+    if (task.revision !== input.expectedRevision) {
+      throw new ConflictError("The task changed before cancellation was recorded.");
+    }
+    if (["completed", "failed", "cancelled"].includes(task.status)) return task;
+
+    const consequential = await tx.agentAction.count({
+      where: {
+        organizationId: input.organizationId, taskId: input.taskId,
+        dispatchState: { in: ["dispatch_authorized", "submitted", "unknown", "settled"] },
+      },
+    });
+    const running = task.status === "running";
+    const status = running
+      ? "running" as const
+      : consequential > 0 ? "reconciling" as const : "cancelled" as const;
+    return tx.agentTask.update({
+      where: { id: task.id },
+      data: {
+        status,
+        cancelledAt: task.cancelledAt ?? now,
+        failureCode: consequential > 0 ? "cancelled_after_dispatch" : null,
+        lastProgressAt: now,
+        ...(!running ? {
+          claimToken: null, leaseExpiresAt: null, activeCheckpointAt: null,
+        } : {}),
+      },
+    });
   });
-  return result.count;
 }

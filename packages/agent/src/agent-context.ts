@@ -1,4 +1,5 @@
 import type { ClassifierSignals } from "./classifier-signals.js";
+import type { BillableModelUsage } from "./model-cost.js";
 import type { MerchantPreferenceSummary } from "./merchant-preferences.js";
 import type { ToolResult } from "./tools/result.js";
 import type {
@@ -113,9 +114,19 @@ export interface ActionAuthorityBlock {
 // Module-agnostic agent context: the org identity and the conversation any
 // module's agent loop operates on. Future modules compose their own context on
 // top of this base.
+// Durable per-task model budget, supplied by hosts that own a persisted task.
+// The reservation is taken before the provider is contacted so a crashed
+// attempt cannot hand a new process a fresh allowance.
+export interface TaskModelBudget {
+  reserveModelCall: () => Promise<void>;
+  recordModelUsage: (usage: BillableModelUsage, model: string) => Promise<void>;
+}
+
 export interface BaseAgentContext {
   // Checked at model/tool boundaries; hosts use this to fence a lost lease.
   assertExecutionAllowed?: () => void;
+  // Absent for hosts with no durable task; their budgets stay turn-scoped.
+  taskBudget?: TaskModelBudget;
   // Turn-scoped and one-way: once set, no action-category tool runs again in
   // this turn. Nothing clears it, because nothing that happens later in a turn
   // can retroactively authorize what the merchant never saw.

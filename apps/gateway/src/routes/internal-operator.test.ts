@@ -178,6 +178,27 @@ describe('durable dashboard agent requests', () => {
     expect(await db.agentRequest.count({ where: { organizationId: org.id } })).toBe(1);
   });
 
+  it('records a merchant stop against the exact task revision', async () => {
+    const submitted = await request(app).post('/internal/operator/requests').set('x-internal-secret', SECRET)
+      .send({ organizationId: org.id, clerkUserId: 'usr_desk', clientRequestId: requestId, instruction: 'check order 1001' });
+
+    const stale = await request(app)
+      .post(`/internal/operator/requests/${submitted.body.requestId}/cancel`)
+      .set('x-internal-secret', SECRET)
+      .send({ organizationId: org.id, clerkUserId: 'usr_desk', taskRevision: 7 });
+    expect(stale.status).toBe(409);
+    expect((await db.agentTask.findUniqueOrThrow({ where: { id: submitted.body.taskId } })).cancelledAt).toBeNull();
+
+    const stopped = await request(app)
+      .post(`/internal/operator/requests/${submitted.body.requestId}/cancel`)
+      .set('x-internal-secret', SECRET)
+      .send({ organizationId: org.id, clerkUserId: 'usr_desk', taskRevision: submitted.body.taskRevision });
+    expect(stopped.status).toBe(200);
+    expect(stopped.body).toMatchObject({ requestId: submitted.body.requestId, status: 'cancelled' });
+    expect((await db.agentTask.findUniqueOrThrow({ where: { id: submitted.body.taskId } })).cancelledAt)
+      .not.toBeNull();
+  });
+
   it('retrieves durable response and delivery state after the submit connection is gone', async () => {
     const submitted = await request(app).post('/internal/operator/requests').set('x-internal-secret', SECRET)
       .send({ organizationId: org.id, clerkUserId: 'usr_desk', clientRequestId: requestId, instruction: 'check order 1001' });

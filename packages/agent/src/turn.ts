@@ -4,7 +4,7 @@ import { resolveAgentSettings } from "./settings.js";
 import { serializeAgentTurn } from "./turns.js";
 import { ConflictError } from "./errors.js";
 import type { LockProvider } from "./lock/index.js";
-import type { AgentContext, AgentActionMode, AgentResult } from "./agent-context.js";
+import type { AgentContext, AgentActionMode, AgentResult, TaskModelBudget } from "./agent-context.js";
 import type { AgentActionApproval } from "./agent-actions.js";
 import type { AgentToolDefinition } from "./tools/registry/index.js";
 import type { OrgSettings, RawToolCall } from "./types.js";
@@ -62,6 +62,8 @@ export interface ExecuteAgentTurnParams {
   agentTaskId?: string;
   /** Host-owned durable claim guard, checked before every tool execution. */
   assertExecutionAllowed?: () => void;
+  /** Host-owned durable model budget for the enclosing task, if there is one. */
+  taskBudget?: TaskModelBudget;
   failureRoute?: string;
   orgSettings?: Partial<OrgSettings> | null;
   approvedToolCalls?: RawToolCall[];
@@ -129,6 +131,7 @@ export async function executeAgentTurn(
       }
     };
     ctx.assertExecutionAllowed();
+    if (params.taskBudget) ctx.taskBudget = params.taskBudget;
     const result = await deps.runAgent(
       ctx,
       params.instruction,

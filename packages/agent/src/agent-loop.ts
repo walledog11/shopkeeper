@@ -176,6 +176,7 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
     if (tokenBudget !== undefined && usageTotals.budgetTokens >= tokenBudget) return done("token_budget", null, i);
     params.signal?.throwIfAborted();
     await params.beforeModelCall?.();
+    await ctx.taskBudget?.reserveModelCall();
 
     logger.info(
       { iteration: i, messageCount: messages.length, readOnly: mode === "read_only" },
@@ -211,6 +212,7 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
     );
     const usage = recordModelUsage(usageTotals, response);
     await recordSpend(ctx.orgId, usage, model);
+    await ctx.taskBudget?.recordModelUsage(usage, model);
     logger.info(
       {
         iteration: i,

@@ -88,6 +88,21 @@ export async function listGatewayAgentRequests(params: {
   return { status: res.status, payload: await res.json().catch(() => null) };
 }
 
+export async function postGatewayAgentRequestCancel(params: {
+  organizationId: string;
+  clerkUserId: string;
+  requestId: string;
+  taskRevision: number;
+}): Promise<{ status: number; payload: GatewayAgentRequestPayload | (Record<string, unknown> & { error?: string }) | null }> {
+  const base = getGatewayBaseUrl({ required: true });
+  const res = await fetchProviderWithDeadline(`${base}/internal/operator/requests/${encodeURIComponent(params.requestId)}/cancel`, {
+    method: "POST",
+    headers: gatewayAuth(),
+    body: JSON.stringify(params),
+  }, { provider: "gateway", operation: "operator-request-cancel", timeoutMs: 10_000 });
+  return { status: res.status, payload: await res.json().catch(() => null) };
+}
+
 // A decision the merchant made with a button rather than a sentence. It lands on
 // the same approve/dismiss the control tools call, so the plan resolves across
 // every device — but with no model call, which is the point of a button.

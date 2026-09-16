@@ -3,6 +3,7 @@ import { isLlmBudgetUnavailableError, isSpendCapError, nanoDollarsToUsd } from '
 import { ApiError } from '@shopkeeper/agent/errors';
 import {
   acceptMemberAgentRequest,
+  cancelMemberAgentTask,
   getMemberAgentRequest,
   listMemberAgentRequests,
 } from '@shopkeeper/agent/task-ledger';
@@ -144,6 +145,39 @@ export function registerInternalOperatorRoutes(router: Router): void {
     } catch (err) {
       if (err instanceof ApiError && err.status < 500) return res.status(err.status).json({ error: err.message });
       logger.error({ err, organizationId, clerkUserId, requestId }, '[InternalOperator] request status failed');
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  });
+
+  // Stop requested by the merchant. The decision is persisted at the task row;
+  // an attempt already running keeps its claim until it observes the stop, and
+  // anything already dispatched still reconciles rather than reporting reversal.
+  router.post('/operator/requests/:requestId/cancel', internalJsonParser(), async (req: Request, res: Response) => {
+    if (!authorizeInternalRequest(req, res, 'InternalOperator')) return;
+    const body = req.body as Record<string, unknown>;
+    const organizationId = stringField(body.organizationId);
+    const clerkUserId = stringField(body.clerkUserId);
+    const requestId = stringField(req.params.requestId);
+    const taskRevision = typeof body.taskRevision === 'number' ? body.taskRevision : null;
+    if (!organizationId || !clerkUserId || !requestId || taskRevision === null) {
+      return res.status(400).json({
+        error: 'organizationId, clerkUserId, requestId, and taskRevision are required',
+      });
+    }
+    try {
+      const request = await getMemberAgentRequest({ organizationId, clerkUserId, requestId });
+      if (!request?.task) return res.status(404).json({ error: 'Request not found' });
+      await cancelMemberAgentTask({
+        organizationId,
+        clerkUserId,
+        taskId: request.task.id,
+        expectedRevision: taskRevision,
+      });
+      const updated = await getMemberAgentRequest({ organizationId, clerkUserId, requestId });
+      return res.status(200).json(durableRequestPayload((updated ?? request) as MemberRequestRecord));
+    } catch (err) {
+      if (err instanceof ApiError && err.status < 500) return res.status(err.status).json({ error: err.message });
+      logger.error({ err, organizationId, clerkUserId, requestId }, '[InternalOperator] request cancel failed');
       return res.status(500).json({ error: 'Internal Server Error' });
     }
   });

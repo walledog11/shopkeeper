@@ -1411,6 +1411,10 @@ model AgentTask {
   checkpoint Json @db.JsonB
   claimToken String? @map("claim_token") @db.Uuid
   leaseExpiresAt DateTime? @map("lease_expires_at") @db.Timestamptz
+  // Start of the not-yet-accounted active-time interval for the current claim.
+  // Recovery charges this interval before releasing an expired claim, so a
+  // worker crash cannot reset the task's cumulative runtime budget.
+  activeCheckpointAt DateTime? @map("active_checkpoint_at") @db.Timestamptz
   modelCallsUsed Int @default(0) @map("model_calls_used")
   inputTokensUsed Int @default(0) @map("input_tokens_used")
   outputTokensUsed Int @default(0) @map("output_tokens_used")

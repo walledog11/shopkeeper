@@ -1,17 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
-  claim, renew, settle, fail, runTurn, findRequest, findMember,
-  findUsage, getContext, loadContext,
+  claim, renew, settle, fail, reserve, recordUsage, runTurn, findRequest, findMember,
+  getContext, loadContext,
 } = vi.hoisted(() => ({
   claim: vi.fn(),
   renew: vi.fn(),
   settle: vi.fn(),
   fail: vi.fn(),
+  reserve: vi.fn(),
+  recordUsage: vi.fn(),
   runTurn: vi.fn(),
   findRequest: vi.fn(),
   findMember: vi.fn(),
-  findUsage: vi.fn(),
   getContext: vi.fn(),
   loadContext: vi.fn(),
 }));
@@ -21,12 +22,13 @@ vi.mock('@shopkeeper/agent/task-ledger', () => ({
   renewAgentTaskLease: renew,
   settleAgentTaskClaim: settle,
   failAgentTaskClaim: fail,
+  reserveAgentTaskModelCall: reserve,
+  recordAgentTaskModelUsage: recordUsage,
 }));
 vi.mock('@shopkeeper/db', () => ({
   db: {
     agentRequest: { findFirst: findRequest },
     orgMember: { findFirst: findMember },
-    agentTurnUsage: { findUnique: findUsage },
   },
 }));
 vi.mock('../operator-context.js', () => ({ getContext, loadLiveOperatorContext: loadContext }));
@@ -47,7 +49,8 @@ describe('processAgentTaskJob', () => {
     fail.mockReset().mockResolvedValue('failed');
     findRequest.mockReset().mockResolvedValue(request);
     findMember.mockReset().mockResolvedValue({ clerkUserId: 'usr-1' });
-    findUsage.mockReset().mockResolvedValue(null);
+    reserve.mockReset().mockResolvedValue('active');
+    recordUsage.mockReset().mockResolvedValue(true);
     getContext.mockReset().mockResolvedValue({ pendingPlans: [], pendingQuestion: null });
     loadContext.mockReset().mockResolvedValue({ pendingPlans: [], pendingQuestion: null });
     runTurn.mockReset().mockResolvedValue({ summary: 'Done', actionsPerformed: [] });
@@ -68,6 +71,22 @@ describe('processAgentTaskJob', () => {
     }));
     expect(settle).toHaveBeenCalledWith(expect.objectContaining({
       requestId: 'request-1', taskId: 'task-1', claimToken: 'claim-1', status: 'completed',
+    }));
+  });
+
+  it('hands the turn a budget that stops the loop when the task was stopped', async () => {
+    await processAgentTaskJob(job);
+    const { taskBudget } = runTurn.mock.calls[0][0];
+    await expect(taskBudget.reserveModelCall()).resolves.toBeUndefined();
+    expect(reserve).toHaveBeenCalledWith(expect.objectContaining({ taskId: 'task-1', claimToken: 'claim-1' }));
+    reserve.mockResolvedValue('cancelled');
+    await expect(taskBudget.reserveModelCall()).rejects.toThrow('cancelled');
+    await taskBudget.recordModelUsage(
+      { inputTokens: 10, outputTokens: 5, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 },
+      'claude-sonnet-5',
+    );
+    expect(recordUsage).toHaveBeenCalledWith(expect.objectContaining({
+      usage: expect.objectContaining({ inputTokens: 10, outputTokens: 5 }),
     }));
   });
 

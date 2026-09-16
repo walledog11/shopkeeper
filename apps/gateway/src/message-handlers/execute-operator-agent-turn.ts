@@ -9,6 +9,7 @@ import { hashInstruction } from '@shopkeeper/agent/agent-actions';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import type { RawToolCall } from '@shopkeeper/agent/types';
 import type { AgentToolDefinition } from '@shopkeeper/agent/tools';
+import type { TaskModelBudget } from '@shopkeeper/agent/context';
 import { db } from '@shopkeeper/db';
 import type { AgentActionResult } from './planning-types.js';
 import { assertBillingWriteAllowedForOrgId } from '../billing/write-gate.js';
@@ -24,6 +25,7 @@ export interface ExecuteOperatorAgentTurnParams {
   agentRequestId?: string;
   agentTaskId?: string;
   assertExecutionAllowed?: () => void;
+  taskBudget?: TaskModelBudget;
   senderPhone?: string;
   clerkUserId?: string;
   // Free-form turns resolve the merchant's single durable operator thread from
@@ -114,6 +116,7 @@ export async function executeOperatorAgentTurn(
     ...(params.agentRequestId ? { agentRequestId: params.agentRequestId } : {}),
     ...(params.agentTaskId ? { agentTaskId: params.agentTaskId } : {}),
     ...(params.assertExecutionAllowed ? { assertExecutionAllowed: params.assertExecutionAllowed } : {}),
+    ...(params.taskBudget ? { taskBudget: params.taskBudget } : {}),
     failureRoute: FAILURE_ROUTE,
     ...(params.operatorLedger ? { operatorLedger: params.operatorLedger } : {}),
     ...(params.operatorDeskMode ? { operatorDeskMode: params.operatorDeskMode } : {}),

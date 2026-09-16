@@ -5,8 +5,9 @@ import { createTestOrg, createTestCustomer, createTestThread, cleanupTestData } 
 import { ConflictError, ForbiddenError } from "./errors.js";
 import {
   acceptMemberAgentRequest, attachMemberAgentTask, getMemberAgentRequest,
-  claimAgentTask, failAgentTaskClaim, findQueuedAgentTasks,
-  reconcileExpiredAgentTaskClaims, renewAgentTaskLease, settleAgentTaskClaim,
+  cancelMemberAgentTask, claimAgentTask, failAgentTaskClaim, findQueuedAgentTasks,
+  recordAgentTaskModelUsage, reconcileExpiredAgentTaskClaims, renewAgentTaskLease,
+  reserveAgentTaskModelCall, settleAgentTaskClaim,
 } from "./task-ledger.js";
 
 const orgIds: string[] = [];
@@ -105,7 +106,7 @@ describe("durable dashboard persistence foundation", () => {
     expect(await claimAgentTask({ ...identity, now: expired })).toBeNull();
   });
 
-  it("settles only the winning claim and carries usage and durable response links", async () => {
+  it("settles only the winning claim and carries durable response links", async () => {
     const { input, request, task } = await seedTask();
     const claim = await claimAgentTask({ organizationId: task.organizationId, taskId: task.id, expectedRevision: 0 });
     expect(claim).not.toBeNull();
@@ -118,19 +119,115 @@ describe("durable dashboard persistence foundation", () => {
       turnId: request.id, tool: "get_order", category: "order", input: {},
       output: "Found it", status: "success", mode: "human_approved",
     } });
-    await expect(settleAgentTaskClaim({
+    const identity = {
       organizationId: input.organizationId, taskId: task.id, expectedRevision: 0,
-      claimToken: claim!.claimToken, requestId: request.id, status: "completed",
-      usage: { modelCalls: 2, inputTokens: 10, outputTokens: 5, activeTimeMs: 123, spentNanoUsd: 99n },
+      claimToken: claim!.claimToken,
+    };
+    expect(await reserveAgentTaskModelCall(identity)).toBe("active");
+    expect(await recordAgentTaskModelUsage({
+      ...identity, usage: { inputTokens: 10, outputTokens: 5, spentNanoUsd: 99n },
+    })).toBe(true);
+    await expect(settleAgentTaskClaim({
+      ...identity, requestId: request.id, status: "completed",
     })).resolves.toBe(true);
     const stored = await db.agentTask.findUniqueOrThrow({ where: { id: task.id }, include: { actions: true, messages: true } });
     expect(stored).toMatchObject({
-      status: "completed", claimToken: null, modelCallsUsed: 2,
-      inputTokensUsed: 10, outputTokensUsed: 5, activeTimeMsUsed: 123,
+      status: "completed", claimToken: null, activeCheckpointAt: null,
+      modelCallsUsed: 1, inputTokensUsed: 10, outputTokensUsed: 5,
     });
+    // Active time is measured from the claim interval alone, so nothing can
+    // report the same milliseconds twice.
+    expect(stored.activeTimeMsUsed).toBeLessThan(120000);
     expect(stored.spentNanoUsd).toBe(99n);
     expect(stored.actions[0]?.taskId).toBe(task.id);
     expect(stored.messages[0]?.agentRequestId).toBe(request.id);
+  });
+
+  it("preserves the cumulative budget across a crashed attempt", async () => {
+    const { input, request, task } = await seedTask();
+    const identity = { organizationId: input.organizationId, taskId: task.id, expectedRevision: 0 };
+    const start = new Date("2026-09-15T12:00:00Z");
+    const first = await claimAgentTask({ ...identity, leaseMs: 1000, now: start });
+    for (let call = 0; call < 3; call += 1) {
+      expect(await reserveAgentTaskModelCall({ ...identity, claimToken: first!.claimToken, now: start }))
+        .toBe("active");
+      await recordAgentTaskModelUsage({
+        ...identity, claimToken: first!.claimToken, now: start,
+        usage: { inputTokens: 100, outputTokens: 50, spentNanoUsd: 10n },
+      });
+    }
+    // The worker dies here: nothing settles, and the sweep releases the claim.
+    await reconcileExpiredAgentTaskClaims(new Date(start.getTime() + 2000));
+    await db.agentTask.update({ where: { id: task.id }, data: { status: "queued", failureCode: null } });
+
+    const second = await claimAgentTask(identity);
+    const resumed = await db.agentTask.findUniqueOrThrow({ where: { id: task.id } });
+    expect(resumed).toMatchObject({ modelCallsUsed: 3, inputTokensUsed: 300, outputTokensUsed: 150 });
+    expect(resumed.spentNanoUsd).toBe(30n);
+    expect(resumed.activeTimeMsUsed).toBeGreaterThanOrEqual(2000);
+
+    await db.agentTask.update({ where: { id: task.id }, data: { modelCallsUsed: resumed.modelCallLimit } });
+    expect(await reserveAgentTaskModelCall({ ...identity, claimToken: second!.claimToken }))
+      .toBe("budget_exhausted");
+    expect(await failAgentTaskClaim({
+      ...identity, claimToken: second!.claimToken, requestId: request.id,
+      failureCode: "task_budget_exhausted",
+    })).toBe("failed");
+  });
+
+  it("stops a claimed attempt before dispatch and cancels it", async () => {
+    const { input, request, task } = await seedTask();
+    const identity = { organizationId: input.organizationId, taskId: task.id, expectedRevision: 0 };
+    const claim = await claimAgentTask(identity);
+    const stopped = await cancelMemberAgentTask({
+      organizationId: input.organizationId, clerkUserId: input.clerkUserId,
+      taskId: task.id, expectedRevision: 0,
+    });
+    // The running attempt keeps its claim until it observes the stop.
+    expect(stopped.status).toBe("running");
+    expect(stopped.cancelledAt).not.toBeNull();
+    expect(await reserveAgentTaskModelCall({ ...identity, claimToken: claim!.claimToken })).toBe("cancelled");
+    expect(await renewAgentTaskLease({ ...identity, claimToken: claim!.claimToken })).toBe(false);
+    expect(await failAgentTaskClaim({
+      ...identity, claimToken: claim!.claimToken, requestId: request.id, failureCode: "turn_failed",
+    })).toBe("cancelled");
+    const stored = await db.agentTask.findUniqueOrThrow({ where: { id: task.id } });
+    expect(stored).toMatchObject({ status: "cancelled", failureCode: null, claimToken: null });
+  });
+
+  it("reconciles rather than cancels once an action reached dispatch", async () => {
+    const { input, request, task } = await seedTask();
+    const identity = { organizationId: input.organizationId, taskId: task.id, expectedRevision: 0 };
+    const claim = await claimAgentTask(identity);
+    await db.agentAction.create({ data: {
+      organizationId: input.organizationId, threadId: input.threadId, taskId: task.id,
+      turnId: request.id, tool: "create_refund", category: "order", input: {},
+      status: "unknown", mode: "human_approved", dispatchState: "submitted",
+      submittedAt: new Date(), operationId: randomUUID(), actionIndex: 0,
+    } });
+    await cancelMemberAgentTask({
+      organizationId: input.organizationId, clerkUserId: input.clerkUserId,
+      taskId: task.id, expectedRevision: 0,
+    });
+    expect(await settleAgentTaskClaim({
+      ...identity, claimToken: claim!.claimToken, requestId: request.id, status: "completed",
+    })).toBe(true);
+    const stored = await db.agentTask.findUniqueOrThrow({ where: { id: task.id } });
+    expect(stored).toMatchObject({ status: "reconciling", failureCode: "cancelled_after_dispatch" });
+  });
+
+  it("refuses a stop from another member or against a stale revision", async () => {
+    const { input, task } = await seedTask();
+    const other = await seed();
+    await expect(cancelMemberAgentTask({
+      organizationId: input.organizationId, clerkUserId: other.clerkUserId,
+      taskId: task.id, expectedRevision: 0,
+    })).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(cancelMemberAgentTask({
+      organizationId: input.organizationId, clerkUserId: input.clerkUserId,
+      taskId: task.id, expectedRevision: 1,
+    })).rejects.toBeInstanceOf(ConflictError);
+    expect((await db.agentTask.findUniqueOrThrow({ where: { id: task.id } })).cancelledAt).toBeNull();
   });
 
   it("fails clean attempts but reconciles interrupted consequential work", async () => {
@@ -166,6 +263,42 @@ describe("durable dashboard persistence foundation", () => {
     });
     expect(await reconcileExpiredAgentTaskClaims(new Date(now.getTime() + 1001))).toBeGreaterThanOrEqual(1);
     expect((await db.agentTask.findUniqueOrThrow({ where: { id: queued.task.id } })).status).toBe("reconciling");
+  });
+
+  it("closes an expired stopped attempt by what it dispatched", async () => {
+    const now = new Date("2026-09-15T12:00:00Z");
+    const expiry = new Date(now.getTime() + 1001);
+    const clean = await seedTask();
+    await claimAgentTask({
+      organizationId: clean.task.organizationId, taskId: clean.task.id,
+      expectedRevision: 0, now, leaseMs: 1000,
+    });
+    await cancelMemberAgentTask({
+      organizationId: clean.input.organizationId, clerkUserId: clean.input.clerkUserId,
+      taskId: clean.task.id, expectedRevision: 0,
+    });
+
+    const dispatched = await seedTask();
+    await claimAgentTask({
+      organizationId: dispatched.task.organizationId, taskId: dispatched.task.id,
+      expectedRevision: 0, now, leaseMs: 1000,
+    });
+    await db.agentAction.create({ data: {
+      organizationId: dispatched.input.organizationId, threadId: dispatched.input.threadId,
+      taskId: dispatched.task.id, turnId: dispatched.request.id, tool: "create_refund",
+      category: "order", input: {}, status: "unknown", mode: "human_approved",
+      dispatchState: "submitted", submittedAt: now, operationId: randomUUID(), actionIndex: 0,
+    } });
+    await cancelMemberAgentTask({
+      organizationId: dispatched.input.organizationId, clerkUserId: dispatched.input.clerkUserId,
+      taskId: dispatched.task.id, expectedRevision: 0,
+    });
+
+    await reconcileExpiredAgentTaskClaims(expiry);
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: clean.task.id } }))
+      .toMatchObject({ status: "cancelled", failureCode: null, activeCheckpointAt: null });
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: dispatched.task.id } }))
+      .toMatchObject({ status: "reconciling", failureCode: "cancelled_after_dispatch" });
   });
 
   it("never reopens a terminal task on request redelivery", async () => {

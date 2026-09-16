@@ -3,10 +3,13 @@ import { db } from '@shopkeeper/db';
 import {
   claimAgentTask,
   failAgentTaskClaim,
+  recordAgentTaskModelUsage,
   renewAgentTaskLease,
+  reserveAgentTaskModelCall,
   settleAgentTaskClaim,
 } from '@shopkeeper/agent/task-ledger';
-import { estimateModelUsageCostUsd } from '@shopkeeper/agent/model-cost';
+import { estimateModelUsageCostUsd, UnknownModelPriceError } from '@shopkeeper/agent/model-cost';
+import type { TaskModelBudget } from '@shopkeeper/agent/context';
 import { QUEUE } from '../constants.js';
 import logger from '../logger.js';
 import { getContext, loadLiveOperatorContext } from '../operator-context.js';
@@ -69,15 +72,38 @@ export async function processAgentTaskJob(data: AgentTaskJobData): Promise<void>
     return;
   }
 
+  const claim = {
+    organizationId: data.organizationId,
+    taskId: data.taskId,
+    expectedRevision: data.revision,
+    claimToken: claimed.claimToken,
+  };
+  // Reserved before the provider is contacted and charged as soon as the
+  // response is measured, so a crash costs at most one call's accounting and
+  // never returns the task to a fresh allowance.
+  const taskBudget: TaskModelBudget = {
+    reserveModelCall: async () => {
+      const state = await reserveAgentTaskModelCall(claim);
+      if (state !== 'active') throw new Error(`Task stopped: ${state}.`);
+    },
+    recordModelUsage: async (usage, model) => {
+      let spentNanoUsd = 0n;
+      try {
+        spentNanoUsd = BigInt(Math.ceil(estimateModelUsageCostUsd(model, usage) * 1_000_000_000));
+      } catch (error) {
+        if (!(error instanceof UnknownModelPriceError)) throw error;
+        logger.warn({ model, taskId: data.taskId }, '[AgentTask] Unpriced model; call counted without spend');
+      }
+      await recordAgentTaskModelUsage({
+        ...claim,
+        usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, spentNanoUsd },
+      });
+    },
+  };
+
   let leaseLost = false;
   const renewal = setInterval(() => {
-    void renewAgentTaskLease({
-      organizationId: data.organizationId,
-      taskId: data.taskId,
-      expectedRevision: data.revision,
-      claimToken: claimed.claimToken,
-      leaseMs: LEASE_MS,
-    }).then((renewed) => {
+    void renewAgentTaskLease({ ...claim, leaseMs: LEASE_MS }).then((renewed) => {
       if (!renewed) leaseLost = true;
     }).catch((error: unknown) => {
       leaseLost = true;
@@ -98,6 +124,7 @@ export async function processAgentTaskJob(data: AgentTaskJobData): Promise<void>
       clerkUserId: member.clerkUserId,
       requestId: request.id,
       taskId: data.taskId,
+      taskBudget,
       assertExecutionAllowed: () => {
         if (leaseLost) throw new Error('Task lease ownership was lost.');
       },
@@ -112,43 +139,22 @@ export async function processAgentTaskJob(data: AgentTaskJobData): Promise<void>
     });
     if (leaseLost) throw new Error('Task lease ownership was lost before completion.');
 
-    const [after, usage] = await Promise.all([
-      getContext(data.organizationId, memberKey),
-      db.agentTurnUsage.findUnique({ where: { turnId: request.id } }),
-    ]);
+    const after = await getContext(data.organizationId, memberKey);
     const taskStatus = after.pendingQuestion
       ? 'waiting_input' as const
       : after.pendingPlans.length > 0
         ? 'waiting_approval' as const
         : 'completed' as const;
-    const spentNanoUsd = usage
-      ? BigInt(Math.ceil(estimateModelUsageCostUsd('claude-sonnet-5', usage) * 1_000_000_000))
-      : 0n;
     const settled = await settleAgentTaskClaim({
-      organizationId: data.organizationId,
-      taskId: data.taskId,
-      expectedRevision: data.revision,
-      claimToken: claimed.claimToken,
+      ...claim,
       requestId: request.id,
       status: taskStatus,
-      ...(usage ? {
-        usage: {
-          modelCalls: usage.modelCalls,
-          inputTokens: usage.inputTokens,
-          outputTokens: usage.outputTokens,
-          activeTimeMs: usage.durationMs,
-          spentNanoUsd,
-        },
-      } : {}),
     });
     if (!settled) throw new Error('Task claim was lost before its result could be recorded.');
   } catch (error) {
     logger.error({ err: error, taskId: data.taskId, requestId: request.id }, '[AgentTask] Turn failed');
     await failAgentTaskClaim({
-      organizationId: data.organizationId,
-      taskId: data.taskId,
-      expectedRevision: data.revision,
-      claimToken: claimed.claimToken,
+      ...claim,
       requestId: request.id,
       failureCode: leaseLost ? 'claim_lost' : 'turn_failed',
     });

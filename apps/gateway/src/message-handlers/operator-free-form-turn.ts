@@ -9,6 +9,7 @@ import {
   executeOperatorAgentTurn,
   type ExecuteOperatorAgentTurnResult,
 } from './execute-operator-agent-turn.js';
+import type { TaskModelBudget } from '@shopkeeper/agent/context';
 import type { OperatorContext } from '../operator-context.js';
 import type { OperatorMessageContext } from '../routes/operator-message.js';
 
@@ -18,6 +19,7 @@ export interface RunOperatorFreeFormTurnParams {
   requestId?: string;
   taskId?: string;
   assertExecutionAllowed?: () => void;
+  taskBudget?: TaskModelBudget;
   message: OperatorMessageContext;
   context: OperatorContext;
 }
@@ -68,6 +70,7 @@ export async function runOperatorFreeFormTurn(
       ...(params.requestId ? { agentRequestId: params.requestId } : {}),
       ...(params.taskId ? { agentTaskId: params.taskId } : {}),
       ...(params.assertExecutionAllowed ? { assertExecutionAllowed: params.assertExecutionAllowed } : {}),
+      ...(params.taskBudget ? { taskBudget: params.taskBudget } : {}),
       operatorKey: senderRef,
       ...(deliveryRef ? { senderPhone: deliveryRef } : {}),
       clerkUserId,
