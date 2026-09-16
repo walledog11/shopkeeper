@@ -15,6 +15,9 @@ import type { OperatorMessageContext } from '../routes/operator-message.js';
 export interface RunOperatorFreeFormTurnParams {
   organizationId: string;
   clerkUserId: string;
+  requestId?: string;
+  taskId?: string;
+  assertExecutionAllowed?: () => void;
   message: OperatorMessageContext;
   context: OperatorContext;
 }
@@ -32,6 +35,7 @@ export async function runOperatorFreeFormTurn(
   const { organizationId, clerkUserId, context } = params;
   const { body, presence, senderRef, deliveryRef, turnId } = params.message;
   const deskMode = !deliveryRef;
+  const durableTurnId = params.requestId ?? turnId;
 
   // No delivery ref means no provider push: the merchant is at the dashboard,
   // where a pending plan is a button rather than a line to reply to.
@@ -60,7 +64,10 @@ export async function runOperatorFreeFormTurn(
     () => executeOperatorAgentTurn({
       orgId: organizationId,
       instruction: body,
-      ...(turnId ? { turnId } : {}),
+      ...(durableTurnId ? { turnId: durableTurnId } : {}),
+      ...(params.requestId ? { agentRequestId: params.requestId } : {}),
+      ...(params.taskId ? { agentTaskId: params.taskId } : {}),
+      ...(params.assertExecutionAllowed ? { assertExecutionAllowed: params.assertExecutionAllowed } : {}),
       operatorKey: senderRef,
       ...(deliveryRef ? { senderPhone: deliveryRef } : {}),
       clerkUserId,

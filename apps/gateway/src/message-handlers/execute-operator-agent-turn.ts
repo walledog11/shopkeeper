@@ -21,6 +21,9 @@ export interface ExecuteOperatorAgentTurnParams {
   orgId: string;
   instruction: string;
   turnId?: string;
+  agentRequestId?: string;
+  agentTaskId?: string;
+  assertExecutionAllowed?: () => void;
   senderPhone?: string;
   clerkUserId?: string;
   // Free-form turns resolve the merchant's single durable operator thread from
@@ -108,6 +111,9 @@ export async function executeOperatorAgentTurn(
     instruction: params.instruction,
     ...(approval ? { auditMode: 'human_approved' as const, approval } : {}),
     ...(params.turnId ? { turnId: params.turnId } : {}),
+    ...(params.agentRequestId ? { agentRequestId: params.agentRequestId } : {}),
+    ...(params.agentTaskId ? { agentTaskId: params.agentTaskId } : {}),
+    ...(params.assertExecutionAllowed ? { assertExecutionAllowed: params.assertExecutionAllowed } : {}),
     failureRoute: FAILURE_ROUTE,
     ...(params.operatorLedger ? { operatorLedger: params.operatorLedger } : {}),
     ...(params.operatorDeskMode ? { operatorDeskMode: params.operatorDeskMode } : {}),

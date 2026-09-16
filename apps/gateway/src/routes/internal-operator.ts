@@ -1,6 +1,12 @@
 import express, { type Request, type Response, type Router } from 'express';
 import { isLlmBudgetUnavailableError, isSpendCapError, nanoDollarsToUsd } from '@shopkeeper/db';
 import { ApiError } from '@shopkeeper/agent/errors';
+import {
+  acceptMemberAgentRequest,
+  getMemberAgentRequest,
+  listMemberAgentRequests,
+} from '@shopkeeper/agent/task-ledger';
+import { resolveOperatorThread } from '@shopkeeper/agent/internal-thread';
 import logger from '../logger.js';
 import { runOperatorFreeFormTurn } from '../message-handlers/operator-free-form-turn.js';
 import {
@@ -16,12 +22,132 @@ import { pushOperatorEscalation } from '../operator-escalation.js';
 import { internalJsonParser } from './body-parsers.js';
 import { authorizeInternalRequest } from './internal-auth.js';
 import type { OperatorMessageContext } from './operator-message.js';
+import { ensureAgentTaskEnqueued } from '../agent-task-ingest.js';
+
+const DASHBOARD_TASK_BUDGET = {
+  runtimeVersion: 1,
+  modelCallLimit: 20,
+  activeTimeMsLimit: 120_000,
+  spendNanoUsdLimit: 1_000_000_000n,
+} as const;
 
 function stringField(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
+type MemberRequestRecord = NonNullable<Awaited<ReturnType<typeof getMemberAgentRequest>>>;
+
+function durableRequestPayload(request: MemberRequestRecord) {
+  const task = request.task;
+  const response = task?.messages[0];
+  return {
+    requestId: request.id,
+    instruction: request.normalizedInstruction,
+    taskId: task?.id ?? null,
+    status: task?.status ?? request.state,
+    taskRevision: task?.revision ?? null,
+    acceptedAt: request.acceptedAt,
+    updatedAt: task?.updatedAt ?? request.attachedAt ?? request.acceptedAt,
+    response: response ? {
+      summary: response.contentText ?? '',
+      actionsPerformed: (task?.actions ?? []).map((action) => ({
+        tool: action.tool,
+        result: action.output ?? '',
+        input: action.input,
+        status: action.status,
+        category: action.category,
+        ...(action.durationMs == null ? {} : { durationMs: action.durationMs }),
+        ...(action.errorDetail ? { errorDetail: action.errorDetail } : {}),
+      })),
+      awaitingApproval: task?.status === 'waiting_approval',
+    } : null,
+    delivery: response ? { status: 'available', messageId: response.id } : { status: 'pending', messageId: null },
+    failureCode: task?.failureCode ?? null,
+  };
+}
+
 export function registerInternalOperatorRoutes(router: Router): void {
+  router.post('/operator/requests', internalJsonParser(), async (req: Request, res: Response) => {
+    if (!authorizeInternalRequest(req, res, 'InternalOperator')) return;
+    const body = req.body as Record<string, unknown>;
+    const organizationId = stringField(body.organizationId);
+    const clerkUserId = stringField(body.clerkUserId);
+    const clientRequestId = stringField(body.clientRequestId);
+    const instruction = stringField(body.instruction);
+    if (!organizationId || !clerkUserId || !clientRequestId || !instruction) {
+      return res.status(400).json({
+        error: 'organizationId, clerkUserId, clientRequestId, and instruction are required',
+      });
+    }
+    try {
+      const memberKey = await resolveOperatorMemberKey(organizationId, clerkUserId);
+      const thread = await resolveOperatorThread(organizationId, memberKey);
+      const accepted = await acceptMemberAgentRequest({
+        organizationId,
+        clerkUserId,
+        threadId: thread.id,
+        dedupeKey: clientRequestId,
+        instruction,
+        budget: DASHBOARD_TASK_BUDGET,
+      });
+      if (!accepted.task) throw new Error('Accepted dashboard request has no task.');
+      try {
+        if (accepted.task.status === 'queued') await ensureAgentTaskEnqueued(accepted.task);
+      } catch (error) {
+        // The persisted queued task is authoritative. The recovery sweep heals
+        // the commit-to-enqueue gap, so a Redis outage does not invite a new ID.
+        logger.error({ err: error, taskId: accepted.task.id }, '[InternalOperator] Task enqueue failed');
+      }
+      return res.status(202).json({
+        ...durableRequestPayload({ ...accepted.request, task: { ...accepted.task, messages: [], actions: [] } }),
+        statusUrl: `/api/agent/requests/${accepted.request.id}`,
+        deduplicated: accepted.deduplicated,
+      });
+    } catch (err) {
+      if (err instanceof ApiError && err.status < 500) {
+        return res.status(err.status).json({ error: err.message });
+      }
+      logger.error({ err, organizationId, clerkUserId }, '[InternalOperator] request submission failed');
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  });
+
+  router.get('/operator/requests', async (req: Request, res: Response) => {
+    if (!authorizeInternalRequest(req, res, 'InternalOperator')) return;
+    const organizationId = stringField(req.query.organizationId);
+    const clerkUserId = stringField(req.query.clerkUserId);
+    if (!organizationId || !clerkUserId) {
+      return res.status(400).json({ error: 'organizationId and clerkUserId are required' });
+    }
+    try {
+      const requests = await listMemberAgentRequests({ organizationId, clerkUserId });
+      return res.status(200).json({ requests: requests.map((request) => durableRequestPayload(request as MemberRequestRecord)) });
+    } catch (err) {
+      if (err instanceof ApiError && err.status < 500) return res.status(err.status).json({ error: err.message });
+      logger.error({ err, organizationId, clerkUserId }, '[InternalOperator] request lookup failed');
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  });
+
+  router.get('/operator/requests/:requestId', async (req: Request, res: Response) => {
+    if (!authorizeInternalRequest(req, res, 'InternalOperator')) return;
+    const organizationId = stringField(req.query.organizationId);
+    const clerkUserId = stringField(req.query.clerkUserId);
+    const requestId = stringField(req.params.requestId);
+    if (!organizationId || !clerkUserId || !requestId) {
+      return res.status(400).json({ error: 'organizationId, clerkUserId, and requestId are required' });
+    }
+    try {
+      const request = await getMemberAgentRequest({ organizationId, clerkUserId, requestId });
+      if (!request) return res.status(404).json({ error: 'Request not found' });
+      return res.status(200).json(durableRequestPayload(request));
+    } catch (err) {
+      if (err instanceof ApiError && err.status < 500) return res.status(err.status).json({ error: err.message });
+      logger.error({ err, organizationId, clerkUserId, requestId }, '[InternalOperator] request status failed');
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  });
+
   router.post('/operator/escalate', internalJsonParser(), async (req: Request, res: Response) => {
     if (!authorizeInternalRequest(req, res, 'InternalOperator')) return;
 
@@ -48,12 +174,8 @@ export function registerInternalOperatorRoutes(router: Router): void {
     }
   });
 
-  // The operator turn for a transport that has no provider send of its own: the
-  // dashboard Concierge. It posts the merchant's instruction and the HTTP
-  // response *is* the reply, so there is no progress channel to fill and no
-  // delivery ref to exclude from plan fan-out. The thread and the pending queue
-  // are the merchant's own, resolved from their member identity — the same ones
-  // their phone talks to.
+  // Compatibility path for callers not yet moved to durable /operator/requests.
+  // Its HTTP lifetime still owns the turn, so new dashboard work must not use it.
   router.post('/operator/turn', internalJsonParser(), async (req: Request, res: Response) => {
     if (!authorizeInternalRequest(req, res, 'InternalOperator')) return;
 

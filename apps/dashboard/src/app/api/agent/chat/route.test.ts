@@ -12,13 +12,15 @@ vi.mock("@clerk/nextjs/server", () => ({
   clerkClient: vi.fn(),
 }));
 
-const { mockPostGatewayOperatorTurn, mockRecordAgentRouteFailure } = vi.hoisted(() => ({
-  mockPostGatewayOperatorTurn: vi.fn(),
+const { mockPostGatewayAgentRequest, mockListGatewayAgentRequests, mockRecordAgentRouteFailure } = vi.hoisted(() => ({
+  mockPostGatewayAgentRequest: vi.fn(),
+  mockListGatewayAgentRequests: vi.fn(),
   mockRecordAgentRouteFailure: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("@/lib/agent/api/gateway-operator-turn", () => ({
-  postGatewayOperatorTurn: mockPostGatewayOperatorTurn,
+  postGatewayAgentRequest: mockPostGatewayAgentRequest,
+  listGatewayAgentRequests: mockListGatewayAgentRequests,
 }));
 
 vi.mock("@/lib/server/agent-failure-alerts", () => ({
@@ -37,10 +39,11 @@ beforeEach(async () => {
     userId: "usr_test",
     orgId: org.clerkOrgId,
   } as ReturnType<typeof auth> extends Promise<infer T> ? T : never);
-  mockPostGatewayOperatorTurn.mockResolvedValue({
-    status: 200,
-    payload: { threadId: "op_thread", summary: "Done", actionsPerformed: [] },
+  mockPostGatewayAgentRequest.mockResolvedValue({
+    status: 202,
+    payload: { requestId: "req_1", taskId: "task_1", status: "queued", statusUrl: "/api/agent/requests/req_1" },
   });
+  mockListGatewayAgentRequests.mockResolvedValue({ status: 200, payload: { requests: [] } });
 });
 
 afterEach(async () => {
@@ -51,37 +54,33 @@ afterEach(async () => {
 describe("POST /api/agent/chat", () => {
   // No session to create or resolve: the gateway owns the thread, so the route
   // hands over identity and instruction and nothing else.
-  it("runs the turn on the gateway operator path", async () => {
-    const res = await POST(jsonReq({ instruction: "Help me" }));
-    const body = await res.json() as { summary: string; awaitingApproval: boolean };
+  it("accepts durable work on the gateway operator path", async () => {
+    const res = await POST(jsonReq({ clientRequestId: "11111111-1111-4111-8111-111111111111", instruction: "Help me" }));
+    const body = await res.json() as { requestId: string; status: string };
 
-    expect(res.status).toBe(200);
-    expect(body).toEqual({ summary: "Done", actionsPerformed: [], awaitingApproval: false });
-    expect(mockPostGatewayOperatorTurn).toHaveBeenCalledWith({
+    expect(res.status).toBe(202);
+    expect(body).toMatchObject({ requestId: "req_1", status: "queued" });
+    expect(mockPostGatewayAgentRequest).toHaveBeenCalledWith({
       organizationId: org.id,
       clerkUserId: "usr_test",
+      clientRequestId: "11111111-1111-4111-8111-111111111111",
       instruction: "Help me",
     });
   });
 
-  it("passes the gateway's pending-plan signal through as awaitingApproval", async () => {
-    mockPostGatewayOperatorTurn.mockResolvedValueOnce({
-      status: 200,
-      payload: { summary: "Here's the draft", actionsPerformed: [], awaitingApproval: true },
-    });
-
+  it("requires the client request identity", async () => {
     const res = await POST(jsonReq({ instruction: "Refund 1234" }));
-
-    expect(await res.json()).toMatchObject({ awaitingApproval: true });
+    expect(res.status).toBe(400);
+    expect(mockPostGatewayAgentRequest).not.toHaveBeenCalled();
   });
 
   it("passes the gateway's spend-cap response through unchanged", async () => {
-    mockPostGatewayOperatorTurn.mockResolvedValueOnce({
+    mockPostGatewayAgentRequest.mockResolvedValueOnce({
       status: 429,
       payload: { error: "AI spend cap reached for today.", code: "spend_cap_reached", currentUsd: 25, capUsd: 25 },
     });
 
-    const res = await POST(jsonReq({ instruction: "Summarize today's tickets" }));
+    const res = await POST(jsonReq({ clientRequestId: "11111111-1111-4111-8111-111111111111", instruction: "Summarize today's tickets" }));
     const body = await res.json() as { code?: string; currentUsd?: number; capUsd?: number };
 
     expect(res.status).toBe(429);
@@ -90,12 +89,12 @@ describe("POST /api/agent/chat", () => {
   });
 
   it("records a route failure when the gateway turn fails", async () => {
-    mockPostGatewayOperatorTurn.mockResolvedValueOnce({
+    mockPostGatewayAgentRequest.mockResolvedValueOnce({
       status: 500,
       payload: { error: "Internal Server Error" },
     });
 
-    const res = await POST(jsonReq({ instruction: "Draft a response" }));
+    const res = await POST(jsonReq({ clientRequestId: "11111111-1111-4111-8111-111111111111", instruction: "Draft a response" }));
 
     expect(res.status).toBe(500);
     expect(mockRecordAgentRouteFailure).toHaveBeenCalledWith(expect.objectContaining({
@@ -163,6 +162,7 @@ describe("GET /api/agent/chat", () => {
         { role: "user", text: "refund 1234" },
         { role: "agent", text: "Refunded $12 to Sarah." },
       ],
+      requests: [],
     });
   });
 
@@ -170,7 +170,7 @@ describe("GET /api/agent/chat", () => {
     const res = await GET(new Request("http://localhost:3000/api/agent/chat"));
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ messages: [] });
+    expect(await res.json()).toEqual({ messages: [], requests: [] });
   });
 });
 

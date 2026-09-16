@@ -57,6 +57,11 @@ export interface ExecuteAgentTurnParams {
   // audit-note rows can be correlated directly during recovery. Other callers
   // keep the generated per-turn identity.
   turnId?: string;
+  /** Durable request/task linkage for resumable runtimes. */
+  agentRequestId?: string;
+  agentTaskId?: string;
+  /** Host-owned durable claim guard, checked before every tool execution. */
+  assertExecutionAllowed?: () => void;
   failureRoute?: string;
   orgSettings?: Partial<OrgSettings> | null;
   approvedToolCalls?: RawToolCall[];
@@ -102,6 +107,8 @@ export async function executeAgentTurn(
         threadId: params.threadId,
         senderType: "customer",
         contentText: params.instruction,
+        ...(params.agentRequestId ? { agentRequestId: params.agentRequestId } : {}),
+        ...(params.agentTaskId ? { agentTaskId: params.agentTaskId } : {}),
       });
     }
 
@@ -116,6 +123,7 @@ export async function executeAgentTurn(
     const priorGuard = ctx.assertExecutionAllowed;
     ctx.assertExecutionAllowed = () => {
       priorGuard?.();
+      params.assertExecutionAllowed?.();
       if (requiresFailClosedLock(params) && lock.isLost?.()) {
         throw new ConflictError("Agent lock ownership was lost. Execution stopped; review completed actions before retrying.");
       }
@@ -142,6 +150,8 @@ export async function executeAgentTurn(
         threadId: params.threadId,
         senderType: "agent",
         contentText: result.summary,
+        ...(params.agentRequestId ? { agentRequestId: params.agentRequestId } : {}),
+        ...(params.agentTaskId ? { agentTaskId: params.agentTaskId } : {}),
       });
     }
 
@@ -149,6 +159,8 @@ export async function executeAgentTurn(
       await createMessage({
         threadId: params.threadId,
         senderType: "note",
+        ...(params.agentRequestId ? { agentRequestId: params.agentRequestId } : {}),
+        ...(params.agentTaskId ? { agentTaskId: params.agentTaskId } : {}),
         contentText: serializeAgentTurn({
           id: turnId,
           instruction: params.instruction,

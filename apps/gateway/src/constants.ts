@@ -36,6 +36,8 @@ export const QUEUE = {
   // OperatorEvent + enqueues here before acknowledging; the worker claims and
   // runs the turn asynchronously.
   OPERATOR_EVENT: 'operator-event',
+  AGENT_TASK: 'agent-task',
+  AGENT_TASK_SWEEP: 'agent-task-sweep',
   // Recovery sweep for stuck operator events (P4-03): reconciles a claim whose
   // worker died mid-turn to `unknown` and re-sends committed-but-undelivered
   // confirmations. Backstop, not the primary path.
@@ -79,6 +81,9 @@ export const JOB = {
   OUTBOUND_SEND_SWEEP: 'sweep-outbound-email',
   OUTBOUND_SEND_SWEEP_ID: 'outbound-email-sweep-5min',
   OPERATOR_EVENT: 'process-operator-event',
+  AGENT_TASK: 'process-agent-task',
+  AGENT_TASK_SWEEP: 'sweep-agent-tasks',
+  AGENT_TASK_SWEEP_ID: 'agent-task-sweep-1min',
   OPERATOR_EVENT_SWEEP: 'sweep-operator-events',
   OPERATOR_EVENT_SWEEP_ID: 'operator-event-sweep-15min',
   UNKNOWN_OUTCOME_SWEEP: 'sweep-unknown-outcomes',
@@ -94,6 +99,11 @@ export const PROCESSING_QUEUE_DEFAULTS = {
   backoff: { type: 'exponential', delay: 5000 },
   removeOnComplete: { age: 60 * 60 * 24, count: 1000 },
   removeOnFail: { age: 60 * 60 * 24 * 7, count: 5000 },
+} as const;
+
+export const AGENT_TASK_QUEUE_DEFAULTS = {
+  ...PROCESSING_QUEUE_DEFAULTS,
+  attempts: 1,
 } as const;
 
 // Disconnect cleanup is durable and idempotent, so provider outages can be

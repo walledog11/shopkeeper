@@ -100,6 +100,23 @@ describe('POST /webhooks/shopify — mandatory compliance topics', () => {
       shopifyCustomerId: '191168',
     });
     const message = await createTestMessage(thread.id, 'My address is private.');
+    const durableTask = await db.agentTask.create({ data: {
+      organizationId: org.id, threadId: thread.id, initiatingActorKind: 'customer',
+      initiatingActorKey: customer.id, objective: 'Private request', runtimeVersion: 1,
+      checkpointVersion: 1, checkpoint: { sourceMessageIds: [message.id] },
+      modelCallLimit: 10, activeTimeMsLimit: 60000, spendNanoUsdLimit: 1000000n,
+      status: 'reconciling',
+    } });
+    const durableRequest = await db.agentRequest.create({ data: {
+      organizationId: org.id, threadId: thread.id, actorKind: 'customer', actorKey: customer.id,
+      channel: 'email', dedupeKey: randomUUID(), payloadVersion: 1, payloadHash: 'a'.repeat(64),
+      payload: {}, normalizedInstruction: 'Private request', sourceMessageId: message.id,
+      state: 'attached', taskId: durableTask.id, attachedAt: new Date(),
+    } });
+    const durableProposal = await db.agentProposal.create({ data: {
+      organizationId: org.id, taskId: durableTask.id, taskRevision: 0, schemaVersion: 1,
+      canonicalActions: [], dependencies: [], sourceRequestIds: [durableRequest.id], proposalHash: 'b'.repeat(64),
+    } });
     await db.message.update({
       where: { id: message.id },
       data: { attachments: ['blob:attachments/test/private.png'] },
@@ -169,6 +186,9 @@ describe('POST /webhooks/shopify — mandatory compliance topics', () => {
     expect(await db.thread.findUnique({ where: { id: thread.id } })).toBeNull();
     expect(await db.message.findUnique({ where: { id: message.id } })).toBeNull();
     expect(await db.customer.findUnique({ where: { id: other.id } })).not.toBeNull();
+    expect(await db.agentRequest.findUnique({ where: { id: durableRequest.id } })).toBeNull();
+    expect(await db.agentTask.findUnique({ where: { id: durableTask.id } })).toBeNull();
+    expect(await db.agentProposal.findUnique({ where: { id: durableProposal.id } })).toBeNull();
     expect(await db.shopifyPrivacyRequest.count({ where: { organizationId: org.id } })).toBe(0);
     expect(await db.requestEpisodeOutcome.findUnique({ where: { id: outcome.id } })).toBeNull();
     expect(await db.refundSpendReservation.findUnique({

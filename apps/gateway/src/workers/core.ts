@@ -14,10 +14,11 @@ import {
 import { createInboundWorker } from './inbound.js';
 import { createIntegrationDisconnectWorker } from './integration-disconnect.js';
 import { createOperatorEventWorker } from './operator-event.js';
+import { createAgentTaskWorker } from './agent-task.js';
 import { createOrderReviewWorker } from './order-review.js';
 import { createOutboundEmailWorker } from './outbound-email.js';
 import type { GatewayWorkerResources, SharedGatewayWorkerOptions } from './resources.js';
-import type { OperatorEventJobData, OrderReviewJobData, OutboundEmailJobData } from '../types.js';
+import type { AgentTaskJobData, OperatorEventJobData, OrderReviewJobData, OutboundEmailJobData } from '../types.js';
 
 export interface CoreWorkerResources extends GatewayWorkerResources {
   messageWorker: Worker<InboundJobData>;
@@ -27,6 +28,7 @@ export interface CoreWorkerResources extends GatewayWorkerResources {
   outboundEmailWorker: Worker<OutboundEmailJobData>;
   gmailSyncWorker: Worker<GmailSyncJobData>;
   operatorEventWorker: Worker<OperatorEventJobData>;
+  agentTaskWorker: Worker<AgentTaskJobData>;
   integrationDisconnectWorker: Worker<IntegrationDisconnectJobData>;
   inboundQueue: Queue<InboundJobData>;
 }
@@ -53,6 +55,7 @@ export function createCoreWorkerResources(
     workerOptions,
   });
   const operatorEventWorker = createOperatorEventWorker({ workerOptions });
+  const agentTaskWorker = createAgentTaskWorker({ workerOptions });
   const integrationDisconnectWorker = createIntegrationDisconnectWorker({ workerOptions });
 
   return {
@@ -63,6 +66,7 @@ export function createCoreWorkerResources(
     outboundEmailWorker,
     gmailSyncWorker,
     operatorEventWorker,
+    agentTaskWorker,
     integrationDisconnectWorker,
     inboundQueue,
     workers: [
@@ -72,6 +76,7 @@ export function createCoreWorkerResources(
       outboundEmailWorker,
       gmailSyncWorker,
       operatorEventWorker,
+      agentTaskWorker,
       integrationDisconnectWorker,
     ],
     queues: [aiSummaryQueue, inboundQueue],

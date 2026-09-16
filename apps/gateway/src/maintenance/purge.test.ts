@@ -8,6 +8,7 @@ import {
   cleanupTestData,
 } from '@shopkeeper/db/test-helpers';
 import { purgeFilteredThreads, FILTERED_PURGE_AFTER_DAYS } from './purge.js';
+import { randomUUID } from 'node:crypto';
 
 describe('purgeFilteredThreads', () => {
   const PURGE_NOW = new Date('2026-04-29T12:00:00Z');
@@ -118,5 +119,64 @@ describe('purgeFilteredThreads', () => {
 
     expect(await db.thread.findUnique({ where: { id: genuine.id } })).not.toBeNull();
     expect(await db.thread.findUnique({ where: { id: questionable.id } })).not.toBeNull();
+  });
+
+  it('preserves unfinished work and erases terminal request/proposal prose with the thread', async () => {
+    const thread = await setupThread();
+    const task = await db.agentTask.create({ data: {
+      organizationId: orgId!, threadId: thread.id, initiatingActorKind: 'system',
+      initiatingActorKey: 'retention-test', objective: 'Private objective',
+      runtimeVersion: 1, checkpointVersion: 1, checkpoint: {},
+      modelCallLimit: 10, activeTimeMsLimit: 60000, spendNanoUsdLimit: 1000000n,
+    } });
+    const request = await db.agentRequest.create({ data: {
+      organizationId: orgId!, threadId: thread.id, actorKind: 'system', actorKey: 'retention-test',
+      channel: 'email', dedupeKey: randomUUID(), payloadVersion: 1, payloadHash: 'a'.repeat(64),
+      payload: {}, normalizedInstruction: 'Private instruction',
+      state: 'attached', taskId: task.id, attachedAt: new Date(),
+    } });
+    const proposal = await db.agentProposal.create({ data: {
+      organizationId: orgId!, taskId: task.id, taskRevision: 0, schemaVersion: 1,
+      canonicalActions: [], dependencies: [], sourceRequestIds: [request.id], proposalHash: 'b'.repeat(64),
+    } });
+    const execution = await db.planExecution.create({ data: {
+      organizationId: orgId!, planId: proposal.id, proposalId: proposal.id,
+      taskId: task.id, threadId: thread.id, planHash: 'b'.repeat(64),
+      instructionHash: 'c'.repeat(64), status: 'committed',
+      claimToken: randomUUID(), claimedAt: new Date(), completedAt: new Date(),
+    } });
+    const action = await db.agentAction.create({ data: {
+      organizationId: orgId!, threadId: thread.id, taskId: task.id,
+      proposalId: proposal.id, executionId: execution.id, turnId: randomUUID(),
+      tool: 'add_internal_note', category: 'thread', input: {},
+      mode: 'auto_executed', status: 'success',
+    } });
+    expect(await purgeFilteredThreads(PURGE_NOW)).toBe(0);
+    await db.agentTask.update({ where: { id: task.id }, data: { status: 'completed' } });
+    expect(await purgeFilteredThreads(PURGE_NOW)).toBe(1);
+    expect(await db.agentTask.findUnique({ where: { id: task.id } })).toBeNull();
+    expect(await db.agentRequest.findUnique({ where: { id: request.id } })).toBeNull();
+    expect(await db.agentProposal.findUnique({ where: { id: proposal.id } })).toBeNull();
+    expect(await db.agentAction.findUnique({ where: { id: action.id } })).toMatchObject({
+      status: 'success', taskId: null, proposalId: null,
+    });
+  });
+
+  it('keeps a terminal task with an uncertain provider write', async () => {
+    const thread = await setupThread();
+    const task = await db.agentTask.create({ data: {
+      organizationId: orgId!, threadId: thread.id, initiatingActorKind: 'system',
+      initiatingActorKey: 'retention-test', objective: 'Refund',
+      runtimeVersion: 1, checkpointVersion: 1, checkpoint: {}, status: 'failed',
+      modelCallLimit: 10, activeTimeMsLimit: 60000, spendNanoUsdLimit: 1000000n,
+    } });
+    await db.agentAction.create({ data: {
+      organizationId: orgId!, threadId: thread.id, taskId: task.id, turnId: randomUUID(),
+      tool: 'create_refund', category: 'order', input: {}, mode: 'auto_executed',
+      status: 'unknown', dispatchState: 'unknown', executedAt: new Date(), durationMs: 1,
+      operationId: randomUUID(), actionIndex: 0,
+    } });
+    expect(await purgeFilteredThreads(PURGE_NOW)).toBe(0);
+    expect(await db.agentTask.findUnique({ where: { id: task.id } })).not.toBeNull();
   });
 });

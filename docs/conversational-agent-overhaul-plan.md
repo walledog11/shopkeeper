@@ -3,7 +3,11 @@
 Status: in progress. Packages 0 and 1 are complete. Package 1 now covers the
 shared receipt boundary, durable action dispatch/recovery lifecycle, all retained
 Shopify writes, retained internal-thread writes, and durable communication
-outcomes. Packages 2–6 have not started.
+outcomes. Package 2 now has additive persistence, ownership helpers, durable
+dashboard submission/status retrieval, a claimed gateway worker, queue-gap and
+stale-claim recovery, and refresh reconnection. Exact proposal continuation,
+cancellation ordering, and crash-safe cumulative budget enforcement remain.
+Packages 3–6 have not started.
 Created 2026-09-11; last updated 2026-09-15.
 
 Implementation detail expanded 2026-09-11 against the current repository. Names marked **proposed** describe work to implement, not APIs or tables that already exist. This document authorizes no production operation by itself.
@@ -827,10 +831,11 @@ replies/emails persist a stable logical response before provider dispatch and
 settle it with a durable delivery outcome. The full PR gate passed with the
 counts recorded above.
 
-Current next step: start Package 2 by landing the additive request/task/proposal
-schema and ownership tests before switching any dashboard route. Keep the
-legacy runtime route available until durable submission, status retrieval, and
-refresh recovery are verified.
+Current next step: finish Package 2 by binding dashboard approval, answers,
+cancellation, and revision changes to exact durable task/proposal identities.
+Make budget accounting survive interruption within an attempt before enabling a
+continuation to start more model work. Keep the synchronous legacy route for
+unmigrated callers until those continuation paths are verified.
 
 Implementation order:
 
@@ -862,6 +867,103 @@ Primary locations: [tool results](../packages/agent/src/tools/result.ts), [regis
 
 ### 2. Make dashboard requests durable and resumable
 
+Persistence milestone (2026-09-15):
+
+- [x] Add request/task/proposal tables and nullable links from actions,
+  executions, messages, and operator events. Preserve legacy taskless rows.
+- [x] Add database tenant/parent constraints, immutable request/proposal
+  snapshots, exact active-proposal/task binding, approval-hash checks, and
+  monotonic runtime/budget fields.
+- [x] Add authenticated-member request acceptance/retrieval and serialized
+  initial task attachment. Concurrent retries create one request/task;
+  changed normalized payload under the same key conflicts. Request hashes
+  are server-generated, and membership/conversation ownership is rechecked.
+- [x] Add revision/token-bound initial task claims and lease renewal. Expired
+  running tasks are deliberately not reclaimed by this helper; dispatch and
+  interrupted legacy-attempt recovery must be implemented before requeueing.
+- [x] Integrate terminal-work retention and explicit customer erasure. Normal
+  retention preserves pending requests, nonterminal tasks, uncertain writes,
+  and pending delivery; organization deletion still cascades.
+
+Files changed: `packages/db/prisma/schema.prisma` and migration
+`20260915160000_add_durable_agent_requests/migration.sql`;
+`packages/agent/src/task-ledger.ts`, its integration suite, and the agent
+package export; gateway `maintenance/agent-work-retention.ts`,
+`maintenance/purge.ts`, `maintenance/retention.ts`,
+`routes/shopify-compliance.ts`, and the purge/compliance integration suites.
+
+The Package 0 contract remains the schema source of truth. Required
+thread/request-to-task foreign keys use SQL `NO ACTION` so deletion of an entire
+organization can complete its cascades while ordinary thread deletion remains
+blocked until durable work is explicitly handled; the integration suite verifies
+both cases. This is the concrete deletion-order refinement to its `Restrict`
+wording.
+
+Verification: migration applied successfully to local PostgreSQL; all 121 agent
+integration tests passed, including ten new persistence tests. Fourteen gateway
+retention/compliance tests, eighteen legacy internal-operator tests, and eleven
+dashboard chat/workspace-deletion tests passed. All 1,143 agent and 455 gateway
+unit tests passed (gateway required local HTTP-listener permission).
+Repository-wide typecheck,
+affected-package lint, and structure/document checks passed. No production
+migration or runtime cutover was performed.
+
+At this persistence-only checkpoint, remaining work was dashboard client
+IDs/202/status/recent lookup, gateway scheduling and sweeps, cumulative runtime
+budget accounting, cancellation/revision dispatch
+ordering, UI refresh recovery, and executable proposal normalization/approval
+integration. The initial checkpoint is a bounded, server-created request
+reference; arbitrary checkpoint writes and customer/system request acceptance
+are not exposed by these helpers. This milestone does not complete Package 2.
+
+Rollback for this checkpoint was to keep the existing synchronous
+dashboard/operator callers. New helpers had no active route callers. Leave the
+additive schema in place; never drop
+durable work or reinterpret new tasks as legacy attempts during rollback.
+
+Durable dashboard milestone (2026-09-15):
+
+- [x] Generate a stable UUID per client submission and reuse it after a lost
+  response. Accept and attach the request/task atomically; changed content under
+  one identity conflicts without changing the original work.
+- [x] Return HTTP 202 after persistence, publish only durable IDs/revision to a
+  dedicated queue, claim one worker, and persist the response independently of
+  the POST connection. The bridge remains pinned to runtime version 1.
+- [x] Add member-scoped single-request and recent-request retrieval. The response
+  exposes task state separately from durable dashboard response availability;
+  the client polls after POST and restores queued/running work after refresh.
+- [x] Add a one-minute recovery sweep for persisted queued work missing a job.
+  An expired running claim becomes `reconciling` and is never automatically
+  replayed. BullMQ also performs no automatic task-attempt retry.
+- [x] Link request/task IDs to transcript messages, link turn actions to the
+  claimed task, and roll completed turn usage into monotonic task counters. A
+  later attempt cannot start after a persisted budget is exhausted.
+
+Files changed: agent `task-ledger.ts` and `turn.ts`; gateway task ingestion,
+worker, recovery sweep, internal operator routes, queue registration, and the
+operator runtime adapter; dashboard gateway adapter, chat/status routes, chat
+session state, validation, and refresh recovery. Checkpoint review also made the
+durable request identity take precedence over a transport turn identity and
+prevented a stale persisted response from being presented as success while its
+task requires reconciliation.
+
+Verification: all 14 task-ledger integration tests passed; the focused gateway
+route suite passed 21 tests; the dashboard route suite passed 6 tests; the new
+gateway queue/worker/sweep unit suites passed 8 tests; the dashboard session
+suite passed 8 tests. The full `npm run verify:pr` gate passed: static checks,
+lint, typechecks, 1,143 agent unit tests, 463 gateway unit tests, 789 dashboard
+unit tests, 79 Node integration tests, 12 browser tests, all coverage thresholds,
+and all seven production builds. Coverage runs included 1,268 agent tests, 1,381
+gateway tests (one skipped), and 1,457 dashboard tests (two skipped). No live
+model/provider operation was run.
+
+Remaining work: exact task/proposal approval and answer continuation,
+cancellation/revision ordering, and persistence of partial usage when a process
+dies before the existing completed-turn usage row is written. The synchronous
+`/operator/turn` endpoint remains available for unmigrated callers; dashboard
+chat uses the durable route. Rollback routes dashboard chat back to that endpoint
+while leaving additive work rows and the version-1 worker readable.
+
 Implementation order:
 
 1. Land additive request/task/proposal schema and ownership tests before switching routes. Add database-backed helpers alongside the existing agent execution/ledger modules; gateway code owns queue scheduling, not the task's authorization rules.
@@ -873,10 +975,10 @@ Implementation order:
 
 Required tests: two concurrent submissions with one key create one request; altered body under the same key conflicts; another tenant/member cannot read or approve it; crash between database commit and enqueue recovers; queue redelivery has one winner; provider takes longer than the old 55-second HTTP timeout and the eventual result is retrievable; refresh after a lost POST response reconnects without another provider call.
 
-- [ ] Give each submitted request a stable client-generated identity, scoped to the authenticated organization and member. Reuse it on retries; an intentional new request gets a new identity.
-- [ ] Persist and claim requests before running them. Return a request identity promptly and expose progress through existing event/polling facilities.
-- [ ] Restore pending and completed work after refresh or reconnect. Display execution state separately from response delivery state.
-- [ ] Reuse messaging ingestion and claim patterns where appropriate; keep one active executor for a task.
+- [x] Give each submitted request a stable client-generated identity, scoped to the authenticated organization and member. Reuse it on retries; an intentional new request gets a new identity.
+- [x] Persist and claim requests before running them. Return a request identity promptly and expose progress through existing event/polling facilities.
+- [x] Restore pending and completed work after refresh or reconnect. Display execution state separately from response delivery state.
+- [x] Reuse messaging ingestion and claim patterns where appropriate; keep one active executor for a task.
 - [ ] Carry one time/call/usage budget across attempts. Propagate cancellation and deadlines to new work without treating an interrupted write as a definite failure.
 
 Acceptance: a slow provider call, browser disconnect, duplicate submission, and worker restart do not cause a lost task or blind replay. A task can complete visibly after the original HTTP request ends.

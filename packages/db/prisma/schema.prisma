@@ -182,6 +182,38 @@ enum MerchantPreferenceStatus {
   rejected
 }
 
+enum AgentActorKind {
+  member
+  customer
+  system
+}
+enum AgentRequestState {
+  accepted
+  attached
+}
+enum AgentTaskStatus {
+  queued
+  running
+  waiting_input
+  waiting_approval
+  reconciling
+  completed
+  failed
+  cancelled
+}
+enum AgentProposalStatus {
+  ready
+  waiting_approval
+  approved
+  rejected
+  superseded
+  completed
+}
+enum AgentCommunicationMode {
+  exact_draft
+  intent
+}
+
 // --- MODELS ---
 
 // One Organization = one Shopify business using the app.
@@ -220,6 +252,9 @@ model Organization {
   kbArticles              KbArticle[]
   kbCitations             KbCitation[]
   agentActions            AgentAction[]
+  agentRequests AgentRequest[]
+  agentTasks AgentTask[]
+  agentProposals AgentProposal[]
   voiceEdits              VoiceEdit[]
   llmDailySpend           LlmDailySpend[]
   refundDailySpend        RefundDailySpend[]
@@ -550,6 +585,8 @@ model Thread {
   kbCitations      KbCitation[]
   agentTurnUsage          AgentTurnUsage[]
   agentActions     AgentAction[]
+  agentRequests AgentRequest[]
+  agentTasks AgentTask[]
   shadowDecisions  AutonomyShadowDecision[]
   planExecutions   PlanExecution[]
   returnWatches    ReturnWatch[]
@@ -606,6 +643,14 @@ model Message {
   sendError         String?    @map("send_error") @db.Text
   sentAt            DateTime   @default(now()) @map("sent_at") @db.Timestamptz
   deletedAt         DateTime?  @map("deleted_at") @db.Timestamptz
+
+  agentRequestId String? @map("agent_request_id") @db.Uuid
+  agentTaskId String? @map("agent_task_id") @db.Uuid
+  agentRequest AgentRequest? @relation("RequestMessages", fields: [agentRequestId], references: [id], onDelete: SetNull)
+  agentTask AgentTask? @relation(fields: [agentTaskId], references: [id], onDelete: SetNull)
+  sourceAgentRequests AgentRequest[] @relation("RequestSourceMessage")
+  operatorEventReplies OperatorEvent[] @relation("OperatorReplyMessage")
+  @@index([organizationId, agentTaskId, sentAt])
 
   thread               Thread          @relation(fields: [threadId], references: [id], onDelete: Cascade)
   organization         Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -676,6 +721,15 @@ model OperatorEvent {
   lastError         String?             @map("last_error") @db.Text
   createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz
   updatedAt         DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  agentRequestId String? @map("agent_request_id") @db.Uuid
+  replyMessageId String? @map("reply_message_id") @db.Uuid
+  agentRequest AgentRequest? @relation("OperatorRequest", fields: [agentRequestId], references: [id], onDelete: SetNull)
+  replyMessage Message? @relation("OperatorReplyMessage", fields: [replyMessageId], references: [id], onDelete: SetNull)
+  sourceAgentRequests AgentRequest[] @relation("RequestSourceEvent")
+  @@unique([organizationId, id], map: "operator_events_organization_id_id_key")
+  @@index([agentRequestId])
+  @@index([replyMessageId])
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -847,6 +901,13 @@ model AgentAction {
   executedAt       DateTime? @map("executed_at") @db.Timestamptz
   durationMs       Int?      @map("duration_ms")
 
+  taskId String? @map("task_id") @db.Uuid
+  proposalId String? @map("proposal_id") @db.Uuid
+  task AgentTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  proposal AgentProposal? @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+  @@index([taskId, proposalId])
+
+
   organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   thread       Thread?        @relation(fields: [threadId], references: [id], onDelete: SetNull)
   execution    PlanExecution? @relation(fields: [executionId], references: [id], onDelete: SetNull)
@@ -918,6 +979,13 @@ model PlanExecution {
   lastObservedAt   DateTime?           @map("last_observed_at") @db.Timestamptz
   createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz
   updatedAt        DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  taskId String? @map("task_id") @db.Uuid
+  proposalId String? @map("proposal_id") @db.Uuid
+  task AgentTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  proposal AgentProposal? @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+  @@index([taskId, proposalId])
+  @@unique([organizationId, proposalId])
 
   organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   thread        Thread?       @relation(fields: [threadId], references: [id], onDelete: SetNull)
@@ -1285,4 +1353,122 @@ model AgentTurnUsage {
   @@index([organizationId, outcome, createdAt(sort: Desc)])
   @@index([threadId])
   @@map("agent_turn_usage")
+}
+
+
+// Package 2 identities. SQL supplements simple Prisma relations with tenant and
+// exact-parent foreign keys, immutable snapshots, and monotonic budget checks.
+model AgentRequest {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  actorKind AgentActorKind @map("actor_kind")
+  actorKey String @map("actor_key") @db.VarChar(255)
+  channel ChannelType
+  threadId String @map("thread_id") @db.Uuid
+  dedupeKey String @map("dedupe_key") @db.VarChar(255)
+  payloadVersion Int @map("payload_version")
+  payloadHash String @map("payload_hash") @db.VarChar(64)
+  payload Json @db.JsonB
+  normalizedInstruction String @map("normalized_instruction") @db.Text
+  sourceMessageId String? @map("source_message_id") @db.Uuid
+  sourceOperatorEventId String? @map("source_operator_event_id") @db.Uuid
+  state AgentRequestState @default(accepted)
+  taskId String? @map("task_id") @db.Uuid
+  acceptedAt DateTime @default(now()) @map("accepted_at") @db.Timestamptz
+  attachedAt DateTime? @map("attached_at") @db.Timestamptz
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  thread Thread @relation(fields: [threadId], references: [id], onDelete: Restrict)
+  task AgentTask? @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  sourceMessage Message? @relation("RequestSourceMessage", fields: [sourceMessageId], references: [id], onDelete: SetNull)
+  sourceOperatorEvent OperatorEvent? @relation("RequestSourceEvent", fields: [sourceOperatorEventId], references: [id], onDelete: SetNull)
+  messages Message[] @relation("RequestMessages")
+  operatorEvents OperatorEvent[] @relation("OperatorRequest")
+  @@unique([organizationId, actorKind, actorKey, channel, dedupeKey], map: "agent_requests_dedupe_key")
+  @@unique([organizationId, id], map: "agent_requests_organization_id_id_key")
+  @@index([state, acceptedAt])
+  @@index([organizationId, threadId, acceptedAt(sort: Desc)])
+  @@index([organizationId, taskId])
+  @@index([sourceMessageId])
+  @@index([sourceOperatorEventId])
+  @@map("agent_requests")
+}
+model AgentTask {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  threadId String @map("thread_id") @db.Uuid
+  initiatingActorKind AgentActorKind @map("initiating_actor_kind")
+  initiatingActorKey String @map("initiating_actor_key") @db.VarChar(255)
+  objective String @db.VarChar(4000)
+  runtimeVersion Int @map("runtime_version")
+  status AgentTaskStatus @default(queued)
+  revision Int @default(0)
+  activeProposalId String? @unique @map("active_proposal_id") @db.Uuid
+  pendingQuestionId String? @map("pending_question_id") @db.Uuid
+  pendingQuestion String? @map("pending_question") @db.VarChar(2000)
+  pendingAnswererKind AgentActorKind? @map("pending_answerer_kind")
+  pendingAnswererKey String? @map("pending_answerer_key") @db.VarChar(255)
+  checkpointVersion Int @map("checkpoint_version")
+  checkpoint Json @db.JsonB
+  claimToken String? @map("claim_token") @db.Uuid
+  leaseExpiresAt DateTime? @map("lease_expires_at") @db.Timestamptz
+  modelCallsUsed Int @default(0) @map("model_calls_used")
+  inputTokensUsed Int @default(0) @map("input_tokens_used")
+  outputTokensUsed Int @default(0) @map("output_tokens_used")
+  activeTimeMsUsed Int @default(0) @map("active_time_ms_used")
+  spentNanoUsd BigInt @default(0) @map("spent_nano_usd")
+  modelCallLimit Int @map("model_call_limit")
+  activeTimeMsLimit Int @map("active_time_ms_limit")
+  spendNanoUsdLimit BigInt @map("spend_nano_usd_limit")
+  lastProgressAt DateTime @default(now()) @map("last_progress_at") @db.Timestamptz
+  cancelledAt DateTime? @map("cancelled_at") @db.Timestamptz
+  completedAt DateTime? @map("completed_at") @db.Timestamptz
+  failureCode String? @map("failure_code") @db.VarChar(64)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  thread Thread @relation(fields: [threadId], references: [id], onDelete: Restrict)
+  requests AgentRequest[]
+  proposals AgentProposal[] @relation("TaskProposals")
+  activeProposal AgentProposal? @relation("ActiveProposal", fields: [activeProposalId], references: [id], onDelete: SetNull)
+  actions AgentAction[]
+  executions PlanExecution[]
+  messages Message[]
+  @@unique([organizationId, id], map: "agent_tasks_organization_id_id_key")
+  @@index([status, leaseExpiresAt])
+  @@index([organizationId, threadId, status, updatedAt(sort: Desc)])
+  @@index([organizationId, lastProgressAt])
+  @@map("agent_tasks")
+}
+model AgentProposal {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  taskId String @map("task_id") @db.Uuid
+  taskRevision Int @map("task_revision")
+  schemaVersion Int @map("schema_version")
+  status AgentProposalStatus @default(ready)
+  canonicalActions Json @map("canonical_actions") @db.JsonB
+  dependencies Json @db.JsonB
+  proposalHash String @map("proposal_hash") @db.VarChar(64)
+  sourceRequestIds Json @map("source_request_ids") @db.JsonB
+  communicationMode AgentCommunicationMode? @map("communication_mode")
+  communicationDestination Json? @map("communication_destination") @db.JsonB
+  approvedDraft String? @map("approved_draft") @db.Text
+  allowedResultBindings Json? @map("allowed_result_bindings") @db.JsonB
+  approverKey String? @map("approver_key") @db.VarChar(255)
+  approvedAt DateTime? @map("approved_at") @db.Timestamptz
+  approvedHash String? @map("approved_hash") @db.VarChar(64)
+  decidedAt DateTime? @map("decided_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  task AgentTask @relation("TaskProposals", fields: [taskId], references: [id], onDelete: Cascade)
+  activeForTask AgentTask? @relation("ActiveProposal")
+  actions AgentAction[]
+  executions PlanExecution[]
+  @@unique([organizationId, id], map: "agent_proposals_organization_id_id_key")
+  @@unique([organizationId, taskId, id], map: "agent_proposals_organization_task_id_key")
+  @@unique([organizationId, taskId, taskRevision, proposalHash], map: "agent_proposals_snapshot_key")
+  @@index([organizationId, taskId, taskRevision(sort: Desc)])
+  @@index([status, createdAt])
+  @@map("agent_proposals")
 }

@@ -145,3 +145,9 @@ export interface OperatorEventJobData {
   organizationId: string;
   traceId?: string;
 }
+
+export interface AgentTaskJobData {
+  taskId: string;
+  organizationId: string;
+  revision: number;
+}

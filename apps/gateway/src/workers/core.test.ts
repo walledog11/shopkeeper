@@ -156,6 +156,7 @@ describe('createCoreWorkerResources', () => {
       QUEUE.OUTBOUND_EMAIL,
       QUEUE.GMAIL_SYNC,
       QUEUE.OPERATOR_EVENT,
+      QUEUE.AGENT_TASK,
       QUEUE.INTEGRATION_DISCONNECT,
     ]);
     expect(workerInstances.every((worker) => {
