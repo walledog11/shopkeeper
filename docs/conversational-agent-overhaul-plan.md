@@ -8,8 +8,9 @@ dashboard submission/status retrieval, a claimed gateway worker, queue-gap and
 stale-claim recovery, refresh reconnection, a crash-safe cumulative budget,
 merchant cancellation ordered at the task row, durable writers for the proposal
 or question a suspended task waits on, and one shared boundary that authorizes
-an approved proposal for every surface. Scoped question continuation remains. Packages 3–6
-have not started.
+an approved proposal for every surface. Scoped question continuation remains.
+Package 3's step 3 landed with that boundary because the two overlap; the rest of
+packages 3–6 has not started.
 Created 2026-09-11; last updated 2026-09-15.
 
 Implementation detail expanded 2026-09-11 against the current repository. Names marked **proposed** describe work to implement, not APIs or tables that already exist. This document authorizes no production operation by itself.
@@ -962,8 +963,9 @@ model/provider operation was run.
 Remaining work at that checkpoint: exact task/proposal approval and answer
 continuation, cancellation/revision ordering, and persistence of partial usage
 when a process dies before the existing completed-turn usage row is written. The
-last two are closed by the budget and cancellation milestone below; exact
-proposal and question continuation is still open. The synchronous
+last two are closed by the budget and cancellation milestone below. Exact
+proposal approval is closed by the shared approval boundary milestone; question
+continuation is still open. The synchronous
 `/operator/turn` endpoint remains available for unmigrated callers; dashboard
 chat uses the durable route. Rollback routes dashboard chat back to that endpoint
 while leaving additive work rows and the version-1 worker readable.
@@ -1040,10 +1042,10 @@ UI — the route exists and the durable decision is what the checkbox required.
 Cancellation is observed at iteration boundaries, so a stop arriving mid-tool-batch
 takes effect at the next reservation rather than interrupting a call already in
 flight; that is the intended bound, not a gap. `AgentProposal`,
-`AgentTask.activeProposalId`, and the pending-question fields still have no
-writers, so a stop resolves against the task, not against an exact proposal or
-question, and an unrelated message could still answer a pending question. That is
-the remaining Package 2 item and overlaps package 3 step 3.
+`AgentTask.activeProposalId`, and the pending-question fields had no writers at
+this checkpoint, so a stop resolved against the task, not against an exact
+proposal or question. The two milestones below close that for proposals; an
+unrelated message answering a pending question is what remains.
 
 Rollback: the column and helpers are additive. Reverting the worker to the
 previous settle-time roll-up leaves recorded counters intact and only loses
@@ -1086,16 +1088,19 @@ agent, 466 gateway and 789 dashboard unit tests, coverage projects (1,279 agent,
 The full `npm run test:integration` passed separately: 134 agent, 919 gateway,
 670 dashboard. New cases cover the proposal bound to its exact task, a replayed
 attempt reusing one row, the answerer scope on a parked question, and a stopped,
-failed or expired attempt left waiting on nothing. No new migration. No live
-model or provider operation was run; the change touches no prompt, tool
-description or planner surface, and therefore owes no eval run.
+failed or expired attempt left waiting on nothing. This completes the "proposal
+invalidated" half of D03, which the budget milestone could only record against
+the task. No new migration. No live model or provider operation was run; the
+change touches no prompt, tool description or planner surface, and therefore
+owes no eval run.
 
 Not done in this milestone: nothing reads these rows yet. Approval and answers
 still resolve through the `OperatorContext` projection, so a terse "yes" is still
 matched to a parked card rather than to an exact proposal hash, and an unrelated
 message can still answer a pending question despite the answerer scope now being
-recorded. Closing that is the shared approval boundary — the remaining Package 2
-item and package 3 step 3.
+recorded. Closing that for proposals is the shared approval boundary below, which
+is both the remaining Package 2 item and package 3 step 3; questions stay open
+after it.
 
 Rollback: the writers are additive and no reader depends on them. Reverting
 `settleAgentTaskClaim` to a bare status leaves written proposals and questions
@@ -1118,7 +1123,11 @@ A card names its proposal by the identity it already carries. The parked plan's
 `plan_executions_proposal_identity_check` asserts `plan_id = proposal_id` — so no
 new field, no write-back, and no inference from a hash join. A plan ID that
 cannot be a proposal ID, including every plan parked before this existed, names
-no proposal and takes the legacy path unchanged.
+no proposal and takes the legacy path unchanged. That guard is load-bearing
+rather than defensive: `AgentProposal.id` is `@db.Uuid`, and asking Postgres to
+compare a non-UUID plan ID against it raises `Inconsistent column data` rather
+than returning no rows, so an unguarded lookup turns every legacy approval into
+an error. A gateway control-tool test caught it.
 
 What the boundary verifies, in the transaction that locks the task row action
 dispatch and stops already serialize on: current membership, that the task is the
@@ -1152,7 +1161,13 @@ the approver recorded from authentication, changed inputs and a changed
 instruction refused, a reordered-but-identical bundle authorized, five
 concurrent approvals with one effect, another tenant/another member/a removed
 member refused, a superseded or stopped proposal refused, and a non-durable plan
-ID left to the legacy path. No new migration. No live model or provider
+ID left to the legacy path. That is D06 in full, the authorization half of D05 —
+one approval row and one reported outcome, with the single plan claim still owned
+by the existing execution ledger — and the membership clause of D16 only.
+D16's grant, policy and refundable-balance revalidation stays with the executor,
+and D19 is not addressed: the boundary takes an explicit proposal identity, so
+resolving an ambiguous "yes" across two open tasks belongs to the caller that
+maps a bare word to a card. No new migration. No live model or provider
 operation was run; no prompt, tool description or planner surface changed, so
 no eval run is owed.
 
@@ -1193,6 +1208,14 @@ Acceptance: a slow provider call, browser disconnect, duplicate submission, and 
 Primary locations: [dashboard gateway adapter](../apps/dashboard/src/lib/agent/api/gateway-operator-turn.ts), [dashboard chat route](../apps/dashboard/src/app/api/agent/chat/route.ts), [gateway operator route](../apps/gateway/src/routes/internal-operator.ts), [operator turn](../apps/gateway/src/message-handlers/execute-operator-agent-turn.ts).
 
 ### 3. Ship one adaptive vertical slice
+
+Step 3 of this list landed ahead of the rest, under Package 2 (see the shared
+approval boundary milestone): the immutable proposal is persisted, every
+approval surface passes through one boundary, and the task revision check lives
+in that boundary rather than in separate dashboard and phone implementations.
+Nothing else in this package has started — the adaptive loop itself, and the
+checklist below, are untouched. Step 2's suspension-at-a-proposal is the
+persistence half only; a migrated turn still cannot suspend mid-loop.
 
 Build the slice in this order:
 
