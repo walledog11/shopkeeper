@@ -367,5 +367,6 @@ export async function planAgent(
     warnings: signals.length > 0 ? signals.map(signal => signal.message) : undefined,
     routingEvidence,
     namespaceMiss: namespaceMiss || undefined,
+    suspendedAtProposal: suspendAtProposal || undefined,
   };
 }

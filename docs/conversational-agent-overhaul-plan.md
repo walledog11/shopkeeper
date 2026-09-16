@@ -11,8 +11,9 @@ or question a suspended task waits on, one shared boundary that authorizes
 an approved proposal for every surface, and scoped continuation of a parked
 question. Package 2 is complete for the dashboard request path.
 Package 3's step 3 landed with that boundary because the two overlap, followed by
-step 1's deterministic bed and step 2's capture-mode suspension, both behind
-options no caller sets yet. The rest of packages 3–6 has not started.
+step 1's deterministic bed, step 2's capture-mode suspension, and step 4's
+autonomy decision for a proposal that composes from the receipt — all behind an
+option no caller sets yet. The rest of packages 3–6 has not started.
 Created 2026-09-11; last updated 2026-09-16.
 
 Implementation detail expanded 2026-09-11 against the current repository. Names marked **proposed** describe work to implement, not APIs or tables that already exist. This document authorizes no production operation by itself.
@@ -1324,6 +1325,36 @@ no draft, which is correct for a plan whose draft was its last chance to say
 anything and wrong for one composing from a receipt. Deciding that belongs with
 step 4, where automatic permission and required approval are exercised as
 separate cases, and the composition it waits on is step 5.
+
+Step 4 landed next, in `autonomy.ts`. A plan now records which kind of
+draft-less proposal it is rather than leaving `decideAutonomy` to guess from
+its shape: `planAgent` returns `suspendedAtProposal` when it ran with the
+option, `plan-cache-shape.ts` type-checks that field the way it already checks
+`namespaceMiss`, and the draft requirement applies to every plan that does not
+carry it. A suspended proposal is then decided by the rules that already
+surround that requirement — tier, rollout mode, business hours, and the static
+policy check ahead of them — so required approval and automatic permission are
+two outcomes of the existing rules rather than a new permission path, and the
+model having chosen `create_refund` still decides neither. The `auto_execute`
+verdict's `replyText` and `sendReplyToolCall` are nullable for that case; the
+one surface that reads them already returns `string | null`.
+
+Four cases cover it: the guarded tier makes the proposal the merchant's to
+approve, trusted and live lets it run without one, rollout-off, out-of-hours
+and an over-cap refund each still hold it, and the legacy draft-less plan keeps
+its own unapprovable verdict. Verified by `npm run typecheck`, `npm run lint`,
+`npm run test:unit` (1,152 agent, 467 gateway, 789 dashboard) and
+`npm run test:integration` (147 agent, 919 gateway, 670 dashboard; one dashboard
+case failed on a first run and passed both alone and on a full re-run, the known
+workspace-concurrency flake). No prompt, tool description or planner surface
+changed, and no fixture produces a suspended plan, so no eval run is owed.
+Rollback is reverting the commit: the field is additive and no plan a current
+caller produces carries it.
+
+Not done: the slice is still unreachable, because nothing sets
+`suspendAtProposal`. A suspended proposal that reached the existing execution
+path today would run its write and say nothing, since composing the reply from
+the receipt is step 5.
 
 Build the slice in this order:
 

@@ -492,6 +492,9 @@ describe("planAgent capture loop", () => {
     // asking for a reply describing a refund that has not happened.
     expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual(["search_kb", "create_refund"]);
     expect(mockCreate).toHaveBeenCalledTimes(2);
+    // The marker autonomy reads to tell this plan's absent draft from a legacy
+    // plan's missing one.
+    expect(plan.suspendedAtProposal).toBe(true);
   });
 
   it("does not ask that path for a terminal tool when nothing was proposed", async () => {
