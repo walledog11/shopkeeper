@@ -6,6 +6,10 @@ import {
   type ExpectedPlanIdentity,
 } from '@shopkeeper/agent/plan-execution';
 import { ConflictError } from '@shopkeeper/agent/errors';
+import {
+  authorizeAgentProposal,
+  completeApprovedAgentTask,
+} from '@shopkeeper/agent/task-approval';
 import { getPlanExecution } from '@shopkeeper/agent/execution-ledger';
 import { executeOperatorApprovedCachedPlan } from './execute-operator-agent-turn.js';
 
@@ -14,6 +18,11 @@ import { executeOperatorApprovedCachedPlan } from './execute-operator-agent-turn
 // (handlePendingPlanCommand) and the approve_pending_plan control tool so both
 // approve identically. A throw propagates with the plan left parked — a failed
 // run is not a dismissal.
+//
+// Because every surface approves through here, this is also where a durable
+// proposal is authorized: the approval is recorded against the exact snapshot
+// before anything executes, and the task it belongs to is closed only once the
+// run actually succeeded.
 export async function runApprovedPendingPlan(params: {
   organizationId: string;
   memberKey: string;
@@ -24,6 +33,13 @@ export async function runApprovedPendingPlan(params: {
   expectedIdentity?: ExpectedPlanIdentity;
   pendingPlan: PendingPlan;
 }): Promise<string> {
+  const authorized = await authorizeAgentProposal({
+    organizationId: params.organizationId,
+    clerkUserId: params.clerkUserId,
+    proposalId: params.pendingPlan.planId,
+    instruction: params.instruction,
+    approvedToolCalls: params.approvedToolCalls,
+  });
   let summary: string;
   try {
     ({ summary } = await executeOperatorApprovedCachedPlan({
@@ -53,6 +69,7 @@ export async function runApprovedPendingPlan(params: {
   }
   if (!isPlanExecutionFailureMessage(summary)) {
     await resolvePendingPlanContexts(params.organizationId, params.memberKey, params.pendingPlan);
+    if (authorized) await completeApprovedAgentTask(authorized);
   }
   return summary || 'Done.';
 }

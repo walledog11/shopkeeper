@@ -31,7 +31,7 @@ function validateTaskBudget(budget: TaskBudget): void {
   if (budget.spendNanoUsdLimit <= 0n) throw new BadRequestError("Spend limit must be positive.");
 }
 
-async function memberThread(tx: Pick<typeof db, "orgMember" | "thread">, input: {
+export async function requireMemberActorKey(tx: Pick<typeof db, "orgMember" | "thread">, input: {
   organizationId: string; clerkUserId: string; threadId?: string;
 }) {
   const member = await tx.orgMember.findUnique({
@@ -71,7 +71,7 @@ export async function acceptMemberAgentRequest(input: MemberRequestInput) {
     throw new BadRequestError("Request payload is too large.");
   }
   return db.$transaction(async (tx) => {
-    const actorKey = await memberThread(tx, input);
+    const actorKey = await requireMemberActorKey(tx, input);
     const id = randomUUID();
     await tx.agentRequest.createMany({
       data: {
@@ -126,7 +126,7 @@ export async function getMemberAgentRequest(input: {
   organizationId: string; clerkUserId: string; requestId: string;
 }) {
   return db.$transaction(async (tx) => {
-    const actorKey = await memberThread(tx, {
+    const actorKey = await requireMemberActorKey(tx, {
       organizationId: input.organizationId, clerkUserId: input.clerkUserId,
     });
     return tx.agentRequest.findFirst({
@@ -159,7 +159,7 @@ export async function listMemberAgentRequests(input: {
     throw new BadRequestError("Request history limit must be 1–50.");
   }
   return db.$transaction(async (tx) => {
-    const actorKey = await memberThread(tx, input);
+    const actorKey = await requireMemberActorKey(tx, input);
     return tx.agentRequest.findMany({
       where: {
         organizationId: input.organizationId, actorKind: "member", actorKey,
@@ -188,7 +188,7 @@ export async function attachMemberAgentTask(input: {
 }) {
   validateTaskBudget(input.budget);
   return db.$transaction(async (tx) => {
-    const actorKey = await memberThread(tx, input);
+    const actorKey = await requireMemberActorKey(tx, input);
     // Serialize initial attachment using the accepted request's durable row.
     await tx.$queryRaw(Prisma.sql`
       SELECT id FROM agent_requests WHERE id = ${input.requestId}::uuid
@@ -199,7 +199,7 @@ export async function attachMemberAgentTask(input: {
       where: { id: input.requestId, organizationId: input.organizationId, actorKind: "member", actorKey },
     });
     if (!request) throw new ForbiddenError("Request is not available to this member.");
-    await memberThread(tx, { ...input, threadId: request.threadId });
+    await requireMemberActorKey(tx, { ...input, threadId: request.threadId });
     if (request.taskId) {
       return tx.agentTask.findFirstOrThrow({
         where: { id: request.taskId, organizationId: input.organizationId },
@@ -403,6 +403,13 @@ export const AGENT_PROPOSAL_SCHEMA_VERSION = 1;
 
 /** The executable bundle a finished attempt wants the merchant to approve. */
 export interface ProposalSnapshot {
+  /**
+   * The parked plan's own identity, which becomes the proposal's ID. The two are
+   * required to be the same value by `plan_executions_proposal_identity_check`,
+   * and it is what lets an approval name the exact durable proposal a card was
+   * rendered from without the card carrying a second identifier.
+   */
+  proposalId?: string;
   instruction: string;
   rawToolCalls: RawToolCall[];
   sourceRequestIds: string[];
@@ -421,7 +428,7 @@ export type TaskSettlement =
 // The four pending-question columns are all-or-nothing in the database and the
 // active proposal must belong to this task, so every exit from `running` writes
 // the whole suspension shape rather than one field of it.
-const NO_SUSPENSION = {
+export const NO_SUSPENSION = {
   activeProposalId: null,
   pendingQuestionId: null,
   pendingQuestion: null,
@@ -451,7 +458,9 @@ async function persistProposal(
     taskRevision: task.revision, proposalHash,
   };
   // A replayed attempt at the same revision re-proposes the same bundle. It is
-  // the same thing to approve, so it reuses the row rather than conflicting.
+  // the same thing to approve, so it reuses the row rather than conflicting on
+  // the snapshot key. The replayed card then carries a fresh plan ID that names
+  // no proposal, and approving it falls back to the legacy taskless path.
   const existing = await tx.agentProposal.findUnique({
     where: { organizationId_taskId_taskRevision_proposalHash: identity },
     select: { id: true },
@@ -460,6 +469,7 @@ async function persistProposal(
   const created = await tx.agentProposal.create({
     data: {
       ...identity,
+      ...(snapshot.proposalId ? { id: snapshot.proposalId } : {}),
       schemaVersion: AGENT_PROPOSAL_SCHEMA_VERSION,
       canonicalActions: snapshot.rawToolCalls as unknown as PrismaTypes.InputJsonValue,
       dependencies: [],
@@ -670,7 +680,7 @@ export async function cancelMemberAgentTask(input: {
 }) {
   const now = input.now ?? new Date();
   return db.$transaction(async (tx) => {
-    const actorKey = await memberThread(tx, input);
+    const actorKey = await requireMemberActorKey(tx, input);
     await tx.$queryRaw(Prisma.sql`
       SELECT id FROM agent_tasks WHERE id = ${input.taskId}::uuid
       AND organization_id = ${input.organizationId}::uuid FOR UPDATE

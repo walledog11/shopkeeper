@@ -149,6 +149,9 @@ export async function processAgentTaskJob(data: AgentTaskJobData): Promise<void>
         ? {
             status: 'waiting_approval',
             proposal: {
+              // The parked card's plan ID becomes the proposal's ID, so an
+              // approval from any surface names the exact durable snapshot.
+              ...(after.pendingPlan.planId ? { proposalId: after.pendingPlan.planId } : {}),
               instruction: after.pendingPlan.instruction,
               rawToolCalls: normalizeApprovedToolCalls(after.pendingPlan.rawToolCalls),
               sourceRequestIds: [request.id],

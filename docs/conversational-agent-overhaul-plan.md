@@ -6,9 +6,9 @@ Shopify writes, retained internal-thread writes, and durable communication
 outcomes. Package 2 now has additive persistence, ownership helpers, durable
 dashboard submission/status retrieval, a claimed gateway worker, queue-gap and
 stale-claim recovery, refresh reconnection, a crash-safe cumulative budget,
-merchant cancellation ordered at the task row, and durable writers for the
-proposal or question a suspended task waits on. Reading those back — exact
-proposal approval and scoped question continuation — remains. Packages 3–6
+merchant cancellation ordered at the task row, durable writers for the proposal
+or question a suspended task waits on, and one shared boundary that authorizes
+an approved proposal for every surface. Scoped question continuation remains. Packages 3–6
 have not started.
 Created 2026-09-11; last updated 2026-09-15.
 
@@ -1101,6 +1101,75 @@ Rollback: the writers are additive and no reader depends on them. Reverting
 `settleAgentTaskClaim` to a bare status leaves written proposals and questions
 readable and orphans nothing; a task already marked `reconciling` must be
 reconciled, never reset.
+
+Shared approval boundary milestone (2026-09-15):
+
+Dashboard buttons, the phone keyword fast path, and the `approve_pending_plan`
+control tool already approve through one function — `runApprovedPendingPlan`.
+What it lacked was durable authority: it took the approver from its caller and
+checked only the plan cache, so nothing compared what was about to run against
+the snapshot the merchant was shown, and no approver identity was recorded.
+`authorizeAgentProposal` (`packages/agent/src/task-approval.ts`) now runs before
+anything executes, and because all three surfaces already route through that
+seam, none of them needed a second implementation.
+
+A card names its proposal by the identity it already carries. The parked plan's
+`planId` becomes the proposal's ID, which the schema already required —
+`plan_executions_proposal_identity_check` asserts `plan_id = proposal_id` — so no
+new field, no write-back, and no inference from a hash join. A plan ID that
+cannot be a proposal ID, including every plan parked before this existed, names
+no proposal and takes the legacy path unchanged.
+
+What the boundary verifies, in the transaction that locks the task row action
+dispatch and stops already serialize on: current membership, that the task is the
+approver's own, that the bundle about to run hashes to the stored
+`proposalHash`, and that this proposal is still the one the task is waiting on
+and the task is not stopped. Approver key and decision time come from the
+authenticated member. The hash is checked before any task-state test, so a
+revised bundle is refused as the wrong proposal whatever else changed. Five
+concurrent approvals produce one approval row and report one identical outcome:
+the second decision through the lock sees the standing approval and returns it
+rather than conflicting.
+
+Approval is not completion. `completeApprovedAgentTask` closes the task only
+after the existing execution path reports a non-failure summary, so a failed run
+leaves the task waiting rather than recording a success it did not have.
+
+Files changed: new `packages/agent/src/task-approval.ts` and its integration
+suite, plus the package export map; `packages/agent/src/task-ledger.ts` (the
+proposal takes the plan's ID; `requireMemberActorKey` and `NO_SUSPENSION` are now
+shared rather than copied); gateway `message-handlers/pending-plan-actions.ts`
+and `workers/agent-task.ts`.
+
+Verification: `npm run verify:pr` passed — static checks, lint, typechecks,
+1,145 agent, 466 gateway and 789 dashboard unit tests, coverage projects (1,287
+agent, 1,385 gateway, 1,459 dashboard) and thresholds, and all seven production
+builds. The full `npm run test:integration` passed separately: 142 agent, 919
+gateway, 670 dashboard. One `verify:pr` run was red on an unrelated SocialAPI
+webhook unit test and green on re-run and in isolation; that is the known
+workspace-concurrency flake, not this change. Eight new integration cases cover
+the approver recorded from authentication, changed inputs and a changed
+instruction refused, a reordered-but-identical bundle authorized, five
+concurrent approvals with one effect, another tenant/another member/a removed
+member refused, a superseded or stopped proposal refused, and a non-durable plan
+ID left to the legacy path. No new migration. No live model or provider
+operation was run; no prompt, tool description or planner surface changed, so
+no eval run is owed.
+
+Not done in this milestone: scoped question continuation. `pendingAnswererKind`
+and `pendingAnswererKey` are written but nothing reads them, so an unrelated
+message can still answer a pending question. Answering also needs the task
+worker to resume from the newest request rather than the oldest — it currently
+selects the task's first `AgentRequest` by `acceptedAt` ascending, which would
+replay the original instruction instead of the answer. Rejection is still the
+existing `cancelMemberAgentTask` stop, which clears the task's pointer at the
+proposal; no proposal is written `rejected`, by the same rule that makes
+`activeProposalId` the only liveness signal.
+
+Rollback: `authorizeAgentProposal` returning null is the pre-existing behavior,
+so reverting the two calls in `pending-plan-actions.ts` restores the previous
+approval path exactly and leaves recorded approvals readable as audit. A task
+already `completed` must not be reopened.
 
 Implementation order:
 
