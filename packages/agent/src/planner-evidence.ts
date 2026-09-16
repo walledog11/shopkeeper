@@ -14,6 +14,7 @@ import {
   refundTargetsAlreadyFullyRefunded,
   refundTargetsNonPaidOrder,
 } from "./planner-safety/refunds.js";
+import { makeMoney, orderShopMoney, withinShopLimit } from "./money.js";
 import { getToolDefinition, TOOL_CATEGORIES } from "./tools/registry/index.js";
 import type { ToolStatus } from "./tools/result.js";
 import type {
@@ -79,16 +80,50 @@ function planShape(rawToolCalls: readonly RawToolCall[]) {
   };
 }
 
+// Whether a proposal is over the merchant's cap, which routes it to a human.
+//
+// The cap is a number the merchant typed in their own currency, so the
+// comparison is made against the order's shop-money total whenever the order is
+// in context. Comparing it to the amount the model named would judge a foreign
+// currency against a limit set in another — 59.90 CAD against a limit of 50
+// dollars — which is how an ordinary international refund became an escalation.
+// When neither figure can be put in the shop's currency the answer is "send it
+// to a human", because the alternative is letting an unjudged amount run.
 function planExceedsCompensationCap(
   rawToolCalls: readonly RawToolCall[],
   settings: OrgSettings | undefined,
+  ctx?: AgentContext,
 ): boolean {
   const cap = settings?.maxRefundAmount;
   if (cap === null || cap === undefined || cap <= 0) return false;
   return rawToolCalls.some((toolCall) => {
     if (!getToolDefinition(toolCall.name)?.policy.refundAmountLimits) return false;
-    const amount = Number((toolCall.input as { amount?: unknown })?.amount);
-    return Number.isFinite(amount) && amount > cap;
+    const input = toolCall.input as { amount?: unknown; currency?: unknown; order_id?: unknown };
+    const order = typeof input?.order_id === "string"
+      ? ctx?.recentOrders?.find((candidate) => candidate.id === input.order_id)
+      : undefined;
+    const shopMoney = order ? orderShopMoney(order) : null;
+    if (shopMoney) return withinShopLimit(shopMoney, shopMoney.currency, cap) === false;
+
+    const amountText = typeof input?.amount === "string" ? input.amount : String(input?.amount ?? "");
+    const claimed = makeMoney(
+      amountText,
+      typeof input?.currency === "string" ? input.currency : (order?.currency ?? null),
+    );
+    // No currency anywhere on the claim. `create_gift_card` has no currency
+    // field at all, so this is its normal shape, not a defect: the value is shop
+    // money by construction and the cap is the number to compare it to.
+    // Returning "not over cap" here is what stopped a $500 gift card against a
+    // $50 limit from routing to a human.
+    if (!claimed) {
+      const amount = Number(amountText);
+      return Number.isFinite(amount) && amount > cap;
+    }
+    // No order in context to anchor the currency: comparable only when nothing
+    // says it is foreign.
+    const shopCurrency = order ? orderShopMoney(order)?.currency ?? order.currency ?? null : null;
+    const verdict = withinShopLimit(claimed, shopCurrency ?? claimed.currency, cap);
+    return verdict === false || verdict === null;
   });
 }
 
@@ -109,7 +144,7 @@ function escalationCode(input: BuildPlanRoutingEvidenceInput): PlanRoutingEviden
   if (shouldEscalateFulfilledAddressChangeRequest(ctx, instruction)) return "fulfilled_address_change_request";
   if (refundTargetsAlreadyFullyRefunded(ctx, instruction)) return "already_refunded_request";
   if (refundTargetsNonPaidOrder(ctx, instruction, rawToolCalls)) return "non_paid_refund_request";
-  if (planExceedsCompensationCap(rawToolCalls, input.settings)) return "compensation_over_cap";
+  if (planExceedsCompensationCap(rawToolCalls, input.settings, ctx)) return "compensation_over_cap";
   const shape = planShape(rawToolCalls);
   if (!shape.hasAction && !shape.hasEscalation && hasExplicitCompensationRequest(ctx)) {
     return "compensation_exception";

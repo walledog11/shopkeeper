@@ -265,11 +265,11 @@ export type ToolGroup =
 export type ToolCapability = "shopify" | "thread-io" | "kb" | "stats";
 
 export interface RefundToolResult extends ToolResult {
-  refundedCents: number | null;
+  refundedShopCents: number | null;
 }
 
 export interface SpendToolResult extends ToolResult {
-  spentCents: number | null;
+  spentShopCents: number | null;
 }
 
 export interface KnowledgeBaseToolArticle {
@@ -296,7 +296,13 @@ export interface ToolExecutionDeps {
   getOrderByName(input: GetOrderByNameInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   getOrderFulfillmentStatus(input: GetOrderFulfillmentStatusInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   getOrderTracking(input: GetOrderTrackingInput, ctx: ShopifyToolContext): Promise<ToolResult>;
-  createRefund(input: CreateRefundInput, ctx: ShopifyToolContext): Promise<RefundToolResult>;
+  // `settings` is required, not optional: the per-call cap is enforced inside
+  // this implementation and an omitted argument silently disables it.
+  createRefund(
+    input: CreateRefundInput,
+    ctx: ShopifyToolContext,
+    settings: OrgSettings,
+  ): Promise<RefundToolResult>;
   createPartialRefund(
     input: CreatePartialRefundInput,
     ctx: ShopifyToolContext,

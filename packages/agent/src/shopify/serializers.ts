@@ -1,3 +1,4 @@
+import { orderSettlementCurrency } from "../money.js";
 import type {
   ShopifyCustomer,
   ShopifyCustomerAddress,
@@ -61,14 +62,20 @@ function serializeOrderLineItem(lineItem: ShopifyOrderLineItem) {
   };
 }
 
+// The REST fields that make the settlement currency knowable. Any order fetch
+// that quotes or moves money must request them: without them Shopify returns
+// only `currency`, which is the shop's own, and every caller that reads it is
+// silently working in the wrong currency on an international order.
+export const ORDER_CURRENCY_FIELDS = "currency,presentment_currency,total_price_set,current_total_price_set";
+
 // What the customer was actually charged, and only when that differs from the
 // shop's own currency. A single-currency store serializes exactly as before.
 function presentmentCharge(order: ShopifyOrder): { presentment_total_price: string; presentment_currency: string } | null {
   const priceSet = order.current_total_price_set ?? order.total_price_set;
   const presentment = priceSet?.presentment_money;
-  const currency = presentment?.currency_code ?? order.presentment_currency;
+  const currency = orderSettlementCurrency(order);
   if (!currency || !presentment?.amount) return null;
-  if (order.currency && currency.toUpperCase() === order.currency.toUpperCase()) return null;
+  if (order.currency && currency === order.currency.toUpperCase()) return null;
   return { presentment_total_price: presentment.amount, presentment_currency: currency };
 }
 

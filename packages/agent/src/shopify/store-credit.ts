@@ -53,11 +53,11 @@ export const STORE_CREDIT_ACCOUNT_CREDIT_MUTATION = `mutation storeCreditAccount
       }`;
 
 function spendError(message: string): SpendToolResult {
-  return { ...toolError(message), spentCents: null };
+  return { ...toolError(message), spentShopCents: null };
 }
 
 function spendUnknown(message: string): SpendToolResult {
-  return { ...toolUnknown(message), spentCents: null };
+  return { ...toolUnknown(message), spentShopCents: null };
 }
 
 export async function issueStoreCredit(
@@ -131,7 +131,7 @@ export async function issueStoreCredit(
       ...toolOk(
         `Added $${amount} ${currencyCode} of store credit to the customer's account.${balanceNote}${expiryNote} It applies automatically at checkout when they are logged in - tell the customer in your reply.`
       ),
-      spentCents: moneyToCents(committedAmount),
+      spentShopCents: moneyToCents(committedAmount),
     };
   } catch (err) {
     if (mutationStarted && isAmbiguousShopifyMutationError(err)) {

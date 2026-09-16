@@ -277,7 +277,7 @@ describe("runAgent policy enforcement", () => {
   it("escalates a refund when the daily cap is already exhausted", async () => {
     mockReserveDailyRefundSpend.mockResolvedValueOnce({
       kind: "blocked",
-      spentCents: 9000,
+      spentShopCents: 9000,
       heldCents: 0,
       remainingCents: 1000,
     });

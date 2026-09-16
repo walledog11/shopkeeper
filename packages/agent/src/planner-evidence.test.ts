@@ -133,4 +133,33 @@ describe("buildPlanRoutingEvidence", () => {
     }).evidence;
     expect(evidence).toMatchObject({ codes: ["compensation_over_cap"] });
   });
+
+  // `create_gift_card` has no currency field at all, so a cap check that needs
+  // one to compare silently stops applying to it. This asserts the number wins
+  // when there is no currency to reconcile.
+  it("records a gift card above the cap, which carries no currency to compare", () => {
+    const ctx = context({
+      recentMessages: [{ senderType: "customer", contentText: "Send me a gift card please." }],
+      classifierSignals: {
+        version: 2,
+        language: "en",
+        intents: { ...emptyIntents(), mutative_request: true },
+        requestFacts: emptyRequestFacts(),
+      },
+    });
+    const evidence = buildPlanRoutingEvidence({
+      ctx,
+      instruction: "Handle it",
+      rawToolCalls: [{
+        id: "gift",
+        name: "create_gift_card",
+        input: { customer_id: "501", amount: "500.00", reason: "Damaged" },
+      }],
+      readBlocks: [],
+      readStatusMap: new Map(),
+      readResultsMap: new Map(),
+      settings: resolveAgentSettings({ maxRefundAmount: 50 }),
+    }).evidence;
+    expect(evidence.codes).toContain("compensation_over_cap");
+  });
 });

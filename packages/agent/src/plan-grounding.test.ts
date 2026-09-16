@@ -4,7 +4,9 @@ import {
   detectUngroundedEscalationReasons,
   detectUngroundedReplyText,
   renderReplyCompletionClaims,
+  unsupportedReplyCompletionClaims,
 } from "./plan-grounding.js";
+import type { CompletionFact } from "./completion-facts.js";
 
 describe("escalation materialization", () => {
   it("keeps reads but replaces model actions and escalation text", () => {
@@ -383,5 +385,42 @@ describe("plan grounding", () => {
         }),
       },
     })).toEqual([]);
+  });
+});
+
+// An international refund, which is where a plan-time currency rule does the
+// most damage. Validation runs before the renderer, so treating a bare `$` as
+// unsupported turns a sentence the renderer would have rewritten into an
+// invalid plan the merchant has to deal with by hand.
+describe("a refund in a currency the customer was charged", () => {
+  const refundFact: CompletionFact = {
+    action: "refund",
+    amount: "59.90",
+    currency: "CAD",
+    outcome: "success",
+    sourceTool: "create_refund",
+    executionReference: "e1",
+    target: { kind: "order", id: "1031" },
+  };
+  const reply = (text: string) => ({ id: "r1", name: "send_reply", input: { text } });
+
+  it("rewrites a bare dollar sign into the currency that actually moved", () => {
+    const rendered = renderReplyCompletionClaims(
+      reply("I've issued a refund of $59.90 to your card."),
+      [refundFact],
+    ).input as { text: string };
+
+    expect(rendered.text).toBe("A refund of 59.90 CAD has been issued for order #1031.");
+    // ...and does not call it unsupported first, which would stop the plan
+    // before the sentence above could be composed.
+    expect(unsupportedReplyCompletionClaims(reply("I've issued a refund of $59.90 to your card."), [refundFact]))
+      .toEqual([]);
+  });
+
+  it("still refuses a claim that names the wrong currency outright", () => {
+    expect(unsupportedReplyCompletionClaims(
+      reply("I've issued a refund of 59.90 USD to your card."),
+      [refundFact],
+    )).not.toEqual([]);
   });
 });

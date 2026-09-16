@@ -1,4 +1,5 @@
 import type { BaseAgentContext, SupportContext } from "./agent-context.js";
+import { canonicalAmount, formatMoney } from "./money.js";
 import {
   expectedCustomerRecipient,
   factTargetsCurrentCustomer,
@@ -101,11 +102,7 @@ function claimSpans(text: string, patterns: readonly RegExp[]): string[] {
   return [...spans, ...[...text.matchAll(CLAIM_CONTINUATION)].map((match) => match[0])];
 }
 
-function canonicalAmount(value: string): string | null {
-  if (!/^\d+(?:\.\d{1,2})?$/.test(value)) return null;
-  const [whole, fraction = ""] = value.split(".");
-  return `${BigInt(whole)}.${fraction.padEnd(2, "0")}`;
-}
+
 
 function moneyClaims(span: string): { amount: string; currency?: string }[] {
   const claims: { amount: string; currency?: string }[] = [];
@@ -141,7 +138,14 @@ function factMatchesDetails(span: string, fact: CompletionFact): boolean {
   if (isFinancialFact && amounts.length > 0) {
     const factAmount = fact.amount ? canonicalAmount(fact.amount) : null;
     if (!factAmount || amounts.some((claim) => claim.amount !== factAmount)) return false;
-    if (amounts.some((claim) => claim.currency && claim.currency !== fact.currency?.toUpperCase())) return false;
+    // A claim that names the wrong currency is unsupported. A bare `$` names
+    // none, and is left grounded on purpose: this runs at plan validation, and
+    // the renderer at execution rewrites the whole sentence from the fact's own
+    // fields — "A refund of 59.90 CAD has been issued for order #1031". Treating
+    // the `$` as unsupported here makes the plan invalid, so it never reaches
+    // the renderer that would have fixed it, and the repair is lost to a block.
+    const factCurrency = fact.currency?.toUpperCase();
+    if (amounts.some((claim) => claim.currency && claim.currency !== factCurrency)) return false;
   }
 
   const orderTargets = claimedOrderTargets(span);
@@ -302,7 +306,7 @@ function publicMoney(fact: CompletionFact): string | null {
   const amount = fact.amount ? canonicalAmount(fact.amount) : null;
   const currency = fact.currency?.trim().toUpperCase();
   if (!amount || !currency) return null;
-  return currency === "USD" ? `$${amount}` : `${amount} ${currency}`;
+  return formatMoney({ amount, currency });
 }
 
 function renderCompletionFact(fact: CompletionFact): string {

@@ -127,8 +127,21 @@ export function checkParsedStaticToolPolicy(
       if (!Number.isFinite(amount) || amount <= 0) {
         return { blocked: true, reason: `${noun} amount must be a positive decimal value.` };
       }
-      if (hasPerCallCap && amount > (settings.maxRefundAmount as number)) {
-        return { blocked: true, reason: `${noun} amount $${refundInput.amount} exceeds the workspace limit of $${settings.maxRefundAmount}.` };
+      // The cap is a number the merchant typed in their own currency, and this
+      // check runs before the order is loaded. So it can only compare like with
+      // like when the claim carries no currency of its own — gift cards always,
+      // which have no currency field and are shop money by construction, and
+      // refunds where the model named none. A claim that does name one may be
+      // foreign, and comparing anyway is what refused an ordinary 59.90 CAD
+      // refund against a limit of 50 dollars. Those defer to `createRefund`,
+      // which loads the order and judges the cap against the shop's own figure.
+      const claimsOwnCurrency = typeof refundInput.currency === "string"
+        && refundInput.currency.trim() !== "";
+      if (hasPerCallCap && !claimsOwnCurrency && amount > (settings.maxRefundAmount as number)) {
+        return {
+          blocked: true,
+          reason: `${noun} amount $${refundInput.amount} exceeds the workspace limit of $${settings.maxRefundAmount}.`,
+        };
       }
     }
   }

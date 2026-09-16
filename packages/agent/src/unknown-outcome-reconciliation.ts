@@ -48,7 +48,7 @@ function canonicalJson(value: Prisma.JsonValue | Prisma.InputJsonValue): string 
 
 function committedSpendCents(result: ShopifyReconciliationProbeResult): number | null {
   if (result.outcome !== "committed") return null;
-  return result.spentCents ?? null;
+  return result.spentShopCents ?? null;
 }
 
 async function findUnknownReservationForAction(params: {

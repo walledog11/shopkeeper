@@ -4,6 +4,7 @@ import type {
   BaseAgentContext,
   SupportContext,
 } from "./agent-context.js";
+import { canonicalAmount as canonicalMoneyAmount, orderSettlementCurrency } from "./money.js";
 import type { RawToolCall } from "./types.js";
 
 export type CompletionAction =
@@ -54,10 +55,14 @@ function textField(input: Record<string, unknown>, key: string): string | undefi
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+// The two shapes `formatMoney` writes, and only those: `$20.00` for USD and
+// `59.90 CAD` for everything else. Deliberately case-sensitive — see the call
+// site.
+const SETTLED_REFUND =
+  /\bRefunded\s+(?:\$(?<symbolAmount>\d+(?:\.\d{1,2})?)|(?<codeAmount>\d+(?:\.\d{1,2})?)\s+(?<code>[A-Z]{3}))\b/;
+
 function canonicalAmount(value: string | undefined): string | undefined {
-  if (!value || !/^\d+(?:\.\d{1,2})?$/.test(value.trim())) return undefined;
-  const [whole, fraction = ""] = value.trim().split(".");
-  return `${BigInt(whole)}.${fraction.padEnd(2, "0")}`;
+  return canonicalMoneyAmount(value) ?? undefined;
 }
 
 function orderTarget(
@@ -74,10 +79,12 @@ function orderTarget(
   };
 }
 
+// The currency a completed money movement is denominated in: what the customer
+// was charged, not the shop's own books. Reading `currency` here is what would
+// label a 59.90 CAD refund as USD whenever the model left the field off.
 function orderCurrency(orderId: string, ctx?: FactContext): string | undefined {
-  return ctx?.recentOrders
-    ?.find((candidate) => candidate.id === orderId)
-    ?.currency?.trim().toUpperCase() || undefined;
+  const order = ctx?.recentOrders?.find((candidate) => candidate.id === orderId);
+  return (order ? orderSettlementCurrency(order) : null) ?? undefined;
 }
 
 function fact(
@@ -127,9 +134,29 @@ function mutationFacts(input: {
       return orderId ? [{ ...base, action: "refund", ...orderOptions, ...(amountFromInput ? { amount: amountFromInput } : {}) }] : [];
     case "create_partial_refund": {
       if (!orderId) return [];
-      const resultAmount = input.result?.match(/\bRefunded\s+\$(\d+(?:\.\d{1,2})?)/i)?.[1];
-      const amount = input.outcome === "success" ? canonicalAmount(resultAmount) : undefined;
-      return [{ ...base, action: "refund", ...orderOptions, ...(amount ? { amount } : {}) }];
+      // This tool's amount exists only in the sentence it wrote, because
+      // `AgentAction` persists the message and not the result object. Reading it
+      // back is the shape that keeps breaking and is tracked as A4 structural
+      // debt; until the row carries the figure, the pattern matches exactly the
+      // two forms `formatMoney` emits and nothing else.
+      //
+      // Case-sensitivity is load-bearing. A case-insensitive three-letter group
+      // matched the word "for" in "Refunded $20.00 for 2 item(s)", so every
+      // single-currency refund reported its currency as FOR and every "$20.00"
+      // in the reply became an unsupported claim.
+      const settled = input.result?.match(SETTLED_REFUND) ?? undefined;
+      const amount = input.outcome === "success"
+        ? canonicalAmount(settled?.groups?.symbolAmount ?? settled?.groups?.codeAmount)
+        : undefined;
+      // `formatMoney` writes a bare `$` only for USD.
+      const settledCurrency = settled?.groups?.code ?? (settled?.groups?.symbolAmount ? "USD" : undefined);
+      return [{
+        ...base,
+        action: "refund",
+        ...orderOptions,
+        ...(settledCurrency ? { currency: settledCurrency } : {}),
+        ...(amount ? { amount } : {}),
+      }];
     }
     case "cancel_order": {
       if (!orderId) return [];
@@ -279,11 +306,15 @@ function historicalOrderFacts(
       id: id ?? name!,
       ...(name && name !== id ? { aliases: [name] } : {}),
     };
-    const currency = textField(order, "currency")?.toUpperCase();
+    const currency = (textField(order, "presentment_currency") ?? textField(order, "currency"))?.toUpperCase();
     const common = { target, ...(currency ? { currency } : {}) };
     const facts: CompletionFact[] = [];
     if (textField(order, "financial_status")?.toLowerCase() === "refunded") {
-      const amount = canonicalAmount(textField(order, "total_price"));
+      // The pair has to stay together: a presentment amount labelled with the
+      // shop's currency is a truthful number and a false statement.
+      const amount = canonicalAmount(
+        textField(order, "presentment_total_price") ?? textField(order, "total_price"),
+      );
       facts.push(fact("refund", sourceTool, "success", executionReference, {
         ...common,
         ...(amount ? { amount } : {}),
