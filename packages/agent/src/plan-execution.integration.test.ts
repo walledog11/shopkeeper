@@ -554,6 +554,45 @@ describe("executeCurrentCachedHomePlan execution", () => {
     ]);
   });
 
+  // Package 3, step 5: a plan that stopped at its proposal has no draft to send,
+  // so its execution is the one that owes a reply composed from the receipt.
+  it("asks a suspended proposal's run to compose from what the write returned", async () => {
+    const base = mutativePlan();
+    const suspended: AgentPlan = {
+      ...base,
+      steps: base.steps.filter((step) => step.category === "action"),
+      rawToolCalls: [noteCall],
+      suspendedAtProposal: true,
+    };
+    const { org, thread, settings } = await seedThreadWithPlan({ plan: suspended });
+    const runAgent = vi.fn(async () => okResult);
+
+    await executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+    }, makeDeps({ runAgent }));
+
+    expect(runAgent.mock.calls[0]?.[4].composeFromReceipt).toBe(true);
+  });
+
+  it("leaves a plan that drafted its own reply to send that reply", async () => {
+    const { org, thread, settings } = await seedThreadWithPlan({ plan: mutativePlan() });
+    const runAgent = vi.fn(async () => okResult);
+
+    await executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+    }, makeDeps({ runAgent }));
+
+    expect(runAgent.mock.calls[0]?.[4].composeFromReceipt).toBeUndefined();
+  });
+
   it("refuses a second execution of the same plan", async () => {
     const { org, thread, settings } = await seedThreadWithPlan();
     const params = {

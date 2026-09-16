@@ -24,6 +24,7 @@ const gatewayRunAgent: ExecuteTurnRunAgent = (ctx, instruction, approvedToolCall
     approval: options.approval,
     executionId: options.executionId,
     completionEvidence: options.completionEvidence,
+    composeFromReceipt: options.composeFromReceipt,
     onActionsPersisted: captureAgentActionsCompleted,
     ...(options.moduleTools ? { moduleTools: options.moduleTools } : {}),
   });

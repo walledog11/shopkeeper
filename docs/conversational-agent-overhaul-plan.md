@@ -11,9 +11,10 @@ or question a suspended task waits on, one shared boundary that authorizes
 an approved proposal for every surface, and scoped continuation of a parked
 question. Package 2 is complete for the dashboard request path.
 Package 3's step 3 landed with that boundary because the two overlap, followed by
-step 1's deterministic bed, step 2's capture-mode suspension, and step 4's
-autonomy decision for a proposal that composes from the receipt — all behind an
-option no caller sets yet. The rest of packages 3–6 has not started.
+step 1's deterministic bed, step 2's capture-mode suspension, step 4's autonomy
+decision for a proposal that composes from the receipt, and step 5's composition
+of that reply from what the write returned — all behind an option no caller sets
+yet. The rest of packages 3–6 has not started.
 Created 2026-09-11; last updated 2026-09-16.
 
 Implementation detail expanded 2026-09-11 against the current repository. Names marked **proposed** describe work to implement, not APIs or tables that already exist. This document authorizes no production operation by itself.
@@ -1355,6 +1356,51 @@ Not done: the slice is still unreachable, because nothing sets
 `suspendAtProposal`. A suspended proposal that reached the existing execution
 path today would run its write and say nothing, since composing the reply from
 the receipt is step 5.
+
+Step 5 landed next. The approved-execution path in `run.ts` ran its tool calls
+and returned without ever calling the model, which is why a suspended proposal
+would have refunded in silence. It now keeps the results `executeAgentToolCalls`
+already returned and, when the caller asks for it, seeds them into the same
+shared loop as the turn the model is answering: the executed proposal as an
+assistant `tool_use` turn, its receipts as the `tool_result` turn under it. The
+completion is then written by the ordinary loop through the ordinary
+`send_reply`, so grounding, dispatch and delivery are the ones already there —
+`executedCompletionFacts` binds the reply's claims to the receipt the write
+actually produced, and no new persistence or delivery path exists.
+
+Three things bound it. Only a committed execution composes:
+`planExecutionOutcomeForActions` already owns that question, an unknown outcome
+stays the executor's to escalate and a definite failure stays the caller's
+bounded replan, and both keep the summary they have today. The composing call is
+offered every tool except the `action` category, because the merchant's approval
+covered the writes that ran and not another one. And a composition that throws
+does not throw out of the run: the write is committed and its receipt stored, so
+reporting the turn as an error would make the caller record a known outcome as
+unknown.
+
+`plan-execution.ts` sets the option for a plan carrying `suspendedAtProposal`,
+and nothing else sets it, so every current plan executes exactly as before. The
+gateway's `runAgent` wrapper enumerates its options rather than spreading them,
+so it forwards the new one explicitly.
+
+Four cases in the step-1 bed cover the loop: an approved refund commits before
+the model is asked for a word and the transcript it is asked with answers the
+executed proposal; the composing call is not offered `create_refund`; a rejected
+refund composes nothing, asserted definite rather than unknown so the silence
+proves something; and a composition that throws leaves one commit, one
+successful action and no reply. Two cases in
+`plan-execution.integration.test.ts` cover the wiring in both directions.
+Verified by `npm run typecheck`, `npm run lint`, `npm run test:unit` (1,156
+agent, 471 gateway, 789 dashboard) and `npm run test:integration` (149 agent,
+919 gateway, 670 dashboard). No prompt, tool description or planner surface
+changed, and no fixture produces a suspended plan, so no eval run is owed.
+Rollback is reverting the commit.
+
+Not done: the recovery half of the crash case. A failed composition leaves the
+write committed and correctly recorded and nothing re-runs it, but nothing
+resumes it either — retrying the composition needs the durable task resumption
+in packages 2 and 5, so D10's "recovery composes" is not yet true. The slice is
+also still unreachable: nothing sets `suspendAtProposal`, which is step 7.
 
 Build the slice in this order:
 

@@ -20,6 +20,7 @@ export interface ExecuteTurnRunOptions {
   approval?: AgentActionApproval;
   executionId?: string;
   completionEvidence?: readonly CompletionFact[];
+  composeFromReceipt?: boolean;
   // Host-injected control tools for this turn (e.g. the gateway's operator
   // control tools). Forwarded to runAgent; ignored on the approved-execution and
   // read-only paths. Keeps host-specific tools out of the shared registry.
@@ -75,6 +76,8 @@ export interface ExecuteAgentTurnParams {
   approval?: AgentActionApproval;
   executionId?: string;
   completionEvidence?: readonly CompletionFact[];
+  /** Compose the customer's reply from the approved write's receipts. */
+  composeFromReceipt?: boolean;
   // Operator freeform turns only: the host-rendered pending-state ledger passed
   // into buildContext, and the operator control tools passed into runAgent.
   operatorLedger?: string;
@@ -144,6 +147,7 @@ export async function executeAgentTurn(
         ...(params.approval ? { approval: params.approval } : {}),
         ...(params.executionId ? { executionId: params.executionId } : {}),
         ...(params.completionEvidence ? { completionEvidence: params.completionEvidence } : {}),
+        ...(params.composeFromReceipt ? { composeFromReceipt: true } : {}),
         ...(params.moduleTools ? { moduleTools: params.moduleTools } : {}),
       }
     );

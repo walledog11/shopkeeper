@@ -425,6 +425,9 @@ export async function executeCurrentCachedHomePlan(params: {
         current.plan.rawToolCalls,
         current.plan.readResults,
       ),
+      // A plan that stopped at its proposal drafted no reply, so the run composes
+      // one from the receipts this execution produces.
+      ...(current.plan.suspendedAtProposal ? { composeFromReceipt: true } : {}),
       ...(approval ? { approval } : {}),
     }, deps);
     terminalExecutionStatus = terminalStatusForResult(result);
