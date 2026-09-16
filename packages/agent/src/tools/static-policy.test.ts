@@ -8,17 +8,11 @@ describe("deterministic compensation policy matrix", () => {
     ["trusted", 100],
   ] as const)("applies the %s tier boundary to refunds and gift cards", (tier, cap) => {
     const settings = resolveAgentSettings({ autonomyTier: tier });
-    // The cap is a number the merchant typed in their own currency, so the
-    // caller has to say what that currency is for the comparison to mean
-    // anything. Gift cards carry no currency field at all: they are shop money
-    // by construction.
-    const shop = { shopCurrency: "USD" };
 
     expect(checkStaticToolPolicy(
       "create_refund",
       { order_id: "1001", amount: cap.toFixed(2), currency: "USD" },
       settings,
-      shop,
     )).toEqual({ blocked: false });
     expect(checkStaticToolPolicy(
       "create_gift_card",
@@ -26,35 +20,40 @@ describe("deterministic compensation policy matrix", () => {
       settings,
     )).toEqual({ blocked: false });
 
+    // A refund naming its own currency defers: this check has no order, so it
+    // cannot tell a foreign amount from a shop-currency one, and blocking on
+    // the assumption is what refused an ordinary 59.90 CAD refund against a
+    // limit of 50 dollars. Over-cap plans still reach a human —
+    // `planExceedsCompensationCap` escalates them at planning time and
+    // `createRefund` re-judges against the shop's own figure at execution.
+    for (const currency of ["USD", "CAD"]) {
+      expect(checkStaticToolPolicy(
+        "create_refund",
+        { order_id: "1001", amount: (cap + 0.01).toFixed(2), currency },
+        settings,
+      )).toEqual({ blocked: false });
+    }
+
+    // With no currency on the claim there is nothing to be foreign, so the cap
+    // is comparable and this is the one refund shape still judged here.
     expect(checkStaticToolPolicy(
       "create_refund",
-      { order_id: "1001", amount: (cap + 0.01).toFixed(2), currency: "USD" },
+      { order_id: "1001", amount: (cap + 0.01).toFixed(2) },
       settings,
-      shop,
     )).toMatchObject({ blocked: true });
 
-    // An amount in a currency this cap was not set in cannot be judged here.
-    // Blocking anyway is what refused an ordinary 59.90 CAD refund against a
-    // limit of 50 dollars; the execution-time check loads the order and judges
-    // it against the shop's own figure.
-    expect(checkStaticToolPolicy(
-      "create_refund",
-      { order_id: "1001", amount: (cap + 0.01).toFixed(2), currency: "CAD" },
-      settings,
-      shop,
-    )).toEqual({ blocked: false });
-    // Over cap and not a plain decimal amount. `Number` accepts these, the money
-    // canonicalizer does not, and rendering the refusal used to assert a Money
-    // that was null and throw a TypeError out of a client-bundled check.
+    // Amounts `Number` accepts that are no kind of money must not throw out of
+    // a check that also runs in the client bundle.
     for (const amount of ["5000.999", "1e3", "20."]) {
       expect(() => checkStaticToolPolicy(
         "create_refund",
-        { order_id: "1001", amount, currency: "USD" },
+        { order_id: "1001", amount },
         settings,
-        shop,
       )).not.toThrow();
     }
 
+    // Gift cards carry no currency field at all: shop money by construction,
+    // always comparable, and this is their only cap enforcement.
     expect(checkStaticToolPolicy(
       "create_gift_card",
       { customer_id: "501", amount: (cap + 0.01).toFixed(2) },
