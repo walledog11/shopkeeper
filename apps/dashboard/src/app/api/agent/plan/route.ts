@@ -12,7 +12,7 @@ import {
 import { getPendingCustomerMessageId } from "@shopkeeper/agent/plan-cache-shape";
 import { clearThreadPlanCache, dismissCurrentCachedPlan } from "@shopkeeper/agent/plan-execution";
 import { parseAgentPlanBody, parseAgentPlanDismissBody } from "@/lib/agent/api/validation";
-import { buildContext, hashInstructionForLog, planAgent } from "@/lib/agent/runner";
+import { buildContext, hashInstructionForLog, planAgent, suspendsAtProposal } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@shopkeeper/agent/settings";
 import {
   captureAgentPlanDecided,
@@ -110,7 +110,10 @@ export const POST = withOrgRoute(
     const ctx = await buildContext(threadId, org.id);
     // Every caller of this route is a merchant action in the ticket composer —
     // the customer-derived auto-plan runs in the gateway, not here.
-    const plan = await planAgent(ctx, instruction, settings, { merchantInstruction: true });
+    const plan = await planAgent(ctx, instruction, settings, {
+      merchantInstruction: true,
+      ...(suspendsAtProposal() ? { suspendAtProposal: true } : {}),
+    });
     const cacheRecord = buildAgentPlanCacheRecord({
       instruction,
       lastCustomerMessageId: pendingCustomerMessageId,

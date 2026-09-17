@@ -58,6 +58,27 @@ export interface PlanAgentOptions {
   suspendAtProposal?: boolean;
 }
 
+export type ProposalSuspensionMode = "off" | "compose_from_receipt";
+
+/**
+ * Whether support planning stops at the proposal and lets the reply be composed
+ * from the receipt, for the callers that produce the plan behind an approval
+ * card. Off unless explicitly enabled: it changes what the merchant is shown to
+ * approve — actions without the draft reply that travels with a plan today — so
+ * it is the gate that lets the slice merge before the cutover chooses a default.
+ */
+export function resolveProposalSuspensionMode(
+  value: string | undefined = process.env.AGENT_PROPOSAL_SUSPENSION_MODE,
+): ProposalSuspensionMode {
+  if (value === undefined || value.trim() === "") return "off";
+  if (value === "off" || value === "compose_from_receipt") return value;
+  throw new Error("AGENT_PROPOSAL_SUSPENSION_MODE must be off or compose_from_receipt");
+}
+
+export function suspendsAtProposal(): boolean {
+  return resolveProposalSuspensionMode() === "compose_from_receipt";
+}
+
 export async function planAgent(
   ctx: AgentContext,
   instruction: string,

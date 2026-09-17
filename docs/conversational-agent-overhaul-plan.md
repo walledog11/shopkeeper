@@ -14,9 +14,10 @@ Package 3's step 3 landed with that boundary because the two overlap, followed b
 step 1's deterministic bed, step 2's capture-mode suspension, step 4's autonomy
 decision for a proposal that composes from the receipt, step 5's composition
 of that reply from what the write returned, and step 6's compound case — all
-behind an option no caller sets yet. Step 6 also repaired the capability it
-needed: `create_partial_refund` had never been executable. Step 7 and the rest
-of packages 3–6 have not started.
+and step 7's gate that lets a caller set it. Step 6 also repaired the capability
+it needed: `create_partial_refund` had never been executable. Package 3's steps
+are all landed, with the flag off by default and the end-to-end run on a live
+store still owed. Packages 4–6 have not started.
 Created 2026-09-11; last updated 2026-09-16.
 
 Implementation detail expanded 2026-09-11 against the current repository. Names marked **proposed** describe work to implement, not APIs or tables that already exist. This document authorizes no production operation by itself.
@@ -1444,6 +1445,45 @@ Not done: `create_partial_refund` has still never run against a real store, so
 its first production execution is ahead of it. The slice also remains
 unreachable — nothing sets `suspendAtProposal`, which is step 7.
 
+Step 7 landed next: the gate that lets a caller set `suspendAtProposal`.
+`resolveProposalSuspensionMode` reads `AGENT_PROPOSAL_SUSPENSION_MODE` the way
+`resolvePlannerTierMode` reads its own — off unless explicitly enabled, throwing
+on any other value — and `suspendsAtProposal()` is what the two callers that
+produce the plan behind an approval card ask: the inbound auto-plan in
+`generate-thread-plan.ts` and the merchant's own plan request in the dashboard's
+`api/agent/plan` route. Both, because a thread must not draft a reply for one
+and compose from the receipt for the other. The replan paths are left alone.
+
+Off is the default because the flag changes what the merchant is shown to
+approve: actions without the draft reply that travels with a plan today. That
+also makes it the cutover switch package 6 owns, not this step.
+
+Nothing downstream needed changing. Every approval surface already enters
+`executeCurrentCachedHomePlan`, which has set `composeFromReceipt` for a
+suspended plan since step 5 — the dashboard card through `api/agent` and
+`api/agent/quick-approve`, the Telegram/iMessage card through
+`executeOperatorApprovedCachedPlan`, and gateway auto-execute through
+`maybeAutoExecuteCurrentCachedHomePlan`.
+
+Five cases cover it: the resolver's own values, each of the two planning callers
+passing the option only when the mode is on, and a suspended cached plan
+approved from the dashboard route and from the operator card reaching execution
+with `composeFromReceipt` — both asserted to fail when the plan is not suspended,
+so neither passes vacuously. Verified by `npm run typecheck`, `npm run lint`,
+`npm run test:unit` (1,167 agent, 471 gateway, 789 dashboard) and
+`npm run test:integration` (149 agent, 921 gateway with 1 skipped, 672 dashboard
+with 2 skipped; the gateway suite was red once on a different file and green on
+re-run, the known workspace-concurrency flake). No prompt, tool description or
+planner surface changed and the default is off, so no eval run is owed. Rollback
+is unsetting the variable.
+
+Not done: nothing has run the slice against a live store or a live model. With
+the flag off in both apps that is a deliberate next step rather than a gap in
+this one — turning it on changes the approval card, and the eval fixtures that
+assert `send_reply` inside a mutative plan (`refund-partial.json` among them) are
+written against the drafting planner. Package 4 changes fixtures and defaults
+together; package 6 owns the cutover.
+
 Build the slice in this order:
 
 1. Use a fake provider and scripted model outputs to exercise the loop ordering without live-model variability. Start with order reads, refund proposal, optional approval, actual refund result, and post-result composition.
@@ -1456,11 +1496,11 @@ Build the slice in this order:
 
 Required tests: approval of proposal A cannot run revised proposal B; a removed member cannot approve; a grant revoked after preview blocks dispatch; refund succeeds then model composition crashes and recovery composes without refunding again; an unknown refund blocks an equivalent fresh proposal; multiple writes preserve partial success. Add conversational evals only after these deterministic invariants pass.
 
-- [ ] Implement the investigate → propose → approve if necessary → execute → observe → respond loop for a refund task using existing provider operations.
-- [ ] Support missing information, changed merchant instructions, approval from another surface, definite failure, and unknown outcome.
-- [ ] Keep the model free to investigate and explain. Do not encode a refund conversation script.
-- [ ] Compose completion wording after execution from receipts; preserve exact approved drafts where applicable.
-- [ ] Attribute request outcome and response delivery to the durable task.
+- [x] Implement the investigate → propose → approve if necessary → execute → observe → respond loop for a refund task using existing provider operations. Deterministic only, and reachable solely through `AGENT_PROPOSAL_SUSPENSION_MODE`, which is off in both apps; no live store or live model has run it.
+- [ ] Support missing information, changed merchant instructions, approval from another surface, definite failure, and unknown outcome. Changed instructions, approval from either surface, definite failure and unknown outcome hold; a clarifying question asked mid-slice does not, and needs the durable suspension in package 5.
+- [x] Keep the model free to investigate and explain. Do not encode a refund conversation script.
+- [x] Compose completion wording after execution from receipts; preserve exact approved drafts where applicable.
+- [ ] Attribute request outcome and response delivery to the durable task. Support plans carry no `AgentTask`; only the dashboard operator request path does.
 
 Acceptance: both a straightforward refund and an unfamiliar compound request succeed through the same primitives. An approval cannot authorize revised inputs. A failed refund never becomes a successful receipt, and an unknown refund is not reissued. The merchant experiences a natural conversation, not a state-machine menu.
 

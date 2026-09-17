@@ -1,7 +1,7 @@
 import { db } from '@shopkeeper/db';
 import { requireOrgThread, getLatestConversationMessage } from '@shopkeeper/agent/thread-auth';
 import { buildContext } from '@shopkeeper/agent/build-context';
-import { planAgent } from '@shopkeeper/agent/planner';
+import { planAgent, suspendsAtProposal } from '@shopkeeper/agent/planner';
 import { decideAutonomy } from '@shopkeeper/agent/autonomy';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import {
@@ -252,7 +252,12 @@ export async function generateThreadPlan(
   }
 
   const ctx = await buildContext(threadId, organizationId, gatewayThreadSink);
-  const plan = await planAgent(ctx, instruction, settings);
+  const plan = await planAgent(
+    ctx,
+    instruction,
+    settings,
+    suspendsAtProposal() ? { suspendAtProposal: true } : undefined,
+  );
   const cacheRecord = buildAgentPlanCacheRecord({
     instruction,
     lastCustomerMessageId: pendingCustomerMessageId,

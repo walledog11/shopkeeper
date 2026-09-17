@@ -1,6 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { db } from '@shopkeeper/db';
-import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers';
+import { ChannelType, db } from '@shopkeeper/db';
+import {
+  cleanupTestData,
+  createTestCustomer,
+  createTestMessage,
+  createTestOrg,
+  createTestThread,
+} from '@shopkeeper/db/test-helpers';
+import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
+import { resolveAgentSettings } from '@shopkeeper/agent/settings';
+import type { AgentPlan } from '@shopkeeper/agent/types';
 
 const {
   mockExecuteAgentTurn,
@@ -29,9 +38,12 @@ vi.mock('../billing/write-gate.js', () => ({
 
 vi.mock('./agent-turn-deps.js', () => ({
   buildGatewayTurnDeps: vi.fn(() => ({ lock: {}, buildContext: vi.fn(), runAgent: vi.fn() })),
+  buildGatewayPlanExecutionDeps: vi.fn(() => ({
+    lock: {}, buildContext: vi.fn(), runAgent: vi.fn(), planAgent: vi.fn(),
+  })),
 }));
 
-import { executeOperatorAgentTurn } from './execute-operator-agent-turn.js';
+import { executeOperatorAgentTurn, executeOperatorApprovedCachedPlan } from './execute-operator-agent-turn.js';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 
@@ -109,6 +121,53 @@ describe('executeOperatorAgentTurn', () => {
       threadId: 'op_thread_1',
       actionsPerformed: [{ tool: 'get_shopify_orders', result: 'ok' }],
     });
+  });
+
+  // Package 3, step 7: the same suspended proposal reaching the operator approval
+  // surface — the card the merchant approves from Telegram or iMessage. It enters
+  // the shared boundary, so it owes the same composition the dashboard's does.
+  it('runs a suspended proposal approved from the operator card with composition', async () => {
+    const customer = await createTestCustomer(org.id, 'op-approve@test.com', { name: 'Owner' });
+    const thread = await createTestThread(org.id, customer.id, ChannelType.operator);
+    const message = await createTestMessage(thread.id, 'Refund the torn napkin');
+    const approvedToolCalls = [{ id: 'refund_1', name: 'create_refund', input: { order_id: '456', amount: '20.00' } }];
+    const plan: AgentPlan = {
+      instruction: 'Refund the torn napkin',
+      steps: [{
+        id: 'refund_1',
+        tool: 'create_refund',
+        label: 'Issue refund',
+        description: 'Refund $20.00',
+        category: 'action',
+        enabled: true,
+      }],
+      rawToolCalls: approvedToolCalls,
+      suspendedAtProposal: true,
+    };
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        cachedPlanMessageId: message.id,
+        cachedPlan: buildAgentPlanCacheRecord({
+          instruction: plan.instruction,
+          lastCustomerMessageId: message.id,
+          settings: resolveAgentSettings(null),
+          plan,
+        }) as object,
+      },
+    });
+
+    await executeOperatorApprovedCachedPlan({
+      orgId: org.id,
+      threadId: thread.id,
+      instruction: plan.instruction,
+      approvedToolCalls,
+    });
+
+    expect(mockExecuteAgentTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ composeFromReceipt: true }),
+      expect.anything(),
+    );
   });
 
   it('forwards the ledger and module tools the caller supplies', async () => {

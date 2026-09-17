@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installAgentLogger, resetAgentLoggerForTests, type AgentLogger } from "./logger.js";
-import { planAgent } from "./planner.js";
+import { planAgent, resolveProposalSuspensionMode } from "./planner.js";
 import type { AgentContext } from "./agent-context.js";
 import { AGENT_SETTINGS_DEFAULTS } from "./settings.js";
 import { emptyIntents, emptyRequestFacts, type ClassifierIntents } from "./classifier-signals.js";
@@ -472,6 +472,14 @@ describe("planAgent capture loop", () => {
     expect(plan.steps.map((step) => step.tool)).toEqual(["create_refund", "send_reply"]);
     expect(plan.readResults).toEqual({ tu_read: "Read result" });
     expect(mockCreate).toHaveBeenCalledTimes(2);
+  });
+
+  it("reads the suspension mode from the environment, off unless asked for", () => {
+    expect(resolveProposalSuspensionMode(undefined)).toBe("off");
+    expect(resolveProposalSuspensionMode("")).toBe("off");
+    expect(resolveProposalSuspensionMode("off")).toBe("off");
+    expect(resolveProposalSuspensionMode("compose_from_receipt")).toBe("compose_from_receipt");
+    expect(() => resolveProposalSuspensionMode("true")).toThrow(/AGENT_PROPOSAL_SUSPENSION_MODE/);
   });
 
   it("stops at the proposal when the caller composes from the receipt", async () => {
