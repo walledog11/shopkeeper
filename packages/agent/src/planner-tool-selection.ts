@@ -1,5 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { ClassifierSignals } from "./classifier-signals.js";
+import { TOOL_DEFINITIONS } from "./tools/registry/index.js";
+import type { AgentToolDefinition } from "./tools/registry/types.js";
 
 export const NAMESPACE_MISS_TOOL_NAME = "request_wider_tool_set";
 
@@ -258,4 +260,105 @@ export function namespaceMissReason(
     return null;
   }
   return rawToolCalls.length === 0 ? "empty_plan" : "incomplete_plan";
+}
+
+/**
+ * How many schemas one discovery call may return. Bounded because the point of
+ * discovery is to replace loading the whole registry: an unbounded "closest
+ * matches" is the full-registry fallback with a search step in front of it.
+ */
+export const DISCOVERY_RESULT_LIMIT = 5;
+
+export interface CapabilityDiscoveryInput {
+  /**
+   * The tools this actor is authorized to use — the planner's already-computed
+   * available set, which is where storefront allowlists, the settings category
+   * filter, the OAuth grant and module tool sets have already been applied.
+   * Discovery reads eligibility from the registry but takes candidacy from this
+   * set, so there is one authority mechanism rather than a second one here.
+   */
+  authorizedTools: readonly Anthropic.Tool[];
+  capability: string;
+  limit?: number;
+}
+
+export interface CapabilityDiscoveryResult {
+  tools: Anthropic.Tool[];
+  /** Eligible tools that matched before the limit was applied. */
+  matched: number;
+  /** Whether the limit dropped matches from `tools`. */
+  bounded: boolean;
+}
+
+// Function words only. Domain words like "order", "customer" and "refund" carry
+// the whole signal here, so nothing that could name a capability is stripped.
+const DISCOVERY_STOP_WORDS: ReadonlySet<string> = new Set([
+  "a", "an", "and", "are", "as", "at", "be", "by", "can", "do", "for", "from",
+  "how", "i", "in", "is", "it", "of", "on", "or", "s", "that", "the", "their",
+  "them", "then", "this", "to", "want", "was", "we", "what", "with", "you",
+]);
+
+function discoveryTokens(text: string): string[] {
+  return (text.toLowerCase().match(/[a-z0-9]+/g) ?? [])
+    .filter((token) => token.length > 1 && !DISCOVERY_STOP_WORDS.has(token));
+}
+
+function overlapScore(queryTokens: ReadonlySet<string>, text: string, weight: number): number {
+  const matched = new Set(discoveryTokens(text).filter((token) => queryTokens.has(token)));
+  return matched.size * weight;
+}
+
+/**
+ * Rank an authorized tool against the requested capability using the metadata
+ * the registry already carries. The name and the merchant-facing labels are the
+ * deliberate descriptions of what a tool does, so they outweigh the description
+ * prose the model reads.
+ *
+ * This is relevance, never permission: a score decides ordering within the
+ * authorized set and nothing else, so a capability string cannot reach a tool
+ * that set does not contain.
+ */
+function relevanceScore(
+  definition: AgentToolDefinition,
+  queryTokens: ReadonlySet<string>,
+): number {
+  return overlapScore(queryTokens, definition.name, 3)
+    + overlapScore(queryTokens, definition.labels.planStep, 2)
+    + overlapScore(queryTokens, definition.labels.executed, 2)
+    + overlapScore(queryTokens, definition.group, 2)
+    + overlapScore(queryTokens, definition.description, 1);
+}
+
+/**
+ * The bounded, registry-derived answer to "what can I use for this?".
+ *
+ * Returns nothing when nothing eligible matches. That is the point: an empty
+ * result is the honest signal that the capability is out of reach for this
+ * actor, and falling back to the full registry would put back the widening this
+ * replaces.
+ */
+export function discoverCapabilityTools(
+  input: CapabilityDiscoveryInput,
+): CapabilityDiscoveryResult {
+  const limit = input.limit ?? DISCOVERY_RESULT_LIMIT;
+  const queryTokens = new Set(discoveryTokens(input.capability));
+  if (queryTokens.size === 0 || limit <= 0) return { tools: [], matched: 0, bounded: false };
+
+  const authorized = new Map(input.authorizedTools.map((tool) => [tool.name, tool]));
+  const scored: { tool: Anthropic.Tool; score: number; order: number }[] = [];
+
+  TOOL_DEFINITIONS.forEach((definition, order) => {
+    if (definition.availability !== "active") return;
+    const tool = authorized.get(definition.name);
+    if (!tool) return;
+    const score = relevanceScore(definition, queryTokens);
+    if (score > 0) scored.push({ tool, score, order });
+  });
+
+  scored.sort((left, right) => right.score - left.score || left.order - right.order);
+  return {
+    tools: scored.slice(0, limit).map((entry) => entry.tool),
+    matched: scored.length,
+    bounded: scored.length > limit,
+  };
 }

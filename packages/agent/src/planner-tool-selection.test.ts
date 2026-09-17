@@ -1,12 +1,16 @@
+import type Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
 import { emptyIntents, emptyRequestFacts, type ClassifierSignals } from "./classifier-signals.js";
+import { GUEST_TOOL_NAMES, VERIFIED_TOOL_NAMES, isGuestOnlyTool } from "./guest-policy.js";
 import {
+  DISCOVERY_RESULT_LIMIT,
   NAMESPACE_MISS_TOOL_NAME,
   NARROWING_EXEMPT_TOOL_NAMES,
+  discoverCapabilityTools,
   namespaceMissReason,
   selectPlanningTools,
 } from "./planner-tool-selection.js";
-import { AGENT_TOOLS } from "./tools/registry/index.js";
+import { AGENT_TOOLS, selectAgentTools } from "./tools/registry/index.js";
 
 function signals(
   intents: Partial<ClassifierSignals["intents"]> = {},
@@ -230,5 +234,108 @@ describe("intent narrowing reaches every active tool", () => {
       .filter(name => !reachable.has(name) && !exempt.has(name))
       .sort();
     expect(orphaned).toEqual([]);
+  });
+});
+
+// The four authority modes as the planner computes them, so a test cannot
+// authorize something the product does not. Support and merchant differ in what
+// the host adds, not in how discovery reads the set — the merchant case below
+// adds the gateway module tool the way an operator turn does.
+const SUPPORT_TOOLS = selectAgentTools(undefined, null, null)
+  .filter((tool) => !isGuestOnlyTool(tool.name));
+const GUEST_TOOLS = selectAgentTools(undefined, GUEST_TOOL_NAMES, null);
+const VERIFIED_TOOLS = selectAgentTools(undefined, VERIFIED_TOOL_NAMES, null);
+const OPERATOR_MODULE_TOOL: Anthropic.Tool = {
+  name: "create_flash_sale",
+  description: "Start a flash sale discounting the catalog or named variants for a number of hours.",
+  input_schema: { type: "object", properties: {}, additionalProperties: false },
+};
+const MERCHANT_TOOLS = [...SUPPORT_TOOLS, OPERATOR_MODULE_TOOL];
+
+function discovered(
+  authorizedTools: readonly Anthropic.Tool[],
+  capability: string,
+  limit?: number,
+): string[] {
+  return discoverCapabilityTools({ authorizedTools, capability, limit }).tools
+    .map((tool) => tool.name);
+}
+
+describe("discoverCapabilityTools", () => {
+  it("surfaces the compensation capability a support turn is authorized for", () => {
+    const result = discoverCapabilityTools({
+      authorizedTools: SUPPORT_TOOLS,
+      capability: "refund this order",
+    });
+
+    expect(result.tools.map((tool) => tool.name)).toContain("create_refund");
+    expect(result.tools.length).toBeLessThanOrEqual(DISCOVERY_RESULT_LIMIT);
+  });
+
+  it("surfaces a merchant turn's capability without reaching its module schemas", () => {
+    // create_flash_sale is a gateway module tool, not a registry one. Discovery
+    // reads the registry, so the only way to hold it stays the module's own
+    // tool set — asking for it here is not a second way in.
+    expect(discovered(MERCHANT_TOOLS, "run a flash sale on the catalog")).not.toContain("create_flash_sale");
+    expect(discovered(MERCHANT_TOOLS, "how support is doing this week")).toContain("get_support_stats");
+  });
+
+  it("never discovers customer or order data for an anonymous storefront visitor", () => {
+    for (const capability of [
+      "refund my order",
+      "look up my customer account",
+      "see everything I have ordered",
+      "cancel my order",
+    ]) {
+      const names = discovered(GUEST_TOOLS, capability);
+      expect(names).not.toContain("create_refund");
+      expect(names).not.toContain("cancel_order");
+      expect(names).not.toContain("find_customer");
+      expect(names).not.toContain("get_shopify_orders");
+      expect(names).not.toContain("get_order_by_name");
+      expect(names.every((name) => (GUEST_TOOL_NAMES as readonly string[]).includes(name))).toBe(true);
+    }
+  });
+
+  it("gives a verified visitor their own order reads and no mutation", () => {
+    expect(discovered(VERIFIED_TOOLS, "check the tracking on my order")).toContain("get_order_tracking");
+    expect(discovered(VERIFIED_TOOLS, "refund my order")).not.toContain("create_refund");
+  });
+
+  it("bounds the result and reports what the bound dropped", () => {
+    const unbounded = discoverCapabilityTools({
+      authorizedTools: SUPPORT_TOOLS,
+      capability: "order",
+    });
+    expect(unbounded.matched).toBeGreaterThan(DISCOVERY_RESULT_LIMIT);
+    expect(unbounded.tools).toHaveLength(DISCOVERY_RESULT_LIMIT);
+    expect(unbounded.bounded).toBe(true);
+
+    const limited = discoverCapabilityTools({
+      authorizedTools: SUPPORT_TOOLS,
+      capability: "order",
+      limit: 2,
+    });
+    expect(limited.tools).toHaveLength(2);
+    expect(limited.tools).toEqual(unbounded.tools.slice(0, 2));
+  });
+
+  it("returns nothing rather than the registry when the capability is out of reach", () => {
+    const result = discoverCapabilityTools({
+      authorizedTools: SUPPORT_TOOLS,
+      capability: "schedule a courier pickup",
+    });
+
+    expect(result).toEqual({ tools: [], matched: 0, bounded: false });
+  });
+
+  it("does not discover a retired capability even when it is authorized", () => {
+    const retired: Anthropic.Tool = {
+      name: "issue_store_credit",
+      description: "Issue store credit to a customer.",
+      input_schema: { type: "object", properties: {}, additionalProperties: false },
+    };
+
+    expect(discovered([...SUPPORT_TOOLS, retired], "issue store credit")).not.toContain("issue_store_credit");
   });
 });

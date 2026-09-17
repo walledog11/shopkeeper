@@ -17,7 +17,8 @@ of that reply from what the write returned, and step 6's compound case — all
 and step 7's gate that lets a caller set it. Step 6 also repaired the capability
 it needed: `create_partial_refund` had never been executable. Package 3's steps
 are all landed, with the flag off by default and the end-to-end run on a live
-store still owed. Packages 4–6 have not started.
+store still owed. Package 4 has started: step 1's registry-derived bounded
+discovery is in place with no caller. Packages 5–6 have not started.
 Created 2026-09-11; last updated 2026-09-16.
 
 Implementation detail expanded 2026-09-11 against the current repository. Names marked **proposed** describe work to implement, not APIs or tables that already exist. This document authorizes no production operation by itself.
@@ -1515,6 +1516,50 @@ Implementation order:
 3. Split context dependencies into required identity/policy, required-for-this-operation evidence, and optional conversational context. Prefer lazy calls to existing loaders. Do not wrap all context loading in one catch-and-continue handler.
 4. Change gift-card default selection, shared instructions and core eval fixtures together. Keep historical receipt/read/reconciliation support. Preserve isolated merchant availability while adoption/scope is unresolved.
 5. Measure schemas loaded, discovery/model calls, total tokens/spend and end-to-end active latency for the same cases. A smaller first prompt alone does not pass this package.
+
+Step 1 landed first: `discoverCapabilityTools` in `planner-tool-selection.ts`.
+It answers "what can I use for this?" from `TOOL_DEFINITIONS` — the tool's name,
+its two merchant-facing labels, its group and its description are scored against
+the requested capability, and the highest scores are returned up to
+`DISCOVERY_RESULT_LIMIT`. Candidacy comes from the caller's already-authorized
+tool set, the one `planAgent` computes from the storefront allowlist, the
+settings category filter and the store's OAuth grant. Relevance therefore orders
+that set and nothing more, so a capability string cannot reach a tool the set
+does not hold — the plan's rule that a model-selected label is a hint and never
+an authorization decision, expressed as the shape of the function rather than as
+a check inside it.
+
+Two exclusions are structural rather than scored. A retired definition is never
+returned even when a caller authorizes it, and a tool absent from the registry is
+invisible to discovery — which is what isolates the operator module schemas:
+`create_flash_sale` sits in the gateway's own tool set, so asking discovery for a
+flash sale is not a second way into it. Nothing matching returns nothing; there
+is deliberately no fall-through to the registry, since that is the widening this
+package replaces.
+
+Eight cases cover it, one per authority mode and one per bound. Support finds
+`create_refund`; a merchant turn finds `get_support_stats` while its module tool
+stays out; an anonymous visitor asking to refund, cancel, or look up an account
+gets only guest-set tools back, never `create_refund`, `cancel_order`,
+`find_customer`, `get_shopify_orders` or `get_order_by_name`; a verified visitor
+gets `get_order_tracking` and still no mutation. The bound is asserted in both
+directions, exhaustion returns empty rather than the registry, and the retired
+case was checked against a build with the availability guard removed so it fails
+when the guard goes.
+
+Verified by `npm run typecheck`, `npm run lint` and `npm run test:unit` (1,174
+agent, 471 gateway, 789 dashboard). `npm run test:integration` (15 agent, 94
+gateway, 93 dashboard with 2 skipped) was red once on a dashboard cross-tenant
+integration case and green alone and on a full re-run — the known
+workspace-concurrency flake, in a file this change cannot reach. No prompt, tool
+description or planner surface changed, and the function has no caller, so no
+eval run is owed. Rollback is reverting the commit.
+
+Not done: nothing calls it. The model-facing tool that offers discovery belongs
+with step 2, which is where the full-registry widening it replaces is removed —
+adding it here would have left an unoffered schema sitting in the planning
+surface. `NAMESPACE_MISS_TOOL` and `widenNamespace` are untouched, so planning
+still widens to the full registry exactly as before.
 
 Required tests: address-only context excludes compensation schemas; a legitimate later refund can be discovered with sufficient authority; anonymous discovery cannot reveal customer/order data; a fabricated forbidden tool call is rejected at execution; unavailable optional KB/count data does not block unrelated allowed reads; unavailable policy evidence blocks its dependent write; discovery exhaustion yields a recoverable status or question rather than a full-registry retry.
 
