@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installAgentLogger, resetAgentLoggerForTests, type AgentLogger } from "./logger.js";
-import { planAgent, resolveProposalSuspensionMode } from "./planner.js";
+import {
+  planAgent,
+  resolveCapabilityDiscoveryMode,
+  resolveProposalSuspensionMode,
+} from "./planner.js";
 import type { AgentContext } from "./agent-context.js";
 import { AGENT_SETTINGS_DEFAULTS } from "./settings.js";
 import { emptyIntents, emptyRequestFacts, type ClassifierIntents } from "./classifier-signals.js";
@@ -174,6 +178,7 @@ beforeEach(() => {
 afterEach(() => {
   resetAgentLoggerForTests();
   vi.clearAllMocks();
+  vi.unstubAllEnvs();
 });
 
 describe("planAgent capture loop", () => {
@@ -794,5 +799,113 @@ describe("planAgent transcript integrity", () => {
     // none of the discarded attempt's turns carried over.
     expect(snapshots[replanIndex]).toEqual(snapshots[0]);
     expectValidToolPairing(snapshots);
+  });
+});
+
+describe("planAgent capability discovery", () => {
+  function enableDiscovery() {
+    vi.stubEnv("AGENT_CAPABILITY_DISCOVERY_MODE", "discover");
+  }
+
+  it("reads the discovery mode from the environment, off unless asked for", () => {
+    expect(resolveCapabilityDiscoveryMode(undefined)).toBe("off");
+    expect(resolveCapabilityDiscoveryMode("")).toBe("off");
+    expect(resolveCapabilityDiscoveryMode("off")).toBe("off");
+    expect(resolveCapabilityDiscoveryMode("discover")).toBe("discover");
+    expect(() => resolveCapabilityDiscoveryMode("true")).toThrow(/AGENT_CAPABILITY_DISCOVERY_MODE/);
+  });
+
+  it("opens an unclassified turn on the starter set instead of the registry", async () => {
+    enableDiscovery();
+    const injectedLogger = makeLogger();
+    installAgentLogger(injectedLogger);
+    mockCreate.mockResolvedValueOnce(singleToolUse("send_reply", { text: "Your order is on the way." }));
+
+    await planAgent(makeCtx(), "Where is my order?");
+
+    const firstCallTools = toolNamesForCall(0);
+    expect(firstCallTools).toContain("search_kb");
+    expect(firstCallTools).toContain("get_shopify_orders");
+    expect(firstCallTools).toContain("discover_capabilities");
+    expect(firstCallTools).not.toContain("create_refund");
+    expect(firstCallTools).not.toContain("request_wider_tool_set");
+    expect(completeLogPayload(injectedLogger)).toMatchObject({
+      toolSelectionBucket: "starter",
+      toolSelectionNarrowed: true,
+      namespaceMiss: false,
+    });
+  });
+
+  it("adds a discovered capability to the same turn instead of re-planning", async () => {
+    enableDiscovery();
+    const injectedLogger = makeLogger();
+    installAgentLogger(injectedLogger);
+    const snapshots: unknown[][] = [];
+    const responses = [
+      singleToolUse("discover_capabilities", { capability: "refund an order" }, "tu_discover"),
+      singleToolUse("create_refund", { order_id: "123", amount: "10.00" }, "tu_refund"),
+      singleToolUse("send_reply", { text: "Refunded." }, "tu_reply"),
+    ];
+    let callIndex = 0;
+    mockCreate.mockImplementation(async (params: { messages: unknown[] }) => {
+      snapshots.push(structuredClone(params.messages));
+      return responses[Math.min(callIndex++, responses.length - 1)];
+    });
+
+    const plan = await planAgent(makeCtx(), "Sort this out for them");
+
+    expect(toolNamesForCall(0)).not.toContain("create_refund");
+    expect(toolNamesForCall(1)).toContain("create_refund");
+    // The attempt continues rather than restarting: the second call still
+    // carries the first, and the discovery answer sits between them.
+    expect(snapshots[1]!.length).toBeGreaterThan(snapshots[0]!.length);
+    expect(JSON.stringify(snapshots[1])).toContain("create_refund");
+    // Discovery is a loop control, not something the merchant approves.
+    expect(plan.rawToolCalls.map((call) => call.name)).toEqual(["create_refund", "send_reply"]);
+    expect(plan.namespaceMiss).toBeUndefined();
+    expect(completeLogPayload(injectedLogger)).toMatchObject({ namespaceMiss: false });
+  });
+
+  it("tells the model a capability is out of reach rather than widening", async () => {
+    enableDiscovery();
+    installAgentLogger(makeLogger());
+    mockCreate
+      .mockResolvedValueOnce(singleToolUse("discover_capabilities", { capability: "book a courier" }, "tu_discover"))
+      .mockResolvedValueOnce(singleToolUse("escalate_to_human", { reason: "Needs a courier booking." }, "tu_escalate"));
+
+    const plan = await planAgent(makeCtx(), "Get a courier to collect this");
+
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+    const secondCallTools = toolNamesForCall(1);
+    expect(secondCallTools).toEqual(toolNamesForCall(0));
+    expect(JSON.stringify(mockCreate.mock.calls[1]![0].messages))
+      .toContain("No capability you are authorized to use matches");
+    expect(plan.namespaceMiss).toBeUndefined();
+  });
+
+  it("does not widen an empty plan to the full registry", async () => {
+    enableDiscovery();
+    const injectedLogger = makeLogger();
+    installAgentLogger(injectedLogger);
+    mockCreate
+      .mockResolvedValueOnce(endTurn("I need another capability."))
+      .mockResolvedValueOnce(endTurn("I still need another capability."));
+
+    const plan = await planAgent(makeCtx({
+      classifierSignals: {
+        ...classifierSignalsFor({ policy_question: true }),
+        requestFacts: { ...emptyRequestFacts(), ask: "policy_question" },
+      },
+    }), "Help with the latest request");
+
+    // One re-prompt for a terminal tool, and no third call planning against
+    // everything.
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+    expect(toolNamesForCall(1)).not.toContain("create_refund");
+    expect(plan.namespaceMiss).toBeUndefined();
+    expect(completeLogPayload(injectedLogger)).toMatchObject({
+      namespaceMiss: false,
+      namespaceMissReason: null,
+    });
   });
 });

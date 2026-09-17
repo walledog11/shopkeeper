@@ -18,8 +18,12 @@ and step 7's gate that lets a caller set it. Step 6 also repaired the capability
 it needed: `create_partial_refund` had never been executable. Package 3's steps
 are all landed, with the flag off by default and the end-to-end run on a live
 store still owed. Package 4 has started: step 1's registry-derived bounded
-discovery is in place with no caller. Packages 5–6 have not started.
-Created 2026-09-11; last updated 2026-09-16.
+discovery is in place, and step 2 gave it a caller — a classification the planner
+cannot use now takes the compact starter set rather than the full registry, the
+namespace-miss retry is replaced by in-turn discovery, and both sit behind
+`AGENT_CAPABILITY_DISCOVERY_MODE`, off in both apps. Packages 5–6 have not
+started.
+Created 2026-09-11; last updated 2026-09-17.
 
 Implementation detail expanded 2026-09-11 against the current repository. Names marked **proposed** describe work to implement, not APIs or tables that already exist. This document authorizes no production operation by itself.
 
@@ -1561,13 +1565,87 @@ adding it here would have left an unoffered schema sitting in the planning
 surface. `NAMESPACE_MISS_TOOL` and `widenNamespace` are untouched, so planning
 still widens to the full registry exactly as before.
 
+Step 2 landed next: the caller, and the widening it replaces. `DISCOVERY_TOOL`
+is a planning-only control like the namespace-miss tool it supersedes — never in
+the executable registry, never a plan step — and `selectPlanningTools` appends
+one or the other, never both, from a new `capabilityDiscovery` input that
+`planAgent` sets from `resolveCapabilityDiscoveryMode`. That reads
+`AGENT_CAPABILITY_DISCOVERY_MODE` the way the suspension gate reads its own: off
+unless explicitly enabled, throwing on any other value. Off is the default
+because what it changes is which schemas the model is offered, which is the
+cutover's decision rather than this step's.
+
+What moves under the gate is the answer to a classification the planner cannot
+use. `no_classifier_signals`, `classifier_unaligned` and `unclassified_request`
+— and the structural guard that falls back to that last reason — returned the
+whole authorized registry, and now return the compact starter set: the
+question/reply controls plus the KB, product and order reads, with every
+mutation left out and discovery in its place. The four authority modes are
+deliberately untouched. An operator turn, a storefront shopper, a merchant-answer
+replan and a merchant-authored instruction are not classification failures but an
+actor planning against their own set, so they keep it whole and are offered no
+discovery tool at all — which is also what keeps the gateway's operator module
+tools isolated, since they reach the model through that set and never through
+discovery.
+
+The widening goes with them. `widenNamespace` now runs only when the selection
+actually offered the namespace-miss tool, so under the gate there is no second
+full-registry planning call behind either the model's signal or an empty plan.
+The replacement happens inside the turn: a resolved discovery call appends the
+matching schemas to the loop's tool set and the attempt continues from the same
+transcript, budget and observations, where the retry discarded all three and
+re-planned against everything from a clean transcript. A no-match stays a
+no-match — it names what to do instead rather than inviting a broader ask,
+because a retry that widens on failure is the full-registry fallback with a
+search step in front of it.
+
+The loop seam is the one structural change outside selection. `runAgentLoop`
+held one immutable tool array for its lifetime; it now carries a set that a
+resolved discovery extends mid-turn, and capture mode keeps the discovery call
+out of `rawToolCalls`, the read executor and the terminal check. Discovery has no
+effect to approve, so the merchant sees what it found through the actions the
+model then proposes, not as a step of its own.
+
+Nine cases cover it. Three assert each classification failure takes the starter
+set with no compensation schema in it, one that a narrowed bucket swaps the
+retry for discovery, three that each authority mode keeps its whole set, and the
+resolver's own cases cover reaching `create_refund` from a starter set that
+withheld it, not re-handing a schema the model already holds, a guest whose
+words match reads but whose answer can still contain no mutation, exhaustion as
+a dead end, and an unnamed capability asking again rather than guessing. Four
+planner cases run the gate end to end: the resolver's values, an unclassified
+turn opening on the starter set, a discovered `create_refund` arriving in the
+second call of the same continuing transcript, a no-match answered in-loop, and
+an empty plan that does not widen.
+
+Verified by `npm run typecheck`, `npm run lint` (structure, knip baseline and
+per-workspace lint), `npm run test:unit` (1,191 agent, 471 gateway, 789
+dashboard) and `npm run test:integration` (149 agent, 921 gateway with 1 skipped,
+672 dashboard with 2 skipped), all green. The gate is off in both apps, so every
+fixture plans against exactly the tool set and prompt it did before — no prompt
+file changed, and both control-tool descriptions are unreachable with the flag
+off — and no eval run is owed. The baseline that matters is the one the cutover
+takes with the flag on. Rollback is reverting the commit; nothing persisted
+changes shape.
+
+Not done: the broad order-mutation bucket. A `mutative_request` classification
+still loads all nine order mutations at once, which is the other half of this
+package's first checkbox and is not a full-registry fallback, so step 2 left it
+where it is. Step 5's cost measurement is also owed, and it is the one that
+decides whether this trade is worth taking: discovery removes the widened replan
+and shrinks the first prompt, and adds a model call whenever the starter set was
+short by one capability. One case to measure specifically — a cheap-tier turn
+that discovers a mutation and proposes it is re-planned on the judgment tier from
+a clean transcript with the starter set, so it discovers the same capability
+twice.
+
 Required tests: address-only context excludes compensation schemas; a legitimate later refund can be discovered with sufficient authority; anonymous discovery cannot reveal customer/order data; a fabricated forbidden tool call is rejected at execution; unavailable optional KB/count data does not block unrelated allowed reads; unavailable policy evidence blocks its dependent write; discovery exhaustion yields a recoverable status or question rather than a full-registry retry.
 
-- [ ] Replace the broad order-mutation default with a compact initial selection and an explicit way to discover additional authorized capabilities.
-- [ ] Keep support, verified storefront, anonymous storefront, and merchant authority distinct in both selection and execution.
+- [ ] Replace the broad order-mutation default with a compact initial selection and an explicit way to discover additional authorized capabilities. Partial completion: every classification the planner cannot use now takes the starter set instead of the registry, and `discover_capabilities` is the explicit way to reach the rest; the `mutative_request` bucket still loads all nine order mutations.
+- [ ] Keep support, verified storefront, anonymous storefront, and merchant authority distinct in both selection and execution. Partial completion: selection and discovery hold the four modes apart under test; execution's own recheck is unchanged and not yet re-covered against a fabricated tool call.
 - [ ] Load relevant evidence on demand; preserve required identity and policy dependencies while allowing unrelated work to continue when optional context fails.
 - [ ] Remove gift-card issuance from default support selection and shared default instructions. Preserve historical handling; retain an isolated merchant capability only if the scope inventory justifies it.
-- [ ] Keep existing operator-only shop-management capabilities isolated. Do not rebuild or expand them during this overhaul.
+- [x] Keep existing operator-only shop-management capabilities isolated. Do not rebuild or expand them during this overhaul. They reach the model through the operator turn's own tool set, which discovery is not offered on, and they are not in the registry discovery reads.
 - [ ] Evaluate the complete cost of discovery and follow-up calls, not just the smaller initial prompt.
 
 Acceptance: an address question does not load compensation schemas by default; an unexpected legitimate need can discover the correct capability; discovery cannot increase authority. Adding an isolated optional capability does not alter default support prompts or tool lists.

@@ -30,8 +30,10 @@ import { resolveAgentSettings } from "./settings.js";
 import { enforceSpendCap } from "./spend.js";
 import { selectAgentTools } from "./tools/registry/index.js";
 import {
+  DISCOVERY_TOOL_NAME,
   NAMESPACE_MISS_TOOL_NAME,
   namespaceMissReason as resolveNamespaceMissReason,
+  runCapabilityDiscovery,
   selectPlanningTools,
 } from "./planner-tool-selection.js";
 import type { AgentPlan, OrgSettings, PlanRoutingEvidence, ProducedPlanSignalCode } from "./types.js";
@@ -77,6 +79,30 @@ export function resolveProposalSuspensionMode(
 
 export function suspendsAtProposal(): boolean {
   return resolveProposalSuspensionMode() === "compose_from_receipt";
+}
+
+export type CapabilityDiscoveryMode = "off" | "discover";
+
+/**
+ * Whether planning runs on the discovery runtime: a classification it cannot
+ * use takes the compact starter set instead of the whole registry, and a model
+ * that needs a capability it was not given discovers it inside the same turn
+ * instead of ending the attempt and re-planning against everything.
+ *
+ * Off unless explicitly enabled, like every other gate on this migration. What
+ * it changes is which schemas the model is offered, so the legacy widening has
+ * to stay reachable until the cutover chooses a default.
+ */
+export function resolveCapabilityDiscoveryMode(
+  value: string | undefined = process.env.AGENT_CAPABILITY_DISCOVERY_MODE,
+): CapabilityDiscoveryMode {
+  if (value === undefined || value.trim() === "") return "off";
+  if (value === "off" || value === "discover") return value;
+  throw new Error("AGENT_CAPABILITY_DISCOVERY_MODE must be off or discover");
+}
+
+export function usesCapabilityDiscovery(): boolean {
+  return resolveCapabilityDiscoveryMode() === "discover";
 }
 
 export async function planAgent(
@@ -132,7 +158,14 @@ export async function planAgent(
     storefrontMode: Boolean(storefrontTools),
     merchantAnswerReplan,
     merchantInstruction: options?.merchantInstruction === true,
+    capabilityDiscovery: usesCapabilityDiscovery(),
   });
+  // Read off the selection rather than the flag: these two are what the model
+  // was actually offered, and only one of them can be present.
+  const offersDiscovery = toolSelection.tools.some((tool) => tool.name === DISCOVERY_TOOL_NAME);
+  const offersNamespaceMiss = toolSelection.tools.some(
+    (tool) => tool.name === NAMESPACE_MISS_TOOL_NAME,
+  );
 
   await enforceSpendCap(ctx.orgId, resolvedSettings);
 
@@ -192,6 +225,19 @@ export async function planAgent(
     captureStopToolNames: tools.some((tool) => tool.name === NAMESPACE_MISS_TOOL_NAME)
       ? [NAMESPACE_MISS_TOOL_NAME]
       : undefined,
+    captureDiscovery: offersDiscovery
+      ? {
+        toolName: DISCOVERY_TOOL_NAME,
+        // Candidates come from the set this actor is already authorized for —
+        // the same set the widened retry used to plan against — so discovery
+        // orders that set and never adds to it.
+        resolve: (rawInput, activeToolNames) => runCapabilityDiscovery({
+          authorizedTools: availableTools,
+          activeToolNames,
+          rawInput,
+        }),
+      }
+      : undefined,
   });
 
   const tier = decidePlannerTier(ctx, { operatorMode });
@@ -214,7 +260,10 @@ export async function planAgent(
     return runLoop(pickModel("agent_run"), availableTools);
   };
 
-  const initialNamespaceMiss = toolSelection.narrowed
+  // Only a selection that offered the namespace-miss tool can widen. A discovery
+  // selection has already answered the same need inside the turn, so there is no
+  // second full-registry attempt behind it.
+  const initialNamespaceMiss = offersNamespaceMiss
     ? resolveNamespaceMissReason(loop.rawToolCalls)
     : null;
   if (initialNamespaceMiss) {
@@ -237,7 +286,7 @@ export async function planAgent(
     }, "[agent:plan] low-tier plan proposed non-trivial work — re-planning on judgment tier");
     tierDowngraded = false;
     loop = await runLoop(pickModel("agent_run"));
-    const judgmentNamespaceMiss = toolSelection.narrowed
+    const judgmentNamespaceMiss = offersNamespaceMiss
       ? resolveNamespaceMissReason(loop.rawToolCalls)
       : null;
     if (judgmentNamespaceMiss) {

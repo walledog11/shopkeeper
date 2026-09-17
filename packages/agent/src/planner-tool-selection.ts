@@ -25,6 +25,30 @@ const NAMESPACE_MISS_TOOL: Anthropic.Tool = {
   },
 };
 
+export const DISCOVERY_TOOL_NAME = "discover_capabilities";
+
+// Planning-only loop control, and the replacement for the namespace-miss retry:
+// instead of ending the attempt and re-planning against the whole registry, it
+// answers with the authorized schemas that match and the loop continues with
+// them. Like the namespace-miss tool it is deliberately not in the executable
+// registry — discovery has no commercial effect and is never a plan step.
+const DISCOVERY_TOOL: Anthropic.Tool = {
+  name: DISCOVERY_TOOL_NAME,
+  description:
+    "Call this when handling the request needs a capability that is not in your current tool list. Name the concrete capability, such as 'refund an order' or 'change the shipping address'. Matching tools you are authorized for become available on your next step. An empty answer means no such capability is available to you: ask, investigate differently, or escalate rather than calling this again for the same thing.",
+  input_schema: {
+    type: "object",
+    properties: {
+      capability: {
+        type: "string",
+        description: "The concrete capability you need, such as 'refund an order' or 'create a replacement order'.",
+      },
+    },
+    required: ["capability"],
+    additionalProperties: false,
+  },
+};
+
 type PlanningToolBucket =
   | "full"
   | "risk"
@@ -65,6 +89,11 @@ interface SelectPlanningToolsInput {
   // what the *customer* said, so applying it here would let a status question
   // hide a tool the merchant explicitly asked for.
   merchantInstruction?: boolean;
+  // The caller plans on the discovery runtime: an absent, stale or inconclusive
+  // classification takes the compact starter set rather than the whole registry,
+  // and a narrowed set carries discovery rather than the namespace-miss retry.
+  // Absent for every legacy caller, which keeps both full-registry fallbacks.
+  capabilityDiscovery?: boolean;
 }
 
 const CONTROL_TOOL_NAMES = [
@@ -91,6 +120,15 @@ const MUTATION_COMMON_TOOL_NAMES = [
   "get_inventory_status",
   ...ORDER_READ_TOOL_NAMES,
 ] as const;
+
+// The compact authorized starter set: the question/reply controls plus the KB,
+// product and order reads a turn opens with. Every mutation is reached through
+// discovery instead of being loaded by default, which is what replaces the full
+// registry as the answer to an absent or stale classification.
+const STARTER_TOOL_NAMES: ReadonlySet<string> = new Set<string>([
+  ...CONTROL_TOOL_NAMES,
+  ...MUTATION_COMMON_TOOL_NAMES,
+]);
 
 const BROAD_ORDER_MUTATION_TOOL_NAMES = [
   "update_shopify_order_address",
@@ -157,6 +195,25 @@ function fullSelection(
   };
 }
 
+/**
+ * What the discovery runtime returns where the legacy runtime returns the whole
+ * registry. The set is the same for every one of those reasons because the
+ * reason is exactly the thing that is unknown: nothing here is evidence about
+ * which mutation the request needs, so discovery answers that when it arises.
+ */
+function starterSelection(
+  availableTools: readonly Anthropic.Tool[],
+  reason: Exclude<PlanningToolSelectionReason, "intent_bucket">,
+): PlanningToolSelection {
+  const selected = availableTools.filter((tool) => STARTER_TOOL_NAMES.has(tool.name));
+  return {
+    tools: [...selected, DISCOVERY_TOOL],
+    bucket: "starter",
+    reason,
+    narrowed: true,
+  };
+}
+
 function addBucket(
   buckets: Set<PlanningToolBucket>,
   names: Set<string>,
@@ -169,8 +226,10 @@ function addBucket(
 
 /**
  * Narrow aligned customer plans by the classifier's typed intent output.
- * Unknown or internally inconsistent request shapes retain the full registry;
- * a false negative costs tokens, while a false positive can hide a capability.
+ * Unknown or internally inconsistent request shapes retain the full registry on
+ * the legacy runtime, where a false negative costs tokens while a false positive
+ * can hide a capability, and take the starter set plus discovery on the
+ * discovery runtime, where the same false positive is recoverable in-loop.
  *
  * RequestFacts deliberately do not participate. The eval suite grades the
  * boolean intent vocabulary on planner behavior; the facts fields are a
@@ -179,6 +238,9 @@ function addBucket(
  * protect those exact boundaries.
  */
 export function selectPlanningTools(input: SelectPlanningToolsInput): PlanningToolSelection {
+  // An actor's own authorized set, not an error fallback: an operator, a
+  // storefront shopper and a merchant-authored instruction each plan against
+  // everything they hold, so discovery has nothing to add to them.
   if (input.operatorMode) return fullSelection(input.availableTools, "operator");
   if (input.storefrontMode) return fullSelection(input.availableTools, "storefront_policy");
   if (input.merchantAnswerReplan) {
@@ -187,12 +249,20 @@ export function selectPlanningTools(input: SelectPlanningToolsInput): PlanningTo
   if (input.merchantInstruction) {
     return fullSelection(input.availableTools, "merchant_instruction");
   }
-  if (!input.classifierSignals) {
-    return fullSelection(input.availableTools, "no_classifier_signals");
-  }
-  if (!classifierIsAligned(input)) {
-    return fullSelection(input.availableTools, "classifier_unaligned");
-  }
+
+  // Everything below is a classification failure. The legacy runtime answers
+  // each with the full registry; the discovery runtime answers each with the
+  // starter set, because loading every schema is the widening it replaces.
+  const unclassified = (
+    reason: Exclude<PlanningToolSelectionReason, "intent_bucket">,
+  ): PlanningToolSelection => (
+    input.capabilityDiscovery
+      ? starterSelection(input.availableTools, reason)
+      : fullSelection(input.availableTools, reason)
+  );
+
+  if (!input.classifierSignals) return unclassified("no_classifier_signals");
+  if (!classifierIsAligned(input)) return unclassified("classifier_unaligned");
 
   const { intents } = input.classifierSignals;
   const availableNames = new Set(input.availableTools.map((tool) => tool.name));
@@ -223,7 +293,7 @@ export function selectPlanningTools(input: SelectPlanningToolsInput): PlanningTo
   // enough evidence to hide tools. The widened registry is the fallback before
   // a model call, not only after a failed narrow attempt.
   if (buckets.size === 0) {
-    return fullSelection(input.availableTools, "unclassified_request");
+    return unclassified("unclassified_request");
   }
 
   const selected = input.availableTools.filter((tool) => selectedNames.has(tool.name));
@@ -231,12 +301,12 @@ export function selectPlanningTools(input: SelectPlanningToolsInput): PlanningTo
   // remove a required control tool, fail open to the full planning registry.
   const requiredControlNames = CONTROL_TOOL_NAMES.filter((name) => availableNames.has(name));
   if (selected.length === 0 || requiredControlNames.some((name) => !selectedNames.has(name))) {
-    return fullSelection(input.availableTools, "unclassified_request");
+    return unclassified("unclassified_request");
   }
 
   const bucket = [...buckets].sort().join("+");
   return {
-    tools: [...selected, NAMESPACE_MISS_TOOL],
+    tools: [...selected, input.capabilityDiscovery ? DISCOVERY_TOOL : NAMESPACE_MISS_TOOL],
     bucket,
     reason: "intent_bucket",
     narrowed: true,
@@ -360,5 +430,58 @@ export function discoverCapabilityTools(
     tools: scored.slice(0, limit).map((entry) => entry.tool),
     matched: scored.length,
     bounded: scored.length > limit,
+  };
+}
+
+export interface CapabilityDiscoveryOutcome {
+  /** Schemas to add for the next model call: the matches not already offered. */
+  tools: Anthropic.Tool[];
+  status: "matched" | "no_match" | "invalid_input";
+  /** What the model is told, as the discovery call's tool result. */
+  content: string;
+}
+
+/**
+ * Resolve one `discover_capabilities` call. The model names a capability; the
+ * answer is the authorized schemas that match it and nothing else.
+ *
+ * An empty answer stays empty. Returning the registry here, or inviting a
+ * broader retry, would rebuild the widening this replaces one call later, so a
+ * no-match says so and names what to do instead.
+ */
+export function runCapabilityDiscovery(input: {
+  authorizedTools: readonly Anthropic.Tool[];
+  /** Tools the model already holds; a match among them needs no second copy. */
+  activeToolNames: ReadonlySet<string>;
+  rawInput: unknown;
+}): CapabilityDiscoveryOutcome {
+  const capability = typeof (input.rawInput as { capability?: unknown } | null)?.capability === "string"
+    ? ((input.rawInput as { capability: string }).capability).trim()
+    : "";
+  if (capability === "") {
+    return {
+      tools: [],
+      status: "invalid_input",
+      content: "No capability was named. Call this again with the concrete capability you need, or continue without it.",
+    };
+  }
+
+  const discovered = discoverCapabilityTools({
+    authorizedTools: input.authorizedTools,
+    capability,
+  });
+  if (discovered.tools.length === 0) {
+    return {
+      tools: [],
+      status: "no_match",
+      content: `No capability you are authorized to use matches "${capability}". Do not ask for it again — answer, ask, or escalate instead.`,
+    };
+  }
+
+  const names = discovered.tools.map((tool) => tool.name);
+  return {
+    tools: discovered.tools.filter((tool) => !input.activeToolNames.has(tool.name)),
+    status: "matched",
+    content: `Available to you from your next step: ${names.join(", ")}.`,
   };
 }

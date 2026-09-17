@@ -4,10 +4,12 @@ import { emptyIntents, emptyRequestFacts, type ClassifierSignals } from "./class
 import { GUEST_TOOL_NAMES, VERIFIED_TOOL_NAMES, isGuestOnlyTool } from "./guest-policy.js";
 import {
   DISCOVERY_RESULT_LIMIT,
+  DISCOVERY_TOOL_NAME,
   NAMESPACE_MISS_TOOL_NAME,
   NARROWING_EXEMPT_TOOL_NAMES,
   discoverCapabilityTools,
   namespaceMissReason,
+  runCapabilityDiscovery,
   selectPlanningTools,
 } from "./planner-tool-selection.js";
 import { AGENT_TOOLS, selectAgentTools } from "./tools/registry/index.js";
@@ -337,5 +339,133 @@ describe("discoverCapabilityTools", () => {
     };
 
     expect(discovered([...SUPPORT_TOOLS, retired], "issue store credit")).not.toContain("issue_store_credit");
+  });
+});
+
+describe("selectPlanningTools on the discovery runtime", () => {
+  const discover = (overrides: Partial<Parameters<typeof selectPlanningTools>[0]> = {}) =>
+    select({ capabilityDiscovery: true, ...overrides });
+
+  it.each([
+    ["no_classifier_signals", { classifierSignals: null }],
+    ["classifier_unaligned", { latestCustomerMessageId: "message_2" }],
+    ["unclassified_request", { classifierSignals: signals() }],
+  ])("answers %s with the starter set rather than the registry", (reason, overrides) => {
+    const selection = discover(overrides);
+
+    expect(selection).toMatchObject({ bucket: "starter", reason, narrowed: true });
+    const selected = names(selection);
+    expect(selected).toEqual(expect.arrayContaining([
+      "send_reply",
+      "escalate_to_human",
+      "ask_operator",
+      "search_kb",
+      "search_shopify_products",
+      "get_shopify_orders",
+      "get_order_tracking",
+      DISCOVERY_TOOL_NAME,
+    ]));
+    // The address question that opens this way never loads a compensation
+    // schema, which is the whole point of not failing open to the registry.
+    for (const withheld of [
+      "create_refund",
+      "create_partial_refund",
+      "create_gift_card",
+      "cancel_order",
+      "update_shopify_order_address",
+    ]) {
+      expect(selected).not.toContain(withheld);
+    }
+    expect(selected).not.toContain(NAMESPACE_MISS_TOOL_NAME);
+    expect(selected.length).toBeLessThan(AGENT_TOOLS.length);
+  });
+
+  it("offers discovery where the legacy runtime offers the widening retry", () => {
+    const selection = discover();
+
+    expect(selection).toMatchObject({ bucket: "order_status", narrowed: true });
+    expect(names(selection)).toContain(DISCOVERY_TOOL_NAME);
+    expect(names(selection)).not.toContain(NAMESPACE_MISS_TOOL_NAME);
+  });
+
+  it.each([
+    ["operator", { operatorMode: true }],
+    ["storefront_policy", { storefrontMode: true }],
+    ["merchant_instruction", { merchantInstruction: true }],
+  ])("leaves the %s actor's own authorized set whole", (reason, overrides) => {
+    const selection = discover(overrides);
+
+    expect(selection).toMatchObject({ bucket: "full", reason, narrowed: false });
+    expect(names(selection)).toEqual(AGENT_TOOLS.map((tool) => tool.name));
+    expect(names(selection)).not.toContain(DISCOVERY_TOOL_NAME);
+  });
+});
+
+describe("runCapabilityDiscovery", () => {
+  const starterToolNames = new Set(
+    selectPlanningTools({
+      availableTools: SUPPORT_TOOLS,
+      classifierSignals: null,
+      operatorMode: false,
+      storefrontMode: false,
+      merchantAnswerReplan: false,
+      capabilityDiscovery: true,
+    }).tools.map((tool) => tool.name),
+  );
+
+  function resolve(capability: unknown, authorizedTools: readonly Anthropic.Tool[] = SUPPORT_TOOLS) {
+    return runCapabilityDiscovery({
+      authorizedTools,
+      activeToolNames: starterToolNames,
+      rawInput: { capability },
+    });
+  }
+
+  it("reaches the compensation capability the starter set withheld", () => {
+    expect(starterToolNames.has("create_refund")).toBe(false);
+    const result = resolve("refund this order");
+
+    expect(result.status).toBe("matched");
+    expect(result.tools.map((tool) => tool.name)).toContain("create_refund");
+    expect(result.content).toContain("create_refund");
+  });
+
+  it("does not hand back a schema the model already holds", () => {
+    const result = resolve("search the knowledge base");
+
+    expect(result.status).toBe("matched");
+    expect(result.content).toContain("search_kb");
+    expect(result.tools.map((tool) => tool.name)).not.toContain("search_kb");
+  });
+
+  it("cannot reach a capability this actor is not authorized for", () => {
+    // The words still match guest-safe reads, so the answer is not empty — but
+    // the capability asked for is not in it, and nothing outside the guest set
+    // can be.
+    const result = resolve("refund my order", GUEST_TOOLS);
+
+    const offered = result.tools.map((tool) => tool.name);
+    expect(offered).not.toContain("create_refund");
+    expect(offered.every((name) => (GUEST_TOOL_NAMES as readonly string[]).includes(name))).toBe(true);
+    expect(result.content).not.toContain("create_refund");
+  });
+
+  it("answers exhaustion with a dead end instead of a wider retry", () => {
+    const result = resolve("schedule a courier pickup");
+
+    expect(result).toMatchObject({ status: "no_match", tools: [] });
+    expect(result.content).toContain("Do not ask for it again");
+  });
+
+  it("asks again rather than guessing when nothing was named", () => {
+    for (const rawInput of [undefined, null, {}, { capability: "" }, { capability: 7 }]) {
+      const result = runCapabilityDiscovery({
+        authorizedTools: SUPPORT_TOOLS,
+        activeToolNames: starterToolNames,
+        rawInput,
+      });
+
+      expect(result).toMatchObject({ status: "invalid_input", tools: [] });
+    }
   });
 });
