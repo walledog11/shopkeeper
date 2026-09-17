@@ -329,7 +329,14 @@ export interface ToolExecutionDeps {
 export interface ToolPolicyMetadata {
   categoryPermission: boolean;
   refundAmountLimits?: boolean;
-  dailyRefundSpendLimit?: boolean;
+  /**
+   * That this tool's compensation spends against the daily budget, and where its
+   * amount comes from. `"input"` is on the call the model made, so the executor
+   * reserves it before dispatch. `"provider"` only exists once Shopify has priced
+   * the selection, so the adapter reserves it mid-execution through
+   * `ShopifyContext.reserveCompensation`.
+   */
+  dailyRefundSpendLimit?: "input" | "provider";
   cancellationDisabled?: boolean;
   customLineItemsDisabled?: boolean;
 }

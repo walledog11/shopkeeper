@@ -7,7 +7,9 @@
 // by task-approval and the receipt parsers, and are asserted beside those.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AGENT_SETTINGS_DEFAULTS } from "./settings.js";
+import { planAgent } from "./planner.js";
 import { runAgent } from "./run.js";
+import { TOOL_CATEGORIES } from "./tools/registry/index.js";
 import { jsonResponse } from "./testing/json-response.js";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { AgentContext } from "./agent-context.js";
@@ -16,10 +18,12 @@ const {
   mockCreate,
   mockSendReply,
   mockReserveDailyRefundSpend,
+  mockKbSearch,
 } = vi.hoisted(() => ({
   mockCreate: vi.fn(),
   mockSendReply: vi.fn(),
   mockReserveDailyRefundSpend: vi.fn(),
+  mockKbSearch: vi.fn(),
 }));
 
 vi.mock("@anthropic-ai/sdk", () => ({
@@ -35,7 +39,7 @@ vi.mock("@shopkeeper/db", () => ({
   markDailyRefundSpendReservationUnknown: vi.fn().mockResolvedValue(undefined),
   recordReturnWatch: vi.fn(),
   db: {
-    kbArticle: { findMany: vi.fn().mockResolvedValue([]) },
+    kbArticle: { findMany: mockKbSearch },
     kbCitation: { createMany: vi.fn().mockResolvedValue({ count: 0 }) },
   },
 }));
@@ -195,6 +199,7 @@ beforeEach(() => {
       },
     };
   });
+  mockKbSearch.mockReset().mockResolvedValue([]);
   mockReserveDailyRefundSpend.mockResolvedValue({
     kind: "reserved",
     reservation: { id: "reservation_1", status: "reserved" },
@@ -466,5 +471,273 @@ describe("composing an approved proposal's completion from its receipt", () => {
     expect(events).not.toContain("io:send_reply");
     expect(result.actionsPerformed).toHaveLength(1);
     expect(result.actionsPerformed[0]).toMatchObject({ tool: "create_refund", status: "success" });
+  });
+});
+
+// Package 3, step 6: the compound case. Not a whole-order refund a fixture could
+// have anticipated — the order and the store's policy are read, one line of the
+// order is refunded, and the completion reports the figure Shopify priced rather
+// than one the model named. The merchant changing the instruction before
+// approving, and the provider refusing the write, are the two branches on it.
+describe("a compound task: read the order and the policy, refund one line, report it", () => {
+  const COMPOUND_ORDER = {
+    id: 456,
+    name: "#1011",
+    currency: "USD",
+    total_price: "30.00",
+    financial_status: "paid",
+    fulfillment_status: "fulfilled",
+    created_at: "2026-05-14T12:00:00-07:00",
+    refunds: [],
+    line_items: [
+      { id: 11, title: "Linen napkin", quantity: 2, current_quantity: 2, price: "8.50" },
+      { id: 12, title: "Tablecloth", quantity: 1, current_quantity: 1, price: "13.00" },
+    ],
+  };
+
+  const NAPKIN_POLICY = {
+    id: "kb_1",
+    title: "Damaged items",
+    body: "Refund the damaged item on its own; the rest of the order stands.",
+    tags: [],
+  };
+
+  // The proposal the merchant approves: one napkin, no amount. This tool takes
+  // line items and quantities, so there is no figure for the model to get wrong.
+  const PARTIAL_REFUND_PROPOSAL = {
+    id: "t3",
+    name: "create_partial_refund",
+    input: { order_id: "456", items: [{ line_item_id: "11", quantity: 1 }], reason: "One napkin arrived torn" },
+  };
+
+  // What the commit was actually asked to refund, captured from the mutation.
+  interface CommittedRefund {
+    refundLineItems?: { lineItemId: string; quantity: number; restockType: string }[];
+    transactions?: { amount: string }[];
+  }
+  interface ProviderRequestBody {
+    refund?: { refund_line_items?: { line_item_id: string; quantity: number }[] };
+    variables?: { input?: CommittedRefund };
+  }
+  let committedRefund: CommittedRefund | null = null;
+
+  // Shopify prices the selection, so the fake prices it too: the amount follows
+  // the quantity asked for. A fake answering the same figure to every selection
+  // would let a revised proposal pass while the original one was committed.
+  function installCompoundShopify(options: { commit?: "refused" } = {}) {
+    vi.stubGlobal("fetch", vi.fn(async (url: string | URL, init?: RequestInit) => {
+      const href = typeof url === "string" ? url : url.toString();
+      const body = typeof init?.body === "string"
+        ? JSON.parse(init.body) as ProviderRequestBody
+        : null;
+      if (href.includes("orders.json")) {
+        events.push("provider:lookup_order");
+        return jsonResponse({ orders: [COMPOUND_ORDER] }, { headers: { "retry-after": "0" } });
+      }
+      if (href.includes("/refunds/calculate")) {
+        events.push("provider:calculate_refund");
+        const lines = body?.refund?.refund_line_items ?? [];
+        const units = lines.reduce((total, line) => total + Number(line.quantity ?? 0), 0);
+        return jsonResponse({
+          refund: {
+            currency: "USD",
+            refund_line_items: lines.map(line => ({ ...line, restock_type: "no_restock" })),
+            transactions: [{
+              kind: "suggested_refund",
+              gateway: "shopify_payments",
+              parent_id: 222,
+              amount: (units * 8.5).toFixed(2),
+              maximum_refundable: "30.00",
+            }],
+          },
+        }, { headers: { "retry-after": "0" } });
+      }
+      if (href.includes("/graphql")) {
+        committedRefund = body?.variables?.input ?? null;
+        if (options.commit === "refused") {
+          events.push("provider:refund_refused");
+          return jsonResponse({
+            data: {
+              refundCreate: {
+                refund: null,
+                userErrors: [{ field: ["refundLineItems"], message: "That line item is not refundable." }],
+              },
+            },
+          }, { headers: { "retry-after": "0" } });
+        }
+        events.push("provider:commit_refund");
+        return jsonResponse({
+          data: {
+            refundCreate: {
+              refund: {
+                id: "gid://shopify/Refund/9002",
+                totalRefundedSet: { presentmentMoney: { amount: committedRefund?.transactions?.[0]?.amount ?? "0.00" } },
+                transactions: { nodes: [{ id: "gid://shopify/OrderTransaction/7002", status: "SUCCESS" }] },
+              },
+              userErrors: [],
+            },
+          },
+        }, { headers: { "retry-after": "0" } });
+      }
+      events.push("provider:read_order");
+      return jsonResponse({ order: COMPOUND_ORDER }, { headers: { "retry-after": "0" } });
+    }));
+  }
+
+  beforeEach(() => {
+    committedRefund = null;
+    installCompoundShopify();
+    // The executor runs two KB queries: the search itself and the memory-override
+    // sweep behind it. Only the first is the policy read.
+    mockKbSearch.mockImplementation(async (args: { where?: { OR?: unknown } }) => {
+      if (!args?.where?.OR) return [];
+      events.push("read:policy");
+      return [NAPKIN_POLICY];
+    });
+  });
+
+  function proposedActions(plan: { rawToolCalls: { id: string; name: string; input: unknown }[] }) {
+    return plan.rawToolCalls.filter(call => TOOL_CATEGORIES[call.name] === "action");
+  }
+
+  it("reads the order and the policy, proposes one line, and reports what Shopify priced", async () => {
+    let composingMessages: Anthropic.MessageParam[] = [];
+    mockCreate
+      .mockImplementationOnce(async () => {
+        events.push("model:plan_1");
+        return toolUse("t1", "get_order_by_name", { order_name: "#1011" });
+      })
+      .mockImplementationOnce(async () => {
+        events.push("model:plan_2");
+        return toolUse("t2", "search_kb", { query: "damaged item refund policy" });
+      })
+      .mockImplementationOnce(async () => {
+        events.push("model:plan_3");
+        return toolUse("t3", "create_partial_refund", PARTIAL_REFUND_PROPOSAL.input);
+      })
+      // Scripted so that a planning turn asking for a draft would show up as a
+      // composing call before the refund committed, rather than as a script that
+      // ran out.
+      .mockImplementationOnce(async (params: Anthropic.MessageCreateParams) => {
+        events.push("model:compose_1");
+        composingMessages = structuredClone(params.messages);
+        return toolUse("t4", "send_reply", { text: "We've refunded the torn napkin." });
+      })
+      .mockImplementationOnce(async () => {
+        events.push("model:compose_2");
+        return { stop_reason: "end_turn", content: [{ type: "text", text: "Told her." }], usage: USAGE };
+      });
+
+    const ctx = supportCtx();
+    const instruction = "One of the napkins arrived torn - sort it out.";
+    const plan = await planAgent(ctx, instruction, LIVE_SETTINGS, { suspendAtProposal: true });
+
+    // Planning investigated and stopped at the proposal: no reply describing a
+    // refund that had not happened.
+    expect(plan.rawToolCalls.map(call => call.name))
+      .toEqual(["get_order_by_name", "search_kb", "create_partial_refund"]);
+    expect(plan.suspendedAtProposal).toBe(true);
+
+    const result = await runAgent(ctx, instruction, proposedActions(plan), LIVE_SETTINGS, {
+      composeFromReceipt: true,
+    });
+
+    expect(events).toEqual([
+      "model:plan_1",
+      "provider:lookup_order",
+      "model:plan_2",
+      "read:policy",
+      "model:plan_3",
+      "provider:read_order",
+      "provider:calculate_refund",
+      "provider:commit_refund",
+      "model:compose_1",
+      "io:send_reply",
+      "model:compose_2",
+    ]);
+    expect(result.actionsPerformed.map(action => action.tool))
+      .toEqual(["create_partial_refund", "send_reply"]);
+
+    // One line of three units, priced by Shopify, and that figure is the one the
+    // composing call is given to report.
+    expect(committedRefund?.refundLineItems)
+      .toEqual([{ lineItemId: "gid://shopify/LineItem/11", quantity: 1, restockType: "NO_RESTOCK" }]);
+    expect(committedRefund?.transactions?.[0]?.amount).toBe("8.50");
+    expect(JSON.stringify(composingMessages.at(-1)?.content)).toContain("8.50");
+  });
+
+  it("commits the proposal the merchant revised to, not the one it replaced", async () => {
+    mockCreate
+      .mockImplementationOnce(async () => {
+        events.push("model:plan_1");
+        return toolUse("t1", "get_order_by_name", { order_name: "#1011" });
+      })
+      .mockImplementationOnce(async () => {
+        events.push("model:plan_2");
+        return toolUse("t3", "create_partial_refund", PARTIAL_REFUND_PROPOSAL.input);
+      })
+      .mockImplementationOnce(async () => {
+        events.push("model:replan");
+        return toolUse("t5", "create_partial_refund", {
+          order_id: "456",
+          items: [{ line_item_id: "11", quantity: 2 }],
+          reason: "Both napkins arrived torn",
+        });
+      })
+      .mockImplementationOnce(async () => {
+        events.push("model:compose_1");
+        return toolUse("t6", "send_reply", { text: "We've refunded both napkins." });
+      })
+      .mockImplementationOnce(async () => {
+        events.push("model:compose_2");
+        return { stop_reason: "end_turn", content: [{ type: "text", text: "Told her." }], usage: USAGE };
+      });
+
+    const ctx = supportCtx();
+    const first = await planAgent(ctx, "One of the napkins arrived torn - sort it out.", LIVE_SETTINGS, {
+      suspendAtProposal: true,
+    });
+    // The merchant changes the instruction instead of approving what they were
+    // shown, so the proposal they approve is the one planned from the new one.
+    const revisedInstruction = "Both napkins were torn - refund both of them.";
+    const revised = await planAgent(ctx, revisedInstruction, LIVE_SETTINGS, { suspendAtProposal: true });
+
+    const result = await runAgent(ctx, revisedInstruction, proposedActions(revised), LIVE_SETTINGS, {
+      composeFromReceipt: true,
+    });
+
+    // The superseded proposal named one napkin and never priced or committed
+    // anything; the money that moved is the revised selection's.
+    expect(proposedActions(first)[0]?.input).toMatchObject({ items: [{ line_item_id: "11", quantity: 1 }] });
+    expect(events.filter(event => event === "provider:commit_refund")).toHaveLength(1);
+    expect(committedRefund?.refundLineItems)
+      .toEqual([{ lineItemId: "gid://shopify/LineItem/11", quantity: 2, restockType: "NO_RESTOCK" }]);
+    expect(committedRefund?.transactions?.[0]?.amount).toBe("17.00");
+    expect(result.actionsPerformed.map(action => action.tool))
+      .toEqual(["create_partial_refund", "send_reply"]);
+  });
+
+  it("tells the customer nothing when the provider refuses the refund", async () => {
+    installCompoundShopify({ commit: "refused" });
+    mockCreate.mockImplementation(async () => {
+      events.push("model:call");
+      return { stop_reason: "end_turn", content: [{ type: "text", text: "Done." }], usage: USAGE };
+    });
+
+    const result = await runAgent(
+      supportCtx(),
+      "One of the napkins arrived torn - sort it out.",
+      [PARTIAL_REFUND_PROPOSAL],
+      LIVE_SETTINGS,
+      { composeFromReceipt: true },
+    );
+
+    // A refused write has nothing to report as done, so the model is never asked
+    // for a word and the customer hears nothing from this turn.
+    expect(events).toContain("provider:refund_refused");
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(events).not.toContain("io:send_reply");
+    expect(result.actionsPerformed).toHaveLength(1);
+    expect(result.actionsPerformed[0]).toMatchObject({ tool: "create_partial_refund", status: "error" });
   });
 });

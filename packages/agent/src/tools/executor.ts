@@ -42,6 +42,7 @@ import {
   toolPolicyBlock,
   toolUnknown,
   validateToolResultReceipt,
+  type CompensationReservation,
   type ReceiptV1,
   type ToolResult,
   type ToolStatus,
@@ -280,72 +281,103 @@ async function executePreparedTool(
     };
   }
 
-  const amount = Number((input as { amount?: unknown }).amount);
-  const requestedCents = Math.round(amount * 100);
-  if (!Number.isSafeInteger(requestedCents) || requestedCents <= 0) {
-    return {
-      result: toolError("Error: compensation amount must be a positive currency amount."),
-      policyBlocked: true,
-    };
-  }
-
   const operationKey = ctx.shopify?.operationId ?? `unscoped:${randomUUID()}`;
-  const executionCtx = ctx.shopify?.operationId || !ctx.shopify
-    ? ctx
-    : {
-        ...ctx,
-        shopify: { ...ctx.shopify, operationId: operationKey },
-      };
   const capCents = resolvedSettings.dailyRefundCap !== null
     && resolvedSettings.dailyRefundCap > 0
     ? Math.round(resolvedSettings.dailyRefundCap * 100)
     : null;
-  const reservation = await reserveDailyRefundSpend({
-    orgId: ctx.orgId,
-    operationKey,
-    tool: definition.name,
-    input: reservationJson(input),
-    requestedCents,
-    capCents,
-  });
-  if (reservation.kind === "blocked") {
-    const cap = resolvedSettings.dailyRefundCap;
-    return {
-      result: toolError(formatPolicyError(
-        `daily compensation cap of $${cap} reached (shared across refunds and gift cards); $${(reservation.remainingCents / 100).toFixed(2)} remaining today.`,
-      )),
-      policyBlocked: true,
-    };
+
+  // One reservation per execution either way. What differs is when it is made:
+  // an amount the model named is reserved before dispatch, an amount the
+  // provider prices is reserved by the adapter that priced it.
+  let reservationId: string | null = null;
+  const reserve = async (requestedCents: number): Promise<CompensationReservation> => {
+    const reservation = await reserveDailyRefundSpend({
+      orgId: ctx.orgId,
+      operationKey,
+      tool: definition.name,
+      input: reservationJson(input),
+      requestedCents,
+      capCents,
+    });
+    if (reservation.kind === "blocked") {
+      const cap = resolvedSettings.dailyRefundCap;
+      return {
+        kind: "refused",
+        result: toolError(formatPolicyError(
+          `daily compensation cap of $${cap} reached (shared across refunds and gift cards); $${(reservation.remainingCents / 100).toFixed(2)} remaining today.`,
+        )),
+        policyBlocked: true,
+      };
+    }
+    if (reservation.kind === "duplicate") {
+      return {
+        kind: "refused",
+        result: duplicateReservationResult(reservation.reservation.status),
+        policyBlocked: false,
+      };
+    }
+    reservationId = reservation.reservation.id;
+    return { kind: "reserved" };
+  };
+
+  const providerPriced = definition.policy.dailyRefundSpendLimit === "provider";
+  if (!providerPriced) {
+    const amount = Number((input as { amount?: unknown }).amount);
+    const requestedCents = Math.round(amount * 100);
+    if (!Number.isSafeInteger(requestedCents) || requestedCents <= 0) {
+      return {
+        result: toolError("Error: compensation amount must be a positive currency amount."),
+        policyBlocked: true,
+      };
+    }
+    const reserved = await reserve(requestedCents);
+    if (reserved.kind === "refused") {
+      return { result: reserved.result, policyBlocked: reserved.policyBlocked };
+    }
   }
-  if (reservation.kind === "duplicate") {
-    return {
-      result: duplicateReservationResult(reservation.reservation.status),
-      policyBlocked: false,
-    };
-  }
+
+  const executionCtx = ctx.shopify
+    ? {
+        ...ctx,
+        shopify: {
+          ...ctx.shopify,
+          operationId: ctx.shopify.operationId ?? operationKey,
+          ...(providerPriced ? { reserveCompensation: reserve } : {}),
+        },
+      }
+    : ctx;
 
   let result: ToolResult;
   try {
     result = await executeDefinitionWithValidatedReceipt(definition, input, executionCtx, resolvedSettings);
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    await markDailyRefundSpendReservationUnknown(reservation.reservation.id, reason).catch(() => undefined);
+    if (reservationId) {
+      await markDailyRefundSpendReservationUnknown(reservationId, reason).catch(() => undefined);
+    }
     throw error;
   }
 
+  // A provider-priced tool that stopped before pricing never reserved anything,
+  // so there is nothing to settle.
+  if (!reservationId) {
+    return { result, policyBlocked: result.status === "policy_block" };
+  }
+
   if (result.status === "unknown") {
-    await markDailyRefundSpendReservationUnknown(reservation.reservation.id, result.message);
+    await markDailyRefundSpendReservationUnknown(reservationId, result.message);
     return { result, policyBlocked: false };
   }
   if (result.status !== "ok") {
-    await releaseDailyRefundSpendReservation(reservation.reservation.id, result.message);
+    await releaseDailyRefundSpendReservation(reservationId, result.message);
     return { result, policyBlocked: result.status === "policy_block" };
   }
 
   const committedCents = committedSpendCents(result);
   if (committedCents === null) {
     const message = "Unknown: provider reported success but the committed compensation amount could not be verified.";
-    await markDailyRefundSpendReservationUnknown(reservation.reservation.id, message);
+    await markDailyRefundSpendReservationUnknown(reservationId, message);
     const unknown = toolUnknown(message);
     return {
       result: result.receipt
@@ -355,11 +387,11 @@ async function executePreparedTool(
     };
   }
   try {
-    await commitDailyRefundSpendReservation(reservation.reservation.id, committedCents);
+    await commitDailyRefundSpendReservation(reservationId, committedCents);
     return { result, policyBlocked: false };
   } catch {
     const message = "Unknown: the provider action completed but its compensation budget record could not be finalized.";
-    await markDailyRefundSpendReservationUnknown(reservation.reservation.id, message).catch(() => undefined);
+    await markDailyRefundSpendReservationUnknown(reservationId, message).catch(() => undefined);
     const unknown = toolUnknown(message);
     return {
       result: result.receipt

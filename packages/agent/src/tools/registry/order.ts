@@ -134,7 +134,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     planStepLabel: "Issue refund",
     policy: {
       refundAmountLimits: true,
-      dailyRefundSpendLimit: true,
+      dailyRefundSpendLimit: "input",
     },
     execute: async (input: CreateRefundInput, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
@@ -169,10 +169,10 @@ export const ORDER_TOOL_DEFINITIONS = [
     planStepLabel: "Issue partial refund",
     policy: {
       // Deliberately not `refundAmountLimits`: that check reads `input.amount`,
-      // and this tool has none. The per-call cap is applied inside the
-      // implementation to Shopify's calculated figure, which is the only amount
-      // that exists before the refund is committed.
-      dailyRefundSpendLimit: true,
+      // and this tool has none. Both caps are applied inside the implementation
+      // to Shopify's calculated figure, which is the only amount that exists
+      // before the refund is committed - which is what `"provider"` says.
+      dailyRefundSpendLimit: "provider",
     },
     execute: async (input: CreatePartialRefundInput, ctx, settings, deps) => {
       const shopify = requireShopify(ctx);
@@ -357,7 +357,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     planStepLabel: "Issue store credit",
     policy: {
       refundAmountLimits: true,
-      dailyRefundSpendLimit: true,
+      dailyRefundSpendLimit: "input",
     },
     execute: async () => toolPolicyBlock(
       "Error: issue_store_credit is retired. Use an explicitly requested gift card or escalate.",
@@ -382,7 +382,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     planStepLabel: "Create gift card",
     policy: {
       refundAmountLimits: true,
-      dailyRefundSpendLimit: true,
+      dailyRefundSpendLimit: "input",
     },
     execute: async (input: CreateGiftCardInput, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);

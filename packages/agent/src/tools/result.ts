@@ -400,6 +400,19 @@ export interface ToolResult {
   receipt?: ReceiptV1;
 }
 
+/**
+ * The answer to "may this compensation spend against today's budget?".
+ *
+ * A tool whose amount is on the call the model made is reserved before dispatch
+ * and never sees this. A tool whose amount only exists once the provider has
+ * priced the selection asks for it mid-execution instead, so the refusal has to
+ * travel back as the result the adapter should return rather than as a thrown
+ * error it would have to translate.
+ */
+export type CompensationReservation =
+  | { kind: "reserved" }
+  | { kind: "refused"; result: ToolResult; policyBlocked: boolean };
+
 export class ReceiptValidationError extends Error {
   constructor(message: string) {
     super(message);

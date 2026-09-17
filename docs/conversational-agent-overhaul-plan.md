@@ -12,9 +12,11 @@ an approved proposal for every surface, and scoped continuation of a parked
 question. Package 2 is complete for the dashboard request path.
 Package 3's step 3 landed with that boundary because the two overlap, followed by
 step 1's deterministic bed, step 2's capture-mode suspension, step 4's autonomy
-decision for a proposal that composes from the receipt, and step 5's composition
-of that reply from what the write returned — all behind an option no caller sets
-yet. The rest of packages 3–6 has not started.
+decision for a proposal that composes from the receipt, step 5's composition
+of that reply from what the write returned, and step 6's compound case — all
+behind an option no caller sets yet. Step 6 also repaired the capability it
+needed: `create_partial_refund` had never been executable. Step 7 and the rest
+of packages 3–6 have not started.
 Created 2026-09-11; last updated 2026-09-16.
 
 Implementation detail expanded 2026-09-11 against the current repository. Names marked **proposed** describe work to implement, not APIs or tables that already exist. This document authorizes no production operation by itself.
@@ -1401,6 +1403,46 @@ write committed and correctly recorded and nothing re-runs it, but nothing
 resumes it either — retrying the composition needs the durable task resumption
 in packages 2 and 5, so D10's "recovery composes" is not yet true. The slice is
 also still unreachable: nothing sets `suspendAtProposal`, which is step 7.
+
+Step 6 landed next, and the compound case it asks for found that its own
+capability could not run. `create_partial_refund` names line items and lets
+Shopify price them, deliberately carrying no `amount` — and the executor's daily
+compensation reservation read `input.amount` for every tool declaring
+`dailyRefundSpendLimit`, so every execution of it returned "compensation amount
+must be a positive currency amount" before dispatch. The guard landed 2026-08-05
+in `26531b55`; the tool landed three weeks later in `0780cb34`, and
+`registry.test.ts` routes each tool by calling `definition.execute` directly,
+which is why nothing caught that the tool had never been executable at all.
+
+The fix puts the reservation where the amount is. `dailyRefundSpendLimit` is now
+`"input" | "provider"` rather than a boolean: an amount the model named is still
+reserved before dispatch, and an amount Shopify prices is reserved by the adapter
+that priced it, through a `reserveCompensation` callback the executor hangs on
+`ShopifyContext`. One reservation per execution either way, settled by the
+executor's existing commit/release/unknown path. `createPartialRefund` reserves
+after the per-call cap check and before the mutation — the same place the
+per-call cap already lived, for the same reason — and refuses the refund when the
+callback is absent rather than committing an unchecked amount.
+
+The compound case then runs end to end: the order and the store's policy are
+read, one line of a two-line order is proposed, the approved proposal commits,
+and the completion is composed from the figure Shopify priced rather than one the
+model named. Its two branches are the merchant changing the instruction before
+approving — the revised selection is what commits, exactly once — and the
+provider refusing the write, after which nothing is composed and the customer
+hears nothing.
+
+Verified by `npm run typecheck`, `npm run lint`, `npm run test:unit` (1,166
+agent, 471 gateway, 789 dashboard) and `npm run test:integration` (149 agent,
+919 gateway with 1 skipped, 670 dashboard with 2 skipped). The tool description
+is unchanged and `policy` never reaches the model — `AGENT_TOOLS` carries name,
+description and `input_schema` — and `refund-partial.json` grades the plan and
+the reply rather than execution, so no eval run is owed. Rollback is reverting
+the commit.
+
+Not done: `create_partial_refund` has still never run against a real store, so
+its first production execution is ahead of it. The slice also remains
+unreachable — nothing sets `suspendAtProposal`, which is step 7.
 
 Build the slice in this order:
 

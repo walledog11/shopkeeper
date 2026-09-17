@@ -50,7 +50,7 @@ const goodwillSpendTool = defineTool({
   capabilities: [],
   label: "Test goodwill spend",
   planStepLabel: "Test goodwill spend",
-  policy: { dailyRefundSpendLimit: true },
+  policy: { dailyRefundSpendLimit: "input" },
   execute: async (input: { amount: number }) => ({
     status: "ok" as const,
     message: "Goodwill issued.",
@@ -189,6 +189,93 @@ describe("goodwill spend reservation finalization", () => {
       "Unknown: the provider action completed but its compensation budget record could not be finalized.",
     );
     expect(mockReleaseDailyRefundSpendReservation).not.toHaveBeenCalled();
+  });
+});
+
+// The other half of the same budget: a tool whose amount only exists once the
+// provider has priced it reserves from inside its own execution.
+const providerPricedSpendTool = defineTool({
+  name: "test_provider_priced_spend",
+  description: "Test-only compensation the provider prices.",
+  fields: { units: numberArg("How many units come back.", { required: true }) },
+  category: "action",
+  group: "order",
+  capabilities: [],
+  label: "Test provider-priced spend",
+  planStepLabel: "Test provider-priced spend",
+  policy: { dailyRefundSpendLimit: "provider" },
+  execute: async (input: { units: number }, ctx) => {
+    const calculatedCents = input.units * 800;
+    if (calculatedCents <= 0) {
+      return { status: "policy_block" as const, message: "Error: nothing to refund." };
+    }
+    const reserved = await ctx.shopify!.reserveCompensation!(calculatedCents);
+    if (reserved.kind === "refused") return reserved.result;
+    return { status: "ok" as const, message: "Refunded.", spentCents: calculatedCents };
+  },
+});
+
+describe("provider-priced spend reservation", () => {
+  function spendCtx(): BaseAgentContext {
+    return {
+      ...threadlessCtx(vi.fn()),
+      shopify: {
+        shop: "test.myshopify.com",
+        accessToken: "token",
+        operationId: "execution_1:refund_1",
+      },
+    };
+  }
+
+  it("reserves the figure the tool priced and commits what it spent", async () => {
+    const result = await executeToolWithStatus(
+      providerPricedSpendTool.name,
+      { units: 2 },
+      spendCtx(),
+      undefined,
+      { [providerPricedSpendTool.name]: providerPricedSpendTool },
+    );
+
+    expect(result.status).toBe("success");
+    expect(mockReserveDailyRefundSpend).toHaveBeenCalledWith(expect.objectContaining({
+      operationKey: "execution_1:refund_1",
+      tool: providerPricedSpendTool.name,
+      requestedCents: 1_600,
+    }));
+    expect(mockCommitDailyRefundSpendReservation).toHaveBeenCalledWith("reservation_1", 1_600);
+  });
+
+  it("passes a refused budget back as the tool's own result", async () => {
+    mockReserveDailyRefundSpend.mockResolvedValueOnce({ kind: "blocked", remainingCents: 250 });
+
+    const result = await executeToolWithStatus(
+      providerPricedSpendTool.name,
+      { units: 2 },
+      spendCtx(),
+      undefined,
+      { [providerPricedSpendTool.name]: providerPricedSpendTool },
+    );
+
+    expect(result.result).toContain("daily compensation cap");
+    // Nothing was reserved, so there is nothing to release or commit.
+    expect(mockCommitDailyRefundSpendReservation).not.toHaveBeenCalled();
+    expect(mockReleaseDailyRefundSpendReservation).not.toHaveBeenCalled();
+  });
+
+  it("settles nothing when the tool stopped before it priced anything", async () => {
+    const result = await executeToolWithStatus(
+      providerPricedSpendTool.name,
+      { units: 0 },
+      spendCtx(),
+      undefined,
+      { [providerPricedSpendTool.name]: providerPricedSpendTool },
+    );
+
+    expect(result.status).toBe("policy_block");
+    expect(mockReserveDailyRefundSpend).not.toHaveBeenCalled();
+    expect(mockCommitDailyRefundSpendReservation).not.toHaveBeenCalled();
+    expect(mockReleaseDailyRefundSpendReservation).not.toHaveBeenCalled();
+    expect(mockMarkDailyRefundSpendReservationUnknown).not.toHaveBeenCalled();
   });
 });
 

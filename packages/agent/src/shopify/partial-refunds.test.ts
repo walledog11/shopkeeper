@@ -2,12 +2,19 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsonResponse } from "../testing/json-response.js";
 import { createPartialRefund, parseRefundItems, unrefundableItems } from "./partial-refunds.js";
 import { resolveAgentSettings } from "../settings.js";
+import { toolPolicyBlock, toolUnknown, type CompensationReservation } from "../tools/result.js";
+import type { ShopifyContext } from "./client.js";
 
-const ctx = {
+// The executor supplies `reserveCompensation`, because the amount this tool
+// spends only exists once Shopify has priced the selection.
+const reserveCompensation = vi.fn(async (): Promise<CompensationReservation> => ({ kind: "reserved" }));
+
+const ctx: ShopifyContext = {
   shop: "test-store.myshopify.com",
   accessToken: "shpat_test",
   operationId: "execution-1:partial-refund",
   executionId: "execution-1",
+  reserveCompensation,
 };
 const SETTINGS = resolveAgentSettings(null);
 
@@ -55,6 +62,7 @@ function committed(amount: string) {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  reserveCompensation.mockReset().mockResolvedValue({ kind: "reserved" });
 });
 
 describe("parseRefundItems", () => {
@@ -161,6 +169,100 @@ describe("createPartialRefund", () => {
       target: { kind: "order", id: "2001" },
     });
     // Two reads happened; the refund did not.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("reserves Shopify's figure against the daily budget before it commits", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(order()))
+      .mockResolvedValueOnce(jsonResponse(calculation("16.00")))
+      .mockResolvedValueOnce(jsonResponse(committed("16.00")));
+    vi.stubGlobal("fetch", fetchMock);
+    let providerCallsWhenReserved = -1;
+    reserveCompensation.mockImplementation(async () => {
+      providerCallsWhenReserved = fetchMock.mock.calls.length;
+      return { kind: "reserved" };
+    });
+
+    const result = await createPartialRefund(
+      { order_id: "2001", items: [{ line_item_id: "9001", quantity: 1 }] },
+      ctx,
+      SETTINGS,
+    );
+
+    expect(result.status).toBe("ok");
+    // The amount reserved is the one Shopify priced, and it was reserved after
+    // the read and the calculation but before the mutation.
+    expect(reserveCompensation).toHaveBeenCalledWith(1_600);
+    expect(providerCallsWhenReserved).toBe(2);
+  });
+
+  it("leaves the order untouched when the daily budget refuses it", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(order()))
+      .mockResolvedValueOnce(jsonResponse(calculation("16.00")));
+    vi.stubGlobal("fetch", fetchMock);
+    reserveCompensation.mockResolvedValue({
+      kind: "refused",
+      result: toolPolicyBlock("Error: refund policy blocked - daily compensation cap of $20 reached."),
+      policyBlocked: true,
+    });
+
+    const result = await createPartialRefund(
+      { order_id: "2001", items: [{ line_item_id: "9001", quantity: 1 }] },
+      ctx,
+      SETTINGS,
+    );
+
+    expect(result.status).toBe("policy_block");
+    expect(result.refundedCents).toBeNull();
+    expect(result.receipt).toMatchObject({
+      outcome: "rejected",
+      code: "compensation_budget_refused",
+    });
+    // Two reads happened; the refund did not.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps an unknown budget record unknown rather than calling it a failure", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(order()))
+      .mockResolvedValueOnce(jsonResponse(calculation("16.00")));
+    vi.stubGlobal("fetch", fetchMock);
+    reserveCompensation.mockResolvedValue({
+      kind: "refused",
+      result: toolUnknown("Unknown: this compensation action already has a submitted budget record."),
+      policyBlocked: false,
+    });
+
+    const result = await createPartialRefund(
+      { order_id: "2001", items: [{ line_item_id: "9001", quantity: 1 }] },
+      ctx,
+      SETTINGS,
+    );
+
+    // This attempt refunded nothing, but an earlier one under the same operation
+    // may have, so it must not be reported as a definite failure.
+    expect(result.status).toBe("unknown");
+    expect(result.refundedCents).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("refuses the refund when no budget check was supplied", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(order()))
+      .mockResolvedValueOnce(jsonResponse(calculation("16.00")));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await createPartialRefund(
+      { order_id: "2001", items: [{ line_item_id: "9001", quantity: 1 }] },
+      { ...ctx, reserveCompensation: undefined },
+      SETTINGS,
+    );
+
+    // Fails closed: an unchecked daily budget is not a reason to refund anyway.
+    expect(result.status).toBe("policy_block");
+    expect(result.receipt).toMatchObject({ code: "compensation_budget_unavailable" });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 

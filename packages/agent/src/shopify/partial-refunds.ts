@@ -293,6 +293,31 @@ export async function createPartialRefund(
         ), "rejected", "amount_over_cap");
     }
 
+    // The daily compensation budget is reserved here rather than before dispatch,
+    // for the same reason the per-call cap is applied here: until Shopify prices
+    // the selection there is no amount to reserve. Nothing has been committed
+    // yet, so a refusal still leaves the order untouched.
+    if (!ctx.reserveCompensation) {
+      return partialRefundNoEffect(ctx, orderId, toolPolicyBlock(
+          "Error: refund policy blocked - the daily compensation budget could not be checked for this refund.",
+          { code: "compensation_budget_unavailable" },
+        ), "rejected", "compensation_budget_unavailable");
+    }
+    const reserved = await ctx.reserveCompensation(calculatedCents);
+    if (reserved.kind === "refused") {
+      // An unknown refusal is a budget record this operation may already own, so
+      // it keeps its own shape rather than being reported as this attempt failing.
+      return reserved.result.status === "unknown"
+        ? { ...reserved.result, refundedCents: null }
+        : partialRefundNoEffect(
+            ctx,
+            orderId,
+            reserved.result,
+            reserved.result.status === "policy_block" ? "rejected" : "failed",
+            "compensation_budget_refused",
+          );
+    }
+
     const idempotencyKey = shopifyIdempotencyKey(ctx.operationId);
     mutationStarted = true;
     const data = await shopifyGraphql<RefundCreateData>(ctx, PARTIAL_REFUND_MUTATION, {
