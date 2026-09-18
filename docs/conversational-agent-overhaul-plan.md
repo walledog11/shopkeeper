@@ -16,18 +16,24 @@ decision for a proposal that composes from the receipt, step 5's composition
 of that reply from what the write returned, and step 6's compound case — all
 and step 7's gate that lets a caller set it. Step 6 also repaired the capability
 it needed: `create_partial_refund` had never been executable. Package 3's steps
-are all landed, with the flag off by default and the end-to-end run on a live
-store still owed. Package 4's steps are all landed: registry-derived bounded
+are all landed, and on 2026-09-18 a live model ran the whole slice end to end
+against a real database and a fake provider; a real store is still owed.
+Package 4's steps are all landed: registry-derived bounded
 discovery, the caller that replaced the full-registry widening, the narrowed
 mutation bucket, the three declared context-dependency tiers with the knowledge
 base deferred on a status question, gift-card issuance out of the default support
 selection and its prompt branch, and the input-side cost measurement. All of it
-sits behind `AGENT_CAPABILITY_DISCOVERY_MODE`, off in both apps, so no model has
-yet planned against any of it. Package 5 has started with the contract every one
+sits behind `AGENT_CAPABILITY_DISCOVERY_MODE`, off in both apps; the same live
+run is the first time a model planned against it, and it discovered the
+capability it needed by name on its second call. Package 5 has started with the
+contract every one
 of its rows is written against: a support conversation now accepts each inbound
 customer message as a durable request and runs it as a claimed task, which also
-closes Package 3's outstanding attribution item. No capability has been migrated
-row by row yet, and nothing routes on the task. Package 6 has not started.
+closes Package 3's outstanding attribution item. That contract shipped with the
+approval side missing, and fixing it is the second thing Package 5 has done: a
+parked proposal now records who may approve it, and approving one closes its
+task. No capability has been migrated row by row yet, and the proposal is still
+not what authorizes the write. Package 6 has not started.
 Created 2026-09-11; last updated 2026-09-18.
 
 Implementation detail expanded 2026-09-11 against the current repository. Names marked **proposed** describe work to implement, not APIs or tables that already exist. This document authorizes no production operation by itself.
@@ -1487,9 +1493,20 @@ re-run, the known workspace-concurrency flake). No prompt, tool description or
 planner surface changed and the default is off, so no eval run is owed. Rollback
 is unsetting the variable.
 
-Not done: nothing has run the slice against a live store or a live model. With
-the flag off in both apps that is a deliberate next step rather than a gap in
-this one — turning it on changes the approval card, and the eval fixtures that
+Closed 2026-09-18 by a live-model run of the whole slice, on a real database
+with a URL-routed fake provider and both gates on. The model was offered the
+starter set with no refund tool, asked for the capability by name
+(`discover_capabilities` with "create a partial refund on specific line items"),
+proposed `create_partial_refund` against the damaged line only and stopped there
+with no draft; the approved run committed once and the reply it then composed
+named the figure Shopify priced, which the model had not seen before the write.
+Six model calls, roughly 56k tokens, about twelve seconds of wall time — the
+first latency and cost datapoints this plan has for a whole task. The run also
+found what Package 5's approval fix below repairs.
+
+Still owed: a real store. `create_partial_refund` has never run against one, so
+its first production execution is still ahead of it. The flag stays off in both
+apps — turning it on changes the approval card, and the eval fixtures that
 assert `send_reply` inside a mutative plan (`refund-partial.json` among them) are
 written against the drafting planner. Package 4 changes fixtures and defaults
 together; package 6 owns the cutover.
@@ -1506,7 +1523,7 @@ Build the slice in this order:
 
 Required tests: approval of proposal A cannot run revised proposal B; a removed member cannot approve; a grant revoked after preview blocks dispatch; refund succeeds then model composition crashes and recovery composes without refunding again; an unknown refund blocks an equivalent fresh proposal; multiple writes preserve partial success. Add conversational evals only after these deterministic invariants pass.
 
-- [x] Implement the investigate → propose → approve if necessary → execute → observe → respond loop for a refund task using existing provider operations. Deterministic only, and reachable solely through `AGENT_PROPOSAL_SUSPENSION_MODE`, which is off in both apps; no live store or live model has run it.
+- [x] Implement the investigate → propose → approve if necessary → execute → observe → respond loop for a refund task using existing provider operations. Reachable solely through `AGENT_PROPOSAL_SUSPENSION_MODE`, which is off in both apps. Run end to end by a live model on 2026-09-18 against a real database and a fake provider; no live store has run it.
 - [ ] Support missing information, changed merchant instructions, approval from another surface, definite failure, and unknown outcome. Changed instructions, approval from either surface, definite failure and unknown outcome hold; a clarifying question asked mid-slice does not, and needs the durable suspension in package 5.
 - [x] Keep the model free to investigate and explain. Do not encode a refund conversation script.
 - [x] Compose completion wording after execution from receipts; preserve exact approved drafts where applicable.
@@ -1862,11 +1879,66 @@ surface changed and the planner is mocked in the new gateway file, so no eval ru
 is owed. Rollback is reverting the commit; the rows are additive and nothing
 reads them for control flow.
 
-Not done, and named rather than assumed. Nothing routes on the task yet — the
-approval a merchant gives still travels through the cached plan and
-`executeCurrentCachedHomePlan`, and the proposal row is written beside it rather
-than being what authorizes the write, so Package 6's cutover still owns that
-switch. The task budget is limits without meters: the attempt's active time is
+That contract shipped with its approval side broken, which the live slice run
+above found. A support task is initiated by the customer and approved by any
+bound member, and `authorizeAgentProposal` re-derived the approver instead — the
+member who initiated the task, on their own operator thread — which is true of no
+support task. From the phone every approval was refused outright and the merchant
+was told to try again; the dashboard routes never reached the boundary at all, so
+they executed the write and left the task claiming it was still waiting for
+permission. One cause, two opposite failures, neither in production: the durable
+tables do not exist there, which was read before choosing the migration shape.
+
+The fix gives `waiting_approval` the field `waiting_input` already had. A parked
+proposal records its approver scope the way a parked question records its
+answerer: the same optional actor on `TaskSettlement`, defaulted to the task's
+initiator so a member's own work is unchanged by construction, with support
+passing `ANY_MEMBER_ACTOR_KEY` — the value it already passes for the question it
+parks, because the card is pushed to every bound operator at once. Authorizing
+moved into `executeCurrentCachedHomePlan` and out of `runApprovedPendingPlan`,
+since all three approval surfaces already enter it and the phone owning the
+decision while the dashboard skipped it was one decision with two owners. The
+task then closes on the execution's typed terminal status rather than on whether
+its summary starts with `Error:`, and the approved run's actions and messages
+name the task and proposal that authorized them — `AgentAction.proposalId` had no
+writer anywhere before it.
+
+Two further defects surfaced while proving that one. `readParkedProposalForThread`
+snapshotted the autonomy verdict's executable subset while every surface approves
+the calls the card renders, reads included, so the two hashes could never match
+and an approval that got past the actor check would have conflicted instead; it
+snapshots the plan's own bundle now. And `authorizeAgentProposal` read the
+proposal before taking the task lock and decided from that row, so under READ
+COMMITTED a second approval still saw `ready` after the first had committed — one
+member racing itself writes the same approver either way, which is why five
+concurrent approvals never showed it and two different members on one support
+card do. The row is re-read inside the lock.
+
+Verified by `npm run typecheck`, `npm run lint`, `npm run lint:structure`,
+`npm run test:unit` (1,214 agent, 471 gateway, 789 dashboard, 68 analytics, 101
+email, 65 integrations) and `npm run test:integration` (183 agent, 929 gateway
+with 1 skipped, 672 dashboard with 2 skipped), all green. Six new cases, each
+checked against a build with its own fix removed: the support approval, the
+non-member refusal, two different members racing one card, the action link, the
+proposal snapshot's hash, and the gateway settlement's scope all fail when the
+thing they assert is taken away. Production was read before the migration shape
+was chosen — `agent_proposals`, `agent_tasks` and `agent_requests` are all absent
+there and neither durable-agent migration is recorded — so the columns are NOT
+NULL and the backfill exists for development databases that already applied the
+create-table migration. The ALTER is a separate migration rather than an edit to
+that one, which would fail every already-migrated machine on a checksum mismatch.
+No prompt, tool description or planner surface changed, so no eval run is owed.
+Rollback is reverting the commit and the migration together; nothing outside this
+plan's own tables reads the new columns.
+
+Not done, and named rather than assumed. The proposal still is not what
+authorizes the write: approval is recorded against it and the run is attributed
+to its task, but the bundle that executes is still the cached plan's, so Package
+6's cutover owns that switch. The customer-facing reply carries no `agentTaskId`,
+because the thread sink writes that row and the task is not plumbed through the
+sink contract on either host; the audit note beside it does carry one.
+`PlanExecution.taskId` and `PlanExecution.proposalId` still have no writer at all.
+The task budget is limits without meters: the attempt's active time is
 charged on settle, but nothing reserves model calls or spend against a support
 task, so `modelCallLimit` and `spendNanoUsdLimit` are recorded and unenforced.
 The bounded failure replan keeps its own turn identity, so its actions reach the
