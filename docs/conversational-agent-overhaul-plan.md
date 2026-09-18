@@ -23,7 +23,11 @@ mutation bucket, the three declared context-dependency tiers with the knowledge
 base deferred on a status question, gift-card issuance out of the default support
 selection and its prompt branch, and the input-side cost measurement. All of it
 sits behind `AGENT_CAPABILITY_DISCOVERY_MODE`, off in both apps, so no model has
-yet planned against any of it. Packages 5–6 have not started.
+yet planned against any of it. Package 5 has started with the contract every one
+of its rows is written against: a support conversation now accepts each inbound
+customer message as a durable request and runs it as a claimed task, which also
+closes Package 3's outstanding attribution item. No capability has been migrated
+row by row yet, and nothing routes on the task. Package 6 has not started.
 Created 2026-09-11; last updated 2026-09-18.
 
 Implementation detail expanded 2026-09-11 against the current repository. Names marked **proposed** describe work to implement, not APIs or tables that already exist. This document authorizes no production operation by itself.
@@ -1506,7 +1510,7 @@ Required tests: approval of proposal A cannot run revised proposal B; a removed 
 - [ ] Support missing information, changed merchant instructions, approval from another surface, definite failure, and unknown outcome. Changed instructions, approval from either surface, definite failure and unknown outcome hold; a clarifying question asked mid-slice does not, and needs the durable suspension in package 5.
 - [x] Keep the model free to investigate and explain. Do not encode a refund conversation script.
 - [x] Compose completion wording after execution from receipts; preserve exact approved drafts where applicable.
-- [ ] Attribute request outcome and response delivery to the durable task. Support plans carry no `AgentTask`; only the dashboard operator request path does.
+- [x] Attribute request outcome and response delivery to the durable task. A support conversation now accepts its inbound message as an `AgentRequest` and runs it as a claimed `AgentTask`, so the attempt's outcome is the task's status and its actions and audit note name the request that authorized them. Closed by Package 5's first contract below.
 
 Acceptance: both a straightforward refund and an unfamiliar compound request succeed through the same primitives. An approval cannot authorize revised inputs. A failed refund never becomes a successful receipt, and an unknown refund is not reissued. The merchant experiences a natural conversation, not a state-machine menu.
 
@@ -1794,6 +1798,86 @@ Primary locations: [tool selection](../packages/agent/src/planner-tool-selection
 
 Migrate in this concrete order: order status and KB/product answers → address update → cancellation → basic returns → each retained merchant operation from the package-0 inventory. Refund is already the reference slice. For each capability, complete the following row before marking it migrated:
 
+The first contract landed before any capability row, because every row on that
+table and every continuity case below is written against a task the support path
+did not have. Package 2 built the request/task/proposal ledger for the merchant's
+own submissions; a customer's message reached the planner, cached a plan on the
+thread and left no durable work behind it. `acceptCustomerAgentRequest` is the
+second actor boundary on that ledger: the member path proves its actor from Clerk
+membership, and a customer has no session to prove, so the inbound `Message` row
+is the identity — an authenticated provider webhook persisted it against a thread
+this organization owns, and it is also the dedupe key, so one message is one
+request however many times the planning job runs.
+
+Two decisions in it are not the member path's, and both are forced.
+
+The payload hashed is the message, not the objective. A member submits the
+instruction their task runs on; a support task's objective is `requestSummary`,
+which the summary job fills in *after* the message lands, so hashing it would
+make the second planning job for one message conflict with its own first attempt
+under D02's rule. What the customer said cannot change, so the request is
+immutable by construction rather than by that check.
+
+And a support question names its own answerer. `suspensionWrite` parked a
+question on `initiatingActorKey`, which is right when the merchant asked for the
+work and wrong here: the customer initiated the task and the merchant answers it,
+fanned out to every bound operator at once. `TaskSettlement`'s `waiting_input`
+now carries an explicit answerer and support passes `ANY_MEMBER_ACTOR_KEY`, which
+records the scope the product actually has instead of naming one member who was
+no more asked than the others.
+
+A thread advances one task rather than accumulating them — that is the shape the
+plan cache it records already had, and the revision increment is the supersede
+the cache performed by overwriting itself, so a customer's second message
+invalidates the proposal parked on their first. Two tasks are left alone: a
+terminal one is not reset by new work, and one that reached a provider is not
+replayed from the top, for the same reason `claimAgentTask` refuses it.
+
+`generateThreadPlan` accepts and claims after the checks that decide whether to
+do agent work at all — a filtered sender, a superseded job, an answered thread
+and an unroutable mailbox each leave before a request exists, because none of
+them is a request the agent accepted — and settles on the way out:
+`readParkedProposalForThread` reads the same cached plan and the same
+`decideAutonomy` verdict the approval surfaces read, so the recorded proposal is
+the one the card renders rather than a second derivation of who may approve
+what. A parked question and a parked card become `waiting_input` and
+`waiting_approval`; everything else is `completed`; a thrown attempt is `failed`
+and still throws.
+
+One landmine closed with it. `findQueuedAgentTasks` had no actor filter, so the
+task sweep would have handed every support task to the durable task worker, which
+runs a member's own request and fails anything else as `invalid_task_owner` — a
+minute after the first support task existed, the queue would have started
+manufacturing failures. It now selects member-initiated work only, which is the
+queue it was always feeding.
+
+Verified by `npm run typecheck`, `npm run lint`, `npm run lint:structure`,
+`npm run test:unit` (1,214 agent, 471 gateway, 789 dashboard, 68 analytics, 101
+email, 65 integrations) and `npm run test:integration` (178 agent, 929 gateway
+with 1 skipped, 672 dashboard with 2 skipped), all green. Twelve new cases, each
+checked against a build with its own guard removed: the operator-channel refusal,
+the queue filter, the whole gateway wiring, and the turn identity all fail when
+the thing they assert is taken away. No prompt, tool description or planner
+surface changed and the planner is mocked in the new gateway file, so no eval run
+is owed. Rollback is reverting the commit; the rows are additive and nothing
+reads them for control flow.
+
+Not done, and named rather than assumed. Nothing routes on the task yet — the
+approval a merchant gives still travels through the cached plan and
+`executeCurrentCachedHomePlan`, and the proposal row is written beside it rather
+than being what authorizes the write, so Package 6's cutover still owns that
+switch. The task budget is limits without meters: the attempt's active time is
+charged on settle, but nothing reserves model calls or spend against a support
+task, so `modelCallLimit` and `spendNanoUsdLimit` are recorded and unenforced.
+The bounded failure replan keeps its own turn identity, so its actions reach the
+task through the thread rather than through `taskId`. A second planning job for
+one message finds the task settled, fails the claim and plans untracked, which is
+correct but means the untracked path stays reachable. And a support task whose
+worker dies is recovered by `reconcileExpiredAgentTaskClaims` into `reconciling`
+rather than being re-enqueued, because the planning job owns its own retries.
+
+For each capability, complete the following row before marking it migrated:
+
 | Item | Evidence required |
 | --- | --- |
 | Availability | Correct initial/discoverable placement for every relevant actor mode |
@@ -1814,7 +1898,10 @@ Move automatic audit notes/status consequences to the successful-receipt path wi
   contracts. Partial completion: cancellation, return, exchange, and
   return-label attachment now use the Package 1 receipt/dispatch boundary;
   fulfillment uses the same boundary but remains isolated from default support
-  selection; conversation-runtime migration remains Package 5 work.
+  selection. The conversation runtime those capabilities migrate onto now exists
+  for support — every inbound message is a durable request on a claimed task —
+  but no capability has been migrated row by row against the evidence table
+  above.
 - [ ] Support multiple requests, task switching, terse follow-ups, explicit preferences, and resumption after waiting for the merchant or customer.
 - [ ] Stop new actions on cancellation or superseding instructions. Revalidate pending approvals and stale evidence when work resumes.
 - [ ] Move audit notes and other mechanical bookkeeping out of the model tool surface where they are consequences of execution.

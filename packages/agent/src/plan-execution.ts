@@ -33,6 +33,7 @@ import {
 import { isInvalidPlan } from "./plan-validation.js";
 import { recordRequestEpisodeDismissed, recordRequestEpisodeExecution } from "./request-outcome.js";
 import { historicalCompletionFacts } from "./completion-facts.js";
+import type { ProposalSnapshot } from "./task-ledger.js";
 
 export type PlanExecutionDeps = ExecuteAgentTurnDeps & {
   planAgent?: PlanAgentFn;
@@ -231,6 +232,35 @@ async function loadCurrentCachedHomePlan(params: {
   };
 }
 
+/**
+ * What the merchant is currently being asked to approve on this thread, shaped
+ * as the durable proposal a task settles on. Null when the current plan needs no
+ * approval, cannot be given one, or no longer matches the pending message — in
+ * each case the attempt left no approval wait behind.
+ *
+ * It reads the same cached plan and the same `decideAutonomy` verdict every
+ * approval surface reads, so the recorded proposal is the one the card renders
+ * rather than a second derivation of who may approve what.
+ */
+export async function readParkedProposalForThread(params: {
+  orgId: string;
+  threadId: string;
+  settings: OrgSettings;
+  allowMutativeAutoExecute?: boolean;
+}): Promise<ProposalSnapshot | null> {
+  const current = await loadCurrentCachedHomePlan(params);
+  if (!current.plan || !current.planId) return null;
+  const verdict = current.verdict;
+  if (verdict.kind !== "needs_review" || !verdict.approvalAllowed) return null;
+  if (verdict.toolCalls.length === 0) return null;
+  return {
+    proposalId: current.planId,
+    instruction: current.instruction,
+    rawToolCalls: verdict.toolCalls,
+    sourceRequestIds: [],
+  };
+}
+
 export async function consumeThreadCachedPlan(params: {
   orgId: string;
   threadId: string;
@@ -311,6 +341,17 @@ export async function dismissCurrentCachedPlan(params: {
   });
 }
 
+/**
+ * Ties one execution to the durable request and task that authorized it. The
+ * turn ID is the request ID because that is how `settleAgentTaskClaim` finds the
+ * actions this attempt wrote and links them to the task; it is not a second
+ * identity to keep in step.
+ */
+export interface DurableTurnIdentity {
+  requestId: string;
+  taskId: string;
+}
+
 export async function executeCurrentCachedHomePlan(params: {
   orgId: string;
   threadId: string;
@@ -323,6 +364,8 @@ export async function executeCurrentCachedHomePlan(params: {
   allowMutativeAutoExecute?: boolean;
   /** When false, suppresses the one bounded child replan after a definite failure. */
   failureReplanAllowed?: boolean;
+  /** The durable task this execution belongs to, for hosts that have one. */
+  durableTurn?: DurableTurnIdentity;
 }, deps: PlanExecutionDeps): Promise<ExecutedCachedPlan> {
   const thread = await requireOrgThread(params.threadId, params.orgId);
   if (shouldBlockTrustedSendActions(thread.filterStatus)) {
@@ -420,6 +463,11 @@ export async function executeCurrentCachedHomePlan(params: {
       approvedToolCalls,
       persistAuditNote: true,
       auditMode,
+      ...(params.durableTurn ? {
+        turnId: params.durableTurn.requestId,
+        agentRequestId: params.durableTurn.requestId,
+        agentTaskId: params.durableTurn.taskId,
+      } : {}),
       ...(executionId ? { executionId } : {}),
       completionEvidence: historicalCompletionFacts(
         current.plan.rawToolCalls,
@@ -538,7 +586,11 @@ export async function executeCurrentCachedHomePlan(params: {
         // the parent's approval envelope — approvedToolCalls, expectedIdentity,
         // approver — cannot travel with it. Everything it inherits is listed
         // here; it runs on the authority its own verdict grants, which is why
-        // the intent is automatic.
+        // the intent is automatic. The durable turn stays off that list too: the
+        // parent's request ID is the turn its own actions are ordered within, so
+        // a child writing into it would interleave two action sequences. The
+        // child's actions reach the task through the thread, not through
+        // `taskId`.
         const childExecuted = await executeCurrentCachedHomePlan({
           orgId: params.orgId,
           threadId: params.threadId,
@@ -604,6 +656,7 @@ export async function maybeAutoExecuteCurrentCachedHomePlan(params: {
   failureRoute: string;
   /** Business-hours and rollout gate for plans that mutate store state. */
   allowMutativeAutoExecute?: boolean;
+  durableTurn?: DurableTurnIdentity;
 }, deps: PlanExecutionDeps): Promise<ExecutedCachedPlan | null> {
   const thread = await requireOrgThread(params.threadId, params.orgId);
   if (shouldSkipAutoPlan(thread.filterStatus)) {

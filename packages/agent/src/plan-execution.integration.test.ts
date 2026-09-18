@@ -24,6 +24,7 @@ import {
 import { resolveAgentSettings } from "./settings.js";
 import { hashInstruction, hashPlan } from "./agent-actions.js";
 import { claimCurrentPlanExecution } from "./execution-ledger.js";
+import { acceptCustomerAgentRequest } from "./task-ledger.js";
 import type { AgentContext, AgentResult } from "./agent-context.js";
 import type { AgentPlan, OrgSettings, RawToolCall } from "./types.js";
 
@@ -576,6 +577,59 @@ describe("executeCurrentCachedHomePlan execution", () => {
     }, makeDeps({ runAgent }));
 
     expect(runAgent.mock.calls[0]?.[4].composeFromReceipt).toBe(true);
+  });
+
+  // Package 5: the request ID is the turn ID because that is how settlement finds
+  // the rows this execution wrote. Both halves are asserted, because a turn ID
+  // that does not match the request links nothing and still looks correct.
+  it("runs an approved plan as the turn of the request that authorized it", async () => {
+    const { org, thread, message, settings } = await seedThreadWithPlan();
+    const runAgent = vi.fn(async () => okResult);
+    const { request, task } = await acceptCustomerAgentRequest({
+      organizationId: org.id, threadId: thread.id, sourceMessageId: message.id,
+      objective: "Answer the shipping question",
+      budget: {
+        runtimeVersion: 1, modelCallLimit: 20,
+        activeTimeMsLimit: 120000, spendNanoUsdLimit: 1000000000n,
+      },
+    });
+    const durableTurn = { requestId: request.id, taskId: task.id };
+
+    await executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+      durableTurn,
+    }, makeDeps({ runAgent }));
+
+    expect(runAgent.mock.calls[0]?.[4].turnId).toBe(durableTurn.requestId);
+    const note = await db.message.findFirstOrThrow({
+      where: { threadId: thread.id, senderType: "note" },
+    });
+    expect(note).toMatchObject({
+      agentRequestId: durableTurn.requestId,
+      agentTaskId: durableTurn.taskId,
+    });
+  });
+
+  it("generates its own turn identity when the caller has no durable task", async () => {
+    const { org, thread, settings } = await seedThreadWithPlan();
+    const runAgent = vi.fn(async () => okResult);
+
+    await executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+    }, makeDeps({ runAgent }));
+
+    expect(runAgent.mock.calls[0]?.[4].turnId).toEqual(expect.any(String));
+    expect(await db.message.findFirstOrThrow({
+      where: { threadId: thread.id, senderType: "note" },
+    })).toMatchObject({ agentRequestId: null, agentTaskId: null });
   });
 
   it("leaves a plan that drafted its own reply to send that reply", async () => {

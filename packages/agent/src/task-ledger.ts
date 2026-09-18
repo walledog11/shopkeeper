@@ -3,6 +3,7 @@ import type { AgentActionDispatchState, AgentActorKind, Prisma as PrismaTypes } 
 import { db, Prisma } from "@shopkeeper/db";
 import { BadRequestError, ConflictError, ForbiddenError } from "./errors.js";
 import { hashInstruction, hashPlan } from "./agent-actions.js";
+import { isOperatorChannel } from "./thread-constants.js";
 import type { RawToolCall } from "./types.js";
 
 // A task whose actions reached any of these has touched a provider, so it is
@@ -269,6 +270,192 @@ export async function attachMemberAgentTask(input: {
   });
 }
 
+/**
+ * A support conversation's request boundary. The member path proves its actor
+ * from Clerk membership; a customer has no session to prove here, so the inbound
+ * `Message` row is the verified identity — an authenticated provider webhook
+ * persisted it against a thread this organization owns, and it is also what the
+ * dedupe key names, so one inbound message is one request however many times the
+ * planning job runs.
+ *
+ * An operator channel mints no customer actor. The merchant's own thread carries
+ * a customer row for storage reasons and its requests belong to the member path;
+ * accepting one here would attribute the merchant's instruction to the customer
+ * whose thread it is.
+ */
+async function requireCustomerActor(
+  tx: Pick<typeof db, "message">,
+  input: { organizationId: string; threadId: string; sourceMessageId: string },
+) {
+  const message = await tx.message.findFirst({
+    where: {
+      id: input.sourceMessageId, organizationId: input.organizationId,
+      threadId: input.threadId, senderType: "customer", deletedAt: null,
+      thread: {
+        organizationId: input.organizationId, deletedAt: null, archivedAt: null,
+        organization: { lifecycleStatus: "active" },
+      },
+    },
+    select: {
+      contentText: true,
+      thread: { select: { customerId: true, channelType: true } },
+    },
+  });
+  if (!message) {
+    throw new ForbiddenError("This conversation message cannot start agent work.");
+  }
+  if (isOperatorChannel(message.thread.channelType)) {
+    throw new ForbiddenError("An operator conversation's requests belong to its member.");
+  }
+  return {
+    actorKey: `customer:${message.thread.customerId}`,
+    channel: message.thread.channelType,
+    text: message.contentText?.trim() ?? "",
+  };
+}
+
+/**
+ * The support conversation's task lookup. A thread runs one task at a time —
+ * that is the shape the cached plan it records already had — so a later message
+ * advances the open one rather than opening a second beside it. The revision
+ * increment is the supersede: whatever the previous attempt parked stops being
+ * the current proposal, which is what the plan cache did by overwriting itself.
+ *
+ * Two kinds of task are left alone. A terminal one is not reset by new work, and
+ * a claimed one belongs to the attempt holding it — advancing that would revoke
+ * a claim mid-flight. Both cases open a new task, so a conversation can hold
+ * more than one; nothing here assumes it cannot.
+ */
+async function advanceOrOpenThreadTask(
+  tx: Pick<typeof db, "agentTask">,
+  input: {
+    organizationId: string; threadId: string; actorKey: string;
+    objective: string; budget: TaskBudget; requestId: string;
+  },
+) {
+  const open = await tx.agentTask.findFirst({
+    where: {
+      organizationId: input.organizationId, threadId: input.threadId,
+      initiatingActorKind: "customer",
+      status: { in: ["queued", "waiting_input", "waiting_approval"] },
+      cancelledAt: null, claimToken: null,
+      actions: { none: { dispatchState: { in: DISPATCHED_STATES } } },
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    select: { id: true, status: true },
+  });
+  if (open) {
+    // Conditional on the status it was read at: a concurrent claim, stop, or
+    // sweep that moved the task first leaves this request to open its own.
+    const advanced = await tx.agentTask.updateMany({
+      where: {
+        id: open.id, organizationId: input.organizationId,
+        status: open.status, claimToken: null, cancelledAt: null,
+      },
+      data: {
+        ...NO_SUSPENSION, status: "queued",
+        revision: { increment: 1 }, lastProgressAt: new Date(),
+      },
+    });
+    if (advanced.count === 1) {
+      return tx.agentTask.findFirstOrThrow({
+        where: { id: open.id, organizationId: input.organizationId },
+      });
+    }
+  }
+  return tx.agentTask.create({
+    data: {
+      organizationId: input.organizationId, threadId: input.threadId,
+      initiatingActorKind: "customer", initiatingActorKey: input.actorKey,
+      objective: input.objective.slice(0, 4000),
+      ...input.budget, checkpointVersion: 1,
+      checkpoint: { sourceRequestIds: [input.requestId], nextWork: "investigate" },
+    },
+  });
+}
+
+export interface CustomerRequestInput {
+  organizationId: string;
+  threadId: string;
+  /** The inbound customer message: this request's dedupe key and its payload. */
+  sourceMessageId: string;
+  /** The task's durable objective — the planner's instruction for this thread. */
+  objective: string;
+  budget: TaskBudget;
+}
+
+/**
+ * Accepts one inbound customer message as a request and puts it on the thread's
+ * task, in one transaction, exactly as the member submission path does.
+ *
+ * The payload hashed here is the message, not the objective. The objective comes
+ * from `Thread.requestSummary`, which the summary job fills in after the message
+ * lands, so hashing it would make a legitimate re-plan of the same message
+ * conflict with its own first attempt. What the customer said cannot change, so
+ * the request is immutable by construction and re-accepting it is idempotent.
+ */
+export async function acceptCustomerAgentRequest(input: CustomerRequestInput) {
+  validateTaskBudget(input.budget);
+  const objective = input.objective.trim();
+  if (!objective) throw new BadRequestError("A task needs an objective.");
+  return db.$transaction(async (tx) => {
+    const actor = await requireCustomerActor(tx, input);
+    const payload = {
+      version: 1, threadId: input.threadId,
+      sourceMessageId: input.sourceMessageId,
+      text: actor.text.slice(0, 16000),
+    };
+    const payloadHash = hashInstruction(JSON.stringify(payload));
+    const id = randomUUID();
+    await tx.agentRequest.createMany({
+      data: {
+        id, organizationId: input.organizationId,
+        actorKind: "customer", actorKey: actor.actorKey,
+        channel: actor.channel, threadId: input.threadId,
+        dedupeKey: input.sourceMessageId, sourceMessageId: input.sourceMessageId,
+        payloadVersion: 1, payloadHash, payload,
+        normalizedInstruction: payload.text,
+      },
+      skipDuplicates: true,
+    });
+    let request = await tx.agentRequest.findUniqueOrThrow({
+      where: { organizationId_actorKind_actorKey_channel_dedupeKey: {
+        organizationId: input.organizationId, actorKind: "customer",
+        actorKey: actor.actorKey, channel: actor.channel,
+        dedupeKey: input.sourceMessageId,
+      } },
+    });
+    if (request.payloadVersion !== 1 || request.payloadHash !== payloadHash) {
+      throw new ConflictError("This message was already accepted with different content.");
+    }
+    // Serialize attachment on the accepted request's own row, so concurrent
+    // planning jobs for one message put it on one task.
+    await tx.$queryRaw(Prisma.sql`
+      SELECT id FROM agent_requests WHERE id = ${request.id}::uuid
+      AND organization_id = ${input.organizationId}::uuid FOR UPDATE
+    `);
+    request = await tx.agentRequest.findUniqueOrThrow({ where: { id: request.id } });
+    if (request.taskId) {
+      return {
+        request,
+        task: await tx.agentTask.findFirstOrThrow({
+          where: { id: request.taskId, organizationId: input.organizationId },
+        }),
+        deduplicated: true,
+      };
+    }
+    const task = await advanceOrOpenThreadTask(tx, {
+      organizationId: input.organizationId, threadId: input.threadId,
+      actorKey: actor.actorKey, objective, budget: input.budget, requestId: request.id,
+    });
+    request = await tx.agentRequest.update({
+      where: { id: request.id, organizationId: input.organizationId },
+      data: { state: "attached", taskId: task.id, attachedAt: new Date() },
+    });
+    return { request, task, deduplicated: request.id !== id };
+  });
+}
+
 export interface TaskClaimIdentity {
   organizationId: string; taskId: string; expectedRevision: number;
 }
@@ -469,8 +656,27 @@ export interface ProposalSnapshot {
  */
 export type TaskSettlement =
   | { status: "completed" }
-  | { status: "waiting_input"; question: string }
+  | { status: "waiting_input"; question: string; answerer?: TaskAnswerer }
   | { status: "waiting_approval"; proposal: ProposalSnapshot };
+
+export interface TaskAnswerer {
+  kind: AgentActorKind;
+  key: string;
+}
+
+/**
+ * The answerer scope for a question nobody in particular was asked. A support
+ * question is pushed to every bound operator at once, so any member of the
+ * organization may answer it, and naming one of them would record a scope the
+ * product does not have. It can never collide with a real member key, which is
+ * `member:<uuid>`.
+ *
+ * Nothing resumes on it yet: answering a support question still travels through
+ * the per-member operator context, and `resumeAnsweredTask` matches an exact
+ * key. This records who the wait is on; routing the answer back to the task is
+ * the continuity work.
+ */
+export const ANY_MEMBER_ACTOR_KEY = "member:*";
 
 // The four pending-question columns are all-or-nothing in the database and the
 // active proposal must belong to this task, so every exit from `running` writes
@@ -544,9 +750,11 @@ async function suspensionWrite(
       pendingQuestionId: randomUUID(),
       pendingQuestion: question.slice(0, 2000),
       // The merchant who asked for the work is the one who may answer it; an
-      // unrelated sender's message is not an answer to this question.
-      pendingAnswererKind: task.initiatingActorKind,
-      pendingAnswererKey: task.initiatingActorKey,
+      // unrelated sender's message is not an answer to this question. A support
+      // task is the case that must name its own: the customer initiated it and
+      // the question goes to the merchant, so the attempt says who.
+      pendingAnswererKind: settlement.answerer?.kind ?? task.initiatingActorKind,
+      pendingAnswererKey: settlement.answerer?.key ?? task.initiatingActorKey,
     };
   }
   return {
@@ -670,9 +878,19 @@ export async function failAgentTaskClaim(input: TaskClaimIdentity & {
   });
 }
 
+/**
+ * Queued work for the durable task worker, which runs a member's own request and
+ * fails anything else as `invalid_task_owner`. Customer-initiated support tasks
+ * are claimed in-process by the planning job that accepted them and recover
+ * through that job's own retries, so handing them to this queue would only
+ * manufacture failures.
+ */
 export async function findQueuedAgentTasks(limit = 100) {
   return db.agentTask.findMany({
-    where: { status: "queued", claimToken: null, cancelledAt: null },
+    where: {
+      status: "queued", claimToken: null, cancelledAt: null,
+      initiatingActorKind: "member",
+    },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     take: limit,
     select: { id: true, organizationId: true, revision: true },
