@@ -192,6 +192,13 @@ export interface SupportContext extends BaseAgentContext {
   openThreadCount: number;
   recentOrders: ShopifyOrderSummary[];
   recentOrdersFetchFailed?: boolean;
+  /**
+   * The knowledge-base pre-fetch failed, as distinct from the store having no
+   * matching article. Operation evidence: the turn continues, and the plan
+   * carries `kb_fetch_failed` so a reply written without documented policy is
+   * not shown to the merchant as though the policy had been consulted.
+   */
+  kbFetchFailed?: boolean;
   linkedShopifyCustomerName: string | null;
   kbArticles: { title: string; body: string }[];
   merchantPreferences: MerchantPreferenceSummary[];

@@ -33,7 +33,7 @@ import {
   attachReturnLabel,
   fulfillOrder,
 } from "./shopify.js";
-import { checkParsedStaticToolPolicy } from "./static-policy.js";
+import { checkParsedStaticToolPolicy, checkStorefrontToolAllowed } from "./static-policy.js";
 import { getSupportStats } from "./support-stats.js";
 import {
   ReceiptValidationError,
@@ -68,6 +68,25 @@ type PreparedToolCall =
 
 function formatPolicyError(message: string): string {
   return `Error: ${message}`;
+}
+
+/**
+ * The storefront allowlist, checked before the arguments are parsed — the same
+ * ordering `checkStaticToolPolicy` uses for the preview path.
+ *
+ * Post-parse is too late for this half: a guest naming `find_customer` with
+ * anything malformed was answered "input.by is required", which refuses the
+ * call but tells the shopper the tool exists and what it takes. Whether an
+ * actor may call a tool at all does not depend on the arguments, so it is
+ * decided first. Selection never offers these, so arriving here means a plan
+ * named a tool outside the actor's set.
+ */
+function storefrontToolBlock(name: string, ctx: BaseAgentContext): string | null {
+  const blocked = checkStorefrontToolAllowed(name, {
+    authState: ctx.authState,
+    verifiedOrders: ctx.verifiedOrders,
+  });
+  return blocked?.blocked ? formatPolicyError(blocked.reason) : null;
 }
 
 function prepareToolCall(
@@ -408,6 +427,9 @@ export async function executeTool(
   ctx: BaseAgentContext,
   settings?: OrgSettings
 ): Promise<string> {
+  const storefrontBlock = storefrontToolBlock(name, ctx);
+  if (storefrontBlock) return storefrontBlock;
+
   const prepared = prepareToolCall(name, args);
   if (!prepared.ok) return prepared.result.message;
 
@@ -426,6 +448,9 @@ export async function executeToolStructured(
   ctx: BaseAgentContext,
   settings?: OrgSettings
 ): Promise<ToolResult> {
+  const storefrontBlock = storefrontToolBlock(name, ctx);
+  if (storefrontBlock) return toolPolicyBlock(storefrontBlock);
+
   const prepared = prepareToolCall(name, args);
   if (!prepared.ok) return prepared.result;
 
@@ -461,6 +486,9 @@ export async function executeToolWithStatus(
   // registering it in the support tool set.
   moduleTools?: Record<string, AgentToolDefinition>,
 ): Promise<ExecuteToolResult> {
+  const storefrontBlock = storefrontToolBlock(name, ctx);
+  if (storefrontBlock) return { result: storefrontBlock, status: "policy_block" };
+
   const prepared = prepareToolCall(name, args, moduleTools);
   if (!prepared.ok) {
     return {

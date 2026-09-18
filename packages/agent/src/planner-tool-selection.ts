@@ -130,7 +130,11 @@ const STARTER_TOOL_NAMES: ReadonlySet<string> = new Set<string>([
   ...MUTATION_COMMON_TOOL_NAMES,
 ]);
 
-const BROAD_ORDER_MUTATION_TOOL_NAMES = [
+// The legacy runtime's answer to any mutative request: every order write at
+// once, because the classifier says a write is wanted without saying which.
+// Reached only with capability discovery off; under discovery these are what
+// `discover_capabilities` returns, one named capability at a time.
+export const BROAD_ORDER_MUTATION_TOOL_NAMES = [
   "update_shopify_order_address",
   "create_refund",
   "create_partial_refund",
@@ -143,8 +147,9 @@ const BROAD_ORDER_MUTATION_TOOL_NAMES = [
 ] as const;
 
 // Tools no customer intent may unlock. They stay reachable through the
-// merchant-authored fail-opens above and through the namespace-miss retry, which
-// is the designed escape when a request genuinely needs one of them.
+// merchant-authored fail-opens above, and through the designed escape when a
+// request genuinely needs one of them: the namespace-miss retry on the legacy
+// runtime, a named discovery call on the discovery one.
 //
 // The list is explicit so the coverage test can tell a deliberate exclusion from
 // an accidental one. A tool added to the registry with neither a bucket nor an
@@ -273,9 +278,14 @@ export function selectPlanningTools(input: SelectPlanningToolsInput): PlanningTo
     addBucket(buckets, selectedNames, "risk", []);
   } else {
     if (intents.mutative_request) {
+      // Which mutation the request needs is the one thing "mutative" does not
+      // say, so on the discovery runtime the bucket loads what any mutation is
+      // proposed from — the KB, product and order reads — and leaves the write
+      // itself to be discovered. An address change stops arriving holding every
+      // compensation schema, which is what the broad bucket did to it.
       addBucket(buckets, selectedNames, "order_mutation", [
         ...MUTATION_COMMON_TOOL_NAMES,
-        ...BROAD_ORDER_MUTATION_TOOL_NAMES,
+        ...(input.capabilityDiscovery ? [] : BROAD_ORDER_MUTATION_TOOL_NAMES),
       ]);
     }
     if (intents.policy_question) {

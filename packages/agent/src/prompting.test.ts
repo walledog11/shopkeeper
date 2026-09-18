@@ -637,3 +637,47 @@ describe('buildSystemPromptParts caching split', () => {
     expect(stable).not.toContain('Test Store');
   });
 });
+
+// The prompt and the tool set are two halves of one decision. Gift-card
+// issuance left the default support selection on the discovery runtime, so the
+// compensation tree's gift-card branch has to stop naming a tool that turn does
+// not hold — and has to keep naming it while the legacy bucket still loads it.
+describe('gift-card issuance follows the runtime that offers it', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('names create_gift_card while the legacy mutation bucket still loads it', () => {
+    const prompt = buildSystemPrompt(makeCtx());
+
+    expect(prompt).toContain('Call create_gift_card with the exact amount and customer_id');
+    expect(prompt).not.toContain('discover the capability first');
+  });
+
+  it('points at discovery instead of the tool on the discovery runtime', () => {
+    vi.stubEnv('AGENT_CAPABILITY_DISCOVERY_MODE', 'discover');
+    const prompt = buildSystemPrompt(makeCtx());
+
+    expect(prompt).not.toContain('Call create_gift_card with the exact amount and customer_id');
+    expect(prompt).toContain('Gift-card issuance is not in your default tool list');
+    // Still an enumerated allowed case, not a removed capability: the inventory
+    // retains it, and a tree that drops the case turns an explicit store-credit
+    // request into a refund.
+    expect(prompt).toContain('Fixed-value gift card: only when the customer or merchant explicitly requests');
+    expect(prompt).toContain('this is the escalate case, not a refund in its place');
+  });
+
+  it('leaves the rest of the compensation tree identical between runtimes', () => {
+    const legacy = buildSystemPromptParts(makeCtx()).stable;
+    vi.stubEnv('AGENT_CAPABILITY_DISCOVERY_MODE', 'discover');
+    const discovery = buildSystemPromptParts(makeCtx()).stable;
+
+    // One bullet differs and nothing else, so the gate cannot quietly carry a
+    // second prompt change in with it.
+    const differing = legacy.split('\n')
+      .filter((line, index) => line !== discovery.split('\n')[index]);
+    expect(differing).toHaveLength(1);
+    expect(differing[0]).toContain('Fixed-value gift card');
+    expect(legacy.split('\n')).toHaveLength(discovery.split('\n').length);
+  });
+});

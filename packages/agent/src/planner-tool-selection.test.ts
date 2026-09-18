@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { emptyIntents, emptyRequestFacts, type ClassifierSignals } from "./classifier-signals.js";
 import { GUEST_TOOL_NAMES, VERIFIED_TOOL_NAMES, isGuestOnlyTool } from "./guest-policy.js";
 import {
+  BROAD_ORDER_MUTATION_TOOL_NAMES,
   DISCOVERY_RESULT_LIMIT,
   DISCOVERY_TOOL_NAME,
   NAMESPACE_MISS_TOOL_NAME,
@@ -12,7 +13,7 @@ import {
   runCapabilityDiscovery,
   selectPlanningTools,
 } from "./planner-tool-selection.js";
-import { AGENT_TOOLS, selectAgentTools } from "./tools/registry/index.js";
+import { AGENT_TOOLS, TOOL_DEFINITIONS, selectAgentTools } from "./tools/registry/index.js";
 
 function signals(
   intents: Partial<ClassifierSignals["intents"]> = {},
@@ -398,6 +399,86 @@ describe("selectPlanningTools on the discovery runtime", () => {
     expect(selection).toMatchObject({ bucket: "full", reason, narrowed: false });
     expect(names(selection)).toEqual(AGENT_TOOLS.map((tool) => tool.name));
     expect(names(selection)).not.toContain(DISCOVERY_TOOL_NAME);
+  });
+
+  // The acceptance sentence this package owns: an address question does not
+  // load compensation schemas by default. On the legacy runtime it does, because
+  // address changes and refunds share one coarse mutative bucket.
+  it("narrows a mutative request to the reads a write is proposed from", () => {
+    const legacy = select({ classifierSignals: signals({ mutative_request: true }) });
+    expect(names(legacy)).toContain("create_refund");
+    expect(names(legacy)).toContain("update_shopify_order_address");
+
+    const selection = discover({ classifierSignals: signals({ mutative_request: true }) });
+    const selected = names(selection);
+
+    expect(selection).toMatchObject({ bucket: "order_mutation", reason: "intent_bucket", narrowed: true });
+    expect(selected).toEqual(expect.arrayContaining([
+      "search_kb",
+      "search_shopify_products",
+      "get_inventory_status",
+      "get_shopify_orders",
+      "get_order_by_name",
+      "send_reply",
+      "ask_operator",
+      DISCOVERY_TOOL_NAME,
+    ]));
+    for (const withheld of BROAD_ORDER_MUTATION_TOOL_NAMES) {
+      expect(selected).not.toContain(withheld);
+    }
+  });
+
+  it("keeps a narrowed mutative turn distinguishable from an unusable classification", () => {
+    const mutative = discover({ classifierSignals: signals({ mutative_request: true }) });
+    const unclassified = discover({ classifierSignals: signals() });
+
+    // Identical tool sets by construction, so the bucket is the only thing that
+    // says whether the classifier was used — which is what the cost measurement
+    // has to group by.
+    expect(names(mutative).sort()).toEqual(names(unclassified).sort());
+    expect(mutative.bucket).toBe("order_mutation");
+    expect(unclassified.bucket).toBe("starter");
+  });
+
+  it("does not let an adjacent intent put a mutation back", () => {
+    const selection = discover({
+      classifierSignals: signals({ mutative_request: true, policy_question: true, order_status: true }),
+    });
+    const selected = names(selection);
+
+    expect(selection.bucket).toBe("order_mutation+order_status+policy");
+    expect(selected).toContain("search_kb");
+    for (const withheld of BROAD_ORDER_MUTATION_TOOL_NAMES) {
+      expect(selected).not.toContain(withheld);
+    }
+  });
+
+  it("leaves no active tool unreachable once the mutation bucket stops loading them", () => {
+    const exempt = new Set<string>(NARROWING_EXEMPT_TOOL_NAMES);
+    const bucketed = new Set<string>();
+    const intentKeys = Object.keys(emptyIntents()) as (keyof ClassifierSignals["intents"])[];
+    for (const intent of intentKeys) {
+      for (const tool of discover({ classifierSignals: signals({ [intent]: true }) }).tools) {
+        bucketed.add(tool.name);
+      }
+    }
+
+    // Every mutation the bucket used to load now has to be discoverable, or
+    // narrowing has orphaned it the way it once orphaned fulfill_order — the
+    // plan is merely worse, never an error.
+    const unreachable = AGENT_TOOLS
+      .map((tool) => tool.name)
+      .filter((name) => !bucketed.has(name) && !exempt.has(name))
+      .filter((name) => {
+        const definition = TOOL_DEFINITIONS.find((candidate) => candidate.name === name);
+        if (!definition) return true;
+        return !discovered(AGENT_TOOLS, definition.labels.planStep).includes(name);
+      })
+      .sort();
+
+    expect(unreachable).toEqual([]);
+    // Not vacuous: the mutations really did leave the buckets.
+    expect(BROAD_ORDER_MUTATION_TOOL_NAMES.some((name) => !bucketed.has(name))).toBe(true);
   });
 });
 

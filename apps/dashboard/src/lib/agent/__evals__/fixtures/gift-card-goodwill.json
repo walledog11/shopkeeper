@@ -54,6 +54,7 @@
     ]
   },
   "instruction": "Apologize for the embroidery quality and send them a $20 gift card as a goodwill gesture.",
+  "merchantInstruction": true,
   "expectedPlan": {
     "mustCallTools": [
       "create_gift_card",

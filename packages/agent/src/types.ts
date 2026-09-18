@@ -135,6 +135,7 @@ export interface PlanRoutingEvidence {
 export type ProducedPlanSignalCode =
   | 'shopify_customer_unresolved'
   | 'recent_orders_fetch_failed'
+  | 'kb_fetch_failed'
   | 'shopify_lookup_failed'
   | 'order_not_found'
   | 'order_tracking_not_found'

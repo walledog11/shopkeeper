@@ -13,6 +13,7 @@ import {
   truncateContextText,
 } from "./context-budget.js";
 import { buildMerchantPreferencesPromptSection } from "./merchant-preferences.js";
+import { usesCapabilityDiscovery } from "./runtime-modes.js";
 
 function promptText(value: string | null | undefined, maxChars: number): string {
   return truncateContextText(value?.trim() ?? "", maxChars);
@@ -136,11 +137,26 @@ ${parts.context}${instructionsSection}${parts.trailer}`;
 }
 
 // ── Support module ──
+const SUPPORT_GIFT_CARD_BRANCH = '  - Fixed-value gift card: only when the customer or merchant explicitly requests a gift card, store credit, or other fixed-value non-cash compensation, the exact amount is stated, a Shopify customer_id is resolved for delivery, and the amount is within both compensation limits. Call create_gift_card with the exact amount and customer_id. Customer language saying "store credit" maps to a Shopify gift card. A fixed-value store-credit request for one damaged item is still this allowed gift-card case when the customer explicitly says no refund; it is not an item-only refund.';
+
+const SUPPORT_GIFT_CARD_BRANCH_DISCOVERY = '  - Fixed-value gift card: only when the customer or merchant explicitly requests a gift card, store credit, or other fixed-value non-cash compensation, the exact amount is stated, a Shopify customer_id is resolved for delivery, and the amount is within both compensation limits. Gift-card issuance is not in your default tool list — discover the capability first, then call the tool it gives you with the exact amount and customer_id. Customer language saying "store credit" maps to a Shopify gift card. A fixed-value store-credit request for one damaged item is still this allowed gift-card case when the customer explicitly says no refund; it is not an item-only refund. If discovery does not offer it, this is the escalate case, not a refund in its place.';
+
+// The compensation decision tree names a tool per allowed case, so it has to
+// agree with what the turn was actually offered. Gift-card issuance left the
+// default support selection on the discovery runtime (the package-0 inventory's
+// disposition: remove from support default, retain as an isolated merchant
+// capability), so on that runtime the branch names the capability to discover
+// rather than a tool the model does not hold — a tree that names an absent tool
+// is how a fabricated tool call gets invited, and execution now refuses those.
+//
+// The legacy runtime keeps the branch verbatim. Gift cards are still in its
+// mutation bucket, and changing what production plans before the cutover is not
+// this package's decision to make.
 const SUPPORT_INSTRUCTIONS = `- When you are uncertain about the right action, whether a request is in scope, or the customer's identity for an action that changes their order or moves money, call escalate_to_human instead of guessing. Confident wrong actions are far worse than honest escalations. If a tool fails and you cannot recover, escalate.
 - If the customer's instructions are contradictory or mutually exclusive within a single message (for example: cancel it, then change the address and rush it, then refund but still ship it), there is no coherent action to take. Do NOT execute or silently pick any one of them - call escalate_to_human so a person can clarify what the customer actually wants.
 - Compensation follows one strict decision tree:
   - Exact full refund: only when the customer or merchant explicitly requests a full refund, one paid order is identified, the exact complete refundable balance and currency are verified from Shopify, there is no prior or partial refund or chargeback, and the amount is within both compensation limits. Call create_refund with that order_id, exact amount, and currency. Do not infer a return merely because the item is damaged, unwanted, or the wrong size; use create_return instead only when the customer also explicitly says they are sending the delivered goods back or store policy requires a return.
-  - Fixed-value gift card: only when the customer or merchant explicitly requests a gift card, store credit, or other fixed-value non-cash compensation, the exact amount is stated, a Shopify customer_id is resolved for delivery, and the amount is within both compensation limits. Call create_gift_card with the exact amount and customer_id. Customer language saying "store credit" maps to a Shopify gift card. A fixed-value store-credit request for one damaged item is still this allowed gift-card case when the customer explicitly says no refund; it is not an item-only refund.
+${SUPPORT_GIFT_CARD_BRANCH}
   - Item-only refund: only when the customer or merchant explicitly asks for money back on specific items rather than the whole order, one fully paid order is identified, it has no prior refund, and every item they named resolves to a line item on that order with enough units left to cover it. Call create_partial_refund with that order_id and the line_item_id and quantity of each item coming back. Never state, calculate, or repeat an amount as the sum being refunded — Shopify prices the selection and the compensation limit is applied to its figure, so any number you name may not be the number refunded. Shipping is never refunded. If the whole order is coming back, that is the exact-full-refund case instead; if the customer is sending the goods back, use create_return.
   - Anything else financial must call escalate_to_human: vague or missing amounts, an item-only request whose line items cannot be resolved from the identified order, missing or ambiguous order/customer identity, amount or currency mismatches, prior refunds, chargebacks or disputes, non-paid orders, over-cap requests, and percentage discounts. For a prior refund, do not explain its status to the customer or add an internal note instead — escalation must be the only terminal tool. Never substitute a gift card for a refund or a refund for a gift card. Never promise completion in a holding reply.
   - A complaint without an explicit compensation request gets a normal helpful reply with no money-moving tool. Never invent or proactively offer compensation.
@@ -237,6 +253,13 @@ const SUPPORT_STABLE_PREFIX = `You are an AI support agent for an e-commerce sto
 
 ## Instructions
 ${SUPPORT_INSTRUCTIONS}${UNTRUSTED_CONTENT_GUIDANCE}`;
+
+// Built once per flag value rather than per request: the prefix is the cached
+// half of the prompt, and only one of these is live at a time.
+const SUPPORT_STABLE_PREFIX_DISCOVERY = SUPPORT_STABLE_PREFIX.replace(
+  SUPPORT_GIFT_CARD_BRANCH,
+  SUPPORT_GIFT_CARD_BRANCH_DISCOVERY,
+);
 
 // The operator equivalent, and it holds only what is on EVERY operator turn.
 // The control-tool, inbox-tool and dashboard-nav blocks are deliberately absent:
@@ -388,7 +411,13 @@ ${identitySection}${ordersSection}${guestSection}
 ${shopifyNote}
 ${shopifyCustomerNote}${buildGuardrailSection(s)}${buildAutonomySection(s)}${buildStoreProfileSection(ctx.orgName, s.aiContext)}${kbSection}${buildVoiceSection(s)}${buildMerchantPreferencesSection(ctx)}`;
 
-  return { stable: SUPPORT_STABLE_PREFIX, volatile };
+  // Storefront turns never held create_gift_card, so their prefix does not
+  // depend on the gate; the branch only has to match what a support turn was
+  // offered.
+  return {
+    stable: usesCapabilityDiscovery() ? SUPPORT_STABLE_PREFIX_DISCOVERY : SUPPORT_STABLE_PREFIX,
+    volatile,
+  };
 }
 
 export function buildSystemPrompt(ctx: AgentContext, settings?: Partial<OrgSettings>): string {

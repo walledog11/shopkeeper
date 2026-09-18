@@ -447,3 +447,93 @@ describe("actionAuthorityBlock", () => {
     expect(result.status).toBe("success");
   });
 });
+
+// Selection decides what the model is offered; execution decides what may run.
+// Discovery makes the first set smaller and expandable, which is only safe
+// because the second check is independent of it — so a tool call the selection
+// never offered, fabricated or hallucinated, must be refused here on the
+// authority of the turn alone.
+describe("execution refuses a fabricated tool call in every authority mode", () => {
+  function storefrontCtx(
+    authState: "guest" | "verified",
+    verifiedOrders: { orderName: string; orderId: string }[] = [],
+  ): BaseAgentContext {
+    return {
+      orgId: "org_1",
+      orgName: "Test Store",
+      authState,
+      verifiedOrders,
+      recentMessages: [],
+      shopify: { shop: "test.myshopify.com", accessToken: "token" },
+      escalate: vi.fn(),
+    };
+  }
+
+  const supportCtx = (): BaseAgentContext => ({
+    orgId: "org_1",
+    orgName: "Test Store",
+    recentMessages: [],
+    shopify: { shop: "test.myshopify.com", accessToken: "token" },
+    escalate: vi.fn(),
+  });
+
+  it("rejects an operator module tool named from a support turn", async () => {
+    // create_flash_sale is a gateway module tool. Discovery cannot return it
+    // because it is not in the registry; execution cannot run it because the
+    // support turn supplies no module tools. Both halves, not just the first.
+    const result = await executeToolWithStatus("create_flash_sale", { percent: 90 }, supportCtx());
+
+    expect(result.status).toBe("error");
+    expect(result.result).toContain('unknown tool "create_flash_sale"');
+  });
+
+  it.each([
+    ["create_refund", { order_id: "123", amount: "10.00" }],
+    ["cancel_order", { order_id: "123" }],
+    ["find_customer", { email: "shopper@example.com" }],
+    ["get_shopify_orders", { customer_id: "456" }],
+    ["get_order_by_name", { order_name: "#1025" }],
+  ])("refuses %s for an anonymous storefront visitor", async (name, args) => {
+    const result = await executeToolWithStatus(name, args, storefrontCtx("guest"));
+
+    // Policy-blocked, not attempted: the guard runs ahead of the provider even
+    // though this context carries a usable Shopify token.
+    expect(result.status).toBe("policy_block");
+  });
+
+  it("refuses a mutation for a verified visitor and scopes their reads to the order they proved", async () => {
+    const ctx = storefrontCtx("verified", [{ orderName: "#1025", orderId: "1025" }]);
+
+    expect((await executeToolWithStatus("create_refund", { order_id: "1025", amount: "10.00" }, ctx)).status)
+      .toBe("policy_block");
+    expect((await executeToolWithStatus("get_order_by_name", { order_name: "#1026" }, ctx)).status)
+      .toBe("policy_block");
+    expect((await executeToolWithStatus("get_order_tracking", { order_id: "1026" }, ctx)).status)
+      .toBe("policy_block");
+  });
+
+  it("refuses a forbidden call without disclosing the tool's arguments", async () => {
+    // Post-parse this answered "input.by is required" — a refusal that still
+    // tells the shopper find_customer exists and what it takes. Whether they may
+    // call it at all does not depend on the arguments being well-formed.
+    for (const args of [{}, { email: "shopper@example.com" }, { by: "email", value: "x" }]) {
+      const result = await executeToolWithStatus("find_customer", args, storefrontCtx("guest"));
+
+      expect(result.status).toBe("policy_block");
+      expect(result.result).not.toContain("input.");
+      expect(result.result).not.toContain("invalid arguments");
+    }
+  });
+
+  it("refuses a support tool whose category the workspace turned off", async () => {
+    const result = await executeToolWithStatus(
+      "create_refund",
+      { order_id: "123", amount: "10.00" },
+      supportCtx(),
+      { toolsEnabled: { action: false, communication: true, internal: true, read: true } },
+    );
+
+    expect(result.status).toBe("policy_block");
+    expect(result.result).toContain("disabled by the workspace owner");
+  });
+});

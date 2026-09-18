@@ -17,13 +17,14 @@ of that reply from what the write returned, and step 6's compound case — all
 and step 7's gate that lets a caller set it. Step 6 also repaired the capability
 it needed: `create_partial_refund` had never been executable. Package 3's steps
 are all landed, with the flag off by default and the end-to-end run on a live
-store still owed. Package 4 has started: step 1's registry-derived bounded
-discovery is in place, and step 2 gave it a caller — a classification the planner
-cannot use now takes the compact starter set rather than the full registry, the
-namespace-miss retry is replaced by in-turn discovery, and both sit behind
-`AGENT_CAPABILITY_DISCOVERY_MODE`, off in both apps. Packages 5–6 have not
-started.
-Created 2026-09-11; last updated 2026-09-17.
+store still owed. Package 4's steps are all landed: registry-derived bounded
+discovery, the caller that replaced the full-registry widening, the narrowed
+mutation bucket, the three declared context-dependency tiers with the knowledge
+base deferred on a status question, gift-card issuance out of the default support
+selection and its prompt branch, and the input-side cost measurement. All of it
+sits behind `AGENT_CAPABILITY_DISCOVERY_MODE`, off in both apps, so no model has
+yet planned against any of it. Packages 5–6 have not started.
+Created 2026-09-11; last updated 2026-09-18.
 
 Implementation detail expanded 2026-09-11 against the current repository. Names marked **proposed** describe work to implement, not APIs or tables that already exist. This document authorizes no production operation by itself.
 
@@ -1628,29 +1629,166 @@ off — and no eval run is owed. The baseline that matters is the one the cutove
 takes with the flag on. Rollback is reverting the commit; nothing persisted
 changes shape.
 
-Not done: the broad order-mutation bucket. A `mutative_request` classification
-still loads all nine order mutations at once, which is the other half of this
-package's first checkbox and is not a full-registry fallback, so step 2 left it
-where it is. Step 5's cost measurement is also owed, and it is the one that
-decides whether this trade is worth taking: discovery removes the widened replan
-and shrinks the first prompt, and adds a model call whenever the starter set was
-short by one capability. One case to measure specifically — a cheap-tier turn
-that discovers a mutation and proposes it is re-planned on the judgment tier from
-a clean transcript with the starter set, so it discovers the same capability
+The mutation bucket closed next, and with it the package's first checkbox. Under
+the gate a `mutative_request` classification adds `MUTATION_COMMON_TOOL_NAMES`
+alone — the KB, product, inventory and order reads any write is proposed from —
+and `BROAD_ORDER_MUTATION_TOOL_NAMES` becomes reachable only through discovery.
+The legacy runtime keeps all nine, so nothing production plans today changes.
+That makes the address question the package's acceptance sentence names finally
+true: it shares one coarse bucket with refunds today, so it arrives holding
+`create_refund`, `create_partial_refund` and `create_gift_card`, and under the
+gate it arrives holding none of them.
+
+Two things the bucket change had to keep. The narrowed mutative set is byte-identical
+to the starter set, so `bucket` is the only thing left that says whether the
+classifier was used at all — `order_mutation` against `starter` — and the cost
+measurement below groups by it. And the registry-coverage test that caught
+`fulfill_order`'s orphaning runs with discovery off, so it still proves the
+legacy buckets name every active tool; its twin proves that under the gate every
+tool a bucket stopped loading is reachable from its own merchant-facing label,
+with a non-vacuity check that the mutations really did leave.
+
+Step 3 split the context dependencies, and found the tiers were accidental. A
+knowledge-base query that rejected took the whole turn down; so did the
+open-thread count and image hydration; merchant preferences did not, because a
+`.catch` was added after the M5 outage. Nothing in the code said which was
+intended. `loadNonFatalContext` now wraps each non-fatal load individually —
+deliberately not the assembly, since one catch-and-continue cannot say which
+tier failed — and the three tiers are declared at its definition. Identity and
+policy (thread, organization, Shopify integration, storefront verification) stay
+awaited and uncaught: a failed read of the Shopify grant must not become
+`shopify: null`, which would have the agent tell a customer the store is
+disconnected and refuse every dependent write for the wrong reason, and a failed
+verification read must not answer a shopper who proved control of their order as
+a guest. Operation evidence (recent orders, knowledge base) continues without
+blocking unrelated work and reports itself: `kb_fetch_failed` joins
+`recent_orders_fetch_failed` as a typed plan signal, blocking rather than
+advisory, and distinct from `kb_no_match` because the store may well have the
+article and the reply was written without ever seeing it. Conversational context
+(open-thread count, merchant preferences, hydrated images) takes its neutral
+value and logs.
+
+The on-demand half is one classification, deliberately. The knowledge-base
+pre-fetch is the largest variable input in a support prompt — `kbTotalChars` is
+14,000, about 3,500 tokens, more than the entire starter tool set — and a "where
+is my order" question has never needed it. So under the gate a turn classified
+`order_status` and nothing else, from a classification aligned to the latest
+customer message, skips the pre-fetch and leaves the knowledge base to
+`search_kb`, which is in every one of these sets; the prompt already says nothing
+is pre-loaded and to search. `KB_DEPENDENT_INTENTS` is listed rather than
+inverted so a new intent defaults to pre-loading, and every classification the
+planner cannot use still pre-loads — not knowing what a turn needs is a reason to
+carry the evidence, not to drop it.
+
+Step 3 also turned up a defect in the execution recheck this package's second
+checkbox owns. `checkStorefrontToolAllowed` is documented to run before and after
+parsing, because "a shopper must not learn that a tool exists from a validation
+error" — and it ran pre-parse only on the preview path. At execution
+`prepareToolCall` parses first, so a guest naming `find_customer` was answered
+"input.by is required": refused, but told the tool exists and what it takes. The
+executor's three entry points now check the allowlist before parsing, from that
+same function rather than a second composition of it.
+
+Step 4 followed the package-0 inventory's disposition for `create_gift_card` —
+remove from support default, retain as an isolated merchant capability, usage
+unknown. The selection half came free with the mutation bucket. The instruction
+half did not: the compensation decision tree names a tool per allowed case, and a
+tree that names a tool the turn does not hold is how a fabricated tool call gets
+invited, which execution now refuses. So under the gate the gift-card branch
+names the capability to discover instead of the tool, keeps the case enumerated —
+dropping it turns an explicit store-credit request into a refund — and says
+plainly that an unavailable capability is the escalate case rather than a refund
+in its place. A test pins that exactly one line of the cached prefix differs
+between the two runtimes, so the gate cannot carry a second prompt change in with
+it. The legacy prompt and bucket are untouched: gift cards still work there
+exactly as they do today, and changing what production plans before the cutover
+is not this package's decision.
+
+One fixture changed, and not to make anything pass. `gift-card-goodwill` is the
+isolated-merchant-capability case — "send them a $20 gift card as a goodwill
+gesture" is a ticket-composer instruction, and `api/agent/plan` sets
+`merchantInstruction: true` for every caller it has. The fixture did not set it,
+so it graded a path that input cannot take in production. It does now.
+
+The wider version of that is worth naming and is not this package's to fix: one
+fixture of eighty-five sets `merchantInstruction`, and it was added for the
+`fulfill_order` regression. The paid gate therefore grades almost every case as
+customer-derived narrowing, which is the gateway auto-plan's path, not the
+composer's. That belongs with package 6's baseline, where the fixture suite is
+re-captured anyway.
+
+Step 5 measured the trade, on the input side, without a provider call. Schemas
+and prompts are exactly computable, and the call counts are structural rather
+than empirical: the legacy runtime answers a namespace miss by discarding the
+attempt and re-planning against the whole registry from a clean transcript, so
+its second call repeats the first call's input; the discovery runtime answers it
+inside the turn, so its second call is the first call's transcript plus one
+discovery result and at most `DISCOVERY_RESULT_LIMIT` schemas.
+
+The first prompt shrinks only where the starter set replaces something wider,
+which is narrower than "discovery makes the prompt smaller". Measured in
+estimated input tokens: `order_status` 1,910 to 1,944 and `policy` 1,106 to
+1,140 — same tools, and the difference is the control tool that was swapped.
+`order_mutation` 5,176 to 2,430 and an unusable classification 6,362 to 2,430,
+both a little over 60% smaller. Whole turns at Sonnet-5 list input prices: a
+mutative request that needs a withheld capability costs 19,576 tokens
+($0.0392) on the legacy widened replan against 14,041 ($0.0281) through
+discovery; the same request answered from the starter set costs 9,195 against
+6,494. The case that goes the other way is the one to watch — a correctly
+narrowed `order_status` turn where the model asks for something the bucket
+withheld runs 5,929 to 13,313, more than double, because it pays a second call
+the legacy turn never made.
+
+Where each saving applies is almost disjoint, and neither change subsumes the
+other. A status turn keeps its bucket, so the tool set saves it 34 tokens and
+the deferred knowledge base is worth up to 3,500; the classifications that take
+the starter set save 3,932 on schemas and still pre-load the knowledge base.
+
+What the measurement cannot say, and the cutover baseline still owes: output
+tokens, wall-clock latency, and how often a real model reaches for discovery when
+it did not need to. A first prompt 60% smaller on the cases it replaces does not
+pay for a discovery call on the cases it does not, and only a live run fixes that
+rate. The specific case to watch there is unchanged from step 2 — a cheap-tier
+turn that discovers a mutation and proposes it is re-planned on the judgment tier
+from a clean transcript with the starter set, so it discovers the same capability
 twice.
+
+Verified by `npm run typecheck`, `npm run lint` (structure, repo, knip baseline
+and per-workspace lint), `npm run lint:structure`, `npm run test:unit` (1,214
+agent, 471 gateway, 789 dashboard, 68 analytics, 101 email, 65 integrations) and
+`npm run test:integration` (166 agent, 921 gateway with 1 skipped, 672 dashboard
+with 2 skipped). The integration suite was red once on a dashboard Shopify
+customer-search route this change cannot reach, and green alone and on a full
+re-run — the known workspace-concurrency flake. Both gates are off in both apps, so
+every fixture plans against the tool set, prompt and context it did before, and
+no eval run is owed; the baseline that matters is the one the cutover takes with
+the flags on. Rollback is reverting the commits — nothing persisted changes
+shape, and `kbFetchFailed` is an optional context field with an optional signal
+code behind it.
+
+Not done: the live half of every one of these. No model has planned against the
+narrowed mutation bucket, the discovery-shaped gift-card branch or the deferred
+knowledge base, and the three fixtures asserting a customer-requested
+`create_gift_card` (`store-credit-goodwill-over-refund` in the core suite,
+`tier-guarded-store-credit-approval` and
+`merchant-preference-store-credit-over-refund` in the extended one) are
+satisfiable under the gate only if the model actually discovers the capability
+rather than escalating or substituting a refund. That is a model-behavior claim,
+it is exactly what this package's acceptance sentence asserts, and nothing here
+establishes it.
 
 Required tests: address-only context excludes compensation schemas; a legitimate later refund can be discovered with sufficient authority; anonymous discovery cannot reveal customer/order data; a fabricated forbidden tool call is rejected at execution; unavailable optional KB/count data does not block unrelated allowed reads; unavailable policy evidence blocks its dependent write; discovery exhaustion yields a recoverable status or question rather than a full-registry retry.
 
-- [ ] Replace the broad order-mutation default with a compact initial selection and an explicit way to discover additional authorized capabilities. Partial completion: every classification the planner cannot use now takes the starter set instead of the registry, and `discover_capabilities` is the explicit way to reach the rest; the `mutative_request` bucket still loads all nine order mutations.
-- [ ] Keep support, verified storefront, anonymous storefront, and merchant authority distinct in both selection and execution. Partial completion: selection and discovery hold the four modes apart under test; execution's own recheck is unchanged and not yet re-covered against a fabricated tool call.
-- [ ] Load relevant evidence on demand; preserve required identity and policy dependencies while allowing unrelated work to continue when optional context fails.
-- [ ] Remove gift-card issuance from default support selection and shared default instructions. Preserve historical handling; retain an isolated merchant capability only if the scope inventory justifies it.
+- [x] Replace the broad order-mutation default with a compact initial selection and an explicit way to discover additional authorized capabilities. On the discovery runtime only: `mutative_request` and every classification the planner cannot use take the starter set, and `discover_capabilities` is the explicit way to reach the nine order mutations. The legacy bucket is unchanged until cutover.
+- [x] Keep support, verified storefront, anonymous storefront, and merchant authority distinct in both selection and execution. Execution refuses a fabricated call in each mode — an operator module tool named from a support turn, mutations and customer-wide reads for a guest, mutations and out-of-scope order reads for a verified visitor, and a category the workspace disabled. The storefront allowlist now runs before argument parsing there as it already did on the preview path, so a forbidden call is no longer answered with the tool's own schema requirements.
+- [x] Load relevant evidence on demand; preserve required identity and policy dependencies while allowing unrelated work to continue when optional context fails. The three tiers are declared per load rather than inherited from whether someone remembered a catch; the knowledge base is deferred to `search_kb` on an aligned `order_status` classification under the gate. Deferral covers that one classification: the other unconditional loads stay eager, because not knowing what a turn needs is a reason to carry the evidence.
+- [x] Remove gift-card issuance from default support selection and shared default instructions. Done on the discovery runtime, following the package-0 inventory's disposition: out of the default set, retained as an isolated merchant capability reached by discovery or a merchant-authored instruction, and the compensation tree's branch names the capability rather than the tool. Receipt, read and reconciliation handling is untouched, and the legacy runtime keeps both the bucket entry and the branch verbatim until cutover.
 - [x] Keep existing operator-only shop-management capabilities isolated. Do not rebuild or expand them during this overhaul. They reach the model through the operator turn's own tool set, which discovery is not offered on, and they are not in the registry discovery reads.
-- [ ] Evaluate the complete cost of discovery and follow-up calls, not just the smaller initial prompt.
+- [x] Evaluate the complete cost of discovery and follow-up calls, not just the smaller initial prompt. Whole turns measured on the input side in `discovery-cost.test.ts`, which asserts the comparisons rather than only printing them, including the case where discovery costs more than double. Output tokens, latency and the real discovery rate are unmeasured and owed to the cutover baseline.
 
 Acceptance: an address question does not load compensation schemas by default; an unexpected legitimate need can discover the correct capability; discovery cannot increase authority. Adding an isolated optional capability does not alter default support prompts or tool lists.
 
-Primary locations: [tool selection](../packages/agent/src/planner-tool-selection.ts), [context assembly](../packages/agent/src/context.ts), [prompt](../packages/agent/src/prompt.ts), [operator composition](../apps/gateway/src/message-handlers/operator-free-form-turn.ts).
+Primary locations: [tool selection](../packages/agent/src/planner-tool-selection.ts), [context assembly](../packages/agent/src/context.ts), [prompt](../packages/agent/src/prompt.ts), [runtime gates](../packages/agent/src/runtime-modes.ts), [cost measurement](../packages/agent/src/discovery-cost.test.ts), [operator composition](../apps/gateway/src/message-handlers/operator-free-form-turn.ts).
 
 ### 5. Migrate retained tasks and conversational continuity
 

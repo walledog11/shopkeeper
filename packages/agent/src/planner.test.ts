@@ -836,6 +836,47 @@ describe("planAgent capability discovery", () => {
     });
   });
 
+  it("opens a mutative request on its reads and discovers the write it needs", async () => {
+    enableDiscovery();
+    const injectedLogger = makeLogger();
+    installAgentLogger(injectedLogger);
+    mockCreate
+      .mockResolvedValueOnce(singleToolUse("discover_capabilities", { capability: "change the shipping address" }, "tu_discover"))
+      .mockResolvedValueOnce(singleToolUse("update_shopify_order_address", {
+        order_id: "9000004003",
+        address: { address1: "5 New Street" },
+      }, "tu_address"))
+      .mockResolvedValueOnce(singleToolUse("send_reply", { text: "Address updated." }, "tu_reply"));
+
+    const plan = await planAgent(
+      makeCtx({
+        recentMessages: [{ senderType: "customer", contentText: "Can you send #4003 to 5 New Street instead?" }],
+        recentOrders: [FULFILLED_ORDER_4003],
+        classifierSignals: classifierSignalsFor({ mutative_request: true }),
+      }),
+      "Handle the customer's request.",
+    );
+
+    // The address question arrives holding no compensation schema, which the
+    // coarse mutation bucket could not do: it loaded all nine writes at once.
+    const firstCallTools = toolNamesForCall(0);
+    expect(firstCallTools).toContain("get_shopify_orders");
+    expect(firstCallTools).toContain("discover_capabilities");
+    for (const withheld of ["create_refund", "create_partial_refund", "create_gift_card", "cancel_order"]) {
+      expect(firstCallTools).not.toContain(withheld);
+    }
+    expect(firstCallTools).not.toContain("update_shopify_order_address");
+
+    expect(toolNamesForCall(1)).toContain("update_shopify_order_address");
+    expect(plan.rawToolCalls.map((call) => call.name))
+      .toEqual(["update_shopify_order_address", "send_reply"]);
+    expect(completeLogPayload(injectedLogger)).toMatchObject({
+      toolSelectionBucket: "order_mutation",
+      toolSelectionNarrowed: true,
+      namespaceMiss: false,
+    });
+  });
+
   it("adds a discovered capability to the same turn instead of re-planning", async () => {
     enableDiscovery();
     const injectedLogger = makeLogger();
