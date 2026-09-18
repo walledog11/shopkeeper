@@ -39,6 +39,7 @@ function proposalData(task: { id: string; organizationId: string; revision: numb
     organizationId: task.organizationId, taskId: task.id, taskRevision: task.revision,
     schemaVersion: 1, canonicalActions: [], dependencies: [], proposalHash: "a".repeat(64),
     sourceRequestIds: [],
+    approverScopeKind: "member" as const, approverScopeKey: `member:${task.id}`,
   };
 }
 afterEach(async () => {

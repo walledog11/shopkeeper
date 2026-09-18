@@ -2,17 +2,25 @@
  * The one place a persisted proposal becomes authorized to run.
  *
  * Dashboard buttons, the phone keyword fast path, and the `approve_pending_plan`
- * control tool all approve through `runApprovedPendingPlan`, and it calls this.
+ * control tool all reach `executeCurrentCachedHomePlan`, and it calls this —
+ * one caller, so no surface can approve on terms of its own.
  * Approver identity and decision time come from the caller's authenticated
  * member, never from model arguments, and the bundle about to execute is hashed
  * and compared with the snapshot the merchant was shown — so an approval of one
  * proposal cannot run a revised one.
+ *
+ * Who may approve is read from the proposal's recorded scope. It used to be
+ * derived here as "the member who initiated the task, on their own operator
+ * thread", which is right for a member's own work and refuses every support
+ * proposal, because a customer initiates those and any bound member approves.
  */
 
 import { db, Prisma } from "@shopkeeper/db";
 import { ConflictError, ForbiddenError } from "./errors.js";
 import { hashPlan } from "./agent-actions.js";
-import { NO_SUSPENSION, requireMemberActorKey } from "./task-ledger.js";
+import {
+  ANY_MEMBER_ACTOR_KEY, actorMayEndWait, NO_SUSPENSION, requireMemberActorKey,
+} from "./task-ledger.js";
 import type { RawToolCall } from "./types.js";
 
 export interface AuthorizedProposal {
@@ -52,25 +60,48 @@ export async function authorizeAgentProposal(
     instruction: input.instruction, steps: [], rawToolCalls: input.approvedToolCalls,
   });
   return db.$transaction(async (tx) => {
+    const named = await tx.agentProposal.findFirst({
+      where: { id: input.proposalId, organizationId: input.organizationId },
+      select: { taskId: true },
+    });
+    if (!named) return null;
+    // The task row is the ordering point action dispatch and stops already
+    // serialize on, so two devices approving at once cannot both win.
+    await tx.$queryRaw(Prisma.sql`
+      SELECT id FROM agent_tasks WHERE id = ${named.taskId}::uuid
+      AND organization_id = ${input.organizationId}::uuid FOR UPDATE
+    `);
+    // Re-read inside the lock. The first read only resolves which task to
+    // serialize on; deciding from it would decide from a row fetched before the
+    // ordering point, which under READ COMMITTED still says `ready` after the
+    // other device committed its approval. Two *different* members approving one
+    // support card is what makes that visible — the same member racing itself
+    // writes the same approver either way.
     const proposal = await tx.agentProposal.findFirst({
       where: { id: input.proposalId, organizationId: input.organizationId },
     });
     if (!proposal) return null;
-    // The task row is the ordering point action dispatch and stops already
-    // serialize on, so two devices approving at once cannot both win.
-    await tx.$queryRaw(Prisma.sql`
-      SELECT id FROM agent_tasks WHERE id = ${proposal.taskId}::uuid
-      AND organization_id = ${input.organizationId}::uuid FOR UPDATE
-    `);
     const actorKey = await requireMemberActorKey(tx, input);
+    // Who may approve is read from the proposal, never re-derived from who
+    // initiated the task. A support task is initiated by the customer and
+    // approved by any bound member; deriving refused every one of them.
+    const scope = { kind: proposal.approverScopeKind, key: proposal.approverScopeKey };
+    // A member-scoped proposal additionally requires the thread still be that
+    // member's own operator thread, which is the condition it was created under.
+    // A shared support thread has no operator key and is scoped by tenant, which
+    // `requireMemberActorKey` has already established for this actor.
     const task = await tx.agentTask.findFirst({
       where: {
         id: proposal.taskId, organizationId: input.organizationId,
-        initiatingActorKind: "member", initiatingActorKey: actorKey,
-        thread: { operatorKey: actorKey, deletedAt: null, archivedAt: null },
+        thread: {
+          deletedAt: null, archivedAt: null,
+          ...(scope.key === ANY_MEMBER_ACTOR_KEY ? {} : { operatorKey: actorKey }),
+        },
       },
     });
-    if (!task) throw new ForbiddenError("This proposal is not available to the member.");
+    if (!task || !actorMayEndWait(scope, { kind: "member", key: actorKey })) {
+      throw new ForbiddenError("This proposal is not available to the member.");
+    }
     // Checked before anything else about the task: what is about to run has to
     // be what was shown, whatever state the task reached since.
     if (proposal.proposalHash !== approvedHash) {
@@ -110,21 +141,41 @@ export async function authorizeAgentProposal(
 }
 
 /**
- * Closes the task an approved proposal was the last thing waiting on. Execution
- * happens in the caller's existing path, so the outcome is only known here; a
- * failed or uncertain run leaves the task waiting rather than reporting success.
+ * Closes the task an approved proposal was the last thing waiting on, and names
+ * the task and proposal on the actions the approved run wrote. Execution happens
+ * in the caller's existing path, so the outcome is only known here; a failed or
+ * uncertain run leaves the task waiting rather than reporting success.
+ *
+ * The run's actions are found by its own turn ID, not by the request ID the
+ * planning attempt used. They are a different turn — `AgentTurnUsage.turnId` is
+ * unique, and a retried approval sharing the planning turn's ID would collide
+ * with it and interleave two action sequences, which is the same reason the
+ * failure replan keeps its own.
  */
 export async function completeApprovedAgentTask(
   approved: AuthorizedProposal,
+  executedTurnId?: string,
 ): Promise<boolean> {
   const now = new Date();
-  const closed = await db.agentTask.updateMany({
-    where: {
-      id: approved.taskId, organizationId: approved.organizationId,
-      revision: approved.taskRevision, status: "waiting_approval",
-      activeProposalId: approved.proposalId, cancelledAt: null,
-    },
-    data: { ...NO_SUSPENSION, status: "completed", completedAt: now, lastProgressAt: now },
+  return db.$transaction(async (tx) => {
+    const closed = await tx.agentTask.updateMany({
+      where: {
+        id: approved.taskId, organizationId: approved.organizationId,
+        revision: approved.taskRevision, status: "waiting_approval",
+        activeProposalId: approved.proposalId, cancelledAt: null,
+      },
+      data: { ...NO_SUSPENSION, status: "completed", completedAt: now, lastProgressAt: now },
+    });
+    if (closed.count !== 1) return false;
+    if (executedTurnId) {
+      await tx.agentAction.updateMany({
+        where: {
+          organizationId: approved.organizationId, turnId: executedTurnId,
+          OR: [{ taskId: null }, { taskId: approved.taskId }],
+        },
+        data: { taskId: approved.taskId, proposalId: approved.proposalId },
+      });
+    }
+    return true;
   });
-  return closed.count === 1;
 }

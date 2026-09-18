@@ -3,7 +3,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import { db } from "@shopkeeper/db";
 import { createTestOrg, createTestCustomer, createTestThread, cleanupTestData } from "@shopkeeper/db/test-helpers";
 import { ConflictError, ForbiddenError } from "./errors.js";
-import { acceptMemberAgentRequest, attachMemberAgentTask, claimAgentTask, settleAgentTaskClaim } from "./task-ledger.js";
+import {
+  ANY_MEMBER_ACTOR_KEY, acceptCustomerAgentRequest, acceptMemberAgentRequest,
+  attachMemberAgentTask, claimAgentTask, settleAgentTaskClaim,
+} from "./task-ledger.js";
 import { authorizeAgentProposal, completeApprovedAgentTask } from "./task-approval.js";
 
 const orgIds: string[] = [];
@@ -45,6 +48,51 @@ async function seedWaitingApproval() {
 
 function approval(input: { organizationId: string; clerkUserId: string }, proposalId: string) {
   return { ...input, proposalId, instruction, approvedToolCalls };
+}
+
+/**
+ * A support task parked on a proposal: the customer initiates it, the thread is
+ * a customer conversation with no operator key, and the card is pushed to every
+ * bound member, so the wait names them all.
+ */
+async function seedSupportWaitingApproval() {
+  const org = await createTestOrg();
+  orgIds.push(org.id);
+  const member = await db.orgMember.create({
+    data: { organizationId: org.id, clerkUserId: randomUUID() },
+  });
+  const customer = await createTestCustomer(org.id, randomUUID());
+  const thread = await createTestThread(org.id, customer.id, "email");
+  const message = await db.message.create({
+    data: {
+      threadId: thread.id, organizationId: org.id,
+      senderType: "customer", contentText: "refund please",
+    },
+  });
+  const { request, task } = await acceptCustomerAgentRequest({
+    organizationId: org.id, threadId: thread.id,
+    sourceMessageId: message.id, objective: instruction, budget,
+  });
+  const claim = await claimAgentTask({
+    organizationId: org.id, taskId: task.id, expectedRevision: task.revision,
+  });
+  const planId = randomUUID();
+  await settleAgentTaskClaim({
+    organizationId: org.id, taskId: task.id, expectedRevision: task.revision,
+    claimToken: claim!.claimToken, requestId: request.id,
+    settlement: {
+      status: "waiting_approval",
+      proposal: {
+        proposalId: planId, instruction, rawToolCalls: approvedToolCalls,
+        sourceRequestIds: [request.id],
+      },
+      approver: { kind: "member", key: ANY_MEMBER_ACTOR_KEY },
+    },
+  });
+  return {
+    input: { organizationId: org.id, clerkUserId: member.clerkUserId },
+    organizationId: org.id, taskId: task.id, threadId: thread.id, planId, member,
+  };
 }
 
 afterEach(async () => {
@@ -141,6 +189,88 @@ describe("shared proposal approval boundary", () => {
     });
     await expect(authorizeAgentProposal(approval(stopped.input, stopped.planId)))
       .rejects.toBeInstanceOf(ConflictError);
+  });
+
+  // A support task is initiated by the customer and approved by any bound member.
+  // The boundary used to derive the approver as "the member who initiated the
+  // task, on their own operator thread", which is true of no support task, so
+  // every one of these approvals was refused and the merchant's card was dead.
+  it("lets any bound member approve a support proposal the customer initiated", async () => {
+    const support = await seedSupportWaitingApproval();
+    const stored = await db.agentProposal.findUniqueOrThrow({ where: { id: support.planId } });
+    expect(stored).toMatchObject({
+      approverScopeKind: "member", approverScopeKey: ANY_MEMBER_ACTOR_KEY,
+    });
+
+    // A second member of the same organization, who asked for none of it.
+    const second = await db.orgMember.create({
+      data: { organizationId: support.organizationId, clerkUserId: randomUUID() },
+    });
+    const authorized = await authorizeAgentProposal(
+      approval({ organizationId: support.organizationId, clerkUserId: second.clerkUserId }, support.planId),
+    );
+    expect(authorized).toMatchObject({
+      taskId: support.taskId, proposalId: support.planId,
+      approverKey: `member:${second.id}`,
+    });
+    expect(await completeApprovedAgentTask(authorized!)).toBe(true);
+    expect((await db.agentTask.findUniqueOrThrow({ where: { id: support.taskId } })).status)
+      .toBe("completed");
+  });
+
+  it("still refuses someone who is not a member of the organization at all", async () => {
+    const support = await seedSupportWaitingApproval();
+    await expect(authorizeAgentProposal(
+      approval({ organizationId: support.organizationId, clerkUserId: randomUUID() }, support.planId),
+    )).rejects.toBeInstanceOf(ForbiddenError);
+    // Another tenant's member names no proposal of this one.
+    const other = await seed();
+    expect(await authorizeAgentProposal(approval(other, support.planId))).toBeNull();
+  });
+
+  it("gives two different members approving one support card a single effect", async () => {
+    const support = await seedSupportWaitingApproval();
+    const second = await db.orgMember.create({
+      data: { organizationId: support.organizationId, clerkUserId: randomUUID() },
+    });
+    const results = await Promise.all([
+      authorizeAgentProposal(approval(support.input, support.planId)),
+      authorizeAgentProposal(
+        approval({ organizationId: support.organizationId, clerkUserId: second.clerkUserId }, support.planId),
+      ),
+    ]);
+    const approvers = new Set(results.map((result) => result?.approverKey));
+    expect(approvers.size).toBe(1);
+    const proposal = await db.agentProposal.findUniqueOrThrow({ where: { id: support.planId } });
+    expect(proposal.status).toBe("approved");
+    expect([...approvers][0]).toBe(proposal.approverKey);
+  });
+
+  it("names the task and proposal on the actions the approved run wrote", async () => {
+    const support = await seedSupportWaitingApproval();
+    const authorized = await authorizeAgentProposal(approval(support.input, support.planId));
+    const turnId = randomUUID();
+    const action = await db.agentAction.create({
+      data: {
+        organizationId: support.organizationId, threadId: support.threadId, turnId,
+        tool: "create_refund", category: "action", input: {}, status: "success",
+        mode: "human_approved",
+      },
+    });
+    // A different turn's action is not this approval's to claim.
+    const unrelated = await db.agentAction.create({
+      data: {
+        organizationId: support.organizationId, threadId: support.threadId, turnId: randomUUID(),
+        tool: "send_reply", category: "communication", input: {}, status: "success",
+        mode: "auto_executed",
+      },
+    });
+
+    expect(await completeApprovedAgentTask(authorized!, turnId)).toBe(true);
+    expect(await db.agentAction.findUniqueOrThrow({ where: { id: action.id } }))
+      .toMatchObject({ taskId: support.taskId, proposalId: support.planId });
+    expect(await db.agentAction.findUniqueOrThrow({ where: { id: unrelated.id } }))
+      .toMatchObject({ taskId: null, proposalId: null });
   });
 
   it("leaves an approval that names no durable proposal to the legacy path", async () => {

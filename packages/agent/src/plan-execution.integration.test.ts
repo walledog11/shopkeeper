@@ -20,6 +20,7 @@ import {
   maybeAutoExecuteCurrentCachedHomePlan,
   resolvePlanExecutionLedgerMode,
   type PlanExecutionDeps,
+  readParkedProposalForThread,
 } from "./plan-execution.js";
 import { resolveAgentSettings } from "./settings.js";
 import { hashInstruction, hashPlan } from "./agent-actions.js";
@@ -320,6 +321,32 @@ describe("plan execution helpers", () => {
         status,
       });
     }
+  });
+});
+
+describe("readParkedProposalForThread", () => {
+  // The snapshot has to hash equal to what the approval surfaces actually send,
+  // and every one of them sends the calls the card renders — reads included.
+  // Recording the autonomy verdict's executable subset instead made the two
+  // hashes permanently different, so a support approval could only ever conflict.
+  it("snapshots the bundle the approval surfaces send, not the executable subset", async () => {
+    const plan = threeStepPlan();
+    const read: RawToolCall = { id: "read_1", name: "get_order_by_name", input: { order_name: "#1024" } };
+    plan.rawToolCalls = [read, ...plan.rawToolCalls];
+    const { org, thread, settings } = await seedThreadWithPlan({
+      plan,
+      settings: resolveAgentSettings({ autonomyTier: "guarded", maxRefundAmount: 100 }),
+    });
+
+    const snapshot = await readParkedProposalForThread({
+      orgId: org.id, threadId: thread.id, settings,
+    });
+    expect(snapshot?.rawToolCalls.map((call) => call.name)).toEqual(
+      plan.rawToolCalls.map((call) => call.name),
+    );
+    // The invariant the surfaces depend on, stated as they state it.
+    expect(hashPlan({ instruction: plan.instruction, steps: [], rawToolCalls: snapshot!.rawToolCalls }))
+      .toBe(hashPlan({ instruction: plan.instruction, steps: [], rawToolCalls: plan.rawToolCalls }));
   });
 });
 

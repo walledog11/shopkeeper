@@ -657,7 +657,7 @@ export interface ProposalSnapshot {
 export type TaskSettlement =
   | { status: "completed" }
   | { status: "waiting_input"; question: string; answerer?: TaskAnswerer }
-  | { status: "waiting_approval"; proposal: ProposalSnapshot };
+  | { status: "waiting_approval"; proposal: ProposalSnapshot; approver?: TaskAnswerer };
 
 export interface TaskAnswerer {
   kind: AgentActorKind;
@@ -671,12 +671,30 @@ export interface TaskAnswerer {
  * product does not have. It can never collide with a real member key, which is
  * `member:<uuid>`.
  *
- * Nothing resumes on it yet: answering a support question still travels through
- * the per-member operator context, and `resumeAnsweredTask` matches an exact
- * key. This records who the wait is on; routing the answer back to the task is
- * the continuity work.
+ * `actorMayEndWait` is what matches it, and proposal approval is its first
+ * consumer. Questions do not use it yet: answering one still travels through the
+ * per-member operator context, and `resumeAnsweredTask` matches an exact key.
+ * That continuation is the remaining work; the vocabulary is now shared.
  */
 export const ANY_MEMBER_ACTOR_KEY = "member:*";
+
+/**
+ * Whether an authenticated actor is within the scope recorded for a wait.
+ *
+ * One predicate so approval and, later, question continuation agree on what a
+ * recorded scope means. `ANY_MEMBER_ACTOR_KEY` widens to every member of the
+ * organization and to nothing else — the caller has already proven the actor
+ * belongs to this tenant, and the sentinel cannot collide with a real
+ * `member:<uuid>`.
+ */
+export function actorMayEndWait(
+  scope: { kind: AgentActorKind; key: string },
+  actor: { kind: AgentActorKind; key: string },
+): boolean {
+  if (scope.kind !== actor.kind) return false;
+  if (scope.key === ANY_MEMBER_ACTOR_KEY) return scope.kind === "member";
+  return scope.key === actor.key;
+}
 
 // The four pending-question columns are all-or-nothing in the database and the
 // active proposal must belong to this task, so every exit from `running` writes
@@ -699,6 +717,7 @@ async function persistProposal(
   tx: Pick<typeof db, "agentProposal">,
   task: { id: string; organizationId: string; revision: number },
   snapshot: ProposalSnapshot,
+  approver: TaskAnswerer,
 ): Promise<string> {
   if (snapshot.rawToolCalls.length === 0) {
     throw new BadRequestError("A proposal must contain at least one action.");
@@ -724,6 +743,8 @@ async function persistProposal(
       ...identity,
       ...(snapshot.proposalId ? { id: snapshot.proposalId } : {}),
       schemaVersion: AGENT_PROPOSAL_SCHEMA_VERSION,
+      approverScopeKind: approver.kind,
+      approverScopeKey: approver.key,
       canonicalActions: snapshot.rawToolCalls as unknown as PrismaTypes.InputJsonValue,
       dependencies: [],
       sourceRequestIds: snapshot.sourceRequestIds,
@@ -757,9 +778,15 @@ async function suspensionWrite(
       pendingAnswererKey: settlement.answerer?.key ?? task.initiatingActorKey,
     };
   }
+  // Defaulted to the initiator, which is what the approval boundary used to
+  // derive, so a member's own task is unchanged. Support overrides it: the
+  // customer who initiated the task approves nothing.
   return {
     ...NO_SUSPENSION,
-    activeProposalId: await persistProposal(tx, task, settlement.proposal),
+    activeProposalId: await persistProposal(tx, task, settlement.proposal, {
+      kind: settlement.approver?.kind ?? task.initiatingActorKind,
+      key: settlement.approver?.key ?? task.initiatingActorKey,
+    }),
   };
 }
 

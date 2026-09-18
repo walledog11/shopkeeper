@@ -1458,6 +1458,13 @@ model AgentProposal {
   communicationDestination Json? @map("communication_destination") @db.JsonB
   approvedDraft String? @map("approved_draft") @db.Text
   allowedResultBindings Json? @map("allowed_result_bindings") @db.JsonB
+  // Who *may* approve, recorded when the wait is created; `approverKey` is who
+  // did. A member's own task names that member; a support task names every bound
+  // member, because the card is pushed to all of them at once. Recorded rather
+  // than derived from the task's initiator: a customer initiates a support task
+  // and never approves anything.
+  approverScopeKind AgentActorKind @map("approver_scope_kind")
+  approverScopeKey String @map("approver_scope_key") @db.VarChar(255)
   approverKey String? @map("approver_key") @db.VarChar(255)
   approvedAt DateTime? @map("approved_at") @db.Timestamptz
   approvedHash String? @map("approved_hash") @db.VarChar(64)

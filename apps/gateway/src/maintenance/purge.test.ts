@@ -138,6 +138,7 @@ describe('purgeFilteredThreads', () => {
     const proposal = await db.agentProposal.create({ data: {
       organizationId: orgId!, taskId: task.id, taskRevision: 0, schemaVersion: 1,
       canonicalActions: [], dependencies: [], sourceRequestIds: [request.id], proposalHash: 'b'.repeat(64),
+      approverScopeKind: 'system', approverScopeKey: 'retention-test',
     } });
     const execution = await db.planExecution.create({ data: {
       organizationId: orgId!, planId: proposal.id, proposalId: proposal.id,

@@ -121,6 +121,12 @@ describe('durable support task', () => {
     expect(proposal.id).toBe(generated.identity?.planId);
     expect(proposal.canonicalActions).toEqual([refund, reply]);
     expect(proposal.sourceRequestIds).toEqual([request.id]);
+    // The card is pushed to every bound operator, so the wait names them all.
+    // Left to the task's initiator it would name the customer, and the approval
+    // boundary would refuse every merchant who tried to act on the card.
+    expect(proposal).toMatchObject({
+      approverScopeKind: 'member', approverScopeKey: ANY_MEMBER_ACTOR_KEY,
+    });
   });
 
   it('settles a plan with nothing to approve as done', async () => {

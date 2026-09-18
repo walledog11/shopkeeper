@@ -546,7 +546,15 @@ async function supportSettlement(
     allowMutativeAutoExecute: scope.allowAutoExecute,
   });
   return proposal
-    ? { status: 'waiting_approval', proposal: { ...proposal, sourceRequestIds: [durable.requestId] } }
+    ? {
+        status: 'waiting_approval',
+        proposal: { ...proposal, sourceRequestIds: [durable.requestId] },
+        // The card is pushed to every bound operator at once, so whichever of
+        // them answers it is the approver. The customer who initiated this task
+        // approves nothing, which is why the scope has to be said rather than
+        // taken from the initiator.
+        approver: { kind: 'member', key: ANY_MEMBER_ACTOR_KEY },
+      }
     : { status: 'completed' };
 }
 

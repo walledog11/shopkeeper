@@ -1,5 +1,6 @@
 import { Prisma, db, type DbChannelType } from "@shopkeeper/db";
 import { isDeepStrictEqual } from "node:util";
+import { randomUUID } from "node:crypto";
 import { BadRequestError, ConflictError } from "./errors.js";
 import { executeAgentTurn, type ExecuteAgentTurnDeps } from "./turn.js";
 import { getLatestConversationMessage, requireOrgThread } from "./thread-auth.js";
@@ -34,6 +35,7 @@ import { isInvalidPlan } from "./plan-validation.js";
 import { recordRequestEpisodeDismissed, recordRequestEpisodeExecution } from "./request-outcome.js";
 import { historicalCompletionFacts } from "./completion-facts.js";
 import type { ProposalSnapshot } from "./task-ledger.js";
+import { authorizeAgentProposal, completeApprovedAgentTask } from "./task-approval.js";
 
 export type PlanExecutionDeps = ExecuteAgentTurnDeps & {
   planAgent?: PlanAgentFn;
@@ -252,11 +254,17 @@ export async function readParkedProposalForThread(params: {
   if (!current.plan || !current.planId) return null;
   const verdict = current.verdict;
   if (verdict.kind !== "needs_review" || !verdict.approvalAllowed) return null;
+  // The verdict decides whether there is anything to approve; the plan decides
+  // what the bundle is. Snapshotting `verdict.toolCalls` instead recorded only
+  // the executable subset, while every surface approves the calls the card
+  // renders — reads included — so the approved hash could never match the
+  // stored one and every support approval conflicted. A step the merchant
+  // switches off still changes the hash, which is the check working.
   if (verdict.toolCalls.length === 0) return null;
   return {
     proposalId: current.planId,
     instruction: current.instruction,
-    rawToolCalls: verdict.toolCalls,
+    rawToolCalls: current.plan.rawToolCalls,
     sourceRequestIds: [],
   };
 }
@@ -425,6 +433,23 @@ export async function executeCurrentCachedHomePlan(params: {
     throw new ConflictError("This plan predates durable approvals. Regenerate it before executing.");
   }
 
+  // The durable approval, taken here because every approval surface enters this
+  // function and none of them should own the decision separately. Null means the
+  // parked plan names no proposal — a card from before the ledger existed — and
+  // those execute exactly as they did before. Taken before the execution claim
+  // so a superseded or out-of-scope approval stops before anything is claimed.
+  const authorized = params.executionIntent === "merchant_approved" && params.approver
+    ? await authorizeAgentProposal({
+        organizationId: params.orgId,
+        clerkUserId: params.approver.clerkUserId,
+        proposalId: current.planId,
+        instruction: current.instruction,
+        approvedToolCalls,
+      })
+    : null;
+  // Its own turn, not the planning attempt's: see completeApprovedAgentTask.
+  const approvedTurnId = authorized ? randomUUID() : undefined;
+
   // The PostgreSQL transition is the correctness boundary across dashboard,
   // gateway, devices, and Redis instances. No approved tool reaches its
   // provider until this durable intent exists and this caller owns its token.
@@ -468,6 +493,12 @@ export async function executeCurrentCachedHomePlan(params: {
         agentRequestId: params.durableTurn.requestId,
         agentTaskId: params.durableTurn.taskId,
       } : {}),
+      // An approved run belongs to the task that parked the proposal, so its
+      // messages name that task. `agentRequestId` is deliberately not set: the
+      // reply answers the task, not one inbound message of it.
+      ...(authorized && approvedTurnId
+        ? { turnId: approvedTurnId, agentTaskId: authorized.taskId }
+        : {}),
       ...(executionId ? { executionId } : {}),
       completionEvidence: historicalCompletionFacts(
         current.plan.rawToolCalls,
@@ -486,6 +517,29 @@ export async function executeCurrentCachedHomePlan(params: {
         status: terminalExecutionStatus,
         error: findFailedToolResult(result)?.result ?? null,
       });
+    }
+    // The wait the merchant ended is over only once the run committed. Keyed on
+    // the execution's own typed status rather than on whether its summary starts
+    // with "Error:", so a failed or uncertain run leaves the task waiting for a
+    // human instead of being closed by a sentence.
+    //
+    // Never fatal. The write is committed and its receipt is stored; letting a
+    // bookkeeping failure fall into the catch below would re-report a known
+    // outcome as unknown and escalate a thread that was handled correctly. A
+    // task left waiting is visible and recoverable; a committed refund recorded
+    // as uncertain is not.
+    if (authorized && terminalExecutionStatus === "committed") {
+      try {
+        await completeApprovedAgentTask(authorized, approvedTurnId);
+      } catch (error) {
+        logger.error({
+          err: error,
+          orgId: params.orgId,
+          threadId: params.threadId,
+          taskId: authorized.taskId,
+          proposalId: authorized.proposalId,
+        }, "[agent] approved task could not be closed after a committed run");
+      }
     }
   } catch (error) {
     // A whole-turn throw can occur after a provider accepted a mutation. Until
