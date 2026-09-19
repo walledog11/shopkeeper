@@ -671,18 +671,31 @@ export interface TaskAnswerer {
  * product does not have. It can never collide with a real member key, which is
  * `member:<uuid>`.
  *
- * `actorMayEndWait` is what matches it, and proposal approval is its first
- * consumer. Questions do not use it yet: answering one still travels through the
- * per-member operator context, and `resumeAnsweredTask` matches an exact key.
- * That continuation is the remaining work; the vocabulary is now shared.
+ * `actorMayEndWait` is what matches it, for the approval a parked proposal
+ * records and the answer a parked question waits on alike.
  */
 export const ANY_MEMBER_ACTOR_KEY = "member:*";
 
 /**
+ * The recorded wait scopes an authenticated actor satisfies.
+ *
+ * Both the predicate below and the query that finds the task an answer
+ * continues are written from this one list, so the check and the lookup cannot
+ * drift into different answers about who may end a wait.
+ */
+function endsWaitScopeKeys(actor: { kind: AgentActorKind; key: string }): string[] {
+  if (actor.kind === "member") return [actor.key, ANY_MEMBER_ACTOR_KEY];
+  // The sentinel is a member-only widening, never a literal key. A non-member
+  // actor whose key happened to be it would otherwise match a scope carrying it
+  // by exact comparison, which is a wait it was never in scope for.
+  return actor.key === ANY_MEMBER_ACTOR_KEY ? [] : [actor.key];
+}
+
+/**
  * Whether an authenticated actor is within the scope recorded for a wait.
  *
- * One predicate so approval and, later, question continuation agree on what a
- * recorded scope means. `ANY_MEMBER_ACTOR_KEY` widens to every member of the
+ * One predicate so approval and question continuation agree on what a recorded
+ * scope means. `ANY_MEMBER_ACTOR_KEY` widens to every member of the
  * organization and to nothing else — the caller has already proven the actor
  * belongs to this tenant, and the sentinel cannot collide with a real
  * `member:<uuid>`.
@@ -691,9 +704,7 @@ export function actorMayEndWait(
   scope: { kind: AgentActorKind; key: string },
   actor: { kind: AgentActorKind; key: string },
 ): boolean {
-  if (scope.kind !== actor.kind) return false;
-  if (scope.key === ANY_MEMBER_ACTOR_KEY) return scope.kind === "member";
-  return scope.key === actor.key;
+  return scope.kind === actor.kind && endsWaitScopeKeys(actor).includes(scope.key);
 }
 
 // The four pending-question columns are all-or-nothing in the database and the
@@ -706,6 +717,96 @@ export const NO_SUSPENSION = {
   pendingAnswererKind: null,
   pendingAnswererKey: null,
 } as const;
+
+/** A claim on a task that was waiting, plus the request the attempt advances. */
+export interface AnsweredTaskClaim extends ActiveTaskClaim {
+  requestId: string;
+}
+
+/**
+ * The answer half of `authorizeAgentProposal`: an authenticated member's answer
+ * ends the wait a parked question recorded, and the attempt that re-plans on
+ * that answer takes the task's claim.
+ *
+ * Ending the wait and claiming are one transition rather than a resume followed
+ * by `claimAgentTask`. A support task left `queued` between the two would be
+ * picked up by nothing — `findQueuedAgentTasks` hands the worker
+ * member-initiated work only — whereas a claim whose process dies expires on its
+ * lease and the sweep reconciles it. The revision increment is the supersede:
+ * whatever the question was parked alongside stops being current, exactly as a
+ * later customer message supersedes it in `advanceOrOpenThreadTask`.
+ *
+ * Null means the answer is not this task's to continue, and the caller re-plans
+ * untracked exactly as it did before the ledger existed: nothing is waiting on
+ * this thread, the answerer is outside the recorded scope, two parked questions
+ * make the answer ambiguous, another attempt already owns the task, or it
+ * reached a provider and so cannot be replayed from the top.
+ */
+export async function claimAnsweredAgentTask(input: {
+  organizationId: string;
+  clerkUserId: string;
+  threadId: string;
+  now?: Date;
+  leaseMs?: number;
+}): Promise<AnsweredTaskClaim | null> {
+  const now = input.now ?? new Date();
+  const claimToken = randomUUID();
+  const leaseExpiresAt = leaseExpiry(now, input.leaseMs ?? 60000);
+  return db.$transaction(async (tx) => {
+    // Tenant membership only. The thread a support question was asked about is
+    // the customer's, not this member's own operator thread, which is why the
+    // threadId is deliberately not passed to the membership check and the
+    // thread is scoped by organization below instead.
+    const actorKey = await requireMemberActorKey(tx, {
+      organizationId: input.organizationId, clerkUserId: input.clerkUserId,
+    });
+    const waiting = await tx.agentTask.findMany({
+      where: {
+        organizationId: input.organizationId, threadId: input.threadId,
+        status: "waiting_input", cancelledAt: null, claimToken: null,
+        pendingAnswererKind: "member",
+        pendingAnswererKey: { in: endsWaitScopeKeys({ kind: "member", key: actorKey }) },
+        organization: { lifecycleStatus: "active" },
+        thread: { deletedAt: null, archivedAt: null },
+        actions: { none: { dispatchState: { in: DISPATCHED_STATES } } },
+        executions: { none: { status: { in: ["claimed", "committed", "unknown"] } } },
+      },
+      select: { id: true, revision: true },
+      take: 2,
+    });
+    if (waiting.length !== 1) return null;
+    const target = waiting[0]!;
+    // The attempt advances the request the task is already running; a merchant's
+    // answer is not itself an accepted request on a customer's conversation.
+    const request = await tx.agentRequest.findFirst({
+      where: { organizationId: input.organizationId, taskId: target.id },
+      orderBy: [{ acceptedAt: "desc" }, { id: "desc" }],
+      select: { id: true },
+    });
+    if (!request) return null;
+    // Conditional on the revision it was read at: a concurrent answer, stop, or
+    // superseding customer message that moved the task first leaves this attempt
+    // to re-plan untracked rather than claiming work it no longer owns.
+    const claimed = await tx.agentTask.updateMany({
+      where: {
+        id: target.id, organizationId: input.organizationId, revision: target.revision,
+        status: "waiting_input", claimToken: null, cancelledAt: null,
+      },
+      data: {
+        ...NO_SUSPENSION, status: "running", revision: { increment: 1 },
+        claimToken, leaseExpiresAt, activeCheckpointAt: now, lastProgressAt: now,
+      },
+    });
+    if (claimed.count !== 1) return null;
+    const task = await tx.agentTask.findFirstOrThrow({
+      where: { id: target.id, organizationId: input.organizationId, claimToken },
+    });
+    return {
+      organizationId: input.organizationId, taskId: task.id,
+      expectedRevision: task.revision, claimToken, requestId: request.id,
+    };
+  });
+}
 
 /**
  * Proposals are written `ready` and their status is not maintained here. Which

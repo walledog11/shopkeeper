@@ -14,18 +14,16 @@ import {
   clearThreadPlanCache,
   findFailedToolResult,
   maybeAutoExecuteCurrentCachedHomePlan,
-  readParkedProposalForThread,
+  supportAttemptSettlement,
 } from '@shopkeeper/agent/plan-execution';
 import type { DurableTurnIdentity } from '@shopkeeper/agent/plan-execution';
 import { getPendingCustomerMessageId } from '@shopkeeper/agent/plan-cache-shape';
 import {
-  ANY_MEMBER_ACTOR_KEY,
   acceptCustomerAgentRequest,
   claimAgentTask,
   failAgentTaskClaim,
   settleAgentTaskClaim,
 } from '@shopkeeper/agent/task-ledger';
-import type { TaskSettlement } from '@shopkeeper/agent/task-ledger';
 import { shouldSkipAutoPlan } from '@shopkeeper/agent/sender-trust';
 import { hashInstruction, hashPlan } from '@shopkeeper/agent/agent-actions';
 import { CHANNEL_TYPE } from '@shopkeeper/agent/thread-constants';
@@ -520,44 +518,6 @@ async function openDurableSupportTask(input: {
   }
 }
 
-/**
- * What the finished attempt left behind, in the task's own terms. A parked
- * question and a parked approval card are both waits the merchant has to end, so
- * they are recorded as waits; everything else — an auto-executed plan, an empty
- * plan, a plan the merchant was never asked about — is this attempt's work done.
- */
-async function supportSettlement(
-  durable: DurableSupportTask,
-  scope: PlanAttemptScope,
-  generated: GeneratedThreadPlan,
-): Promise<TaskSettlement> {
-  if (generated.merchantQuestion) {
-    return {
-      status: 'waiting_input',
-      question: generated.merchantQuestion,
-      // Pushed to every bound operator at once, so any member may answer it.
-      answerer: { kind: 'member', key: ANY_MEMBER_ACTOR_KEY },
-    };
-  }
-  const proposal = await readParkedProposalForThread({
-    orgId: scope.organizationId,
-    threadId: scope.threadId,
-    settings: scope.settings,
-    allowMutativeAutoExecute: scope.allowAutoExecute,
-  });
-  return proposal
-    ? {
-        status: 'waiting_approval',
-        proposal: { ...proposal, sourceRequestIds: [durable.requestId] },
-        // The card is pushed to every bound operator at once, so whichever of
-        // them answers it is the approver. The customer who initiated this task
-        // approves nothing, which is why the scope has to be said rather than
-        // taken from the initiator.
-        approver: { kind: 'member', key: ANY_MEMBER_ACTOR_KEY },
-      }
-    : { status: 'completed' };
-}
-
 async function settleDurableSupportTask(
   durable: DurableSupportTask,
   scope: PlanAttemptScope,
@@ -570,7 +530,14 @@ async function settleDurableSupportTask(
       expectedRevision: durable.expectedRevision,
       claimToken: durable.claimToken,
       requestId: durable.requestId,
-      settlement: await supportSettlement(durable, scope, generated),
+      settlement: await supportAttemptSettlement({
+        orgId: scope.organizationId,
+        threadId: scope.threadId,
+        settings: scope.settings,
+        allowMutativeAutoExecute: scope.allowAutoExecute,
+        merchantQuestion: generated.merchantQuestion ?? null,
+        sourceRequestIds: [durable.requestId],
+      }),
     });
     if (!settled) {
       logger.warn(

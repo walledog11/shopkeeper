@@ -32,8 +32,11 @@ customer message as a durable request and runs it as a claimed task, which also
 closes Package 3's outstanding attribution item. That contract shipped with the
 approval side missing, and fixing it is the second thing Package 5 has done: a
 parked proposal now records who may approve it, and approving one closes its
-task. No capability has been migrated row by row yet, and the proposal is still
-not what authorizes the write. Package 6 has not started.
+task. The third is the other half of that wait: a parked support question now
+records who may answer it, and an answer from either surface ends that wait and
+continues the same task instead of re-planning untracked. No capability has been
+migrated row by row yet, and the proposal is still not what authorizes the write.
+Package 6 has not started.
 Created 2026-09-11; last updated 2026-09-18.
 
 Implementation detail expanded 2026-09-11 against the current repository. Names marked **proposed** describe work to implement, not APIs or tables that already exist. This document authorizes no production operation by itself.
@@ -1524,7 +1527,7 @@ Build the slice in this order:
 Required tests: approval of proposal A cannot run revised proposal B; a removed member cannot approve; a grant revoked after preview blocks dispatch; refund succeeds then model composition crashes and recovery composes without refunding again; an unknown refund blocks an equivalent fresh proposal; multiple writes preserve partial success. Add conversational evals only after these deterministic invariants pass.
 
 - [x] Implement the investigate → propose → approve if necessary → execute → observe → respond loop for a refund task using existing provider operations. Reachable solely through `AGENT_PROPOSAL_SUSPENSION_MODE`, which is off in both apps. Run end to end by a live model on 2026-09-18 against a real database and a fake provider; no live store has run it.
-- [ ] Support missing information, changed merchant instructions, approval from another surface, definite failure, and unknown outcome. Changed instructions, approval from either surface, definite failure and unknown outcome hold; a clarifying question asked mid-slice does not, and needs the durable suspension in package 5.
+- [x] Support missing information, changed merchant instructions, approval from another surface, definite failure, and unknown outcome. Changed instructions, approval from either surface, definite failure and unknown outcome held already; the clarifying question was closed by the durable suspension in package 5 below — the question is parked with the scope that may answer it, either answer surface ends that wait and continues the same task, and the card the continuation parks is a proposal on it. What the continuation does not do is resume the model turn: it is a new attempt on the same task, re-derived from the conversation rather than from the task's checkpoint.
 - [x] Keep the model free to investigate and explain. Do not encode a refund conversation script.
 - [x] Compose completion wording after execution from receipts; preserve exact approved drafts where applicable.
 - [x] Attribute request outcome and response delivery to the durable task. A support conversation now accepts its inbound message as an `AgentRequest` and runs it as a claimed `AgentTask`, so the attempt's outcome is the task's status and its actions and audit note name the request that authorized them. Closed by Package 5's first contract below.
@@ -1948,6 +1951,89 @@ correct but means the untracked path stays reachable. And a support task whose
 worker dies is recovered by `reconcileExpiredAgentTaskClaims` into `reconciling`
 rather than being re-enqueued, because the planning job owns its own retries.
 
+The third thing Package 5 has done is the other half of that wait. The contract
+landed with the approval side broken and the answer side missing, and they were
+the same omission: `waiting_approval` and `waiting_input` are both waits a
+merchant ends, and only one of them could be ended. A support question was parked
+on every bound operator and nothing anywhere resumed it. `resumeAnsweredTask`
+runs inside `acceptMemberAgentRequest`, matches an exact actor key and filters on
+the requester's own thread, so it could not match a support task on any axis —
+the merchant answers from their operator thread about the customer's. Both answer
+surfaces went around the ledger entirely: the phone's `answer_operator_question`
+cleared the per-member `OperatorContext.pendingQuestion` and re-planned, and the
+dashboard's `api/agent/answer` route did its own equivalent. So the task sat
+`waiting_input` until the customer happened to write again, since
+`reconcileExpiredAgentTaskClaims` only sweeps `running`. Worse, the card the
+re-plan parked carried a fresh plan ID naming no proposal, and approving it fell
+through `authorizeAgentProposal`'s null to the path that predates durable
+approvals — so every support conversation that asked the merchant anything lost
+its durable approval for the rest of its life. `ask_operator` is not a corner
+case.
+
+`claimAnsweredAgentTask` is the answer counterpart to `authorizeAgentProposal`:
+tenant membership proves the actor — deliberately without the thread check the
+member path uses, because the conversation is the customer's and not this
+member's own operator thread — and `actorMayEndWait`'s scope decides the rest, so
+`ANY_MEMBER_ACTOR_KEY` finally means for a question what it already meant for a
+card. That predicate and the query that finds the task are now written from one
+list of scope keys rather than two expressions of the same rule; the rewrite was
+diffed against the old implementation over every kind/key combination before
+landing, which is how the one case it would have loosened — a non-member actor
+whose key was literally the sentinel — was caught and kept refused.
+
+Ending the wait and claiming it are one transition rather than a resume followed
+by `claimAgentTask`, because a support task left `queued` between the two would
+be picked up by nothing: `findQueuedAgentTasks` hands the durable worker
+member-initiated work only. A claim whose process dies expires on its lease
+instead, which something does sweep.
+
+What the attempt then settles on is one derivation, `supportAttemptSettlement`,
+which the inbound planning job now shares with both answer surfaces — a thread's
+task cannot say one thing on the phone and another in the dashboard. A re-drafted
+plan that asks again records the new question rather than closing the task, so
+the next answer continues the same task; an already-handled ticket completes,
+because the wait is over and there is nothing to come back to; and a re-plan that
+produces nothing fails the claim rather than leaving it to the lease. Every exit
+after the claim settles or fails, on both surfaces, which is why the dashboard
+claims below the note and knowledge-base writes that do not depend on it.
+
+Verified by `npm run typecheck`, `npm run lint` (knip baseline clean),
+`npm run lint:structure`, `npm run test:unit` (1,214 agent, 471 gateway, 789
+dashboard, 68 analytics, 101 email, 65 integrations), `npm run test:integration`
+(190 agent, 933 gateway with 1 skipped, 677 dashboard with 2 skipped) and
+`npm run verify:pr --stage coverage` and `--stage build`, all green. Three files this change
+cannot reach were red once each across those runs — two gateway webhook files on
+a first coverage run, an Instagram OAuth callback on a full dashboard
+integration run — and each passed alone and on a re-run of its whole suite, the
+known workspace-concurrency flake. Sixteen new cases across the three owners, each
+checked against a build with its own guard removed: the answerer-scope filter,
+the ambiguity refusal, the dispatched-actions refusal, the conditional claim, the
+tenant membership check, and — for each host — settling after the re-plan,
+failing a thrown one, closing an already-handled ticket, and recording a re-asked
+question all fail when the thing they assert is taken away. The approval-wait
+case was additionally checked against a build with both of its guards removed, so
+it does not pass vacuously. No prompt, tool description or planner surface
+changed, so no eval run is owed. `test:e2e:smoke` was not run: this change
+touches no delivery or browser path. Rollback is reverting the commit; no schema
+changed and nothing outside this plan's tables reads the new transition.
+
+Not done. A revision is still not a continuation: `revise_pending_plan` enters
+the same re-plan, but the task is `waiting_approval` rather than `waiting_input`,
+so the claim finds nothing, the new card names no proposal and the task keeps
+pointing at the proposal it superseded. That is the proposal side's supersede,
+which Package 6's cutover owns along with making the proposal what authorizes the
+write. The answer itself is not an `AgentRequest` — the attempt advances the
+customer's message, which is the request the task is already running — so a crash
+between recording the answer and re-planning loses the attempt but not the
+answer; accepting a member's instruction on a customer's conversation is the
+"multiple requests advance one task" item below. The re-plan re-derives from the
+thread rather than from the task's checkpoint, which is not updated. And
+`loadLiveOperatorContext` still resolves a stale question on one member's
+projection without touching the org-wide task, which is correct — one member's
+card must not close a task — but means a question whose thread moved on is
+cleared for the merchant and left parked on the task until a customer message
+advances it.
+
 For each capability, complete the following row before marking it migrated:
 
 | Item | Evidence required |
@@ -1974,7 +2060,7 @@ Move automatic audit notes/status consequences to the successful-receipt path wi
   for support — every inbound message is a durable request on a claimed task —
   but no capability has been migrated row by row against the evidence table
   above.
-- [ ] Support multiple requests, task switching, terse follow-ups, explicit preferences, and resumption after waiting for the merchant or customer.
+- [ ] Support multiple requests, task switching, terse follow-ups, explicit preferences, and resumption after waiting for the merchant or customer. Resumption after waiting for the merchant now holds for support: a parked question names who may answer it, and an answer from any bound member ends that wait and continues the same task from either surface. The rest does not — a conversation still runs one task, an answer is not itself an accepted request, and a revision supersedes a card without continuing its task.
 - [ ] Stop new actions on cancellation or superseding instructions. Revalidate pending approvals and stale evidence when work resumes.
 - [ ] Move audit notes and other mechanical bookkeeping out of the model tool surface where they are consequences of execution.
 - [ ] Remove obsolete speculative completion-draft behavior as each path gains receipt-based composition. Keep any residual prose checks explicitly labeled as heuristics, not guarantees.

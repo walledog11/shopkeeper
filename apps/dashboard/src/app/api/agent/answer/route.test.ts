@@ -12,6 +12,11 @@ const {
   requireThread,
   saveAnswer,
   threadUpdate,
+  authSpy,
+  claimAnswered,
+  failClaim,
+  settleClaim,
+  supportSettlement,
 } = vi.hoisted(() => ({
   buildContext: vi.fn(),
   clearPlan: vi.fn(),
@@ -24,6 +29,11 @@ const {
   requireThread: vi.fn(),
   saveAnswer: vi.fn(),
   threadUpdate: vi.fn(),
+  authSpy: vi.fn(),
+  claimAnswered: vi.fn(),
+  failClaim: vi.fn(),
+  settleClaim: vi.fn(),
+  supportSettlement: vi.fn(),
 }));
 
 vi.mock('@shopkeeper/db', async (importOriginal) => ({
@@ -45,6 +55,19 @@ vi.mock('@shopkeeper/agent/thread-auth', () => ({
 }));
 vi.mock('@shopkeeper/agent/plan-execution', () => ({
   clearThreadPlanCache: clearPlan,
+  supportAttemptSettlement: supportSettlement,
+}));
+// The ledger's own behaviour is covered against a real database in
+// packages/agent; what this surface owns is reaching it with the authenticated
+// member and settling what its re-plan actually parked.
+vi.mock('@shopkeeper/agent/task-ledger', () => ({
+  claimAnsweredAgentTask: claimAnswered,
+  failAgentTaskClaim: failClaim,
+  settleAgentTaskClaim: settleClaim,
+}));
+vi.mock('@clerk/nextjs/server', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@clerk/nextjs/server')>(),
+  auth: authSpy,
 }));
 vi.mock('@shopkeeper/agent/merchant-answer-kb', () => ({
   saveMerchantAnswerToKb: saveAnswer,
@@ -107,6 +130,11 @@ describe('POST /api/agent/answer', () => {
     threadUpdate.mockResolvedValue({});
     buildContext.mockResolvedValue({ thread: { id: 'thread-1' } });
     planAgent.mockResolvedValue({ instruction: 'reply', steps: [], rawToolCalls: [] });
+    authSpy.mockResolvedValue({ userId: 'user_1' });
+    claimAnswered.mockResolvedValue(null);
+    settleClaim.mockResolvedValue(true);
+    failClaim.mockResolvedValue('failed');
+    supportSettlement.mockResolvedValue({ status: 'completed' });
     decideAutonomy.mockReturnValue({
       kind: 'quick_reply',
       reasons: ['safe_quick_reply'],
@@ -176,6 +204,91 @@ describe('POST /api/agent/answer', () => {
       kind: 'needs_merchant_input',
       question: 'Do we ship to military addresses?',
       replyText: null,
+    });
+  });
+
+  describe('durable continuation', () => {
+    const continuation = {
+      organizationId: 'org-1', taskId: 'task-1', expectedRevision: 3,
+      claimToken: 'claim-1', requestId: 'request-1',
+    };
+
+    it('ends the wait its answer was asked under and settles what the re-plan parked', async () => {
+      getLatest.mockResolvedValue({ id: 'message-1', senderType: 'customer' });
+      claimAnswered.mockResolvedValue(continuation);
+      supportSettlement.mockResolvedValue({ status: 'waiting_approval' });
+
+      const response = await POST(request());
+
+      expect(response.status).toBe(200);
+      expect(claimAnswered).toHaveBeenCalledWith({
+        organizationId: 'org-1',
+        clerkUserId: 'user_1',
+        threadId: '11111111-1111-4111-8111-111111111111',
+      });
+      expect(supportSettlement).toHaveBeenCalledWith(expect.objectContaining({
+        orgId: 'org-1',
+        allowMutativeAutoExecute: false,
+        merchantQuestion: null,
+        sourceRequestIds: ['request-1'],
+      }));
+      expect(settleClaim).toHaveBeenCalledWith(expect.objectContaining({
+        taskId: 'task-1', claimToken: 'claim-1', expectedRevision: 3,
+        settlement: { status: 'waiting_approval' },
+      }));
+      expect(failClaim).not.toHaveBeenCalled();
+    });
+
+    it('records a re-asked question as the wait the next answer continues', async () => {
+      getLatest.mockResolvedValue({ id: 'message-1', senderType: 'customer' });
+      claimAnswered.mockResolvedValue(continuation);
+      decideAutonomy.mockReturnValueOnce({
+        kind: 'needs_merchant_input',
+        reasons: ['explicit_merchant_question'],
+        question: 'Do we ship to military addresses?',
+      });
+
+      await POST(request());
+
+      expect(supportSettlement).toHaveBeenCalledWith(expect.objectContaining({
+        merchantQuestion: 'Do we ship to military addresses?',
+      }));
+    });
+
+    it('closes the task when the ticket was already handled', async () => {
+      getLatest.mockResolvedValue(null);
+      claimAnswered.mockResolvedValue(continuation);
+
+      await POST(request());
+
+      expect(planAgent).not.toHaveBeenCalled();
+      expect(settleClaim).toHaveBeenCalledWith(expect.objectContaining({
+        taskId: 'task-1', settlement: { status: 'completed' },
+      }));
+    });
+
+    it('fails the task rather than leaving it claimed when the re-plan throws', async () => {
+      getLatest.mockResolvedValue({ id: 'message-1', senderType: 'customer' });
+      claimAnswered.mockResolvedValue(continuation);
+      planAgent.mockRejectedValue(new Error('boom'));
+
+      const response = await POST(request());
+
+      expect(response.status).toBe(500);
+      expect(failClaim).toHaveBeenCalledWith(expect.objectContaining({
+        taskId: 'task-1', claimToken: 'claim-1', failureCode: 'answer_replan_failed',
+      }));
+      expect(settleClaim).not.toHaveBeenCalled();
+    });
+
+    it('re-plans untracked when nothing on the thread is waiting on this member', async () => {
+      getLatest.mockResolvedValue({ id: 'message-1', senderType: 'customer' });
+      claimAnswered.mockResolvedValue(null);
+
+      expect((await POST(request())).status).toBe(200);
+      expect(planAgent).toHaveBeenCalledTimes(1);
+      expect(settleClaim).not.toHaveBeenCalled();
+      expect(failClaim).not.toHaveBeenCalled();
     });
   });
 

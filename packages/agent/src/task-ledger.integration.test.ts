@@ -9,7 +9,8 @@ import {
   ANY_MEMBER_ACTOR_KEY,
   acceptCustomerAgentRequest,
   acceptMemberAgentRequest, attachMemberAgentTask, getMemberAgentRequest,
-  cancelMemberAgentTask, claimAgentTask, failAgentTaskClaim, findQueuedAgentTasks,
+  cancelMemberAgentTask, claimAgentTask, claimAnsweredAgentTask,
+  failAgentTaskClaim, findQueuedAgentTasks,
   recordAgentTaskModelUsage, reconcileExpiredAgentTaskClaims, renewAgentTaskLease,
   reserveAgentTaskModelCall, settleAgentTaskClaim,
 } from "./task-ledger.js";
@@ -748,5 +749,178 @@ describe("support conversation request boundary", () => {
       pendingAnswererKind: "member",
       pendingAnswererKey: ANY_MEMBER_ACTOR_KEY,
     });
+  });
+});
+
+describe("support question continuation", () => {
+  async function seedAnswerable() {
+    const org = await createTestOrg();
+    orgIds.push(org.id);
+    const customer = await createTestCustomer(org.id, randomUUID());
+    const thread = await createTestThread(org.id, customer.id, "email");
+    const message = await createTestMessage(thread.id, "Where is my order?");
+    // Two members, and the one that answers is never the one the attempt named:
+    // a support question is pushed to every bound operator at once.
+    const asked = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: randomUUID() },
+    });
+    const answering = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: randomUUID() },
+    });
+    const { request, task } = await acceptCustomerAgentRequest({
+      organizationId: org.id, threadId: thread.id, sourceMessageId: message.id,
+      objective: "Handle this customer's latest request", budget,
+    });
+    return {
+      organizationId: org.id, threadId: thread.id, clerkUserId: answering.clerkUserId,
+      asked, answering, request, task,
+    };
+  }
+
+  function current(seeded: Awaited<ReturnType<typeof seedAnswerable>>) {
+    return { taskId: seeded.task.id, requestId: seeded.request.id };
+  }
+
+  // Runs one attempt on a support task and leaves it parked on a question, the
+  // way the planning job does.
+  async function park(
+    seeded: { organizationId: string },
+    on: { taskId: string; requestId: string },
+    answerer = { kind: "member" as const, key: ANY_MEMBER_ACTOR_KEY },
+  ) {
+    const task = await db.agentTask.findUniqueOrThrow({ where: { id: on.taskId } });
+    const claim = await claimAgentTask({
+      organizationId: seeded.organizationId, taskId: task.id, expectedRevision: task.revision,
+    });
+    await settleAgentTaskClaim({
+      organizationId: seeded.organizationId, taskId: task.id, expectedRevision: task.revision,
+      claimToken: claim!.claimToken, requestId: on.requestId,
+      settlement: { status: "waiting_input", question: "Do we refund this one?", answerer },
+    });
+    return task.id;
+  }
+
+  it("lets any bound member end a support wait and claims the task for their answer", async () => {
+    const seeded = await seedAnswerable();
+    const taskId = await park(seeded, current(seeded));
+    const continued = await claimAnsweredAgentTask(seeded);
+    expect(continued).toMatchObject({ taskId, requestId: seeded.request.id, expectedRevision: 1 });
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: taskId } })).toMatchObject({
+      status: "running", revision: 1, claimToken: continued!.claimToken,
+      pendingQuestionId: null, pendingQuestion: null,
+      pendingAnswererKind: null, pendingAnswererKey: null,
+    });
+    // The claim it returns is the one the re-plan settles on.
+    expect(await settleAgentTaskClaim({
+      ...continued!, requestId: continued!.requestId, settlement: { status: "completed" },
+    })).toBe(true);
+    expect((await db.agentTask.findUniqueOrThrow({ where: { id: taskId } })).status).toBe("completed");
+  });
+
+  it("refuses an answer from outside the organization", async () => {
+    const seeded = await seedAnswerable();
+    await park(seeded, current(seeded));
+    const otherOrg = await createTestOrg();
+    orgIds.push(otherOrg.id);
+    const outsider = await db.orgMember.create({
+      data: { organizationId: otherOrg.id, clerkUserId: randomUUID() },
+    });
+    await expect(claimAnsweredAgentTask({
+      ...seeded, clerkUserId: outsider.clerkUserId,
+    })).rejects.toBeInstanceOf(ForbiddenError);
+    expect((await db.agentTask.findUniqueOrThrow({ where: { id: seeded.task.id } })).status)
+      .toBe("waiting_input");
+  });
+
+  it("leaves a question scoped to one member for that member alone", async () => {
+    const seeded = await seedAnswerable();
+    const taskId = await park(seeded, current(seeded), { kind: "member", key: `member:${seeded.asked.id}` });
+    expect(await claimAnsweredAgentTask(seeded)).toBeNull();
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: taskId } })).toMatchObject({
+      status: "waiting_input", revision: 0, pendingQuestion: "Do we refund this one?",
+    });
+    // The member it was actually asked of still ends it.
+    expect(await claimAnsweredAgentTask({
+      ...seeded, clerkUserId: seeded.asked.clerkUserId,
+    })).toMatchObject({ taskId });
+  });
+
+  it("continues neither task when two parked questions make the answer ambiguous", async () => {
+    const seeded = await seedAnswerable();
+    // A thread runs one task at a time, so the second message only opens a
+    // second task while the first is claimed — which is the state that lets one
+    // conversation hold two parked questions at all.
+    const held = await claimAgentTask({
+      organizationId: seeded.organizationId, taskId: seeded.task.id, expectedRevision: 0,
+    });
+    const second = await createTestMessage(seeded.threadId, "Actually, also this");
+    const other = await acceptCustomerAgentRequest({
+      organizationId: seeded.organizationId, threadId: seeded.threadId,
+      sourceMessageId: second.id, objective: "Handle the follow-up", budget,
+    });
+    expect(other.task.id).not.toBe(seeded.task.id);
+    await settleAgentTaskClaim({
+      organizationId: seeded.organizationId, taskId: seeded.task.id, expectedRevision: 0,
+      claimToken: held!.claimToken, requestId: seeded.request.id,
+      settlement: {
+        status: "waiting_input", question: "Do we refund this one?",
+        answerer: { kind: "member", key: ANY_MEMBER_ACTOR_KEY },
+      },
+    });
+    await park(seeded, { taskId: other.task.id, requestId: other.request.id });
+
+    expect(await claimAnsweredAgentTask(seeded)).toBeNull();
+    expect(await db.agentTask.count({
+      where: { organizationId: seeded.organizationId, status: "waiting_input" },
+    })).toBe(2);
+  });
+
+  it("does not replay a task that already reached a provider", async () => {
+    const seeded = await seedAnswerable();
+    const taskId = await park(seeded, current(seeded));
+    await db.agentAction.create({ data: {
+      organizationId: seeded.organizationId, threadId: seeded.threadId, taskId,
+      turnId: randomUUID(), tool: "create_refund", category: "order", input: {},
+      status: "unknown", mode: "auto_executed", dispatchState: "unknown",
+      executedAt: new Date(), durationMs: 1, operationId: randomUUID(), actionIndex: 0,
+    } });
+    expect(await claimAnsweredAgentTask(seeded)).toBeNull();
+    expect((await db.agentTask.findUniqueOrThrow({ where: { id: taskId } })).status)
+      .toBe("waiting_input");
+  });
+
+  it("claims once when two members answer the same question at the same time", async () => {
+    const seeded = await seedAnswerable();
+    const taskId = await park(seeded, current(seeded));
+    const claims = await Promise.all([
+      claimAnsweredAgentTask(seeded),
+      claimAnsweredAgentTask({ ...seeded, clerkUserId: seeded.asked.clerkUserId }),
+    ]);
+    expect(claims.filter(Boolean)).toHaveLength(1);
+    expect((await db.agentTask.findUniqueOrThrow({ where: { id: taskId } })).revision).toBe(1);
+  });
+
+  it("does not treat an approval wait as a question", async () => {
+    const seeded = await seedAnswerable();
+    const task = await db.agentTask.findUniqueOrThrow({ where: { id: seeded.task.id } });
+    const claim = await claimAgentTask({
+      organizationId: seeded.organizationId, taskId: task.id, expectedRevision: task.revision,
+    });
+    await settleAgentTaskClaim({
+      organizationId: seeded.organizationId, taskId: task.id, expectedRevision: task.revision,
+      claimToken: claim!.claimToken, requestId: seeded.request.id,
+      settlement: {
+        status: "waiting_approval",
+        proposal: {
+          instruction: "Handle this customer's latest request",
+          rawToolCalls: [{ id: "tc1", name: "create_refund", input: { order_id: "1" } }],
+          sourceRequestIds: [seeded.request.id],
+        },
+        approver: { kind: "member", key: ANY_MEMBER_ACTOR_KEY },
+      },
+    });
+    expect(await claimAnsweredAgentTask(seeded)).toBeNull();
+    expect((await db.agentTask.findUniqueOrThrow({ where: { id: task.id } })).status)
+      .toBe("waiting_approval");
   });
 });

@@ -34,7 +34,7 @@ import {
 import { isInvalidPlan } from "./plan-validation.js";
 import { recordRequestEpisodeDismissed, recordRequestEpisodeExecution } from "./request-outcome.js";
 import { historicalCompletionFacts } from "./completion-facts.js";
-import type { ProposalSnapshot } from "./task-ledger.js";
+import { ANY_MEMBER_ACTOR_KEY, type ProposalSnapshot, type TaskSettlement } from "./task-ledger.js";
 import { authorizeAgentProposal, completeApprovedAgentTask } from "./task-approval.js";
 
 export type PlanExecutionDeps = ExecuteAgentTurnDeps & {
@@ -267,6 +267,49 @@ export async function readParkedProposalForThread(params: {
     rawToolCalls: current.plan.rawToolCalls,
     sourceRequestIds: [],
   };
+}
+
+/**
+ * What a finished support attempt left the merchant waiting on, in the task's
+ * own terms. A parked question and a parked approval card are both waits a
+ * merchant has to end, so they are recorded as waits; everything else — an
+ * auto-executed plan, an empty plan, a plan the merchant was never asked about —
+ * is the attempt's work done.
+ *
+ * One derivation for the inbound planning job and for both surfaces that re-plan
+ * on a merchant's answer, so a thread's task cannot say one thing on the phone
+ * and another in the dashboard. Both scopes are the support rule rather than a
+ * caller's choice: the customer initiated the task, and the question and the
+ * card are pushed to every bound operator at once, so any member ends either
+ * wait and naming one of them would record a scope the product does not have.
+ *
+ * `merchantQuestion` is what this attempt actually parked, not a second reading
+ * of the cache — an attempt that pushed a question is waiting on it even if a
+ * newer message has since moved the cached plan on.
+ */
+export async function supportAttemptSettlement(params: {
+  orgId: string;
+  threadId: string;
+  settings: OrgSettings;
+  allowMutativeAutoExecute?: boolean;
+  merchantQuestion: string | null;
+  sourceRequestIds: string[];
+}): Promise<TaskSettlement> {
+  if (params.merchantQuestion) {
+    return {
+      status: "waiting_input",
+      question: params.merchantQuestion,
+      answerer: { kind: "member", key: ANY_MEMBER_ACTOR_KEY },
+    };
+  }
+  const proposal = await readParkedProposalForThread(params);
+  return proposal
+    ? {
+        status: "waiting_approval",
+        proposal: { ...proposal, sourceRequestIds: params.sourceRequestIds },
+        approver: { kind: "member", key: ANY_MEMBER_ACTOR_KEY },
+      }
+    : { status: "completed" };
 }
 
 export async function consumeThreadCachedPlan(params: {

@@ -8,7 +8,10 @@ import { saveMerchantAnswerToKb } from '@shopkeeper/agent/merchant-answer-kb';
 import { buildAgentPlanCacheRecord, commitThreadPlanCacheIfCurrent, readAgentPlanCache } from '@shopkeeper/agent/plan-cache';
 import { hashInstruction, hashPlan } from '@shopkeeper/agent/agent-actions';
 import { extractCachedQuestion, getPendingCustomerMessageId } from '@shopkeeper/agent/plan-cache-shape';
-import { clearThreadPlanCache } from '@shopkeeper/agent/plan-execution';
+import { clearThreadPlanCache, supportAttemptSettlement } from '@shopkeeper/agent/plan-execution';
+import { decideAutonomy } from '@shopkeeper/agent/autonomy';
+import { claimAnsweredAgentTask, failAgentTaskClaim, settleAgentTaskClaim } from '@shopkeeper/agent/task-ledger';
+import type { AnsweredTaskClaim } from '@shopkeeper/agent/task-ledger';
 import {
   captureCommittedPlanOutcome,
   recordRequestEpisodeMerchantInputAnswered,
@@ -52,6 +55,8 @@ export interface OperatorAnswerReplanParams {
   organizationId: string;
   // `member:<orgMemberId>` — the queue the re-drafted plan is parked on.
   memberKey: string;
+  /** The answering member, proven by the channel binding — who ends the wait. */
+  clerkUserId: string;
   threadId: string;
   // The merchant's freeform text: an answer to a pending question, or revision
   // guidance for a pending plan. Recorded as a note, saved to the KB as a
@@ -63,15 +68,123 @@ export interface OperatorAnswerReplanParams {
   askingPlanId?: string | null;
 }
 
-// Ingests a merchant's answer/guidance for a thread and re-drafts its plan:
-// record a note, persist the fact to the knowledge base, re-plan with the fact
-// pinned, update the pending plan, and notify the *other* operator channels.
-// Returns a model-facing draft summary; the answer/revise control tools return it
-// as their tool result and the model relays it. Never throws — a failure resolves
-// to an apologetic status string.
+// A re-plan is a plan; the lease matches the one the inbound planning job takes.
+const ANSWER_REPLAN_LEASE_MS = 300_000;
+
+// What the attempt left behind, for the task that was waiting on this answer.
+// `nothing_parked` is the already-handled ticket: the wait is over and there is
+// nothing for the merchant to come back to. `failed` is a re-plan that produced
+// nothing, which is an attempt that failed rather than an attempt that finished.
+type AnswerReplanOutcome =
+  | { message: string; settlement: 'nothing_parked' }
+  | { message: string; settlement: 'failed' }
+  | {
+      message: string;
+      settlement: 'replanned';
+      settings: OrgSettings;
+      merchantQuestion: string | null;
+    };
+
+/**
+ * Ingests a merchant's answer/guidance for a thread and re-drafts its plan:
+ * record a note, persist the fact to the knowledge base, re-plan with the fact
+ * pinned, update the pending plan, and notify the *other* operator channels.
+ * Returns a model-facing draft summary; the answer/revise control tools return
+ * it as their tool result and the model relays it. A re-plan failure resolves to
+ * an apologetic status string.
+ *
+ * The answer also ends the durable wait it was asked under. Without that the
+ * task the question was parked on stayed `waiting_input` until the customer
+ * happened to write again, and the card this re-plan parks named no proposal, so
+ * approving it fell back to the path that predates durable approvals.
+ */
 export async function applyOperatorAnswerReplan(
   params: OperatorAnswerReplanParams,
 ): Promise<string> {
+  const continuation = await claimAnsweredAgentTask({
+    organizationId: params.organizationId,
+    clerkUserId: params.clerkUserId,
+    threadId: params.threadId,
+    leaseMs: ANSWER_REPLAN_LEASE_MS,
+  }).catch((err: unknown) => {
+    // A conversation whose ledger is unavailable must still have its answer
+    // re-planned, so this re-plans untracked rather than losing the answer.
+    logger.error(
+      { err, organizationId: params.organizationId, threadId: params.threadId },
+      '[Operator] Could not continue durable support work; re-planning untracked',
+    );
+    return null;
+  });
+
+  let outcome: AnswerReplanOutcome;
+  try {
+    outcome = await runAnswerReplan(params);
+  } catch (err) {
+    if (continuation) await failAnswerContinuation(continuation, params);
+    throw err;
+  }
+  if (continuation) {
+    if (outcome.settlement === 'failed') await failAnswerContinuation(continuation, params);
+    else await settleAnswerContinuation(continuation, params, outcome);
+  }
+  return outcome.message;
+}
+
+async function settleAnswerContinuation(
+  continuation: AnsweredTaskClaim,
+  params: OperatorAnswerReplanParams,
+  outcome: Exclude<AnswerReplanOutcome, { settlement: 'failed' }>,
+): Promise<void> {
+  try {
+    const settled = await settleAgentTaskClaim({
+      ...continuation,
+      settlement: outcome.settlement === 'replanned'
+        ? await supportAttemptSettlement({
+            orgId: params.organizationId,
+            threadId: params.threadId,
+            settings: outcome.settings,
+            // This path parks a card and never auto-executes, so whatever it
+            // drafted is the merchant's to approve.
+            allowMutativeAutoExecute: false,
+            merchantQuestion: outcome.merchantQuestion,
+            sourceRequestIds: [continuation.requestId],
+          })
+        : { status: 'completed' },
+    });
+    if (!settled) {
+      logger.warn(
+        { taskId: continuation.taskId, organizationId: params.organizationId },
+        '[Operator] Answered support task claim was lost before settlement',
+      );
+    }
+  } catch (err) {
+    // The answer is recorded and the re-drafted plan is cached and pushed.
+    // Losing the settlement leaves the task claimed, which the lease sweep
+    // reconciles; it must not turn a delivered draft into a failed tool call.
+    logger.error(
+      { err, taskId: continuation.taskId, organizationId: params.organizationId },
+      '[Operator] Could not settle answered support task',
+    );
+  }
+}
+
+async function failAnswerContinuation(
+  continuation: AnsweredTaskClaim,
+  params: OperatorAnswerReplanParams,
+): Promise<void> {
+  try {
+    await failAgentTaskClaim({ ...continuation, failureCode: 'answer_replan_failed' });
+  } catch (err) {
+    logger.error(
+      { err, taskId: continuation.taskId, organizationId: params.organizationId },
+      '[Operator] Could not record answered support task failure',
+    );
+  }
+}
+
+async function runAnswerReplan(
+  params: OperatorAnswerReplanParams,
+): Promise<AnswerReplanOutcome> {
   const { organizationId, memberKey, threadId, deliveryRef } = params;
   const answer = params.answer.trim();
 
@@ -139,7 +252,10 @@ export async function applyOperatorAnswerReplan(
       await clearThreadPlanCache({ orgId: organizationId, threadId });
     }
     logger.info({ organizationId, threadId, reason: 'thread_already_answered' }, '[Operator] Answer recorded, skipped re-plan');
-    return 'Got it — saved that for next time. This ticket was already handled.';
+    return {
+      message: 'Got it — saved that for next time. This ticket was already handled.',
+      settlement: 'nothing_parked',
+    };
   }
 
   const org = await db.organization.findUnique({
@@ -205,13 +321,19 @@ export async function applyOperatorAnswerReplan(
     ({ plan, cacheRecord } = await doReplan());
   } catch (err) {
     logger.error({ err: (err as Error).message, organizationId, threadId }, '[Operator] Answer re-plan failed');
-    return "Saved your answer, but I couldn't draft the reply just now — please try again in a moment.";
+    return {
+      message: "Saved your answer, but I couldn't draft the reply just now — please try again in a moment.",
+      settlement: 'failed',
+    };
   }
 
   const notifyPlan = toGatewayAgentPlan(plan);
   if (!notifyPlan) {
     logger.error({ organizationId, threadId }, '[Operator] Answer re-plan produced no notify plan');
-    return "Saved your answer, but I couldn't draft the reply just now — please try again in a moment.";
+    return {
+      message: "Saved your answer, but I couldn't draft the reply just now — please try again in a moment.",
+      settlement: 'failed',
+    };
   }
 
   const exclude = answeringChannelFromDeliveryRef(deliveryRef);
@@ -287,5 +409,13 @@ export async function applyOperatorAnswerReplan(
   }
 
   logger.info({ organizationId, threadId }, '[Operator] Answer ingested and re-planned');
-  return draftSummary;
+  const verdict = decideAutonomy(plan, settings);
+  return {
+    message: draftSummary,
+    settlement: 'replanned',
+    settings,
+    // A re-drafted plan that asks again is still waiting on the merchant, and
+    // recording that is what lets the next answer continue the same task.
+    merchantQuestion: verdict.kind === 'needs_merchant_input' ? verdict.question : null,
+  };
 }
