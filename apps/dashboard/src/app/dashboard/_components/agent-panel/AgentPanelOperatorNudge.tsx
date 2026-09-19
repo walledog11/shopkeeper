@@ -9,7 +9,10 @@ interface Props {
   showConnectBanner?: boolean
 }
 
-export default function AgentPanelTelegramNudge({
+// Named for the operator relationship, not for one of the two providers that
+// carry it. It reads `anyBound` and its copy says "your phone"; there has never
+// been anything Telegram-specific in here.
+export default function AgentPanelOperatorNudge({
   enabled,
   showConnectBanner = true,
 }: Props) {

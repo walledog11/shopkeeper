@@ -167,7 +167,8 @@ export async function buildOrderOpsContext(
     },
     // Seam 2: the injected flag sink. runOrderOps routes flag_order through
     // ctx.escalate; the host (gateway worker) decides what a flag does (record
-    // a finding now, Telegram-notify later) without the core importing it.
+    // a finding now, notify the operator channels later) without the core
+    // importing any of them.
     escalate,
   };
 

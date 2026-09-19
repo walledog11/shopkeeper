@@ -185,6 +185,7 @@ export function buildOperatorSessionTools(
       const message = await applyOperatorAnswerReplan({
         organizationId,
         memberKey,
+        clerkUserId,
         threadId: pendingPlan.threadId,
         answer: input.guidance,
         ...(deliveryRef ? { deliveryRef } : {}),
@@ -213,6 +214,7 @@ export function buildOperatorSessionTools(
       const message = await applyOperatorAnswerReplan({
         organizationId,
         memberKey,
+        clerkUserId,
         threadId: pendingQuestion.threadId,
         answer: input.answer,
         askingPlanId: pendingQuestion.planId ?? null,

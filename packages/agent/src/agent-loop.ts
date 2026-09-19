@@ -92,15 +92,33 @@ export interface RunAgentLoopParams {
   // Support planning sets this; operator planning does not (no customer to
   // reply to).
   captureReprompt?: boolean;
+  // capture: end the attempt at the first mutative proposal rather than running
+  // on until the model also drafts the reply. A turn that stops here has
+  // proposed the write and nothing else, which is the shape a runtime wants
+  // when the completion is written from the receipt instead of guessed at.
+  captureSuspendAtProposal?: boolean;
   // Planning-only control tools can end a narrowed attempt without becoming an
   // executable plan. The planner consumes the signal and retries from a clean
   // transcript with a wider registry.
   captureStopToolNames?: readonly string[];
+  // capture: resolve a discovery control call into extra schemas for the rest of
+  // this turn. Unlike the namespace-miss stop above, the attempt continues:
+  // observations, transcript and budget are kept and the next model call carries
+  // the discovered tools. Discovery performs no effect, so it is never recorded
+  // as a plan step.
+  captureDiscovery?: {
+    toolName: string;
+    resolve: (
+      rawInput: unknown,
+      activeToolNames: ReadonlySet<string>,
+    ) => { tools: Anthropic.Tool[]; content: string };
+  };
 }
 
 // Executes reads for real (preserving the structured ToolStatus that plan
 // signals + routing depend on) and records every emitted tool call as a plan
-// step. Returns whether a terminal tool was proposed this iteration.
+// step. Returns whether a terminal tool was proposed this iteration, and any
+// schemas discovery added for the calls that follow.
 async function handleCaptureBlocks(
   blocks: Anthropic.ToolUseBlock[],
   state: {
@@ -112,9 +130,35 @@ async function handleCaptureBlocks(
     readResults: Map<string, string>;
     readStatus: Map<string, ToolStatus>;
     captureStopToolNames?: readonly string[];
+    captureSuspendAtProposal?: boolean;
+    captureDiscovery?: RunAgentLoopParams["captureDiscovery"];
+    activeToolNames: ReadonlySet<string>;
   },
-): Promise<boolean> {
-  const reads = blocks.filter((b) => TOOL_CATEGORIES[b.name] === "read");
+): Promise<{ terminalReached: boolean; discoveredTools: Anthropic.Tool[] }> {
+  const discoveryToolName = state.captureDiscovery?.toolName;
+  const discoveryBlocks = discoveryToolName
+    ? blocks.filter((b) => b.name === discoveryToolName)
+    : [];
+  // Discovery is a loop control, not a proposal: it stays out of the plan steps,
+  // the read executor and the terminal check below.
+  const planBlocks = discoveryToolName
+    ? blocks.filter((b) => b.name !== discoveryToolName)
+    : blocks;
+
+  const discoveredTools: Anthropic.Tool[] = [];
+  const discoveryContent = new Map<string, string>();
+  const offered = new Set(state.activeToolNames);
+  for (const block of discoveryBlocks) {
+    const resolved = state.captureDiscovery!.resolve(block.input, offered);
+    discoveryContent.set(block.id, resolved.content);
+    for (const tool of resolved.tools) {
+      if (offered.has(tool.name)) continue;
+      offered.add(tool.name);
+      discoveredTools.push(tool);
+    }
+  }
+
+  const reads = planBlocks.filter((b) => TOOL_CATEGORIES[b.name] === "read");
   if (reads.length > 0) {
     const executed = await executePlanningReadTools({
       ctx: state.ctx,
@@ -126,12 +170,14 @@ async function handleCaptureBlocks(
     for (const [id, status] of executed.readStatusMap) state.readStatus.set(id, status);
   }
 
-  for (const b of blocks) {
+  for (const b of planBlocks) {
     state.rawToolCalls.push({ id: b.id, name: b.name, input: b.input });
   }
 
-  const terminalReached = blocks.some((b) => (
-    TERMINAL_TOOL_NAMES.has(b.name) || state.captureStopToolNames?.includes(b.name)
+  const terminalReached = planBlocks.some((b) => (
+    TERMINAL_TOOL_NAMES.has(b.name)
+    || state.captureStopToolNames?.includes(b.name)
+    || (state.captureSuspendAtProposal && TOOL_CATEGORIES[b.name] === "action")
   ));
 
   // Only feed results back when the loop will continue; a terminal ends the turn.
@@ -139,18 +185,22 @@ async function handleCaptureBlocks(
     const toolResults: Anthropic.ToolResultBlockParam[] = blocks.map((b) => ({
       type: "tool_result",
       tool_use_id: b.id,
-      content: TOOL_CATEGORIES[b.name] === "read"
-        ? (state.readResults.get(b.id) ?? CAPTURE_NOT_EXECUTED)
-        : CAPTURE_NOT_EXECUTED,
+      content: discoveryContent.get(b.id)
+        ?? (TOOL_CATEGORIES[b.name] === "read"
+          ? (state.readResults.get(b.id) ?? CAPTURE_NOT_EXECUTED)
+          : CAPTURE_NOT_EXECUTED),
     }));
     state.messages.push({ role: "user", content: toolResults });
   }
 
-  return terminalReached;
+  return { terminalReached, discoveredTools };
 }
 
 export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoopResult> {
-  const { ctx, mode, messages, systemPromptBlocks, tools, model, maxIterations, maxTokensPerCall, tokenBudget } = params;
+  const { ctx, mode, messages, systemPromptBlocks, model, maxIterations, maxTokensPerCall, tokenBudget } = params;
+  // The only thing that changes this mid-turn is a resolved discovery call, so
+  // every other mode sends the caller's set on every iteration.
+  let tools = params.tools;
   const usageTotals = params.usageTotals ?? createModelUsageMetrics();
   const rawToolCalls: RawToolCall[] = [];
   const readBlocks: Anthropic.ToolUseBlock[] = [];
@@ -176,6 +226,7 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
     if (tokenBudget !== undefined && usageTotals.budgetTokens >= tokenBudget) return done("token_budget", null, i);
     params.signal?.throwIfAborted();
     await params.beforeModelCall?.();
+    await ctx.taskBudget?.reserveModelCall();
 
     logger.info(
       { iteration: i, messageCount: messages.length, readOnly: mode === "read_only" },
@@ -211,6 +262,7 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
     );
     const usage = recordModelUsage(usageTotals, response);
     await recordSpend(ctx.orgId, usage, model);
+    await ctx.taskBudget?.recordModelUsage(usage, model);
     logger.info(
       {
         iteration: i,
@@ -258,7 +310,7 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
     }
 
     if (mode === "capture") {
-      const terminalReached = await handleCaptureBlocks(toolUseBlocks, {
+      const captured = await handleCaptureBlocks(toolUseBlocks, {
         ctx: ctx as AgentContext,
         settings: params.settings,
         messages,
@@ -267,8 +319,12 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
         readResults,
         readStatus,
         captureStopToolNames: params.captureStopToolNames,
+        captureSuspendAtProposal: params.captureSuspendAtProposal,
+        captureDiscovery: params.captureDiscovery,
+        activeToolNames: new Set(tools.map((tool) => tool.name)),
       });
-      if (terminalReached) return done("terminal_captured", finalText, i + 1);
+      if (captured.discoveredTools.length > 0) tools = [...tools, ...captured.discoveredTools];
+      if (captured.terminalReached) return done("terminal_captured", finalText, i + 1);
       return iterate(i + 1);
     }
 

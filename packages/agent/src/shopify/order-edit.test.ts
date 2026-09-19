@@ -8,6 +8,11 @@ const ctx = {
   operationId: "execution-1:edit-order",
 };
 
+const receiptCtx = {
+  ...ctx,
+  executionId: "execution-1",
+};
+
 function beginResponse() {
   return jsonResponse({
     data: {
@@ -70,6 +75,30 @@ function reconciledOrder(oldItemQuantity: number) {
   });
 }
 
+function committedSwapResponse() {
+  return jsonResponse({
+    data: {
+      orderEditCommit: {
+        order: {
+          name: "#1001",
+          lineItems: {
+            edges: [{
+              node: {
+                id: "gid://shopify/LineItem/22",
+                title: "New shirt",
+                currentQuantity: 2,
+                variant: { id: "gid://shopify/ProductVariant/789", title: "Blue" },
+              },
+            }],
+            pageInfo: { hasNextPage: false },
+          },
+        },
+        userErrors: [],
+      },
+    },
+  });
+}
+
 function graphqlOperation(fetchMock: ReturnType<typeof vi.fn>, callIndex: number): string {
   const body = JSON.parse(fetchMock.mock.calls[callIndex]?.[1]?.body as string);
   return body.query;
@@ -81,6 +110,54 @@ afterEach(() => {
 });
 
 describe("editShopifyOrder mutation safety", () => {
+  it("emits ordered provider-observed receipt facts for a committed swap", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(beginResponse())
+      .mockResolvedValueOnce(stagedResponse("orderEditAddVariant"))
+      .mockResolvedValueOnce(stagedResponse("orderEditSetQuantity"))
+      .mockResolvedValueOnce(committedSwapResponse());
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await editShopifyOrder({
+      order_id: "456",
+      variant_id: "789",
+      remove_variant_id: "123",
+      quantity: 2,
+    }, receiptCtx);
+
+    expect(result.status).toBe("ok");
+    expect(result.receipt).toEqual(expect.objectContaining({
+      version: 1,
+      operationId: "execution-1:edit-order",
+      executionId: "execution-1",
+      tool: "edit_shopify_order",
+      target: { kind: "order", id: "456" },
+      outcome: "succeeded",
+      providerReference: "456",
+      facts: {
+        orderId: "456",
+        changes: [
+          {
+            kind: "addition",
+            variantId: "gid://shopify/ProductVariant/789",
+            lineItemId: "gid://shopify/LineItem/22",
+            requestedQuantity: 2,
+            providerObservedFinalQuantity: 2,
+            outcome: "committed",
+          },
+          {
+            kind: "removal",
+            variantId: "gid://shopify/ProductVariant/123",
+            lineItemId: "gid://shopify/CalculatedLineItem/1",
+            requestedQuantity: null,
+            providerObservedFinalQuantity: 0,
+            outcome: "committed",
+          },
+        ],
+      },
+    }));
+  });
+
   it("does not call Shopify when the same variant would be added and removed", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
@@ -92,8 +169,26 @@ describe("editShopifyOrder mutation safety", () => {
     }, ctx);
 
     expect(result).toEqual({
-      status: "error",
+      status: "policy_block",
       message: "Error: edit_shopify_order cannot add and remove the same variant in one edit.",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("emits a rejected receipt for invalid edit input under a durable identity", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await editShopifyOrder({ order_id: "456" }, receiptCtx);
+
+    expect(result).toMatchObject({
+      status: "policy_block",
+      receipt: {
+        tool: "edit_shopify_order",
+        outcome: "rejected",
+        code: "missing_edit_change",
+        target: { kind: "order", id: "456" },
+      },
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -108,6 +203,21 @@ describe("editShopifyOrder mutation safety", () => {
     expect(result.message).toContain("edit-session creation");
     expect(result.message).toContain("no order change was committed by this tool");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("emits an unknown receipt when edit-session creation is interrupted", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ errors: "response lost" }, 503));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await editShopifyOrder({ order_id: "456", variant_id: "789" }, receiptCtx);
+
+    expect(result.receipt).toMatchObject({
+      tool: "edit_shopify_order",
+      outcome: "unknown",
+      code: "begin_interrupted",
+      providerReference: null,
+      target: { kind: "order", id: "456" },
+    });
   });
 
   it.each([429, 503])("returns unknown without replaying interrupted add staging after HTTP %i", async (status) => {
@@ -144,11 +254,23 @@ describe("editShopifyOrder mutation safety", () => {
       variant_id: "789",
       remove_variant_id: "123",
       quantity: 2,
-    }, ctx);
+    }, receiptCtx);
 
     expect(result.status).toBe("unknown");
     expect(result.message).toContain("staged the added item");
     expect(result.message).toContain("not committed by this tool");
+    expect(result.receipt).toMatchObject({
+      outcome: "unknown",
+      code: "partial_staging_rejected",
+      providerReference: "456",
+      facts: {
+        orderId: "456",
+        changes: [
+          { kind: "addition", outcome: "staged", providerObservedFinalQuantity: null },
+          { kind: "removal", outcome: "rejected", providerObservedFinalQuantity: null },
+        ],
+      },
+    });
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
@@ -160,10 +282,22 @@ describe("editShopifyOrder mutation safety", () => {
       .mockResolvedValueOnce(reconciledOrder(0));
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await editShopifyOrder({ order_id: "456", remove_variant_id: "123" }, ctx);
+    const result = await editShopifyOrder({ order_id: "456", remove_variant_id: "123" }, receiptCtx);
 
     expect(result.status).toBe("ok");
     expect(result.message).toContain("confirmed after an interrupted provider response");
+    expect(result.receipt).toMatchObject({
+      outcome: "succeeded",
+      facts: {
+        orderId: "456",
+        changes: [{
+          kind: "removal",
+          variantId: "gid://shopify/ProductVariant/123",
+          providerObservedFinalQuantity: 0,
+          outcome: "committed",
+        }],
+      },
+    });
     expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(graphqlOperation(fetchMock, 2)).toContain("mutation orderEditCommit");
     expect(fetchMock.mock.calls.filter(([, init]) => (init as RequestInit).method === "POST")).toHaveLength(3);

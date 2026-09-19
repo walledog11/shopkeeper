@@ -89,7 +89,9 @@ export const GET = withOrgRoute(
       }),
     ]);
 
-    const findings = flagRows.map(parseFlagOrderRow);
+    const findings = flagRows.flatMap((row) => (
+      row.executedAt ? [parseFlagOrderRow({ ...row, executedAt: row.executedAt })] : []
+    ));
     const returns: OrderAttentionReturn[] = returnThreads.map((thread) => ({
       threadId: thread.id,
       customerName: thread.customer.name || thread.customer.platformId,

@@ -1,5 +1,5 @@
 import './test-fixtures/worker-test-setup.js';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { ChannelType, db } from '@shopkeeper/db';
 import { createTestIntegration } from '@shopkeeper/db/test-helpers';
 import { org } from './test-fixtures/worker-test-setup.js';
@@ -295,9 +295,120 @@ describe('Message worker — normalized ig_dm jobs', () => {
         integrationId: integration.id,
       });
       expect(thread.replyIntegrationId).toBe(integration.id);
-      // Meta profile enrichment and media download are the only outbound calls this
-      // path would make, and both need a Meta token a SocialAPI row cannot hold.
+      // Meta profile enrichment and media download both need a Meta token a
+      // SocialAPI row cannot hold, and SocialAPI's own enrichment is off with no
+      // workspace key, so this path still makes no outbound call at all.
       expect(getMockFetch().mock.calls.length).toBe(fetchCallsBefore);
+    });
+
+    function socialApiConversationsResponse(
+      conversations: Array<Record<string, unknown>>,
+    ) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => null },
+        json: async () => ({
+          data: conversations.map(conversation => ({
+            platform: 'instagram',
+            account_id: 'acct_1',
+            platform_id: 'ig_conv_platform_1',
+            last_message_at: '2026-09-12T00:00:00.000Z',
+            status: 'open',
+            ...conversation,
+          })),
+          pagination: { has_more: false, next_cursor: null },
+        }),
+      };
+    }
+
+    it('names the customer from the SocialAPI conversation participant', async () => {
+      const integration = await createSocialApiIntegration();
+      vi.stubEnv('SOCIALAPI_API_KEY', 'test-socialapi-key');
+      getMockFetch().mockResolvedValue(socialApiConversationsResponse([
+        {
+          id: 'conv_named',
+          participant_id: 'socialapi_author_named',
+          participant_name: 'thecasemrkt',
+          participant_picture: 'https://cdn.example.com/avatar.jpg',
+        },
+      ]));
+
+      const handler = getCapturedHandlers().get('inbound-messages');
+      await handler!(makeIgDmJob(org.id, 'socialapi_author_named', {
+        instagramAccountId: integration.externalAccountId,
+        integrationId: integration.id,
+        provider: 'socialapi',
+        providerConversationId: 'conv_named',
+        messageMid: 'native.mid.named',
+        text: 'do you ship to canada',
+      }));
+
+      const customer = await db.customer.findFirstOrThrow({
+        where: { organizationId: org.id, platformId: 'socialapi_author_named' },
+      });
+      expect(customer.name).toBe('thecasemrkt');
+      // The participant picture is a temporary signed CDN URL, so enrichment
+      // reads the name and leaves the avatar to the Blob download path.
+      expect(customer.profilePicUrl).toBeNull();
+    });
+
+    it('refuses a name whose conversation participant is a different sender', async () => {
+      const integration = await createSocialApiIntegration();
+      vi.stubEnv('SOCIALAPI_API_KEY', 'test-socialapi-key');
+      getMockFetch().mockResolvedValue(socialApiConversationsResponse([
+        {
+          id: 'conv_mismatch',
+          participant_id: 'some_other_shopper',
+          participant_name: 'someone_else',
+        },
+      ]));
+
+      const handler = getCapturedHandlers().get('inbound-messages');
+      await handler!(makeIgDmJob(org.id, 'socialapi_author_mismatch', {
+        instagramAccountId: integration.externalAccountId,
+        integrationId: integration.id,
+        provider: 'socialapi',
+        providerConversationId: 'conv_mismatch',
+        messageMid: 'native.mid.mismatch',
+        text: 'hello',
+      }));
+
+      const customer = await db.customer.findFirstOrThrow({
+        where: { organizationId: org.id, platformId: 'socialapi_author_mismatch' },
+      });
+      expect(customer.name).toBeNull();
+    });
+
+    it('still persists the DM when SocialAPI enrichment fails', async () => {
+      const integration = await createSocialApiIntegration();
+      vi.stubEnv('SOCIALAPI_API_KEY', 'test-socialapi-key');
+      getMockFetch().mockResolvedValue({
+        ok: false,
+        status: 503,
+        headers: { get: () => null },
+        json: async () => ({ error: { code: 'unavailable', message: 'down' } }),
+      });
+
+      const handler = getCapturedHandlers().get('inbound-messages');
+      await handler!(makeIgDmJob(org.id, 'socialapi_author_unnamed', {
+        instagramAccountId: integration.externalAccountId,
+        integrationId: integration.id,
+        provider: 'socialapi',
+        providerConversationId: 'conv_unnamed',
+        messageMid: 'native.mid.unnamed',
+        text: 'where is my order',
+      }));
+
+      const customer = await db.customer.findFirstOrThrow({
+        where: { organizationId: org.id, platformId: 'socialapi_author_unnamed' },
+      });
+      expect(customer.name).toBeNull();
+      const thread = await db.thread.findFirstOrThrow({
+        where: { organizationId: org.id, customerId: customer.id },
+      });
+      const message = await db.message.findFirstOrThrow({ where: { threadId: thread.id } });
+      expect(message.contentText).toBe('where is my order');
     });
 
     it('represents media it cannot yet fetch instead of dropping the message', async () => {

@@ -20,10 +20,12 @@ import {
   maybeAutoExecuteCurrentCachedHomePlan,
   resolvePlanExecutionLedgerMode,
   type PlanExecutionDeps,
+  readParkedProposalForThread,
 } from "./plan-execution.js";
 import { resolveAgentSettings } from "./settings.js";
 import { hashInstruction, hashPlan } from "./agent-actions.js";
 import { claimCurrentPlanExecution } from "./execution-ledger.js";
+import { acceptCustomerAgentRequest } from "./task-ledger.js";
 import type { AgentContext, AgentResult } from "./agent-context.js";
 import type { AgentPlan, OrgSettings, RawToolCall } from "./types.js";
 
@@ -322,6 +324,32 @@ describe("plan execution helpers", () => {
   });
 });
 
+describe("readParkedProposalForThread", () => {
+  // The snapshot has to hash equal to what the approval surfaces actually send,
+  // and every one of them sends the calls the card renders — reads included.
+  // Recording the autonomy verdict's executable subset instead made the two
+  // hashes permanently different, so a support approval could only ever conflict.
+  it("snapshots the bundle the approval surfaces send, not the executable subset", async () => {
+    const plan = threeStepPlan();
+    const read: RawToolCall = { id: "read_1", name: "get_order_by_name", input: { order_name: "#1024" } };
+    plan.rawToolCalls = [read, ...plan.rawToolCalls];
+    const { org, thread, settings } = await seedThreadWithPlan({
+      plan,
+      settings: resolveAgentSettings({ autonomyTier: "guarded", maxRefundAmount: 100 }),
+    });
+
+    const snapshot = await readParkedProposalForThread({
+      orgId: org.id, threadId: thread.id, settings,
+    });
+    expect(snapshot?.rawToolCalls.map((call) => call.name)).toEqual(
+      plan.rawToolCalls.map((call) => call.name),
+    );
+    // The invariant the surfaces depend on, stated as they state it.
+    expect(hashPlan({ instruction: plan.instruction, steps: [], rawToolCalls: snapshot!.rawToolCalls }))
+      .toBe(hashPlan({ instruction: plan.instruction, steps: [], rawToolCalls: plan.rawToolCalls }));
+  });
+});
+
 describe("executeCurrentCachedHomePlan guards", () => {
   it("refuses an invalid plan before any human or automatic execution path", async () => {
     const { org, thread, settings } = await seedThreadWithPlan({
@@ -552,6 +580,98 @@ describe("executeCurrentCachedHomePlan execution", () => {
         executionReference: "read:read_1",
       }),
     ]);
+  });
+
+  // Package 3, step 5: a plan that stopped at its proposal has no draft to send,
+  // so its execution is the one that owes a reply composed from the receipt.
+  it("asks a suspended proposal's run to compose from what the write returned", async () => {
+    const base = mutativePlan();
+    const suspended: AgentPlan = {
+      ...base,
+      steps: base.steps.filter((step) => step.category === "action"),
+      rawToolCalls: [noteCall],
+      suspendedAtProposal: true,
+    };
+    const { org, thread, settings } = await seedThreadWithPlan({ plan: suspended });
+    const runAgent = vi.fn(async () => okResult);
+
+    await executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+    }, makeDeps({ runAgent }));
+
+    expect(runAgent.mock.calls[0]?.[4].composeFromReceipt).toBe(true);
+  });
+
+  // Package 5: the request ID is the turn ID because that is how settlement finds
+  // the rows this execution wrote. Both halves are asserted, because a turn ID
+  // that does not match the request links nothing and still looks correct.
+  it("runs an approved plan as the turn of the request that authorized it", async () => {
+    const { org, thread, message, settings } = await seedThreadWithPlan();
+    const runAgent = vi.fn(async () => okResult);
+    const { request, task } = await acceptCustomerAgentRequest({
+      organizationId: org.id, threadId: thread.id, sourceMessageId: message.id,
+      objective: "Answer the shipping question",
+      budget: {
+        runtimeVersion: 1, modelCallLimit: 20,
+        activeTimeMsLimit: 120000, spendNanoUsdLimit: 1000000000n,
+      },
+    });
+    const durableTurn = { requestId: request.id, taskId: task.id };
+
+    await executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+      durableTurn,
+    }, makeDeps({ runAgent }));
+
+    expect(runAgent.mock.calls[0]?.[4].turnId).toBe(durableTurn.requestId);
+    const note = await db.message.findFirstOrThrow({
+      where: { threadId: thread.id, senderType: "note" },
+    });
+    expect(note).toMatchObject({
+      agentRequestId: durableTurn.requestId,
+      agentTaskId: durableTurn.taskId,
+    });
+  });
+
+  it("generates its own turn identity when the caller has no durable task", async () => {
+    const { org, thread, settings } = await seedThreadWithPlan();
+    const runAgent = vi.fn(async () => okResult);
+
+    await executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+    }, makeDeps({ runAgent }));
+
+    expect(runAgent.mock.calls[0]?.[4].turnId).toEqual(expect.any(String));
+    expect(await db.message.findFirstOrThrow({
+      where: { threadId: thread.id, senderType: "note" },
+    })).toMatchObject({ agentRequestId: null, agentTaskId: null });
+  });
+
+  it("leaves a plan that drafted its own reply to send that reply", async () => {
+    const { org, thread, settings } = await seedThreadWithPlan({ plan: mutativePlan() });
+    const runAgent = vi.fn(async () => okResult);
+
+    await executeCurrentCachedHomePlan({
+      orgId: org.id,
+      threadId: thread.id,
+      settings,
+      executionIntent: "merchant_approved",
+      failureRoute: "test",
+    }, makeDeps({ runAgent }));
+
+    expect(runAgent.mock.calls[0]?.[4].composeFromReceipt).toBeUndefined();
   });
 
   it("refuses a second execution of the same plan", async () => {

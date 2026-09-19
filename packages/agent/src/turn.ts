@@ -4,7 +4,7 @@ import { resolveAgentSettings } from "./settings.js";
 import { serializeAgentTurn } from "./turns.js";
 import { ConflictError } from "./errors.js";
 import type { LockProvider } from "./lock/index.js";
-import type { AgentContext, AgentActionMode, AgentResult } from "./agent-context.js";
+import type { AgentContext, AgentActionMode, AgentResult, TaskModelBudget } from "./agent-context.js";
 import type { AgentActionApproval } from "./agent-actions.js";
 import type { AgentToolDefinition } from "./tools/registry/index.js";
 import type { OrgSettings, RawToolCall } from "./types.js";
@@ -20,6 +20,7 @@ export interface ExecuteTurnRunOptions {
   approval?: AgentActionApproval;
   executionId?: string;
   completionEvidence?: readonly CompletionFact[];
+  composeFromReceipt?: boolean;
   // Host-injected control tools for this turn (e.g. the gateway's operator
   // control tools). Forwarded to runAgent; ignored on the approved-execution and
   // read-only paths. Keeps host-specific tools out of the shared registry.
@@ -57,6 +58,13 @@ export interface ExecuteAgentTurnParams {
   // audit-note rows can be correlated directly during recovery. Other callers
   // keep the generated per-turn identity.
   turnId?: string;
+  /** Durable request/task linkage for resumable runtimes. */
+  agentRequestId?: string;
+  agentTaskId?: string;
+  /** Host-owned durable claim guard, checked before every tool execution. */
+  assertExecutionAllowed?: () => void;
+  /** Host-owned durable model budget for the enclosing task, if there is one. */
+  taskBudget?: TaskModelBudget;
   failureRoute?: string;
   orgSettings?: Partial<OrgSettings> | null;
   approvedToolCalls?: RawToolCall[];
@@ -68,6 +76,8 @@ export interface ExecuteAgentTurnParams {
   approval?: AgentActionApproval;
   executionId?: string;
   completionEvidence?: readonly CompletionFact[];
+  /** Compose the customer's reply from the approved write's receipts. */
+  composeFromReceipt?: boolean;
   // Operator freeform turns only: the host-rendered pending-state ledger passed
   // into buildContext, and the operator control tools passed into runAgent.
   operatorLedger?: string;
@@ -102,6 +112,8 @@ export async function executeAgentTurn(
         threadId: params.threadId,
         senderType: "customer",
         contentText: params.instruction,
+        ...(params.agentRequestId ? { agentRequestId: params.agentRequestId } : {}),
+        ...(params.agentTaskId ? { agentTaskId: params.agentTaskId } : {}),
       });
     }
 
@@ -116,11 +128,13 @@ export async function executeAgentTurn(
     const priorGuard = ctx.assertExecutionAllowed;
     ctx.assertExecutionAllowed = () => {
       priorGuard?.();
+      params.assertExecutionAllowed?.();
       if (requiresFailClosedLock(params) && lock.isLost?.()) {
         throw new ConflictError("Agent lock ownership was lost. Execution stopped; review completed actions before retrying.");
       }
     };
     ctx.assertExecutionAllowed();
+    if (params.taskBudget) ctx.taskBudget = params.taskBudget;
     const result = await deps.runAgent(
       ctx,
       params.instruction,
@@ -133,6 +147,7 @@ export async function executeAgentTurn(
         ...(params.approval ? { approval: params.approval } : {}),
         ...(params.executionId ? { executionId: params.executionId } : {}),
         ...(params.completionEvidence ? { completionEvidence: params.completionEvidence } : {}),
+        ...(params.composeFromReceipt ? { composeFromReceipt: true } : {}),
         ...(params.moduleTools ? { moduleTools: params.moduleTools } : {}),
       }
     );
@@ -142,6 +157,8 @@ export async function executeAgentTurn(
         threadId: params.threadId,
         senderType: "agent",
         contentText: result.summary,
+        ...(params.agentRequestId ? { agentRequestId: params.agentRequestId } : {}),
+        ...(params.agentTaskId ? { agentTaskId: params.agentTaskId } : {}),
       });
     }
 
@@ -149,6 +166,8 @@ export async function executeAgentTurn(
       await createMessage({
         threadId: params.threadId,
         senderType: "note",
+        ...(params.agentRequestId ? { agentRequestId: params.agentRequestId } : {}),
+        ...(params.agentTaskId ? { agentTaskId: params.agentTaskId } : {}),
         contentText: serializeAgentTurn({
           id: turnId,
           instruction: params.instruction,

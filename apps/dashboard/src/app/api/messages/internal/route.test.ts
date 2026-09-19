@@ -34,7 +34,10 @@ beforeEach(async () => {
   org = await createTestOrg();
   process.env.INTERNAL_API_SECRET = 'current-secret';
   process.env.INTERNAL_API_SECRET_PREV = 'previous-secret';
-  mockDispatchMessage.mockResolvedValue({ ok: true });
+  mockDispatchMessage.mockResolvedValue({
+    ok: true,
+    message: { id: 'message-1', threadId: 'thread-1', sendStatus: 'sent', providerMessageId: 'provider-1' },
+  });
 });
 
 afterEach(async () => {

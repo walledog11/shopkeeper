@@ -51,7 +51,7 @@ async function main() {
       data: {
         organizationId: org.id,
         customerId: operatorCustomer.id,
-        channelType: 'sms_agent',
+        channelType: 'operator',
         status: 'open',
       },
       select: { id: true },
@@ -174,7 +174,7 @@ async function main() {
       thread: {
         id: operatorThread.id,
         status: 'open',
-        channelType: 'sms_agent',
+        channelType: 'operator',
         tag: null,
         aiSummary: null,
         shopifyCustomerId: null,

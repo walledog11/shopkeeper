@@ -64,9 +64,12 @@ describe("skippedMutationDocument", () => {
   });
 
   it("preserves a directive the document already carries", () => {
-    const skipped = skippedMutationDocument(SHOPIFY_MUTATION_DOCUMENTS.refundCreate);
-    expect(skipped).toContain("@skip(if: true)");
-    expect(skipped).toContain("@idempotent(key: $idempotencyKey)");
+    for (const name of ["refundCreate", "partialRefundCreate"] as const) {
+      const skipped = skippedMutationDocument(SHOPIFY_MUTATION_DOCUMENTS[name]);
+      expect(skipped).toContain("@skip(if: true)");
+      expect(skipped).toContain("@idempotent(key: $idempotencyKey)");
+      expect(skipped).not.toContain("refundCreate(input: $input, idempotencyKey:");
+    }
   });
 
   it("handles a root field with no arguments", () => {

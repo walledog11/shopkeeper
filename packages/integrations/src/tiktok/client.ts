@@ -1,4 +1,5 @@
 import { isRecord } from '@shopkeeper/agent/guards';
+import { readStringKey } from '../values.js';
 
 import type {
   TikTokShopApiConfig,
@@ -137,7 +138,7 @@ export async function sendTikTokShopTextMessage({
 
   const data = readObject(body, 'data') ?? readObject(body, 'result') ?? (isRecord(body) ? body : {});
   return {
-    providerMessageId: readString(data, 'message_id', 'messageId', 'provider_message_id'),
+    providerMessageId: readStringKey(data, 'message_id', 'messageId', 'provider_message_id'),
     raw: body,
   };
 }
@@ -212,7 +213,7 @@ async function requestToken(
 
 function parseTokenResult(body: unknown): TikTokShopTokenResult {
   const data = readObject(body, 'data') ?? readObject(body, 'result') ?? (isRecord(body) ? body : {});
-  const accessToken = readString(data, 'access_token', 'accessToken');
+  const accessToken = readStringKey(data, 'access_token', 'accessToken');
   if (!accessToken) {
     throw new TikTokShopProviderError('TikTok Shop token response did not include an access token', {
       category: 'malformed_response',
@@ -222,18 +223,18 @@ function parseTokenResult(body: unknown): TikTokShopTokenResult {
 
   const expiresInSeconds = readNumber(data, 'expires_in', 'expiresIn');
   const expiresAtSeconds = readNumber(data, 'access_token_expire_in', 'accessTokenExpireIn', 'expire_in');
-  const shopId = readString(data, 'shop_id', 'shopId');
-  const sellerId = readString(data, 'seller_id', 'sellerId', 'seller_base_id');
+  const shopId = readStringKey(data, 'shop_id', 'shopId');
+  const sellerId = readStringKey(data, 'seller_id', 'sellerId', 'seller_base_id');
 
   return {
     accessToken,
-    refreshToken: readString(data, 'refresh_token', 'refreshToken'),
+    refreshToken: readStringKey(data, 'refresh_token', 'refreshToken'),
     tokenExpiresAt: resolveTokenExpiresAt(expiresInSeconds, expiresAtSeconds),
     shopId,
     sellerId,
-    openId: readString(data, 'open_id', 'openId'),
-    displayName: readString(data, 'shop_name', 'shopName', 'seller_name', 'sellerName', 'name'),
-    region: readString(data, 'region', 'shop_region', 'shopRegion', 'seller_base_region'),
+    openId: readStringKey(data, 'open_id', 'openId'),
+    displayName: readStringKey(data, 'shop_name', 'shopName', 'seller_name', 'sellerName', 'name'),
+    region: readStringKey(data, 'region', 'shop_region', 'shopRegion', 'seller_base_region'),
     scopes: readStringList(data, 'scope', 'scopes', 'granted_scopes', 'grantedScopes'),
     raw: body,
   };
@@ -254,8 +255,8 @@ function resolveTokenExpiresAt(
 
 function isProviderErrorBody(body: unknown): boolean {
   if (!isRecord(body)) return false;
-  const code = readString(body, 'code', 'error_code', 'errorCode');
-  const message = readString(body, 'message', 'error', 'error_description', 'errorDescription');
+  const code = readStringKey(body, 'code', 'error_code', 'errorCode');
+  const message = readStringKey(body, 'message', 'error', 'error_description', 'errorDescription');
   if (!code && !message) return false;
   return !['0', 'ok', 'success'].includes(String(code ?? '').toLowerCase());
 }
@@ -305,16 +306,6 @@ function readObject(value: unknown, ...keys: string[]): Record<string, unknown> 
   for (const key of keys) {
     const next = value[key];
     if (isRecord(next)) return next;
-  }
-  return null;
-}
-
-function readString(value: unknown, ...keys: string[]): string | null {
-  if (!isRecord(value)) return null;
-  for (const key of keys) {
-    const next = value[key];
-    if (typeof next === 'string' && next.trim()) return next.trim();
-    if (typeof next === 'number' && Number.isFinite(next)) return String(next);
   }
   return null;
 }

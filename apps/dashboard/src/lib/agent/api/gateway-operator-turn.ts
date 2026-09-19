@@ -6,7 +6,7 @@ import type { ActionEntry } from "@shopkeeper/agent/context";
 // here rather than the platform killing the function mid-request.
 const OPERATOR_TURN_TIMEOUT_MS = 55_000;
 
-export interface GatewayOperatorTurnPayload {
+interface GatewayOperatorTurnPayload {
   threadId?: string;
   summary?: string;
   actionsPerformed?: ActionEntry[];
@@ -14,44 +14,93 @@ export interface GatewayOperatorTurnPayload {
   error?: string;
 }
 
-export interface GatewayOperatorTurnResponse {
+interface GatewayOperatorTurnResponse {
   status: number;
   payload: GatewayOperatorTurnPayload | null;
 }
 
-// Runs one Concierge turn on the gateway's operator path — the same turn the
-// merchant's phone gets, module tools included. The gateway resolves the thread
-// and the pending queue from the Clerk user's org membership, so there is no
-// session or chat id to pass. Throws when the gateway is unreachable or
-// misconfigured; a reached gateway's status is returned for the route to map.
-export async function postGatewayOperatorTurn(params: {
+type DurableAgentTaskStatus =
+  | "accepted" | "attached" | "queued" | "running" | "waiting_input"
+  | "waiting_approval" | "reconciling" | "completed" | "failed" | "cancelled";
+
+export interface GatewayAgentRequestPayload {
+  requestId: string;
+  instruction: string;
+  taskId: string | null;
+  status: DurableAgentTaskStatus;
+  taskRevision: number | null;
+  acceptedAt: string;
+  updatedAt: string;
+  statusUrl?: string;
+  deduplicated?: boolean;
+  response: {
+    summary: string;
+    actionsPerformed: ActionEntry[];
+    awaitingApproval: boolean;
+  } | null;
+  delivery: { status: "pending" | "available"; messageId: string | null };
+  failureCode: string | null;
+}
+
+function gatewayAuth() {
+  const secret = process.env.INTERNAL_API_SECRET;
+  if (!secret) throw new Error("[agent/chat] INTERNAL_API_SECRET unset");
+  return { "Content-Type": "application/json", "x-internal-secret": secret };
+}
+
+export async function postGatewayAgentRequest(params: {
   organizationId: string;
   clerkUserId: string;
+  clientRequestId: string;
   instruction: string;
-}): Promise<GatewayOperatorTurnResponse> {
+}): Promise<{ status: number; payload: GatewayAgentRequestPayload | (Record<string, unknown> & { error?: string }) | null }> {
   const base = getGatewayBaseUrl({ required: true });
-  const secret = process.env.INTERNAL_API_SECRET;
-  if (!secret) {
-    throw new Error("[agent/chat] INTERNAL_API_SECRET unset");
-  }
-
-  const res = await fetchProviderWithDeadline(`${base}/internal/operator/turn`, {
+  const res = await fetchProviderWithDeadline(`${base}/internal/operator/requests`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-internal-secret": secret,
-    },
+    headers: gatewayAuth(),
     body: JSON.stringify(params),
-  }, {
-    provider: "gateway",
-    operation: "operator-turn",
-    timeoutMs: OPERATOR_TURN_TIMEOUT_MS,
-  });
+  }, { provider: "gateway", operation: "operator-request-submit", timeoutMs: 10_000 });
+  return { status: res.status, payload: await res.json().catch(() => null) };
+}
 
-  return {
-    status: res.status,
-    payload: await res.json().catch(() => null) as GatewayOperatorTurnPayload | null,
-  };
+export async function getGatewayAgentRequest(params: {
+  organizationId: string;
+  clerkUserId: string;
+  requestId: string;
+}): Promise<{ status: number; payload: GatewayAgentRequestPayload | (Record<string, unknown> & { error?: string }) | null }> {
+  const base = getGatewayBaseUrl({ required: true });
+  const query = new URLSearchParams({ organizationId: params.organizationId, clerkUserId: params.clerkUserId });
+  const res = await fetchProviderWithDeadline(`${base}/internal/operator/requests/${encodeURIComponent(params.requestId)}?${query}`, {
+    headers: gatewayAuth(),
+  }, { provider: "gateway", operation: "operator-request-status", timeoutMs: 10_000 });
+  return { status: res.status, payload: await res.json().catch(() => null) };
+}
+
+export async function listGatewayAgentRequests(params: {
+  organizationId: string;
+  clerkUserId: string;
+}): Promise<{ status: number; payload: { requests?: GatewayAgentRequestPayload[]; error?: string } | null }> {
+  const base = getGatewayBaseUrl({ required: true });
+  const query = new URLSearchParams(params);
+  const res = await fetchProviderWithDeadline(`${base}/internal/operator/requests?${query}`, {
+    headers: gatewayAuth(),
+  }, { provider: "gateway", operation: "operator-request-list", timeoutMs: 10_000 });
+  return { status: res.status, payload: await res.json().catch(() => null) };
+}
+
+export async function postGatewayAgentRequestCancel(params: {
+  organizationId: string;
+  clerkUserId: string;
+  requestId: string;
+  taskRevision: number;
+}): Promise<{ status: number; payload: GatewayAgentRequestPayload | (Record<string, unknown> & { error?: string }) | null }> {
+  const base = getGatewayBaseUrl({ required: true });
+  const res = await fetchProviderWithDeadline(`${base}/internal/operator/requests/${encodeURIComponent(params.requestId)}/cancel`, {
+    method: "POST",
+    headers: gatewayAuth(),
+    body: JSON.stringify(params),
+  }, { provider: "gateway", operation: "operator-request-cancel", timeoutMs: 10_000 });
+  return { status: res.status, payload: await res.json().catch(() => null) };
 }
 
 // A decision the merchant made with a button rather than a sentence. It lands on
@@ -64,16 +113,11 @@ export async function postGatewayPlanDecision(params: {
   decision: "approve" | "dismiss";
 }): Promise<GatewayOperatorTurnResponse> {
   const base = getGatewayBaseUrl({ required: true });
-  const secret = process.env.INTERNAL_API_SECRET;
-  if (!secret) {
-    throw new Error("[agent/pending] INTERNAL_API_SECRET unset");
-  }
 
   const res = await fetchProviderWithDeadline(`${base}/internal/operator/plan-decision`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
-      "x-internal-secret": secret,
+      ...gatewayAuth(),
     },
     body: JSON.stringify(params),
   }, {

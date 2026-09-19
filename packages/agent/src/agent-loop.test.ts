@@ -195,3 +195,66 @@ it('refuses a new model call once the shared planning deadline expires', async (
     model: 'test', maxIterations: 10, maxTokensPerCall: 100, signal })).rejects.toThrow('planning deadline');
   expect(mockCreate).not.toHaveBeenCalled();
 });
+
+// The durable budget must bracket the provider call: reserved before, charged
+// after, and a stop observed by the reservation ends the turn without another.
+describe("runAgentLoop durable task budget", () => {
+  it("reserves before each call and records the measured usage after", async () => {
+    const calls: string[] = [];
+    const taskBudget = {
+      reserveModelCall: vi.fn(async () => { calls.push("reserve"); }),
+      recordModelUsage: vi.fn(async () => { calls.push("record"); }),
+    };
+    let iteration = 0;
+    mockCreate.mockImplementation(async () => {
+      calls.push("provider");
+      iteration += 1;
+      return iteration === 1
+        ? toolUse({ input_tokens: 10, output_tokens: 4 })
+        : endTurn("done", { input_tokens: 6, output_tokens: 2 });
+    });
+
+    await runAgentLoop({
+      ctx: { orgId: "org_1", taskBudget } as unknown as BaseAgentContext,
+      mode: "execute",
+      messages: [{ role: "user", content: "go" }],
+      systemPromptBlocks: [],
+      tools: [],
+      model: "test-model",
+      maxIterations: 10,
+      maxTokensPerCall: 4096,
+      usageTotals: createModelUsageMetrics(),
+      runTools: toolResult,
+      getEscalationReason: () => null,
+    });
+
+    expect(calls).toEqual(["reserve", "provider", "record", "reserve", "provider", "record"]);
+    expect(taskBudget.recordModelUsage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ inputTokens: 6, outputTokens: 2 }),
+      "test-model",
+    );
+  });
+
+  it("stops the turn when the reservation is refused", async () => {
+    mockCreate.mockResolvedValue(endTurn("done", { input_tokens: 1, output_tokens: 1 }));
+    const taskBudget = {
+      reserveModelCall: vi.fn(async () => { throw new Error("Task stopped: cancelled."); }),
+      recordModelUsage: vi.fn(async () => {}),
+    };
+
+    await expect(runAgentLoop({
+      ctx: { orgId: "org_1", taskBudget } as unknown as BaseAgentContext,
+      mode: "execute",
+      messages: [{ role: "user", content: "go" }],
+      systemPromptBlocks: [],
+      tools: [],
+      model: "test-model",
+      maxIterations: 10,
+      maxTokensPerCall: 4096,
+      usageTotals: createModelUsageMetrics(),
+      runTools: toolResult,
+      getEscalationReason: () => null,
+    })).rejects.toThrow("Task stopped: cancelled.");
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+});

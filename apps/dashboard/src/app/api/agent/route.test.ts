@@ -92,6 +92,32 @@ describe('POST /api/agent', () => {
     expect(mockExecuteAgentTurn).not.toHaveBeenCalled();
   });
 
+  // Package 3, step 7: the dashboard approval surface with a plan that stopped at
+  // its proposal. It carries no draft, so what it owes is a reply composed from
+  // the receipt the refund returns.
+  it('runs a suspended proposal with the composition its plan has no draft for', async () => {
+    const approvedToolCalls = [{ id: 'refund_1', name: 'create_refund', input: { order_id: '456', amount: '20.00' } }];
+    const plan: AgentPlan = {
+      instruction: 'Handle this',
+      steps: [{ id: 'refund_1', tool: 'create_refund', label: 'Issue refund', description: 'Refund $20.00', category: 'action', enabled: true }],
+      rawToolCalls: approvedToolCalls,
+      suspendedAtProposal: true,
+    };
+    const thread = await createThreadWithCachedPlan(plan);
+
+    const res = await POST(new Request('http://localhost:3000/api/agent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId: thread.id, instruction: 'Handle this', approvedToolCalls }),
+    }));
+
+    expect(res.status).toBe(200);
+    expect(mockExecuteAgentTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ composeFromReceipt: true }),
+      expect.anything(),
+    );
+  });
+
   it('rejects execution without approved tool calls', async () => {
     const plan: AgentPlan = {
       instruction: 'Handle this',

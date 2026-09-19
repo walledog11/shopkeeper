@@ -6,6 +6,8 @@ const {
   publishThreadEvent,
   pushEscalation,
   recordFailure,
+  threadFindFirst,
+  threadUpdate,
   threadUpdateMany,
 } = vi.hoisted(() => ({
   createMessage: vi.fn(),
@@ -13,11 +15,18 @@ const {
   publishThreadEvent: vi.fn(),
   pushEscalation: vi.fn(),
   recordFailure: vi.fn(),
+  threadFindFirst: vi.fn(),
+  threadUpdate: vi.fn(),
   threadUpdateMany: vi.fn(),
 }));
 
 vi.mock('@shopkeeper/db', () => ({
-  db: { thread: { updateMany: threadUpdateMany } },
+  db: {
+    thread: { findFirst: threadFindFirst, update: threadUpdate, updateMany: threadUpdateMany },
+    $transaction: (callback: (tx: unknown) => unknown) => callback({
+      thread: { findFirst: threadFindFirst, update: threadUpdate },
+    }),
+  },
   SenderType: { note: 'note' },
   createMessage,
 }));
@@ -44,9 +53,13 @@ const ctx = { threadId: 'thread-1', orgId: 'org-1', orgName: 'Acme' };
 describe('gatewayThreadSink persistence', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    createMessage.mockResolvedValue({});
+    createMessage.mockResolvedValue({ id: 'message-1' });
     publishThreadEvent.mockResolvedValue(undefined);
     threadUpdateMany.mockResolvedValue({ count: 1 });
+    threadFindFirst.mockResolvedValue({ id: 'thread-1', status: 'open', tag: null });
+    threadUpdate.mockImplementation(async ({ data }: { data: { status?: string; tag?: string } }) => (
+      data.status ? { status: data.status } : { tag: data.tag }
+    ));
     pushEscalation.mockResolvedValue(undefined);
   });
 
@@ -58,13 +71,11 @@ describe('gatewayThreadSink persistence', () => {
 
     expect(createMessage).toHaveBeenNthCalledWith(1, {
       threadId: 'thread-1',
+      organizationId: 'org-1',
       senderType: 'note',
       contentText: '__shopkeeper_agent_note__Investigating',
     });
-    expect(threadUpdateMany.mock.calls).toEqual([
-      [{ where: { id: 'thread-1', organizationId: 'org-1' }, data: { status: 'closed' } }],
-      [{ where: { id: 'thread-1', organizationId: 'org-1' }, data: { tag: 'shipping' } }],
-    ]);
+    expect(threadUpdate).toHaveBeenCalledTimes(2);
     expect(createMessage).toHaveBeenNthCalledWith(2, {
       threadId: 'thread-1',
       senderType: 'note',
@@ -72,6 +83,31 @@ describe('gatewayThreadSink persistence', () => {
     });
     expect(publishThreadEvent).toHaveBeenCalledTimes(4);
     expect(publishThreadEvent).toHaveBeenCalledWith('org-1', 'thread-1');
+  });
+
+  it('returns provider-observed receipts for identity-bearing thread writes', async () => {
+    const execution = { ...ctx, operationId: 'operation-1', executionId: 'execution-1' };
+    const note = await gatewayThreadSink.addInternalNote({ text: 'Investigating' }, execution);
+    const status = await gatewayThreadSink.updateThreadStatus({ status: 'closed' }, execution);
+    const tag = await gatewayThreadSink.updateThreadTag({ tag: 'shipping' }, execution);
+
+    expect(note.receipt).toEqual(expect.objectContaining({
+      tool: 'add_internal_note',
+      providerReference: 'message-1',
+      facts: expect.objectContaining({
+        threadId: 'thread-1',
+        messageId: 'message-1',
+        contentSha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      }),
+    }));
+    expect(status.receipt).toEqual(expect.objectContaining({
+      tool: 'update_thread_status',
+      facts: { threadId: 'thread-1', beforeStatus: 'open', afterStatus: 'closed' },
+    }));
+    expect(tag.receipt).toEqual(expect.objectContaining({
+      tool: 'update_thread_tag',
+      facts: { threadId: 'thread-1', beforeTag: null, afterTag: 'shipping' },
+    }));
   });
 
   it('persists escalation state before notifying the operator', async () => {
@@ -144,14 +180,15 @@ describe('gatewayThreadSink persistence', () => {
   });
 
   it('does not persist or notify when the thread belongs to another org', async () => {
+    threadFindFirst.mockResolvedValue(null);
     threadUpdateMany.mockResolvedValue({ count: 0 });
 
     const status = await gatewayThreadSink.updateThreadStatus({ status: 'closed' }, ctx);
     const tag = await gatewayThreadSink.updateThreadTag({ tag: 'shipping' }, ctx);
     const escalation = await gatewayThreadSink.escalateToHuman({ reason: 'Refund approval needed' }, ctx);
 
-    expect(status).toEqual({ status: 'error', message: 'Error: thread not found.' });
-    expect(tag).toEqual({ status: 'error', message: 'Error: thread not found.' });
+    expect(status).toEqual({ status: 'not_found', message: 'Error: thread not found.' });
+    expect(tag).toEqual({ status: 'not_found', message: 'Error: thread not found.' });
     expect(escalation).toEqual({ status: 'error', message: 'Error: thread not found.' });
     expect(createMessage).not.toHaveBeenCalled();
     expect(pushEscalation).not.toHaveBeenCalled();

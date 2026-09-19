@@ -29,7 +29,9 @@ async function runUnknownOutcomeSweep(): Promise<void> {
   const result = await runUnknownOutcomeReconciliation({ loadShopifyContext });
 
   const needsAttention = result.staleClaimedExecutions > 0
+    || result.staleActionDispatches > 0
     || result.stillUnknownExecutions > 0
+    || result.stillUnknownStandaloneActions > 0
     || result.stillUnknownReservations > 0;
 
   if (needsAttention) {
@@ -43,6 +45,7 @@ async function runUnknownOutcomeSweep(): Promise<void> {
   if (
     result.staleReleasedReservations > 0
     || result.resolvedExecutions > 0
+    || result.resolvedStandaloneActions > 0
     || result.resolvedReservations > 0
   ) {
     logger.info({ ...result }, '[UnknownOutcomeSweep] Reconciled ambiguous provider outcomes');

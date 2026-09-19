@@ -6,6 +6,7 @@ const ctx = {
   shop: "test-store.myshopify.com",
   accessToken: "shpat_test",
   operationId: "0ecfcf1c-2a07-4caf-956f-77cbaa2fb83a:refund_step",
+  executionId: "0ecfcf1c-2a07-4caf-956f-77cbaa2fb83a",
 };
 
 // Every stub here answers with retry-after: 0 so the client's backoff does not
@@ -48,7 +49,7 @@ function refundResponse(status = "SUCCESS") {
         refund: {
           id: "gid://shopify/Refund/9001",
           totalRefundedSet: { presentmentMoney: { amount: "20.00" } },
-          transactions: { nodes: [{ status }] },
+          transactions: { nodes: [{ id: "gid://shopify/OrderTransaction/7001", status }] },
         },
         userErrors: [],
       },
@@ -101,7 +102,7 @@ describe("createRefund full-refund input", () => {
             refund: {
               id: "gid://shopify/Refund/9001",
               totalRefundedSet: { presentmentMoney: { amount: "25.50" } },
-              transactions: { nodes: [{ status: "SUCCESS" }] },
+              transactions: { nodes: [{ id: "gid://shopify/OrderTransaction/7001", status: "SUCCESS" }] },
             },
             userErrors: [],
           },
@@ -250,7 +251,7 @@ describe("createRefund full-refund input", () => {
             refund: {
               id: "gid://shopify/Refund/9001",
               totalRefundedSet: { presentmentMoney: { amount: "59.90" } },
-              transactions: { nodes: [{ status: "SUCCESS" }] },
+              transactions: { nodes: [{ id: "gid://shopify/OrderTransaction/7001", status: "SUCCESS" }] },
             },
             userErrors: [],
           },
@@ -299,6 +300,23 @@ describe("createRefund provider outcomes", () => {
     const retry = JSON.parse(fetchMock.mock.calls[3][1].body as string);
 
     expect(result).toMatchObject({ status: "ok", refundedCents: 2000 });
+    expect(result.receipt).toMatchObject({
+      version: 1,
+      operationId: ctx.operationId,
+      executionId: ctx.executionId,
+      tool: "create_refund",
+      outcome: "succeeded",
+      providerReference: "gid://shopify/Refund/9001",
+      facts: {
+        orderId: "456",
+        refundId: "gid://shopify/Refund/9001",
+        amount: "20.00",
+        currency: "USD",
+        transactionStatus: "SUCCESS",
+        transactionReference: "gid://shopify/OrderTransaction/7001",
+        classification: "full",
+      },
+    });
     expect(firstAttempt.variables).toEqual(retry.variables);
     expect(firstAttempt.variables.idempotencyKey).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
@@ -368,10 +386,17 @@ describe("createRefund provider outcomes", () => {
 
     const result = await createRefund({ order_id: "456", amount: "20.00" }, ctx);
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       status: "error",
       message: "Error: failed to create refund - Amount is not refundable",
       refundedCents: null,
+      receipt: {
+        version: 1,
+        tool: "create_refund",
+        target: { kind: "order", id: "456" },
+        outcome: "failed",
+        code: "provider_rejected",
+      },
     });
   });
 });

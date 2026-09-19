@@ -112,12 +112,14 @@ describe("missingShopifyScopes", () => {
   // capability expansion, where gift cards and store credit fail as 403s.
   it("reports the scopes an older install never received", () => {
     const older = SHOPIFY_OAUTH_SCOPES.filter((scope) => (
-      scope !== "write_gift_cards"
+      scope !== "read_gift_cards"
+      && scope !== "write_gift_cards"
       && scope !== "read_store_credit_accounts"
       && scope !== "write_store_credit_account_transactions"
     ));
 
     expect(missingShopifyScopes(older)).toEqual([
+      "read_gift_cards",
       "write_gift_cards",
       "read_store_credit_accounts",
       "write_store_credit_account_transactions",

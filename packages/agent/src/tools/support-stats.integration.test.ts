@@ -65,7 +65,7 @@ describe("getSupportStats", () => {
       { channelType: ChannelType.email, archivedAt: now },
       { channelType: ChannelType.email, deletedAt: now },
       { channelType: ChannelType.email, filterStatus: "filtered" as const },
-      { channelType: ChannelType.sms_agent },
+      { channelType: ChannelType.operator },
       { channelType: ChannelType.dashboard_agent },
     ];
     for (const [index, excluded] of excludedThreads.entries()) {

@@ -1,5 +1,6 @@
 import { db, Prisma } from "@shopkeeper/db";
 import { parseClassifierSignals } from "./classifier-signals.js";
+import { usesCapabilityDiscovery } from "./runtime-modes.js";
 import { shopifyRestJson, type ShopifyContext } from "./shopify/client.js";
 import { recordedShopifyScopes } from "./shopify/integration-health.js";
 import { CHANNEL_TYPE, isOperatorChannel } from "./thread-constants.js";
@@ -32,6 +33,8 @@ import type {
 import type {
   AgentActionMode,
   AgentContext,
+  AgentExecutionIdentity,
+  AgentRecentMessage,
   BaseAgentContext,
   ShopifyOrderSummary,
 } from "./agent-context.js";
@@ -45,6 +48,8 @@ interface ThreadSinkContext {
   threadId: string;
   orgId: string;
   orgName: string;
+  operationId?: string;
+  executionId?: string;
 }
 
 export interface ThreadSink {
@@ -84,6 +89,95 @@ type RawShopifyOrder = {
     country_name?: string | null;
   } | null;
 };
+
+/**
+ * A context load that must not fail the turn, declared at the load rather than
+ * around the assembly.
+ *
+ * `buildContext` reads three tiers of dependency and they have to fail
+ * differently:
+ *
+ * - **Identity and policy** — the thread, the organization, the Shopify
+ *   integration, the storefront verification rows. The turn cannot be
+ *   authorized without them, so they are awaited directly and a failure throws.
+ *   Degrading a failed integration read to `shopify: null` would have the agent
+ *   tell a customer the store is disconnected and turn every dependent write
+ *   into "no Shopify integration connected"; degrading a failed verification
+ *   read would answer a shopper who proved control of their order as a guest.
+ * - **Operation evidence** — recent orders, knowledge-base articles. Unrelated
+ *   work continues without them, but the plan carries a typed signal so the
+ *   merchant is never shown a reply written as though the evidence was there.
+ * - **Conversational context** — the open-thread count, merchant preferences,
+ *   the linked Shopify name, hydrated message images. Nothing depends on them,
+ *   so the neutral value stands and the failure is logged.
+ *
+ * One wrapper per load, deliberately, and not one around the whole assembly: a
+ * single catch-and-continue cannot say which tier failed, and it is the tier
+ * that decides whether the turn may proceed. What hid the missing
+ * merchant-preference table for a day was an uncaught fan-out inside
+ * `Promise.all`, so every non-fatal load here names itself.
+ */
+async function loadNonFatalContext<T>(
+  label: string,
+  scope: { orgId: string; threadId: string },
+  fallback: T,
+  load: () => Promise<T>,
+): Promise<{ value: T; failed: boolean }> {
+  try {
+    return { value: await load(), failed: false };
+  } catch (error) {
+    logger.warn(
+      { ...scope, contextLoad: label, err: error },
+      "[agent:context] non-fatal context load failed",
+    );
+    return { value: fallback, failed: true };
+  }
+}
+
+/**
+ * Whether this turn's knowledge base has to be pre-loaded, or can be left to
+ * `search_kb` if the model turns out to need it.
+ *
+ * The pre-fetch is the largest variable input in the support prompt — up to
+ * `kbTotalChars`, more than the entire starter tool set — and a "where is my
+ * order" question has never needed it. So on the discovery runtime one
+ * classification is answered on demand: `order_status` and nothing else, where
+ * the classifier was confident, aligned, and named no policy question, no
+ * mutation and no risk. Everything else, including every classification the
+ * planner could not use, still pre-loads; not knowing what a turn needs is a
+ * reason to carry the evidence, not to drop it.
+ *
+ * The model keeps `search_kb` in every one of these sets, and the prompt already
+ * tells it that nothing is pre-loaded, so the capability is deferred rather than
+ * removed.
+ */
+function prefetchesKnowledgeBase(
+  signals: ReturnType<typeof parseClassifierSignals>,
+  requestSourceMessageId: string | null,
+  latestCustomerMessageId: string | null,
+): boolean {
+  if (!usesCapabilityDiscovery()) return true;
+  if (!signals) return true;
+  // Same alignment rule tool selection narrows on: a classification taken from
+  // an older message is not evidence about this one.
+  if (!requestSourceMessageId || requestSourceMessageId !== latestCustomerMessageId) return true;
+  const { intents } = signals;
+  if (!intents.order_status) return true;
+  return KB_DEPENDENT_INTENTS.some((intent) => intents[intent]);
+}
+
+// Every intent whose turn may need documented policy. Listed rather than
+// inverted so a new intent defaults to pre-loading instead of silently
+// inheriting the deferral.
+const KB_DEPENDENT_INTENTS = [
+  "policy_question",
+  "mutative_request",
+  "fraud_signals",
+  "contradiction",
+  "out_of_scope_commercial",
+  "forwarded_injection",
+  "no_request",
+] as const;
 
 export interface BuildContextOptions {
   agentActionMode?: AgentActionMode;
@@ -131,11 +225,16 @@ export async function buildContext(
 ): Promise<AgentContext> {
   const requestedMessageWindow = options?.messageWindow ?? 50;
   const fetchedMessageWindow = Math.min(requestedMessageWindow, CONTEXT_BUDGETS.recentMessageCount);
-  const activeMerchantPreferencesPromise = loadActiveMerchantPreferences(orgId).catch((error) => {
-    logger.warn({ orgId, threadId, err: error }, "[agent:context] merchant preference load failed");
-    return [];
-  });
+  const scope = { orgId, threadId };
+  const activeMerchantPreferencesPromise = loadNonFatalContext(
+    "merchant_preferences",
+    scope,
+    [] as Awaited<ReturnType<typeof loadActiveMerchantPreferences>>,
+    () => loadActiveMerchantPreferences(orgId),
+  );
 
+  // Identity and policy. Awaited together and uncaught on purpose: every one of
+  // these decides whether the turn may act at all.
   const [thread, org, shopifyIntegration, activeMerchantPreferences] = await Promise.all([
     db.thread.findUnique({
       where: { id: threadId },
@@ -159,27 +258,51 @@ export async function buildContext(
     throw new Error("Thread not found");
   }
 
-  // Rank matching tags before the limit, so newer unrelated articles cannot
-  // displace the relevant policy. Exclude overridden memories before ranking.
-  const effectiveKbArticlesPromise = (async () => {
-    const overrides = await db.kbArticle.findMany({
-      where: { organizationId: orgId, tags: { has: MEMORY_OVERRIDE_TAG } },
-      select: { tags: true },
-    });
-    const overriddenIds = memoryOverrideTargetIds(overrides);
-    return db.$queryRaw<Array<{ title: string; body: string; tags: string[] }>>(Prisma.sql`
-      SELECT title, body, tags FROM kb_articles
-      WHERE organization_id = ${orgId}::uuid
-      ${overriddenIds.length ? Prisma.sql`AND id NOT IN (${Prisma.join(overriddenIds.map(id => Prisma.sql`${id}::uuid`))})` : Prisma.empty}
-      ORDER BY EXISTS (SELECT 1 FROM unnest(tags) AS tag WHERE lower(tag) = ${thread.tag?.toLowerCase() ?? null}) DESC,
-        updated_at DESC, id DESC
-      LIMIT 3
-    `);
-  })().then(value => ({ value }), (error: unknown) => ({ error }));
+  const classifierSignals = parseClassifierSignals(thread.classifierSignals);
+  const prefetchKb = prefetchesKnowledgeBase(
+    classifierSignals,
+    thread.requestSourceMessageId,
+    thread.messages.find((message) => message.senderType === "customer")?.id ?? null,
+  );
 
-  const openThreadCountPromise = db.thread.count({
-    where: { organizationId: orgId, customerId: thread.customerId, status: "open" },
-  });
+  // Operation evidence. Rank matching tags before the limit, so newer unrelated
+  // articles cannot displace the relevant policy. Exclude overridden memories
+  // before ranking.
+  const loadEffectiveKbArticles = () => loadNonFatalContext(
+    "kb_articles",
+    scope,
+    [] as Array<{ title: string; body: string; tags: string[] }>,
+    async () => {
+      const overrides = await db.kbArticle.findMany({
+        where: { organizationId: orgId, tags: { has: MEMORY_OVERRIDE_TAG } },
+        select: { tags: true },
+      });
+      const overriddenIds = memoryOverrideTargetIds(overrides);
+      return db.$queryRaw<Array<{ title: string; body: string; tags: string[] }>>(Prisma.sql`
+        SELECT title, body, tags FROM kb_articles
+        WHERE organization_id = ${orgId}::uuid
+        ${overriddenIds.length ? Prisma.sql`AND id NOT IN (${Prisma.join(overriddenIds.map(id => Prisma.sql`${id}::uuid`))})` : Prisma.empty}
+        ORDER BY EXISTS (SELECT 1 FROM unnest(tags) AS tag WHERE lower(tag) = ${thread.tag?.toLowerCase() ?? null}) DESC,
+          updated_at DESC, id DESC
+        LIMIT 3
+      `);
+    },
+  );
+  const effectiveKbArticlesPromise = prefetchKb
+    ? loadEffectiveKbArticles()
+    : Promise.resolve({ value: [] as Array<{ title: string; body: string; tags: string[] }>, failed: false });
+
+  // Conversational context. One open thread is the neutral answer — this one —
+  // so a failed count reads as "nothing else is open" rather than suppressing
+  // the turn over a number the prompt only mentions in passing.
+  const openThreadCountPromise = loadNonFatalContext(
+    "open_thread_count",
+    scope,
+    1,
+    () => db.thread.count({
+      where: { organizationId: orgId, customerId: thread.customerId, status: "open" },
+    }),
+  );
 
   const dbName = thread.customer.name?.includes("@") ? null : (thread.customer.name ?? null);
 
@@ -209,7 +332,7 @@ export async function buildContext(
   }
 
   const isOperator = isOperatorChannel(thread.channelType);
-  const isGatewayOperator = thread.channelType === "sms_agent";
+  const isGatewayOperator = thread.channelType === "operator";
   // The single place a conversation becomes a guest. Storefront chat is the only
   // channel whose sender is anonymous by construction: every other channel
   // carries an identity the merchant's provider already established.
@@ -315,10 +438,9 @@ export async function buildContext(
     }
   }
 
-  const openThreadCount = await openThreadCountPromise;
+  const openThreadCount = (await openThreadCountPromise).value;
 
   const kbResult = await effectiveKbArticlesPromise;
-  if ("error" in kbResult) throw kbResult.error;
   const allKbArticles = kbResult.value;
   const threadTag = thread.tag?.toLowerCase();
   const matchingKbArticles = threadTag
@@ -330,7 +452,7 @@ export async function buildContext(
     : loadedKbArticles;
   const budgetedKb = budgetKbArticles(mergedKbArticles);
   const kbArticles = budgetedKb.articles;
-  const budgetedPreferences = budgetMerchantPreferences(activeMerchantPreferences);
+  const budgetedPreferences = budgetMerchantPreferences(activeMerchantPreferences.value);
   const merchantPreferences = budgetedPreferences.preferences;
 
   const threadIo = {
@@ -351,9 +473,19 @@ export async function buildContext(
     maxCount: fetchedMessageWindow,
   });
   const contextMessages = budgetedMessages.messages;
+  const strippedMessages = (): AgentRecentMessage[] => contextMessages.map(
+    ({ senderType, contentText }) => ({ senderType, contentText }),
+  );
+  // Conversational context: an unreachable attachment costs the model the
+  // picture, never the conversation, so the text of the same messages stands.
   const recentMessages = shouldHydrateAgentMessageImages(thread.channelType)
-    ? await hydrateAgentMessageImages(orgId, contextMessages)
-    : contextMessages.map(({ senderType, contentText }) => ({ senderType, contentText }));
+    ? (await loadNonFatalContext(
+        "message_images",
+        scope,
+        strippedMessages(),
+        () => hydrateAgentMessageImages(orgId, contextMessages),
+      )).value
+    : strippedMessages();
   logger.info({
     orgId,
     threadId,
@@ -384,11 +516,11 @@ export async function buildContext(
     askOperator: (question) =>
       sink.askOperator({ question }, threadIo).then(() => {}),
     io: {
-      addInternalNote: (input) => sink.addInternalNote(input, threadIo),
-      sendReply: (input) => sink.sendReply(input, threadIo),
-      sendEmail: (input) => sink.sendEmail(input, threadIo),
-      updateThreadStatus: (input) => sink.updateThreadStatus(input, threadIo),
-      updateThreadTag: (input) => sink.updateThreadTag(input, threadIo),
+      addInternalNote: (input, execution?: AgentExecutionIdentity) => sink.addInternalNote(input, { ...threadIo, ...execution }),
+      sendReply: (input, execution?: AgentExecutionIdentity) => sink.sendReply(input, { ...threadIo, ...execution }),
+      sendEmail: (input, execution?: AgentExecutionIdentity) => sink.sendEmail(input, { ...threadIo, ...execution }),
+      updateThreadStatus: (input, execution?: AgentExecutionIdentity) => sink.updateThreadStatus(input, { ...threadIo, ...execution }),
+      updateThreadTag: (input, execution?: AgentExecutionIdentity) => sink.updateThreadTag(input, { ...threadIo, ...execution }),
     },
   };
 
@@ -416,10 +548,11 @@ export async function buildContext(
     openThreadCount,
     recentOrders,
     ...(recentOrdersFetchFailed ? { recentOrdersFetchFailed: true } : {}),
+    ...(kbResult.failed ? { kbFetchFailed: true } : {}),
     linkedShopifyCustomerName: isOperator ? shopifyCustomerName : null,
     kbArticles: kbArticles.map(a => ({ title: a.title, body: a.body })),
     merchantPreferences,
-    classifierSignals: parseClassifierSignals(thread.classifierSignals),
+    classifierSignals,
     ...(options?.operatorLedger
       ? {
           operatorLedger: truncateContextText(

@@ -3,7 +3,13 @@ import { recordManualMerchantReplyForThread } from "@shopkeeper/agent/request-ou
 import { db } from "@shopkeeper/db"
 import logger from "@/lib/server/logger"
 import { isOutboundEmailAsyncEnabled } from "@/lib/messaging/enqueue-outbound-email"
-import { createSentAgentMessage } from "./dispatch-message-common"
+import {
+  createPendingLogicalResponse,
+  createSentAgentMessage,
+  markAgentMessageSendFailed,
+  markLogicalResponseSent,
+  markPendingAgentMessageSendUnknown,
+} from "./dispatch-message-common"
 import {
   dispatchEmailViaGatewayQueue,
   sendEmailSynchronously,
@@ -118,6 +124,12 @@ export async function dispatchMessage(
     )
   }
 
+  const persistBeforeSynchronousAgentSend = source === "agent_send_reply"
+    && !(isEmailChannel && isOutboundEmailAsyncEnabled())
+  const pendingResponse = persistBeforeSynchronousAgentSend
+    ? await createPendingLogicalResponse(thread, text, attachments)
+    : null
+
   const providerResult = thread.channelType === CHANNEL_TYPE.IG_DM
     ? await dispatchInstagramDirect(thread, org, text, source)
     : thread.channelType === CHANNEL_TYPE.TIKTOK
@@ -139,15 +151,29 @@ export async function dispatchMessage(
           ? await resolveStorefrontChatDelivery(thread)
           : { ok: false as const, error: "Unsupported channel" }
 
-  if (!providerResult.ok) return providerResult
+  if (!providerResult.ok) {
+    if (!pendingResponse) return providerResult
+    if (providerResult.outcome === "unknown") {
+      await markPendingAgentMessageSendUnknown(pendingResponse.id, providerResult.error)
+    } else {
+      await markAgentMessageSendFailed(pendingResponse.id, providerResult.error)
+    }
+    return { ...providerResult, message: { ...pendingResponse, sendStatus: providerResult.outcome === "unknown" ? "unknown" : "failed" } }
+  }
 
-  const message = await createSentAgentMessage(
-    thread,
-    text,
-    providerResult.integrationId,
-    providerResult.providerMessageId,
-    attachments,
-  )
+  const message = pendingResponse
+    ? await markLogicalResponseSent(
+        pendingResponse.id,
+        providerResult.integrationId,
+        providerResult.providerMessageId,
+      )
+    : await createSentAgentMessage(
+        thread,
+        text,
+        providerResult.integrationId,
+        providerResult.providerMessageId,
+        attachments,
+      )
   const replySource = options.analyticsReplySource
     ?? (source === "agent_send_reply" ? "agent_approved" : "manual")
   if (replySource === "manual" && source !== "auto_ack") {

@@ -153,7 +153,7 @@ async function deleteSelectedCustomerData(
       .filter((value): value is string => value !== null)
       .map(value => value.toLowerCase()),
   );
-  const [actionCandidates, reservationCandidates, contextCandidates] =
+  const [actionCandidates, reservationCandidates, contextCandidates, taskCandidates] =
     await Promise.all([
       db.agentAction.findMany({
         where: { organizationId },
@@ -172,6 +172,16 @@ async function deleteSelectedCustomerData(
       db.operatorContext.findMany({
         where: { organizationId },
         select: { id: true, pendingPlans: true, pendingDigest: true, pendingQuestion: true },
+      }),
+      db.agentTask.findMany({
+        where: { organizationId },
+        select: {
+          id: true, threadId: true, checkpoint: true,
+          actions: { select: { id: true } },
+          requests: { select: { payload: true } },
+          proposals: { select: { canonicalActions: true, communicationDestination: true } },
+          messages: { select: { attachments: true } },
+        },
       }),
     ]);
   const actionIds = actionCandidates
@@ -200,13 +210,32 @@ async function deleteSelectedCustomerData(
       || containsExactIdentifier(context.pendingQuestion, identifiers)
     ))
     .map(context => context.id);
+  const relatedTasks = taskCandidates.filter(task =>
+    selection.threadIds.includes(task.threadId)
+    || task.actions.some(action => actionIds.includes(action.id))
+    || containsExactIdentifier(task.checkpoint, identifiers)
+    || containsExactIdentifier(task.requests, identifiers)
+    || containsExactIdentifier(task.proposals, identifiers));
+  const taskIds = relatedTasks.map(task => task.id);
 
   // Blob deletion happens first. If it fails, the webhook returns 500 and
   // Shopify retries without leaving detached personal data in object storage.
-  await deleteOrgAttachments(selection.attachmentRefs);
+  await deleteOrgAttachments([...new Set([
+    ...selection.attachmentRefs,
+    ...relatedTasks.flatMap(task => task.messages.flatMap(message => message.attachments)),
+  ])]);
 
   await db.$transaction(async (tx) => {
     const threadWhere = { organizationId, threadId: { in: selection.threadIds } };
+    // Explicit customer erasure removes this class of action evidence under
+    // the same policy as the existing action/reservation deletion below.
+    await tx.message.deleteMany({ where: { organizationId, agentTaskId: { in: taskIds } } });
+    await tx.agentAction.deleteMany({ where: { organizationId, taskId: { in: taskIds } } });
+    await tx.planExecution.deleteMany({ where: { organizationId, taskId: { in: taskIds } } });
+    await tx.agentRequest.deleteMany({ where: { organizationId, OR: [
+      { threadId: { in: selection.threadIds } }, { taskId: { in: taskIds } },
+    ] } });
+    await tx.agentTask.deleteMany({ where: { organizationId, id: { in: taskIds } } });
     const watchWhere = {
       organizationId,
       OR: [

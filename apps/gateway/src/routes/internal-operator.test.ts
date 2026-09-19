@@ -13,9 +13,10 @@ import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { hashInstruction, hashPlan } from '@shopkeeper/agent/agent-actions';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 
-const { sendMessageSpy, executeAgentTurnSpy } = vi.hoisted(() => ({
+const { sendMessageSpy, executeAgentTurnSpy, ensureAgentTaskEnqueuedSpy } = vi.hoisted(() => ({
   sendMessageSpy: vi.fn().mockResolvedValue(true),
   executeAgentTurnSpy: vi.fn(),
+  ensureAgentTaskEnqueuedSpy: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../clients/telegram-client.js', () => ({
@@ -28,6 +29,10 @@ vi.mock('../clients/telegram-client.js', () => ({
 // and module tools all run against the real database.
 vi.mock('@shopkeeper/agent/turn', () => ({
   executeAgentTurn: executeAgentTurnSpy,
+}));
+
+vi.mock('../agent-task-ingest.js', () => ({
+  ensureAgentTaskEnqueued: ensureAgentTaskEnqueuedSpy,
 }));
 
 vi.mock('ioredis', () => ({
@@ -123,11 +128,102 @@ beforeEach(async () => {
   process.env.DASHBOARD_URL = 'http://dashboard.test';
   sendMessageSpy.mockClear();
   executeAgentTurnSpy.mockReset();
+  ensureAgentTaskEnqueuedSpy.mockClear();
   executeAgentTurnSpy.mockResolvedValue({
     summary: 'Nothing urgent.',
     actionsPerformed: [],
   });
   org = await createTestOrg();
+});
+
+describe('durable dashboard agent requests', () => {
+  const requestId = '11111111-1111-4111-8111-111111111111';
+
+  it('persists before 202 and reconnects duplicate submissions to one task', async () => {
+    const body = {
+      organizationId: org.id,
+      clerkUserId: 'usr_desk',
+      clientRequestId: requestId,
+      instruction: 'check order 1001',
+    };
+    const first = await request(app)
+      .post('/internal/operator/requests')
+      .set('x-internal-secret', SECRET)
+      .send(body);
+    const second = await request(app)
+      .post('/internal/operator/requests')
+      .set('x-internal-secret', SECRET)
+      .send(body);
+
+    expect(first.status).toBe(202);
+    expect(second.status).toBe(202);
+    expect(second.body).toMatchObject({
+      requestId: first.body.requestId,
+      taskId: first.body.taskId,
+      status: 'queued',
+      deduplicated: true,
+    });
+    expect(await db.agentRequest.count({ where: { organizationId: org.id } })).toBe(1);
+    expect(await db.agentTask.count({ where: { organizationId: org.id } })).toBe(1);
+    expect(ensureAgentTaskEnqueuedSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns 409 when one client identity is reused for changed work', async () => {
+    const base = { organizationId: org.id, clerkUserId: 'usr_desk', clientRequestId: requestId };
+    await request(app).post('/internal/operator/requests').set('x-internal-secret', SECRET)
+      .send({ ...base, instruction: 'check order 1001' });
+    const conflict = await request(app).post('/internal/operator/requests').set('x-internal-secret', SECRET)
+      .send({ ...base, instruction: 'refund order 1001' });
+    expect(conflict.status).toBe(409);
+    expect(await db.agentRequest.count({ where: { organizationId: org.id } })).toBe(1);
+  });
+
+  it('records a merchant stop against the exact task revision', async () => {
+    const submitted = await request(app).post('/internal/operator/requests').set('x-internal-secret', SECRET)
+      .send({ organizationId: org.id, clerkUserId: 'usr_desk', clientRequestId: requestId, instruction: 'check order 1001' });
+
+    const stale = await request(app)
+      .post(`/internal/operator/requests/${submitted.body.requestId}/cancel`)
+      .set('x-internal-secret', SECRET)
+      .send({ organizationId: org.id, clerkUserId: 'usr_desk', taskRevision: 7 });
+    expect(stale.status).toBe(409);
+    expect((await db.agentTask.findUniqueOrThrow({ where: { id: submitted.body.taskId } })).cancelledAt).toBeNull();
+
+    const stopped = await request(app)
+      .post(`/internal/operator/requests/${submitted.body.requestId}/cancel`)
+      .set('x-internal-secret', SECRET)
+      .send({ organizationId: org.id, clerkUserId: 'usr_desk', taskRevision: submitted.body.taskRevision });
+    expect(stopped.status).toBe(200);
+    expect(stopped.body).toMatchObject({ requestId: submitted.body.requestId, status: 'cancelled' });
+    expect((await db.agentTask.findUniqueOrThrow({ where: { id: submitted.body.taskId } })).cancelledAt)
+      .not.toBeNull();
+  });
+
+  it('retrieves durable response and delivery state after the submit connection is gone', async () => {
+    const submitted = await request(app).post('/internal/operator/requests').set('x-internal-secret', SECRET)
+      .send({ organizationId: org.id, clerkUserId: 'usr_desk', clientRequestId: requestId, instruction: 'check order 1001' });
+    await db.agentTask.update({
+      where: { id: submitted.body.taskId },
+      data: { status: 'completed', completedAt: new Date() },
+    });
+    const task = await db.agentTask.findUniqueOrThrow({ where: { id: submitted.body.taskId } });
+    await db.message.create({ data: {
+      organizationId: org.id, threadId: task.threadId, senderType: SenderType.agent,
+      contentText: 'Order 1001 is in transit.', agentRequestId: submitted.body.requestId,
+      agentTaskId: task.id,
+    } });
+
+    const status = await request(app)
+      .get(`/internal/operator/requests/${submitted.body.requestId}`)
+      .query({ organizationId: org.id, clerkUserId: 'usr_desk' })
+      .set('x-internal-secret', SECRET);
+    expect(status.status).toBe(200);
+    expect(status.body).toMatchObject({
+      status: 'completed',
+      response: { summary: 'Order 1001 is in transit.' },
+      delivery: { status: 'available' },
+    });
+  });
 });
 
 afterEach(async () => {
@@ -330,7 +426,7 @@ describe('POST /internal/operator/turn', () => {
     const thread = await db.thread.findFirstOrThrow({
       where: { organizationId: org.id, operatorKey: `member:${member.id}` },
     });
-    expect(thread.channelType).toBe('sms_agent');
+    expect(thread.channelType).toBe('operator');
     expect(res.body).toEqual({
       threadId: thread.id,
       summary: 'Nothing urgent.',
@@ -352,6 +448,7 @@ describe('POST /internal/operator/turn', () => {
       'end_flash_sale',
       'get_ticket',
       'list_active_tickets',
+      'list_flash_sales',
       'list_recent_changes',
       'mark_ticket_spam',
       'navigate_dashboard',

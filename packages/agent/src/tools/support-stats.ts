@@ -13,7 +13,7 @@ export {
 function inboxThreadSql(orgId: string) {
   return Prisma.sql`
     t.organization_id = ${orgId}::uuid
-    AND t.channel_type NOT IN ('sms_agent', 'dashboard_agent')
+    AND t.channel_type NOT IN ('operator', 'dashboard_agent')
     AND t.archived_at IS NULL
     AND t.deleted_at IS NULL
     AND t.filter_status <> 'filtered'

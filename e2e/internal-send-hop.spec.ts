@@ -116,7 +116,7 @@ test('gateway ThreadSink crosses the internal dashboard hop and commits send_rep
   expect(messages).toHaveLength(1);
   expect(messages[0]).toMatchObject({
     organizationId: org.id,
-    sendStatus: null,
+    sendStatus: 'sent',
   });
   expect(messages[0]?.id).toBeTruthy();
   expect(messages[0]?.integrationId).toBeTruthy();

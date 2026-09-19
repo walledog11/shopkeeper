@@ -47,7 +47,7 @@ export async function resolveOperatorThread(
       data: {
         organizationId: orgId,
         customerId: customer.id,
-        channelType: "sms_agent",
+        channelType: "operator",
         status: "open",
         operatorKey,
       },

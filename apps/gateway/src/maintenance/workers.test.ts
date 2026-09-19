@@ -97,9 +97,9 @@ describe('createMaintenanceWorkers', () => {
 
     const resources = await createMaintenanceWorkers(workerConn, producerConn, workerOptions);
 
-    expect(maintenanceJobRegistrations).toHaveLength(15);
-    expect(resources.workers).toHaveLength(16);
-    expect(resources.queues).toHaveLength(28);
+    expect(maintenanceJobRegistrations).toHaveLength(16);
+    expect(resources.workers).toHaveLength(17);
+    expect(resources.queues).toHaveLength(29);
     expect(queueInstances.map((queue) => queue.name)).toEqual([
       "inbound-processing-recovery", QUEUE.AI_SUMMARY,
       QUEUE.TOKEN_HEALTH,
@@ -119,6 +119,7 @@ describe('createMaintenanceWorkers', () => {
       QUEUE.RETURN_LIFECYCLE,
       QUEUE.OUTBOUND_SEND_SWEEP,
       QUEUE.OPERATOR_EVENT_SWEEP,
+      QUEUE.AGENT_TASK_SWEEP,
       QUEUE.UNKNOWN_OUTCOME_SWEEP,
       QUEUE.QUEUE_HEALTH,
       QUEUE.INBOUND,
@@ -144,6 +145,7 @@ describe('createMaintenanceWorkers', () => {
       QUEUE.RETURN_LIFECYCLE,
       QUEUE.OUTBOUND_SEND_SWEEP,
       QUEUE.OPERATOR_EVENT_SWEEP,
+      QUEUE.AGENT_TASK_SWEEP,
       QUEUE.UNKNOWN_OUTCOME_SWEEP,
       QUEUE.QUEUE_HEALTH,
     ]);
@@ -241,6 +243,11 @@ describe('createMaintenanceWorkers', () => {
       jobId: JOB.OPERATOR_EVENT_SWEEP_ID,
       every: FIFTEEN_MINUTES_MS,
     });
+    expect(readRepeatJob(QUEUE.AGENT_TASK_SWEEP)).toEqual({
+      name: JOB.AGENT_TASK_SWEEP,
+      jobId: JOB.AGENT_TASK_SWEEP_ID,
+      every: ONE_MINUTE_MS,
+    });
     expect(readRepeatJob(QUEUE.UNKNOWN_OUTCOME_SWEEP)).toEqual({
       name: JOB.UNKNOWN_OUTCOME_SWEEP,
       jobId: JOB.UNKNOWN_OUTCOME_SWEEP_ID,
@@ -263,7 +270,7 @@ describe('createMaintenanceWorkers', () => {
     );
 
     const repeatableAdds = queueInstances.flatMap((queue) => queue.add.mock.calls);
-    expect(repeatableAdds).toHaveLength(16);
+    expect(repeatableAdds).toHaveLength(17);
 
     for (const addCall of repeatableAdds) {
       expect(addCall[2]).toEqual(expect.objectContaining(PROCESSING_QUEUE_DEFAULTS));

@@ -9,6 +9,10 @@ import {
 } from '@shopkeeper/db/test-helpers';
 import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
+import {
+  ANY_MEMBER_ACTOR_KEY, acceptCustomerAgentRequest, claimAgentTask, settleAgentTaskClaim,
+} from '@shopkeeper/agent/task-ledger';
+import { randomUUID } from 'node:crypto';
 
 const { planAgentSpy, sendOperatorPlanNotificationSpy } = vi.hoisted(() => ({
   planAgentSpy: vi.fn(),
@@ -34,6 +38,9 @@ let org!: Awaited<ReturnType<typeof createTestOrg>>;
 // Operator state is keyed to the person, so every transport in these cases writes
 // and reads this one queue.
 const MEMBER_KEY = 'member:00000000-0000-4000-8000-0000000000aa';
+// No OrgMember row backs it in these cases, so the durable continuation finds
+// no actor and the re-plan runs untracked — which is what they already asserted.
+const CLERK_USER_ID = 'user_operator_answer_replan';
 
 beforeEach(async () => {
   org = await createTestOrg();
@@ -82,6 +89,7 @@ describe('applyOperatorAnswerReplan', () => {
     const message = await applyOperatorAnswerReplan({
       organizationId: org.id,
       memberKey: MEMBER_KEY,
+      clerkUserId: CLERK_USER_ID,
       threadId: thread.id,
       answer: 'Yes, $15 flat to Canada.',
       deliveryRef: 'telegram:chat_1',
@@ -158,6 +166,7 @@ describe('applyOperatorAnswerReplan', () => {
     const message = await applyOperatorAnswerReplan({
       organizationId: org.id,
       memberKey: MEMBER_KEY,
+      clerkUserId: CLERK_USER_ID,
       threadId: thread.id,
       answer: 'Yes, $15 flat to Canada.',
       deliveryRef: 'imessage:chat_2',
@@ -195,6 +204,163 @@ describe('applyOperatorAnswerReplan', () => {
     );
   });
 
+  describe('durable continuation', () => {
+    const budget = {
+      runtimeVersion: 1, modelCallLimit: 20, activeTimeMsLimit: 300000,
+      spendNanoUsdLimit: 1000000000n,
+    };
+
+    // A support conversation waiting on the merchant, the way the inbound
+    // planning job leaves one: the customer's message is an accepted request on
+    // a task parked with a question any bound member may answer.
+    async function seedWaitingSupportTask(options: { pending: boolean }) {
+      const member = await db.orgMember.create({
+        data: { organizationId: org.id, clerkUserId: randomUUID() },
+      });
+      const customer = await createTestCustomer(org.id, 'cust@example.com', { name: 'Jane Doe' });
+      const thread = await createTestThread(org.id, customer.id, 'email', { tag: 'Support' });
+      const custMsg = await createTestMessage(thread.id, 'Can I get a refund?', SenderType.customer);
+      if (!options.pending) {
+        await createTestMessage(thread.id, 'Looking into it!', SenderType.agent);
+      }
+      await db.thread.update({
+        where: { id: thread.id },
+        data: {
+          cachedPlanMessageId: custMsg.id,
+          aiSummary: 'Refund request',
+          requestSummary: 'Refund request',
+        },
+      });
+      const { request, task } = await acceptCustomerAgentRequest({
+        organizationId: org.id, threadId: thread.id, sourceMessageId: custMsg.id,
+        objective: 'Refund request', budget,
+      });
+      const claim = await claimAgentTask({
+        organizationId: org.id, taskId: task.id, expectedRevision: task.revision,
+      });
+      await settleAgentTaskClaim({
+        organizationId: org.id, taskId: task.id, expectedRevision: task.revision,
+        claimToken: claim!.claimToken, requestId: request.id,
+        settlement: {
+          status: 'waiting_input', question: 'Is this one within policy?',
+          answerer: { kind: 'member', key: ANY_MEMBER_ACTOR_KEY },
+        },
+      });
+      return { member, thread, custMsg, taskId: task.id };
+    }
+
+    function refundPlan() {
+      return {
+        instruction: 'Refund request',
+        steps: [
+          {
+            id: 'refund_1', tool: 'create_refund', label: 'Refund',
+            description: 'Issue the refund', category: 'action', enabled: true,
+          },
+          {
+            id: 'send_1', tool: 'send_reply', label: 'Reply',
+            description: 'Tell the customer', category: 'communication', enabled: true,
+          },
+        ],
+        rawToolCalls: [
+          { id: 'refund_1', name: 'create_refund', input: { order_id: 'gid://shopify/Order/1', amount: '10.00', currency: 'USD' } },
+          { id: 'send_1', name: 'send_reply', input: { text: "You're all set." } },
+        ],
+        routingEvidence: { classifierState: 'not_applicable', codes: [] },
+        validation: { status: 'valid', issues: [] },
+        warnings: [],
+      };
+    }
+
+    it('ends the wait its answer was asked under and records the re-drafted card as a proposal', async () => {
+      const { member, thread, taskId } = await seedWaitingSupportTask({ pending: true });
+      planAgentSpy.mockResolvedValue(refundPlan());
+
+      await applyOperatorAnswerReplan({
+        organizationId: org.id,
+        memberKey: `member:${member.id}`,
+        clerkUserId: member.clerkUserId,
+        threadId: thread.id,
+        answer: 'Yes, refund it.',
+        deliveryRef: 'telegram:chat_9',
+      });
+
+      const settled = await db.agentTask.findUniqueOrThrow({ where: { id: taskId } });
+      expect(settled).toMatchObject({
+        status: 'waiting_approval', claimToken: null,
+        pendingQuestion: null, pendingAnswererKey: null,
+      });
+      // The card the merchant now holds is the proposal the task waits on, and
+      // it is theirs to approve rather than the customer's.
+      const cached = await db.thread.findUniqueOrThrow({
+        where: { id: thread.id }, select: { cachedPlan: true },
+      });
+      const planId = (cached.cachedPlan as { planId?: string } | null)?.planId;
+      expect(settled.activeProposalId).toBe(planId);
+      expect(await db.agentProposal.findUniqueOrThrow({ where: { id: settled.activeProposalId! } }))
+        .toMatchObject({ taskId, status: 'ready', approverScopeKey: ANY_MEMBER_ACTOR_KEY });
+    });
+
+    it('closes the task when the ticket was already handled', async () => {
+      const { member, thread, taskId } = await seedWaitingSupportTask({ pending: false });
+
+      await applyOperatorAnswerReplan({
+        organizationId: org.id,
+        memberKey: `member:${member.id}`,
+        clerkUserId: member.clerkUserId,
+        threadId: thread.id,
+        answer: 'Yes, refund it.',
+      });
+
+      expect(planAgentSpy).not.toHaveBeenCalled();
+      expect(await db.agentTask.findUniqueOrThrow({ where: { id: taskId } })).toMatchObject({
+        status: 'completed', claimToken: null, pendingQuestion: null,
+      });
+    });
+
+    it('fails the task rather than leaving it claimed when the re-plan produces nothing', async () => {
+      const { member, thread, taskId } = await seedWaitingSupportTask({ pending: true });
+      planAgentSpy.mockRejectedValue(new Error('boom'));
+
+      const message = await applyOperatorAnswerReplan({
+        organizationId: org.id,
+        memberKey: `member:${member.id}`,
+        clerkUserId: member.clerkUserId,
+        threadId: thread.id,
+        answer: 'Yes, refund it.',
+      });
+
+      expect(message).toContain("couldn't draft the reply");
+      expect(await db.agentTask.findUniqueOrThrow({ where: { id: taskId } })).toMatchObject({
+        status: 'failed', failureCode: 'answer_replan_failed', claimToken: null,
+      });
+    });
+
+    it('leaves an unrelated member\'s conversation alone', async () => {
+      const { thread, taskId } = await seedWaitingSupportTask({ pending: true });
+      const outsiderOrg = await createTestOrg();
+      const outsider = await db.orgMember.create({
+        data: { organizationId: outsiderOrg.id, clerkUserId: randomUUID() },
+      });
+      planAgentSpy.mockResolvedValue(refundPlan());
+
+      // The answer still re-plans; what it cannot do is end this task's wait.
+      await applyOperatorAnswerReplan({
+        organizationId: org.id,
+        memberKey: MEMBER_KEY,
+        clerkUserId: outsider.clerkUserId,
+        threadId: thread.id,
+        answer: 'Yes, refund it.',
+      });
+
+      expect(planAgentSpy).toHaveBeenCalledTimes(1);
+      expect(await db.agentTask.findUniqueOrThrow({ where: { id: taskId } })).toMatchObject({
+        status: 'waiting_input', pendingQuestion: 'Is this one within policy?',
+      });
+      await cleanupTestData(outsiderOrg.id);
+    });
+  });
+
   it('does nothing destructive and returns an apologetic string when re-plan throws', async () => {
     const customer = await createTestCustomer(org.id, 'cust@example.com', { name: 'Jane Doe' });
     const thread = await createTestThread(org.id, customer.id, 'email', { tag: 'Support' });
@@ -210,6 +376,7 @@ describe('applyOperatorAnswerReplan', () => {
     const message = await applyOperatorAnswerReplan({
       organizationId: org.id,
       memberKey: MEMBER_KEY,
+      clerkUserId: CLERK_USER_ID,
       threadId: thread.id,
       answer: 'Yes, $15 flat.',
       deliveryRef: 'telegram:chat_3',

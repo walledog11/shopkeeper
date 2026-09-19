@@ -78,7 +78,7 @@ async function loadLegacyOpenReturnCandidates(organizationId: string): Promise<O
   for (const action of actions) {
     const orderId = readOrderId(action.input);
     const tool = toolFromAction(action.tool);
-    if (!orderId || !tool || seen.has(orderId)) continue;
+    if (!orderId || !tool || !action.executedAt || seen.has(orderId)) continue;
     seen.add(orderId);
     candidates.push({
       organizationId,

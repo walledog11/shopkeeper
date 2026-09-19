@@ -11,12 +11,14 @@ import {
 } from "./execution-ledger.js";
 import {
   reconcileStaleReservedRefundSpendReservations,
+  reconcileStaleAgentActionDispatches,
   reconcileUnknownAgentAction,
   runUnknownOutcomeReconciliation,
   STALE_CLAIMED_EXECUTION_ERROR,
   STALE_RESERVED_SPEND_ERROR,
+  STALE_ACTION_DISPATCH_ERROR,
 } from "./unknown-outcome-reconciliation.js";
-import { shopifyOperationTag } from "./shopify/client.js";
+import { shopifyIdempotencyKey, shopifyOperationTag } from "./shopify/client.js";
 
 const ELEVEN_MINUTES_AGO = () => new Date(Date.now() - 11 * 60 * 1000);
 
@@ -53,6 +55,560 @@ describe("unknown outcome reconciliation", () => {
     const updated = await db.planExecution.findUniqueOrThrow({ where: { id: execution.id } });
     expect(updated.status).toBe("unknown");
     expect(updated.lastError).toBe(STALE_CLAIMED_EXECUTION_ERROR);
+  });
+
+  it("turns stale authorized and submitted dispatches into unknown without touching prepared work", async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
+    const base = {
+      turnId: crypto.randomUUID(),
+      organizationId: org.id,
+      tool: "cancel_order",
+      category: "action",
+      input: { order_id: "1" },
+      output: "Execution started; completion has not been recorded.",
+      status: "unknown",
+      errorDetail: "Execution started; completion has not been recorded.",
+      mode: "human_approved",
+      actionIndex: 0,
+      executedAt: null,
+      durationMs: null,
+      createdAt: ELEVEN_MINUTES_AGO(),
+    } as const;
+    const prepared = await db.agentAction.create({
+      data: { ...base, operationId: crypto.randomUUID(), dispatchState: "prepared" },
+    });
+    const authorized = await db.agentAction.create({
+      data: {
+        ...base,
+        id: undefined,
+        operationId: crypto.randomUUID(),
+        actionIndex: 1,
+        dispatchState: "dispatch_authorized",
+      },
+    });
+    const submitted = await db.agentAction.create({
+      data: {
+        ...base,
+        id: undefined,
+        operationId: crypto.randomUUID(),
+        actionIndex: 2,
+        dispatchState: "submitted",
+        submittedAt: ELEVEN_MINUTES_AGO(),
+      },
+    });
+
+    await expect(reconcileStaleAgentActionDispatches(
+      new Date(Date.now() - 10 * 60 * 1000),
+      STALE_ACTION_DISPATCH_ERROR,
+    )).resolves.toBe(2);
+
+    await expect(db.agentAction.findUniqueOrThrow({ where: { id: prepared.id } }))
+      .resolves.toMatchObject({ dispatchState: "prepared", executedAt: null });
+    for (const id of [authorized.id, submitted.id]) {
+      const row = await db.agentAction.findUniqueOrThrow({ where: { id } });
+      expect(row).toMatchObject({
+        dispatchState: "unknown",
+        status: "unknown",
+        errorDetail: STALE_ACTION_DISPATCH_ERROR,
+        durationMs: 0,
+      });
+      expect(row.executedAt).toBeInstanceOf(Date);
+    }
+  });
+
+  it("probes a stale standalone dispatch from storage without replaying the write", async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
+    const providerOperationKey = `${crypto.randomUUID()}:tool_call_create_order`;
+    const operationId = crypto.randomUUID();
+    const action = await db.agentAction.create({
+      data: {
+        turnId: crypto.randomUUID(),
+        organizationId: org.id,
+        operationId,
+        actionIndex: 0,
+        providerOperationKey,
+        dispatchState: "dispatch_authorized",
+        createdAt: ELEVEN_MINUTES_AGO(),
+        tool: "create_shopify_order",
+        category: "action",
+        input: {
+          email: "buyer@example.com",
+          first_name: "Test",
+          last_name: "Buyer",
+          address1: "1 Main St",
+          city: "San Francisco",
+          province: "CA",
+          zip: "94105",
+          country: "US",
+          line_items: [{ variant_id: "1", quantity: 1 }],
+        },
+        output: "Execution started; completion has not been recorded.",
+        status: "unknown",
+        errorDetail: "Execution started; completion has not been recorded.",
+        mode: "human_approved",
+        executedAt: null,
+        durationMs: null,
+      },
+    });
+    const providerRead = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      orders: [{ id: 123, name: "#1001", tags: shopifyOperationTag(providerOperationKey) }],
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", providerRead);
+
+    const result = await runUnknownOutcomeReconciliation({
+      staleBefore: new Date(Date.now() - 10 * 60 * 1000),
+      loadShopifyContext: async () => ({ shop: "test.myshopify.com", accessToken: "test" }),
+    });
+
+    expect(result.staleActionDispatches).toBe(1);
+    expect(result.stillUnknownStandaloneActions).toBe(1);
+    expect(providerRead).toHaveBeenCalledOnce();
+    await expect(db.agentAction.findUniqueOrThrow({ where: { id: action.id } }))
+      .resolves.toMatchObject({
+        operationId,
+        providerOperationKey,
+        dispatchState: "unknown",
+        status: "unknown",
+      });
+  });
+
+  it.each([
+    ["create_return", { order_id: "456" }],
+    ["create_exchange", {
+      order_id: "456",
+      variant_id: "999",
+      exchange_variant_id: "1000",
+      quantity: 1,
+    }],
+    ["fulfill_order", { order_id: "456" }],
+  ] as const)("keeps a reconciled %s commit unknown when the probe cannot rebuild its receipt facts", async (tool, input) => {
+    const org = await createTestOrg();
+    orgId = org.id;
+    const operationId = crypto.randomUUID();
+    const action = await db.agentAction.create({
+      data: {
+        turnId: crypto.randomUUID(),
+        organizationId: org.id,
+        operationId,
+        actionIndex: 0,
+        providerOperationKey: operationId,
+        dispatchState: "unknown",
+        submittedAt: ELEVEN_MINUTES_AGO(),
+        tool,
+        category: "action",
+        input,
+        output: "Unknown provider result",
+        status: "unknown",
+        errorDetail: "Unknown provider result",
+        mode: "human_approved",
+        executedAt: ELEVEN_MINUTES_AGO(),
+        durationMs: 1,
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        data: {
+          order: { id: "gid://shopify/Order/456" },
+          returnableFulfillments: { edges: [] },
+        },
+      }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        data: {
+          order: {
+            returns: {
+              edges: [{
+                node: {
+                  id: "gid://shopify/Return/999",
+                  name: "#1001-R1",
+                  status: "OPEN",
+                  reverseFulfillmentOrders: { edges: [] },
+                },
+              }],
+            },
+          },
+        },
+      }), { status: 200, headers: { "Content-Type": "application/json" } })));
+
+    const outcome = await reconcileUnknownAgentAction({
+      actionId: action.id,
+      organizationId: org.id,
+      executionId: null,
+      providerOperationKey: operationId,
+      tool: action.tool,
+      input: action.input,
+      shopify: { shop: "test.myshopify.com", accessToken: "test" },
+    });
+
+    expect(outcome).toBe("still_unknown");
+    await expect(db.agentAction.findUniqueOrThrow({ where: { id: action.id } }))
+      .resolves.toMatchObject({
+        operationId,
+        providerOperationKey: operationId,
+        dispatchState: "unknown",
+        status: "unknown",
+        receiptVersion: null,
+        receipt: null,
+      });
+  });
+
+  it("keeps a reconciled order-edit commit unknown when the probe cannot rebuild its receipt facts", async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
+    const operationId = crypto.randomUUID();
+    const action = await db.agentAction.create({
+      data: {
+        turnId: crypto.randomUUID(),
+        organizationId: org.id,
+        operationId,
+        actionIndex: 0,
+        providerOperationKey: operationId,
+        dispatchState: "unknown",
+        submittedAt: ELEVEN_MINUTES_AGO(),
+        tool: "edit_shopify_order",
+        category: "action",
+        input: { order_id: "456", remove_variant_id: "123" },
+        output: "Unknown provider result",
+        status: "unknown",
+        errorDetail: "Unknown provider result",
+        mode: "human_approved",
+        executedAt: ELEVEN_MINUTES_AGO(),
+        durationMs: 1,
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      order: { id: 456, name: "#1001", line_items: [] },
+    }), { status: 200, headers: { "Content-Type": "application/json" } })));
+
+    const outcome = await reconcileUnknownAgentAction({
+      actionId: action.id,
+      organizationId: org.id,
+      executionId: null,
+      providerOperationKey: operationId,
+      tool: action.tool,
+      input: action.input,
+      shopify: { shop: "test.myshopify.com", accessToken: "test" },
+    });
+
+    expect(outcome).toBe("still_unknown");
+    await expect(db.agentAction.findUniqueOrThrow({ where: { id: action.id } }))
+      .resolves.toMatchObject({
+        operationId,
+        providerOperationKey: operationId,
+        dispatchState: "unknown",
+        status: "unknown",
+        receiptVersion: null,
+        receipt: null,
+      });
+  });
+
+  it("keeps a reconciled return-label commit unknown when the probe cannot rebuild its receipt facts", async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
+    const operationId = crypto.randomUUID();
+    const action = await db.agentAction.create({
+      data: {
+        turnId: crypto.randomUUID(),
+        organizationId: org.id,
+        operationId,
+        actionIndex: 0,
+        providerOperationKey: operationId,
+        dispatchState: "unknown",
+        submittedAt: ELEVEN_MINUTES_AGO(),
+        tool: "attach_return_label",
+        category: "action",
+        input: {
+          order_id: "456",
+          label_url: "https://labels.example.com/rma-456.pdf",
+          tracking_number: "1Z999",
+        },
+        output: "Unknown provider result",
+        status: "unknown",
+        errorDetail: "Unknown provider result",
+        mode: "human_approved",
+        executedAt: ELEVEN_MINUTES_AGO(),
+        durationMs: 1,
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({
+      data: {
+        order: {
+          returns: {
+            edges: [{
+              node: {
+                id: "gid://shopify/Return/999",
+                name: "#1001-R1",
+                status: "OPEN",
+                reverseFulfillmentOrders: {
+                  edges: [{
+                    node: {
+                      reverseDeliveries: {
+                        edges: [{ node: { deliverable: { tracking: { number: "1Z999" } } } }],
+                      },
+                    },
+                  }],
+                },
+              },
+            }],
+          },
+        },
+      },
+    }), { status: 200, headers: { "Content-Type": "application/json" } })));
+
+    const outcome = await reconcileUnknownAgentAction({
+      actionId: action.id,
+      organizationId: org.id,
+      executionId: null,
+      providerOperationKey: operationId,
+      tool: action.tool,
+      input: action.input,
+      shopify: { shop: "test.myshopify.com", accessToken: "test" },
+    });
+
+    expect(outcome).toBe("still_unknown");
+    await expect(db.agentAction.findUniqueOrThrow({ where: { id: action.id } }))
+      .resolves.toMatchObject({
+        operationId,
+        providerOperationKey: operationId,
+        dispatchState: "unknown",
+        status: "unknown",
+        receiptVersion: null,
+        receipt: null,
+      });
+  });
+
+  // The probe reads only the order's shipping address, so it can prove the
+  // order half committed but knows nothing about the customer default address
+  // the receipt also requires. Promoting it would claim a compound outcome from
+  // half the evidence.
+  it("keeps a reconciled order-address commit unknown when the probe cannot rebuild its receipt facts", async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
+    const operationId = crypto.randomUUID();
+    const action = await db.agentAction.create({
+      data: {
+        turnId: crypto.randomUUID(),
+        organizationId: org.id,
+        operationId,
+        actionIndex: 0,
+        providerOperationKey: operationId,
+        dispatchState: "unknown",
+        submittedAt: ELEVEN_MINUTES_AGO(),
+        tool: "update_shopify_order_address",
+        category: "action",
+        input: {
+          order_id: "456",
+          customer_id: "123",
+          address1: "123 Main St",
+          city: "Los Angeles",
+          province: "CA",
+          zip: "90001",
+          country: "United States",
+        },
+        output: "Unknown provider result",
+        status: "unknown",
+        errorDetail: "Unknown provider result",
+        mode: "human_approved",
+        executedAt: ELEVEN_MINUTES_AGO(),
+        durationMs: 1,
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({
+      order: {
+        id: 456,
+        name: "#1001",
+        shipping_address: {
+          address1: "123 Main St",
+          city: "Los Angeles",
+          province: "California",
+          province_code: "CA",
+          zip: "90001",
+          country: "United States",
+          country_code: "US",
+        },
+      },
+    }), { status: 200, headers: { "Content-Type": "application/json" } })));
+
+    const outcome = await reconcileUnknownAgentAction({
+      actionId: action.id,
+      organizationId: org.id,
+      executionId: null,
+      providerOperationKey: operationId,
+      tool: action.tool,
+      input: action.input,
+      shopify: { shop: "test.myshopify.com", accessToken: "test" },
+    });
+
+    expect(outcome).toBe("still_unknown");
+    await expect(db.agentAction.findUniqueOrThrow({ where: { id: action.id } }))
+      .resolves.toMatchObject({
+        operationId,
+        providerOperationKey: operationId,
+        dispatchState: "unknown",
+        status: "unknown",
+        receiptVersion: null,
+        receipt: null,
+      });
+  });
+
+  it("keeps a reconciled customer-info commit unknown when the probe cannot rebuild its receipt", async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
+    const operationId = crypto.randomUUID();
+    const action = await db.agentAction.create({
+      data: {
+        turnId: crypto.randomUUID(),
+        organizationId: org.id,
+        operationId,
+        actionIndex: 0,
+        providerOperationKey: operationId,
+        dispatchState: "unknown",
+        submittedAt: ELEVEN_MINUTES_AGO(),
+        tool: "update_shopify_customer_info",
+        category: "action",
+        input: { customer_id: "123", first_name: "Jane", email: "jane@example.com" },
+        output: "Unknown provider result",
+        status: "unknown",
+        errorDetail: "Unknown provider result",
+        mode: "human_approved",
+        executedAt: ELEVEN_MINUTES_AGO(),
+        durationMs: 1,
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      customer: { id: 123, first_name: "Jane", email: "jane@example.com" },
+    }), { status: 200, headers: { "Content-Type": "application/json" } })));
+
+    const outcome = await reconcileUnknownAgentAction({
+      actionId: action.id,
+      organizationId: org.id,
+      executionId: null,
+      providerOperationKey: operationId,
+      tool: action.tool,
+      input: action.input,
+      shopify: { shop: "test.myshopify.com", accessToken: "test" },
+    });
+
+    expect(outcome).toBe("still_unknown");
+    await expect(db.agentAction.findUniqueOrThrow({ where: { id: action.id } }))
+      .resolves.toMatchObject({
+        operationId,
+        providerOperationKey: operationId,
+        dispatchState: "unknown",
+        status: "unknown",
+        receiptVersion: null,
+        receipt: null,
+      });
+  });
+
+  it("keeps an observed customer-note append unknown without its hash-bound receipt", async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
+    const operationId = crypto.randomUUID();
+    const action = await db.agentAction.create({
+      data: {
+        turnId: crypto.randomUUID(),
+        organizationId: org.id,
+        operationId,
+        actionIndex: 0,
+        providerOperationKey: operationId,
+        dispatchState: "unknown",
+        submittedAt: ELEVEN_MINUTES_AGO(),
+        tool: "add_shopify_customer_note",
+        category: "action",
+        input: { customer_id: "123", note: "Follow up" },
+        output: "Unknown provider result",
+        status: "unknown",
+        errorDetail: "Unknown provider result",
+        mode: "human_approved",
+        executedAt: ELEVEN_MINUTES_AGO(),
+        durationMs: 1,
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      customer: { id: 123, note: "Existing\n\nFollow up" },
+    }), { status: 200, headers: { "Content-Type": "application/json" } })));
+
+    const outcome = await reconcileUnknownAgentAction({
+      actionId: action.id,
+      organizationId: org.id,
+      executionId: null,
+      providerOperationKey: operationId,
+      tool: action.tool,
+      input: action.input,
+      shopify: { shop: "test.myshopify.com", accessToken: "test" },
+    });
+
+    expect(outcome).toBe("still_unknown");
+    await expect(db.agentAction.findUniqueOrThrow({ where: { id: action.id } }))
+      .resolves.toMatchObject({
+        dispatchState: "unknown",
+        status: "unknown",
+        receiptVersion: null,
+        receipt: null,
+      });
+  });
+
+  it("keeps an observed gift-card commit unknown when the probe cannot rebuild its receipt", async () => {
+    const org = await createTestOrg();
+    orgId = org.id;
+    const operationId = crypto.randomUUID();
+    const providerOperationKey = "execution-1:gift_card";
+    const code = shopifyIdempotencyKey(providerOperationKey).replaceAll("-", "").slice(0, 20);
+    const action = await db.agentAction.create({
+      data: {
+        turnId: crypto.randomUUID(),
+        organizationId: org.id,
+        operationId,
+        actionIndex: 0,
+        providerOperationKey,
+        dispatchState: "unknown",
+        submittedAt: ELEVEN_MINUTES_AGO(),
+        tool: "create_gift_card",
+        category: "action",
+        input: { customer_id: "123", amount: "25.00" },
+        output: "Unknown provider result",
+        status: "unknown",
+        errorDetail: "Unknown provider result",
+        mode: "human_approved",
+        executedAt: ELEVEN_MINUTES_AGO(),
+        durationMs: 1,
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      data: {
+        giftCards: {
+          nodes: [{
+            id: "gid://shopify/GiftCard/42",
+            initialValue: { amount: "25.00" },
+            note: `Shopkeeper operation: ${code}`,
+          }],
+        },
+      },
+    }), { status: 200, headers: { "Content-Type": "application/json" } })));
+
+    const outcome = await reconcileUnknownAgentAction({
+      actionId: action.id,
+      organizationId: org.id,
+      executionId: null,
+      providerOperationKey,
+      tool: action.tool,
+      input: action.input,
+      shopify: { shop: "test.myshopify.com", accessToken: "test" },
+    });
+
+    expect(outcome).toBe("still_unknown");
+    await expect(db.agentAction.findUniqueOrThrow({ where: { id: action.id } }))
+      .resolves.toMatchObject({
+        dispatchState: "unknown",
+        status: "unknown",
+        receiptVersion: null,
+        receipt: null,
+      });
   });
 
   it("releases stale reserved goodwill reservations", async () => {

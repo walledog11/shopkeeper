@@ -44,6 +44,8 @@ export type DispatchFailure = {
   detail?: string
   providerStatus?: number
   code?: DispatchFailureCode
+  /** Present when the logical response was persisted before provider dispatch. */
+  message?: Message
 }
 
 export type DispatchMessageResult =

@@ -152,7 +152,12 @@ export function parseAgentPlanDecisionBody(body: unknown) {
 
 export function parseAgentChatBody(body: unknown) {
   const candidate = requireObject(body);
+  const clientRequestId = requireNonEmptyString(candidate.clientRequestId, "clientRequestId");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clientRequestId)) {
+    invalidField("clientRequestId", "clientRequestId must be a UUID");
+  }
   return {
+    clientRequestId,
     instruction: requireTrimmedInstruction(candidate.instruction),
   };
 }

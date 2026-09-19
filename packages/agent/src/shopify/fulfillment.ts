@@ -7,7 +7,16 @@ import {
   type ShopifyContext,
   type ShopifyGraphqlUserError,
 } from "./client.js";
-import { toolError, toolOk, toolUnknown, type ToolResult } from "../tools/result.js";
+import {
+  toolError,
+  toolNotFound,
+  toolOk,
+  toolPolicyBlock,
+  toolUnknown,
+  type ReceiptV1,
+  type ToolResult,
+} from "../tools/result.js";
+import { shopifyFailureReceipt, shopifyReceiptEnvelope } from "./receipts.js";
 import { optionalString, requireNumericId, ShopifyInputError } from "./validation.js";
 
 // Exported so the reconciliation probe decides "was this fulfillable?" with the
@@ -56,8 +65,18 @@ export const FULFILLMENT_CREATE_MUTATION = `mutation fulfillmentCreate($fulfillm
         fulfillment {
           id
           status
+          createdAt
           totalQuantity
           trackingInfo { number company url }
+          fulfillmentLineItems(first: 50) {
+            edges {
+              node {
+                id
+                quantity
+                lineItem { id }
+              }
+            }
+          }
         }
         userErrors { field message }
       }
@@ -91,11 +110,54 @@ interface FulfillmentCreateData {
     fulfillment?: {
       id: string;
       status?: string | null;
+      createdAt?: string | null;
       totalQuantity?: number | null;
       trackingInfo?: { number?: string | null; company?: string | null; url?: string | null }[] | null;
+      fulfillmentLineItems?: {
+        edges: {
+          node: {
+            id?: string | null;
+            quantity?: number | null;
+            lineItem?: { id?: string | null } | null;
+          };
+        }[];
+      } | null;
     } | null;
     userErrors?: ShopifyGraphqlUserError[];
   } | null;
+}
+
+function fulfillmentFailure(
+  ctx: ShopifyContext,
+  orderId: string,
+  result: ToolResult,
+  outcome: "not_found" | "rejected" | "failed",
+  code: string,
+): ToolResult {
+  const receipt = shopifyFailureReceipt(
+    ctx,
+    { kind: "order", id: orderId },
+    "fulfill_order",
+    outcome,
+    code,
+  );
+  return receipt ? { ...result, receipt } : result;
+}
+
+function unknownFulfillmentReceipt(
+  ctx: ShopifyContext,
+  orderId: string,
+  code: string,
+  providerReference: string | null = null,
+): ReceiptV1 | undefined {
+  const envelope = shopifyReceiptEnvelope(ctx, { kind: "order", id: orderId });
+  return envelope ? {
+    ...envelope,
+    tool: "fulfill_order",
+    outcome: "unknown",
+    code,
+    providerReference,
+  } : undefined;
 }
 
 export interface FulfillableFulfillmentOrder {
@@ -193,12 +255,22 @@ export async function fulfillOrder(
 
     const fulfillable = await fetchFulfillableFulfillmentOrders(ctx, orderGid);
     if (!fulfillable) {
-      return toolError(`Error: failed to fulfill order - order ${orderId} was not found.`);
+      return fulfillmentFailure(
+        ctx,
+        orderId,
+        toolNotFound(`Error: failed to fulfill order - order ${orderId} was not found.`),
+        "not_found",
+        "order_not_found",
+      );
     }
 
     if (fulfillable.length === 0) {
-      return toolError(
-        `Error: order ${orderId} has nothing left to fulfill - every item is already fulfilled, or the order was cancelled or put on hold.`,
+      return fulfillmentFailure(
+        ctx,
+        orderId,
+        toolPolicyBlock(`Error: order ${orderId} has nothing left to fulfill - every item is already fulfilled, or the order was cancelled or put on hold.`),
+        "rejected",
+        "nothing_fulfillable",
       );
     }
 
@@ -231,32 +303,130 @@ export async function fulfillOrder(
 
     const payload = created.fulfillmentCreate;
     const userErrors = formatUserErrors(payload?.userErrors);
-    if (userErrors) return toolError(`Error: could not fulfill order - ${userErrors}`);
+    if (userErrors) {
+      return fulfillmentFailure(
+        ctx,
+        orderId,
+        toolError(`Error: could not fulfill order - ${userErrors}`),
+        "failed",
+        "provider_rejected",
+      );
+    }
 
     if (!payload?.fulfillment) {
-      return toolError("Error: could not fulfill order - Shopify did not return a fulfillment.");
+      const result = toolUnknown(
+        `Unknown: Shopify accepted the fulfillment request for order ${orderId}, but did not return a fulfillment. Do not fulfill again, retry, or tell the customer the order shipped until the order is reviewed.`,
+      );
+      const receipt = unknownFulfillmentReceipt(ctx, orderId, "provider_fulfillment_missing");
+      return receipt ? { ...result, receipt } : result;
     }
+
+    const fulfillmentId = payload.fulfillment.id?.trim();
+    const fulfillmentStatus = payload.fulfillment.status?.trim();
+    const fulfilledAt = payload.fulfillment.createdAt?.trim();
+    const confirmedTotalQuantity = payload.fulfillment.totalQuantity;
+    const requestedTotalQuantity = fulfillable.reduce(
+      (total, entry) => total + entry.lineItems.reduce((sum, item) => sum + item.quantity, 0),
+      0,
+    );
+    const confirmedLines = (payload.fulfillment.fulfillmentLineItems?.edges ?? []).map(
+      ({ node }) => ({
+        fulfillmentLineItemId: node.id?.trim() ?? "",
+        lineItemId: node.lineItem?.id?.trim() ?? "",
+        quantity: node.quantity ?? 0,
+      }),
+    );
+    if (
+      !fulfillmentId
+      || !fulfillmentStatus
+      || !fulfilledAt
+      || !Number.isSafeInteger(confirmedTotalQuantity)
+      || Number(confirmedTotalQuantity) <= 0
+      || confirmedLines.length === 0
+      || confirmedLines.some((line) => (
+        !line.fulfillmentLineItemId || !line.lineItemId || !Number.isSafeInteger(line.quantity) || line.quantity <= 0
+      ))
+      || confirmedLines.reduce((sum, line) => sum + line.quantity, 0) !== confirmedTotalQuantity
+      || confirmedTotalQuantity !== requestedTotalQuantity
+    ) {
+      const result = toolUnknown(
+        `Unknown: Shopify fulfilled order ${orderId}, but did not return complete confirmed fulfillment state. Do not fulfill again, retry, or tell the customer the order shipped until the order is reviewed.`,
+      );
+      const receipt = unknownFulfillmentReceipt(
+        ctx,
+        orderId,
+        "confirmed_state_incomplete",
+        fulfillmentId || null,
+      );
+      return receipt ? { ...result, receipt } : result;
+    }
+
+    const confirmedTracking = payload.fulfillment.trackingInfo?.[0];
+    const receiptTracking = {
+      number: confirmedTracking?.number?.trim() || null,
+      company: confirmedTracking?.company?.trim() || null,
+      url: confirmedTracking?.url?.trim() || null,
+    };
 
     const itemList = fulfillable
       .flatMap((entry) => entry.lineItems)
       .map((item) => `${item.quantity}x ${item.name}`)
       .join(", ");
-    const trackingNote = trackingNumber
-      ? ` Tracking ${trackingNumber}${trackingCompany ? ` via ${trackingCompany}` : ""}.`
+    const trackingNote = receiptTracking.number
+      ? ` Tracking ${receiptTracking.number}${receiptTracking.company ? ` via ${receiptTracking.company}` : ""}.`
       : "";
     const notifyNote = notifyCustomer
-      ? " Shopify emailed the customer a shipping confirmation, so your reply should read as a follow-up, not as the first notice."
-      : " Shopify did NOT email the customer, so your reply must be what tells them the order shipped.";
+      ? " Shopify was asked to email the customer a shipping confirmation, so your reply should read as a follow-up, not as the first notice."
+      : " Shopify was NOT asked to email the customer, so your reply must be what tells them the order shipped.";
 
-    return toolOk(
+    const envelope = shopifyReceiptEnvelope(ctx, { kind: "order", id: orderId });
+    const receipt: ReceiptV1 | undefined = envelope ? {
+      ...envelope,
+      tool: "fulfill_order",
+      outcome: "succeeded",
+      providerReference: fulfillmentId,
+      facts: {
+        orderId,
+        fulfillmentId,
+        status: fulfillmentStatus,
+        fulfilledAt,
+        lineItems: confirmedLines,
+        tracking: receiptTracking,
+        notifyCustomerRequested: notifyCustomer,
+      },
+    } : undefined;
+    const result = toolOk(
       `Marked order ${orderId} fulfilled (status ${payload.fulfillment.status ?? "SUCCESS"}) for: ${itemList}.${trackingNote}${notifyNote}`,
     );
+    return receipt ? { ...result, receipt } : result;
   } catch (err) {
     if (mutationStarted && isAmbiguousShopifyMutationError(err)) {
-      return toolUnknown(
+      const result = toolUnknown(
         `Unknown: order ${input.order_id} may have been fulfilled at Shopify, but it could not be confirmed. Do not fulfill again, retry, or tell the customer the order shipped until the order is reviewed. ${formatShopifyToolError("fulfillment reconciliation failed", err)}`,
       );
+      const receipt = unknownFulfillmentReceipt(
+        ctx,
+        input.order_id.trim() || "invalid",
+        "ambiguous_provider_response",
+      );
+      return receipt ? { ...result, receipt } : result;
     }
-    return toolError(formatShopifyToolError("failed to fulfill order", err));
+    const orderId = input.order_id.trim() || "invalid";
+    if (err instanceof ShopifyInputError) {
+      return fulfillmentFailure(
+        ctx,
+        orderId,
+        toolPolicyBlock(`Error: failed to fulfill order - ${err.message}`),
+        "rejected",
+        "invalid_fulfillment_input",
+      );
+    }
+    return fulfillmentFailure(
+      ctx,
+      orderId,
+      toolError(formatShopifyToolError("failed to fulfill order", err)),
+      "failed",
+      "definite_failure",
+    );
   }
 }

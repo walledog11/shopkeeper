@@ -7,6 +7,7 @@ import {
   createShopifyOrder,
   editShopifyOrder,
   issueDiscount,
+  updateShopifyCustomerInfo,
   updateShopifyOrderAddress,
 } from "./shopify.js";
 import { shopifyOperationTag } from "../shopify/client.js";
@@ -22,6 +23,147 @@ afterEach(() => {
 });
 
 describe("shopify tools", () => {
+  it("emits provider-observed customer-info facts for an identity-bearing update", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
+      customer: {
+        id: 123,
+        first_name: "Jane",
+        last_name: "Smith",
+        email: "jane@example.com",
+        phone: "+14155550100",
+      },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await updateShopifyCustomerInfo({
+      customer_id: "123",
+      first_name: "Jane",
+      email: "JANE@example.com",
+    }, { ...ctx, operationId: "operation-customer-1", executionId: "execution-customer-1" });
+
+    expect(result).toMatchObject({
+      status: "ok",
+      receipt: {
+        tool: "update_shopify_customer_info",
+        target: { kind: "customer", id: "123" },
+        outcome: "succeeded",
+        providerReference: "123",
+        facts: {
+          customerId: "123",
+          updates: [
+            { field: "firstName", value: "Jane" },
+            { field: "email", value: "jane@example.com" },
+          ],
+        },
+      },
+    });
+  });
+
+  it("reconciles an incomplete customer-update response with a provider read", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123 } }))
+      .mockResolvedValueOnce(jsonResponse({
+        customer: { id: 123, first_name: "Jane", email: "jane@example.com" },
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await updateShopifyCustomerInfo({
+      customer_id: "123",
+      first_name: "Jane",
+      email: "jane@example.com",
+    }, { ...ctx, operationId: "operation-customer-1", executionId: "execution-customer-1" });
+
+    expect(result.status).toBe("ok");
+    expect(result.message).toContain("confirmed after an interrupted provider response");
+    expect(result.receipt).toMatchObject({ outcome: "succeeded", providerReference: "123" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a customer update unknown when the provider state does not match", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123 } }))
+      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123, first_name: "Old" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await updateShopifyCustomerInfo({
+      customer_id: "123",
+      first_name: "Jane",
+    }, { ...ctx, operationId: "operation-customer-1", executionId: "execution-customer-1" });
+
+    expect(result).toMatchObject({
+      status: "unknown",
+      receipt: {
+        tool: "update_shopify_customer_info",
+        target: { kind: "customer", id: "123" },
+        outcome: "unknown",
+        code: "customer_update_not_confirmed",
+        providerReference: "123",
+      },
+    });
+  });
+
+  it("reconciles a customer update after an ambiguous provider response", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ errors: "upstream unavailable" }, { status: 503 }))
+      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123, phone: "+14155550100" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await updateShopifyCustomerInfo({
+      customer_id: "123",
+      phone: "+14155550100",
+    }, { ...ctx, operationId: "operation-customer-1", executionId: "execution-customer-1" });
+
+    expect(result.status).toBe("ok");
+    expect(result.message).toContain("confirmed after an interrupted provider response");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns a typed not-found outcome for a missing customer", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(jsonResponse(
+      { errors: "Not found" },
+      { status: 404 },
+    )));
+
+    const result = await updateShopifyCustomerInfo({
+      customer_id: "123",
+      first_name: "Jane",
+    }, { ...ctx, operationId: "operation-customer-1", executionId: "execution-customer-1" });
+
+    expect(result).toMatchObject({
+      status: "not_found",
+      receipt: {
+        tool: "update_shopify_customer_info",
+        outcome: "not_found",
+        code: "customer_not_found",
+        providerReference: null,
+      },
+    });
+  });
+
+  it("rejects an empty customer update before provider dispatch", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await updateShopifyCustomerInfo({ customer_id: "123" }, {
+      ...ctx,
+      operationId: "operation-customer-1",
+      executionId: "execution-customer-1",
+    });
+
+    expect(result).toMatchObject({
+      status: "policy_block",
+      receipt: {
+        outcome: "rejected",
+        code: "invalid_customer_update_input",
+        target: { kind: "customer", id: "123" },
+      },
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("does not overwrite a customer note when fetching the existing note fails", async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ errors: "Not found" }, { status: 404 }));
     vi.stubGlobal("fetch", fetchMock);
@@ -29,8 +171,90 @@ describe("shopify tools", () => {
     const result = await addShopifyCustomerNote({ customer_id: "123", note: "New note" }, ctx);
 
     expect(result.message).toContain("Error: failed to add note");
-    expect(result.status).toBe("error");
+    expect(result.status).toBe("not_found");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("emits a hash-bound receipt after appending a customer note", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123, note: "Existing" } }))
+      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123, note: "Existing\n\nFollow up" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await addShopifyCustomerNote({ customer_id: "123", note: "Follow up" }, {
+      ...ctx,
+      operationId: "operation-note-1",
+      executionId: "execution-note-1",
+    });
+
+    expect(result).toMatchObject({
+      status: "ok",
+      receipt: {
+        tool: "add_shopify_customer_note",
+        target: { kind: "customer", id: "123" },
+        outcome: "succeeded",
+        providerReference: "123",
+        facts: {
+          customerId: "123",
+          resultingNoteLength: 19,
+          appendState: "appended",
+        },
+      },
+    });
+    const facts = (result.receipt as Extract<NonNullable<typeof result.receipt>, {
+      tool: "add_shopify_customer_note";
+      outcome: "succeeded";
+    }>).facts;
+    expect(facts.previousNoteSha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(facts.appendedNoteSha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(facts.resultingNoteSha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(JSON.stringify(facts)).not.toContain("Follow up");
+  });
+
+  it("reconciles an incomplete customer-note response without appending twice", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123, note: "Existing" } }))
+      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123 } }))
+      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123, note: "Existing\n\nFollow up" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await addShopifyCustomerNote({ customer_id: "123", note: "Follow up" }, {
+      ...ctx,
+      operationId: "operation-note-1",
+      executionId: "execution-note-1",
+    });
+
+    expect(result.status).toBe("ok");
+    expect(result.message).toContain("confirmed after an interrupted provider response");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls.filter(([, init]) => init.method === "PUT")).toHaveLength(1);
+  });
+
+  it("keeps a customer-note append unknown when read-back does not match", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123, note: "Existing" } }))
+      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123 } }))
+      .mockResolvedValueOnce(jsonResponse({ customer: { id: 123, note: "Different" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await addShopifyCustomerNote({ customer_id: "123", note: "Follow up" }, {
+      ...ctx,
+      operationId: "operation-note-1",
+      executionId: "execution-note-1",
+    });
+
+    expect(result).toMatchObject({
+      status: "unknown",
+      receipt: {
+        tool: "add_shopify_customer_note",
+        outcome: "unknown",
+        code: "customer_note_not_confirmed",
+        providerReference: "123",
+      },
+    });
   });
 
   it("stops the plan on a partial order-address update", async () => {
@@ -128,7 +352,7 @@ describe("shopify tools", () => {
             refund: {
               id: "gid://shopify/Refund/9001",
               totalRefundedSet: { presentmentMoney: { amount: "25.00" } },
-              transactions: { nodes: [{ status: "SUCCESS" }] },
+              transactions: { nodes: [{ id: "gid://shopify/OrderTransaction/7001", status: "SUCCESS" }] },
             },
             userErrors: [],
           },
@@ -190,7 +414,7 @@ describe("shopify tools", () => {
     const result = await editShopifyOrder({ order_id: "456", remove_variant_id: "123" }, ctx);
 
     expect(result.message).toContain("variant 123 was not found");
-    expect(result.status).toBe("error");
+    expect(result.status).toBe("policy_block");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -295,7 +519,7 @@ describe("shopify tools", () => {
     const result = await editShopifyOrder({ order_id: "456" }, ctx);
 
     expect(result).toEqual({
-      status: "error",
+      status: "policy_block",
       message: "Error: edit_shopify_order requires at least variant_id (to add) or remove_variant_id (to remove).",
     });
     expect(fetchMock).not.toHaveBeenCalled();
@@ -423,7 +647,7 @@ describe("shopify tools", () => {
     expect(result.message).toContain("No refund was issued");
   });
 
-  it("returns an error when the order has no returnable items", async () => {
+  it("policy-blocks when the order has no returnable items", async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
       data: { order: { id: "gid://shopify/Order/456" }, returnableFulfillments: { edges: [] } },
     }));
@@ -431,7 +655,7 @@ describe("shopify tools", () => {
 
     const result = await createReturn({ order_id: "456" }, ctx);
 
-    expect(result.status).toBe("error");
+    expect(result.status).toBe("policy_block");
     expect(result.message).toContain("no returnable items");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -453,7 +677,7 @@ describe("shopify tools", () => {
     }, ctx);
 
     expect(result.message).toContain("Custom line items are disabled");
-    expect(result.status).toBe("error");
+    expect(result.status).toBe("policy_block");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -492,6 +716,91 @@ describe("shopify tools", () => {
     });
   });
 
+  it("emits a provider-observed order creation receipt for an identity-bearing execution", async () => {
+    const operationId = "0ecfcf1c-2a07-4caf-956f-77cbaa2fb83a:create_order";
+    const operationTag = shopifyOperationTag(operationId);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ data: { orders: { nodes: [] } } }))
+      .mockResolvedValueOnce(jsonResponse({
+        order: {
+          id: 456,
+          name: "#1001",
+          email: "jane@example.com",
+          total_price: "25.00",
+          currency: "USD",
+          financial_status: "pending",
+          tags: operationTag,
+        },
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await createShopifyOrder({
+      email: "jane@example.com",
+      address1: "123 Main St",
+      city: "Los Angeles",
+      province: "CA",
+      zip: "90001",
+      country: "United States",
+      line_items: [{ variant_id: "789", quantity: 1 }],
+    }, { ...ctx, operationId, executionId: "execution-create-order-1" });
+
+    expect(result).toMatchObject({
+      status: "ok",
+      receipt: {
+        version: 1,
+        operationId,
+        executionId: "execution-create-order-1",
+        tool: "create_shopify_order",
+        target: { kind: "order", id: "456" },
+        outcome: "succeeded",
+        providerReference: "456",
+        facts: {
+          orderId: "456",
+          orderName: "#1001",
+          operationTag,
+          financialStatus: "pending",
+          adminUrl: "https://test-store.myshopify.com/admin/orders/456",
+          totalAmount: "25.00",
+          currency: "USD",
+        },
+      },
+    });
+  });
+
+  it("keeps an incomplete created order unknown instead of claiming success", async () => {
+    const operationId = "0ecfcf1c-2a07-4caf-956f-77cbaa2fb83a:create_order";
+    const operationTag = shopifyOperationTag(operationId);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ data: { orders: { nodes: [] } } }))
+      .mockResolvedValueOnce(jsonResponse({
+        order: { id: 456, name: "#1001", total_price: "25.00", tags: operationTag },
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await createShopifyOrder({
+      email: "jane@example.com",
+      address1: "123 Main St",
+      city: "Los Angeles",
+      province: "CA",
+      zip: "90001",
+      country: "United States",
+      line_items: [{ variant_id: "789", quantity: 1 }],
+    }, { ...ctx, operationId, executionId: "execution-create-order-1" });
+
+    expect(result).toMatchObject({
+      status: "unknown",
+      receipt: {
+        tool: "create_shopify_order",
+        target: { kind: "order", id: "456" },
+        outcome: "unknown",
+        code: "incomplete_created_order",
+        providerReference: "456",
+      },
+    });
+  });
+
   it.each([429, 503])("reconciles an order that committed before Shopify returned %i", async (status) => {
     const operationId = "0ecfcf1c-2a07-4caf-956f-77cbaa2fb83a:create_order";
     const operationTag = shopifyOperationTag(operationId);
@@ -508,7 +817,8 @@ describe("shopify tools", () => {
               name: "#1001",
               email: "jane@example.com",
               tags: [operationTag],
-              totalPriceSet: { shopMoney: { amount: "25.00" } },
+              displayFinancialStatus: "PENDING",
+              totalPriceSet: { shopMoney: { amount: "25.00", currencyCode: "USD" } },
             }],
           },
         },
@@ -523,10 +833,15 @@ describe("shopify tools", () => {
       zip: "90001",
       country: "United States",
       line_items: [{ variant_id: "789", quantity: 1 }],
-    }, { ...ctx, operationId });
+    }, { ...ctx, operationId, executionId: "execution-create-order-1" });
 
     expect(result.status).toBe("ok");
     expect(result.message).toContain("confirmed after an interrupted provider response");
+    expect(result.receipt).toMatchObject({
+      outcome: "succeeded",
+      providerReference: "456",
+      facts: { orderId: "456", operationTag, financialStatus: "pending" },
+    });
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/orders.json"))).toHaveLength(1);
   });
@@ -546,10 +861,20 @@ describe("shopify tools", () => {
       zip: "90001",
       country: "United States",
       line_items: [{ variant_id: "789", quantity: 1 }],
-    }, { ...ctx, operationId: "execution:create_order" });
+    }, {
+      ...ctx,
+      operationId: "execution:create_order",
+      executionId: "execution-create-order-1",
+    });
 
     expect(result.status).toBe("error");
     expect(result.message).toContain("failed to create order (422)");
+    expect(result.receipt).toMatchObject({
+      tool: "create_shopify_order",
+      target: { kind: "email", id: "jane@example.com" },
+      outcome: "failed",
+      code: "provider_rejected_creation",
+    });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -569,10 +894,20 @@ describe("shopify tools", () => {
       zip: "90001",
       country: "United States",
       line_items: [{ variant_id: "789", quantity: 1 }],
-    }, { ...ctx, operationId: "execution:create_order" });
+    }, {
+      ...ctx,
+      operationId: "execution:create_order",
+      executionId: "execution-create-order-1",
+    });
 
     expect(result.status).toBe("unknown");
     expect(result.message).toContain("Do not retry or confirm it to the customer");
+    expect(result.receipt).toMatchObject({
+      tool: "create_shopify_order",
+      target: { kind: "email", id: "jane@example.com" },
+      outcome: "unknown",
+      code: "creation_not_confirmed",
+    });
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/orders.json"))).toHaveLength(1);
   });

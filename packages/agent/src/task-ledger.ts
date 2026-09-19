@@ -1,0 +1,1121 @@
+import { randomUUID } from "node:crypto";
+import type { AgentActionDispatchState, AgentActorKind, Prisma as PrismaTypes } from "@prisma/client";
+import { db, Prisma } from "@shopkeeper/db";
+import { BadRequestError, ConflictError, ForbiddenError } from "./errors.js";
+import { hashInstruction, hashPlan } from "./agent-actions.js";
+import { isOperatorChannel } from "./thread-constants.js";
+import type { RawToolCall } from "./types.js";
+
+// A task whose actions reached any of these has touched a provider, so it is
+// never replayed from the top — claiming, settling, stopping, and resuming all
+// read the same list.
+const DISPATCHED_STATES: AgentActionDispatchState[] = [
+  "dispatch_authorized", "submitted", "unknown", "settled",
+];
+
+// Customer/system adapters require their own verified identity boundary.
+export interface MemberRequestInput {
+  organizationId: string;
+  clerkUserId: string;
+  threadId: string;
+  dedupeKey: string;
+  instruction: string;
+  budget?: TaskBudget;
+}
+
+export interface TaskBudget {
+  runtimeVersion: number;
+  modelCallLimit: number;
+  activeTimeMsLimit: number;
+  spendNanoUsdLimit: bigint;
+}
+
+function validateTaskBudget(budget: TaskBudget): void {
+  for (const value of [budget.runtimeVersion, budget.modelCallLimit, budget.activeTimeMsLimit]) {
+    if (!Number.isSafeInteger(value) || value <= 0 || value > 2147483647) {
+      throw new BadRequestError("Runtime version and task limits must be positive integers.");
+    }
+  }
+  if (budget.spendNanoUsdLimit <= 0n) throw new BadRequestError("Spend limit must be positive.");
+}
+
+export async function requireMemberActorKey(tx: Pick<typeof db, "orgMember" | "thread">, input: {
+  organizationId: string; clerkUserId: string; threadId?: string;
+}) {
+  const member = await tx.orgMember.findUnique({
+    where: { organizationId_clerkUserId: {
+      organizationId: input.organizationId, clerkUserId: input.clerkUserId,
+    } },
+  });
+  if (!member) throw new ForbiddenError("Current organization membership is required.");
+  const actorKey = `member:${member.id}`;
+  if (input.threadId) {
+    const thread = await tx.thread.findFirst({
+      where: {
+        id: input.threadId, organizationId: input.organizationId,
+        operatorKey: actorKey, deletedAt: null, archivedAt: null,
+        organization: { lifecycleStatus: "active" },
+      },
+      select: { id: true },
+    });
+    if (!thread) throw new ForbiddenError("This conversation is not available to the member.");
+  }
+  return actorKey;
+}
+
+/**
+ * A parked question names the one actor scoped to answer it, so that actor's
+ * next request continues the waiting task instead of starting a new one.
+ *
+ * Exactly one match is a continuation. Two parked questions make a terse "yes"
+ * ambiguous, and picking one would act on a proposal the merchant may not have
+ * meant, so neither is resumed and the request becomes its own task. A task that
+ * already dispatched a write is skipped for the same reason `claimAgentTask`
+ * refuses it: it cannot be replayed from the top, so attaching an answer would
+ * only queue work no worker may claim.
+ */
+async function resumeAnsweredTask(
+  tx: Pick<typeof db, "agentTask">,
+  input: { organizationId: string; threadId: string; actorKey: string },
+) {
+  const waiting = await tx.agentTask.findMany({
+    where: {
+      organizationId: input.organizationId, threadId: input.threadId,
+      status: "waiting_input", cancelledAt: null,
+      pendingAnswererKind: "member", pendingAnswererKey: input.actorKey,
+      actions: { none: { dispatchState: { in: DISPATCHED_STATES } } },
+    },
+    select: { id: true },
+    take: 2,
+  });
+  if (waiting.length !== 1) return null;
+  // The conditional update is the ordering: a concurrent answer, stop, or sweep
+  // that moved the task first leaves this one to open its own task.
+  const resumed = await tx.agentTask.updateMany({
+    where: { id: waiting[0].id, organizationId: input.organizationId, status: "waiting_input" },
+    data: { ...NO_SUSPENSION, status: "queued", revision: { increment: 1 }, lastProgressAt: new Date() },
+  });
+  if (resumed.count !== 1) return null;
+  return tx.agentTask.findFirstOrThrow({
+    where: { id: waiting[0].id, organizationId: input.organizationId },
+  });
+}
+
+export async function acceptMemberAgentRequest(input: MemberRequestInput) {
+  if (input.budget) validateTaskBudget(input.budget);
+  const instruction = input.instruction.trim();
+  if (!instruction || instruction.length > 16000) {
+    throw new BadRequestError("Instruction must contain 1–16000 characters.");
+  }
+  if (!input.dedupeKey.trim() || input.dedupeKey.length > 255) {
+    throw new BadRequestError("A bounded, stable request key is required.");
+  }
+  // Fixed, server-authored envelope; the client cannot supply a hash.
+  const payload = { version: 1, threadId: input.threadId, instruction };
+  const payloadHash = hashInstruction(JSON.stringify(payload));
+  if (Buffer.byteLength(JSON.stringify(payload)) > 60000) {
+    throw new BadRequestError("Request payload is too large.");
+  }
+  return db.$transaction(async (tx) => {
+    const actorKey = await requireMemberActorKey(tx, input);
+    const id = randomUUID();
+    await tx.agentRequest.createMany({
+      data: {
+        id, organizationId: input.organizationId, actorKey, actorKind: "member",
+        channel: "dashboard_agent", threadId: input.threadId,
+        dedupeKey: input.dedupeKey, payloadVersion: 1, payloadHash, payload,
+        normalizedInstruction: instruction,
+      },
+      skipDuplicates: true,
+    });
+    let request = await tx.agentRequest.findUniqueOrThrow({
+      where: { organizationId_actorKind_actorKey_channel_dedupeKey: {
+        organizationId: input.organizationId, actorKind: "member", actorKey,
+        channel: "dashboard_agent", dedupeKey: input.dedupeKey,
+      } },
+    });
+    if (request.payloadVersion !== 1 || request.payloadHash !== payloadHash) {
+      throw new ConflictError("This request key was already used with a different instruction.");
+    }
+    let task = null;
+    if (input.budget) {
+      await tx.$queryRaw(Prisma.sql`
+        SELECT id FROM agent_requests WHERE id = ${request.id}::uuid
+        AND organization_id = ${input.organizationId}::uuid FOR UPDATE
+      `);
+      request = await tx.agentRequest.findUniqueOrThrow({ where: { id: request.id } });
+      if (request.taskId) {
+        task = await tx.agentTask.findFirstOrThrow({
+          where: { id: request.taskId, organizationId: input.organizationId },
+        });
+      } else {
+        task = await resumeAnsweredTask(tx, {
+          organizationId: input.organizationId, threadId: request.threadId, actorKey,
+        }) ?? await tx.agentTask.create({
+          data: {
+            organizationId: input.organizationId, threadId: request.threadId,
+            initiatingActorKind: "member", initiatingActorKey: actorKey,
+            objective: request.normalizedInstruction.slice(0, 4000),
+            ...input.budget, checkpointVersion: 1,
+            checkpoint: { sourceRequestIds: [request.id], nextWork: "investigate" },
+          },
+        });
+        request = await tx.agentRequest.update({
+          where: { id: request.id, organizationId: input.organizationId },
+          data: { state: "attached", taskId: task.id, attachedAt: new Date() },
+        });
+      }
+    }
+    return { request, task, deduplicated: request.id !== id };
+  });
+}
+
+export async function getMemberAgentRequest(input: {
+  organizationId: string; clerkUserId: string; requestId: string;
+}) {
+  return db.$transaction(async (tx) => {
+    const actorKey = await requireMemberActorKey(tx, {
+      organizationId: input.organizationId, clerkUserId: input.clerkUserId,
+    });
+    return tx.agentRequest.findFirst({
+      where: {
+        id: input.requestId, organizationId: input.organizationId,
+        actorKind: "member", actorKey,
+        thread: { operatorKey: actorKey, deletedAt: null, archivedAt: null },
+      },
+      include: {
+        task: {
+          include: {
+            messages: {
+              where: { senderType: "agent", deletedAt: null },
+              orderBy: [{ sentAt: "desc" }, { id: "desc" }],
+              take: 1,
+            },
+            actions: { where: { turnId: input.requestId }, orderBy: [{ actionIndex: "asc" }, { createdAt: "asc" }] },
+          },
+        },
+      },
+    });
+  });
+}
+
+export async function listMemberAgentRequests(input: {
+  organizationId: string; clerkUserId: string; limit?: number;
+}) {
+  const limit = input.limit ?? 20;
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) {
+    throw new BadRequestError("Request history limit must be 1–50.");
+  }
+  return db.$transaction(async (tx) => {
+    const actorKey = await requireMemberActorKey(tx, input);
+    return tx.agentRequest.findMany({
+      where: {
+        organizationId: input.organizationId, actorKind: "member", actorKey,
+        thread: { operatorKey: actorKey, deletedAt: null, archivedAt: null },
+      },
+      orderBy: [{ acceptedAt: "desc" }, { id: "desc" }],
+      take: limit,
+      include: {
+        task: {
+          include: {
+            messages: {
+              where: { senderType: "agent", deletedAt: null },
+              orderBy: [{ sentAt: "desc" }, { id: "desc" }],
+              take: 1,
+            },
+            actions: { orderBy: [{ actionIndex: "asc" }, { createdAt: "asc" }] },
+          },
+        },
+      },
+    });
+  });
+}
+
+export async function attachMemberAgentTask(input: {
+  organizationId: string; clerkUserId: string; requestId: string; budget: TaskBudget;
+}) {
+  validateTaskBudget(input.budget);
+  return db.$transaction(async (tx) => {
+    const actorKey = await requireMemberActorKey(tx, input);
+    // Serialize initial attachment using the accepted request's durable row.
+    await tx.$queryRaw(Prisma.sql`
+      SELECT id FROM agent_requests WHERE id = ${input.requestId}::uuid
+      AND organization_id = ${input.organizationId}::uuid
+      AND actor_kind = 'member' AND actor_key = ${actorKey} FOR UPDATE
+    `);
+    const request = await tx.agentRequest.findFirst({
+      where: { id: input.requestId, organizationId: input.organizationId, actorKind: "member", actorKey },
+    });
+    if (!request) throw new ForbiddenError("Request is not available to this member.");
+    await requireMemberActorKey(tx, { ...input, threadId: request.threadId });
+    if (request.taskId) {
+      return tx.agentTask.findFirstOrThrow({
+        where: { id: request.taskId, organizationId: input.organizationId },
+      });
+    }
+    const task = await tx.agentTask.create({
+      data: {
+        organizationId: input.organizationId, threadId: request.threadId,
+        initiatingActorKind: "member", initiatingActorKey: actorKey,
+        objective: request.normalizedInstruction.slice(0, 4000),
+        ...input.budget, checkpointVersion: 1,
+        checkpoint: { sourceRequestIds: [request.id], nextWork: "investigate" },
+      },
+    });
+    await tx.agentRequest.update({
+      where: { id: request.id, organizationId: input.organizationId },
+      data: { state: "attached", taskId: task.id, attachedAt: new Date() },
+    });
+    return task;
+  });
+}
+
+/**
+ * A support conversation's request boundary. The member path proves its actor
+ * from Clerk membership; a customer has no session to prove here, so the inbound
+ * `Message` row is the verified identity — an authenticated provider webhook
+ * persisted it against a thread this organization owns, and it is also what the
+ * dedupe key names, so one inbound message is one request however many times the
+ * planning job runs.
+ *
+ * An operator channel mints no customer actor. The merchant's own thread carries
+ * a customer row for storage reasons and its requests belong to the member path;
+ * accepting one here would attribute the merchant's instruction to the customer
+ * whose thread it is.
+ */
+async function requireCustomerActor(
+  tx: Pick<typeof db, "message">,
+  input: { organizationId: string; threadId: string; sourceMessageId: string },
+) {
+  const message = await tx.message.findFirst({
+    where: {
+      id: input.sourceMessageId, organizationId: input.organizationId,
+      threadId: input.threadId, senderType: "customer", deletedAt: null,
+      thread: {
+        organizationId: input.organizationId, deletedAt: null, archivedAt: null,
+        organization: { lifecycleStatus: "active" },
+      },
+    },
+    select: {
+      contentText: true,
+      thread: { select: { customerId: true, channelType: true } },
+    },
+  });
+  if (!message) {
+    throw new ForbiddenError("This conversation message cannot start agent work.");
+  }
+  if (isOperatorChannel(message.thread.channelType)) {
+    throw new ForbiddenError("An operator conversation's requests belong to its member.");
+  }
+  return {
+    actorKey: `customer:${message.thread.customerId}`,
+    channel: message.thread.channelType,
+    text: message.contentText?.trim() ?? "",
+  };
+}
+
+/**
+ * The support conversation's task lookup. A thread runs one task at a time —
+ * that is the shape the cached plan it records already had — so a later message
+ * advances the open one rather than opening a second beside it. The revision
+ * increment is the supersede: whatever the previous attempt parked stops being
+ * the current proposal, which is what the plan cache did by overwriting itself.
+ *
+ * Two kinds of task are left alone. A terminal one is not reset by new work, and
+ * a claimed one belongs to the attempt holding it — advancing that would revoke
+ * a claim mid-flight. Both cases open a new task, so a conversation can hold
+ * more than one; nothing here assumes it cannot.
+ */
+async function advanceOrOpenThreadTask(
+  tx: Pick<typeof db, "agentTask">,
+  input: {
+    organizationId: string; threadId: string; actorKey: string;
+    objective: string; budget: TaskBudget; requestId: string;
+  },
+) {
+  const open = await tx.agentTask.findFirst({
+    where: {
+      organizationId: input.organizationId, threadId: input.threadId,
+      initiatingActorKind: "customer",
+      status: { in: ["queued", "waiting_input", "waiting_approval"] },
+      cancelledAt: null, claimToken: null,
+      actions: { none: { dispatchState: { in: DISPATCHED_STATES } } },
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    select: { id: true, status: true },
+  });
+  if (open) {
+    // Conditional on the status it was read at: a concurrent claim, stop, or
+    // sweep that moved the task first leaves this request to open its own.
+    const advanced = await tx.agentTask.updateMany({
+      where: {
+        id: open.id, organizationId: input.organizationId,
+        status: open.status, claimToken: null, cancelledAt: null,
+      },
+      data: {
+        ...NO_SUSPENSION, status: "queued",
+        revision: { increment: 1 }, lastProgressAt: new Date(),
+      },
+    });
+    if (advanced.count === 1) {
+      return tx.agentTask.findFirstOrThrow({
+        where: { id: open.id, organizationId: input.organizationId },
+      });
+    }
+  }
+  return tx.agentTask.create({
+    data: {
+      organizationId: input.organizationId, threadId: input.threadId,
+      initiatingActorKind: "customer", initiatingActorKey: input.actorKey,
+      objective: input.objective.slice(0, 4000),
+      ...input.budget, checkpointVersion: 1,
+      checkpoint: { sourceRequestIds: [input.requestId], nextWork: "investigate" },
+    },
+  });
+}
+
+export interface CustomerRequestInput {
+  organizationId: string;
+  threadId: string;
+  /** The inbound customer message: this request's dedupe key and its payload. */
+  sourceMessageId: string;
+  /** The task's durable objective — the planner's instruction for this thread. */
+  objective: string;
+  budget: TaskBudget;
+}
+
+/**
+ * Accepts one inbound customer message as a request and puts it on the thread's
+ * task, in one transaction, exactly as the member submission path does.
+ *
+ * The payload hashed here is the message, not the objective. The objective comes
+ * from `Thread.requestSummary`, which the summary job fills in after the message
+ * lands, so hashing it would make a legitimate re-plan of the same message
+ * conflict with its own first attempt. What the customer said cannot change, so
+ * the request is immutable by construction and re-accepting it is idempotent.
+ */
+export async function acceptCustomerAgentRequest(input: CustomerRequestInput) {
+  validateTaskBudget(input.budget);
+  const objective = input.objective.trim();
+  if (!objective) throw new BadRequestError("A task needs an objective.");
+  return db.$transaction(async (tx) => {
+    const actor = await requireCustomerActor(tx, input);
+    const payload = {
+      version: 1, threadId: input.threadId,
+      sourceMessageId: input.sourceMessageId,
+      text: actor.text.slice(0, 16000),
+    };
+    const payloadHash = hashInstruction(JSON.stringify(payload));
+    const id = randomUUID();
+    await tx.agentRequest.createMany({
+      data: {
+        id, organizationId: input.organizationId,
+        actorKind: "customer", actorKey: actor.actorKey,
+        channel: actor.channel, threadId: input.threadId,
+        dedupeKey: input.sourceMessageId, sourceMessageId: input.sourceMessageId,
+        payloadVersion: 1, payloadHash, payload,
+        normalizedInstruction: payload.text,
+      },
+      skipDuplicates: true,
+    });
+    let request = await tx.agentRequest.findUniqueOrThrow({
+      where: { organizationId_actorKind_actorKey_channel_dedupeKey: {
+        organizationId: input.organizationId, actorKind: "customer",
+        actorKey: actor.actorKey, channel: actor.channel,
+        dedupeKey: input.sourceMessageId,
+      } },
+    });
+    if (request.payloadVersion !== 1 || request.payloadHash !== payloadHash) {
+      throw new ConflictError("This message was already accepted with different content.");
+    }
+    // Serialize attachment on the accepted request's own row, so concurrent
+    // planning jobs for one message put it on one task.
+    await tx.$queryRaw(Prisma.sql`
+      SELECT id FROM agent_requests WHERE id = ${request.id}::uuid
+      AND organization_id = ${input.organizationId}::uuid FOR UPDATE
+    `);
+    request = await tx.agentRequest.findUniqueOrThrow({ where: { id: request.id } });
+    if (request.taskId) {
+      return {
+        request,
+        task: await tx.agentTask.findFirstOrThrow({
+          where: { id: request.taskId, organizationId: input.organizationId },
+        }),
+        deduplicated: true,
+      };
+    }
+    const task = await advanceOrOpenThreadTask(tx, {
+      organizationId: input.organizationId, threadId: input.threadId,
+      actorKey: actor.actorKey, objective, budget: input.budget, requestId: request.id,
+    });
+    request = await tx.agentRequest.update({
+      where: { id: request.id, organizationId: input.organizationId },
+      data: { state: "attached", taskId: task.id, attachedAt: new Date() },
+    });
+    return { request, task, deduplicated: request.id !== id };
+  });
+}
+
+export interface TaskClaimIdentity {
+  organizationId: string; taskId: string; expectedRevision: number;
+}
+
+export interface ActiveTaskClaim extends TaskClaimIdentity {
+  claimToken: string;
+}
+
+export type TaskClaimControlState = "active" | "cancelled" | "budget_exhausted" | "claim_lost";
+
+export interface TaskModelUsageDelta {
+  inputTokens: number;
+  outputTokens: number;
+  spentNanoUsd: bigint;
+}
+
+function validateUsageDelta(usage: TaskModelUsageDelta): void {
+  if (
+    !Number.isSafeInteger(usage.inputTokens) || usage.inputTokens < 0
+    || !Number.isSafeInteger(usage.outputTokens) || usage.outputTokens < 0
+    || usage.spentNanoUsd < 0n
+  ) {
+    throw new BadRequestError("Task usage deltas must be non-negative integers.");
+  }
+}
+
+function activeTimeDeltaMs(checkpoint: Date | null, now: Date): number {
+  if (!checkpoint) return 0;
+  return Math.max(0, Math.min(2147483647, now.getTime() - checkpoint.getTime()));
+}
+
+function leaseExpiry(now: Date, leaseMs: number): Date {
+  if (!Number.isFinite(now.getTime()) || !Number.isInteger(leaseMs) || leaseMs <= 0 || leaseMs > 300000) {
+    throw new BadRequestError("Lease duration must be 1–300000 ms.");
+  }
+  return new Date(now.getTime() + leaseMs);
+}
+
+// Only fresh queued work is claimable here. Recovery must inspect dispatched
+// operations and any interrupted legacy attempt before requeuing running work.
+export async function claimAgentTask(input: TaskClaimIdentity & { now?: Date; leaseMs?: number }) {
+  const now = input.now ?? new Date();
+  const claimToken = randomUUID();
+  const leaseExpiresAt = leaseExpiry(now, input.leaseMs ?? 60000);
+  return db.$transaction(async (tx) => {
+    const won = await tx.agentTask.updateMany({
+      where: {
+        id: input.taskId, organizationId: input.organizationId, revision: input.expectedRevision,
+        status: "queued", claimToken: null, cancelledAt: null,
+        organization: { lifecycleStatus: "active" },
+        actions: { none: { dispatchState: { in: DISPATCHED_STATES } } },
+        executions: { none: { status: { in: ["claimed", "committed", "unknown"] } } },
+      },
+      data: {
+        status: "running", claimToken, leaseExpiresAt,
+        activeCheckpointAt: now, lastProgressAt: now,
+      },
+    });
+    if (won.count !== 1) return null;
+    const task = await tx.agentTask.findFirstOrThrow({
+      where: { id: input.taskId, organizationId: input.organizationId, claimToken },
+    });
+    return { task, claimToken };
+  });
+}
+
+export async function renewAgentTaskLease(input: TaskClaimIdentity & {
+  claimToken: string; now?: Date; leaseMs?: number;
+}) {
+  const now = input.now ?? new Date();
+  const leaseExpiresAt = leaseExpiry(now, input.leaseMs ?? 60000);
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw(Prisma.sql`
+      SELECT id FROM agent_tasks WHERE id = ${input.taskId}::uuid
+      AND organization_id = ${input.organizationId}::uuid FOR UPDATE
+    `);
+    const task = await tx.agentTask.findFirst({
+      where: {
+        id: input.taskId, organizationId: input.organizationId,
+        revision: input.expectedRevision, status: "running",
+        claimToken: input.claimToken, leaseExpiresAt: { gt: now }, cancelledAt: null,
+      },
+    });
+    if (!task) return false;
+    const activeTimeMs = activeTimeDeltaMs(task.activeCheckpointAt, now);
+    const updated = await tx.agentTask.updateMany({
+      where: {
+        id: input.taskId, organizationId: input.organizationId,
+        revision: input.expectedRevision, status: "running",
+        claimToken: input.claimToken, cancelledAt: null,
+      },
+      data: {
+        activeTimeMsUsed: { increment: activeTimeMs },
+        activeCheckpointAt: now, leaseExpiresAt, lastProgressAt: now,
+      },
+    });
+    return updated.count === 1;
+  });
+}
+
+/**
+ * Reserves one model-call slot before contacting the provider. The reservation
+ * is deliberately durable before the network call: a process death may waste a
+ * slot, but it cannot reset the cumulative call budget and retry indefinitely.
+ */
+export async function reserveAgentTaskModelCall(
+  input: ActiveTaskClaim & { now?: Date },
+): Promise<TaskClaimControlState> {
+  const now = input.now ?? new Date();
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw(Prisma.sql`
+      SELECT id FROM agent_tasks WHERE id = ${input.taskId}::uuid
+      AND organization_id = ${input.organizationId}::uuid FOR UPDATE
+    `);
+    const task = await tx.agentTask.findFirst({
+      where: { id: input.taskId, organizationId: input.organizationId },
+    });
+    if (
+      !task || task.status !== "running" || task.revision !== input.expectedRevision
+      || task.claimToken !== input.claimToken || !task.leaseExpiresAt
+      || task.leaseExpiresAt <= now
+    ) return "claim_lost";
+
+    const activeTimeMs = activeTimeDeltaMs(task.activeCheckpointAt, now);
+    const nextActiveTime = Math.min(2147483647, task.activeTimeMsUsed + activeTimeMs);
+    if (task.cancelledAt) {
+      await tx.agentTask.update({
+        where: { id: task.id },
+        data: { activeTimeMsUsed: nextActiveTime, activeCheckpointAt: now, lastProgressAt: now },
+      });
+      return "cancelled";
+    }
+    if (
+      task.modelCallsUsed >= task.modelCallLimit
+      || nextActiveTime >= task.activeTimeMsLimit
+      || task.spentNanoUsd >= task.spendNanoUsdLimit
+    ) {
+      await tx.agentTask.update({
+        where: { id: task.id },
+        data: { activeTimeMsUsed: nextActiveTime, activeCheckpointAt: now, lastProgressAt: now },
+      });
+      return "budget_exhausted";
+    }
+    await tx.agentTask.update({
+      where: { id: task.id },
+      data: {
+        modelCallsUsed: { increment: 1 },
+        activeTimeMsUsed: nextActiveTime,
+        activeCheckpointAt: now,
+        lastProgressAt: now,
+      },
+    });
+    return "active";
+  });
+}
+
+/** Persist the measured response cost immediately, before any resulting tool runs. */
+export async function recordAgentTaskModelUsage(
+  input: ActiveTaskClaim & { usage: TaskModelUsageDelta; now?: Date },
+): Promise<boolean> {
+  validateUsageDelta(input.usage);
+  const now = input.now ?? new Date();
+  const updated = await db.agentTask.updateMany({
+    where: {
+      id: input.taskId, organizationId: input.organizationId,
+      revision: input.expectedRevision, status: "running", claimToken: input.claimToken,
+    },
+    data: {
+      inputTokensUsed: { increment: input.usage.inputTokens },
+      outputTokensUsed: { increment: input.usage.outputTokens },
+      spentNanoUsd: { increment: input.usage.spentNanoUsd },
+      lastProgressAt: now,
+    },
+  });
+  return updated.count === 1;
+}
+
+export const AGENT_PROPOSAL_SCHEMA_VERSION = 1;
+
+/** The executable bundle a finished attempt wants the merchant to approve. */
+export interface ProposalSnapshot {
+  /**
+   * The parked plan's own identity, which becomes the proposal's ID. The two are
+   * required to be the same value by `plan_executions_proposal_identity_check`,
+   * and it is what lets an approval name the exact durable proposal a card was
+   * rendered from without the card carrying a second identifier.
+   */
+  proposalId?: string;
+  instruction: string;
+  rawToolCalls: RawToolCall[];
+  sourceRequestIds: string[];
+}
+
+/**
+ * What the finished attempt left the merchant waiting on. Status and the record
+ * naming the wait are written together under one claim check, so
+ * `waiting_approval` can never mean "waiting on something nothing can name".
+ */
+export type TaskSettlement =
+  | { status: "completed" }
+  | { status: "waiting_input"; question: string; answerer?: TaskAnswerer }
+  | { status: "waiting_approval"; proposal: ProposalSnapshot; approver?: TaskAnswerer };
+
+export interface TaskAnswerer {
+  kind: AgentActorKind;
+  key: string;
+}
+
+/**
+ * The answerer scope for a question nobody in particular was asked. A support
+ * question is pushed to every bound operator at once, so any member of the
+ * organization may answer it, and naming one of them would record a scope the
+ * product does not have. It can never collide with a real member key, which is
+ * `member:<uuid>`.
+ *
+ * `actorMayEndWait` is what matches it, for the approval a parked proposal
+ * records and the answer a parked question waits on alike.
+ */
+export const ANY_MEMBER_ACTOR_KEY = "member:*";
+
+/**
+ * The recorded wait scopes an authenticated actor satisfies.
+ *
+ * Both the predicate below and the query that finds the task an answer
+ * continues are written from this one list, so the check and the lookup cannot
+ * drift into different answers about who may end a wait.
+ */
+function endsWaitScopeKeys(actor: { kind: AgentActorKind; key: string }): string[] {
+  if (actor.kind === "member") return [actor.key, ANY_MEMBER_ACTOR_KEY];
+  // The sentinel is a member-only widening, never a literal key. A non-member
+  // actor whose key happened to be it would otherwise match a scope carrying it
+  // by exact comparison, which is a wait it was never in scope for.
+  return actor.key === ANY_MEMBER_ACTOR_KEY ? [] : [actor.key];
+}
+
+/**
+ * Whether an authenticated actor is within the scope recorded for a wait.
+ *
+ * One predicate so approval and question continuation agree on what a recorded
+ * scope means. `ANY_MEMBER_ACTOR_KEY` widens to every member of the
+ * organization and to nothing else — the caller has already proven the actor
+ * belongs to this tenant, and the sentinel cannot collide with a real
+ * `member:<uuid>`.
+ */
+export function actorMayEndWait(
+  scope: { kind: AgentActorKind; key: string },
+  actor: { kind: AgentActorKind; key: string },
+): boolean {
+  return scope.kind === actor.kind && endsWaitScopeKeys(actor).includes(scope.key);
+}
+
+// The four pending-question columns are all-or-nothing in the database and the
+// active proposal must belong to this task, so every exit from `running` writes
+// the whole suspension shape rather than one field of it.
+export const NO_SUSPENSION = {
+  activeProposalId: null,
+  pendingQuestionId: null,
+  pendingQuestion: null,
+  pendingAnswererKind: null,
+  pendingAnswererKey: null,
+} as const;
+
+/** A claim on a task that was waiting, plus the request the attempt advances. */
+export interface AnsweredTaskClaim extends ActiveTaskClaim {
+  requestId: string;
+}
+
+/**
+ * The answer half of `authorizeAgentProposal`: an authenticated member's answer
+ * ends the wait a parked question recorded, and the attempt that re-plans on
+ * that answer takes the task's claim.
+ *
+ * Ending the wait and claiming are one transition rather than a resume followed
+ * by `claimAgentTask`. A support task left `queued` between the two would be
+ * picked up by nothing — `findQueuedAgentTasks` hands the worker
+ * member-initiated work only — whereas a claim whose process dies expires on its
+ * lease and the sweep reconciles it. The revision increment is the supersede:
+ * whatever the question was parked alongside stops being current, exactly as a
+ * later customer message supersedes it in `advanceOrOpenThreadTask`.
+ *
+ * Null means the answer is not this task's to continue, and the caller re-plans
+ * untracked exactly as it did before the ledger existed: nothing is waiting on
+ * this thread, the answerer is outside the recorded scope, two parked questions
+ * make the answer ambiguous, another attempt already owns the task, or it
+ * reached a provider and so cannot be replayed from the top.
+ */
+export async function claimAnsweredAgentTask(input: {
+  organizationId: string;
+  clerkUserId: string;
+  threadId: string;
+  now?: Date;
+  leaseMs?: number;
+}): Promise<AnsweredTaskClaim | null> {
+  const now = input.now ?? new Date();
+  const claimToken = randomUUID();
+  const leaseExpiresAt = leaseExpiry(now, input.leaseMs ?? 60000);
+  return db.$transaction(async (tx) => {
+    // Tenant membership only. The thread a support question was asked about is
+    // the customer's, not this member's own operator thread, which is why the
+    // threadId is deliberately not passed to the membership check and the
+    // thread is scoped by organization below instead.
+    const actorKey = await requireMemberActorKey(tx, {
+      organizationId: input.organizationId, clerkUserId: input.clerkUserId,
+    });
+    const waiting = await tx.agentTask.findMany({
+      where: {
+        organizationId: input.organizationId, threadId: input.threadId,
+        status: "waiting_input", cancelledAt: null, claimToken: null,
+        pendingAnswererKind: "member",
+        pendingAnswererKey: { in: endsWaitScopeKeys({ kind: "member", key: actorKey }) },
+        organization: { lifecycleStatus: "active" },
+        thread: { deletedAt: null, archivedAt: null },
+        actions: { none: { dispatchState: { in: DISPATCHED_STATES } } },
+        executions: { none: { status: { in: ["claimed", "committed", "unknown"] } } },
+      },
+      select: { id: true, revision: true },
+      take: 2,
+    });
+    if (waiting.length !== 1) return null;
+    const target = waiting[0]!;
+    // The attempt advances the request the task is already running; a merchant's
+    // answer is not itself an accepted request on a customer's conversation.
+    const request = await tx.agentRequest.findFirst({
+      where: { organizationId: input.organizationId, taskId: target.id },
+      orderBy: [{ acceptedAt: "desc" }, { id: "desc" }],
+      select: { id: true },
+    });
+    if (!request) return null;
+    // Conditional on the revision it was read at: a concurrent answer, stop, or
+    // superseding customer message that moved the task first leaves this attempt
+    // to re-plan untracked rather than claiming work it no longer owns.
+    const claimed = await tx.agentTask.updateMany({
+      where: {
+        id: target.id, organizationId: input.organizationId, revision: target.revision,
+        status: "waiting_input", claimToken: null, cancelledAt: null,
+      },
+      data: {
+        ...NO_SUSPENSION, status: "running", revision: { increment: 1 },
+        claimToken, leaseExpiresAt, activeCheckpointAt: now, lastProgressAt: now,
+      },
+    });
+    if (claimed.count !== 1) return null;
+    const task = await tx.agentTask.findFirstOrThrow({
+      where: { id: target.id, organizationId: input.organizationId, claimToken },
+    });
+    return {
+      organizationId: input.organizationId, taskId: task.id,
+      expectedRevision: task.revision, claimToken, requestId: request.id,
+    };
+  });
+}
+
+/**
+ * Proposals are written `ready` and their status is not maintained here. Which
+ * one the merchant is actually being asked about is `AgentTask.activeProposalId`
+ * and nothing else, so a superseded snapshot cannot contradict the task it
+ * belongs to. Approval owns the later status transitions.
+ */
+async function persistProposal(
+  tx: Pick<typeof db, "agentProposal">,
+  task: { id: string; organizationId: string; revision: number },
+  snapshot: ProposalSnapshot,
+  approver: TaskAnswerer,
+): Promise<string> {
+  if (snapshot.rawToolCalls.length === 0) {
+    throw new BadRequestError("A proposal must contain at least one action.");
+  }
+  const proposalHash = hashPlan({
+    instruction: snapshot.instruction, steps: [], rawToolCalls: snapshot.rawToolCalls,
+  });
+  const identity = {
+    organizationId: task.organizationId, taskId: task.id,
+    taskRevision: task.revision, proposalHash,
+  };
+  // A replayed attempt at the same revision re-proposes the same bundle. It is
+  // the same thing to approve, so it reuses the row rather than conflicting on
+  // the snapshot key. The replayed card then carries a fresh plan ID that names
+  // no proposal, and approving it falls back to the legacy taskless path.
+  const existing = await tx.agentProposal.findUnique({
+    where: { organizationId_taskId_taskRevision_proposalHash: identity },
+    select: { id: true },
+  });
+  if (existing) return existing.id;
+  const created = await tx.agentProposal.create({
+    data: {
+      ...identity,
+      ...(snapshot.proposalId ? { id: snapshot.proposalId } : {}),
+      schemaVersion: AGENT_PROPOSAL_SCHEMA_VERSION,
+      approverScopeKind: approver.kind,
+      approverScopeKey: approver.key,
+      canonicalActions: snapshot.rawToolCalls as unknown as PrismaTypes.InputJsonValue,
+      dependencies: [],
+      sourceRequestIds: snapshot.sourceRequestIds,
+    },
+    select: { id: true },
+  });
+  return created.id;
+}
+
+async function suspensionWrite(
+  tx: Pick<typeof db, "agentProposal">,
+  task: {
+    id: string; organizationId: string; revision: number;
+    initiatingActorKind: AgentActorKind; initiatingActorKey: string;
+  },
+  settlement: TaskSettlement,
+) {
+  if (settlement.status === "completed") return NO_SUSPENSION;
+  if (settlement.status === "waiting_input") {
+    const question = settlement.question.trim();
+    if (!question) throw new BadRequestError("A parked question must have text.");
+    return {
+      ...NO_SUSPENSION,
+      pendingQuestionId: randomUUID(),
+      pendingQuestion: question.slice(0, 2000),
+      // The merchant who asked for the work is the one who may answer it; an
+      // unrelated sender's message is not an answer to this question. A support
+      // task is the case that must name its own: the customer initiated it and
+      // the question goes to the merchant, so the attempt says who.
+      pendingAnswererKind: settlement.answerer?.kind ?? task.initiatingActorKind,
+      pendingAnswererKey: settlement.answerer?.key ?? task.initiatingActorKey,
+    };
+  }
+  // Defaulted to the initiator, which is what the approval boundary used to
+  // derive, so a member's own task is unchanged. Support overrides it: the
+  // customer who initiated the task approves nothing.
+  return {
+    ...NO_SUSPENSION,
+    activeProposalId: await persistProposal(tx, task, settlement.proposal, {
+      kind: settlement.approver?.kind ?? task.initiatingActorKind,
+      key: settlement.approver?.key ?? task.initiatingActorKey,
+    }),
+  };
+}
+
+export async function settleAgentTaskClaim(input: TaskClaimIdentity & {
+  claimToken: string;
+  requestId: string;
+  settlement: TaskSettlement;
+}) {
+  return db.$transaction(async (tx) => {
+    const now = new Date();
+    await tx.$queryRaw(Prisma.sql`
+      SELECT id FROM agent_tasks WHERE id = ${input.taskId}::uuid
+      AND organization_id = ${input.organizationId}::uuid FOR UPDATE
+    `);
+    const ownedTask = await tx.agentTask.findFirst({
+      where: {
+        id: input.taskId, organizationId: input.organizationId,
+        revision: input.expectedRevision, status: "running", claimToken: input.claimToken,
+      },
+    });
+    if (!ownedTask) return false;
+    await tx.agentAction.updateMany({
+      where: {
+        organizationId: input.organizationId, turnId: input.requestId,
+        OR: [{ taskId: null }, { taskId: input.taskId }],
+      },
+      data: { taskId: input.taskId },
+    });
+    const consequential = ownedTask.cancelledAt
+      ? await tx.agentAction.count({
+          where: {
+            organizationId: input.organizationId, taskId: input.taskId,
+            dispatchState: { in: DISPATCHED_STATES },
+          },
+        })
+      : 0;
+    const status = ownedTask.cancelledAt
+      ? consequential > 0 ? "reconciling" as const : "cancelled" as const
+      : input.settlement.status;
+    // A stop overrides what the attempt wanted to wait on, so the stopped task
+    // is left pointing at no proposal and no question.
+    const suspension = ownedTask.cancelledAt
+      ? NO_SUSPENSION
+      : await suspensionWrite(tx, ownedTask, input.settlement);
+    const activeTimeMs = activeTimeDeltaMs(ownedTask.activeCheckpointAt, now);
+    const settled = await tx.agentTask.updateMany({
+      where: {
+        id: input.taskId, organizationId: input.organizationId,
+        revision: input.expectedRevision, status: "running", claimToken: input.claimToken,
+      },
+      data: {
+        status,
+        ...suspension,
+        claimToken: null,
+        leaseExpiresAt: null,
+        activeCheckpointAt: null,
+        lastProgressAt: now,
+        ...(status === "completed" ? { completedAt: now } : {}),
+        ...(status === "reconciling" ? { failureCode: "cancelled_after_dispatch" } : {}),
+        activeTimeMsUsed: { increment: activeTimeMs },
+      },
+    });
+    return settled.count === 1;
+  });
+}
+
+export async function failAgentTaskClaim(input: TaskClaimIdentity & {
+  claimToken: string; requestId: string; failureCode: string;
+}) {
+  return db.$transaction(async (tx) => {
+    const now = new Date();
+    await tx.$queryRaw(Prisma.sql`
+      SELECT id FROM agent_tasks WHERE id = ${input.taskId}::uuid
+      AND organization_id = ${input.organizationId}::uuid FOR UPDATE
+    `);
+    const ownedTask = await tx.agentTask.findFirst({
+      where: {
+        id: input.taskId, organizationId: input.organizationId,
+        revision: input.expectedRevision, status: "running", claimToken: input.claimToken,
+      },
+    });
+    if (!ownedTask) return null;
+    await tx.agentAction.updateMany({
+      where: {
+        organizationId: input.organizationId, turnId: input.requestId,
+        OR: [{ taskId: null }, { taskId: input.taskId }],
+      },
+      data: { taskId: input.taskId },
+    });
+    const consequential = await tx.agentAction.count({
+      where: {
+        organizationId: input.organizationId, taskId: input.taskId,
+        dispatchState: { in: DISPATCHED_STATES },
+      },
+    });
+    const status = consequential > 0
+      ? "reconciling"
+      : ownedTask.cancelledAt ? "cancelled" : "failed";
+    const activeTimeMs = activeTimeDeltaMs(ownedTask.activeCheckpointAt, now);
+    const failed = await tx.agentTask.updateMany({
+      where: {
+        id: input.taskId, organizationId: input.organizationId,
+        revision: input.expectedRevision, status: "running", claimToken: input.claimToken,
+      },
+      data: {
+        status,
+        ...NO_SUSPENSION,
+        failureCode: (ownedTask.cancelledAt
+          ? consequential > 0 ? "cancelled_after_dispatch" : null
+          : input.failureCode.slice(0, 64)),
+        claimToken: null, leaseExpiresAt: null, activeCheckpointAt: null,
+        activeTimeMsUsed: { increment: activeTimeMs }, lastProgressAt: now,
+      },
+    });
+    return failed.count === 1 ? status : null;
+  });
+}
+
+/**
+ * Queued work for the durable task worker, which runs a member's own request and
+ * fails anything else as `invalid_task_owner`. Customer-initiated support tasks
+ * are claimed in-process by the planning job that accepted them and recover
+ * through that job's own retries, so handing them to this queue would only
+ * manufacture failures.
+ */
+export async function findQueuedAgentTasks(limit = 100) {
+  return db.agentTask.findMany({
+    where: {
+      status: "queued", claimToken: null, cancelledAt: null,
+      initiatingActorKind: "member",
+    },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    take: limit,
+    select: { id: true, organizationId: true, revision: true },
+  });
+}
+
+// A cancelled attempt is only definitely over when nothing reached the
+// provider. Anything dispatched still owes reconciliation, exactly as the
+// worker-side settle and fail paths decide it.
+export async function reconcileExpiredAgentTaskClaims(now = new Date()) {
+  const dispatched = Prisma.sql`EXISTS (
+    SELECT 1 FROM agent_actions a
+    WHERE a.task_id = agent_tasks.id AND a.organization_id = agent_tasks.organization_id
+    AND a.dispatch_state IN ('dispatch_authorized', 'submitted', 'unknown', 'settled')
+  )`;
+  return db.$executeRaw(Prisma.sql`
+    UPDATE agent_tasks
+    SET status = CASE WHEN cancelled_at IS NOT NULL AND NOT ${dispatched}
+                      THEN 'cancelled'::"AgentTaskStatus"
+                      ELSE 'reconciling'::"AgentTaskStatus" END,
+        failure_code = CASE
+          WHEN cancelled_at IS NULL THEN 'interrupted_attempt'
+          WHEN ${dispatched} THEN 'cancelled_after_dispatch'
+          ELSE NULL END,
+        active_time_ms_used = LEAST(2147483647,
+          active_time_ms_used + GREATEST(0, FLOOR(EXTRACT(EPOCH FROM
+            (${now}::timestamptz - active_checkpoint_at)) * 1000)::integer)),
+        claim_token = NULL,
+        lease_expires_at = NULL,
+        active_checkpoint_at = NULL,
+        active_proposal_id = NULL,
+        pending_question_id = NULL,
+        pending_question = NULL,
+        pending_answerer_kind = NULL,
+        pending_answerer_key = NULL,
+        last_progress_at = ${now}
+    WHERE status = 'running' AND lease_expires_at <= ${now}
+  `);
+}
+
+/**
+ * Records a member stop request at the task-row ordering point shared with
+ * action dispatch. Running work keeps its claim long enough to record an
+ * in-flight model response, while every later dispatch observes cancelledAt.
+ */
+export async function cancelMemberAgentTask(input: {
+  organizationId: string;
+  clerkUserId: string;
+  taskId: string;
+  expectedRevision: number;
+  now?: Date;
+}) {
+  const now = input.now ?? new Date();
+  return db.$transaction(async (tx) => {
+    const actorKey = await requireMemberActorKey(tx, input);
+    await tx.$queryRaw(Prisma.sql`
+      SELECT id FROM agent_tasks WHERE id = ${input.taskId}::uuid
+      AND organization_id = ${input.organizationId}::uuid FOR UPDATE
+    `);
+    const task = await tx.agentTask.findFirst({
+      where: {
+        id: input.taskId, organizationId: input.organizationId,
+        initiatingActorKind: "member", initiatingActorKey: actorKey,
+        thread: { operatorKey: actorKey, deletedAt: null, archivedAt: null },
+      },
+    });
+    if (!task) throw new ForbiddenError("Task is not available to this member.");
+    if (task.revision !== input.expectedRevision) {
+      throw new ConflictError("The task changed before cancellation was recorded.");
+    }
+    if (["completed", "failed", "cancelled"].includes(task.status)) return task;
+
+    const consequential = await tx.agentAction.count({
+      where: {
+        organizationId: input.organizationId, taskId: input.taskId,
+        dispatchState: { in: DISPATCHED_STATES },
+      },
+    });
+    const running = task.status === "running";
+    const status = running
+      ? "running" as const
+      : consequential > 0 ? "reconciling" as const : "cancelled" as const;
+    return tx.agentTask.update({
+      where: { id: task.id },
+      data: {
+        status,
+        cancelledAt: task.cancelledAt ?? now,
+        failureCode: consequential > 0 ? "cancelled_after_dispatch" : null,
+        lastProgressAt: now,
+        // A stop that lands while the merchant is being asked to approve or
+        // answer ends that wait. A claimed attempt keeps its own, and clears it
+        // through settle or fail.
+        ...(!running ? {
+          ...NO_SUSPENSION,
+          claimToken: null, leaseExpiresAt: null, activeCheckpointAt: null,
+        } : {}),
+      },
+    });
+  });
+}

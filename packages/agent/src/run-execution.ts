@@ -27,12 +27,19 @@ import {
   renderReplyCompletionClaims,
   unsupportedReplyCompletionClaims,
 } from "./plan-grounding.js";
+import type { ReceiptV1 } from "./tools/result.js";
 
 export type AgentToolCall = {
   id: string;
   name: string;
   input: unknown;
 };
+
+export interface AgentActionDispatchHooks {
+  authorizeDispatch: () => Promise<void>;
+  markSubmitted: () => Promise<void>;
+  complete: (action: ActionEntry) => Promise<void>;
+}
 
 export type RecordToolFailure = (
   kind: "tool_result" | "tool_exception",
@@ -151,7 +158,7 @@ export async function finishAgentRun(input: {
   const durationMs = Date.now() - summaryStartedAt;
   const purpose = readOnly
     ? "composer_ask"
-    : supportThread?.channelType === "sms_agent"
+    : supportThread?.channelType === "operator"
       ? "operator_turn"
       : "agent_run";
 
@@ -252,7 +259,11 @@ export async function executeAgentToolCall(
     moduleTools?: Record<string, AgentToolDefinition>;
     operationScopeId?: string;
     completionEvidence?: readonly CompletionFact[];
-    beginAction?: (call: AgentToolCall, providerOperationKey?: string) => Promise<((action: ActionEntry) => Promise<void>) | undefined>;
+    beginAction?: (
+      call: AgentToolCall,
+      operationId: string,
+      providerOperationKey?: string,
+    ) => Promise<AgentActionDispatchHooks | undefined>;
   },
 ) {
   const {
@@ -271,7 +282,10 @@ export async function executeAgentToolCall(
   const category = moduleTools?.[toolCall.name]?.category ?? TOOL_CATEGORIES[toolCall.name];
   const completionFacts = [
     ...(input.completionEvidence ?? []),
-    ...executedCompletionFacts(actionsPerformed, ctx),
+    // This execution loop is the pinned legacy runtime. Its string-only action
+    // rows retain their bounded compatibility reader until migrated tools emit
+    // receipts and the durable runtime replaces this call path.
+    ...executedCompletionFacts(actionsPerformed, ctx, { allowHistoricalResultInference: true }),
   ];
   const executableToolCall = toolCall.name === "send_reply" || toolCall.name === "send_email"
     ? renderReplyCompletionClaims(toolCall, completionFacts, ctx)
@@ -289,15 +303,16 @@ export async function executeAgentToolCall(
   let result: string;
   let status: AgentActionStatus;
   let errorDetail: string | undefined;
+  let receipt: ReceiptV1 | undefined;
   let threw = false;
-  const providerOperationKey = operationScopeId && ctx.shopify
-    ? `${operationScopeId}:${toolCall.id}`
+  const runtimeOperationId = !readOnly && category !== "read" ? randomUUID() : undefined;
+  const providerOperationKey = runtimeOperationId && ctx.shopify
+    ? runtimeOperationId
     : undefined;
 
-  const completeAction = !readOnly && category !== "read"
-    ? await input.beginAction?.(executableToolCall, providerOperationKey)
-    : undefined;
   ctx.assertExecutionAllowed?.();
+
+  let actionDispatch: AgentActionDispatchHooks | undefined;
 
   if (readOnly && category !== "read") {
     result = `Error: ${toolCall.name} is not available in private ask mode.`;
@@ -319,16 +334,29 @@ export async function executeAgentToolCall(
     status = "error";
     errorDetail = result;
   } else {
+    actionDispatch = !readOnly && category !== "read"
+      ? await input.beginAction?.(executableToolCall, runtimeOperationId!, providerOperationKey)
+      : undefined;
+    ctx.assertExecutionAllowed?.();
+    await actionDispatch?.authorizeDispatch();
+    await actionDispatch?.markSubmitted();
     try {
-      const toolContext = providerOperationKey && ctx.shopify
-        ? {
-            ...ctx,
+      const executionIdentity = runtimeOperationId && operationScopeId
+        ? { operationId: runtimeOperationId, executionId: operationScopeId }
+        : undefined;
+      const toolContext = {
+        ...ctx,
+        ...(executionIdentity ? { execution: executionIdentity } : {}),
+        ...(providerOperationKey && ctx.shopify
+          ? {
             shopify: {
               ...ctx.shopify,
               operationId: providerOperationKey,
+              executionId: operationScopeId,
             },
           }
-        : ctx;
+          : {}),
+      };
       const executed = await executeToolWithStatus(
         executableToolCall.name,
         executableToolCall.input,
@@ -338,12 +366,14 @@ export async function executeAgentToolCall(
       );
       result = executed.result;
       status = executed.status;
+      receipt = executed.receipt;
       if (status !== "success") errorDetail = result;
     } catch (err) {
       threw = true;
       const errorMessage = err instanceof Error ? err.message : String(err);
-      result = `Error: tool "${toolCall.name}" threw - ${errorMessage}`;
-      status = "error";
+      const possiblySubmitted = actionDispatch !== undefined;
+      result = `${possiblySubmitted ? "Unknown" : "Error"}: tool "${toolCall.name}" threw - ${errorMessage}`;
+      status = possiblySubmitted ? "unknown" : "error";
       errorDetail = errorMessage;
       logger.error({ err, tool: toolCall.name }, "[agent] tool error");
       recordAgentFailure("tool_exception", toolCall.name, errorMessage);
@@ -356,7 +386,7 @@ export async function executeAgentToolCall(
   // into the loop - the safe outcome no longer depends on the model choosing to escalate.
   const operatorPolicyBlock = status === "policy_block"
     && supportThread != null
-    && supportThread.channelType === "sms_agent";
+    && supportThread.channelType === "operator";
   if (!threw && status === "policy_block" && category === "action" && !operatorPolicyBlock) {
     const reason = result.replace(/^Error:\s*/, "").trim() || "Action blocked by policy.";
     await ctx.escalate(reason);
@@ -395,9 +425,10 @@ export async function executeAgentToolCall(
     status,
     category,
     ...(errorDetail ? { errorDetail } : {}),
+    ...(receipt ? { receipt } : {}),
   };
   actionsPerformed.push(action);
-  await completeAction?.(action);
+  await actionDispatch?.complete(action);
   return {
     type: "tool_result" as const,
     tool_use_id: toolCall.id,

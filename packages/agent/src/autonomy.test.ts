@@ -165,6 +165,52 @@ describe("decideAutonomy", () => {
     expect(verdict).toMatchObject({ kind: "needs_review", approvalAllowed: false });
   });
 
+  // Package 3, step 4: a plan that suspended at its proposal composes the reply
+  // from the receipt, so the same draft-less shape is decided on its merits
+  // instead. Required approval and automatic permission are separate cases, and
+  // the model having proposed the refund decides neither of them.
+  describe("a proposal that composes from the receipt", () => {
+    const suspended = (overrides: Partial<OrgSettings> = {}) =>
+      decideAutonomy(plan([refund], { suspendedAtProposal: true }), settings(overrides));
+
+    it("is approvable by the merchant when the tier requires review", () => {
+      expect(suspended({ autonomyTier: "guarded" })).toMatchObject({
+        kind: "needs_review",
+        reasons: ["tier_requires_review"],
+        approvalAllowed: true,
+        toolCalls: [refund],
+      });
+    });
+
+    it("runs without a human when the existing rules already permit the mutation", () => {
+      const verdict = suspended();
+      expect(verdict.kind).toBe("auto_execute");
+      if (verdict.kind === "auto_execute") {
+        expect(verdict.toolCalls).toEqual([refund]);
+        expect(verdict.replyText).toBeNull();
+        expect(verdict.sendReplyToolCall).toBeNull();
+      }
+    });
+
+    it("is still held by the rollout, business-hours and policy rules", () => {
+      expect(suspended({ autoExecuteMode: "off" })).toMatchObject({
+        kind: "needs_review",
+        reasons: ["auto_execute_rollout_disabled"],
+        approvalAllowed: true,
+      });
+      expect(decideAutonomy(
+        plan([refund], { suspendedAtProposal: true }),
+        settings(),
+        { allowMutativeAutoExecute: false },
+      )).toMatchObject({ kind: "needs_review", reasons: ["outside_business_hours"] });
+      expect(suspended({ maxRefundAmount: 5 })).toMatchObject({
+        kind: "needs_review",
+        reasons: ["static_policy_block"],
+        approvalAllowed: false,
+      });
+    });
+  });
+
   it("honors rollout and business-hours gates", () => {
     expect(decideAutonomy(plan([refund, reply]), settings({ autoExecuteMode: "off" })))
       .toMatchObject({ kind: "needs_review", reasons: ["auto_execute_rollout_disabled"] });

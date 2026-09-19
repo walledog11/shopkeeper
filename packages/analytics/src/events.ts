@@ -29,9 +29,13 @@ export const MESSAGE_CHANNELS = [
   'shopify',
   'shopify_chat',
   'sms',
-  'sms_agent',
+  'operator',
   'dashboard_agent',
   'imessage',
+  // Renamed to `operator` on 2026-09-11. Still accepted so an event already in
+  // flight from a loaded page is recorded rather than rejected; nothing emits
+  // it now.
+  'sms_agent',
 ] as const;
 export type MessageChannel = (typeof MESSAGE_CHANNELS)[number];
 

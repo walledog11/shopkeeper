@@ -283,6 +283,7 @@ export interface ShopifyToolContext {
   shop: string;
   accessToken: string;
   operationId?: string;
+  executionId?: string;
 }
 
 export interface ToolExecutionDeps {
@@ -328,7 +329,14 @@ export interface ToolExecutionDeps {
 export interface ToolPolicyMetadata {
   categoryPermission: boolean;
   refundAmountLimits?: boolean;
-  dailyRefundSpendLimit?: boolean;
+  /**
+   * That this tool's compensation spends against the daily budget, and where its
+   * amount comes from. `"input"` is on the call the model made, so the executor
+   * reserves it before dispatch. `"provider"` only exists once Shopify has priced
+   * the selection, so the adapter reserves it mid-execution through
+   * `ShopifyContext.reserveCompensation`.
+   */
+  dailyRefundSpendLimit?: "input" | "provider";
   cancellationDisabled?: boolean;
   customLineItemsDisabled?: boolean;
 }
@@ -357,6 +365,12 @@ export interface AgentToolDefinition<TInput = unknown, TName extends string = st
    * covering everything it covered before.
    */
   requiredScopes: readonly ShopifyOAuthScope[];
+  /**
+   * A migrated write must return a schema-valid receipt whenever the runtime
+   * supplies stable execution and operation identities. Older/taskless callers
+   * remain compatible while their result boundary is still in service.
+   */
+  requiredReceiptVersion: 1 | null;
   execute(
     input: TInput,
     ctx: BaseAgentContext,

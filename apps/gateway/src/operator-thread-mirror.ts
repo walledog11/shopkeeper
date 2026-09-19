@@ -3,7 +3,7 @@
  *
  * A binding's inbound texts, the agent's replies, and the system notifications
  * it pushes (plans, questions, digests) all belong to the same conversation.
- * Persisting them to the merchant's single `sms_agent` thread (resolved from the
+ * Persisting them to the merchant's single `operator` thread (resolved from the
  * binding key) is what lets the agent read what the merchant is replying to.
  * Mirroring is best-effort — a failure here must never break the real send.
  */

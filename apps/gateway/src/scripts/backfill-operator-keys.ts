@@ -10,7 +10,7 @@ loadGatewayEnv();
 //
 //   railway run bash -c 'NODE_ENV=production ORG_ID=<org> npx tsx apps/gateway/src/scripts/backfill-operator-keys.ts'
 //
-// Scoped to ORG_ID. Idempotent: only touches open sms_agent threads whose
+// Scoped to ORG_ID. Idempotent: only touches open operator threads whose
 // operator_key IS NULL and whose customer.platform_id is a binding key.
 
 async function main() {
@@ -21,7 +21,7 @@ async function main() {
     `SELECT t.id, c.platform_id
        FROM threads t JOIN customers c ON c.id = t.customer_id
       WHERE t.organization_id = $1
-        AND t.channel_type = 'sms_agent'
+        AND t.channel_type = 'operator'
         AND t.status = 'open'
         AND t.operator_key IS NULL
         AND (c.platform_id LIKE 'imessage:%' OR c.platform_id LIKE 'telegram:%')`,

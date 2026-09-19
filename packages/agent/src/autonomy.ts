@@ -77,8 +77,9 @@ export type AutonomyVerdict =
   | (VerdictBase & {
       kind: "auto_execute"
       toolCalls: RawToolCall[]
-      replyText: string
-      sendReplyToolCall: RawToolCall
+      /** Null for a plan that suspended at its proposal: it composes after the write. */
+      replyText: string | null
+      sendReplyToolCall: RawToolCall | null
     });
 
 /**
@@ -280,7 +281,12 @@ export function decideAutonomy(
     }
     const sendReplyToolCall = plan.rawToolCalls.find((call) => call.name === "send_reply") ?? null;
     const text = replyText(sendReplyToolCall);
-    if (!sendReplyToolCall || !text) {
+    // A legacy plan's draft was its only chance to say anything, so a mutation
+    // that carries none can never run. A plan that suspended at its proposal
+    // composes from the receipt once the write lands, so the absent draft is
+    // expected — the rules on either side of this decide it like any other
+    // mutation, and the model having chosen the tool decides nothing.
+    if (!plan.suspendedAtProposal && (!sendReplyToolCall || !text)) {
       return { kind: "needs_review", reasons: ["missing_customer_reply"], approvalAllowed: false, toolCalls: calls };
     }
     if (resolveAutoExecuteMode(resolved) === "off") {

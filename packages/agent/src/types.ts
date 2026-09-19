@@ -135,6 +135,7 @@ export interface PlanRoutingEvidence {
 export type ProducedPlanSignalCode =
   | 'shopify_customer_unresolved'
   | 'recent_orders_fetch_failed'
+  | 'kb_fetch_failed'
   | 'shopify_lookup_failed'
   | 'order_not_found'
   | 'order_tracking_not_found'
@@ -190,6 +191,12 @@ export interface AgentPlan {
   routingEvidence?: PlanRoutingEvidence
   /** True when the planner widened tool selection after a namespace-miss retry. */
   namespaceMiss?: boolean
+  /**
+   * True when planning stopped at the proposal instead of drafting its outcome.
+   * Such a plan composes the customer's reply from the receipt after the write,
+   * so it carries no draft by design.
+   */
+  suspendedAtProposal?: boolean
   /**
    * @deprecated Derived from `signals` so plans cached by an earlier release stay
    * readable. Read `signals` instead — this is display text with no code attached.

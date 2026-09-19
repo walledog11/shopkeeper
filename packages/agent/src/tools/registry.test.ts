@@ -421,12 +421,18 @@ describe("agent tool execution routing", () => {
 });
 
 describe("Shopify scope gating", () => {
-  // The graceful-degradation guarantee: a merchant whose token predates every
-  // scoped capability keeps the entire tool set they had before the gate existed.
-  // A store connected before the gate holds `read_products`, so it keeps every
-  // tool. Only a grant genuinely missing a scope loses the tool that needs it.
-  it("keeps the whole tool set for a store holding the long-standing scopes", () => {
-    const complete = selectAgentTools(undefined, null, ["read_products"]).map((t) => t.name);
+  it("keeps the whole tool set for a store holding the scopes required by migrated tools", () => {
+    const complete = selectAgentTools(undefined, null, [
+      "read_products",
+      "write_orders",
+      "write_customers",
+      "write_returns",
+      "write_merchant_managed_fulfillment_orders",
+      "write_order_edits",
+      "read_orders",
+      "write_gift_cards",
+      "read_gift_cards",
+    ]).map((t) => t.name);
     const unchecked = selectAgentTools(undefined, null, null).map((t) => t.name);
 
     expect(complete).toEqual(unchecked);
@@ -437,23 +443,70 @@ describe("Shopify scope gating", () => {
     const unchecked = selectAgentTools(undefined, null, null).map((tool) => tool.name);
 
     expect(unchecked).toContain("get_inventory_status");
-    expect(unchecked.filter((name) => !short.includes(name))).toEqual(["get_inventory_status"]);
+    expect(unchecked.filter((name) => !short.includes(name))).toEqual([
+      "get_inventory_status",
+      "update_shopify_customer_info",
+      "add_shopify_customer_note",
+      "update_shopify_order_address",
+      "create_refund",
+      "create_partial_refund",
+      "cancel_order",
+      "create_shopify_order",
+      "edit_shopify_order",
+      "create_return",
+      "create_exchange",
+      "create_gift_card",
+      "attach_return_label",
+      "fulfill_order",
+    ]);
   });
 
-  // Every scope a tool declares must be one a connected store already holds, or
-  // the capability silently disappears for merchants who never re-authorize.
-  // `read_products` has been in the requested set since long before this gate.
-  it("declares only scopes an existing grant already covers", () => {
+  it("declares the exact scopes currently required by scoped tools", () => {
     const scoped = TOOL_DEFINITIONS.flatMap((definition) => TOOL_REQUIRED_SCOPES[definition.name]);
 
     expect(scoped.length).toBeGreaterThan(0);
-    expect([...new Set(scoped)]).toEqual(["read_products"]);
+    expect([...new Set(scoped)]).toEqual([
+      "read_products",
+      "write_customers",
+      "write_orders",
+      "write_order_edits",
+      "read_orders",
+      "write_returns",
+      "write_gift_cards",
+      "read_gift_cards",
+      "write_merchant_managed_fulfillment_orders",
+    ]);
   });
 
   it("reads a tool's requirement through the shared grant rule", () => {
     expect(toolScopesGranted("search_shopify_products", [])).toBe(true);
     expect(toolScopesGranted("get_inventory_status", [])).toBe(false);
     expect(toolScopesGranted("get_inventory_status", ["write_products"])).toBe(true);
+    expect(toolScopesGranted("update_shopify_order_address", ["write_orders"])).toBe(false);
+    expect(toolScopesGranted("update_shopify_order_address", ["write_orders", "write_customers"])).toBe(true);
+    expect(toolScopesGranted("update_shopify_customer_info", ["read_customers"])).toBe(false);
+    expect(toolScopesGranted("update_shopify_customer_info", ["write_customers"])).toBe(true);
+    expect(toolScopesGranted("add_shopify_customer_note", ["read_customers"])).toBe(false);
+    expect(toolScopesGranted("add_shopify_customer_note", ["write_customers"])).toBe(true);
+    expect(toolScopesGranted("create_refund", ["read_orders"])).toBe(false);
+    expect(toolScopesGranted("create_refund", ["write_orders"])).toBe(true);
+    expect(toolScopesGranted("create_shopify_order", ["read_orders"])).toBe(false);
+    expect(toolScopesGranted("create_shopify_order", ["write_orders"])).toBe(true);
+    expect(toolScopesGranted("create_gift_card", ["write_customers"])).toBe(false);
+    expect(toolScopesGranted("create_gift_card", ["write_gift_cards"])).toBe(false);
+    expect(toolScopesGranted("create_gift_card", ["read_gift_cards", "write_customers"])).toBe(false);
+    expect(toolScopesGranted("create_gift_card", ["write_gift_cards", "write_customers"])).toBe(true);
+    expect(toolScopesGranted("create_gift_card", ["write_gift_cards", "write_customers", "read_gift_cards"])).toBe(true);
+    expect(toolScopesGranted("create_return", ["read_returns"])).toBe(false);
+    expect(toolScopesGranted("create_return", ["write_returns"])).toBe(true);
+    expect(toolScopesGranted("create_exchange", ["write_returns"])).toBe(false);
+    expect(toolScopesGranted("create_exchange", ["read_products", "write_returns"])).toBe(true);
+    expect(toolScopesGranted("attach_return_label", ["read_returns"])).toBe(false);
+    expect(toolScopesGranted("attach_return_label", ["write_returns"])).toBe(true);
+    expect(toolScopesGranted("edit_shopify_order", ["write_order_edits"])).toBe(false);
+    expect(toolScopesGranted("edit_shopify_order", ["write_order_edits", "read_orders"])).toBe(true);
+    expect(toolScopesGranted("fulfill_order", ["read_orders"])).toBe(false);
+    expect(toolScopesGranted("fulfill_order", ["write_merchant_managed_fulfillment_orders"])).toBe(true);
   });
 
   describe("a tool that does declare scopes", () => {

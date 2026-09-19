@@ -7,7 +7,16 @@ import {
   type ShopifyContext,
   type ShopifyGraphqlUserError,
 } from "./client.js";
-import { toolError, toolOk, toolUnknown, type ToolResult } from "../tools/result.js";
+import {
+  toolError,
+  toolNotFound,
+  toolOk,
+  toolPolicyBlock,
+  toolUnknown,
+  type ReceiptV1,
+  type ToolResult,
+} from "../tools/result.js";
+import { shopifyFailureReceipt, shopifyReceiptEnvelope } from "./receipts.js";
 import { optionalString, requireNumericId } from "./validation.js";
 
 const RETURN_REASON_MAP: Record<string, string> = {
@@ -144,7 +153,11 @@ export async function fetchReturnableLineItems(
 export async function runReturnCreate(
   ctx: ShopifyContext,
   returnInput: Record<string, unknown>
-): Promise<{ createdReturn: CreatedReturn } | { errorMessage: string }> {
+): Promise<
+  | { createdReturn: CreatedReturn }
+  | { errorMessage: string; outcome: "failed"; code: "provider_rejected" }
+  | { errorMessage: string; outcome: "unknown"; code: "provider_return_missing" }
+> {
   const createData = await shopifyGraphql<ReturnCreateData>(
     ctx,
     RETURN_CREATE_MUTATION,
@@ -153,13 +166,52 @@ export async function runReturnCreate(
 
   const payload = createData.returnCreate;
   const userErrors = formatUserErrors(payload?.userErrors);
-  if (userErrors) return { errorMessage: userErrors };
+  if (userErrors) {
+    return { errorMessage: userErrors, outcome: "failed", code: "provider_rejected" };
+  }
 
   const createdReturn = payload?.return;
   if (!createdReturn) {
-    return { errorMessage: "Shopify did not return a return record." };
+    return {
+      errorMessage: "Shopify did not return a return record.",
+      outcome: "unknown",
+      code: "provider_return_missing",
+    };
   }
   return { createdReturn };
+}
+
+function returnFailure(
+  ctx: ShopifyContext,
+  orderId: string,
+  result: ToolResult,
+  outcome: "rejected" | "failed" | "not_found",
+  code: string,
+): ToolResult {
+  const receipt = shopifyFailureReceipt(
+    ctx,
+    { kind: "order", id: orderId },
+    "create_return",
+    outcome,
+    code,
+  );
+  return receipt ? { ...result, receipt } : result;
+}
+
+function unknownReturnReceipt(
+  ctx: ShopifyContext,
+  orderId: string,
+  code: string,
+  providerReference: string | null = null,
+): ReceiptV1 | undefined {
+  const envelope = shopifyReceiptEnvelope(ctx, { kind: "order", id: orderId });
+  return envelope ? {
+    ...envelope,
+    tool: "create_return",
+    outcome: "unknown",
+    code,
+    providerReference,
+  } : undefined;
 }
 
 export async function createReturn(
@@ -177,11 +229,23 @@ export async function createReturn(
 
     const returnable = await fetchReturnableLineItems(ctx, orderGid);
     if (!returnable) {
-      return toolError(`Error: failed to create return - order ${orderId} was not found.`);
+      return returnFailure(
+        ctx,
+        orderId,
+        toolNotFound(`Order ${orderId} was not returned by Shopify.`),
+        "not_found",
+        "order_not_found",
+      );
     }
 
     if (returnable.length === 0) {
-      return toolError("Error: this order has no returnable items - it may not have shipped yet, or the items were already returned.");
+      return returnFailure(
+        ctx,
+        orderId,
+        toolPolicyBlock("Error: this order has no returnable items - it may not have shipped yet, or the items were already returned."),
+        "rejected",
+        "no_returnable_items",
+      );
     }
 
     let selected = returnable;
@@ -189,7 +253,13 @@ export async function createReturn(
       const variantGid = `gid://shopify/ProductVariant/${requireNumericId(filterVariantId, "variant_id")}`;
       selected = returnable.filter((item) => item.variantId === variantGid);
       if (selected.length === 0) {
-        return toolError(`Error: could not open a return - variant ${filterVariantId} is not a returnable item on order ${orderId}.`);
+        return returnFailure(
+          ctx,
+          orderId,
+          toolPolicyBlock(`Error: could not open a return - variant ${filterVariantId} is not a returnable item on order ${orderId}.`),
+          "rejected",
+          "variant_not_returnable",
+        );
       }
     }
 
@@ -205,28 +275,80 @@ export async function createReturn(
     });
 
     if ("errorMessage" in created) {
-      return toolError(`Error: could not create return - ${created.errorMessage}`);
+      const result = created.outcome === "unknown"
+        ? toolUnknown(`Unknown: Shopify may have opened the return on order ${orderId}, but did not return a complete return record. Do not retry or confirm it to the customer until it is reconciled.`)
+        : toolError(`Error: could not create return - ${created.errorMessage}`);
+      if (created.outcome === "unknown") {
+        const receipt = unknownReturnReceipt(ctx, orderId, created.code);
+        return receipt ? { ...result, receipt } : result;
+      }
+      return returnFailure(ctx, orderId, result, "failed", created.code);
     }
 
+    const returnId = created.createdReturn.id?.trim();
+    const returnName = created.createdReturn.name?.trim();
+    const returnStatus = created.createdReturn.status?.trim();
+    if (!returnId || !returnName || !returnStatus) {
+      const result = toolUnknown(
+        `Unknown: Shopify opened a return on order ${orderId}, but did not return complete confirmed return state. Do not retry or confirm it to the customer until it is reconciled.`,
+      );
+      const receipt = unknownReturnReceipt(
+        ctx,
+        orderId,
+        "confirmed_state_incomplete",
+        returnId || null,
+      );
+      return receipt ? { ...result, receipt } : result;
+    }
     const itemList = selected.map((item) => `${item.quantity}x ${item.name}`).join(", ");
-    const label = created.createdReturn.name ?? created.createdReturn.id;
-    return toolOk(
-      `Opened return ${label} (status ${created.createdReturn.status ?? "REQUESTED"}) on order ${orderId} for: ${itemList}. No refund was issued - this only authorizes the customer to send the items back. Tell the customer the return is set up and how to ship the items.`,
+    const envelope = shopifyReceiptEnvelope(ctx, { kind: "order", id: orderId });
+    const receipt: ReceiptV1 | undefined = envelope ? {
+      ...envelope,
+      tool: "create_return",
+      outcome: "succeeded",
+      providerReference: returnId,
+      facts: {
+        orderId,
+        returnId,
+        returnName,
+        status: returnStatus,
+        lineItems: selected.map((item) => ({
+          fulfillmentLineItemId: item.fulfillmentLineItemId,
+          quantity: item.quantity,
+        })),
+        refundIssued: false,
+      },
+    } : undefined;
+    const result = toolOk(
+      `Opened return ${returnName} (status ${returnStatus}) on order ${orderId} for: ${itemList}. No refund was issued - this only authorizes the customer to send the items back. Tell the customer the return is set up and how to ship the items.`,
       {
         returnWatch: {
-          shopifyReturnId: created.createdReturn.id,
-          returnName: created.createdReturn.name ?? null,
+          shopifyReturnId: returnId,
+          returnName,
           orderId,
           tool: "create_return",
         },
       } satisfies ReturnWatchToolData,
     );
+    return receipt ? { ...result, receipt } : result;
   } catch (err) {
     if (mutationStarted && isAmbiguousShopifyMutationError(err)) {
-      return toolUnknown(
+      const result = toolUnknown(
         `Unknown: the return may have been opened at Shopify, but it could not be confirmed. Do not open another return, retry, or tell the customer the return is set up until order ${input.order_id} is reviewed. ${formatShopifyToolError("return reconciliation failed", err)}`,
       );
+      const receipt = unknownReturnReceipt(
+        ctx,
+        input.order_id.trim() || "invalid",
+        "ambiguous_provider_response",
+      );
+      return receipt ? { ...result, receipt } : result;
     }
-    return toolError(formatShopifyToolError("failed to create return", err));
+    return returnFailure(
+      ctx,
+      input.order_id.trim() || "invalid",
+      toolError(formatShopifyToolError("failed to create return", err)),
+      "failed",
+      "definite_failure",
+    );
   }
 }

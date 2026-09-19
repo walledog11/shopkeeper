@@ -7,11 +7,19 @@ import type { AgentContext } from "./agent-context.js";
 
 const {
   mockCreate,
+  mockBeginAgentActionAttempt,
+  mockAuthorizeAgentActionDispatch,
+  mockMarkAgentActionSubmitted,
+  mockCompleteAgentActionAttempt,
   mockRecordAgentActionsBatch,
   mockEnforceSpendCap,
   mockRecordSpend,
 } = vi.hoisted(() => ({
   mockCreate: vi.fn(),
+  mockBeginAgentActionAttempt: vi.fn().mockResolvedValue({ id: "action_1", operationId: "operation_1" }),
+  mockAuthorizeAgentActionDispatch: vi.fn().mockResolvedValue(undefined),
+  mockMarkAgentActionSubmitted: vi.fn().mockResolvedValue(undefined),
+  mockCompleteAgentActionAttempt: vi.fn().mockResolvedValue(undefined),
   mockRecordAgentActionsBatch: vi.fn().mockResolvedValue([{ id: "action_1" }]),
   mockEnforceSpendCap: vi.fn().mockResolvedValue(undefined),
   mockRecordSpend: vi.fn().mockResolvedValue(undefined),
@@ -30,9 +38,12 @@ vi.mock("./spend.js", () => ({
 }));
 
 vi.mock("./agent-actions.js", () => ({
+  beginAgentActionAttempt: mockBeginAgentActionAttempt,
+  authorizeAgentActionDispatch: mockAuthorizeAgentActionDispatch,
+  markAgentActionSubmitted: mockMarkAgentActionSubmitted,
   recordAgentActionsBatch: mockRecordAgentActionsBatch,
   summarizeJournaledActions: vi.fn().mockResolvedValue(undefined),
-  completeAgentActionAttempt: vi.fn().mockResolvedValue(undefined),
+  completeAgentActionAttempt: mockCompleteAgentActionAttempt,
   recordAgentTurnUsage: vi.fn().mockResolvedValue(undefined),
   recordAgentAction: vi.fn().mockResolvedValue(undefined),
   hashInstruction: vi.fn().mockReturnValue("hash"),
@@ -56,12 +67,27 @@ function endTurn(text = "Done.") {
 }
 
 function makeIo(): NonNullable<AgentContext["io"]> {
+  const receipt = (
+    tool: "add_internal_note" | "send_reply" | "send_email" | "update_thread_status" | "update_thread_tag",
+    execution: { operationId: string; executionId: string } | undefined,
+    facts: Record<string, unknown>,
+    providerReference = "thread_1",
+  ) => execution ? {
+    version: 1 as const,
+    ...execution,
+    tool,
+    target: { kind: "thread", id: "thread_1" },
+    observedAt: "2026-09-15T07:00:00.000Z",
+    providerReference,
+    outcome: "succeeded" as const,
+    facts,
+  } : undefined;
   return {
-    addInternalNote: vi.fn().mockResolvedValue({ status: "ok", message: "Note added." }),
-    sendReply: vi.fn().mockResolvedValue({ status: "ok", message: "Reply sent to customer via email." }),
+    addInternalNote: vi.fn(async (_input, execution) => ({ status: "ok", message: "Note added.", receipt: receipt("add_internal_note", execution, { threadId: "thread_1", messageId: "message_1", contentSha256: "a".repeat(64) }, "message_1") })),
+    sendReply: vi.fn(async (_input, execution) => ({ status: "ok", message: "Reply sent to customer via email.", receipt: receipt("send_reply", execution, { logicalResponseId: "message_1", messageId: "message_1", threadId: "thread_1", destination: { kind: "thread", id: "thread_1" }, contentSha256: "b".repeat(64), deliveryState: "sent", providerMessageId: null }, "message_1") })),
     sendEmail: vi.fn().mockResolvedValue({ status: "ok", message: "Email sent." }),
-    updateThreadStatus: vi.fn().mockResolvedValue({ status: "ok", message: "Status updated." }),
-    updateThreadTag: vi.fn().mockResolvedValue({ status: "ok", message: "Tag updated." }),
+    updateThreadStatus: vi.fn(async (_input, execution) => ({ status: "ok", message: "Status updated.", receipt: receipt("update_thread_status", execution, { threadId: "thread_1", beforeStatus: "open", afterStatus: "closed" }) })),
+    updateThreadTag: vi.fn(async (_input, execution) => ({ status: "ok", message: "Tag updated.", receipt: receipt("update_thread_tag", execution, { threadId: "thread_1", beforeTag: null, afterTag: "Refund" }) })),
   };
 }
 
@@ -102,6 +128,10 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
 
 beforeEach(() => {
   mockCreate.mockReset();
+  mockBeginAgentActionAttempt.mockResolvedValue({ id: "action_1", operationId: "operation_1" });
+  mockAuthorizeAgentActionDispatch.mockResolvedValue(undefined);
+  mockMarkAgentActionSubmitted.mockResolvedValue(undefined);
+  mockCompleteAgentActionAttempt.mockResolvedValue(undefined);
   mockRecordAgentActionsBatch.mockResolvedValue([{ id: "action_1" }]);
   mockEnforceSpendCap.mockResolvedValue(undefined);
   mockRecordSpend.mockResolvedValue(undefined);
@@ -120,7 +150,7 @@ describe("runAgent tool execution", () => {
       thread: {
         id: "operator_thread",
         status: "open",
-        channelType: "sms_agent",
+        channelType: "operator",
         tag: "Support",
         aiSummary: null,
         shopifyCustomerId: null,
@@ -147,7 +177,7 @@ describe("runAgent tool execution", () => {
       thread: {
         id: "operator_thread",
         status: "open",
-        channelType: "sms_agent",
+        channelType: "operator",
         tag: "Support",
         aiSummary: null,
         shopifyCustomerId: null,
@@ -172,7 +202,7 @@ describe("runAgent tool execution", () => {
 
     const result = await runAgent(ctx, "Note that the customer is VIP");
 
-    expect(ctx.io?.addInternalNote).toHaveBeenCalledWith({ text: "Customer is VIP" });
+    expect(ctx.io?.addInternalNote).toHaveBeenCalledWith({ text: "Customer is VIP" }, expect.any(Object));
     expect(result.actionsPerformed[0]).toMatchObject({
       tool: "add_internal_note",
       result: "Note added.",
@@ -195,8 +225,8 @@ describe("runAgent tool execution", () => {
 
     const result = await runAgent(ctx, "Close and tag this thread");
 
-    expect(ctx.io?.updateThreadStatus).toHaveBeenCalledWith({ status: "closed" });
-    expect(ctx.io?.updateThreadTag).toHaveBeenCalledWith({ tag: "Refund" });
+    expect(ctx.io?.updateThreadStatus).toHaveBeenCalledWith({ status: "closed" }, expect.any(Object));
+    expect(ctx.io?.updateThreadTag).toHaveBeenCalledWith({ tag: "Refund" }, expect.any(Object));
     expect(result.actionsPerformed.map((action) => action.tool)).toEqual([
       "update_thread_status",
       "update_thread_tag",
@@ -211,7 +241,7 @@ describe("runAgent tool execution", () => {
 
     const result = await runAgent(ctx, "Tell the customer their order shipped");
 
-    expect(ctx.io?.sendReply).toHaveBeenCalledWith({ text: "Your order shipped!" });
+    expect(ctx.io?.sendReply).toHaveBeenCalledWith({ text: "Your order shipped!" }, expect.any(Object));
     expect(result.actionsPerformed[0].result).toBe("Reply sent to customer via email.");
   });
 
@@ -283,7 +313,7 @@ describe("runAgent loop behavior", () => {
     );
 
     expect(mockCreate).not.toHaveBeenCalled();
-    expect(ctx.io?.addInternalNote).toHaveBeenCalledWith({ text: "Pre-approved note" });
+    expect(ctx.io?.addInternalNote).toHaveBeenCalledWith({ text: "Pre-approved note" }, expect.any(Object));
     expect(result.actionsPerformed).toHaveLength(1);
     expect(result.actionsPerformed[0].tool).toBe("add_internal_note");
   });
@@ -372,12 +402,21 @@ describe("runAgent moduleTools seam", () => {
       },
     );
 
-    expect(moduleExecute.mock.calls[0]?.[1]?.shopify?.operationId)
-      .toBe("execution_42:tool_call_7");
-    expect(result.actionsPerformed[0]?.providerOperationKey)
-      .toBe("execution_42:tool_call_7");
-    expect(mockRecordAgentActionsBatch.mock.calls.at(-1)?.[0]?.actions[0]?.providerOperationKey)
-      .toBe("execution_42:tool_call_7");
+    const providerOperationKey = moduleExecute.mock.calls[0]?.[1]?.shopify?.operationId;
+    expect(providerOperationKey).toMatch(/^[0-9a-f-]{36}$/);
+    expect(result.actionsPerformed[0]?.providerOperationKey).toBe(providerOperationKey);
+    expect(mockBeginAgentActionAttempt.mock.calls.at(-1)?.[0]).toMatchObject({
+      operationId: providerOperationKey,
+      action: { providerOperationKey },
+    });
+    expect(mockAuthorizeAgentActionDispatch).toHaveBeenCalledWith({
+      id: "action_1",
+      operationId: "operation_1",
+    });
+    expect(mockMarkAgentActionSubmitted).toHaveBeenCalledWith({
+      id: "action_1",
+      operationId: "operation_1",
+    });
   });
 
   it("does not offer module tools in read-only mode", async () => {
@@ -400,14 +439,16 @@ it('keeps a completed action journaled when the following model call fails', asy
   const ctx = makeCtx();
   await expect(runAgent(ctx, 'Reply')).rejects.toThrow('model unavailable');
   expect(ctx.io?.sendReply).toHaveBeenCalledOnce();
-  expect(mockRecordAgentActionsBatch).toHaveBeenCalledOnce();
-  expect(mockRecordAgentActionsBatch.mock.calls[0][0].actions[0].status).toBe('unknown');
-  expect(completeAgentActionAttempt).toHaveBeenCalledWith('action_1', expect.objectContaining({ status: 'success' }));
+  expect(mockBeginAgentActionAttempt).toHaveBeenCalledOnce();
+  expect(completeAgentActionAttempt).toHaveBeenCalledWith(
+    { id: 'action_1', operationId: 'operation_1' },
+    expect.objectContaining({ status: 'success' }),
+  );
   expect(recordAgentTurnUsage).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'error' }));
 });
 
 it('does not execute a mutation when the attempt cannot be persisted', async () => {
-  mockRecordAgentActionsBatch.mockRejectedValueOnce(new Error('database unavailable'));
+  mockBeginAgentActionAttempt.mockRejectedValueOnce(new Error('database unavailable'));
   const ctx = makeCtx();
   await expect(runAgent(ctx, 'Reply', [{ id: 'send', name: 'send_reply', input: { text: 'hello' } }])).rejects.toThrow('database unavailable');
   expect(ctx.io?.sendReply).not.toHaveBeenCalled();

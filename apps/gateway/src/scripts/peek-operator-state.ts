@@ -53,7 +53,7 @@ async function main() {
   }
 
   const actions = await db.agentAction.findMany({
-    where: { organizationId: orgId },
+    where: { organizationId: orgId, executedAt: { not: null } },
     orderBy: { executedAt: 'desc' },
     take: limit,
   });
@@ -61,7 +61,7 @@ async function main() {
   console.log('');
   console.log(`── Last ${actions.length} agent actions (newest first) ─────────────────────`);
   for (const a of actions) {
-    const when = a.executedAt.toISOString().replace('T', ' ').slice(0, 19);
+    const when = a.executedAt!.toISOString().replace('T', ' ').slice(0, 19);
     const summary = a.summary ? ` · ${a.summary.slice(0, 60)}` : '';
     console.log(`  ${when}  ${a.tool.padEnd(24)} ${a.status.padEnd(8)} ${a.mode}${summary}`);
   }

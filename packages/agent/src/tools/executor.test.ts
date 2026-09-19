@@ -50,7 +50,7 @@ const goodwillSpendTool = defineTool({
   capabilities: [],
   label: "Test goodwill spend",
   planStepLabel: "Test goodwill spend",
-  policy: { dailyRefundSpendLimit: true },
+  policy: { dailyRefundSpendLimit: "input" },
   execute: async (input: { amount: number }) => ({
     status: "ok" as const,
     message: "Goodwill issued.",
@@ -192,6 +192,201 @@ describe("goodwill spend reservation finalization", () => {
   });
 });
 
+// The other half of the same budget: a tool whose amount only exists once the
+// provider has priced it reserves from inside its own execution.
+const providerPricedSpendTool = defineTool({
+  name: "test_provider_priced_spend",
+  description: "Test-only compensation the provider prices.",
+  fields: { units: numberArg("How many units come back.", { required: true }) },
+  category: "action",
+  group: "order",
+  capabilities: [],
+  label: "Test provider-priced spend",
+  planStepLabel: "Test provider-priced spend",
+  policy: { dailyRefundSpendLimit: "provider" },
+  execute: async (input: { units: number }, ctx) => {
+    const calculatedCents = input.units * 800;
+    if (calculatedCents <= 0) {
+      return { status: "policy_block" as const, message: "Error: nothing to refund." };
+    }
+    const reserved = await ctx.shopify!.reserveCompensation!(calculatedCents);
+    if (reserved.kind === "refused") return reserved.result;
+    return { status: "ok" as const, message: "Refunded.", spentCents: calculatedCents };
+  },
+});
+
+describe("provider-priced spend reservation", () => {
+  function spendCtx(): BaseAgentContext {
+    return {
+      ...threadlessCtx(vi.fn()),
+      shopify: {
+        shop: "test.myshopify.com",
+        accessToken: "token",
+        operationId: "execution_1:refund_1",
+      },
+    };
+  }
+
+  it("reserves the figure the tool priced and commits what it spent", async () => {
+    const result = await executeToolWithStatus(
+      providerPricedSpendTool.name,
+      { units: 2 },
+      spendCtx(),
+      undefined,
+      { [providerPricedSpendTool.name]: providerPricedSpendTool },
+    );
+
+    expect(result.status).toBe("success");
+    expect(mockReserveDailyRefundSpend).toHaveBeenCalledWith(expect.objectContaining({
+      operationKey: "execution_1:refund_1",
+      tool: providerPricedSpendTool.name,
+      requestedCents: 1_600,
+    }));
+    expect(mockCommitDailyRefundSpendReservation).toHaveBeenCalledWith("reservation_1", 1_600);
+  });
+
+  it("passes a refused budget back as the tool's own result", async () => {
+    mockReserveDailyRefundSpend.mockResolvedValueOnce({ kind: "blocked", remainingCents: 250 });
+
+    const result = await executeToolWithStatus(
+      providerPricedSpendTool.name,
+      { units: 2 },
+      spendCtx(),
+      undefined,
+      { [providerPricedSpendTool.name]: providerPricedSpendTool },
+    );
+
+    expect(result.result).toContain("daily compensation cap");
+    // Nothing was reserved, so there is nothing to release or commit.
+    expect(mockCommitDailyRefundSpendReservation).not.toHaveBeenCalled();
+    expect(mockReleaseDailyRefundSpendReservation).not.toHaveBeenCalled();
+  });
+
+  it("settles nothing when the tool stopped before it priced anything", async () => {
+    const result = await executeToolWithStatus(
+      providerPricedSpendTool.name,
+      { units: 0 },
+      spendCtx(),
+      undefined,
+      { [providerPricedSpendTool.name]: providerPricedSpendTool },
+    );
+
+    expect(result.status).toBe("policy_block");
+    expect(mockReserveDailyRefundSpend).not.toHaveBeenCalled();
+    expect(mockCommitDailyRefundSpendReservation).not.toHaveBeenCalled();
+    expect(mockReleaseDailyRefundSpendReservation).not.toHaveBeenCalled();
+    expect(mockMarkDailyRefundSpendReservationUnknown).not.toHaveBeenCalled();
+  });
+});
+
+describe("receipt validation", () => {
+  it("turns a missing required receipt into unknown when stable identities were supplied", async () => {
+    const missingReceiptTool = defineTool({
+      name: "test_missing_receipt",
+      description: "Omits required execution evidence.",
+      fields: {},
+      category: "action",
+      group: "order",
+      capabilities: ["shopify"],
+      label: "Missing receipt",
+      planStepLabel: "Missing receipt",
+      requiredReceiptVersion: 1,
+      execute: async () => ({ status: "ok" as const, message: "Provider said yes." }),
+    });
+    const ctx = {
+      ...threadlessCtx(vi.fn()),
+      shopify: {
+        shop: "test.myshopify.com",
+        accessToken: "token",
+        operationId: "operation-1",
+        executionId: "execution-1",
+      },
+    } as BaseAgentContext;
+
+    const result = await executeToolWithStatus(
+      missingReceiptTool.name,
+      {},
+      ctx,
+      undefined,
+      { [missingReceiptTool.name]: missingReceiptTool },
+    );
+
+    expect(result.status).toBe("unknown");
+    expect(result.result).toContain("invalid execution receipt");
+    expect(result.receipt).toBeUndefined();
+  });
+
+  it("keeps taskless compatibility calls working while identities are absent", async () => {
+    const compatibilityTool = defineTool({
+      name: "test_legacy_receipt_compatibility",
+      description: "Represents a taskless legacy execution.",
+      fields: {},
+      category: "action",
+      group: "order",
+      capabilities: [],
+      label: "Legacy result",
+      planStepLabel: "Legacy result",
+      requiredReceiptVersion: 1,
+      execute: async () => ({ status: "ok" as const, message: "Legacy success." }),
+    });
+
+    const result = await executeToolWithStatus(
+      compatibilityTool.name,
+      {},
+      threadlessCtx(vi.fn()),
+      undefined,
+      { [compatibilityTool.name]: compatibilityTool },
+    );
+
+    expect(result).toEqual({ status: "success", result: "Legacy success." });
+  });
+
+  it("turns a malformed success receipt into unknown before it can be journaled as success", async () => {
+    const malformedReceiptTool = defineTool({
+      name: "test_malformed_receipt",
+      description: "Returns malformed evidence.",
+      fields: {},
+      category: "action",
+      group: "order",
+      capabilities: [],
+      label: "Malformed receipt",
+      planStepLabel: "Malformed receipt",
+      policy: {},
+      execute: async () => ({
+        status: "ok" as const,
+        message: "Provider said yes.",
+        receipt: {
+          version: 1,
+          operationId: "wrong-operation",
+          executionId: "execution-1",
+          tool: "create_refund",
+          target: { kind: "order", id: "order-1" },
+          observedAt: "not-a-date",
+          outcome: "succeeded",
+          providerReference: "refund-1",
+          facts: {},
+        } as never,
+      }),
+    });
+    const ctx = {
+      ...threadlessCtx(vi.fn()),
+      shopify: { shop: "test.myshopify.com", accessToken: "token", operationId: "operation-1" },
+    } as BaseAgentContext;
+
+    const result = await executeToolWithStatus(
+      malformedReceiptTool.name,
+      {},
+      ctx,
+      undefined,
+      { [malformedReceiptTool.name]: malformedReceiptTool },
+    );
+
+    expect(result.status).toBe("unknown");
+    expect(result.result).toContain("invalid execution receipt");
+    expect(result.receipt).toBeUndefined();
+  });
+});
+
 describe("actionAuthorityBlock", () => {
   function blockedCtx(): BaseAgentContext {
     return {
@@ -250,5 +445,95 @@ describe("actionAuthorityBlock", () => {
     );
 
     expect(result.status).toBe("success");
+  });
+});
+
+// Selection decides what the model is offered; execution decides what may run.
+// Discovery makes the first set smaller and expandable, which is only safe
+// because the second check is independent of it — so a tool call the selection
+// never offered, fabricated or hallucinated, must be refused here on the
+// authority of the turn alone.
+describe("execution refuses a fabricated tool call in every authority mode", () => {
+  function storefrontCtx(
+    authState: "guest" | "verified",
+    verifiedOrders: { orderName: string; orderId: string }[] = [],
+  ): BaseAgentContext {
+    return {
+      orgId: "org_1",
+      orgName: "Test Store",
+      authState,
+      verifiedOrders,
+      recentMessages: [],
+      shopify: { shop: "test.myshopify.com", accessToken: "token" },
+      escalate: vi.fn(),
+    };
+  }
+
+  const supportCtx = (): BaseAgentContext => ({
+    orgId: "org_1",
+    orgName: "Test Store",
+    recentMessages: [],
+    shopify: { shop: "test.myshopify.com", accessToken: "token" },
+    escalate: vi.fn(),
+  });
+
+  it("rejects an operator module tool named from a support turn", async () => {
+    // create_flash_sale is a gateway module tool. Discovery cannot return it
+    // because it is not in the registry; execution cannot run it because the
+    // support turn supplies no module tools. Both halves, not just the first.
+    const result = await executeToolWithStatus("create_flash_sale", { percent: 90 }, supportCtx());
+
+    expect(result.status).toBe("error");
+    expect(result.result).toContain('unknown tool "create_flash_sale"');
+  });
+
+  it.each([
+    ["create_refund", { order_id: "123", amount: "10.00" }],
+    ["cancel_order", { order_id: "123" }],
+    ["find_customer", { email: "shopper@example.com" }],
+    ["get_shopify_orders", { customer_id: "456" }],
+    ["get_order_by_name", { order_name: "#1025" }],
+  ])("refuses %s for an anonymous storefront visitor", async (name, args) => {
+    const result = await executeToolWithStatus(name, args, storefrontCtx("guest"));
+
+    // Policy-blocked, not attempted: the guard runs ahead of the provider even
+    // though this context carries a usable Shopify token.
+    expect(result.status).toBe("policy_block");
+  });
+
+  it("refuses a mutation for a verified visitor and scopes their reads to the order they proved", async () => {
+    const ctx = storefrontCtx("verified", [{ orderName: "#1025", orderId: "1025" }]);
+
+    expect((await executeToolWithStatus("create_refund", { order_id: "1025", amount: "10.00" }, ctx)).status)
+      .toBe("policy_block");
+    expect((await executeToolWithStatus("get_order_by_name", { order_name: "#1026" }, ctx)).status)
+      .toBe("policy_block");
+    expect((await executeToolWithStatus("get_order_tracking", { order_id: "1026" }, ctx)).status)
+      .toBe("policy_block");
+  });
+
+  it("refuses a forbidden call without disclosing the tool's arguments", async () => {
+    // Post-parse this answered "input.by is required" — a refusal that still
+    // tells the shopper find_customer exists and what it takes. Whether they may
+    // call it at all does not depend on the arguments being well-formed.
+    for (const args of [{}, { email: "shopper@example.com" }, { by: "email", value: "x" }]) {
+      const result = await executeToolWithStatus("find_customer", args, storefrontCtx("guest"));
+
+      expect(result.status).toBe("policy_block");
+      expect(result.result).not.toContain("input.");
+      expect(result.result).not.toContain("invalid arguments");
+    }
+  });
+
+  it("refuses a support tool whose category the workspace turned off", async () => {
+    const result = await executeToolWithStatus(
+      "create_refund",
+      { order_id: "123", amount: "10.00" },
+      supportCtx(),
+      { toolsEnabled: { action: false, communication: true, internal: true, read: true } },
+    );
+
+    expect(result.status).toBe("policy_block");
+    expect(result.result).toContain("disabled by the workspace owner");
   });
 });

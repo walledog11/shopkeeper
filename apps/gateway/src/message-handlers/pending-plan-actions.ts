@@ -14,6 +14,12 @@ import { executeOperatorApprovedCachedPlan } from './execute-operator-agent-turn
 // (handlePendingPlanCommand) and the approve_pending_plan control tool so both
 // approve identically. A throw propagates with the plan left parked — a failed
 // run is not a dismissal.
+//
+// Authorizing the durable proposal is not done here. Every approval surface —
+// this one, and both dashboard routes — enters `executeCurrentCachedHomePlan`,
+// so that is where the approval is recorded against the exact snapshot and the
+// task is closed. Doing it here as well gave the phone one owner and the
+// dashboard another, and the two disagreed.
 export async function runApprovedPendingPlan(params: {
   organizationId: string;
   memberKey: string;

@@ -15,12 +15,28 @@ import {
 } from "@/lib/agent/concierge-navigation"
 import {
   fetchOperatorTranscript,
+  isAgentRequestActive,
+  resumeAgentChatRequest,
   sendAgentChatInstruction,
   transcriptToChatMessages,
   type ChatMessage,
 } from "./agent-chat-session"
 
 const DEFAULT_FILLER_PHRASES = getConciergeFillerPhrases("")
+const PENDING_REQUEST_STORAGE_KEY = "shopkeeper:agent:pending-request"
+
+function taskStatusLabel(status: string): string {
+  switch (status) {
+    case "accepted":
+    case "attached":
+    case "queued": return "Queued — waiting for a worker…"
+    case "running": return "Working on it…"
+    case "waiting_input": return "Waiting for your answer…"
+    case "waiting_approval": return "Waiting for your approval…"
+    case "reconciling": return "Checking an interrupted action…"
+    default: return "Working on it…"
+  }
+}
 
 interface UseAgentChatStateProps {
   /** Load the operator thread's history on mount. Off for surfaces that open on a blank slate. */
@@ -75,8 +91,48 @@ export function useAgentChatState({ restoreHistory = true }: UseAgentChatStatePr
 
     void fetchOperatorTranscript()
       .then((result) => {
-        if (result.status !== "ok" || result.transcript.messages.length === 0) return
-        setMessages(transcriptToChatMessages(result.transcript))
+        if (result.status !== "ok") return
+        const restored = transcriptToChatMessages(result.transcript)
+        const active = result.transcript.requests?.find(isAgentRequestActive)
+        if (!active) {
+          setMessages(restored)
+          window.localStorage.removeItem(PENDING_REQUEST_STORAGE_KEY)
+          return
+        }
+        window.localStorage.setItem(PENDING_REQUEST_STORAGE_KEY, active.requestId)
+        const last = restored.at(-1)
+        const withRequest = last?.role === "user" && last.text === active.instruction
+          ? restored
+          : [...restored, { role: "user" as const, text: active.instruction, timestamp: new Date() }]
+        setIsRunning(true)
+        setMessages([...withRequest, { role: "thinking", status: taskStatusLabel(active.status) }])
+        void resumeAgentChatRequest(active.requestId, fetch, 750, (status) => {
+          setMessages(prev => prev.map((message, index) =>
+            index === prev.length - 1 && message.role === "thinking"
+              ? { ...message, status: taskStatusLabel(status) }
+              : message))
+        }).then((requestResult) => {
+          setMessages(prev => [
+            ...prev.slice(0, -1),
+            requestResult.ok
+              ? {
+                  role: "agent" as const,
+                  summary: requestResult.summary,
+                  actions: requestResult.actionsPerformed,
+                  timestamp: new Date(),
+                  awaitingApproval: requestResult.awaitingApproval,
+                }
+              : { role: "agent" as const, summary: requestResult.error, actions: [], timestamp: new Date() },
+          ])
+        }).catch(() => {
+          setMessages(prev => [
+            ...prev.slice(0, -1),
+            { role: "agent", summary: "Request status is temporarily unavailable.", actions: [], timestamp: new Date() },
+          ])
+        }).finally(() => {
+          window.localStorage.removeItem(PENDING_REQUEST_STORAGE_KEY)
+          setIsRunning(false)
+        })
       })
       .catch((err) => {
         console.error("[AgentChat] fetchOperatorTranscript failed:", err)
@@ -117,7 +173,18 @@ export function useAgentChatState({ restoreHistory = true }: UseAgentChatStatePr
     ])
 
     try {
-      const result = await sendAgentChatInstruction({ instruction: trimmed })
+      const clientRequestId = crypto.randomUUID()
+      window.localStorage.setItem(PENDING_REQUEST_STORAGE_KEY, clientRequestId)
+      const result = await sendAgentChatInstruction({
+        instruction: trimmed,
+        clientRequestId,
+        onStatus: (status) => {
+          setMessages(prev => prev.map((message, index) =>
+            index === prev.length - 1 && message.role === "thinking"
+              ? { ...message, status: taskStatusLabel(status) }
+              : message))
+        },
+      })
 
       if (!result.ok) {
         setMessages(prev => [
@@ -150,6 +217,7 @@ export function useAgentChatState({ restoreHistory = true }: UseAgentChatStatePr
         { role: "agent", summary: "Request failed. Please try again.", actions: [], timestamp: new Date() },
       ])
     } finally {
+      window.localStorage.removeItem(PENDING_REQUEST_STORAGE_KEY)
       setIsRunning(false)
       textareaRef.current?.focus()
     }

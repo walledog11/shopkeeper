@@ -1,14 +1,24 @@
+import type Anthropic from "@anthropic-ai/sdk";
 import logger from "./logger.js";
 import { randomUUID } from "node:crypto";
-import { recordAgentActionsBatch, completeAgentActionAttempt } from "./agent-actions.js";
+import {
+  authorizeAgentActionDispatch,
+  beginAgentActionAttempt,
+  completeAgentActionAttempt,
+  markAgentActionSubmitted,
+} from "./agent-actions.js";
 import { buildCachedSystemPrompt, buildSplitCachedSystemPrompt } from "./ai/anthropic.js";
 import { pickModel } from "./ai/index.js";
 import type { OrgSettings, RawToolCall } from "./types.js";
-import { selectAgentTools, type AgentToolDefinition } from "./tools/registry/index.js";
+import {
+  selectAgentTools,
+  TOOL_CATEGORIES,
+  type AgentToolDefinition,
+} from "./tools/registry/index.js";
 import { buildSystemPromptParts, buildComposerAskPrompt } from "./prompt.js";
 import { isOperatorChannel } from "./intent.js";
 import { buildMessageHistory } from "./message-history.js";
-import { runAgentLoop } from "./agent-loop.js";
+import { runAgentLoop, type AgentLoopResult } from "./agent-loop.js";
 import {
   hasUnresolvedShopifyCustomer,
   isGuestOnlyTool,
@@ -31,6 +41,7 @@ import {
   summarizeApprovedDashboardActions,
 } from "./run-approved-actions.js";
 import { summarizeOperatorTurnDispatchFailure } from "./message-dispatch.js";
+import { planExecutionOutcomeForActions } from "./execution-outcome.js";
 import {
   createAgentFailureRecorder,
   executeAgentToolCalls,
@@ -63,6 +74,10 @@ export interface RunAgentOptions extends RunAgentPolicyOptions {
   // Successful facts established by live reads during planning. Approved plans
   // do not re-run those reads, so their evidence travels with the execution.
   completionEvidence?: readonly CompletionFact[];
+  // Set by the caller of a plan that suspended at its proposal: once the approved
+  // write commits, its receipts go back to the same loop and the model composes
+  // the customer's reply from what actually happened.
+  composeFromReceipt?: boolean;
 }
 
 const OPERATOR_HIDDEN_TOOL_NAMES = new Set([
@@ -98,7 +113,7 @@ export async function runAgent(
   const supportThread = isSupportContext(ctx) ? ctx.thread : null;
   const supportCustomer = isSupportContext(ctx) ? ctx.customer : null;
   const operatorMode = supportThread != null && isOperatorChannel(supportThread.channelType);
-  const gatewayOperatorMode = supportThread?.channelType === "sms_agent";
+  const gatewayOperatorMode = supportThread?.channelType === "operator";
   const failureAlertPromises: Promise<unknown>[] = [];
   let escalationReason: string | null = null;
   const finish = (result: AgentResult, outcome: string) => finishAgentRun({
@@ -131,6 +146,7 @@ export async function runAgent(
     supportThread,
     failureAlertPromises,
   });
+  let actionIndex = 0;
   const executeToolCalls = (
     toolCalls: { id: string; name: string; input: unknown }[],
     executionOptions?: { stopOnDefiniteFailure?: boolean },
@@ -143,8 +159,8 @@ export async function runAgent(
       actionsPerformed,
       executedToolCalls,
       completionEvidence: options?.completionEvidence,
-      beginAction: async (call, providerOperationKey) => {
-        const [attempt] = await recordAgentActionsBatch({
+      beginAction: async (call, operationId, providerOperationKey) => {
+        const attempt = await beginAgentActionAttempt({
           orgId: ctx.orgId,
           threadId: supportThread?.id,
           customerId: supportCustomer?.id,
@@ -153,19 +169,35 @@ export async function runAgent(
           instruction,
           approval,
           executionId: options?.executionId,
-          actions: [{ tool: call.name, input: call.input, providerOperationKey,
+          operationId,
+          actionIndex: actionIndex++,
+          action: {
+            tool: call.name,
+            input: call.input,
+            providerOperationKey,
             category: options?.moduleTools?.[call.name]?.category,
-            status: "unknown", result: "Execution started; completion has not been recorded." }],
+          },
         });
-        if (!attempt) throw new Error("Could not persist agent action attempt");
-        return async (action) => {
-          journaledActions.add(action);
-          await completeAgentActionAttempt(attempt.id, action);
-          try {
-            options?.onActionsPersisted?.([{ ...attempt, status: action.status ?? "success" }]);
-          } catch (err) {
-            logger.error({ err, turnId }, "[agent] action observer failed");
-          }
+        return {
+          authorizeDispatch: () => authorizeAgentActionDispatch(attempt),
+          markSubmitted: () => markAgentActionSubmitted(attempt),
+          complete: async (action) => {
+            journaledActions.add(action);
+            await completeAgentActionAttempt(attempt, action);
+            try {
+              options?.onActionsPersisted?.([{
+                id: attempt.id,
+                category: options?.moduleTools?.[call.name]?.category
+                  ?? TOOL_CATEGORIES[call.name]
+                  ?? "unknown",
+                organizationId: ctx.orgId,
+                status: action.status ?? "success",
+                tool: call.name,
+              }]);
+            } catch (err) {
+              logger.error({ err, turnId }, "[agent] action observer failed");
+            }
+          },
         };
       },
       recordAgentFailure: recordAgentFailureSafely,
@@ -179,6 +211,12 @@ export async function runAgent(
         : {}),
     });
 
+  // A plan that suspended at its proposal carries no draft, so the turn that tells
+  // the customer what happened is written after the write, from what it returned.
+  // The executed proposal and its results are seeded into the shared loop below as
+  // the turn the model is answering.
+  const receiptTurns: Anthropic.MessageParam[] = [];
+
   try {
     if (!readOnly && approvedToolCalls && approvedToolCalls.length > 0) {
       const executableToolCalls = selectExecutableApprovedToolCalls(supportThread, approvedToolCalls);
@@ -190,7 +228,7 @@ export async function runAgent(
         }, "approved_dashboard_actions_empty");
       }
 
-      await executeToolCalls(executableToolCalls, { stopOnDefiniteFailure: true });
+      const toolResults = await executeToolCalls(executableToolCalls, { stopOnDefiniteFailure: true });
 
       if (escalationReason) {
         return finish({
@@ -199,11 +237,38 @@ export async function runAgent(
         }, "escalated");
       }
 
-      return finish({
-        summary: summarizeApprovedDashboardActions(actionsPerformed),
-        actionsPerformed,
-      }, approvedActionsCompleteOutcome(supportThread));
+      // Only a committed write earns a composed completion. An unknown outcome is
+      // the executor's to escalate and a definite failure is the caller's bounded
+      // replan; both keep the summary they have today.
+      const composeFromReceipt = options?.composeFromReceipt === true
+        && planExecutionOutcomeForActions(actionsPerformed) === "committed";
+
+      if (!composeFromReceipt) {
+        return finish({
+          summary: summarizeApprovedDashboardActions(actionsPerformed),
+          actionsPerformed,
+        }, approvedActionsCompleteOutcome(supportThread));
+      }
+
+      // Every tool_use block owes a tool_result, so the transcript carries only
+      // the calls that ran: `stopOnDefiniteFailure` can end the batch early.
+      const answered = new Set(toolResults.map((result) => result.tool_use_id));
+      receiptTurns.push(
+        {
+          role: "assistant",
+          content: executableToolCalls
+            .filter((call) => answered.has(call.id))
+            .map((call) => ({
+              type: "tool_use" as const,
+              id: call.id,
+              name: call.name,
+              input: call.input,
+            })),
+        },
+        { role: "user", content: toolResults },
+      );
     }
+    const composingFromReceipt = receiptTurns.length > 0;
 
     // The operator channel is now one durable thread per binding, so its history is
     // the merchant's real conversation — widen the window from the legacy 4. Composer
@@ -218,6 +283,7 @@ export async function runAgent(
       ? `Private question from the support operator. Do not contact the customer.\n\n${boundedInstruction}`
       : boundedInstruction;
     const messages = buildMessageHistory(history, messageInstruction, { segregateUntrusted: !operatorMode });
+    messages.push(...receiptTurns);
     // runAgent is the support/composer entry: it builds a support-shaped system
     // prompt and tool set. Thread-less modules (order-ops and later) run through the
     // shared loop (runAgentLoop) via their own entrypoint, not here — the executor
@@ -245,7 +311,12 @@ export async function runAgent(
         ));
     const tools = readOnly
       ? selectedCoreTools
-      : [
+      : composingFromReceipt
+        // The merchant's approval covered the writes that already ran. Reporting
+        // what they did may read, reply, note or escalate; committing again would
+        // be a write nobody approved.
+        ? selectedCoreTools.filter((tool) => TOOL_CATEGORIES[tool.name] !== "action")
+        : [
           ...selectedCoreTools,
           ...Object.values(options?.moduleTools ?? {}).map((def) => ({
             name: def.name,
@@ -266,24 +337,42 @@ export async function runAgent(
 
     // Spend cap is a backstop, not a per-call meter — check once before the model
     // loop. The approved-execution path above returns with zero model calls and
-    // stays ungated.
+    // stays ungated unless it goes on to compose from its receipts.
     await enforceSpendCap(ctx.orgId, s);
 
-    const loop = await runAgentLoop({
-      ctx,
-      mode: readOnly ? "read_only" : "execute",
-      messages,
-      systemPromptBlocks,
-      tools,
-      model: iterationModel,
-      maxIterations,
-      maxTokensPerCall: readOnly ? 2048 : 4096,
-      settings,
-      usageTotals,
-      runTools: executeToolCalls,
-      getEscalationReason: () => escalationReason,
-      ...(readOnly ? {} : { tokenBudget: TOKEN_BUDGET }),
-    });
+    let loop: AgentLoopResult;
+    try {
+      loop = await runAgentLoop({
+        ctx,
+        mode: readOnly ? "read_only" : "execute",
+        messages,
+        systemPromptBlocks,
+        tools,
+        model: iterationModel,
+        maxIterations,
+        maxTokensPerCall: readOnly ? 2048 : 4096,
+        settings,
+        usageTotals,
+        runTools: executeToolCalls,
+        getEscalationReason: () => escalationReason,
+        ...(readOnly ? {} : { tokenBudget: TOKEN_BUDGET }),
+      });
+    } catch (error) {
+      if (!composingFromReceipt) throw error;
+      // The approved write is already committed and its receipt already stored.
+      // Reporting the turn as an error would make the caller record a known
+      // outcome as unknown, so report what committed and stop here instead.
+      logger.error({
+        err: error,
+        orgId: ctx.orgId,
+        threadId: supportThread?.id ?? null,
+        turnId,
+      }, "[agent] receipt composition failed");
+      return finish({
+        summary: summarizeApprovedDashboardActions(actionsPerformed),
+        actionsPerformed,
+      }, "compose_failed");
+    }
 
     switch (loop.stop) {
       case "escalated":

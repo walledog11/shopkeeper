@@ -20,15 +20,44 @@ export const STALE_CLAIMED_EXECUTION_ERROR =
   "Plan execution did not finish; claim reconciled to unknown for review. It is never auto-replayed.";
 export const STALE_RESERVED_SPEND_ERROR =
   "Goodwill reservation did not reach a provider outcome; capacity released after the reservation window expired.";
+export const STALE_ACTION_DISPATCH_ERROR =
+  "Agent action crossed dispatch authorization without a recorded outcome; it is unknown and must be reconciled, never replayed.";
 export const RECONCILED_ACTION_PREFIX = "Reconciled after provider ambiguity review.";
 
 export interface UnknownOutcomeSweepCounts {
   staleClaimedExecutions: number;
+  staleActionDispatches: number;
   staleReleasedReservations: number;
+  resolvedStandaloneActions: number;
+  stillUnknownStandaloneActions: number;
   resolvedExecutions: number;
   resolvedReservations: number;
   stillUnknownExecutions: number;
   stillUnknownReservations: number;
+}
+
+export async function reconcileStaleAgentActionDispatches(
+  staleBefore: Date,
+  reason: string,
+): Promise<number> {
+  const updated = await db.agentAction.updateMany({
+    where: {
+      dispatchState: { in: ["dispatch_authorized", "submitted"] },
+      OR: [
+        { dispatchState: "dispatch_authorized", createdAt: { lt: staleBefore } },
+        { dispatchState: "submitted", submittedAt: { lt: staleBefore } },
+      ],
+    },
+    data: {
+      dispatchState: "unknown",
+      status: "unknown",
+      output: reason,
+      errorDetail: reason,
+      executedAt: new Date(),
+      durationMs: 0,
+    },
+  });
+  return updated.count;
 }
 
 function canonicalJson(value: Prisma.JsonValue | Prisma.InputJsonValue): string {
@@ -142,7 +171,7 @@ export async function reconcileUnknownAgentAction(params: {
       organizationId: params.organizationId,
       status: "unknown",
     },
-    select: { id: true, status: true },
+    select: { id: true, status: true, dispatchState: true },
   });
   if (!action) return "still_unknown";
 
@@ -171,10 +200,18 @@ export async function reconcileUnknownAgentAction(params: {
       if (reservation) {
         await applyReservationProbeResult(reservation, probe);
       }
+      // Existing taskless rows use the historical text/status compatibility
+      // boundary. A lifecycle row cannot be promoted to success without a
+      // versioned receipt carrying the provider facts required by its tool.
+      // The probe still prevents replay and may settle a proven no-effect.
+      const lifecycleCommitMissingReceipt = action.dispatchState !== null
+        && probe.outcome === "committed";
+      if (lifecycleCommitMissingReceipt) return "still_unknown";
       await db.agentAction.updateMany({
         where: { id: params.actionId, status: "unknown" },
         data: {
           status: probe.outcome === "committed" ? "success" : "error",
+          ...(action.dispatchState !== null ? { dispatchState: "settled" as const } : {}),
           output: `${RECONCILED_ACTION_PREFIX} ${probe.message}`,
           errorDetail: probe.outcome === "no_effect" ? probe.message : null,
         },
@@ -194,12 +231,22 @@ export async function reconcileUnknownOutcomesForOrganization(params: {
   organizationId: string;
   shopify: ShopifyContext | null;
   batchSize?: number;
-}): Promise<Pick<UnknownOutcomeSweepCounts, "resolvedExecutions" | "resolvedReservations" | "stillUnknownExecutions" | "stillUnknownReservations">> {
+}): Promise<Pick<
+  UnknownOutcomeSweepCounts,
+  | "resolvedStandaloneActions"
+  | "stillUnknownStandaloneActions"
+  | "resolvedExecutions"
+  | "resolvedReservations"
+  | "stillUnknownExecutions"
+  | "stillUnknownReservations"
+>> {
   const batchSize = params.batchSize ?? 25;
   let resolvedExecutions = 0;
   let resolvedReservations = 0;
   let stillUnknownExecutions = 0;
   let stillUnknownReservations = 0;
+  let resolvedStandaloneActions = 0;
+  let stillUnknownStandaloneActions = 0;
 
   const unknownReservations = await db.refundSpendReservation.findMany({
     where: { organizationId: params.organizationId, status: "unknown" },
@@ -217,6 +264,37 @@ export async function reconcileUnknownOutcomesForOrganization(params: {
     } else {
       stillUnknownReservations += 1;
     }
+  }
+
+  const standaloneActions = await db.agentAction.findMany({
+    where: {
+      organizationId: params.organizationId,
+      executionId: null,
+      status: "unknown",
+      dispatchState: "unknown",
+    },
+    orderBy: { executedAt: "asc" },
+    take: batchSize,
+    select: {
+      id: true,
+      tool: true,
+      input: true,
+      executionId: true,
+      providerOperationKey: true,
+    },
+  });
+  for (const action of standaloneActions) {
+    const outcome = await reconcileUnknownAgentAction({
+      actionId: action.id,
+      organizationId: params.organizationId,
+      executionId: action.executionId,
+      providerOperationKey: action.providerOperationKey,
+      tool: action.tool,
+      input: action.input,
+      shopify: params.shopify,
+    });
+    if (outcome === "resolved") resolvedStandaloneActions += 1;
+    else stillUnknownStandaloneActions += 1;
   }
 
   const unknownExecutions = await db.planExecution.findMany({
@@ -272,6 +350,8 @@ export async function reconcileUnknownOutcomesForOrganization(params: {
   }
 
   return {
+    resolvedStandaloneActions,
+    stillUnknownStandaloneActions,
     resolvedExecutions,
     resolvedReservations,
     stillUnknownExecutions,
@@ -290,13 +370,17 @@ export async function runUnknownOutcomeReconciliation(params: {
     staleBefore,
     STALE_CLAIMED_EXECUTION_ERROR,
   );
+  const staleActionDispatches = await reconcileStaleAgentActionDispatches(
+    staleBefore,
+    STALE_ACTION_DISPATCH_ERROR,
+  );
   const staleReleasedReservations = await reconcileStaleReservedRefundSpendReservations(
     staleBefore,
     STALE_RESERVED_SPEND_ERROR,
   );
 
   const organizationIds = new Set<string>();
-  const [executionOrgs, reservationOrgs] = await Promise.all([
+  const [executionOrgs, reservationOrgs, actionOrgs] = await Promise.all([
     db.planExecution.findMany({
       where: { status: "unknown" },
       distinct: ["organizationId"],
@@ -309,13 +393,23 @@ export async function runUnknownOutcomeReconciliation(params: {
       select: { organizationId: true },
       take: 100,
     }),
+    db.agentAction.findMany({
+      where: { status: "unknown", dispatchState: "unknown" },
+      distinct: ["organizationId"],
+      select: { organizationId: true },
+      take: 100,
+    }),
   ]);
   for (const row of executionOrgs) organizationIds.add(row.organizationId);
   for (const row of reservationOrgs) organizationIds.add(row.organizationId);
+  for (const row of actionOrgs) organizationIds.add(row.organizationId);
 
   const totals: UnknownOutcomeSweepCounts = {
     staleClaimedExecutions,
+    staleActionDispatches,
     staleReleasedReservations,
+    resolvedStandaloneActions: 0,
+    stillUnknownStandaloneActions: 0,
     resolvedExecutions: 0,
     resolvedReservations: 0,
     stillUnknownExecutions: 0,
@@ -331,6 +425,8 @@ export async function runUnknownOutcomeReconciliation(params: {
     });
     totals.resolvedExecutions += result.resolvedExecutions;
     totals.resolvedReservations += result.resolvedReservations;
+    totals.resolvedStandaloneActions += result.resolvedStandaloneActions;
+    totals.stillUnknownStandaloneActions += result.stillUnknownStandaloneActions;
     totals.stillUnknownExecutions += result.stillUnknownExecutions;
     totals.stillUnknownReservations += result.stillUnknownReservations;
   }

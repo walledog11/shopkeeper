@@ -10,6 +10,8 @@ export const PLAN_SIGNAL_MESSAGES: Record<ProducedPlanSignalCode, string> = {
     "Couldn't find a Shopify customer - verify the correct account is linked before approving.",
   recent_orders_fetch_failed:
     "Shopify recent-orders pre-fetch failed - verify order details before approving.",
+  kb_fetch_failed:
+    "Couldn't load your knowledge base - the reply may contradict documented policy. Review before sending.",
   shopify_lookup_failed:
     "Shopify lookup failed during planning - verify order/customer details before approving.",
   order_not_found:

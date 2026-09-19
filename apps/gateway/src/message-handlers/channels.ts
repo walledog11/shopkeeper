@@ -2,6 +2,10 @@ import type { Job, Queue } from 'bullmq';
 import { db } from '@shopkeeper/db';
 import { shopifyRestJson } from '@shopkeeper/agent/shopify';
 import { fetchInstagramMessagingUserProfile } from '../clients/instagram-graph.js';
+import {
+  fetchSocialApiParticipantProfile,
+  SocialApiProfileError,
+} from '../clients/socialapi-profile.js';
 import { isRecord } from '../lib/typing.js';
 import {
   downloadInstagramAttachment,
@@ -224,11 +228,12 @@ export async function handleIgDmJob(job: Job<InboundJobData>, aiSummaryQueue: Qu
       return;
     }
 
-    // Profile enrichment and attachment download both speak Meta's Graph API with
-    // the integration's Meta token, which a SocialAPI row does not have. Until the
-    // provider's own enrichment and media paths are built, a SocialAPI message
-    // carries no display name and its media renders through formatInstagramMessage
-    // as an unsupported-attachment marker rather than being silently dropped.
+    // Each transport reads the shopper's display name from its own surface: Meta's
+    // Graph API for a direct row, and SocialAPI's conversation list for a provider
+    // row, which is the only place SocialAPI carries it. Attachment download still
+    // speaks Meta's Graph API with a token a SocialAPI row does not have, so its
+    // media renders through formatInstagramMessage as an unsupported-attachment
+    // marker rather than being silently dropped.
     let customerName: string | null = null;
     let storedAttachments: string[] = [];
     if (integration.transport === 'meta_direct') {
@@ -257,6 +262,28 @@ export async function handleIgDmJob(job: Job<InboundJobData>, aiSummaryQueue: Qu
         downloadInstagramAttachment,
         externalMessageId,
       );
+    } else if (providerConversationId) {
+      // A display name is worth one bounded read, never the message: a failed
+      // lookup leaves the ticket under its platform-id label and is retried by
+      // the next inbound message, which merges the name onto the same customer.
+      try {
+        const profile = await fetchSocialApiParticipantProfile({
+          accountId: integration.instagramAccountId,
+          conversationId: providerConversationId,
+          participantId: senderIgsid,
+        });
+        customerName = profile?.name ?? null;
+      } catch (error) {
+        logger.warn(
+          {
+            category: error instanceof SocialApiProfileError ? error.category : 'unknown',
+            integrationId,
+            organizationId,
+            traceId,
+          },
+          '[Worker] SocialAPI profile enrichment failed',
+        );
+      }
     }
 
     await processInboundMessage(

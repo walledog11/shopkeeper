@@ -1,5 +1,6 @@
 import { db, ThreadStatus } from '@shopkeeper/db';
-import { defineTool, stringArg, toolError, toolOk, toolUnknown, type AgentToolDefinition } from '@shopkeeper/agent/tools';
+import { createHash } from 'node:crypto';
+import { defineTool, stringArg, toolError, toolNotFound, toolOk, toolUnknown, type AgentToolDefinition, type ReceiptV1 } from '@shopkeeper/agent/tools';
 import { canonicalInboxThreadWhere } from '@shopkeeper/agent/inbox-filter';
 import { wrapUntrusted } from '@shopkeeper/agent/message-history';
 import { getCurrentPlanForThread } from '@shopkeeper/agent/plan-cache-shape';
@@ -171,7 +172,7 @@ export function buildOperatorInboxTools(
       if (!isThreadId(input.ticket_id)) return toolError(TICKET_NOT_IN_INBOX);
       // Org-scoped + the canonical inbox predicate, so a ticket id alone can
       // never reach another tenant's thread or the operator's own internal
-      // sms_agent/dashboard_agent threads.
+      // operator/dashboard_agent threads.
       const thread = await db.thread.findFirst({
         where: { ...canonicalInboxThreadWhere(organizationId), id: input.ticket_id },
         select: {
@@ -249,22 +250,79 @@ export function buildOperatorInboxTools(
     label: 'Sent ticket reply',
     planStepLabel: 'Send ticket reply',
     policy: { categoryPermission: false },
-    execute: async (input: SendTicketReplyInput) => {
+    requiredReceiptVersion: 1,
+    execute: async (input: SendTicketReplyInput, ctx) => {
       const thread = await findInboxThread(organizationId, input.ticket_id);
-      if (!thread) return toolError(TICKET_NOT_IN_INBOX);
+      if (!thread) {
+        const result = toolNotFound(TICKET_NOT_IN_INBOX);
+        if (!ctx.execution) return result;
+        return {
+          ...result,
+          receipt: {
+            version: 1,
+            operationId: ctx.execution.operationId,
+            executionId: ctx.execution.executionId,
+            tool: 'send_ticket_reply',
+            target: { kind: 'thread', id: input.ticket_id },
+            observedAt: new Date().toISOString(),
+            providerReference: null,
+            outcome: 'not_found',
+            code: 'ticket_not_in_inbox',
+          },
+        };
+      }
 
       const response = await sendInboxThreadReply(input.ticket_id, input.text);
       if (!response.ok) {
-        return response.outcome === 'unknown'
+        const result = response.outcome === 'unknown'
           ? toolUnknown('I could not confirm whether that reply sent. Check the ticket before trying again.')
           : toolError('Reply failed to send. Please try again from the dashboard.');
+        if (!ctx.execution) return result;
+        return {
+          ...result,
+          receipt: {
+            version: 1,
+            operationId: ctx.execution.operationId,
+            executionId: ctx.execution.executionId,
+            tool: 'send_ticket_reply',
+            target: { kind: 'thread', id: input.ticket_id },
+            observedAt: new Date().toISOString(),
+            providerReference: null,
+            outcome: response.outcome === 'unknown' ? 'unknown' : 'failed',
+            code: response.outcome === 'unknown' ? 'delivery_unknown' : 'delivery_failed',
+          },
+        };
       }
 
-      return toolOk(formatDigestReplyConfirmation(
+      const result = toolOk(formatDigestReplyConfirmation(
         thread.customer.name,
         digestOrdinalFor(pendingDigest ?? null, input.ticket_id),
         input.text,
       ));
+      if (!ctx.execution) return result;
+      const deliveryState = response.data.sendStatus === 'pending' || response.data.sendStatus === 'processing'
+        ? 'accepted'
+        : 'sent';
+      const receipt: ReceiptV1 = {
+        version: 1,
+        operationId: ctx.execution.operationId,
+        executionId: ctx.execution.executionId,
+        tool: 'send_ticket_reply',
+        target: { kind: 'thread', id: response.data.threadId },
+        observedAt: new Date().toISOString(),
+        providerReference: response.data.messageId,
+        outcome: 'succeeded',
+        facts: {
+          logicalResponseId: response.data.messageId,
+          messageId: response.data.messageId,
+          threadId: response.data.threadId,
+          destination: { kind: 'thread', id: response.data.threadId },
+          contentSha256: createHash('sha256').update(input.text).digest('hex'),
+          deliveryState,
+          providerMessageId: response.data.providerMessageId,
+        },
+      };
+      return { ...result, receipt };
     },
   });
 
@@ -281,14 +339,33 @@ export function buildOperatorInboxTools(
     label: 'Marked ticket as spam',
     planStepLabel: 'Mark ticket as spam',
     policy: { categoryPermission: false },
-    execute: async (input: MarkTicketSpamInput) => {
+    requiredReceiptVersion: 1,
+    execute: async (input: MarkTicketSpamInput, ctx) => {
       const result = await markInboxThreadSpam(organizationId, input.ticket_id);
-      if (!result.ok) return toolError(TICKET_NOT_IN_INBOX);
+      if (!result.ok) return toolNotFound(TICKET_NOT_IN_INBOX);
 
-      return toolOk(formatDigestSpamConfirmation(
+      const response = toolOk(formatDigestSpamConfirmation(
         result.customerName,
         digestOrdinalFor(pendingDigest ?? null, input.ticket_id),
       ));
+      if (!ctx.execution) return response;
+      const receipt: ReceiptV1 = {
+        version: 1,
+        operationId: ctx.execution.operationId,
+        executionId: ctx.execution.executionId,
+        tool: 'mark_ticket_spam',
+        target: { kind: 'thread', id: input.ticket_id },
+        observedAt: result.decidedAt.toISOString(),
+        providerReference: input.ticket_id,
+        outcome: 'succeeded',
+        facts: {
+          threadId: input.ticket_id,
+          beforeFilterState: result.beforeFilterState,
+          afterFilterState: result.afterFilterState,
+          decidedAt: result.decidedAt.toISOString(),
+        },
+      };
+      return { ...response, receipt };
     },
   });
 

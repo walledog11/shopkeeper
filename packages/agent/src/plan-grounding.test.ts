@@ -34,9 +34,12 @@ describe("plan grounding", () => {
     ["cancellation", "We've canceled the order.", "Order #1001 has been canceled."],
     ["store_credit", "We've issued your store credit.", "Store credit of $20.00 has been issued."],
     ["address_update", "We've updated the address.", "The address for order #1001 has been updated."],
+    ["customer_update", "We've updated the customer profile.", "The customer profile has been updated."],
+    ["customer_note", "We've added a note.", "A note has been added to the customer profile."],
     ["fulfillment", "We've fulfilled the order.", "Order #1001 has been fulfilled."],
     ["order_creation", "We've created the order.", "The order has been created."],
     ["order_update", "We've updated the order.", "Order #1001 has been updated."],
+    ["price_update", "We've updated the prices.", "The variant prices have been updated."],
     ["discount", "We've applied the discount.", "The discount has been applied."],
   ] as const)("renders a deterministic %s completion statement", (action, text, expected) => {
     const rendered = renderReplyCompletionClaims({

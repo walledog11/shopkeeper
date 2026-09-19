@@ -38,7 +38,7 @@ async function main() {
 
   // Operator by default; CHANNEL=email measures the support prompt, which is a
   // different and much larger shape — KB articles, customer history, orders.
-  const channel = (process.env.CHANNEL?.trim() ?? 'sms_agent') as 'sms_agent' | 'email';
+  const channel = (process.env.CHANNEL?.trim() ?? 'operator') as 'operator' | 'email';
   const thread = process.env.THREAD_ID?.trim()
     ? await db.thread.findUnique({ where: { id: process.env.THREAD_ID.trim() }, select: { id: true } })
     : await db.thread.findFirst({
@@ -93,7 +93,7 @@ async function main() {
   const withTools = await count({ tools });
 
   // Exactly the window run.ts sends on an operator turn.
-  const history = channel === 'sms_agent' ? ctx.recentMessages.slice(-20) : ctx.recentMessages;
+  const history = channel === 'operator' ? ctx.recentMessages.slice(-20) : ctx.recentMessages;
   const historyMessages = buildMessageHistory(history, 'probe instruction', {
     segregateUntrusted: false,
   });

@@ -5,6 +5,7 @@ const {
   mockRequireOrgThread,
   mockBuildContext,
   mockPlanAgent,
+  mockSuspendsAtProposal,
   mockIsAgentPlanCacheHit,
   mockReadAgentPlanCache,
   mockBuildAgentPlanCacheRecord,
@@ -17,6 +18,7 @@ const {
   mockRequireOrgThread: vi.fn(),
   mockBuildContext: vi.fn(),
   mockPlanAgent: vi.fn(),
+  mockSuspendsAtProposal: vi.fn(() => false),
   mockIsAgentPlanCacheHit: vi.fn(),
   mockReadAgentPlanCache: vi.fn(),
   mockBuildAgentPlanCacheRecord: vi.fn(),
@@ -37,6 +39,7 @@ vi.mock('@shopkeeper/agent/build-context', () => ({
 
 vi.mock('@shopkeeper/agent/planner', () => ({
   planAgent: mockPlanAgent,
+  suspendsAtProposal: mockSuspendsAtProposal,
 }));
 
 vi.mock('./agent-thread-sink.js', () => ({
@@ -437,8 +440,37 @@ describe('generateThreadPlan auto-execute path', () => {
       expect.anything(),
       'Where is my order #1001?',
       expect.anything(),
+      undefined,
     );
     expect(result.instruction).toBe('Where is my order #1001?');
+  });
+
+  // Package 3, step 7: the gate that makes the adaptive slice reachable. Off by
+  // default, so every plan today still drafts the reply it proposes.
+  it('lets planning stop at the proposal only when the suspension mode is on', async () => {
+    async function planOnce() {
+      mockIsAgentPlanCacheHit.mockReturnValue(false);
+      mockRequireOrgThread.mockResolvedValueOnce({
+        id: 'thread_1',
+        aiSummary: 'Refund request',
+        filterStatus: 'genuine',
+        messages: [{ id: 'msg_1' }],
+        cachedPlan: null,
+      });
+      mockBuildContext.mockResolvedValue({ thread: { id: 'thread_1' } });
+      mockPlanAgent.mockResolvedValue({
+        steps: [{ id: 'refund_1', tool: 'create_refund' }],
+        rawToolCalls: [{ id: 'refund_1', name: 'create_refund', input: { order_id: '1' } }],
+      });
+      await generateThreadPlan('org_1', 'thread_1', false);
+      return mockPlanAgent.mock.calls.at(-1)?.[3];
+    }
+
+    mockSuspendsAtProposal.mockReturnValue(false);
+    expect(await planOnce()).toBeUndefined();
+
+    mockSuspendsAtProposal.mockReturnValue(true);
+    expect(await planOnce()).toEqual({ suspendAtProposal: true });
   });
 
   it('skips plan generation for questionable senders and clears stale cache', async () => {

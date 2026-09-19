@@ -250,6 +250,13 @@ export function getSocialApiWebhookConfig(): SocialApiWebhookConfig {
   };
 }
 
+// The workspace messaging key, shared with the dashboard's outbound dispatch.
+// Absent means profile enrichment is off, not that ingest fails: a SocialAPI DM
+// still becomes a ticket under the platform-id fallback label.
+export function getSocialApiApiKey(): string | null {
+  return readOptionalTrimmedEnv('SOCIALAPI_API_KEY');
+}
+
 export interface SpectrumConfig {
   projectId: string;
   projectSecret: string;

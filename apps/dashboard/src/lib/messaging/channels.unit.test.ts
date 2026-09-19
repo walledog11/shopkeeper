@@ -15,7 +15,9 @@ describe("channel metadata", () => {
       badgeClassName: "bg-blue-500/15 text-blue-600",
     });
     expect(getChannelLabel("dashboard_agent")).toBe("Dashboard");
-    expect(getChannelLabel("sms_agent")).toBe("Telegram");
+    // Not a provider name: this one thread type carries Telegram and iMessage
+    // both, so naming either mislabels the other.
+    expect(getChannelLabel("operator")).toBe("Messages");
     expect(getChannelBadgeClassName("ig_dm")).toBe("bg-pink-500/15 text-pink-600");
   });
 
@@ -42,7 +44,7 @@ describe("channel metadata", () => {
 
   it("can group operator channels for report labels", () => {
     expect(getChannelLabel("dashboard_agent", { operatorLabel: "internal" })).toBe("Internal");
-    expect(getChannelLabel("sms_agent", { operatorLabel: "internal" })).toBe("Internal");
+    expect(getChannelLabel("operator", { operatorLabel: "internal" })).toBe("Internal");
     expect(getChannelLabel("email", { operatorLabel: "internal" })).toBe("Email");
   });
 

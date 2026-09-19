@@ -23,6 +23,7 @@ import {
   ORDER_EDIT_SET_QUANTITY_MUTATION,
 } from "./order-edit.js";
 import { REFUND_CREATE_MUTATION } from "./refunds.js";
+import { PARTIAL_REFUND_MUTATION } from "./partial-refunds.js";
 import { REVERSE_DELIVERY_CREATE_WITH_SHIPPING_MUTATION } from "./return-labels.js";
 import { RETURN_CREATE_MUTATION } from "./returns.js";
 import { STORE_CREDIT_ACCOUNT_CREDIT_MUTATION } from "./store-credit.js";
@@ -66,6 +67,10 @@ export const SHOPIFY_MUTATION_DOCUMENTS: Record<string, ShopifyMutationDocument>
   },
   refundCreate: {
     document: REFUND_CREATE_MUTATION,
+    rootField: "refundCreate",
+  },
+  partialRefundCreate: {
+    document: PARTIAL_REFUND_MUTATION,
     rootField: "refundCreate",
   },
   reverseDeliveryCreateWithShipping: {

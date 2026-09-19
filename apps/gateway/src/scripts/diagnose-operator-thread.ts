@@ -50,7 +50,7 @@ async function main() {
     try {
       await db.$transaction(async (tx) => {
         await tx.thread.create({
-          data: { organizationId: orgId, customerId: customer.id, channelType: 'sms_agent', status: 'open', operatorKey },
+          data: { organizationId: orgId, customerId: customer.id, channelType: 'operator', status: 'open', operatorKey },
           select: { id: true },
         });
         throw new Error('__ROLLBACK__'); // always roll back the probe insert

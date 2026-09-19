@@ -54,6 +54,8 @@ export const ORDER_TOOL_DEFINITIONS = [
     category: "action",
     group: "order",
     capabilities: ["shopify"],
+    requiredScopes: ["write_orders", "write_customers"],
+    requiredReceiptVersion: 1,
     label: "Updated shipping address",
     planStepLabel: "Update shipping address on Shopify",
     execute: async (input: UpdateShopifyOrderAddressInput, ctx, _settings, deps) => {
@@ -126,11 +128,13 @@ export const ORDER_TOOL_DEFINITIONS = [
     category: "action",
     group: "order",
     capabilities: ["shopify"],
+    requiredScopes: ["write_orders"],
+    requiredReceiptVersion: 1,
     label: "Issued refund",
     planStepLabel: "Issue refund",
     policy: {
       refundAmountLimits: true,
-      dailyRefundSpendLimit: true,
+      dailyRefundSpendLimit: "input",
     },
     execute: async (input: CreateRefundInput, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
@@ -159,14 +163,16 @@ export const ORDER_TOOL_DEFINITIONS = [
     category: "action",
     group: "order",
     capabilities: ["shopify"],
+    requiredScopes: ["write_orders"],
+    requiredReceiptVersion: 1,
     label: "Issued partial refund",
     planStepLabel: "Issue partial refund",
     policy: {
       // Deliberately not `refundAmountLimits`: that check reads `input.amount`,
-      // and this tool has none. The per-call cap is applied inside the
-      // implementation to Shopify's calculated figure, which is the only amount
-      // that exists before the refund is committed.
-      dailyRefundSpendLimit: true,
+      // and this tool has none. Both caps are applied inside the implementation
+      // to Shopify's calculated figure, which is the only amount that exists
+      // before the refund is committed - which is what `"provider"` says.
+      dailyRefundSpendLimit: "provider",
     },
     execute: async (input: CreatePartialRefundInput, ctx, settings, deps) => {
       const shopify = requireShopify(ctx);
@@ -186,6 +192,8 @@ export const ORDER_TOOL_DEFINITIONS = [
     category: "action",
     group: "order",
     capabilities: ["shopify"],
+    requiredScopes: ["write_orders"],
+    requiredReceiptVersion: 1,
     label: "Cancelled order",
     planStepLabel: "Cancel order",
     policy: {
@@ -225,6 +233,8 @@ export const ORDER_TOOL_DEFINITIONS = [
     category: "action",
     group: "order",
     capabilities: ["shopify"],
+    requiredScopes: ["write_orders"],
+    requiredReceiptVersion: 1,
     label: "Created order",
     planStepLabel: "Create Shopify order",
     policy: {
@@ -252,6 +262,8 @@ export const ORDER_TOOL_DEFINITIONS = [
     category: "action",
     group: "order",
     capabilities: ["shopify"],
+    requiredScopes: ["write_order_edits", "read_orders"],
+    requiredReceiptVersion: 1,
     label: "Edited order",
     planStepLabel: "Edit existing order",
     execute: async (input: EditShopifyOrderInput, ctx, _settings, deps) => {
@@ -290,6 +302,8 @@ export const ORDER_TOOL_DEFINITIONS = [
     category: "action",
     group: "order",
     capabilities: ["shopify"],
+    requiredScopes: ["write_returns"],
+    requiredReceiptVersion: 1,
     label: "Opened return",
     planStepLabel: "Open return",
     execute: async (input: CreateReturnInput, ctx, _settings, deps) => {
@@ -314,6 +328,8 @@ export const ORDER_TOOL_DEFINITIONS = [
     category: "action",
     group: "order",
     capabilities: ["shopify"],
+    requiredScopes: ["read_products", "write_returns"],
+    requiredReceiptVersion: 1,
     label: "Set up exchange",
     planStepLabel: "Set up exchange",
     execute: async (input: CreateExchangeInput, ctx, _settings, deps) => {
@@ -341,7 +357,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     planStepLabel: "Issue store credit",
     policy: {
       refundAmountLimits: true,
-      dailyRefundSpendLimit: true,
+      dailyRefundSpendLimit: "input",
     },
     execute: async () => toolPolicyBlock(
       "Error: issue_store_credit is retired. Use an explicitly requested gift card or escalate.",
@@ -360,11 +376,13 @@ export const ORDER_TOOL_DEFINITIONS = [
     category: "action",
     group: "order",
     capabilities: ["shopify"],
+    requiredScopes: ["write_gift_cards", "write_customers", "read_gift_cards"],
+    requiredReceiptVersion: 1,
     label: "Created gift card",
     planStepLabel: "Create gift card",
     policy: {
       refundAmountLimits: true,
-      dailyRefundSpendLimit: true,
+      dailyRefundSpendLimit: "input",
     },
     execute: async (input: CreateGiftCardInput, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
@@ -385,6 +403,8 @@ export const ORDER_TOOL_DEFINITIONS = [
     category: "action",
     group: "order",
     capabilities: ["shopify"],
+    requiredScopes: ["write_returns"],
+    requiredReceiptVersion: 1,
     label: "Attached return label",
     planStepLabel: "Attach return label",
     execute: async (input: AttachReturnLabelInput, ctx, _settings, deps) => {
@@ -406,6 +426,8 @@ export const ORDER_TOOL_DEFINITIONS = [
     category: "action",
     group: "order",
     capabilities: ["shopify"],
+    requiredScopes: ["write_merchant_managed_fulfillment_orders"],
+    requiredReceiptVersion: 1,
     label: "Fulfilled order",
     planStepLabel: "Mark order fulfilled",
     execute: async (input: FulfillOrderInput, ctx, _settings, deps) => {

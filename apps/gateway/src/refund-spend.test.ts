@@ -197,7 +197,7 @@ describe('refund spend', () => {
       capabilities: [],
       label: 'Test goodwill spend',
       planStepLabel: 'Test goodwill spend',
-      policy: { dailyRefundSpendLimit: true },
+      policy: { dailyRefundSpendLimit: "input" },
       execute: async (input: { amount: number }) => {
         providerCalls += 1;
         return {

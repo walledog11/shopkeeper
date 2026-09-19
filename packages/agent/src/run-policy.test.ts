@@ -14,6 +14,7 @@ const {
   mockReleaseDailyRefundSpendReservation,
   mockMarkDailyRefundSpendReservationUnknown,
   mockEscalateToHuman,
+  mockBeginAgentActionAttempt,
   mockRecordAgentActionsBatch,
 } = vi.hoisted(() => ({
   mockCreate: vi.fn(),
@@ -25,6 +26,7 @@ const {
   mockReleaseDailyRefundSpendReservation: vi.fn().mockResolvedValue(undefined),
   mockMarkDailyRefundSpendReservationUnknown: vi.fn().mockResolvedValue(undefined),
   mockEscalateToHuman: vi.fn().mockResolvedValue(undefined),
+  mockBeginAgentActionAttempt: vi.fn().mockResolvedValue({ id: "action_1", operationId: "operation_1" }),
   mockRecordAgentActionsBatch: vi.fn().mockResolvedValue([{ id: "action_1" }]),
 }));
 
@@ -53,6 +55,9 @@ vi.mock("./spend.js", () => ({
 }));
 
 vi.mock("./agent-actions.js", () => ({
+  beginAgentActionAttempt: mockBeginAgentActionAttempt,
+  authorizeAgentActionDispatch: vi.fn().mockResolvedValue(undefined),
+  markAgentActionSubmitted: vi.fn().mockResolvedValue(undefined),
   recordAgentActionsBatch: mockRecordAgentActionsBatch,
   summarizeJournaledActions: vi.fn().mockResolvedValue(undefined),
   completeAgentActionAttempt: vi.fn().mockResolvedValue(undefined),
@@ -72,6 +77,45 @@ function makeIo(): NonNullable<AgentContext["io"]> {
   };
 }
 
+function replyReceipt(execution: { operationId: string; executionId: string }, outcome: "succeeded" | "failed" = "succeeded") {
+  const base = {
+    version: 1 as const,
+    ...execution,
+    tool: "send_reply" as const,
+    target: { kind: "thread", id: "thread_1" },
+    observedAt: "2026-09-15T07:00:00.000Z",
+  };
+  return outcome === "failed"
+    ? { ...base, providerReference: null, outcome, code: "provider_send_failed" }
+    : {
+        ...base,
+        providerReference: "message_1",
+        outcome,
+        facts: {
+          logicalResponseId: "message_1",
+          messageId: "message_1",
+          threadId: "thread_1",
+          destination: { kind: "thread" as const, id: "thread_1" },
+          contentSha256: "b".repeat(64),
+          deliveryState: "sent" as const,
+          providerMessageId: null,
+        },
+      };
+}
+
+function statusReceipt(execution: { operationId: string; executionId: string }) {
+  return {
+    version: 1 as const,
+    ...execution,
+    tool: "update_thread_status" as const,
+    target: { kind: "thread", id: "thread_1" },
+    observedAt: "2026-09-15T07:00:00.000Z",
+    providerReference: "thread_1",
+    outcome: "succeeded" as const,
+    facts: { threadId: "thread_1", beforeStatus: "open", afterStatus: "closed" },
+  };
+}
+
 function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
   return {
     orgId: "org_1",
@@ -79,7 +123,11 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
     customer: { id: "customer_1", name: "Jane", platformId: "jane@test.com" },
     recentMessages: [{ senderType: "customer", contentText: "Help me" }],
     openThreadCount: 1,
-    shopify: { shop: "test-store.myshopify.com", accessToken: "shpat_test" },
+    shopify: {
+      shop: "test-store.myshopify.com",
+      accessToken: "shpat_test",
+      grantedScopes: ["write_orders"],
+    },
     recentOrders: [],
     linkedShopifyCustomerName: null,
     kbArticles: [],
@@ -135,10 +183,11 @@ beforeEach(() => {
   mockReleaseDailyRefundSpendReservation.mockReset();
   mockMarkDailyRefundSpendReservationUnknown.mockReset();
   mockEscalateToHuman.mockReset();
+  mockBeginAgentActionAttempt.mockReset();
   mockRecordAgentActionsBatch.mockReset();
 
-  mockSendReply.mockResolvedValue({ status: "ok", message: "Reply sent." });
-  mockUpdateThreadStatus.mockResolvedValue({ status: "ok", message: "Status updated." });
+  mockSendReply.mockImplementation(async (_input, execution) => ({ status: "ok", message: "Reply sent.", receipt: replyReceipt(execution) }));
+  mockUpdateThreadStatus.mockImplementation(async (_input, execution) => ({ status: "ok", message: "Status updated.", receipt: statusReceipt(execution) }));
   mockRecordToolFailure.mockResolvedValue(undefined);
   mockReserveDailyRefundSpend.mockResolvedValue({
     kind: "reserved",
@@ -148,6 +197,7 @@ beforeEach(() => {
   mockReleaseDailyRefundSpendReservation.mockResolvedValue(undefined);
   mockMarkDailyRefundSpendReservationUnknown.mockResolvedValue(undefined);
   mockEscalateToHuman.mockResolvedValue(undefined);
+  mockBeginAgentActionAttempt.mockResolvedValue({ id: "action_1", operationId: "operation_1" });
   mockRecordAgentActionsBatch.mockResolvedValue([{ id: "action_1" }]);
 });
 
@@ -186,15 +236,16 @@ describe("runAgent policy enforcement", () => {
     mockCreate
       .mockResolvedValueOnce(toolUseBatch())
       .mockResolvedValueOnce(endTurn("All done."));
-    mockSendReply.mockImplementation(async () => {
+    mockSendReply.mockImplementation(async (_input, execution) => {
       markReplyStarted();
       await replyRelease;
-      return { status: "ok", message: "Reply sent." };
+      return { status: "ok", message: "Reply sent.", receipt: replyReceipt(execution) };
     });
-    mockUpdateThreadStatus.mockResolvedValue({
+    mockUpdateThreadStatus.mockImplementation(async (_input, execution) => ({
       status: "ok",
       message: "Status updated after reply.",
-    });
+      receipt: statusReceipt(execution),
+    }));
 
     const resultPromise = runAgent(
       makeCtx({ thread: { ...makeCtx().thread, channelType: "email" } }),
@@ -215,7 +266,7 @@ describe("runAgent policy enforcement", () => {
     mockCreate
       .mockResolvedValueOnce(singleToolUse("send_reply", { text: "Done." }))
       .mockResolvedValueOnce(endTurn("All done."));
-    mockSendReply.mockResolvedValueOnce({ status: "error", message: "Error: provider send failed." });
+    mockSendReply.mockImplementationOnce(async (_input, execution) => ({ status: "error", message: "Error: provider send failed.", receipt: replyReceipt(execution, "failed") }));
 
     await runAgent(
       makeCtx({ thread: { ...makeCtx().thread, channelType: "email" } }),
@@ -396,7 +447,7 @@ describe("runAgent policy enforcement", () => {
             refund: {
               id: "gid://shopify/Refund/1",
               totalRefundedSet: { presentmentMoney: { amount: "20.00" } },
-              transactions: { nodes: [{ status: "SUCCESS" }] },
+              transactions: { nodes: [{ id: "gid://shopify/OrderTransaction/7001", status: "SUCCESS" }] },
             },
             userErrors: [],
           },
@@ -475,7 +526,7 @@ describe("runAgent policy enforcement", () => {
             refund: {
               id: "gid://shopify/Refund/1",
               totalRefundedSet: { presentmentMoney: { amount: "20.00" } },
-              transactions: { nodes: [{ status: "PENDING" }] },
+              transactions: { nodes: [{ id: "gid://shopify/OrderTransaction/7001", status: "PENDING" }] },
             },
             userErrors: [],
           },

@@ -34,7 +34,7 @@ export interface ThreadSetup {
     | "tiktok"
     | "shopify"
     | "sms"
-    | "sms_agent"
+    | "operator"
     | "dashboard_agent"
     | "imessage"
     | "shopify_chat";

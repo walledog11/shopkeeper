@@ -35,7 +35,10 @@ export function decodeAgentActionCursor(cursor: string): AgentActionCursor | nul
 }
 
 function buildTurnGroupWhereSql(orgId: string, filters?: ActionLogFilters): Prisma.Sql {
-  const clauses: Prisma.Sql[] = [PrismaRuntime.sql`a.organization_id = ${orgId}::uuid`];
+  const clauses: Prisma.Sql[] = [
+    PrismaRuntime.sql`a.organization_id = ${orgId}::uuid`,
+    PrismaRuntime.sql`a.executed_at IS NOT NULL`,
+  ];
 
   if (filters?.from) clauses.push(PrismaRuntime.sql`a.executed_at >= ${filters.from}`);
   if (filters?.to) clauses.push(PrismaRuntime.sql`a.executed_at <= ${filters.to}`);
@@ -249,7 +252,12 @@ async function fetchTurnsPage(params: {
   // Phase 2: load every row for the selected turns (unfiltered at row level,
   // we want the full action breakdown even when the user filters by one tool).
   const rows = await db.agentAction.findMany({
-    where: { organizationId: orgId, turnId: { in: turnIds } },
+    where: {
+      organizationId: orgId,
+      turnId: { in: turnIds },
+      executedAt: { not: null },
+      durationMs: { not: null },
+    },
     select: ACTION_LOG_SELECT,
     orderBy: [{ executedAt: "asc" }, { id: "asc" }],
   });
@@ -257,8 +265,9 @@ async function fetchTurnsPage(params: {
   const byTurn = new Map<string, RawActionRow[]>();
   for (const row of rows) {
     const bucket = byTurn.get(row.turnId);
-    if (bucket) bucket.push(row);
-    else byTurn.set(row.turnId, [row]);
+    const completedRow = row as RawActionRow;
+    if (bucket) bucket.push(completedRow);
+    else byTurn.set(row.turnId, [completedRow]);
   }
 
   const executionIds = rows

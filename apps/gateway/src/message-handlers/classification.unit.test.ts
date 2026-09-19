@@ -318,7 +318,7 @@ describe('thread write contract', () => {
     // A shopper is capped at questionable, never binned.
     expect(classifiedFilterFields(filtered, 'shopify_chat')?.filterStatus).toBe('questionable');
     // A channel that takes no verdict writes nothing at all.
-    expect(classifiedFilterFields(filtered, 'sms_agent')).toBeNull();
+    expect(classifiedFilterFields(filtered, 'operator')).toBeNull();
   });
 
   it('carries the request source message id so the request half can be aligned', () => {

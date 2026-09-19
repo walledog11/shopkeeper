@@ -7,10 +7,10 @@
  * session of its own: the turn runs on the gateway's operator path against the
  * durable operator thread their phone talks to, so module tools, the pending-state
  * ledger, and the control tools all apply, and an approval given here clears the
- * plan showing on Telegram.
+ * plan showing on their phone.
  *
- * POST  { instruction: string }
- *       -> { summary, actionsPerformed, awaitingApproval }
+ * POST  { clientRequestId, instruction }
+ *       -> 202 { requestId, taskId, status, statusUrl }
  * GET   -> { messages: Array<{ role, text }> }  the thread so far
  */
 import { NextResponse } from "next/server";
@@ -20,7 +20,7 @@ import { auth } from "@clerk/nextjs/server";
 import { UnauthorizedError } from "@/lib/api/errors";
 import { readRequiredJsonObject } from "@/lib/api/body";
 import { withOrgRoute } from "@/lib/api/route";
-import { postGatewayOperatorTurn } from "@/lib/agent/api/gateway-operator-turn";
+import { listGatewayAgentRequests, postGatewayAgentRequest } from "@/lib/agent/api/gateway-operator-turn";
 import { getOperatorTranscript } from "@/lib/agent/api/operator-transcript";
 import { parseAgentChatBody } from "@/lib/agent/api/validation";
 import { recordAgentRouteFailure } from "@/lib/server/agent-failure-alerts";
@@ -32,7 +32,14 @@ export const GET = withOrgRoute(
   async ({ org }) => {
     const { userId } = await auth();
     if (!userId) throw new UnauthorizedError();
-    return NextResponse.json({ messages: await getOperatorTranscript(org.id, userId) });
+    const [messages, recent] = await Promise.all([
+      getOperatorTranscript(org.id, userId),
+      listGatewayAgentRequests({ organizationId: org.id, clerkUserId: userId }).catch(() => null),
+    ]);
+    return NextResponse.json({
+      messages,
+      requests: recent?.status === 200 ? recent.payload?.requests ?? [] : [],
+    });
   },
 );
 
@@ -60,11 +67,12 @@ export const POST = withOrgRoute(
     const { userId } = await auth();
     if (!userId) throw new UnauthorizedError();
 
-    const { instruction } = parseAgentChatBody(await readRequiredJsonObject(request));
+    const { clientRequestId, instruction } = parseAgentChatBody(await readRequiredJsonObject(request));
 
-    const { status, payload } = await postGatewayOperatorTurn({
+    const { status, payload } = await postGatewayAgentRequest({
       organizationId: org.id,
       clerkUserId: userId,
+      clientRequestId,
       instruction,
     });
 
@@ -74,14 +82,10 @@ export const POST = withOrgRoute(
     if (status >= 500) {
       throw new Error(`[agent/chat] gateway operator turn failed with ${status}`);
     }
-    if (status !== 200) {
+    if (status !== 202) {
       return NextResponse.json(payload ?? { error: "Failed to run agent" }, { status });
     }
 
-    return NextResponse.json({
-      summary: payload?.summary ?? "",
-      actionsPerformed: payload?.actionsPerformed ?? [],
-      awaitingApproval: payload?.awaitingApproval === true,
-    });
+    return NextResponse.json(payload, { status: 202 });
   },
 );

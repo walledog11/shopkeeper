@@ -1,5 +1,6 @@
 import { Prisma, db, type DbChannelType } from "@shopkeeper/db";
 import { isDeepStrictEqual } from "node:util";
+import { randomUUID } from "node:crypto";
 import { BadRequestError, ConflictError } from "./errors.js";
 import { executeAgentTurn, type ExecuteAgentTurnDeps } from "./turn.js";
 import { getLatestConversationMessage, requireOrgThread } from "./thread-auth.js";
@@ -33,6 +34,8 @@ import {
 import { isInvalidPlan } from "./plan-validation.js";
 import { recordRequestEpisodeDismissed, recordRequestEpisodeExecution } from "./request-outcome.js";
 import { historicalCompletionFacts } from "./completion-facts.js";
+import { ANY_MEMBER_ACTOR_KEY, type ProposalSnapshot, type TaskSettlement } from "./task-ledger.js";
+import { authorizeAgentProposal, completeApprovedAgentTask } from "./task-approval.js";
 
 export type PlanExecutionDeps = ExecuteAgentTurnDeps & {
   planAgent?: PlanAgentFn;
@@ -231,6 +234,84 @@ async function loadCurrentCachedHomePlan(params: {
   };
 }
 
+/**
+ * What the merchant is currently being asked to approve on this thread, shaped
+ * as the durable proposal a task settles on. Null when the current plan needs no
+ * approval, cannot be given one, or no longer matches the pending message — in
+ * each case the attempt left no approval wait behind.
+ *
+ * It reads the same cached plan and the same `decideAutonomy` verdict every
+ * approval surface reads, so the recorded proposal is the one the card renders
+ * rather than a second derivation of who may approve what.
+ */
+export async function readParkedProposalForThread(params: {
+  orgId: string;
+  threadId: string;
+  settings: OrgSettings;
+  allowMutativeAutoExecute?: boolean;
+}): Promise<ProposalSnapshot | null> {
+  const current = await loadCurrentCachedHomePlan(params);
+  if (!current.plan || !current.planId) return null;
+  const verdict = current.verdict;
+  if (verdict.kind !== "needs_review" || !verdict.approvalAllowed) return null;
+  // The verdict decides whether there is anything to approve; the plan decides
+  // what the bundle is. Snapshotting `verdict.toolCalls` instead recorded only
+  // the executable subset, while every surface approves the calls the card
+  // renders — reads included — so the approved hash could never match the
+  // stored one and every support approval conflicted. A step the merchant
+  // switches off still changes the hash, which is the check working.
+  if (verdict.toolCalls.length === 0) return null;
+  return {
+    proposalId: current.planId,
+    instruction: current.instruction,
+    rawToolCalls: current.plan.rawToolCalls,
+    sourceRequestIds: [],
+  };
+}
+
+/**
+ * What a finished support attempt left the merchant waiting on, in the task's
+ * own terms. A parked question and a parked approval card are both waits a
+ * merchant has to end, so they are recorded as waits; everything else — an
+ * auto-executed plan, an empty plan, a plan the merchant was never asked about —
+ * is the attempt's work done.
+ *
+ * One derivation for the inbound planning job and for both surfaces that re-plan
+ * on a merchant's answer, so a thread's task cannot say one thing on the phone
+ * and another in the dashboard. Both scopes are the support rule rather than a
+ * caller's choice: the customer initiated the task, and the question and the
+ * card are pushed to every bound operator at once, so any member ends either
+ * wait and naming one of them would record a scope the product does not have.
+ *
+ * `merchantQuestion` is what this attempt actually parked, not a second reading
+ * of the cache — an attempt that pushed a question is waiting on it even if a
+ * newer message has since moved the cached plan on.
+ */
+export async function supportAttemptSettlement(params: {
+  orgId: string;
+  threadId: string;
+  settings: OrgSettings;
+  allowMutativeAutoExecute?: boolean;
+  merchantQuestion: string | null;
+  sourceRequestIds: string[];
+}): Promise<TaskSettlement> {
+  if (params.merchantQuestion) {
+    return {
+      status: "waiting_input",
+      question: params.merchantQuestion,
+      answerer: { kind: "member", key: ANY_MEMBER_ACTOR_KEY },
+    };
+  }
+  const proposal = await readParkedProposalForThread(params);
+  return proposal
+    ? {
+        status: "waiting_approval",
+        proposal: { ...proposal, sourceRequestIds: params.sourceRequestIds },
+        approver: { kind: "member", key: ANY_MEMBER_ACTOR_KEY },
+      }
+    : { status: "completed" };
+}
+
 export async function consumeThreadCachedPlan(params: {
   orgId: string;
   threadId: string;
@@ -311,6 +392,17 @@ export async function dismissCurrentCachedPlan(params: {
   });
 }
 
+/**
+ * Ties one execution to the durable request and task that authorized it. The
+ * turn ID is the request ID because that is how `settleAgentTaskClaim` finds the
+ * actions this attempt wrote and links them to the task; it is not a second
+ * identity to keep in step.
+ */
+export interface DurableTurnIdentity {
+  requestId: string;
+  taskId: string;
+}
+
 export async function executeCurrentCachedHomePlan(params: {
   orgId: string;
   threadId: string;
@@ -323,6 +415,8 @@ export async function executeCurrentCachedHomePlan(params: {
   allowMutativeAutoExecute?: boolean;
   /** When false, suppresses the one bounded child replan after a definite failure. */
   failureReplanAllowed?: boolean;
+  /** The durable task this execution belongs to, for hosts that have one. */
+  durableTurn?: DurableTurnIdentity;
 }, deps: PlanExecutionDeps): Promise<ExecutedCachedPlan> {
   const thread = await requireOrgThread(params.threadId, params.orgId);
   if (shouldBlockTrustedSendActions(thread.filterStatus)) {
@@ -382,6 +476,23 @@ export async function executeCurrentCachedHomePlan(params: {
     throw new ConflictError("This plan predates durable approvals. Regenerate it before executing.");
   }
 
+  // The durable approval, taken here because every approval surface enters this
+  // function and none of them should own the decision separately. Null means the
+  // parked plan names no proposal — a card from before the ledger existed — and
+  // those execute exactly as they did before. Taken before the execution claim
+  // so a superseded or out-of-scope approval stops before anything is claimed.
+  const authorized = params.executionIntent === "merchant_approved" && params.approver
+    ? await authorizeAgentProposal({
+        organizationId: params.orgId,
+        clerkUserId: params.approver.clerkUserId,
+        proposalId: current.planId,
+        instruction: current.instruction,
+        approvedToolCalls,
+      })
+    : null;
+  // Its own turn, not the planning attempt's: see completeApprovedAgentTask.
+  const approvedTurnId = authorized ? randomUUID() : undefined;
+
   // The PostgreSQL transition is the correctness boundary across dashboard,
   // gateway, devices, and Redis instances. No approved tool reaches its
   // provider until this durable intent exists and this caller owns its token.
@@ -420,11 +531,25 @@ export async function executeCurrentCachedHomePlan(params: {
       approvedToolCalls,
       persistAuditNote: true,
       auditMode,
+      ...(params.durableTurn ? {
+        turnId: params.durableTurn.requestId,
+        agentRequestId: params.durableTurn.requestId,
+        agentTaskId: params.durableTurn.taskId,
+      } : {}),
+      // An approved run belongs to the task that parked the proposal, so its
+      // messages name that task. `agentRequestId` is deliberately not set: the
+      // reply answers the task, not one inbound message of it.
+      ...(authorized && approvedTurnId
+        ? { turnId: approvedTurnId, agentTaskId: authorized.taskId }
+        : {}),
       ...(executionId ? { executionId } : {}),
       completionEvidence: historicalCompletionFacts(
         current.plan.rawToolCalls,
         current.plan.readResults,
       ),
+      // A plan that stopped at its proposal drafted no reply, so the run composes
+      // one from the receipts this execution produces.
+      ...(current.plan.suspendedAtProposal ? { composeFromReceipt: true } : {}),
       ...(approval ? { approval } : {}),
     }, deps);
     terminalExecutionStatus = terminalStatusForResult(result);
@@ -435,6 +560,29 @@ export async function executeCurrentCachedHomePlan(params: {
         status: terminalExecutionStatus,
         error: findFailedToolResult(result)?.result ?? null,
       });
+    }
+    // The wait the merchant ended is over only once the run committed. Keyed on
+    // the execution's own typed status rather than on whether its summary starts
+    // with "Error:", so a failed or uncertain run leaves the task waiting for a
+    // human instead of being closed by a sentence.
+    //
+    // Never fatal. The write is committed and its receipt is stored; letting a
+    // bookkeeping failure fall into the catch below would re-report a known
+    // outcome as unknown and escalate a thread that was handled correctly. A
+    // task left waiting is visible and recoverable; a committed refund recorded
+    // as uncertain is not.
+    if (authorized && terminalExecutionStatus === "committed") {
+      try {
+        await completeApprovedAgentTask(authorized, approvedTurnId);
+      } catch (error) {
+        logger.error({
+          err: error,
+          orgId: params.orgId,
+          threadId: params.threadId,
+          taskId: authorized.taskId,
+          proposalId: authorized.proposalId,
+        }, "[agent] approved task could not be closed after a committed run");
+      }
     }
   } catch (error) {
     // A whole-turn throw can occur after a provider accepted a mutation. Until
@@ -535,7 +683,11 @@ export async function executeCurrentCachedHomePlan(params: {
         // the parent's approval envelope — approvedToolCalls, expectedIdentity,
         // approver — cannot travel with it. Everything it inherits is listed
         // here; it runs on the authority its own verdict grants, which is why
-        // the intent is automatic.
+        // the intent is automatic. The durable turn stays off that list too: the
+        // parent's request ID is the turn its own actions are ordered within, so
+        // a child writing into it would interleave two action sequences. The
+        // child's actions reach the task through the thread, not through
+        // `taskId`.
         const childExecuted = await executeCurrentCachedHomePlan({
           orgId: params.orgId,
           threadId: params.threadId,
@@ -601,6 +753,7 @@ export async function maybeAutoExecuteCurrentCachedHomePlan(params: {
   failureRoute: string;
   /** Business-hours and rollout gate for plans that mutate store state. */
   allowMutativeAutoExecute?: boolean;
+  durableTurn?: DurableTurnIdentity;
 }, deps: PlanExecutionDeps): Promise<ExecutedCachedPlan | null> {
   const thread = await requireOrgThread(params.threadId, params.orgId);
   if (shouldSkipAutoPlan(thread.filterStatus)) {

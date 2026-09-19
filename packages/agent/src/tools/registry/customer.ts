@@ -82,6 +82,8 @@ export const CUSTOMER_TOOL_DEFINITIONS = [
     category: "action",
     group: "customer",
     capabilities: ["shopify"],
+    requiredScopes: ["write_customers"],
+    requiredReceiptVersion: 1,
     label: "Updated customer info",
     planStepLabel: "Update customer info on Shopify",
     execute: async (input: UpdateShopifyCustomerInfoInput, ctx, _settings, deps) => {
@@ -99,6 +101,8 @@ export const CUSTOMER_TOOL_DEFINITIONS = [
     category: "action",
     group: "customer",
     capabilities: ["shopify"],
+    requiredScopes: ["write_customers"],
+    requiredReceiptVersion: 1,
     label: "Added Shopify note",
     planStepLabel: "Add note to Shopify customer",
     execute: async (input: AddShopifyCustomerNoteInput, ctx, _settings, deps) => {

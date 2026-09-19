@@ -1,3 +1,4 @@
+import { readString } from '../values.js';
 import { isRecord } from '@shopkeeper/agent/guards';
 
 export const INSTAGRAM_GRAPH_VERSION = 'v25.0';
@@ -85,10 +86,6 @@ interface ProviderErrorDescriptor {
   message: string | null;
   requestId: string | null;
   subcode: number | null;
-}
-
-function readString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim().length > 0 ? value : null;
 }
 
 function readNumber(value: unknown): number | null {

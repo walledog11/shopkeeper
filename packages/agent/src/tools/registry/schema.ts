@@ -43,6 +43,8 @@ interface DefineToolOptions<TInput, TName extends string> {
   availability?: "active" | "retired";
   /** Shopify OAuth scopes without which this tool cannot run. */
   requiredScopes?: readonly ShopifyOAuthScope[];
+  /** Versioned outcome receipt required on identity-bearing executions. */
+  requiredReceiptVersion?: 1;
   policy?: Partial<Omit<ToolPolicyMetadata, "categoryPermission">> & {
     categoryPermission?: boolean;
   };
@@ -210,6 +212,7 @@ export function defineTool<const TName extends string, TInput>(
     },
     availability: definition.availability ?? "active",
     requiredScopes: definition.requiredScopes ?? [],
+    requiredReceiptVersion: definition.requiredReceiptVersion ?? null,
     execute: definition.execute,
   };
 }

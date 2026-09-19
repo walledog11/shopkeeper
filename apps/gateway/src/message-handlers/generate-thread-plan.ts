@@ -1,7 +1,7 @@
 import { db } from '@shopkeeper/db';
 import { requireOrgThread, getLatestConversationMessage } from '@shopkeeper/agent/thread-auth';
 import { buildContext } from '@shopkeeper/agent/build-context';
-import { planAgent } from '@shopkeeper/agent/planner';
+import { planAgent, suspendsAtProposal } from '@shopkeeper/agent/planner';
 import { decideAutonomy } from '@shopkeeper/agent/autonomy';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import {
@@ -14,8 +14,16 @@ import {
   clearThreadPlanCache,
   findFailedToolResult,
   maybeAutoExecuteCurrentCachedHomePlan,
+  supportAttemptSettlement,
 } from '@shopkeeper/agent/plan-execution';
+import type { DurableTurnIdentity } from '@shopkeeper/agent/plan-execution';
 import { getPendingCustomerMessageId } from '@shopkeeper/agent/plan-cache-shape';
+import {
+  acceptCustomerAgentRequest,
+  claimAgentTask,
+  failAgentTaskClaim,
+  settleAgentTaskClaim,
+} from '@shopkeeper/agent/task-ledger';
 import { shouldSkipAutoPlan } from '@shopkeeper/agent/sender-trust';
 import { hashInstruction, hashPlan } from '@shopkeeper/agent/agent-actions';
 import { CHANNEL_TYPE } from '@shopkeeper/agent/thread-constants';
@@ -33,6 +41,7 @@ import { removePendingPlanForThread } from '../operator-context.js';
 import { captureCommittedPlanOutcome } from '@shopkeeper/agent/request-outcome';
 
 const FAILURE_ROUTE = 'gateway:auto-plan';
+
 const EMAIL_REPLY_ROUTE_MISSING = 'email_reply_route_missing';
 const EMAIL_REPLY_INTEGRATION_INACTIVE = 'email_reply_integration_inactive';
 const EMAIL_REPLY_PROVIDER_INCOMPLETE = 'email_reply_provider_incomplete';
@@ -212,6 +221,53 @@ export async function generateThreadPlan(
 
   const settings = resolveAgentSettings(org?.settings as Partial<OrgSettings> | null);
 
+  // Everything above is the decision to do agent work at all — a filtered
+  // sender, a superseded job, an answered thread and an unroutable mailbox each
+  // leave before a request exists, because none of them is a request the agent
+  // accepted. From here the customer's message is durable work.
+  const durable = await openDurableSupportTask({
+    organizationId,
+    threadId,
+    sourceMessageId: pendingCustomerMessageId,
+    objective: instruction,
+  });
+  const scope: PlanAttemptScope = {
+    organizationId, threadId, allowAutoExecute, instruction, thread, settings,
+    pendingCustomerMessageId, generationStartedAt,
+    ...(durable ? { durableTurn: { requestId: durable.requestId, taskId: durable.taskId } } : {}),
+  };
+  if (!durable) return runPlanAttempt(scope);
+  try {
+    const generated = await runPlanAttempt(scope);
+    await settleDurableSupportTask(durable, scope, generated);
+    return generated;
+  } catch (error) {
+    await failDurableSupportTask(durable, 'plan_attempt_failed');
+    throw error;
+  }
+}
+
+interface PlanAttemptScope {
+  organizationId: string;
+  threadId: string;
+  allowAutoExecute: boolean;
+  instruction: string;
+  thread: Awaited<ReturnType<typeof requireOrgThread>>;
+  settings: OrgSettings;
+  pendingCustomerMessageId: string;
+  generationStartedAt: number;
+  durableTurn?: DurableTurnIdentity;
+}
+
+// The plan attempt itself: serve a warm cache or plan and cache a fresh one,
+// then auto-execute within business hours. Unchanged by the task around it
+// except that its executions name the request they belong to.
+async function runPlanAttempt(scope: PlanAttemptScope): Promise<GeneratedThreadPlan> {
+  const {
+    organizationId, threadId, allowAutoExecute, instruction, thread, settings,
+    pendingCustomerMessageId, generationStartedAt,
+  } = scope;
+
   // P5-04: an escalated ticket is flagged for a human. Keep planning and
   // notifying the merchant, but never autonomously execute on it until the
   // escalation flag is cleared — bias to escalation over confident wrong action.
@@ -235,7 +291,7 @@ export async function generateThreadPlan(
       });
     }
     const autoExecution = autonomousWorkAllowed
-      ? await buildAutoExecutionResult(organizationId, threadId, settings, allowAutoExecute)
+      ? await buildAutoExecutionResult(scope)
       : {};
     return {
       plan: toGatewayAgentPlan(cached?.plan ?? null),
@@ -252,7 +308,12 @@ export async function generateThreadPlan(
   }
 
   const ctx = await buildContext(threadId, organizationId, gatewayThreadSink);
-  const plan = await planAgent(ctx, instruction, settings);
+  const plan = await planAgent(
+    ctx,
+    instruction,
+    settings,
+    suspendsAtProposal() ? { suspendAtProposal: true } : undefined,
+  );
   const cacheRecord = buildAgentPlanCacheRecord({
     instruction,
     lastCustomerMessageId: pendingCustomerMessageId,
@@ -311,7 +372,7 @@ export async function generateThreadPlan(
   }
 
   const autoExecution = autonomousWorkAllowed
-    ? await buildAutoExecutionResult(organizationId, threadId, settings, allowAutoExecute)
+    ? await buildAutoExecutionResult(scope)
     : {};
 
   return {
@@ -329,18 +390,17 @@ export async function generateThreadPlan(
 }
 
 async function buildAutoExecutionResult(
-  organizationId: string,
-  threadId: string,
-  settings: OrgSettings,
-  allowMutativeAutoExecute: boolean,
+  scope: PlanAttemptScope,
 ): Promise<Partial<GeneratedThreadPlan>> {
+  const { organizationId, threadId, settings } = scope;
   const executed = await maybeAutoExecuteCurrentCachedHomePlan(
     {
       orgId: organizationId,
       threadId,
       settings,
       failureRoute: FAILURE_ROUTE,
-      allowMutativeAutoExecute,
+      allowMutativeAutoExecute: scope.allowAutoExecute,
+      ...(scope.durableTurn ? { durableTurn: scope.durableTurn } : {}),
     },
     buildGatewayPlanExecutionDeps(),
   );
@@ -385,4 +445,134 @@ async function buildAutoExecutionResult(
       }),
     } : {}),
   };
+}
+
+// One support attempt: plan, notify, and auto-execute what autonomy allows. The
+// lease covers the whole thing rather than one model call, because the planning
+// job is the only worker that will ever hold this task.
+const SUPPORT_TASK_LEASE_MS = 300_000;
+// Limits, not yet meters: the attempt's active time is charged on settle, and
+// nothing reserves model calls or spend against a support task. The shared LLM
+// spend cap still applies, as it does today.
+const SUPPORT_TASK_BUDGET = {
+  runtimeVersion: 1,
+  modelCallLimit: 20,
+  activeTimeMsLimit: 300_000,
+  spendNanoUsdLimit: 1_000_000_000n,
+} as const;
+
+interface DurableSupportTask {
+  requestId: string;
+  taskId: string;
+  organizationId: string;
+  expectedRevision: number;
+  claimToken: string;
+}
+
+/**
+ * Puts the customer's message on the thread's durable task and claims it for
+ * this attempt. Null means the attempt runs exactly as it did before the task
+ * existed: either a concurrent worker owns the task, or the message has already
+ * been planned and settled and nothing new is queued on it.
+ *
+ * Accepting is durable; claiming is not retried. A conversation whose ledger is
+ * unavailable must still get a plan, so a failure here is logged and the attempt
+ * continues untracked rather than leaving the customer unanswered.
+ */
+async function openDurableSupportTask(input: {
+  organizationId: string;
+  threadId: string;
+  sourceMessageId: string;
+  objective: string;
+}): Promise<DurableSupportTask | null> {
+  try {
+    const { request, task } = await acceptCustomerAgentRequest({
+      ...input, budget: SUPPORT_TASK_BUDGET,
+    });
+    const claimed = await claimAgentTask({
+      organizationId: input.organizationId,
+      taskId: task.id,
+      expectedRevision: task.revision,
+      leaseMs: SUPPORT_TASK_LEASE_MS,
+    });
+    if (!claimed) {
+      logger.info(
+        { organizationId: input.organizationId, threadId: input.threadId, taskId: task.id },
+        '[gateway:auto-plan] Support task is not this attempt\'s to run',
+      );
+      return null;
+    }
+    return {
+      requestId: request.id,
+      taskId: task.id,
+      organizationId: input.organizationId,
+      expectedRevision: task.revision,
+      claimToken: claimed.claimToken,
+    };
+  } catch (err) {
+    logger.error(
+      { err, organizationId: input.organizationId, threadId: input.threadId },
+      '[gateway:auto-plan] Could not record durable support work; planning untracked',
+    );
+    return null;
+  }
+}
+
+async function settleDurableSupportTask(
+  durable: DurableSupportTask,
+  scope: PlanAttemptScope,
+  generated: GeneratedThreadPlan,
+): Promise<void> {
+  try {
+    const settled = await settleAgentTaskClaim({
+      organizationId: durable.organizationId,
+      taskId: durable.taskId,
+      expectedRevision: durable.expectedRevision,
+      claimToken: durable.claimToken,
+      requestId: durable.requestId,
+      settlement: await supportAttemptSettlement({
+        orgId: scope.organizationId,
+        threadId: scope.threadId,
+        settings: scope.settings,
+        allowMutativeAutoExecute: scope.allowAutoExecute,
+        merchantQuestion: generated.merchantQuestion ?? null,
+        sourceRequestIds: [durable.requestId],
+      }),
+    });
+    if (!settled) {
+      logger.warn(
+        { taskId: durable.taskId, organizationId: durable.organizationId },
+        '[gateway:auto-plan] Support task claim was lost before settlement',
+      );
+    }
+  } catch (err) {
+    // The plan is cached and anything it executed is recorded. Losing the
+    // settlement leaves the task claimed, which the lease sweep reconciles; it
+    // must not turn a delivered plan into a failed job.
+    logger.error(
+      { err, taskId: durable.taskId, organizationId: durable.organizationId },
+      '[gateway:auto-plan] Could not settle support task',
+    );
+  }
+}
+
+async function failDurableSupportTask(
+  durable: DurableSupportTask,
+  failureCode: string,
+): Promise<void> {
+  try {
+    await failAgentTaskClaim({
+      organizationId: durable.organizationId,
+      taskId: durable.taskId,
+      expectedRevision: durable.expectedRevision,
+      claimToken: durable.claimToken,
+      requestId: durable.requestId,
+      failureCode,
+    });
+  } catch (err) {
+    logger.error(
+      { err, taskId: durable.taskId, organizationId: durable.organizationId },
+      '[gateway:auto-plan] Could not record support task failure',
+    );
+  }
 }

@@ -99,7 +99,7 @@ describe('GET /api/threads/[id]', () => {
   it('returns 404 for operator channel threads', async () => {
     const customer = await createTestCustomer(org.id, 'operator_detail@test.com');
     const thread = await db.thread.create({
-      data: { organizationId: org.id, customerId: customer.id, channelType: ChannelType.sms_agent, status: 'open' },
+      data: { organizationId: org.id, customerId: customer.id, channelType: ChannelType.operator, status: 'open' },
     });
 
     const res = await callGet(thread.id);

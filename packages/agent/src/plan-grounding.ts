@@ -11,13 +11,13 @@ import {
 import type { RawToolCall } from "./types.js";
 
 const MUTATION_SUBJECT =
-  "refunds?|returns?|exchanges?|cancellations?|gift cards?|store credit|replacements?|discounts?|orders?|address(?:es)?|labels?|shipments?";
+  "refunds?|returns?|exchanges?|cancellations?|gift cards?|store credit|replacements?|discounts?|prices?|orders?|address(?:es)?|customer (?:info|information|profile|notes?)|email address|phone number|customer name|notes?|labels?|shipments?";
 const MUTATION_VERB =
-  "initiated|issued|processed|created|started|placed|sent|applied|approved|arranged|completed|refunded|returned|cancell?ed|exchanged|fulfilled|shipped|updated|changed|edited|opened|set up";
+  "initiated|issued|processed|created|started|placed|sent|applied|approved|arranged|completed|refunded|returned|cancell?ed|exchanged|fulfilled|shipped|updated|changed|edited|added|opened|set up";
 const MUTATION_VERB_PROGRESSIVE =
-  "initiating|issuing|processing|creating|starting|placing|sending|applying|approving|arranging|completing|refunding|returning|cancell?ing|exchanging|fulfill?ing|shipping|updating|changing|editing|opening|setting up";
+  "initiating|issuing|processing|creating|starting|placing|sending|applying|approving|arranging|completing|refunding|returning|cancell?ing|exchanging|fulfill?ing|shipping|updating|changing|editing|adding|opening|setting up";
 const MUTATION_VERB_BASE =
-  "initiate|issue|process|create|start|place|send|apply|approve|arrange|complete|refund|return|cancel|exchange|fulfill?|ship|update|change|edit|open|set up";
+  "initiate|issue|process|create|start|place|send|apply|approve|arrange|complete|refund|return|cancel|exchange|fulfill?|ship|update|change|edit|add|open|set up";
 const ANY_MUTATION_VERB = `${MUTATION_VERB}|${MUTATION_VERB_PROGRESSIVE}|${MUTATION_VERB_BASE}`;
 const CLAIM_TARGET_SUFFIX = "(?:\\s+(?:(?:id|number)\\s*)?#?\\d{2,})?";
 const CLAIM_GAP = "(?:[^.!?]|(?<=\\d)\\.(?=\\d)){0,60}?";
@@ -64,8 +64,11 @@ const SPECIFIC_CLAIM_ACTIONS: readonly [RegExp, ReadonlySet<CompletionAction>][]
   [/\b(?:exchanges?|exchanged|exchanging|replacements?)\b/i, new Set(["exchange", "order_creation"])],
   [/\bcancell?(?:ations?|ed|ing)?\b/i, new Set(["cancellation"])],
   [/\baddress(?:es)?\b/i, new Set(["address_update"])],
+  [/\b(?:customer (?:info|information|profile)|email address|phone number|customer name)\b/i, new Set(["customer_update"])],
+  [/\b(?:customer notes?|notes?)\b/i, new Set(["customer_note"])],
   [/\b(?:shipments?|shipped|shipping|fulfilled|fulfilling)\b/i, new Set(["fulfillment"])],
   [/\bdiscounts?\b/i, new Set(["discount"])],
+  [/\bprices?\b/i, new Set(["price_update"])],
 ];
 const GENERIC_ORDER_ACTIONS = new Set<CompletionAction>(["fulfillment", "order_creation", "order_update"]);
 
@@ -324,12 +327,18 @@ function renderCompletionFact(fact: CompletionFact): string {
       return `Store credit${moneySuffix} has been issued.`;
     case "address_update":
       return order ? `The address for order ${order} has been updated.` : "The address has been updated.";
+    case "customer_update":
+      return "The customer profile has been updated.";
+    case "customer_note":
+      return "A note has been added to the customer profile.";
     case "fulfillment":
       return order ? `Order ${order} has been fulfilled.` : "The order has been fulfilled.";
     case "order_creation":
       return "The order has been created.";
     case "order_update":
       return order ? `Order ${order} has been updated.` : "The order has been updated.";
+    case "price_update":
+      return "The variant prices have been updated.";
     case "discount":
       return "The discount has been applied.";
   }

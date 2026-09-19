@@ -61,6 +61,11 @@ export function appendInitialPlanningSignals(input: {
   if (ctx.recentOrdersFetchFailed) {
     codes.push("recent_orders_fetch_failed");
   }
+  // Distinct from kb_no_match: the store may well have the article, and the
+  // reply was written without ever seeing it.
+  if (ctx.kbFetchFailed) {
+    codes.push("kb_fetch_failed");
+  }
   // A guest shopper has no Shopify customer by construction, so this would fire
   // on every storefront plan and ask the merchant to verify a link that cannot
   // exist. A signal present on every plan is a signal nobody reads.

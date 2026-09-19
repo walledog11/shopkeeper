@@ -98,6 +98,14 @@
       "types": "./dist/agent-actions.d.ts",
       "default": "./dist/agent-actions.js"
     },
+    "./task-ledger": {
+      "types": "./dist/task-ledger.d.ts",
+      "default": "./dist/task-ledger.js"
+    },
+    "./task-approval": {
+      "types": "./dist/task-approval.d.ts",
+      "default": "./dist/task-approval.js"
+    },
     "./run": {
       "types": "./dist/run.d.ts",
       "default": "./dist/run.js"

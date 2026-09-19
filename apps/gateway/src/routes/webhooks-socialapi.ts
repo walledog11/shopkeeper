@@ -1,4 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
+
+import { isRecord } from '@shopkeeper/agent/guards';
 import type { Request, Response, Router } from 'express';
 import {
   normalizeSocialApiDmReceived,
@@ -21,12 +23,6 @@ import {
 
 const ROUTE = '/webhooks/socialapi';
 const REGISTRATION_PING_MAX_BYTES = 4_096;
-
-type UnknownRecord = Record<string, unknown>;
-
-function isRecord(value: unknown): value is UnknownRecord {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function readHeader(req: Request, name: string): string | null {
   const value = req.headers[name];

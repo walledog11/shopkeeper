@@ -34,7 +34,9 @@ export interface StaticPolicyOptions {
 // The allowlist half of storefront enforcement: which tools this auth state may
 // name at all. Independent of arguments, so it runs both before and after
 // parsing — a shopper must not learn that a tool exists from a validation error.
-function checkStorefrontToolAllowed(
+// Exported because the execution path needs the same pre-parse ordering and
+// composing a second version of it there is how the two would drift apart.
+export function checkStorefrontToolAllowed(
   name: string,
   options: StaticPolicyOptions | undefined,
 ): StaticPolicyResult | null {

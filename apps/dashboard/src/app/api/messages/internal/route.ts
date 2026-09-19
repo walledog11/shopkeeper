@@ -44,6 +44,12 @@ export const POST = withInternalRoute(
 
     await recordMerchantReply(thread);
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({
+      ok: true,
+      messageId: result.message.id,
+      threadId: result.message.threadId,
+      sendStatus: result.message.sendStatus,
+      providerMessageId: result.message.providerMessageId,
+    });
   },
 );

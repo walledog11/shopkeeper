@@ -1,5 +1,6 @@
 import { parseToolInput } from "../../tools/index.js";
 import type {
+  AddShopifyCustomerNoteInput,
   AttachReturnLabelInput,
   CancelOrderInput,
   CreateExchangeInput,
@@ -14,10 +15,13 @@ import type {
   IssueStoreCreditInput,
   ToolName,
   UpdateShopifyOrderAddressInput,
+  UpdateShopifyCustomerInfoInput,
 } from "../../tools/index.js";
 import type { ShopifyContext } from "../client.js";
 import type { ReconciliationProbe, ShopifyReconciliationProbeResult } from "./types.js";
 import { probeCancellation } from "./probes/cancellation.js";
+import { probeCustomerInfo } from "./probes/customer-info.js";
+import { probeCustomerNote } from "./probes/customer-note.js";
 import { probeDiscount } from "./probes/discount.js";
 import { probeFulfillment } from "./probes/fulfillment.js";
 import { probeGiftCard } from "./probes/gift-card.js";
@@ -51,6 +55,8 @@ export const SHOPIFY_RECONCILIATION_PROBES = {
   issue_store_credit: defineReconciliationProbe<IssueStoreCreditInput>("issue_store_credit", probeStoreCredit),
   edit_shopify_order: defineReconciliationProbe<EditShopifyOrderInput>("edit_shopify_order", probeOrderEdit),
   update_shopify_order_address: defineReconciliationProbe<UpdateShopifyOrderAddressInput>("update_shopify_order_address", probeOrderAddress),
+  update_shopify_customer_info: defineReconciliationProbe<UpdateShopifyCustomerInfoInput>("update_shopify_customer_info", probeCustomerInfo),
+  add_shopify_customer_note: defineReconciliationProbe<AddShopifyCustomerNoteInput>("add_shopify_customer_note", probeCustomerNote),
   create_return: defineReconciliationProbe<CreateReturnInput>("create_return", probeReturn),
   create_exchange: defineReconciliationProbe<CreateExchangeInput>("create_exchange", probeReturn),
   attach_return_label: defineReconciliationProbe<AttachReturnLabelInput>("attach_return_label", probeReturnLabel),

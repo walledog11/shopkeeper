@@ -57,6 +57,7 @@ export function buildOperatorActionHistoryTools(
         where: {
           organizationId,
           category: { in: [...CHANGE_CATEGORIES] },
+          executedAt: { not: null },
           ...(tool ? { tool } : {}),
         },
         orderBy: { executedAt: 'desc' },
@@ -79,7 +80,7 @@ export function buildOperatorActionHistoryTools(
       }
 
       const lines = actions.map((action) => {
-        const facts = [action.tool, ageOf(action.executedAt)];
+        const facts = [action.tool, ageOf(action.executedAt!)];
         // Only an unsuccessful outcome is worth a word: labelling the ordinary
         // case invites the model to narrate it back to the merchant.
         if (action.status !== 'success') facts.push(action.status);

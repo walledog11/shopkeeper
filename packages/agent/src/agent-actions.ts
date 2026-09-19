@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
-import type { Prisma } from "@prisma/client";
-import { db } from "@shopkeeper/db";
+import type { Prisma as PrismaTypes } from "@prisma/client";
+import { db, Prisma } from "@shopkeeper/db";
 import { TOOL_CATEGORIES } from "./tools/registry/index.js";
 import type {
   ActionEntry,
@@ -9,6 +9,7 @@ import type {
 } from "./agent-context.js";
 import type { AgentPlan } from "./types.js";
 import type { ModelUsageMetrics } from "./usage.js";
+import { parseReceiptV1, type ReceiptV1 } from "./tools/result.js";
 
 export interface AgentActionApproval {
   approverId: string;
@@ -29,6 +30,17 @@ interface CommonRecordParams {
   executionId?: string | null;
 }
 
+export interface BeginAgentActionAttemptParams extends CommonRecordParams {
+  action: Pick<ActionEntry, "tool" | "input" | "category" | "providerOperationKey">;
+  actionIndex: number;
+  operationId: string;
+}
+
+export interface AgentActionAttempt {
+  id: string;
+  operationId: string;
+}
+
 export interface RecordAgentActionsBatchParams extends CommonRecordParams {
   actions: ActionEntry[];
 }
@@ -40,6 +52,8 @@ export interface PersistedAgentAction {
   status: AgentActionStatus;
   tool: string;
 }
+
+const EXECUTION_STARTED_MESSAGE = "Execution started; completion has not been recorded.";
 
 function sha256Hex(value: string): string {
   return createHash("sha256").update(value).digest("hex");
@@ -88,8 +102,36 @@ function deriveCategory(entry: ActionEntry): string {
   return entry.category ?? TOOL_CATEGORIES[entry.tool] ?? "unknown";
 }
 
-function toJsonInput(value: unknown): Prisma.InputJsonValue {
-  return JSON.parse(JSON.stringify(value ?? {})) as Prisma.InputJsonValue;
+const RECEIPT_ACTION_STATUS: Record<ReceiptV1["outcome"], AgentActionStatus> = {
+  succeeded: "success",
+  not_found: "success",
+  rejected: "policy_block",
+  failed: "error",
+  unknown: "unknown",
+};
+
+function validatedEntryReceipt(entry: ActionEntry, expectedOperationId?: string): ReceiptV1 | undefined {
+  if (entry.receipt === undefined) return undefined;
+  const receipt = parseReceiptV1(entry.receipt);
+  if (receipt.tool !== entry.tool) {
+    throw new Error(`Receipt tool ${receipt.tool} does not match action tool ${entry.tool}`);
+  }
+  if (entry.providerOperationKey && receipt.operationId !== entry.providerOperationKey) {
+    throw new Error("Receipt operationId does not match action provider operation key");
+  }
+  if (expectedOperationId && receipt.operationId !== expectedOperationId) {
+    throw new Error("Receipt operationId does not match the durable action operation ID");
+  }
+  const status = deriveStatus(entry);
+  const expectedStatus = RECEIPT_ACTION_STATUS[receipt.outcome];
+  if (status !== expectedStatus) {
+    throw new Error(`Receipt outcome ${receipt.outcome} requires action status ${expectedStatus}`);
+  }
+  return receipt;
+}
+
+function toJsonInput(value: unknown): PrismaTypes.InputJsonValue {
+  return JSON.parse(JSON.stringify(value ?? {})) as PrismaTypes.InputJsonValue;
 }
 
 function entryToRow(params: CommonRecordParams & {
@@ -99,6 +141,7 @@ function entryToRow(params: CommonRecordParams & {
   turnId: string;
 }) {
   const status = deriveStatus(params.entry);
+  const receipt = validatedEntryReceipt(params.entry);
   return {
     id: params.id,
     turnId: params.turnId,
@@ -107,6 +150,8 @@ function entryToRow(params: CommonRecordParams & {
     customerId: params.customerId ?? null,
     executionId: params.executionId ?? null,
     providerOperationKey: params.entry.providerOperationKey ?? null,
+    receiptVersion: receipt?.version ?? null,
+    receipt: receipt ? toJsonInput(receipt) : Prisma.DbNull,
     tool: params.entry.tool,
     category: deriveCategory(params.entry),
     input: toJsonInput(params.entry.input),
@@ -151,6 +196,73 @@ export async function recordAgentActionsBatch(
     status: row.status,
     tool: row.tool,
   }));
+}
+
+/**
+ * Creates the durable operation before a mutative adapter can run. New lifecycle
+ * rows intentionally have no execution timestamp or duration until they reach a
+ * terminal known/unknown outcome.
+ */
+export async function beginAgentActionAttempt(
+  params: BeginAgentActionAttemptParams,
+): Promise<AgentActionAttempt> {
+  const id = randomUUID();
+  const operationId = params.operationId;
+  await db.agentAction.create({
+    data: {
+      id,
+      turnId: params.turnId ?? randomUUID(),
+      organizationId: params.orgId,
+      threadId: params.threadId ?? null,
+      customerId: params.customerId ?? null,
+      executionId: params.executionId ?? null,
+      operationId,
+      actionIndex: params.actionIndex,
+      providerOperationKey: params.action.providerOperationKey ?? null,
+      dispatchState: "prepared",
+      tool: params.action.tool,
+      category: params.action.category ?? TOOL_CATEGORIES[params.action.tool] ?? "unknown",
+      input: toJsonInput(params.action.input),
+      output: EXECUTION_STARTED_MESSAGE,
+      status: "unknown",
+      errorDetail: EXECUTION_STARTED_MESSAGE,
+      mode: params.mode,
+      instruction: params.instruction ?? null,
+      summary: params.summary ?? null,
+      approverId: params.approval?.approverId ?? null,
+      approvedAt: params.approval?.approvedAt ?? null,
+      approvedPlanHash: params.approval?.approvedPlanHash ?? null,
+      instructionHash: params.approval?.instructionHash ?? null,
+      executedAt: null,
+      durationMs: null,
+    },
+  });
+  return { id, operationId };
+}
+
+async function transitionAgentActionDispatch(
+  attempt: AgentActionAttempt,
+  from: "prepared" | "dispatch_authorized",
+  to: "dispatch_authorized" | "submitted",
+): Promise<void> {
+  const result = await db.agentAction.updateMany({
+    where: { id: attempt.id, operationId: attempt.operationId, dispatchState: from },
+    data: {
+      dispatchState: to,
+      ...(to === "submitted" ? { submittedAt: new Date() } : {}),
+    },
+  });
+  if (result.count !== 1) {
+    throw new Error(`Agent action ${attempt.id} could not transition from ${from} to ${to}`);
+  }
+}
+
+export async function authorizeAgentActionDispatch(attempt: AgentActionAttempt): Promise<void> {
+  await transitionAgentActionDispatch(attempt, "prepared", "dispatch_authorized");
+}
+
+export async function markAgentActionSubmitted(attempt: AgentActionAttempt): Promise<void> {
+  await transitionAgentActionDispatch(attempt, "dispatch_authorized", "submitted");
 }
 
 export interface RecordAgentTurnUsageParams {
@@ -200,17 +312,33 @@ export async function recordAgentTurnUsage(
 
 // Update the attempt written before a mutative tool runs. If the process dies
 // before this write, the durable row remains unknown and must be reconciled.
-export async function completeAgentActionAttempt(id: string, entry: ActionEntry): Promise<void> {
+export async function completeAgentActionAttempt(
+  attempt: AgentActionAttempt,
+  entry: ActionEntry,
+): Promise<void> {
   const status = deriveStatus(entry);
-  await db.agentAction.update({
-    where: { id },
+  const receipt = validatedEntryReceipt(entry, attempt.operationId);
+  const dispatchState = status === "unknown" ? "unknown" : "settled";
+  const result = await db.agentAction.updateMany({
+    where: {
+      id: attempt.id,
+      operationId: attempt.operationId,
+      dispatchState: "submitted",
+    },
     data: {
       output: entry.result,
       status,
       errorDetail: deriveErrorDetail(entry, status),
       durationMs: entry.durationMs ?? 0,
+      executedAt: new Date(),
+      dispatchState,
+      receiptVersion: receipt?.version ?? null,
+      receipt: receipt ? toJsonInput(receipt) : Prisma.DbNull,
     },
   });
+  if (result.count !== 1) {
+    throw new Error(`Submitted agent action ${attempt.id} could not be completed`);
+  }
 }
 
 export async function summarizeJournaledActions(orgId: string, turnId: string, summary: string): Promise<void> {

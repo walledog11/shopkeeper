@@ -25,13 +25,24 @@ import { validatePlan } from "./plan-validation.js";
 import { buildPlanSignals } from "./plan-signals.js";
 import { buildPlanSteps } from "./planner-steps.js";
 import { buildSystemPromptParts } from "./prompt.js";
+export {
+  resolveCapabilityDiscoveryMode,
+  resolveProposalSuspensionMode,
+  suspendsAtProposal,
+  usesCapabilityDiscovery,
+  type CapabilityDiscoveryMode,
+  type ProposalSuspensionMode,
+} from "./runtime-modes.js";
+import { usesCapabilityDiscovery } from "./runtime-modes.js";
 import { TOKEN_BUDGET, DEFAULT_MAX_ITERATIONS } from "./run-policy.js";
 import { resolveAgentSettings } from "./settings.js";
 import { enforceSpendCap } from "./spend.js";
 import { selectAgentTools } from "./tools/registry/index.js";
 import {
+  DISCOVERY_TOOL_NAME,
   NAMESPACE_MISS_TOOL_NAME,
   namespaceMissReason as resolveNamespaceMissReason,
+  runCapabilityDiscovery,
   selectPlanningTools,
 } from "./planner-tool-selection.js";
 import type { AgentPlan, OrgSettings, PlanRoutingEvidence, ProducedPlanSignalCode } from "./types.js";
@@ -50,7 +61,14 @@ export interface PlanAgentOptions {
   // derived from the customer's own message. Intent narrowing is inferred from
   // what the customer said, so it must not gate a tool the merchant named.
   merchantInstruction?: boolean;
+  // Set by a caller that suspends at a proposal and composes the customer's
+  // reply from the receipt once the write lands. Planning then stops at the
+  // mutative call and is not asked for a terminal draft, because the outcome it
+  // would describe has not happened yet. Absent for every legacy caller, whose
+  // plans keep the terminal-tool requirement and its single re-prompt.
+  suspendAtProposal?: boolean;
 }
+
 
 export async function planAgent(
   ctx: AgentContext,
@@ -63,6 +81,7 @@ export async function planAgent(
   const instructionHash = hashInstructionForLog(instruction);
   const modelInstruction = truncateContextText(instruction, CONTEXT_BUDGETS.instructionChars);
   const operatorMode = isOperatorChannel(ctx.thread.channelType);
+  const suspendAtProposal = options?.suspendAtProposal === true;
   const historyWindow = operatorMode ? ctx.recentMessages.slice(-4) : ctx.recentMessages;
   const baseMessages = buildMessageHistory(historyWindow, modelInstruction, {
     segregateUntrusted: !operatorMode,
@@ -104,7 +123,14 @@ export async function planAgent(
     storefrontMode: Boolean(storefrontTools),
     merchantAnswerReplan,
     merchantInstruction: options?.merchantInstruction === true,
+    capabilityDiscovery: usesCapabilityDiscovery(),
   });
+  // Read off the selection rather than the flag: these two are what the model
+  // was actually offered, and only one of them can be present.
+  const offersDiscovery = toolSelection.tools.some((tool) => tool.name === DISCOVERY_TOOL_NAME);
+  const offersNamespaceMiss = toolSelection.tools.some(
+    (tool) => tool.name === NAMESPACE_MISS_TOOL_NAME,
+  );
 
   await enforceSpendCap(ctx.orgId, resolvedSettings);
 
@@ -159,9 +185,23 @@ export async function planAgent(
     maxTokensPerCall: 4096,
     settings,
     usageTotals,
-    captureReprompt: !operatorMode,
+    captureReprompt: !operatorMode && !suspendAtProposal,
+    captureSuspendAtProposal: suspendAtProposal,
     captureStopToolNames: tools.some((tool) => tool.name === NAMESPACE_MISS_TOOL_NAME)
       ? [NAMESPACE_MISS_TOOL_NAME]
+      : undefined,
+    captureDiscovery: offersDiscovery
+      ? {
+        toolName: DISCOVERY_TOOL_NAME,
+        // Candidates come from the set this actor is already authorized for —
+        // the same set the widened retry used to plan against — so discovery
+        // orders that set and never adds to it.
+        resolve: (rawInput, activeToolNames) => runCapabilityDiscovery({
+          authorizedTools: availableTools,
+          activeToolNames,
+          rawInput,
+        }),
+      }
       : undefined,
   });
 
@@ -185,7 +225,10 @@ export async function planAgent(
     return runLoop(pickModel("agent_run"), availableTools);
   };
 
-  const initialNamespaceMiss = toolSelection.narrowed
+  // Only a selection that offered the namespace-miss tool can widen. A discovery
+  // selection has already answered the same need inside the turn, so there is no
+  // second full-registry attempt behind it.
+  const initialNamespaceMiss = offersNamespaceMiss
     ? resolveNamespaceMissReason(loop.rawToolCalls)
     : null;
   if (initialNamespaceMiss) {
@@ -208,7 +251,7 @@ export async function planAgent(
     }, "[agent:plan] low-tier plan proposed non-trivial work — re-planning on judgment tier");
     tierDowngraded = false;
     loop = await runLoop(pickModel("agent_run"));
-    const judgmentNamespaceMiss = toolSelection.narrowed
+    const judgmentNamespaceMiss = offersNamespaceMiss
       ? resolveNamespaceMissReason(loop.rawToolCalls)
       : null;
     if (judgmentNamespaceMiss) {
@@ -359,5 +402,6 @@ export async function planAgent(
     warnings: signals.length > 0 ? signals.map(signal => signal.message) : undefined,
     routingEvidence,
     namespaceMiss: namespaceMiss || undefined,
+    suspendedAtProposal: suspendAtProposal || undefined,
   };
 }

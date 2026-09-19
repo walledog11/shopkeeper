@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { handleShopifySimulatorRest } from "./simulator-store.js";
+import type { CompensationReservation } from "../tools/result.js";
 
 export const SHOPIFY_API_VERSION = "2026-04";
 
@@ -10,6 +11,14 @@ export interface ShopifyContext {
   shop: string;
   accessToken: string;
   operationId?: string;
+  executionId?: string;
+  /**
+   * Reserves provider-priced compensation against the daily budget. The executor
+   * supplies it for a tool whose amount only exists once Shopify has priced the
+   * selection; that adapter calls it after pricing and before it commits
+   * anything, and refuses the refund when it is missing.
+   */
+  reserveCompensation?: (requestedCents: number) => Promise<CompensationReservation>;
 }
 
 export interface ShopifyRequestOptions {

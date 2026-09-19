@@ -8,7 +8,7 @@ import { cn } from "@/lib/ui/cn"
 import AgentAvatar from "@/components/agent/AgentAvatar"
 import AgentPanelBriefing from "@/app/dashboard/_components/agent-panel/AgentPanelBriefing"
 import AgentPanelPendingLedger from "@/app/dashboard/_components/agent-panel/AgentPanelPendingLedger"
-import AgentPanelTelegramNudge from "@/app/dashboard/_components/agent-panel/AgentPanelTelegramNudge"
+import AgentPanelOperatorNudge from "@/app/dashboard/_components/agent-panel/AgentPanelOperatorNudge"
 import type { AgentPanelOpenContext } from "@/lib/agent/panel"
 import { WalkthroughCard, WalkthroughNote } from "@/components/agent/WalkthroughBriefing"
 import type { PanelSuggestionChip } from "@/lib/agent/panel-briefing"
@@ -181,7 +181,7 @@ export function AgentChatView({
                 <div className={cn("max-w-[88%] px-3.5 py-2.5", CONCIERGE_BUBBLE.agent.shell, CONCIERGE_BUBBLE.agent.text)}>
                   <div className="flex items-center gap-2 text-white/70">
                     <Loader2 className="size-3.5 shrink-0 animate-spin text-white/45" />
-                    <span>{fillerPhrase}</span>
+                    <span>{msg.status ?? fillerPhrase}</span>
                   </div>
                 </div>
               </div>
@@ -193,7 +193,7 @@ export function AgentChatView({
               <AgentAvatar size="md" className="mt-0.5" />
               <div className="flex items-center gap-2 text-sm text-muted-foreground pt-1">
                 <Loader2 className="size-3.5 animate-spin text-green-500" />
-                {fillerPhrase}
+                {msg.status ?? fillerPhrase}
               </div>
             </div>
           )
@@ -276,7 +276,7 @@ export function AgentChatView({
       </div>
 
       {compact && !headerSearchMode && (
-        <AgentPanelTelegramNudge
+        <AgentPanelOperatorNudge
           enabled
           showConnectBanner={messages.length === 0 && !walkthrough}
         />

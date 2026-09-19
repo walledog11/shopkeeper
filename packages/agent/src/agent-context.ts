@@ -1,4 +1,5 @@
 import type { ClassifierSignals } from "./classifier-signals.js";
+import type { BillableModelUsage } from "./model-cost.js";
 import type { MerchantPreferenceSummary } from "./merchant-preferences.js";
 import type { ToolResult } from "./tools/result.js";
 import type {
@@ -15,11 +16,16 @@ import type {
 // is what lets the executor live in a shared package that cannot import a message
 // provider.
 export interface AgentIO {
-  addInternalNote(input: AddInternalNoteInput): Promise<ToolResult>;
-  sendReply(input: SendReplyInput): Promise<ToolResult>;
-  sendEmail(input: SendEmailInput): Promise<ToolResult>;
-  updateThreadStatus(input: UpdateThreadStatusInput): Promise<ToolResult>;
-  updateThreadTag(input: UpdateThreadTagInput): Promise<ToolResult>;
+  addInternalNote(input: AddInternalNoteInput, execution?: AgentExecutionIdentity): Promise<ToolResult>;
+  sendReply(input: SendReplyInput, execution?: AgentExecutionIdentity): Promise<ToolResult>;
+  sendEmail(input: SendEmailInput, execution?: AgentExecutionIdentity): Promise<ToolResult>;
+  updateThreadStatus(input: UpdateThreadStatusInput, execution?: AgentExecutionIdentity): Promise<ToolResult>;
+  updateThreadTag(input: UpdateThreadTagInput, execution?: AgentExecutionIdentity): Promise<ToolResult>;
+}
+
+export interface AgentExecutionIdentity {
+  operationId: string;
+  executionId: string;
 }
 
 export interface ShopifyOrderSummary {
@@ -108,13 +114,25 @@ export interface ActionAuthorityBlock {
 // Module-agnostic agent context: the org identity and the conversation any
 // module's agent loop operates on. Future modules compose their own context on
 // top of this base.
+// Durable per-task model budget, supplied by hosts that own a persisted task.
+// The reservation is taken before the provider is contacted so a crashed
+// attempt cannot hand a new process a fresh allowance.
+export interface TaskModelBudget {
+  reserveModelCall: () => Promise<void>;
+  recordModelUsage: (usage: BillableModelUsage, model: string) => Promise<void>;
+}
+
 export interface BaseAgentContext {
   // Checked at model/tool boundaries; hosts use this to fence a lost lease.
   assertExecutionAllowed?: () => void;
+  // Absent for hosts with no durable task; their budgets stay turn-scoped.
+  taskBudget?: TaskModelBudget;
   // Turn-scoped and one-way: once set, no action-category tool runs again in
   // this turn. Nothing clears it, because nothing that happens later in a turn
   // can retroactively authorize what the merchant never saw.
   actionAuthorityBlock?: ActionAuthorityBlock | null;
+  /** Runtime-owned identity for the current non-read operation, including non-provider writes. */
+  execution?: AgentExecutionIdentity;
   orgId: string;
   orgName: string;
   authState?: AgentAuthState;
@@ -129,6 +147,9 @@ export interface BaseAgentContext {
     // Host-generated identity for one tool call. Mutations that support
     // provider idempotency derive their stable provider key from this value.
     operationId?: string;
+    // Durable execution enclosing the operation. Kept distinct from the
+    // per-call operation id in typed receipts.
+    executionId?: string;
     // The OAuth grant this token was issued with. A token keeps its grant, so an
     // install that predates a capability expansion is short of the scopes that
     // expansion added; tools declaring those scopes are withheld rather than
@@ -171,6 +192,13 @@ export interface SupportContext extends BaseAgentContext {
   openThreadCount: number;
   recentOrders: ShopifyOrderSummary[];
   recentOrdersFetchFailed?: boolean;
+  /**
+   * The knowledge-base pre-fetch failed, as distinct from the store having no
+   * matching article. Operation evidence: the turn continues, and the plan
+   * carries `kb_fetch_failed` so a reply written without documented policy is
+   * not shown to the merchant as though the policy had been consulted.
+   */
+  kbFetchFailed?: boolean;
   linkedShopifyCustomerName: string | null;
   kbArticles: { title: string; body: string }[];
   merchantPreferences: MerchantPreferenceSummary[];
@@ -204,6 +232,8 @@ export interface ActionEntry {
   mode?: AgentActionMode;
   errorDetail?: string;
   category?: string;
+  /** Validated provider/runtime observation. New writes never derive it from result text. */
+  receipt?: import("./tools/result.js").ReceiptV1;
 }
 
 export interface AgentResult {
