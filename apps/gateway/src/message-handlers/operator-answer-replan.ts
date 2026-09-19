@@ -10,8 +10,8 @@ import { hashInstruction, hashPlan } from '@shopkeeper/agent/agent-actions';
 import { extractCachedQuestion, getPendingCustomerMessageId } from '@shopkeeper/agent/plan-cache-shape';
 import { clearThreadPlanCache, supportAttemptSettlement } from '@shopkeeper/agent/plan-execution';
 import { decideAutonomy } from '@shopkeeper/agent/autonomy';
-import { claimAnsweredAgentTask, failAgentTaskClaim, settleAgentTaskClaim } from '@shopkeeper/agent/task-ledger';
-import type { AnsweredTaskClaim } from '@shopkeeper/agent/task-ledger';
+import { claimContinuedAgentTask, failAgentTaskClaim, settleAgentTaskClaim } from '@shopkeeper/agent/task-ledger';
+import type { ContinuedTaskClaim, EndedWait } from '@shopkeeper/agent/task-ledger';
 import {
   captureCommittedPlanOutcome,
   recordRequestEpisodeMerchantInputAnswered,
@@ -66,6 +66,12 @@ export interface OperatorAnswerReplanParams {
   deliveryRef?: string;
   /** Plan that asked the merchant, when known before the cached plan is replaced. */
   askingPlanId?: string | null;
+  /**
+   * Which wait this text ends — the question the agent asked, or the card it
+   * parked. The caller knows because the merchant's tool call is what says so,
+   * and answering a question must not end an approval wait it never addressed.
+   */
+  endsWait: EndedWait;
 }
 
 // A re-plan is a plan; the lease matches the one the inbound planning job takes.
@@ -93,18 +99,20 @@ type AnswerReplanOutcome =
  * it as their tool result and the model relays it. A re-plan failure resolves to
  * an apologetic status string.
  *
- * The answer also ends the durable wait it was asked under. Without that the
- * task the question was parked on stayed `waiting_input` until the customer
- * happened to write again, and the card this re-plan parks named no proposal, so
- * approving it fell back to the path that predates durable approvals.
+ * The merchant's text also ends the durable wait it was given under — the
+ * question for an answer, the parked card for revision guidance. Without that
+ * the task stayed suspended until the customer happened to write again, and the
+ * card this re-plan parks named no proposal, so approving it fell back to the
+ * path that predates durable approvals.
  */
 export async function applyOperatorAnswerReplan(
   params: OperatorAnswerReplanParams,
 ): Promise<string> {
-  const continuation = await claimAnsweredAgentTask({
+  const continuation = await claimContinuedAgentTask({
     organizationId: params.organizationId,
     clerkUserId: params.clerkUserId,
     threadId: params.threadId,
+    endsWait: params.endsWait,
     leaseMs: ANSWER_REPLAN_LEASE_MS,
   }).catch((err: unknown) => {
     // A conversation whose ledger is unavailable must still have its answer
@@ -131,7 +139,7 @@ export async function applyOperatorAnswerReplan(
 }
 
 async function settleAnswerContinuation(
-  continuation: AnsweredTaskClaim,
+  continuation: ContinuedTaskClaim,
   params: OperatorAnswerReplanParams,
   outcome: Exclude<AnswerReplanOutcome, { settlement: 'failed' }>,
 ): Promise<void> {
@@ -169,7 +177,7 @@ async function settleAnswerContinuation(
 }
 
 async function failAnswerContinuation(
-  continuation: AnsweredTaskClaim,
+  continuation: ContinuedTaskClaim,
   params: OperatorAnswerReplanParams,
 ): Promise<void> {
   try {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { ConflictError } from "@/lib/api/errors";
+import { ConflictError, UnauthorizedError } from "@/lib/api/errors";
+import { auth } from "@clerk/nextjs/server";
 import { readRequiredJsonObject } from "@/lib/api/body";
 import { withOrgRoute } from "@/lib/api/route";
 import { getLatestConversationMessage, requireOrgThread } from "@shopkeeper/agent/thread-auth";
@@ -189,10 +190,16 @@ export const DELETE = withOrgRoute(
   },
   async ({ org, request }) => {
     const { threadId, planId } = parseAgentPlanDismissBody(await readRequiredJsonObject(request));
+    // The dismissing member, for the durable proposal's own scope check.
+    // `getOrCreateOrg` has already established a signed-in session, so a missing
+    // user here is a broken one rather than an anonymous caller.
+    const { userId } = await auth();
+    if (!userId) throw new UnauthorizedError();
     const cleared = await dismissCurrentCachedPlan({
       orgId: org.id,
       threadId,
       expectedPlanId: planId,
+      clerkUserId: userId,
     });
     // A card the merchant is dismissing can already be gone — the reply was sent,
     // or a newer customer message replaced the plan. The card is stale either way

@@ -312,7 +312,7 @@ export function registerInternalOperatorRoutes(router: Router): void {
       }
 
       if (decision === 'dismiss') {
-        await clearPendingPlan(organizationId, memberKey, plan);
+        await clearPendingPlan(organizationId, memberKey, clerkUserId, plan);
         return res.status(200).json({ summary: 'Plan dismissed.' });
       }
 

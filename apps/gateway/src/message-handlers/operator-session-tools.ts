@@ -148,7 +148,7 @@ export function buildOperatorSessionTools(
       const selected = selectPendingPlan(context.pendingPlans, input.plan_ref, context.pendingDigest);
       if ('error' in selected) return toolError(selected.error);
       try {
-        const dismissed = await clearPendingPlan(organizationId, memberKey, selected.plan);
+        const dismissed = await clearPendingPlan(organizationId, memberKey, clerkUserId, selected.plan);
         return dismissed
           ? toolOk('Plan dismissed.')
           : toolError('Error: that plan was already replaced or resolved.');
@@ -188,6 +188,10 @@ export function buildOperatorSessionTools(
         clerkUserId,
         threadId: pendingPlan.threadId,
         answer: input.guidance,
+        // Guidance on a drafted card ends that card's approval wait: the task is
+        // continued rather than re-planned beside itself, and the proposal the
+        // merchant is superseding stops being approvable.
+        endsWait: 'proposal',
         ...(deliveryRef ? { deliveryRef } : {}),
       });
       return toolOk(message);
@@ -217,6 +221,7 @@ export function buildOperatorSessionTools(
         clerkUserId,
         threadId: pendingQuestion.threadId,
         answer: input.answer,
+        endsWait: 'question',
         askingPlanId: pendingQuestion.planId ?? null,
         ...(deliveryRef ? { deliveryRef } : {}),
       });

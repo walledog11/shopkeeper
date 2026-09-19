@@ -8,6 +8,7 @@ import {
   cleanupTestData,
 } from '@shopkeeper/db/test-helpers';
 import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
+import type { AgentPlan } from '@shopkeeper/agent/types';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import {
   ANY_MEMBER_ACTOR_KEY, acceptCustomerAgentRequest, claimAgentTask, settleAgentTaskClaim,
@@ -92,6 +93,7 @@ describe('applyOperatorAnswerReplan', () => {
       clerkUserId: CLERK_USER_ID,
       threadId: thread.id,
       answer: 'Yes, $15 flat to Canada.',
+      endsWait: 'question',
       deliveryRef: 'telegram:chat_1',
     });
 
@@ -169,6 +171,7 @@ describe('applyOperatorAnswerReplan', () => {
       clerkUserId: CLERK_USER_ID,
       threadId: thread.id,
       answer: 'Yes, $15 flat to Canada.',
+      endsWait: 'question',
       deliveryRef: 'imessage:chat_2',
     });
 
@@ -249,7 +252,7 @@ describe('applyOperatorAnswerReplan', () => {
       return { member, thread, custMsg, taskId: task.id };
     }
 
-    function refundPlan() {
+    function refundPlan(): AgentPlan {
       return {
         instruction: 'Refund request',
         steps: [
@@ -272,6 +275,112 @@ describe('applyOperatorAnswerReplan', () => {
       };
     }
 
+    // The same conversation waiting on a *card* rather than a question: the
+    // attempt parked a proposal any bound member may approve, which is what the
+    // merchant's revision guidance supersedes.
+    async function seedCardedSupportTask() {
+      const member = await db.orgMember.create({
+        data: { organizationId: org.id, clerkUserId: randomUUID() },
+      });
+      const customer = await createTestCustomer(org.id, 'cust@example.com', { name: 'Jane Doe' });
+      const thread = await createTestThread(org.id, customer.id, 'email', { tag: 'Support' });
+      const custMsg = await createTestMessage(thread.id, 'Can I get a refund?', SenderType.customer);
+      const cacheRecord = buildAgentPlanCacheRecord({
+        instruction: 'Refund request',
+        lastCustomerMessageId: custMsg.id,
+        settings: resolveAgentSettings(null),
+        plan: refundPlan(),
+      });
+      await db.thread.update({
+        where: { id: thread.id },
+        data: {
+          cachedPlan: cacheRecord as object,
+          cachedPlanMessageId: custMsg.id,
+          aiSummary: 'Refund request',
+          requestSummary: 'Refund request',
+        },
+      });
+      const { request, task } = await acceptCustomerAgentRequest({
+        organizationId: org.id, threadId: thread.id, sourceMessageId: custMsg.id,
+        objective: 'Refund request', budget,
+      });
+      const claim = await claimAgentTask({
+        organizationId: org.id, taskId: task.id, expectedRevision: task.revision,
+      });
+      await settleAgentTaskClaim({
+        organizationId: org.id, taskId: task.id, expectedRevision: task.revision,
+        claimToken: claim!.claimToken, requestId: request.id,
+        settlement: {
+          status: 'waiting_approval',
+          proposal: {
+            proposalId: cacheRecord.planId!,
+            instruction: 'Refund request',
+            rawToolCalls: refundPlan().rawToolCalls,
+            sourceRequestIds: [request.id],
+          },
+          approver: { kind: 'member', key: ANY_MEMBER_ACTOR_KEY },
+        },
+      });
+      return { member, thread, taskId: task.id, proposalId: cacheRecord.planId! };
+    }
+
+    it('continues the task the card it revised was parked on', async () => {
+      const { member, thread, taskId, proposalId } = await seedCardedSupportTask();
+      planAgentSpy.mockResolvedValue({
+        ...refundPlan(),
+        rawToolCalls: [{ id: 'send_1', name: 'send_reply', input: { text: 'Refunded — sorry about that.' } }],
+      });
+
+      await applyOperatorAnswerReplan({
+        organizationId: org.id,
+        memberKey: `member:${member.id}`,
+        clerkUserId: member.clerkUserId,
+        threadId: thread.id,
+        answer: 'Make it warmer and mention the delay.',
+        endsWait: 'proposal',
+        deliveryRef: 'telegram:chat_9',
+      });
+
+      // One task, advanced — not a second one beside it, and not left parked on
+      // the card the merchant just replaced.
+      expect(await db.agentProposal.findUniqueOrThrow({ where: { id: proposalId } }))
+        .toMatchObject({ status: 'superseded' });
+      const settled = await db.agentTask.findUniqueOrThrow({ where: { id: taskId } });
+      expect(settled).toMatchObject({ status: 'waiting_approval', claimToken: null });
+      expect(settled.activeProposalId).not.toBe(proposalId);
+      const cached = await db.thread.findUniqueOrThrow({
+        where: { id: thread.id }, select: { cachedPlan: true },
+      });
+      // The new card names the new proposal, which is what stops the approval
+      // that follows from falling back to the path that predates them.
+      expect(settled.activeProposalId).toBe((cached.cachedPlan as { planId?: string }).planId);
+      expect(await db.agentTask.count({ where: { threadId: thread.id } })).toBe(1);
+    });
+
+    it('leaves the card parked when the guidance comes from outside the organization', async () => {
+      const { thread, taskId, proposalId } = await seedCardedSupportTask();
+      const outsiderOrg = await createTestOrg();
+      const outsider = await db.orgMember.create({
+        data: { organizationId: outsiderOrg.id, clerkUserId: randomUUID() },
+      });
+      planAgentSpy.mockResolvedValue(refundPlan());
+
+      await applyOperatorAnswerReplan({
+        organizationId: org.id,
+        memberKey: MEMBER_KEY,
+        clerkUserId: outsider.clerkUserId,
+        threadId: thread.id,
+        answer: 'Make it warmer.',
+        endsWait: 'proposal',
+      });
+
+      expect(await db.agentTask.findUniqueOrThrow({ where: { id: taskId } }))
+        .toMatchObject({ status: 'waiting_approval', activeProposalId: proposalId });
+      expect((await db.agentProposal.findUniqueOrThrow({ where: { id: proposalId } })).status)
+        .toBe('ready');
+      await cleanupTestData(outsiderOrg.id);
+    });
+
     it('ends the wait its answer was asked under and records the re-drafted card as a proposal', async () => {
       const { member, thread, taskId } = await seedWaitingSupportTask({ pending: true });
       planAgentSpy.mockResolvedValue(refundPlan());
@@ -282,6 +391,7 @@ describe('applyOperatorAnswerReplan', () => {
         clerkUserId: member.clerkUserId,
         threadId: thread.id,
         answer: 'Yes, refund it.',
+        endsWait: 'question',
         deliveryRef: 'telegram:chat_9',
       });
 
@@ -310,6 +420,7 @@ describe('applyOperatorAnswerReplan', () => {
         clerkUserId: member.clerkUserId,
         threadId: thread.id,
         answer: 'Yes, refund it.',
+        endsWait: 'question',
       });
 
       expect(planAgentSpy).not.toHaveBeenCalled();
@@ -328,6 +439,7 @@ describe('applyOperatorAnswerReplan', () => {
         clerkUserId: member.clerkUserId,
         threadId: thread.id,
         answer: 'Yes, refund it.',
+        endsWait: 'question',
       });
 
       expect(message).toContain("couldn't draft the reply");
@@ -351,6 +463,7 @@ describe('applyOperatorAnswerReplan', () => {
         clerkUserId: outsider.clerkUserId,
         threadId: thread.id,
         answer: 'Yes, refund it.',
+        endsWait: 'question',
       });
 
       expect(planAgentSpy).toHaveBeenCalledTimes(1);
@@ -379,6 +492,7 @@ describe('applyOperatorAnswerReplan', () => {
       clerkUserId: CLERK_USER_ID,
       threadId: thread.id,
       answer: 'Yes, $15 flat.',
+      endsWait: 'question',
       deliveryRef: 'telegram:chat_3',
     });
 

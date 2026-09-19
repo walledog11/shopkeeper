@@ -7,7 +7,7 @@ import {
   ANY_MEMBER_ACTOR_KEY, acceptCustomerAgentRequest, acceptMemberAgentRequest,
   attachMemberAgentTask, claimAgentTask, settleAgentTaskClaim,
 } from "./task-ledger.js";
-import { authorizeAgentProposal, completeApprovedAgentTask } from "./task-approval.js";
+import { authorizeAgentProposal, completeApprovedAgentTask, rejectAgentProposal } from "./task-approval.js";
 
 const orgIds: string[] = [];
 const budget = { runtimeVersion: 1, modelCallLimit: 20, activeTimeMsLimit: 120000, spendNanoUsdLimit: 1000000000n };
@@ -279,5 +279,71 @@ describe("shared proposal approval boundary", () => {
     expect(await authorizeAgentProposal({ ...approval(input, randomUUID()), proposalId: undefined })).toBeNull();
     // A plan parked before proposals existed carries an ID no proposal can have.
     expect(await authorizeAgentProposal(approval(input, "plan-a"))).toBeNull();
+  });
+});
+
+describe("shared proposal rejection boundary", () => {
+  // Exactly the three fields the dismissal surfaces pass. Spreading a seed in
+  // would hand `requireMemberActorKey` a threadId and make every refusal below
+  // pass on its thread check instead of the proposal's recorded scope.
+  function reject(input: { organizationId: string; clerkUserId: string }, proposalId: string) {
+    return db.$transaction((tx) => rejectAgentProposal(tx, {
+      organizationId: input.organizationId, clerkUserId: input.clerkUserId, proposalId,
+    }));
+  }
+
+  it("ends the approval wait and stops the task when a bound member declines the card", async () => {
+    const support = await seedSupportWaitingApproval();
+    expect(await reject(support.input, support.planId)).toBe(true);
+    const proposal = await db.agentProposal.findUniqueOrThrow({ where: { id: support.planId } });
+    expect(proposal.status).toBe("rejected");
+    expect(proposal.decidedAt).not.toBeNull();
+    const task = await db.agentTask.findUniqueOrThrow({ where: { id: support.taskId } });
+    expect(task).toMatchObject({ status: "cancelled", activeProposalId: null });
+    expect(task.cancelledAt).not.toBeNull();
+  });
+
+  it("refuses a member the proposal does not admit", async () => {
+    const { input, task, planId } = await seedWaitingApproval();
+    const outsider = await db.orgMember.create({
+      data: { organizationId: input.organizationId, clerkUserId: randomUUID() },
+    });
+    // The card was parked for one member on their own operator thread, so a
+    // colleague is not who it is waiting on.
+    await expect(reject({ ...input, clerkUserId: outsider.clerkUserId }, planId))
+      .rejects.toBeInstanceOf(ForbiddenError);
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: task.id } }))
+      .toMatchObject({ status: "waiting_approval", activeProposalId: planId });
+    expect((await db.agentProposal.findUniqueOrThrow({ where: { id: planId } })).status)
+      .toBe("ready");
+  });
+
+  it("cannot take back a decision that was already approved", async () => {
+    const support = await seedSupportWaitingApproval();
+    expect(await authorizeAgentProposal({
+      organizationId: support.organizationId, clerkUserId: support.input.clerkUserId,
+      proposalId: support.planId, instruction, approvedToolCalls,
+    })).not.toBeNull();
+    // The execution row is still absent between authorization and the run, so
+    // the proposal's own status is what stands between a second device's "no"
+    // and a plan that is about to execute.
+    await expect(reject(support.input, support.planId)).rejects.toBeInstanceOf(ConflictError);
+    expect((await db.agentProposal.findUniqueOrThrow({ where: { id: support.planId } })).status)
+      .toBe("approved");
+  });
+
+  it("reports the outcome that already stands when one dismissal arrives twice", async () => {
+    const support = await seedSupportWaitingApproval();
+    expect(await reject(support.input, support.planId)).toBe(true);
+    expect(await reject(support.input, support.planId)).toBe(true);
+    expect((await db.agentTask.findUniqueOrThrow({ where: { id: support.taskId } })).status)
+      .toBe("cancelled");
+  });
+
+  it("leaves a dismissal that names no durable proposal to the legacy path", async () => {
+    const input = await seed();
+    expect(await reject(input, randomUUID())).toBe(false);
+    // A plan parked before proposals existed carries an ID no proposal can have.
+    expect(await reject(input, "plan-a")).toBe(false);
   });
 });

@@ -64,10 +64,14 @@ export async function runApprovedPendingPlan(params: {
 }
 
 // Dismisses a parked plan without running it. Shared by the keyword `no`/`dismiss`
-// path and the reject_pending_plan control tool.
+// path, the reject_pending_plan control tool, and the dashboard's plan-decision
+// button. `clerkUserId` is the dismissing member, proven by the channel binding
+// or the session — the durable proposal decides from the same recorded scope an
+// approval does, so a dismissal has to say who made it.
 export async function clearPendingPlan(
   organizationId: string,
   memberKey: string,
+  clerkUserId: string,
   expected: PendingPlan,
 ): Promise<boolean> {
   let dismissedCurrentPlan = true;
@@ -76,6 +80,7 @@ export async function clearPendingPlan(
       orgId: organizationId,
       threadId: expected.threadId,
       expectedPlanId: expected.planId,
+      clerkUserId,
     });
   }
   await resolvePendingPlanContexts(organizationId, memberKey, expected);

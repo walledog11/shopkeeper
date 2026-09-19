@@ -35,7 +35,7 @@ import { isInvalidPlan } from "./plan-validation.js";
 import { recordRequestEpisodeDismissed, recordRequestEpisodeExecution } from "./request-outcome.js";
 import { historicalCompletionFacts } from "./completion-facts.js";
 import { ANY_MEMBER_ACTOR_KEY, type ProposalSnapshot, type TaskSettlement } from "./task-ledger.js";
-import { authorizeAgentProposal, completeApprovedAgentTask } from "./task-approval.js";
+import { authorizeAgentProposal, completeApprovedAgentTask, rejectAgentProposal } from "./task-approval.js";
 
 export type PlanExecutionDeps = ExecuteAgentTurnDeps & {
   planAgent?: PlanAgentFn;
@@ -346,11 +346,21 @@ export async function clearThreadPlanCache(params: {
   });
 }
 
-/** Clears only the exact cached plan the caller reviewed, never a newer replacement. */
+/**
+ * Clears only the exact cached plan the caller reviewed, never a newer
+ * replacement, and ends the durable approval wait that plan was parked under.
+ *
+ * The dismissing member is required rather than optional. A dismissal and an
+ * approval end the same wait, so they answer to the same recorded scope; a
+ * surface allowed to dismiss without saying who would be a second owner of that
+ * decision, which is what made the phone and the dashboard disagree about
+ * approvals.
+ */
 export async function dismissCurrentCachedPlan(params: {
   orgId: string;
   threadId: string;
   expectedPlanId: string;
+  clerkUserId: string;
 }): Promise<boolean> {
   return db.$transaction(async (tx) => {
     const locked = await tx.$queryRaw<Array<{ cachedPlan: unknown }>>(Prisma.sql`
@@ -377,6 +387,14 @@ export async function dismissCurrentCachedPlan(params: {
     if (execution && execution.status !== "pending" && execution.status !== "failed") {
       throw new ConflictError("This plan has already been approved or is currently running.");
     }
+
+    // Before the draft is destroyed, not after: a member the proposal refuses
+    // throws out of here with the card still parked for whoever may decide it.
+    await rejectAgentProposal(tx, {
+      organizationId: params.orgId,
+      clerkUserId: params.clerkUserId,
+      proposalId: params.expectedPlanId,
+    });
 
     const cleared = await tx.thread.updateMany({
       where: { id: params.threadId, organizationId: params.orgId },

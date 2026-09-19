@@ -7,9 +7,9 @@ import { buildAgentPlanCacheRecord } from "@shopkeeper/agent/plan-cache";
 import { extractCachedQuestion, getPendingCustomerMessageId } from "@shopkeeper/agent/plan-cache-shape";
 import { clearThreadPlanCache, supportAttemptSettlement } from "@shopkeeper/agent/plan-execution";
 import {
-  claimAnsweredAgentTask, failAgentTaskClaim, settleAgentTaskClaim,
+  claimContinuedAgentTask, failAgentTaskClaim, settleAgentTaskClaim,
 } from "@shopkeeper/agent/task-ledger";
-import type { AnsweredTaskClaim, TaskSettlement } from "@shopkeeper/agent/task-ledger";
+import type { ContinuedTaskClaim, TaskSettlement } from "@shopkeeper/agent/task-ledger";
 import { auth } from "@clerk/nextjs/server";
 import { buildMerchantAnswerPlanningInstruction } from "@shopkeeper/agent/kb-learned";
 import { saveMerchantAnswerToKb } from "@shopkeeper/agent/merchant-answer-kb";
@@ -31,11 +31,13 @@ export const maxDuration = 60;
 async function claimAnsweredTaskForThread(
   organizationId: string,
   threadId: string,
-): Promise<AnsweredTaskClaim | null> {
+): Promise<ContinuedTaskClaim | null> {
   try {
     const { userId } = await auth();
     if (!userId) return null;
-    return await claimAnsweredAgentTask({ organizationId, clerkUserId: userId, threadId });
+    return await claimContinuedAgentTask({
+      organizationId, clerkUserId: userId, threadId, endsWait: "question",
+    });
   } catch (err) {
     // An answer must still be recorded and re-planned when the ledger is
     // unavailable, so this degrades to the untracked path rather than failing.
@@ -45,7 +47,7 @@ async function claimAnsweredTaskForThread(
 }
 
 async function settleAnsweredTask(
-  continuation: AnsweredTaskClaim,
+  continuation: ContinuedTaskClaim,
   settlement: TaskSettlement | "failed",
   orgId: string,
 ): Promise<void> {

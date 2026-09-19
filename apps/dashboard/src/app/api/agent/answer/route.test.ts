@@ -61,7 +61,7 @@ vi.mock('@shopkeeper/agent/plan-execution', () => ({
 // packages/agent; what this surface owns is reaching it with the authenticated
 // member and settling what its re-plan actually parked.
 vi.mock('@shopkeeper/agent/task-ledger', () => ({
-  claimAnsweredAgentTask: claimAnswered,
+  claimContinuedAgentTask: claimAnswered,
   failAgentTaskClaim: failClaim,
   settleAgentTaskClaim: settleClaim,
 }));
@@ -225,6 +225,9 @@ describe('POST /api/agent/answer', () => {
         organizationId: 'org-1',
         clerkUserId: 'user_1',
         threadId: '11111111-1111-4111-8111-111111111111',
+        // This surface answers questions; it has no revise button, and ending
+        // an approval wait with an answer is a different decision.
+        endsWait: 'question',
       });
       expect(supportSettlement).toHaveBeenCalledWith(expect.objectContaining({
         orgId: 'org-1',

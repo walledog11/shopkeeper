@@ -64,7 +64,7 @@ export async function handlePendingPlanCommand(
   const { threadId, instruction, rawToolCalls } = pendingPlan;
   if (command.type === 'plan-dismiss') {
     try {
-      const dismissed = await clearPendingPlan(organizationId, memberKey, pendingPlan);
+      const dismissed = await clearPendingPlan(organizationId, memberKey, clerkUserId, pendingPlan);
       if (!dismissed) {
         await reply(`That plan was already replaced or resolved.${stillWaitingSuffix(remaining)}`);
         return true;

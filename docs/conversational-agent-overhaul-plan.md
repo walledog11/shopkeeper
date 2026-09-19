@@ -34,7 +34,10 @@ approval side missing, and fixing it is the second thing Package 5 has done: a
 parked proposal now records who may approve it, and approving one closes its
 task. The third is the other half of that wait: a parked support question now
 records who may answer it, and an answer from either surface ends that wait and
-continues the same task instead of re-planning untracked. No capability has been
+continues the same task instead of re-planning untracked. The fourth closes the
+approval wait's other two exits: revising a card continues the task it was parked
+on and supersedes it, and declining one ends the task at the ledger instead of
+only in the merchant's queue. No capability has been
 migrated row by row yet, and the proposal is still not what authorizes the write.
 Package 6 has not started.
 Created 2026-09-11; last updated 2026-09-18.
@@ -2017,22 +2020,101 @@ changed, so no eval run is owed. `test:e2e:smoke` was not run: this change
 touches no delivery or browser path. Rollback is reverting the commit; no schema
 changed and nothing outside this plan's tables reads the new transition.
 
-Not done. A revision is still not a continuation: `revise_pending_plan` enters
-the same re-plan, but the task is `waiting_approval` rather than `waiting_input`,
-so the claim finds nothing, the new card names no proposal and the task keeps
-pointing at the proposal it superseded. That is the proposal side's supersede,
-which Package 6's cutover owns along with making the proposal what authorizes the
-write. The answer itself is not an `AgentRequest` — the attempt advances the
-customer's message, which is the request the task is already running — so a crash
-between recording the answer and re-planning loses the attempt but not the
-answer; accepting a member's instruction on a customer's conversation is the
-"multiple requests advance one task" item below. The re-plan re-derives from the
-thread rather than from the task's checkpoint, which is not updated. And
+Not done by that commit. The answer itself is not an `AgentRequest` — the attempt
+advances the customer's message, which is the request the task is already running
+— so a crash between recording the answer and re-planning loses the attempt but
+not the answer; accepting a member's instruction on a customer's conversation is
+the "multiple requests advance one task" item below. The re-plan re-derives from
+the thread rather than from the task's checkpoint, which is not updated. And
 `loadLiveOperatorContext` still resolves a stale question on one member's
 projection without touching the org-wide task, which is correct — one member's
 card must not close a task — but means a question whose thread moved on is
 cleared for the merchant and left parked on the task until a customer message
 advances it.
+
+The fourth thing Package 5 has done is the other two exits from that wait. An
+approval wait ends three ways and only approval ended it: a revision left the
+task pointing at the proposal it had just superseded while the new card named
+none, and a dismissal did not reach the ledger at all — the merchant's draft was
+destroyed and the task sat `waiting_approval` on a proposal they had already
+refused, swept by nothing, because `reconcileExpiredAgentTaskClaims` only touches
+`running`. The revision case was the answer bug in its other half: a card naming
+no proposal falls through `authorizeAgentProposal`'s null to the path that
+predates durable approvals, so every conversation the merchant re-drafted lost
+its durable approval for the rest of its life exactly as every conversation the
+agent asked about did.
+
+`claimContinuedAgentTask` is the answer claim widened to the wait it did not
+cover, with the caller naming which wait its merchant input ends — `question` or
+`proposal` — because they are two waits and a model reaching for the wrong
+control tool must not silently end the other one. The scopes live in different
+places and the predicate says so: a question records its answerer on the task,
+while a card records its approver on the proposal it was rendered from, which is
+also where `ready` is checked. That check is what separates a card still waiting
+from one whose approval has already decided it, and it is load-bearing rather
+than tidy: approval writes the proposal and leaves the task `waiting_approval`
+with its revision untouched until the run completes, so the revision check the
+answer path relies on sees nothing. The candidate scan and the re-read are
+written from one predicate for the same reason `endsWaitScopeKeys` is one list,
+and the task row is locked between them, which is the ordering point approval,
+dispatch and stops already share.
+
+`rejectAgentProposal` is the refusal half of `authorizeAgentProposal`: the same
+recorded scope decides who may decline a card as decides who may approve it, and
+it runs inside `dismissCurrentCachedPlan`'s own transaction so that a member the
+proposal refuses cannot have destroyed the draft on the way to being refused.
+Declining ends the task rather than only the wait — there is nothing further for
+the agent to do on that request, and `cancelledAt` is what every later claim and
+dispatch reads to stay stopped. It also closes a race the cached plan could not
+see: between authorization and the run claiming it the `PlanExecution` row is
+still `pending`, so the proposal's own `approved` status is the only thing
+standing between a second device's "no" and a plan that is about to run. Every
+dismissal surface now names the member deciding — the control tool, the phone's
+keyword path, the dashboard's plan-decision button and its `DELETE` — because a
+surface that could dismiss without saying who would be a second owner of a
+decision the approval boundary already owns.
+
+`AgentProposalStatus` had `rejected` and `superseded` and no writer for either.
+One helper writes the supersede at all three sites that end an approval wait
+without deciding it — a superseding customer message in `advanceOrOpenThreadTask`,
+the revision claim, and a stop in `cancelMemberAgentTask` — because a status
+written at two of three places is worse than one written nowhere: it reads as
+evidence. Only a `ready` proposal is superseded; an approved one belongs to the
+run it authorized.
+
+Verified by `npm run typecheck`, `npm run lint`, `npm run lint:structure`,
+`npm run test:unit` (1,214 agent, 471 gateway, 789 dashboard, 68 analytics, 101
+email, 65 integrations), `npm run test:integration` (206 agent, 938 gateway with
+1 skipped, 677 dashboard with 2 skipped) and `npm run verify:pr --stage coverage`
+and `--stage build`, all green. Two files this change cannot reach were red once
+each across those runs — a Shopify customer-search route on one dashboard
+coverage run, a gateway internal-queue route on one gateway run — and each
+passed alone and on a re-run of its whole suite, the known workspace-concurrency
+flake. Fifteen new cases across the agent core and the gateway tools, each
+checked against a build with its own guard removed: the `ready` filter, the
+proposal's approver scope, the supersede at each of the three sites, each wait
+kind refusing the other's input, the tenant check, the dismissal's scope refusal,
+the refusal landing before the draft is destroyed, the dismissal-after-approval
+conflict, the task stop, and — for each control tool — the wait it names and the
+member it names. The scope refusal was additionally rewritten after that check
+showed it passing vacuously: the test spread a seed carrying a `threadId` into
+`rejectAgentProposal`, so the refusal came from `requireMemberActorKey`'s thread
+condition rather than the recorded scope, and the boundary now names the two
+fields it passes rather than forwarding a caller's object. No prompt, tool
+description or planner surface changed, so no eval run is owed. `test:e2e:smoke`
+was not run: this change touches no delivery or browser path. Rollback is
+reverting the commit; no schema changed, and `AgentProposalStatus` values that
+nothing read before are still read by nothing outside this plan's own tables.
+
+Still not done on the proposal side. The proposal is not yet what authorizes the
+write — approval and refusal are both recorded against it, and the bundle that
+executes is still the cached plan's, which Package 6's cutover owns. A dismissal
+is recorded against the proposal but is not an `AgentRequest` either, so it
+shares the answer's crash window. And `claimContinuedAgentTask` deliberately does
+not apply the operator-thread condition `authorizeAgentProposal` adds for a
+member-scoped proposal, which is the rule the answer side already shipped: ending
+a wait is tenant membership plus the recorded scope, and approving additionally
+requires the thread still be that member's own.
 
 For each capability, complete the following row before marking it migrated:
 
@@ -2060,8 +2142,8 @@ Move automatic audit notes/status consequences to the successful-receipt path wi
   for support — every inbound message is a durable request on a claimed task —
   but no capability has been migrated row by row against the evidence table
   above.
-- [ ] Support multiple requests, task switching, terse follow-ups, explicit preferences, and resumption after waiting for the merchant or customer. Resumption after waiting for the merchant now holds for support: a parked question names who may answer it, and an answer from any bound member ends that wait and continues the same task from either surface. The rest does not — a conversation still runs one task, an answer is not itself an accepted request, and a revision supersedes a card without continuing its task.
-- [ ] Stop new actions on cancellation or superseding instructions. Revalidate pending approvals and stale evidence when work resumes.
+- [ ] Support multiple requests, task switching, terse follow-ups, explicit preferences, and resumption after waiting for the merchant or customer. Resumption after waiting for the merchant now holds for support on both kinds of wait: a parked question names who may answer it and a parked card names who may approve it, and an answer or a revision from any bound member ends that wait and continues the same task from either surface. The rest does not — a conversation still runs one task, and neither the answer nor the dismissal is itself an accepted request.
+- [ ] Stop new actions on cancellation or superseding instructions. Revalidate pending approvals and stale evidence when work resumes. Partial completion: an approval wait now ends at the ledger however it ends — approved, declined, revised, stopped, or superseded by a later customer message — and a proposal that is no longer current records that, so a card held on another device cannot be approved after the fact. Revalidating stale *evidence* on resume does not exist.
 - [ ] Move audit notes and other mechanical bookkeeping out of the model tool surface where they are consequences of execution.
 - [ ] Remove obsolete speculative completion-draft behavior as each path gains receipt-based composition. Keep any residual prose checks explicitly labeled as heuristics, not guarantees.
 

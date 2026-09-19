@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db, SenderType } from '@shopkeeper/db';
 import {
@@ -11,6 +12,9 @@ import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import type { BaseAgentContext } from '@shopkeeper/agent/context';
 import { BadRequestError, ConflictError } from '@shopkeeper/agent/errors';
+import {
+  ANY_MEMBER_ACTOR_KEY, acceptCustomerAgentRequest, claimAgentTask, settleAgentTaskClaim,
+} from '@shopkeeper/agent/task-ledger';
 
 const { mockExecuteOperatorAgentTurn, planAgentSpy, sendOperatorPlanNotificationSpy } = vi.hoisted(() => ({
   mockExecuteOperatorAgentTurn: vi.fn(),
@@ -45,11 +49,14 @@ const settings = resolveAgentSettings(null);
 const baseCtx = { orgId: 'org', orgName: 'Store', recentMessages: [], shopify: null } as unknown as BaseAgentContext;
 const emptyDeps = {} as never;
 
-async function buildTools(memberKey: string) {
+// `clerkUserId` defaults to a member row that does not exist, which is what the
+// cases below want: no durable task is reachable, so they exercise the tool
+// itself. A case about the ledger passes a real member's id.
+async function buildTools(memberKey: string, clerkUserId = 'usr_1') {
   const context = await getContext(org.id, memberKey);
   return buildOperatorSessionTools({
     organizationId: org.id,
-    clerkUserId: 'usr_1',
+    clerkUserId,
     memberKey,
     deliveryRef: 'telegram:chat_1',
     context,
@@ -69,6 +76,67 @@ afterEach(async () => {
   await db.operatorContext.deleteMany({ where: { organizationId: org.id } }).catch(() => undefined);
   await cleanupTestData(org?.id);
 });
+
+// A support conversation parked on a card that is also a durable proposal, plus
+// the merchant's queued copy of it. Shared by the revise and dismiss cases
+// below, which are the two ways an approval wait ends without being approved.
+async function seedCardedSupportTask(memberKey: string) {
+  const member = await db.orgMember.create({
+    data: { organizationId: org.id, clerkUserId: randomUUID() },
+  });
+  const customer = await createTestCustomer(org.id, `${randomUUID()}@example.com`, { name: 'Ray Doe' });
+  const thread = await createTestThread(org.id, customer.id, 'email', { tag: 'Support' });
+  const custMsg = await createTestMessage(thread.id, 'Can I get a discount?', SenderType.customer);
+  const rawToolCalls = [{ id: 's1', name: 'send_reply', input: { text: 'No discounts, sorry.' } }];
+  const cacheRecord = buildAgentPlanCacheRecord({
+    instruction: 'Discount request',
+    lastCustomerMessageId: custMsg.id,
+    settings,
+    plan: {
+      instruction: 'Discount request',
+      steps: [{ id: 's1', category: 'communication', tool: 'send_reply', label: 'Reply', description: 'x', enabled: true }],
+      rawToolCalls,
+      warnings: [],
+    },
+  });
+  await db.thread.update({
+    where: { id: thread.id },
+    data: {
+      cachedPlan: cacheRecord as object, cachedPlanMessageId: custMsg.id,
+      aiSummary: 'Discount request', requestSummary: 'Discount request',
+    },
+  });
+  const { request, task } = await acceptCustomerAgentRequest({
+    organizationId: org.id, threadId: thread.id, sourceMessageId: custMsg.id,
+    objective: 'Discount request',
+    budget: {
+      runtimeVersion: 1, modelCallLimit: 20,
+      activeTimeMsLimit: 300000, spendNanoUsdLimit: 1000000000n,
+    },
+  });
+  const claim = await claimAgentTask({
+    organizationId: org.id, taskId: task.id, expectedRevision: task.revision,
+  });
+  await settleAgentTaskClaim({
+    organizationId: org.id, taskId: task.id, expectedRevision: task.revision,
+    claimToken: claim!.claimToken, requestId: request.id,
+    settlement: {
+      status: 'waiting_approval',
+      proposal: {
+        proposalId: cacheRecord.planId!, instruction: 'Discount request',
+        rawToolCalls, sourceRequestIds: [request.id],
+      },
+      approver: { kind: 'member', key: ANY_MEMBER_ACTOR_KEY },
+    },
+  });
+  await updateContext(org.id, memberKey, {
+    pendingPlan: {
+      threadId: thread.id, instruction: 'Discount request', rawToolCalls,
+      planId: cacheRecord.planId!, sourceMessageId: custMsg.id,
+    },
+  });
+  return { member, thread, taskId: task.id, proposalId: cacheRecord.planId! };
+}
 
 describe('approve_pending_plan', () => {
   // 2026-09-10: the merchant's "Yes" named a plan the queue no longer held, the
@@ -412,6 +480,23 @@ describe('reject_pending_plan', () => {
     expect((await getContext(org.id, memberKey)).pendingPlan).toBeNull();
   });
 
+  // Declining a card ends the same wait approving it ends. It used to end only
+  // the merchant's copy: the draft was destroyed and the task stayed
+  // `waiting_approval` on a proposal they had already refused.
+  it('ends the durable approval wait when the merchant declines the card', async () => {
+    const memberKey = 'member:reject-durable';
+    const { member, taskId, proposalId } = await seedCardedSupportTask(memberKey);
+    const tools = await buildTools(memberKey, member.clerkUserId);
+
+    const result = await tools.reject_pending_plan.execute({}, baseCtx, settings, emptyDeps);
+
+    expect(result).toEqual({ status: 'ok', message: 'Plan dismissed.' });
+    expect((await db.agentProposal.findUniqueOrThrow({ where: { id: proposalId } })).status)
+      .toBe('rejected');
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: taskId } }))
+      .toMatchObject({ status: 'cancelled', activeProposalId: null });
+  });
+
   it('errors when no plan is pending', async () => {
     const tools = await buildTools('chat_reject_empty');
     const result = await tools.reject_pending_plan.execute({}, baseCtx, settings, emptyDeps);
@@ -487,6 +572,31 @@ describe('revise_pending_plan', () => {
     );
   });
 
+  // Guidance on a card ends that card's approval wait. Naming the question wait
+  // here instead would find no task, re-plan untracked, and park a new card
+  // naming no proposal — the shape that lost durable approval for the rest of a
+  // conversation's life when a question was answered.
+  it('continues the durable task the card it revised was parked on', async () => {
+    const memberKey = 'member:revise-durable';
+    const { member, taskId, proposalId } = await seedCardedSupportTask(memberKey);
+    planAgentSpy.mockResolvedValue({
+      instruction: 'Discount request',
+      steps: [{ id: 'r1', category: 'communication', tool: 'send_reply', label: 'Reply', description: 'x', enabled: true }],
+      rawToolCalls: [{ id: 'r1', name: 'send_reply', input: { text: 'Here is 10% off.' } }],
+      warnings: [],
+    });
+    const tools = await buildTools(memberKey, member.clerkUserId);
+
+    const result = await tools.revise_pending_plan.execute({ guidance: 'Give them 10% off' }, baseCtx, settings, emptyDeps);
+
+    expect(result.status).toBe('ok');
+    expect((await db.agentProposal.findUniqueOrThrow({ where: { id: proposalId } })).status)
+      .toBe('superseded');
+    const settled = await db.agentTask.findUniqueOrThrow({ where: { id: taskId } });
+    expect(settled.activeProposalId).not.toBe(proposalId);
+    expect(settled.claimToken).toBeNull();
+  });
+
   it('errors when no plan is pending', async () => {
     const tools = await buildTools('chat_revise_empty');
     const result = await tools.revise_pending_plan.execute({ guidance: 'x' }, baseCtx, settings, emptyDeps);
@@ -548,6 +658,62 @@ describe('answer_operator_question', () => {
     const updated = await getContext(org.id, memberKey);
     expect(updated.pendingQuestion).toBeNull();
     expect(updated.pendingPlan).toMatchObject({ threadId: thread.id, instruction: 'Shipping question' });
+  });
+
+  // The counterpart of the revise case above: an answer ends the question wait,
+  // and naming the approval wait instead would supersede a card the merchant
+  // never decided.
+  it('continues the durable task the question it answered was parked on', async () => {
+    const memberKey = 'member:answer-durable';
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: randomUUID() },
+    });
+    const customer = await createTestCustomer(org.id, 'asked@example.com', { name: 'Sam Doe' });
+    const thread = await createTestThread(org.id, customer.id, 'email', { tag: 'Support' });
+    const custMsg = await createTestMessage(thread.id, 'Do you ship to Canada?', SenderType.customer);
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        cachedPlanMessageId: custMsg.id,
+        aiSummary: 'Shipping question', requestSummary: 'Shipping question',
+      },
+    });
+    const { request, task } = await acceptCustomerAgentRequest({
+      organizationId: org.id, threadId: thread.id, sourceMessageId: custMsg.id,
+      objective: 'Shipping question',
+      budget: {
+        runtimeVersion: 1, modelCallLimit: 20,
+        activeTimeMsLimit: 300000, spendNanoUsdLimit: 1000000000n,
+      },
+    });
+    const claim = await claimAgentTask({
+      organizationId: org.id, taskId: task.id, expectedRevision: task.revision,
+    });
+    await settleAgentTaskClaim({
+      organizationId: org.id, taskId: task.id, expectedRevision: task.revision,
+      claimToken: claim!.claimToken, requestId: request.id,
+      settlement: {
+        status: 'waiting_input', question: 'Do we ship to Canada?',
+        answerer: { kind: 'member', key: ANY_MEMBER_ACTOR_KEY },
+      },
+    });
+    await updateContext(org.id, memberKey, {
+      pendingQuestion: { threadId: thread.id, question: 'Do we ship to Canada?' },
+    });
+    planAgentSpy.mockResolvedValue({
+      instruction: 'Shipping question',
+      steps: [{ id: 'r1', category: 'communication', tool: 'send_reply', label: 'Reply', description: 'x', enabled: true }],
+      rawToolCalls: [{ id: 'r1', name: 'send_reply', input: { text: 'Yes, $15 flat.' } }],
+      warnings: [],
+    });
+    const tools = await buildTools(memberKey, member.clerkUserId);
+
+    const result = await tools.answer_operator_question.execute({ answer: 'Yes, $15 flat.' }, baseCtx, settings, emptyDeps);
+
+    expect(result.status).toBe('ok');
+    const settled = await db.agentTask.findUniqueOrThrow({ where: { id: task.id } });
+    expect(settled).toMatchObject({ pendingQuestion: null, claimToken: null });
+    expect(settled.status).not.toBe('waiting_input');
   });
 
   it('errors when no question is pending', async () => {

@@ -141,6 +141,109 @@ export async function authorizeAgentProposal(
 }
 
 /**
+ * Everything `rejectAgentProposal` reads and writes, which is the caller's own
+ * transaction: dismissing a card is one decision with two records — the thread's
+ * cached plan and the durable proposal — and they cannot be allowed to disagree
+ * about whether it happened.
+ */
+export type ProposalDecisionTx = Pick<
+  typeof db, "$queryRaw" | "orgMember" | "thread" | "agentTask" | "agentProposal"
+>;
+
+/**
+ * The refusal half of `authorizeAgentProposal`. Declining a card ends the same
+ * wait approving it ends, so it asks the same question about who may end it and
+ * reads the answer from the same recorded scope.
+ *
+ * It runs inside the caller's transaction so that a member the proposal refuses
+ * cannot have destroyed the draft on the way to being refused, and so a
+ * dismissal recorded here is never left without the cached plan being cleared.
+ *
+ * Returns whether the wait was ended here. A proposal that had already stopped
+ * being the current one returns false and leaves the caller to clear the stale
+ * card it was shown. An approved one throws: the decision was already made, and
+ * dismissing the card it ran from cannot take it back.
+ */
+export async function rejectAgentProposal(
+  tx: ProposalDecisionTx,
+  input: {
+    organizationId: string;
+    clerkUserId: string;
+    /** The parked plan's ID, which is the durable proposal's ID where one exists. */
+    proposalId: string;
+    now?: Date;
+  },
+): Promise<boolean> {
+  if (!UUID.test(input.proposalId)) return false;
+  const named = await tx.agentProposal.findFirst({
+    where: { id: input.proposalId, organizationId: input.organizationId },
+    select: { taskId: true },
+  });
+  if (!named) return false;
+  // Same ordering point as approval, for the same reason: two devices deciding
+  // one card at once cannot both win.
+  await tx.$queryRaw(Prisma.sql`
+    SELECT id FROM agent_tasks WHERE id = ${named.taskId}::uuid
+    AND organization_id = ${input.organizationId}::uuid FOR UPDATE
+  `);
+  const proposal = await tx.agentProposal.findFirst({
+    where: { id: input.proposalId, organizationId: input.organizationId },
+  });
+  if (!proposal) return false;
+  // Tenant membership only, named field by field: which thread the actor must
+  // still own is this boundary's decision, read from the proposal's scope below,
+  // never something a caller can smuggle in through `requireMemberActorKey`.
+  const actorKey = await requireMemberActorKey(tx, {
+    organizationId: input.organizationId, clerkUserId: input.clerkUserId,
+  });
+  const scope = { kind: proposal.approverScopeKind, key: proposal.approverScopeKey };
+  const task = await tx.agentTask.findFirst({
+    where: {
+      id: proposal.taskId, organizationId: input.organizationId,
+      thread: {
+        deletedAt: null, archivedAt: null,
+        ...(scope.key === ANY_MEMBER_ACTOR_KEY ? {} : { operatorKey: actorKey }),
+      },
+    },
+  });
+  if (!task || !actorMayEndWait(scope, { kind: "member", key: actorKey })) {
+    throw new ForbiddenError("This proposal is not available to the member.");
+  }
+  // The same dismissal arriving twice reports the outcome that already stands.
+  if (proposal.status === "rejected") return true;
+  if (proposal.status === "approved") {
+    // The execution row this dismissal already checked is still `pending`
+    // between authorization and the run claiming it, so this is the only thing
+    // standing between a second device's "no" and a plan that is about to run.
+    throw new ConflictError("This plan has already been approved or is currently running.");
+  }
+  if (
+    proposal.status !== "ready"
+    || task.status !== "waiting_approval"
+    || task.activeProposalId !== proposal.id
+    || task.cancelledAt !== null
+  ) {
+    return false;
+  }
+  const now = input.now ?? new Date();
+  await tx.agentProposal.update({
+    where: { id: proposal.id },
+    data: { status: "rejected", decidedAt: now },
+  });
+  // Declining the proposed work ends the task, not just the wait: there is
+  // nothing further for the agent to do on this request, and `cancelledAt` is
+  // what every later claim and dispatch reads to stay stopped.
+  await tx.agentTask.update({
+    where: { id: task.id, organizationId: input.organizationId },
+    data: {
+      ...NO_SUSPENSION, status: "cancelled", cancelledAt: now, lastProgressAt: now,
+      claimToken: null, leaseExpiresAt: null, activeCheckpointAt: null,
+    },
+  });
+  return true;
+}
+
+/**
  * Closes the task an approved proposal was the last thing waiting on, and names
  * the task and proposal on the actions the approved run wrote. Execution happens
  * in the caller's existing path, so the outcome is only known here; a failed or

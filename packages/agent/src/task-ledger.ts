@@ -327,7 +327,7 @@ async function requireCustomerActor(
  * more than one; nothing here assumes it cannot.
  */
 async function advanceOrOpenThreadTask(
-  tx: Pick<typeof db, "agentTask">,
+  tx: Pick<typeof db, "agentTask" | "agentProposal">,
   input: {
     organizationId: string; threadId: string; actorKey: string;
     objective: string; budget: TaskBudget; requestId: string;
@@ -342,7 +342,7 @@ async function advanceOrOpenThreadTask(
       actions: { none: { dispatchState: { in: DISPATCHED_STATES } } },
     },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    select: { id: true, status: true },
+    select: { id: true, status: true, activeProposalId: true },
   });
   if (open) {
     // Conditional on the status it was read at: a concurrent claim, stop, or
@@ -358,6 +358,10 @@ async function advanceOrOpenThreadTask(
       },
     });
     if (advanced.count === 1) {
+      await supersedeActiveProposal(tx, {
+        organizationId: input.organizationId,
+        activeProposalId: open.activeProposalId,
+      }, new Date());
       return tx.agentTask.findFirstOrThrow({
         where: { id: open.id, organizationId: input.organizationId },
       });
@@ -718,64 +722,152 @@ export const NO_SUSPENSION = {
   pendingAnswererKey: null,
 } as const;
 
+/**
+ * The parked proposal stops being the one the merchant is being asked about.
+ *
+ * Three things end an approval wait without deciding it — a superseding customer
+ * message, the merchant's revision guidance, and a stop — and all three clear
+ * `activeProposalId`. Clearing it alone leaves the proposal itself saying
+ * `ready`, which is the one thing `authorizeAgentProposal` accepts, so the
+ * status is written here rather than left to be inferred from a task that no
+ * longer points at it.
+ *
+ * Only a `ready` proposal is superseded. An approved one belongs to the run it
+ * authorized and rewriting its status would erase who approved what.
+ */
+async function supersedeActiveProposal(
+  tx: Pick<typeof db, "agentProposal">,
+  input: { organizationId: string; activeProposalId: string | null },
+  now: Date,
+): Promise<void> {
+  if (!input.activeProposalId) return;
+  await tx.agentProposal.updateMany({
+    where: {
+      id: input.activeProposalId,
+      organizationId: input.organizationId,
+      status: "ready",
+    },
+    data: { status: "superseded", decidedAt: now },
+  });
+}
+
 /** A claim on a task that was waiting, plus the request the attempt advances. */
-export interface AnsweredTaskClaim extends ActiveTaskClaim {
+export interface ContinuedTaskClaim extends ActiveTaskClaim {
   requestId: string;
 }
 
 /**
- * The answer half of `authorizeAgentProposal`: an authenticated member's answer
- * ends the wait a parked question recorded, and the attempt that re-plans on
- * that answer takes the task's claim.
+ * Which wait the merchant's input ends. They are two waits, not one: an answer
+ * is a response to a question and guidance is a response to a card, and a model
+ * that reaches for the wrong tool must not silently end the other one.
+ */
+export type EndedWait = "question" | "proposal";
+
+/**
+ * The tasks a member's input may continue, as one predicate. The candidate scan
+ * and the re-read under the lock below are both written from it, so what the
+ * lookup finds and what the claim checks cannot drift into different answers
+ * about which task this input belongs to.
+ */
+function continuableTaskWhere(
+  input: { organizationId: string; threadId: string; endsWait: EndedWait },
+  actorKey: string,
+): PrismaTypes.AgentTaskWhereInput {
+  const scopeKeys = endsWaitScopeKeys({ kind: "member", key: actorKey });
+  return {
+    organizationId: input.organizationId, threadId: input.threadId,
+    cancelledAt: null, claimToken: null,
+    organization: { lifecycleStatus: "active" },
+    thread: { deletedAt: null, archivedAt: null },
+    actions: { none: { dispatchState: { in: DISPATCHED_STATES } } },
+    executions: { none: { status: { in: ["claimed", "committed", "unknown"] } } },
+    ...(input.endsWait === "question"
+      ? {
+          status: "waiting_input" as const,
+          pendingAnswererKind: "member" as const,
+          pendingAnswererKey: { in: scopeKeys },
+        }
+      : {
+          status: "waiting_approval" as const,
+          // An approval wait records its scope on the proposal the card was
+          // rendered from rather than on the task, so that is where who may end
+          // it is read from. `ready` is the other half of the rule: an approved
+          // proposal belongs to the run it authorized, and revising it would
+          // re-draft a decision that has already been made.
+          activeProposal: {
+            is: {
+              status: "ready" as const,
+              approverScopeKind: "member" as const,
+              approverScopeKey: { in: scopeKeys },
+            },
+          },
+        }),
+  };
+}
+
+/**
+ * The merchant's half of `authorizeAgentProposal`: an authenticated member's
+ * answer or revision ends the wait the attempt recorded, and the attempt that
+ * re-plans on it takes the task's claim.
  *
  * Ending the wait and claiming are one transition rather than a resume followed
  * by `claimAgentTask`. A support task left `queued` between the two would be
  * picked up by nothing — `findQueuedAgentTasks` hands the worker
  * member-initiated work only — whereas a claim whose process dies expires on its
  * lease and the sweep reconciles it. The revision increment is the supersede:
- * whatever the question was parked alongside stops being current, exactly as a
- * later customer message supersedes it in `advanceOrOpenThreadTask`.
+ * whatever the task was parked on stops being current, exactly as a later
+ * customer message supersedes it in `advanceOrOpenThreadTask`.
  *
- * Null means the answer is not this task's to continue, and the caller re-plans
+ * The task row is locked before the decision because approval does not move the
+ * task or its revision — it writes the proposal and leaves the task
+ * `waiting_approval` until the run completes — so the revision check alone would
+ * let guidance claim a task whose card was approved a moment ago. The re-read
+ * under the lock is what sees that, and the lock is what keeps the two from
+ * interleaving at all.
+ *
+ * Null means this input is not the task's to continue, and the caller re-plans
  * untracked exactly as it did before the ledger existed: nothing is waiting on
- * this thread, the answerer is outside the recorded scope, two parked questions
- * make the answer ambiguous, another attempt already owns the task, or it
- * reached a provider and so cannot be replayed from the top.
+ * this thread, the member is outside the recorded scope, two parked waits make
+ * the input ambiguous, another attempt already owns the task, or it reached a
+ * provider and so cannot be replayed from the top.
  */
-export async function claimAnsweredAgentTask(input: {
+export async function claimContinuedAgentTask(input: {
   organizationId: string;
   clerkUserId: string;
   threadId: string;
+  endsWait: EndedWait;
   now?: Date;
   leaseMs?: number;
-}): Promise<AnsweredTaskClaim | null> {
+}): Promise<ContinuedTaskClaim | null> {
   const now = input.now ?? new Date();
   const claimToken = randomUUID();
   const leaseExpiresAt = leaseExpiry(now, input.leaseMs ?? 60000);
   return db.$transaction(async (tx) => {
-    // Tenant membership only. The thread a support question was asked about is
-    // the customer's, not this member's own operator thread, which is why the
+    // Tenant membership only. The thread a support wait was recorded on is the
+    // customer's, not this member's own operator thread, which is why the
     // threadId is deliberately not passed to the membership check and the
-    // thread is scoped by organization below instead.
+    // thread is scoped by organization in the predicate instead.
     const actorKey = await requireMemberActorKey(tx, {
       organizationId: input.organizationId, clerkUserId: input.clerkUserId,
     });
+    const continuable = continuableTaskWhere(input, actorKey);
     const waiting = await tx.agentTask.findMany({
-      where: {
-        organizationId: input.organizationId, threadId: input.threadId,
-        status: "waiting_input", cancelledAt: null, claimToken: null,
-        pendingAnswererKind: "member",
-        pendingAnswererKey: { in: endsWaitScopeKeys({ kind: "member", key: actorKey }) },
-        organization: { lifecycleStatus: "active" },
-        thread: { deletedAt: null, archivedAt: null },
-        actions: { none: { dispatchState: { in: DISPATCHED_STATES } } },
-        executions: { none: { status: { in: ["claimed", "committed", "unknown"] } } },
-      },
-      select: { id: true, revision: true },
-      take: 2,
+      where: continuable, select: { id: true }, take: 2,
     });
     if (waiting.length !== 1) return null;
-    const target = waiting[0]!;
+    const candidateId = waiting[0]!.id;
+    // The ordering point action dispatch, stops and approval already serialize
+    // on, so whichever of them is in flight is wholly before or wholly after
+    // this claim.
+    await tx.$queryRaw(Prisma.sql`
+      SELECT id FROM agent_tasks WHERE id = ${candidateId}::uuid
+      AND organization_id = ${input.organizationId}::uuid FOR UPDATE
+    `);
+    const target = await tx.agentTask.findFirst({
+      where: { ...continuable, id: candidateId },
+      select: { id: true, revision: true, status: true, activeProposalId: true },
+    });
+    if (!target) return null;
     // The attempt advances the request the task is already running; a merchant's
     // answer is not itself an accepted request on a customer's conversation.
     const request = await tx.agentRequest.findFirst({
@@ -784,13 +876,10 @@ export async function claimAnsweredAgentTask(input: {
       select: { id: true },
     });
     if (!request) return null;
-    // Conditional on the revision it was read at: a concurrent answer, stop, or
-    // superseding customer message that moved the task first leaves this attempt
-    // to re-plan untracked rather than claiming work it no longer owns.
     const claimed = await tx.agentTask.updateMany({
       where: {
         id: target.id, organizationId: input.organizationId, revision: target.revision,
-        status: "waiting_input", claimToken: null, cancelledAt: null,
+        status: target.status, claimToken: null, cancelledAt: null,
       },
       data: {
         ...NO_SUSPENSION, status: "running", revision: { increment: 1 },
@@ -798,6 +887,10 @@ export async function claimAnsweredAgentTask(input: {
       },
     });
     if (claimed.count !== 1) return null;
+    await supersedeActiveProposal(tx, {
+      organizationId: input.organizationId,
+      activeProposalId: target.activeProposalId,
+    }, now);
     const task = await tx.agentTask.findFirstOrThrow({
       where: { id: target.id, organizationId: input.organizationId, claimToken },
     });
@@ -1101,6 +1194,14 @@ export async function cancelMemberAgentTask(input: {
     const status = running
       ? "running" as const
       : consequential > 0 ? "reconciling" as const : "cancelled" as const;
+    // A stop that ends an approval wait ends it for the proposal too. A claimed
+    // attempt keeps its wait, so it keeps whatever it is parked on.
+    if (!running) {
+      await supersedeActiveProposal(tx, {
+        organizationId: input.organizationId,
+        activeProposalId: task.activeProposalId,
+      }, now);
+    }
     return tx.agentTask.update({
       where: { id: task.id },
       data: {

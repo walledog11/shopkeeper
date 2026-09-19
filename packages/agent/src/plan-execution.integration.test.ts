@@ -8,7 +8,7 @@ import {
   createTestOrg,
   createTestThread,
 } from "@shopkeeper/db/test-helpers";
-import { BadRequestError, ConflictError } from "./errors.js";
+import { BadRequestError, ConflictError, ForbiddenError } from "./errors.js";
 import { buildAgentPlanCacheRecord, commitThreadPlanCacheIfCurrent, readAgentPlanCache } from "./plan-cache.js";
 import {
   executeCurrentCachedHomePlan,
@@ -19,13 +19,17 @@ import {
   isAutoExecuteEnabled,
   maybeAutoExecuteCurrentCachedHomePlan,
   resolvePlanExecutionLedgerMode,
+  supportAttemptSettlement,
   type PlanExecutionDeps,
   readParkedProposalForThread,
 } from "./plan-execution.js";
 import { resolveAgentSettings } from "./settings.js";
 import { hashInstruction, hashPlan } from "./agent-actions.js";
 import { claimCurrentPlanExecution } from "./execution-ledger.js";
-import { acceptCustomerAgentRequest } from "./task-ledger.js";
+import {
+  acceptCustomerAgentRequest, claimAgentTask, settleAgentTaskClaim,
+} from "./task-ledger.js";
+import { authorizeAgentProposal } from "./task-approval.js";
 import type { AgentContext, AgentResult } from "./agent-context.js";
 import type { AgentPlan, OrgSettings, RawToolCall } from "./types.js";
 
@@ -235,6 +239,41 @@ async function seedThreadWithPlan(options: {
   return { org, thread, message, plan, settings, cache };
 }
 
+// A support conversation whose parked card is also a durable proposal: the
+// planning job accepts the customer's message, runs an attempt, and settles on
+// whatever `supportAttemptSettlement` reads back out of the cached plan.
+async function seedSupportCardParkedOnTask() {
+  const plan = threeStepPlan();
+  const settings = resolveAgentSettings({ autonomyTier: "guarded", maxRefundAmount: 100 });
+  const seeded = await seedThreadWithPlan({ plan, settings });
+  const member = await db.orgMember.create({
+    data: { organizationId: seeded.org.id, clerkUserId: randomUUID() },
+  });
+  const { request, task } = await acceptCustomerAgentRequest({
+    organizationId: seeded.org.id, threadId: seeded.thread.id, sourceMessageId: seeded.message.id,
+    objective: plan.instruction,
+    budget: {
+      runtimeVersion: 1, modelCallLimit: 20,
+      activeTimeMsLimit: 120000, spendNanoUsdLimit: 1000000000n,
+    },
+  });
+  const claim = await claimAgentTask({
+    organizationId: seeded.org.id, taskId: task.id, expectedRevision: task.revision,
+  });
+  const settlement = await supportAttemptSettlement({
+    orgId: seeded.org.id, threadId: seeded.thread.id, settings,
+    merchantQuestion: null, sourceRequestIds: [request.id],
+  });
+  expect(settlement.status).toBe("waiting_approval");
+  expect(await settleAgentTaskClaim({
+    organizationId: seeded.org.id, taskId: task.id, expectedRevision: task.revision,
+    claimToken: claim!.claimToken, requestId: request.id, settlement,
+  })).toBe(true);
+  expect((await db.agentTask.findUniqueOrThrow({ where: { id: task.id } })).activeProposalId)
+    .toBe(seeded.cache.planId);
+  return { ...seeded, member, task, request };
+}
+
 describe("plan execution helpers", () => {
   it("dismisses only the exact cached plan identity", async () => {
     const { org, thread, cache } = await seedThreadWithPlan();
@@ -243,6 +282,7 @@ describe("plan execution helpers", () => {
       orgId: org.id,
       threadId: thread.id,
       expectedPlanId: "stale-plan-id",
+      clerkUserId: "user_dismisser",
     })).resolves.toBe(false);
     expect((await db.thread.findUnique({ where: { id: thread.id } }))?.cachedPlan).not.toBeNull();
 
@@ -250,6 +290,7 @@ describe("plan execution helpers", () => {
       orgId: org.id,
       threadId: thread.id,
       expectedPlanId: cache.planId!,
+      clerkUserId: "user_dismisser",
     })).resolves.toBe(true);
     const dismissed = await db.thread.findUnique({ where: { id: thread.id } });
     expect(dismissed?.cachedPlan).toBeNull();
@@ -273,8 +314,73 @@ describe("plan execution helpers", () => {
       orgId: org.id,
       threadId: thread.id,
       expectedPlanId: cache.planId!,
+      clerkUserId: "user_dismisser",
     })).rejects.toBeInstanceOf(ConflictError);
     expect((await db.thread.findUnique({ where: { id: thread.id } }))?.cachedPlan).not.toBeNull();
+  });
+
+  // A dismissal ends the same wait an approval ends, so it has to leave the
+  // durable proposal and the cached card saying the same thing. They used to
+  // disagree: the card was destroyed and the task stayed `waiting_approval` on a
+  // proposal the merchant had already declined, with nothing sweeping it.
+  it("ends the durable approval wait when the parked card is dismissed", async () => {
+    const support = await seedSupportCardParkedOnTask();
+
+    await expect(dismissCurrentCachedPlan({
+      orgId: support.org.id,
+      threadId: support.thread.id,
+      expectedPlanId: support.cache.planId!,
+      clerkUserId: support.member.clerkUserId,
+    })).resolves.toBe(true);
+
+    expect((await db.thread.findUnique({ where: { id: support.thread.id } }))?.cachedPlan).toBeNull();
+    expect((await db.agentProposal.findUniqueOrThrow({ where: { id: support.cache.planId! } })).status)
+      .toBe("rejected");
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: support.task.id } }))
+      .toMatchObject({ status: "cancelled", activeProposalId: null });
+  });
+
+  it("leaves the draft parked when the proposal refuses the member dismissing it", async () => {
+    const support = await seedSupportCardParkedOnTask();
+    const otherOrg = await createTestOrg();
+    orgIds.push(otherOrg.id);
+    const outsider = await db.orgMember.create({
+      data: { organizationId: otherOrg.id, clerkUserId: randomUUID() },
+    });
+
+    await expect(dismissCurrentCachedPlan({
+      orgId: support.org.id,
+      threadId: support.thread.id,
+      expectedPlanId: support.cache.planId!,
+      clerkUserId: outsider.clerkUserId,
+    })).rejects.toBeInstanceOf(ForbiddenError);
+
+    // Refused before the draft was destroyed, which is why the two records move
+    // in one transaction rather than one after the other.
+    expect((await db.thread.findUnique({ where: { id: support.thread.id } }))?.cachedPlan).not.toBeNull();
+    expect((await db.agentProposal.findUniqueOrThrow({ where: { id: support.cache.planId! } })).status)
+      .toBe("ready");
+  });
+
+  it("refuses to dismiss a card whose approval was already recorded", async () => {
+    const support = await seedSupportCardParkedOnTask();
+    expect(await authorizeAgentProposal({
+      organizationId: support.org.id,
+      clerkUserId: support.member.clerkUserId,
+      proposalId: support.cache.planId!,
+      instruction: support.plan.instruction,
+      approvedToolCalls: support.plan.rawToolCalls,
+    })).not.toBeNull();
+
+    // No execution row exists yet, so the ledger's own status is the only thing
+    // that stops a second device's "no" from clearing a plan about to run.
+    await expect(dismissCurrentCachedPlan({
+      orgId: support.org.id,
+      threadId: support.thread.id,
+      expectedPlanId: support.cache.planId!,
+      clerkUserId: support.member.clerkUserId,
+    })).rejects.toBeInstanceOf(ConflictError);
+    expect((await db.thread.findUnique({ where: { id: support.thread.id } }))?.cachedPlan).not.toBeNull();
   });
 
   it("formats an approver with and without a display name", () => {
