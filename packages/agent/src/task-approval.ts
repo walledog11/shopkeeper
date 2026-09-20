@@ -44,6 +44,8 @@ export interface ProposalApprovalInput {
   proposalId?: string | undefined;
   instruction: string;
   approvedToolCalls: RawToolCall[];
+  /** Durable execution cannot be authorized without an enforce-mode ledger. */
+  executionLedgerEnforced?: boolean;
 }
 
 /**
@@ -81,6 +83,12 @@ export async function authorizeAgentProposal(
       where: { id: input.proposalId, organizationId: input.organizationId },
     });
     if (!proposal) return null;
+    // Check before writing the approval. Otherwise a temporary ledger-mode
+    // misconfiguration parks the task behind an approved proposal that no
+    // execution owns and no later approval can safely retry.
+    if (input.executionLedgerEnforced === false) {
+      throw new ConflictError("Durable proposals require the execution ledger.");
+    }
     const actorKey = await requireMemberActorKey(tx, input);
     // Who may approve is read from the proposal, never re-derived from who
     // initiated the task. A support task is initiated by the customer and
@@ -241,44 +249,4 @@ export async function rejectAgentProposal(
     },
   });
   return true;
-}
-
-/**
- * Closes the task an approved proposal was the last thing waiting on, and names
- * the task and proposal on the actions the approved run wrote. Execution happens
- * in the caller's existing path, so the outcome is only known here; a failed or
- * uncertain run leaves the task waiting rather than reporting success.
- *
- * The run's actions are found by its own turn ID, not by the request ID the
- * planning attempt used. They are a different turn — `AgentTurnUsage.turnId` is
- * unique, and a retried approval sharing the planning turn's ID would collide
- * with it and interleave two action sequences, which is the same reason the
- * failure replan keeps its own.
- */
-export async function completeApprovedAgentTask(
-  approved: AuthorizedProposal,
-  executedTurnId?: string,
-): Promise<boolean> {
-  const now = new Date();
-  return db.$transaction(async (tx) => {
-    const closed = await tx.agentTask.updateMany({
-      where: {
-        id: approved.taskId, organizationId: approved.organizationId,
-        revision: approved.taskRevision, status: "waiting_approval",
-        activeProposalId: approved.proposalId, cancelledAt: null,
-      },
-      data: { ...NO_SUSPENSION, status: "completed", completedAt: now, lastProgressAt: now },
-    });
-    if (closed.count !== 1) return false;
-    if (executedTurnId) {
-      await tx.agentAction.updateMany({
-        where: {
-          organizationId: approved.organizationId, turnId: executedTurnId,
-          OR: [{ taskId: null }, { taskId: approved.taskId }],
-        },
-        data: { taskId: approved.taskId, proposalId: approved.proposalId },
-      });
-    }
-    return true;
-  });
 }

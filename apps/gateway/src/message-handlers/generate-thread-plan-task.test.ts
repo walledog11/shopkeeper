@@ -203,6 +203,7 @@ describe('durable support task', () => {
     const again = await generateThreadPlan(seed.organizationId, seed.threadId, false);
 
     expect(again.plan).not.toBeNull();
+    expect(mockPlanAgent).toHaveBeenCalledTimes(1);
     expect(await db.agentRequest.count({ where: { organizationId: seed.organizationId } })).toBe(1);
     expect(await db.agentTask.count({ where: { organizationId: seed.organizationId } })).toBe(1);
     // The wait the merchant is in is not ended by replanning the same message.
@@ -248,7 +249,7 @@ describe('durable support task', () => {
     const seed = await seedThread();
     mockPlanAgent.mockResolvedValue(plan([reply]));
     mockMaybeAutoExecute.mockImplementation(async (params) => {
-      expect(params.durableTurn).toEqual({
+      expect(params.durableTurn).toMatchObject({
         requestId: (await db.agentRequest.findFirstOrThrow({
           where: { organizationId: seed.organizationId },
         })).id,

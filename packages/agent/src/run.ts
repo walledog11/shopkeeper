@@ -5,7 +5,9 @@ import {
   authorizeAgentActionDispatch,
   beginAgentActionAttempt,
   completeAgentActionAttempt,
+  failAgentActionBeforeDispatch,
   markAgentActionSubmitted,
+  type AgentActionTaskAuthority,
 } from "./agent-actions.js";
 import { buildCachedSystemPrompt, buildSplitCachedSystemPrompt } from "./ai/anthropic.js";
 import { pickModel } from "./ai/index.js";
@@ -71,6 +73,7 @@ export interface RunAgentOptions extends RunAgentPolicyOptions {
   moduleTools?: Record<string, AgentToolDefinition>;
   // Shadow/enforced durable plan execution row that owns this run's actions.
   executionId?: string;
+  taskAuthority?: AgentActionTaskAuthority;
   // Successful facts established by live reads during planning. Approved plans
   // do not re-run those reads, so their evidence travels with the execution.
   completionEvidence?: readonly CompletionFact[];
@@ -169,6 +172,7 @@ export async function runAgent(
           instruction,
           approval,
           executionId: options?.executionId,
+          taskAuthority: options?.taskAuthority,
           operationId,
           actionIndex: actionIndex++,
           action: {
@@ -181,6 +185,7 @@ export async function runAgent(
         return {
           authorizeDispatch: () => authorizeAgentActionDispatch(attempt),
           markSubmitted: () => markAgentActionSubmitted(attempt),
+          failBeforeDispatch: (action) => failAgentActionBeforeDispatch(attempt, action),
           complete: async (action) => {
             journaledActions.add(action);
             await completeAgentActionAttempt(attempt, action);

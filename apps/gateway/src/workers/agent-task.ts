@@ -127,6 +127,12 @@ export async function processAgentTaskJob(data: AgentTaskJobData): Promise<void>
       clerkUserId: member.clerkUserId,
       requestId: request.id,
       taskId: data.taskId,
+      taskAuthority: {
+        kind: 'claim',
+        taskId: data.taskId,
+        expectedRevision: data.revision,
+        claimToken: claimed.claimToken,
+      },
       taskBudget,
       assertExecutionAllowed: () => {
         if (leaseLost) throw new Error('Task lease ownership was lost.');

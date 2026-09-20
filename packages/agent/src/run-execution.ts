@@ -38,6 +38,7 @@ export type AgentToolCall = {
 export interface AgentActionDispatchHooks {
   authorizeDispatch: () => Promise<void>;
   markSubmitted: () => Promise<void>;
+  failBeforeDispatch: (action: ActionEntry) => Promise<void>;
   complete: (action: ActionEntry) => Promise<void>;
 }
 
@@ -313,6 +314,7 @@ export async function executeAgentToolCall(
   ctx.assertExecutionAllowed?.();
 
   let actionDispatch: AgentActionDispatchHooks | undefined;
+  let dispatchAuthorized = false;
 
   if (readOnly && category !== "read") {
     result = `Error: ${toolCall.name} is not available in private ask mode.`;
@@ -337,10 +339,11 @@ export async function executeAgentToolCall(
     actionDispatch = !readOnly && category !== "read"
       ? await input.beginAction?.(executableToolCall, runtimeOperationId!, providerOperationKey)
       : undefined;
-    ctx.assertExecutionAllowed?.();
-    await actionDispatch?.authorizeDispatch();
-    await actionDispatch?.markSubmitted();
     try {
+      ctx.assertExecutionAllowed?.();
+      await actionDispatch?.authorizeDispatch();
+      dispatchAuthorized = actionDispatch !== undefined;
+      await actionDispatch?.markSubmitted();
       const executionIdentity = runtimeOperationId && operationScopeId
         ? { operationId: runtimeOperationId, executionId: operationScopeId }
         : undefined;
@@ -371,7 +374,7 @@ export async function executeAgentToolCall(
     } catch (err) {
       threw = true;
       const errorMessage = err instanceof Error ? err.message : String(err);
-      const possiblySubmitted = actionDispatch !== undefined;
+      const possiblySubmitted = dispatchAuthorized;
       result = `${possiblySubmitted ? "Unknown" : "Error"}: tool "${toolCall.name}" threw - ${errorMessage}`;
       status = possiblySubmitted ? "unknown" : "error";
       errorDetail = errorMessage;
@@ -428,7 +431,10 @@ export async function executeAgentToolCall(
     ...(receipt ? { receipt } : {}),
   };
   actionsPerformed.push(action);
-  await actionDispatch?.complete(action);
+  if (actionDispatch) {
+    if (dispatchAuthorized) await actionDispatch.complete(action);
+    else await actionDispatch.failBeforeDispatch(action);
+  }
   return {
     type: "tool_result" as const,
     tool_use_id: toolCall.id,

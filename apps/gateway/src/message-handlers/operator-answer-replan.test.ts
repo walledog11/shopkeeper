@@ -20,7 +20,8 @@ const { planAgentSpy, sendOperatorPlanNotificationSpy } = vi.hoisted(() => ({
   sendOperatorPlanNotificationSpy: vi.fn(),
 }));
 
-vi.mock('@shopkeeper/agent/planner', () => ({
+vi.mock('@shopkeeper/agent/planner', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@shopkeeper/agent/planner')>(),
   planAgent: planAgentSpy,
 }));
 
@@ -365,14 +366,14 @@ describe('applyOperatorAnswerReplan', () => {
       });
       planAgentSpy.mockResolvedValue(refundPlan());
 
-      await applyOperatorAnswerReplan({
+      await expect(applyOperatorAnswerReplan({
         organizationId: org.id,
         memberKey: MEMBER_KEY,
         clerkUserId: outsider.clerkUserId,
         threadId: thread.id,
         answer: 'Make it warmer.',
         endsWait: 'proposal',
-      });
+      })).rejects.toThrow('membership');
 
       expect(await db.agentTask.findUniqueOrThrow({ where: { id: taskId } }))
         .toMatchObject({ status: 'waiting_approval', activeProposalId: proposalId });
@@ -456,17 +457,16 @@ describe('applyOperatorAnswerReplan', () => {
       });
       planAgentSpy.mockResolvedValue(refundPlan());
 
-      // The answer still re-plans; what it cannot do is end this task's wait.
-      await applyOperatorAnswerReplan({
+      await expect(applyOperatorAnswerReplan({
         organizationId: org.id,
         memberKey: MEMBER_KEY,
         clerkUserId: outsider.clerkUserId,
         threadId: thread.id,
         answer: 'Yes, refund it.',
         endsWait: 'question',
-      });
+      })).rejects.toThrow('membership');
 
-      expect(planAgentSpy).toHaveBeenCalledTimes(1);
+      expect(planAgentSpy).not.toHaveBeenCalled();
       expect(await db.agentTask.findUniqueOrThrow({ where: { id: taskId } })).toMatchObject({
         status: 'waiting_input', pendingQuestion: 'Is this one within policy?',
       });

@@ -5,9 +5,14 @@ import { createTestOrg, createTestCustomer, createTestThread, cleanupTestData } 
 import { ConflictError, ForbiddenError } from "./errors.js";
 import {
   ANY_MEMBER_ACTOR_KEY, acceptCustomerAgentRequest, acceptMemberAgentRequest,
-  attachMemberAgentTask, claimAgentTask, settleAgentTaskClaim,
+  attachMemberAgentTask, cancelMemberAgentTask, claimAgentTask, settleAgentTaskClaim,
 } from "./task-ledger.js";
-import { authorizeAgentProposal, completeApprovedAgentTask, rejectAgentProposal } from "./task-approval.js";
+import { authorizeAgentProposal, rejectAgentProposal } from "./task-approval.js";
+import {
+  claimPlanExecution, completePlanExecution, finalizeReconciledPlanExecution,
+  reconcileStaleClaimedPlanExecutions,
+} from "./execution-ledger.js";
+import { authorizeAgentActionDispatch, beginAgentActionAttempt, hashInstruction, hashPlan } from "./agent-actions.js";
 
 const orgIds: string[] = [];
 const budget = { runtimeVersion: 1, modelCallLimit: 20, activeTimeMsLimit: 120000, spendNanoUsdLimit: 1000000000n };
@@ -123,11 +128,214 @@ describe("shared proposal approval boundary", () => {
     expect((await db.agentTask.findUniqueOrThrow({ where: { id: task.id } })).status)
       .toBe("waiting_approval");
 
-    expect(await completeApprovedAgentTask(authorized!)).toBe(true);
+  });
+
+  it("leaves a durable proposal ready when the execution ledger is unavailable", async () => {
+    const { input, task, planId } = await seedWaitingApproval();
+    await expect(authorizeAgentProposal({
+      ...approval(input, planId), executionLedgerEnforced: false,
+    })).rejects.toThrow("Durable proposals require the execution ledger");
+    expect(await db.agentProposal.findUniqueOrThrow({ where: { id: planId } }))
+      .toMatchObject({ status: "ready", approverKey: null });
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: task.id } }))
+      .toMatchObject({ status: "waiting_approval", activeProposalId: planId });
+  });
+
+  it("binds an approved dispatch to its task and settles execution with the task atomically", async () => {
+    const { input, task, planId } = await seedWaitingApproval();
+    const authorized = await authorizeAgentProposal(approval(input, planId));
+    const identity = {
+      orgId: input.organizationId,
+      planId,
+      planHash: hashPlan({ instruction, steps: [], rawToolCalls: approvedToolCalls }),
+      instructionHash: hashInstruction(instruction),
+      taskId: task.id,
+      proposalId: planId,
+    };
+    const execution = await claimPlanExecution(identity);
+    expect(execution.claimed).toBe(true);
+    const attempt = await beginAgentActionAttempt({
+      orgId: input.organizationId,
+      mode: "human_approved",
+      actionIndex: 0,
+      operationId: randomUUID(),
+      executionId: execution.execution.id,
+      taskAuthority: {
+        kind: "approved_proposal",
+        taskId: task.id,
+        expectedRevision: authorized!.taskRevision,
+        proposalId: planId,
+        executionId: execution.execution.id,
+        executionClaimToken: execution.claimToken!,
+      },
+      action: { tool: "create_refund", input: { orderId: "55" }, category: "action" },
+    });
+    await authorizeAgentActionDispatch(attempt);
+    await completePlanExecution({
+      executionId: execution.execution.id,
+      claimToken: execution.claimToken!,
+      status: "committed",
+    });
+
+    expect(await db.agentAction.findUniqueOrThrow({ where: { id: attempt.id } }))
+      .toMatchObject({ taskId: task.id, proposalId: planId, dispatchState: "dispatch_authorized" });
     expect(await db.agentTask.findUniqueOrThrow({ where: { id: task.id } }))
       .toMatchObject({ status: "completed", activeProposalId: null });
-    // A failed run's retry cannot close an already-closed task a second time.
-    expect(await completeApprovedAgentTask(authorized!)).toBe(false);
+    expect(await db.agentProposal.findUniqueOrThrow({ where: { id: planId } }))
+      .toMatchObject({ status: "completed" });
+  });
+
+  it("moves an uncertain approved execution to reconciliation instead of leaving an approved wait", async () => {
+    const { input, task, planId } = await seedWaitingApproval();
+    await authorizeAgentProposal(approval(input, planId));
+    const execution = await claimPlanExecution({
+      orgId: input.organizationId,
+      planId,
+      planHash: hashPlan({ instruction, steps: [], rawToolCalls: approvedToolCalls }),
+      instructionHash: hashInstruction(instruction),
+      taskId: task.id,
+      proposalId: planId,
+    });
+    await completePlanExecution({
+      executionId: execution.execution.id,
+      claimToken: execution.claimToken!,
+      status: "unknown",
+      error: "provider outcome unknown",
+    });
+
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: task.id } }))
+      .toMatchObject({
+        status: "reconciling",
+        activeProposalId: null,
+        failureCode: "approved_execution_unknown",
+      });
+  });
+
+  it("keeps a committed outcome when cancellation lands after dispatch", async () => {
+    const { input, task, planId } = await seedWaitingApproval();
+    const authorized = await authorizeAgentProposal(approval(input, planId));
+    const execution = await claimPlanExecution({
+      orgId: input.organizationId,
+      planId,
+      planHash: hashPlan({ instruction, steps: [], rawToolCalls: approvedToolCalls }),
+      instructionHash: hashInstruction(instruction),
+      taskId: task.id,
+      proposalId: planId,
+    });
+    const attempt = await beginAgentActionAttempt({
+      orgId: input.organizationId,
+      mode: "human_approved",
+      actionIndex: 0,
+      operationId: randomUUID(),
+      executionId: execution.execution.id,
+      taskAuthority: {
+        kind: "approved_proposal",
+        taskId: task.id,
+        expectedRevision: authorized!.taskRevision,
+        proposalId: planId,
+        executionId: execution.execution.id,
+        executionClaimToken: execution.claimToken!,
+      },
+      action: { tool: "create_refund", input: { orderId: "55" }, category: "action" },
+    });
+    await authorizeAgentActionDispatch(attempt);
+    await cancelMemberAgentTask({
+      organizationId: input.organizationId,
+      clerkUserId: input.clerkUserId,
+      taskId: task.id,
+      expectedRevision: task.revision,
+    });
+
+    await completePlanExecution({
+      executionId: execution.execution.id,
+      claimToken: execution.claimToken!,
+      status: "committed",
+    });
+
+    expect(await db.planExecution.findUniqueOrThrow({ where: { id: execution.execution.id } }))
+      .toMatchObject({ status: "committed" });
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: task.id } }))
+      .toMatchObject({ status: "completed", activeProposalId: null, failureCode: null });
+    expect((await db.agentTask.findUniqueOrThrow({ where: { id: task.id } })).cancelledAt)
+      .not.toBeNull();
+    expect(await db.agentProposal.findUniqueOrThrow({ where: { id: planId } }))
+      .toMatchObject({ status: "completed" });
+  });
+
+  it("recovers a crash between approval execution and task settlement", async () => {
+    const { input, task, planId } = await seedWaitingApproval();
+    await authorizeAgentProposal(approval(input, planId));
+    const execution = await claimPlanExecution({
+      orgId: input.organizationId,
+      planId,
+      planHash: hashPlan({ instruction, steps: [], rawToolCalls: approvedToolCalls }),
+      instructionHash: hashInstruction(instruction),
+      taskId: task.id,
+      proposalId: planId,
+    });
+    await db.planExecution.update({
+      where: { id: execution.execution.id },
+      data: { claimedAt: new Date("2026-01-01T00:00:00.000Z") },
+    });
+
+    expect(await reconcileStaleClaimedPlanExecutions(
+      new Date("2026-01-02T00:00:00.000Z"),
+      "worker_crashed",
+    )).toBe(1);
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: task.id } }))
+      .toMatchObject({ status: "reconciling", activeProposalId: null });
+
+    await db.agentAction.create({
+      data: {
+        organizationId: input.organizationId,
+        turnId: randomUUID(),
+        executionId: execution.execution.id,
+        taskId: task.id,
+        proposalId: planId,
+        tool: "create_refund",
+        category: "action",
+        input: {},
+        status: "success",
+        mode: "human_approved",
+      },
+    });
+    expect(await finalizeReconciledPlanExecution(execution.execution.id)).toBe("committed");
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: task.id } }))
+      .toMatchObject({ status: "completed", failureCode: null });
+  });
+
+  it("still reconciles a stale execution when its linked task is already terminal", async () => {
+    const { input, task, planId } = await seedWaitingApproval();
+    await authorizeAgentProposal(approval(input, planId));
+    const execution = await claimPlanExecution({
+      orgId: input.organizationId,
+      planId,
+      planHash: hashPlan({ instruction, steps: [], rawToolCalls: approvedToolCalls }),
+      instructionHash: hashInstruction(instruction),
+      taskId: task.id,
+      proposalId: planId,
+    });
+    await db.planExecution.update({
+      where: { id: execution.execution.id },
+      data: { claimedAt: new Date("2026-01-01T00:00:00.000Z") },
+    });
+    await db.agentTask.update({
+      where: { id: task.id },
+      data: {
+        status: "cancelled", cancelledAt: new Date(), activeProposalId: null,
+        pendingQuestionId: null, pendingQuestion: null,
+        pendingAnswererKind: null, pendingAnswererKey: null,
+      },
+    });
+
+    expect(await reconcileStaleClaimedPlanExecutions(
+      new Date("2026-01-02T00:00:00.000Z"),
+      "worker_crashed",
+    )).toBe(1);
+    expect(await db.planExecution.findUniqueOrThrow({ where: { id: execution.execution.id } }))
+      .toMatchObject({ status: "unknown", lastError: "worker_crashed" });
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: task.id } }))
+      .toMatchObject({ status: "cancelled" });
   });
 
   it("refuses to run inputs other than the ones that were approved", async () => {
@@ -213,9 +421,8 @@ describe("shared proposal approval boundary", () => {
       taskId: support.taskId, proposalId: support.planId,
       approverKey: `member:${second.id}`,
     });
-    expect(await completeApprovedAgentTask(authorized!)).toBe(true);
     expect((await db.agentTask.findUniqueOrThrow({ where: { id: support.taskId } })).status)
-      .toBe("completed");
+      .toBe("waiting_approval");
   });
 
   it("still refuses someone who is not a member of the organization at all", async () => {
@@ -244,33 +451,6 @@ describe("shared proposal approval boundary", () => {
     const proposal = await db.agentProposal.findUniqueOrThrow({ where: { id: support.planId } });
     expect(proposal.status).toBe("approved");
     expect([...approvers][0]).toBe(proposal.approverKey);
-  });
-
-  it("names the task and proposal on the actions the approved run wrote", async () => {
-    const support = await seedSupportWaitingApproval();
-    const authorized = await authorizeAgentProposal(approval(support.input, support.planId));
-    const turnId = randomUUID();
-    const action = await db.agentAction.create({
-      data: {
-        organizationId: support.organizationId, threadId: support.threadId, turnId,
-        tool: "create_refund", category: "action", input: {}, status: "success",
-        mode: "human_approved",
-      },
-    });
-    // A different turn's action is not this approval's to claim.
-    const unrelated = await db.agentAction.create({
-      data: {
-        organizationId: support.organizationId, threadId: support.threadId, turnId: randomUUID(),
-        tool: "send_reply", category: "communication", input: {}, status: "success",
-        mode: "auto_executed",
-      },
-    });
-
-    expect(await completeApprovedAgentTask(authorized!, turnId)).toBe(true);
-    expect(await db.agentAction.findUniqueOrThrow({ where: { id: action.id } }))
-      .toMatchObject({ taskId: support.taskId, proposalId: support.planId });
-    expect(await db.agentAction.findUniqueOrThrow({ where: { id: unrelated.id } }))
-      .toMatchObject({ taskId: null, proposalId: null });
   });
 
   it("leaves an approval that names no durable proposal to the legacy path", async () => {

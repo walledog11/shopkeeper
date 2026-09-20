@@ -17,6 +17,7 @@ const {
   failClaim,
   settleClaim,
   supportSettlement,
+  taskCount,
 } = vi.hoisted(() => ({
   buildContext: vi.fn(),
   clearPlan: vi.fn(),
@@ -34,11 +35,15 @@ const {
   failClaim: vi.fn(),
   settleClaim: vi.fn(),
   supportSettlement: vi.fn(),
+  taskCount: vi.fn(),
 }));
 
 vi.mock('@shopkeeper/db', async (importOriginal) => ({
   ...await importOriginal<typeof import('@shopkeeper/db')>(),
-  db: { thread: { findFirst: findThread, update: threadUpdate } },
+  db: {
+    thread: { findFirst: findThread, update: threadUpdate },
+    agentTask: { count: taskCount },
+  },
   createMessage,
 }));
 vi.mock('@/lib/server/org', () => ({ getOrCreateOrg: getOrg }));
@@ -132,6 +137,7 @@ describe('POST /api/agent/answer', () => {
     planAgent.mockResolvedValue({ instruction: 'reply', steps: [], rawToolCalls: [] });
     authSpy.mockResolvedValue({ userId: 'user_1' });
     claimAnswered.mockResolvedValue(null);
+    taskCount.mockResolvedValue(0);
     settleClaim.mockResolvedValue(true);
     failClaim.mockResolvedValue('failed');
     supportSettlement.mockResolvedValue({ status: 'completed' });
@@ -207,11 +213,34 @@ describe('POST /api/agent/answer', () => {
     });
   });
 
+  it('keeps proposal suspension enabled when an answer resumes planning', async () => {
+    const previous = process.env.AGENT_PROPOSAL_SUSPENSION_MODE;
+    process.env.AGENT_PROPOSAL_SUSPENSION_MODE = 'compose_from_receipt';
+    try {
+      getLatest.mockResolvedValue({ id: 'message-1', senderType: 'customer' });
+      const response = await POST(request());
+      expect(response.status).toBe(200);
+      expect(planAgent).toHaveBeenCalledWith(
+        expect.anything(),
+        'answer-informed instruction',
+        expect.anything(),
+        { suspendAtProposal: true },
+      );
+    } finally {
+      if (previous === undefined) delete process.env.AGENT_PROPOSAL_SUSPENSION_MODE;
+      else process.env.AGENT_PROPOSAL_SUSPENSION_MODE = previous;
+    }
+  });
+
   describe('durable continuation', () => {
     const continuation = {
       organizationId: 'org-1', taskId: 'task-1', expectedRevision: 3,
       claimToken: 'claim-1', requestId: 'request-1',
     };
+
+    beforeEach(() => {
+      taskCount.mockResolvedValue(1);
+    });
 
     it('ends the wait its answer was asked under and settles what the re-plan parked', async () => {
       getLatest.mockResolvedValue({ id: 'message-1', senderType: 'customer' });
@@ -287,6 +316,7 @@ describe('POST /api/agent/answer', () => {
     it('re-plans untracked when nothing on the thread is waiting on this member', async () => {
       getLatest.mockResolvedValue({ id: 'message-1', senderType: 'customer' });
       claimAnswered.mockResolvedValue(null);
+      taskCount.mockResolvedValue(0);
 
       expect((await POST(request())).status).toBe(200);
       expect(planAgent).toHaveBeenCalledTimes(1);

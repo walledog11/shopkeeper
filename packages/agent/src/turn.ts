@@ -6,6 +6,7 @@ import { ConflictError } from "./errors.js";
 import type { LockProvider } from "./lock/index.js";
 import type { AgentContext, AgentActionMode, AgentResult, TaskModelBudget } from "./agent-context.js";
 import type { AgentActionApproval } from "./agent-actions.js";
+import type { AgentActionTaskAuthority } from "./agent-actions.js";
 import type { AgentToolDefinition } from "./tools/registry/index.js";
 import type { OrgSettings, RawToolCall } from "./types.js";
 import type { CompletionFact } from "./completion-facts.js";
@@ -19,6 +20,7 @@ export interface ExecuteTurnRunOptions {
   mode?: AgentActionMode;
   approval?: AgentActionApproval;
   executionId?: string;
+  taskAuthority?: AgentActionTaskAuthority;
   completionEvidence?: readonly CompletionFact[];
   composeFromReceipt?: boolean;
   // Host-injected control tools for this turn (e.g. the gateway's operator
@@ -61,6 +63,7 @@ export interface ExecuteAgentTurnParams {
   /** Durable request/task linkage for resumable runtimes. */
   agentRequestId?: string;
   agentTaskId?: string;
+  taskAuthority?: AgentActionTaskAuthority;
   /** Host-owned durable claim guard, checked before every tool execution. */
   assertExecutionAllowed?: () => void;
   /** Host-owned durable model budget for the enclosing task, if there is one. */
@@ -146,6 +149,7 @@ export async function executeAgentTurn(
         ...(params.auditMode ? { mode: params.auditMode } : {}),
         ...(params.approval ? { approval: params.approval } : {}),
         ...(params.executionId ? { executionId: params.executionId } : {}),
+        ...(params.taskAuthority ? { taskAuthority: params.taskAuthority } : {}),
         ...(params.completionEvidence ? { completionEvidence: params.completionEvidence } : {}),
         ...(params.composeFromReceipt ? { composeFromReceipt: true } : {}),
         ...(params.moduleTools ? { moduleTools: params.moduleTools } : {}),

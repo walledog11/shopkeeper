@@ -6,6 +6,7 @@ import {
   type ExpectedPlanIdentity,
 } from '@shopkeeper/agent/plan-execution';
 import { hashInstruction } from '@shopkeeper/agent/agent-actions';
+import type { AgentActionTaskAuthority } from '@shopkeeper/agent/agent-actions';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import type { RawToolCall } from '@shopkeeper/agent/types';
 import type { AgentToolDefinition } from '@shopkeeper/agent/tools';
@@ -24,6 +25,7 @@ export interface ExecuteOperatorAgentTurnParams {
   turnId?: string;
   agentRequestId?: string;
   agentTaskId?: string;
+  taskAuthority?: AgentActionTaskAuthority;
   assertExecutionAllowed?: () => void;
   taskBudget?: TaskModelBudget;
   senderPhone?: string;
@@ -115,6 +117,7 @@ export async function executeOperatorAgentTurn(
     ...(params.turnId ? { turnId: params.turnId } : {}),
     ...(params.agentRequestId ? { agentRequestId: params.agentRequestId } : {}),
     ...(params.agentTaskId ? { agentTaskId: params.agentTaskId } : {}),
+    ...(params.taskAuthority ? { taskAuthority: params.taskAuthority } : {}),
     ...(params.assertExecutionAllowed ? { assertExecutionAllowed: params.assertExecutionAllowed } : {}),
     ...(params.taskBudget ? { taskBudget: params.taskBudget } : {}),
     failureRoute: FAILURE_ROUTE,

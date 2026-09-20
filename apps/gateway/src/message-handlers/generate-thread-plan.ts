@@ -225,7 +225,7 @@ export async function generateThreadPlan(
   // sender, a superseded job, an answered thread and an unroutable mailbox each
   // leave before a request exists, because none of them is a request the agent
   // accepted. From here the customer's message is durable work.
-  const durable = await openDurableSupportTask({
+  const durableResult = await openDurableSupportTask({
     organizationId,
     threadId,
     sourceMessageId: pendingCustomerMessageId,
@@ -234,9 +234,15 @@ export async function generateThreadPlan(
   const scope: PlanAttemptScope = {
     organizationId, threadId, allowAutoExecute, instruction, thread, settings,
     pendingCustomerMessageId, generationStartedAt,
-    ...(durable ? { durableTurn: { requestId: durable.requestId, taskId: durable.taskId } } : {}),
+    ...(durableResult.kind === 'claimed' ? { durableTurn: {
+      requestId: durableResult.claim.requestId,
+      taskId: durableResult.claim.taskId,
+      expectedRevision: durableResult.claim.expectedRevision,
+      claimToken: durableResult.claim.claimToken,
+    } } : {}),
   };
-  if (!durable) return runPlanAttempt(scope);
+  if (durableResult.kind === 'not_owned') return readCurrentPlanWithoutWork(scope);
+  const durable = durableResult.claim;
   try {
     const generated = await runPlanAttempt(scope);
     await settleDurableSupportTask(durable, scope, generated);
@@ -245,6 +251,29 @@ export async function generateThreadPlan(
     await failDurableSupportTask(durable, 'plan_attempt_failed');
     throw error;
   }
+}
+
+function readCurrentPlanWithoutWork(scope: PlanAttemptScope): GeneratedThreadPlan {
+  const cached = readAgentPlanCache(scope.thread.cachedPlan);
+  if (!isAgentPlanCacheHit({
+    cache: cached,
+    instruction: scope.instruction,
+    lastCustomerMessageId: scope.pendingCustomerMessageId,
+    settings: scope.settings,
+  })) return { plan: null, instruction: scope.instruction };
+  return {
+    plan: toGatewayAgentPlan(cached?.plan ?? null),
+    instruction: scope.instruction,
+    ...(cached?.plan ? {
+      identity: planIdentity({
+        planId: cached.planId,
+        sourceMessageId: cached.lastCustomerMessageId,
+        instruction: cached.instruction,
+        plan: cached.plan,
+      }),
+      merchantQuestion: merchantQuestionFor(cached.plan, scope.settings),
+    } : {}),
+  };
 }
 
 interface PlanAttemptScope {
@@ -471,51 +500,45 @@ interface DurableSupportTask {
 
 /**
  * Puts the customer's message on the thread's durable task and claims it for
- * this attempt. Null means the attempt runs exactly as it did before the task
- * existed: either a concurrent worker owns the task, or the message has already
- * been planned and settled and nothing new is queued on it.
+ * this attempt. A non-owner may only return the already-cached result for this
+ * exact message; it must not repeat planning or execution outside the claim.
  *
- * Accepting is durable; claiming is not retried. A conversation whose ledger is
- * unavailable must still get a plan, so a failure here is logged and the attempt
- * continues untracked rather than leaving the customer unanswered.
+ * Accepting is durable and claiming is deliberately not retried here. Ledger
+ * failures fail the job so normal queue retry/recovery remains the sole owner of
+ * the work instead of silently degrading to an untracked attempt.
  */
 async function openDurableSupportTask(input: {
   organizationId: string;
   threadId: string;
   sourceMessageId: string;
   objective: string;
-}): Promise<DurableSupportTask | null> {
-  try {
-    const { request, task } = await acceptCustomerAgentRequest({
-      ...input, budget: SUPPORT_TASK_BUDGET,
-    });
-    const claimed = await claimAgentTask({
-      organizationId: input.organizationId,
-      taskId: task.id,
-      expectedRevision: task.revision,
-      leaseMs: SUPPORT_TASK_LEASE_MS,
-    });
-    if (!claimed) {
-      logger.info(
-        { organizationId: input.organizationId, threadId: input.threadId, taskId: task.id },
-        '[gateway:auto-plan] Support task is not this attempt\'s to run',
-      );
-      return null;
-    }
-    return {
+}): Promise<{ kind: 'claimed'; claim: DurableSupportTask } | { kind: 'not_owned' }> {
+  const { request, task } = await acceptCustomerAgentRequest({
+    ...input, budget: SUPPORT_TASK_BUDGET,
+  });
+  const claimed = await claimAgentTask({
+    organizationId: input.organizationId,
+    taskId: task.id,
+    expectedRevision: task.revision,
+    leaseMs: SUPPORT_TASK_LEASE_MS,
+  });
+  if (!claimed) {
+    logger.info(
+      { organizationId: input.organizationId, threadId: input.threadId, taskId: task.id },
+      '[gateway:auto-plan] Support task is already owned or settled',
+    );
+    return { kind: 'not_owned' };
+  }
+  return {
+    kind: 'claimed',
+    claim: {
       requestId: request.id,
       taskId: task.id,
       organizationId: input.organizationId,
       expectedRevision: task.revision,
       claimToken: claimed.claimToken,
-    };
-  } catch (err) {
-    logger.error(
-      { err, organizationId: input.organizationId, threadId: input.threadId },
-      '[gateway:auto-plan] Could not record durable support work; planning untracked',
-    );
-    return null;
-  }
+    },
+  };
 }
 
 async function settleDurableSupportTask(

@@ -23,6 +23,7 @@ const gatewayRunAgent: ExecuteTurnRunAgent = (ctx, instruction, approvedToolCall
     mode: options.mode,
     approval: options.approval,
     executionId: options.executionId,
+    taskAuthority: options.taskAuthority,
     completionEvidence: options.completionEvidence,
     composeFromReceipt: options.composeFromReceipt,
     onActionsPersisted: captureAgentActionsCompleted,

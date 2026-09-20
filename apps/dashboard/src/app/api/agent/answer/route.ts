@@ -16,6 +16,8 @@ import { saveMerchantAnswerToKb } from "@shopkeeper/agent/merchant-answer-kb";
 import { decideAutonomy } from "@shopkeeper/agent/autonomy";
 import { parseAgentAnswerBody } from "@/lib/agent/api/validation";
 import { buildContext, hashInstructionForLog, planAgent } from "@/lib/agent/runner";
+import { suspendsAtProposal } from "@shopkeeper/agent/planner";
+import { ConflictError } from "@shopkeeper/agent/errors";
 import { resolveAgentSettings } from "@shopkeeper/agent/settings";
 import type { OrgSettings } from "@/types";
 import logger from "@/lib/server/logger";
@@ -24,26 +26,26 @@ export const maxDuration = 60;
 
 /**
  * Ends the durable wait this answer was asked under, and claims the task for the
- * re-plan below. Null re-plans untracked, exactly as this route did before the
- * ledger existed — including when the answering session has no Clerk user to
- * prove, which `withOrgRoute` has already established cannot normally happen.
+ * re-plan below. Null is allowed only when no durable wait exists (for a legacy
+ * cached question); a durable wait that cannot be claimed fails closed.
  */
 async function claimAnsweredTaskForThread(
   organizationId: string,
   threadId: string,
 ): Promise<ContinuedTaskClaim | null> {
-  try {
-    const { userId } = await auth();
-    if (!userId) return null;
-    return await claimContinuedAgentTask({
-      organizationId, clerkUserId: userId, threadId, endsWait: "question",
-    });
-  } catch (err) {
-    // An answer must still be recorded and re-planned when the ledger is
-    // unavailable, so this degrades to the untracked path rather than failing.
-    logger.error({ err, orgId: organizationId, threadId }, "[agent:answer] could not continue durable work");
-    return null;
+  const { userId } = await auth();
+  if (!userId) throw new ConflictError("The answering member session is no longer available.");
+  const durableWait = await db.agentTask.count({
+    where: { organizationId, threadId, status: "waiting_input", cancelledAt: null },
+  });
+  if (durableWait === 0) return null;
+  const continuation = await claimContinuedAgentTask({
+    organizationId, clerkUserId: userId, threadId, endsWait: "question",
+  });
+  if (!continuation) {
+    throw new ConflictError("This question is already being continued or is no longer available to answer.");
   }
+  return continuation;
 }
 
 async function settleAnsweredTask(
@@ -94,33 +96,33 @@ export const POST = withOrgRoute(
       ? getPendingCustomerMessageId([latestConversation])
       : null;
     const question = extractCachedQuestion(thread.cachedPlan);
-
-    await createMessage({
-      threadId,
-      senderType: "note",
-      contentText: question
-        ? `Merchant answered the agent's question.\n\nQ: ${question}\nA: ${answer}`
-        : `Merchant note for the agent: ${answer}`,
-    });
+    const continuation = await claimAnsweredTaskForThread(org.id, threadId);
 
     let savedArticle: { title: string; body: string } | null = null;
-    if (saveToKb) {
-      const saved = await saveMerchantAnswerToKb({
-        organizationId: org.id,
+    try {
+      await createMessage({
         threadId,
-        question,
-        answer,
-        threadTag: threadMeta?.tag,
-        channelType: thread.channelType,
-        threadSummary: thread.aiSummary,
+        senderType: "note",
+        contentText: question
+          ? `Merchant answered the agent's question.\n\nQ: ${question}\nA: ${answer}`
+          : `Merchant note for the agent: ${answer}`,
       });
-      savedArticle = { title: saved.title, body: saved.body };
+      if (saveToKb) {
+        const saved = await saveMerchantAnswerToKb({
+          organizationId: org.id,
+          threadId,
+          question,
+          answer,
+          threadTag: threadMeta?.tag,
+          channelType: thread.channelType,
+          threadSummary: thread.aiSummary,
+        });
+        savedArticle = { title: saved.title, body: saved.body };
+      }
+    } catch (err) {
+      if (continuation) await settleAnsweredTask(continuation, "failed", org.id);
+      throw err;
     }
-
-    // Claimed here, below the writes that do not depend on it: from this point
-    // every exit either settles the task or fails its claim, so an answer can
-    // never leave one running until its lease expires.
-    const continuation = await claimAnsweredTaskForThread(org.id, threadId);
 
     // The customer message is gone (already handled elsewhere) — nothing to re-plan against.
     if (!pendingCustomerMessageId) {
@@ -149,7 +151,12 @@ export const POST = withOrgRoute(
       const ctx = await buildContext(threadId, org.id, savedArticle
         ? { pinKbArticles: [savedArticle] }
         : undefined);
-      plan = await planAgent(ctx, planningInstruction, settings);
+      plan = await planAgent(
+        ctx,
+        planningInstruction,
+        settings,
+        suspendsAtProposal() ? { suspendAtProposal: true } : undefined,
+      );
 
       // Cache under the base instruction so the normal /plan path serves this
       // answer-informed plan on a cache hit rather than re-asking.

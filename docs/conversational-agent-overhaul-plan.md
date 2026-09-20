@@ -37,10 +37,13 @@ records who may answer it, and an answer from either surface ends that wait and
 continues the same task instead of re-planning untracked. The fourth closes the
 approval wait's other two exits: revising a card continues the task it was parked
 on and supersedes it, and declining one ends the task at the ledger instead of
-only in the merchant's queue. No capability has been
+only in the merchant's queue. The fifth binds task authority through action
+dispatch and execution settlement, removes the remaining untracked retry paths,
+and makes cancellation win before dispatch without losing an effect that was
+already submitted. No capability has been
 migrated row by row yet, and the proposal is still not what authorizes the write.
 Package 6 has not started.
-Created 2026-09-11; last updated 2026-09-18.
+Created 2026-09-11; last updated 2026-09-19.
 
 Implementation detail expanded 2026-09-11 against the current repository. Names marked **proposed** describe work to implement, not APIs or tables that already exist. This document authorizes no production operation by itself.
 
@@ -1169,9 +1172,22 @@ concurrent approvals produce one approval row and report one identical outcome:
 the second decision through the lock sees the standing approval and returns it
 rather than conflicting.
 
-Approval is not completion. `completeApprovedAgentTask` closes the task only
-after the existing execution path reports a non-failure summary, so a failed run
-leaves the task waiting rather than recording a success it did not have.
+Approval is not completion. As of the 2026-09-19 hardening pass, the claimed
+`PlanExecution` is linked to the exact task and proposal before dispatch. Its
+terminal transaction advances the task to `completed`, `failed`, or
+`reconciling` from the typed execution outcome. This replaced the earlier
+`completeApprovedAgentTask` follow-up, whose separate transaction could leave an
+approved proposal permanently parked after a crash.
+
+That pass also closed the task/dispatch ordering gap: migrated action rows carry
+their task authority when prepared, and dispatch authorization locks the task
+row and rechecks revision, claim or approved proposal, lease, and cancellation
+before changing the action to `dispatch_authorized`. Focused database tests
+cover cancellation winning before dispatch, approved execution settlement, and
+unknown execution entering reconciliation. Cancellation after dispatch preserves
+the known execution outcome and the stop timestamp. Duplicate support jobs now
+read the current durable result without planning or executing again, and
+continuation planning preserves proposal suspension on both answer surfaces.
 
 Files changed: new `packages/agent/src/task-approval.ts` and its integration
 suite, plus the package export map; `packages/agent/src/task-ledger.ts` (the
@@ -1943,14 +1959,15 @@ to its task, but the bundle that executes is still the cached plan's, so Package
 6's cutover owns that switch. The customer-facing reply carries no `agentTaskId`,
 because the thread sink writes that row and the task is not plumbed through the
 sink contract on either host; the audit note beside it does carry one.
-`PlanExecution.taskId` and `PlanExecution.proposalId` still have no writer at all.
+Durable approval execution now writes `PlanExecution.taskId` and
+`PlanExecution.proposalId`; legacy plans continue to leave both null.
 The task budget is limits without meters: the attempt's active time is
 charged on settle, but nothing reserves model calls or spend against a support
 task, so `modelCallLimit` and `spendNanoUsdLimit` are recorded and unenforced.
 The bounded failure replan keeps its own turn identity, so its actions reach the
 task through the thread rather than through `taskId`. A second planning job for
-one message finds the task settled, fails the claim and plans untracked, which is
-correct but means the untracked path stays reachable. And a support task whose
+one message now returns only the exact cached result and never plans or executes
+outside the claim. And a support task whose
 worker dies is recovered by `reconcileExpiredAgentTaskClaims` into `reconciling`
 rather than being re-enqueued, because the planning job owns its own retries.
 
@@ -2105,6 +2122,42 @@ description or planner surface changed, so no eval run is owed. `test:e2e:smoke`
 was not run: this change touches no delivery or browser path. Rollback is
 reverting the commit; no schema changed, and `AgentProposalStatus` values that
 nothing read before are still read by nothing outside this plan's own tables.
+
+The fifth Package 5 contract hardened the execution ordering underneath all four
+wait exits. A claimed `PlanExecution` now names the exact task and proposal before
+the first write is prepared. Every migrated action carries either the current
+task claim or the approved proposal plus execution claim; dispatch authorization
+locks the task row and rechecks revision, lease or proposal, cancellation, and
+the execution claim before the action can leave `prepared`. Losing authority is
+a definite pre-dispatch failure, while anything that passed that boundary keeps
+the existing unknown-outcome rules.
+
+Execution and task settlement are now one transaction in the normal case:
+committed, failed, and unknown execution outcomes advance the linked task to
+completed, failed, and reconciling. A stop that wins before dispatch prevents the
+effect. A stop after dispatch records its timestamp and waits in reconciliation;
+the exact execution's later known outcome resolves the task without rolling the
+execution record back. Stale claimed executions move their linked tasks to
+reconciliation and final reconciliation closes both records.
+
+The host paths fail closed with that boundary. The task worker passes its claim
+into every action, durable proposal approval refuses to proceed unless the
+execution ledger is enforced, duplicate support jobs return only an exact cached
+result, and ledger errors no longer fall back to untracked planning. Both answer
+surfaces claim before recording the answer-dependent work and preserve proposal
+suspension when they re-plan, so every post-claim exit settles or fails the task.
+
+Verified by `npm run lint`; the agent and gateway typechecks; `npm run test:unit`
+(1,214 agent, 471 gateway, 783 dashboard, 68 analytics, 101 email, 65
+integrations); `npm run test:integration` (212 agent, 938 gateway with 1 skipped,
+680 dashboard with 2 skipped); and `npm run verify:pr -- --stage coverage`. The
+first coverage run hit the known cross-workspace uniqueness flake in the Shopify
+customer-search route; the complete rerun passed. Full typecheck and the build
+stage reach one unrelated concurrent onboarding edit and stop on its
+`tiktok-shop`/`OnboardingOAuthProvider` mismatch; all other build targets pass.
+No prompt, tool description, or model surface changed, so no eval run is owed.
+Rollback is reverting this commit; there is no schema change, and legacy plans
+without task/proposal identity retain their existing interpretation.
 
 Still not done on the proposal side. The proposal is not yet what authorizes the
 write — approval and refusal are both recorded against it, and the bundle that

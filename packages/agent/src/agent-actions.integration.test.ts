@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { db } from "@shopkeeper/db";
-import { cleanupTestData, createTestOrg } from "@shopkeeper/db/test-helpers";
+import {
+  cleanupTestData, createTestCustomer, createTestOrg, createTestThread,
+} from "@shopkeeper/db/test-helpers";
 import {
   authorizeAgentActionDispatch,
   beginAgentActionAttempt,
@@ -10,6 +12,7 @@ import {
   recordAgentActionsBatch,
 } from "./agent-actions.js";
 import type { ReceiptV1 } from "./tools/result.js";
+import { acceptMemberAgentRequest, cancelMemberAgentTask, claimAgentTask } from "./task-ledger.js";
 
 const orgIds: string[] = [];
 
@@ -104,6 +107,65 @@ describe("agent action receipts", () => {
 });
 
 describe("agent action dispatch lifecycle", () => {
+  async function claimedTask() {
+    const org = await createTestOrg();
+    orgIds.push(org.id);
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: randomUUID() },
+    });
+    const customer = await createTestCustomer(org.id, randomUUID());
+    const thread = await createTestThread(org.id, customer.id, "operator");
+    await db.thread.update({
+      where: { id: thread.id }, data: { operatorKey: `member:${member.id}` },
+    });
+    const input = {
+      organizationId: org.id, clerkUserId: member.clerkUserId,
+      threadId: thread.id, dedupeKey: randomUUID(), instruction: "Refund order 1",
+    };
+    const { request, task } = await acceptMemberAgentRequest({
+      ...input,
+      budget: {
+        runtimeVersion: 1, modelCallLimit: 20,
+        activeTimeMsLimit: 120000, spendNanoUsdLimit: 1000000000n,
+      },
+    });
+    const claim = await claimAgentTask({
+      organizationId: org.id, taskId: task!.id, expectedRevision: task!.revision,
+    });
+    return { org, input, request, task: task!, claim: claim! };
+  }
+
+  it("orders cancellation and dispatch authorization on the task row", async () => {
+    const seeded = await claimedTask();
+    const authority = {
+      kind: "claim" as const,
+      taskId: seeded.task.id,
+      expectedRevision: seeded.task.revision,
+      claimToken: seeded.claim.claimToken,
+    };
+    const attempt = await beginAgentActionAttempt({
+      orgId: seeded.org.id,
+      threadId: seeded.input.threadId,
+      turnId: seeded.request.id,
+      mode: "human_approved",
+      actionIndex: 0,
+      operationId: randomUUID(),
+      taskAuthority: authority,
+      action: { tool: "create_refund", input: { order_id: "1" }, category: "action" },
+    });
+    await cancelMemberAgentTask({
+      organizationId: seeded.org.id,
+      clerkUserId: seeded.input.clerkUserId,
+      taskId: seeded.task.id,
+      expectedRevision: seeded.task.revision,
+    });
+
+    await expect(authorizeAgentActionDispatch(attempt))
+      .rejects.toThrow("authority was lost");
+    await expect(db.agentAction.findUniqueOrThrow({ where: { id: attempt.id } }))
+      .resolves.toMatchObject({ taskId: seeded.task.id, dispatchState: "prepared" });
+  });
+
   it("persists each dispatch boundary before recording a settled receipt", async () => {
     const org = await createTestOrg();
     orgIds.push(org.id);

@@ -825,11 +825,12 @@ function continuableTaskWhere(
  * under the lock is what sees that, and the lock is what keeps the two from
  * interleaving at all.
  *
- * Null means this input is not the task's to continue, and the caller re-plans
- * untracked exactly as it did before the ledger existed: nothing is waiting on
+ * Null means this input is not the task's to continue: nothing is waiting on
  * this thread, the member is outside the recorded scope, two parked waits make
  * the input ambiguous, another attempt already owns the task, or it reached a
- * provider and so cannot be replayed from the top.
+ * provider and so cannot be replayed from the top. Callers must distinguish the
+ * legacy "nothing waiting" case from lost authority and fail closed for the
+ * latter.
  */
 export async function claimContinuedAgentTask(input: {
   organizationId: string;

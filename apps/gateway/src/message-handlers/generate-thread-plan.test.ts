@@ -13,6 +13,9 @@ const {
   mockGetLatestConversationMessage,
   mockThreadUpdate,
   mockEscalateToHuman,
+  mockAcceptCustomerAgentRequest,
+  mockClaimAgentTask,
+  mockSettleAgentTaskClaim,
 } = vi.hoisted(() => ({
   mockMaybeAutoExecute: vi.fn(),
   mockRequireOrgThread: vi.fn(),
@@ -26,6 +29,16 @@ const {
   mockGetLatestConversationMessage: vi.fn(),
   mockThreadUpdate: vi.fn(),
   mockEscalateToHuman: vi.fn(),
+  mockAcceptCustomerAgentRequest: vi.fn(),
+  mockClaimAgentTask: vi.fn(),
+  mockSettleAgentTaskClaim: vi.fn(),
+}));
+
+vi.mock('@shopkeeper/agent/task-ledger', () => ({
+  acceptCustomerAgentRequest: mockAcceptCustomerAgentRequest,
+  claimAgentTask: mockClaimAgentTask,
+  settleAgentTaskClaim: mockSettleAgentTaskClaim,
+  ANY_MEMBER_ACTOR_KEY: '*',
 }));
 
 vi.mock('@shopkeeper/agent/thread-auth', () => ({
@@ -137,6 +150,11 @@ beforeEach(() => {
   mockIsAgentPlanCacheHit.mockReturnValue(true);
   mockMaybeAutoExecute.mockResolvedValue(null);
   mockEscalateToHuman.mockResolvedValue({ status: 'escalated', message: 'escalated' });
+  mockAcceptCustomerAgentRequest.mockResolvedValue({
+    request: { id: 'request_1' }, task: { id: 'task_1', revision: 0 },
+  });
+  mockClaimAgentTask.mockResolvedValue({ claimToken: 'claim_1' });
+  mockSettleAgentTaskClaim.mockResolvedValue({});
 });
 
 describe('generateThreadPlan auto-execute path', () => {

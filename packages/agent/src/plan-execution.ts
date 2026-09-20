@@ -35,7 +35,7 @@ import { isInvalidPlan } from "./plan-validation.js";
 import { recordRequestEpisodeDismissed, recordRequestEpisodeExecution } from "./request-outcome.js";
 import { historicalCompletionFacts } from "./completion-facts.js";
 import { ANY_MEMBER_ACTOR_KEY, type ProposalSnapshot, type TaskSettlement } from "./task-ledger.js";
-import { authorizeAgentProposal, completeApprovedAgentTask, rejectAgentProposal } from "./task-approval.js";
+import { authorizeAgentProposal, rejectAgentProposal } from "./task-approval.js";
 
 export type PlanExecutionDeps = ExecuteAgentTurnDeps & {
   planAgent?: PlanAgentFn;
@@ -419,6 +419,8 @@ export async function dismissCurrentCachedPlan(params: {
 export interface DurableTurnIdentity {
   requestId: string;
   taskId: string;
+  expectedRevision?: number;
+  claimToken?: string;
 }
 
 export async function executeCurrentCachedHomePlan(params: {
@@ -499,6 +501,7 @@ export async function executeCurrentCachedHomePlan(params: {
   // parked plan names no proposal — a card from before the ledger existed — and
   // those execute exactly as they did before. Taken before the execution claim
   // so a superseded or out-of-scope approval stops before anything is claimed.
+  const ledgerMode = resolvePlanExecutionLedgerMode();
   const authorized = params.executionIntent === "merchant_approved" && params.approver
     ? await authorizeAgentProposal({
         organizationId: params.orgId,
@@ -506,9 +509,10 @@ export async function executeCurrentCachedHomePlan(params: {
         proposalId: current.planId,
         instruction: current.instruction,
         approvedToolCalls,
+        executionLedgerEnforced: ledgerMode === "enforce",
       })
     : null;
-  // Its own turn, not the planning attempt's: see completeApprovedAgentTask.
+  // Its own turn, separate from the planning attempt that created the proposal.
   const approvedTurnId = authorized ? randomUUID() : undefined;
 
   // The PostgreSQL transition is the correctness boundary across dashboard,
@@ -524,8 +528,8 @@ export async function executeCurrentCachedHomePlan(params: {
     mode: auditMode,
     approverId: approval?.approverId,
     approvedAt: approval?.approvedAt,
+    ...(authorized ? { taskId: authorized.taskId, proposalId: authorized.proposalId } : {}),
   };
-  const ledgerMode = resolvePlanExecutionLedgerMode();
   let executionId: string | undefined;
   let claimToken: string | undefined;
   if (ledgerMode === "enforce") {
@@ -553,12 +557,35 @@ export async function executeCurrentCachedHomePlan(params: {
         turnId: params.durableTurn.requestId,
         agentRequestId: params.durableTurn.requestId,
         agentTaskId: params.durableTurn.taskId,
+        ...(params.durableTurn.expectedRevision !== undefined && params.durableTurn.claimToken
+          ? {
+              taskAuthority: {
+                kind: "claim" as const,
+                taskId: params.durableTurn.taskId,
+                expectedRevision: params.durableTurn.expectedRevision,
+                claimToken: params.durableTurn.claimToken,
+              },
+            }
+          : {}),
       } : {}),
       // An approved run belongs to the task that parked the proposal, so its
       // messages name that task. `agentRequestId` is deliberately not set: the
       // reply answers the task, not one inbound message of it.
       ...(authorized && approvedTurnId
-        ? { turnId: approvedTurnId, agentTaskId: authorized.taskId }
+        ? {
+            turnId: approvedTurnId,
+            agentTaskId: authorized.taskId,
+            ...(executionId && claimToken ? {
+              taskAuthority: {
+                kind: "approved_proposal" as const,
+                taskId: authorized.taskId,
+                expectedRevision: authorized.taskRevision,
+                proposalId: authorized.proposalId,
+                executionId,
+                executionClaimToken: claimToken,
+              },
+            } : {}),
+          }
         : {}),
       ...(executionId ? { executionId } : {}),
       completionEvidence: historicalCompletionFacts(
@@ -578,29 +605,6 @@ export async function executeCurrentCachedHomePlan(params: {
         status: terminalExecutionStatus,
         error: findFailedToolResult(result)?.result ?? null,
       });
-    }
-    // The wait the merchant ended is over only once the run committed. Keyed on
-    // the execution's own typed status rather than on whether its summary starts
-    // with "Error:", so a failed or uncertain run leaves the task waiting for a
-    // human instead of being closed by a sentence.
-    //
-    // Never fatal. The write is committed and its receipt is stored; letting a
-    // bookkeeping failure fall into the catch below would re-report a known
-    // outcome as unknown and escalate a thread that was handled correctly. A
-    // task left waiting is visible and recoverable; a committed refund recorded
-    // as uncertain is not.
-    if (authorized && terminalExecutionStatus === "committed") {
-      try {
-        await completeApprovedAgentTask(authorized, approvedTurnId);
-      } catch (error) {
-        logger.error({
-          err: error,
-          orgId: params.orgId,
-          threadId: params.threadId,
-          taskId: authorized.taskId,
-          proposalId: authorized.proposalId,
-        }, "[agent] approved task could not be closed after a committed run");
-      }
     }
   } catch (error) {
     // A whole-turn throw can occur after a provider accepted a mutation. Until
@@ -671,6 +675,7 @@ export async function executeCurrentCachedHomePlan(params: {
 
   const failureReplanAllowed = params.failureReplanAllowed !== false
     && !current.failureReplan
+    && !authorized
     && Boolean(deps.planAgent);
   if (
     failureReplanAllowed

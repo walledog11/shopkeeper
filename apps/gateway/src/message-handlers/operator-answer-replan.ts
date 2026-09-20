@@ -1,7 +1,8 @@
 import { db, createMessage } from '@shopkeeper/db';
 import { requireOrgThread, getLatestConversationMessage } from '@shopkeeper/agent/thread-auth';
 import { buildContext } from '@shopkeeper/agent/build-context';
-import { planAgent } from '@shopkeeper/agent/planner';
+import { planAgent, suspendsAtProposal } from '@shopkeeper/agent/planner';
+import { ConflictError } from '@shopkeeper/agent/errors';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { buildMerchantAnswerPlanningInstruction } from '@shopkeeper/agent/kb-learned';
 import { saveMerchantAnswerToKb } from '@shopkeeper/agent/merchant-answer-kb';
@@ -108,21 +109,26 @@ type AnswerReplanOutcome =
 export async function applyOperatorAnswerReplan(
   params: OperatorAnswerReplanParams,
 ): Promise<string> {
-  const continuation = await claimContinuedAgentTask({
-    organizationId: params.organizationId,
-    clerkUserId: params.clerkUserId,
-    threadId: params.threadId,
-    endsWait: params.endsWait,
-    leaseMs: ANSWER_REPLAN_LEASE_MS,
-  }).catch((err: unknown) => {
-    // A conversation whose ledger is unavailable must still have its answer
-    // re-planned, so this re-plans untracked rather than losing the answer.
-    logger.error(
-      { err, organizationId: params.organizationId, threadId: params.threadId },
-      '[Operator] Could not continue durable support work; re-planning untracked',
-    );
-    return null;
+  const durableWait = await db.agentTask.count({
+    where: {
+      organizationId: params.organizationId,
+      threadId: params.threadId,
+      status: params.endsWait === 'question' ? 'waiting_input' : 'waiting_approval',
+      cancelledAt: null,
+    },
   });
+  const continuation = durableWait > 0
+    ? await claimContinuedAgentTask({
+        organizationId: params.organizationId,
+        clerkUserId: params.clerkUserId,
+        threadId: params.threadId,
+        endsWait: params.endsWait,
+        leaseMs: ANSWER_REPLAN_LEASE_MS,
+      })
+    : null;
+  if (durableWait > 0 && !continuation) {
+    throw new ConflictError('This task is already being continued or is no longer available to revise.');
+  }
 
   let outcome: AnswerReplanOutcome;
   try {
@@ -286,7 +292,12 @@ async function runAnswerReplan(
     const ctx = await buildContext(threadId, organizationId, gatewayThreadSink, {
       pinKbArticles: [{ title: saved.title, body: saved.body }],
     });
-    const replanned = await planAgent(ctx, planningInstruction, settings);
+    const replanned = await planAgent(
+      ctx,
+      planningInstruction,
+      settings,
+      suspendsAtProposal() ? { suspendAtProposal: true } : undefined,
+    );
     const cacheRecord = buildAgentPlanCacheRecord({
       instruction: baseInstruction,
       lastCustomerMessageId: pendingCustomerMessageId,

@@ -16,6 +16,8 @@ export interface PlanExecutionIdentity {
   mode?: string | null;
   approverId?: string | null;
   approvedAt?: Date | null;
+  taskId?: string | null;
+  proposalId?: string | null;
 }
 
 export interface PlanExecutionClaim {
@@ -36,7 +38,9 @@ function assertSameIdentity(existing: PlanExecution, identity: PlanExecutionIden
     || existing.threadId !== (identity.threadId ?? null)
     || existing.sourceMessageId !== (identity.sourceMessageId ?? null)
     || existing.planHash !== identity.planHash
-    || existing.instructionHash !== identity.instructionHash;
+    || existing.instructionHash !== identity.instructionHash
+    || existing.taskId !== (identity.taskId ?? null)
+    || existing.proposalId !== (identity.proposalId ?? null);
   if (mismatch) {
     throw new ConflictError("Plan execution identity does not match the existing ledger record.");
   }
@@ -83,6 +87,8 @@ async function createOrLoadPending(identity: PlanExecutionIdentity): Promise<Pla
         mode: identity.mode ?? null,
         approverId: identity.approverId ?? null,
         approvedAt: identity.approvedAt ?? null,
+        taskId: identity.taskId ?? null,
+        proposalId: identity.proposalId ?? null,
       },
     });
   } catch (error) {
@@ -338,22 +344,92 @@ export async function completePlanExecution(params: {
   status: TerminalPlanExecutionStatus;
   error?: string | null;
 }): Promise<PlanExecution> {
-  const completed = await db.planExecution.updateMany({
+  return db.$transaction(async (tx) => {
+    const now = new Date();
+    const completed = await tx.planExecution.updateMany({
+      where: {
+        id: params.executionId,
+        status: "claimed",
+        claimToken: params.claimToken,
+      },
+      data: {
+        status: params.status,
+        completedAt: now,
+        lastError: params.error ?? null,
+      },
+    });
+    if (completed.count !== 1) {
+      throw new ConflictError("Plan execution claim is no longer active.");
+    }
+    const execution = await tx.planExecution.findUniqueOrThrow({ where: { id: params.executionId } });
+    await settleLinkedTask(tx, execution, params.status, now);
+    return execution;
+  });
+}
+
+type ExecutionTaskTx = Pick<typeof db, "agentTask" | "agentProposal">;
+
+async function settleLinkedTask(
+  tx: ExecutionTaskTx,
+  execution: Pick<PlanExecution, "organizationId" | "taskId" | "proposalId">,
+  status: TerminalPlanExecutionStatus,
+  now: Date,
+): Promise<void> {
+  if (!execution.taskId || !execution.proposalId) return;
+  const taskStatus = status === "committed"
+    ? "completed" as const
+    : status === "unknown" ? "reconciling" as const : "failed" as const;
+  let updated = await tx.agentTask.updateMany({
     where: {
-      id: params.executionId,
-      status: "claimed",
-      claimToken: params.claimToken,
+      id: execution.taskId,
+      organizationId: execution.organizationId,
+      status: "waiting_approval",
+      activeProposalId: execution.proposalId,
     },
     data: {
-      status: params.status,
-      completedAt: new Date(),
-      lastError: params.error ?? null,
+      status: taskStatus,
+      activeProposalId: null,
+      pendingQuestionId: null,
+      pendingQuestion: null,
+      pendingAnswererKind: null,
+      pendingAnswererKey: null,
+      lastProgressAt: now,
+      ...(status === "committed"
+        ? { completedAt: now, failureCode: null }
+        : { failureCode: status === "unknown" ? "approved_execution_unknown" : "approved_execution_failed" }),
     },
   });
-  if (completed.count !== 1) {
-    throw new ConflictError("Plan execution claim is no longer active.");
+  // A stop can win the task-row lock after dispatch authorization but before
+  // the provider result is recorded. It moves the task to reconciliation and
+  // clears the wait, but it cannot undo the already-dispatched effect. Once the
+  // exact linked execution has a known outcome, resolve that reconciliation
+  // while preserving cancelledAt as the audit record of the stop.
+  if (updated.count === 0 && status !== "unknown") {
+    updated = await tx.agentTask.updateMany({
+      where: {
+        id: execution.taskId,
+        organizationId: execution.organizationId,
+        status: "reconciling",
+        cancelledAt: { not: null },
+      },
+      data: {
+        status: status === "committed" ? "completed" : "failed",
+        completedAt: status === "committed" ? now : null,
+        failureCode: status === "committed" ? null : "approved_execution_failed",
+        lastProgressAt: now,
+      },
+    });
   }
-  return db.planExecution.findUniqueOrThrow({ where: { id: params.executionId } });
+  if (updated.count !== 1) return;
+  if (status === "committed") {
+    const proposal = await tx.agentProposal.updateMany({
+      where: { id: execution.proposalId, taskId: execution.taskId, status: "approved" },
+      data: { status: "completed", decidedAt: now },
+    });
+    if (proposal.count !== 1) {
+      throw new ConflictError("The approved proposal changed before execution could be settled.");
+    }
+  }
 }
 
 export async function getPlanExecution(
@@ -372,38 +448,69 @@ export async function reconcileStaleClaimedPlanExecutions(
   staleBefore: Date,
   reason: string,
 ): Promise<number> {
-  const updated = await db.planExecution.updateMany({
-    where: {
-      status: "claimed",
-      claimedAt: { lt: staleBefore },
-    },
-    data: {
-      status: "unknown",
-      completedAt: new Date(),
-      lastError: reason,
-    },
+  return db.$transaction(async (tx) => {
+    const stale = await tx.planExecution.findMany({
+      where: { status: "claimed", claimedAt: { lt: staleBefore } },
+      select: { id: true, organizationId: true, taskId: true, proposalId: true },
+    });
+    if (stale.length === 0) return 0;
+    const now = new Date();
+    let updatedCount = 0;
+    for (const execution of stale) {
+      const updated = await tx.planExecution.updateMany({
+        where: { id: execution.id, status: "claimed" },
+        data: { status: "unknown", completedAt: now, lastError: reason },
+      });
+      if (updated.count !== 1) continue;
+      updatedCount += 1;
+      // The execution must become reviewable even if its task was independently
+      // cancelled or otherwise settled. In the normal waiting state this still
+      // moves the linked task to reconciling in the same transaction.
+      await settleLinkedTask(tx, execution, "unknown", now);
+    }
+    return updatedCount;
   });
-  return updated.count;
 }
 
 export async function finalizeReconciledPlanExecution(executionId: string): Promise<"committed" | "failed" | "unknown" | null> {
-  const actions = await db.agentAction.findMany({
-    where: { executionId },
-    select: { status: true },
+  return db.$transaction(async (tx) => {
+    const actions = await tx.agentAction.findMany({
+      where: { executionId }, select: { status: true },
+    });
+    if (actions.length === 0) return null;
+    if (actions.some((action) => action.status === "unknown")) return "unknown";
+    const status = actions.some((action) => (
+      action.status === "error" || action.status === "policy_block"
+    )) ? "failed" as const : "committed" as const;
+    const updated = await tx.planExecution.updateMany({
+      where: { id: executionId, status: "unknown" },
+      data: { status, lastError: status === "committed" ? null : "reconciled_with_failures" },
+    });
+    if (updated.count === 1) {
+      const execution = await tx.planExecution.findUniqueOrThrow({ where: { id: executionId } });
+      // A task already moved to reconciling when uncertainty was recorded. The
+      // exact execution remains its authority, so resolve that terminal state.
+      if (execution.taskId && execution.proposalId) {
+        await tx.agentTask.updateMany({
+          where: {
+            id: execution.taskId, organizationId: execution.organizationId,
+            status: "reconciling", cancelledAt: null,
+          },
+          data: {
+            status: status === "committed" ? "completed" : "failed",
+            completedAt: status === "committed" ? new Date() : null,
+            failureCode: status === "committed" ? null : "approved_execution_failed",
+            lastProgressAt: new Date(),
+          },
+        });
+        if (status === "committed") {
+          await tx.agentProposal.updateMany({
+            where: { id: execution.proposalId, taskId: execution.taskId, status: "approved" },
+            data: { status: "completed", decidedAt: new Date() },
+          });
+        }
+      }
+    }
+    return status;
   });
-  if (actions.length === 0) return null;
-  if (actions.some((action) => action.status === "unknown")) {
-    return "unknown";
-  }
-  const status = actions.some((action) => (
-    action.status === "error" || action.status === "policy_block"
-  )) ? "failed" : "committed";
-  await db.planExecution.updateMany({
-    where: { id: executionId, status: "unknown" },
-    data: {
-      status,
-      lastError: status === "committed" ? null : "reconciled_with_failures",
-    },
-  });
-  return status;
 }

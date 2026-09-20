@@ -10,6 +10,7 @@ import type {
 import type { AgentPlan } from "./types.js";
 import type { ModelUsageMetrics } from "./usage.js";
 import { parseReceiptV1, type ReceiptV1 } from "./tools/result.js";
+import { ConflictError } from "./errors.js";
 
 export interface AgentActionApproval {
   approverId: string;
@@ -28,7 +29,24 @@ interface CommonRecordParams {
   summary?: string | null;
   turnId?: string;
   executionId?: string | null;
+  taskAuthority?: AgentActionTaskAuthority;
 }
+
+export type AgentActionTaskAuthority =
+  | {
+      kind: "claim";
+      taskId: string;
+      expectedRevision: number;
+      claimToken: string;
+    }
+  | {
+      kind: "approved_proposal";
+      taskId: string;
+      expectedRevision: number;
+      proposalId: string;
+      executionId: string;
+      executionClaimToken: string;
+    };
 
 export interface BeginAgentActionAttemptParams extends CommonRecordParams {
   action: Pick<ActionEntry, "tool" | "input" | "category" | "providerOperationKey">;
@@ -39,6 +57,7 @@ export interface BeginAgentActionAttemptParams extends CommonRecordParams {
 export interface AgentActionAttempt {
   id: string;
   operationId: string;
+  taskAuthority?: AgentActionTaskAuthority;
 }
 
 export interface RecordAgentActionsBatchParams extends CommonRecordParams {
@@ -216,6 +235,10 @@ export async function beginAgentActionAttempt(
       threadId: params.threadId ?? null,
       customerId: params.customerId ?? null,
       executionId: params.executionId ?? null,
+      taskId: params.taskAuthority?.taskId ?? null,
+      proposalId: params.taskAuthority?.kind === "approved_proposal"
+        ? params.taskAuthority.proposalId
+        : null,
       operationId,
       actionIndex: params.actionIndex,
       providerOperationKey: params.action.providerOperationKey ?? null,
@@ -237,7 +260,7 @@ export async function beginAgentActionAttempt(
       durationMs: null,
     },
   });
-  return { id, operationId };
+  return { id, operationId, ...(params.taskAuthority ? { taskAuthority: params.taskAuthority } : {}) };
 }
 
 async function transitionAgentActionDispatch(
@@ -258,11 +281,78 @@ async function transitionAgentActionDispatch(
 }
 
 export async function authorizeAgentActionDispatch(attempt: AgentActionAttempt): Promise<void> {
-  await transitionAgentActionDispatch(attempt, "prepared", "dispatch_authorized");
+  if (!attempt.taskAuthority) {
+    await transitionAgentActionDispatch(attempt, "prepared", "dispatch_authorized");
+    return;
+  }
+  const authority = attempt.taskAuthority;
+  await db.$transaction(async (tx) => {
+    await tx.$queryRaw(Prisma.sql`
+      SELECT id FROM agent_tasks WHERE id = ${authority.taskId}::uuid FOR UPDATE
+    `);
+    const task = await tx.agentTask.findUnique({ where: { id: authority.taskId } });
+    const now = new Date();
+    const claimIsCurrent = authority.kind === "claim"
+      && task?.status === "running"
+      && task.revision === authority.expectedRevision
+      && task.claimToken === authority.claimToken
+      && task.leaseExpiresAt !== null
+      && task.leaseExpiresAt > now;
+    const proposalIsCurrent = authority.kind === "approved_proposal"
+      && task?.status === "waiting_approval"
+      && task.revision === authority.expectedRevision
+      && task.activeProposalId === authority.proposalId
+      && await tx.agentProposal.count({ where: {
+        id: authority.proposalId, taskId: authority.taskId, status: "approved",
+      } }) === 1
+      && await tx.planExecution.count({ where: {
+        id: authority.executionId, taskId: authority.taskId,
+        proposalId: authority.proposalId, status: "claimed",
+        claimToken: authority.executionClaimToken,
+      } }) === 1;
+    if (!task || task.cancelledAt || (!claimIsCurrent && !proposalIsCurrent)) {
+      throw new ConflictError("Durable task authority was lost before action dispatch.");
+    }
+    const updated = await tx.agentAction.updateMany({
+      where: {
+        id: attempt.id, organizationId: task.organizationId,
+        operationId: attempt.operationId, taskId: authority.taskId,
+        dispatchState: "prepared",
+      },
+      data: { dispatchState: "dispatch_authorized" },
+    });
+    if (updated.count !== 1) {
+      throw new Error(`Agent action ${attempt.id} could not transition from prepared to dispatch_authorized`);
+    }
+  });
 }
 
 export async function markAgentActionSubmitted(attempt: AgentActionAttempt): Promise<void> {
   await transitionAgentActionDispatch(attempt, "dispatch_authorized", "submitted");
+}
+
+export async function failAgentActionBeforeDispatch(
+  attempt: AgentActionAttempt,
+  entry: ActionEntry,
+): Promise<void> {
+  const status = deriveStatus(entry);
+  if (status === "unknown" || status === "success") {
+    throw new Error("An action that was not dispatched requires a definite failure result");
+  }
+  const result = await db.agentAction.updateMany({
+    where: { id: attempt.id, operationId: attempt.operationId, dispatchState: "prepared" },
+    data: {
+      output: entry.result,
+      status,
+      errorDetail: deriveErrorDetail(entry, status),
+      durationMs: entry.durationMs ?? 0,
+      executedAt: new Date(),
+      dispatchState: "settled",
+    },
+  });
+  if (result.count !== 1) {
+    throw new Error(`Prepared agent action ${attempt.id} could not be failed before dispatch`);
+  }
 }
 
 export interface RecordAgentTurnUsageParams {
