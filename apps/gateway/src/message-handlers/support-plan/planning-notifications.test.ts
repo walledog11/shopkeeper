@@ -29,11 +29,11 @@ const { listOperatorBindingsSpy, mockLogger, notifyOperatorSpy } = vi.hoisted(()
   notifyOperatorSpy: vi.fn(),
 }));
 
-vi.mock('../logger.js', () => ({
+vi.mock('../../logger.js', () => ({
   default: mockLogger,
 }));
 
-vi.mock('../operator-notify.js', () => ({
+vi.mock('../../operator-notify.js', () => ({
   bindingDeliveryKey: (binding: { channel: string; chatId?: string; senderId?: string }) =>
     (binding.channel === 'telegram' ? binding.chatId : binding.senderId),
   listOperatorBindings: listOperatorBindingsSpy,
@@ -43,7 +43,7 @@ vi.mock('../operator-notify.js', () => ({
   },
 }));
 
-vi.mock('../config/env.js', () => ({
+vi.mock('../../config/env.js', () => ({
   getGatewayDashboardUrl: () => 'https://dashboard.example.com',
 }));
 

@@ -400,7 +400,7 @@ describe('applyOperatorAnswerReplan', () => {
         expect.anything(),
         expect.any(String),
         expect.anything(),
-        { runtimeVersion: 2 },
+        undefined,
       );
 
       const settled = await db.agentTask.findUniqueOrThrow({ where: { id: taskId } });

@@ -31,7 +31,7 @@ const { acquireSpy, releaseSpy } = vi.hoisted(() => {
   };
 });
 
-vi.mock('../clients/agent-runtime.js', () => ({
+vi.mock('../../clients/agent-runtime.js', () => ({
   getGatewayLockProvider: () => ({ acquire: acquireSpy }),
 }));
 
@@ -39,7 +39,7 @@ vi.mock('@shopkeeper/db/billing-write-gate', () => ({
   assertBillingWriteAllowedForOrgId: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('../clients/clerk-approver.js', () => ({
+vi.mock('../../clients/clerk-approver.js', () => ({
   resolveClerkUserApprover: vi.fn().mockResolvedValue({ clerkUserId: 'usr_op', displayName: 'Owner' }),
 }));
 

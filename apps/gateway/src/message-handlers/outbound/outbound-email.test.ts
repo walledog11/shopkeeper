@@ -21,11 +21,11 @@ vi.mock('@shopkeeper/email', async (importActual) => {
   return { ...actual, getEmailSender: () => ({ send: sendMock }) };
 });
 
-vi.mock('../logger.js', () => ({
+vi.mock('../../logger.js', () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('../product-analytics.js', () => ({
+vi.mock('../../product-analytics.js', () => ({
   captureOutboundReplySent,
 }));
 

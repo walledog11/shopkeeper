@@ -3,9 +3,9 @@ import type { Queue } from 'bullmq';
 import { db, ChannelType } from '@shopkeeper/db';
 import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers';
 
-vi.mock('../realtime/publish.js', () => ({ publishThreadEvent: vi.fn().mockResolvedValue(undefined) }));
-vi.mock('../operator-context.js', () => ({ removePendingPlanForThread: vi.fn().mockResolvedValue(undefined) }));
-vi.mock('../product-analytics.js', () => ({ captureInboundMessageProcessed: vi.fn() }));
+vi.mock('../../realtime/publish.js', () => ({ publishThreadEvent: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('../../operator-context.js', () => ({ removePendingPlanForThread: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('../../product-analytics.js', () => ({ captureInboundMessageProcessed: vi.fn() }));
 
 import { processInboundMessage } from './inbound-persistence.js';
 import { recoverInboundProcessing } from './inbound-processing.js';

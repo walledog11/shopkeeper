@@ -5,7 +5,6 @@ const {
   mockRequireOrgThread,
   mockBuildContext,
   mockPlanAgent,
-  mockResolveNewAgentTaskRuntimeVersion,
   mockIsAgentPlanCacheHit,
   mockReadAgentPlanCache,
   mockBuildAgentPlanCacheRecord,
@@ -21,7 +20,6 @@ const {
   mockRequireOrgThread: vi.fn(),
   mockBuildContext: vi.fn(),
   mockPlanAgent: vi.fn(),
-  mockResolveNewAgentTaskRuntimeVersion: vi.fn(() => 1),
   mockIsAgentPlanCacheHit: vi.fn(),
   mockReadAgentPlanCache: vi.fn(),
   mockBuildAgentPlanCacheRecord: vi.fn(),
@@ -50,9 +48,9 @@ vi.mock('@shopkeeper/agent/build-context', () => ({
   buildContext: mockBuildContext,
 }));
 
-vi.mock('@shopkeeper/agent/planner', () => ({
+vi.mock('@shopkeeper/agent/planner', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@shopkeeper/agent/planner')>(),
   planAgent: mockPlanAgent,
-  resolveNewAgentTaskRuntimeVersion: mockResolveNewAgentTaskRuntimeVersion,
 }));
 
 vi.mock('./agent-thread-sink.js', () => ({
@@ -82,7 +80,7 @@ vi.mock('@shopkeeper/agent/settings', () => ({
   })),
 }));
 
-vi.mock('../operator-context.js', () => ({
+vi.mock('../../operator-context.js', () => ({
   removePendingPlanForThread: vi.fn(async () => {}),
 }));
 
@@ -119,7 +117,6 @@ const cachedPlan = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockResolveNewAgentTaskRuntimeVersion.mockReturnValue(1);
   mockRequireOrgThread.mockResolvedValue({
     id: 'thread_1',
     channelType: 'email',
@@ -462,37 +459,37 @@ describe('generateThreadPlan auto-execute path', () => {
       expect.anything(),
       'Where is my order #1001?',
       expect.anything(),
-      { runtimeVersion: 1 },
+      undefined,
     );
     expect(result.instruction).toBe('Where is my order #1001?');
   });
 
-  it('routes planning from the stored task version after rollout configuration changes', async () => {
-    async function planOnce() {
-      mockIsAgentPlanCacheHit.mockReturnValue(false);
-      mockRequireOrgThread.mockResolvedValueOnce({
-        id: 'thread_1',
-        aiSummary: 'Refund request',
-        filterStatus: 'genuine',
-        messages: [{ id: 'msg_1' }],
-        cachedPlan: null,
-      });
-      mockBuildContext.mockResolvedValue({ thread: { id: 'thread_1' } });
-      mockPlanAgent.mockResolvedValue({
-        steps: [{ id: 'refund_1', tool: 'create_refund' }],
-        rawToolCalls: [{ id: 'refund_1', name: 'create_refund', input: { order_id: '1' } }],
-      });
-      await generateThreadPlan('org_1', 'thread_1', false);
-      return mockPlanAgent.mock.calls.at(-1)?.[3];
-    }
+  it('accepts support tasks with the fixed support budget runtime version', async () => {
+    mockIsAgentPlanCacheHit.mockReturnValue(false);
+    mockRequireOrgThread.mockResolvedValueOnce({
+      id: 'thread_1',
+      aiSummary: 'Refund request',
+      filterStatus: 'genuine',
+      messages: [{ id: 'msg_1' }],
+      cachedPlan: null,
+    });
+    mockBuildContext.mockResolvedValue({ thread: { id: 'thread_1' } });
+    mockPlanAgent.mockResolvedValue({
+      steps: [{ id: 'refund_1', tool: 'create_refund' }],
+      rawToolCalls: [{ id: 'refund_1', name: 'create_refund', input: { order_id: '1' } }],
+    });
 
-    // New tasks would now be version 2, but this accepted task was created as
-    // version 1. Claiming returns the persisted row, which must own routing.
-    mockResolveNewAgentTaskRuntimeVersion.mockReturnValue(2);
-    expect(await planOnce()).toEqual({ runtimeVersion: 1 });
+    await generateThreadPlan('org_1', 'thread_1', false);
+
     expect(mockAcceptCustomerAgentRequest).toHaveBeenCalledWith(expect.objectContaining({
-      budget: expect.objectContaining({ runtimeVersion: 2 }),
+      budget: expect.objectContaining({ runtimeVersion: 1 }),
     }));
+    expect(mockPlanAgent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.any(String),
+      expect.anything(),
+      undefined,
+    );
   });
 
   it('skips plan generation for questionable senders and clears stale cache', async () => {

@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockBurst, mockFindThread, mockGenerateThreadPlan, mockLogger } = vi.hoisted(() => ({
+const {
+  mockBurst,
+  mockFindThread,
+  mockGenerateThreadPlan,
+  mockLogger,
+  mockRequestAutoAck,
+} = vi.hoisted(() => ({
   mockBurst: vi.fn(),
   mockFindThread: vi.fn(),
   mockGenerateThreadPlan: vi.fn(),
@@ -10,6 +16,7 @@ const { mockBurst, mockFindThread, mockGenerateThreadPlan, mockLogger } = vi.hoi
     info: vi.fn(),
     warn: vi.fn(),
   },
+  mockRequestAutoAck: vi.fn(),
 }));
 
 vi.mock('@shopkeeper/db', async (importOriginal) => {
@@ -23,12 +30,18 @@ vi.mock('@shopkeeper/db', async (importOriginal) => {
   };
 });
 
-vi.mock('../logger.js', () => ({
+vi.mock('../../logger.js', () => ({
   default: mockLogger,
 }));
 
-vi.mock('./conversation-burst.js', () => ({ getConversationBurst: mockBurst }));
+vi.mock('../inbound/conversation-burst.js', () => ({ getConversationBurst: mockBurst }));
 vi.mock('./generate-thread-plan.js', () => ({ generateThreadPlan: mockGenerateThreadPlan }));
+vi.mock('./plan-limit.js', () => ({
+  degradeForConversationLimit: vi.fn(async () => false),
+}));
+vi.mock('./planning-dashboard-client.js', () => ({
+  requestAutoAck: mockRequestAutoAck,
+}));
 
 import { precomputeThreadPlan, sendAutoAck, shouldSkipRequestWork } from './planning.js';
 
@@ -37,6 +50,7 @@ beforeEach(() => {
   mockLogger.error.mockClear();
   mockLogger.info.mockClear();
   mockLogger.warn.mockClear();
+  mockRequestAutoAck.mockReset();
   mockFindThread.mockReset().mockResolvedValue({
     status: 'open',
     requestDisposition: 'merchant_action',
@@ -146,66 +160,52 @@ describe('precomputeThreadPlan', () => {
 
 describe('sendAutoAck', () => {
   it('dispatches through the dashboard internal API and logs success', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    mockRequestAutoAck.mockResolvedValueOnce({ ok: true, data: { ok: true } });
+
+    await sendAutoAck('org_1', 'thread_1');
+
+    expect(mockRequestAutoAck).toHaveBeenCalledWith('thread_1');
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      { threadId: 'thread_1', organizationId: 'org_1' },
+      '[Worker] Auto-ack sent to customer',
     );
-
-    try {
-      await sendAutoAck('org_1', 'thread_1');
-
-      expect(fetchSpy).toHaveBeenCalledOnce();
-      const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
-      expect(url).toMatch(/\/api\/messages\/auto-ack$/);
-      expect(init).toMatchObject({
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-internal-secret': process.env.INTERNAL_API_SECRET,
-        },
-        body: JSON.stringify({ threadId: 'thread_1' }),
-      });
-      expect(mockLogger.info).toHaveBeenCalledWith(
-        { threadId: 'thread_1', organizationId: 'org_1' },
-        '[Worker] Auto-ack sent to customer',
-      );
-    } finally {
-      fetchSpy.mockRestore();
-    }
   });
 
   it('preserves skipped and failed dispatch warnings', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch')
-      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, skipped: true }), { status: 200 }))
-      .mockResolvedValueOnce(new Response('unavailable', { status: 503 }));
+    mockRequestAutoAck
+      .mockResolvedValueOnce({ ok: true, data: { ok: true, skipped: true } })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        responseBody: 'unavailable',
+        outcome: 'failed',
+      });
 
-    try {
-      await sendAutoAck('org_1', 'thread_skipped');
-      await sendAutoAck('org_1', 'thread_failed');
+    await sendAutoAck('org_1', 'thread_skipped');
+    await sendAutoAck('org_1', 'thread_failed');
 
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        { threadId: 'thread_skipped', organizationId: 'org_1' },
-        '[Worker] Auto-ack skipped by dashboard — check businessHoursEnabled setting sync',
-      );
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        { status: 503, outcome: 'failed', threadId: 'thread_failed', organizationId: 'org_1' },
-        '[Worker] Auto-ack dispatch failed',
-      );
-    } finally {
-      fetchSpy.mockRestore();
-    }
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      { threadId: 'thread_skipped', organizationId: 'org_1' },
+      '[Worker] Auto-ack skipped by dashboard — check businessHoursEnabled setting sync',
+    );
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      { status: 503, outcome: 'failed', threadId: 'thread_failed', organizationId: 'org_1' },
+      '[Worker] Auto-ack dispatch failed',
+    );
   });
 
   it('logs ambiguous dispatch outcomes without claiming a definite failure', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network down'));
+    mockRequestAutoAck.mockResolvedValueOnce({
+      ok: false,
+      status: null,
+      responseBody: 'network down',
+      outcome: 'unknown',
+    });
 
-    try {
-      await expect(sendAutoAck('org_1', 'thread_1')).resolves.toBeUndefined();
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        { status: null, outcome: 'unknown', threadId: 'thread_1', organizationId: 'org_1' },
-        '[Worker] Auto-ack dispatch outcome unknown',
-      );
-    } finally {
-      fetchSpy.mockRestore();
-    }
+    await expect(sendAutoAck('org_1', 'thread_1')).resolves.toBeUndefined();
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      { status: null, outcome: 'unknown', threadId: 'thread_1', organizationId: 'org_1' },
+      '[Worker] Auto-ack dispatch outcome unknown',
+    );
   });
 });

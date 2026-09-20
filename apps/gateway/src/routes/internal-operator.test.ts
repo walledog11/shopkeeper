@@ -168,35 +168,27 @@ describe('durable dashboard agent requests', () => {
     expect(ensureAgentTaskEnqueuedSpy).toHaveBeenCalledTimes(2);
   });
 
-  it('pins the selected runtime when rollout configuration changes', async () => {
-    const previous = process.env.AGENT_RUNTIME_VERSION;
+  it('pins dashboard task runtime to the support budget version', async () => {
     const body = {
       organizationId: org.id,
       clerkUserId: 'usr_desk',
       clientRequestId: '22222222-2222-4222-8222-222222222222',
       instruction: 'check order 1002',
     };
-    try {
-      process.env.AGENT_RUNTIME_VERSION = '2';
-      const first = await request(app)
-        .post('/internal/operator/requests')
-        .set('x-internal-secret', SECRET)
-        .send(body);
-      process.env.AGENT_RUNTIME_VERSION = '1';
-      const duplicate = await request(app)
-        .post('/internal/operator/requests')
-        .set('x-internal-secret', SECRET)
-        .send(body);
+    const first = await request(app)
+      .post('/internal/operator/requests')
+      .set('x-internal-secret', SECRET)
+      .send(body);
+    const duplicate = await request(app)
+      .post('/internal/operator/requests')
+      .set('x-internal-secret', SECRET)
+      .send(body);
 
-      expect(first.status).toBe(202);
-      expect(duplicate.status).toBe(202);
-      expect(duplicate.body.taskId).toBe(first.body.taskId);
-      expect(await db.agentTask.findUniqueOrThrow({ where: { id: first.body.taskId } }))
-        .toMatchObject({ runtimeVersion: 2 });
-    } finally {
-      if (previous === undefined) delete process.env.AGENT_RUNTIME_VERSION;
-      else process.env.AGENT_RUNTIME_VERSION = previous;
-    }
+    expect(first.status).toBe(202);
+    expect(duplicate.status).toBe(202);
+    expect(duplicate.body.taskId).toBe(first.body.taskId);
+    expect(await db.agentTask.findUniqueOrThrow({ where: { id: first.body.taskId } }))
+      .toMatchObject({ runtimeVersion: 1 });
   });
 
   it('returns 409 when one client identity is reused for changed work', async () => {

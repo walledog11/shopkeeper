@@ -29,9 +29,9 @@ vi.mock('@shopkeeper/agent/plan-execution', async (importOriginal) => ({
 vi.mock('@shopkeeper/agent/request-outcome', () => ({
   captureCommittedPlanOutcome: vi.fn(async () => {}),
 }));
-vi.mock('../realtime/publish.js', () => ({ publishThreadEvent: vi.fn(async () => {}) }));
-vi.mock('../product-analytics.js', () => ({ captureAgentPlanGenerated: vi.fn(async () => {}) }));
-vi.mock('../operator-context.js', () => ({ removePendingPlanForThread: vi.fn(async () => {}) }));
+vi.mock('../../realtime/publish.js', () => ({ publishThreadEvent: vi.fn(async () => {}) }));
+vi.mock('../../product-analytics.js', () => ({ captureAgentPlanGenerated: vi.fn(async () => {}) }));
+vi.mock('../../operator-context.js', () => ({ removePendingPlanForThread: vi.fn(async () => {}) }));
 
 import { generateThreadPlan } from './generate-thread-plan.js';
 

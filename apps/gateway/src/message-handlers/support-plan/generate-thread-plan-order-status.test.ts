@@ -24,7 +24,7 @@ vi.mock('@anthropic-ai/sdk', () => ({
   },
 }));
 
-vi.mock('../clients/agent-runtime.js', () => ({
+vi.mock('../../clients/agent-runtime.js', () => ({
   getGatewayLockProvider: () => ({
     acquire: vi.fn(async () => ({
       isLost: () => false,
@@ -33,20 +33,20 @@ vi.mock('../clients/agent-runtime.js', () => ({
   }),
 }));
 
-vi.mock('../clients/dashboard-internal.js', () => ({
+vi.mock('../../clients/dashboard-internal.js', () => ({
   postDashboardInternal,
 }));
 
-vi.mock('../realtime/publish.js', () => ({
+vi.mock('../../realtime/publish.js', () => ({
   publishThreadEvent: vi.fn(async () => {}),
 }));
 
-vi.mock('../product-analytics.js', () => ({
+vi.mock('../../product-analytics.js', () => ({
   captureAgentActionsCompleted: vi.fn(),
   captureAgentPlanGenerated: vi.fn(async () => {}),
 }));
 
-vi.mock('../operator-context.js', () => ({
+vi.mock('../../operator-context.js', () => ({
   removePendingPlanForThread: vi.fn(async () => {}),
 }));
 
