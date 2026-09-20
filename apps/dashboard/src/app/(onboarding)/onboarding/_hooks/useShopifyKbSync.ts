@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { KbSyncState, KbSyncViewModel } from "../_components/model";
+import type { KbSyncState, KbSyncViewModel } from "../_lib/onboarding-model";
 import { synchronizeShopifyKnowledge } from "../_lib/onboarding-requests";
 
 const KB_SYNC_ERROR = "Couldn't read your Shopify store. Try again.";

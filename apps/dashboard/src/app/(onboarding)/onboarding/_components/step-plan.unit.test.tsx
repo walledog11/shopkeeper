@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { Footer } from "./chrome";
-import { DEFAULT_DATA } from "./model";
+import { DEFAULT_DATA } from "../_lib/onboarding-model";
 import { StepPlan } from "./step-plan";
 
 describe("StepPlan", () => {

@@ -2,7 +2,7 @@ import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it, vi } from "vitest"
 import { StepEmail } from "./step-email"
-import { DEFAULT_DATA } from "./model"
+import { DEFAULT_DATA } from "../_lib/onboarding-model"
 
 vi.mock("@/components/integrations/EmailForwardingDisclosure", () => ({
   EmailForwardingSetupPanel: () => createElement("div", { "data-testid": "forwarding-panel" }, "Forwarding panel"),

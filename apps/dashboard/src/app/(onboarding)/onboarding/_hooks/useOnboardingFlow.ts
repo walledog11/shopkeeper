@@ -21,7 +21,7 @@ import { updateShopifyStorefrontChat } from "@/lib/integrations/requests";
 import { isShopifyIntegrationActive } from "@/lib/integrations/shopify-connection";
 import { captureClientProductEvent } from "@/lib/product-events";
 import type { Integration } from "@/types";
-import { RETURN_TO, STEPS, STORAGE_KEY, type OnboardingData } from "../_components/model";
+import { RETURN_TO, STEPS, STORAGE_KEY, type OnboardingData } from "../_lib/onboarding-model";
 import { selectOnboardingIntegrations } from "../_lib/onboarding-integrations";
 import {
   createForwardingEmail,

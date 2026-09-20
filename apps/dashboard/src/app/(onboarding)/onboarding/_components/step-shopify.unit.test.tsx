@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { DEFAULT_DATA } from "./model";
+import { DEFAULT_DATA } from "../_lib/onboarding-model";
 import { StepShopify } from "./step-shopify";
 
 const baseProps = {

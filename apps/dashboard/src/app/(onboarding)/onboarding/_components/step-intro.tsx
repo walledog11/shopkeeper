@@ -1,7 +1,7 @@
 import { Input } from "@/components/ui/input";
 import { PRODUCT_NAME } from "@/lib/brand";
 import { Field, Headline, Lede } from "./primitives";
-import type { OnboardingData } from "./model";
+import type { OnboardingData } from "../_lib/onboarding-model";
 
 export function StepIntro({
   data,

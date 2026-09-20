@@ -1,5 +1,5 @@
+export { AmbiguousInstagramIntegrationError } from './errors.js';
 export {
-  AmbiguousInstagramIntegrationError,
   buildInstagramAuthorizationUrl,
   exchangeInstagramAuthorizationCode,
   exchangeInstagramLongLivedToken,

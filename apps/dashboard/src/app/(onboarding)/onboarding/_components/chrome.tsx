@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight, Loader2, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/ui/cn";
-import { STEPS, type StepId } from "./model";
+import { STEPS, type StepId } from "../_lib/onboarding-model";
 
 export function Footer({ idx, stepId, canContinue, hasCustomerChannel, hasMessaging, saving, onNext, onBack, exitLabel, onExit }: {
   idx: number;
