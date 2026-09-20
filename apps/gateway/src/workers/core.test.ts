@@ -85,22 +85,22 @@ vi.mock('../logger.js', () => ({
   default: mockLogger,
 }));
 
-vi.mock('../message-handlers/channels.js', () => ({
+vi.mock('../message-handlers/inbound/channels.js', () => ({
   handleEmailJob: vi.fn(),
   handleIgDmJob: vi.fn(),
   handleShopifyJob: vi.fn(),
 }));
 
-vi.mock('../message-handlers/intelligence.js', () => ({
+vi.mock('../message-handlers/inbound/intelligence.js', () => ({
   generateThreadIntelligence: vi.fn().mockResolvedValue({ filterStatus: 'genuine', aiSummary: 'Summary' }),
 }));
 
-vi.mock('../message-handlers/planning.js', () => ({
+vi.mock('../message-handlers/support-plan/planning.js', () => ({
   precomputeThreadPlan: vi.fn().mockResolvedValue(null),
   sendAutoAck: vi.fn(),
 }));
 
-vi.mock('../message-handlers/planning-notifications.js', () => ({
+vi.mock('../message-handlers/support-plan/planning-notifications.js', () => ({
   sendOperatorAutoExecutionNotification: vi.fn(),
   sendOperatorPlanNotification: vi.fn(),
 }));

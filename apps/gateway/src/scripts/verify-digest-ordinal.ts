@@ -11,7 +11,7 @@ async function main() {
   const { db } = await import('@shopkeeper/db');
   const { runAgent } = await import('@shopkeeper/agent/run');
   const { defineTool, stringArg, toolOk } = await import('@shopkeeper/agent/tools');
-  const { renderOperatorLedger } = await import('../message-handlers/operator-ledger.js');
+  const { renderOperatorLedger } = await import('../message-handlers/operator/operator-ledger.js');
 
   const marker = randomUUID();
   const org = await db.organization.create({

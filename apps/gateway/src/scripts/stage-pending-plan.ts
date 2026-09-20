@@ -28,8 +28,8 @@ loadGatewayEnv();
 
 async function main() {
   const { db } = await import('@shopkeeper/db');
-  const { generateThreadPlan } = await import('../message-handlers/generate-thread-plan.js');
-  const { sendOperatorPlanNotification } = await import('../message-handlers/planning-notifications.js');
+  const { generateThreadPlan } = await import('../message-handlers/support-plan/generate-thread-plan.js');
+  const { sendOperatorPlanNotification } = await import('../message-handlers/support-plan/planning-notifications.js');
   const { listOperatorBindings } = await import('../operator-notify.js');
 
   const prompt = process.env.PROMPT

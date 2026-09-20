@@ -1,6 +1,6 @@
 import { db } from '@shopkeeper/db';
 import { loadGatewayEnv } from '../config/load-env.js';
-import { generateThreadIntelligence } from '../message-handlers/intelligence.js';
+import { generateThreadIntelligence } from '../message-handlers/inbound/intelligence.js';
 
 loadGatewayEnv();
 

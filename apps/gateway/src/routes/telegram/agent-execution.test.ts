@@ -14,7 +14,7 @@ const { mockExecuteOperatorAgentTurn } = vi.hoisted(() => ({
   }),
 }));
 
-vi.mock('../../message-handlers/execute-operator-agent-turn.js', () => ({
+vi.mock('../../message-handlers/operator/execute-operator-agent-turn.js', () => ({
   executeOperatorAgentTurn: mockExecuteOperatorAgentTurn,
 }));
 

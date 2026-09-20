@@ -7,7 +7,7 @@ import { SENDER_TYPE } from '@shopkeeper/agent/thread-constants';
 import { JOB, PROCESSING_QUEUE_DEFAULTS, QUEUE } from '../constants.js';
 import logger from '../logger.js';
 import type { AiSummaryJobData } from '../types.js';
-import { enqueueAiSummaryJob } from '../message-handlers/inbound-persistence.js';
+import { enqueueAiSummaryJob } from '../message-handlers/inbound/inbound-persistence.js';
 import {
   createMaintenanceQueue,
   createMaintenanceWorker,

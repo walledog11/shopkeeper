@@ -13,7 +13,7 @@ import { parseStoredPendingPlan } from '../../operator-context.js';
 import {
   requestDisplayHasContext,
   unavailableRequestDisplay,
-} from '../../message-handlers/request-display.js';
+} from '../../message-handlers/shared/request-display.js';
 import { WAITING_PLAN_MIN_AGE_MS } from './constants.js';
 import { rowAskLess, rowRequestFacts } from './request-facts.js';
 import type { WaitingItem } from './types.js';

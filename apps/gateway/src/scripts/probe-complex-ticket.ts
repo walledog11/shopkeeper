@@ -33,10 +33,10 @@ const TICKET = [
 
 async function main() {
   const { db } = await import('@shopkeeper/db');
-  const { generateThreadIntelligence } = await import('../message-handlers/intelligence.js');
+  const { generateThreadIntelligence } = await import('../message-handlers/inbound/intelligence.js');
   const { formatBlockedTicketLine } = await import('../maintenance/digest-briefing/index.js');
-  const { formatOperatorPlanMessage } = await import('../message-handlers/planning-notifications.js');
-  const { readRequestDisplay } = await import('../message-handlers/request-display.js');
+  const { formatOperatorPlanMessage } = await import('../message-handlers/support-plan/planning-notifications.js');
+  const { readRequestDisplay } = await import('../message-handlers/shared/request-display.js');
 
   const org = await db.organization.create({
     data: { name: 'Probe Shop', clerkOrgId: `probe_${Date.now()}`, settings: {} },

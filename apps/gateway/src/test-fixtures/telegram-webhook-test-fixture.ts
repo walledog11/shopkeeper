@@ -94,7 +94,7 @@ vi.mock('../logger.js', () => ({
   default: mockLogger,
 }));
 
-vi.mock('../message-handlers/execute-operator-agent-turn.js', () => ({
+vi.mock('../message-handlers/operator/execute-operator-agent-turn.js', () => ({
   executeOperatorAgentTurn: executeOperatorAgentTurnSpy,
   executeOperatorApprovedCachedPlan: executeOperatorAgentTurnSpy,
 }));

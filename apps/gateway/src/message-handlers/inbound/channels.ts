@@ -1,0 +1,532 @@
+import type { Job, Queue } from 'bullmq';
+import { db } from '@shopkeeper/db';
+import { fetchInstagramMessagingUserProfile } from '../../clients/instagram-graph.js';
+import {
+  fetchSocialApiParticipantProfile,
+  SocialApiProfileError,
+} from '../../clients/socialapi-profile.js';
+import { isRecord } from '../../lib/typing.js';
+import {
+  downloadInstagramAttachment,
+  isSupportedInstagramBinaryAttachment,
+} from '../../clients/instagram-media.js';
+import { normalizeTikTokShopWebhookPayload } from '../../clients/tiktok-shop.js';
+import { downloadTikTokShopImage } from '../../clients/tiktok-shop-media.js';
+import logger from '../../logger.js';
+import { CHANNEL, STATUS } from '../../constants.js';
+import { loadActiveInstagramIntegration } from '../../lib/instagram-integration.js';
+import type {
+  InboundJobData,
+  InstagramInboundAttachment,
+  InstagramInboundJobData,
+  ShopifyOrderPayload,
+} from '../../types.js';
+import { emptyRequestFacts } from '@shopkeeper/agent/classifier-signals';
+import { uploadOrgAttachment } from '../../storage/blob.js';
+import { applyInboundAttachmentBudget, mapWithConcurrency } from '../../storage/attachment-budget.js';
+import { getInboundAttachmentLimits } from '../../config/runtime-config.js';
+import {
+  classifyAndSummarizeNewEmail,
+  emptyIntents,
+  stripQuotedReply,
+  type ClassificationResult,
+} from './classification.js';
+import { processInboundMessage } from './inbound-persistence.js';
+import { deliverInboundProcessing } from './inbound-processing.js';
+import { recordConversationAttributionSafely } from './conversation-attribution.js';
+import { lookupShopifyCustomerName } from './channels/shopify-customer.js';
+
+function isInstagramInboundAttachment(value: unknown): value is InstagramInboundAttachment {
+  return isRecord(value)
+    && typeof value.type === 'string'
+    && (typeof value.url === 'string' || value.url === null);
+}
+
+function isInstagramInboundJobData(data: unknown): data is InstagramInboundJobData {
+  return isRecord(data)
+    && data.platform === CHANNEL.IG_DM
+    && typeof data.integrationId === 'string'
+    && typeof data.organizationId === 'string'
+    && typeof data.instagramAccountId === 'string'
+    && typeof data.senderIgsid === 'string'
+    && (typeof data.externalMessageId === 'string' || data.externalMessageId === null)
+    && typeof data.providerSentAt === 'string'
+    && (typeof data.text === 'string' || data.text === null)
+    && Array.isArray(data.attachments)
+    && data.attachments.every(isInstagramInboundAttachment)
+    && typeof data.traceId === 'string'
+    && (data.provider === undefined || data.provider === 'meta_direct' || data.provider === 'socialapi')
+    && (
+      data.providerConversationId === undefined
+      || data.providerConversationId === null
+      || typeof data.providerConversationId === 'string'
+    );
+}
+
+function publicInstagramShareUrl(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:') return null;
+    if (url.hostname !== 'instagram.com' && !url.hostname.endsWith('.instagram.com')) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function formatInstagramMessage(
+  text: string | null,
+  attachments: InstagramInboundAttachment[],
+): string {
+  const parts = text ? [text] : [];
+  for (const attachment of attachments) {
+    if (attachment.type === 'deleted') {
+      parts.push('[Instagram message deleted]');
+      continue;
+    }
+    if (
+      attachment.type === 'share'
+      || attachment.type === 'story_mention'
+      || attachment.type === 'ig_reel'
+      || attachment.type === 'reel'
+    ) {
+      const shareUrl = publicInstagramShareUrl(attachment.url);
+      const label = attachment.type === 'story_mention'
+        ? 'Instagram story mention'
+        : attachment.type === 'share'
+          ? 'Shared Instagram content'
+          : 'Shared Instagram reel';
+      parts.push(shareUrl ? `${label}: ${shareUrl}` : `[${label}]`);
+      continue;
+    }
+    if (attachment.type === 'unsupported') {
+      parts.push('[Unsupported Instagram message]');
+      continue;
+    }
+    parts.push(`[Instagram ${attachment.type} attachment]`);
+  }
+  return parts.join('\n') || '[Unsupported Instagram message]';
+}
+
+async function alreadyIngested(organizationId: string, externalMessageId: string | null | undefined, queue: Queue): Promise<boolean> {
+  if (!externalMessageId?.trim()) return false;
+  const existing = await db.message.findFirst({
+    where: { organizationId, externalMessageId: externalMessageId.trim() },
+    select: { id: true },
+  });
+  if (!existing) return false;
+  await deliverInboundProcessing(existing.id, queue);
+  return true;
+}
+
+async function persistProviderAttachments<T>(
+  organizationId: string,
+  attachments: readonly T[],
+  download: (attachment: T, signal: AbortSignal, consumeBytes: (bytes: number) => boolean) => Promise<{ filename: string; contentType: string; base64Content: string } | null>,
+  messageIdentity?: string | null,
+): Promise<string[]> {
+  const limits = getInboundAttachmentLimits();
+  const signal = AbortSignal.timeout(20_000);
+  let remainingBytes = limits.maxTotalBytes;
+  const consumeBytes = (bytes: number) => {
+    if (bytes > remainingBytes) return false;
+    remainingBytes -= bytes;
+    return true;
+  };
+  const downloaded = await mapWithConcurrency(
+    attachments.slice(0, Math.min(5, limits.maxCount)), Math.min(3, limits.uploadConcurrency),
+    attachment => signal.aborted ? Promise.resolve(null) : download(attachment, signal, consumeBytes),
+  );
+  const { accepted } = applyInboundAttachmentBudget(downloaded.flatMap(item => item ? [{
+    name: item.filename, contentType: item.contentType, contentBase64: item.base64Content,
+  }] : []));
+  return (await mapWithConcurrency(accepted, limits.uploadConcurrency, item =>
+    uploadOrgAttachment(organizationId, item.name, item.contentType, item.contentBase64, messageIdentity),
+  )).filter((ref): ref is string => ref !== null);
+}
+
+function formatTikTokShopMessage(
+  text: string,
+  storedAttachmentCount: number,
+): string {
+  const trimmed = text.trim();
+  const parts = trimmed && trimmed !== '[Attachment]' ? [trimmed] : [];
+  if (storedAttachmentCount > 0) {
+    parts.push('[TikTok image attachment]');
+  }
+  return parts.join('\n') || '[Attachment]';
+}
+
+export async function handleIgDmJob(job: Job<InboundJobData>, aiSummaryQueue: Queue): Promise<void> {
+  const candidate: unknown = job.data;
+  if (!isInstagramInboundJobData(candidate)) {
+    logger.error({ jobId: job.id }, '[Worker] Invalid normalized Instagram job — dropping');
+    return;
+  }
+
+  const {
+    attachments,
+    externalMessageId,
+    instagramAccountId,
+    integrationId,
+    organizationId,
+    providerSentAt,
+    senderIgsid,
+    text,
+    traceId,
+  } = candidate;
+  const transport = candidate.provider ?? 'meta_direct';
+  // SocialAPI replies address a conversation, not a recipient, so the outbound
+  // path needs the provider conversation id the webhook carried.
+  const providerConversationId = transport === 'socialapi'
+    ? candidate.providerConversationId ?? null
+    : null;
+  if (await alreadyIngested(organizationId, externalMessageId, aiSummaryQueue)) return;
+  const sentAt = new Date(providerSentAt);
+  if (!Number.isFinite(sentAt.getTime())) {
+    logger.error({ integrationId, traceId }, '[Worker] Invalid Instagram provider timestamp — dropping');
+    return;
+  }
+
+  try {
+    const integration = await loadActiveInstagramIntegration({
+      id: integrationId,
+      instagramAccountId,
+      organizationId,
+      transport,
+    });
+    if (!integration) {
+      logger.info(
+        { instagramAccountId, integrationId, organizationId, traceId, transport },
+        '[Worker] Instagram integration disconnected or replaced before processing — dropping',
+      );
+      return;
+    }
+
+    // Each transport reads the shopper's display name from its own surface: Meta's
+    // Graph API for a direct row, and SocialAPI's conversation list for a provider
+    // row, which is the only place SocialAPI carries it. Attachment download still
+    // speaks Meta's Graph API with a token a SocialAPI row does not have, so its
+    // media renders through formatInstagramMessage as an unsupported-attachment
+    // marker rather than being silently dropped.
+    let customerName: string | null = null;
+    let storedAttachments: string[] = [];
+    if (integration.transport === 'meta_direct') {
+      const profileResult = await fetchInstagramMessagingUserProfile(
+        senderIgsid,
+        integration.accessToken,
+      );
+      if (profileResult.ok) {
+        customerName = profileResult.data.name ?? profileResult.data.username;
+      } else {
+        logger.warn(
+          {
+            category: profileResult.error.category,
+            code: profileResult.error.code,
+            integrationId,
+            requestId: profileResult.error.requestId,
+            senderIgsid,
+          },
+          '[Worker] Instagram profile enrichment failed',
+        );
+      }
+
+      storedAttachments = await persistProviderAttachments(
+        organizationId,
+        attachments.filter(attachment => isSupportedInstagramBinaryAttachment(attachment.type)),
+        downloadInstagramAttachment,
+        externalMessageId,
+      );
+    } else if (providerConversationId) {
+      // A display name is worth one bounded read, never the message: a failed
+      // lookup leaves the ticket under its platform-id label and is retried by
+      // the next inbound message, which merges the name onto the same customer.
+      try {
+        const profile = await fetchSocialApiParticipantProfile({
+          accountId: integration.instagramAccountId,
+          conversationId: providerConversationId,
+          participantId: senderIgsid,
+        });
+        customerName = profile?.name ?? null;
+      } catch (error) {
+        logger.warn(
+          {
+            category: error instanceof SocialApiProfileError ? error.category : 'unknown',
+            integrationId,
+            organizationId,
+            traceId,
+          },
+          '[Worker] SocialAPI profile enrichment failed',
+        );
+      }
+    }
+
+    await processInboundMessage(
+      organizationId,
+      senderIgsid,
+      CHANNEL.IG_DM,
+      formatInstagramMessage(text, attachments),
+      aiSummaryQueue,
+      {
+        customerName,
+        externalMessageId,
+        integrationId,
+        attachments: storedAttachments,
+        receivedAt: sentAt,
+        traceId,
+        isRealCustomerMessage: true,
+        ...(providerConversationId ? { externalSpaceId: providerConversationId } : {}),
+      },
+    );
+    logger.info(
+      { senderIgsid, organizationId, traceId, transport },
+      '[Worker] Successfully saved Instagram DM',
+    );
+  } catch (error) {
+    logger.error({ err: error, traceId }, '[Worker] DB operation failed for Instagram DM');
+    throw error;
+  }
+}
+
+// A sender with a prior genuine thread cannot be spam. That guarantee is worth
+// keeping — it was the point of the bypass this replaces. What the bypass also
+// did was decline to read what the customer was asking, which a prior genuine
+// thread says nothing about: it wrote emptyIntents(), an empty requestSummary
+// and emptyRequestFacts(), and because a precomputed result sets skipSummary
+// (inbound-persistence.ts) the classifier never ran later either. Every repeat
+// customer emailing in was permanently ask-less, so the briefing fell to its
+// prose fallback for exactly the traffic that matters most.
+//
+// So classify, then override the verdict rather than the whole record. The
+// placeholder survives only for a failed classification — outage or spend cap —
+// where it still keeps a known sender out of the spam bucket at the cost of an
+// unread request. Same trade as before, now on the rare path instead of the
+// normal one.
+function knownSenderClassification(
+  classified: ClassificationResult | null,
+  subject: string | null | undefined,
+): ClassificationResult {
+  const filterReason = 'Existing customer with prior genuine thread';
+  if (classified) return { ...classified, filterStatus: 'genuine', filterReason };
+  return {
+    title: subject?.trim()?.slice(0, 60) || 'New email',
+    summary: subject?.slice(0, 200) || 'New email',
+    tag: 'General',
+    filterStatus: 'genuine',
+    filterReason,
+    intents: emptyIntents(),
+    language: '',
+    requestSummary: '',
+    requestDisposition: 'unclear',
+    requestFacts: emptyRequestFacts(),
+  };
+}
+
+export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Queue): Promise<void> {
+  const { organizationId, traceId } = job.data;
+  const { senderName, subject, body } = job.data;
+  const senderEmail = job.data.senderEmail?.trim().toLowerCase();
+  if (await alreadyIngested(organizationId, job.data.inboundMessageId, aiSummaryQueue)) return;
+
+  try {
+    if (job.data.integrationId) {
+      const activeIntegration = await db.integration.findFirst({
+        where: {
+          id: job.data.integrationId,
+          organizationId,
+          platform: CHANNEL.EMAIL,
+          lifecycleStatus: 'active',
+        },
+        select: { id: true },
+      });
+      if (!activeIntegration) {
+        logger.info(
+          { integrationId: job.data.integrationId, organizationId, traceId },
+          '[Worker] Email integration disconnected before processing — dropping',
+        );
+        return;
+      }
+    }
+
+    const [existingCustomer, org] = await Promise.all([
+      db.customer.findUnique({
+        where: { organizationId_platformId: { organizationId, platformId: senderEmail! } },
+        select: { id: true, name: true },
+      }),
+      db.organization.findUnique({
+        where: { id: organizationId },
+        select: { settings: true },
+      }),
+    ]);
+    const spamFilterEnabled = ((org?.settings ?? {}) as { spamFilterEnabled?: boolean }).spamFilterEnabled !== false;
+
+    const hasOpenThread = existingCustomer
+      ? await db.thread.findFirst({
+          where: { organizationId, customerId: existingCustomer.id, status: STATUS.OPEN, channelType: CHANNEL.EMAIL },
+          select: { id: true },
+        })
+      : null;
+
+    // Classify only on new email threads. Replies on open threads inherit the
+    // existing filterStatus; the kill switch defers classification to the
+    // standard SUMMARIZE_THREAD path (which treats unset filter as genuine).
+    let precomputed: ClassificationResult | null = null;
+    if (!hasOpenThread && spamFilterEnabled) {
+      const priorGenuine = existingCustomer
+        ? await db.thread.findFirst({
+            where: {
+              organizationId,
+              customerId: existingCustomer.id,
+              channelType: CHANNEL.EMAIL,
+              filterStatus: 'genuine',
+            },
+            select: { id: true },
+          })
+        : null;
+      const classified = await classifyAndSummarizeNewEmail(organizationId, subject!, body!);
+      precomputed = priorGenuine
+        ? knownSenderClassification(classified, subject)
+        : classified;
+    }
+
+    const emailLocal = senderEmail!.split('@')[0];
+    const existingNameIsEmailLike = !existingCustomer?.name
+      || existingCustomer.name === senderEmail
+      || existingCustomer.name === emailLocal;
+
+    let resolvedName: string | null = senderName?.trim() || null;
+    if (!resolvedName && existingNameIsEmailLike) {
+      resolvedName = await lookupShopifyCustomerName(organizationId, senderEmail!);
+    }
+    if (!resolvedName && !existingCustomer) {
+      resolvedName = emailLocal;
+    }
+
+    const { accepted: budgetedAttachments } = applyInboundAttachmentBudget(job.data.attachments ?? []);
+    const attachmentUrls = (await mapWithConcurrency(
+      budgetedAttachments,
+      getInboundAttachmentLimits().uploadConcurrency,
+      (att) => uploadOrgAttachment(organizationId, att.name, att.contentType, att.contentBase64, job.data.inboundMessageId),
+    )).filter((url): url is string => url !== null);
+
+    await processInboundMessage(organizationId, senderEmail!, CHANNEL.EMAIL, stripQuotedReply(body!), aiSummaryQueue, {
+      customerName: resolvedName,
+      subject: subject?.trim() || null,
+      externalMessageId: job.data.inboundMessageId,
+      integrationId: job.data.integrationId,
+      receivedAt: job.data.receivedAt ? new Date(job.data.receivedAt) : undefined,
+      traceId,
+      attachments: attachmentUrls,
+      precomputed,
+      lockAsGenuine: !spamFilterEnabled,
+      isRealCustomerMessage: true,
+    });
+    logger.info({ senderEmail, organizationId, traceId, classification: precomputed?.filterStatus ?? null }, '[Worker] Successfully saved Email');
+  } catch (error) {
+    logger.error({ err: error, traceId }, '[Worker] DB operation failed for Email');
+    throw error;
+  }
+}
+
+export async function handleShopifyJob(job: Job<InboundJobData>, aiSummaryQueue: Queue): Promise<void> {
+  const { organizationId, traceId } = job.data;
+  const { topic, rawPayload } = job.data as { topic: string; rawPayload: ShopifyOrderPayload };
+  const customer = rawPayload.customer;
+  const email = customer?.email;
+
+  // Before the identity guard below, deliberately. A guest order with no
+  // customer record attached is still revenue, and the attribution table can
+  // only report the attributed *share* if it holds every order as its
+  // denominator. Only orders/create — the other topics restate an order that
+  // has already been counted.
+  if (topic === 'orders/create') {
+    await recordConversationAttributionSafely(organizationId, rawPayload, traceId);
+  }
+
+  if (!email && !customer?.id) {
+    logger.warn({ traceId }, '[Worker] Shopify order missing customer identity — dropping');
+    return;
+  }
+
+  const platformId = email ?? `shopify_${customer!.id}`;
+  const orderName = rawPayload.name || (rawPayload.order_number ? `#${rawPayload.order_number}` : 'unknown order');
+  const customerName = customer?.first_name
+    ? `${customer.first_name}${customer.last_name ? ` ${customer.last_name}` : ''}`.trim()
+    : (email?.split('@')[0] ?? null);
+
+  const EVENT_MESSAGES: Record<string, string> = {
+    'orders/create': `New order ${orderName} was placed.`,
+    'orders/fulfilled': `Order ${orderName} has been fulfilled.`,
+    'orders/updated': `Order ${orderName} has been updated.`,
+    'orders/cancelled': `Order ${orderName} has been cancelled.`,
+  };
+  const messageText = EVENT_MESSAGES[topic] ?? `Shopify event '${topic}' for order ${orderName}.`;
+
+  try {
+    await processInboundMessage(organizationId, platformId, CHANNEL.SHOPIFY, messageText, aiSummaryQueue, {
+      customerName,
+      initialTag: 'Order Status',
+      subject: `Order ${orderName}`,
+      externalMessageId: job.data.inboundMessageId,
+      traceId,
+      synthetic: true,
+    });
+    logger.info({ platformId, organizationId, topic, traceId }, '[Worker] Successfully saved Shopify order event');
+  } catch (error) {
+    logger.error({ err: error, traceId }, '[Worker] DB operation failed for Shopify order event');
+    throw error;
+  }
+}
+
+export async function handleTikTokShopJob(job: Job<InboundJobData>, aiSummaryQueue: Queue): Promise<void> {
+  const { organizationId, traceId } = job.data;
+  const message = job.data.tiktokMessage ?? normalizeTikTokShopWebhookPayload(job.data.rawPayload);
+
+  if (!message || message.isEcho) return;
+  const integration = await db.integration.findFirst({
+    where: {
+      ...(job.data.integrationId ? { id: job.data.integrationId } : {}),
+      organizationId, platform: CHANNEL.TIKTOK, externalAccountId: message.accountId, lifecycleStatus: 'active',
+    },
+    select: { id: true },
+  });
+  if (!integration) return;
+  const externalMessageId = job.data.inboundMessageId ?? (message.messageId ? `tiktok:${message.accountId}:${message.messageId}` : null);
+  if (await alreadyIngested(organizationId, externalMessageId, aiSummaryQueue)) return;
+
+  const buyerIdentity = message.buyerId ?? message.conversationId;
+  const platformId = `tiktok:${message.accountId}:${buyerIdentity}`;
+
+  try {
+    const storedAttachmentRefs = await persistProviderAttachments(
+      organizationId,
+      message.attachments,
+      downloadTikTokShopImage,
+      externalMessageId,
+    );
+    const messageText = formatTikTokShopMessage(message.text, storedAttachmentRefs.length);
+
+    await processInboundMessage(organizationId, platformId, CHANNEL.TIKTOK, messageText, aiSummaryQueue, {
+      attachments: storedAttachmentRefs,
+      customerName: message.customerName,
+      externalMessageId,
+      integrationId: integration.id,
+      externalSpaceId: message.conversationId,
+      traceId,
+      isRealCustomerMessage: true,
+    });
+    logger.info(
+      {
+        accountId: message.accountId,
+        conversationId: message.conversationId,
+        organizationId,
+        traceId,
+      },
+      '[Worker] Successfully saved TikTok Shop buyer message',
+    );
+  } catch (error) {
+    logger.error({ err: error, traceId }, '[Worker] DB operation failed for TikTok Shop buyer message');
+    throw error;
+  }
+}

@@ -29,7 +29,7 @@ function parseArgs(): Args {
 
 async function main() {
   const { db } = await import('@shopkeeper/db');
-  const { generateThreadIntelligence } = await import('../message-handlers/intelligence.js');
+  const { generateThreadIntelligence } = await import('../message-handlers/inbound/intelligence.js');
 
   const { dryRun, orgId, openOnly } = parseArgs();
   console.log(

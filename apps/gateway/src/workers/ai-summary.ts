@@ -1,6 +1,6 @@
 import { Worker } from 'bullmq';
 import { QUEUE } from '../constants.js';
-import { processAiSummaryJob } from '../message-handlers/ai-summary-flow.js';
+import { processAiSummaryJob } from '../message-handlers/inbound/ai-summary-flow.js';
 import type { AiSummaryJobData } from '../types.js';
 import { registerJobFailureLogging } from './failure.js';
 import type { SharedGatewayWorkerOptions } from './resources.js';

@@ -8,7 +8,7 @@ import { SENDER_TYPE } from '@shopkeeper/agent/thread-constants';
 import { getCurrentPlanForThread } from '@shopkeeper/agent/plan-cache-shape';
 import { db } from '@shopkeeper/db';
 import { listVerifiedOrderNamesByThread } from '../../storefront-chat-verified-orders.js';
-import { loadAttributionLine } from '../../message-handlers/conversation-attribution.js';
+import { loadAttributionLine } from '../../message-handlers/inbound/conversation-attribution.js';
 import { byDeadlineFirst } from '../briefing-fields.js';
 import { loadDigestShopifyGarnish } from '../digest-shopify-garnish.js';
 import {

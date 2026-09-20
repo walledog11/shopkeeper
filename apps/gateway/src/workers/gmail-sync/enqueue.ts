@@ -8,7 +8,7 @@ import {
 } from '@shopkeeper/email';
 import { CHANNEL, JOB } from '../../constants.js';
 import logger from '../../logger.js';
-import { recordEmailBounce } from '../../message-handlers/email-bounce.js';
+import { recordEmailBounce } from '../../message-handlers/inbound/email-bounce.js';
 import { applyInboundAttachmentBudget } from '../../storage/attachment-budget.js';
 import type { InboundJobData } from '../../types.js';
 import { normalizeAddress, providerMessageKey } from './eligibility.js';

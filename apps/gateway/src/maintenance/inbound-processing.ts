@@ -1,6 +1,6 @@
 import type { AiSummaryJobData } from '../types.js';
 import { PROCESSING_QUEUE_DEFAULTS, QUEUE } from '../constants.js';
-import { recoverInboundProcessing } from '../message-handlers/inbound-processing.js';
+import { recoverInboundProcessing } from '../message-handlers/inbound/inbound-processing.js';
 import {
   createMaintenanceQueue,
   createMaintenanceWorker,

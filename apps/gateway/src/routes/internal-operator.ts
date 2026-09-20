@@ -7,9 +7,10 @@ import {
   getMemberAgentRequest,
   listMemberAgentRequests,
 } from '@shopkeeper/agent/task-ledger';
+import { resolveNewAgentTaskRuntimeVersion } from '@shopkeeper/agent/planner';
 import { resolveOperatorThread } from '@shopkeeper/agent/internal-thread';
 import logger from '../logger.js';
-import { runOperatorFreeFormTurn } from '../message-handlers/operator-free-form-turn.js';
+import { runOperatorFreeFormTurn } from '../message-handlers/operator/operator-free-form-turn.js';
 import {
   expectedPlanIdentity,
   isPendingPlanInvalid,
@@ -17,7 +18,7 @@ import {
   loadLiveOperatorContext,
   normalizeApprovedToolCalls,
 } from '../operator-context.js';
-import { clearPendingPlan, runApprovedPendingPlan } from '../message-handlers/pending-plan-actions.js';
+import { clearPendingPlan, runApprovedPendingPlan } from '../message-handlers/operator/pending-plan-actions.js';
 import { resolveOperatorMemberKey } from '../operator-identity.js';
 import { pushOperatorEscalation } from '../operator-escalation.js';
 import { internalJsonParser } from './body-parsers.js';
@@ -25,12 +26,18 @@ import { authorizeInternalRequest } from './internal-auth.js';
 import type { OperatorMessageContext } from './operator-message.js';
 import { ensureAgentTaskEnqueued } from '../agent-task-ingest.js';
 
-const DASHBOARD_TASK_BUDGET = {
-  runtimeVersion: 1,
+const DASHBOARD_TASK_LIMITS = {
   modelCallLimit: 20,
   activeTimeMsLimit: 120_000,
   spendNanoUsdLimit: 1_000_000_000n,
 } as const;
+
+function dashboardTaskBudget() {
+  return {
+    ...DASHBOARD_TASK_LIMITS,
+    runtimeVersion: resolveNewAgentTaskRuntimeVersion(),
+  };
+}
 
 function stringField(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -89,7 +96,7 @@ export function registerInternalOperatorRoutes(router: Router): void {
         threadId: thread.id,
         dedupeKey: clientRequestId,
         instruction,
-        budget: DASHBOARD_TASK_BUDGET,
+        budget: dashboardTaskBudget(),
       });
       if (!accepted.task) throw new Error('Accepted dashboard request has no task.');
       try {

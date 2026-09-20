@@ -4,7 +4,7 @@ import type { Content, Message, Space, WebhookRawResult } from 'spectrum-ts';
 import { getPlatformSpectrumApp, sendImessageOnSpace, SpectrumIntegrationConfigError } from '../clients/spectrum.js';
 import logger from '../logger.js';
 import { rateLimit, sendTooManyRequests } from '../rate-limit.js';
-import { stripMarkdown } from '../message-handlers/strip-markdown.js';
+import { stripMarkdown } from '../message-handlers/shared/strip-markdown.js';
 import { ingestAndEnqueueOperatorEvent } from '../operator-event-ingest.js';
 import { webhookJsonParser } from './body-parsers.js';
 import { getRateLimitRedis } from './webhooks-shared.js';

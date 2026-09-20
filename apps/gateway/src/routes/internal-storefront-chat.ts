@@ -5,7 +5,7 @@ import logger from '../logger.js';
 import { getGatewayBullMqQueue } from '../clients/gateway-queues.js';
 import { internalJsonParser } from './body-parsers.js';
 import { authorizeInternalRequest } from './internal-auth.js';
-import { processInboundMessage } from '../message-handlers/inbound-persistence.js';
+import { processInboundMessage } from '../message-handlers/inbound/inbound-persistence.js';
 import {
   claimStorefrontChatBudget,
   storefrontChatDenialMessage,

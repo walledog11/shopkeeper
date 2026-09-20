@@ -12,8 +12,8 @@ import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import {
   buildRequestDisplaySnapshot,
   requestDisplayHasContext,
-} from './message-handlers/request-display.js';
-import { formatOperatorPlanMessage } from './message-handlers/planning-notifications.js';
+} from './message-handlers/shared/request-display.js';
+import { formatOperatorPlanMessage } from './message-handlers/support-plan/planning-notifications.js';
 import {
   formatBlockedTicketLine,
   formatTicketLine,

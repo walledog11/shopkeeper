@@ -30,7 +30,7 @@ loadGatewayEnv();
 
 async function main() {
   const { db, SenderType } = await import('@shopkeeper/db');
-  const { episodePolicyFor } = await import('../message-handlers/resolve-inbound-episode.js');
+  const { episodePolicyFor } = await import('../message-handlers/inbound/resolve-inbound-episode.js');
 
   const threadId = process.env.THREAD_ID;
   if (!threadId) throw new Error('Set THREAD_ID');

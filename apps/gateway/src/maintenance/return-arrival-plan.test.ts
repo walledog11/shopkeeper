@@ -14,11 +14,11 @@ const { generateThreadPlanSpy, sendOperatorPlanNotificationSpy, listOperatorBind
   listOperatorBindingsSpy: vi.fn(),
 }));
 
-vi.mock('../message-handlers/generate-thread-plan.js', () => ({
+vi.mock('../message-handlers/support-plan/generate-thread-plan.js', () => ({
   generateThreadPlan: generateThreadPlanSpy,
 }));
 
-vi.mock('../message-handlers/planning-notifications.js', () => ({
+vi.mock('../message-handlers/support-plan/planning-notifications.js', () => ({
   sendOperatorPlanNotification: sendOperatorPlanNotificationSpy,
 }));
 

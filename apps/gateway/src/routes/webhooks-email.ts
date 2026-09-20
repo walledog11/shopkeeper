@@ -10,7 +10,7 @@ import { applyInboundAttachmentBudget } from '../storage/attachment-budget.js';
 import { emailInboundJsonParser, emailInboundUrlencodedParser } from './body-parsers.js';
 import { getMessageQueue, getRateLimitRedis } from './webhooks-shared.js';
 import { recordUnclaimedInbound, type UnclaimedInboundReason } from './webhooks-unclaimed-alerts.js';
-import { recordEmailBounce } from '../message-handlers/email-bounce.js';
+import { recordEmailBounce } from '../message-handlers/inbound/email-bounce.js';
 
 function isProductionEnv(): boolean {
   return process.env.NODE_ENV === 'production';

@@ -123,7 +123,7 @@ describe('runOutboundSendSweep', () => {
 
   it('sweeps a stale pending iMessage send (channel-agnostic)', async () => {
     const customer = await createTestCustomer(org.id, '+15551234567', { name: 'iMsg Cust' });
-    const thread = await createTestThread(org.id, customer.id, ChannelType.imessage);
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
     const message = await createMessage(thread.id, 'pending', ELEVEN_MINUTES_AGO());
 
     await runOutboundSendSweep();

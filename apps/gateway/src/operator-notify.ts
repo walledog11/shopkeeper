@@ -25,7 +25,7 @@ import { db } from '@shopkeeper/db';
 import logger from './logger.js';
 import { isTelegramConfigured, sendMessage as telegramSend } from './clients/telegram-client.js';
 import { isImessageConfigured, sendImessageToSpace } from './clients/spectrum.js';
-import { stripMarkdown } from './message-handlers/strip-markdown.js';
+import { stripMarkdown } from './message-handlers/shared/strip-markdown.js';
 import { memberOperatorKey } from '@shopkeeper/agent/internal-thread';
 import { appendPendingPlan, updateContext, type OperatorContext, type PendingPlan } from './operator-context.js';
 import { mirrorOperatorMessage } from './operator-thread-mirror.js';

@@ -7,7 +7,7 @@ import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { bucketDigestThreads, buildOrgDigest, digestWindowKey, formatDigestMessage, formatWeeklySummaryLine } from './digest.js';
 import type { BriefingItem } from './digest-briefing/index.js';
 import { buildConversationBrief } from './digest-briefing/conversation.js';
-import { renderOperatorLedger } from '../message-handlers/operator-ledger.js';
+import { renderOperatorLedger } from '../message-handlers/operator/operator-ledger.js';
 import { selectPendingPlan, updateContext, type PendingPlan } from '../operator-context.js';
 
 const { create } = vi.hoisted(() => ({ create: vi.fn() }));

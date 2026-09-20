@@ -60,7 +60,7 @@ export async function main(args = parseCanaryArgs(process.argv)): Promise<void> 
   assertSafeTestRuntime(args);
 
   const { db, ChannelType } = await import('@shopkeeper/db');
-  const { gatewayThreadSink } = await import('../message-handlers/agent-thread-sink.js');
+  const { gatewayThreadSink } = await import('../message-handlers/support-plan/agent-thread-sink.js');
   const { closeGatewayRedisConnections } = await import('../clients/redis-client.js');
 
   try {

@@ -3,7 +3,7 @@ import { formatFactsBriefingLine } from '../briefing-fields.js';
 import {
   formatRequestDisplayLine,
   unavailableRequestDisplay,
-} from '../../message-handlers/request-display.js';
+} from '../../message-handlers/shared/request-display.js';
 import { HANDOFF_VERBATIM_MAX, PHONE_LINE_MAX } from './constants.js';
 import { rowAskLess, rowRequestFacts } from './request-facts.js';
 import { cleanBriefingText, truncateBriefingText } from './text.js';

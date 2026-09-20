@@ -1,11 +1,11 @@
 import { classifyPerson, personSubject } from '@shopkeeper/agent/person-name';
 import { isReadToolName, PLAN_STEP_LABELS } from '@shopkeeper/agent/tools';
 import type { RequestFacts } from '@shopkeeper/agent/classifier-signals';
-import { firstDraftExcerpt } from '../../message-handlers/operator-ledger.js';
+import { firstDraftExcerpt } from '../../message-handlers/operator/operator-ledger.js';
 import { formatAlternativeMention, formatDeadlineLead, formatRequestPhrase } from '../briefing-fields.js';
 import { cleanBriefingText, endClause, truncateBriefingText } from './text.js';
 import { lowerFirst } from '../../lib/sentence-case.js';
-import type { SystemRequestKind } from '../../message-handlers/request-display.js';
+import type { SystemRequestKind } from '../../message-handlers/shared/request-display.js';
 
 /** Presentation evidence only; execution always uses the original pending plan. */
 export interface ConversationBrief {

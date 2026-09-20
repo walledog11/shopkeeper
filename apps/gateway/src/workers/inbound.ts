@@ -1,7 +1,7 @@
 import { Worker, type Queue } from 'bullmq';
 import { CHANNEL, QUEUE } from '../constants.js';
 import logger from '../logger.js';
-import { handleEmailJob, handleIgDmJob, handleShopifyJob, handleTikTokShopJob } from '../message-handlers/channels.js';
+import { handleEmailJob, handleIgDmJob, handleShopifyJob, handleTikTokShopJob } from '../message-handlers/inbound/channels.js';
 import type { AiSummaryJobData, InboundJobData } from '../types.js';
 import { registerJobFailureLogging } from './failure.js';
 import type { SharedGatewayWorkerOptions } from './resources.js';

@@ -14,12 +14,12 @@ import { buildSystemPrompt } from '@shopkeeper/agent/prompt';
 import { CHANNEL } from '../constants.js';
 import { registerInternalStorefrontChatRoutes } from './internal-storefront-chat.js';
 import internalStorefrontChatRouter from './internal-storefront-chat.js';
-import { processInboundMessage } from '../message-handlers/inbound-persistence.js';
+import { processInboundMessage } from '../message-handlers/inbound/inbound-persistence.js';
 
 const queueAddSpy = vi.fn().mockResolvedValue({ id: 'test-ai-summary-job' });
 
-vi.mock('../message-handlers/inbound-persistence.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../message-handlers/inbound-persistence.js')>();
+vi.mock('../message-handlers/inbound/inbound-persistence.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../message-handlers/inbound/inbound-persistence.js')>();
   return {
     ...actual,
     processInboundMessage: vi.fn(actual.processInboundMessage),

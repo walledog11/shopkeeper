@@ -1,7 +1,7 @@
 import type { OperatorEvent } from '@prisma/client';
 import { sendMessage } from './clients/telegram-client.js';
 import { sendImessageToSpace } from './clients/spectrum.js';
-import { stripMarkdown } from './message-handlers/strip-markdown.js';
+import { stripMarkdown } from './message-handlers/shared/strip-markdown.js';
 
 export type OperatorEventReplyDelivery = boolean | 'unknown';
 

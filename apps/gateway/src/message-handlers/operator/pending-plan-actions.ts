@@ -1,0 +1,88 @@
+import type { RawToolCall } from '@shopkeeper/agent/types';
+import { isPlanExecutionFailureMessage } from '@shopkeeper/agent/message-dispatch';
+import { resolvePendingPlanContexts, type PendingPlan } from '../../operator-context.js';
+import {
+  dismissCurrentCachedPlan,
+  type ExpectedPlanIdentity,
+} from '@shopkeeper/agent/plan-execution';
+import { ConflictError } from '@shopkeeper/shared/errors';
+import { getPlanExecution } from '@shopkeeper/agent/execution-ledger';
+import { executeOperatorApprovedCachedPlan } from './execute-operator-agent-turn.js';
+
+// Runs an approved plan's stored tool calls verbatim on its ticket thread (zero
+// model calls), then clears the parked plan. Shared by the keyword fast path
+// (handlePendingPlanCommand) and the approve_pending_plan control tool so both
+// approve identically. A throw propagates with the plan left parked — a failed
+// run is not a dismissal.
+//
+// Authorizing the durable proposal is not done here. Every approval surface —
+// this one, and both dashboard routes — enters `executeCurrentCachedHomePlan`,
+// so that is where the approval is recorded against the exact snapshot and the
+// task is closed. Doing it here as well gave the phone one owner and the
+// dashboard another, and the two disagreed.
+export async function runApprovedPendingPlan(params: {
+  organizationId: string;
+  memberKey: string;
+  clerkUserId: string;
+  threadId: string;
+  instruction: string;
+  approvedToolCalls: RawToolCall[];
+  expectedIdentity?: ExpectedPlanIdentity;
+  pendingPlan: PendingPlan;
+}): Promise<string> {
+  let summary: string;
+  try {
+    ({ summary } = await executeOperatorApprovedCachedPlan({
+      orgId: params.organizationId,
+      threadId: params.threadId,
+      instruction: params.instruction,
+      approvedToolCalls: params.approvedToolCalls,
+      clerkUserId: params.clerkUserId,
+      ...(params.expectedIdentity ? { expectedIdentity: params.expectedIdentity } : {}),
+    }));
+  } catch (error) {
+    // A stable plan that is stale, already claimed, or terminal is no longer
+    // actionable on any device. Unknown pre-claim infrastructure failures leave
+    // it parked so the merchant can retry safely.
+    const planId = params.pendingPlan.planId;
+    const execution = planId
+      ? await getPlanExecution(params.organizationId, planId).catch(() => null)
+      : null;
+    if (
+      planId
+      && (error instanceof ConflictError
+        || (execution && execution.status !== 'pending'))
+    ) {
+      await resolvePendingPlanContexts(params.organizationId, params.memberKey, params.pendingPlan);
+    }
+    throw error;
+  }
+  if (!isPlanExecutionFailureMessage(summary)) {
+    await resolvePendingPlanContexts(params.organizationId, params.memberKey, params.pendingPlan);
+  }
+  return summary || 'Done.';
+}
+
+// Dismisses a parked plan without running it. Shared by the keyword `no`/`dismiss`
+// path, the reject_pending_plan control tool, and the dashboard's plan-decision
+// button. `clerkUserId` is the dismissing member, proven by the channel binding
+// or the session — the durable proposal decides from the same recorded scope an
+// approval does, so a dismissal has to say who made it.
+export async function clearPendingPlan(
+  organizationId: string,
+  memberKey: string,
+  clerkUserId: string,
+  expected: PendingPlan,
+): Promise<boolean> {
+  let dismissedCurrentPlan = true;
+  if (expected.planId) {
+    dismissedCurrentPlan = await dismissCurrentCachedPlan({
+      orgId: organizationId,
+      threadId: expected.threadId,
+      expectedPlanId: expected.planId,
+      clerkUserId,
+    });
+  }
+  await resolvePendingPlanContexts(organizationId, memberKey, expected);
+  return dismissedCurrentPlan;
+}

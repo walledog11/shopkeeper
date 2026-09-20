@@ -8,7 +8,7 @@ import {
   loadDigestThreads,
   markInboxThreadSpam,
   sendInboxThreadReply,
-} from '../../message-handlers/digest-triage.js';
+} from '../../message-handlers/support-plan/digest-triage.js';
 import type { OperatorContext } from '../../operator-context.js';
 import type { DigestCommand } from './command-parser.js';
 import { relativeAge } from './format.js';

@@ -14,7 +14,7 @@ import type { TaskModelBudget } from '@shopkeeper/agent/context';
 import { QUEUE } from '../constants.js';
 import logger from '../logger.js';
 import { getContext, loadLiveOperatorContext, normalizeApprovedToolCalls } from '../operator-context.js';
-import { runOperatorFreeFormTurn } from '../message-handlers/operator-free-form-turn.js';
+import { runOperatorFreeFormTurn } from '../message-handlers/operator/operator-free-form-turn.js';
 import type { AgentTaskJobData } from '../types.js';
 import { registerJobFailureLogging } from './failure.js';
 import type { SharedGatewayWorkerOptions } from './resources.js';

@@ -1,5 +1,5 @@
 import logger from '../../logger.js';
-import { runOperatorFreeFormTurn } from '../../message-handlers/operator-free-form-turn.js';
+import { runOperatorFreeFormTurn } from '../../message-handlers/operator/operator-free-form-turn.js';
 import type { OperatorContext } from '../../operator-context.js';
 import type { OperatorMessageContext } from '../operator-message.js';
 

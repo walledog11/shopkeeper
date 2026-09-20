@@ -4,8 +4,8 @@ import { getPendingCustomerMessageId } from '@shopkeeper/agent/plan-cache-shape'
 import type { ReturnWatchTool } from '@shopkeeper/db';
 import { formatReturnClosedNotification } from '@shopkeeper/agent/shopify';
 import logger from '../logger.js';
-import { generateThreadPlan } from '../message-handlers/generate-thread-plan.js';
-import { sendOperatorPlanNotification } from '../message-handlers/planning-notifications.js';
+import { generateThreadPlan } from '../message-handlers/support-plan/generate-thread-plan.js';
+import { sendOperatorPlanNotification } from '../message-handlers/support-plan/planning-notifications.js';
 import { listOperatorBindings, notifyOperator } from '../operator-notify.js';
 
 export function returnArrivedIdempotencyKey(

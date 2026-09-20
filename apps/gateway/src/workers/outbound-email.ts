@@ -1,7 +1,7 @@
 import { Worker } from 'bullmq';
 import { QUEUE } from '../constants.js';
 import type { OutboundEmailJobData } from '../types.js';
-import { handleOutboundEmailJob } from '../message-handlers/outbound-email.js';
+import { handleOutboundEmailJob } from '../message-handlers/outbound/outbound-email.js';
 import { registerJobFailureLogging } from './failure.js';
 import type { SharedGatewayWorkerOptions } from './resources.js';
 

@@ -11,7 +11,7 @@ import {
   type PendingPlan,
   type ToolCall,
 } from '../../operator-context.js';
-import { runApprovedPendingPlan, clearPendingPlan } from '../../message-handlers/pending-plan-actions.js';
+import { runApprovedPendingPlan, clearPendingPlan } from '../../message-handlers/operator/pending-plan-actions.js';
 import { formatOperatorDispatchFailure, isPlanExecutionFailureMessage } from '@shopkeeper/agent/message-dispatch';
 import { ConflictError } from '@shopkeeper/shared/errors';
 import { findTerminalSendTool } from '@shopkeeper/agent/planner-skip-reply';

@@ -36,7 +36,7 @@ vi.mock('../operator-context.js', () => ({
   normalizeApprovedToolCalls: (calls: { id: string; name: string; input: unknown }[]) =>
     calls.map(({ id, name, input }) => ({ id, name, input })),
 }));
-vi.mock('../message-handlers/operator-free-form-turn.js', () => ({ runOperatorFreeFormTurn: runTurn }));
+vi.mock('../message-handlers/operator/operator-free-form-turn.js', () => ({ runOperatorFreeFormTurn: runTurn }));
 vi.mock('../logger.js', () => ({ default: { error: vi.fn(), info: vi.fn(), warn: vi.fn() } }));
 
 import { processAgentTaskJob } from './agent-task.js';

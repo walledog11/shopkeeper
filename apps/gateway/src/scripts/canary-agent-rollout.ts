@@ -25,7 +25,7 @@ async function main(): Promise<void> {
   const { getGatewayBullMqQueue, closeGatewayBullMqQueues } = await import('../clients/gateway-queues.js');
   const { closeGatewayRedisConnections } = await import('../clients/redis-client.js');
   const { QUEUE } = await import('../constants.js');
-  const { processInboundMessage } = await import('../message-handlers/inbound-persistence.js');
+  const { processInboundMessage } = await import('../message-handlers/inbound/inbound-persistence.js');
 
   try {
     const organization = await db.organization.findUniqueOrThrow({

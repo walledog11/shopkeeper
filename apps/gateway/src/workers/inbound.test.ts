@@ -32,7 +32,7 @@ vi.mock('../logger.js', () => ({
   default: mockLogger,
 }));
 
-vi.mock('../message-handlers/channels.js', () => channelHandlers);
+vi.mock('../message-handlers/inbound/channels.js', () => channelHandlers);
 
 import { createInboundWorker } from './inbound.js';
 
