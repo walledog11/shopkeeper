@@ -1,4 +1,5 @@
 import { isRecord } from '../guards.js';
+import { readString } from '../values.js';
 
 export const SOCIALAPI_PRODUCTION_BASE_URL = 'https://api.social-api.ai/v1';
 
@@ -104,10 +105,6 @@ interface SocialApiClientConfig {
   baseUrl: string;
   fetchImpl: typeof fetch;
   timeoutMs: number;
-}
-
-function readString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim().length > 0 ? value : null;
 }
 
 function readCode(value: unknown): string | number | null {

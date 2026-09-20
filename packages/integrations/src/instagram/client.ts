@@ -1,4 +1,5 @@
 import { isRecord } from '../guards.js';
+import { readString } from '../values.js';
 
 export const INSTAGRAM_GRAPH_VERSION = 'v25.0';
 export const INSTAGRAM_REQUIRED_SCOPES = [
@@ -85,10 +86,6 @@ interface ProviderErrorDescriptor {
   message: string | null;
   requestId: string | null;
   subcode: number | null;
-}
-
-function readString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim().length > 0 ? value : null;
 }
 
 function readNumber(value: unknown): number | null {
