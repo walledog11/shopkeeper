@@ -1,5 +1,5 @@
 import type { Prisma as PrismaTypes } from '@prisma/client';
-import type { PlanValidation, PlanValidationIssue, RawToolCall } from '@shopkeeper/agent/types';
+import type { PlanValidation, PlanValidationIssue } from '@shopkeeper/agent/types';
 import type { ExpectedPlanIdentity } from '@shopkeeper/agent/plan-execution';
 import { isRecord } from '../lib/typing.js';
 import { readRequestDisplay, type RequestDisplay } from '../message-handlers/shared/request-display.js';

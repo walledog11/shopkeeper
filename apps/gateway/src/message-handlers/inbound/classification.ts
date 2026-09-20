@@ -26,8 +26,6 @@ import {
   parseRequestFacts,
   REQUEST_ASKS,
   INTENT_KEYS,
-  type ClassifierTag,
-  type RequestFacts,
 } from '@shopkeeper/agent/classifier-signals';
 import logger from '../../logger.js';
 import { CHANNEL, MODEL } from '../../constants.js';
