@@ -53,8 +53,7 @@
       "project": ["src/**/*.ts"]
     },
     "packages/shared": {
-      "entry": ["vitest.config.ts"],
-      "project": ["src/**/*.ts", "vitest.config.ts"]
+      "project": ["src/**/*.ts"]
     }
   }
 }
