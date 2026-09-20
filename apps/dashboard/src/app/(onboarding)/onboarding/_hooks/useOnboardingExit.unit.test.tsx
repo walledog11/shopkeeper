@@ -3,7 +3,7 @@
 import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { STORAGE_KEY } from "../_components/model";
+import { STORAGE_KEY } from "../_lib/onboarding-model";
 import { useOnboardingExit } from "./useOnboardingExit";
 
 const mocks = vi.hoisted(() => ({

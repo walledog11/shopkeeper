@@ -22,6 +22,7 @@
     "spend-store.ts",
     "refund-spend.ts",
     "voice.ts",
+    "guards.ts",
     "scripts/**/*.ts"
   ],
   "exclude": ["node_modules", "dist"]

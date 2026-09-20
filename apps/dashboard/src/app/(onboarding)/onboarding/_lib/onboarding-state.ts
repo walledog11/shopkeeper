@@ -2,7 +2,7 @@ import {
   DEFAULT_DATA,
   STEPS,
   type OnboardingData,
-} from "../_components/model";
+} from "./onboarding-model";
 
 export interface StoredOnboardingState {
   data: OnboardingData;

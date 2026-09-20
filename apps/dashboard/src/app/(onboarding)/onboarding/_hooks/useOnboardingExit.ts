@@ -4,7 +4,7 @@ import { useCallback, useMemo } from "react";
 import { useClerk } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { useSingleFlightOperation } from "@/hooks/useSingleFlightOperation";
-import { STORAGE_KEY } from "../_components/model";
+import { STORAGE_KEY } from "../_lib/onboarding-model";
 
 interface MembershipLike {
   organization: { id: string; name: string };

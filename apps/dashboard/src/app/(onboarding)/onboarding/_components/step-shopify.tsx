@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/ui/cn";
 import type { Integration } from "@/types";
 import { Accent, Headline, Lede } from "./primitives";
-import type { KbSyncViewModel, OnboardingData } from "./model";
+import type { KbSyncViewModel, OnboardingData } from "../_lib/onboarding-model";
 import type { LaunchOnboardingOAuth } from "../_hooks/useOnboardingOAuth";
 
 export function StepShopify({

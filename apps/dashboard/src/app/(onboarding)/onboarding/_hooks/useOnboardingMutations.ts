@@ -4,7 +4,7 @@ import { useCallback } from "react";
 import { captureClientProductEvent } from "@/lib/product-events";
 import { useSingleFlightOperation } from "@/hooks/useSingleFlightOperation";
 import type { Integration } from "@/types";
-import type { OnboardingData } from "../_components/model";
+import type { OnboardingData } from "../_lib/onboarding-model";
 import {
   createForwardingEmail,
   persistOnboardingSettings,

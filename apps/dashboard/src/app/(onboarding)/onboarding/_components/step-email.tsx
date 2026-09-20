@@ -6,7 +6,7 @@ import { EmailForwardingSetupPanel } from "@/components/integrations/EmailForwar
 import { GmailSupportAddressPanel } from "@/components/integrations/GmailSupportAddressPanel";
 import { Accent, Headline, Lede } from "./primitives";
 import type { Integration } from "@/types";
-import type { OnboardingData } from "./model";
+import type { OnboardingData } from "../_lib/onboarding-model";
 import type { LaunchOnboardingOAuth } from "../_hooks/useOnboardingOAuth";
 
 export function StepEmail({

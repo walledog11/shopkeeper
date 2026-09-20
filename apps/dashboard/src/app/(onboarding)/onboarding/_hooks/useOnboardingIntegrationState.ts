@@ -5,7 +5,7 @@ import useSWR from "swr";
 import { useIntegrations } from "@/hooks/useIntegrations";
 import { fetcher } from "@/lib/api/fetcher";
 import { isShopifyIntegrationActive } from "@/lib/integrations/shopify-connection";
-import type { ImessageStatus } from "../_components/model";
+import type { ImessageStatus } from "../_lib/onboarding-model";
 import { selectOnboardingIntegrations } from "../_lib/onboarding-integrations";
 import { useShopifyKnowledgeSync } from "./useShopifyKnowledgeSync";
 
