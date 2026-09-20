@@ -1,4 +1,5 @@
 import { isRecord } from '../guards.js';
+import { isFetchTimeoutError, readResponseJson, readResponseRequestId } from '../http.js';
 import { readString } from '../values.js';
 
 export const SOCIALAPI_PRODUCTION_BASE_URL = 'https://api.social-api.ai/v1';
@@ -111,14 +112,6 @@ function readCode(value: unknown): string | number | null {
   return typeof value === 'string' || typeof value === 'number' ? value : null;
 }
 
-async function readJson(response: Response): Promise<unknown> {
-  try {
-    return await response.json() as unknown;
-  } catch {
-    return null;
-  }
-}
-
 function normalizeBaseUrl(value: string): string {
   const url = new URL(value);
   if (url.protocol !== 'https:' && !['localhost', '127.0.0.1', '::1'].includes(url.hostname)) {
@@ -163,10 +156,6 @@ function validationError(message: string, httpStatus = 0, requestId: string | nu
   return { category: 'validation', httpStatus, code: null, message, requestId };
 }
 
-function requestId(response: Response): string | null {
-  return response.headers.get('x-request-id') ?? response.headers.get('request-id');
-}
-
 async function requestJson<T>(
   config: SocialApiClientConfig,
   path: string,
@@ -185,8 +174,7 @@ async function requestJson<T>(
       signal: init.signal ?? AbortSignal.timeout(config.timeoutMs),
     });
   } catch (error) {
-    const timedOut = error instanceof Error
-      && (error.name === 'AbortError' || error.name === 'TimeoutError');
+    const timedOut = isFetchTimeoutError(error);
     return {
       ok: false,
       error: {
@@ -199,7 +187,7 @@ async function requestJson<T>(
     };
   }
 
-  const payload = response.status === 204 ? null : await readJson(response);
+  const payload = response.status === 204 ? null : await readResponseJson(response);
   if (!response.ok) {
     const descriptor = readError(payload);
     return {
@@ -209,7 +197,7 @@ async function requestJson<T>(
         httpStatus: response.status,
         code: descriptor.code,
         message: descriptor.message ?? 'SocialAPI request failed',
-        requestId: requestId(response),
+        requestId: readResponseRequestId(response),
       },
     };
   }
@@ -218,10 +206,10 @@ async function requestJson<T>(
   if (data === null) {
     return {
       ok: false,
-      error: validationError('SocialAPI returned an invalid response', response.status, requestId(response)),
+      error: validationError('SocialAPI returned an invalid response', response.status, readResponseRequestId(response)),
     };
   }
-  return { ok: true, data, httpStatus: response.status, requestId: requestId(response) };
+  return { ok: true, data, httpStatus: response.status, requestId: readResponseRequestId(response) };
 }
 
 function parseConnect(payload: unknown): SocialApiConnectResult | null {

@@ -8,7 +8,7 @@ import {
 } from "@/lib/integrations/oauth-contract";
 import { useOAuthLauncher } from "@/hooks/useOAuthLauncher";
 import type { OperationState } from "@/hooks/useSingleFlightOperation";
-import { RETURN_TO } from "../_components/model";
+import { RETURN_TO } from "../_lib/onboarding-model";
 
 export type OnboardingOAuthProvider = "gmail" | "shopify";
 export type OnboardingOAuthParameters = {

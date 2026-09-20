@@ -10,7 +10,7 @@ import { buildSmsDeepLink, formatHandleLabel } from "@/lib/imessage-connect";
 import { startImessageBinding } from "@/lib/integrations/channel-binding-client";
 import { captureClientProductEvent } from "@/lib/product-events";
 import { cn } from "@/lib/ui/cn";
-import type { ImessageStatus } from "./model";
+import type { ImessageStatus } from "../_lib/onboarding-model";
 import { Accent, Headline, Lede } from "./primitives";
 
 type RefreshStatus = () => unknown | Promise<unknown>;

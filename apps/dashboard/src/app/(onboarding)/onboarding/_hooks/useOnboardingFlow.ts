@@ -10,7 +10,7 @@ import {
   useSingleFlightOperation,
 } from "@/hooks/useSingleFlightOperation";
 import type { OAuthOutcome } from "@/lib/integrations/oauth-contract";
-import { STEPS, STORAGE_KEY } from "../_components/model";
+import { STEPS, STORAGE_KEY } from "../_lib/onboarding-model";
 import { useOnboardingDraft } from "./useOnboardingDraft";
 import { useOnboardingExit } from "./useOnboardingExit";
 import { useOnboardingIntegrationState } from "./useOnboardingIntegrationState";

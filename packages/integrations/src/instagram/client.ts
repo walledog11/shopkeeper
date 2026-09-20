@@ -1,5 +1,13 @@
 import { isRecord } from '../guards.js';
+import { isFetchTimeoutError, readResponseJson } from '../http.js';
 import { readString } from '../values.js';
+
+export class AmbiguousInstagramIntegrationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AmbiguousInstagramIntegrationError';
+  }
+}
 
 export const INSTAGRAM_GRAPH_VERSION = 'v25.0';
 export const INSTAGRAM_REQUIRED_SCOPES = [
@@ -111,14 +119,6 @@ function parsePermissions(value: unknown): string[] {
   return [...new Set(values.map(readString).filter((item): item is string => item !== null))];
 }
 
-async function readJson(response: Response): Promise<unknown> {
-  try {
-    return await response.json() as unknown;
-  } catch {
-    return null;
-  }
-}
-
 function readProviderError(payload: unknown): ProviderErrorDescriptor | null {
   if (!isRecord(payload)) return null;
 
@@ -223,7 +223,7 @@ async function requestInstagramJson<T>(
       cache: 'no-store',
       signal: init.signal ?? AbortSignal.timeout(DEFAULT_REQUEST_TIMEOUT_MS),
     });
-    const payload = await readJson(response);
+    const payload = await readResponseJson(response);
     const descriptor = readProviderError(payload);
     if (!response.ok || descriptor) {
       return { ok: false, error: createResponseError(response, descriptor) };
@@ -247,8 +247,7 @@ async function requestInstagramJson<T>(
       requestId: response.headers.get('x-fb-trace-id') ?? response.headers.get('x-request-id'),
     };
   } catch (error) {
-    const timedOut = error instanceof Error
-      && (error.name === 'AbortError' || error.name === 'TimeoutError');
+    const timedOut = isFetchTimeoutError(error);
     return {
       ok: false,
       error: {

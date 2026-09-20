@@ -2,7 +2,7 @@ import { Check, ChevronLeft, ChevronRight, Loader2, Mail, ShieldCheck, Smartphon
 import { PRODUCT_NAME } from "@/lib/brand";
 import { Button } from "@/components/ui/button";
 import { Accent, Headline } from "./primitives";
-import type { OnboardingData } from "./model";
+import type { OnboardingData } from "../_lib/onboarding-model";
 
 export function StepPlan({
   data,
