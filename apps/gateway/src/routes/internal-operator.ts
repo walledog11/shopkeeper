@@ -7,7 +7,6 @@ import {
   getMemberAgentRequest,
   listMemberAgentRequests,
 } from '@shopkeeper/agent/task-ledger';
-import { resolveNewAgentTaskRuntimeVersion } from '@shopkeeper/agent/planner';
 import { resolveOperatorThread } from '@shopkeeper/agent/internal-thread';
 import logger from '../logger.js';
 import { runOperatorFreeFormTurn } from '../message-handlers/operator/operator-free-form-turn.js';
@@ -35,7 +34,7 @@ const DASHBOARD_TASK_LIMITS = {
 function dashboardTaskBudget() {
   return {
     ...DASHBOARD_TASK_LIMITS,
-    runtimeVersion: resolveNewAgentTaskRuntimeVersion(),
+    runtimeVersion: 1,
   };
 }
 

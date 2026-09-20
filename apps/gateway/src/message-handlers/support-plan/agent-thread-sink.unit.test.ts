@@ -30,19 +30,19 @@ vi.mock('@shopkeeper/db', () => ({
   SenderType: { note: 'note' },
   createMessage,
 }));
-vi.mock('../clients/dashboard-internal.js', () => ({
+vi.mock('../../clients/dashboard-internal.js', () => ({
   postDashboardInternal: postInternal,
 }));
-vi.mock('../agent-failure-alerts.js', () => ({
+vi.mock('../../agent-failure-alerts.js', () => ({
   recordAgentFailureInBackground: recordFailure,
 }));
-vi.mock('../operator-escalation.js', () => ({
+vi.mock('../../operator-escalation.js', () => ({
   pushOperatorEscalation: pushEscalation,
 }));
-vi.mock('../realtime/publish.js', () => ({
+vi.mock('../../realtime/publish.js', () => ({
   publishThreadEvent,
 }));
-vi.mock('../logger.js', () => ({
+vi.mock('../../logger.js', () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 

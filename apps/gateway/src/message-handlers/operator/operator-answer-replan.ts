@@ -132,7 +132,7 @@ export async function applyOperatorAnswerReplan(
 
   let outcome: AnswerReplanOutcome;
   try {
-    outcome = await runAnswerReplan(params, continuation?.runtimeVersion);
+    outcome = await runAnswerReplan(params);
   } catch (err) {
     if (continuation) await failAnswerContinuation(continuation, params);
     throw err;
@@ -198,7 +198,6 @@ async function failAnswerContinuation(
 
 async function runAnswerReplan(
   params: OperatorAnswerReplanParams,
-  runtimeVersion?: number,
 ): Promise<AnswerReplanOutcome> {
   const { organizationId, memberKey, threadId, deliveryRef } = params;
   const answer = params.answer.trim();
@@ -297,9 +296,7 @@ async function runAnswerReplan(
       ctx,
       planningInstruction,
       settings,
-      runtimeVersion === undefined
-        ? suspendsAtProposal() ? { suspendAtProposal: true } : undefined
-        : { runtimeVersion },
+      suspendsAtProposal() ? { suspendAtProposal: true } : undefined,
     );
     const cacheRecord = buildAgentPlanCacheRecord({
       instruction: baseInstruction,

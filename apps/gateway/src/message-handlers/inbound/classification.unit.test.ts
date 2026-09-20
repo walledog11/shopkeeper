@@ -250,7 +250,7 @@ describe('classifierSystemPrompt', () => {
   });
 
   it('leaves every other channel byte-identical', () => {
-    for (const channel of ['email', 'ig_dm', 'shopify', 'shopify_chat', 'tiktok']) {
+    for (const channel of ['email', 'ig_dm', 'shopify', 'tiktok']) {
       expect(promptText(classifierSystemPrompt(channel))).toBe(CLASSIFIER_SYSTEM_PROMPT);
     }
   });

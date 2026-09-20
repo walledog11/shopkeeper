@@ -61,21 +61,6 @@ function walk(dir, files = []) {
   return files;
 }
 
-function rewritePath(path) {
-  for (const [mod, group] of moduleToGroup) {
-    const needle = `message-handlers/${mod}.js`;
-    if (path.includes(needle) && !path.includes(`message-handlers/${group}/`)) {
-      return path.replace(needle, `message-handlers/${group}/${mod}.js`);
-    }
-    const needleNoExt = `message-handlers/${mod}'`;
-    const replacement = `message-handlers/${group}/${mod}.js'`;
-    if (path.includes(`message-handlers/${mod}'`) && !path.includes(`message-handlers/${group}/`)) {
-      return path.replace(`message-handlers/${mod}'`, replacement);
-    }
-  }
-  return path;
-}
-
 function rewriteFile(content, filePath) {
   let next = content;
   for (const [mod, group] of moduleToGroup) {
